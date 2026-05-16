@@ -1,0 +1,49 @@
+name: CI
+
+# Manual only. This is a Go workspace (go.work) repo with a lot of
+# generated code (dbent/gen). Flip on push / pull_request once the
+# checks are tuned for the workspace if you want continuous CI.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          # Highest go directive across the workspace modules.
+          go-version: "1.26.x"
+          cache: false
+
+      # go.work makes dbent/lace/saas local; enttui comes from the
+      # proxy. Sync first so the module graph is consistent on CI.
+      - name: go work sync
+        run: go work sync
+
+      - name: gofmt check
+        run: |
+          out=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*' -not -path '*/gen/*'))
+          if [ -n "$out" ]; then
+            echo "::error::gofmt needs to be run on:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./saas/cmd/cli/...
+
+      - name: go build (pure Go, no CGO)
+        env:
+          CGO_ENABLED: "0"
+        run: go build -o /tmp/lore ./saas/cmd/cli
+
+      - name: go test
+        env:
+          CGO_ENABLED: "0"
+        run: go test -count=1 ./dbent/... ./lace/... ./saas/...
