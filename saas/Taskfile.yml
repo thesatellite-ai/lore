@@ -1,0 +1,26 @@
+# https://taskfile.dev
+
+version: "3"
+
+# dotenv: ['.env']
+
+tasks:
+  default:
+    cmds:
+      - task --list-all
+    silent: true
+
+  update:
+    desc: upgrade all the go modules
+    cmds:
+      - go get -u ./...
+      - go mod tidy
+
+  build:
+    desc: create build files saas, api, cli
+    cmds:
+      - go build -o ../tmp/bin/cli ./cmd/cli
+  dev:
+    desc: run air (port from PKL/$PORT), tee → ../tmp/air.log
+    cmds:
+      - air 2>&1 | tee ../tmp/air.log

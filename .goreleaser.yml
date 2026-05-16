@@ -1,0 +1,93 @@
+version: 2
+
+project_name: lore
+
+# This repo is a Go workspace (go.work stitches ./dbent ./lace ./saas;
+# `enttui` resolves from the module proxy). dbent is local-only, so the
+# build MUST run with the workspace active — do not disable it.
+# Pure-Go sqlite (modernc.org/sqlite) => CGO_ENABLED=0 => cross-compile
+# every target from a single Linux runner. FTS5 is built into modernc;
+# no build tag needed.
+before:
+  hooks:
+    - go work sync
+
+builds:
+  - id: lore
+    main: ./saas/cmd/cli
+    binary: lore
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: lore
+    formats: ["tar.gz"]
+    name_template: "lore_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+    files:
+      - README.md
+      # Ship the Claude skill bundle inside the archive so users who
+      # install via the released tarball (no git clone) can copy it to
+      # ~/.claude/skills/lore. See install.sh / README.
+      - src: skills/**/*
+        dst: skills
+      - src: skills/*.md
+        dst: skills
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  # Must stay valid semver even when no semver tag exists yet (the
+  # dispatch-snapshot path builds off an arbitrary branch).
+  version_template: "0.0.0-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+
+release:
+  draft: false
+  prerelease: auto
+
+# Publishes Formula/lore.rb into the SHARED org tap that holds every
+# thesatellite-ai tool's formula. Needs a repo secret
+# HOMEBREW_TAP_GITHUB_TOKEN (PAT with contents:write on the tap repo) —
+# the default GITHUB_TOKEN cannot push to a different repository.
+# Users: `brew install thesatellite-ai/tap/lore`.
+brews:
+  - name: lore
+    repository:
+      owner: thesatellite-ai
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/thesatellite-ai/lore"
+    description: "Local-first knowledge & context store for AI coding agents"
+    license: "PolyForm-Perimeter-1.0.0"
+    skip_upload: auto
+    install: |
+      bin.install "lore"
+    test: |
+      system "#{bin}/lore", "version"

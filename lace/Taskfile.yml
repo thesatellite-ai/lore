@@ -1,0 +1,17 @@
+# https://taskfile.dev
+
+version: "3"
+
+# dotenv: ['.env']
+
+tasks:
+  default:
+    cmds:
+      - task --list-all
+    silent: true
+
+  update:
+    desc: upgrade all the go modules
+    cmds:
+      - go get -u ./...
+      - go mod tidy

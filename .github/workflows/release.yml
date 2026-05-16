@@ -1,0 +1,186 @@
+name: Release
+
+# Four ways this fires, ordered by ease:
+#
+#   1. push to main            → auto-bump patch, tag, release.
+#                                The zero-friction path. Put
+#                                `[skip release]` in the commit
+#                                SUBJECT to opt out (docs/workflow-only
+#                                changes).
+#
+#   2. push tag v*             → use the pushed tag, release as-is.
+#                                Use this to bump minor/major
+#                                (`git tag -a v0.3.0 && git push
+#                                origin v0.3.0`).
+#
+#   3. workflow_dispatch, tag=X → create+push tag on current ref,
+#                                then release. Same as path 2 from the
+#                                Actions UI.
+#
+#   4. workflow_dispatch, tag="" → snapshot build. dist/ uploaded as a
+#                                workflow artifact, no GitHub Release.
+#
+# No PAT needed: the auto-tag step creates the tag and continues to
+# GoReleaser in the SAME job, so there's no second-workflow dance.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.3.0). Empty = snapshot build.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Opt-out check looks ONLY at the commit subject line so the
+      # marker described in this file's header can't self-trigger.
+      - name: Evaluate skip marker
+        id: skip
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          subject="$(git log -1 --format=%s)"
+          echo "subject: $subject"
+          case "$subject" in
+            *"[skip release]"*)
+              echo "::notice::commit subject contains opt-out marker — release skipped"
+              echo "skip=true"  >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Set up Go
+        if: steps.skip.outputs.skip != 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.x"
+          cache: false
+
+      # go.work stitches the local modules (dbent/lace/saas); enttui
+      # resolves from the proxy. Keep the graph consistent before the
+      # GoReleaser cross-compile.
+      - name: go work sync
+        if: steps.skip.outputs.skip != 'true'
+        run: go work sync
+
+      # Resolve the release tag for this run.
+      #   tag:      version string (empty on snapshot)
+      #   create:   "true" => git tag && git push
+      #   snapshot: "true" => GoReleaser --snapshot
+      - name: Resolve release tag
+        id: v
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          event="${{ github.event_name }}"
+          ref="${{ github.ref }}"
+          input_tag="${{ inputs.tag }}"
+
+          if [ "$event" = "push" ] && [[ "$ref" == refs/tags/* ]]; then
+            tag="${ref#refs/tags/}"
+            echo "tag=$tag"        >> "$GITHUB_OUTPUT"
+            echo "create=false"    >> "$GITHUB_OUTPUT"
+            echo "snapshot=false"  >> "$GITHUB_OUTPUT"
+            echo "mode: tag-push ($tag)"
+          elif [ "$event" = "workflow_dispatch" ] && [ -n "$input_tag" ]; then
+            echo "tag=$input_tag"  >> "$GITHUB_OUTPUT"
+            echo "create=true"     >> "$GITHUB_OUTPUT"
+            echo "snapshot=false"  >> "$GITHUB_OUTPUT"
+            echo "mode: dispatch-with-tag ($input_tag)"
+          elif [ "$event" = "workflow_dispatch" ]; then
+            echo "tag="            >> "$GITHUB_OUTPUT"
+            echo "create=false"    >> "$GITHUB_OUTPUT"
+            echo "snapshot=true"   >> "$GITHUB_OUTPUT"
+            echo "mode: dispatch-snapshot"
+          else
+            # push to main — auto-bump patch off the latest v* tag.
+            latest=$(git tag -l 'v*' --sort=-v:refname | head -n1 || true)
+            if [ -z "$latest" ]; then
+              next="v0.1.0"
+            else
+              base="${latest#v}"
+              core="${base%%-*}"
+              major="${core%%.*}"
+              rest="${core#*.}"
+              minor="${rest%%.*}"
+              patch="${rest#*.}"
+              next="v${major}.${minor}.$((patch + 1))"
+            fi
+            echo "tag=$next"       >> "$GITHUB_OUTPUT"
+            echo "create=true"     >> "$GITHUB_OUTPUT"
+            echo "snapshot=false"  >> "$GITHUB_OUTPUT"
+            echo "mode: push-to-main auto-bump ($latest -> $next)"
+          fi
+
+      - name: Create + push tag
+        if: steps.skip.outputs.skip != 'true' && steps.v.outputs.create == 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.v.outputs.tag }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::tag $TAG already exists"
+            exit 1
+          fi
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+
+      # Skip the Homebrew pipe unless the tap PAT secret is present, so
+      # the release never fails just because brew publishing isn't wired
+      # up yet. Add HOMEBREW_TAP_GITHUB_TOKEN to enable it.
+      - name: Homebrew gate
+        id: brew
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -n "$TAP_TOKEN" ]; then
+            echo "skip=" >> "$GITHUB_OUTPUT"
+            echo "::notice::Homebrew tap token present — publishing formula"
+          else
+            echo "skip=--skip=homebrew" >> "$GITHUB_OUTPUT"
+            echo "::notice::HOMEBREW_TAP_GITHUB_TOKEN unset — skipping Homebrew publish"
+          fi
+
+      - name: Run GoReleaser
+        if: steps.skip.outputs.skip != 'true'
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: >-
+            release --clean
+            ${{ steps.brew.outputs.skip }}
+            ${{ steps.v.outputs.snapshot == 'true' && '--snapshot' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT with contents:write on thesatellite-ai/homebrew-tap.
+          # Without it the Homebrew step is skipped (release still
+          # succeeds); set it to enable `brew install`.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Upload dist/ as workflow artifact
+        if: ${{ always() && steps.skip.outputs.skip != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lore-${{ steps.v.outputs.tag || github.sha }}
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 30
