@@ -1,0 +1,207 @@
+# lore Taskfile (v0.1)
+#
+# To wire into the workspace's root Taskfile.yml, add this under `includes:` (in the CUSTOM section):
+#
+#   lore:
+#     taskfile: ./Taskfile.lore.yml
+#     dir: ./
+#
+# Then run tasks via `task lore:<name>`.
+#
+# Pre-flight before commit: `task lore:ship-check`
+#
+# Reference: BUILD_SYSTEM.md and .ai/TASKS.md
+
+version: "3"
+
+vars:
+  BIN_DIR: "{{.ROOT_DIR}}/tmp/bin"
+  LORE_BIN: "{{.BIN_DIR}}/lore"
+  WORKSPACE_ROOT: "{{.ROOT_DIR}}"
+  TESTS_DIR: "{{.ROOT_DIR}}/../tests"
+
+tasks:
+  build:
+    desc: "Build aicoder binary (pure-Go sqlite, CGO off, version stamped)"
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -trimpath -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.LORE_BIN}} ./saas/cmd/cli
+      - echo "Built {{.LORE_BIN}} ({{.VERSION}})"
+
+  build:debug:
+    desc: "Build aicoder with debug symbols"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -o {{.LORE_BIN}} ./saas/cmd/cli
+
+  install:
+    desc: "Install aicoder to $GOPATH/bin"
+    deps: [build]
+    cmds:
+      - cp {{.LORE_BIN}} $(go env GOPATH)/bin/lore
+      - echo "Installed to $(go env GOPATH)/bin/lore"
+
+  skill:install:
+    desc: "Install lore Claude skill to ~/.claude/skills/lore"
+    vars:
+      SKILL_SRC: "{{.ROOT_DIR}}/skills"
+      SKILL_DEST: "{{.HOME}}/.claude/skills/lore"
+    cmds:
+      - mkdir -p "{{.SKILL_DEST}}"
+      - rsync -a --delete "{{.SKILL_SRC}}/" "{{.SKILL_DEST}}/"
+      - echo "Installed skill to {{.SKILL_DEST}}"
+
+  install:all:
+    desc: "Build + install aicoder binary AND install Claude skill"
+    cmds:
+      - task: install
+      - task: skill:install
+
+  test:
+    desc: "Unit + integration tests for mini's code"
+    cmds:
+      - go test -race ./saas/cmd/cli/... ./saas/pkg/aicoder/...
+      - go test -race ./dbent/schema/...
+
+  test:cover:
+    desc: "Test with coverage report"
+    cmds:
+      - go test -race -coverprofile=coverage.out ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...
+      - go tool cover -func=coverage.out | tail -20
+
+  lint:
+    desc: "Static checks: vet + fmt + staticcheck"
+    cmds:
+      - go vet ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...
+      - 'test -z "$(gofmt -l ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/)" || (echo "gofmt failures:"; gofmt -l ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/; exit 1)'
+      - which staticcheck > /dev/null && staticcheck ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/... || echo "staticcheck not installed; skipping"
+
+  fmt:
+    desc: "Format code"
+    cmds:
+      - gofmt -w ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/
+
+  schema:gen:
+    desc: "Regenerate ent code from schema (after editing dbent/schema/*.go)"
+    cmds:
+      - cd dbent && go run ./cmd/entg .
+
+  schema:migrate:
+    desc: "Apply schema to SQLite DB"
+    cmds:
+      - cd dbent && go run ./cmd/migrate .
+
+  tui:gen:
+    desc: "Regenerate the enttui register glue (saas/pkg/aicoder/tuigen) after a dbent schema change"
+    cmds:
+      # Stage on the generated ent client; tuigen imports dbent/gen/ent.
+      - task: schema:gen
+      - go generate ./saas/pkg/aicoder/tuigen
+
+  tui:run:
+    desc: "Launch the lore TUI on the current .lore DB (flags after --, e.g. task lore:tui:run -- --kind task)"
+    cmds:
+      - CGO_ENABLED=0 go run ./saas/cmd/cli tui {{.CLI_ARGS}}
+
+  scenarios:
+    desc: "Run all acceptance scenarios (tests/scenarios/SC-*.sh)"
+    deps: [build]
+    cmds:
+      - |
+        if [ ! -d {{.TESTS_DIR}}/scenarios ]; then
+          echo "ERROR: {{.TESTS_DIR}}/scenarios/ not found"
+          exit 1
+        fi
+        export LORE={{.LORE_BIN}}
+        export WORKSPACE_ROOT={{.WORKSPACE_ROOT}}
+        FAIL=0
+        for f in {{.TESTS_DIR}}/scenarios/SC-*.sh; do
+          [ -f "$f" ] || continue
+          echo "▶ $(basename $f)"
+          if bash "$f"; then
+            echo "  ✓ PASS"
+          else
+            echo "  ✗ FAIL"
+            FAIL=$((FAIL+1))
+          fi
+        done
+        if [ $FAIL -gt 0 ]; then
+          echo "$FAIL scenario(s) FAILED"
+          exit 1
+        fi
+        echo "All scenarios PASSED"
+
+  chaos:
+    desc: "Run FMEA chaos scenarios (tests/chaos/CH-*.sh) — slow"
+    deps: [build]
+    cmds:
+      - |
+        if [ ! -d {{.TESTS_DIR}}/chaos ]; then
+          echo "ERROR: {{.TESTS_DIR}}/chaos/ not found"
+          exit 1
+        fi
+        export LORE={{.LORE_BIN}}
+        export WORKSPACE_ROOT={{.WORKSPACE_ROOT}}
+        FAIL=0
+        for f in {{.TESTS_DIR}}/chaos/CH-*.sh; do
+          [ -f "$f" ] || continue
+          echo "▶ $(basename $f)"
+          if bash "$f"; then
+            echo "  ✓ PASS"
+          else
+            echo "  ✗ FAIL"
+            FAIL=$((FAIL+1))
+          fi
+        done
+        if [ $FAIL -gt 0 ]; then
+          echo "$FAIL chaos scenario(s) FAILED"
+          exit 1
+        fi
+        echo "All chaos scenarios PASSED"
+
+  bench:
+    desc: "Performance regression check vs Round 21 SLAs"
+    deps: [build]
+    cmds:
+      - |
+        if ! command -v hyperfine > /dev/null; then
+          echo "WARN: hyperfine not installed; skipping bench"
+          exit 0
+        fi
+        export LORE={{.LORE_BIN}}
+        TMP=$(mktemp -d)
+        cd $TMP && git init -q
+        $LORE init --non-interactive --name=benchproj
+        for i in $(seq 1 100); do $LORE memory add "memory $i tag $((i%10))"; done
+        hyperfine --warmup 3 --export-json bench.json '$LORE memory search "memory" --limit=10'
+        # TODO: gate via tools/bench-check
+        cat bench.json | jq -r '.results[0].mean'
+      - echo "bench complete"
+
+  
+  ship-check:
+    desc: "Pre-v0.1 ship readiness — all gates must pass"
+    cmds:
+      - task: lint
+      - task: test
+      - task: build
+      - task: scenarios
+      - task: chaos
+      - task: bench
+      - echo "✓ All ship-check gates PASSED"
+
+  clean:
+    desc: "Remove build artifacts"
+    cmds:
+      - rm -rf {{.BIN_DIR}}
+      - rm -f coverage.out bench.json
+      - find . -name "*.db" -path "*/.lore/*" -delete 2>/dev/null || true
+
+  release:
+    desc: "Build release artifacts (TODO: integrate with goreleaser per ship-gate)"
+    cmds:
+      - 'echo "TODO: integrate with goreleaser per ship-gate"'
+      - 'exit 1'
