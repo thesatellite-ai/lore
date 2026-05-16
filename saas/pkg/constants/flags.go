@@ -38,6 +38,8 @@ const (
 	FlagGlobs       = "globs"
 	FlagDue         = "due"
 	FlagTarget      = "target"
+	FlagOut         = "out"
+	FlagNoPointer   = "no-pointer"
 	FlagTags        = "tags"
 	FlagCode        = "code"
 

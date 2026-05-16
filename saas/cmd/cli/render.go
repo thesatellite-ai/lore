@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"saas/pkg/constants"
 	"strings"
 
@@ -41,8 +42,31 @@ import (
 
 type renderFlags struct {
 	commonFlags
+	outPath    string
 	targetPath string
+	noPointer  bool
 	dryRun     bool
+}
+
+const (
+	pointerStartMarker = "<!-- lore:pointer:start -->"
+	pointerEndMarker   = "<!-- lore:pointer:end -->"
+)
+
+// pointerRegex matches an existing pointer block (across newlines, non-greedy)
+var pointerRegex = regexp.MustCompile(
+	`(?s)` + regexp.QuoteMeta(pointerStartMarker) + `.*?` + regexp.QuoteMeta(pointerEndMarker) + `\n?`,
+)
+
+// pointerBlock is the idempotent stitch dropped at the top of the agent file
+// (CLAUDE.md). relOut is the generated file's path RELATIVE to the agent
+// file's directory — Claude Code resolves `@path` imports relative to the
+// importing file. The prose fallback covers agents without @import support
+func pointerBlock(relOut string) string {
+	return pointerStartMarker + "\n" +
+		"@" + relOut + "\n" +
+		"<!-- if your agent does not support @import, read " + relOut + " now -->\n" +
+		pointerEndMarker + "\n"
 }
 
 func newRenderCommand() *cobra.Command {
@@ -50,22 +74,29 @@ func newRenderCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "render",
 		Short: "Render CLAUDE.md from scoped knowledge",
-		Long: `render assembles the project's knowledge into a CLAUDE.md file
+		Long: `render assembles the project's knowledge into a generated file
+(default .lore/LORE.md) and stitches an idempotent @import pointer into the
+agent file (default CLAUDE.md) so hand-written CLAUDE.md content is never
+clobbered
 
 Output is deterministic (same DB state produces byte-identical output)
-Atomic-write safe: existing files are replaced via rename only after the new
-content is fully written
+Atomic-write safe: the generated file is replaced via rename only after the
+new content is fully written
 
-Symlink-aware: if CLAUDE.md is a symlink, the target is updated; the
-symlink itself is preserved
+Symlink-aware: if the generated file is a symlink, the target is updated;
+the symlink itself is preserved
 
-Use --dry-run to print to stdout without writing.`,
+The pointer block in the agent file is bounded by sentinel markers and
+replaced in place on re-run. Pass --no-pointer to skip stitching, or
+--dry-run to print the generated body to stdout without writing anything.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRender(cmd.Context(), f)
 		},
 	}
 	bindCommonFlags(cmd, &f.commonFlags)
-	cmd.Flags().StringVar(&f.targetPath, constants.FlagTarget, "CLAUDE.md", "output file path")
+	cmd.Flags().StringVar(&f.outPath, constants.FlagOut, ".lore/LORE.md", "generated knowledge file path")
+	cmd.Flags().StringVar(&f.targetPath, constants.FlagTarget, "CLAUDE.md", "agent file to stitch the @import pointer into")
+	cmd.Flags().BoolVar(&f.noPointer, constants.FlagNoPointer, false, "do not stitch the pointer into the agent file")
 	cmd.Flags().BoolVar(&f.dryRun, constants.FlagDryRun, false, "print to stdout instead of writing file")
 	return cmd
 }
@@ -133,36 +164,100 @@ func runRender(ctx context.Context, f *renderFlags) error {
 		return nil
 	}
 
-	// Resolve symlinks (R27 #19): if target is a symlink, write to target
-	resolvedTarget, err := resolveSymlinkTarget(f.targetPath)
+	// Generated content goes to the out file (default .lore/LORE.md), NOT
+	// CLAUDE.md — so hand-written CLAUDE.md is never clobbered. CLAUDE.md
+	// only receives an idempotent @import pointer (stitchPointer below)
+
+	// Resolve symlinks (R27 #19): if the out file is a symlink, write to target
+	resolvedOut, err := resolveSymlinkTarget(f.outPath)
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "resolve target symlink").WithCause(err)
+		return errcodes.New(errcodes.Internal, "resolve out symlink").WithCause(err)
 	}
 
-	// Skip rename if content unchanged (R29 #53)
-	if existing, err := os.ReadFile(resolvedTarget); err == nil {
-		if sha256Hex(existing) == sha256Hex([]byte(body)) {
-			fmt.Printf("%s %s (unchanged)\n", style.Muted("·"), resolvedTarget)
-			return persistRenderHistory(ctx, client, projectID, repoID, resolvedTarget, body, renderResult{
-				Rules: len(rules), Hotfixes: len(hotfixes),
-			})
+	// Skip rename if content unchanged (R29 #53) — but still re-stitch the
+	// pointer: CLAUDE.md may have lost it even when the body is identical
+	unchanged := false
+	if existing, err := os.ReadFile(resolvedOut); err == nil {
+		unchanged = sha256Hex(existing) == sha256Hex([]byte(body))
+	}
+
+	if unchanged {
+		fmt.Printf("%s %s (unchanged)\n", style.Muted("·"), resolvedOut)
+	} else {
+		if err := atomicWriteFile(resolvedOut, []byte(body), 0o644); err != nil {
+			return errcodes.New(errcodes.Internal, "atomic write").WithCause(err)
+		}
+		fmt.Printf("%s %s (%d bytes; %dR + %dHF)\n",
+			style.Success("✓"), resolvedOut, len(body),
+			len(rules), len(hotfixes))
+	}
+
+	if !f.noPointer {
+		if err := stitchPointer(f.targetPath, resolvedOut); err != nil {
+			return err
 		}
 	}
 
-	if err := atomicWriteFile(resolvedTarget, []byte(body), 0o644); err != nil {
-		return errcodes.New(errcodes.Internal, "atomic write").WithCause(err)
-	}
-
-	if err := persistRenderHistory(ctx, client, projectID, repoID, resolvedTarget, body, renderResult{
+	if err := persistRenderHistory(ctx, client, projectID, repoID, resolvedOut, body, renderResult{
 		Rules: len(rules), Hotfixes: len(hotfixes),
 	}); err != nil {
 		// Non-fatal: file written, history failed. Log and continue
 		fmt.Fprintln(os.Stderr, style.Warn("WARN: render_history write failed: "+err.Error()))
 	}
 
-	fmt.Printf("%s %s (%d bytes; %dR + %dHF)\n",
-		style.Success("✓"), resolvedTarget, len(body),
-		len(rules), len(hotfixes))
+	return nil
+}
+
+// stitchPointer ensures agentFile (CLAUDE.md) carries the lore pointer block
+// at its top, bounded by sentinel markers. Idempotent: an existing block is
+// replaced in place; a missing one is prepended; if nothing changes the file
+// is left untouched. The @import path is computed RELATIVE to agentFile's
+// directory so Claude Code resolves it correctly regardless of cwd
+func stitchPointer(agentFile, outFile string) error {
+	absAgent, err := filepath.Abs(agentFile)
+	if err != nil {
+		return errcodes.New(errcodes.BadPath, "resolve "+agentFile).WithCause(err)
+	}
+	absOut, err := filepath.Abs(outFile)
+	if err != nil {
+		return errcodes.New(errcodes.BadPath, "resolve "+outFile).WithCause(err)
+	}
+	relOut, err := filepath.Rel(filepath.Dir(absAgent), absOut)
+	if err != nil {
+		// Different volumes / unrelatable — fall back to the path as given
+		relOut = outFile
+	}
+	relOut = filepath.ToSlash(relOut)
+
+	existing := ""
+	if data, err := os.ReadFile(absAgent); err == nil {
+		existing = string(data)
+	} else if !os.IsNotExist(err) {
+		return errcodes.New(errcodes.Internal, "read "+absAgent).WithCause(err)
+	}
+
+	block := pointerBlock(relOut)
+	var out string
+	switch {
+	case pointerRegex.MatchString(existing):
+		out = pointerRegex.ReplaceAllString(existing, block)
+	case existing == "":
+		out = block
+	default:
+		out = block + "\n" + existing
+	}
+
+	if out == existing {
+		fmt.Printf("%s %s (pointer present)\n", style.Muted("="), absAgent)
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(absAgent), 0o755); err != nil {
+		return errcodes.New(errcodes.Internal, "mkdir parent").WithCause(err)
+	}
+	if err := os.WriteFile(absAgent, []byte(out), 0o644); err != nil {
+		return errcodes.New(errcodes.Internal, "write "+absAgent).WithCause(err)
+	}
+	fmt.Printf("%s %s (pointer → %s)\n", style.Success("✓"), absAgent, relOut)
 	return nil
 }
 
