@@ -112,8 +112,10 @@ lore tui                         # browse everything interactively
   `--repo`. `add` persists `repo_id`; `list` and `search` filter by it with
   identical semantics (`--repo`, `--all-repos`, `--master-only`, `--no-inherit`).
   Real per-repo scoping — no body prefix-tag convention needed.
-  Note: `edit --repo` does **not** re-scope (it's context-only, a known
-  limitation) — re-scope via `add --supersedes=<old_id> --repo=<mount>`.
+  Re-scope an existing row with `edit --rebind-repo=<mount>` /
+  `edit --rebind-master`. Bare `--repo` on `edit` is context-only (never
+  mutates scope; warns loudly). For audited body+scope change use
+  `add --supersedes=<old_id> --repo=<mount>`.
 - **Render** — `lore render` compiles the relevant scoped knowledge into
   `CLAUDE.md` (or `AGENTS.md` / `.cursorrules` via `--target`).
 

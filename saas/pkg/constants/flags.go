@@ -41,6 +41,10 @@ const (
 	FlagOut         = "out"
 	FlagNoPointer   = "no-pointer"
 
+	// Scope rebind (edit) — distinct from the context-only --repo
+	FlagRebindRepo   = "rebind-repo"
+	FlagRebindMaster = "rebind-master"
+
 	// Task commitment / deferral
 	FlagCommitment       = "commitment"
 	FlagDeferUntil       = "defer-until"
