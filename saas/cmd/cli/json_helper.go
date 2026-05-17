@@ -76,12 +76,14 @@ type missionWithTasks struct {
 
 // taskBrief is the lightweight task projection used in eager-load contexts
 type taskBrief struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Status    string `json:"status"`
-	Priority  string `json:"priority"`
-	DueAt     string `json:"due_at,omitempty"`
-	MissionID string `json:"mission_id,omitempty"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	Status        string `json:"status"`
+	Priority      string `json:"priority"`
+	Commitment    string `json:"commitment"`
+	DeferredUntil string `json:"deferred_until,omitempty"`
+	DueAt         string `json:"due_at,omitempty"`
+	MissionID     string `json:"mission_id,omitempty"`
 }
 
 // taskFull is the JSON shape for task show
@@ -91,6 +93,8 @@ type taskFull struct {
 	Body        string `json:"body,omitempty"`
 	Status      string `json:"status"`
 	Priority    string `json:"priority"`
+	Commitment  string `json:"commitment"`
+	DeferredUntil string `json:"deferred_until,omitempty"`
 	DueAt       string `json:"due_at,omitempty"`
 	StartedAt   string `json:"started_at,omitempty"`
 	CompletedAt string `json:"completed_at,omitempty"`

@@ -95,6 +95,11 @@ func Body(v string) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldBody, v))
 }
 
+// DeferredUntil applies equality check predicate on the "deferred_until" field. It's identical to DeferredUntilEQ.
+func DeferredUntil(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDeferredUntil, v))
+}
+
 // DueAt applies equality check predicate on the "due_at" field. It's identical to DueAtEQ.
 func DueAt(v time.Time) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldDueAt, v))
@@ -533,6 +538,76 @@ func PriorityIn(vs ...Priority) predicate.Task {
 // PriorityNotIn applies the NotIn predicate on the "priority" field.
 func PriorityNotIn(vs ...Priority) predicate.Task {
 	return predicate.Task(sql.FieldNotIn(FieldPriority, vs...))
+}
+
+// CommitmentEQ applies the EQ predicate on the "commitment" field.
+func CommitmentEQ(v Commitment) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldCommitment, v))
+}
+
+// CommitmentNEQ applies the NEQ predicate on the "commitment" field.
+func CommitmentNEQ(v Commitment) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldCommitment, v))
+}
+
+// CommitmentIn applies the In predicate on the "commitment" field.
+func CommitmentIn(vs ...Commitment) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldCommitment, vs...))
+}
+
+// CommitmentNotIn applies the NotIn predicate on the "commitment" field.
+func CommitmentNotIn(vs ...Commitment) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldCommitment, vs...))
+}
+
+// DeferredUntilEQ applies the EQ predicate on the "deferred_until" field.
+func DeferredUntilEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDeferredUntil, v))
+}
+
+// DeferredUntilNEQ applies the NEQ predicate on the "deferred_until" field.
+func DeferredUntilNEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldDeferredUntil, v))
+}
+
+// DeferredUntilIn applies the In predicate on the "deferred_until" field.
+func DeferredUntilIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldDeferredUntil, vs...))
+}
+
+// DeferredUntilNotIn applies the NotIn predicate on the "deferred_until" field.
+func DeferredUntilNotIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldDeferredUntil, vs...))
+}
+
+// DeferredUntilGT applies the GT predicate on the "deferred_until" field.
+func DeferredUntilGT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldDeferredUntil, v))
+}
+
+// DeferredUntilGTE applies the GTE predicate on the "deferred_until" field.
+func DeferredUntilGTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldDeferredUntil, v))
+}
+
+// DeferredUntilLT applies the LT predicate on the "deferred_until" field.
+func DeferredUntilLT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldDeferredUntil, v))
+}
+
+// DeferredUntilLTE applies the LTE predicate on the "deferred_until" field.
+func DeferredUntilLTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldDeferredUntil, v))
+}
+
+// DeferredUntilIsNil applies the IsNil predicate on the "deferred_until" field.
+func DeferredUntilIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldDeferredUntil))
+}
+
+// DeferredUntilNotNil applies the NotNil predicate on the "deferred_until" field.
+func DeferredUntilNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldDeferredUntil))
 }
 
 // DueAtEQ applies the EQ predicate on the "due_at" field.

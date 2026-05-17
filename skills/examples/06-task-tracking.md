@@ -17,12 +17,15 @@ echo "Mission: $M"
 ## Day 0 — populate tasks
 
 ```bash
-lore task add "Design plugin manifest schema"         --mission=$M --priority=high --due=2026-05-20
-lore task add "Wire MCP server stub"                  --mission=$M --priority=high --due=2026-05-25
-lore task add "Extend FTS5 to rules + decisions"      --mission=$M --priority=medium --due=2026-05-30
-lore task add "Document plugin lifecycle"             --mission=$M --priority=medium --due=2026-06-05
-lore task add "v0.2 release notes draft"              --mission=$M --priority=low  --due=2026-06-10
-lore task add "macOS notarization config"             --mission=$M --priority=low
+# Agents MUST pass --commitment (no default). Work the user agreed to = accepted;
+# your own speculative ideas = proposed (they land under `lore task triage`, not the
+# default list); parking-lot ideas = someday.
+lore task add "Design plugin manifest schema"         --mission=$M --commitment=accepted --priority=high --due=2026-05-20
+lore task add "Wire MCP server stub"                  --mission=$M --commitment=accepted --priority=high --due=2026-05-25
+lore task add "Extend FTS5 to rules + decisions"      --mission=$M --commitment=accepted --priority=medium --due=2026-05-30
+lore task add "Document plugin lifecycle"             --mission=$M --commitment=accepted --priority=medium --due=2026-06-05
+lore task add "v0.2 release notes draft"              --mission=$M --commitment=proposed --priority=low  --due=2026-06-10
+lore task add "macOS notarization config"             --mission=$M --commitment=someday --priority=low
 
 lore mission show $M --json | jq '.data.tasks | length'
 # 6

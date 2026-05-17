@@ -33,6 +33,10 @@ const (
 	FieldStatus = "status"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
+	// FieldCommitment holds the string denoting the commitment field in the database.
+	FieldCommitment = "commitment"
+	// FieldDeferredUntil holds the string denoting the deferred_until field in the database.
+	FieldDeferredUntil = "deferred_until"
 	// FieldDueAt holds the string denoting the due_at field in the database.
 	FieldDueAt = "due_at"
 	// FieldStartedAt holds the string denoting the started_at field in the database.
@@ -91,6 +95,8 @@ var Columns = []string{
 	FieldBody,
 	FieldStatus,
 	FieldPriority,
+	FieldCommitment,
+	FieldDeferredUntil,
 	FieldDueAt,
 	FieldStartedAt,
 	FieldCompletedAt,
@@ -185,6 +191,33 @@ func PriorityValidator(pr Priority) error {
 	}
 }
 
+// Commitment defines the type for the "commitment" enum field.
+type Commitment string
+
+// CommitmentAccepted is the default value of the Commitment enum.
+const DefaultCommitment = CommitmentAccepted
+
+// Commitment values.
+const (
+	CommitmentAccepted Commitment = "accepted"
+	CommitmentProposed Commitment = "proposed"
+	CommitmentSomeday  Commitment = "someday"
+)
+
+func (c Commitment) String() string {
+	return string(c)
+}
+
+// CommitmentValidator is a validator for the "commitment" field enum values. It is called by the builders before save.
+func CommitmentValidator(c Commitment) error {
+	switch c {
+	case CommitmentAccepted, CommitmentProposed, CommitmentSomeday:
+		return nil
+	default:
+		return fmt.Errorf("task: invalid enum value for commitment field: %q", c)
+	}
+}
+
 // OrderOption defines the ordering options for the Task queries.
 type OrderOption func(*sql.Selector)
 
@@ -231,6 +264,16 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByPriority orders the results by the priority field.
 func ByPriority(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriority, opts...).ToFunc()
+}
+
+// ByCommitment orders the results by the commitment field.
+func ByCommitment(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCommitment, opts...).ToFunc()
+}
+
+// ByDeferredUntil orders the results by the deferred_until field.
+func ByDeferredUntil(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeferredUntil, opts...).ToFunc()
 }
 
 // ByDueAt orders the results by the due_at field.
@@ -347,6 +390,24 @@ func (e *Priority) UnmarshalGQL(val interface{}) error {
 	*e = Priority(str)
 	if err := PriorityValidator(*e); err != nil {
 		return fmt.Errorf("%s is not a valid Priority", str)
+	}
+	return nil
+}
+
+// MarshalGQL implements graphql.Marshaler interface.
+func (e Commitment) MarshalGQL(w io.Writer) {
+	io.WriteString(w, strconv.Quote(e.String()))
+}
+
+// UnmarshalGQL implements graphql.Unmarshaler interface.
+func (e *Commitment) UnmarshalGQL(val interface{}) error {
+	str, ok := val.(string)
+	if !ok {
+		return fmt.Errorf("enum %T must be a string", val)
+	}
+	*e = Commitment(str)
+	if err := CommitmentValidator(*e); err != nil {
+		return fmt.Errorf("%s is not a valid Commitment", str)
 	}
 	return nil
 }
