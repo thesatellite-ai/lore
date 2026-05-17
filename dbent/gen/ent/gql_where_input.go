@@ -30996,6 +30996,24 @@ type TaskWhereInput struct {
 	PriorityIn    []task.Priority `json:"priorityIn,omitempty"`
 	PriorityNotIn []task.Priority `json:"priorityNotIn,omitempty"`
 
+	// "commitment" field predicates.
+	Commitment      *task.Commitment  `json:"commitment,omitempty"`
+	CommitmentNEQ   *task.Commitment  `json:"commitmentNEQ,omitempty"`
+	CommitmentIn    []task.Commitment `json:"commitmentIn,omitempty"`
+	CommitmentNotIn []task.Commitment `json:"commitmentNotIn,omitempty"`
+
+	// "deferred_until" field predicates.
+	DeferredUntil       *time.Time  `json:"deferredUntil,omitempty"`
+	DeferredUntilNEQ    *time.Time  `json:"deferredUntilNEQ,omitempty"`
+	DeferredUntilIn     []time.Time `json:"deferredUntilIn,omitempty"`
+	DeferredUntilNotIn  []time.Time `json:"deferredUntilNotIn,omitempty"`
+	DeferredUntilGT     *time.Time  `json:"deferredUntilGT,omitempty"`
+	DeferredUntilGTE    *time.Time  `json:"deferredUntilGTE,omitempty"`
+	DeferredUntilLT     *time.Time  `json:"deferredUntilLT,omitempty"`
+	DeferredUntilLTE    *time.Time  `json:"deferredUntilLTE,omitempty"`
+	DeferredUntilIsNil  bool        `json:"deferredUntilIsNil,omitempty"`
+	DeferredUntilNotNil bool        `json:"deferredUntilNotNil,omitempty"`
+
 	// "due_at" field predicates.
 	DueAt       *time.Time  `json:"dueAt,omitempty"`
 	DueAtNEQ    *time.Time  `json:"dueAtNEQ,omitempty"`
@@ -31470,6 +31488,48 @@ func (i *TaskWhereInput) P() (predicate.Task, error) {
 	}
 	if len(i.PriorityNotIn) > 0 {
 		predicates = append(predicates, task.PriorityNotIn(i.PriorityNotIn...))
+	}
+	if i.Commitment != nil {
+		predicates = append(predicates, task.CommitmentEQ(*i.Commitment))
+	}
+	if i.CommitmentNEQ != nil {
+		predicates = append(predicates, task.CommitmentNEQ(*i.CommitmentNEQ))
+	}
+	if len(i.CommitmentIn) > 0 {
+		predicates = append(predicates, task.CommitmentIn(i.CommitmentIn...))
+	}
+	if len(i.CommitmentNotIn) > 0 {
+		predicates = append(predicates, task.CommitmentNotIn(i.CommitmentNotIn...))
+	}
+	if i.DeferredUntil != nil {
+		predicates = append(predicates, task.DeferredUntilEQ(*i.DeferredUntil))
+	}
+	if i.DeferredUntilNEQ != nil {
+		predicates = append(predicates, task.DeferredUntilNEQ(*i.DeferredUntilNEQ))
+	}
+	if len(i.DeferredUntilIn) > 0 {
+		predicates = append(predicates, task.DeferredUntilIn(i.DeferredUntilIn...))
+	}
+	if len(i.DeferredUntilNotIn) > 0 {
+		predicates = append(predicates, task.DeferredUntilNotIn(i.DeferredUntilNotIn...))
+	}
+	if i.DeferredUntilGT != nil {
+		predicates = append(predicates, task.DeferredUntilGT(*i.DeferredUntilGT))
+	}
+	if i.DeferredUntilGTE != nil {
+		predicates = append(predicates, task.DeferredUntilGTE(*i.DeferredUntilGTE))
+	}
+	if i.DeferredUntilLT != nil {
+		predicates = append(predicates, task.DeferredUntilLT(*i.DeferredUntilLT))
+	}
+	if i.DeferredUntilLTE != nil {
+		predicates = append(predicates, task.DeferredUntilLTE(*i.DeferredUntilLTE))
+	}
+	if i.DeferredUntilIsNil {
+		predicates = append(predicates, task.DeferredUntilIsNil())
+	}
+	if i.DeferredUntilNotNil {
+		predicates = append(predicates, task.DeferredUntilNotNil())
 	}
 	if i.DueAt != nil {
 		predicates = append(predicates, task.DueAtEQ(*i.DueAt))

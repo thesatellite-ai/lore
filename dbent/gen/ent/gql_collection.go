@@ -7531,6 +7531,16 @@ func (_q *TaskQuery) collectField(ctx context.Context, oneNode bool, opCtx *grap
 				selectedFields = append(selectedFields, task.FieldPriority)
 				fieldSeen[task.FieldPriority] = struct{}{}
 			}
+		case "commitment":
+			if _, ok := fieldSeen[task.FieldCommitment]; !ok {
+				selectedFields = append(selectedFields, task.FieldCommitment)
+				fieldSeen[task.FieldCommitment] = struct{}{}
+			}
+		case "deferredUntil":
+			if _, ok := fieldSeen[task.FieldDeferredUntil]; !ok {
+				selectedFields = append(selectedFields, task.FieldDeferredUntil)
+				fieldSeen[task.FieldDeferredUntil] = struct{}{}
+			}
 		case "dueAt":
 			if _, ok := fieldSeen[task.FieldDueAt]; !ok {
 				selectedFields = append(selectedFields, task.FieldDueAt)

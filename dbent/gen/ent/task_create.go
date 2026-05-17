@@ -122,6 +122,34 @@ func (_c *TaskCreate) SetNillablePriority(v *task.Priority) *TaskCreate {
 	return _c
 }
 
+// SetCommitment sets the "commitment" field.
+func (_c *TaskCreate) SetCommitment(v task.Commitment) *TaskCreate {
+	_c.mutation.SetCommitment(v)
+	return _c
+}
+
+// SetNillableCommitment sets the "commitment" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableCommitment(v *task.Commitment) *TaskCreate {
+	if v != nil {
+		_c.SetCommitment(*v)
+	}
+	return _c
+}
+
+// SetDeferredUntil sets the "deferred_until" field.
+func (_c *TaskCreate) SetDeferredUntil(v time.Time) *TaskCreate {
+	_c.mutation.SetDeferredUntil(v)
+	return _c
+}
+
+// SetNillableDeferredUntil sets the "deferred_until" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableDeferredUntil(v *time.Time) *TaskCreate {
+	if v != nil {
+		_c.SetDeferredUntil(*v)
+	}
+	return _c
+}
+
 // SetDueAt sets the "due_at" field.
 func (_c *TaskCreate) SetDueAt(v time.Time) *TaskCreate {
 	_c.mutation.SetDueAt(v)
@@ -314,6 +342,10 @@ func (_c *TaskCreate) defaults() {
 		v := task.DefaultPriority
 		_c.mutation.SetPriority(v)
 	}
+	if _, ok := _c.mutation.Commitment(); !ok {
+		v := task.DefaultCommitment
+		_c.mutation.SetCommitment(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := task.DefaultID()
 		_c.mutation.SetID(v)
@@ -358,6 +390,14 @@ func (_c *TaskCreate) check() error {
 	if v, ok := _c.mutation.Priority(); ok {
 		if err := task.PriorityValidator(v); err != nil {
 			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "Task.priority": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Commitment(); !ok {
+		return &ValidationError{Name: "commitment", err: errors.New(`ent: missing required field "Task.commitment"`)}
+	}
+	if v, ok := _c.mutation.Commitment(); ok {
+		if err := task.CommitmentValidator(v); err != nil {
+			return &ValidationError{Name: "commitment", err: fmt.Errorf(`ent: validator failed for field "Task.commitment": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.ID(); ok {
@@ -432,6 +472,14 @@ func (_c *TaskCreate) createSpec() (*Task, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(task.FieldPriority, field.TypeEnum, value)
 		_node.Priority = value
+	}
+	if value, ok := _c.mutation.Commitment(); ok {
+		_spec.SetField(task.FieldCommitment, field.TypeEnum, value)
+		_node.Commitment = value
+	}
+	if value, ok := _c.mutation.DeferredUntil(); ok {
+		_spec.SetField(task.FieldDeferredUntil, field.TypeTime, value)
+		_node.DeferredUntil = &value
 	}
 	if value, ok := _c.mutation.DueAt(); ok {
 		_spec.SetField(task.FieldDueAt, field.TypeTime, value)
@@ -637,6 +685,36 @@ func (u *TaskUpsert) SetPriority(v task.Priority) *TaskUpsert {
 // UpdatePriority sets the "priority" field to the value that was provided on create.
 func (u *TaskUpsert) UpdatePriority() *TaskUpsert {
 	u.SetExcluded(task.FieldPriority)
+	return u
+}
+
+// SetCommitment sets the "commitment" field.
+func (u *TaskUpsert) SetCommitment(v task.Commitment) *TaskUpsert {
+	u.Set(task.FieldCommitment, v)
+	return u
+}
+
+// UpdateCommitment sets the "commitment" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateCommitment() *TaskUpsert {
+	u.SetExcluded(task.FieldCommitment)
+	return u
+}
+
+// SetDeferredUntil sets the "deferred_until" field.
+func (u *TaskUpsert) SetDeferredUntil(v time.Time) *TaskUpsert {
+	u.Set(task.FieldDeferredUntil, v)
+	return u
+}
+
+// UpdateDeferredUntil sets the "deferred_until" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateDeferredUntil() *TaskUpsert {
+	u.SetExcluded(task.FieldDeferredUntil)
+	return u
+}
+
+// ClearDeferredUntil clears the value of the "deferred_until" field.
+func (u *TaskUpsert) ClearDeferredUntil() *TaskUpsert {
+	u.SetNull(task.FieldDeferredUntil)
 	return u
 }
 
@@ -933,6 +1011,41 @@ func (u *TaskUpsertOne) SetPriority(v task.Priority) *TaskUpsertOne {
 func (u *TaskUpsertOne) UpdatePriority() *TaskUpsertOne {
 	return u.Update(func(s *TaskUpsert) {
 		s.UpdatePriority()
+	})
+}
+
+// SetCommitment sets the "commitment" field.
+func (u *TaskUpsertOne) SetCommitment(v task.Commitment) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetCommitment(v)
+	})
+}
+
+// UpdateCommitment sets the "commitment" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateCommitment() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateCommitment()
+	})
+}
+
+// SetDeferredUntil sets the "deferred_until" field.
+func (u *TaskUpsertOne) SetDeferredUntil(v time.Time) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetDeferredUntil(v)
+	})
+}
+
+// UpdateDeferredUntil sets the "deferred_until" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateDeferredUntil() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateDeferredUntil()
+	})
+}
+
+// ClearDeferredUntil clears the value of the "deferred_until" field.
+func (u *TaskUpsertOne) ClearDeferredUntil() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearDeferredUntil()
 	})
 }
 
@@ -1420,6 +1533,41 @@ func (u *TaskUpsertBulk) SetPriority(v task.Priority) *TaskUpsertBulk {
 func (u *TaskUpsertBulk) UpdatePriority() *TaskUpsertBulk {
 	return u.Update(func(s *TaskUpsert) {
 		s.UpdatePriority()
+	})
+}
+
+// SetCommitment sets the "commitment" field.
+func (u *TaskUpsertBulk) SetCommitment(v task.Commitment) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetCommitment(v)
+	})
+}
+
+// UpdateCommitment sets the "commitment" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateCommitment() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateCommitment()
+	})
+}
+
+// SetDeferredUntil sets the "deferred_until" field.
+func (u *TaskUpsertBulk) SetDeferredUntil(v time.Time) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetDeferredUntil(v)
+	})
+}
+
+// UpdateDeferredUntil sets the "deferred_until" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateDeferredUntil() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateDeferredUntil()
+	})
+}
+
+// ClearDeferredUntil clears the value of the "deferred_until" field.
+func (u *TaskUpsertBulk) ClearDeferredUntil() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearDeferredUntil()
 	})
 }
 

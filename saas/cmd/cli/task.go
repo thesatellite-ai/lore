@@ -19,6 +19,7 @@ import (
 	"dbent/gen/ent"
 	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
 
@@ -29,6 +30,9 @@ func newTaskCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "task", Short: "Manage tasks (discrete work items)"}
 	cmd.AddCommand(newTaskAddCommand())
 	cmd.AddCommand(newTaskListCommand())
+	cmd.AddCommand(newTaskTriageCommand())
+	cmd.AddCommand(newTaskSomedayCommand())
+	cmd.AddCommand(newTaskDeferredCommand())
 	cmd.AddCommand(newTaskStartCommand())
 	cmd.AddCommand(newTaskDoneCommand())
 	cmd.AddCommand(newTaskCancelCommand())
@@ -45,6 +49,7 @@ func newTaskCommand() *cobra.Command {
 // actor refs so consumers don't need follow-up queries
 func newTaskSearchCommand() *cobra.Command {
 	var f entitySearchFlags
+	var includeAll bool
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Full-text search across task title + body (FTS5 BM25 ranked)",
@@ -76,8 +81,13 @@ func newTaskSearchCommand() *cobra.Command {
 				snippets[h.ID] = h.Snippet
 				scores[h.ID] = h.BM25
 			}
-			rows, err := client.Task.Query().
-				Where(entTask.IDIn(ids...)).
+			fq := client.Task.Query().Where(entTask.IDIn(ids...))
+			if !includeAll {
+				// Default: only surface ActiveTask hits (hide proposed/
+				// someday/deferred/done/cancelled). --all bypasses
+				fq = activeTaskFilter(fq)
+			}
+			rows, err := fq.
 				WithTasklist().
 				WithMission().
 				WithPlan().
@@ -125,6 +135,8 @@ func newTaskSearchCommand() *cobra.Command {
 		},
 	}
 	bindEntitySearchFlags(cmd, &f)
+	cmd.Flags().BoolVar(&includeAll, constants.FlagAll, false,
+		"include proposed/someday/deferred/done/cancelled hits (default: active only)")
 	return cmd
 }
 
@@ -156,6 +168,9 @@ type taskEditFlags struct {
 	body            string
 	priority        string
 	status          string
+	commitment      string
+	deferUntil      string
+	clearDefer      bool
 	due             string
 	clearDue        bool
 	tasklist        string
@@ -216,6 +231,23 @@ func newTaskEditCommand() *cobra.Command {
 				}
 				upd.SetStatus(v)
 			}
+			if ch(constants.FlagCommitment) {
+				c, err := parseCommitment(f.commitment)
+				if err != nil {
+					return err
+				}
+				upd.SetCommitment(c)
+			}
+			if ch(constants.FlagDeferUntil) {
+				du, err := parseDeferUntil(f.deferUntil)
+				if err != nil {
+					return err
+				}
+				upd.SetDeferredUntil(du)
+			}
+			if f.clearDefer {
+				upd.ClearDeferredUntil()
+			}
 			if ch(constants.FlagDue) {
 				due, err := time.Parse("2006-01-02", f.due)
 				if err != nil {
@@ -263,6 +295,9 @@ func newTaskEditCommand() *cobra.Command {
 	cmd.Flags().StringVar(&f.body, constants.FlagBody, "", "new body")
 	cmd.Flags().StringVar(&f.priority, constants.FlagPriority, "", "low | medium | high | urgent")
 	cmd.Flags().StringVar(&f.status, constants.FlagStatus, "", "todo | in_progress | done | cancelled | blocked")
+	cmd.Flags().StringVar(&f.commitment, constants.FlagCommitment, "", "accepted | proposed | someday")
+	cmd.Flags().StringVar(&f.deferUntil, constants.FlagDeferUntil, "", "snooze until date YYYY-MM-DD")
+	cmd.Flags().BoolVar(&f.clearDefer, constants.FlagClearDefer, false, "un-defer (clear deferred_until)")
 	cmd.Flags().StringVar(&f.due, constants.FlagDue, "", "due date YYYY-MM-DD")
 	cmd.Flags().BoolVar(&f.clearDue, constants.FlagClearDue, false, "remove due date")
 	cmd.Flags().StringVar(&f.tasklist, constants.FlagTasklist, "", "move to tasklist_id (tlt_*)")
@@ -279,6 +314,8 @@ type taskAddFlags struct {
 	commonFlags
 	body       string
 	priority   string
+	commitment string
+	deferUntil string
 	due        string
 	mission    string
 	tasklist   string
@@ -301,6 +338,8 @@ func newTaskAddCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f.commonFlags)
 	cmd.Flags().StringVar(&f.body, constants.FlagBody, "", "longer description")
 	cmd.Flags().StringVar(&f.priority, constants.FlagPriority, "medium", "low | medium | high | urgent")
+	cmd.Flags().StringVar(&f.commitment, constants.FlagCommitment, "", "accepted | proposed | someday (REQUIRED for agent callers)")
+	cmd.Flags().StringVar(&f.deferUntil, constants.FlagDeferUntil, "", "snooze until date (YYYY-MM-DD); hides from active list until then")
 	cmd.Flags().StringVar(&f.due, constants.FlagDue, "", "due date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&f.mission, constants.FlagMission, "", "mission_id (msn_*) to attach to")
 	cmd.Flags().StringVar(&f.tasklist, constants.FlagTasklist, "", "tasklist_id (tlt_*) — REQUIRED")
@@ -335,10 +374,35 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 		return err
 	}
 
+	// Commitment axis (orthogonal to status). Agent callers MUST pass
+	// --commitment explicitly — no silent default in either direction
+	// (TASK_COMMITMENT_SPEC.md ADR-TASK-1). Non-agent / manual callers
+	// fall back to the schema default (accepted)
+	if f.commitment == "" && callerIsAgent() {
+		return errcodes.New(errcodes.InvalidInput,
+			"--commitment is required for agent callers").
+			WithHint("accepted = user asked / starting now; " +
+				"proposed = your speculative idea; someday = parking lot")
+	}
+
 	create := client.Task.Create().
 		SetProjectID(projectID).
 		SetTitle(cleanTitle).
 		SetPriority(taskPriority(f.priority))
+	if f.commitment != "" {
+		c, err := parseCommitment(f.commitment)
+		if err != nil {
+			return err
+		}
+		create.SetCommitment(c)
+	}
+	if f.deferUntil != "" {
+		du, err := parseDeferUntil(f.deferUntil)
+		if err != nil {
+			return err
+		}
+		create.SetDeferredUntil(du)
+	}
 	if f.body != "" {
 		body, err := textnorm.Normalize(f.body)
 		if err != nil {
@@ -391,10 +455,14 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 
 type taskListFlags struct {
 	commonFlags
-	status     string
-	mission    string
-	all        bool
-	jsonOutput bool
+	status          string
+	commitment      string
+	mission         string
+	all             bool
+	includeProposed bool
+	includeSomeday  bool
+	includeDeferred bool
+	jsonOutput      bool
 }
 
 func newTaskListCommand() *cobra.Command {
@@ -407,9 +475,13 @@ func newTaskListCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f.commonFlags)
-	cmd.Flags().StringVar(&f.status, constants.FlagStatus, "", "filter: todo | in_progress | done | cancelled | blocked (empty = default open set, see --all)")
+	cmd.Flags().StringVar(&f.status, constants.FlagStatus, "", "filter: todo | in_progress | done | cancelled | blocked (empty = default active set, see --all)")
+	cmd.Flags().StringVar(&f.commitment, constants.FlagCommitment, "", "filter: accepted | proposed | someday")
 	cmd.Flags().StringVar(&f.mission, constants.FlagMission, "", "filter by mission_id")
-	cmd.Flags().BoolVar(&f.all, constants.FlagAll, false, "include done + cancelled tasks (default: hide them)")
+	cmd.Flags().BoolVar(&f.all, constants.FlagAll, false, "show everything: done/cancelled + proposed/someday + deferred")
+	cmd.Flags().BoolVar(&f.includeProposed, constants.FlagIncludeProposed, false, "also include commitment=proposed")
+	cmd.Flags().BoolVar(&f.includeSomeday, constants.FlagIncludeSomeday, false, "also include commitment=someday")
+	cmd.Flags().BoolVar(&f.includeDeferred, constants.FlagIncludeDeferred, false, "also include deferred (deferred_until in the future)")
 	cmd.Flags().BoolVar(&f.jsonOutput, constants.FlagJSON, false, "JSON output")
 	return cmd
 }
@@ -427,11 +499,47 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 	}
 
 	q := client.Task.Query().Where(entTask.ProjectID(projectID))
-	if f.status != "" {
-		q = q.Where(entTask.StatusEQ(taskStatus(f.status)))
-	} else if !f.all {
-		// Default: hide done + cancelled. --all overrides; --status= overrides
-		q = q.Where(entTask.StatusNotIn(entTask.StatusDone, entTask.StatusCancelled))
+
+	// Explicit --commitment is a hard filter (and a loud error if bad)
+	if f.commitment != "" {
+		c, err := parseCommitment(f.commitment)
+		if err != nil {
+			return err
+		}
+		q = q.Where(entTask.CommitmentEQ(c))
+	}
+
+	if f.all {
+		// Show everything; only an explicit --status still narrows
+		if f.status != "" {
+			q = q.Where(entTask.StatusEQ(taskStatus(f.status)))
+		}
+	} else {
+		// Status: explicit --status wins, else hide done + cancelled
+		if f.status != "" {
+			q = q.Where(entTask.StatusEQ(taskStatus(f.status)))
+		} else {
+			q = q.Where(entTask.StatusNotIn(entTask.StatusDone, entTask.StatusCancelled))
+		}
+		// Commitment: default accepted-only; widen with --include-* flags.
+		// Skipped if an explicit --commitment was already applied
+		if f.commitment == "" {
+			allowed := []entTask.Commitment{entTask.CommitmentAccepted}
+			if f.includeProposed {
+				allowed = append(allowed, entTask.CommitmentProposed)
+			}
+			if f.includeSomeday {
+				allowed = append(allowed, entTask.CommitmentSomeday)
+			}
+			q = q.Where(entTask.CommitmentIn(allowed...))
+		}
+		// Deferral: hide future-deferred unless asked to include them
+		if !f.includeDeferred {
+			q = q.Where(entTask.Or(
+				entTask.DeferredUntilIsNil(),
+				entTask.DeferredUntilLTE(time.Now()),
+			))
+		}
 	}
 	if f.mission != "" {
 		q = q.Where(entTask.MissionID(f.mission))
@@ -450,9 +558,17 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 		return nil
 	}
 
+	printTaskRows(rows)
+	return nil
+}
+
+// printTaskRows renders the human task list. Shows the commitment chip only
+// when it isn't the common case (accepted) and the deferral wake date, so
+// triage/someday/deferred views are self-explaining
+func printTaskRows(rows []*ent.Task) {
 	if len(rows) == 0 {
 		fmt.Println(style.Muted("(no tasks)"))
-		return nil
+		return
 	}
 	for _, t := range rows {
 		statusBadge := taskStatusStyle(string(t.Status))
@@ -460,10 +576,89 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 		if t.DueAt != nil {
 			due = " due:" + t.DueAt.Format("2006-01-02")
 		}
-		fmt.Printf("%s T-%-3s %s [%s]%s\n",
-			statusBadge, t.ID, t.Title, t.Priority, due)
+		commit := ""
+		if t.Commitment != entTask.CommitmentAccepted {
+			commit = " " + style.Warn("("+string(t.Commitment)+")")
+		}
+		defer_ := ""
+		if t.DeferredUntil != nil {
+			defer_ = " " + style.Muted("⏾"+t.DeferredUntil.Format("2006-01-02"))
+		}
+		fmt.Printf("%s T-%-3s %s [%s]%s%s%s\n",
+			statusBadge, t.ID, t.Title, t.Priority, due, commit, defer_)
 	}
+}
+
+// runTaskView is the shared body for the triage / someday / deferred
+// read-only views — a project-scoped query with a caller-supplied predicate
+func runTaskView(ctx context.Context, f *commonFlags, narrow func(*ent.TaskQuery) *ent.TaskQuery) error {
+	rctx, client, err := resolveContext(f)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	if err != nil {
+		return err
+	}
+	q := narrow(client.Task.Query().Where(entTask.ProjectID(projectID)))
+	rows, err := q.Order(ent.Asc(entTask.FieldID)).All(ctx)
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "list tasks").WithCause(err)
+	}
+	printTaskRows(rows)
 	return nil
+}
+
+func newTaskTriageCommand() *cobra.Command {
+	var f commonFlags
+	cmd := &cobra.Command{
+		Use:   "triage",
+		Short: "Show proposed tasks (AI-suggested, not yet committed)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTaskView(cmd.Context(), &f, func(q *ent.TaskQuery) *ent.TaskQuery {
+				return q.Where(
+					entTask.CommitmentEQ(entTask.CommitmentProposed),
+					entTask.StatusNotIn(entTask.StatusDone, entTask.StatusCancelled),
+				)
+			})
+		},
+	}
+	bindCommonFlags(cmd, &f)
+	return cmd
+}
+
+func newTaskSomedayCommand() *cobra.Command {
+	var f commonFlags
+	cmd := &cobra.Command{
+		Use:   "someday",
+		Short: "Show someday/maybe tasks (parking lot, no commitment)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTaskView(cmd.Context(), &f, func(q *ent.TaskQuery) *ent.TaskQuery {
+				return q.Where(entTask.CommitmentEQ(entTask.CommitmentSomeday))
+			})
+		},
+	}
+	bindCommonFlags(cmd, &f)
+	return cmd
+}
+
+func newTaskDeferredCommand() *cobra.Command {
+	var f commonFlags
+	cmd := &cobra.Command{
+		Use:   "deferred",
+		Short: "Show deferred tasks (snoozed; deferred_until in the future)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTaskView(cmd.Context(), &f, func(q *ent.TaskQuery) *ent.TaskQuery {
+				return q.Where(
+					entTask.DeferredUntilNotNil(),
+					entTask.DeferredUntilGT(time.Now()),
+				)
+			})
+		},
+	}
+	bindCommonFlags(cmd, &f)
+	return cmd
 }
 
 func newTaskStartCommand() *cobra.Command {
@@ -528,8 +723,12 @@ func updateTaskStatus(ctx context.Context, f *commonFlags, idArg string, target 
 	switch target {
 	case entTask.StatusInProgress:
 		upd.SetStartedAt(now)
+		// Auto-promote: starting work commits the task and un-defers it.
+		// Self-heals a task wrongly left proposed/someday/deferred
+		upd.SetCommitment(entTask.CommitmentAccepted).ClearDeferredUntil()
 	case entTask.StatusDone:
 		upd.SetCompletedAt(now)
+		upd.SetCommitment(entTask.CommitmentAccepted).ClearDeferredUntil()
 	}
 	if _, err := upd.Save(ctx); err != nil {
 		return errcodes.New(errcodes.Internal, "update task").WithCause(err)
@@ -567,6 +766,10 @@ func newTaskShowCommand() *cobra.Command {
 			fmt.Printf("  title:    %s\n", t.Title)
 			fmt.Printf("  status:   %s\n", t.Status)
 			fmt.Printf("  priority: %s\n", t.Priority)
+			fmt.Printf("  commit:   %s\n", t.Commitment)
+			if t.DeferredUntil != nil {
+				fmt.Printf("  deferred: %s\n", t.DeferredUntil.Format("2006-01-02"))
+			}
 			if t.DueAt != nil {
 				fmt.Printf("  due:      %s\n", t.DueAt.Format("2006-01-02"))
 			}
@@ -588,12 +791,16 @@ func newTaskShowCommand() *cobra.Command {
 // fullFromTask projects an ent.Task → taskFull JSON shape
 func fullFromTask(t *ent.Task) taskFull {
 	out := taskFull{
-		ID:        t.ID,
-		Title:     t.Title,
-		Status:    string(t.Status),
-		Priority:  string(t.Priority),
-		ProjectID: t.ProjectID,
-		CreatedAt: t.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:         t.ID,
+		Title:      t.Title,
+		Status:     string(t.Status),
+		Priority:   string(t.Priority),
+		Commitment: string(t.Commitment),
+		ProjectID:  t.ProjectID,
+		CreatedAt:  t.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	if t.DeferredUntil != nil {
+		out.DeferredUntil = t.DeferredUntil.Format("2006-01-02")
 	}
 	if t.Body != nil {
 		out.Body = *t.Body
@@ -651,6 +858,56 @@ func taskPriority(s string) entTask.Priority {
 		return entTask.PriorityMedium
 	}
 	return ep
+}
+
+// parseCommitment validates a --commitment value. Unlike taskStatus (which
+// silently falls back), commitment is loud: an invalid value is a hard error
+// so an agent can't typo its way into the wrong axis
+func parseCommitment(s string) (entTask.Commitment, error) {
+	c := entTask.Commitment(s)
+	if err := entTask.CommitmentValidator(c); err != nil {
+		return "", errcodes.New(errcodes.InvalidInput,
+			"bad --commitment "+s+" (want: accepted | proposed | someday)")
+	}
+	return c, nil
+}
+
+// callerIsAgent reports whether the current CLI invoker resolved to an
+// agent identity. Used to force an explicit --commitment on agent task
+// creation (no silent default — see TASK_COMMITMENT_SPEC.md ADR-TASK-1)
+func callerIsAgent() bool {
+	return identity.Resolve(identity.Inputs{}).Kind == "agent"
+}
+
+// activeTaskFilter applies the one shared ActiveTask predicate:
+//
+//	status NOT IN (done,cancelled)
+//	AND commitment = accepted
+//	AND (deferred_until IS NULL OR deferred_until <= now)
+//
+// Single definition consumed by `task list` default, the triage/someday/
+// deferred views, and the task FTS fetch (Rule 2 — do not inline elsewhere)
+func activeTaskFilter(q *ent.TaskQuery) *ent.TaskQuery {
+	now := time.Now()
+	return q.Where(
+		entTask.StatusNotIn(entTask.StatusDone, entTask.StatusCancelled),
+		entTask.CommitmentEQ(entTask.CommitmentAccepted),
+		entTask.Or(
+			entTask.DeferredUntilIsNil(),
+			entTask.DeferredUntilLTE(now),
+		),
+	)
+}
+
+// parseDeferUntil parses a --defer-until value (YYYY-MM-DD, consistent
+// with --due)
+func parseDeferUntil(s string) (time.Time, error) {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}, errcodes.New(errcodes.InvalidInput,
+			"--defer-until format: YYYY-MM-DD").WithCause(err)
+	}
+	return t, nil
 }
 
 func taskStatusStyle(s string) string {

@@ -134,25 +134,35 @@ lore mission list [--status=active|paused|done|cancelled] [--json]
 lore mission show <id|MS-N> [--json]
 lore mission done <id|MS-N>
 
-# task = discrete work — `--tasklist` is REQUIRED
+# task = discrete work — `--tasklist` is REQUIRED.
+# `--commitment` is REQUIRED for agent callers (no default; missing = hard error)
 lore task add "Wire FTS5 backend" \
   --tasklist=tlt_<id> \
+  --commitment=accepted \    # accepted | proposed | someday  (agents MUST pass this)
   --priority=high \
+  --defer-until=2026-07-01 \ # optional snooze; hidden until then, auto-resurfaces
   --mission=msn_<id> \
   --plan=pln_<id> \
   --due=2026-05-20 \
   --assigned-to=act_<id> \
   --created-by=act_<id>      # optional — defaults to current identity
-lore task list [--status=todo|in_progress|done|cancelled|blocked] [--mission=<id>] [--all] [--json]
-                                   # default hides done + cancelled; --all to include; --status=X overrides
+lore task list [--status=…] [--commitment=…] [--mission=<id>] \
+               [--include-proposed] [--include-someday] [--include-deferred] [--all] [--json]
+                                   # default = ActiveTask (accepted, not done/cancelled, not future-deferred)
+lore task triage                   # commitment=proposed (AI-suggested, not committed)
+lore task someday                  # commitment=someday (parking lot)
+lore task deferred                 # snoozed: deferred_until in the future
 lore task show <id|T-N> [--json]
-lore task start <id|T-N>
-lore task done <id|T-N>
+lore task start <id|T-N>           # auto-promotes commitment=accepted, clears defer
+lore task done <id|T-N>            # auto-promotes commitment=accepted, clears defer
 lore task cancel <id|T-N>
+lore task search <query> [--all]   # default surfaces only ActiveTask hits
 
-# task edit — reparent, reassign, reprioritize in one place
+# task edit — reparent, reassign, reprioritize, commit/snooze in one place
 lore task edit <id|T-N> \
   [--title=…] [--body=…] [--priority=…] [--status=…] \
+  [--commitment=accepted|proposed|someday] \
+  [--defer-until=YYYY-MM-DD | --clear-defer] \
   [--due=YYYY-MM-DD | --clear-due] \
   [--tasklist=tlt_…] \
   [--mission=msn_… | --clear-mission] \
@@ -160,9 +170,9 @@ lore task edit <id|T-N> \
   [--assigned-to=act_… | --clear-assignee]
 ```
 
-Priority: `low | medium | high | urgent`. Status: `todo | in_progress | done | cancelled | blocked`.
+Priority: `low | medium | high | urgent`. Status: `todo | in_progress | done | cancelled | blocked`. Commitment: `accepted | proposed | someday` (orthogonal to status; agents must set it explicitly on `add`).
 
-**Required fields for `task add`:** `<title>` (positional) and `--tasklist=<tlt_id>`. Create the tasklist first (`lore tasklist add --title=...`) if none exists.
+**Required fields for `task add`:** `<title>` (positional) and `--tasklist=<tlt_id>`. Create the tasklist first (`lore tasklist add --title=...`) if none exists. **Agent callers must also pass `--commitment`** — `accepted` (user asked / doing now), `proposed` (your speculative idea), or `someday` (parking lot). No default; omitting it as an agent is a hard error so speculative tasks can't silently pollute the active list.
 
 **Relation flags (apply across `<entity> add`):**
 - `--mission`, `--tasklist`, `--plan` — group/parent relations (task)

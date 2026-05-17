@@ -63,6 +63,29 @@ var taskStatusValues = []string{
 	string(TaskStatusBlocked),
 }
 
+// --- Task.commitment -------------------------------------------------------
+//
+// Orthogonal to status (lifecycle). Answers "is this task agreed work?":
+//   - accepted: from an explicit user request, or work has started
+//   - proposed: AI suggested it speculatively; not assumed real
+//   - someday:  parked idea, no commitment, no date
+// Schema default is `accepted` (safe for non-agent / manual callers); agent
+// callers are forced to choose explicitly at the CLI (loud error if absent).
+
+type TaskCommitment string
+
+const (
+	TaskCommitmentAccepted TaskCommitment = "accepted"
+	TaskCommitmentProposed TaskCommitment = "proposed"
+	TaskCommitmentSomeday  TaskCommitment = "someday"
+)
+
+var taskCommitmentValues = []string{
+	string(TaskCommitmentAccepted),
+	string(TaskCommitmentProposed),
+	string(TaskCommitmentSomeday),
+}
+
 // --- Task.priority ---------------------------------------------------------
 
 type TaskPriority string

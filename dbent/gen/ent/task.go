@@ -36,6 +36,10 @@ type Task struct {
 	Status task.Status `json:"status,omitempty"`
 	// Priority holds the value of the "priority" field.
 	Priority task.Priority `json:"priority,omitempty"`
+	// Commitment holds the value of the "commitment" field.
+	Commitment task.Commitment `json:"commitment,omitempty"`
+	// DeferredUntil holds the value of the "deferred_until" field.
+	DeferredUntil *time.Time `json:"deferred_until,omitempty"`
 	// DueAt holds the value of the "due_at" field.
 	DueAt *time.Time `json:"due_at,omitempty"`
 	// StartedAt holds the value of the "started_at" field.
@@ -111,9 +115,9 @@ func (*Task) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case task.FieldID, task.FieldProjectID, task.FieldRepoID, task.FieldTitle, task.FieldBody, task.FieldStatus, task.FieldPriority, task.FieldMissionID, task.FieldTasklistID, task.FieldPlanID, task.FieldCreatedByActorID, task.FieldAssignedToActorID:
+		case task.FieldID, task.FieldProjectID, task.FieldRepoID, task.FieldTitle, task.FieldBody, task.FieldStatus, task.FieldPriority, task.FieldCommitment, task.FieldMissionID, task.FieldTasklistID, task.FieldPlanID, task.FieldCreatedByActorID, task.FieldAssignedToActorID:
 			values[i] = new(sql.NullString)
-		case task.FieldCreatedAt, task.FieldUpdatedAt, task.FieldDueAt, task.FieldStartedAt, task.FieldCompletedAt:
+		case task.FieldCreatedAt, task.FieldUpdatedAt, task.FieldDeferredUntil, task.FieldDueAt, task.FieldStartedAt, task.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -185,6 +189,19 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field priority", values[i])
 			} else if value.Valid {
 				_m.Priority = task.Priority(value.String)
+			}
+		case task.FieldCommitment:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment", values[i])
+			} else if value.Valid {
+				_m.Commitment = task.Commitment(value.String)
+			}
+		case task.FieldDeferredUntil:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field deferred_until", values[i])
+			} else if value.Valid {
+				_m.DeferredUntil = new(time.Time)
+				*_m.DeferredUntil = value.Time
 			}
 		case task.FieldDueAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -320,6 +337,14 @@ func (_m *Task) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("priority=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Priority))
+	builder.WriteString(", ")
+	builder.WriteString("commitment=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Commitment))
+	builder.WriteString(", ")
+	if v := _m.DeferredUntil; v != nil {
+		builder.WriteString("deferred_until=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.DueAt; v != nil {
 		builder.WriteString("due_at=")
