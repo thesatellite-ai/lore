@@ -652,7 +652,8 @@ func newWorkspaceEditCommand() *cobra.Command {
 
 func newPatternEditCommand() *cobra.Command {
 	var f commonFlags
-	var title, body string
+	var title, body, rebindRepo string
+	var rebindMaster bool
 	cmd := &cobra.Command{
 		Use:   "edit <id>",
 		Short: "Edit pattern fields (use `--supersedes` on add for audited body changes)",
@@ -689,6 +690,16 @@ func newPatternEditCommand() *cobra.Command {
 				}
 				upd.SetBody(v)
 			}
+			reb, err := resolveScopeRebind(cmd, cmd.Context(), client, row.ProjectID, rebindRepo, rebindMaster)
+			if err != nil {
+				return err
+			}
+			if reb.set {
+				upd.SetRepoID(reb.repoID)
+			}
+			if reb.clear {
+				upd.ClearRepoID()
+			}
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "update pattern").WithCause(err)
 			}
@@ -697,6 +708,7 @@ func newPatternEditCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindScopeRebindFlags(cmd, &rebindRepo, &rebindMaster)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "new title")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "new body")
 	return cmd
@@ -706,7 +718,8 @@ func newPatternEditCommand() *cobra.Command {
 
 func newMemoryEditCommand() *cobra.Command {
 	var f commonFlags
-	var body, kind, source, sourceRef string
+	var body, kind, source, sourceRef, rebindRepo string
+	var rebindMaster bool
 	cmd := &cobra.Command{
 		Use:   "edit <id>",
 		Short: "Edit memory fields (use `--supersedes` on add for audited body changes)",
@@ -749,6 +762,16 @@ func newMemoryEditCommand() *cobra.Command {
 			if ch(constants.FlagSourceRef) {
 				upd.SetSourceRef(sourceRef)
 			}
+			reb, err := resolveScopeRebind(cmd, cmd.Context(), client, row.ProjectID, rebindRepo, rebindMaster)
+			if err != nil {
+				return err
+			}
+			if reb.set {
+				upd.SetRepoID(reb.repoID)
+			}
+			if reb.clear {
+				upd.ClearRepoID()
+			}
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "update memory").WithCause(err)
 			}
@@ -757,6 +780,7 @@ func newMemoryEditCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindScopeRebindFlags(cmd, &rebindRepo, &rebindMaster)
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "new body")
 	cmd.Flags().StringVar(&kind, constants.FlagKind, "", "core | retrieved | episodic | procedural | archival")
 	cmd.Flags().StringVar(&source, constants.FlagSource, "", "new source_kind")
@@ -768,7 +792,8 @@ func newMemoryEditCommand() *cobra.Command {
 
 func newRuleEditCommand() *cobra.Command {
 	var f commonFlags
-	var body, severity, activation, globs, sourceRef string
+	var body, severity, activation, globs, sourceRef, rebindRepo string
+	var rebindMaster bool
 	cmd := &cobra.Command{
 		Use:   "edit <id>",
 		Short: "Edit rule fields (use `--supersedes` on add for audited body changes)",
@@ -818,6 +843,20 @@ func newRuleEditCommand() *cobra.Command {
 			if ch(constants.FlagSourceRef) {
 				upd.SetSourceRef(sourceRef)
 			}
+			ruleProj := ""
+			if row.ProjectID != nil {
+				ruleProj = *row.ProjectID
+			}
+			reb, err := resolveScopeRebind(cmd, cmd.Context(), client, ruleProj, rebindRepo, rebindMaster)
+			if err != nil {
+				return err
+			}
+			if reb.set {
+				upd.SetRepoID(reb.repoID)
+			}
+			if reb.clear {
+				upd.ClearRepoID()
+			}
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "update rule").WithCause(err)
 			}
@@ -826,6 +865,7 @@ func newRuleEditCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindScopeRebindFlags(cmd, &rebindRepo, &rebindMaster)
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "new body")
 	cmd.Flags().StringVar(&severity, constants.FlagSeverity, "", "must | should | may")
 	cmd.Flags().StringVar(&activation, constants.FlagActivation, "", "always | glob | semantic | manual")
@@ -838,7 +878,8 @@ func newRuleEditCommand() *cobra.Command {
 
 func newDecisionEditCommand() *cobra.Command {
 	var f commonFlags
-	var title, body, status, sourceRef string
+	var title, body, status, sourceRef, rebindRepo string
+	var rebindMaster bool
 	cmd := &cobra.Command{
 		Use:   "edit <id>",
 		Short: "Edit decision fields (use `--supersedes` on add for audited body changes)",
@@ -885,6 +926,16 @@ func newDecisionEditCommand() *cobra.Command {
 			if ch(constants.FlagSourceRef) {
 				upd.SetSourceRef(sourceRef)
 			}
+			reb, err := resolveScopeRebind(cmd, cmd.Context(), client, row.ProjectID, rebindRepo, rebindMaster)
+			if err != nil {
+				return err
+			}
+			if reb.set {
+				upd.SetRepoID(reb.repoID)
+			}
+			if reb.clear {
+				upd.ClearRepoID()
+			}
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "update decision").WithCause(err)
 			}
@@ -893,6 +944,7 @@ func newDecisionEditCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindScopeRebindFlags(cmd, &rebindRepo, &rebindMaster)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "new title")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "new body")
 	cmd.Flags().StringVar(&status, constants.FlagStatus, "", "proposed | accepted | superseded | deprecated")
@@ -904,7 +956,8 @@ func newDecisionEditCommand() *cobra.Command {
 
 func newHotfixEditCommand() *cobra.Command {
 	var f commonFlags
-	var title, body, severity string
+	var title, body, severity, rebindRepo string
+	var rebindMaster bool
 	cmd := &cobra.Command{
 		Use:   "edit <id>",
 		Short: "Edit hotfix fields (use `--supersedes` on add for audited body changes)",
@@ -948,6 +1001,16 @@ func newHotfixEditCommand() *cobra.Command {
 				}
 				upd.SetSeverity(v)
 			}
+			reb, err := resolveScopeRebind(cmd, cmd.Context(), client, row.ProjectID, rebindRepo, rebindMaster)
+			if err != nil {
+				return err
+			}
+			if reb.set {
+				upd.SetRepoID(reb.repoID)
+			}
+			if reb.clear {
+				upd.ClearRepoID()
+			}
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "update hotfix").WithCause(err)
 			}
@@ -956,6 +1019,7 @@ func newHotfixEditCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindScopeRebindFlags(cmd, &rebindRepo, &rebindMaster)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "new title")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "new body")
 	cmd.Flags().StringVar(&severity, constants.FlagSeverity, "", "low | medium | high | critical")
