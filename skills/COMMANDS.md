@@ -52,9 +52,16 @@ lore memory add "Tailwind v4 only" [--repo=web] [--kind=manual] [--allow-secrets
 # search (FTS5 BM25; LIKE fallback)
 lore memory search "tailwind" [--limit=10] [--all-repos|--master-only|--no-inherit] [--include-archived] [--json]
 
-# list (newest first)
-lore memory list --json
+# list — repo-scoped, SAME scope semantics as search
+lore memory list [--repo=web | --all-repos | --master-only | --no-inherit] [--json]
+#   default (no --repo)      → master rows only (repo_id IS NULL)
+#   --repo=web               → that repo's rows + master (inherited)
+#   --repo=web --no-inherit  → that repo's rows only
+#   --all-repos              → every row regardless of repo
+#   --master-only            → master rows only
 ```
+
+> Scope works on **`add`/`edit`/`search`/`list`** for every knowledge kind (`memory`, `rule`, `decision`, `hotfix`, `pattern`). `--repo` on `add` persists `repo_id`; the same scope flags filter `list` and `search` identically. You do **not** need `[REPO-NAME]` body prefix tags for per-repo organization — real `repo_id` scoping is the supported mechanism.
 
 Kinds (typed enum, validated): `core | retrieved | episodic | procedural | archival`. Default `retrieved`. Quick guide:
 

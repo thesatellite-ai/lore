@@ -374,6 +374,7 @@ var repoArchiveTarget = archiveTarget{
 
 func newMemoryListCommand() *cobra.Command {
 	var f commonFlags
+	var scope repoScopeFlags
 	var jsonOut, includeArchived bool
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -388,7 +389,20 @@ func newMemoryListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			repoID, err := resolveRepoID(cmd.Context(), client, projectID, rctx.RepoMount)
+			if err != nil {
+				return err
+			}
 			q := client.Memory.Query().Where(entMemory.ProjectID(projectID))
+			switch resolveRepoScope(scope, repoID) {
+			case scopeAll:
+			case scopeMasterOnly:
+				q = q.Where(entMemory.RepoIDIsNil())
+			case scopeRepoOnly:
+				q = q.Where(entMemory.RepoID(repoID))
+			case scopeInherit:
+				q = q.Where(entMemory.Or(entMemory.RepoID(repoID), entMemory.RepoIDIsNil()))
+			}
 			if !includeArchived {
 				q = q.Where(entMemory.ArchivedAtIsNil())
 			}
@@ -419,6 +433,7 @@ func newMemoryListCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindRepoScopeFlags(cmd, &scope)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	cmd.Flags().BoolVar(&includeArchived, constants.FlagArchived, false, "include archived memories")
 	return cmd
