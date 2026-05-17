@@ -1491,6 +1491,8 @@ var (
 		{Name: "body", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"todo", "in_progress", "done", "cancelled", "blocked"}, Default: "todo"},
 		{Name: "priority", Type: field.TypeEnum, Enums: []string{"low", "medium", "high", "urgent"}, Default: "medium"},
+		{Name: "commitment", Type: field.TypeEnum, Enums: []string{"accepted", "proposed", "someday"}, Default: "accepted"},
+		{Name: "deferred_until", Type: field.TypeTime, Nullable: true},
 		{Name: "due_at", Type: field.TypeTime, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
@@ -1508,19 +1510,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "tasks_missions_tasks",
-				Columns:    []*schema.Column{TasksColumns[14]},
+				Columns:    []*schema.Column{TasksColumns[16]},
 				RefColumns: []*schema.Column{MissionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tasks_plans_tasks",
-				Columns:    []*schema.Column{TasksColumns[15]},
+				Columns:    []*schema.Column{TasksColumns[17]},
 				RefColumns: []*schema.Column{PlansColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tasks_task_lists_tasks",
-				Columns:    []*schema.Column{TasksColumns[16]},
+				Columns:    []*schema.Column{TasksColumns[18]},
 				RefColumns: []*schema.Column{TaskListsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1532,24 +1534,29 @@ var (
 				Columns: []*schema.Column{TasksColumns[3], TasksColumns[7]},
 			},
 			{
-				Name:    "task_mission_id",
+				Name:    "task_project_id_commitment",
 				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[14]},
+				Columns: []*schema.Column{TasksColumns[3], TasksColumns[9]},
 			},
 			{
-				Name:    "task_tasklist_id",
+				Name:    "task_mission_id",
 				Unique:  false,
 				Columns: []*schema.Column{TasksColumns[16]},
 			},
 			{
+				Name:    "task_tasklist_id",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[18]},
+			},
+			{
 				Name:    "task_plan_id",
 				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[15]},
+				Columns: []*schema.Column{TasksColumns[17]},
 			},
 			{
 				Name:    "task_due_at",
 				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[9]},
+				Columns: []*schema.Column{TasksColumns[11]},
 			},
 		},
 	}

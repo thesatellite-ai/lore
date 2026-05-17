@@ -260,13 +260,19 @@ func briefFromTask(t *ent.Task) taskBrief {
 	if t.MissionID != nil {
 		mid = *t.MissionID
 	}
+	deferred := ""
+	if t.DeferredUntil != nil {
+		deferred = t.DeferredUntil.Format("2006-01-02")
+	}
 	return taskBrief{
-		ID:        t.ID,
-		Title:     t.Title,
-		Status:    string(t.Status),
-		Priority:  string(t.Priority),
-		DueAt:     due,
-		MissionID: mid,
+		ID:            t.ID,
+		Title:         t.Title,
+		Status:        string(t.Status),
+		Priority:      string(t.Priority),
+		Commitment:    string(t.Commitment),
+		DeferredUntil: deferred,
+		DueAt:         due,
+		MissionID:     mid,
 	}
 }
 

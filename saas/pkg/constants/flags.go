@@ -40,6 +40,14 @@ const (
 	FlagTarget      = "target"
 	FlagOut         = "out"
 	FlagNoPointer   = "no-pointer"
+
+	// Task commitment / deferral
+	FlagCommitment       = "commitment"
+	FlagDeferUntil       = "defer-until"
+	FlagClearDefer       = "clear-defer"
+	FlagIncludeProposed  = "include-proposed"
+	FlagIncludeSomeday   = "include-someday"
+	FlagIncludeDeferred  = "include-deferred"
 	FlagTags        = "tags"
 	FlagCode        = "code"
 

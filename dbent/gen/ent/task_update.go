@@ -120,6 +120,40 @@ func (_u *TaskUpdate) SetNillablePriority(v *task.Priority) *TaskUpdate {
 	return _u
 }
 
+// SetCommitment sets the "commitment" field.
+func (_u *TaskUpdate) SetCommitment(v task.Commitment) *TaskUpdate {
+	_u.mutation.SetCommitment(v)
+	return _u
+}
+
+// SetNillableCommitment sets the "commitment" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableCommitment(v *task.Commitment) *TaskUpdate {
+	if v != nil {
+		_u.SetCommitment(*v)
+	}
+	return _u
+}
+
+// SetDeferredUntil sets the "deferred_until" field.
+func (_u *TaskUpdate) SetDeferredUntil(v time.Time) *TaskUpdate {
+	_u.mutation.SetDeferredUntil(v)
+	return _u
+}
+
+// SetNillableDeferredUntil sets the "deferred_until" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableDeferredUntil(v *time.Time) *TaskUpdate {
+	if v != nil {
+		_u.SetDeferredUntil(*v)
+	}
+	return _u
+}
+
+// ClearDeferredUntil clears the value of the "deferred_until" field.
+func (_u *TaskUpdate) ClearDeferredUntil() *TaskUpdate {
+	_u.mutation.ClearDeferredUntil()
+	return _u
+}
+
 // SetDueAt sets the "due_at" field.
 func (_u *TaskUpdate) SetDueAt(v time.Time) *TaskUpdate {
 	_u.mutation.SetDueAt(v)
@@ -371,6 +405,11 @@ func (_u *TaskUpdate) check() error {
 			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "Task.priority": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Commitment(); ok {
+		if err := task.CommitmentValidator(v); err != nil {
+			return &ValidationError{Name: "commitment", err: fmt.Errorf(`ent: validator failed for field "Task.commitment": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -415,6 +454,15 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(task.FieldPriority, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.Commitment(); ok {
+		_spec.SetField(task.FieldCommitment, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.DeferredUntil(); ok {
+		_spec.SetField(task.FieldDeferredUntil, field.TypeTime, value)
+	}
+	if _u.mutation.DeferredUntilCleared() {
+		_spec.ClearField(task.FieldDeferredUntil, field.TypeTime)
 	}
 	if value, ok := _u.mutation.DueAt(); ok {
 		_spec.SetField(task.FieldDueAt, field.TypeTime, value)
@@ -640,6 +688,40 @@ func (_u *TaskUpdateOne) SetNillablePriority(v *task.Priority) *TaskUpdateOne {
 	if v != nil {
 		_u.SetPriority(*v)
 	}
+	return _u
+}
+
+// SetCommitment sets the "commitment" field.
+func (_u *TaskUpdateOne) SetCommitment(v task.Commitment) *TaskUpdateOne {
+	_u.mutation.SetCommitment(v)
+	return _u
+}
+
+// SetNillableCommitment sets the "commitment" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableCommitment(v *task.Commitment) *TaskUpdateOne {
+	if v != nil {
+		_u.SetCommitment(*v)
+	}
+	return _u
+}
+
+// SetDeferredUntil sets the "deferred_until" field.
+func (_u *TaskUpdateOne) SetDeferredUntil(v time.Time) *TaskUpdateOne {
+	_u.mutation.SetDeferredUntil(v)
+	return _u
+}
+
+// SetNillableDeferredUntil sets the "deferred_until" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableDeferredUntil(v *time.Time) *TaskUpdateOne {
+	if v != nil {
+		_u.SetDeferredUntil(*v)
+	}
+	return _u
+}
+
+// ClearDeferredUntil clears the value of the "deferred_until" field.
+func (_u *TaskUpdateOne) ClearDeferredUntil() *TaskUpdateOne {
+	_u.mutation.ClearDeferredUntil()
 	return _u
 }
 
@@ -907,6 +989,11 @@ func (_u *TaskUpdateOne) check() error {
 			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "Task.priority": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Commitment(); ok {
+		if err := task.CommitmentValidator(v); err != nil {
+			return &ValidationError{Name: "commitment", err: fmt.Errorf(`ent: validator failed for field "Task.commitment": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -968,6 +1055,15 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(task.FieldPriority, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.Commitment(); ok {
+		_spec.SetField(task.FieldCommitment, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.DeferredUntil(); ok {
+		_spec.SetField(task.FieldDeferredUntil, field.TypeTime, value)
+	}
+	if _u.mutation.DeferredUntilCleared() {
+		_spec.ClearField(task.FieldDeferredUntil, field.TypeTime)
 	}
 	if value, ok := _u.mutation.DueAt(); ok {
 		_spec.SetField(task.FieldDueAt, field.TypeTime, value)

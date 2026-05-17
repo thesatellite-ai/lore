@@ -58,6 +58,17 @@ func (Task) Fields() []ent.Field {
 			Values(taskPriorityValues...).
 			Default(string(TaskPriorityMedium)).
 			Annotations(enttui.Editable{}),
+		// commitment: is this agreed work? (orthogonal to status). See
+		// enums.go. Default `accepted` is safe for non-agent/manual callers;
+		// agent callers are forced to pass --commitment at the CLI.
+		field.Enum("commitment").
+			Values(taskCommitmentValues...).
+			Default(string(TaskCommitmentAccepted)).
+			Annotations(enttui.Editable{}),
+		// deferred_until: snooze. Real+accepted but hidden from active views
+		// until this time, then auto-resurfaces (query predicate, no
+		// scheduler). Nil = not deferred.
+		field.Time("deferred_until").Optional().Nillable(),
 		field.Time("due_at").Optional().Nillable(),
 		field.Time("started_at").Optional().Nillable(),
 		field.Time("completed_at").Optional().Nillable(),
@@ -87,6 +98,7 @@ func (Task) Edges() []ent.Edge {
 func (Task) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("project_id", "status"),
+		index.Fields("project_id", "commitment"),
 		index.Fields("mission_id"),
 		index.Fields("tasklist_id"),
 		index.Fields("plan_id"),
