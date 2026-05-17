@@ -111,25 +111,20 @@ func runMemorySearch(ctx context.Context, f *searchFlags, query string) error {
 
 	q := client.Memory.Query().Where(entMemory.ProjectID(projectID))
 
-	// Scope filter
-	switch {
-	case f.allRepos:
+	// Scope filter — shared decision (see repo_scope.go) so list + search
+	// never diverge
+	switch resolveRepoScope(repoScopeFlags{f.allRepos, f.masterOnly, f.noInherit}, repoID) {
+	case scopeAll:
 		// no repo filter
-	case f.masterOnly:
+	case scopeMasterOnly:
 		q = q.Where(entMemory.RepoIDIsNil())
-	case f.noInherit && repoID != "":
+	case scopeRepoOnly:
 		q = q.Where(entMemory.RepoID(repoID))
-	case f.noInherit:
-		q = q.Where(entMemory.RepoIDIsNil())
-	case repoID != "":
-		// Default with --repo: include both repo + master
+	case scopeInherit:
 		q = q.Where(entMemory.Or(
 			entMemory.RepoID(repoID),
 			entMemory.RepoIDIsNil(),
 		))
-	default:
-		// Default no --repo: master only
-		q = q.Where(entMemory.RepoIDIsNil())
 	}
 
 	if !f.includeArchived {

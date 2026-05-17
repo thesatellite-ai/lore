@@ -57,6 +57,7 @@ func newRuleCommand() *cobra.Command {
 
 func newRuleListCommand() *cobra.Command {
 	var f commonFlags
+	var scope repoScopeFlags
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -71,10 +72,21 @@ func newRuleListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := client.Rule.Query().
-				Where(entRule.ProjectID(projectID)).
-				Order(ent.Asc(entRule.FieldID)).
-				All(cmd.Context())
+			repoID, err := resolveRepoID(cmd.Context(), client, projectID, rctx.RepoMount)
+			if err != nil {
+				return err
+			}
+			q := client.Rule.Query().Where(entRule.ProjectID(projectID))
+			switch resolveRepoScope(scope, repoID) {
+			case scopeAll:
+			case scopeMasterOnly:
+				q = q.Where(entRule.RepoIDIsNil())
+			case scopeRepoOnly:
+				q = q.Where(entRule.RepoID(repoID))
+			case scopeInherit:
+				q = q.Where(entRule.Or(entRule.RepoID(repoID), entRule.RepoIDIsNil()))
+			}
+			rows, err := q.Order(ent.Asc(entRule.FieldID)).All(cmd.Context())
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list rules").WithCause(err)
 			}
@@ -97,6 +109,7 @@ func newRuleListCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindRepoScopeFlags(cmd, &scope)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
 }
@@ -287,6 +300,7 @@ type decisionAddFlags struct {
 
 func newDecisionListCommand() *cobra.Command {
 	var f commonFlags
+	var scope repoScopeFlags
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -301,10 +315,21 @@ func newDecisionListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := client.Decision.Query().
-				Where(entDecision.ProjectID(projectID)).
-				Order(ent.Asc(entDecision.FieldID)).
-				All(cmd.Context())
+			repoID, err := resolveRepoID(cmd.Context(), client, projectID, rctx.RepoMount)
+			if err != nil {
+				return err
+			}
+			q := client.Decision.Query().Where(entDecision.ProjectID(projectID))
+			switch resolveRepoScope(scope, repoID) {
+			case scopeAll:
+			case scopeMasterOnly:
+				q = q.Where(entDecision.RepoIDIsNil())
+			case scopeRepoOnly:
+				q = q.Where(entDecision.RepoID(repoID))
+			case scopeInherit:
+				q = q.Where(entDecision.Or(entDecision.RepoID(repoID), entDecision.RepoIDIsNil()))
+			}
+			rows, err := q.Order(ent.Asc(entDecision.FieldID)).All(cmd.Context())
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list decisions").WithCause(err)
 			}
@@ -327,6 +352,7 @@ func newDecisionListCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindRepoScopeFlags(cmd, &scope)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
 }
@@ -499,6 +525,7 @@ type hotfixAddFlags struct {
 
 func newHotfixListCommand() *cobra.Command {
 	var f commonFlags
+	var scope repoScopeFlags
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -513,10 +540,21 @@ func newHotfixListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := client.Hotfix.Query().
-				Where(entHotfix.ProjectID(projectID)).
-				Order(ent.Asc(entHotfix.FieldID)).
-				All(cmd.Context())
+			repoID, err := resolveRepoID(cmd.Context(), client, projectID, rctx.RepoMount)
+			if err != nil {
+				return err
+			}
+			q := client.Hotfix.Query().Where(entHotfix.ProjectID(projectID))
+			switch resolveRepoScope(scope, repoID) {
+			case scopeAll:
+			case scopeMasterOnly:
+				q = q.Where(entHotfix.RepoIDIsNil())
+			case scopeRepoOnly:
+				q = q.Where(entHotfix.RepoID(repoID))
+			case scopeInherit:
+				q = q.Where(entHotfix.Or(entHotfix.RepoID(repoID), entHotfix.RepoIDIsNil()))
+			}
+			rows, err := q.Order(ent.Asc(entHotfix.FieldID)).All(cmd.Context())
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list hotfixes").WithCause(err)
 			}
@@ -539,6 +577,7 @@ func newHotfixListCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindRepoScopeFlags(cmd, &scope)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
 }
