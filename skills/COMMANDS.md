@@ -61,7 +61,15 @@ lore memory list [--repo=web | --all-repos | --master-only | --no-inherit] [--js
 #   --master-only            → master rows only
 ```
 
-> Scope works on **`add`/`edit`/`search`/`list`** for every knowledge kind (`memory`, `rule`, `decision`, `hotfix`, `pattern`). `--repo` on `add` persists `repo_id`; the same scope flags filter `list` and `search` identically. You do **not** need `[REPO-NAME]` body prefix tags for per-repo organization — real `repo_id` scoping is the supported mechanism.
+> Scope binds at **`add`** time and filters on **`list`/`search`** for every knowledge kind (`memory`, `rule`, `decision`, `hotfix`, `pattern`). `--repo` on `add` persists `repo_id`; the same scope flags filter `list` and `search` identically. You do **not** need `[REPO-NAME]` body prefix tags for per-repo organization — real `repo_id` scoping is the supported mechanism.
+>
+> ⚠️ **`edit <kind> --repo` does NOT rebind scope (known limitation).** On `edit`, `--repo` is consumed only as *context* (which repo's data to resolve), not as a field mutation — the command returns `✓ updated` but `repo_id` is unchanged. Silent no-op. To move an existing row to a different repo, use the audited supersede path:
+>
+> ```bash
+> lore <kind> add "<same body>" --supersedes=<old_id> --repo=<mount>
+> ```
+>
+> This creates a new repo-scoped row and chains the old one (audited history), which is the documented correct path for scoped replacement. Do not rely on `edit --repo` for re-scoping — verify with `lore <kind> list --repo=<mount> --no-inherit` afterward.
 
 Kinds (typed enum, validated): `core | retrieved | episodic | procedural | archival`. Default `retrieved`. Quick guide:
 
