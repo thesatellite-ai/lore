@@ -49034,6 +49034,8 @@ type TaskMutation struct {
 	body                 *string
 	status               *task.Status
 	priority             *task.Priority
+	commitment           *task.Commitment
+	deferred_until       *time.Time
 	due_at               *time.Time
 	started_at           *time.Time
 	completed_at         *time.Time
@@ -49467,6 +49469,91 @@ func (m *TaskMutation) OldPriority(ctx context.Context) (v task.Priority, err er
 // ResetPriority resets all changes to the "priority" field.
 func (m *TaskMutation) ResetPriority() {
 	m.priority = nil
+}
+
+// SetCommitment sets the "commitment" field.
+func (m *TaskMutation) SetCommitment(t task.Commitment) {
+	m.commitment = &t
+}
+
+// Commitment returns the value of the "commitment" field in the mutation.
+func (m *TaskMutation) Commitment() (r task.Commitment, exists bool) {
+	v := m.commitment
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitment returns the old "commitment" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldCommitment(ctx context.Context) (v task.Commitment, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitment is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitment requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitment: %w", err)
+	}
+	return oldValue.Commitment, nil
+}
+
+// ResetCommitment resets all changes to the "commitment" field.
+func (m *TaskMutation) ResetCommitment() {
+	m.commitment = nil
+}
+
+// SetDeferredUntil sets the "deferred_until" field.
+func (m *TaskMutation) SetDeferredUntil(t time.Time) {
+	m.deferred_until = &t
+}
+
+// DeferredUntil returns the value of the "deferred_until" field in the mutation.
+func (m *TaskMutation) DeferredUntil() (r time.Time, exists bool) {
+	v := m.deferred_until
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeferredUntil returns the old "deferred_until" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldDeferredUntil(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeferredUntil is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeferredUntil requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeferredUntil: %w", err)
+	}
+	return oldValue.DeferredUntil, nil
+}
+
+// ClearDeferredUntil clears the value of the "deferred_until" field.
+func (m *TaskMutation) ClearDeferredUntil() {
+	m.deferred_until = nil
+	m.clearedFields[task.FieldDeferredUntil] = struct{}{}
+}
+
+// DeferredUntilCleared returns if the "deferred_until" field was cleared in this mutation.
+func (m *TaskMutation) DeferredUntilCleared() bool {
+	_, ok := m.clearedFields[task.FieldDeferredUntil]
+	return ok
+}
+
+// ResetDeferredUntil resets all changes to the "deferred_until" field.
+func (m *TaskMutation) ResetDeferredUntil() {
+	m.deferred_until = nil
+	delete(m.clearedFields, task.FieldDeferredUntil)
 }
 
 // SetDueAt sets the "due_at" field.
@@ -49976,7 +50063,7 @@ func (m *TaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaskMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 18)
 	if m.created_at != nil {
 		fields = append(fields, task.FieldCreatedAt)
 	}
@@ -50000,6 +50087,12 @@ func (m *TaskMutation) Fields() []string {
 	}
 	if m.priority != nil {
 		fields = append(fields, task.FieldPriority)
+	}
+	if m.commitment != nil {
+		fields = append(fields, task.FieldCommitment)
+	}
+	if m.deferred_until != nil {
+		fields = append(fields, task.FieldDeferredUntil)
 	}
 	if m.due_at != nil {
 		fields = append(fields, task.FieldDueAt)
@@ -50049,6 +50142,10 @@ func (m *TaskMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case task.FieldPriority:
 		return m.Priority()
+	case task.FieldCommitment:
+		return m.Commitment()
+	case task.FieldDeferredUntil:
+		return m.DeferredUntil()
 	case task.FieldDueAt:
 		return m.DueAt()
 	case task.FieldStartedAt:
@@ -50090,6 +50187,10 @@ func (m *TaskMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldStatus(ctx)
 	case task.FieldPriority:
 		return m.OldPriority(ctx)
+	case task.FieldCommitment:
+		return m.OldCommitment(ctx)
+	case task.FieldDeferredUntil:
+		return m.OldDeferredUntil(ctx)
 	case task.FieldDueAt:
 		return m.OldDueAt(ctx)
 	case task.FieldStartedAt:
@@ -50170,6 +50271,20 @@ func (m *TaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPriority(v)
+		return nil
+	case task.FieldCommitment:
+		v, ok := value.(task.Commitment)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitment(v)
+		return nil
+	case task.FieldDeferredUntil:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeferredUntil(v)
 		return nil
 	case task.FieldDueAt:
 		v, ok := value.(time.Time)
@@ -50263,6 +50378,9 @@ func (m *TaskMutation) ClearedFields() []string {
 	if m.FieldCleared(task.FieldBody) {
 		fields = append(fields, task.FieldBody)
 	}
+	if m.FieldCleared(task.FieldDeferredUntil) {
+		fields = append(fields, task.FieldDeferredUntil)
+	}
 	if m.FieldCleared(task.FieldDueAt) {
 		fields = append(fields, task.FieldDueAt)
 	}
@@ -50306,6 +50424,9 @@ func (m *TaskMutation) ClearField(name string) error {
 		return nil
 	case task.FieldBody:
 		m.ClearBody()
+		return nil
+	case task.FieldDeferredUntil:
+		m.ClearDeferredUntil()
 		return nil
 	case task.FieldDueAt:
 		m.ClearDueAt()
@@ -50362,6 +50483,12 @@ func (m *TaskMutation) ResetField(name string) error {
 		return nil
 	case task.FieldPriority:
 		m.ResetPriority()
+		return nil
+	case task.FieldCommitment:
+		m.ResetCommitment()
+		return nil
+	case task.FieldDeferredUntil:
+		m.ResetDeferredUntil()
 		return nil
 	case task.FieldDueAt:
 		m.ResetDueAt()

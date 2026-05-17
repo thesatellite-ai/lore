@@ -5,5 +5,5 @@ package runtime
 // The schema-stitching logic is generated in dbent/gen/ent/runtime.go
 
 const (
-	Version = "v0.14.5" // Version of ent codegen.
+	Version = "v0.14.6" // Version of ent codegen.
 )
