@@ -109,7 +109,9 @@ lore tui                         # browse everything interactively
   `pattern`, `hotfix`, `snapshot`, `playbook`, `prompt`, `task`, `mission`,
   `plan`, `reminder`, `handoff`, `incident`, `techdoc`, and more.
 - **Scope** — knowledge is scoped to the whole project (`master`) or a specific
-  `--repo`. Most commands accept `--repo` and `--project`.
+  `--repo`. `add`/`edit` persist `repo_id`; `list` and `search` filter by it with
+  identical semantics (`--repo`, `--all-repos`, `--master-only`, `--no-inherit`).
+  Real per-repo scoping — no body prefix-tag convention needed.
 - **Render** — `lore render` compiles the relevant scoped knowledge into
   `CLAUDE.md` (or `AGENTS.md` / `.cursorrules` via `--target`).
 

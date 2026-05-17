@@ -175,6 +175,7 @@ func newPatternAddCommand() *cobra.Command {
 
 func newPatternListCommand() *cobra.Command {
 	var f commonFlags
+	var scope repoScopeFlags
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -189,10 +190,21 @@ func newPatternListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := client.Pattern.Query().
-				Where(entPattern.ProjectID(projectID)).
-				Order(ent.Asc(entPattern.FieldID)).
-				All(cmd.Context())
+			repoID, err := resolveRepoID(cmd.Context(), client, projectID, rctx.RepoMount)
+			if err != nil {
+				return err
+			}
+			q := client.Pattern.Query().Where(entPattern.ProjectID(projectID))
+			switch resolveRepoScope(scope, repoID) {
+			case scopeAll:
+			case scopeMasterOnly:
+				q = q.Where(entPattern.RepoIDIsNil())
+			case scopeRepoOnly:
+				q = q.Where(entPattern.RepoID(repoID))
+			case scopeInherit:
+				q = q.Where(entPattern.Or(entPattern.RepoID(repoID), entPattern.RepoIDIsNil()))
+			}
+			rows, err := q.Order(ent.Asc(entPattern.FieldID)).All(cmd.Context())
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list patterns").WithCause(err)
 			}
@@ -211,6 +223,7 @@ func newPatternListCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindRepoScopeFlags(cmd, &scope)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
 }
