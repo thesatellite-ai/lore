@@ -111,6 +111,7 @@ const (
 	FlagFile           = "file"
 	FlagColumn         = "column"
 	FlagFilter         = "filter"
+	FlagSort           = "sort"
 	FlagEntity         = "entity"
 	FlagError          = "error"
 	FlagExpiring       = "expiring"

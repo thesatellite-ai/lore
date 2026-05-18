@@ -58,6 +58,7 @@ func init() {
 	rootCmd.AddCommand(newHotfixCommand())
 	rootCmd.AddCommand(newRenderCommand())
 	rootCmd.AddCommand(newDoctorCommand())
+	rootCmd.AddCommand(newTablesCommand())
 	rootCmd.AddCommand(newWhyContextCommand())
 	rootCmd.AddCommand(newVersionCommand())
 	rootCmd.AddCommand(newErrorsCommand())
