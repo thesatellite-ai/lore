@@ -161,15 +161,15 @@ func init() {
 	// architecturenote.ProjectIDValidator is a validator for the "project_id" field. It is called by the builders before save.
 	architecturenote.ProjectIDValidator = architecturenoteDescProjectID.Validators[0].(func(string) error)
 	// architecturenoteDescTitle is the schema descriptor for title field.
-	architecturenoteDescTitle := architecturenoteFields[1].Descriptor()
+	architecturenoteDescTitle := architecturenoteFields[2].Descriptor()
 	// architecturenote.TitleValidator is a validator for the "title" field. It is called by the builders before save.
 	architecturenote.TitleValidator = architecturenoteDescTitle.Validators[0].(func(string) error)
 	// architecturenoteDescBody is the schema descriptor for body field.
-	architecturenoteDescBody := architecturenoteFields[2].Descriptor()
+	architecturenoteDescBody := architecturenoteFields[3].Descriptor()
 	// architecturenote.BodyValidator is a validator for the "body" field. It is called by the builders before save.
 	architecturenote.BodyValidator = architecturenoteDescBody.Validators[0].(func(string) error)
 	// architecturenoteDescCreatedByActorID is the schema descriptor for created_by_actor_id field.
-	architecturenoteDescCreatedByActorID := architecturenoteFields[3].Descriptor()
+	architecturenoteDescCreatedByActorID := architecturenoteFields[4].Descriptor()
 	// architecturenote.CreatedByActorIDValidator is a validator for the "created_by_actor_id" field. It is called by the builders before save.
 	architecturenote.CreatedByActorIDValidator = architecturenoteDescCreatedByActorID.Validators[0].(func(string) error)
 	// architecturenoteDescID is the schema descriptor for id field.

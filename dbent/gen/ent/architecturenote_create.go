@@ -57,6 +57,20 @@ func (_c *ArchitectureNoteCreate) SetProjectID(v string) *ArchitectureNoteCreate
 	return _c
 }
 
+// SetRepoID sets the "repo_id" field.
+func (_c *ArchitectureNoteCreate) SetRepoID(v string) *ArchitectureNoteCreate {
+	_c.mutation.SetRepoID(v)
+	return _c
+}
+
+// SetNillableRepoID sets the "repo_id" field if the given value is not nil.
+func (_c *ArchitectureNoteCreate) SetNillableRepoID(v *string) *ArchitectureNoteCreate {
+	if v != nil {
+		_c.SetRepoID(*v)
+	}
+	return _c
+}
+
 // SetTitle sets the "title" field.
 func (_c *ArchitectureNoteCreate) SetTitle(v string) *ArchitectureNoteCreate {
 	_c.mutation.SetTitle(v)
@@ -236,6 +250,10 @@ func (_c *ArchitectureNoteCreate) createSpec() (*ArchitectureNote, *sqlgraph.Cre
 		_spec.SetField(architecturenote.FieldProjectID, field.TypeString, value)
 		_node.ProjectID = value
 	}
+	if value, ok := _c.mutation.RepoID(); ok {
+		_spec.SetField(architecturenote.FieldRepoID, field.TypeString, value)
+		_node.RepoID = &value
+	}
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(architecturenote.FieldTitle, field.TypeString, value)
 		_node.Title = value
@@ -309,6 +327,24 @@ func (u *ArchitectureNoteUpsert) SetUpdatedAt(v time.Time) *ArchitectureNoteUpse
 // UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
 func (u *ArchitectureNoteUpsert) UpdateUpdatedAt() *ArchitectureNoteUpsert {
 	u.SetExcluded(architecturenote.FieldUpdatedAt)
+	return u
+}
+
+// SetRepoID sets the "repo_id" field.
+func (u *ArchitectureNoteUpsert) SetRepoID(v string) *ArchitectureNoteUpsert {
+	u.Set(architecturenote.FieldRepoID, v)
+	return u
+}
+
+// UpdateRepoID sets the "repo_id" field to the value that was provided on create.
+func (u *ArchitectureNoteUpsert) UpdateRepoID() *ArchitectureNoteUpsert {
+	u.SetExcluded(architecturenote.FieldRepoID)
+	return u
+}
+
+// ClearRepoID clears the value of the "repo_id" field.
+func (u *ArchitectureNoteUpsert) ClearRepoID() *ArchitectureNoteUpsert {
+	u.SetNull(architecturenote.FieldRepoID)
 	return u
 }
 
@@ -419,6 +455,27 @@ func (u *ArchitectureNoteUpsertOne) SetUpdatedAt(v time.Time) *ArchitectureNoteU
 func (u *ArchitectureNoteUpsertOne) UpdateUpdatedAt() *ArchitectureNoteUpsertOne {
 	return u.Update(func(s *ArchitectureNoteUpsert) {
 		s.UpdateUpdatedAt()
+	})
+}
+
+// SetRepoID sets the "repo_id" field.
+func (u *ArchitectureNoteUpsertOne) SetRepoID(v string) *ArchitectureNoteUpsertOne {
+	return u.Update(func(s *ArchitectureNoteUpsert) {
+		s.SetRepoID(v)
+	})
+}
+
+// UpdateRepoID sets the "repo_id" field to the value that was provided on create.
+func (u *ArchitectureNoteUpsertOne) UpdateRepoID() *ArchitectureNoteUpsertOne {
+	return u.Update(func(s *ArchitectureNoteUpsert) {
+		s.UpdateRepoID()
+	})
+}
+
+// ClearRepoID clears the value of the "repo_id" field.
+func (u *ArchitectureNoteUpsertOne) ClearRepoID() *ArchitectureNoteUpsertOne {
+	return u.Update(func(s *ArchitectureNoteUpsert) {
+		s.ClearRepoID()
 	})
 }
 
@@ -703,6 +760,27 @@ func (u *ArchitectureNoteUpsertBulk) SetUpdatedAt(v time.Time) *ArchitectureNote
 func (u *ArchitectureNoteUpsertBulk) UpdateUpdatedAt() *ArchitectureNoteUpsertBulk {
 	return u.Update(func(s *ArchitectureNoteUpsert) {
 		s.UpdateUpdatedAt()
+	})
+}
+
+// SetRepoID sets the "repo_id" field.
+func (u *ArchitectureNoteUpsertBulk) SetRepoID(v string) *ArchitectureNoteUpsertBulk {
+	return u.Update(func(s *ArchitectureNoteUpsert) {
+		s.SetRepoID(v)
+	})
+}
+
+// UpdateRepoID sets the "repo_id" field to the value that was provided on create.
+func (u *ArchitectureNoteUpsertBulk) UpdateRepoID() *ArchitectureNoteUpsertBulk {
+	return u.Update(func(s *ArchitectureNoteUpsert) {
+		s.UpdateRepoID()
+	})
+}
+
+// ClearRepoID clears the value of the "repo_id" field.
+func (u *ArchitectureNoteUpsertBulk) ClearRepoID() *ArchitectureNoteUpsertBulk {
+	return u.Update(func(s *ArchitectureNoteUpsert) {
+		s.ClearRepoID()
 	})
 }
 

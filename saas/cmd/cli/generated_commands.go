@@ -591,8 +591,15 @@ func newArchitectureNoteAddCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			repoID, err := resolveRepoID(cmd.Context(), client, projectID, rctx.RepoMount)
+			if err != nil {
+				return err
+			}
 			create := client.ArchitectureNote.Create().
 				SetProjectID(projectID)
+			if repoID != "" {
+				create.SetRepoID(repoID)
+			}
 			if title != "" {
 				cleanTitle, err := textnorm.Normalize(title)
 				if err != nil {
@@ -633,6 +640,7 @@ func newArchitectureNoteAddCommand() *cobra.Command {
 
 func newArchitectureNoteListCommand() *cobra.Command {
 	var f commonFlags
+	var scope repoScopeFlags
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -647,8 +655,21 @@ func newArchitectureNoteListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := client.ArchitectureNote.Query().
-				Where(entArchitectureNote.ProjectID(projectID)).
+			repoID, err := resolveRepoID(cmd.Context(), client, projectID, rctx.RepoMount)
+			if err != nil {
+				return err
+			}
+			q := client.ArchitectureNote.Query().Where(entArchitectureNote.ProjectID(projectID))
+			switch resolveRepoScope(scope, repoID) {
+			case scopeAll:
+			case scopeMasterOnly:
+				q = q.Where(entArchitectureNote.RepoIDIsNil())
+			case scopeRepoOnly:
+				q = q.Where(entArchitectureNote.RepoID(repoID))
+			case scopeInherit:
+				q = q.Where(entArchitectureNote.Or(entArchitectureNote.RepoID(repoID), entArchitectureNote.RepoIDIsNil()))
+			}
+			rows, err := q.
 				Order(ent.Asc(entArchitectureNote.FieldID)).
 				All(cmd.Context())
 			if err != nil {
@@ -669,6 +690,7 @@ func newArchitectureNoteListCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindRepoScopeFlags(cmd, &scope)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
 }

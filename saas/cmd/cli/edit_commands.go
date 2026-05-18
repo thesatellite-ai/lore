@@ -274,7 +274,8 @@ func newPromptEditCommand() *cobra.Command {
 
 func newArchitectureNoteEditCommand() *cobra.Command {
 	var f commonFlags
-	var title, body string
+	var title, body, rebindRepo string
+	var rebindMaster bool
 	cmd := &cobra.Command{
 		Use:   "edit <id>",
 		Short: "Edit architecture-note fields",
@@ -311,6 +312,16 @@ func newArchitectureNoteEditCommand() *cobra.Command {
 				}
 				upd.SetBody(v)
 			}
+			reb, err := resolveScopeRebind(cmd, cmd.Context(), client, row.ProjectID, rebindRepo, rebindMaster)
+			if err != nil {
+				return err
+			}
+			if reb.set {
+				upd.SetRepoID(reb.repoID)
+			}
+			if reb.clear {
+				upd.ClearRepoID()
+			}
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "update architecture-note").WithCause(err)
 			}
@@ -319,6 +330,7 @@ func newArchitectureNoteEditCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindScopeRebindFlags(cmd, &rebindRepo, &rebindMaster)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "new title")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "new body")
 	return cmd

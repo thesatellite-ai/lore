@@ -363,6 +363,11 @@ func (_q *ArchitectureNoteQuery) collectField(ctx context.Context, oneNode bool,
 				selectedFields = append(selectedFields, architecturenote.FieldProjectID)
 				fieldSeen[architecturenote.FieldProjectID] = struct{}{}
 			}
+		case "repoID":
+			if _, ok := fieldSeen[architecturenote.FieldRepoID]; !ok {
+				selectedFields = append(selectedFields, architecturenote.FieldRepoID)
+				fieldSeen[architecturenote.FieldRepoID] = struct{}{}
+			}
 		case "title":
 			if _, ok := fieldSeen[architecturenote.FieldTitle]; !ok {
 				selectedFields = append(selectedFields, architecturenote.FieldTitle)

@@ -35,6 +35,26 @@ func (_u *ArchitectureNoteUpdate) SetUpdatedAt(v time.Time) *ArchitectureNoteUpd
 	return _u
 }
 
+// SetRepoID sets the "repo_id" field.
+func (_u *ArchitectureNoteUpdate) SetRepoID(v string) *ArchitectureNoteUpdate {
+	_u.mutation.SetRepoID(v)
+	return _u
+}
+
+// SetNillableRepoID sets the "repo_id" field if the given value is not nil.
+func (_u *ArchitectureNoteUpdate) SetNillableRepoID(v *string) *ArchitectureNoteUpdate {
+	if v != nil {
+		_u.SetRepoID(*v)
+	}
+	return _u
+}
+
+// ClearRepoID clears the value of the "repo_id" field.
+func (_u *ArchitectureNoteUpdate) ClearRepoID() *ArchitectureNoteUpdate {
+	_u.mutation.ClearRepoID()
+	return _u
+}
+
 // SetTitle sets the "title" field.
 func (_u *ArchitectureNoteUpdate) SetTitle(v string) *ArchitectureNoteUpdate {
 	_u.mutation.SetTitle(v)
@@ -165,6 +185,12 @@ func (_u *ArchitectureNoteUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(architecturenote.FieldUpdatedAt, field.TypeTime, value)
 	}
+	if value, ok := _u.mutation.RepoID(); ok {
+		_spec.SetField(architecturenote.FieldRepoID, field.TypeString, value)
+	}
+	if _u.mutation.RepoIDCleared() {
+		_spec.ClearField(architecturenote.FieldRepoID, field.TypeString)
+	}
 	if value, ok := _u.mutation.Title(); ok {
 		_spec.SetField(architecturenote.FieldTitle, field.TypeString, value)
 	}
@@ -202,6 +228,26 @@ type ArchitectureNoteUpdateOne struct {
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ArchitectureNoteUpdateOne) SetUpdatedAt(v time.Time) *ArchitectureNoteUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
+	return _u
+}
+
+// SetRepoID sets the "repo_id" field.
+func (_u *ArchitectureNoteUpdateOne) SetRepoID(v string) *ArchitectureNoteUpdateOne {
+	_u.mutation.SetRepoID(v)
+	return _u
+}
+
+// SetNillableRepoID sets the "repo_id" field if the given value is not nil.
+func (_u *ArchitectureNoteUpdateOne) SetNillableRepoID(v *string) *ArchitectureNoteUpdateOne {
+	if v != nil {
+		_u.SetRepoID(*v)
+	}
+	return _u
+}
+
+// ClearRepoID clears the value of the "repo_id" field.
+func (_u *ArchitectureNoteUpdateOne) ClearRepoID() *ArchitectureNoteUpdateOne {
+	_u.mutation.ClearRepoID()
 	return _u
 }
 
@@ -364,6 +410,12 @@ func (_u *ArchitectureNoteUpdateOne) sqlSave(ctx context.Context) (_node *Archit
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(architecturenote.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.RepoID(); ok {
+		_spec.SetField(architecturenote.FieldRepoID, field.TypeString, value)
+	}
+	if _u.mutation.RepoIDCleared() {
+		_spec.ClearField(architecturenote.FieldRepoID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Title(); ok {
 		_spec.SetField(architecturenote.FieldTitle, field.TypeString, value)
