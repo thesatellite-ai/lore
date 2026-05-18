@@ -76,6 +76,8 @@ func runTUI(ctx context.Context, f *tuiFlags) error {
 	app.SetDefaultViewMode(f.view)
 	app.SetInitialKind(f.kind)
 	tuigen.RegisterAll(app, client)
+	// Synthetic non-ent screen: all-tables overview (see tui_tables.go)
+	registerTablesScreen(app, rctx.DBPath)
 
 	return app.Run()
 }
