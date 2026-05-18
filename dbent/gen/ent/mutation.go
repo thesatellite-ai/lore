@@ -1564,6 +1564,7 @@ type ArchitectureNoteMutation struct {
 	created_at          *time.Time
 	updated_at          *time.Time
 	project_id          *string
+	repo_id             *string
 	title               *string
 	body                *string
 	created_by_actor_id *string
@@ -1785,6 +1786,55 @@ func (m *ArchitectureNoteMutation) ResetProjectID() {
 	m.project_id = nil
 }
 
+// SetRepoID sets the "repo_id" field.
+func (m *ArchitectureNoteMutation) SetRepoID(s string) {
+	m.repo_id = &s
+}
+
+// RepoID returns the value of the "repo_id" field in the mutation.
+func (m *ArchitectureNoteMutation) RepoID() (r string, exists bool) {
+	v := m.repo_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRepoID returns the old "repo_id" field's value of the ArchitectureNote entity.
+// If the ArchitectureNote object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ArchitectureNoteMutation) OldRepoID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRepoID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRepoID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRepoID: %w", err)
+	}
+	return oldValue.RepoID, nil
+}
+
+// ClearRepoID clears the value of the "repo_id" field.
+func (m *ArchitectureNoteMutation) ClearRepoID() {
+	m.repo_id = nil
+	m.clearedFields[architecturenote.FieldRepoID] = struct{}{}
+}
+
+// RepoIDCleared returns if the "repo_id" field was cleared in this mutation.
+func (m *ArchitectureNoteMutation) RepoIDCleared() bool {
+	_, ok := m.clearedFields[architecturenote.FieldRepoID]
+	return ok
+}
+
+// ResetRepoID resets all changes to the "repo_id" field.
+func (m *ArchitectureNoteMutation) ResetRepoID() {
+	m.repo_id = nil
+	delete(m.clearedFields, architecturenote.FieldRepoID)
+}
+
 // SetTitle sets the "title" field.
 func (m *ArchitectureNoteMutation) SetTitle(s string) {
 	m.title = &s
@@ -1940,7 +1990,7 @@ func (m *ArchitectureNoteMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ArchitectureNoteMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.created_at != nil {
 		fields = append(fields, architecturenote.FieldCreatedAt)
 	}
@@ -1949,6 +1999,9 @@ func (m *ArchitectureNoteMutation) Fields() []string {
 	}
 	if m.project_id != nil {
 		fields = append(fields, architecturenote.FieldProjectID)
+	}
+	if m.repo_id != nil {
+		fields = append(fields, architecturenote.FieldRepoID)
 	}
 	if m.title != nil {
 		fields = append(fields, architecturenote.FieldTitle)
@@ -1973,6 +2026,8 @@ func (m *ArchitectureNoteMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedAt()
 	case architecturenote.FieldProjectID:
 		return m.ProjectID()
+	case architecturenote.FieldRepoID:
+		return m.RepoID()
 	case architecturenote.FieldTitle:
 		return m.Title()
 	case architecturenote.FieldBody:
@@ -1994,6 +2049,8 @@ func (m *ArchitectureNoteMutation) OldField(ctx context.Context, name string) (e
 		return m.OldUpdatedAt(ctx)
 	case architecturenote.FieldProjectID:
 		return m.OldProjectID(ctx)
+	case architecturenote.FieldRepoID:
+		return m.OldRepoID(ctx)
 	case architecturenote.FieldTitle:
 		return m.OldTitle(ctx)
 	case architecturenote.FieldBody:
@@ -2029,6 +2086,13 @@ func (m *ArchitectureNoteMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProjectID(v)
+		return nil
+	case architecturenote.FieldRepoID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRepoID(v)
 		return nil
 	case architecturenote.FieldTitle:
 		v, ok := value.(string)
@@ -2081,6 +2145,9 @@ func (m *ArchitectureNoteMutation) AddField(name string, value ent.Value) error 
 // mutation.
 func (m *ArchitectureNoteMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(architecturenote.FieldRepoID) {
+		fields = append(fields, architecturenote.FieldRepoID)
+	}
 	if m.FieldCleared(architecturenote.FieldCreatedByActorID) {
 		fields = append(fields, architecturenote.FieldCreatedByActorID)
 	}
@@ -2098,6 +2165,9 @@ func (m *ArchitectureNoteMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ArchitectureNoteMutation) ClearField(name string) error {
 	switch name {
+	case architecturenote.FieldRepoID:
+		m.ClearRepoID()
+		return nil
 	case architecturenote.FieldCreatedByActorID:
 		m.ClearCreatedByActorID()
 		return nil
@@ -2117,6 +2187,9 @@ func (m *ArchitectureNoteMutation) ResetField(name string) error {
 		return nil
 	case architecturenote.FieldProjectID:
 		m.ResetProjectID()
+		return nil
+	case architecturenote.FieldRepoID:
+		m.ResetRepoID()
 		return nil
 	case architecturenote.FieldTitle:
 		m.ResetTitle()

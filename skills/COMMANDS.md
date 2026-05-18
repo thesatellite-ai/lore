@@ -61,9 +61,9 @@ lore memory list [--repo=web | --all-repos | --master-only | --no-inherit] [--js
 #   --master-only            → master rows only
 ```
 
-> Scope binds at **`add`** time and filters on **`list`/`search`** for every knowledge kind (`memory`, `rule`, `decision`, `hotfix`, `pattern`). `--repo` on `add` persists `repo_id`; the same scope flags filter `list` and `search` identically. You do **not** need `[REPO-NAME]` body prefix tags for per-repo organization — real `repo_id` scoping is the supported mechanism.
+> Scope binds at **`add`** time and filters on **`list`/`search`** for every knowledge kind (`memory`, `rule`, `decision`, `hotfix`, `pattern`, `architecturenote`). `--repo` on `add` persists `repo_id`; the same scope flags filter `list` and `search` identically. You do **not** need `[REPO-NAME]` body prefix tags for per-repo organization — real `repo_id` scoping is the supported mechanism.
 >
-> **Re-scoping an existing row** (`memory/rule/decision/hotfix/pattern`): use the explicit rebind flags on `edit`:
+> **Re-scoping an existing row** (`memory/rule/decision/hotfix/pattern/architecturenote`): use the explicit rebind flags on `edit`:
 >
 > ```bash
 > lore <kind> edit <id> --rebind-repo=<mount>   # move row to that repo (sets repo_id)

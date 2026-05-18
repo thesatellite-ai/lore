@@ -79,6 +79,11 @@ func ProjectID(v string) predicate.ArchitectureNote {
 	return predicate.ArchitectureNote(sql.FieldEQ(FieldProjectID, v))
 }
 
+// RepoID applies equality check predicate on the "repo_id" field. It's identical to RepoIDEQ.
+func RepoID(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldEQ(FieldRepoID, v))
+}
+
 // Title applies equality check predicate on the "title" field. It's identical to TitleEQ.
 func Title(v string) predicate.ArchitectureNote {
 	return predicate.ArchitectureNote(sql.FieldEQ(FieldTitle, v))
@@ -237,6 +242,81 @@ func ProjectIDEqualFold(v string) predicate.ArchitectureNote {
 // ProjectIDContainsFold applies the ContainsFold predicate on the "project_id" field.
 func ProjectIDContainsFold(v string) predicate.ArchitectureNote {
 	return predicate.ArchitectureNote(sql.FieldContainsFold(FieldProjectID, v))
+}
+
+// RepoIDEQ applies the EQ predicate on the "repo_id" field.
+func RepoIDEQ(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldEQ(FieldRepoID, v))
+}
+
+// RepoIDNEQ applies the NEQ predicate on the "repo_id" field.
+func RepoIDNEQ(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldNEQ(FieldRepoID, v))
+}
+
+// RepoIDIn applies the In predicate on the "repo_id" field.
+func RepoIDIn(vs ...string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldIn(FieldRepoID, vs...))
+}
+
+// RepoIDNotIn applies the NotIn predicate on the "repo_id" field.
+func RepoIDNotIn(vs ...string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldNotIn(FieldRepoID, vs...))
+}
+
+// RepoIDGT applies the GT predicate on the "repo_id" field.
+func RepoIDGT(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldGT(FieldRepoID, v))
+}
+
+// RepoIDGTE applies the GTE predicate on the "repo_id" field.
+func RepoIDGTE(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldGTE(FieldRepoID, v))
+}
+
+// RepoIDLT applies the LT predicate on the "repo_id" field.
+func RepoIDLT(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldLT(FieldRepoID, v))
+}
+
+// RepoIDLTE applies the LTE predicate on the "repo_id" field.
+func RepoIDLTE(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldLTE(FieldRepoID, v))
+}
+
+// RepoIDContains applies the Contains predicate on the "repo_id" field.
+func RepoIDContains(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldContains(FieldRepoID, v))
+}
+
+// RepoIDHasPrefix applies the HasPrefix predicate on the "repo_id" field.
+func RepoIDHasPrefix(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldHasPrefix(FieldRepoID, v))
+}
+
+// RepoIDHasSuffix applies the HasSuffix predicate on the "repo_id" field.
+func RepoIDHasSuffix(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldHasSuffix(FieldRepoID, v))
+}
+
+// RepoIDIsNil applies the IsNil predicate on the "repo_id" field.
+func RepoIDIsNil() predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldIsNull(FieldRepoID))
+}
+
+// RepoIDNotNil applies the NotNil predicate on the "repo_id" field.
+func RepoIDNotNil() predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldNotNull(FieldRepoID))
+}
+
+// RepoIDEqualFold applies the EqualFold predicate on the "repo_id" field.
+func RepoIDEqualFold(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldEqualFold(FieldRepoID, v))
+}
+
+// RepoIDContainsFold applies the ContainsFold predicate on the "repo_id" field.
+func RepoIDContainsFold(v string) predicate.ArchitectureNote {
+	return predicate.ArchitectureNote(sql.FieldContainsFold(FieldRepoID, v))
 }
 
 // TitleEQ applies the EQ predicate on the "title" field.
