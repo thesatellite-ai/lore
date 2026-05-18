@@ -19,6 +19,8 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldProjectID holds the string denoting the project_id field in the database.
 	FieldProjectID = "project_id"
+	// FieldRepoID holds the string denoting the repo_id field in the database.
+	FieldRepoID = "repo_id"
 	// FieldTitle holds the string denoting the title field in the database.
 	FieldTitle = "title"
 	// FieldBody holds the string denoting the body field in the database.
@@ -35,6 +37,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldProjectID,
+	FieldRepoID,
 	FieldTitle,
 	FieldBody,
 	FieldCreatedByActorID,
@@ -92,6 +95,11 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByProjectID orders the results by the project_id field.
 func ByProjectID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProjectID, opts...).ToFunc()
+}
+
+// ByRepoID orders the results by the repo_id field.
+func ByRepoID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRepoID, opts...).ToFunc()
 }
 
 // ByTitle orders the results by the title field.

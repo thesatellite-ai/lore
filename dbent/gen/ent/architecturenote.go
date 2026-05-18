@@ -23,6 +23,8 @@ type ArchitectureNote struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// ProjectID holds the value of the "project_id" field.
 	ProjectID string `json:"project_id,omitempty"`
+	// RepoID holds the value of the "repo_id" field.
+	RepoID *string `json:"repo_id,omitempty"`
 	// Title holds the value of the "title" field.
 	Title string `json:"title,omitempty"`
 	// Body holds the value of the "body" field.
@@ -37,7 +39,7 @@ func (*ArchitectureNote) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case architecturenote.FieldID, architecturenote.FieldProjectID, architecturenote.FieldTitle, architecturenote.FieldBody, architecturenote.FieldCreatedByActorID:
+		case architecturenote.FieldID, architecturenote.FieldProjectID, architecturenote.FieldRepoID, architecturenote.FieldTitle, architecturenote.FieldBody, architecturenote.FieldCreatedByActorID:
 			values[i] = new(sql.NullString)
 		case architecturenote.FieldCreatedAt, architecturenote.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -79,6 +81,13 @@ func (_m *ArchitectureNote) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field project_id", values[i])
 			} else if value.Valid {
 				_m.ProjectID = value.String
+			}
+		case architecturenote.FieldRepoID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field repo_id", values[i])
+			} else if value.Valid {
+				_m.RepoID = new(string)
+				*_m.RepoID = value.String
 			}
 		case architecturenote.FieldTitle:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -143,6 +152,11 @@ func (_m *ArchitectureNote) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("project_id=")
 	builder.WriteString(_m.ProjectID)
+	builder.WriteString(", ")
+	if v := _m.RepoID; v != nil {
+		builder.WriteString("repo_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("title=")
 	builder.WriteString(_m.Title)

@@ -935,6 +935,23 @@ type ArchitectureNoteWhereInput struct {
 	ProjectIDEqualFold    *string  `json:"projectIDEqualFold,omitempty"`
 	ProjectIDContainsFold *string  `json:"projectIDContainsFold,omitempty"`
 
+	// "repo_id" field predicates.
+	RepoID             *string  `json:"repoID,omitempty"`
+	RepoIDNEQ          *string  `json:"repoIDNEQ,omitempty"`
+	RepoIDIn           []string `json:"repoIDIn,omitempty"`
+	RepoIDNotIn        []string `json:"repoIDNotIn,omitempty"`
+	RepoIDGT           *string  `json:"repoIDGT,omitempty"`
+	RepoIDGTE          *string  `json:"repoIDGTE,omitempty"`
+	RepoIDLT           *string  `json:"repoIDLT,omitempty"`
+	RepoIDLTE          *string  `json:"repoIDLTE,omitempty"`
+	RepoIDContains     *string  `json:"repoIDContains,omitempty"`
+	RepoIDHasPrefix    *string  `json:"repoIDHasPrefix,omitempty"`
+	RepoIDHasSuffix    *string  `json:"repoIDHasSuffix,omitempty"`
+	RepoIDIsNil        bool     `json:"repoIDIsNil,omitempty"`
+	RepoIDNotNil       bool     `json:"repoIDNotNil,omitempty"`
+	RepoIDEqualFold    *string  `json:"repoIDEqualFold,omitempty"`
+	RepoIDContainsFold *string  `json:"repoIDContainsFold,omitempty"`
+
 	// "title" field predicates.
 	Title             *string  `json:"title,omitempty"`
 	TitleNEQ          *string  `json:"titleNEQ,omitempty"`
@@ -1170,6 +1187,51 @@ func (i *ArchitectureNoteWhereInput) P() (predicate.ArchitectureNote, error) {
 	}
 	if i.ProjectIDContainsFold != nil {
 		predicates = append(predicates, architecturenote.ProjectIDContainsFold(*i.ProjectIDContainsFold))
+	}
+	if i.RepoID != nil {
+		predicates = append(predicates, architecturenote.RepoIDEQ(*i.RepoID))
+	}
+	if i.RepoIDNEQ != nil {
+		predicates = append(predicates, architecturenote.RepoIDNEQ(*i.RepoIDNEQ))
+	}
+	if len(i.RepoIDIn) > 0 {
+		predicates = append(predicates, architecturenote.RepoIDIn(i.RepoIDIn...))
+	}
+	if len(i.RepoIDNotIn) > 0 {
+		predicates = append(predicates, architecturenote.RepoIDNotIn(i.RepoIDNotIn...))
+	}
+	if i.RepoIDGT != nil {
+		predicates = append(predicates, architecturenote.RepoIDGT(*i.RepoIDGT))
+	}
+	if i.RepoIDGTE != nil {
+		predicates = append(predicates, architecturenote.RepoIDGTE(*i.RepoIDGTE))
+	}
+	if i.RepoIDLT != nil {
+		predicates = append(predicates, architecturenote.RepoIDLT(*i.RepoIDLT))
+	}
+	if i.RepoIDLTE != nil {
+		predicates = append(predicates, architecturenote.RepoIDLTE(*i.RepoIDLTE))
+	}
+	if i.RepoIDContains != nil {
+		predicates = append(predicates, architecturenote.RepoIDContains(*i.RepoIDContains))
+	}
+	if i.RepoIDHasPrefix != nil {
+		predicates = append(predicates, architecturenote.RepoIDHasPrefix(*i.RepoIDHasPrefix))
+	}
+	if i.RepoIDHasSuffix != nil {
+		predicates = append(predicates, architecturenote.RepoIDHasSuffix(*i.RepoIDHasSuffix))
+	}
+	if i.RepoIDIsNil {
+		predicates = append(predicates, architecturenote.RepoIDIsNil())
+	}
+	if i.RepoIDNotNil {
+		predicates = append(predicates, architecturenote.RepoIDNotNil())
+	}
+	if i.RepoIDEqualFold != nil {
+		predicates = append(predicates, architecturenote.RepoIDEqualFold(*i.RepoIDEqualFold))
+	}
+	if i.RepoIDContainsFold != nil {
+		predicates = append(predicates, architecturenote.RepoIDContainsFold(*i.RepoIDContainsFold))
 	}
 	if i.Title != nil {
 		predicates = append(predicates, architecturenote.TitleEQ(*i.Title))
