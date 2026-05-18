@@ -224,7 +224,7 @@ All of the above support `list / show / edit / search / archive / unarchive`
 | `lore restore <file>` | Restore the DB from a backup |
 | `lore repair` | Recover from a corrupted DB |
 | `lore doctor` | Health checks (DB integrity, FTS drift, schema version) |
-| `lore tables` | Every data table + total record count. Sortable (`--sort=name\|count[:asc\|desc]`), filterable (`--filter=`), `--json` |
+| `lore tables` | Every data table + total record count. Sortable (`--sort=name\|count[:asc\|desc]`), filterable (`--filter=`), `--json`. Also a TUI screen: `lore tui --kind=tables` |
 | `lore support-bundle` | Produce a sanitized incident-report bundle |
 | `lore snapshot` | Point-in-time knowledge captures (logical, not file backup) |
 
