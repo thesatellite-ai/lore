@@ -151,7 +151,8 @@ func entityHasProjectID(cfg Config) bool {
 // entityHasRepoID — which entities have a repo_id column (per schema audit).
 func entityHasRepoID(cfg Config) bool {
 	switch cfg.Entity {
-	case "memory", "rule", "decision", "hotfix", "pattern", "task":
+	case "memory", "rule", "decision", "hotfix", "pattern", "task",
+		"architecturenote":
 		return true
 	}
 	return false

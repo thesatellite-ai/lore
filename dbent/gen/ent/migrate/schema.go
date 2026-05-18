@@ -54,6 +54,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "project_id", Type: field.TypeString},
+		{Name: "repo_id", Type: field.TypeString, Nullable: true},
 		{Name: "title", Type: field.TypeString},
 		{Name: "body", Type: field.TypeString, Size: 2147483647},
 		{Name: "created_by_actor_id", Type: field.TypeString, Nullable: true},
@@ -63,6 +64,13 @@ var (
 		Name:       "architecture_notes",
 		Columns:    ArchitectureNotesColumns,
 		PrimaryKey: []*schema.Column{ArchitectureNotesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "architecturenote_project_id_repo_id",
+				Unique:  false,
+				Columns: []*schema.Column{ArchitectureNotesColumns[3], ArchitectureNotesColumns[4]},
+			},
+		},
 	}
 	// AssembleCitationsColumns holds the columns for the "assemble_citations" table.
 	AssembleCitationsColumns = []*schema.Column{
