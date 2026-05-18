@@ -628,6 +628,10 @@ Shows what was included/excluded and why (scope filters, dedup decisions, budget
 # health
 lore doctor [--json]              # exit 0 healthy, 1 degraded, 2 broken
 
+# all-tables overview — every data table + total record count
+lore tables [--sort=name|count[:asc|desc]] [--filter=<substr>] [--json]
+#   default sort name:asc; FTS5 virtual/shadow + sqlite internals excluded
+
 # backup / restore round-trip
 lore backup [--out=path]          # default: .lore/backups/<ts>.sqlite
 lore restore <path> --confirm     # replaces current DB
