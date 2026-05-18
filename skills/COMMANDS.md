@@ -192,7 +192,7 @@ Priority: `low | medium | high | urgent`. Status: `todo | in_progress | done | c
 
 **Relation flags (apply across `<entity> add`):**
 - `--mission`, `--tasklist`, `--plan` — group/parent relations (task)
-- `--repo` — scope to a repo (memory, rule, decision, hotfix, pattern, task)
+- `--repo` — scope to a repo (memory, rule, decision, hotfix, pattern, architecturenote, task)
 - `--supersedes=<id>` — supersede a previous row (memory, rule, decision, hotfix, pattern)
 - `--created-by=<act_id>` — actor that authored (auto-filled from current identity if omitted; available on every `add` whose schema has `created_by_actor_id`)
 - `--assigned-to=<act_id>` — task assignee
