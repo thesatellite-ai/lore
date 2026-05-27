@@ -55,6 +55,7 @@ func registerRule(app *runtime.App, client *ent.Client) {
 					entRule.SourceRefContainsFold(opts.Filter),
 					entRule.ProjectIDContainsFold(opts.Filter),
 					entRule.RepoIDContainsFold(opts.Filter),
+					entRule.BodyContainsFold(opts.Filter),
 					entRule.GlobsContainsFold(opts.Filter),
 					entRule.AppliesToDescriptionContainsFold(opts.Filter),
 					entRule.SupersededByIDContainsFold(opts.Filter),
@@ -122,6 +123,15 @@ func registerRule(app *runtime.App, client *ent.Client) {
 						q = q.Where(entRule.RepoIDIsNil())
 					case runtime.OpNotNull:
 						q = q.Where(entRule.RepoIDNotNil())
+					}
+				case "body":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entRule.BodyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entRule.BodyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entRule.BodyContainsFold(f.Value))
 					}
 				case "activation":
 					switch f.Op {
@@ -520,7 +530,7 @@ func registerRule(app *runtime.App, client *ent.Client) {
 				Key:        "body",
 				Label:      "Body",
 				Sortable:   false,
-				Filterable: false,
+				Filterable: true,
 				Hidden:     true,
 				Width:      0,
 				Align:      "",

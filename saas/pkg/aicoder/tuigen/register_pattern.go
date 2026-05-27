@@ -55,6 +55,7 @@ func registerPattern(app *runtime.App, client *ent.Client) {
 					entPattern.ProjectIDContainsFold(opts.Filter),
 					entPattern.RepoIDContainsFold(opts.Filter),
 					entPattern.TitleContainsFold(opts.Filter),
+					entPattern.BodyContainsFold(opts.Filter),
 					entPattern.LanguageContainsFold(opts.Filter),
 					entPattern.SupersededByIDContainsFold(opts.Filter),
 					entPattern.CreatedByActorIDContainsFold(opts.Filter),
@@ -126,6 +127,15 @@ func registerPattern(app *runtime.App, client *ent.Client) {
 						q = q.Where(entPattern.TitleNEQ(f.Value))
 					case runtime.OpContains:
 						q = q.Where(entPattern.TitleContainsFold(f.Value))
+					}
+				case "body":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entPattern.BodyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entPattern.BodyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entPattern.BodyContainsFold(f.Value))
 					}
 				case "language":
 					switch f.Op {
@@ -458,7 +468,7 @@ func registerPattern(app *runtime.App, client *ent.Client) {
 				Key:        "body",
 				Label:      "Body",
 				Sortable:   false,
-				Filterable: false,
+				Filterable: true,
 				Hidden:     true,
 				Width:      0,
 				Align:      "",

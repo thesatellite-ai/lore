@@ -6,6 +6,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+
+	"github.com/khanakia/entx/enttui"
 )
 
 // Hotfix is a LOUD recurring warning. "we keep hitting this — beware."
@@ -34,7 +36,9 @@ func (Hotfix) Fields() []ent.Field {
 		// title: short headline, surfaced in render. Max ~80 chars recommended.
 		field.String("title").NotEmpty(),
 		// body: full hotfix with reproduction steps and workaround.
-		field.Text("body").NotEmpty(),
+		// String (not Text) → enttui includes BodyContainsFold in the
+		// global `/` filter Or-chain. SQLite stores both as TEXT.
+		field.String("body").NotEmpty().Annotations(enttui.Filterable{}),
 
 		field.Enum("severity").
 			Values(hotfixSeverityValues...).
