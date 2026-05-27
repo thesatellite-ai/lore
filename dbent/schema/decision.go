@@ -6,6 +6,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+
+	"github.com/khanakia/entx/enttui"
 )
 
 // Decision is an Architectural Decision Record. WHY we chose something.
@@ -35,7 +37,9 @@ func (Decision) Fields() []ent.Field {
 
 		field.String("title").NotEmpty(),
 		// body: markdown — context + chosen + alternatives + reasoning.
-		field.Text("body").NotEmpty(),
+		// String (not Text) → enttui includes BodyContainsFold in the
+		// global `/` filter Or-chain. SQLite stores both as TEXT.
+		field.String("body").NotEmpty().Annotations(enttui.Filterable{}),
 
 		field.Enum("status").
 			Values(decisionStatusValues...).
