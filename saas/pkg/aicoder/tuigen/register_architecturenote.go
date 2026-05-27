@@ -50,7 +50,9 @@ func registerArchitectureNote(app *runtime.App, client *ent.Client) {
 				q = q.Where(entArchitectureNote.Or(
 					entArchitectureNote.IDContainsFold(opts.Filter),
 					entArchitectureNote.ProjectIDContainsFold(opts.Filter),
+					entArchitectureNote.RepoIDContainsFold(opts.Filter),
 					entArchitectureNote.TitleContainsFold(opts.Filter),
+					entArchitectureNote.BodyContainsFold(opts.Filter),
 					entArchitectureNote.CreatedByActorIDContainsFold(opts.Filter),
 				))
 			}
@@ -77,6 +79,19 @@ func registerArchitectureNote(app *runtime.App, client *ent.Client) {
 					case runtime.OpContains:
 						q = q.Where(entArchitectureNote.ProjectIDContainsFold(f.Value))
 					}
+				case "repo_id":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entArchitectureNote.RepoIDEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entArchitectureNote.RepoIDNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entArchitectureNote.RepoIDContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entArchitectureNote.RepoIDIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entArchitectureNote.RepoIDNotNil())
+					}
 				case "title":
 					switch f.Op {
 					case runtime.OpEq:
@@ -85,6 +100,15 @@ func registerArchitectureNote(app *runtime.App, client *ent.Client) {
 						q = q.Where(entArchitectureNote.TitleNEQ(f.Value))
 					case runtime.OpContains:
 						q = q.Where(entArchitectureNote.TitleContainsFold(f.Value))
+					}
+				case "body":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entArchitectureNote.BodyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entArchitectureNote.BodyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entArchitectureNote.BodyContainsFold(f.Value))
 					}
 				case "created_by_actor_id":
 					switch f.Op {
@@ -129,6 +153,12 @@ func registerArchitectureNote(app *runtime.App, client *ent.Client) {
 							q = q.Order(ent.Asc(entArchitectureNote.FieldProjectID))
 						} else {
 							q = q.Order(ent.Desc(entArchitectureNote.FieldProjectID))
+						}
+					case "repo_id":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entArchitectureNote.FieldRepoID))
+						} else {
+							q = q.Order(ent.Desc(entArchitectureNote.FieldRepoID))
 						}
 					case "title":
 						if k.Dir == runtime.Asc {
@@ -214,6 +244,21 @@ func registerArchitectureNote(app *runtime.App, client *ent.Client) {
 				},
 			},
 			{
+				Key:        "repo_id",
+				Label:      "Repo Id",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.ArchitectureNote) string {
+					if r.RepoID == nil {
+						return ""
+					}
+					return *r.RepoID
+				},
+			},
+			{
 				Key:        "title",
 				Label:      "Title",
 				Sortable:   true,
@@ -229,7 +274,7 @@ func registerArchitectureNote(app *runtime.App, client *ent.Client) {
 				Key:        "body",
 				Label:      "Body",
 				Sortable:   false,
-				Filterable: false,
+				Filterable: true,
 				Hidden:     true,
 				Width:      0,
 				Align:      "",

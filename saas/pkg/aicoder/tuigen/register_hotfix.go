@@ -56,6 +56,7 @@ func registerHotfix(app *runtime.App, client *ent.Client) {
 					entHotfix.ProjectIDContainsFold(opts.Filter),
 					entHotfix.RepoIDContainsFold(opts.Filter),
 					entHotfix.TitleContainsFold(opts.Filter),
+					entHotfix.BodyContainsFold(opts.Filter),
 					entHotfix.SupersededByIDContainsFold(opts.Filter),
 					entHotfix.CreatedByActorIDContainsFold(opts.Filter),
 				))
@@ -126,6 +127,15 @@ func registerHotfix(app *runtime.App, client *ent.Client) {
 						q = q.Where(entHotfix.TitleNEQ(f.Value))
 					case runtime.OpContains:
 						q = q.Where(entHotfix.TitleContainsFold(f.Value))
+					}
+				case "body":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entHotfix.BodyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entHotfix.BodyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entHotfix.BodyContainsFold(f.Value))
 					}
 				case "severity":
 					switch f.Op {
@@ -470,7 +480,7 @@ func registerHotfix(app *runtime.App, client *ent.Client) {
 				Key:        "body",
 				Label:      "Body",
 				Sortable:   false,
-				Filterable: false,
+				Filterable: true,
 				Hidden:     true,
 				Width:      0,
 				Align:      "",

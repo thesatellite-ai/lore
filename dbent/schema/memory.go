@@ -8,6 +8,8 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+
+	"github.com/khanakia/entx/enttui"
 )
 
 // Memory is the flexible knowledge type — free-form learned notes.
@@ -62,8 +64,12 @@ func (Memory) Fields() []ent.Field {
 
 		// body: actual knowledge text. Markdown allowed. NotEmpty enforced
 		// at app layer via textnorm.Normalize before INSERT.
-		field.Text("body").
-			NotEmpty(),
+		// field.String (not Text) so enttui codegen treats it as IsString
+		// and includes BodyContainsFold in the global `/` filter Or-chain;
+		// SQLite stores both as TEXT — no migration delta.
+		field.String("body").
+			NotEmpty().
+			Annotations(enttui.Filterable{}),
 
 		// Bitemporal axes ──
 		field.Time("valid_at").

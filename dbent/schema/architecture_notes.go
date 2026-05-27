@@ -6,6 +6,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+
+	"github.com/khanakia/entx/enttui"
 )
 
 // ArchitectureNote — see PLAN.md for table semantics.
@@ -25,7 +27,9 @@ func (ArchitectureNote) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 		field.String("title").NotEmpty(),
-		field.Text("body").NotEmpty(),
+		// String (not Text) → enttui includes BodyContainsFold in the
+		// global `/` filter Or-chain. SQLite stores both as TEXT.
+		field.String("body").NotEmpty().Annotations(enttui.Filterable{}),
 		field.String("created_by_actor_id").NotEmpty().Optional().Nillable(),
 	}
 }

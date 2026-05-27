@@ -55,6 +55,7 @@ func registerMemory(app *runtime.App, client *ent.Client) {
 					entMemory.SourceRefContainsFold(opts.Filter),
 					entMemory.ProjectIDContainsFold(opts.Filter),
 					entMemory.RepoIDContainsFold(opts.Filter),
+					entMemory.BodyContainsFold(opts.Filter),
 					entMemory.SupersededByIDContainsFold(opts.Filter),
 					entMemory.CreatedByActorIDContainsFold(opts.Filter),
 					entMemory.ValidatedByActorIDContainsFold(opts.Filter),
@@ -143,6 +144,15 @@ func registerMemory(app *runtime.App, client *ent.Client) {
 								q = q.Where(entMemory.KindNotIn(vals...))
 							}
 						}
+					}
+				case "body":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entMemory.BodyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entMemory.BodyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entMemory.BodyContainsFold(f.Value))
 					}
 				case "superseded_by_id":
 					switch f.Op {
@@ -519,7 +529,7 @@ func registerMemory(app *runtime.App, client *ent.Client) {
 				Key:        "body",
 				Label:      "Body",
 				Sortable:   false,
-				Filterable: false,
+				Filterable: true,
 				Hidden:     true,
 				Width:      0,
 				Align:      "",

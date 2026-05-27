@@ -48,8 +48,10 @@ func (Task) Fields() []ent.Field {
 		field.String("repo_id").Optional().Nillable(),
 		field.String("title").NotEmpty().
 			Annotations(enttui.Editable{}),
-		field.Text("body").Optional().Nillable().
-			Annotations(enttui.Editable{}),
+		// String (not Text) → enttui includes BodyContainsFold in the
+		// global `/` filter Or-chain. SQLite stores both as TEXT.
+		field.String("body").Optional().Nillable().
+			Annotations(enttui.Editable{}, enttui.Filterable{}),
 		field.Enum("status").
 			Values(taskStatusValues...).
 			Default(string(TaskStatusTodo)).

@@ -6,6 +6,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+
+	"github.com/khanakia/entx/enttui"
 )
 
 // Pattern: how code SHOULD look. Templates / idioms / conventions.
@@ -23,7 +25,9 @@ func (Pattern) Fields() []ent.Field {
 		field.String("project_id").NotEmpty().Immutable(),
 		field.String("repo_id").Optional().Nillable(),
 		field.String("title").NotEmpty(),
-		field.Text("body").NotEmpty(),
+		// String (not Text) → enttui includes BodyContainsFold in the
+		// global `/` filter Or-chain. SQLite stores both as TEXT.
+		field.String("body").NotEmpty().Annotations(enttui.Filterable{}),
 		field.String("language").Optional().Nillable(),
 		field.String("superseded_by_id").Optional().Nillable(),
 		field.String("created_by_actor_id").Optional().Nillable(),
