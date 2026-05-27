@@ -56,6 +56,7 @@ func registerDecision(app *runtime.App, client *ent.Client) {
 					entDecision.ProjectIDContainsFold(opts.Filter),
 					entDecision.RepoIDContainsFold(opts.Filter),
 					entDecision.TitleContainsFold(opts.Filter),
+					entDecision.BodyContainsFold(opts.Filter),
 					entDecision.SupersededByIDContainsFold(opts.Filter),
 					entDecision.CreatedByActorIDContainsFold(opts.Filter),
 				))
@@ -126,6 +127,15 @@ func registerDecision(app *runtime.App, client *ent.Client) {
 						q = q.Where(entDecision.TitleNEQ(f.Value))
 					case runtime.OpContains:
 						q = q.Where(entDecision.TitleContainsFold(f.Value))
+					}
+				case "body":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entDecision.BodyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entDecision.BodyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entDecision.BodyContainsFold(f.Value))
 					}
 				case "status":
 					switch f.Op {
@@ -470,7 +480,7 @@ func registerDecision(app *runtime.App, client *ent.Client) {
 				Key:        "body",
 				Label:      "Body",
 				Sortable:   false,
-				Filterable: false,
+				Filterable: true,
 				Hidden:     true,
 				Width:      0,
 				Align:      "",

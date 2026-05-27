@@ -68,6 +68,7 @@ func registerTask(app *runtime.App, client *ent.Client) {
 					entTask.ProjectIDContainsFold(opts.Filter),
 					entTask.RepoIDContainsFold(opts.Filter),
 					entTask.TitleContainsFold(opts.Filter),
+					entTask.BodyContainsFold(opts.Filter),
 					entTask.MissionIDContainsFold(opts.Filter),
 					entTask.TasklistIDContainsFold(opts.Filter),
 					entTask.PlanIDContainsFold(opts.Filter),
@@ -120,6 +121,19 @@ func registerTask(app *runtime.App, client *ent.Client) {
 					case runtime.OpContains:
 						q = q.Where(entTask.TitleContainsFold(f.Value))
 					}
+				case "body":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.BodyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.BodyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.BodyContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.BodyIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.BodyNotNil())
+					}
 				case "status":
 					switch f.Op {
 					case runtime.OpEq:
@@ -167,6 +181,31 @@ func registerTask(app *runtime.App, client *ent.Client) {
 								q = q.Where(entTask.PriorityIn(vals...))
 							} else {
 								q = q.Where(entTask.PriorityNotIn(vals...))
+							}
+						}
+					}
+				case "commitment":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.CommitmentEQ(entTask.Commitment(f.Value)))
+					case runtime.OpNeq:
+						q = q.Where(entTask.CommitmentNEQ(entTask.Commitment(f.Value)))
+					case runtime.OpIn, runtime.OpNotIn:
+						// Multi-select: condition value is a "|"-joined
+						// list of enum strings. Empty entries are dropped.
+						parts := strings.Split(f.Value, "|")
+						vals := make([]entTask.Commitment, 0, len(parts))
+						for _, p := range parts {
+							if p == "" {
+								continue
+							}
+							vals = append(vals, entTask.Commitment(p))
+						}
+						if len(vals) > 0 {
+							if f.Op == runtime.OpIn {
+								q = q.Where(entTask.CommitmentIn(vals...))
+							} else {
+								q = q.Where(entTask.CommitmentNotIn(vals...))
 							}
 						}
 					}
@@ -325,6 +364,18 @@ func registerTask(app *runtime.App, client *ent.Client) {
 							q = q.Order(ent.Asc(entTask.FieldPriority))
 						} else {
 							q = q.Order(ent.Desc(entTask.FieldPriority))
+						}
+					case "commitment":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldCommitment))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldCommitment))
+						}
+					case "deferred_until":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldDeferredUntil))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldDeferredUntil))
 						}
 					case "due_at":
 						if k.Dir == runtime.Asc {
@@ -503,7 +554,7 @@ func registerTask(app *runtime.App, client *ent.Client) {
 				Key:        "body",
 				Label:      "Body",
 				Sortable:   false,
-				Filterable: false,
+				Filterable: true,
 				Hidden:     true,
 				Width:      0,
 				Align:      "",
@@ -549,6 +600,38 @@ func registerTask(app *runtime.App, client *ent.Client) {
 				},
 				Get: func(r *ent.Task) string {
 					return string(r.Priority)
+				},
+			},
+			{
+				Key:        "commitment",
+				Label:      "Commitment",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				EnumValues: []string{
+					"accepted",
+					"proposed",
+					"someday",
+				},
+				Get: func(r *ent.Task) string {
+					return string(r.Commitment)
+				},
+			},
+			{
+				Key:        "deferred_until",
+				Label:      "Deferred Until",
+				Sortable:   true,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.DeferredUntil == nil || r.DeferredUntil.IsZero() {
+						return ""
+					}
+					return r.DeferredUntil.Format("2006-01-02 15:04:05")
 				},
 			},
 			{
@@ -746,6 +829,14 @@ func registerTask(app *runtime.App, client *ent.Client) {
 				},
 			},
 			{
+				Key: "commitment", Label: "Commitment", Kind: "enum", Required: true,
+				EnumValues: []string{
+					"accepted",
+					"proposed",
+					"someday",
+				},
+			},
+			{
 				Key: "tasklist_id", Label: "Tasklist", Kind: "ref", Required: false,
 				RefKind: "tasklist",
 			},
@@ -787,6 +878,11 @@ func registerTask(app *runtime.App, client *ent.Client) {
 					u.SetPriority(entTask.Priority(v))
 				}
 			}
+			if v, ok := vals["commitment"]; ok {
+				if v != "" {
+					u.SetCommitment(entTask.Commitment(v))
+				}
+			}
 			if v, ok := vals["tasklist_id"]; ok {
 				if v == "" {
 					u.ClearTasklistID()
@@ -825,6 +921,9 @@ func registerTask(app *runtime.App, client *ent.Client) {
 			}
 			if v, ok := vals["priority"]; ok && v != "" {
 				c.SetPriority(entTask.Priority(v))
+			}
+			if v, ok := vals["commitment"]; ok && v != "" {
+				c.SetCommitment(entTask.Commitment(v))
 			}
 			if v, ok := vals["tasklist_id"]; ok && v != "" {
 				c.SetTasklistID(v)

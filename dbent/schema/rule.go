@@ -6,6 +6,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+
+	"github.com/khanakia/entx/enttui"
 )
 
 // Rule is a hard constraint. "must do X" / "must not do Y."
@@ -41,7 +43,9 @@ func (Rule) Fields() []ent.Field {
 		field.String("repo_id").
 			Optional().
 			Nillable(),
-		field.Text("body").NotEmpty(),
+		// String (not Text) → enttui includes BodyContainsFold in the
+		// global `/` filter Or-chain. SQLite stores both as TEXT.
+		field.String("body").NotEmpty().Annotations(enttui.Filterable{}),
 
 		// Activation: when does this rule appear in render?
 		field.Enum("activation").
