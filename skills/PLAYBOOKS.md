@@ -19,10 +19,10 @@ for id in $(lore learn list --json | jq -r '.data[].id'); do
     lore learn promote "$id" --target=memories
 done
 
-lore render                            # writes CLAUDE.md
+lore render                            # writes .lore/LORE.md + @import pointer in CLAUDE.md
 ```
 
-After this, the AI (next session) reads `CLAUDE.md` automatically.
+After this, the AI (next session) reads `CLAUDE.md`, which `@import`s `.lore/LORE.md` automatically.
 
 ---
 
@@ -74,7 +74,7 @@ lore hotfix add \
 lore render
 ```
 
-Hotfixes are **never truncated** in the rendered CLAUDE.md, even under tight budget.
+Hotfixes are **never truncated** in the rendered `.lore/LORE.md`, even under tight budget.
 
 ---
 
@@ -217,8 +217,8 @@ lore learn list                        # review proposals
 for id in $(lore learn list --json | jq -r '.data[].id'); do
     lore learn promote "$id" --target=memories
 done
-lore render                            # produces CLAUDE.md
-# Optionally: tell git to ignore the old sources, keep CLAUDE.md as the canonical surface
+lore render                            # produces .lore/LORE.md + @import pointer in CLAUDE.md
+# Optionally: tell git to ignore the old sources, keep .lore/LORE.md as the canonical surface
 ```
 
 ---
@@ -232,8 +232,8 @@ In CI you want to fail-fast on missing rules but never mutate the DB:
 - run: |
     LORE_READ_ONLY=1 lore doctor --json | jq -e '.db_ok'
     LORE_READ_ONLY=1 lore render --dry-run > /tmp/expected.md
-    diff CLAUDE.md /tmp/expected.md || {
-        echo "CLAUDE.md out of date — run 'lore render' locally"; exit 1; }
+    diff .lore/LORE.md /tmp/expected.md || {
+        echo ".lore/LORE.md out of date — run 'lore render' locally"; exit 1; }
 ```
 
 Any write attempt under `--read-only` or `LORE_READ_ONLY=1` returns `E_READ_ONLY`.
@@ -245,24 +245,24 @@ Any write attempt under `--read-only` or `LORE_READ_ONLY=1` returns `E_READ_ONLY
 The user wants to bring Alice up to speed on a project that already uses lore.
 
 ```bash
-# 1. Make sure CLAUDE.md is in git and current
+# 1. Make sure the rendered knowledge + pointer are in git and current
 lore render
-git add CLAUDE.md && git commit -m "refresh CLAUDE.md"
+git add .lore/LORE.md CLAUDE.md && git commit -m "refresh lore knowledge"
 
 # 2. Alice clones the repo
 git clone <repo>; cd <repo>
 
-# 3. Alice initializes her own local DB (CLAUDE.md is the seed)
+# 3. Alice initializes her own local DB (.lore/LORE.md is the seed)
 lore init --non-interactive
-lore learn-from docs --paths=CLAUDE.md
+lore learn-from docs --paths=.lore/LORE.md
 for id in $(lore learn list --json | jq -r '.data[].id'); do
     lore learn promote "$id" --target=memories
 done
 
-# 4. Alice opens her AI tool of choice — sees the same CLAUDE.md
+# 4. Alice opens her AI tool of choice — CLAUDE.md @imports the same .lore/LORE.md
 ```
 
-Knowledge lives in CLAUDE.md (committed), DB is per-developer (gitignored). Alice's writes stay local until she re-commits CLAUDE.md.
+Knowledge lives in `.lore/LORE.md` (committed, `@import`ed by CLAUDE.md), DB is per-developer (`.lore/lore.db` is gitignored). Alice's writes stay local until she re-renders and re-commits `.lore/LORE.md`.
 
 ---
 
@@ -328,7 +328,7 @@ lore task list --status=in_progress --json | jq --arg cutoff "$(date -v-7d +%Y-%
 
 # 6. Render + commit
 lore render
-git diff --quiet CLAUDE.md || { git add CLAUDE.md; git commit -m "weekly: refresh CLAUDE.md"; }
+git diff --quiet .lore/LORE.md CLAUDE.md || { git add .lore/LORE.md CLAUDE.md; git commit -m "weekly: refresh lore knowledge"; }
 ```
 
 ---
@@ -367,14 +367,14 @@ SQL
 
 ## P19 — Render only a slice (budget control)
 
-When CLAUDE.md grows large and you want a focused view:
+When the rendered knowledge grows large and you want a focused view:
 
 ```bash
-# Per-repo render (only that repo's memories + master)
-lore render --repo=web --target=web/CLAUDE.md
+# Per-repo render (that repo's rows + master)
+lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
 
-# Cross-cutting only (no repo memories)
-lore render --master-only --target=master.md
+# Note: a plain `lore render` always includes project-master + project rows;
+# there is no master-only render flag. Use --repo to narrow to a repo slice.
 
 # A specific feature — use tags to filter (v0.2)
 ```

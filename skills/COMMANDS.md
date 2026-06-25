@@ -353,14 +353,18 @@ lore search rebuild --kind=memory # one entity only
 ## Render (hybrid)
 
 ```bash
-lore render                        # hybrid: directive + hotfixes + severity=must rules only
-lore render --target=AGENTS.md     # alt output path
+lore render                        # hybrid: directive + hotfixes + severity=must rules → .lore/LORE.md
+lore render --target=AGENTS.md     # stitch the @import pointer into AGENTS.md instead of CLAUDE.md
+lore render --out=docs/LORE.md     # change the generated knowledge-file path
+lore render --no-pointer           # write the generated file only; leave the agent file untouched
 lore render --dry-run              # stdout, no write
 ```
 
-**Hybrid model — what's pinned vs searched:**
+Render writes the compiled body to `.lore/LORE.md` and stitches an idempotent `@import` pointer into `CLAUDE.md`. See the **Render** section later in this file for the exact pointer shape.
 
-| Entity | Pinned in CLAUDE.md | Searched on demand |
+**Hybrid model — what's pinned vs searched** (pinned content lives in `.lore/LORE.md`, which CLAUDE.md `@import`s):
+
+| Entity | Pinned in `.lore/LORE.md` | Searched on demand |
 |---|---|---|
 | Directive | always | — |
 | Rules | `severity=must` | `severity=should` / `may` |
@@ -596,17 +600,30 @@ lore repo list [--json]
 
 ---
 
-## Render (compile knowledge → CLAUDE.md)
+## Render (compile knowledge → `.lore/LORE.md` + `@import` pointer)
 
 ```bash
-lore render                       # writes CLAUDE.md at cwd
-lore render --dry-run             # prints to stdout, doesn't write
-lore render --target=AGENTS.md    # write to a different file
+lore render                       # writes .lore/LORE.md + stitches @import pointer into CLAUDE.md
+lore render --dry-run             # prints the generated .lore/LORE.md body to stdout, doesn't write
+lore render --out=.lore/LORE.md   # change the generated knowledge-file path
+lore render --target=AGENTS.md    # stitch the pointer into a different agent file
+lore render --no-pointer          # write the generated file only; don't touch the agent file
 ```
 
-Render is **deterministic** — same DB → byte-identical output. Canary line at top is content-sha-derived, not random.
+Render writes the compiled knowledge to a **generated file** (default `.lore/LORE.md`) and stitches an **idempotent `@import` pointer** into the agent file (default `CLAUDE.md`):
 
-Symlink-aware: if CLAUDE.md is a symlink, render writes through to the target, preserving the link.
+```
+<!-- lore:pointer:start -->
+@.lore/LORE.md
+<!-- if your agent does not support @import, read .lore/LORE.md now -->
+<!-- lore:pointer:end -->
+```
+
+The pointer is bounded by sentinel markers and replaced in place on every re-run, so your **hand-written CLAUDE.md content is never clobbered**. The canary line and every pinned rule/hotfix live in `.lore/LORE.md`, not CLAUDE.md.
+
+Render is **deterministic** — same DB → byte-identical output. The canary line at the top of the generated file is content-sha-derived, not random.
+
+Symlink-aware: if the generated file is a symlink, render writes through to the target, preserving the link.
 
 After render, the result is queryable via `why-context`.
 

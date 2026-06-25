@@ -43,19 +43,19 @@ lore repair --tier=2 --confirm
 
 Tier 2 is the **default** (`lore repair --confirm` without `--tier`).
 
-## Tier 3 — bootstrap empty + re-learn from CLAUDE.md
+## Tier 3 — bootstrap empty + re-learn from `.lore/LORE.md`
 
-If you have no backups but you DID commit `CLAUDE.md`:
+If you have no backups but you DID commit `.lore/LORE.md` (the rendered knowledge file):
 
 ```bash
 lore repair --tier=3 --confirm
 # ✓ Empty DB created
-# (Note: all rows lost — only CLAUDE.md committed to git survives)
+# (Note: all rows lost — only the committed .lore/LORE.md survives)
 
-lore learn-from docs   # re-ingest from CLAUDE.md
+lore learn-from docs --paths=.lore/LORE.md   # re-ingest from the rendered knowledge
 lore learn list --json | jq -r '.data[].id' | xargs -I{} lore learn promote {} --target=memories
 lore render
-# ✓ DB rebuilt from CLAUDE.md
+# ✓ DB rebuilt from .lore/LORE.md
 ```
 
 ## Prevention

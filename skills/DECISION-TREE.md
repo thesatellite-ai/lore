@@ -93,9 +93,9 @@ Diagnose first:  lore doctor --json
     │
     └── No:
         │
-        Is CLAUDE.md in git?
+        Is .lore/LORE.md in git?
         │
-        ├── Yes → lore repair --tier=3 --confirm  (then learn-from docs)
+        ├── Yes → lore repair --tier=3 --confirm  (then learn-from .lore/LORE.md)
         │
         └── No  → support-bundle + file bug + restore from a clone if possible
 ```
@@ -104,17 +104,22 @@ Diagnose first:  lore doctor --json
 
 ```
 Just regenerate?           → lore render
-                             (hybrid: pins only directive + must-rules
+                             (writes .lore/LORE.md + @import pointer in CLAUDE.md;
+                              hybrid: pins only directive + must-rules
                               + critical/high hotfixes; everything else via search)
-Preview without writing?   → lore render --dry-run
-Different output file?     → lore render --target=AGENTS.md
+Preview without writing?   → lore render --dry-run        (prints the .lore/LORE.md body)
+Different pointer file?    → lore render --target=AGENTS.md
+Different generated path?  → lore render --out=docs/LORE.md
+Generated file only?       → lore render --no-pointer
 Different scope?           → lore render --repo=<mount>
 ```
 
-## What goes into CLAUDE.md vs what lives in search
+## What goes into `.lore/LORE.md` vs what lives in search
+
+`.lore/LORE.md` holds the pinned content; `CLAUDE.md` `@import`s it, so every session sees it automatically.
 
 ```
-Pinned in CLAUDE.md (every session sees automatically):
+Pinned in .lore/LORE.md (imported by CLAUDE.md, so every session sees it):
   - Directive block
   - Rules where severity=must
   - Hotfixes where severity=critical or high

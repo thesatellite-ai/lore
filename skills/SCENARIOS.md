@@ -17,7 +17,7 @@ lore render
 
 ### A.2 User opens a project that has .lore/ but no CLAUDE.md
 ```bash
-lore render     # creates CLAUDE.md from existing DB
+lore render     # writes .lore/LORE.md from existing DB + creates CLAUDE.md with the @import pointer
 ```
 
 ### A.3 User opens a project with both .lore/ and CLAUDE.md
@@ -254,10 +254,10 @@ lore render --dry-run | less
 
 ### E.3 "Render for a specific repo"
 ```bash
-lore render --repo=web --target=web/CLAUDE.md
+lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
 ```
 
-### E.4 "Also write AGENTS.md for Codex"
+### E.4 "Also stitch the pointer into AGENTS.md for Codex"
 ```bash
 lore render --target=AGENTS.md
 # (Currently: render to one target at a time; multi-target is v0.2.)
@@ -436,9 +436,9 @@ lore identity show
 
 ## K · CI / read-only
 
-### K.1 "CI check: CLAUDE.md is up to date"
+### K.1 "CI check: .lore/LORE.md is up to date"
 ```bash
-LORE_READ_ONLY=1 diff -u CLAUDE.md <(lore render --dry-run) || exit 1
+LORE_READ_ONLY=1 diff -u .lore/LORE.md <(lore render --dry-run) || exit 1
 ```
 
 ### K.2 "CI check: DB is healthy"

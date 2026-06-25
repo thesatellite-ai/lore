@@ -106,7 +106,7 @@ The decisive signal: is the user **committing to a stance** or **floating an ide
 
 5. **Counterfactual / hypothetical** — "if we HAD done X, we wouldn't have Y" / "had we used X" / "in retrospect we should have" / "imagine if we" express regret about an UNCHOSEN path. They are NOT current facts to capture. Do not emit `lore add` for these; do not invert the hypothetical into a positive claim either (that's hallucination). Respond in prose about the lesson.
 
-6. **Invalid enum values in flags** — if the user types a flag value that is NOT in the documented enum (scope: master|project|repo|canary; severity: must|should|may; priority: low|medium|high|urgent; status: todo|in_progress|blocked|done|canceled|archived; on-table: must be PLURAL), DO NOT FORWARD that bad value to the CLI. The OUTPUT CONTRACT's "one bash block" requirement is OVERRIDDEN here — emit a brief PROSE note listing the valid values, then optionally a placeholder command with `<valid-value>` for them to fill in. Never emit `--scope=foobar` / `--severity=critical` / `--priority=blocker` / `--on-table=task` etc. just because the user said them.
+6. **Invalid enum values in flags** — if the user types a flag value that is NOT in the documented enum (memory `--kind`: core|retrieved|episodic|procedural|archival; severity: must|should|may; priority: low|medium|high|urgent; status: todo|in_progress|blocked|done|canceled|archived; on-table: must be PLURAL), DO NOT FORWARD that bad value to the CLI. The OUTPUT CONTRACT's "one bash block" requirement is OVERRIDDEN here — emit a brief PROSE note listing the valid values, then optionally a placeholder command with `<valid-value>` for them to fill in. Never emit `--kind=foobar` / `--severity=critical` / `--priority=blocker` / `--on-table=task` etc. just because the user said them. (Scoping has no `--scope` flag: use `--repo=<mount>` for a repo, or omit it for project-master.)
 
 If you find yourself paraphrasing the user's question into a statement to capture, STOP. That's a hallucinated capture; the user didn't actually commit.
 
@@ -378,10 +378,8 @@ T[capture for <repo> repo: <text>]       → rule add --repo=<repo> "<text>"; re
 T[pre-create a tag | create tag X without attaching | reserve tag name]
                                           → tag add --name=<X>
                                           # use this when user wants to define the tag entity FIRST, then attach later
-T[as if I were on the canary scope | preview from canary | what would canary render look like]
-                                          → render --scope=canary --dry-run   (scope flags work on READ ops too, not just capture)
-T[preview from master scope | what would master-only render look like]
-                                          → render --master-only --dry-run
+T[preview what render would produce | dry-run the rendered body]
+                                          → render --dry-run   (always project-master + project rows; no master-only flag)
 T[across every repo | all repos | every repo in this project | not scoped to any one repo]
                                          → <kind> list --all-repos --json   (default scope is current repo; use --all-repos to widen)
 T[master-only | project-master rules]    → <kind> list --master-only --json
@@ -389,7 +387,7 @@ T[in a different project | switch to <project> project | peek into <project> pro
                                           → <kind> list --project=<X> --json
                                           # --project flag is a one-shot override; doesn't change your current working project
 T[strict scope | only this scope, no inheritance] → <kind> list --no-inherit --json
-T[master rule: X]                        → rule add --scope=master "<X>"; render
+T[master rule: X]                        → rule add "<X>"; render   (master is the default when --repo is omitted)
 ```
 
 ## POLYMORPHIC: tag + comment
@@ -413,9 +411,11 @@ Common slip: singular table name (`task` not `tasks`). Always plural.
 ## RENDER + INTROSPECT
 
 ```bash
-lore render                        # compile DB → CLAUDE.md (run after every capture)
-lore render --dry-run              # preview without writing
-lore render --target=AGENTS.md    # alternate output file
+lore render                        # compile DB → .lore/LORE.md + @import pointer in CLAUDE.md (run after every capture)
+lore render --dry-run              # preview the .lore/LORE.md body without writing
+lore render --target=AGENTS.md    # stitch the pointer into a different agent file
+lore render --out=docs/LORE.md    # change the generated knowledge-file path
+lore render --no-pointer          # write the generated file only; leave the agent file untouched
 lore why-context --last-render    # what was included and why
 lore why-context --last-render --rendered  # full rendered text
 lore why-context --last-render --json      # pipe-friendly
@@ -444,7 +444,8 @@ severity:    must  should  may
 priority:    low  medium  high  urgent
 status:      todo  in_progress  done  cancelled  blocked  archived
 recurrence:  7d  30d  1m  3m  6m  1y
-scope:       master  project  repo  canary
+scope:       no --scope flag — use --repo=<mount> for a repo, omit for project-master
+             (list/search filters: --repo  --all-repos  --master-only  --no-inherit)
 ```
 
 ## ID PREFIXES
@@ -487,8 +488,8 @@ P5  multi-repo scoping
     lore repo add api   --origin=git@…
     lore memory add "<web-only fact>"  --repo=web
     lore memory add "<cross-cutting>"
-    lore render --repo=web --target=web/CLAUDE.md
-    lore render --repo=api --target=api/CLAUDE.md
+    lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
+    lore render --repo=api --out=api/.lore/LORE.md --target=api/CLAUDE.md
 
 P6  shared DB across sibling projects (Mode B)
     lore project shared-init --db=${HOME}/.lore/shared.db --name=<proj>
@@ -525,14 +526,14 @@ P11 migrate from .cursorrules / AGENTS.md
 
 P12 CI integration (read-only)
     LORE_READ_ONLY=1 lore doctor --json | jq -e '.db_ok'
-    diff CLAUDE.md <(LORE_READ_ONLY=1 lore render --dry-run) \
-      || { echo "CLAUDE.md stale — run lore render"; exit 1; }
+    diff .lore/LORE.md <(LORE_READ_ONLY=1 lore render --dry-run) \
+      || { echo ".lore/LORE.md stale — run lore render"; exit 1; }
 
 P13 onboard new teammate
-    lore render && git add CLAUDE.md && git commit -m "refresh CLAUDE.md"
+    lore render && git add .lore/LORE.md CLAUDE.md && git commit -m "refresh lore knowledge"
     # teammate clones, then:
     lore init --non-interactive
-    lore learn-from docs --paths=CLAUDE.md
+    lore learn-from docs --paths=.lore/LORE.md
     lore render
 
 P14 promote memory → rule  (ALL 4 STEPS REQUIRED — do NOT skip the show)
@@ -566,8 +567,8 @@ P18 audit log forensics
       "SELECT tx_at,actor_id,op,entity_id FROM audit_log WHERE entity_table='rules' ORDER BY tx_at DESC LIMIT 20"
 
 P19 render slice (budget control)
-    lore render --repo=web --target=web/CLAUDE.md
-    lore render --master-only --target=master.md
+    lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
+    # plain `lore render` is always project-master + project; no master-only flag
     lore render --dry-run | wc -c
 
 P20 migrate to new lore version
@@ -605,13 +606,13 @@ When the user uses a value that's NOT in the allowed enum, DO NOT blindly forwar
 
 | User says | You should |
 |---|---|
-| `--scope=foobar` | Note: foobar isn't valid. Valid scopes: `master`, `project`, `repo`, `canary`. Which did you mean? Don't emit the bad cmd. |
+| `--kind=foobar` (memory) | Note: foobar isn't valid. Valid kinds: `core`, `retrieved`, `episodic`, `procedural`, `archival`. Which did you mean? Don't emit the bad cmd. (There is no `--scope` flag — scope via `--repo` or omit for master.) |
 | `--severity=critical` | Note: not in enum. Valid: `must`, `should`, `may`. Map to closest (probably `must`) and confirm, OR ask. |
 | `--priority=blocker` | Not valid. Map to `urgent` and confirm. Valid: `low`, `medium`, `high`, `urgent`. |
 | `--status=wip` | Not valid. Valid: `todo`, `in_progress`, `blocked`, `done`, `canceled`, `archived`. Map to `in_progress`. |
 | `--on-table=task` (singular) | Plural required: `tasks`. Fix silently and proceed. |
 
-The CLI will reject invalid enums with `E_SCOPE_INVALID` / `E_SEVERITY_INVALID` / etc. anyway — better to catch them before emitting.
+The CLI will reject invalid enums with `E_INVALID_INPUT` (and unknown flags like `--scope` with an "unknown flag" error) anyway — better to catch them before emitting.
 
 ## ANTI-PATTERNS
 
@@ -687,12 +688,12 @@ You: (User said "workflow" — use `workflow add`, NOT `playbook add`. The word 
   lore workflow add --name="deploy-flow" --body="go build; task test; git tag v\$NEXT; git push --tags"
   lore render
 
-User: Capture a rule with --scope=foobar that we always lint before commit.
-You: (Invalid scope value detected. DO NOT emit `--scope=foobar` — CLI will reject with E_SCOPE_INVALID. Surface the constraint first; don't blindly forward.)
-  Note: `foobar` isn't a valid scope. Valid scopes are: `master`, `project`, `repo`, `canary`.
-  Which did you mean? If it was a typo for `repo` or `canary`, here's what the command WOULD look like:
+User: Capture a rule with --kind=foobar that we always lint before commit.
+You: (Invalid enum value detected — and `rule add` has no `--kind` flag at all. DO NOT forward bad/unknown flags; the CLI rejects unknown flags. Surface the constraint first; don't blindly forward.)
+  Note: `rule add` takes `--severity` (`must` | `should` | `may`), not `--kind`. Scope is `--repo=<mount>` or omit for project-master — there is no `--scope` flag.
+  Here's what the command should look like:
   ```bash
-  lore rule add --severity=must --scope=<valid> "Always lint before commit"
+  lore rule add --severity=must "Always lint before commit"
   lore render
   ```
 
@@ -766,13 +767,13 @@ User: Find memories about auth or session but NOT logging.
 You: (Use FTS5 boolean operators in the query string itself — do NOT post-filter with jq when FTS5 can do it natively.)
   lore memory search "(auth OR session) NOT logging" --json
 
-User: Render a budget-trimmed CLAUDE.md that fits under 4000 bytes, but preview first without writing.
-You:
-  lore render --budget=4000 --dry-run
+User: Render a context that fits under 4000 bytes, but preview first without writing.
+You: (There is no `--budget` flag. Render is already a hybrid: it pins only the directive + `must` rules + critical/high hotfixes, so the generated `.lore/LORE.md` stays small. Preview its size without writing; to shrink further, lower rule/hotfix severities so fewer rows pin.)
+  lore render --dry-run | wc -c
 
-User: Reduce the rendered file size to half — show me what would change.
-You:
-  lore render --budget=<half> --dry-run
+User: Reduce the rendered file size — show me what would change.
+You: (No size flag exists. Preview the body and trim by re-scoping or down-severitying pinned rows.)
+  lore render --dry-run | wc -c
 
 User: I ran lore learn-from docs and got a bunch of candidates. Show me the list and accept the first three as memories.
 You: (TWO-step workflow as ONE script; emit BOTH the list AND the promotes together — do NOT stop after the list.)

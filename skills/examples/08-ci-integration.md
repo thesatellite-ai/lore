@@ -1,6 +1,6 @@
-# Example: CI integration — fail-fast on stale CLAUDE.md
+# Example: CI integration — fail-fast on stale `.lore/LORE.md`
 
-**Scenario:** Hiro wants the CI to verify that `CLAUDE.md` in the PR matches what `lore render` would produce locally. If they diverge, the PR is failing to refresh.
+**Scenario:** Hiro wants the CI to verify that the committed `.lore/LORE.md` in the PR matches what `lore render` would produce locally. If they diverge, the PR is failing to refresh. (`lore render --dry-run` emits the generated `.lore/LORE.md` body — the agent file `CLAUDE.md` only carries the `@import` pointer, so the diff target is `.lore/LORE.md`, not `CLAUDE.md`.)
 
 ## .github/workflows/lore.yml
 
@@ -22,10 +22,10 @@ jobs:
       - name: Doctor
         run: LORE_READ_ONLY=1 lore doctor --json | jq -e '.db_ok'
 
-      - name: CLAUDE.md is up to date
+      - name: .lore/LORE.md is up to date
         run: |
-          diff -u CLAUDE.md <(LORE_READ_ONLY=1 lore render --dry-run) \
-            || { echo "::error::CLAUDE.md out of date — run 'lore render' locally"; exit 1; }
+          diff -u .lore/LORE.md <(LORE_READ_ONLY=1 lore render --dry-run) \
+            || { echo "::error::.lore/LORE.md out of date — run 'lore render' locally"; exit 1; }
 
       - name: No secrets in DB
         run: |
@@ -48,7 +48,7 @@ In CI, the runner has no business mutating the project DB. Read-only mode:
 
 | Failure | Catches |
 |---|---|
-| Developer added a rule but forgot to render | CLAUDE.md diff fails |
+| Developer added a rule but forgot to render | `.lore/LORE.md` diff fails |
 | DB itself is corrupt or missing | `doctor` fails first |
 | A secret got into a memory | grep scan fails |
 | Schema migrated by a newer lore | `doctor` reports `E_SCHEMA_VERSION_MISMATCH` |
@@ -60,11 +60,10 @@ In CI, the runner has no business mutating the project DB. Read-only mode:
 ```bash
 #!/usr/bin/env bash
 # Auto-render before commit if the DB changed.
-if git diff --cached --name-only | grep -q '^\.lore/'; then
-    echo "lore DB changed; re-rendering..."
-    lore render
-    git add CLAUDE.md
-fi
+# Note: .lore/lore.db is gitignored, so re-render unconditionally and let the
+# diff check below decide whether anything actually changed.
+lore render
+git add .lore/LORE.md CLAUDE.md
 ```
 
 Or a Husky / lefthook config that calls `lore render` automatically.
@@ -81,9 +80,9 @@ LORE_READ_ONLY=1 lore doctor --json | jq -e '.db_ok' >/dev/null \
 
 ## Render-on-demand vs render-in-CI
 
-There are two ways to keep CLAUDE.md fresh:
+There are two ways to keep `.lore/LORE.md` fresh:
 
-1. **Render-in-CI**: developer commits a possibly-stale CLAUDE.md, CI catches it. ← shown above.
+1. **Render-in-CI**: developer commits a possibly-stale `.lore/LORE.md`, CI catches it. ← shown above.
 2. **Render-on-commit**: pre-commit hook auto-renders every time. ← simpler, but adds latency to every commit.
 
 Pick one. Don't do both — they fight.
