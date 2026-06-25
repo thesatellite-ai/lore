@@ -3,13 +3,13 @@
 Terms used throughout the lore documentation and CLI. Alphabetical.
 
 ## Activation
-A rule's render-time scope policy. Values: `always`, `glob`, `semantic`, `manual`. Determines when the rule appears in compiled CLAUDE.md.
+A rule's render-time scope policy. Values: `always`, `glob`, `semantic`, `manual`. Determines when the rule appears in the compiled `.lore/LORE.md`.
 
 ## Actor
 The identity behind any write. Resolved via 8-step fallback chain (flag → env → toml → git config → $USER → machine-id → persisted salt → ephemeral). Always resolves; the chain step is recorded.
 
 ## AGENTS.md
-Codex / OpenAI convention for AI context files. lore can render to `AGENTS.md` via `--target=AGENTS.md`. Same content shape as CLAUDE.md.
+Codex / OpenAI convention for AI context files. `lore render --target=AGENTS.md` stitches the `@import` pointer into `AGENTS.md` instead of `CLAUDE.md`; the generated knowledge still lives in `.lore/LORE.md`.
 
 ## Audit log
 Append-only ledger of every write, with hash chain for tamper detection. Verifiable via `lore audit verify` (v0.2).
@@ -36,10 +36,10 @@ The first-time setup: `lore init` + `lore learn-from docs`. See [examples/01-boo
 Sanitized tarball produced by `lore support-bundle` for bug reports. Contains DB schema, doctor output, scrubbed audit log. No bodies / no credentials.
 
 ## Canary
-A content-derived sha256 prefix in CLAUDE.md (`<!-- AICODER:CANARY=rnd_<hex> -->`). Lets `why-context --last-render` look up exactly which render the AI consumed. Content-derived so renders are deterministic.
+A content-derived sha256 prefix at the top of the generated knowledge file `.lore/LORE.md` (`<!-- AICODER:CANARY=rnd_<hex> -->`). Lets `why-context --last-render` look up exactly which render the AI consumed. Content-derived so renders are deterministic.
 
 ## CLAUDE.md
-Anthropic's convention for AI context files. lore's default render target. The AI reads this; the user writes to lore; lore render bridges the two.
+Anthropic's convention for AI context files. lore's default **pointer target**: `lore render` writes the compiled knowledge to `.lore/LORE.md` and stitches an idempotent `@import` pointer into CLAUDE.md, leaving any hand-written content intact. The AI reads CLAUDE.md, which imports `.lore/LORE.md`; the user writes to lore; `lore render` bridges the two.
 
 ## Comment
 Polymorphic free-form note attached to any entity via `--on-table` + `--on-id`. Timeline-ordered.
@@ -111,7 +111,7 @@ SQLite's `PRAGMA quick_check` — fast page-level integrity check. lore runs it 
 Time-based notification. Supports recurrence (`7d | 30d | 1m | 3m | 6m | 1y`). One-shot reminders flip to done; recurring ones reschedule.
 
 ## Render
-The compile step: structured DB → text file (CLAUDE.md by default). Deterministic — same DB content produces byte-identical output.
+The compile step: structured DB → generated knowledge file (`.lore/LORE.md` by default) + an idempotent `@import` pointer stitched into the agent file (`CLAUDE.md` by default). Deterministic — same DB content produces byte-identical output. `--out` changes the generated path; `--target` changes the pointer's agent file; `--no-pointer` skips the stitch.
 
 ## Repo
 A code repository registered within a project. Identified by `mount_name` (human) or `rep_id` (opaque). Used to scope rules / memories / tasks to one part of a multi-repo project.

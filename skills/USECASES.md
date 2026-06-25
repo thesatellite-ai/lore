@@ -104,9 +104,11 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 
 | Intent | Command |
 |---|---|
-| Compile CLAUDE.md from DB (hybrid; pins only directive + must-rules + critical/high hotfixes) | `lore render` |
-| Render to a different target file | `lore render --target=AGENTS.md` |
-| See what render would produce | `lore render --dry-run` |
+| Compile `.lore/LORE.md` from DB + `@import` pointer into CLAUDE.md (hybrid; pins only directive + must-rules + critical/high hotfixes) | `lore render` |
+| Stitch the pointer into a different agent file | `lore render --target=AGENTS.md` |
+| Change the generated knowledge-file path | `lore render --out=docs/LORE.md` |
+| Write the generated file only (no pointer stitch) | `lore render --no-pointer` |
+| See what render would produce (the `.lore/LORE.md` body) | `lore render --dry-run` |
 | What did the AI actually see? | `lore why-context --last-render` |
 | Same as above in JSON | `lore why-context --last-render --json` |
 | Last rendered text | `lore why-context --last-render --rendered` |
@@ -154,7 +156,7 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 |---|---|
 | Refuse writes globally | `LORE_READ_ONLY=1 lore ...` |
 | Per-command read-only | `lore ... --read-only` |
-| Verify CLAUDE.md is up to date | `diff CLAUDE.md <(lore render --dry-run)` |
+| Verify the rendered knowledge is up to date | `diff .lore/LORE.md <(lore render --dry-run)` |
 
 ## When in doubt
 

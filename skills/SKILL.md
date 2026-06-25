@@ -109,9 +109,9 @@ want a worked transcript     → examples/
 | Concept | Meaning | Verb |
 |---|---|---|
 | **Memory** | Free-form learned fact. "We use Tailwind v4." | `memory add` |
-| **Rule** | Hard constraint with severity. `must` blocks, `should` warns, `may` suggests. **Only `must`-severity rules are pinned in CLAUDE.md** since v0.2; `should`/`may` surface via search. | `rule add --severity=<s>` |
-| **Decision** | Architectural choice with rationale. ADR-style. **Not pinned in CLAUDE.md** — surfaces via `lore search`. | `decision add --title=… --body=<why>` |
-| **Hotfix** | Loud warning we keep hitting. **Only `critical` + `high` severity hotfixes are pinned in CLAUDE.md** since v0.2; `medium`/`low` surface via search. Hotfix styling stays loud regardless of where it appears. | `hotfix add --severity=<s>` |
+| **Rule** | Hard constraint with severity. `must` blocks, `should` warns, `may` suggests. **Only `must`-severity rules are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `should`/`may` surface via search. | `rule add --severity=<s>` |
+| **Decision** | Architectural choice with rationale. ADR-style. **Not pinned in `.lore/LORE.md`** — surfaces via `lore search`. | `decision add --title=… --body=<why>` |
+| **Hotfix** | Loud warning we keep hitting. **Only `critical` + `high` severity hotfixes are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `medium`/`low` surface via search. Hotfix styling stays loud regardless of where it appears. | `hotfix add --severity=<s>` |
 | **Pattern** | Reusable code shape. | `pattern add --name=…` |
 | **Playbook** | Reusable procedure. | `playbook add --name=…` |
 | **Prompt** | Reusable LLM prompt template. | `prompt add --name=…` |
@@ -160,13 +160,13 @@ When the user uses a value that's not in the documented enum, do **not** blindly
 
 | User says | You should |
 |---|---|
-| `--scope=foobar` | Note: not valid. Valid scopes: `master`, `project`, `repo`, `canary`. Don't emit the bad command. |
+| `--kind=foobar` (memory) | Note: not valid. Valid kinds: `core`, `retrieved`, `episodic`, `procedural`, `archival`. Don't emit the bad command. (Scoping uses `--repo` / `--master-only`, not a `--scope` flag.) |
 | `--severity=critical` | Not in enum. Valid: `must`, `should`, `may`. Map to closest (likely `must`) and confirm. |
 | `--priority=blocker` | Not valid. Valid: `low`, `medium`, `high`, `urgent`. Map to `urgent`. |
 | `--status=wip` | Not valid. Valid: `todo`, `in_progress`, `blocked`, `done`, `canceled`, `archived`. Map to `in_progress`. |
 | `--on-table=task` (singular) | Plural required: `tasks`. Fix silently and proceed. |
 
-CLI will reject with `E_SCOPE_INVALID` / `E_SEVERITY_INVALID` / etc. anyway — catch before emitting.
+CLI will reject bad values with `E_INVALID_INPUT` (and unknown flags like `--scope` with an "unknown flag" error) anyway — catch before emitting.
 
 ### Universal output
 
@@ -242,7 +242,7 @@ vs. real triggers (emit capture command):
 
 5. **Counterfactual / hypothetical** — `"if we HAD done X"`, `"had we used X"`, `"in retrospect we should have"`, `"imagine if we"`. These express regret about an unchosen path. They are NOT current facts. Don't capture them; don't invert them into positive claims (that's hallucination). Respond about the lesson in prose.
 
-6. **Invalid enum value in a flag** — user types `--scope=foobar`, `--severity=critical`, `--priority=blocker`, `--on-table=task` (singular instead of plural). DO NOT forward the bad value to the CLI. Surface the constraint in prose, list the valid values, ask for clarification. The output-as-one-bash-block convention is overridden here.
+6. **Invalid enum value in a flag** — user types `--kind=foobar`, `--severity=critical`, `--priority=blocker`, `--on-table=task` (singular instead of plural). DO NOT forward the bad value to the CLI. Surface the constraint in prose, list the valid values, ask for clarification. The output-as-one-bash-block convention is overridden here.
 
 If you find yourself paraphrasing the user's question into a statement and capturing it — STOP. That's a hallucinated capture; the user didn't commit.
 
@@ -511,27 +511,26 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 
 | User says | Run |
 |---|---|
-| "regenerate CLAUDE.md" | `lore render` (hybrid: only directive + must-rules + critical/high hotfixes pinned) |
-| "what would render produce?" | `lore render --dry-run` |
-| "render to AGENTS.md instead" | `lore render --target=AGENTS.md` |
-| "trim the rendered file to N bytes" | `lore render --budget=<N>` |
-| "preview a budget-trimmed render under N bytes, don't write" | `lore render --budget=<N> --dry-run` (combine flags) |
-| "preview render as if I were on the canary scope" | `lore render --scope=canary --dry-run` (scope flags apply to render itself, not just capture) |
-| "preview render with only master rows" | `lore render --master-only --dry-run` |
+| "regenerate my context" / "re-render" | `lore render` (writes `.lore/LORE.md` + `@import` pointer into CLAUDE.md; hybrid: only directive + must-rules + critical/high hotfixes pinned) |
+| "what would render produce?" | `lore render --dry-run` (prints the `.lore/LORE.md` body) |
+| "stitch the pointer into AGENTS.md instead" | `lore render --target=AGENTS.md` |
+| "put the generated file somewhere else" | `lore render --out=docs/LORE.md` |
+| "write the generated file only, leave CLAUDE.md alone" | `lore render --no-pointer` |
+| "render just one repo's slice" | `lore render --repo=<mount> --out=<mount>/.lore/LORE.md --target=<mount>/CLAUDE.md` |
 | "what did the AI actually see?" | `lore why-context --last-render` |
 
-### What's pinned in CLAUDE.md vs searched on demand
+### What's pinned in `.lore/LORE.md` vs searched on demand
 
-Since v0.2, `lore render` follows a **hybrid model**. CLAUDE.md is intentionally kept small so it doesn't bloat as project knowledge accumulates:
+`lore render` follows a **hybrid model**. The pinned content goes into the generated `.lore/LORE.md` (which CLAUDE.md `@import`s); it's intentionally kept small so it doesn't bloat as project knowledge accumulates:
 
-| Entity | Pinned in CLAUDE.md | Searched on demand via `lore search` |
+| Entity | Pinned in `.lore/LORE.md` | Searched on demand via `lore search` |
 |---|---|---|
 | Directive | always | — |
 | Rules | `severity=must` | `severity=should` / `may` |
 | Hotfixes | `severity=critical` + `high` | `severity=medium` / `low` |
 | Memories, decisions, patterns, architecturenotes, taste prefs, playbooks, … | — | always |
 
-The agent's **directive step 5** (in CLAUDE.md) mandates `lore search "<keywords>"` before substantive responses — that's how the non-pinned content reaches the agent. Cite hits by ID (`per dec_<id>, …`).
+The agent's **directive step 5** (rendered into `.lore/LORE.md`, reached via the CLAUDE.md `@import`) mandates `lore search "<keywords>"` before substantive responses — that's how the non-pinned content reaches the agent. Cite hits by ID (`per dec_<id>, …`).
 
 ### Benchmark / evaluation
 
@@ -628,7 +627,7 @@ If the user uses different phrasing, the principle is: **classify the intent (ca
                                ▼
         ┌───────────────────────────────────────────────┐
         │  YOU run:  lore render                    │   ← refresh
-        │  → writes CLAUDE.md from DB                   │
+        │  → writes .lore/LORE.md + @import in CLAUDE.md │
         └──────────────────────┬────────────────────────┘
                                │
                                ▼
@@ -757,7 +756,7 @@ lore
 ├── tag      add|list|attach|detach
 │                              polymorphic labels
 ├── comment  add|list          polymorphic discussions
-├── render                     compile CLAUDE.md from DB (deterministic)
+├── render                     compile .lore/LORE.md from DB + @import pointer in CLAUDE.md
 ├── why-context                introspect last render
 ├── learn-from docs            ingest existing markdown
 ├── learn list|promote|reject  review learn candidates
@@ -915,8 +914,8 @@ Before ending the session, verify:
 # 1. Captured knowledge persisted
 lore doctor --json | jq -e '.db_ok' >/dev/null || echo "WARN: DB issue"
 
-# 2. CLAUDE.md is up to date with the DB
-diff CLAUDE.md <(lore render --dry-run) >/dev/null || lore render
+# 2. .lore/LORE.md is up to date with the DB
+diff .lore/LORE.md <(lore render --dry-run) >/dev/null || lore render
 
 # 3. No stale lock from a crashed process
 ls .lore/state/lock 2>/dev/null && echo "WARN: stale lock present"
