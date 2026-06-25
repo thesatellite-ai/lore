@@ -1,0 +1,35 @@
+version: '3'
+
+# lore brand asset pipeline. Run from this dir: `task -t Taskfile.yml <name>`
+# or wire into the repo root Taskfile as an included namespace.
+
+tasks:
+  gen:
+    desc: Regenerate all SVG marks + design tokens from gen-brand.mjs
+    cmds:
+      - node gen-brand.mjs
+
+  raster:
+    desc: Rasterize favicons, apple-touch, app icons, OG covers + favicon.ico (needs rsvg-convert + magick)
+    cmds:
+      - mkdir -p png
+      - rsvg-convert -w 16   -h 16   favicon.svg          -o png/favicon-16.png
+      - rsvg-convert -w 32   -h 32   favicon.svg          -o png/favicon-32.png
+      - rsvg-convert -w 48   -h 48   favicon.svg          -o png/favicon-48.png
+      - rsvg-convert -w 180  -h 180  lore-icon.svg        -o png/apple-touch-icon.png
+      - rsvg-convert -w 512  -h 512  lore-icon.svg        -o png/lore-icon-512.png
+      - rsvg-convert -w 1024 -h 1024 lore-icon.svg        -o png/lore-icon-1024.png
+      - rsvg-convert -w 1200 -h 630  og-cover.svg         -o png/og-cover.png
+      - rsvg-convert -w 1200 -h 630  og-cover-light.svg   -o png/og-cover-light.png
+      - magick png/favicon-16.png png/favicon-32.png png/favicon-48.png favicon.ico
+
+  all:
+    desc: Regenerate everything (SVG + tokens + raster)
+    cmds:
+      - task: gen
+      - task: raster
+
+  clean:
+    desc: Remove generated raster output
+    cmds:
+      - rm -rf png favicon.ico
