@@ -1,0 +1,14 @@
+<svg width="620" height="200" viewBox="0 0 620 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="lore">
+  <defs><linearGradient id="l-color" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse"><stop stop-color="#10B981"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>
+  <g transform="translate(20,36) scale(0.25)">
+    <rect width="512" height="512" rx="112" fill="url(#l-color)"/>
+    <ellipse cx="256" cy="256" rx="156" ry="96" transform="rotate(-24 256 256)" fill="none" stroke="#FFFFFF" stroke-opacity="0.30" stroke-width="6"/>
+  <circle cx="383" cy="182" r="17" fill="#A3E635"/>
+  <g fill="#FFFFFF">
+    <rect x="168" y="196" width="176" height="40" rx="20"/>
+    <rect x="148" y="252" width="216" height="40" rx="20"/>
+    <rect x="168" y="308" width="176" height="40" rx="20"/>
+  </g>
+  </g>
+  <text x="176" y="132" font-family="'Space Grotesk', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="116" font-weight="600" letter-spacing="-5" fill="#0B0B12">lore</text>
+</svg>
