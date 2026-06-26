@@ -17,8 +17,6 @@
   <a href="https://github.com/thesatellite-ai/lore/stargazers"><img src="https://img.shields.io/github/stars/thesatellite-ai/lore?style=social" alt="GitHub stars"></a>
 </p>
 
----
-
 lore is an open-source, local-first **memory and context-management CLI for AI coding agents** — Claude Code, Cursor, Windsurf, Cline, GitHub Copilot, and Codex. It captures what you and your agent learn about a project — rules, decisions, patterns, gotchas, tasks — and turns it into the `CLAUDE.md` / `AGENTS.md` your agent reads every session. So it stops forgetting context and stops repeating the same mistakes.
 
 One command to install, nothing to run, everything stays on your machine. Ships with a Claude Code skill so the agent saves and recalls knowledge for you automatically.
@@ -340,7 +338,5 @@ Yes — free, open source, no seats or usage tiers.
 
 See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (build, release, Homebrew tap)
 and **[CONTRIBUTING.md](CONTRIBUTING.md)**.
-
----
 
 <sub><strong>lore</strong> — open-source, local-first memory &amp; context management for AI coding agents. Persistent <code>CLAUDE.md</code> / <code>AGENTS.md</code> memory for Claude Code, Cursor, Windsurf, Cline, GitHub Copilot, and Codex. No cloud, no API keys, no embeddings.</sub>
