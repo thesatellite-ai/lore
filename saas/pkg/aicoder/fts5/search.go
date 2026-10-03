@@ -52,66 +52,72 @@ func SearchEntity(ctx context.Context, db *sql.DB, cfg Config, query string, opt
 	ftsName := cfg.FTSTable()
 
 	// Build column-scoped MATCH if --columns was passed. FTS5 syntax for
-	// restricting MATCH to specific columns is: `{col1 col2}: <query>`.
-	matchExpr := query
-	if len(opts.Columns) > 0 {
-		matchExpr = "{" + strings.Join(opts.Columns, " ") + "}: " + query
-	}
-
-	// Build bm25() with per-column weights from Config. SQLite expects one
-	// arg per indexed column; mismatched count errors out, so default to
-	// uniform 1.0 if Weights is wrong-length.
-	weights := cfg.Weights
-	if len(weights) != len(cfg.Columns) {
-		weights = make([]float64, len(cfg.Columns))
-		for i := range weights {
-			weights[i] = 1.0
+	// restricting MATCH to specific columns is: `{col1 col2}: (<query>)`.
+	build := func(expr string) (string, []any) {
+		matchExpr := expr
+		if len(opts.Columns) > 0 {
+			// Parenthesised: FTS5 applies a column filter only to the
+			// phrase right after it, so `{title}: a b` would scope "a" and
+			// let "b" match any column.
+			matchExpr = "{" + strings.Join(opts.Columns, " ") + "}: (" + expr + ")"
 		}
-	}
-	weightArgs := make([]string, len(weights))
-	for i, w := range weights {
-		weightArgs[i] = fmt.Sprintf("%g", w)
-	}
+		args := []any{matchExpr}
 
-	// snippet() args: table, column-index (0-indexed, -1 = first matched),
-	// start-marker, end-marker, ellipsis, max-tokens.
-	q := fmt.Sprintf(`
-		SELECT t.id, t.rowid,
-		       bm25(%s, %s) AS rank,
-		       snippet(%s, -1, '<b>', '</b>', '...', 32) AS snip
-		FROM %s
-		JOIN %s t ON t.rowid = %s.rowid
-		WHERE %s MATCH ?
-	`, ftsName, strings.Join(weightArgs, ", "),
-		ftsName, ftsName, cfg.Table, ftsName, ftsName)
-
-	args := []any{matchExpr}
-
-	if opts.ProjectID != "" && entityHasProjectID(cfg) {
-		q += ` AND t.project_id = ?`
-		args = append(args, opts.ProjectID)
-	}
-
-	// Repo scope. Skip when entity doesn't have a repo_id column.
-	if entityHasRepoID(cfg) && !opts.AllRepos {
-		switch {
-		case opts.MasterOnly:
-			q += ` AND t.repo_id IS NULL`
-		case opts.RepoID != "":
-			q += ` AND (t.repo_id = ? OR t.repo_id IS NULL)`
-			args = append(args, opts.RepoID)
+		// Build bm25() with per-column weights from Config. SQLite expects one
+		// arg per indexed column; mismatched count errors out, so default to
+		// uniform 1.0 if Weights is wrong-length.
+		weights := cfg.Weights
+		if len(weights) != len(cfg.Columns) {
+			weights = make([]float64, len(cfg.Columns))
+			for i := range weights {
+				weights[i] = 1.0
+			}
 		}
+		weightArgs := make([]string, len(weights))
+		for i, w := range weights {
+			weightArgs[i] = fmt.Sprintf("%g", w)
+		}
+
+		// snippet() args: table, column-index (0-indexed, -1 = first matched),
+		// start-marker, end-marker, ellipsis, max-tokens.
+		q := fmt.Sprintf(`
+			SELECT t.id, t.rowid,
+			       bm25(%s, %s) AS rank,
+			       snippet(%s, -1, '<b>', '</b>', '...', 32) AS snip
+			FROM %s
+			JOIN %s t ON t.rowid = %s.rowid
+			WHERE %s MATCH ?
+		`, ftsName, strings.Join(weightArgs, ", "),
+			ftsName, ftsName, cfg.Table, ftsName, ftsName)
+
+		if opts.ProjectID != "" && entityHasProjectID(cfg) {
+			q += ` AND t.project_id = ?`
+			args = append(args, opts.ProjectID)
+		}
+
+		// Repo scope. Skip when entity doesn't have a repo_id column.
+		if entityHasRepoID(cfg) && !opts.AllRepos {
+			switch {
+			case opts.MasterOnly:
+				q += ` AND t.repo_id IS NULL`
+			case opts.RepoID != "":
+				q += ` AND (t.repo_id = ? OR t.repo_id IS NULL)`
+				args = append(args, opts.RepoID)
+			}
+		}
+
+		// Archive filter.
+		if !opts.IncludeArchived && entityHasArchivedAt(cfg) {
+			q += ` AND t.archived_at IS NULL`
+		}
+
+		q += ` ORDER BY rank LIMIT ?`
+		args = append(args, opts.Limit)
+
+		return q, args
 	}
 
-	// Archive filter.
-	if !opts.IncludeArchived && entityHasArchivedAt(cfg) {
-		q += ` AND t.archived_at IS NULL`
-	}
-
-	q += ` ORDER BY rank LIMIT ?`
-	args = append(args, opts.Limit)
-
-	rows, err := db.QueryContext(ctx, q, args...)
+	rows, err := queryWithFallback(ctx, db, query, build)
 	if err != nil {
 		return nil, fmt.Errorf("fts5 search %s: %w", ftsName, err)
 	}

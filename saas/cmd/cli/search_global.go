@@ -86,6 +86,9 @@ you want to scope to one type. This is the cross-entity hammer.`,
 				return cmd.Help()
 			}
 			query := args[0]
+			if err := requireSearchQuery(query); err != nil {
+				return err
+			}
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
@@ -278,7 +281,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = truncBody(r.Body, 80)
 					}
 				}
@@ -289,7 +292,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -300,7 +303,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -311,7 +314,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -322,7 +325,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -333,7 +336,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -344,7 +347,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -355,7 +358,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -366,7 +369,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Name
 					}
 				}
@@ -377,7 +380,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Name
 					}
 				}
@@ -388,7 +391,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -399,7 +402,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Name
 					}
 				}
@@ -410,7 +413,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -421,7 +424,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -432,7 +435,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -443,7 +446,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = truncBody(r.Body, 80)
 					}
 				}
@@ -454,7 +457,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Title
 					}
 				}
@@ -465,7 +468,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = truncBody(r.Body, 80)
 					}
 				}
@@ -486,7 +489,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Name
 					}
 				}
@@ -497,7 +500,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Name
 					}
 				}
@@ -508,7 +511,7 @@ func hydrateGlobalHits(ctx context.Context, client *ent.Client, hits []globalSea
 				for _, i := range indices {
 					if hits[i].ID == r.ID {
 						hits[i].ID = r.ID
-						hits[i].Pretty = fmt.Sprintf("%s", r.ID)
+						hits[i].Pretty = r.ID
 						hits[i].Body = r.Name
 					}
 				}

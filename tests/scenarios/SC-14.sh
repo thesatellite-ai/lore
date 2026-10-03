@@ -4,7 +4,7 @@
 source "$(dirname "$0")/../lib/common.sh"
 need jq
 mk_tmp; init_project whyt
-$LORE memory add "important context" >/dev/null
+$LORE rule add --severity=must --body "important context" >/dev/null
 $LORE render >/dev/null || fail "render"
 $LORE why-context --last-render --json > /tmp/why.json || fail "why-context --json"
 jq -e '.schema_version == 1' /tmp/why.json >/dev/null || fail "schema_version missing"

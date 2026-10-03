@@ -3,7 +3,7 @@
 # Catches: R16-25
 source "$(dirname "$0")/../lib/common.sh"
 need go
-WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(cd "$(dirname "$0")/../../ai-coder-mini-go" && pwd)}"
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 [ -d "$WORKSPACE_ROOT/saas/cmd/cli" ] || skip "workspace root not found: $WORKSPACE_ROOT"
 
 mk_tmp

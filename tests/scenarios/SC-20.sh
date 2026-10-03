@@ -7,6 +7,6 @@ for key in \
     "Use this key: AKIAIOSFODNN7EXAMPLE for staging" \
     "OpenAI key sk-1234567890abcdef1234567890ab" \
     "ghp_1234567890abcdefghijklmnopqrstuvwxyz12"; do
-    $LORE memory add "$key" 2>&1 | grep -qE "E_SECRET_DETECTED|secret" || fail "secret not refused: $key"
+    $LORE memory add --body "$key" 2>&1 | grep -qE "E_SECRET_DETECTED|secret" || fail "secret not refused: $key"
 done
 pass SC-20

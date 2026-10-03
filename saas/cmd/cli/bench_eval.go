@@ -75,7 +75,6 @@ type benchEvalAddFlags struct {
 	prompt       string
 	promptFile   string
 	linkedKind   string
-	linkedID     string
 	linkedBody   string
 	graderKind   string
 	graderCmd    string

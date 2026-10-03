@@ -141,6 +141,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 > - **Edit existing rows** → ` + "`lore <kind> edit <id>`" + ` (16 entities). For audited body changes on knowledge entities: ` + "`<kind> add ... --supersedes=<old_id>`" + `
 > - **Find anything** → ` + "`lore <kind> search \"<query>\"`" + ` — FTS5 across 23 entities. Run this BEFORE creating a new row, every time
 > - **Ingest external sources** (PR reviews, commit logs, postmortems, markdown docs) → ` + "`lore learn-from docs`" + ` — stages ` + "`learn_candidate`" + ` rows for review
+> - **Share with the team** → every lore write is mirrored to ` + "`.lore/data/`" + ` (one JSON file per row). When the user commits the work, include ` + "`.lore/data/`" + ` and ` + "`.gitattributes`" + ` in that commit; never commit ` + "`.lore/lore.db`" + `. If ` + "`lore sync`" + ` reports a conflict, show both versions and let the user choose (` + "`lore sync conflicts`" + ` / ` + "`resolve`" + `)
 >
 > ## Hard prohibitions
 >

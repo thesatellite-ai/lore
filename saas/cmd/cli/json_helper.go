@@ -49,18 +49,6 @@ func printJSON(kind string, data any, count int) {
 	fmt.Println(string(out))
 }
 
-// printJSONOrPlain is the standard branch helper for commands with --json
-//
-//	if jsonOut: emit envelope and return
-//	else: invoke plain func to format human output
-func printJSONOrPlain(jsonOut bool, kind string, data any, count int, plain func()) {
-	if jsonOut {
-		printJSON(kind, data, count)
-		return
-	}
-	plain()
-}
-
 // missionWithTasks is the canonical JSON shape for mission show/list with
 // eager-loaded tasks. Fields use snake_case for stable consumer parsing
 type missionWithTasks struct {
@@ -88,42 +76,22 @@ type taskBrief struct {
 
 // taskFull is the JSON shape for task show
 type taskFull struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Body        string `json:"body,omitempty"`
-	Status      string `json:"status"`
-	Priority    string `json:"priority"`
-	Commitment  string `json:"commitment"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	Body          string `json:"body,omitempty"`
+	Status        string `json:"status"`
+	Priority      string `json:"priority"`
+	Commitment    string `json:"commitment"`
 	DeferredUntil string `json:"deferred_until,omitempty"`
-	DueAt       string `json:"due_at,omitempty"`
-	StartedAt   string `json:"started_at,omitempty"`
-	CompletedAt string `json:"completed_at,omitempty"`
-	MissionID   string `json:"mission_id,omitempty"`
-	TaskListID  string `json:"tasklist_id,omitempty"`
-	PlanID      string `json:"plan_id,omitempty"`
-	ProjectID   string `json:"project_id"`
-	RepoID      string `json:"repo_id,omitempty"`
-	CreatedAt   string `json:"created_at"`
-}
-
-// planWithTasks projects a Plan with its attached tasks (1:N edge)
-type planWithTasks struct {
-	ID        string      `json:"id"`
-	Title     string      `json:"title"`
-	Body      string      `json:"body"`
-	Status    string      `json:"status"`
-	CreatedAt string      `json:"created_at"`
-	Tasks     []taskBrief `json:"tasks,omitempty"`
-}
-
-// taskListWithTasks projects a TaskList with its tasks
-type taskListWithTasks struct {
-	ID        string      `json:"id"`
-	Title     string      `json:"title"`
-	Body      string      `json:"body,omitempty"`
-	Status    string      `json:"status"`
-	CreatedAt string      `json:"created_at"`
-	Tasks     []taskBrief `json:"tasks,omitempty"`
+	DueAt         string `json:"due_at,omitempty"`
+	StartedAt     string `json:"started_at,omitempty"`
+	CompletedAt   string `json:"completed_at,omitempty"`
+	MissionID     string `json:"mission_id,omitempty"`
+	TaskListID    string `json:"tasklist_id,omitempty"`
+	PlanID        string `json:"plan_id,omitempty"`
+	ProjectID     string `json:"project_id"`
+	RepoID        string `json:"repo_id,omitempty"`
+	CreatedAt     string `json:"created_at"`
 }
 
 // projectWithRepos projects a Project with its repos
@@ -143,37 +111,6 @@ type repoBrief struct {
 	DisplayName string `json:"display_name,omitempty"`
 	OriginURL   string `json:"origin_url,omitempty"`
 	ArchivedAt  string `json:"archived_at,omitempty"`
-}
-
-// techDocWithPages — TechDoc + pages
-type techDocWithPages struct {
-	ID          string             `json:"id"`
-	Name        string             `json:"name"`
-	BaseURL     string             `json:"base_url,omitempty"`
-	Description string             `json:"description,omitempty"`
-	Pages       []techDocPageBrief `json:"pages,omitempty"`
-}
-
-type techDocPageBrief struct {
-	ID    string `json:"id"`
-	URL   string `json:"url"`
-	Title string `json:"title,omitempty"`
-}
-
-// runWithSteps — Run + ordered steps
-type runWithSteps struct {
-	ID          string    `json:"id"`
-	Kind        string    `json:"kind"`
-	Status      string    `json:"status"`
-	StartedAt   string    `json:"started_at,omitempty"`
-	CompletedAt string    `json:"completed_at,omitempty"`
-	Steps       []runStep `json:"steps,omitempty"`
-}
-
-type runStep struct {
-	Seq    int    `json:"seq"`
-	Kind   string `json:"kind"`
-	Status string `json:"status"`
 }
 
 // briefTask projects an ent Task into the lightweight JSON form used in

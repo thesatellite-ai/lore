@@ -144,7 +144,7 @@ var snapshotArchiveTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
 		return c.Snapshot.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)

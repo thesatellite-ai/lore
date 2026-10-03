@@ -8,6 +8,6 @@ cat > .lore/lore.toml <<TML
 db_path = "../../../etc/passwd"
 project_id = "prj_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 TML
-$LORE memory add "x" 2>&1 | grep -qE "E_BAD_PATH|traversal|outside" || \
+$LORE memory add --body "x" 2>&1 | grep -qE "E_BAD_PATH|traversal|outside" || \
     fail "deep path traversal not refused"
 pass CH-4

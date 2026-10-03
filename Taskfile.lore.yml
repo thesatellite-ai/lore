@@ -18,7 +18,7 @@ vars:
   BIN_DIR: "{{.ROOT_DIR}}/tmp/bin"
   LORE_BIN: "{{.BIN_DIR}}/lore"
   WORKSPACE_ROOT: "{{.ROOT_DIR}}"
-  TESTS_DIR: "{{.ROOT_DIR}}/../tests"
+  TESTS_DIR: "{{.ROOT_DIR}}/tests"
 
 tasks:
   build:
@@ -66,18 +66,40 @@ tasks:
       - go test -race ./saas/cmd/cli/... ./saas/pkg/aicoder/...
       - go test -race ./dbent/schema/...
 
+  test:sync:
+    desc: "Git-sync tests only: lsync engine, merge3, canonjson, gitsetup, ids + the CLI e2e suite (real git, real binary)"
+    cmds:
+      - go test -race ./saas/pkg/aicoder/lsync/... ./saas/pkg/aicoder/merge3/... ./saas/pkg/aicoder/canonjson/... ./saas/pkg/aicoder/gitsetup/... ./saas/pkg/aicoder/ids/...
+      - go test ./saas/cmd/cli/...
+
+  bench:sync:
+    desc: "Sync performance: no-op pass, bootstrap and fresh-clone adopt at 1k/10k rows (numbers recorded in LORE_SYNC_SPEC.md)"
+    cmds:
+      - go test ./saas/pkg/aicoder/lsync/ -run xxx -bench . -benchtime 3x
+
   test:cover:
     desc: "Test with coverage report"
     cmds:
       - go test -race -coverprofile=coverage.out ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...
       - go tool cover -func=coverage.out | tail -20
 
-  lint:
-    desc: "Static checks: vet + fmt + staticcheck"
+  build:cross:
+    desc: "Cross-compile the CLI for every shipped OS/arch (platform code must build everywhere, not just on the host)"
     cmds:
+      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
+
+  lint:
+    desc: "Static checks: vet + fmt + staticcheck + cross-OS build"
+    cmds:
+      - task: build:cross
       - go vet ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...
       - 'test -z "$(gofmt -l ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/)" || (echo "gofmt failures:"; gofmt -l ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/; exit 1)'
-      - which staticcheck > /dev/null && staticcheck ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/... || echo "staticcheck not installed; skipping"
+      - if which staticcheck > /dev/null; then staticcheck ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...; else echo "staticcheck not installed; skipping"; fi
 
   fmt:
     desc: "Format code"

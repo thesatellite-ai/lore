@@ -90,27 +90,30 @@ type Hit struct {
 // Returns the IDs (caller does ent.Memory.Query().Where(IDIn(...))).
 //
 // Query syntax is FTS5 — supports phrase ("..."), boolean (AND/OR/NOT),
-// prefix (foo*), and column filters. Validation is left to SQLite which
-// surfaces a usable error message.
+// prefix (foo*), and column filters. Text SQLite rejects as FTS5 syntax
+// (e.g. "round-trip") is retried literally via QuoteTerms.
 func Search(ctx context.Context, db *sql.DB, projectID, query string, limit int) ([]Hit, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	q := `
+	build := func(expr string) (string, []any) {
+		q := `
 		SELECT m.id, bm25(memory_fts) AS rank
 		FROM memory_fts
 		JOIN memories m ON m.rowid = memory_fts.rowid
 		WHERE memory_fts MATCH ?
 	`
-	args := []any{query}
-	if projectID != "" {
-		q += ` AND m.project_id = ?`
-		args = append(args, projectID)
+		args := []any{expr}
+		if projectID != "" {
+			q += ` AND m.project_id = ?`
+			args = append(args, projectID)
+		}
+		q += ` ORDER BY rank LIMIT ?`
+		args = append(args, limit)
+		return q, args
 	}
-	q += ` ORDER BY rank LIMIT ?`
-	args = append(args, limit)
 
-	rows, err := db.QueryContext(ctx, q, args...)
+	rows, err := queryWithFallback(ctx, db, query, build)
 	if err != nil {
 		return nil, fmt.Errorf("fts5 search: %w", err)
 	}

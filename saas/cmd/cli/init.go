@@ -1,7 +1,7 @@
 // aicoder_init.go — implements `lore init`
 //
 // Story S2.1 (PLAN.md). Creates a fresh Mode A project at cwd:
-//   - Refuses if .lore/ already exists (E_ALREADY_INITIALIZED)
+//   - Refuses if .lore/lore.db or .lore/lore.toml exists (E_ALREADY_INITIALIZED)
 //   - Auto-suggests project name from git remote
 //   - Initializes SQLite DB with schema migration
 //   - Seeds DBConfig singletons (schema_version, db_uuid, db_created_at)
@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,8 +29,11 @@ import (
 	"dbent/pkg/dbent_migrate"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/fts5"
+	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/ids"
+	"saas/pkg/aicoder/lsync"
+	"saas/pkg/aicoder/migrationlog"
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
@@ -55,7 +59,7 @@ It will:
   • register the initial Project row using the auto-detected name from
     your git remote (or the directory basename if no remote)
 
-Refuses if .lore/ already exists.`,
+Refuses if a project already exists (.lore/lore.db or .lore/lore.toml).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := "."
@@ -75,12 +79,35 @@ Refuses if .lore/ already exists.`,
 }
 
 func runInit(ctx context.Context, projectRoot string) error {
-	// 1. Refuse if .lore/ already exists
+	// 1. A checkout that already carries shared lore data (.lore/data from a
+	// teammate) but no local DB: adopt it instead of minting a second
+	// project (E1).
 	markerDir := filepath.Join(projectRoot, projresolve.MarkerDir)
-	if _, err := os.Stat(markerDir); err == nil {
-		return errcodes.New(errcodes.AlreadyInitialized,
-			fmt.Sprintf(".lore/ already exists at %s", projectRoot)).
-			WithHint("delete the existing .lore/ directory first if you intend to re-init")
+	if err := checkNetworkFS(projectRoot); err != nil {
+		return err
+	}
+	if needsMaterialize(projectRoot) {
+		if err := materializeFromData(ctx, projectRoot); err != nil {
+			return errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(err)
+		}
+		meta, err := lsync.ReadProjectMeta(filepath.Join(markerDir, lsync.DataDirName))
+		if err != nil {
+			return errcodes.New(errcodes.Internal, "read .lore/data/_meta.json").WithCause(err)
+		}
+		fmt.Printf("%s adopted the shared lore project at %s\n", style.Success("✓"), projectRoot)
+		fmt.Printf("    project_id: %s\n", style.Code(meta.ProjectID))
+		return nil
+	}
+
+	// Refuse when a project already exists here. A .lore/ holding only
+	// leftovers (an empty state/ dir from a lock, backups) is not a project
+	// and must not block init.
+	for _, f := range []string{projresolve.ModeAFile, projresolve.ModeBFile} {
+		if _, err := os.Lstat(filepath.Join(markerDir, f)); err == nil {
+			return errcodes.New(errcodes.AlreadyInitialized,
+				fmt.Sprintf("a lore project already exists at %s (.lore/%s)", projectRoot, f)).
+				WithHint("delete .lore/" + f + " first if you intend to re-init")
+		}
 	}
 
 	// 2. Determine project name
@@ -106,32 +133,21 @@ func runInit(ctx context.Context, projectRoot string) error {
 		return errcodes.New(errcodes.Internal, "create .lore/state").WithCause(err)
 	}
 
-	// 4. Init SQLite DB at .lore/lore.db, apply pragmas, run migration
+	// 4. Create .lore/lore.db with schema, config singletons and FTS
 	dbPath := filepath.Join(markerDir, projresolve.ModeAFile)
+	if err := createProjectDB(ctx, dbPath); err != nil {
+		return err
+	}
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
-
-	if err := dbent.ApplyPragmas(db); err != nil {
-		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
-	}
-	if err := dbent_migrate.Migrate(ctx, db); err != nil {
-		return errcodes.New(errcodes.Internal, "migrate schema").WithCause(err)
-	}
-
-	// Reopen for the working session (Migrate closes its own client)
-	db = dbent.InitDB(dbPath)
 	defer db.Close()
 	if err := dbent.ApplyPragmas(db); err != nil {
 		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
 	}
 	entdb := dbent.New(db)
 	client := entdb.Client()
+	client.Use(naturalIDHook())
+	client.Use(txAtMonotonicHook())
 	defer client.Close()
-
-	// 5. Seed DBConfig singletons
-	if err := seedDBConfig(ctx, client); err != nil {
-		return errcodes.New(errcodes.Internal, "seed config").WithCause(err)
-	}
 
 	// 6. Resolve identity → seed initial actor row
 	resolved := identity.Resolve(identity.Inputs{})
@@ -156,13 +172,73 @@ func runInit(ctx context.Context, projectRoot string) error {
 	}
 
 	// 8. Auto-update .gitignore
-	if err := ensureGitignore(projectRoot); err != nil {
+	if err := ensureGitignore(ctx, projectRoot); err != nil {
 		// Non-fatal — surface as warning
 		fmt.Fprintln(os.Stderr, style.Warn("WARN: could not update .gitignore: "+err.Error()))
 	}
 
-	// 8.5. FTS5 setup + fingerprint stamp (so search works immediately on
-	// fresh installs without requiring `lore setup` afterwards)
+	// 9. Print success summary
+	fmt.Printf("%s lore initialized at %s\n", style.Success("✓"), projectRoot)
+	fmt.Printf("    project_id: %s\n", style.Code(proj.ID))
+	fmt.Printf("    name:       %s\n", proj.Name)
+	if originURL != "" {
+		fmt.Printf("    origin:     %s\n", originURL)
+	}
+	fmt.Printf("    db:         %s\n", dbPath)
+	fmt.Printf("    identity:   %s (%s)\n", actor.StableKey, resolved.Step)
+	fmt.Println()
+	fmt.Println(style.Hint("  next: lore learn-from docs   to bootstrap from existing markdown"))
+
+	// 10. First sync pass: writes .lore/data (the git-tracked copy of the
+	// project + actor rows) so the very first commit already carries it.
+	if os.Getenv(envSync) != envValueOff {
+		rep, err := runSyncPass(ctx, db, projectRoot, filepath.Join(markerDir, lsync.DataDirName))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+err.Error()))
+		} else {
+			printSyncReport(rep)
+		}
+		syncSessions[dbPath] = &syncSession{root: projectRoot, dbPath: dbPath, dataDir: filepath.Join(markerDir, lsync.DataDirName)}
+	}
+	return nil
+}
+
+// createProjectDB creates a ready-to-use lore.db at dbPath: pragmas, the
+// full schema, config singletons and the FTS5 search tables. Shared by
+// `lore init` and by the fresh-clone path (materializeFromData), which
+// must produce an identical cache before importing .lore/data.
+func createProjectDB(ctx context.Context, dbPath string) error {
+	db := dbent.InitDB(dbPath)
+	if err := dbent.ApplyPragmas(db); err != nil {
+		_ = db.Close() // the pragma error is the one to report
+		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
+	}
+	// Migrate closes the handle it is given (it wraps it in its own client).
+	if err := dbent_migrate.Migrate(ctx, db); err != nil {
+		return errcodes.New(errcodes.Internal, "migrate schema").WithCause(err)
+	}
+	db = dbent.InitDB(dbPath)
+	defer db.Close()
+	if err := dbent.ApplyPragmas(db); err != nil {
+		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
+	}
+	client := dbent.New(db).Client()
+	if err := seedDBConfig(ctx, client); err != nil {
+		return errcodes.New(errcodes.Internal, "seed config").WithCause(err)
+	}
+	if err := migrationlog.Record(ctx, db); err != nil {
+		return errcodes.New(errcodes.Internal, "record schema migration").WithCause(err)
+	}
+	setupSearchIndex(ctx, db)
+	return nil
+}
+
+// setupSearchIndex creates the FTS5 search tables and stamps the registry
+// fingerprint, so search works immediately on a new DB without `lore setup`.
+// Shared by every path that creates a DB (`lore init`, fresh-clone build,
+// `lore project shared-init`). Failures are warnings: the DB is usable and
+// `lore setup` repairs the index.
+func setupSearchIndex(ctx context.Context, db *sql.DB) {
 	if fts5.Available(ctx, db) {
 		if err := fts5.EnsureSchema(ctx, db); err != nil {
 			fmt.Fprintln(os.Stderr, style.Warn("WARN: fts5 schema: "+err.Error()))
@@ -179,19 +255,6 @@ func runInit(ctx context.Context, projectRoot string) error {
 			}
 		}
 	}
-
-	// 9. Print success summary
-	fmt.Printf("%s lore initialized at %s\n", style.Success("✓"), projectRoot)
-	fmt.Printf("    project_id: %s\n", style.Code(proj.ID))
-	fmt.Printf("    name:       %s\n", proj.Name)
-	if originURL != "" {
-		fmt.Printf("    origin:     %s\n", originURL)
-	}
-	fmt.Printf("    db:         %s\n", dbPath)
-	fmt.Printf("    identity:   %s (%s)\n", actor.StableKey, resolved.Step)
-	fmt.Println()
-	fmt.Println(style.Hint("  next: lore learn-from docs   to bootstrap from existing markdown"))
-	return nil
 }
 
 // inferProjectNameFromGit returns the repo name from `git remote get-url origin`
@@ -229,8 +292,20 @@ func readGitOriginURL(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// alreadyIgnored reports whether git already ignores path (e.g. a broader
+// `.lore/` rule), so init does not append a redundant line. Without git the
+// answer is "no" and the literal check above decides.
+func alreadyIgnored(ctx context.Context, projectRoot, path string) bool {
+	probe := strings.TrimSuffix(path, "/")
+	if strings.HasSuffix(path, "/") {
+		probe += "/x" // check-ignore needs a path inside an ignored dir
+	}
+	ignored, err := gitsetup.IsIgnored(ctx, projectRoot, probe)
+	return err == nil && ignored
+}
+
 // ensureGitignore appends standard lore paths to .gitignore if missing
-func ensureGitignore(projectRoot string) error {
+func ensureGitignore(ctx context.Context, projectRoot string) error {
 	gi := filepath.Join(projectRoot, ".gitignore")
 	required := []string{
 		".lore/lore.db",
@@ -247,9 +322,10 @@ func ensureGitignore(projectRoot string) error {
 
 	var toAdd []string
 	for _, line := range required {
-		if !strings.Contains(existing, line) {
-			toAdd = append(toAdd, line)
+		if strings.Contains(existing, line) || alreadyIgnored(ctx, projectRoot, line) {
+			continue
 		}
+		toAdd = append(toAdd, line)
 	}
 	if len(toAdd) == 0 {
 		return nil

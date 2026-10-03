@@ -3,7 +3,7 @@
 # Catches: R23-9
 source "$(dirname "$0")/../lib/common.sh"
 mk_tmp; init_project ch6
-$LORE memory add "x" >/dev/null
+$LORE memory add --body "x" >/dev/null
 $LORE backup >/dev/null
 
 : > .lore/lore.db

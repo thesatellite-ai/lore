@@ -25,6 +25,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"saas/pkg/aicoder/migrationlog"
 
 	"dbent"
 	"dbent/pkg/dbent_migrate"
@@ -118,6 +119,18 @@ need to run this manually unless upgrading.`,
 func runSetup(ctx context.Context, dbPath string) error {
 	// 1. ent migration. Open + immediately hand to Migrate (which closes)
 	fmt.Println(style.Hint("→ running ent schema migration..."))
+	// Record the migration as in_progress first: if it is killed half-way
+	// the replay log shows it (doctor: E_MIGRATION_INCOMPLETE).
+	version := 0
+	{
+		pre := dbent.InitDB(dbPath)
+		v, err := migrationlog.Begin(ctx, pre)
+		_ = pre.Close() // read/insert done; close errors are not actionable
+		if err != nil {
+			return errcodes.New(errcodes.Internal, "record schema migration").WithCause(err)
+		}
+		version = v
+	}
 	{
 		db := dbent.InitDB(dbPath)
 		if err := dbent_migrate.Migrate(ctx, db); err != nil {
@@ -132,11 +145,21 @@ func runSetup(ctx context.Context, dbPath string) error {
 	if err := dbent.ApplyPragmas(db); err != nil {
 		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
 	}
+	var err error
+	if version != 0 {
+		err = migrationlog.Complete(ctx, db, version)
+	} else {
+		// No log row yet (DB created before the log existed): record one.
+		err = migrationlog.Record(ctx, db)
+	}
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "record schema migration").WithCause(err)
+	}
 	if !fts5.Available(ctx, db) {
 		fmt.Fprintln(os.Stderr, style.Warn(
 			"⚠ FTS5 not compiled into this binary — search is degraded"))
 		fmt.Fprintln(os.Stderr, style.Hint(
-			"  rebuild with `task aicoder:build` (the sqlite_fts5 tag is set there)"))
+			"  rebuild with `task lore:build` (pure-Go SQLite with FTS5 built in)"))
 		return nil
 	}
 	fmt.Println(style.Hint("→ building FTS5 search index..."))

@@ -46,6 +46,11 @@ type renderFlags struct {
 	targetPath string
 	noPointer  bool
 	dryRun     bool
+	// quiet suppresses the per-file stdout lines. Not a CLI flag: set by the
+	// post-command sync step that re-renders LORE.md after importing
+	// teammates' changes, where stdout belongs to the user's command (and
+	// may be --json).
+	quiet bool
 }
 
 const (
@@ -182,14 +187,18 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	}
 
 	if unchanged {
-		fmt.Printf("%s %s (unchanged)\n", style.Muted("·"), resolvedOut)
+		if !f.quiet {
+			fmt.Printf("%s %s (unchanged)\n", style.Muted("·"), resolvedOut)
+		}
 	} else {
 		if err := atomicWriteFile(resolvedOut, []byte(body), 0o644); err != nil {
 			return errcodes.New(errcodes.Internal, "atomic write").WithCause(err)
 		}
-		fmt.Printf("%s %s (%d bytes; %dR + %dHF)\n",
-			style.Success("✓"), resolvedOut, len(body),
-			len(rules), len(hotfixes))
+		if !f.quiet {
+			fmt.Printf("%s %s (%d bytes; %dR + %dHF)\n",
+				style.Success("✓"), resolvedOut, len(body),
+				len(rules), len(hotfixes))
+		}
 	}
 
 	if !f.noPointer {
