@@ -197,7 +197,7 @@ var memoryArchiveTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
 		return c.Memory.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
@@ -217,7 +217,7 @@ var ruleArchiveTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
 		return c.Rule.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
@@ -237,7 +237,7 @@ var decisionArchiveTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
 		return c.Decision.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
@@ -257,7 +257,7 @@ var hotfixArchiveTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
 		return c.Hotfix.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
@@ -277,7 +277,7 @@ var patternArchiveTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
 		return c.Pattern.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
@@ -297,7 +297,7 @@ var playbookArchiveTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
 		return c.Playbook.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
@@ -317,7 +317,7 @@ var promptArchiveTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
 		return c.Prompt.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
@@ -470,7 +470,7 @@ func newMemoryShowCommand() *cobra.Command {
 			if r.ArchivedAt != nil {
 				fmt.Printf("  archived-at: %s\n", r.ArchivedAt.Format(time.RFC3339))
 			}
-			if !r.ValidUntil.IsZero() {
+			if r.ValidUntil != nil && !r.ValidUntil.IsZero() {
 				fmt.Printf("  valid-until: %s\n", r.ValidUntil.Format(time.RFC3339))
 			}
 			fmt.Println()
@@ -613,7 +613,7 @@ var taskDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Task.DeleteOneID(id).Exec(ctx)
@@ -627,7 +627,7 @@ var missionDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Mission.DeleteOneID(id).Exec(ctx)
@@ -641,7 +641,7 @@ var tasklistDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.TaskList.DeleteOneID(id).Exec(ctx)
@@ -655,7 +655,7 @@ var planDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Plan.DeleteOneID(id).Exec(ctx)
@@ -669,7 +669,7 @@ var architectureNoteDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.ArchitectureNote.DeleteOneID(id).Exec(ctx)
@@ -683,7 +683,7 @@ var behaviourDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Behaviour.DeleteOneID(id).Exec(ctx)
@@ -697,7 +697,7 @@ var cookbookRecipeDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.CookbookRecipe.DeleteOneID(id).Exec(ctx)
@@ -711,7 +711,7 @@ var incidentDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Incident.DeleteOneID(id).Exec(ctx)
@@ -725,7 +725,7 @@ var suggestionDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Suggestion.DeleteOneID(id).Exec(ctx)
@@ -739,7 +739,7 @@ var tastePrefDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.TastePref.DeleteOneID(id).Exec(ctx)
@@ -753,7 +753,7 @@ var workflowDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Workflow.DeleteOneID(id).Exec(ctx)
@@ -767,7 +767,7 @@ var workspaceDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Workspace.DeleteOneID(id).Exec(ctx)
@@ -795,7 +795,7 @@ var handoffDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Handoff.DeleteOneID(id).Exec(ctx)
@@ -823,7 +823,7 @@ var techDocDeleteTarget = archiveTarget{
 		if err != nil {
 			return "", "", err
 		}
-		return r.ID, fmt.Sprintf("%s", r.ID), nil
+		return r.ID, r.ID, nil
 	},
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.TechDoc.DeleteOneID(id).Exec(ctx)

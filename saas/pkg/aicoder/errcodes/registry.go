@@ -9,13 +9,13 @@
 //
 //	if errors.Is(err, sql.ErrNoRows) {
 //	    return errcodes.New(errcodes.NotFound, "memory M-12 not found").
-//	        WithHint("run `aicoder memory list` to see all memories")
+//	        WithHint("run `lore memory list` to see all memories")
 //	}
 //
 // Output formats:
 //
 //	plain  → "[E_NOT_FOUND] memory M-12 not found
-//	          Hint: run `aicoder memory list` to see all memories"
+//	          Hint: run `lore memory list` to see all memories"
 //	json   → {"error":{"code":"E_NOT_FOUND","message":"...","hint":"..."}}
 package errcodes
 
@@ -71,6 +71,9 @@ const (
 	// ── Audit ───────────────────────────────────────────────────────
 	AuditChainBroken Code = "E_AUDIT_CHAIN_BROKEN"
 
+	// ── Git sync ────────────────────────────────────────────────────
+	SyncDataIgnored Code = "E_SYNC_DATA_IGNORED"
+
 	// ── Generic ─────────────────────────────────────────────────────
 	NotFound       Code = "E_NOT_FOUND"
 	Internal       Code = "E_INTERNAL"
@@ -78,7 +81,7 @@ const (
 	Unsupported    Code = "E_UNSUPPORTED"
 )
 
-// All returns every registered code. Used by `aicoder errors list` and tests.
+// All returns every registered code. Used by `lore errors list` and tests.
 func All() []Code {
 	return []Code{
 		DBLocked, DBCorrupt, DBNotFound, SchemaVersionMismatch, MigrationIncomplete,
@@ -89,24 +92,25 @@ func All() []Code {
 		SecretDetected, RootRefused, SymlinkDB, SymlinkLoop, UIDMismatch,
 		LockHeld, ReadOnly, BusyTimeout,
 		AuditChainBroken,
+		SyncDataIgnored,
 		NotFound, Internal, NotImplemented, Unsupported,
 	}
 }
 
 // Description returns a one-line human description for documentation.
-// Used by `aicoder errors list` output.
+// Used by `lore errors list` output.
 func Description(c Code) string {
 	descs := map[Code]string{
-		DBLocked:              "another aicoder process is holding the DB write lock",
-		DBCorrupt:             "DB file failed quick_check; run `aicoder repair`",
+		DBLocked:              "another lore process is holding the DB write lock",
+		DBCorrupt:             "DB file failed quick_check; run `lore repair`",
 		DBNotFound:            "DB file does not exist at the configured path",
-		SchemaVersionMismatch: "DB was migrated by a newer aicoder; upgrade or use a different DB",
-		MigrationIncomplete:   "a migration is in_progress; run `aicoder repair`",
-		NetworkFS:             "DB path is on a network/cloud-sync filesystem (silent corruption risk)",
+		SchemaVersionMismatch: "DB was migrated by a newer lore; upgrade or use a different DB",
+		MigrationIncomplete:   "a schema migration did not finish; run `lore setup`",
+		NetworkFS:             "DB path is on a network/cloud-sync filesystem (silent corruption risk); set LORE_ALLOW_NETWORK_FS=1 to override",
 		InodeMismatch:         "DB file inode changed since last open; verify external mutation",
 		DiskFull:              "no space left on device for write or backup",
 		ReadOnlyFS:            "DB path is on a read-only filesystem",
-		NotProjectRoot:        "current directory is not an aicoder project (no .lore/lore.db or lore.toml)",
+		NotProjectRoot:        "current directory is not an lore project (no .lore/lore.db or lore.toml)",
 		AmbiguousProject:      "both .lore/lore.db AND .lore/lore.toml present (Mode A vs Mode B ambiguity)",
 		ProjectNotFound:       "project_id not registered in this DB",
 		ProjectNameCollision:  "multiple projects share that name; specify by opaque ID",
@@ -122,16 +126,17 @@ func Description(c Code) string {
 		BodyTooLarge:          "body exceeds maximum allowed size",
 		InvalidIdentifier:     "identifier contains disallowed character",
 		SecretDetected:        "input contains a credential pattern; refusing to store. Use --allow-secrets to override (logged)",
-		RootRefused:           "aicoder refuses to run as root; set MINI_ALLOW_ROOT=1 to override",
+		RootRefused:           "lore refuses to run as root; set LORE_ALLOW_ROOT=1 to override",
 		SymlinkDB:             "DB path is a symlink; refusing for safety. Use --allow-symlink-db to override",
 		SymlinkLoop:           "filesystem walk encountered a symlink loop",
 		UIDMismatch:           "EUID does not match HOME owner (sudo PRESERVE_ENV detected); refusing",
-		LockHeld:              "another aicoder process is holding the project flock",
+		LockHeld:              "another lore process is holding the project flock",
 		ReadOnly:              "command requires write access but read-only mode is active",
 		BusyTimeout:           "DB busy timeout exceeded",
 		AuditChainBroken:      "audit log hash chain integrity verification failed",
+		SyncDataIgnored:       "git ignores files under .lore/data, so teammates would not receive them; re-include the folder in .gitignore",
 		NotFound:              "requested entity does not exist",
-		Internal:              "internal error; please file a bug report with `aicoder support-bundle`",
+		Internal:              "internal error; please file a bug report with `lore support-bundle`",
 		NotImplemented:        "feature not yet implemented (deferred to v0.2 or v1.0+)",
 		Unsupported:           "operation not supported in current mode",
 	}

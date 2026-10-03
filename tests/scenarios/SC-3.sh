@@ -3,7 +3,7 @@
 # Catches: R16-7+#8, R23-13, R23-44
 source "$(dirname "$0")/../lib/common.sh"
 mk_tmp; init_project drtest
-$LORE memory add "important data" >/dev/null || fail "add"
+$LORE memory add --body "important data" >/dev/null || fail "add"
 $LORE backup >/dev/null || fail "backup"
 ls .lore/backups/*.sqlite >/dev/null 2>&1 || fail "no backup file written"
 

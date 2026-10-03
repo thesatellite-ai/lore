@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"saas/pkg/aicoder/migrationlog"
 	"saas/pkg/constants"
 	"strings"
 
@@ -97,6 +98,12 @@ Refuses if cwd already has .lore/ (use a clean directory).`,
 			if err := dbent.ApplyPragmas(db); err != nil {
 				return errcodes.New(errcodes.Internal, "apply pragmas (reopen)").WithCause(err)
 			}
+			// Same search index `lore init` builds; without it every search
+			// in a Mode B project failed with "no such table: memory_fts".
+			if err := migrationlog.Record(cmd.Context(), db); err != nil {
+				return errcodes.New(errcodes.Internal, "record schema migration").WithCause(err)
+			}
+			setupSearchIndex(cmd.Context(), db)
 
 			client := dbent.New(db).Client()
 			existing, _ := client.Project.Query().

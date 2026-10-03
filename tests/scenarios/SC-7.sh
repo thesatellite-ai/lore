@@ -9,12 +9,12 @@ cd "$TMP/p1"
 $LORE project shared-init --db="$SHARED_DB" --name=alpha >/dev/null || fail "shared-init alpha"
 [ -f .lore/lore.toml ] || fail "toml not written"
 grep -q "db_path" .lore/lore.toml || fail "toml missing db_path"
-$LORE memory add "alpha memory" >/dev/null || fail "alpha write"
+$LORE memory add --body "alpha memory" >/dev/null || fail "alpha write"
 
 mkdir -p "$TMP/p2"
 cd "$TMP/p2"
 $LORE project shared-init --db="$SHARED_DB" --name=beta >/dev/null || fail "shared-init beta"
-$LORE memory add "beta memory" >/dev/null || fail "beta write"
+$LORE memory add --body "beta memory" >/dev/null || fail "beta write"
 
 # Each project sees ONLY its own memories.
 cd "$TMP/p1"

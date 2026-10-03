@@ -5,9 +5,9 @@ source "$(dirname "$0")/../lib/common.sh"
 need sqlite3
 mk_tmp; init_project concurrent
 
-(for i in $(seq 1 25); do $LORE memory add "A-$i" >/dev/null 2>&1; done) &
+(for i in $(seq 1 25); do $LORE memory add --body "A-$i" >/dev/null 2>&1; done) &
 PID_A=$!
-(for i in $(seq 1 25); do $LORE memory add "B-$i" >/dev/null 2>&1; done) &
+(for i in $(seq 1 25); do $LORE memory add --body "B-$i" >/dev/null 2>&1; done) &
 PID_B=$!
 wait $PID_A $PID_B
 

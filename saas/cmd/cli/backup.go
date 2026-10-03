@@ -18,6 +18,7 @@ import (
 
 	"dbent"
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/style"
 
@@ -78,16 +79,34 @@ on a fresh machine without right-click-Open friction.`,
 func newRestoreCommand() *cobra.Command {
 	var f commonFlags
 	var confirm bool
+	var prefer string
 	cmd := &cobra.Command{
 		Use:   "restore <backup-path>",
 		Short: "Restore the project DB from a backup file",
 		Long: `Replaces the current .lore/lore.db with the contents of the
-specified backup file. Requires --confirm to prevent accidents.`,
+specified backup file. Requires --confirm to prevent accidents.
+
+In a project that syncs through git (.lore/data), the restored DB and the
+files may disagree. --prefer decides which side wins on the next command:
+db (default: you restored because you want the DB back — its rows are
+re-exported and rows that exist only in the files are removed; review the
+git diff), files (the committed files win, rows only in the DB are moved
+to ` + "`lore sync trash`" + `), or
+newest (later updated_at wins; the other version is kept under
+` + "`lore sync conflicts`" + `).`,
+		Example: `  lore restore .lore/backups/20261003-101500.sqlite --confirm
+  lore restore snap.sqlite --confirm --prefer files`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !confirm {
 				return errcodes.New(errcodes.InvalidInput,
 					"refusing to overwrite DB without --confirm")
+			}
+			// Validate every flag BEFORE touching files: a typo must not
+			// leave the DB replaced with its sync state un-reset (E43).
+			preferMode, perr := parsePrefer(prefer)
+			if perr != nil {
+				return perr
 			}
 			rctx, err := projresolve.Resolve(projresolve.Inputs{
 				FlagDB: f.flagDB, FlagProject: f.flagProject,
@@ -138,12 +157,51 @@ specified backup file. Requires --confirm to prevent accidents.`,
 
 			fmt.Printf("%s restored from %s\n", style.Success("✓"), src)
 			fmt.Printf("  previous DB preserved at: %s\n", brokenName)
+
+			// The restored file's sync bookkeeping (if any) describes the
+			// past; without a reset its rows would compare against stale
+			// bases and silently lose to .lore/data (E43). Forget the
+			// baseline so the next command ADOPTs with the chosen side.
+			if _, ok := syncDataDir(dst); ok && os.Getenv(envSync) != envValueOff {
+				db := dbent.InitDB(dst)
+				defer db.Close()
+				if err := lsync.ResetForRestore(cmd.Context(), db, preferMode); err != nil {
+					return errcodes.New(errcodes.Internal, "reset sync state of restored DB").WithCause(err)
+				}
+				fmt.Printf("  next command re-syncs .lore/data preferring: %s\n", preferLabel(preferMode))
+			}
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "required to overwrite the current DB")
+	cmd.Flags().StringVar(&prefer, constants.FlagPrefer, string(lsync.PreferDB),
+		"when the restored DB and .lore/data disagree on a row: db | files | newest")
 	return cmd
+}
+
+// preferNewestLabel is the CLI spelling of lsync.PreferNewest (whose value
+// is the empty string).
+const preferNewestLabel = "newest"
+
+// parsePrefer maps the --prefer flag onto lsync.PreferMode.
+func parsePrefer(s string) (lsync.PreferMode, error) {
+	if s == preferNewestLabel {
+		return lsync.PreferNewest, nil
+	}
+	for _, m := range lsync.PreferModes {
+		if m != lsync.PreferNewest && string(m) == s {
+			return m, nil
+		}
+	}
+	return "", errcodes.New(errcodes.InvalidInput, "--prefer must be db, files or newest")
+}
+
+func preferLabel(m lsync.PreferMode) string {
+	if m == lsync.PreferNewest {
+		return preferNewestLabel
+	}
+	return string(m)
 }
 
 func copyFile(src, dst string) error {

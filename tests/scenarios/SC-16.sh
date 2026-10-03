@@ -3,7 +3,7 @@
 # Catches: R16-13+#17, R23-13
 source "$(dirname "$0")/../lib/common.sh"
 mk_tmp; init_project backupt
-$LORE memory add "round-trip" >/dev/null
+$LORE memory add --body "round-trip" >/dev/null
 
 $LORE backup --out="$TMP/b.sqlite" >/dev/null || fail "backup"
 [ -f "$TMP/b.sqlite" ] || fail "backup file missing"

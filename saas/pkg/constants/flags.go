@@ -46,14 +46,14 @@ const (
 	FlagRebindMaster = "rebind-master"
 
 	// Task commitment / deferral
-	FlagCommitment       = "commitment"
-	FlagDeferUntil       = "defer-until"
-	FlagClearDefer       = "clear-defer"
-	FlagIncludeProposed  = "include-proposed"
-	FlagIncludeSomeday   = "include-someday"
-	FlagIncludeDeferred  = "include-deferred"
-	FlagTags        = "tags"
-	FlagCode        = "code"
+	FlagCommitment      = "commitment"
+	FlagDeferUntil      = "defer-until"
+	FlagClearDefer      = "clear-defer"
+	FlagIncludeProposed = "include-proposed"
+	FlagIncludeSomeday  = "include-someday"
+	FlagIncludeDeferred = "include-deferred"
+	FlagTags            = "tags"
+	FlagCode            = "code"
 
 	// Task / mission / relations
 	FlagTasklist      = "tasklist"
@@ -122,4 +122,12 @@ const (
 	FlagCustom         = "custom"
 	FlagDone           = "done"
 	FlagHigh           = "high"
+
+	// lore sync / restore flags (git-backed sync, LORE_SYNC_SPEC.md).
+	FlagTake           = "take"
+	FlagKeep           = "keep"
+	FlagDrop           = "drop"
+	FlagKeepOurs       = "keep-ours"
+	FlagPrefer         = "prefer"
+	FlagArchivedBefore = "archived-before"
 )

@@ -175,16 +175,6 @@ func (c *claudeCLI) Call(ctx context.Context, model, prompt string, opts Options
 	}, nil
 }
 
-// benchSettingsJSON returns a JSON string usable with `claude --settings`.
-// Empty hooks block; permissive defaultMode. This nukes user-level hook
-// injection without disabling OAuth/keychain auth.
-//
-// Passing JSON directly (vs a file path) avoids needing a writable temp
-// path in CI / restricted environments.
-func benchSettingsJSON() string {
-	return `{"$schema":"https://json.schemastore.org/claude-code-settings.json","permissions":{"defaultMode":"auto"},"hooks":{}}`
-}
-
 // ── provider: anthropic API (direct) ────────────────────────────────────────
 
 type anthropicAPI struct {

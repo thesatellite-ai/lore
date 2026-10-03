@@ -12,9 +12,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"strings"
 
+	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/guard"
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
@@ -44,6 +48,41 @@ the top) for design rationale.`,
 	Version:       version,
 	SilenceErrors: true, // we render errors ourselves via style + JSON envelope
 	SilenceUsage:  true,
+	// Refuse root before any command touches the filesystem: files created
+	// as root (lore.db, .lore/data) stay unwritable for the real user.
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		allowed := os.Getenv(envAllowRoot) == envValueOn || os.Getenv(envAllowRootLegacy) == envValueOn
+		if err := guard.CheckRoot(geteuid(), allowed); err != nil {
+			return errcodes.New(errcodes.RootRefused, "lore refuses to run as root").
+				WithHint("run as your normal user, or set " + envAllowRoot + "=1 if you really mean it")
+		}
+		return nil
+	},
+}
+
+// geteuid is os.Geteuid, a variable so the root refusal can be tested
+// without running the test suite as root.
+var geteuid = os.Geteuid
+
+// Root / network-FS overrides (see saas/pkg/aicoder/guard).
+const (
+	envAllowRoot = "LORE_ALLOW_ROOT"
+	// envAllowRootLegacy is the pre-rename spelling, still honoured.
+	envAllowRootLegacy = "MINI_ALLOW_ROOT"
+	envAllowNetworkFS  = "LORE_ALLOW_NETWORK_FS"
+)
+
+// checkNetworkFS refuses a project or DB path on a cloud-sync / network
+// filesystem (E_NETWORK_FS) unless LORE_ALLOW_NETWORK_FS=1.
+func checkNetworkFS(path string) error {
+	if os.Getenv(envAllowNetworkFS) == envValueOn {
+		return nil
+	}
+	if err := guard.CheckNetworkFS(path); err != nil {
+		return errcodes.New(errcodes.NetworkFS, err.Error()).
+			WithHint("SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set " + envAllowNetworkFS + "=1")
+	}
+	return nil
 }
 
 // flagColor is the global --color flag bound by Init()
@@ -92,13 +131,46 @@ func init() {
 	rootCmd.AddCommand(newLinkCommand())
 	rootCmd.AddCommand(newCommitShowCommand())
 	rootCmd.AddCommand(buildTUICommand())
+	rootCmd.AddCommand(newSyncCommand())
+	rootCmd.AddCommand(newMergeDriverCommand())
+	rootCmd.AddCommand(newAuditCommand())
 	registerExtraCommands(rootCmd)
 }
 
 func main() {
 	style.Init(style.ParseMode(flagColor))
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+err.Error())
+	err := rootCmd.Execute()
+	// Export this command's writes to .lore/data (and wire git) even when the
+	// command failed part-way: rows it already wrote must not be left behind.
+	finishSyncSessions(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+explainStorageError(err).Error())
 		os.Exit(1)
 	}
+}
+
+// sqliteFullMarker is SQLite's SQLITE_FULL message.
+const sqliteFullMarker = "database or disk is full"
+
+// sqliteCantOpenMarker is SQLite's SQLITE_CANTOPEN message, which is what a
+// full disk produces when WAL/-shm files cannot be created.
+const sqliteCantOpenMarker = "unable to open database file"
+
+// explainStorageError turns a SQLite failure caused by a full disk into
+// E_DISK_FULL with a clear hint. Without it the user saw E_INTERNAL "unable
+// to open database file" (CH-7). Other errors pass through unchanged.
+func explainStorageError(err error) error {
+	msg := err.Error()
+	full := strings.Contains(msg, sqliteFullMarker)
+	if !full && strings.Contains(msg, sqliteCantOpenMarker) {
+		if cwd, cerr := os.Getwd(); cerr == nil {
+			full = guard.DiskFull(cwd)
+		}
+	}
+	if !full {
+		return err
+	}
+	return errcodes.New(errcodes.DiskFull, "the disk is full: lore could not write (nothing was changed)").
+		WithCause(err).
+		WithHint("free some space and run the command again; the DB is intact")
 }

@@ -190,9 +190,24 @@ func InitDB(dbPath string) *sql.DB {
 	// "_pragma=foreign_keys(1)". ent's SQLite migrator requires FK
 	// to be ON at connection time, so this must be in the DSN (not
 	// only in ApplyPragmas, which runs after the pool is built).
-	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&cache=shared", dbPath)
+	//
+	// busy_timeout and _txlock are per CONNECTION, so they must be in the
+	// DSN too: a PRAGMA run through *sql.DB lands on one pooled connection
+	// only. Without them, two lore processes writing at once (two agents,
+	// two terminals) failed instantly with SQLITE_BUSY instead of waiting —
+	// ApplyPragmas' first write-pragma hit the lock before its own
+	// busy_timeout line ran (tests/scenarios/SC-5.sh lost rows).
+	// _txlock=immediate takes the write lock at BEGIN, so a transaction
+	// that reads then writes can never fail mid-way on lock upgrade
+	// (SQLITE_BUSY_SNAPSHOT is not retried by busy_timeout).
+	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=busy_timeout(%d)&_txlock=immediate&cache=shared", dbPath, busyTimeoutMS)
 	return db.New(db.WithDataSourceName(dsn), db.WithDriverName("sqlite3"))
 }
+
+// busyTimeoutMS is how long a connection waits for another process's write
+// lock before failing with SQLITE_BUSY. Generous because lore commands are
+// short and a failed write is worse than a brief wait.
+const busyTimeoutMS = 5000
 
 // ApplyPragmas applies the canonical pragma block for production SQLite.
 // Run AFTER InitDB but BEFORE the first table is created (auto_vacuum is
@@ -202,12 +217,14 @@ func InitDB(dbPath string) *sql.DB {
 // in its startup path. PLAN.md Round 26 ship-gate item.
 func ApplyPragmas(db *sql.DB) error {
 	pragmas := []string{
+		// First: every later pragma may need the write lock, and must wait
+		// for it instead of failing (also set per connection in InitDB).
+		fmt.Sprintf("PRAGMA busy_timeout=%d", busyTimeoutMS),
 		// Set BEFORE any table — applies at create time.
 		"PRAGMA auto_vacuum=INCREMENTAL",
 		// Concurrency / durability.
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA synchronous=NORMAL",
-		"PRAGMA busy_timeout=5000",
 		// Performance.
 		"PRAGMA cache_size=-64000",
 		"PRAGMA temp_store=MEMORY",

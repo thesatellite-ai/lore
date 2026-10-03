@@ -63,6 +63,7 @@ func bindRepoScopeFlags(cmd *cobra.Command, f *repoScopeFlags) {
 //	--no-inherit         → repo_id IS NULL
 //	repo set             → repo + master (inherit)
 //	default (no repo)    → repo_id IS NULL (master only)
+//
 // scopeRebind is the decision from resolveScopeRebind. The caller applies
 // it via the entity's own SetRepoID / ClearRepoID (ent UpdateOne builders
 // share no common interface, so the switch lives at the call site)

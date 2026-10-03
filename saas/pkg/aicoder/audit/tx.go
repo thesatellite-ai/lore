@@ -1,18 +1,16 @@
-// Package audit provides BEGIN IMMEDIATE transaction wrapping and the
-// hash-chained audit log buffer.
+// Package audit keeps lore's hash-chained audit log (R16 #4, R27 #9,
+// R37 Block 5): one row per change to a shared knowledge row, each row
+// carrying the hash of the previous one, so deleting or editing a past
+// entry breaks the chain and `lore audit verify` reports where.
 //
-// Two responsibilities:
+// Entries are appended by the CLI's sync passes, which see every write to
+// a synced table (see saas/pkg/aicoder/lsync, Options.OnChange) — lore's own
+// writes, imports from .lore/data, and changes found in the DB that no lore
+// command made. Append runs inside the caller's transaction, so the log and
+// the change it describes commit together.
 //
-//  1. WithImmediateTx — every write goes through this to ensure SQLite locks
-//     in IMMEDIATE mode (R16 #10, R18 #32, R27 #29). Default ent.Tx uses
-//     BEGIN, which can return SQLITE_BUSY when a SELECT-then-write upgrades
-//     mid-flight.
-//
-//  2. Buffer — collects audit_log entries during a txn; flushes hash-chained
-//     batch at commit time (R27 #9). Avoids per-write hash recomputation
-//     under bulk imports.
-//
-// Catches: R16 #4+#10, R18 #32, R27 #9+#29, R37 Block 5.
+// Chain order is INSERTION order (rowid): ids are UUIDv7, which are not
+// strictly ordered within one millisecond.
 package audit
 
 import (
@@ -20,255 +18,160 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
-	"dbent/gen/ent"
+	"saas/pkg/aicoder/ids"
 )
 
-// Entry is a single audit-log row pending flush.
+// Querier is the subset of *sql.DB / *sql.Tx the log needs.
+type Querier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// Entry is one audit-log row to append.
 type Entry struct {
-	ActingProjectID string // where command was launched (cwd toml)
-	TargetProjectID string // where data was actually written (--project flag)
-	ActorID         string // who did it
-	Action          string // 'memory.add' | 'rule.update' | 'project.purge'
-	TargetTable     string // affected entity table; "" for non-row actions
-	TargetID        string // affected entity id; "" for non-row actions
-	Override        bool   // true when --project overrode cwd
-	BeforeHash      string // sha256 of row state BEFORE; "" for INSERT
-	AfterHash       string // sha256 of row state AFTER; "" for DELETE
-	Reason          string // optional human note
+	ActingProjectID string `json:"acting_project_id,omitempty"` // where the command was launched
+	TargetProjectID string `json:"target_project_id,omitempty"` // where data was written
+	ActorID         string `json:"actor_id"`                    // who (actor id, or the resolved stable key)
+	Action          string `json:"action"`                      // e.g. "memories.write", "rules.import"
+	TargetTable     string `json:"target_table,omitempty"`      // affected table; "" for non-row actions
+	TargetID        string `json:"target_id,omitempty"`         // affected row id; "" for non-row actions
+	Override        bool   `json:"override"`                    // true when --project overrode the cwd project
+	BeforeHash      string `json:"before_hash,omitempty"`       // content hash before; "" = row did not exist
+	AfterHash       string `json:"after_hash,omitempty"`        // content hash after; "" = row was deleted
+	Reason          string `json:"reason,omitempty"`            // optional note
 }
 
-// Buffer collects audit entries within a transaction scope. Flushed at
-// commit time with prev_log_hash chain computed across the buffer + the
-// most recent persisted row.
-type Buffer struct {
-	entries []Entry
+// Record is a persisted entry.
+type Record struct {
+	Entry
+	ID          string `json:"id"`
+	CreatedAt   string `json:"created_at"`
+	PrevLogHash string `json:"prev_log_hash,omitempty"`
 }
 
-// Append adds an audit entry to the current transaction's buffer.
-func (b *Buffer) Append(e Entry) {
-	b.entries = append(b.entries, e)
-}
+// auditTable is the ent table holding the log.
+const auditTable = "audit_logs"
 
-// Len returns the number of pending entries.
-func (b *Buffer) Len() int {
-	return len(b.entries)
-}
+// selectCols lists the chain-relevant columns in hash order.
+const selectCols = `id, actor_id, action, COALESCE(acting_project_id, ''), COALESCE(target_project_id, ''),
+	COALESCE(target_table, ''), COALESCE(target_id, ''), override, COALESCE(before_hash, ''),
+	COALESCE(after_hash, ''), COALESCE(prev_log_hash, ''), COALESCE(reason, ''), created_at`
 
-// Flush persists the buffer to the audit_log table with hash-chain links
-// computed against the chain head (most recent persisted row).
-//
-// Called by WithImmediateTx at commit time. If buffer is empty, no-op.
-//
-// Hash chain rule (R27 #9): prev_log_hash = sha256 of all chain-relevant
-// fields of the previous row. First row in the entire DB has prev_log_hash=NULL.
-func (b *Buffer) Flush(ctx context.Context, tx *ent.Tx) error {
-	if len(b.entries) == 0 {
-		return nil
+// Append adds e at the end of the chain. Call it inside the transaction
+// that makes the change (immediate transactions serialise appenders, so two
+// processes cannot fork the chain).
+func Append(ctx context.Context, q Querier, e Entry) error {
+	prev := ""
+	head, err := scanOne(q.QueryRowContext(ctx, `SELECT `+selectCols+` FROM `+auditTable+` ORDER BY rowid DESC LIMIT 1`))
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+	case err != nil:
+		return fmt.Errorf("audit: chain head: %w", err)
+	default:
+		prev = hashRecord(head)
 	}
-
-	// Find the current chain head (last inserted audit row, ordered by id which
-	// embeds UUIDv7 timestamp per R31).
-	head, err := tx.AuditLog.Query().
-		Order(ent.Desc("id")).
-		Limit(1).
-		All(ctx)
+	id, err := ids.New(ids.PrefixAuditLog)
 	if err != nil {
-		return fmt.Errorf("audit: chain head lookup: %w", err)
+		return err
 	}
-
-	prevHash := ""
-	if len(head) > 0 && head[0].PrevLogHash != nil {
-		prevHash = hashAuditRow(head[0])
-	} else if len(head) > 0 {
-		// Head exists but has nil prev_log_hash (first row ever). Compute its
-		// hash to chain the next entry off of.
-		prevHash = hashAuditRow(head[0])
+	now := time.Now().UTC()
+	if _, err := q.ExecContext(ctx, `INSERT INTO `+auditTable+`(id, created_at, updated_at, acting_project_id, target_project_id,
+		actor_id, action, target_table, target_id, override, before_hash, after_hash, prev_log_hash, reason)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, now, now, nullable(e.ActingProjectID), nullable(e.TargetProjectID), e.ActorID, e.Action,
+		nullable(e.TargetTable), nullable(e.TargetID), e.Override, nullable(e.BeforeHash), nullable(e.AfterHash),
+		nullable(prev), nullable(e.Reason)); err != nil {
+		return fmt.Errorf("audit: append: %w", err)
 	}
-
-	// Persist each buffered entry, chaining hashes.
-	for _, e := range b.entries {
-		ph := prevHash
-		create := tx.AuditLog.Create().
-			SetActorID(e.ActorID).
-			SetAction(e.Action).
-			SetOverride(e.Override)
-		if e.ActingProjectID != "" {
-			create.SetActingProjectID(e.ActingProjectID)
-		}
-		if e.TargetProjectID != "" {
-			create.SetTargetProjectID(e.TargetProjectID)
-		}
-		if e.TargetTable != "" {
-			create.SetTargetTable(e.TargetTable)
-		}
-		if e.TargetID != "" {
-			create.SetTargetID(e.TargetID)
-		}
-		if e.BeforeHash != "" {
-			create.SetBeforeHash(e.BeforeHash)
-		}
-		if e.AfterHash != "" {
-			create.SetAfterHash(e.AfterHash)
-		}
-		if ph != "" {
-			create.SetPrevLogHash(ph)
-		}
-		if e.Reason != "" {
-			create.SetReason(e.Reason)
-		}
-
-		row, err := create.Save(ctx)
-		if err != nil {
-			return fmt.Errorf("audit: persist entry: %w", err)
-		}
-		prevHash = hashAuditRow(row)
-	}
-
-	// Clear buffer after successful flush.
-	b.entries = nil
 	return nil
 }
 
-// hashAuditRow computes the chain-link hash for one audit_log row.
-// Includes only chain-relevant fields (omits prev_log_hash itself to avoid
-// circular reference).
-func hashAuditRow(r *ent.AuditLog) string {
-	var actingPrj, targetPrj, beforeHash, afterHash, reason, targetTable, targetID string
-	if r.ActingProjectID != nil {
-		actingPrj = *r.ActingProjectID
+// Verify walks the chain in insertion order and returns the id of the first
+// entry whose prev_log_hash does not match its predecessor ("" = intact).
+func Verify(ctx context.Context, q Querier) (string, int, error) {
+	rows, err := q.QueryContext(ctx, `SELECT `+selectCols+` FROM `+auditTable+` ORDER BY rowid`)
+	if err != nil {
+		return "", 0, fmt.Errorf("audit: verify: %w", err)
 	}
-	if r.TargetProjectID != nil {
-		targetPrj = *r.TargetProjectID
+	defer rows.Close()
+	prev, n := "", 0
+	for rows.Next() {
+		r, err := scanRows(rows)
+		if err != nil {
+			return "", n, err
+		}
+		if r.PrevLogHash != prev {
+			return r.ID, n, nil
+		}
+		prev = hashRecord(r)
+		n++
 	}
-	if r.BeforeHash != nil {
-		beforeHash = *r.BeforeHash
-	}
-	if r.AfterHash != nil {
-		afterHash = *r.AfterHash
-	}
-	if r.Reason != nil {
-		reason = *r.Reason
-	}
-	if r.TargetTable != nil {
-		targetTable = *r.TargetTable
-	}
-	if r.TargetID != nil {
-		targetID = *r.TargetID
-	}
+	return "", n, rows.Err()
+}
 
-	// Format chosen for stability across schema additions; new fields go at end.
+// List returns the newest entries first (limit <= 0 means all).
+func List(ctx context.Context, q Querier, limit int) ([]Record, error) {
+	query := `SELECT ` + selectCols + ` FROM ` + auditTable + ` ORDER BY rowid DESC`
+	var args []any
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("audit: list: %w", err)
+	}
+	defer rows.Close()
+	var out []Record
+	for rows.Next() {
+		r, err := scanRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// hashRecord is the chain-link hash of one entry. The payload format is
+// fixed: changing it invalidates every existing chain.
+func hashRecord(r Record) string {
 	payload := fmt.Sprintf(
 		"id=%s|actor=%s|action=%s|acting=%s|target=%s|table=%s|tid=%s|override=%t|before=%s|after=%s|reason=%s",
-		r.ID, r.ActorID, r.Action, actingPrj, targetPrj,
-		targetTable, targetID, r.Override, beforeHash, afterHash, reason,
-	)
+		r.ID, r.ActorID, r.Action, r.ActingProjectID, r.TargetProjectID,
+		r.TargetTable, r.TargetID, r.Override, r.BeforeHash, r.AfterHash, r.Reason)
 	sum := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(sum[:])
 }
 
-// WithImmediateTx runs fn inside a SQLite IMMEDIATE transaction.
-//
-// Differs from ent's default client.Tx() by issuing "BEGIN IMMEDIATE"
-// up-front via the underlying *sql.DB, then wrapping the resulting *sql.Tx
-// in an ent.Tx for the duration.
-//
-// Buffer is the audit-log buffer for this transaction. Calls to
-// audit.Append(buffer, ...) accumulate; commit time flushes the chain.
-//
-// Returns first error from fn, BEGIN, COMMIT, or buffer flush. On any error,
-// rolls back.
-//
-// Usage:
-//
-//	err := audit.WithImmediateTx(ctx, db, client, func(tx *ent.Tx, buf *audit.Buffer) error {
-//	    m, err := tx.Memory.Create().Set...().Save(ctx)
-//	    if err != nil { return err }
-//	    buf.Append(audit.Entry{Action: "memory.add", TargetTable: "memories", TargetID: m.ID, ...})
-//	    return nil
-//	})
-func WithImmediateTx(
-	ctx context.Context,
-	db *sql.DB,
-	client *ent.Client,
-	fn func(tx *ent.Tx, buf *Buffer) error,
-) error {
-	// Issue BEGIN IMMEDIATE manually. ent's client.Tx() can't be told to use
-	// IMMEDIATE; we side-channel the SQL.
-	if _, err := db.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
-		return fmt.Errorf("audit: BEGIN IMMEDIATE: %w", err)
+type scanner interface{ Scan(dest ...any) error }
+
+func scanOne(row *sql.Row) (Record, error) { return scanInto(row) }
+
+func scanRows(rows *sql.Rows) (Record, error) { return scanInto(rows) }
+
+func scanInto(s scanner) (Record, error) {
+	var r Record
+	var created any
+	err := s.Scan(&r.ID, &r.ActorID, &r.Action, &r.ActingProjectID, &r.TargetProjectID, &r.TargetTable,
+		&r.TargetID, &r.Override, &r.BeforeHash, &r.AfterHash, &r.PrevLogHash, &r.Reason, &created)
+	switch v := created.(type) {
+	case time.Time:
+		r.CreatedAt = v.UTC().Format(time.RFC3339)
+	case string:
+		r.CreatedAt = v
 	}
-
-	committed := false
-	defer func() {
-		if !committed {
-			// Best-effort rollback on any failure. The IMMEDIATE txn was started
-			// against the underlying *sql.DB, so rollback also runs there.
-			_, _ = db.ExecContext(ctx, "ROLLBACK")
-		}
-	}()
-
-	// Create an ent.Tx over the same connection. ent's Tx() implementation
-	// will issue its OWN savepoint within our IMMEDIATE txn, which is
-	// acceptable for SQLite.
-	entTx, err := client.Tx(ctx)
-	if err != nil {
-		return fmt.Errorf("audit: ent Tx: %w", err)
-	}
-
-	buf := &Buffer{}
-	if err := fn(entTx, buf); err != nil {
-		_ = entTx.Rollback()
-		return err
-	}
-
-	// Apply tx_at clock-skew protection per R27 #29: nothing to do at the
-	// transaction wrapper layer — individual entity hooks should handle this
-	// at field-default level. Documented here for traceability.
-	_ = time.Now() // placeholder for future per-table tx_at adjustments
-
-	if err := buf.Flush(ctx, entTx); err != nil {
-		_ = entTx.Rollback()
-		return err
-	}
-
-	if err := entTx.Commit(); err != nil {
-		return fmt.Errorf("audit: ent commit: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, "COMMIT"); err != nil {
-		return fmt.Errorf("audit: outer COMMIT: %w", err)
-	}
-
-	committed = true
-	return nil
+	return r, err
 }
 
-// Verify walks the audit_log chain row-by-row. Returns the id of the first
-// row whose prev_log_hash does not match the computed hash of the previous
-// row. Returns "" if the chain is intact.
-//
-// Used by `aicoder audit verify` (S1.5 T1.5.4).
-func Verify(ctx context.Context, client *ent.Client) (string, error) {
-	rows, err := client.AuditLog.Query().Order(ent.Asc("id")).All(ctx)
-	if err != nil {
-		return "", fmt.Errorf("audit verify: %w", err)
+func nullable(s string) any {
+	if s == "" {
+		return nil
 	}
-
-	prevHash := ""
-	for i, r := range rows {
-		// First row: prev_log_hash should be NULL.
-		if i == 0 {
-			if r.PrevLogHash != nil {
-				return r.ID, nil
-			}
-		} else {
-			if r.PrevLogHash == nil || *r.PrevLogHash != prevHash {
-				return r.ID, nil
-			}
-		}
-		prevHash = hashAuditRow(r)
-	}
-	return "", nil
+	return s
 }

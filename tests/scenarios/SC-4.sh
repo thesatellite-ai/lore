@@ -8,14 +8,14 @@ $LORE repo add web1 --origin=git@github.com:org/web.git >/dev/null || fail "repo
 $LORE repo add admin --origin=git@github.com:org/admin.git >/dev/null
 $LORE repo add api --origin=git@github.com:org/api.git >/dev/null
 
-$LORE memory add "Tailwind in web1" --repo=web1 >/dev/null
-$LORE memory add "Mantine in admin" --repo=admin >/dev/null
-$LORE memory add "gqlgen in api" --repo=api >/dev/null
-$LORE memory add "Client uses USD" >/dev/null
+$LORE memory add --body "Tailwind in web1" --repo=web1 >/dev/null
+$LORE memory add --body "Mantine in admin" --repo=admin >/dev/null
+$LORE memory add --body "gqlgen in api" --repo=api >/dev/null
+$LORE memory add --body "Client uses USD" >/dev/null
 
-OUT=$($LORE memory search "" --repo=web1 --json)
-echo "$OUT" | jq -e '.results[] | select(.body | contains("Tailwind in web1"))' >/dev/null || fail "web1 memory missing"
-echo "$OUT" | jq -e '.results[] | select(.body | contains("Client uses USD"))' >/dev/null || fail "master memory missing"
-echo "$OUT" | jq -e '.results[] | select(.body | contains("Mantine"))' >/dev/null && fail "admin memory leaked"
-echo "$OUT" | jq -e '.results[] | select(.body | contains("gqlgen"))' >/dev/null && fail "api memory leaked"
+OUT=$($LORE memory list --repo=web1 --json)
+echo "$OUT" | jq -e '.data[] | select(.body | contains("Tailwind in web1"))' >/dev/null || fail "web1 memory missing"
+echo "$OUT" | jq -e '.data[] | select(.body | contains("Client uses USD"))' >/dev/null || fail "master memory missing"
+echo "$OUT" | jq -e '.data[] | select(.body | contains("Mantine"))' >/dev/null && fail "admin memory leaked"
+echo "$OUT" | jq -e '.data[] | select(.body | contains("gqlgen"))' >/dev/null && fail "api memory leaked"
 pass SC-4

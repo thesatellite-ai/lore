@@ -6,7 +6,7 @@ need sqlite3
 mk_tmp; init_project bidi
 
 INPUT="$(printf 'normal text \xE2\x80\xAE attack')"
-$LORE memory add "$INPUT" >/dev/null
+$LORE memory add --body "$INPUT" >/dev/null
 
 # DB column must not contain U+202E (E2 80 AE).
 STORED=$(sqlite3 .lore/lore.db "SELECT body FROM memories LIMIT 1")

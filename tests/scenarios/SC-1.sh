@@ -28,18 +28,21 @@ git remote add origin https://github.com/test/myproject.git
 # 1. Init creates .lore/lore.db and adds to .gitignore
 $LORE init --non-interactive --name=myproject || fail "init failed"
 [ -f .lore/lore.db ] || fail ".lore/lore.db not created"
-grep -q "\.lore/aicoder\.db" .gitignore || fail ".gitignore missing lore.db"
+grep -q "\.lore/lore\.db" .gitignore || fail ".gitignore missing lore.db"
 
 # 2. memory add succeeds
-$LORE memory add "Use Tailwind v4" || fail "memory add failed"
+$LORE memory add --body "Use Tailwind v4" || fail "memory add failed"
 
-# 3. render writes CLAUDE.md
+# 3. render writes .lore/LORE.md (must-rules pinned) and an @import pointer
+#    into CLAUDE.md; memories are retrieved on demand via search
+$LORE rule add --severity=must --body "Never force-push main" >/dev/null || fail "rule add failed"
 $LORE render || fail "render failed"
 [ -f CLAUDE.md ] || fail "CLAUDE.md not written"
-grep -q "Use Tailwind v4" CLAUDE.md || fail "CLAUDE.md missing memory"
+grep -q "@.lore/LORE.md" CLAUDE.md || fail "CLAUDE.md missing @import pointer"
+grep -q "Never force-push main" .lore/LORE.md || fail "LORE.md missing must rule"
 
 # 4. search returns the memory via JSON output
 RESULTS=$($LORE memory search "Tailwind" --json)
-echo "$RESULTS" | jq -e '.results[0].body | test("Tailwind")' > /dev/null || fail "search did not return memory"
+echo "$RESULTS" | jq -e '.data[0].row.body | test("Tailwind")' > /dev/null || fail "search did not return memory"
 
 echo "PASS: SC-1"

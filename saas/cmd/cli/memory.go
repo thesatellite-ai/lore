@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 	"saas/pkg/constants"
-	"strings"
 
 	"dbent"
 	"dbent/gen/ent"
@@ -71,6 +70,12 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 		_ = os.Setenv("LORE_READ_ONLY", "1")
 	}
 
+	// Fresh clone (or deleted cache): .lore/data exists but lore.db does
+	// not. Build the cache from the files before resolving the project.
+	if err := maybeMaterialize(context.Background(), c); err != nil {
+		return nil, nil, errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(err)
+	}
+
 	ctx, err := projresolve.Resolve(projresolve.Inputs{
 		FlagDB:      c.flagDB,
 		FlagProject: c.flagProject,
@@ -78,6 +83,10 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 	})
 	if err != nil {
 		return nil, nil, mapResolveError(err)
+	}
+
+	if err := checkNetworkFS(ctx.DBPath); err != nil {
+		return nil, nil, err
 	}
 
 	// Refuse if lore.db is a symlink (R16 #13, R18 #13, SC-22): an
@@ -108,8 +117,17 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 		warnIfSetupStale(context.Background(), db)
 	}
 
+	// Bring in whatever git changed since the last command (pull, checkout,
+	// merge…) BEFORE the command reads anything. Never fails the command.
+	preCommandSync(context.Background(), ctx, db)
+
 	entdb := dbent.New(db)
 	client := entdb.Client()
+	// Natural-key rows (tags, repos, actors…) get ids derived from their
+	// key so two clones creating "the same" row write the same file (E2).
+	client.Use(naturalIDHook())
+	// tx_at never goes backwards when the wall clock does (R27 #29).
+	client.Use(txAtMonotonicHook())
 	// Cache the raw *sql.DB by client pointer so callers needing raw SQL
 	// (FTS5, audit log) can recover it without re-opening the file. ent's
 	// Driver() accessor is unexported, so we maintain a sidecar map
@@ -210,45 +228,6 @@ func resolveRepoID(ctx context.Context, client *ent.Client, projectID, repoFlag 
 			fmt.Sprintf("no repo with mount_name %q in current project", repoFlag))
 	}
 	return r.ID, nil
-}
-
-// readBody returns the body for `<entity> add` from (in priority order):
-//   - args (joined with spaces)
-//   - stdin if not a TTY
-//   - error
-func readBody(args []string) (string, error) {
-	if len(args) > 0 {
-		// Reject bodies that look like a flag (e.g. starts with `-` or
-		// contains a stray `--`). Cobra would silently treat these as
-		// unknown flags before we ever see them — but if they slip through
-		// (shell quoting + interspersed flags), warn loudly so the user
-		// knows to add the `--` separator
-		if strings.HasPrefix(args[0], "-") {
-			return "", errcodes.New(errcodes.InvalidInput,
-				"body starts with `-` — looks like a flag").
-				WithHint("use `-- ` to separate flags from the body: `lore <cmd> -- \"<body>\"`")
-		}
-		return strings.Join(args, " "), nil
-	}
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		// stdin is piped
-		var sb strings.Builder
-		buf := make([]byte, 4096)
-		for {
-			n, err := os.Stdin.Read(buf)
-			if n > 0 {
-				sb.Write(buf[:n])
-			}
-			if err != nil {
-				break
-			}
-		}
-		return sb.String(), nil
-	}
-	return "", errcodes.New(errcodes.InvalidInput,
-		"no body provided").
-		WithHint("pass body as arg, pipe via stdin, or use --edit (deferred to v0.2)")
 }
 
 // memoryAddFlags are the per-command flags for `memory add`

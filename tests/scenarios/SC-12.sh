@@ -3,7 +3,7 @@
 # Catches: R16-5, R21-24, R34-4
 source "$(dirname "$0")/../lib/common.sh"
 mk_tmp; init_project det
-for i in $(seq 1 20); do $LORE memory add "memory $i" >/dev/null; done
+for i in $(seq 1 20); do $LORE memory add --body "memory $i" >/dev/null; done
 
 $LORE render >/dev/null || fail "first render"
 SHA1=$(shasum -a 256 CLAUDE.md | awk '{print $1}')

@@ -21,10 +21,10 @@ cd "$TMP/wt"
 [ -f .git ] || fail "worktree .git is not a regular file"
 
 # Without --db, aicoder refuses (no walk-up). That refusal IS the correct behavior.
-$LORE memory add "should-refuse" 2>&1 | grep -qE "E_NOT_PROJECT_ROOT|not an aicoder" \
+$LORE memory add --body "should-refuse" 2>&1 | grep -qE "E_NOT_PROJECT_ROOT|not an aicoder" \
     || fail "worktree without --db should refuse"
 
 # With explicit --db pointing at the main repo's DB, write succeeds.
-$LORE memory add "from-worktree" --db="$MAIN_DB" >/dev/null \
+$LORE memory add --body "from-worktree" --db="$MAIN_DB" >/dev/null \
     || fail "memory add with explicit --db from worktree failed"
 pass SC-27

@@ -322,7 +322,10 @@ func newRunEndCommand() *cobra.Command {
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "close run").WithCause(err)
 			}
-			elapsed := time.Since(run.StartedAt.UTC()).Round(time.Second)
+			elapsed := "start time unknown"
+			if run.StartedAt != nil {
+				elapsed = time.Since(run.StartedAt.UTC()).Round(time.Second).String()
+			}
 			fmt.Printf("%s %s [%s] (%s)\n",
 				style.Success("✓"), run.ID, outcome, elapsed)
 			return nil
@@ -441,7 +444,9 @@ func newRunShowCommand() *cobra.Command {
 			fmt.Printf("%s %s\n", run.ID, style.Code(run.ID))
 			fmt.Printf("  kind:     %s\n", run.Kind)
 			fmt.Printf("  status:   %s\n", run.StatusStr)
-			fmt.Printf("  started:  %s\n", run.StartedAt.Format(time.RFC3339))
+			if run.StartedAt != nil {
+				fmt.Printf("  started:  %s\n", run.StartedAt.Format(time.RFC3339))
+			}
 			if run.CompletedAt != nil && run.StartedAt != nil {
 				fmt.Printf("  ended:    %s (took %s)\n",
 					run.CompletedAt.Format(time.RFC3339),

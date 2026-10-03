@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"saas/pkg/constants"
+	"strings"
 
 	"dbent/gen/ent"
 	"saas/pkg/aicoder/errcodes"
@@ -145,6 +146,9 @@ func printSearchEnvelope(jsonOutput bool, kind, query string, hits []entitySearc
 //
 // Returns (nil, nil) on FTS5 unavailable — caller can degrade to LIKE
 func runFTSAgainst(ctx context.Context, client *ent.Client, rctx *projresolveContext, entity, query string, f *entitySearchFlags) ([]fts5.EntityHit, error) {
+	if err := requireSearchQuery(query); err != nil {
+		return nil, err
+	}
 	cfg, ok := fts5.FindConfig(entity)
 	if !ok {
 		return nil, errcodes.New(errcodes.InvalidInput, "unknown entity "+entity)
@@ -164,7 +168,14 @@ func runFTSAgainst(ctx context.Context, client *ent.Client, rctx *projresolveCon
 	return hits, nil
 }
 
-// flipSign returns the BM25 score in "higher = better" form for envelopes
-// Pure passthrough today (SearchEntity already flips); kept as a named
-// helper for callers that consume EntityHit.BM25 directly
-func flipSign(score float64) float64 { return score }
+// requireSearchQuery refuses a blank query with a usage error. FTS5 cannot
+// match "nothing" (SQLite raises a syntax error, which used to surface as
+// E_INTERNAL); listing everything in scope is `list`'s job, with the same
+// --repo / --no-inherit scoping.
+func requireSearchQuery(query string) error {
+	if strings.TrimSpace(query) != "" {
+		return nil
+	}
+	return errcodes.New(errcodes.InvalidInput, "search needs a query").
+		WithHint("use `lore <kind> list` (same --repo / --all-repos / --no-inherit flags) to see every row in scope")
+}
