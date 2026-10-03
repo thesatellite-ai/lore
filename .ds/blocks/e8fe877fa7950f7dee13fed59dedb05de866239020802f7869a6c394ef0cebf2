@@ -1,0 +1,25 @@
+func StrategyFor(t *Table) func(string) merge3.Strategy {
+	return func(key string) merge3.Strategy {
+		if key == updatedAtColumn {
+			return merge3.StrategyMax
+		}
+		if key == keyVersion || key == keyTable {
+			return merge3.StrategyMax
+		}
+		c, ok := t.column(key)
+		if !ok {
+			return merge3.StrategyConflict
+		}
+		switch c.Type {
+		case field.TypeString:
+			if strings.HasSuffix(key, "_id") {
+				return merge3.StrategyNewest
+			}
+			return merge3.StrategyConflict
+		case field.TypeJSON, field.TypeOther, field.TypeBytes:
+			return merge3.StrategyConflict
+		default:
+			return merge3.StrategyNewest
+		}
+	}
+}

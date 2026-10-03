@@ -1,0 +1,6 @@
+# docsync acks format=3 extract=1 repo=lore_go commit=a85220b scanned_at=2026-10-03T15:46:24Z
+at	actor	actor_kind	delegated_by	id	repo	doc	line	env	block_hash	sentence_hash	note	rule	sentence
+2026-10-03T19:15:40Z	khanakia	human		sync-hooklines-3282rwuw	lore	LORE_SYNC_SPEC.md	482		e14d2505cab7d6c13b4fbd4d6d3dd5b5f21053ae5da489c413a8e8dc3b64f4eb		pre-commit now probes for sync hook; sentence updated	1	
+2026-10-03T19:15:40Z	khanakia	human		sync-hooklines-3282rwuw	lore	README.md	347		e14d2505cab7d6c13b4fbd4d6d3dd5b5f21053ae5da489c413a8e8dc3b64f4eb		added the old-lore skip to the hooks sentence	1	
+2026-10-03T19:31:03Z	khanakia	human		sync-hooklines-3282rwuw	lore	LORE_SYNC_SPEC.md	482		2d5b034fc5b17eedb9339e3a746acd33ba2a97c007a31a4f047268b4613435fb		isRepoRoot refactor; behaviour unchanged	1	
+2026-10-03T19:31:03Z	khanakia	human		sync-hooklines-3282rwuw	lore	README.md	347		2d5b034fc5b17eedb9339e3a746acd33ba2a97c007a31a4f047268b4613435fb		isRepoRoot refactor; behaviour unchanged	1	

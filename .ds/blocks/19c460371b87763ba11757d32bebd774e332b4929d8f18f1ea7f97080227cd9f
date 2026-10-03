@@ -1,0 +1,14 @@
+func hookLines(projectRel string) map[string][]string {
+	cd := ""
+	if projectRel != "" && projectRel != "." {
+		cd = `cd "` + filepath.ToSlash(projectRel) + `" && `
+	}
+	guard := `command -v ` + BinaryName + ` >/dev/null 2>&1 && `
+	refresh := []string{"( " + cd + guard + BinaryName + " sync hook refresh >/dev/null 2>&1 ) || true"}
+	return map[string][]string{
+		"pre-commit":    {"( " + cd + "if command -v " + BinaryName + " >/dev/null 2>&1; then " + BinaryName + " sync hook pre-commit; fi ) || exit $?"},
+		"post-checkout": refresh,
+		"post-merge":    refresh,
+		"post-rewrite":  refresh,
+	}
+}

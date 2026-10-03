@@ -7,7 +7,7 @@ All commands accept the universal flags from SKILL.md (`--db`, `--project`, `--r
 ## Bootstrap
 
 ### `lore init [path]`
-Initializes a Mode A project at cwd. Creates `.lore/lore.db`, applies schema, registers project, auto-adds to `.gitignore`.
+Initializes a Mode A project at cwd. Creates `.lore/lore.db`, applies schema, registers project, auto-adds `lore.db` to `.gitignore`, and writes the first sync pass to `.lore/data/` (commit it). In a clone that already has `.lore/data/` it adopts the shared project instead of minting a new one.
 
 ```bash
 lore init --non-interactive --name=my-app
@@ -968,3 +968,52 @@ Intent                                       → Command
 "run the benchmark"                          → bench run start (v0.2.3+)
 "see benchmark results"                      → bench report summary (v0.2.3+)
 ```
+
+## Sync (git-tracked `.lore/data/`)
+
+Every shared row is mirrored to `.lore/data/<table>/<id>.json`; commit those files. A pass runs automatically before and after every command, so these are for inspection and repair. Design: `LORE_SYNC_SPEC.md`.
+
+```bash
+lore sync                          # run a pass now; non-zero exit when a file could not be synced
+lore sync --json                   # {pass, imported[], exported[], removed_files[], deleted_rows[], conflicts[], errors[], warnings[], pending_exports}
+lore sync status --json            # {baselined, data_dir_present, tracked_files, pending_exports, open_conflicts, trash_rows, errors[], uncommitted[]}
+lore sync conflicts [--all] [--json]
+lore sync resolve <n> --take kept|other
+lore sync trash [--json]           # rows removed because their file disappeared
+lore sync trash restore <n>
+lore sync peek <git-ref> [table] [--json]          # rows on another branch, nothing imported
+lore sync promote <id>... --to <branch> [--dry-run]  # new local commit on <branch>; never pushes; not the current branch
+lore sync dupes [--json]
+lore sync merge-rows <table> --keep <id> --drop <id>
+lore sync export --all [--json]    # rewrite every file from the DB
+lore sync purge --archived-before <date|90d|720h> (--dry-run | --confirm)
+lore sync fix-projects [--keep <prj_id>] [--dry-run]
+lore sync install-git [--json]     # merge driver, .gitattributes block, hook blocks, .gitignore exceptions
+                                   # for .lore/data (normally automatic); E_SYNC_DATA_IGNORED if git still ignores it
+lore restore <backup> --confirm --prefer db|files|newest
+```
+
+Environment: `LORE_SYNC=0` (off), `LORE_SYNC_GIT=0` (no git wiring), `LORE_SYNC_QUIET=1`, `LORE_SYNC_ALLOW_SECRETS=1` (one run).
+
+Error kinds in `errors[]`: `invalid-file`, `conflict-markers`, `newer-format` (upgrade lore), `import-failed`, `secret-detected` (row kept local, not written to git).
+
+## Audit
+
+Every change to a shared row is appended to a hash-chained log by the sync passes: `<table>.write` (this lore command), `<table>.import` (from .lore/data), `<table>.merge`, `<table>.external-write` (found in lore.db, made by something other than lore).
+
+```bash
+lore audit verify [--json]          # exit 1 + E_AUDIT_CHAIN_BROKEN on an edited/deleted entry, or "hash mismatch" for rows changed outside lore
+lore audit log [--limit 50] [--json]  # newest first; --limit 0 = all
+```
+
+`audit verify` and `audit log` open the DB without a sync pass, so run `verify` first when investigating — any other lore command records outside changes as external writes.
+
+## Safety refusals
+
+| Code | When | Override |
+|---|---|---|
+| `E_ROOT_REFUSED` | running as root (files would end up root-owned) | `LORE_ALLOW_ROOT=1` (legacy `MINI_ALLOW_ROOT=1`) |
+| `E_NETWORK_FS` | project or DB inside iCloud/Dropbox/OneDrive/Google Drive, or on NFS/SMB | `LORE_ALLOW_NETWORK_FS=1` |
+| `E_DISK_FULL` | the disk is full; nothing was written | free space, re-run |
+| `E_MIGRATION_INCOMPLETE` (doctor) | a schema migration was interrupted | `lore setup` |
+

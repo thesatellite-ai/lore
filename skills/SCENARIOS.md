@@ -521,13 +521,13 @@ lore run list --json
 ```bash
 # lore refuses by default with E_SECRET_DETECTED.
 # Only override if user explicitly says "yes, I know, override":
-lore memory add "<...>" --allow-secrets    # logged loudly
+lore memory add --body "<...>" --allow-secrets    # logged loudly; never written to .lore/data
 ```
 
 ### N.2 User runs as root
 ```bash
 # Refused with E_ROOT_REFUSED. Only proceed if user explicitly:
-MINI_ALLOW_ROOT=1 lore init
+LORE_ALLOW_ROOT=1 lore init
 ```
 
 ### N.3 .lore/lore.db is a symlink
@@ -547,8 +547,10 @@ lore repair --tier=2 --confirm   # if backup exists
 
 ### N.5 DB on iCloud / Dropbox / OneDrive
 ```bash
-# lore detects via path string match and returns E_NETWORK_FS.
-# Move the DB to a local path:
+# lore detects cloud-sync folders by path and network filesystems by fs type,
+# and returns E_NETWORK_FS. Best fix: move the whole project to a local disk
+# and share knowledge through git (.lore/data). Or keep the project and move
+# only the DB to a local path (git sync is then off for this project):
 mv .lore/lore.db /Users/me/local-lore/$(basename $PWD).db
 mkdir -p .lore
 ln -s /Users/me/local-lore/$(basename $PWD).db .lore/lore.db
@@ -590,8 +592,8 @@ lore learn-from docs
 
 ### N.10 User: "audit log is corrupted"
 ```bash
-# v0.2 feature — `lore audit verify` will land then. For now:
-sqlite3 .lore/lore.db "SELECT COUNT(*) FROM audit_log"
+lore audit verify          # chain intact? rows changed outside lore?
+lore audit log --limit 50  # who changed what, newest first
 ```
 
 ---

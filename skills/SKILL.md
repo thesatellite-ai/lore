@@ -577,17 +577,38 @@ The agent's **directive step 5** (rendered into `.lore/LORE.md`, reached via the
 | "DB is broken" | `lore repair --tier=2 --confirm` (tier-1 = FTS rebuild, tier-2 = restore from latest backup, tier-3 = bootstrap empty DB) |
 | "restore from a specific backup file" | `lore restore <backup-path> --confirm` — POSITIONAL backup-path (NOT `--from=`); never `repair --tier=3` for restore-from-file |
 | "file a bug" | `lore support-bundle --out=/tmp/bundle.tar.gz` (then attach to issue) |
+| "who changed this / is the history intact?" | `lore audit log` / `lore audit verify` (run verify before other commands when investigating) |
 | "list every error code" | `lore errors list` |
 | "what version am I on?" | `lore version` |
 
 If the user uses different phrasing, the principle is: **classify the intent (capture / track / retrieve / render / heal) and pick from the matching subtable.** See [USECASES.md](./USECASES.md) for the full intent table.
+
+### Team sync through git (`.lore/data/`)
+
+lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.json`. Those files are committed with the code, so knowledge follows branches and reaches `main` when the PR merges. A sync pass runs automatically before and after every lore command — you never need to call it to keep things consistent. What you MUST do as an agent: **commit `.lore/data/` (and `.gitattributes`) together with the code change that produced the knowledge.** lore prints `lore sync: N file(s) in .lore/data not committed` as a reminder.
+
+| User says | Run |
+|---|---|
+| "is lore in sync / what's pending?" | `lore sync status` (`--json`) |
+| "sync now" / after editing a `.lore/data` file by hand | `lore sync` |
+| "what knowledge is on branch X?" | `lore sync peek origin/X [table]` (read-only, nothing imported) |
+| "make this rule apply on main now" | `lore sync promote <id> --to main` (local commit on main, never pushes; confirm with the user first) |
+| "lore says conflict" | `lore sync conflicts` → show both versions → `lore sync resolve <n> --take kept\|other` after the user chooses |
+| "I lost a memory after git clean / revert" | `lore sync trash` → `lore sync trash restore <n>` |
+| "same fact recorded twice" | `lore sync dupes` → `lore sync merge-rows <table> --keep <id> --drop <id>` |
+| ".lore/data got deleted" | `lore sync export --all` |
+| "two project ids after a merge" | `lore sync fix-projects` |
+| "remove archived stuff for good" | `lore sync purge --archived-before 90d --dry-run`, then `--confirm` with user OK |
+| "set up git for lore" | automatic; `lore sync install-git` to see what it does |
+| "restored a backup, which side wins?" | `lore restore <file> --confirm --prefer db\|files\|newest` — `db` (default) rolls back: files of rows not in the backup are removed (review the git diff) |
+
+**Merge conflicts in `.lore/data` files:** markers sit INSIDE the JSON string value (`"body": "<<<<<<< ours\n…\n=======\n…\n>>>>>>> theirs"`). lore imports the rest of the row and shows both versions in `lore <entity> show <id>`; the pre-commit hook refuses to commit until the text is settled. Ask the user which version (or what combination) to keep, then `lore <entity> edit <id> --body "<chosen text>"` — lore rewrites the file without markers — and commit. Never delete the file. Different fields of the same row merge automatically — those never need you. Markers that break the JSON itself (a merge done where lore's driver was not installed) block the file: run any lore command to install the driver, abort and redo the merge.
 
 ### CLI gaps (no native verb yet — use these workarounds)
 
 | User asks for | Status | Workaround |
 |---|---|---|
 | `lore task block <T-N>` | No native verb (despite `blocked` being a valid status enum) | `lore task edit T-N --status=blocked` (works via universal `edit`) |
-| `lore audit` CLI | No native verb yet | Raw SQL: `sqlite3 .lore/lore.db "SELECT … FROM audit_log WHERE …"` |
 | Cancel-with-reason as one verb | `task cancel` has no `--reason` flag | Two-cmd: `task cancel T-N` + `comment add --on-table=tasks --on-id=T-N --body="cancelled: <reason>"` |
 
 ### Hard delete (escape hatch)
@@ -693,7 +714,7 @@ One-shot ingestion. **Recipe: [PLAYBOOKS.md § P11](./PLAYBOOKS.md).**
 Read-only mode, render-diff check. **Recipe: [PLAYBOOKS.md § P12](./PLAYBOOKS.md).** Worked example: [examples/08-ci-integration.md](./examples/08-ci-integration.md).
 
 ### P13 — Onboard a new teammate
-Bring a new dev up to speed via committed CLAUDE.md + their own local DB. **Recipe: [PLAYBOOKS.md § P13](./PLAYBOOKS.md).**
+`git clone` brings `.lore/data/`; the first lore command builds their local `lore.db` from it (no `lore init` needed — `init` would adopt the shared project anyway). **Recipe: [PLAYBOOKS.md § P13](./PLAYBOOKS.md).**
 
 ### P14 — Promote a memory to a rule
 Soft fact turns out to be a hard constraint. **Recipe: [PLAYBOOKS.md § P14](./PLAYBOOKS.md).**
@@ -760,6 +781,14 @@ lore
 ├── why-context                introspect last render
 ├── learn-from docs            ingest existing markdown
 ├── learn list|promote|reject  review learn candidates
+├── sync                       git-tracked .lore/data ⇄ lore.db (runs automatically)
+│   ├── status|conflicts|trash  inspect state; resolve <n>, trash restore <n>
+│   ├── peek <ref> [table]     read another branch's rows without checkout
+│   ├── promote <id> --to <b>  commit a row onto another local branch
+│   ├── dupes|merge-rows       find + fold duplicate rows
+│   ├── export --all|purge     rewrite every file | remove archived rows for good
+│   └── fix-projects|install-git
+├── audit verify|log           hash-chained change log; verify flags tampering
 ├── doctor                     health check, exit 0/1/2
 ├── backup                     online SQLite backup
 ├── restore <path>             replace current DB
@@ -888,6 +917,9 @@ Quick reactions:
 | Using `rule` when `decision` is right | Rules say WHAT, decisions say WHY | Use `decision add` when the rationale matters more than the conclusion |
 | Adding rules without severity | Defaults to `must` (blocking) | Always set `--severity=must|should|may` explicitly |
 | Calling `repair --tier=3` first | Destroys data | Try `--tier=1`, then `--tier=2`. Tier 3 is the LAST resort. |
+| Committing code but leaving `.lore/data/` out | The knowledge never reaches teammates or `main` | `git add .lore/data .gitattributes` with the change |
+| Resolving a `.lore/data` conflict by taking a whole file side | Silently drops the other side's edits | Edit the marked value; let lore merge the rest |
+| Deleting `.lore/data/` to "reset" | lore keeps the DB and warns; teammates lose rows when it is committed | `lore sync export --all` to rebuild it from the DB |
 
 ---
 
@@ -900,8 +932,8 @@ Quick reactions:
 5. **Scope before storing.** Repo-specific → `--repo=<mount>`. Cross-cutting → master.
 6. **Errors are codes, not prose.** Match `E_*` strings; use `lore errors list --json` for the registry.
 7. **Never wrap lore in your own retry loop for `UNIQUE constraint failed`.** lore already retries 8x internally.
-8. **Never edit `.lore/lore.db` directly.** Always go through the CLI.
-9. **Never commit `.lore/lore.db` to git.** `lore init` writes `.gitignore`. Commit `CLAUDE.md` instead.
+8. **Never edit `.lore/lore.db` directly.** Always go through the CLI. (If something does write to it, lore's triggers still export the change — but the CLI keeps validation and secret checks.)
+9. **Never commit `.lore/lore.db` to git — commit `.lore/data/` instead.** `lore.db` is a gitignored local cache; the shared knowledge is the JSON files under `.lore/data/` (plus `.gitattributes`). Commit them with the code that produced the knowledge.
 10. **One render per capture batch.** Batch N captures, then render once.
 
 ---
@@ -922,6 +954,10 @@ ls .lore/state/lock 2>/dev/null && echo "WARN: stale lock present"
 
 # 4. Backup is recent
 ls -la .lore/backups/ 2>/dev/null | tail -3
+
+# 5. Shared knowledge is exported and committed
+lore sync status --json | jq '.data | {pending_exports, open_conflicts, uncommitted}'
+git status --porcelain -- .lore/data
 ```
 
 If you captured anything during the session, end with:
@@ -929,6 +965,7 @@ If you captured anything during the session, end with:
 ```bash
 lore render
 lore backup     # optional but cheap insurance
+git add .lore/data .gitattributes   # with the user's change, when they commit
 ```
 
 ---
@@ -944,6 +981,7 @@ RENDER      lore render
 SEARCH      lore memory search "<q>" --json
 INTROSPECT  lore why-context --last-render
 DIAGNOSE    lore doctor --json
+SHARE       git add .lore/data .gitattributes   (lore sync status to check)
 RECOVER     lore repair --tier=2 --confirm
 HELP        lore --help  |  lore <cmd> --help  |  lore errors list --json
 ```

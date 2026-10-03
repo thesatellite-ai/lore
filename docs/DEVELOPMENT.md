@@ -7,7 +7,8 @@ Internal build / release notes. End-user docs live in the top-level
 
 | Layer | Detail |
 |-------|--------|
-| Storage | One SQLite file under `.lore/`, pure-Go `modernc.org/sqlite` |
+| Storage | SQLite cache `.lore/lore.db` (pure-Go `modernc.org/sqlite`) mirrored to committed JSON row files under `.lore/data/` |
+| Sync | `saas/pkg/aicoder/lsync` reconciles both directions around every command; design in [LORE_SYNC_SPEC.md](../LORE_SYNC_SPEC.md) |
 | Search | SQLite FTS5 (built into the binary) + hybrid ranking |
 | Output | Compiles stored knowledge into `CLAUDE.md` / `AGENTS.md` / `.cursorrules` |
 | Agent loop | Claude skill captures corrections & decisions back into the db |
@@ -20,6 +21,8 @@ This is a Go **workspace** (`go.work`) stitching local modules:
 |--------|------|
 | `saas/cmd/cli` | the `lore` binary (package `main`) |
 | `saas/pkg/aicoder/*` | core domain logic (capture, search, render, fts5) |
+| `saas/pkg/aicoder/lsync` | git sync engine: table registry, change triggers, reconcile, bootstrap/adopt, merge driver, trash/conflicts |
+| `saas/pkg/aicoder/{canonjson,merge3,gitsetup}` | generic helpers sync is built on: byte-stable JSON, field-level 3-way merge, idempotent git wiring + plumbing |
 | `dbent` | Ent schema + generated client (local-only module) |
 | `lace/db` | pure-Go SQLite open/registration |
 | `github.com/khanakia/entx/enttui` | TUI engine (resolved from the module proxy) |
@@ -38,7 +41,11 @@ task lore:build:debug    # with debug symbols
 task lore:install:all    # build + install binary AND the Claude skill locally
 task lore:skill:install  # (re)install the skill to ~/.claude/skills/lore
 task lore:test           # unit + integration tests
+task lore:test:sync      # sync engine + CLI end-to-end suite (real git, real binary)
+task lore:bench:sync     # sync performance at 1k / 10k rows
 ```
+
+Adding an ent table? `saas/pkg/aicoder/lsync/registry.go` must classify it as synced or local — `TestRegistry_EveryTableClassified` fails until it does. A new unique index on a synced table also needs an entry in `saas/cmd/cli/natural_ids.go` (`TestNaturalIDSpecs_MatchRegistry`).
 
 Plain `go build`:
 

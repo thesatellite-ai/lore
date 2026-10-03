@@ -29,8 +29,8 @@ Auto-discovery: `lore errors list --json` returns the full registry at runtime �
 | `E_DB_CORRUPT` | DB file failed quick_check; run `lore repair` |
 | `E_DB_NOT_FOUND` | DB file does not exist at the configured path |
 | `E_SCHEMA_VERSION_MISMATCH` | DB was migrated by a newer lore; upgrade or use a different DB |
-| `E_MIGRATION_INCOMPLETE` | a migration is in_progress; run `lore repair` |
-| `E_NETWORK_FS` | DB path is on a network/cloud-sync filesystem (silent corruption risk) |
+| `E_MIGRATION_INCOMPLETE` | a schema migration did not finish; run `lore setup` |
+| `E_NETWORK_FS` | DB path is on a network/cloud-sync filesystem (silent corruption risk); set LORE_ALLOW_NETWORK_FS=1 to override |
 | `E_INODE_MISMATCH` | DB file inode changed since last open; verify external mutation |
 | `E_DISK_FULL` | no space left on device for write or backup |
 | `E_READ_ONLY_FS` | DB path is on a read-only filesystem |
@@ -50,7 +50,7 @@ Auto-discovery: `lore errors list --json` returns the full registry at runtime �
 | `E_BODY_TOO_LARGE` | body exceeds maximum allowed size |
 | `E_INVALID_IDENTIFIER` | identifier contains disallowed character |
 | `E_SECRET_DETECTED` | input contains a credential pattern; refusing to store. Use --allow-secrets to override (logged) |
-| `E_ROOT_REFUSED` | lore refuses to run as root; set MINI_ALLOW_ROOT=1 to override |
+| `E_ROOT_REFUSED` | lore refuses to run as root; set LORE_ALLOW_ROOT=1 to override |
 | `E_SYMLINK_DB` | DB path is a symlink; refusing for safety. Use --allow-symlink-db to override |
 | `E_SYMLINK_LOOP` | filesystem walk encountered a symlink loop |
 | `E_UID_MISMATCH` | EUID does not match HOME owner (sudo PRESERVE_ENV detected); refusing |
@@ -58,6 +58,7 @@ Auto-discovery: `lore errors list --json` returns the full registry at runtime �
 | `E_READ_ONLY` | command requires write access but read-only mode is active |
 | `E_BUSY_TIMEOUT` | DB busy timeout exceeded |
 | `E_AUDIT_CHAIN_BROKEN` | audit log hash chain integrity verification failed |
+| `E_SYNC_DATA_IGNORED` | git ignores files under .lore/data, so teammates would not receive them; re-include the folder in .gitignore |
 | `E_NOT_FOUND` | requested entity does not exist |
 | `E_INTERNAL` | internal error; please file a bug report with `lore support-bundle` |
 | `E_NOT_IMPLEMENTED` | feature not yet implemented (deferred to v0.2 or v1.0+) |
@@ -68,9 +69,30 @@ Auto-discovery: `lore errors list --json` returns the full registry at runtime �
 ## Recovery decision tree
 
 ```
-E_DB_CORRUPT / E_DB_NOT_FOUND / E_MIGRATION_INCOMPLETE
+E_MIGRATION_INCOMPLETE
+    → a schema migration was interrupted: `lore setup` finishes it
+    → if setup fails: lore repair --tier=2 --confirm   (restore from backup)
+
+E_DB_CORRUPT / E_DB_NOT_FOUND
     → lore repair --tier=2 --confirm     (restore from backup)
-    → if no backup:    --tier=3 --confirm   (bootstrap empty, then learn-from docs)
+    → in a git-synced project, deleting .lore/lore.db also works: the next
+      command rebuilds it from .lore/data (local-only telemetry is lost)
+    → if no backup and no .lore/data:  --tier=3 --confirm (bootstrap empty)
+
+E_DISK_FULL
+    → the disk is full; nothing was written and the DB is intact.
+      Free space and run the command again.
+
+E_AUDIT_CHAIN_BROKEN
+    → `lore audit verify` found an edited/deleted audit entry, or rows changed
+      outside lore ("hash mismatch"). Inspect with `lore audit log`; restore a
+      backup to compare.
+
+E_SYNC_DATA_IGNORED
+    → `lore sync install-git` found .lore/data files git would not commit.
+      Lore adds `!.lore/data/` exceptions itself when that helps; this error
+      means a whole parent folder (usually `.lore/`) is ignored. Change that
+      rule (ignore `.lore/lore.db`, `.lore/state/`, `.lore/backups/` instead).
 
 E_DB_LOCKED / E_LOCK_HELD
     → another lore process is running; wait or `pkill -f lore`
@@ -89,7 +111,8 @@ E_SECRET_DETECTED
       --allow-secrets (the override is logged loudly).
 
 E_ROOT_REFUSED
-    → set MINI_ALLOW_ROOT=1 (only if you really mean it).
+    → run as your normal user; set LORE_ALLOW_ROOT=1 only if you really
+      mean it (the old MINI_ALLOW_ROOT=1 still works).
 
 E_SYMLINK_DB
     → .lore/lore.db is a symlink. Delete the symlink and either
@@ -102,8 +125,10 @@ E_INVALID_INPUT / E_EMPTY_BODY / E_INVALID_IDENTIFIER / E_BAD_PATH
     → user-correctable; show the hint to the user.
 
 E_NETWORK_FS
-    → DB path is on iCloud/Dropbox/NFS. Move it to a local disk
-      (lore.db inside cloud-synced folders silently corrupts).
+    → the project is inside iCloud/Dropbox/OneDrive/Google Drive or on NFS/SMB.
+      Move the project to a local disk — git (via .lore/data) is how lore
+      knowledge is shared, not the sync client. LORE_ALLOW_NETWORK_FS=1
+      overrides at your own risk.
 
 E_NOT_IMPLEMENTED / E_UNSUPPORTED
     → feature isn't built yet (v0.2). No recovery, just inform user.

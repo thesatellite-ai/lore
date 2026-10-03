@@ -1,0 +1,5 @@
+var gitAttributeLines = []string{
+	".lore/data/**/*.json text eol=lf merge=" + mergeDriverLore + " linguist-generated=true",
+	".lore/data/*.json text eol=lf merge=" + mergeDriverLore + " linguist-generated=true",
+	loreMDRel + " text eol=lf merge=" + mergeDriverKeepOurs + " linguist-generated=true",
+}

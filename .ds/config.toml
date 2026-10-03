@@ -1,0 +1,19 @@
+spec = "1.0"
+prefix = "ds"
+
+[scan]
+code = ["**"]
+docs = ["docs/**", "README.md", "LORE_SYNC_SPEC.md", "skills/**/*.md"]
+exclude = ["**/testdata/**", "**/node_modules/**", "**/vendor/**", "dist/**", "public/**", "tmp/**", "apidash/**", "docs/framework/**", "brand/**", "lace/**", "**/*.db", "coverage.svg"]
+generated = ["**/*.pb.go", "**/gen/**", "**/*_gen.go", "**/*_gen.ts"]
+
+[include]
+mode = "build"
+max_lines = 40
+
+[check]
+fuzzy_threshold = 0.8
+unacked = "error"
+
+[env]
+default = ""

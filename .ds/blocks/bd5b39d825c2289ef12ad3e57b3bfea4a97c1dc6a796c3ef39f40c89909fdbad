@@ -1,0 +1,9 @@
+const (
+	envSync            = "LORE_SYNC"
+	envSyncGit         = "LORE_SYNC_GIT"
+	envSyncQuiet       = "LORE_SYNC_QUIET"
+	envSyncAllowSecret = "LORE_SYNC_ALLOW_SECRETS"
+	envReadOnly        = "LORE_READ_ONLY"
+	envValueOff        = "0"
+	envValueOn         = "1"
+)

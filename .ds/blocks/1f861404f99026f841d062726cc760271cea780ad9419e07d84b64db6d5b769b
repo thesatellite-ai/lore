@@ -1,0 +1,13 @@
+const (
+	// DataDirName is the folder under .lore/ that holds committed row files.
+	DataDirName = "data"
+	// MetaFileName holds the project identity + format version (§12.3).
+	MetaFileName = "_meta.json"
+	// PurgedFileName lists ids deliberately purged on main, so ADOPT never
+	// resurrects them from an old local DB (E47).
+	PurgedFileName = "_purged.json"
+	// rowFileExt is the extension of every row file.
+	rowFileExt = ".json"
+	// tmpPrefix marks in-flight atomic writes; leftovers are crash debris.
+	tmpPrefix = ".tmp-"
+)
