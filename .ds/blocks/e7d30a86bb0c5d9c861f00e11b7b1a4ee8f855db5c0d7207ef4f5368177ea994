@@ -1,0 +1,1 @@
+const MaxFileSize = 4 << 20

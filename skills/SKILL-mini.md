@@ -530,11 +530,18 @@ P12 CI integration (read-only)
       || { echo ".lore/LORE.md stale — run lore render"; exit 1; }
 
 P13 onboard new teammate
-    lore render && git add .lore/LORE.md CLAUDE.md && git commit -m "refresh lore knowledge"
-    # teammate clones, then:
-    lore init --non-interactive
-    lore learn-from docs --paths=.lore/LORE.md
-    lore render
+    git add .lore/data .gitattributes .lore/LORE.md CLAUDE.md && git commit -m "lore knowledge"
+    # teammate clones, then ANY lore command builds their cache from .lore/data:
+    lore memory list
+
+TEAM SYNC (.lore/data/ = one committed JSON file per shared row; automatic)
+    commit .lore/data + .gitattributes WITH the code change that produced the knowledge
+    lore sync status | conflicts | trash | dupes      inspect
+    lore sync resolve <n> --take kept|other           after the user picks a side
+    lore sync peek origin/<branch> [table]            another branch, read-only
+    lore sync promote <id> --to main                  local commit on main (confirm first)
+    conflict markers live INSIDE the JSON value; `lore <entity> show` has both sides,
+    settle with `lore <entity> edit <id> --body "…"` after the user picks; never delete the file
 
 P14 promote memory → rule  (ALL 4 STEPS REQUIRED — do NOT skip the show)
     lore memory show M-N --json | jq -r '.data.body'   # MUST fetch the actual body first;

@@ -1,0 +1,1 @@
+const racyWindow = 2 * time.Second

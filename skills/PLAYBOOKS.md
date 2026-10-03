@@ -245,24 +245,47 @@ Any write attempt under `--read-only` or `LORE_READ_ONLY=1` returns `E_READ_ONLY
 The user wants to bring Alice up to speed on a project that already uses lore.
 
 ```bash
-# 1. Make sure the rendered knowledge + pointer are in git and current
-lore render
-git add .lore/LORE.md CLAUDE.md && git commit -m "refresh lore knowledge"
+# 1. Make sure the shared knowledge is committed (lore exports it automatically)
+lore sync status
+git add .lore/data .gitattributes .lore/LORE.md CLAUDE.md && git commit -m "lore knowledge"
 
 # 2. Alice clones the repo
 git clone <repo>; cd <repo>
 
-# 3. Alice initializes her own local DB (.lore/LORE.md is the seed)
-lore init --non-interactive
-lore learn-from docs --paths=.lore/LORE.md
-for id in $(lore learn list --json | jq -r '.data[].id'); do
-    lore learn promote "$id" --target=memories
-done
+# 3. Any lore command builds her local cache from .lore/data (no init needed;
+#    `lore init` would adopt the shared project too)
+lore memory list
 
 # 4. Alice opens her AI tool of choice — CLAUDE.md @imports the same .lore/LORE.md
 ```
 
-Knowledge lives in `.lore/LORE.md` (committed, `@import`ed by CLAUDE.md), DB is per-developer (`.lore/lore.db` is gitignored). Alice's writes stay local until she re-renders and re-commits `.lore/LORE.md`.
+Shared knowledge lives in `.lore/data/` — one committed JSON file per row — and travels with the code: it follows branches, merges with PRs, and arrives on `git pull` (the post-merge hook imports it immediately). `.lore/lore.db` is a gitignored per-developer cache rebuilt from those files. Alice's captures are exported to `.lore/data/` as she makes them and reach the team when she commits and pushes them.
+
+### P13b — Roll sync out to a team that already uses lore
+
+Each developer has an old, never-shared `lore.db`.
+
+```bash
+# 1. One person, on main, after upgrading lore:
+lore memory list                      # first command: backs up lore.db, exports everything to .lore/data
+git add .lore/data .gitattributes && git commit -m "lore: shared knowledge" && git push
+
+# 2. Everyone else, after upgrading:
+git pull
+lore memory list                      # adopts .lore/data: switches to the shared project id,
+                                      # imports teammates' rows, exports their private rows
+lore sync conflicts                   # rows both sides changed: the newer won, the other is here
+lore sync dupes                       # same fact recorded twice → lore sync merge-rows …
+git add .lore/data && git commit -m "lore: my knowledge"   # on their branch, merged via PR
+```
+
+If two people bootstrapped in parallel, run `lore sync fix-projects` on main after the merge.
+
+Things to check during the rollout (all found on a real repo):
+
+- **A teammate on an old lore** (without `lore sync hook`) can still commit: the hook prints "upgrade it" and skips the check. Ask everyone to upgrade anyway, or nothing checks their lore files.
+- **A broad `.gitignore` rule** (`_*`, `*.json`, `snapshots/`) would hide lore files; lore adds `!.lore/data/` exceptions and says so — commit the `.gitignore` change with the data. If the whole `.lore/` folder is ignored, lore leaves `.gitignore` alone and warns; change the rule yourself.
+- **Committed hooks** (`core.hooksPath .githooks`): lore chains its lines into those scripts and adds `post-checkout`, `post-merge` and `post-rewrite`. Commit them so every clone gets them.
 
 ---
 
@@ -326,9 +349,10 @@ lore task list --status=in_progress --json | jq --arg cutoff "$(date -v-7d +%Y-%
     .data[] | select(.started_at < $cutoff) | "T-\(.id) stale since \(.started_at)"
 '
 
-# 6. Render + commit
+# 6. Render + commit (shared rows live in .lore/data)
 lore render
-git diff --quiet .lore/LORE.md CLAUDE.md || { git add .lore/LORE.md CLAUDE.md; git commit -m "weekly: refresh lore knowledge"; }
+lore sync status
+git diff --quiet .lore/LORE.md CLAUDE.md .lore/data || { git add .lore/LORE.md CLAUDE.md .lore/data; git commit -m "weekly: refresh lore knowledge"; }
 ```
 
 ---
@@ -350,18 +374,14 @@ Useful for: portability, manual review, feeding into a fine-tune.
 ## P18 — Audit log review (forensics)
 
 ```bash
-# When did this rule get added, and by whom?
-sqlite3 .lore/lore.db <<'SQL'
-SELECT a.tx_at, a.actor_id, a.op, a.entity_id, a.row_after
-FROM audit_log a
-WHERE a.entity_table = 'rules'
-  AND a.row_after LIKE '%stdlib%'
-ORDER BY a.tx_at DESC
-LIMIT 10;
-SQL
+# When did this rule change, and by whom?
+lore audit log --limit 0 --json | jq '.data[] | select(.target_table == "rules" and .target_id == "rul_<id>")'
+
+# Is the trail intact, and did anything change the DB behind lore's back?
+lore audit verify
 ```
 
-(`audit_log` is internal — there's no CLI front in v0.1. v0.2 will expose `lore audit search`.)
+Every change to a shared row is an entry: `<table>.write` (a lore command), `<table>.import` (arrived from teammates via .lore/data), `<table>.merge` (both sides edited), `<table>.external-write` (found in lore.db, not made by lore — e.g. sqlite3). Entries are hash-chained: editing or deleting one breaks `audit verify`. Run `audit verify` FIRST when investigating: any other lore command synchronises the DB and records outside changes as external writes.
 
 ---
 

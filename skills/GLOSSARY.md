@@ -12,7 +12,7 @@ The identity behind any write. Resolved via 8-step fallback chain (flag → env 
 Codex / OpenAI convention for AI context files. `lore render --target=AGENTS.md` stitches the `@import` pointer into `AGENTS.md` instead of `CLAUDE.md`; the generated knowledge still lives in `.lore/LORE.md`.
 
 ## Audit log
-Append-only ledger of every write, with hash chain for tamper detection. Verifiable via `lore audit verify` (v0.2).
+Append-only, hash-chained ledger of every change to a shared row (lore writes, imports from .lore/data, merges, and external writes found in the DB). `lore audit verify` checks the chain and flags rows changed outside lore; `lore audit log` lists entries.
 
 ## Bench
 The DB-backed evaluation engine. Three nouns: **eval** (task template), **run** (one execution), **result** (task × arm × attempt outcome). Replaces the Phase-1 YAML + bash runner. See `BENCH_DESIGN.md`.
@@ -84,7 +84,16 @@ Free-form learned fact. The lightest-weight capture shape. No rationale, no seve
 A container for tasks. Used to group related work items under one initiative with a target date.
 
 ## Mode A
-Local DB mode. One `.lore/lore.db` per project root. The default.
+Local DB mode. One `.lore/lore.db` per project root. The default. Mode A projects sync through git via `.lore/data/` (see Row file).
+
+## Row file
+`.lore/data/<table>/<id>.json` — one canonical JSON file per shared row (sorted keys, UTC timestamps, `_v` format version, `_table`). The committed source of truth; `lore.db` is a cache of these files plus machine-local tables.
+
+## Bootstrap / Adopt
+The first sync pass. **Bootstrap** (no `.lore/data` yet): back up `lore.db`, export every shared row, write `_meta.json`. **Adopt** (`.lore/data` exists but this DB never synced — a teammate's pull, a fresh clone, a restore): switch to the shared project id, import files, export private rows, keep losing versions of clashing rows as conflicts.
+
+## Sync trash
+Rows deleted because their file disappeared (revert, `git clean`, stash) are copied to the trash first; `lore sync trash restore <n>` undoes it.
 
 ## Mode B
 Shared DB mode. Multiple project roots pointing at a single shared SQLite file via `.lore/lore.toml`. Used when many sibling projects want one knowledge base.

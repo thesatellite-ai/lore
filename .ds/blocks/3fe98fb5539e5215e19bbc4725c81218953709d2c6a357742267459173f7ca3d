@@ -1,0 +1,1 @@
+const defaultLockTimeout = 15 * time.Second

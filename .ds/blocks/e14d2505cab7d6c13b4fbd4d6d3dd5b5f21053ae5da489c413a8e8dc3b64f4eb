@@ -1,0 +1,19 @@
+func hookLines(projectRel string) map[string][]string {
+	cd := ""
+	if projectRel != "" && projectRel != "." {
+		cd = `cd "` + filepath.ToSlash(projectRel) + `" && `
+	}
+	guard := `command -v ` + BinaryName + ` >/dev/null 2>&1 && `
+	refresh := []string{"( " + cd + guard + BinaryName + " sync hook refresh >/dev/null 2>&1 ) || true"}
+	// The hook scripts may be committed (a repo's .githooks), so teammates
+	// who still run a lore without `sync hook` execute them too. Probing
+	// for the command keeps their commits working; they get a note instead.
+	probe := BinaryName + " sync hook --help >/dev/null 2>&1"
+	tooOld := `echo "` + BinaryName + `: installed ` + BinaryName + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`
+	return map[string][]string{
+		"pre-commit":    {"( " + cd + "if command -v " + BinaryName + " >/dev/null 2>&1; then if " + probe + "; then " + BinaryName + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"},
+		"post-checkout": refresh,
+		"post-merge":    refresh,
+		"post-rewrite":  refresh,
+	}
+}

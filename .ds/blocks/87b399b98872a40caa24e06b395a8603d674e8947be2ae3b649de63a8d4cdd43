@@ -1,0 +1,8 @@
+func mergeDriverConfig() [][2]string {
+	return [][2]string{
+		{"merge." + mergeDriverLore + ".name", "lore field-level row merge"},
+		{"merge." + mergeDriverLore + ".driver", BinaryName + " merge-driver %O %A %B %P"},
+		{"merge." + mergeDriverKeepOurs + ".name", "lore: keep ours, re-render after merge"},
+		{"merge." + mergeDriverKeepOurs + ".driver", BinaryName + " merge-driver --keep-ours %O %A %B %P"},
+	}
+}

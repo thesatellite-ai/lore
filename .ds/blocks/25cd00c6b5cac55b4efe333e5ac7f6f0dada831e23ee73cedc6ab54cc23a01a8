@@ -1,0 +1,7 @@
+var volatileColumns = map[string]string{
+	"last_accessed_at":   "bumped by retrieval (decay buffer)",
+	"last_seen_at":       "bumped whenever an actor runs a command",
+	"last_active_at":     "bumped whenever a project is used",
+	"embedding_model_id": "derived from body by a local embedding model",
+	"embedding_dim":      "derived from body by a local embedding model",
+}
