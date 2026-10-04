@@ -22,6 +22,11 @@ vars:
   # File inside .git where `task check` records the tree it passed for; the
   # pre-push hook (.githooks/pre-push) reads the same name.
   CHECK_STAMP: "lore-check-passed"
+  # File inside .git holding the tree when `task check` started: the stamp is
+  # refused if any gate step (or a concurrent edit) changed tracked files.
+  CHECK_BEGIN: "lore-check-begin"
+  # Prints the tree id of the tracked files as they are in the work tree.
+  TRACKED_TREE: "{{.TASKFILE_DIR}}/.githooks/lib/tracked-tree.sh"
 
 tasks:
   build:
@@ -98,23 +103,43 @@ tasks:
           echo "✘ ds (docsync) is not installed, so doc citations cannot be checked"
           exit 1
         fi
-        ds scan >/dev/null
-        ds check
+        # ds scan rewrites .ds/ledger.tsv and refs.tsv (their header records
+        # the commit and time of every scan). A gate must not change tracked
+        # files, so they are put back after checking; refresh them on purpose
+        # with `ds scan` and commit when docs or citations change.
+        keep=$(mktemp -d)
+        cp .ds/ledger.tsv .ds/refs.tsv "$keep"/
+        status=0
+        ds scan >/dev/null && ds check || status=$?
+        cp "$keep/ledger.tsv" "$keep/refs.tsv" .ds/
+        rm -rf "$keep"
+        exit $status
+
+  check:begin:
+    desc: "Record the tracked files' tree before the gate runs (check:stamp compares against it)"
+    cmds:
+      - '"{{.TRACKED_TREE}}" > "$(git rev-parse --git-path {{.CHECK_BEGIN}})"'
 
   check:stamp:
-    desc: "Record that the gate passed for the tracked files as they are now (read by the pre-push hook)"
+    desc: "Record that the gate passed for the tracked files as they are now (read by the pre-push hook); refused if they changed while it ran"
     cmds:
       - |
         set -e
-        index=$(mktemp)
-        tree=$(GIT_INDEX_FILE="$index" sh -c 'git read-tree HEAD && git add -u && git write-tree')
-        rm -f "$index"
+        begin_file=$(git rev-parse --git-path {{.CHECK_BEGIN}})
+        tree=$("{{.TRACKED_TREE}}")
+        if [ -f "$begin_file" ] && [ "$(cat "$begin_file")" != "$tree" ]; then
+          echo "✘ tracked files changed while the gate ran, so it did not test one version of the code:"
+          git diff-tree -r --name-only "$(cat "$begin_file")" "$tree" | sed 's/^/    /'
+          echo "  (a gate step must not modify tracked files; or an edit happened during the run)"
+          exit 1
+        fi
         echo "$tree" > "$(git rev-parse --git-path {{.CHECK_STAMP}})"
         echo "✓ gate passed for tree $tree"
 
   check:
     desc: "THE gate — run before every push (the pre-push hook enforces it): build, lint, race tests, every module's tests, tidy, scenarios, chaos, docs"
     cmds:
+      - task: check:begin
       - task: build
       - task: lint
       - task: test
