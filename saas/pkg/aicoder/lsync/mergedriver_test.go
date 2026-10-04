@@ -70,6 +70,9 @@ func TestMergeDriver_StatusNewestWins(t *testing.T) {
 	if out.Conflicted || doc["status"] != "in_progress" || len(out.AutoResolved) == 0 {
 		t.Fatalf("newer ours must win: %+v %v", out, doc)
 	}
+	if got := strings.Join(out.NewerWins(), ","); got != "status" {
+		t.Fatalf("the losing status edit must be reported: %q", got)
+	}
 }
 
 func TestMergeDriver_TextClashMarkedButValidJSON(t *testing.T) {
@@ -134,5 +137,16 @@ func TestMergeDriver_NewerFormatFallsBack(t *testing.T) {
 	out, _, _ := runDriver(t, `{"_v":1}`, `{"_v":99,"x":1}`, `{"_v":1,"x":2}`, "x")
 	if !out.Fallback {
 		t.Fatal("a newer-format file must not be rewritten by an older driver (E13)")
+	}
+}
+
+func TestNewerWinsLeavesOutBookkeeping(t *testing.T) {
+	t.Parallel()
+	out := MergeOutcome{AutoResolved: []string{updatedAtColumn, "status", keyVersion, "priority", keyTable}}
+	if got := strings.Join(out.NewerWins(), ","); got != "status,priority" {
+		t.Fatalf("NewerWins = %q", got)
+	}
+	if got := (MergeOutcome{AutoResolved: []string{updatedAtColumn}}).NewerWins(); len(got) != 0 {
+		t.Fatalf("updated_at alone is not a decision: %v", got)
 	}
 }

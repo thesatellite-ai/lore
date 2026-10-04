@@ -448,6 +448,26 @@ func hookLines(projectRel string) map[string][]string {
 	}
 }
 
+// projectRelPath returns dir relative to the repository's top level, slash
+// separated. Symlinks are resolved first (git reports the resolved top level;
+// macOS temp dirs live behind /var → /private/var). It returns "" — the
+// repository root — when dir cannot be placed inside toplevel; callers that
+// match paths against it then match nothing, which is the safe failure.
+func projectRelPath(toplevel, dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return ""
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = real
+	}
+	rel, err := filepath.Rel(toplevel, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return filepath.ToSlash(rel)
+}
+
 // isRepoRoot reports whether a project path relative to the repository's
 // top level names the top level itself ("" from a failed Rel, "." from a
 // successful one); such a project needs no `cd` and keeps the plain marker.
@@ -505,10 +525,7 @@ func ensureGitWiring(ctx context.Context, root string) (gitWiringResult, error) 
 	if res.Gitignore, res.IgnoredData, err = ensureDataNotIgnored(ctx, root); err != nil {
 		return res, err
 	}
-	rel, err := filepath.Rel(repo.Toplevel, root)
-	if err != nil {
-		rel = ""
-	}
+	rel := projectRelPath(repo.Toplevel, root)
 	for hook, lines := range hookLines(rel) {
 		ch, err := gitsetup.EnsureHookBlock(repo.HooksDir, hook, hookMarker(rel), lines)
 		if err != nil {

@@ -113,6 +113,7 @@ func newMissionEditCommand() *cobra.Command {
 func newMissionAddCommand() *cobra.Command {
 	var f commonFlags
 	var body, target, createdBy string
+	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "add <title>",
 		Short: "Add a new mission",
@@ -142,10 +143,11 @@ func newMissionAddCommand() *cobra.Command {
 				}
 			}
 			if target != "" {
-				t, err := time.Parse("2006-01-02", target)
-				if err == nil {
-					create.SetTargetDate(t)
+				t, err := time.Parse(time.DateOnly, target)
+				if err != nil {
+					return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("--%s %q: want YYYY-MM-DD", constants.FlagTarget, target))
 				}
+				create.SetTargetDate(t)
 			}
 			actorID, err := resolveActorIDFlag(cmd.Context(), client, createdBy)
 			if err != nil {
@@ -163,11 +165,16 @@ func newMissionAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create mission").WithCause(err)
 			}
+			if jsonOut {
+				printJSON(constants.KindMissionAdd, m, 0)
+				return nil
+			}
 			fmt.Printf("%s %s %s — %s\n", style.Success("✓"), m.ID, style.Code(m.ID), title)
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output (the created mission)")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "longer description")
 	cmd.Flags().StringVar(&target, constants.FlagTarget, "", "target completion date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
@@ -313,8 +320,16 @@ func newMissionDoneCommand() *cobra.Command {
 	return cmd
 }
 
+// missionShowJSON is `lore mission show --json`'s payload: the mission's own
+// fields plus its tasks under "tasks" (scripts read .data.tasks).
+type missionShowJSON struct {
+	*ent.Mission
+	Tasks []*ent.Task `json:"tasks"`
+}
+
 func newMissionShowCommand() *cobra.Command {
 	var f commonFlags
+	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "show <id>",
 		Short: "Show mission details + attached tasks",
@@ -335,6 +350,20 @@ func newMissionShowCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.NotFound, fmt.Sprintf("mission %q not found", args[0]))
 			}
+			tasks, err := client.Task.Query().
+				Where(entTask.MissionID(m.ID)).
+				Order(ent.Asc(entTask.FieldID)).
+				All(cmd.Context())
+			if err != nil {
+				return errcodes.New(errcodes.Internal, "load mission tasks").WithCause(err)
+			}
+			if jsonOut {
+				if tasks == nil {
+					tasks = []*ent.Task{}
+				}
+				printJSON(constants.KindMissionShow, missionShowJSON{Mission: m, Tasks: tasks}, len(tasks))
+				return nil
+			}
 			fmt.Printf("%s %s\n", m.ID, style.Code(m.ID))
 			fmt.Printf("  title:  %s\n", m.Title)
 			fmt.Printf("  status: %s\n", m.Status)
@@ -345,10 +374,6 @@ func newMissionShowCommand() *cobra.Command {
 				fmt.Println()
 				fmt.Println(*m.Body)
 			}
-			tasks, _ := client.Task.Query().
-				Where(entTask.MissionID(m.ID)).
-				Order(ent.Asc(entTask.FieldID)).
-				All(cmd.Context())
 			if len(tasks) > 0 {
 				fmt.Println()
 				fmt.Println(style.Muted("Tasks:"))
@@ -360,5 +385,6 @@ func newMissionShowCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output (mission fields + tasks)")
 	return cmd
 }

@@ -30,6 +30,20 @@ type MergeOutcome struct {
 	Fallback bool
 }
 
+// NewerWins lists the fields where both sides set different values and the
+// side with the newer updated_at won (status, priority, dates, references).
+// Bookkeeping keys settled on every merge (updated_at, _v, _table) are left
+// out: they carry no decision a person needs to hear about.
+func (o MergeOutcome) NewerWins() []string {
+	var out []string
+	for _, k := range o.AutoResolved {
+		if k != updatedAtColumn && k != keyVersion && k != keyTable {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
 // MergeFiles is the body of `lore merge-driver %O %A %B %P` (git passes the
 // ancestor, ours, theirs and the path; the result must be written to ours).
 //

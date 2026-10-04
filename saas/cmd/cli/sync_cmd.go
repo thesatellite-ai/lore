@@ -145,7 +145,8 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
 	cmd.AddCommand(newSyncStatusCommand(), newSyncExportCommand(), newSyncConflictsCommand(),
 		newSyncResolveCommand(), newSyncTrashCommand(), newSyncPurgeCommand(), newSyncFixProjectsCommand(),
 		newSyncInstallGitCommand(), newSyncHookCommand(), newSyncPeekCommand(), newSyncPromoteCommand(),
-		newSyncDupesCommand(), newSyncMergeRowsCommand())
+		newSyncDupesCommand(), newSyncMergeRowsCommand(), newSyncCIMergeCommand(),
+		newSyncInstallActionCommand(), newSyncUninstallActionCommand())
 	return cmd
 }
 
@@ -747,6 +748,11 @@ func newMergeDriverCommand() *cobra.Command {
 			out, err := lsync.MergeFiles(cmd.Context(), args[0], args[1], args[2], repoPath)
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "merge driver").WithCause(err)
+			}
+			if keys := out.NewerWins(); len(keys) > 0 {
+				// git shows a driver's stderr during the merge: say which
+				// changes lost, so a teammate's edit never vanishes silently.
+				fmt.Fprintf(os.Stderr, "lore merge-driver: %s: both sides changed %s; kept the newer edit\n", repoPath, strings.Join(keys, ", "))
 			}
 			if out.Conflicted {
 				// git's merge-driver contract: non-zero exit = conflict left

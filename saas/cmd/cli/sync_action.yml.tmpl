@@ -1,0 +1,114 @@
+[[.Marker]] (lore [[.LoreVersion]]). Re-run `lore sync install-action` to update it; `lore sync uninstall-action` removes it.
+#
+# Why: GitHub's merge button never runs custom git merge drivers, so when two
+# pull requests edit the same lore row (.lore/data), the second one shows a
+# conflict even though lore's field-level driver would merge it cleanly. This
+# job does that merge here: it merges the base branch into the pull request
+# branch with lore and pushes the merge commit, but only when every conflict
+# is in lore data and lore settles all of them. Anything else (a code
+# conflict, the same text edited on both sides) is left for a person, and the
+# run summary says which pull requests need one.
+#
+# Cost: [[if .Manual]]it runs only when started by hand (Actions → lore sync merge → Run workflow).[[else]]it runs only when lore data changes (paths filter below), usually
+# under a minute; on a private repository that is billed Actions time. Install
+# with `lore sync install-action --manual` to run it only by hand instead.[[end]]
+#
+# Pushes made with the default GITHUB_TOKEN do not start other workflows, so
+# required checks will not re-run on the merge commit. To have them run, add a
+# repository secret LORE_SYNC_TOKEN (a token with contents:write on this
+# repository); it is used instead when present.
+#
+# Pull requests from forks are skipped: no token here can push to a fork.
+name: lore sync merge
+
+on:
+[[- if not .Manual]]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ["[[.DataGlob]]"]
+  push:
+    branches: [[.BranchesYAML]]
+    paths: ["[[.DataGlob]]"]
+[[- end]]
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "Base branch whose open pull requests to process"
+        required: true
+        default: "[[.DefaultBranch]]"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: lore-sync-merge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.LORE_SYNC_TOKEN || github.token }}
+
+      - name: Install lore [[.LoreVersion]]
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64) arch=amd64 ;;
+            aarch64|arm64) arch=arm64 ;;
+            *) echo "unsupported runner architecture $(uname -m)"; exit 1 ;;
+          esac
+          asset="lore_linux_${arch}.tar.gz"
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o "$asset" "[[.ReleaseURL]]/$asset"
+          curl -fsSL -o checksums.txt "[[.ReleaseURL]]/checksums.txt"
+          grep " ${asset}\$" checksums.txt | sha256sum -c -
+          mkdir -p lore-bin
+          tar -xzf "$asset" -C lore-bin
+          echo "$RUNNER_TEMP/lore-bin" >> "$GITHUB_PATH"
+
+      - name: Merge lore data into pull requests
+        working-directory: [[.WorkDir]]
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          PUSHED: ${{ github.ref_name }}
+          INPUT_BASE: ${{ inputs.base }}
+        run: |
+          set -euo pipefail
+          git config user.name "lore-sync[bot]"
+          git config user.email "lore-sync@users.noreply.github.com"
+          if [ "$EVENT" = "pull_request" ]; then
+            prs="$PR"
+          else
+            prs=$(gh pr list --base "${INPUT_BASE:-$PUSHED}" --state open --limit 100 \
+              --json number,isCrossRepository -q '.[] | select(.isCrossRepository | not) | .number')
+          fi
+          for pr in $prs; do
+            head=$(gh pr view "$pr" --json headRefName -q .headRefName)
+            base=$(gh pr view "$pr" --json baseRefName -q .baseRefName)
+            git fetch -q origin "$head" "$base"
+            git checkout -q -B "$head" "origin/$head"
+            out=$(lore sync ci-merge --base "origin/$base" --json)
+            outcome=$(jq -r '.data.outcome' <<<"$out")
+            echo "#$pr ($head <- $base): $outcome"
+            case "$outcome" in
+              [[.OutcomeMerged]])
+                if git push -q origin "HEAD:$head"; then
+                  echo "- #$pr: merged \`$base\` in; lore data settled field by field" >> "$GITHUB_STEP_SUMMARY"
+                else
+                  echo "- #$pr: branch moved while merging; the next run retries" >> "$GITHUB_STEP_SUMMARY"
+                fi
+                ;;
+              [[.OutcomeNeedsHuman]])
+                echo "- #$pr: needs a person: $(jq -r '.data.reason' <<<"$out")" >> "$GITHUB_STEP_SUMMARY"
+                ;;
+            esac
+          done
