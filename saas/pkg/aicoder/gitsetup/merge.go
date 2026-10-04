@@ -89,7 +89,7 @@ func ProbeMerge(ctx context.Context, dir, theirs string) (MergeProbe, error) {
 // k=v`), so merge drivers can be supplied without writing the repository's
 // config. A conflicted merge is not an error: check Unmerged afterwards.
 func MergeNoCommit(ctx context.Context, dir, theirs string, config [][2]string) error {
-	args := make([]string, 0, 2*len(config)+5)
+	var args []string
 	for _, kv := range config {
 		args = append(args, "-c", kv[0]+"="+kv[1])
 	}
@@ -166,13 +166,15 @@ func parseGitVersion(s string) (int, int, bool) {
 	if len(fields) < gitVersionFields {
 		return 0, 0, false
 	}
-	parts := strings.SplitN(fields[gitVersionFields-1], ".", 3)
-	if len(parts) < 2 {
+	// "2.50.1" or "2.43.0.windows.1": only major and minor matter.
+	major, rest, ok := strings.Cut(fields[gitVersionFields-1], ".")
+	if !ok {
 		return 0, 0, false
 	}
-	major, err1 := strconv.Atoi(parts[0])
-	minor, err2 := strconv.Atoi(parts[1])
-	return major, minor, err1 == nil && err2 == nil
+	minor, _, _ := strings.Cut(rest, ".")
+	maj, err1 := strconv.Atoi(major)
+	mnr, err2 := strconv.Atoi(minor)
+	return maj, mnr, err1 == nil && err2 == nil
 }
 
 // gitVersionFields is the position (1-based) of the number in `git version`

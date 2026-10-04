@@ -1296,7 +1296,7 @@ func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 	if r.code != 0 {
 		t.Fatalf("workflow script failed: %d\n%s\n%s", r.code, r.stdout, r.stderr)
 	}
-	if !strings.Contains(r.stdout, "#7 (feature <- main): "+ciMergeMerged) {
+	if !strings.Contains(r.stdout, "#7 (feature <- main): "+string(ciMergeMerged)) {
 		t.Fatalf("unexpected run: %s", r.stdout)
 	}
 	if got, _ := os.ReadFile(summary); !strings.Contains(string(got), "#7: merged") {

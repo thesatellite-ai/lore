@@ -1,4 +1,4 @@
-# docsync refs format=2 extract=1 repo=lore commit=ba15496 scanned_at=2026-10-04T04:17:24Z
+# docsync refs format=2 extract=1 repo=lore commit=4ac26c9 scanned_at=2026-10-04T04:23:54Z
 id	repo	doc	line	verb	carrier	acked_hash	seen_hash	sentence_hash	env	args
 sync-datanames-nhh4krj2	lore	LORE_SYNC_SPEC.md	313	block	block		1f861404f99026f841d062726cc760271cea780ad9419e07d84b64db6d5b769b			id=sync-datanames-nhh4krj2
 sync-formatversion-h8e7vzn7	lore	LORE_SYNC_SPEC.md	335	block	block		6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b			id=sync-formatversion-h8e7vzn7

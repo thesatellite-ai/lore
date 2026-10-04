@@ -27,20 +27,28 @@ import (
 	"saas/pkg/constants"
 )
 
-// Outcomes of `lore sync ci-merge`. The generated workflow branches on these
-// values, so they are part of the command's contract.
+// ciMergeOutcome is what `lore sync ci-merge` decided. The generated workflow
+// branches on these exact strings (sync_action.yml.tmpl), so they are part of
+// the command's contract: renaming one breaks every installed workflow.
+type ciMergeOutcome string
+
+// Outcomes of `lore sync ci-merge`.
 const (
 	// ciMergeUpToDate: the base is already contained in the branch.
-	ciMergeUpToDate = "up-to-date"
+	ciMergeUpToDate ciMergeOutcome = "up-to-date"
 	// ciMergeClean: a plain merge has no conflicts; the host can merge it.
-	ciMergeClean = "clean"
+	ciMergeClean ciMergeOutcome = "clean"
 	// ciMergeMerged: lore's drivers settled every conflict and the merge was
 	// committed locally; the caller pushes it.
-	ciMergeMerged = "merged"
+	ciMergeMerged ciMergeOutcome = "merged"
 	// ciMergeNeedsHuman: a conflict lore may not or cannot settle; nothing
 	// was changed.
-	ciMergeNeedsHuman = "needs-human"
+	ciMergeNeedsHuman ciMergeOutcome = "needs-human"
 )
+
+// ciMergeOutcomes is every outcome, in decision order (tests check each is
+// printed and documented).
+var ciMergeOutcomes = []ciMergeOutcome{ciMergeUpToDate, ciMergeClean, ciMergeMerged, ciMergeNeedsHuman}
 
 // jsonKindSyncCIMerge is the JSON envelope kind of `lore sync ci-merge`.
 const jsonKindSyncCIMerge = "sync.ci-merge"
@@ -48,7 +56,7 @@ const jsonKindSyncCIMerge = "sync.ci-merge"
 // ciMergeResult is what `lore sync ci-merge` reports.
 type ciMergeResult struct {
 	// Outcome is one of the ciMerge* constants.
-	Outcome string `json:"outcome"`
+	Outcome ciMergeOutcome `json:"outcome"`
 	// Base is the ref that was merged in.
 	Base string `json:"base"`
 	// Commit is the merge commit (Outcome merged only).

@@ -208,8 +208,9 @@ const preSyncBackupSuffix = "-pre-sync.sqlite"
 // two passes in the same second never overwrite each other's backup.
 const preSyncBackupStamp = "20060102-150405.000000000"
 
-// File modes for what the sync wiring creates under .lore/ and for files it
-// restores: git's work-tree defaults.
+// File modes for what the sync commands write into the work tree (.lore/
+// directories, restored files, the generated workflow): git's work-tree
+// defaults.
 const (
 	syncDirMode  = 0o755
 	syncFileMode = 0o644

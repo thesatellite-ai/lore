@@ -119,8 +119,8 @@ func TestRenderSyncAction(t *testing.T) {
 		t.Fatalf("working-directory = %q", workDir)
 	}
 	// The job branches on the exact outcomes ci-merge prints.
-	for _, outcome := range []string{ciMergeMerged, ciMergeNeedsHuman} {
-		if !strings.Contains(run, outcome+")") {
+	for _, outcome := range []ciMergeOutcome{ciMergeMerged, ciMergeNeedsHuman} {
+		if !strings.Contains(run, string(outcome)+")") {
 			t.Fatalf("merge step does not handle outcome %q", outcome)
 		}
 	}
@@ -203,7 +203,7 @@ func TestInstallUninstallSyncAction(t *testing.T) {
 	if _, err := os.Stat(file); !os.IsNotExist(err) {
 		t.Fatal("--dry-run wrote the file")
 	}
-	for _, want := range []string{syncActionCreated, syncActionUnchanged} {
+	for _, want := range []syncActionStatus{syncActionCreated, syncActionUnchanged} {
 		if res, err := installSyncAction(ctx, dir, o); err != nil || res.Status != want {
 			t.Fatalf("want %s: %+v %v", want, res, err)
 		}
