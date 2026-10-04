@@ -1,0 +1,52 @@
+#!/bin/sh
+# Pre-push gate: nothing reaches the remote unless `task check` passed for
+# exactly the code being pushed.
+#
+# `task check` (Taskfile.lore.yml) ends by writing the tree id of the tracked
+# files it tested to .git/lore-check-passed. A push whose commits all have
+# that tree goes through at once; anything else runs the gate first, and a
+# push of code the gate did not see (uncommitted changes while checking) is
+# refused. Install with `task hooks:install`. Emergency bypass, which skips
+# every check: git push --no-verify
+
+stamp_file=$(git rev-parse --git-path lore-check-passed)
+zero=0000000000000000000000000000000000000000
+
+stamp() { [ -f "$stamp_file" ] && cat "$stamp_file"; }
+
+# git passes "<local ref> <local sha> <remote ref> <remote sha>" per ref.
+trees=""
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+	[ "$local_sha" = "$zero" ] && continue # deleting a remote ref: nothing to test
+	tree=$(git rev-parse "$local_sha^{tree}" 2>/dev/null) || continue
+	trees="$trees $tree"
+done
+[ -z "$trees" ] && exit 0
+
+all_stamped() {
+	for t in $trees; do
+		[ "$t" = "$(stamp)" ] || return 1
+	done
+	return 0
+}
+
+if all_stamped; then
+	echo "pre-push: task check already passed for this code"
+	exit 0
+fi
+
+if ! command -v task >/dev/null 2>&1; then
+	echo "pre-push: \`task\` (taskfile.dev) is not installed, so the gate cannot run — push blocked" >&2
+	exit 1
+fi
+
+echo "pre-push: running task check (the full gate) before pushing…"
+if ! task check </dev/null; then
+	echo "pre-push: task check failed — push blocked" >&2
+	exit 1
+fi
+
+if ! all_stamped; then
+	echo "pre-push: the gate tested your working tree, which differs from the commits being pushed (uncommitted changes). Commit or stash them and push again — push blocked" >&2
+	exit 1
+fi

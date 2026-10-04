@@ -105,7 +105,7 @@ jobs:
             base=$(gh pr view "$pr" --json baseRefName -q .baseRefName)
             git fetch -q origin "$head" "$base"
             git checkout -q -B "$head" "origin/$head"
-            out=$(lore sync ci-merge --base "origin/$base" --json)
+            out=$([[.CIMergeCommand]] --base "origin/$base" --json)
             outcome=$(jq -r '.data.outcome' <<<"$out")
             echo "#$pr ($head <- $base): $outcome"
             case "$outcome" in

@@ -162,7 +162,7 @@ func newSnapshotAddCommand() *cobra.Command {
 	var title, body string
 	cmd := &cobra.Command{
 		Use: "add", Short: "Add a snapshot (--title and --body required)",
-		Args: cobra.NoArgs,
+		Args: bodyOnlyArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err

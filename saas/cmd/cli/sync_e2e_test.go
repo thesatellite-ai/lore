@@ -28,6 +28,12 @@ import (
 // e2eBin is the lore binary built by TestMain ("" when -short).
 var e2eBin string
 
+// envE2ECoverDir, when set, builds the e2e binary with coverage and has every
+// run of it write its counters there, so `task lore:test:cover` can report
+// what the end-to-end tests exercise (go test's own coverage only sees the
+// test process, never the binary it runs). Used by e2eCoverEnv.
+const envE2ECoverDir = "LORE_E2E_COVERDIR"
+
 // templateDB is a migrated DB built once before any test runs and copied
 // per test: ent's migrator mutates package-level metadata, so parallel
 // migrations race (see dbent/pkg/dbtemplate).
@@ -54,7 +60,11 @@ func runTests(m *testing.M) int {
 	}
 	if !testing.Short() {
 		e2eBin = filepath.Join(tmp, BinaryName)
-		build := exec.Command("go", "build", "-o", e2eBin, ".")
+		args := []string{"build", "-o", e2eBin}
+		if os.Getenv(envE2ECoverDir) != "" {
+			args = append(args, "-cover", "-coverpkg=./...,saas/pkg/...")
+		}
+		build := exec.Command("go", append(args, ".")...)
 		build.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if out, err := build.CombinedOutput(); err != nil {
 			fmt.Fprintf(os.Stderr, "build lore for e2e: %v\n%s", err, out)
@@ -91,6 +101,9 @@ func newWorld(t *testing.T) *world {
 		"GIT_TERMINAL_PROMPT=0",
 		"LORE_SYNC_QUIET=0",
 		"NO_COLOR=1",
+	}
+	if dir := os.Getenv(envE2ECoverDir); dir != "" {
+		w.base = append(w.base, "GOCOVERDIR="+dir)
 	}
 	w.run(root, nil, "git", "init", "-q", "--bare", "-b", "main", w.origin)
 	return w
@@ -1272,7 +1285,7 @@ func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 	}
 	script := ""
 	for _, s := range doc.Jobs["merge"].Steps {
-		if strings.Contains(s.Run, "lore sync ci-merge") {
+		if strings.Contains(s.Run, ciMergeCommand) {
 			script = s.Run
 		}
 	}
@@ -1339,7 +1352,7 @@ func TestE2E_MissionJSONForScripts(t *testing.T) {
 	if err := json.Unmarshal([]byte(r.stdout), &tl); err != nil || !strings.HasPrefix(tl.Data.ID, "tlt_") {
 		t.Fatalf("tasklist add --json: %v %s", err, r.stdout)
 	}
-	alice.lore("task", "add", "first", "--tasklist="+tl.Data.ID, "--mission="+added.Data.ID)
+	alice.lore("task", "add", "first", "--tasklist="+tl.Data.ID, "--mission="+added.Data.ID, "--due=2026-06-01")
 	alice.lore("task", "add", "second", "--tasklist="+tl.Data.ID, "--mission="+added.Data.ID)
 	var shown struct {
 		Data struct {
@@ -1348,6 +1361,7 @@ func TestE2E_MissionJSONForScripts(t *testing.T) {
 			TargetDate string `json:"target_date"`
 			Tasks      []struct {
 				Status string `json:"status"`
+				DueAt  string `json:"due_at"`
 			} `json:"tasks"`
 		} `json:"data"`
 	}
@@ -1357,6 +1371,15 @@ func TestE2E_MissionJSONForScripts(t *testing.T) {
 	}
 	if shown.Data.Title != "Ship v0.2" || shown.Data.Status == "" || !strings.HasPrefix(shown.Data.TargetDate, "2026-06-15") || len(shown.Data.Tasks) != 2 || shown.Data.Tasks[0].Status == "" {
 		t.Fatalf("mission show --json payload: %+v", shown.Data)
+	}
+	// The human list prints ids every command accepts: the full opaque id,
+	// never a "T-" short form (removed; nothing resolves it).
+	if r := alice.lore("task", "list"); strings.Contains(r.stdout, "T-tsk_") || !strings.Contains(r.stdout, "tsk_") {
+		t.Fatalf("task list ids: %s", r.stdout)
+	}
+	// Same task shape as task list / mission list: dates, not timestamps.
+	if shown.Data.Tasks[0].DueAt != "2026-06-01" {
+		t.Fatalf("mission show task due_at = %q, want 2026-06-01", shown.Data.Tasks[0].DueAt)
 	}
 	if r := alice.loreAny("mission", "add", "bad date", "--target=15/06/2026"); r.code == 0 {
 		t.Fatal("an invalid --target must be refused, not dropped")

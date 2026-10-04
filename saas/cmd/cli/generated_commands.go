@@ -110,6 +110,7 @@ func newPatternAddCommand() *cobra.Command {
 	var title, body, supersedes, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new pattern",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -284,6 +285,7 @@ func newPlaybookAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new playbook",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -434,6 +436,7 @@ func newPromptAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new prompt",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -580,6 +583,7 @@ func newArchitectureNoteAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new architecturenote",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -748,6 +752,7 @@ func newBehaviourAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new behaviour",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -894,6 +899,7 @@ func newCookbookRecipeAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new cookbookrecipe",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -1039,6 +1045,7 @@ func newIncidentAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new incident",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -1185,6 +1192,7 @@ func newSuggestionAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new suggestion",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = title
@@ -1333,6 +1341,7 @@ func newTastePrefAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new tastepref",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = title
@@ -1471,6 +1480,7 @@ func newPlanAddCommand() *cobra.Command {
 	var title, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new plan",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -1619,6 +1629,7 @@ func newTaskListAddCommand() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new tasklist",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -1765,6 +1776,7 @@ func newWorkflowAddCommand() *cobra.Command {
 	var title, body string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new workflow",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -1905,6 +1917,7 @@ func newWorkspaceAddCommand() *cobra.Command {
 	var title, body string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new workspace",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
@@ -2047,6 +2060,7 @@ func newHandoffAddCommand() *cobra.Command {
 	var title, body, fromActor, toActor string
 	cmd := &cobra.Command{
 		Use:   "add",
+		Args:  bodyOnlyArgs,
 		Short: "Add a new handoff",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = title

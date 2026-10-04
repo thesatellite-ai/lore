@@ -15,8 +15,30 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"saas/pkg/aicoder/errcodes"
 )
+
+// bodyOnlyArgs is the cobra Args validator of every body-primary `add`
+// command: it refuses positional text with the same message as
+// resolveBodyInput. Declaring it (rather than only failing inside RunE)
+// makes the rule visible to cobra, so the help, the error text and the docs
+// drift test (TestDocsMatchCLI, which runs ValidateArgs on every documented
+// command) all agree.
+func bodyOnlyArgs(_ *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		return positionalBodyError()
+	}
+	return nil
+}
+
+// positionalBodyError is the usage error for text passed without --body.
+func positionalBodyError() error {
+	return errcodes.New(errcodes.InvalidInput,
+		"body must be passed via --body=<value> (or piped via stdin)").
+		WithHint("example: lore <cmd> add --title=X --body=\"the body\"")
+}
 
 // resolveBodyInput is the canonical entry point for body-primary `add`
 // commands. Pass the value of the --body flag; positional args (if any)
@@ -25,10 +47,9 @@ import (
 // Pass nil/empty args to indicate "no positional, only flag + stdin"
 func resolveBodyInput(args []string, bodyFlag string) (string, error) {
 	if len(args) > 0 {
-		// Caller had positional args left over — usage error
-		return "", errcodes.New(errcodes.InvalidInput,
-			"body must be passed via --body=<value> (or piped via stdin)").
-			WithHint("example: lore <cmd> add --title=X --body=\"the body\"")
+		// Caller had positional args left over — usage error (bodyOnlyArgs
+		// normally refuses them before RunE runs).
+		return "", positionalBodyError()
 	}
 	if bodyFlag != "" {
 		return bodyFlag, nil

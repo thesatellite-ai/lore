@@ -141,12 +141,21 @@ func Search(ctx context.Context, db *sql.DB, projectID, query string, limit int)
 // Available probes whether the linked SQLite was built with FTS5 support.
 // Some minimal SQLite builds (Alpine images, embedded) omit FTS5; the helper
 // lets callers degrade gracefully to LIKE.
+//
+// It must not write: it runs on every command, and the old probe (CREATE and
+// DROP a throwaway virtual table) changed the schema each time, so a second
+// lore process checking the DB at that moment failed with "database schema
+// has changed" and reported the DB as corrupt. pragma_module_list lists the
+// registered modules; builds without introspection pragmas fall back to the
+// compile options.
 func Available(ctx context.Context, db *sql.DB) bool {
-	_, err := db.ExecContext(ctx,
-		`CREATE VIRTUAL TABLE IF NOT EXISTS _aicoder_fts_probe USING fts5(x)`)
-	if err != nil {
-		return false
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_module_list WHERE name = 'fts5'`).Scan(&n); err == nil {
+		return n > 0
 	}
-	_, _ = db.ExecContext(ctx, `DROP TABLE _aicoder_fts_probe`)
-	return true
+	var used int
+	if err := db.QueryRowContext(ctx, `SELECT sqlite_compileoption_used('ENABLE_FTS5')`).Scan(&used); err == nil {
+		return used == 1
+	}
+	return false
 }

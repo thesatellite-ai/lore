@@ -171,7 +171,7 @@ Severity drives verifier behavior:
   must   — blocking
   should — warning
   may    — suggestion`,
-		Args: cobra.NoArgs,
+		Args: bodyOnlyArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body, err := resolveBodyInput(args, f.body)
 			if err != nil {
@@ -419,7 +419,7 @@ func newDecisionAddCommand() *cobra.Command {
 		Use:   "add",
 		Short: "Add a new decision",
 		Long:  `Add an architectural decision record. Body should answer: context + chosen + alternatives + reasoning.`,
-		Args:  cobra.NoArgs,
+		Args:  bodyOnlyArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body, err := resolveBodyInput(args, f.body)
 			if err != nil {
@@ -642,7 +642,7 @@ func newHotfixAddCommand() *cobra.Command {
 		Short: "Add a new hotfix",
 		Long: `Add a loud recurring warning. Hotfixes are pinned in render output and
 NEVER truncated under budget pressure. Use for: "we keep hitting this — beware."`,
-		Args: cobra.NoArgs,
+		Args: bodyOnlyArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body, err := resolveBodyInput(args, f.body)
 			if err != nil {

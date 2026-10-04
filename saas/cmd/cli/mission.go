@@ -38,7 +38,7 @@ func newMissionEditCommand() *cobra.Command {
 	var title, body, target, status string
 	var clearTarget bool
 	cmd := &cobra.Command{
-		Use:   "edit <id|MS-N>",
+		Use:   "edit <id>",
 		Short: "Edit mission fields (only flags you pass are applied)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -321,10 +321,12 @@ func newMissionDoneCommand() *cobra.Command {
 }
 
 // missionShowJSON is `lore mission show --json`'s payload: the mission's own
-// fields plus its tasks under "tasks" (scripts read .data.tasks).
+// fields plus its tasks under "tasks" (scripts read .data.tasks), in the same
+// taskBrief shape `mission list --json` and `task list --json` use (dates as
+// YYYY-MM-DD), so one jq filter works on all three.
 type missionShowJSON struct {
 	*ent.Mission
-	Tasks []*ent.Task `json:"tasks"`
+	Tasks []taskBrief `json:"tasks"`
 }
 
 func newMissionShowCommand() *cobra.Command {
@@ -358,10 +360,11 @@ func newMissionShowCommand() *cobra.Command {
 				return errcodes.New(errcodes.Internal, "load mission tasks").WithCause(err)
 			}
 			if jsonOut {
-				if tasks == nil {
-					tasks = []*ent.Task{}
+				briefs := make([]taskBrief, 0, len(tasks))
+				for _, t := range tasks {
+					briefs = append(briefs, briefFromTask(t))
 				}
-				printJSON(constants.KindMissionShow, missionShowJSON{Mission: m, Tasks: tasks}, len(tasks))
+				printJSON(constants.KindMissionShow, missionShowJSON{Mission: m, Tasks: briefs}, len(briefs))
 				return nil
 			}
 			fmt.Printf("%s %s\n", m.ID, style.Code(m.ID))

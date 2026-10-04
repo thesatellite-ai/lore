@@ -46,8 +46,8 @@ var driftDocGlobs = []string{
 // exact code text: examples of what NOT to run, or a table row documenting
 // that a command does not exist. Each needs its reason.
 var driftAllowed = map[string]string{
-	"lore task block <T-N>": "SKILL.md table row documenting that this verb does not exist",
-	"lore add":              "capture-discipline rules: shorthand for any `lore <entity> add` (\"NO `lore add`\")",
+	"lore task block <tsk_id>": "SKILL.md table row documenting that this verb does not exist",
+	"lore add":                 "capture-discipline rules: shorthand for any `lore <entity> add` (\"NO `lore add`\")",
 }
 
 // invocationStart finds `lore` where a shell command can begin: at the start
@@ -96,6 +96,76 @@ var subcommandWord = regexp.MustCompile(`^[a-z][a-z-]*$`)
 
 // longFlagName is a valid long flag name.
 var longFlagName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+// shellSubstitutionStandIn replaces a `$( … )` that is not itself a lore
+// invocation (`--due=$(date -v+1d +%F)`): one opaque word, so its spaces
+// and its ")" do not split or end the lore command around it.
+const shellSubstitutionStandIn = "SUBST"
+
+// foldSubstitutions replaces every `$( … )` whose command is not lore with
+// shellSubstitutionStandIn. `$(lore …)` is kept: it is an invocation.
+func foldSubstitutions(s string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(s, "$(")
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		if strings.HasPrefix(strings.TrimSpace(s[i+2:]), BinaryName+" ") {
+			b.WriteString(s[:i+2])
+			s = s[i+2:]
+			continue
+		}
+		depth, j := 0, i+1
+		for ; j < len(s); j++ {
+			if s[j] == '(' {
+				depth++
+			} else if s[j] == ')' {
+				depth--
+				if depth == 0 {
+					break
+				}
+			}
+		}
+		b.WriteString(s[:i] + shellSubstitutionStandIn)
+		if j >= len(s) {
+			return b.String()
+		}
+		s = s[j+1:]
+	}
+}
+
+// annotationGap is a wide gap followed by a plain word: in a reference
+// listing it starts a column-aligned description ("lore sync peek
+// origin/<b>        another branch, read-only"). A gap followed by a flag, a
+// quote, a variable or a placeholder is alignment inside the command
+// ("lore task add "Wire FTS5"      --tasklist=$TL") and is kept.
+var annotationGap = regexp.MustCompile(`\S\s{3,}[A-Za-z]`)
+
+// dropAnnotation cuts a fenced line where its description starts.
+func dropAnnotation(s string) string {
+	start := strings.Index(s, BinaryName+" ")
+	if start < 0 {
+		return s
+	}
+	cmd := s[start:]
+	// Alignment between the subcommand words ("lore pattern   add") is not
+	// a description: only look after the third word.
+	words := 0
+	for i := 0; i < len(cmd); i++ {
+		if cmd[i] == ' ' && (i == 0 || cmd[i-1] != ' ') {
+			words++
+			if words == 3 {
+				if m := annotationGap.FindStringIndex(cmd[i-1:]); m != nil {
+					return s[:start] + cmd[:i-1+m[0]+1]
+				}
+				break
+			}
+		}
+	}
+	return s
+}
 
 // driftFinding is one problem in one document.
 type driftFinding struct {
@@ -192,6 +262,10 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 			}
 		}
 		for _, s := range spans {
+			s = foldSubstitutions(s)
+			if inFence {
+				s = dropAnnotation(s)
+			}
 			for _, loc := range invocationStart.FindAllStringIndex(s, -1) {
 				start := loc[0] + strings.Index(s[loc[0]:], "lore")
 				rest := s[start:]
@@ -231,9 +305,36 @@ func checkInvocation(code string) string {
 		return "no command `lore " + toks[0] + "`"
 	}
 	given := map[string]bool{}
-	for _, tok := range toks[i:] {
+	var positional []string
+	rest := toks[i:]
+	// Notation, not arguments: "( …" opens prose ("lore rule edit R-N (or
+	// archive + add)"); "/" and "|" separate alternatives ("archive /
+	// unarchive <id>", "(--dry-run | --confirm)"). Flags are still checked;
+	// the argument count is not.
+	notation := false
+	for k, tok := range rest {
+		if tok == "/" || tok == "|" || strings.HasPrefix(tok, "(") && !strings.HasPrefix(tok, "(--") {
+			if strings.HasPrefix(tok, "(") {
+				rest = rest[:k]
+			}
+			notation = true
+			break
+		}
+	}
+	for k := 0; k < len(rest); k++ {
+		tok := rest[k]
+		if strings.HasPrefix(strings.TrimLeft(tok, "[("), "--") && strings.Contains(tok, "|") {
+			// "[--all-repos|--master-only|--no-inherit]": one of several flags.
+			for _, alt := range strings.Split(strings.Trim(tok, "[]()"), "|") {
+				if name, ok := flagName(alt); ok && lookupFlag(cmd, name) == nil {
+					return "`" + cmd.CommandPath() + "` has no flag " + alt
+				}
+			}
+			continue
+		}
 		name, ok := flagName(tok)
 		if !ok {
+			positional = append(positional, tok)
 			continue
 		}
 		f := lookupFlag(cmd, name)
@@ -241,8 +342,24 @@ func checkInvocation(code string) string {
 			return "`" + cmd.CommandPath() + "` has no flag " + tok
 		}
 		given[f.Name] = true
+		// "--title value": a flag that takes a value consumes the next word
+		// unless it was written "--title=value".
+		if !strings.Contains(tok, "=") && flagTakesValue(f) && k+1 < len(rest) {
+			k++
+		}
 	}
-	if strings.Contains(code, placeholderUnicode) || strings.Contains(code, placeholderEllipsis) || i == len(toks) {
+	abbreviated := strings.Contains(code, placeholderUnicode) || strings.Contains(code, placeholderEllipsis)
+	nameOnly := i == len(toks)
+	// Only arguments that ARE given are checked: a reference fragment such as
+	// "lore restore --prefer <x>" names a flag without repeating the
+	// command's required arguments, while text passed where a command takes
+	// none (the bug class this catches) always shows up here.
+	if !notation && !abbreviated && !nameOnly && len(positional) > 0 {
+		if err := cmd.ValidateArgs(positional); err != nil {
+			return "`" + cmd.CommandPath() + "` rejects the arguments " + strings.Join(positional, " ") + ": " + err.Error()
+		}
+	}
+	if abbreviated || nameOnly || notation {
 		// An abbreviated form, or a bare command name naming the command
 		// rather than running it (`lore decision add` in a table): required
 		// flags are not expected there.
@@ -300,7 +417,7 @@ func isWord(tok string) bool {
 
 // flagName extracts the flag name from "--name", "--name=value" or "-n".
 func flagName(tok string) (string, bool) {
-	tok = strings.Trim(tok, "[]")
+	tok = strings.Trim(tok, "[]()")
 	switch {
 	case strings.HasPrefix(tok, "--") && tok != "--":
 		name, _, _ := strings.Cut(strings.TrimPrefix(tok, "--"), "=")
@@ -310,6 +427,12 @@ func flagName(tok string) (string, bool) {
 		return tok[1:], true
 	}
 	return "", false
+}
+
+// flagTakesValue reports whether a flag needs a value (anything but a
+// boolean or a flag with an implicit value).
+func flagTakesValue(f *pflag.Flag) bool {
+	return f.Value != nil && f.Value.Type() != "bool" && f.NoOptDefVal == ""
 }
 
 // findSub returns the direct subcommand named (or aliased) name.

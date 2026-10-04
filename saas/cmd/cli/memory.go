@@ -275,7 +275,7 @@ Body is passed via --body=<text> or piped via stdin:
   echo "use Tailwind v4" | lore memory add
 
 Scope defaults to current repo (if --repo set) or project-master.`,
-		Args: cobra.NoArgs,
+		Args: bodyOnlyArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body, err := resolveBodyInput(args, f.body)
 			if err != nil {

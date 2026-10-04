@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -83,6 +84,33 @@ func parseRelPath(rel string) (table, id string, ok bool) {
 	return table, id, true
 }
 
+// osJunkFiles are files operating systems and file managers drop into any
+// folder someone browses (macOS Finder, Windows Explorer). They are never
+// lore data, so the scan skips them silently: reporting them would print a
+// warning on every command for a file nobody created on purpose.
+var osJunkFiles = map[string]bool{".DS_Store": true, "Thumbs.db": true, "desktop.ini": true, "Desktop.ini": true}
+
+// osJunkPrefix marks macOS AppleDouble files ("._name") written on non-HFS
+// volumes and in archives.
+const osJunkPrefix = "._"
+
+// IsOSJunk reports whether a file name is operating-system clutter rather
+// than anything lore or a person wrote. Exported so the git wiring can keep
+// the same names out of commits.
+func IsOSJunk(name string) bool {
+	return osJunkFiles[name] || strings.HasPrefix(name, osJunkPrefix)
+}
+
+// OSJunkGitPatterns are gitignore patterns for IsOSJunk's names.
+func OSJunkGitPatterns() []string {
+	out := make([]string, 0, len(osJunkFiles)+1)
+	for name := range osJunkFiles {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return append(out, osJunkPrefix+"*")
+}
+
 // fileStat is the cached stat of one row file.
 type fileStat struct {
 	size    int64
@@ -107,6 +135,9 @@ func scanDataDir(dataDir string, reg *Registry, now time.Time) (scanResult, erro
 	}
 	for _, e := range entries {
 		name := e.Name()
+		if IsOSJunk(name) {
+			continue
+		}
 		if !e.IsDir() {
 			if name == MetaFileName || name == PurgedFileName {
 				continue
@@ -133,6 +164,9 @@ func scanDataDir(dataDir string, reg *Registry, now time.Time) (scanResult, erro
 		for _, f := range files {
 			fn := f.Name()
 			rel := name + "/" + fn
+			if IsOSJunk(fn) {
+				continue
+			}
 			if strings.HasPrefix(fn, tmpPrefix) {
 				removeStaleTmp(filepath.Join(sub, fn), fn, now)
 				continue

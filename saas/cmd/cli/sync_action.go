@@ -158,6 +158,8 @@ type syncActionParams struct {
 	// WorkDir is the lore project directory, repository-relative ("." at
 	// the root); ci-merge runs there.
 	WorkDir string
+	// CIMergeCommand is ciMergeCommand, the command the merge step runs.
+	CIMergeCommand string
 	// OutcomeMerged / OutcomeNeedsHuman are the ci-merge outcomes the job
 	// branches on.
 	OutcomeMerged     ciMergeOutcome
@@ -472,6 +474,7 @@ func syncActionParamsFor(ctx context.Context, toplevel, dir string, o syncAction
 		BranchesYAML:      string(branchesYAML),
 		DefaultBranch:     branches[0],
 		WorkDir:           workDir,
+		CIMergeCommand:    ciMergeCommand,
 		OutcomeMerged:     ciMergeMerged,
 		OutcomeNeedsHuman: ciMergeNeedsHuman,
 	}, nil
@@ -626,7 +629,7 @@ func parseSyncAction(content string) (syncActionSettings, error) {
 	}
 	for _, job := range doc.Jobs {
 		for _, st := range job.Steps {
-			if strings.Contains(st.Run, "lore sync ci-merge") {
+			if strings.Contains(st.Run, ciMergeCommand) {
 				s.workDir = st.WorkingDirectory
 			}
 		}
@@ -651,19 +654,17 @@ type syncActionRefresh struct {
 }
 
 // refreshSyncActionPin moves an auto-pinned workflow of the lore project at
-// root to own, the running lore's version, when that is a newer release.
-// See the file comment for every case it deliberately leaves alone.
-func refreshSyncActionPin(ctx context.Context, root, own string) (syncActionRefresh, error) {
+// root (inside repo) to own, the running lore's version, when that is a newer
+// release. See the file comment for every case it deliberately leaves alone.
+// repo is passed in because its caller, the git wiring, has already opened it
+// (one git process less on every uncached command).
+func refreshSyncActionPin(ctx context.Context, repo gitsetup.Repo, root, own string) (syncActionRefresh, error) {
 	target := ""
 	if releaseVersionPattern.MatchString(own) {
 		target = "v" + strings.TrimPrefix(own, "v")
 	}
 	if target == "" {
 		return syncActionRefresh{}, nil // a development build has no release to pin to
-	}
-	repo, err := gitsetup.Open(ctx, root)
-	if err != nil {
-		return syncActionRefresh{}, err
 	}
 	prefix := lorePathPrefix(repo.Toplevel, root)
 	file := filepath.Join(repo.Toplevel, filepath.FromSlash(syncActionFileRel(prefix)))

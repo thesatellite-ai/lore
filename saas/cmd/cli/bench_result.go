@@ -465,13 +465,22 @@ regrade a whole run.`,
 				style.Success("✓"), flipped, sameVerdict, len(results))
 			// If --run, also recompute and update run.summary
 			if runRef != "" {
-				run, _ := lookupBenchRun(cmd.Context(), client, projectID, runRef)
-				if run != nil {
-					summary, _ := computeRunSummary(cmd.Context(), client, run.ID)
-					_, _ = client.BenchRun.UpdateOne(run).SetSummary(summary).Save(cmd.Context())
-					fmt.Printf("  run %s summary updated (Δ now %+.1fpp)\n",
-						run.Code, summaryDelta(summary))
+				run, err := lookupBenchRun(cmd.Context(), client, projectID, runRef)
+				if err != nil {
+					return err
 				}
+				summary, err := computeRunSummary(cmd.Context(), client, run.ID)
+				if err != nil {
+					return errcodes.New(errcodes.Internal, "recompute run summary").WithCause(err)
+				}
+				stored, err := summary.toStored()
+				if err != nil {
+					return errcodes.New(errcodes.Internal, "store run summary").WithCause(err)
+				}
+				if _, err := client.BenchRun.UpdateOne(run).SetSummary(stored).Save(cmd.Context()); err != nil {
+					return errcodes.New(errcodes.Internal, "update run summary").WithCause(err)
+				}
+				fmt.Printf("  run %s summary updated (Δ now %+.1fpp)\n", run.Code, summary.DeltaPP)
 			}
 			return nil
 		},
