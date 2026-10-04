@@ -102,7 +102,7 @@ A program git runs instead of its line-by-line merge for files `.gitattributes` 
 `lore sync ci-merge --base <ref>` — merges a base branch into the current branch with lore's driver and commits, only when the host would see a conflict, every conflict is in lore data, and lore settles all of them; otherwise reports `needs-human` and changes nothing. Never pushes. What the optional pull-request workflow runs.
 
 ## lore-sync-merge workflow
-`.github/workflows/lore-sync-merge.yml`, written by `lore sync install-action` (opt-in; `--manual` for run-by-hand only). Runs `ci-merge` for open pull requests when lore data changes and pushes the merges it is allowed to make. Uses a `LORE_SYNC_TOKEN` secret when present so required checks re-run on its merge commits.
+`.github/workflows/lore-sync-merge.yml`, written by `lore sync install-action` (opt-in; `--manual` for run-by-hand only). Runs `ci-merge` for open pull requests when lore data changes and pushes the merges it is allowed to make. Uses a `LORE_SYNC_TOKEN` secret when present so required checks re-run on its merge commits. Its lore version is pinned `auto` (follows the newest lore release a developer runs in the repo; never downgraded) or `fixed` (`--lore-version`); a checksum line marks hand edits, which stop the automatic updates.
 
 ## Mode B
 Shared DB mode. Multiple project roots pointing at a single shared SQLite file via `.lore/lore.toml`. Used when many sibling projects want one knowledge base.

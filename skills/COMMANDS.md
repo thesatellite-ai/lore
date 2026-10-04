@@ -995,7 +995,9 @@ lore sync ci-merge --base <ref> [--dry-run] [--json]
                                    # base, commit, merged[], blocking[], reason}; exit 0 for every outcome
 lore sync install-action [--branch <b>]... [--manual] [--lore-version vX.Y.Z|latest] [--dry-run] [--force] [--json]
                                    # opt-in: writes .github/workflows/lore-sync-merge.yml (runs ci-merge for open
-                                   # pull requests and pushes the merge); commit it to enable; re-run after upgrading
+                                   # pull requests and pushes the merge); commit it to enable. Without
+                                   # --lore-version the pin follows lore upgrades: a newer lore release rewrites
+                                   # it on its next command ("commit it"); --lore-version freezes it
 lore sync uninstall-action [--force] [--json]   # delete that workflow (only if lore generated it)
 lore restore <backup> --confirm --prefer db|files|newest
 ```
