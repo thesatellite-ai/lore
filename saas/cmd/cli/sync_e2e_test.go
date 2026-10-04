@@ -1362,3 +1362,65 @@ func TestE2E_MissionJSONForScripts(t *testing.T) {
 		t.Fatal("an invalid --target must be refused, not dropped")
 	}
 }
+
+// buildReleaseLore builds the CLI stamped as release ver (the e2e binary is a
+// development build, which never refreshes a workflow pin).
+func buildReleaseLore(t *testing.T, ver string) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), BinaryName)
+	build := exec.Command("go", "build", "-ldflags", "-X main.version="+ver, "-o", bin, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build release lore: %v\n%s", err, out)
+	}
+	return bin
+}
+
+// An ordinary command of a newer lore release moves an auto-pinned workflow
+// to that release and says so; a read-only command writes nothing.
+func TestE2E_WorkflowPinFollowsLoreUpgrade(t *testing.T) {
+	w := newWorld(t)
+	alice := w.newClone("alice")
+	alice.lore("init", "--non-interactive", "--name=app")
+	alice.lore("sync", "install-action", "--branch", "main")
+	file := filepath.Join(alice.dir, filepath.FromSlash(syncActionFileRel("")))
+	alice.commitAll("lore + workflow")
+	release := buildReleaseLore(t, "0.1.99")
+
+	// Read-only first: nothing may be written, not even git wiring.
+	if err := os.Remove(filepath.Join(alice.dir, ".gitattributes")); err != nil {
+		t.Fatal(err)
+	}
+	r := w.run(alice.dir, nil, release, "memory", "list", "--read-only")
+	if r.code != 0 {
+		t.Fatalf("read-only list: %s", r.stderr)
+	}
+	if _, err := os.Stat(filepath.Join(alice.dir, ".gitattributes")); err == nil {
+		t.Fatal("a read-only command rewrote .gitattributes")
+	}
+	if strings.Contains(readFileE2E(t, file), "v0.1.99") {
+		t.Fatal("a read-only command refreshed the workflow")
+	}
+
+	r = w.run(alice.dir, nil, release, "memory", "list")
+	if r.code != 0 || !strings.Contains(r.stderr, "to lore v0.1.99") || !strings.Contains(r.stderr, "commit it") {
+		t.Fatalf("upgrade not reported: %d %s", r.code, r.stderr)
+	}
+	s, err := parseSyncAction(readFileE2E(t, file))
+	if err != nil || s.version != "v0.1.99" || s.pin != syncActionPinAuto {
+		t.Fatalf("workflow after upgrade: %+v %v", s, err)
+	}
+	// The development build (older by definition here) never downgrades.
+	alice.lore("memory", "list")
+	if s, _ := parseSyncAction(readFileE2E(t, file)); s.version != "v0.1.99" {
+		t.Fatalf("downgraded to %s", s.version)
+	}
+}
+
+func readFileE2E(t *testing.T, p string) string {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}

@@ -149,7 +149,9 @@ func finishSyncSessions(ctx context.Context) {
 		printSyncReport(rep)
 		s.wroteFiles = s.wroteFiles || len(rep.Exported)+len(rep.Removed) > 0
 		rerenderIfDue(ctx, db, s.root)
-		if os.Getenv(envSyncGit) != envValueOff {
+		// Read-only commands never write: the wiring changes hooks, config,
+		// .gitattributes, .gitignore and the workflow file.
+		if os.Getenv(envSyncGit) != envValueOff && os.Getenv(envReadOnly) != envValueOn {
 			wireGit(ctx, db, s.root)
 			if s.wroteFiles {
 				remindUncommitted(ctx, s.root)
@@ -502,8 +504,11 @@ type gitWiringResult struct {
 	// IgnoredData lists lore paths git still ignores after that, each with
 	// the rule responsible. Non-empty means teammates will not receive them.
 	IgnoredData []string `json:"ignored_data,omitempty"`
-	Config      []string `json:"config_changed,omitempty"`
-	Hooks       []string `json:"hooks_changed,omitempty"`
+	// Workflow reports the automatic refresh of an installed
+	// lore-sync-merge workflow's lore version (empty when nothing to do).
+	Workflow syncActionRefresh `json:"workflow"`
+	Config   []string          `json:"config_changed,omitempty"`
+	Hooks    []string          `json:"hooks_changed,omitempty"`
 }
 
 // ensureGitWiring installs the merge drivers, attributes and hook blocks.
@@ -525,6 +530,11 @@ func ensureGitWiring(ctx context.Context, root string) (gitWiringResult, error) 
 	}
 	if res.Gitignore, res.IgnoredData, err = ensureDataNotIgnored(ctx, root); err != nil {
 		return res, err
+	}
+	if res.Workflow, err = refreshSyncActionPin(ctx, root, version); err != nil {
+		// Never fatal: the workflow only matters in CI, and the rest of the
+		// wiring must still happen.
+		res.Workflow = syncActionRefresh{Note: "could not check the lore-sync-merge workflow: " + err.Error()}
 	}
 	rel := projectRelPath(repo.Toplevel, root)
 	for hook, lines := range hookLines(rel) {
@@ -610,6 +620,10 @@ const (
 // every clone to re-check once after an upgrade.
 func wiringVersion() string {
 	h := sha256.New()
+	// The running lore's version: an upgrade must re-run the check once, or
+	// an installed workflow would keep its old pin until something else
+	// touched the wiring.
+	h.Write([]byte(version + "\n"))
 	for _, l := range append(append([]string(nil), gitAttributeLines...), dataUnignoreLines...) {
 		h.Write([]byte(l + "\n"))
 	}
@@ -649,6 +663,11 @@ func wiringFingerprint(paths []string) string {
 // wiredPaths lists the files whose change invalidates the wiring cache.
 func wiredPaths(root string, res gitWiringResult) []string {
 	paths := []string{res.ConfigPath, filepath.Join(root, ".gitattributes")}
+	// The project's workflow file: a hand edit, an install or an uninstall
+	// re-runs the check.
+	if res.Toplevel != "" {
+		paths = append(paths, filepath.Join(res.Toplevel, filepath.FromSlash(syncActionFileRel(lorePathPrefix(res.Toplevel, root)))))
+	}
 	// Ignore files that can hide .lore/data: a new rule there re-runs the check.
 	for _, dir := range []string{res.Toplevel, root, filepath.Join(root, projresolve.MarkerDir), filepath.Join(root, filepath.FromSlash(dataRel))} {
 		if dir != "" {
@@ -687,6 +706,13 @@ func wireGit(ctx context.Context, db *sql.DB, root string) {
 	if res.Gitignore && os.Getenv(envSyncQuiet) != envValueOn {
 		fmt.Fprintf(os.Stderr, "%sa .gitignore rule hid lore files; re-included %s in .gitignore — commit it\n", syncLogPrefix, dataRel)
 	}
+	if w := res.Workflow; w.To != "" && os.Getenv(envSyncQuiet) != envValueOn {
+		fmt.Fprintf(os.Stderr, "%supdated %s to lore %s (was %s) — commit it\n", syncLogPrefix, displayPath(root, w.Path), w.To, w.From)
+	}
+	if w := res.Workflow; w.Note != "" {
+		// Shown once per state of the file (it is a watched path).
+		fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+displayPath(root, w.Path)+": "+w.Note))
+	}
 	if len(res.IgnoredData) > 0 {
 		// Never quiet. Shown once per state of the ignore files: what is
 		// left is a whole excluded folder, often a deliberate choice to keep
@@ -698,6 +724,17 @@ func wireGit(ctx context.Context, db *sql.DB, root string) {
 	if err := lsync.SetState(ctx, db, stateGitPaths, strings.Join(paths, "\n")); err == nil {
 		_ = lsync.SetState(ctx, db, stateGitFingerprint, wiringFingerprint(paths)) // cache only; recomputed next time if lost
 	}
+}
+
+// displayPath shows path relative to root when it is inside it.
+func displayPath(root, path string) string {
+	if path == "" {
+		return "lore-sync-merge workflow"
+	}
+	if rel, err := filepath.Rel(root, path); err == nil && !strings.HasPrefix(rel, "..") {
+		return filepath.ToSlash(rel)
+	}
+	return path
 }
 
 // ignoredDataMessage explains which lore files git will not commit and why.

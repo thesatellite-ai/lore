@@ -1,4 +1,13 @@
 [[.Marker]] (lore [[.LoreVersion]]). Re-run `lore sync install-action` to update it; `lore sync uninstall-action` removes it.
+[[.PinLine]]
+[[.SumLine]]
+#
+# The lore version is refreshed automatically: when a developer runs a newer
+# lore release in this repository, it rewrites this file to that release
+# (pin "auto"; never downgraded) and asks them to commit it. Install with
+# --lore-version to pin a version ("fixed") that is never changed, and do not
+# edit this file by hand: a hand-edited file is left alone (the checksum
+# above no longer matches) and stops receiving updates.
 #
 # Why: GitHub's merge button never runs custom git merge drivers, so when two
 # pull requests edit the same lore row (.lore/data), the second one shows a
@@ -19,7 +28,7 @@
 # repository); it is used instead when present.
 #
 # Pull requests from forks are skipped: no token here can push to a fork.
-name: lore sync merge
+name: lore sync merge[[.NameSuffix]]
 
 on:
 [[- if not .Manual]]
@@ -42,7 +51,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: lore-sync-merge-${{ github.event.pull_request.number || github.ref }}
+  group: lore-sync-merge[[.Slug]]-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:

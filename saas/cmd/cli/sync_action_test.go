@@ -189,7 +189,7 @@ func TestInstallUninstallSyncAction(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	dir := gitInitRepo(t)
-	file := filepath.Join(dir, filepath.FromSlash(syncActionRel))
+	file := filepath.Join(dir, filepath.FromSlash(syncActionFileRel("")))
 	o := syncActionOptions{branches: []string{"main"}, loreVersion: "v0.1.10"}
 
 	if res, err := uninstallSyncAction(ctx, dir, false); err != nil || res.Status != syncActionAbsent {
