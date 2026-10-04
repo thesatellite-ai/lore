@@ -64,6 +64,8 @@ task lore:hooks:install  # once per clone: use the committed .githooks
 
 `task lore:hooks:install` points git at `.githooks/`, whose `pre-push` hook enforces the gate. A passing `task check` records the tree of the tracked files it tested (`.git/lore-check-passed`). On `git push`, if every pushed commit has exactly that tree, the push goes through at once; otherwise the hook runs `task check` first and blocks the push if it fails, or if the code it tested is not the code being pushed (uncommitted changes while checking). `git push --no-verify` skips it, for emergencies only. The hook itself is tested in `saas/cmd/cli/prepush_hook_test.go`.
 
+No gate step may modify tracked files: `task check` records the tracked tree when it starts (`check:begin`) and refuses to stamp if it changed by the end, naming the files. That is why `check:docs` puts `.ds/ledger.tsv` and `refs.tsv` back after `ds scan` (whose header records the commit and time of every scan): run `ds scan` yourself and commit when docs or citations change. Uncommitted changes to tracked files also make the stamp differ from the commit being pushed, so commit or `git stash` them before pushing.
+
 Adding an ent table? `saas/pkg/aicoder/lsync/registry.go` must classify it as synced or local — `TestRegistry_EveryTableClassified` fails until it does. A new unique index on a synced table also needs an entry in `saas/cmd/cli/natural_ids.go` (`TestNaturalIDSpecs_MatchRegistry`).
 
 Plain `go build`:

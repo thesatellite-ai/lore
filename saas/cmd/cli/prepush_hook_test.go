@@ -65,9 +65,23 @@ func (r *hookRepo) write(rel, content string) {
 	}
 }
 
-// standInTask installs a `task` that records each run and then either fails
-// or runs the real check:stamp in the scratch repository.
-func (r *hookRepo) standInTask(fail bool) {
+// Stand-in `task` behaviours.
+type standInMode int
+
+const (
+	// standInPass runs the real check:begin and check:stamp: a passing gate.
+	standInPass standInMode = iota
+	// standInFail exits non-zero: a failing gate.
+	standInFail
+	// standInMutate runs check:begin, changes a tracked file (what `ds scan`
+	// did to .ds/ledger.tsv), then check:stamp: a gate step that modifies
+	// tracked files.
+	standInMutate
+)
+
+// standInTask installs a `task` that records each run and then behaves as
+// mode says, using the real Taskfile tasks in the scratch repository.
+func (r *hookRepo) standInTask(mode standInMode) {
 	r.t.Helper()
 	real, err := exec.LookPath("task")
 	if err != nil {
@@ -77,11 +91,15 @@ func (r *hookRepo) standInTask(fail bool) {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	body := "#!/bin/sh\necho ran >> \"" + filepath.Join(r.bin, "runs") + "\"\n"
-	if fail {
+	run := "\"" + real + "\" --taskfile \"" + taskfile + "\" --dir \"" + r.dir + "\" "
+	body := "#!/bin/sh\nset -e\necho ran >> \"" + filepath.Join(r.bin, "runs") + "\"\n"
+	switch mode {
+	case standInFail:
 		body += "exit 1\n"
-	} else {
-		body += "exec \"" + real + "\" --taskfile \"" + taskfile + "\" --dir \"" + r.dir + "\" check:stamp\n"
+	case standInMutate:
+		body += run + "check:begin\necho changed >> \"" + filepath.Join(r.dir, "a.txt") + "\"\n" + run + "check:stamp\n"
+	default:
+		body += run + "check:begin\n" + run + "check:stamp\n"
 	}
 	if err := os.WriteFile(filepath.Join(r.bin, "task"), []byte(body), 0o755); err != nil {
 		r.t.Fatal(err)
@@ -120,7 +138,7 @@ func (r *hookRepo) pathWithTask() string {
 
 func TestPrePushRunsGateThenTrustsStamp(t *testing.T) {
 	r := newHookRepo(t)
-	r.standInTask(false)
+	r.standInTask(standInPass)
 	head := r.git("rev-parse", "HEAD")
 	if code, out, runs := r.push(head, r.pathWithTask()); code != 0 || runs != 1 {
 		t.Fatalf("first push must run the gate once and pass: %d runs=%d %s", code, runs, out)
@@ -137,7 +155,7 @@ func TestPrePushRunsGateThenTrustsStamp(t *testing.T) {
 
 func TestPrePushBlocksFailingGate(t *testing.T) {
 	r := newHookRepo(t)
-	r.standInTask(true)
+	r.standInTask(standInFail)
 	if code, out, _ := r.push(r.git("rev-parse", "HEAD"), r.pathWithTask()); code == 0 || !strings.Contains(out, "push blocked") {
 		t.Fatalf("a failing gate must block: %d %s", code, out)
 	}
@@ -147,7 +165,7 @@ func TestPrePushBlocksFailingGate(t *testing.T) {
 // code being pushed.
 func TestPrePushBlocksUntestedCommit(t *testing.T) {
 	r := newHookRepo(t)
-	r.standInTask(false)
+	r.standInTask(standInPass)
 	head := r.git("rev-parse", "HEAD")
 	r.write("a.txt", "edited, not committed\n")
 	if code, out, _ := r.push(head, r.pathWithTask()); code == 0 || !strings.Contains(out, "uncommitted changes") {
@@ -157,7 +175,7 @@ func TestPrePushBlocksUntestedCommit(t *testing.T) {
 
 func TestPrePushAllowsRefDeletion(t *testing.T) {
 	r := newHookRepo(t)
-	r.standInTask(true) // would fail if it ran
+	r.standInTask(standInFail) // would fail if it ran
 	if code, out, runs := r.push(zeroSHA, r.pathWithTask()); code != 0 || runs != 0 {
 		t.Fatalf("deleting a remote ref needs no gate: %d runs=%d %s", code, runs, out)
 	}
@@ -179,5 +197,18 @@ func TestPrePushWithoutTaskBlocks(t *testing.T) {
 	path := filepath.Dir(git) + string(os.PathListSeparator) + filepath.Dir(sh)
 	if code, out, _ := r.push(r.git("rev-parse", "HEAD"), path); code == 0 || !strings.Contains(out, "not installed") {
 		t.Fatalf("without task the push must be blocked: %d %s", code, out)
+	}
+}
+
+// A gate step that modifies tracked files (ds scan rewrote .ds/ledger.tsv)
+// means the gate did not test one version of the code: the stamp is refused,
+// so the push is blocked with the reason, instead of every later push being
+// blocked as "untested" with no explanation.
+func TestPrePushRefusesGateThatModifiesTrackedFiles(t *testing.T) {
+	r := newHookRepo(t)
+	r.standInTask(standInMutate)
+	code, out, _ := r.push(r.git("rev-parse", "HEAD"), r.pathWithTask())
+	if code == 0 || !strings.Contains(out, "tracked files changed while the gate ran") || !strings.Contains(out, "a.txt") {
+		t.Fatalf("a mutating gate step must be named and block the push: %d %s", code, out)
 	}
 }
