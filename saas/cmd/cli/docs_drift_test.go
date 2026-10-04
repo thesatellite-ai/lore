@@ -63,6 +63,40 @@ var inlineCode = regexp.MustCompile("`([^`]+)`")
 // (a pipe escaped inside a markdown table cell).
 var commandEnd = regexp.MustCompile(`\s(?:\\?\||&&|;|#|>|2>|<<)\s?|\)|$`)
 
+// minDocInvocations guards the extractor itself: the docs hold several
+// hundred invocations, so finding fewer means the parser broke and the test
+// would pass vacuously.
+const minDocInvocations = 200
+
+// Scanner buffer for long markdown lines (wide tables): initial and maximum.
+const (
+	docLineBufInitial = 64 << 10
+	docLineBufMax     = 1 << 20
+)
+
+// Placeholders a document uses for "some command here": the invocation is
+// a pattern, not a command to check.
+const (
+	placeholderEllipsis = "..."
+	placeholderUnicode  = "…"
+)
+
+// cobraRequiredTrue is the value cobra stores under BashCompOneRequiredFlag
+// on a flag marked with MarkFlagRequired.
+const cobraRequiredTrue = "true"
+
+// Flags cobra adds itself: --help/-h on every command, --version/-v on the
+// root (because rootCmd sets Version). They are not in any FlagSet until
+// cobra initialises them at execution time.
+var cobraBuiltinFlags = map[string]bool{"help": true, "h": true}
+var cobraRootBuiltinFlags = map[string]bool{"version": true, "v": true}
+
+// subcommandWord reads like a subcommand name, not an argument or id.
+var subcommandWord = regexp.MustCompile(`^[a-z][a-z-]*$`)
+
+// longFlagName is a valid long flag name.
+var longFlagName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
 // driftFinding is one problem in one document.
 type driftFinding struct {
 	file, code, problem string
@@ -95,7 +129,7 @@ func TestDocsMatchCLI(t *testing.T) {
 			}
 		}
 	}
-	if checked < 200 {
+	if checked < minDocInvocations {
 		t.Fatalf("only %d invocations found; the extractor is broken", checked)
 	}
 	sort.Slice(findings, func(i, j int) bool {
@@ -128,7 +162,7 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 	n, start := 0, 0
 	pending := ""
 	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 1<<16), 1<<20)
+	sc.Buffer(make([]byte, 0, docLineBufInitial), docLineBufMax)
 	for sc.Scan() {
 		n++
 		line := sc.Text()
@@ -178,7 +212,7 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 // problem description, or "" when it is valid.
 func checkInvocation(code string) string {
 	toks := docTokens(code)[1:] // drop "lore"
-	if len(toks) > 0 && (strings.ContainsAny(toks[0][:1], "$<") || toks[0] == "..." || toks[0] == "…") {
+	if len(toks) > 0 && (strings.ContainsAny(toks[0][:1], "$<") || toks[0] == placeholderEllipsis || toks[0] == placeholderUnicode) {
 		return "" // the command itself is a variable or placeholder
 	}
 	cmd := rootCmd
@@ -208,7 +242,7 @@ func checkInvocation(code string) string {
 		}
 		given[f.Name] = true
 	}
-	if strings.ContainsAny(code, "…") || strings.Contains(code, "...") || i == len(toks) {
+	if strings.Contains(code, placeholderUnicode) || strings.Contains(code, placeholderEllipsis) || i == len(toks) {
 		// An abbreviated form, or a bare command name naming the command
 		// rather than running it (`lore decision add` in a table): required
 		// flags are not expected there.
@@ -216,7 +250,7 @@ func checkInvocation(code string) string {
 	}
 	var missing []string
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
-		if req, ok := f.Annotations[cobra.BashCompOneRequiredFlag]; ok && len(req) > 0 && req[0] == "true" && !given[f.Name] {
+		if req, ok := f.Annotations[cobra.BashCompOneRequiredFlag]; ok && len(req) > 0 && req[0] == cobraRequiredTrue && !given[f.Name] {
 			missing = append(missing, "--"+f.Name)
 		}
 	})
@@ -261,17 +295,17 @@ func docTokens(code string) []string {
 // isWord reports whether a token reads like a subcommand name rather than an
 // argument, placeholder, id or flag.
 func isWord(tok string) bool {
-	return regexp.MustCompile(`^[a-z][a-z-]*$`).MatchString(tok)
+	return subcommandWord.MatchString(tok)
 }
 
 // flagName extracts the flag name from "--name", "--name=value" or "-n".
 func flagName(tok string) (string, bool) {
 	tok = strings.Trim(tok, "[]")
 	switch {
-	case strings.HasPrefix(tok, "--") && len(tok) > 2:
-		name, _, _ := strings.Cut(tok[2:], "=")
+	case strings.HasPrefix(tok, "--") && tok != "--":
+		name, _, _ := strings.Cut(strings.TrimPrefix(tok, "--"), "=")
 		name = strings.TrimRight(name, ",")
-		return name, regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`).MatchString(name)
+		return name, longFlagName.MatchString(name)
 	case len(tok) == 2 && tok[0] == '-' && tok[1] != '-':
 		return tok[1:], true
 	}
@@ -301,7 +335,7 @@ func lookupFlag(cmd *cobra.Command, name string) *pflag.Flag {
 			}
 		}
 	}
-	if name == "help" || name == "h" || (cmd == rootCmd && (name == "version" || name == "v")) {
+	if cobraBuiltinFlags[name] || (cmd == rootCmd && cobraRootBuiltinFlags[name]) {
 		return &pflag.Flag{Name: name}
 	}
 	return nil

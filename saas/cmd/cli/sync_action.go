@@ -59,12 +59,6 @@ const fallbackDefaultBranch = "main"
 // syncActionRemote is the remote whose default branch is looked up.
 const syncActionRemote = "origin"
 
-// syncActionDirMode is the mode of a created .github/workflows directory.
-const syncActionDirMode = 0o755
-
-// syncActionFileMode is the mode of the written workflow file.
-const syncActionFileMode = 0o644
-
 // releaseVersionPattern matches a lore version that has a published release
 // (what goreleaser stamps into release builds: "0.1.10" or "v0.1.10").
 // Development builds ("0.1.0-dev", "v0.1.9-4-gabc-dirty") do not.
@@ -96,8 +90,8 @@ type syncActionParams struct {
 	WorkDir string
 	// OutcomeMerged / OutcomeNeedsHuman are the ci-merge outcomes the job
 	// branches on.
-	OutcomeMerged     string
-	OutcomeNeedsHuman string
+	OutcomeMerged     ciMergeOutcome
+	OutcomeNeedsHuman ciMergeOutcome
 }
 
 // syncActionOptions are install-action's inputs.
@@ -114,7 +108,7 @@ type syncActionResult struct {
 	// Path is the workflow file.
 	Path string `json:"path"`
 	// Status is one of the syncAction* status constants.
-	Status string `json:"status"`
+	Status syncActionStatus `json:"status"`
 	// LoreVersion is the lore release the workflow downloads.
 	LoreVersion string `json:"lore_version,omitempty"`
 	// Branches are the branches whose pushes trigger it (none when manual).
@@ -125,15 +119,22 @@ type syncActionResult struct {
 	Content string `json:"content,omitempty"`
 }
 
+// syncActionStatus is what install-action / uninstall-action did (the
+// "status" field of their --json output).
+type syncActionStatus string
+
 // install-action / uninstall-action statuses.
 const (
-	syncActionCreated   = "created"
-	syncActionUpdated   = "updated"
-	syncActionUnchanged = "unchanged"
-	syncActionDryRun    = "dry-run"
-	syncActionRemoved   = "removed"
-	syncActionAbsent    = "not-installed"
+	syncActionCreated   syncActionStatus = "created"
+	syncActionUpdated   syncActionStatus = "updated"
+	syncActionUnchanged syncActionStatus = "unchanged"
+	syncActionDryRun    syncActionStatus = "dry-run"
+	syncActionRemoved   syncActionStatus = "removed"
+	syncActionAbsent    syncActionStatus = "not-installed"
 )
+
+// syncActionStatuses is every status (tests check each is printed).
+var syncActionStatuses = []syncActionStatus{syncActionCreated, syncActionUpdated, syncActionUnchanged, syncActionDryRun, syncActionRemoved, syncActionAbsent}
 
 // jsonKindSyncAction is the JSON envelope kind of both commands.
 const jsonKindSyncAction = "sync.action"
@@ -248,10 +249,10 @@ func installSyncAction(ctx context.Context, dir string, o syncActionOptions) (sy
 	default:
 		res.Status = syncActionUpdated
 	}
-	if err := os.MkdirAll(filepath.Dir(file), syncActionDirMode); err != nil {
+	if err := os.MkdirAll(filepath.Dir(file), syncDirMode); err != nil {
 		return res, errcodes.New(errcodes.Internal, "create "+filepath.Dir(file)).WithCause(err)
 	}
-	if err := os.WriteFile(file, []byte(content), syncActionFileMode); err != nil {
+	if err := os.WriteFile(file, []byte(content), syncFileMode); err != nil {
 		return res, errcodes.New(errcodes.Internal, "write "+file).WithCause(err)
 	}
 	return res, nil
