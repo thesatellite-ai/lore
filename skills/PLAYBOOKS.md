@@ -34,7 +34,7 @@ User just said "no, we don't wrap stdlib errors here."
 lore rule add \
     --severity=must \
     --activation=always \
-    "Do not wrap stdlib errors with fmt.Errorf in this repo"
+    --body="Do not wrap stdlib errors with fmt.Errorf in this repo"
 lore render
 ```
 
@@ -45,7 +45,7 @@ lore rule add \
     --severity=must \
     --activation=glob \
     --globs='["**/*.go", "!**/*_test.go"]' \
-    "Do not wrap stdlib errors with fmt.Errorf in non-test Go files"
+    --body="Do not wrap stdlib errors with fmt.Errorf in non-test Go files"
 ```
 
 ---
@@ -71,7 +71,7 @@ User: "ugh, ent regen wiped my resolver helpers AGAIN."
 lore hotfix add \
     --severity=high \
     --title="ent regen overwrites resolver/" \
-    "ent regen overwrites resolver/ files — keep helpers in internal/, lace/, or saas/pkg/"
+    --body="ent regen overwrites resolver/ files — keep helpers in internal/, lace/, or saas/pkg/"
 lore render
 ```
 
@@ -90,13 +90,13 @@ lore repo add admin --origin=git@github.com:org/admin.git
 lore repo add api   --origin=git@github.com:org/api.git
 
 # Scoped memories
-lore memory add "Tailwind v4"          --repo=web
-lore memory add "Mantine"              --repo=admin
-lore memory add "gqlgen + ent"         --repo=api
+lore memory add --body="Tailwind v4"          --repo=web
+lore memory add --body="Mantine"              --repo=admin
+lore memory add --body="gqlgen + ent"         --repo=api
 
 # Cross-cutting (no --repo)
-lore memory add "Client charges in USD"
-lore memory add "All times in UTC"
+lore memory add --body="Client charges in USD"
+lore memory add --body="All times in UTC"
 
 # Render per repo (each gets only its repo + master)
 cd web   && lore render --repo=web
@@ -317,7 +317,7 @@ M=$(lore memory search "stdlib errors" --json | jq -r '.results[0].id')
 
 # Capture the same content as a rule
 BODY=$(lore memory show $M --json | jq -r '.data.body')
-lore rule add --severity=must "$BODY"
+lore rule add --severity=must --body="$BODY"
 
 # Archive the original memory
 sqlite3 .lore/lore.db "UPDATE memories SET archived_at=datetime('now') WHERE id='$M'"
@@ -335,7 +335,7 @@ The opposite — turns out it was too strict.
 R=$(lore rule list --json | jq -r '.data[] | select(.body | test("stdlib errors")) | .id')
 BODY=$(lore rule show $R --json | jq -r '.data.body')
 
-lore memory add "(formerly rule) $BODY"
+lore memory add --body="(formerly rule) $BODY"
 sqlite3 .lore/lore.db "UPDATE rules SET archived_at=datetime('now') WHERE id='$R'"
 lore render
 ```

@@ -42,21 +42,21 @@ lore render
 
 ### B.1 User says "remember: we use Tailwind v4"
 ```bash
-lore memory add "We use Tailwind v4 (not v3) for all styling"
+lore memory add --body="We use Tailwind v4 (not v3) for all styling"
 lore render
 ```
 
 ### B.2 User says "we never wrap stdlib errors"
 ```bash
 lore rule add --severity=must --activation=always \
-    "Never wrap stdlib errors with fmt.Errorf; return them directly."
+    --body="Never wrap stdlib errors with fmt.Errorf; return them directly."
 lore render
 ```
 
 ### B.3 User says "should prefer composition over inheritance"
 ```bash
 lore rule add --severity=should \
-    "Prefer composition over inheritance in domain models."
+    --body="Prefer composition over inheritance in domain models."
 lore render
 ```
 
@@ -75,7 +75,7 @@ lore render
 ### B.5 User: "I keep forgetting that ent regen wipes resolver/ helpers"
 ```bash
 lore hotfix add --severity=high --title="ent regen wipes resolver/ helpers" \
-    "ent regen wipes hand-written code in resolver/. Keep helpers in internal/, lace/, or saas/pkg/."
+    --body="ent regen wipes hand-written code in resolver/. Keep helpers in internal/, lace/, or saas/pkg/."
 lore render
 ```
 
@@ -331,12 +331,12 @@ lore support-bundle --out=/tmp/lore-bug.tar.gz
 
 ### G.1 "Add a memory only for the web repo"
 ```bash
-lore memory add "Tailwind v4 only" --repo=web
+lore memory add --body="Tailwind v4 only" --repo=web
 ```
 
 ### G.2 "Add a project-wide memory"
 ```bash
-lore memory add "Client charges USD"    # no --repo
+lore memory add --body="Client charges USD"    # no --repo
 ```
 
 ### G.3 "Search in current repo only"
@@ -403,7 +403,7 @@ lore tag attach --on-table=memories --on-id=mem_019e... --tag=draft
 ### I.3 "Comment on dec_<id> with a status update"
 ```bash
 DID=$(lore decision list --json | jq -r '.data[] | select(.id==3) | .id')
-lore comment add --on-table=decisions --on-id=$DID "Reviewed 2026-08-01; still holds."
+lore comment add --on-table=decisions --on-id=$DID --body="Reviewed 2026-08-01; still holds."
 ```
 
 ### I.4 "Show all comments on dec_<id>"
@@ -475,7 +475,7 @@ lore render
 ### L.3 "Import a curated list of rules from JSON"
 ```bash
 jq -r '.rules[] | [.severity, .body] | @tsv' rules.json | while IFS=$'\t' read sev body; do
-    lore rule add --severity=$sev "$body"
+    lore rule add --severity=$sev --body="$body"
 done
 lore render
 ```
@@ -572,7 +572,7 @@ lore render    # rerender without archived rows
 ```bash
 # v0.1: no `memory edit`. Add a new one + archive the old:
 sqlite3 .lore/lore.db "UPDATE memories SET archived_at=datetime('now') WHERE id=3"
-lore memory add "<corrected text>"
+lore memory add --body="<corrected text>"
 lore render
 ```
 

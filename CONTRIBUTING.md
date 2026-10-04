@@ -12,14 +12,16 @@ Thanks for your interest. `lore` is source-available under the [PolyForm Perimet
 See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** for layout, build, and release. Quick loop:
 
 ```sh
+task lore:hooks:install   # once: the pre-push hook runs the full gate
 task lore:build
 task lore:test
+task check                # the full gate — must pass before you push
 ```
 
 ## Pull requests
 
 - Branch from `main`; keep PRs focused.
-- `gofmt` clean; `go vet ./saas/cmd/cli/...` clean; tests pass (`task lore:test`).
+- `task check` passes (build, lint, every test suite, tidy, scenarios, chaos, docs). The pre-push hook enforces it once `task lore:hooks:install` has run.
 - Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`). No AI-attribution / co-author trailers in commit messages.
 - A push to `main` auto-publishes a release — maintainers handle merges with that in mind. Use `[skip release]` in the commit subject for docs-only changes.
 

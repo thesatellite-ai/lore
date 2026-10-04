@@ -37,10 +37,32 @@ task lore:build          # → tmp/bin/lore (version stamped from git describe)
 task lore:build:debug    # with debug symbols
 task lore:install:all    # build + install binary AND the Claude skill locally
 task lore:skill:install  # (re)install the skill to ~/.claude/skills/lore
-task lore:test           # unit + integration tests
+task lore:test           # unit + integration tests (race detector)
 task lore:test:sync      # sync engine + CLI end-to-end suite (real git, real binary)
+task lore:test:cover     # coverage of unit AND end-to-end tests; lists functions no test reaches
 task lore:bench:sync     # sync performance at 1k / 10k rows
 ```
+
+## The gate: `task check`, before every push
+
+One command runs everything, in this order, and stops at the first failure:
+
+| Step | What it proves |
+|---|---|
+| `lore:build` | the binary builds |
+| `lore:lint` | `go vet`, `gofmt`, `staticcheck`, and a build for all six release targets (linux, darwin, windows × amd64, arm64) |
+| `lore:test` | unit and integration tests with the race detector |
+| `lore:test:all` | every Go test in `dbent`, `lace` and `saas`, including the CLI end-to-end suite (real git, real binary) and `TestDocsMatchCLI` (every `lore …` command in the README and `skills/*.md` exists with the flags shown) |
+| `lore:check:tidy` | `go mod tidy` changes nothing |
+| `lore:scenarios`, `lore:chaos` | the shell acceptance and failure-injection scripts in `tests/` (SC-21 needs root or sudo and skips otherwise) |
+| `lore:check:docs` | every docsync citation in the docs still matches the code (`ds check`) |
+
+```sh
+task check               # alias of task lore:check
+task lore:hooks:install  # once per clone: use the committed .githooks
+```
+
+`task lore:hooks:install` points git at `.githooks/`, whose `pre-push` hook enforces the gate. A passing `task check` records the tree of the tracked files it tested (`.git/lore-check-passed`). On `git push`, if every pushed commit has exactly that tree, the push goes through at once; otherwise the hook runs `task check` first and blocks the push if it fails, or if the code it tested is not the code being pushed (uncommitted changes while checking). `git push --no-verify` skips it, for emergencies only. The hook itself is tested in `saas/cmd/cli/prepush_hook_test.go`.
 
 Adding an ent table? `saas/pkg/aicoder/lsync/registry.go` must classify it as synced or local — `TestRegistry_EveryTableClassified` fails until it does. A new unique index on a synced table also needs an entry in `saas/cmd/cli/natural_ids.go` (`TestNaturalIDSpecs_MatchRegistry`).
 

@@ -145,7 +145,7 @@ E_INTERNAL
 
 ```bash
 # Run a command, catch a specific code in JSON
-if ! out=$(lore memory add "$body" 2>&1); then
+if ! out=$(lore memory add --body="$body" 2>&1); then
     code=$(echo "$out" | grep -oE 'E_[A-Z_]+' | head -1)
     case "$code" in
         E_SECRET_DETECTED) echo "secret refused"; exit 1 ;;
