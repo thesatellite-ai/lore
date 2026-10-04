@@ -531,7 +531,7 @@ func ensureGitWiring(ctx context.Context, root string) (gitWiringResult, error) 
 	if res.Gitignore, res.IgnoredData, err = ensureDataNotIgnored(ctx, root); err != nil {
 		return res, err
 	}
-	if res.Workflow, err = refreshSyncActionPin(ctx, root, version); err != nil {
+	if res.Workflow, err = refreshSyncActionPin(ctx, repo, root, version); err != nil {
 		// Never fatal: the workflow only matters in CI, and the rest of the
 		// wiring must still happen.
 		res.Workflow = syncActionRefresh{Note: "could not check the lore-sync-merge workflow: " + err.Error()}
@@ -557,7 +557,22 @@ var dataRel = path.Join(projresolve.MarkerDir, lsync.DataDirName)
 // clone then does not recognise the folder; `*.json` or `snapshots/` hide
 // rows). A negation cannot re-include a file whose parent folder is
 // excluded (`.lore/`): ensureDataNotIgnored reports that case instead.
-var dataUnignoreLines = []string{"!" + dataRel + "/", "!" + dataRel + "/**"}
+//
+// The negation re-includes EVERYTHING under the folder, including the
+// .DS_Store / Thumbs.db a file manager drops there, which the repo's own
+// rules may have excluded; the junk names are ignored again right after it
+// (in a .gitignore the later rule wins).
+var dataUnignoreLines = append([]string{"!" + dataRel + "/", "!" + dataRel + "/**"}, dataJunkIgnoreLines()...)
+
+// dataJunkIgnoreLines ignores operating-system clutter at any depth of the
+// data folder.
+func dataJunkIgnoreLines() []string {
+	var out []string
+	for _, p := range lsync.OSJunkGitPatterns() {
+		out = append(out, dataRel+"/**/"+p)
+	}
+	return out
+}
 
 // ensureDataNotIgnored makes sure `git add` picks up every kind of file sync
 // writes. When a rule hides one, it appends dataUnignoreLines to the

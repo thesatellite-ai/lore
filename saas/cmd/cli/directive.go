@@ -56,13 +56,13 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 > ## Pre-response checklist (run through this BEFORE every reply)
 >
 > 1. **Have you loaded the lore skill in this session?** If no — load it NOW via the Skill tool (skill name: ` + "`lore`" + `). This repo has ` + "`.lore/`" + ` so the skill applies. Do not respond before loading. **No exceptions. Not even for "which skill did you load" — load first, then answer.**
-> 2. **Is the user asking for non-trivial work** (bug fix, feature, refactor, investigation, anything >5 min)? If yes — run ` + "`lore task search \"<keyword>\"`" + ` first to check for an existing task. If none, create one: ` + "`lore task add \"<title>\" --tasklist=<tlt_id> --commitment=<accepted|proposed|someday> [--priority=high|medium|low] --body=\"...\"`" + `. Mark ` + "`task start <T-N>`" + ` when you begin, ` + "`task done <T-N>`" + ` / ` + "`cancel <T-N>`" + ` at end
+> 2. **Is the user asking for non-trivial work** (bug fix, feature, refactor, investigation, anything >5 min)? If yes — run ` + "`lore task search \"<keyword>\"`" + ` first to check for an existing task. If none, create one: ` + "`lore task add \"<title>\" --tasklist=<tlt_id> --commitment=<accepted|proposed|someday> [--priority=high|medium|low] --body=\"...\"`" + `. Mark ` + "`task start <tsk_id>`" + ` when you begin, ` + "`task done <tsk_id>`" + ` / ` + "`cancel <tsk_id>`" + ` at end
 >
 >    **` + "`--commitment`" + ` is REQUIRED when you (an agent) create a task — there is no default, a missing value is a hard error. Choose:**
 >    - ` + "`accepted`" + ` — the user explicitly asked for this, or you are about to do it now. Appears in the default ` + "`task list`" + `.
 >    - ` + "`proposed`" + ` — your own speculative idea ("we could also…"). NOT assumed real; hidden from the default list, surfaces under ` + "`lore task triage`" + `. Use this for anything the user did not explicitly request.
 >    - ` + "`someday`" + ` — parking-lot idea, no commitment, no date. Surfaces under ` + "`lore task someday`" + `.
->    - To snooze an accepted task: ` + "`lore task edit <T-N> --defer-until=YYYY-MM-DD`" + ` (auto-resurfaces). ` + "`task start`" + ` / ` + "`task done`" + ` auto-promote to ` + "`accepted`" + `.
+>    - To snooze an accepted task: ` + "`lore task edit <tsk_id> --defer-until=YYYY-MM-DD`" + ` (auto-resurfaces). ` + "`task start`" + ` / ` + "`task done`" + ` auto-promote to ` + "`accepted`" + `.
 >
 >    **Task body MUST preserve the original request — verbatim — plus surrounding context.** The body is the future session's only handle on what the user actually wanted. Use this template (or richer if more context is available):
 >
@@ -90,7 +90,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >    - If the user's prompt is one line and zero context, the body still has the verbatim quote + a Context section noting "no additional context — single-line ad-hoc request."
 > 3. **Open a run BEFORE doing the work** (this is the step most often skipped):
 >
->    ` + "`RID=$(lore run start --task=<T-N> --model=<your-model-id> --agent=claude-code --goal=\"<one-line description>\")`" + `
+>    ` + "`RID=$(lore run start --task=<tsk_id> --model=<your-model-id> --agent=claude-code --goal=\"<one-line description>\")`" + `
 >
 >    Keep ` + "`$RID`" + ` in scope for the rest of the turn. Log significant steps as you go:
 >
@@ -108,7 +108,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 >    **If the work shipped as a git commit, link it.** Right after closing the run (or whenever a commit lands):
 >
->    - ` + "`lore link add --entity=<T-N> --commit=HEAD`" + ` — anchors the commit to the task
+>    - ` + "`lore link add --entity=<tsk_id> --commit=HEAD`" + ` — anchors the commit to the task
 >    - ` + "`lore link add --entity=$RID --commit=HEAD`" + ` — anchors the commit to the run
 >
 >    Auto-captures sha + message + author + committed-at via git. Same commit can be linked to multiple entities (one commit closing two tasks: link twice). Skip when no commit was created this turn
@@ -259,7 +259,10 @@ func installDirective(target string) error {
 	switch {
 	case directiveRegex.MatchString(existing):
 		// Replace existing block in place
-		out = directiveRegex.ReplaceAllString(existing, block)
+		// Literal: the block's shell examples contain "$RID", which
+		// ReplaceAllString would expand as a (missing) capture group,
+		// silently blanking it on every re-install.
+		out = directiveRegex.ReplaceAllLiteralString(existing, block)
 	case existing == "":
 		// New file
 		out = block

@@ -77,7 +77,7 @@ func parseWorkflow(t *testing.T, content string) workflowDoc {
 func mergeStep(t *testing.T, doc workflowDoc) (run, workDir string) {
 	t.Helper()
 	for _, s := range doc.Jobs["merge"].Steps {
-		if strings.Contains(s.Run, "lore sync ci-merge") {
+		if strings.Contains(s.Run, ciMergeCommand) {
 			return s.Run, s.WorkingDirectory
 		}
 	}

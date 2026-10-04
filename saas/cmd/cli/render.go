@@ -249,7 +249,9 @@ func stitchPointer(agentFile, outFile string) error {
 	var out string
 	switch {
 	case pointerRegex.MatchString(existing):
-		out = pointerRegex.ReplaceAllString(existing, block)
+		// Literal, like the directive block: a "$" in the block must never be
+		// read as a regexp capture reference.
+		out = pointerRegex.ReplaceAllLiteralString(existing, block)
 	case existing == "":
 		out = block
 	default:

@@ -50,6 +50,11 @@ const (
 // printed and documented).
 var ciMergeOutcomes = []ciMergeOutcome{ciMergeUpToDate, ciMergeClean, ciMergeMerged, ciMergeNeedsHuman}
 
+// ciMergeCommand is the command line the generated workflow runs (without
+// its flags). The template prints it and parseSyncAction finds the merge step
+// by it, so the two can never disagree.
+const ciMergeCommand = BinaryName + " sync ci-merge"
+
 // jsonKindSyncCIMerge is the JSON envelope kind of `lore sync ci-merge`.
 const jsonKindSyncCIMerge = "sync.ci-merge"
 

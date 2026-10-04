@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/merge3"
 	"saas/pkg/aicoder/projresolve"
@@ -230,6 +232,38 @@ func TestPreCommitLineAgainstOldAndNewLore(t *testing.T) {
 		}
 		if code != tc.wantCode || !strings.Contains(stderr.String(), tc.wantStderr) {
 			t.Fatalf("%s: exit %d stderr %q", tc.name, code, stderr.String())
+		}
+	}
+}
+
+// The .gitignore exception lore adds re-includes everything under
+// .lore/data; OS clutter there must stay ignored, and lore files must not.
+func TestDataUnignoreKeepsOSJunkIgnored(t *testing.T) {
+	t.Parallel()
+	dir := gitInitRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("_*\n.DS_Store\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	changed, still, err := ensureDataNotIgnored(ctx, dir)
+	if err != nil || !changed || len(still) != 0 {
+		t.Fatalf("re-include: %v %v %v", changed, still, err)
+	}
+	ignored, err := gitsetup.IgnoredPaths(ctx, dir, []string{
+		".lore/data/.DS_Store", ".lore/data/memories/.DS_Store", ".lore/data/memories/._mem_1.json",
+		".lore/data/Thumbs.db", ".lore/data/_meta.json", ".lore/data/memories/mem_1.json",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, junk := range []string{".lore/data/.DS_Store", ".lore/data/memories/.DS_Store", ".lore/data/memories/._mem_1.json", ".lore/data/Thumbs.db"} {
+		if _, ok := ignored[junk]; !ok {
+			t.Fatalf("%s must stay ignored: %v", junk, ignored)
+		}
+	}
+	for _, real := range []string{".lore/data/_meta.json", ".lore/data/memories/mem_1.json"} {
+		if rule, ok := ignored[real]; ok {
+			t.Fatalf("%s must be committed, ignored by %s", real, rule)
 		}
 	}
 }

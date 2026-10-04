@@ -27,6 +27,11 @@ tasks:
     cmds:
       - task: lore:build
 
+  check:
+    desc: alias → lore:check — the full gate; run before every push
+    cmds:
+      - task: lore:check
+
   workvendor:
     desc: fix work vendor mismatch on server
     cmds:

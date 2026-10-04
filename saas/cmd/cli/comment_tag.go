@@ -78,7 +78,7 @@ and the body via --body=<text> (or pipe stdin)
 Examples:
   lore comment add --on-table=memories --on-id=mem_018f... --body="agreed; revisit Q3"
   lore comment add --on-table=decisions --on-id=D-3 --body="context updated"`,
-		Args: cobra.NoArgs,
+		Args: bodyOnlyArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			raw, err := resolveBodyInput(args, bodyFlag)
 			if err != nil {

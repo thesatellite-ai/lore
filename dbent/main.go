@@ -240,6 +240,35 @@ func ApplyPragmas(db *sql.DB) error {
 	return nil
 }
 
+// quickCheckAttempts bounds QuickCheck's retries when SQLite reports a
+// concurrent schema change (SQLITE_SCHEMA) instead of a result.
+const quickCheckAttempts = 5
+
+// quickCheckBackoff is the pause before each retry, growing linearly: a
+// schema change by another process (lore setup, a trigger refresh) takes
+// milliseconds, so retrying at once would usually land inside it again.
+const quickCheckBackoff = 20 * time.Millisecond
+
+// sqliteSchemaChanged is SQLite's message for SQLITE_SCHEMA: the schema was
+// modified by another connection between preparing and running a statement.
+const sqliteSchemaChanged = "database schema has changed"
+
+// retryOnSchemaChange runs query, retrying (with a growing pause) only while
+// it fails because another connection changed the schema meanwhile (lore
+// setup or a trigger refresh in another process: not corruption). Any other
+// error, or success, returns at once; after quickCheckAttempts the last
+// error is returned.
+func retryOnSchemaChange(query func() error) error {
+	var err error
+	for attempt := 0; attempt < quickCheckAttempts; attempt++ {
+		if err = query(); err == nil || !strings.Contains(err.Error(), sqliteSchemaChanged) {
+			return err
+		}
+		time.Sleep(time.Duration(attempt+1) * quickCheckBackoff)
+	}
+	return err
+}
+
 // QuickCheck runs PRAGMA quick_check AND verifies the schema is present.
 //
 // SQLite's quick_check returns "ok" on a 0-byte file (it treats the empty
@@ -248,20 +277,26 @@ func ApplyPragmas(db *sql.DB) error {
 // aicoder DB (corrupt, truncated, or zeroed). Without this probe, CH-6
 // (truncate-to-zero) silently slips past corruption detection.
 //
+// A concurrent schema change (SQLITE_SCHEMA) is retried, not reported as
+// corruption: another lore process may be running `lore setup`.
+//
 // Catches: R23 #44, CH-6 (truncate-to-zero), SC-3 (corrupt → repair).
 func QuickCheck(db *sql.DB) error {
-	row := db.QueryRow("PRAGMA quick_check")
 	var result string
-	if err := row.Scan(&result); err != nil {
+	if err := retryOnSchemaChange(func() error {
+		return db.QueryRow("PRAGMA quick_check").Scan(&result)
+	}); err != nil {
 		return fmt.Errorf("quick_check: %w", err)
 	}
 	if result != "ok" {
 		return fmt.Errorf("quick_check failed: %s", result)
 	}
 	var n int
-	if err := db.QueryRow(
-		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='projects'`,
-	).Scan(&n); err != nil {
+	if err := retryOnSchemaChange(func() error {
+		return db.QueryRow(
+			`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='projects'`,
+		).Scan(&n)
+	}); err != nil {
 		return fmt.Errorf("schema probe: %w", err)
 	}
 	if n == 0 {

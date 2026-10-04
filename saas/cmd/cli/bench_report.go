@@ -93,7 +93,11 @@ func newBenchReportSummaryCommand() *cobra.Command {
 			if run.CompletedAt != nil {
 				elapsed = run.CompletedAt.Sub(run.StartedAt)
 			}
-			printRunSummary(run.Code, run.Summary, run.TotalCalls, run.CostUsdEstimate, elapsed)
+			s, err := storedRunSummary(run)
+			if err != nil {
+				return err
+			}
+			printRunSummary(run.Code, s, run.TotalCalls, run.CostUsdEstimate, elapsed)
 			return nil
 		},
 	}
@@ -147,8 +151,15 @@ func newBenchReportCompareCommand() *cobra.Command {
 			}
 			sort.Strings(codes)
 
-			deltaA := summaryDelta(a.Summary)
-			deltaB := summaryDelta(b.Summary)
+			sumA, err := storedRunSummary(a)
+			if err != nil {
+				return err
+			}
+			sumB, err := storedRunSummary(b)
+			if err != nil {
+				return err
+			}
+			deltaA, deltaB := sumA.DeltaPP, sumB.DeltaPP
 			diff := deltaB - deltaA
 
 			perTask := map[string]any{}
@@ -235,14 +246,22 @@ func newBenchReportTrendCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list runs").WithCause(err)
 			}
+			summaries := make([]benchRunSummary, len(rows))
+			for i, r := range rows {
+				s, err := storedRunSummary(r)
+				if err != nil {
+					return err
+				}
+				summaries[i] = s
+			}
 			if jsonOut {
 				out := make([]map[string]any, 0, len(rows))
-				for _, r := range rows {
+				for i, r := range rows {
 					out = append(out, map[string]any{
 						"code":     r.Code,
 						"model":    r.Model,
 						"date":     r.StartedAt.Format("2006-01-02"),
-						"delta_pp": summaryDelta(r.Summary),
+						"delta_pp": summaries[i].DeltaPP,
 						"summary":  r.Summary,
 					})
 				}
@@ -255,10 +274,10 @@ func newBenchReportTrendCommand() *cobra.Command {
 			}
 			fmt.Printf("%-30s %-26s %-10s   %s\n", "code", "model", "date", "Δ pp")
 			fmt.Println(strings.Repeat("-", 76))
-			for _, r := range rows {
+			for i, r := range rows {
 				fmt.Printf("%-30s %-26s %-10s   %+.1f\n",
 					r.Code, r.Model, r.StartedAt.Format("2006-01-02"),
-					summaryDelta(r.Summary))
+					summaries[i].DeltaPP)
 			}
 			return nil
 		},
@@ -294,22 +313,21 @@ func newBenchReportByCategoryCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cats, _ := run.Summary["by_category"].(map[string]any)
+			s, err := storedRunSummary(run)
+			if err != nil {
+				return err
+			}
 			if jsonOut {
-				printJSON(constants.KindBenchReportByCat, cats, 0)
+				printJSON(constants.KindBenchReportByCat, s.ByCategory, 0)
 				return nil
 			}
 			fmt.Printf("=== %s by category ===\n", run.Code)
-			for arm, vraw := range cats {
-				armCats, _ := vraw.(map[string]any)
+			for _, arm := range sortedKeys(s.ByCategory) {
+				cats := s.ByCategory[arm]
 				fmt.Printf("\n  %s\n", arm)
-				for c, x := range armCats {
-					if v, ok := x.(map[string]any); ok {
-						rate, _ := v["pass_rate"].(float64)
-						n, _ := v["n"].(float64)
-						pass, _ := v["pass"].(float64)
-						fmt.Printf("    %-20s %.0f/%-3.0f  %.1f%%\n", c, pass, n, rate*100)
-					}
+				for _, c := range sortedKeys(cats) {
+					v := cats[c]
+					fmt.Printf("    %-20s %d/%-3d  %.1f%%\n", c, v.Pass, v.N, v.PassRate*100)
 				}
 			}
 			return nil

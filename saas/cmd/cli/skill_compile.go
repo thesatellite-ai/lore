@@ -329,7 +329,7 @@ suitable for small-context (32K) and weak-instruction-following models
    - RENDER + INTROSPECT
    - SEARCH (FTS5 BM25 syntax: prefix, OR/AND/NOT, phrase)
    - ENUMS (severity, priority, status, scope)
-   - ID PREFIXES (M-N, R-N, etc.)
+   - ID PREFIXES (opaque ids: mem_, rul_, dec_, hfx_, tsk_, msn_, …; there are no short mem_<id> / tsk_<id> forms)
    - 20 PLAYBOOKS (cmd sequences only; P14 + P15 must say "ALL STEPS REQUIRED")
    - TOP ERROR CODES (one line each)
    - ANTI-PATTERNS (numbered list, 6-10 items)
@@ -364,9 +364,9 @@ suitable for small-context (32K) and weak-instruction-following models
 15. **Playbook P14 (promote memory → rule) and P15 (demote rule → memory) must be marked "(ALL STEPS REQUIRED — do NOT skip the show)"** and the first step must have an inline comment "# MUST fetch the actual body first; never invent the rule text."
 
 16. **TRIGGER GRAMMAR must include conflict-resolution triggers:**
-    T[scratch the previous rule about X]      → rule search "X"; archive R-N; (optionally add new)
-    T[update what we said about X]            → rule search "X"; rule edit R-N (or archive + add)
-    T[reverse the rule about X]               → rule search "X"; archive R-N; add new with opposite content
+    T[scratch the previous rule about X]      → rule search "X"; archive rul_<id>; (optionally add new)
+    T[update what we said about X]            → rule search "X"; rule edit rul_<id> (or archive + add)
+    T[reverse the rule about X]               → rule search "X"; archive rul_<id>; add new with opposite content
     These must be emitted as ONE atomic shell script using `+"`$(…)`"+` command substitution to extract the rule code in-line — NOT as multi-step "Step 1 / Step 2" examples (weak models stop after step 1). Example form:
         RID=$(lore rule search "<keyword>" --json | jq -r '.data[0].code')
         lore rule archive "$RID"
@@ -424,13 +424,13 @@ suitable for small-context (32K) and weak-instruction-following models
     Weak models stop at `+"`learn list`"+` if shown as multi-step "Step 1 / Step 2". Always use the atomic-script form for sequential ops
 
 24. **Note the CLI gaps that don't have direct verbs.** Mention briefly that:
-    - There is NO `+"`lore task block <T-N>`"+` transition (despite `+"`blocked`"+` being a valid status enum); the workaround is `+"`lore comment add --on-table=tasks --on-id=T-N --body=\"blocked: <reason>\"`"+`
+    - There is NO `+"`lore task block <tsk_id>`"+` transition (despite `+"`blocked`"+` being a valid status enum); the workaround is `+"`lore comment add --on-table=tasks --on-id=tsk_<id> --body=\"blocked: <reason>\"`"+`
     - There is NO `+"`lore audit`"+` CLI verb yet; audit-log access is raw SQL (covered in rule 20)
 
-25. **TRIGGER GRAMMAR must include bench-meta triggers** (meta != capture). The bench commands MANAGE eval suites; do not confuse "set up an eval FOR rule R-N" with "capture rule R-N":
-    T[set up a benchmark eval for X | author a bench task for rule R-N]
+25. **TRIGGER GRAMMAR must include bench-meta triggers** (meta != capture). The bench commands MANAGE eval suites; do not confuse "set up an eval FOR rule rul_<id>" with "capture rule rul_<id>":
+    T[set up a benchmark eval for X | author a bench task for rule rul_<id>]
         → lore bench eval add --category=<…> --link=<kind>:<id> --prompt-file=- --grader-kind=programmatic --grader-cmd='…'
-        # CRITICAL: do NOT emit `+"`rule add`"+` for "set up an eval for rule R-N" — that's the META verb, not capture
+        # CRITICAL: do NOT emit `+"`rule add`"+` for "set up an eval for rule rul_<id>" — that's the META verb, not capture
     T[run the benchmark | execute the eval set]
         → lore bench run start --model=<m> --runs-per-arm=<n> --parallel=<p>
     T[list benchmark evals | show me the eval set]
@@ -472,14 +472,14 @@ suitable for small-context (32K) and weak-instruction-following models
     The word "architecture" wins over "decision" when both appear in the same prompt. If content is component-listing ("backend is X, DB is Y, events are Z"), use `+"`architecturenote`"+`. If content is single-choice-with-rationale ("we decided X because Y"), use `+"`decision add`"+` (rule 13)
 
 30. **TRIGGER GRAMMAR must include mission lifecycle:**
-    T[mark M-N done | mission M-N is complete | ship M-N]
-        → mission done M-N
-    Bundle must say explicitly: mission has its own done verb; do NOT use `+"`task done`"+` for an M-N ID
+    T[mark msn_<id> done | mission msn_<id> is complete | ship msn_<id>]
+        → mission done msn_<id>
+    Bundle must say explicitly: mission has its own done verb; do NOT use `+"`task done`"+` for an msn_<id> ID
 
 31. **TRIGGER GRAMMAR must include decision-revisit pattern** (flag without archiving):
-    T[flag D-N for re-eval | revisit D-N | re-evaluate decision | conditions changed for D-N but don't archive yet]
-        → lore comment add --on-table=decisions --on-id=D-N --body="REVISIT: <why>; conditions changed <when>"
-          OR: lore tag attach --on-table=decisions --on-id=D-N --name=revisit
+    T[flag dec_<id> for re-eval | revisit dec_<id> | re-evaluate decision | conditions changed for dec_<id> but don't archive yet]
+        → lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>; conditions changed <when>"
+          OR: lore tag attach --on-table=decisions --on-id=dec_<id> --name=revisit
     Critical: do NOT create a NEW decision when the user wants to flag an existing one. The old decision stays active until explicitly archived
 
 32. **TRIGGER GRAMMAR must include bench grader meta-tools:**
@@ -491,8 +491,8 @@ suitable for small-context (32K) and weak-instruction-following models
         → lore bench grader audit
 
 33. **TRIGGER GRAMMAR must include cancel-with-reason pattern** (CLI has no native --reason flag, so workaround is cancel + comment):
-    T[cancel T-N because <reason> | cancel with note]
-        → task cancel T-N; lore comment add --on-table=tasks --on-id=T-N --body="cancelled: <reason>"
+    T[cancel tsk_<id> because <reason> | cancel with note]
+        → task cancel tsk_<id>; lore comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"
 
 34. **Capture-vs-question disambiguation rule.** Question forms like "what does X check?" / "what does X do?" / "what's X's behavior?" are HOW-questions and should be answered with prose or `+"`<cmd> --help`"+`, NOT by running the command silently. Add to the ⛔ DO NOT CAPTURE block
 

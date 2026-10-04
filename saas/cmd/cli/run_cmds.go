@@ -96,7 +96,7 @@ func newRunStartCommand() *cobra.Command {
 				return err
 			}
 
-			// Resolve T-N → opaque IDs so notes payload is clickable later
+			// Validate the opaque ids (tsk_… / msn_…) before storing them in the notes payload
 			var taskID, missionID string
 			if task != "" {
 				resolvedTask, err := resolvePrettyID(cmd.Context(), client, task)
@@ -151,8 +151,8 @@ func newRunStartCommand() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f)
-	cmd.Flags().StringVar(&task, "task", "", "task ID (T-N or opaque tsk_*)")
-	cmd.Flags().StringVar(&mission, constants.FlagMission, "", "mission ID (MS-N or opaque msn_*)")
+	cmd.Flags().StringVar(&task, "task", "", "task id (tsk_…)")
+	cmd.Flags().StringVar(&mission, constants.FlagMission, "", "mission id (msn_…)")
 	cmd.Flags().StringVar(&model, constants.FlagModel, "", "model identifier (e.g. claude-opus-4-7)")
 	cmd.Flags().StringVar(&agent, constants.FlagAgent, "", "agent kind: claude-code | cursor | aider | codex-cli | manual")
 	cmd.Flags().StringVar(&retryOf, "retry-of", "", "previous run-id this is retrying")

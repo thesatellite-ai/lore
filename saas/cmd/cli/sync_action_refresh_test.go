@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"saas/pkg/aicoder/gitsetup"
 )
 
 // installAt installs the workflow for the project at dir with v0.1.11 and
@@ -36,7 +38,11 @@ func readFile(t *testing.T, p string) string {
 
 func refresh(t *testing.T, dir, own string) syncActionRefresh {
 	t.Helper()
-	r, err := refreshSyncActionPin(context.Background(), dir, own)
+	repo, err := gitsetup.Open(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := refreshSyncActionPin(context.Background(), repo, dir, own)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +325,7 @@ func TestParseSyncActionRejects(t *testing.T) {
 		"no marker":   "name: x\n",
 		"bad pin":     strings.Replace(good, syncActionPinPrefix+"auto", syncActionPinPrefix+"sometimes", 1),
 		"broken yaml": good + "\n\t: : :\n",
-		"no ci-merge": strings.ReplaceAll(good, "lore sync ci-merge", "lore sync other"),
+		"no ci-merge": strings.ReplaceAll(good, ciMergeCommand, "lore sync other"),
 	} {
 		if _, err := parseSyncAction(bad); err == nil {
 			t.Fatalf("%s: must be rejected", name)

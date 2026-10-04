@@ -19,6 +19,9 @@ vars:
   LORE_BIN: "{{.BIN_DIR}}/lore"
   WORKSPACE_ROOT: "{{.ROOT_DIR}}"
   TESTS_DIR: "{{.ROOT_DIR}}/tests"
+  # File inside .git where `task check` records the tree it passed for; the
+  # pre-push hook (.githooks/pre-push) reads the same name.
+  CHECK_STAMP: "lore-check-passed"
 
 tasks:
   build:
@@ -66,6 +69,70 @@ tasks:
       - go test -race ./saas/cmd/cli/... ./saas/pkg/aicoder/...
       - go test -race ./dbent/schema/...
 
+  test:all:
+    desc: "Every Go test in the workspace modules (dbent, lace, saas), incl. the CLI end-to-end suite and the docs drift test"
+    cmds:
+      - go test -count=1 ./dbent/... ./lace/... ./saas/...
+
+  check:tidy:
+    desc: "Fail when `go mod tidy` would change saas/go.mod or go.sum (leaves the files as they were)"
+    dir: saas
+    cmds:
+      - |
+        set -e
+        keep=$(mktemp -d)
+        cp go.mod go.sum "$keep"/
+        go mod tidy
+        if ! cmp -s go.mod "$keep/go.mod" || ! cmp -s go.sum "$keep/go.sum"; then
+          cp "$keep/go.mod" "$keep/go.sum" .
+          echo "✘ go mod tidy would change saas/go.mod or go.sum — run it in saas/ and commit the result"
+          exit 1
+        fi
+        echo "✓ go mod tidy: no changes"
+
+  check:docs:
+    desc: "Docs cite code through docsync: every citation still matches (ds check). Command/flag drift is TestDocsMatchCLI in test:all"
+    cmds:
+      - |
+        if ! command -v ds >/dev/null 2>&1; then
+          echo "✘ ds (docsync) is not installed, so doc citations cannot be checked"
+          exit 1
+        fi
+        ds scan >/dev/null
+        ds check
+
+  check:stamp:
+    desc: "Record that the gate passed for the tracked files as they are now (read by the pre-push hook)"
+    cmds:
+      - |
+        set -e
+        index=$(mktemp)
+        tree=$(GIT_INDEX_FILE="$index" sh -c 'git read-tree HEAD && git add -u && git write-tree')
+        rm -f "$index"
+        echo "$tree" > "$(git rev-parse --git-path {{.CHECK_STAMP}})"
+        echo "✓ gate passed for tree $tree"
+
+  check:
+    desc: "THE gate — run before every push (the pre-push hook enforces it): build, lint, race tests, every module's tests, tidy, scenarios, chaos, docs"
+    cmds:
+      - task: build
+      - task: lint
+      - task: test
+      - task: test:all
+      - task: check:tidy
+      - task: scenarios
+      - task: chaos
+      - task: check:docs
+      - task: check:stamp
+      - echo "✓ task check — every gate passed"
+
+  hooks:install:
+    desc: "Use the repo's committed hooks (.githooks): pre-push runs `task check` unless it already passed for the exact code being pushed"
+    cmds:
+      - chmod +x .githooks/*
+      - git config --local core.hooksPath .githooks
+      - echo "✓ hooks installed (core.hooksPath = .githooks)"
+
   test:sync:
     desc: "Git-sync tests only: lsync engine, merge3, canonjson, gitsetup, ids + the CLI e2e suite (real git, real binary)"
     cmds:
@@ -78,10 +145,17 @@ tasks:
       - go test ./saas/pkg/aicoder/lsync/ -run xxx -bench . -benchtime 3x
 
   test:cover:
-    desc: "Test with coverage report"
+    desc: "Coverage of unit AND end-to-end tests (the e2e binary is built with -cover); lists functions no test reaches"
     cmds:
-      - go test -race -coverprofile=coverage.out ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...
-      - go tool cover -func=coverage.out | tail -20
+      - |
+        set -e
+        dir=$(mktemp -d)
+        unit=$(mktemp -d)
+        LORE_E2E_COVERDIR="$dir" go test -count=1 -cover -coverpkg=./saas/... ./saas/cmd/cli/... ./saas/pkg/aicoder/... -args -test.gocoverdir="$unit" >/dev/null
+        go tool covdata textfmt -i="$dir,$unit" -o coverage.out
+        go tool cover -func=coverage.out | tail -1
+        echo "functions no test reaches (lore CLI + sync packages):"
+        go tool cover -func=coverage.out | grep -E "saas/(cmd/cli|pkg/aicoder/(lsync|gitsetup|merge3|canonjson|guard|migrationlog))/" | awk '$NF == "0.0%"' || true
 
   build:cross:
     desc: "Cross-compile the CLI for every shipped OS/arch (platform code must build everywhere, not just on the host)"

@@ -18,11 +18,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"saas/pkg/constants"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -395,12 +393,16 @@ func runBenchRunStart(ctx context.Context, f *benchRunStartFlags) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "aggregate summary").WithCause(err)
 	}
+	stored, err := summary.toStored()
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "store summary").WithCause(err)
+	}
 	completed, err := client.BenchRun.UpdateOne(run).
 		SetStatus(entBenchRun.StatusComplete).
 		SetCompletedAt(time.Now()).
 		SetTotalCalls(totalCalls).
 		SetCostUsdEstimate(totalCost).
-		SetSummary(summary).
+		SetSummary(stored).
 		Save(ctx)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "update bench run").WithCause(err)
@@ -464,10 +466,13 @@ func newBenchRunListCommand() *cobra.Command {
 				return nil
 			}
 			for _, r := range rows {
-				delta := summaryDelta(r.Summary)
+				s, err := storedRunSummary(r)
+				if err != nil {
+					return err
+				}
 				fmt.Printf("%-30s %-26s %-10s Δ=%+.1fpp  $%.2f  %s\n",
 					r.Code, r.Model, r.Status,
-					delta, r.CostUsdEstimate,
+					s.DeltaPP, r.CostUsdEstimate,
 					r.StartedAt.Format("2006-01-02 15:04"))
 			}
 			return nil
@@ -523,7 +528,11 @@ func newBenchRunShowCommand() *cobra.Command {
 			}
 			fmt.Printf("  calls:      %d   cost: $%.4f\n", run.TotalCalls, run.CostUsdEstimate)
 			fmt.Println()
-			printRunSummary(run.Code, run.Summary, run.TotalCalls, run.CostUsdEstimate, 0)
+			s, err := storedRunSummary(run)
+			if err != nil {
+				return err
+			}
+			printRunSummary(run.Code, s, run.TotalCalls, run.CostUsdEstimate, 0)
 			return nil
 		},
 	}
@@ -710,95 +719,62 @@ func lookupBenchRun(ctx context.Context, client *ent.Client, projectID, ref stri
 	return row, nil
 }
 
-// computeRunSummary rolls up bench_result rows by arm + category into
-// a JSON-serializable summary suitable for the BenchRun.summary field
-func computeRunSummary(ctx context.Context, client *ent.Client, runID string) (map[string]any, error) {
+// computeRunSummary rolls up bench_result rows by arm and by arm+category.
+func computeRunSummary(ctx context.Context, client *ent.Client, runID string) (benchRunSummary, error) {
 	results, err := client.BenchResult.Query().
 		Where(entBenchResult.BenchRunID(runID)).
 		WithBenchEval().
 		All(ctx)
 	if err != nil {
-		return nil, err
+		return benchRunSummary{}, err
 	}
-	// arm → {n, pass}
-	type bucket struct {
-		N, Pass int
-	}
-	armTotal := map[entBenchResult.Arm]*bucket{}
-	armByCat := map[entBenchResult.Arm]map[entBenchEval.Category]*bucket{}
+	type tally struct{ n, pass int }
+	armTotal := map[string]*tally{}
+	armByCat := map[string]map[string]*tally{}
 	for _, r := range results {
-		ev := r.Edges.BenchEval
-		if armTotal[r.Arm] == nil {
-			armTotal[r.Arm] = &bucket{}
+		arm := string(r.Arm)
+		passed := r.Grade == entBenchResult.GradePass
+		if armTotal[arm] == nil {
+			armTotal[arm] = &tally{}
 		}
-		armTotal[r.Arm].N++
-		if r.Grade == entBenchResult.GradePass {
-			armTotal[r.Arm].Pass++
+		armTotal[arm].n++
+		if passed {
+			armTotal[arm].pass++
 		}
-		if ev != nil {
-			if armByCat[r.Arm] == nil {
-				armByCat[r.Arm] = map[entBenchEval.Category]*bucket{}
+		if ev := r.Edges.BenchEval; ev != nil {
+			cat := string(ev.Category)
+			if armByCat[arm] == nil {
+				armByCat[arm] = map[string]*tally{}
 			}
-			if armByCat[r.Arm][ev.Category] == nil {
-				armByCat[r.Arm][ev.Category] = &bucket{}
+			if armByCat[arm][cat] == nil {
+				armByCat[arm][cat] = &tally{}
 			}
-			armByCat[r.Arm][ev.Category].N++
-			if r.Grade == entBenchResult.GradePass {
-				armByCat[r.Arm][ev.Category].Pass++
-			}
-		}
-	}
-	arms := map[string]any{}
-	for a, b := range armTotal {
-		rate := 0.0
-		if b.N > 0 {
-			rate = float64(b.Pass) / float64(b.N)
-		}
-		arms[string(a)] = map[string]any{
-			"n":         b.N,
-			"pass":      b.Pass,
-			"pass_rate": rate,
-		}
-	}
-	cats := map[string]any{}
-	for a, m := range armByCat {
-		armCats := map[string]any{}
-		for c, b := range m {
-			rate := 0.0
-			if b.N > 0 {
-				rate = float64(b.Pass) / float64(b.N)
-			}
-			armCats[string(c)] = map[string]any{
-				"n": b.N, "pass": b.Pass, "pass_rate": rate,
-			}
-		}
-		cats[string(a)] = armCats
-	}
-	// Delta (baseline → with_skill in pp)
-	delta := 0.0
-	if bb, ok := arms["baseline"].(map[string]any); ok {
-		if ws, ok2 := arms["with_skill"].(map[string]any); ok2 {
-			if br, ok3 := bb["pass_rate"].(float64); ok3 {
-				if wr, ok4 := ws["pass_rate"].(float64); ok4 {
-					delta = (wr - br) * 100
-				}
+			armByCat[arm][cat].n++
+			if passed {
+				armByCat[arm][cat].pass++
 			}
 		}
 	}
-	return map[string]any{
-		"arms":        arms,
-		"by_category": cats,
-		"delta_pp":    delta,
-		"computed_at": time.Now().Format(time.RFC3339),
-	}, nil
-}
-
-// summaryDelta plucks the headline Δ out of a stored summary map
-func summaryDelta(summary map[string]any) float64 {
-	if v, ok := summary["delta_pp"].(float64); ok {
-		return v
+	s := benchRunSummary{
+		Arms:       map[string]benchArmStats{},
+		ByCategory: map[string]map[string]benchArmStats{},
+		ComputedAt: time.Now().Format(time.RFC3339),
 	}
-	return 0
+	for arm, t := range armTotal {
+		s.Arms[arm] = newArmStats(t.n, t.pass)
+	}
+	for arm, cats := range armByCat {
+		s.ByCategory[arm] = map[string]benchArmStats{}
+		for cat, t := range cats {
+			s.ByCategory[arm][cat] = newArmStats(t.n, t.pass)
+		}
+	}
+	base, okBase := s.Arms[string(entBenchResult.ArmBaseline)]
+	with, okWith := s.Arms[string(entBenchResult.ArmWithSkill)]
+	if okBase && okWith {
+		s.DeltaPP = (with.PassRate - base.PassRate) * 100
+	}
+	return s, nil
 }
 
 // parseSince accepts "7d", "30d", or "YYYY-MM-DD"
@@ -815,50 +791,34 @@ func parseSince(s string) (time.Time, error) {
 	return time.Parse("2006-01-02", s)
 }
 
-// printRunSummary writes a one-screen human report for a completed run
-func printRunSummary(code string, summary map[string]any, calls int, cost float64, elapsed time.Duration) {
-	arms, _ := summary["arms"].(map[string]any)
+// printRunSummary writes a one-screen human report for a completed run.
+func printRunSummary(code string, summary benchRunSummary, calls int, cost float64, elapsed time.Duration) {
 	fmt.Printf("=== summary: %s ===\n", code)
-	for _, a := range []string{"baseline", "with_skill"} {
-		if m, ok := arms[a].(map[string]any); ok {
-			pass, _ := m["pass"].(float64)
-			n, _ := m["n"].(float64)
-			rate, _ := m["pass_rate"].(float64)
-			fmt.Printf("  %-12s %.0f/%-3.0f  (%.1f%%)\n", a, pass, n, rate*100)
+	for _, arm := range []string{string(entBenchResult.ArmBaseline), string(entBenchResult.ArmWithSkill)} {
+		if a, ok := summary.Arms[arm]; ok {
+			fmt.Printf("  %-12s %d/%-3d  (%.1f%%)\n", arm, a.Pass, a.N, a.PassRate*100)
 		}
 	}
-	if d, ok := summary["delta_pp"].(float64); ok {
+	if len(summary.Arms) > 0 {
 		sign := "+"
-		if d < 0 {
+		if summary.DeltaPP < 0 {
 			sign = ""
 		}
-		fmt.Printf("  Δ:           %s%.1f pp\n", sign, d)
+		fmt.Printf("  Δ:           %s%.1f pp\n", sign, summary.DeltaPP)
 	}
 	fmt.Printf("  calls:       %d   cost: $%.4f", calls, cost)
 	if elapsed > 0 {
 		fmt.Printf("   elapsed: %s", elapsed.Round(time.Second))
 	}
 	fmt.Println()
-	if cats, ok := summary["by_category"].(map[string]any); ok && len(cats) > 0 {
+	if len(summary.ByCategory) > 0 {
 		fmt.Println()
 		fmt.Println("  by category:")
-		armKeys := make([]string, 0, len(cats))
-		for k := range cats {
-			armKeys = append(armKeys, k)
-		}
-		sort.Strings(armKeys)
-		for _, arm := range armKeys {
-			armCats, _ := cats[arm].(map[string]any)
-			for cat, vraw := range armCats {
-				if v, ok := vraw.(map[string]any); ok {
-					rate, _ := v["pass_rate"].(float64)
-					fmt.Printf("    %-12s %-20s %.1f%%\n", arm, cat, rate*100)
-				}
+		for _, arm := range sortedKeys(summary.ByCategory) {
+			cats := summary.ByCategory[arm]
+			for _, cat := range sortedKeys(cats) {
+				fmt.Printf("    %-12s %-20s %.1f%%\n", arm, cat, cats[cat].PassRate*100)
 			}
 		}
 	}
 }
-
-// JSON encode helper for grader trace persistence sanity (unused but kept
-// so importing encoding/json isn't dropped)
-var _ = json.Marshal

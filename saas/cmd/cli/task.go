@@ -185,7 +185,7 @@ type taskEditFlags struct {
 func newTaskEditCommand() *cobra.Command {
 	f := &taskEditFlags{}
 	cmd := &cobra.Command{
-		Use:   "edit <id|T-N>",
+		Use:   "edit <id>",
 		Short: "Edit task fields (only flags you pass are applied)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -584,7 +584,10 @@ func printTaskRows(rows []*ent.Task) {
 		if t.DeferredUntil != nil {
 			defer_ = " " + style.Muted("⏾"+t.DeferredUntil.Format("2006-01-02"))
 		}
-		fmt.Printf("%s T-%-3s %s [%s]%s%s%s\n",
+		// The full opaque id: it is what every command takes (the short
+		// "T-N" form was removed, so printing a "T-" prefix here produced
+		// ids no command accepts).
+		fmt.Printf("%s %s %s [%s]%s%s%s\n",
 			statusBadge, t.ID, t.Title, t.Priority, due, commit, defer_)
 	}
 }

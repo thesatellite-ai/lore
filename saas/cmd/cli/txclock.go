@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -57,9 +58,35 @@ func txAtMonotonicHook() ent.Hook {
 }
 
 // nextTxAt returns max(now, high-water + step) and stores it as the new
-// high-water mark. Concurrent writers are serialised by SQLite's write
-// lock (immediate transactions, see dbent.InitDB).
+// high-water mark, atomically: the read and the write run in ONE transaction,
+// which this DSN begins IMMEDIATE (dbent.InitDB), so concurrent lore processes
+// queue on the write lock instead of both reading the same mark (two equal
+// tx_at values) or both inserting the first one (UNIQUE config.key failure,
+// which made SC-5 lose a memory 1 run in 100). When the memory is being
+// created inside a caller's transaction, that transaction already holds the
+// write lock and is used as is.
 func nextTxAt(ctx context.Context, client *ent.Client, now time.Time) (time.Time, error) {
+	tx, err := client.Tx(ctx)
+	if errors.Is(err, ent.ErrTxStarted) {
+		return advanceTxClock(ctx, client, now) // already inside a transaction
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("begin tx_at clock transaction: %w", err)
+	}
+	next, err := advanceTxClock(ctx, tx.Client(), now)
+	if err != nil {
+		_ = tx.Rollback() // the clock error is the one to report
+		return time.Time{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return time.Time{}, fmt.Errorf("commit tx_at clock: %w", err)
+	}
+	return next, nil
+}
+
+// advanceTxClock is nextTxAt's read-modify-write; the caller provides the
+// transaction that makes it atomic.
+func advanceTxClock(ctx context.Context, client *ent.Client, now time.Time) (time.Time, error) {
 	next := now
 	row, err := client.DBConfig.Query().Where(entConfig.Key(txClockKey)).Only(ctx)
 	switch {
