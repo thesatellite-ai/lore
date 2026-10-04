@@ -154,7 +154,7 @@ lore bench result stats           # no args = latest
 
 # 5. Final summary after completion
 lore bench report summary          # no args = latest
-lore bench report analyze --latest
+lore bench report analyze <run-id-or-code>
 
 # 6. If the smoke shows signal (Δ > 5pp), do the real run
 lore bench run start --model=claude-sonnet-4-6 --runs-per-arm=3 \

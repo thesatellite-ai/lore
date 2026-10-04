@@ -88,6 +88,17 @@ Copies only: a bare remote cloned from the repo, the real `lore.db` copied in, t
 | A same-text conflict could not be settled with lore: the file was blocked, so `lore memory edit` changed the DB but never the file | a valid file with markers inside a value is imported (clean fields land, both versions visible) and its notice persists until an edit exports a settled file; raw-marker files stay blocked and are never overwritten | `TestConflictMarkersInsideStringValue` (rewritten to the new contract), `TestRawConflictMarkersStayBlocked`; trial: blocked commit → `lore memory edit` → commit → A and B converge |
 | `lore memory show` crashed (nil `valid_until`) on every memory without a valid-until date — all 550 in that repo, also in the released 0.1.9; `run show` / `run end` had the same shape with `started_at` | nil guards at all three sites (every other optional-time dereference in the CLI was checked and is guarded or a non-pointer field) | `TestE2E_ShowCommandsWithOptionalTimesUnset` (verified failing with the guard removed) |
 
+### Pull-request merging (after v0.1.10)
+
+| Built | Pinned by |
+|---|---|
+| `gitsetup` merge mechanics: `ProbeMerge`, `MergeNoCommit` (drivers per invocation), `Unmerged`, `AbortMerge`, `CommitMerge`, `IsClean`, `DefaultBranch` | `merge_test.go` (incl. `TestProbeMergeIgnoresConfiguredDrivers`, verified failing with the attribute override removed) |
+| `lore sync ci-merge` (§9.1) | `TestE2E_CIMergeSettlesLoreConflict`, `TestE2E_CIMergeLeavesHumanConflictsAlone` (same text; code conflict), `TestE2E_CIMergeCleanAndGuards` |
+| `lore sync install-action` / `uninstall-action` and the workflow template | `sync_action_test.go` (YAML structure, triggers, paths, subfolder projects, version pinning, branch-name refusal, every install/uninstall state); generated files pass actionlint with shellcheck; `TestE2E_InstalledWorkflowScriptMergesPullRequest` runs the workflow's real shell step against a local origin with a stand-in `gh` and checks the pushed branch |
+| The merge driver now prints which fields "newer wins" decided (the spec said so; nothing printed it) | `TestNewerWinsLeavesOutBookkeeping`, `TestMergeDriver_StatusNewestWins` |
+
+Found while building it: the first `ProbeMerge` used plain `git merge-tree`, which runs a driver the clone has configured, so in a developer's clone it answered "clean" where GitHub reports a conflict. Fixed with `--attr-source=<empty tree>` (git 2.40+).
+
 Not changed, needs a decision: `.lore/LORE.md` gets a new random `AICODER:CANARY` id on every render, so any clone that re-renders after a pull shows `LORE.md` modified even when no rule changed. It merges cleanly (`merge=lore-keep-ours`) but is noise in `git status`.
 
 ### Deferred features and gaps closed (previously skipped scenarios)
@@ -446,11 +457,26 @@ lore task list              → reconcile: diff old HEAD tree vs new → rows of
 | unchanged | changed | take theirs |
 | changed | unchanged | take ours |
 | changed to X | changed to X | X |
-| changed to X | changed to Y | **scalar enum / timestamp** (status, priority, archived_at): newest `updated_at` wins, warning printed. **free text** (title, body): real conflict — driver writes git-style conflict markers inside the string value and exits 1, so the human resolves it (with `lore <entity> edit`, or by editing the value). |
+| changed to X | changed to Y | **enum, number, boolean, timestamp, reference (`*_id`)** (status, priority, archived_at): newest `updated_at` wins; the driver prints which fields that decided (`MergeOutcome.NewerWins`). **free text and JSON** (title, body): real conflict — driver writes git-style conflict markers inside the string value and exits 1, so the human resolves it (with `lore <entity> edit`, or by editing the value). |
 | `updated_at` | always | max(ours, theirs) |
 | unknown fields | | same rules, preserved verbatim |
 
 Text fields stay loud on purpose: silently picking one of two edited rule bodies is exactly the silent data loss this design exists to prevent.
+
+### 9.1 Pull requests: merging where the host cannot
+
+A host's web merge (GitHub, GitLab) never runs custom drivers, so "same row, different fields" in the first table is a conflict there. Two paths clear it; both run lore's driver on a machine:
+
+1. **By hand:** merge the base branch into the PR branch locally (`git pull origin main`), settle any same-text conflict, push.
+2. **`lore sync ci-merge --base <ref>`**, unattended (opt-in workflow from `lore sync install-action`). It changes the branch only when all of these hold, and otherwise reports `needs-human` and leaves everything as it was:
+   - the work tree is clean;
+   - a plain merge conflicts (`gitsetup.ProbeMerge`, which reads attributes from the empty tree so the probe sees what the host sees: `merge-tree` would otherwise run a driver the clone has configured and report "clean");
+   - every conflicted path is lore-managed (`<project>/.lore/data/**` or `<project>/.lore/LORE.md`);
+   - the real merge with lore's drivers (passed per invocation with `git -c`, never written to config) leaves nothing unmerged.
+
+   It then commits the merge (hooks skipped: the result was validated, and an interactive hook must not decide an unattended merge) and exits 0. Outcomes: `up-to-date`, `clean` (the host can merge as is), `merged` (caller pushes), `needs-human`. It never pushes.
+
+The workflow (`.github/workflows/lore-sync-merge.yml`, generated from `sync_action.yml.tmpl` with the CLI's own constants) triggers on `pull_request` and on pushes to the chosen branches, both filtered to the lore data paths, plus `workflow_dispatch`; `--manual` keeps only the last. It downloads the lore release that generated it (checksum-verified; `latest` from a development build), runs `ci-merge` for the event's PR or for every open same-repository PR on the pushed base, pushes `merged` results, and lists `needs-human` ones in the run summary. It needs `contents: write`; pushes made with `GITHUB_TOKEN` start no other workflows, so a `LORE_SYNC_TOKEN` secret is used instead when present. Fork PRs are skipped. `install-action` only overwrites or deletes a file that starts with its marker line (`--force` otherwise).
 
 ## 10. Git integration (auto-configured, optional for correctness)
 
@@ -493,7 +519,7 @@ Grouped by area. Each row is a case the implementation must handle and a test mu
 
 | # | Case | Fix |
 |---|---|---|
-| E1 | Two developers each ran `lore init` before sharing → two `project` rows with different random ids; every row's `project_id` differs | `.lore/data/_meta.json` holds the project id and is committed. `lore init` in a repo with existing `.lore/data` adopts it instead of creating a new project. If two `_meta.json` histories meet in a merge (both inited in parallel): `lore doctor --fix` picks the older id, rewrites `project_id` in every file of the other, in one commit. |
+| E1 | Two developers each ran `lore init` before sharing → two `project` rows with different random ids; every row's `project_id` differs | `.lore/data/_meta.json` holds the project id and is committed. `lore init` in a repo with existing `.lore/data` adopts it instead of creating a new project. If two `_meta.json` histories meet in a merge (both inited in parallel): `lore sync fix-projects` (designed as `doctor --fix`) keeps the older id and rewrites `project_id` in every row of the other; commit the result. |
 | E2 | Natural-key uniques collide: tag `(project_id,name)`, repo `(project_id,mount_name)`, prompt `(project_id,name)`, project_config `(project_id,key)`, actor `stable_key` — two branches create tag "auth" with different UUIDs → import violates the unique index | Rows with a natural key get a **deterministic id**: `prefix + hex(sha256(project_id + "\x00" + natural_key))[:32]`. Both branches then write the same path with the same content → git merges identical adds cleanly. Pre-existing random-id duplicates: importer detects the unique violation, keeps the lexicographically smaller id, rewrites references (entity_tag etc.), logs it. |
 | E3 | Renaming a deterministic-id row (tag rename) changes its id | Rename = create new + re-point references + archive old, done by the CLI in one operation; documented on the tag schema field. |
 | E4 | `actor.stable_key` holds `human:<email>` → committing exposes emails | Committed actor file stores `stable_key_hash` (sha256) + `display_name` + `kind`; the raw key stays local. Note: git commit metadata already exposes author emails to repo readers, so this is defense in depth, not a new boundary. **As built:** `stable_key` is committed unchanged — see §0 Deltas. |
@@ -506,7 +532,7 @@ Grouped by area. Each row is a case the implementation must handle and a test mu
 | # | Case | Fix |
 |---|---|---|
 | E8 | Dangling references after a merge (task → mission that only existed on the other branch; `superseded_by_id` → archived row) | Import with foreign keys deferred / disabled; after import, a reference check lists dangling ids in `sync_errors`; commands render "(missing)" instead of failing; `lore doctor` reports them. |
-| E9 | Deleted on one branch, edited on the other → git modify/delete conflict | No hard deletes of synced rows. Delete = set `archived_at`. Hard purge only via `lore gc --purge-archived --older-than` run deliberately on `main`. **As built:** `lore <kind> delete` still hard-deletes; the export removes the file and git shows a visible modify/delete conflict if another branch edited it — see §0 Deltas. |
+| E9 | Deleted on one branch, edited on the other → git modify/delete conflict | No hard deletes of synced rows. Delete = set `archived_at`. Hard purge only via `lore sync purge --archived-before <date|age> --confirm` (designed as `gc --purge-archived`) run deliberately on `main`. **As built:** `lore <kind> delete` still hard-deletes; the export removes the file and git shows a visible modify/delete conflict if another branch edited it — see §0 Deltas. |
 | E10 | Same entity edited on two branches, merged on GitHub (no driver) | Usually conflicts (the `updated_at` line). GitHub shows a normal text conflict in a small JSON file; it can be resolved in the web editor, or locally where the driver auto-resolves non-text fields. Documented as expected. |
 | E11 | Driver not installed in a clone, developer resolves by picking one side whole | Damage is limited to that one entity (one file), not the whole DB as with a binary file. Lore installs the driver on first command (§10), so the window is "clone + merge before ever running lore". |
 | E12 | Conflict markers or invalid JSON committed | Importer skips the file, keeps the previous DB row, records `sync_errors`, prints the path on every command until fixed. The pre-commit hook rejects it when installed. |
@@ -565,7 +591,7 @@ As built, the numbers behind E28 and E32 are named constants: a pass waits up to
 |---|---|---|
 | E37 | Developer forgets to commit `.lore/data` changes | Every lore command prints "N lore files not committed" when dirty; agents read lore output and commit them; optional pre-commit hook auto-stages. **As built:** the reminder prints after commands that wrote row files; `lore sync status` / doctor always show the count. |
 | E38 | Developer stages only specific files, leaves lore out, PR merges without its knowledge | Same warning keeps showing on their branch after merge; `lore doctor` flags "lore changes exist that are not on any pushed commit". |
-| E39 | Knowledge that must apply to every branch immediately (urgent rule) | Out of scope for v1 sync; the path is a small PR to `main` that branches then merge. Later phase: `lore promote <id>` opens that PR. |
+| E39 | Knowledge that must apply to every branch immediately (urgent rule) | The path is a small PR to `main` that branches then merge. **As built:** `lore sync promote <id> --to main` commits the row onto local `main` (never pushes); the push or PR stays with the user. |
 | E40 | Existing projects with a populated, never-shared `lore.db` per developer | Bootstrap export + adopt, see §12. |
 
 ## 12. Existing `lore.db` files and direct DB writes
@@ -642,7 +668,7 @@ Step 2  Everyone else:        upgrade lore → git pull main → run any command
                               → commit it with their next push; it reaches main when that PR merges
 ```
 
-If two people bootstrap in parallel before either merges, both `_meta.json` files carry different project ids → `lore doctor --fix` (E1) unifies them after the merge. The recommended order above avoids that.
+If two people bootstrap in parallel before either merges, both `_meta.json` files carry different project ids → `lore sync fix-projects` (E1) unifies them after the merge. The recommended order above avoids that.
 
 ### 12.5 Other direct-write cases
 
@@ -654,8 +680,8 @@ If two people bootstrap in parallel before either merges, both `_meta.json` file
 | E44 | `lore.db` deleted or corrupt | Full import from files rebuilds every synced row; only local-only telemetry is lost. This becomes the cheapest recovery tier, ahead of today's backup tiers. |
 | E45 | A teammate still on an old lore binary keeps writing to their DB with no triggers | Their changes are invisible until they upgrade; on upgrade, ADOPT exports them (rows only in the DB) and conflict-copies any that diverged. `_meta.json` carries `min_lore_version`; future versions refuse to write below it. Rollout note: upgrade everyone in step 2 above. **As built:** no `min_lore_version` field; the per-file `_v` check gives the same protection. |
 | E46 | Existing hook manager owns `core.hooksPath` (husky, lefthook, a repo's `.githooks` like sync_go) | Append lore's marked block to that directory's scripts; never repoint `core.hooksPath` (also referenced in §10). |
-| E47 | Rows deleted on `main` (via archive) get resurrected by an old DB during ADOPT | Cannot happen for archived rows (file still exists with `archived_at`; DB row is older → file wins by `updated_at`). Can happen only after `lore gc --purge-archived` removed the file; purge therefore records purged ids in `.lore/data/_purged.json`, and ADOPT skips them. |
-| E48 | Two developers independently wrote the same knowledge with different ids (both added "use JWT") | Not auto-merged (content similarity is a judgement call). `lore doctor --dupes` lists near-duplicates after ADOPT for a human or agent to merge with `lore <kind> merge <keep> <drop>`. |
+| E47 | Rows deleted on `main` (via archive) get resurrected by an old DB during ADOPT | Cannot happen for archived rows (file still exists with `archived_at`; DB row is older → file wins by `updated_at`). Can happen only after `lore sync purge` removed the file; purge therefore records purged ids in `.lore/data/_purged.json`, and ADOPT skips them. |
+| E48 | Two developers independently wrote the same knowledge with different ids (both added "use JWT") | Not auto-merged (content similarity is a judgement call). `lore sync dupes` lists rows recorded twice (same text, different ids) for a human or agent to fold with `lore sync merge-rows <table> --keep <id> --drop <id>`. |
 | E49 | Mode B projects (`.lore/lore.toml` → shared DB) | Out of scope for v1 (Q4): bootstrap does not run when the project resolves via Mode B, and prints why once. |
 
 ## 13. Plan
@@ -671,7 +697,7 @@ All phases shipped; sync is on by default (`LORE_SYNC=0` turns it off). Per-phas
 | **P4 — merge** | `lore merge-driver` (field-level 3-way, loud on text), `lore-regen` driver for `LORE.md`, `.gitattributes` writer | Harness merges with the driver AND with plain `git merge` (no driver, simulating GitHub) and asserts no silent loss in either |
 | **P5 — git wiring** | Auto-config of merge driver + `core.hooksPath` with chaining into existing hook dirs (E46 husky / `.githooks`); optional hooks | Fresh-clone test: first lore command configures everything; existing `.githooks/pre-commit` (sync_go style) still runs after lore appends |
 | **P6 — migration + default on** | BOOTSTRAP and ADOPT (§12.3) with pre-backup; both-sides-changed resolution (§12.2) and `lore sync resolve`; `backup restore --prefer` (E43); `_purged.json` (E47); `lore doctor` checks (E1, E8, E12, E30, E38, E48); `lore init` adopts existing `.lore/data`; rollout guide (§12.4); flip default | Harness: two clones with independent pre-existing `lore.db` files bootstrap + adopt, merge, and end with identical data and a clean doctor; old-binary DB adopted without loss |
-| **P7 — later** | `lore task list --ref origin/feature/x` read-only view via `git show`; `lore promote`; `lore gc --purge-archived` | — |
+| **P7 — done** | read another branch's rows: `lore sync peek origin/feature/x [table]` (designed as `task list --ref`); `lore sync promote <id> --to <branch>`; `lore sync purge --archived-before` | e2e peek / promote / purge tests |
 
 **Test harness (built in P3, used by every later phase):** a Go test helper that creates a bare "origin" repo plus two or three clones in a temp dir, runs real lore commands and real git commands in each, and asserts on the resulting DB contents. Every edge case row above gets at least one scenario in it.
 

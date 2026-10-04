@@ -1,7 +1,6 @@
 # Development
 
-Internal build / release notes. End-user docs live in the top-level
-[README](../README.md).
+Internal build / release notes. End-user docs live in the top-level [README](../README.md).
 
 ## How it works
 
@@ -27,9 +26,7 @@ This is a Go **workspace** (`go.work`) stitching local modules:
 | `lace/db` | pure-Go SQLite open/registration |
 | `github.com/khanakia/entx/enttui` | TUI engine (resolved from the module proxy) |
 
-`vendor/` is **not** committed; `go.sum` is. A fresh clone builds from the
-module proxy. The build is pure-Go: `CGO_ENABLED=0`, `modernc.org/sqlite`
-(FTS5 is built in — no build tag).
+`vendor/` is **not** committed; `go.sum` is. A fresh clone builds from the module proxy. The build is pure-Go: `CGO_ENABLED=0`, `modernc.org/sqlite` (FTS5 is built in — no build tag).
 
 ## Build
 
@@ -55,18 +52,14 @@ CGO_ENABLED=0 go build -o tmp/bin/lore ./saas/cmd/cli
 
 ## Releases
 
-Driven by GoReleaser (`.goreleaser.yml`) via `.github/workflows/release.yml`.
-Four trigger paths:
+Driven by GoReleaser (`.goreleaser.yml`) via `.github/workflows/release.yml`. Four trigger paths:
 
-1. **push to `main`** → auto-bump patch, tag, release. Add `[skip release]` to
-   the commit **subject** to opt out.
+1. **push to `main`** → auto-bump patch, tag, release. Add `[skip release]` to the commit **subject** to opt out.
 2. **push tag `vX.Y.Z`** → release that tag (use for minor/major bumps).
 3. **workflow_dispatch with `tag=`** → create+push that tag, then release.
 4. **workflow_dispatch, empty tag** → snapshot build, artifacts on the run page.
 
-Each release cross-compiles linux/darwin/windows × amd64/arm64, bundles the
-binary + `README.md` + `skills/` into per-platform archives, and publishes a
-GitHub Release with checksums.
+Each release cross-compiles linux/darwin/windows × amd64/arm64, bundles the binary + `README.md` + `skills/` into per-platform archives, and publishes a GitHub Release with checksums.
 
 Validate locally before pushing:
 
@@ -77,17 +70,12 @@ goreleaser release --snapshot --clean --skip=publish
 
 ## Homebrew tap
 
-Formulae for all `thesatellite-ai` tools live in one shared tap repo:
-**`thesatellite-ai/homebrew-tap`**. GoReleaser writes `Formula/lore.rb` there on
-every release; users run `brew install thesatellite-ai/tap/lore`.
+Formulae for all `thesatellite-ai` tools live in one shared tap repo: **`thesatellite-ai/homebrew-tap`**. GoReleaser writes `Formula/lore.rb` there on every release; users run `brew install thesatellite-ai/tap/lore`.
 
 One-time setup (already done for the tap repo itself):
 
 1. The tap repo `thesatellite-ai/homebrew-tap` exists and is public.
-2. A Personal Access Token with `repo` scope (or a fine-grained token with
-   contents:write on the tap repo) is stored as the **`HOMEBREW_TAP_GITHUB_TOKEN`**
-   repository secret on `thesatellite-ai/lore`. The default `GITHUB_TOKEN`
-   cannot push to a *different* repo, so this separate token is required.
+2. A Personal Access Token with `repo` scope (or a fine-grained token with contents:write on the tap repo) is stored as the **`HOMEBREW_TAP_GITHUB_TOKEN`** repository secret on `thesatellite-ai/lore`. The default `GITHUB_TOKEN` cannot push to a *different* repo, so this separate token is required.
 
 To create the secret:
 
@@ -97,13 +85,8 @@ gh secret set HOMEBREW_TAP_GITHUB_TOKEN \
   --body "<PAT with repo scope>"
 ```
 
-Future projects reuse the same tap — just add a `brews:` block pointing at
-`thesatellite-ai/homebrew-tap` in their own `.goreleaser.yml`.
+Future projects reuse the same tap — just add a `brews:` block pointing at `thesatellite-ai/homebrew-tap` in their own `.goreleaser.yml`.
 
 ## Rebranding note
 
-Internal Go module/package names (`saas`, `dbent`, `lace`,
-`saas/pkg/aicoder/*`) intentionally keep their original identifiers — they are
-not user-visible and renaming them is pure churn. User-facing surfaces (binary
-`lore`, `.lore/` data dir, `lore.db`, `LORE_*` env vars, the skill) are all
-branded `lore`.
+Internal Go module/package names (`saas`, `dbent`, `lace`, `saas/pkg/aicoder/*`) intentionally keep their original identifiers — they are not user-visible and renaming them is pure churn. User-facing surfaces (binary `lore`, `.lore/` data dir, `lore.db`, `LORE_*` env vars, the skill) are all branded `lore`.

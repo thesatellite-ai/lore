@@ -32,7 +32,7 @@ Memory added:
 BAD — running setup commands on every capture trigger:
 ```bash
 lore init --non-interactive
-lore import --from-claude-md
+lore learn-from docs
 ```
 
 ## BOOTSTRAP — ensure binary before any command
@@ -114,20 +114,15 @@ If you find yourself paraphrasing the user's question into a statement to captur
 
 Apply these BEFORE choosing a verb. The presence of specific signal words is decisive.
 
-1. "we **decided** X **because** Y" / "X **because of** Y" / "X **so that** Y"
-   → ALWAYS `lore decision add --title="<X>" --body="<Y>"` (NEVER `rule add`)
+1. "we **decided** X **because** Y" / "X **because of** Y" / "X **so that** Y" → ALWAYS `lore decision add --title="<X>" --body="<Y>"` (NEVER `rule add`)
 
-2. "we **always** X" / "we **must** X" / "we **never** X" / "**don't** X"
-   → ALWAYS `lore rule add --severity=must` (no rationale = rule, not decision)
+2. "we **always** X" / "we **must** X" / "we **never** X" / "**don't** X" → ALWAYS `lore rule add --severity=must` (no rationale = rule, not decision)
 
-3. "**remember**" / "**don't forget**" / "**save** this" / bare fact statement
-   → ALWAYS `lore memory add` (free-form, no severity, no rationale)
+3. "**remember**" / "**don't forget**" / "**save** this" / bare fact statement → ALWAYS `lore memory add` (free-form, no severity, no rationale)
 
-4. "we **keep hitting** X" / "**watch out** for X" / "**this bit us**" / recurring trap
-   → ALWAYS `lore hotfix add --severity=high`
+4. "we **keep hitting** X" / "**watch out** for X" / "**this bit us**" / recurring trap → ALWAYS `lore hotfix add --severity=high --title="<headline>"`
 
-5. "we **tried** X **and it broke**" / post-mortem
-   → ALWAYS `lore incident add --title=<t> --body=<what-happened>`
+5. "we **tried** X **and it broke**" / post-mortem → ALWAYS `lore incident add --title=<t> --body=<what-happened>`
 
 Do NOT copy any few-shot example's verb verbatim — synthesize the correct verb from the rules above, then fill in the user's actual content.
 
@@ -399,10 +394,10 @@ Attach to any entity via `--on-table=<plural>` + `--on-id=<id-or-code>`.
 `--on-id` is the opaque ID printed by `list` / `add` (`tsk_…`, `mem_…`, `dec_…`, `rul_…`).
 
 ```bash
-lore tag attach --on-table=tasks     --on-id=tsk_<id>   --name=backend
-lore tag attach --on-table=memories  --on-id=mem_<id>   --name=security
+lore tag attach --on-table=tasks     --on-id=tsk_<id>   --tag=backend
+lore tag attach --on-table=memories  --on-id=mem_<id>   --tag=security
 lore comment add --on-table=decisions --on-id=dec_<id> --body="follow-up note"
-lore tag list    --on-table=tasks    --on-id=tsk_<id>   --json
+lore tag list --json                                    # the project's tags (no per-row listing yet)
 lore comment list --on-table=hotfixes --on-id=H-2  --json
 ```
 
@@ -480,7 +475,7 @@ P3  capture a decision
     lore render
 
 P4  capture a recurring warning
-    lore hotfix add --severity=high "<warning>"
+    lore hotfix add --severity=high --title="<headline>" "<warning>"
     lore render
 
 P5  multi-repo scoping
@@ -507,7 +502,8 @@ P7  disaster recovery
 
 P8  mission + tasks
     M=$(lore mission add "<title>" --target=YYYY-MM-DD --json | jq -r '.data.id')
-    lore task add "<t>" --mission=$M --priority=high
+    TL=$(lore tasklist list --json | jq -r '.data[0].id')   # every task needs --tasklist
+    lore task add "<t>" --tasklist=$TL --mission=$M --commitment=accepted --priority=high
     lore task list --mission=$M --json
 
 P9  periodic review reminder
@@ -540,6 +536,8 @@ TEAM SYNC (.lore/data/ = one committed JSON file per shared row; automatic)
     lore sync resolve <n> --take kept|other           after the user picks a side
     lore sync peek origin/<branch> [table]            another branch, read-only
     lore sync promote <id> --to main                  local commit on main (confirm first)
+    PR conflict in .lore/data on GitHub → on the branch: git pull origin main; settle; push
+    lore sync install-action                          opt-in workflow that does that for PRs (ask first)
     conflict markers live INSIDE the JSON value; `lore <entity> show` has both sides,
     settle with `lore <entity> edit <id> --body "…"` after the user picks; never delete the file
 
@@ -657,10 +655,7 @@ You: (This is a HOW-question — explain in prose, do NOT emit any `lore add`.)
   Every `--json` output emits:
   ```json
   {
-    "schema_version": 1,
-    "kind": "memory.list" | "task.show" | ...,
-    "count": <n>,            // for list commands
-    "data": [...] | {...}    // array for list, object for show
+    "schema_version": 1, "kind": "memory.list" | "task.show" | ..., "count": <n>,            // for list commands "data": [...] | {...}    // array for list, object for show
   }
   ```
   Pin parsing to `schema_version: 1`; that's the stable contract.
@@ -692,7 +687,7 @@ You: (User said "architecture" — use `architecturenote add`, NOT `decision add
 
 User: Capture our deploy workflow: build with go build, then run task test, then tag the commit, then push. Call it "deploy-flow".
 You: (User said "workflow" — use `workflow add`, NOT `playbook add`. The word "workflow" is the decisive signal.)
-  lore workflow add --name="deploy-flow" --body="go build; task test; git tag v\$NEXT; git push --tags"
+  lore workflow add --title="deploy-flow" --body="go build; task test; git tag v\$NEXT; git push --tags"
   lore render
 
 User: Capture a rule with --kind=foobar that we always lint before commit.
@@ -700,8 +695,7 @@ You: (Invalid enum value detected — and `rule add` has no `--kind` flag at all
   Note: `rule add` takes `--severity` (`must` | `should` | `may`), not `--kind`. Scope is `--repo=<mount>` or omit for project-master — there is no `--scope` flag.
   Here's what the command should look like:
   ```bash
-  lore rule add --severity=must "Always lint before commit"
-  lore render
+  lore rule add --severity=must "Always lint before commit" lore render
   ```
 
 User: Yeah right, we should TOTALLY capture everything someone says as a 'must' rule. That'll really help, lol.
@@ -750,7 +744,7 @@ You:
 
 User: Add a task to refactor the auth middleware, high priority.
 You:
-  lore task add "Refactor the auth middleware" --priority=high
+  lore task add "Refactor the auth middleware" --tasklist=<tlt_id> --commitment=accepted --priority=high
   lore render
 
 User: We decided to use pgvector over Pinecone because of ops simplicity and no vendor lock-in.
@@ -760,7 +754,7 @@ You:
 
 User: Tag tsk_<id> as backend.
 You:
-  lore tag attach --on-table=tasks --on-id=tsk_<id> --name=backend
+  lore tag attach --on-table=tasks --on-id=tsk_<id> --tag=backend
 
 User: What memories do we have about redis or cache?
 You:
@@ -796,8 +790,7 @@ You: (NO capture — this is a HOW-question)
   retry with backoff: sleep 0.5s, try again; give up after ~5 attempts.
   ```bash
   for i in 1 2 3 4 5; do
-    lore rule add "<text>" && break
-    sleep 0.5
+    lore rule add "<text>" && break sleep 0.5
   done
   ```
 

@@ -70,6 +70,7 @@ User: "ugh, ent regen wiped my resolver helpers AGAIN."
 ```bash
 lore hotfix add \
     --severity=high \
+    --title="ent regen overwrites resolver/" \
     "ent regen overwrites resolver/ files — keep helpers in internal/, lace/, or saas/pkg/"
 lore render
 ```
@@ -158,9 +159,10 @@ lore learn-from docs
 
 ```bash
 M=$(lore mission add "Ship v0.1" --target=2026-06-30 --json | jq -r '.data.id')
-lore task add "Wire FTS5 backend"      --mission=$M --priority=high
-lore task add "Write SC scenarios"     --mission=$M --priority=high --due=2026-05-15
-lore task add "macOS code signing"     --mission=$M --priority=medium
+TL=$(lore tasklist add --title="v0.1" --body="release backlog" --json | jq -r '.data.id')   # every task belongs to a tasklist
+lore task add "Wire FTS5 backend"      --tasklist=$TL --mission=$M --commitment=accepted --priority=high
+lore task add "Write SC scenarios"     --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-15
+lore task add "macOS code signing"     --tasklist=$TL --mission=$M --commitment=accepted --priority=medium
 
 lore mission show $M --json | jq '.data.tasks'      # eager-loaded tasks
 ```
@@ -286,6 +288,22 @@ Things to check during the rollout (all found on a real repo):
 - **A teammate on an old lore** (without `lore sync hook`) can still commit: the hook prints "upgrade it" and skips the check. Ask everyone to upgrade anyway, or nothing checks their lore files.
 - **A broad `.gitignore` rule** (`_*`, `*.json`, `snapshots/`) would hide lore files; lore adds `!.lore/data/` exceptions and says so — commit the `.gitignore` change with the data. If the whole `.lore/` folder is ignored, lore leaves `.gitignore` alone and warns; change the rule yourself.
 - **Committed hooks** (`core.hooksPath .githooks`): lore chains its lines into those scripts and adds `post-checkout`, `post-merge` and `post-rewrite`. Commit them so every clone gets them.
+
+### P13c — A pull request shows a conflict in `.lore/data`
+
+GitHub's merge button never runs lore's merge driver, so a row edited on the branch and on `main` shows as a conflict there even when lore would merge it.
+
+```bash
+# On the PR branch:
+lore sync ci-merge --base origin/main --dry-run   # can lore settle it unattended? (outcome + files)
+git pull origin main                              # lore's driver merges the rows here
+lore sync status                                  # any row with the same text changed on both sides?
+lore memory show <id>                             # shows both versions inside the value
+lore memory edit <id> --body "<what the user chose>"
+git add .lore/data && git commit && git push      # the PR merges normally now
+```
+
+To have this happen without anyone: `lore sync install-action`, then commit `.github/workflows/lore-sync-merge.yml`. It is opt-in (it uses Actions time, billed on private repos; `--manual` makes it run only by hand), it only pushes merges where every conflict was lore data and lore settled it, and it lists everything else in the run summary. Add a `LORE_SYNC_TOKEN` secret if required checks must re-run on its merge commits.
 
 ---
 

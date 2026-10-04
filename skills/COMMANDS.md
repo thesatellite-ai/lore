@@ -31,7 +31,7 @@ lore project shared-init --db=${HOME}/.lore/shared.db --name=alpha
 Ingest existing markdown (CLAUDE.md, AGENTS.md, .cursorrules, README) into `learn_candidates` for review.
 
 ```bash
-lore learn-from docs                       # default sources at project root
+lore learn-from docs                       # default sources at project root (same as `lore learn from docs`)
 lore learn-from docs --paths=foo.md        # explicit file(s)
 lore learn-from docs --paths=docs/         # directory — RECURSES for *.md
 lore learn list [--status=pending] [--json]
@@ -66,8 +66,7 @@ lore memory list [--repo=web | --all-repos | --master-only | --no-inherit] [--js
 > **Re-scoping an existing row** (`memory/rule/decision/hotfix/pattern/architecturenote`): use the explicit rebind flags on `edit`:
 >
 > ```bash
-> lore <kind> edit <id> --rebind-repo=<mount>   # move row to that repo (sets repo_id)
-> lore <kind> edit <id> --rebind-master         # move row to master (clears repo_id)
+> lore <kind> edit <id> --rebind-repo=<mount>   # move row to that repo (sets repo_id) lore <kind> edit <id> --rebind-master         # move row to master (clears repo_id)
 > ```
 >
 > `--rebind-repo` errors loudly if the mount is unknown. Note: bare `--repo` on `edit` is **context-only** (which repo's data to resolve) and never mutates scope — it now prints a loud note instead of silently no-op'ing. For an audited body+scope change (new row + history chain) use `lore <kind> add "<body>" --supersedes=<old_id> --repo=<mount>` instead. Verify with `lore <kind> list --repo=<mount> --no-inherit`.
@@ -132,7 +131,7 @@ Status: `proposed | accepted | superseded | rejected`.
 ## Hotfix (loud recurring warnings)
 
 ```bash
-lore hotfix add --severity=high "Beware: ent regen wipes resolver/ helpers"
+lore hotfix add --severity=high --title="ent regen wipes resolver helpers" "Beware: ent regen wipes resolver/ helpers"
 lore hotfix list [--json]
 lore hotfix show <id> [--json]
 ```
@@ -145,9 +144,9 @@ Severity: `info | low | medium | high | critical`. Hotfixes are **never truncate
 
 ```bash
 # mission = container for tasks
-lore mission add "Ship v0.1" --target=2026-06-30 --body="..."
+lore mission add "Ship v0.1" --target=2026-06-30 --body="..." [--json]   # --json: the new mission (.data.id)
 lore mission list [--status=active|paused|done|cancelled] [--json]
-lore mission show <id|MS-N> [--json]
+lore mission show <id|MS-N> [--json]   # --json: mission fields + .data.tasks
 lore mission done <id|MS-N>
 
 # task = discrete work — `--tasklist` is REQUIRED.
@@ -528,9 +527,9 @@ Same shape — `add | list | show`. Each `list/show` supports `--json`.
 
 ```bash
 lore plan add --title="Q2 roadmap" --body="..."
-lore tasklist add --title="Triage queue" --body="..."
-lore workflow add --name="release" --body="..."
-lore workspace add --name="dev" --body="..."
+lore tasklist add --title="Triage queue" --body="..." [--json]   # --json: .data.id, for task add --tasklist
+lore workflow add --title="release" --body="..."
+lore workspace add --title="dev" --body="..."
 lore handoff add --to=alice --body="ctx for next session"
 ```
 
@@ -543,15 +542,15 @@ lore handoff add --to=alice --body="ctx for next session"
 Same `add | list | show` shape. Each `list/show` supports `--json`.
 
 ```bash
-lore pattern   add --name=NoFmt --body="..."
-lore playbook  add --name=Release --body="..."
-lore prompt    add --name=SystemV2 --body="..."
+lore pattern   add --title=NoFmt --body="..."
+lore playbook  add --title=Release --body="..."
+lore prompt    add --title=SystemV2 --body="..."
 lore architecturenote add --title="Why SQLite" --body="..."
-lore behaviour add --name=careful --body="..."
-lore cookbookrecipe add --name="add-resolver" --body="..."
+lore behaviour add --title=careful --body="..."
+lore cookbookrecipe add --title="add-resolver" --body="..."
 lore incident  add --title="..." --body="..."
 lore suggestion add --title="..." --body="..."
-lore tastepref add --name="composition" --body="..."
+lore tastepref add --body="..."
 ```
 
 ---
@@ -667,7 +666,9 @@ lore repair --tier=3 --confirm    # bootstrap empty DB (last resort)
 
 ```bash
 lore identity show           # who am I, what resolution step won
-lore identity set --kind=human --display="Alice"
+lore identity set "Alice"    # persist to ~/.lore/identity.toml
+lore identity unset          # remove that file; resolution falls back down the chain
+lore identity anonymize on   # anon:<random> per session (off to stop)
 ```
 
 8-step fallback chain: flag → env → toml → git config → $USER → machine-id → persisted salt → ephemeral. Always resolves.
@@ -708,10 +709,7 @@ lore <cmd> --help                 # per-command help
 
 ## Bench — evaluation engine
 
-DB-backed benchmark framework for measuring AI agent performance with vs
-without lore context. Three nouns: `eval` (task templates), `run` (one
-benchmark execution), `result` (one task × arm × attempt). Plus
-`report`/`grader`/`config` for analysis.
+DB-backed benchmark framework for measuring AI agent performance with vs without lore context. Three nouns: `eval` (task templates), `run` (one benchmark execution), `result` (one task × arm × attempt). Plus `report`/`grader`/`config` for analysis.
 
 See `BENCH_DESIGN.md` and `EVAL_PLAN.md` at repo root for full methodology.
 
@@ -990,6 +988,15 @@ lore sync purge --archived-before <date|90d|720h> (--dry-run | --confirm)
 lore sync fix-projects [--keep <prj_id>] [--dry-run]
 lore sync install-git [--json]     # merge driver, .gitattributes block, hook blocks, .gitignore exceptions
                                    # for .lore/data (normally automatic); E_SYNC_DATA_IGNORED if git still ignores it
+lore sync ci-merge --base <ref> [--dry-run] [--json]
+                                   # merge <ref> in with lore's driver and commit, ONLY when the host would see a
+                                   # conflict, every conflict is in .lore/data or .lore/LORE.md, and lore settles all
+                                   # of them; never pushes. --json: {outcome: up-to-date|clean|merged|needs-human,
+                                   # base, commit, merged[], blocking[], reason}; exit 0 for every outcome
+lore sync install-action [--branch <b>]... [--manual] [--lore-version vX.Y.Z|latest] [--dry-run] [--force] [--json]
+                                   # opt-in: writes .github/workflows/lore-sync-merge.yml (runs ci-merge for open
+                                   # pull requests and pushes the merge); commit it to enable; re-run after upgrading
+lore sync uninstall-action [--force] [--json]   # delete that workflow (only if lore generated it)
 lore restore <backup> --confirm --prefer db|files|newest
 ```
 
