@@ -11,6 +11,7 @@ M=$(lore mission add \
     --body="Sprint goal: open the plugin protocol, ship MCP server alpha, expand FTS5 to all entity types." \
     --json | jq -r '.data.id')
 echo "Mission: $M"
+TL=$(lore tasklist add --title="v0.2 sprint" --body="sprint backlog" --json | jq -r '.data.id')   # every task belongs to a tasklist
 # Mission: msn_019e...
 ```
 
@@ -20,12 +21,12 @@ echo "Mission: $M"
 # Agents MUST pass --commitment (no default). Work the user agreed to = accepted;
 # your own speculative ideas = proposed (they land under `lore task triage`, not the
 # default list); parking-lot ideas = someday.
-lore task add "Design plugin manifest schema"         --mission=$M --commitment=accepted --priority=high --due=2026-05-20
-lore task add "Wire MCP server stub"                  --mission=$M --commitment=accepted --priority=high --due=2026-05-25
-lore task add "Extend FTS5 to rules + decisions"      --mission=$M --commitment=accepted --priority=medium --due=2026-05-30
-lore task add "Document plugin lifecycle"             --mission=$M --commitment=accepted --priority=medium --due=2026-06-05
-lore task add "v0.2 release notes draft"              --mission=$M --commitment=proposed --priority=low  --due=2026-06-10
-lore task add "macOS notarization config"             --mission=$M --commitment=someday --priority=low
+lore task add "Design plugin manifest schema"         --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-20
+lore task add "Wire MCP server stub"                  --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-25
+lore task add "Extend FTS5 to rules + decisions"      --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-05-30
+lore task add "Document plugin lifecycle"             --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-06-05
+lore task add "v0.2 release notes draft"              --tasklist=$TL --mission=$M --commitment=proposed --priority=low  --due=2026-06-10
+lore task add "macOS notarization config"             --tasklist=$TL --mission=$M --commitment=someday --priority=low
 
 lore mission show $M --json | jq '.data.tasks | length'
 # 6

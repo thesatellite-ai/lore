@@ -1,4 +1,4 @@
-# docsync ledger format=2 extract=1 repo=lore commit=a85220b scanned_at=2026-10-03T19:31:03Z
+# docsync ledger format=2 extract=1 repo=lore commit=ba15496 scanned_at=2026-10-04T04:17:24Z
 id	repo	kind	file	symbol	lines	hash	owner	stability	env	args
 sync-datanames-nhh4krj2	lore	const	saas/pkg/aicoder/lsync/files.go	DataDirName	21-33	1f861404f99026f841d062726cc760271cea780ad9419e07d84b64db6d5b769b	@khanakia	stable		desc=names%20inside%20.lore/data id=sync-datanames-nhh4krj2 owner=@khanakia stability=stable
 sync-drainrounds-2adqnp3a	lore	const	saas/pkg/aicoder/lsync/engine.go	maxDrainRounds	82	4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a	@khanakia	stable		desc=drain%20rounds%20per%20pass id=sync-drainrounds-2adqnp3a owner=@khanakia stability=stable

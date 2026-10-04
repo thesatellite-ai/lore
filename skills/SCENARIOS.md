@@ -74,14 +74,14 @@ lore render
 
 ### B.5 User: "I keep forgetting that ent regen wipes resolver/ helpers"
 ```bash
-lore hotfix add --severity=high \
+lore hotfix add --severity=high --title="ent regen wipes resolver/ helpers" \
     "ent regen wipes hand-written code in resolver/. Keep helpers in internal/, lace/, or saas/pkg/."
 lore render
 ```
 
 ### B.6 User pastes a reusable code snippet: "let's save this pattern"
 ```bash
-lore pattern add --name="options-pattern" --body="$(cat <<'GO'
+lore pattern add --title="options-pattern" --body="$(cat <<'GO'
 type Option func(*Config)
 func WithTimeout(d time.Duration) Option { return func(c *Config) { c.timeout = d } }
 func New(opts ...Option) *Client {
@@ -96,7 +96,7 @@ lore render
 
 ### B.7 User: "let's record the release procedure"
 ```bash
-lore playbook add --name="release" --body="$(cat <<'MD'
+lore playbook add --title="release" --body="$(cat <<'MD'
 1. task test:all
 2. Tag: git tag v$(date +%Y.%m.%d)
 3. task release
@@ -109,7 +109,7 @@ lore render
 
 ### B.8 User: "save this prompt as our default system prompt"
 ```bash
-lore prompt add --name="system-v2" --body="$PROMPT_TEXT"
+lore prompt add --title="system-v2" --body="$PROMPT_TEXT"
 lore render
 ```
 
@@ -139,19 +139,20 @@ lore render
 
 ### C.1 User: "add a task to wire FTS5"
 ```bash
-lore task add "Wire FTS5 backend" --priority=high
+TL=$(lore tasklist list --json | jq -r '.data[0].id')   # or: lore tasklist add --title=… --body=… --json
+lore task add "Wire FTS5 backend" --tasklist=$TL --commitment=accepted --priority=high
 lore render
 ```
 
 ### C.2 User: "track the v0.2 sprint"
 ```bash
 M=$(lore mission add "Ship v0.2" --target=2026-06-15 --json | jq -r '.data.id')
-# Then add tasks: lore task add "..." --mission=$M
+# Then add tasks: lore task add "<title>" --tasklist=<tlt_id> --mission=$M --commitment=accepted
 ```
 
 ### C.3 User: "high-priority urgent task: fix login bug, due tomorrow"
 ```bash
-lore task add "Fix login redirect bug" --priority=urgent --due=$(date -v+1d +%Y-%m-%d)
+lore task add "Fix login redirect bug" --tasklist=<tlt_id> --commitment=accepted --priority=urgent --due=$(date -v+1d +%Y-%m-%d)
 ```
 
 ### C.4 User: "what's on my plate?"
@@ -421,7 +422,7 @@ lore identity show
 
 ### J.2 "Set explicit identity"
 ```bash
-lore identity set --kind=human --display="Alice <alice@acme.com>"
+lore identity set "Alice <alice@acme.com>"
 ```
 
 ### J.3 "I'm running in CI; what identity?"
@@ -663,7 +664,7 @@ lore bench run start --model=claude-sonnet-4-6 --runs-per-arm=3
 
 ### P.10 (v0.2.3+) "Report on the latest run"
 ```bash
-lore bench report summary $(lore bench run list --latest --id-only)
+lore bench report summary --latest
 ```
 
 ---

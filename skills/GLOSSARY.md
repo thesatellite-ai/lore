@@ -95,6 +95,15 @@ The first sync pass. **Bootstrap** (no `.lore/data` yet): back up `lore.db`, exp
 ## Sync trash
 Rows deleted because their file disappeared (revert, `git clean`, stash) are copied to the trash first; `lore sync trash restore <n>` undoes it.
 
+## Merge driver
+A program git runs instead of its line-by-line merge for files `.gitattributes` assigns to it. lore's (`lore merge-driver`) merges row files field by field: a field changed on one side takes that side, `updated_at` takes the later time, a status / priority / date / reference changed both ways takes the newer edit (and says so), and text changed both ways becomes a real conflict with markers inside that one value. Configured in each clone automatically; host merge buttons (GitHub, GitLab) never run it.
+
+## ci-merge
+`lore sync ci-merge --base <ref>` — merges a base branch into the current branch with lore's driver and commits, only when the host would see a conflict, every conflict is in lore data, and lore settles all of them; otherwise reports `needs-human` and changes nothing. Never pushes. What the optional pull-request workflow runs.
+
+## lore-sync-merge workflow
+`.github/workflows/lore-sync-merge.yml`, written by `lore sync install-action` (opt-in; `--manual` for run-by-hand only). Runs `ci-merge` for open pull requests when lore data changes and pushes the merges it is allowed to make. Uses a `LORE_SYNC_TOKEN` secret when present so required checks re-run on its merge commits.
+
 ## Mode B
 Shared DB mode. Multiple project roots pointing at a single shared SQLite file via `.lore/lore.toml`. Used when many sibling projects want one knowledge base.
 

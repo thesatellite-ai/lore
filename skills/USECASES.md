@@ -9,16 +9,16 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Persist any free-form fact | `lore memory add "<text>"` |
 | Persist a hard constraint with severity | `lore rule add --severity=must "<text>"` |
 | Persist a decision rationale (ADR-style) | `lore decision add --title="<t>" --body="<why>"` |
-| Persist a recurring warning | `lore hotfix add --severity=high "<text>"` |
-| Reusable code pattern | `lore pattern add --name=<n> --body="<code>"` |
-| Reusable procedure | `lore playbook add --name=<n> --body="<steps>"` |
-| Reusable LLM prompt | `lore prompt add --name=<n> --body="<prompt>"` |
+| Persist a recurring warning | `lore hotfix add --severity=high --title="<headline>" "<text>"` |
+| Reusable code pattern | `lore pattern add --title=<n> --body="<code>"` |
+| Reusable procedure | `lore playbook add --title=<n> --body="<steps>"` |
+| Reusable LLM prompt | `lore prompt add --title=<n> --body="<prompt>"` |
 | Architectural note | `lore architecturenote add --title=<t> --body=<b>` |
-| Behaviour mode preset | `lore behaviour add --name=<n> --body=<b>` |
-| Recipe (cookbook entry) | `lore cookbookrecipe add --name=<n> --body=<b>` |
+| Behaviour mode preset | `lore behaviour add --title=<n> --body=<b>` |
+| Recipe (cookbook entry) | `lore cookbookrecipe add --title=<n> --body=<b>` |
 | Incident postmortem | `lore incident add --title=<t> --body=<b>` |
 | Improvement suggestion | `lore suggestion add --title=<t> --body=<b>` |
-| Taste preference | `lore tastepref add --name=<n> --body=<b>` |
+| Taste preference | `lore tastepref add --body=<b>` |
 
 ## Track work
 
@@ -140,7 +140,7 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Intent | Command |
 |---|---|
 | Who am I to lore? | `lore identity show` |
-| Override identity | `lore identity set --kind=human --display=<name>` |
+| Override identity | `lore identity set "<name>"` |
 
 ## Diagnostics
 

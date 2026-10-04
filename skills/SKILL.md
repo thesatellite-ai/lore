@@ -288,7 +288,7 @@ Five rules, priority order. The presence of specific signal words is decisive �
 1. **"we decided X because Y"** / "X because of Y" / "X so that Y" → ALWAYS `lore decision add --title="<X>" --body="<Y>"` (NEVER `rule add`)
 2. **"we always X"** / "we must X" / "we never X" / "don't X" → ALWAYS `lore rule add --severity=must` (no rationale = rule, not decision)
 3. **"remember"** / "don't forget" / "save this" / bare fact statement → ALWAYS `lore memory add` (free-form, no severity, no rationale)
-4. **"we keep hitting X"** / "watch out for X" / "this bit us" / recurring trap → ALWAYS `lore hotfix add --severity=high`
+4. **"we keep hitting X"** / "watch out for X" / "this bit us" / recurring trap → ALWAYS `lore hotfix add --severity=high --title="<headline>"`
 5. **"we tried X and it broke"** / post-mortem → ALWAYS `lore incident add --title=<t> --body=<what-happened>`
 
 ### ⚠ Anti-pattern: do NOT roleplay lore's output
@@ -422,12 +422,12 @@ lore render
 | User says | Run |
 |---|---|
 | "pre-create a tag called X (without attaching yet)" | `lore tag add --name=X` (standalone tag entity — distinct from `tag attach`) |
-| "tag tsk_<id> as backend" | `lore tag attach --on-table=tasks --on-id=tsk_<id> --name=backend` |
-| "remove the backend tag from tsk_<id>" | `lore tag detach --on-table=tasks --on-id=tsk_<id> --name=backend` |
-| "tag this memory mem_<id> 'security'" | `lore tag attach --on-table=memories --on-id=mem_<id> --name=security` |
+| "tag tsk_<id> as backend" | `lore tag attach --on-table=tasks --on-id=tsk_<id> --tag=backend` |
+| "remove the backend tag from tsk_<id>" | `lore tag detach --on-table=tasks --on-id=tsk_<id> --tag=backend` |
+| "tag this memory mem_<id> 'security'" | `lore tag attach --on-table=memories --on-id=mem_<id> --tag=security` |
 | "add a comment on dec_<id>: foo" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="foo"` |
 | "comment on hotfix H-2 that …" | `lore comment add --on-table=hotfixes --on-id=H-2 --body="…"` |
-| "show all tags on tsk_<id>" | `lore tag list --on-table=tasks --on-id=tsk_<id> --json` |
+| "what tags exist?" | `lore tag list --json` (lists the project's tags; there is no per-row tag listing yet) |
 | "what's been commented on dec_<id>?" | `lore comment list --on-table=decisions --on-id=dec_<id> --json` |
 
 **Common slip:** singular table name (`task`, `memory`, `decision`). Always plural.
@@ -504,7 +504,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "what decisions about X?" | `lore decision list --json \| jq '.data[] \| select(.title \| test("X";"i"))'` |
 | "why did you do X?" | `lore why-context --last-render --rendered` |
 | "show me mem_<id>", "show me tsk_<id>", "show me dec_<id>" | `lore <kind> show <id>` |
-| "show all rules INCLUDING archived" | `lore rule list --include-archived --json` |
+| "show all rules INCLUDING archived" | `lore rule list --json` (archived rules are included; check `archived_at`) |
 | "rules under project X (cross-project peek)" | `lore rule list --project=X --json` (one-shot override, doesn't change cwd project) |
 
 ### Render + introspect
@@ -568,7 +568,7 @@ The agent's **directive step 5** (rendered into `.lore/LORE.md`, reached via the
 |---|---|
 | "who am I / whoami / what identity" | `lore identity show` |
 | "anonymize captures / hide my name" | `lore identity anonymize` (toggles anon mode; file stays) |
-| "set my identity to X" | `lore identity set --actor=X` |
+| "set my identity to X" | `lore identity set "X"` |
 | "unset identity / go back to auto-detected" | `lore identity unset` (REMOVES ~/.lore/identity.toml entirely; distinct from `anonymize`) |
 | "is everything OK?" | `lore doctor` |
 | "what does doctor check?" | `lore doctor --help` (or `--json` to see structured output of checks) |
@@ -600,6 +600,8 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 | "two project ids after a merge" | `lore sync fix-projects` |
 | "remove archived stuff for good" | `lore sync purge --archived-before 90d --dry-run`, then `--confirm` with user OK |
 | "set up git for lore" | automatic; `lore sync install-git` to see what it does |
+| "GitHub says the PR has conflicts in .lore/data" | on the branch: `git pull origin main` (lore's driver merges there), settle any same-text conflict as below, push. Or `lore sync ci-merge --base origin/main` to see whether lore can settle it unattended |
+| "fix lore conflicts in PRs automatically" | `lore sync install-action` (opt-in GitHub workflow, uses Actions time; `--manual` to run only by hand) — confirm with the user, then they commit the file |
 | "restored a backup, which side wins?" | `lore restore <file> --confirm --prefer db\|files\|newest` — `db` (default) rolls back: files of rows not in the backup are removed (review the git diff) |
 
 **Merge conflicts in `.lore/data` files:** markers sit INSIDE the JSON string value (`"body": "<<<<<<< ours\n…\n=======\n…\n>>>>>>> theirs"`). lore imports the rest of the row and shows both versions in `lore <entity> show <id>`; the pre-commit hook refuses to commit until the text is settled. Ask the user which version (or what combination) to keep, then `lore <entity> edit <id> --body "<chosen text>"` — lore rewrites the file without markers — and commit. Never delete the file. Different fields of the same row merge automatically — those never need you. Markers that break the JSON itself (a merge done where lore's driver was not installed) block the file: run any lore command to install the driver, abort and redo the merge.
@@ -801,8 +803,7 @@ lore
 └── errors list                full E_* code registry
 ```
 
-**Universal flags** (work on every command):
-`--db PATH`, `--project NAME`, `--repo NAME`, `--read-only`, `--json`, `--color auto|always|never`.
+**Universal flags** (work on every command): `--db PATH`, `--project NAME`, `--repo NAME`, `--read-only`, `--json`, `--color auto|always|never`.
 
 ---
 
