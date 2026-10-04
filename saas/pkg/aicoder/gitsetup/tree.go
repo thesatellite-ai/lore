@@ -45,7 +45,7 @@ func ReadTree(ctx context.Context, dir, ref, prefix string) (map[string][]byte, 
 	cmd.Dir = dir
 	var in bytes.Buffer
 	for _, p := range paths {
-		in.WriteString(ref + ":./" + p + "\n")
+		fmt.Fprintf(&in, "%s:./%s\n", ref, p)
 	}
 	cmd.Stdin = &in
 	stdout, err := cmd.StdoutPipe()

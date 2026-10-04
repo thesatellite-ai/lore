@@ -1616,6 +1616,7 @@ func newTaskListGroup() *cobra.Command {
 func newTaskListAddCommand() *cobra.Command {
 	var f commonFlags
 	var title, body string
+	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a new tasklist",
@@ -1653,11 +1654,16 @@ func newTaskListAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create tasklist").WithCause(err)
 			}
+			if jsonOut {
+				printJSON(constants.KindTasklistAdd, row, 0)
+				return nil
+			}
 			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output (the created tasklist; scripts read .data.id)")
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "title (required)")
 	_ = cmd.MarkFlagRequired(constants.FlagTitle)
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "body (required; pass --body=<v> or pipe via stdin)")

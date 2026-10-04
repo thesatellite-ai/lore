@@ -18,6 +18,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"dbent"
 
 	"dbent/pkg/dbtemplate"
@@ -1122,5 +1124,241 @@ func TestE2E_ShowCommandsWithOptionalTimesUnset(t *testing.T) {
 	}
 	if r := alice.lore("run", "end", run, "--outcome", "success"); !strings.Contains(r.stdout, "start time unknown") {
 		t.Fatalf("run end: %s", r.stdout)
+	}
+}
+
+// ciMergeWorld: alice owns main, bob works on feature; both start from one
+// shared memory. Returns the clones and the memory id.
+func ciMergeWorld(t *testing.T) (*world, *clone, *clone, string) {
+	t.Helper()
+	w := newWorld(t)
+	alice := w.newClone("alice")
+	alice.lore("init", "--non-interactive", "--name=app")
+	mem := alice.addMemory("v1")
+	alice.commitAll("lore")
+	alice.git("push", "-q")
+	bob := w.newClone("bob")
+	bob.memories()
+	bob.git("checkout", "-q", "-b", "feature")
+	return w, alice, bob, mem
+}
+
+func (c *clone) ciMerge(base string) ciMergeResult {
+	c.w.t.Helper()
+	r := c.lore("sync", "ci-merge", "--base", base, "--json")
+	var env struct {
+		Data ciMergeResult `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+		c.w.t.Fatalf("ci-merge output: %v\n%s", err, r.stdout)
+	}
+	return env.Data
+}
+
+// Different fields of one row on two branches: the host sees a conflict,
+// ci-merge settles it with lore's driver and commits a merge.
+func TestE2E_CIMergeSettlesLoreConflict(t *testing.T) {
+	_, alice, bob, mem := ciMergeWorld(t)
+	bob.lore("memory", "edit", mem, "--kind", "procedural")
+	bob.commitAll("bob: kind")
+	bob.git("push", "-q", "-u", "origin", "feature")
+	alice.lore("memory", "edit", mem, "--body", "v2 from main")
+	alice.commitAll("alice: body")
+	alice.git("push", "-q")
+
+	bob.git("fetch", "-q")
+	head := bob.git("rev-parse", "HEAD")
+	res := bob.ciMerge("origin/main")
+	if res.Outcome != ciMergeMerged || res.Commit == "" || len(res.Merged) == 0 {
+		t.Fatalf("result = %+v", res)
+	}
+	doc := bob.readDoc("memories", mem)
+	if doc["body"] != "v2 from main" || doc["kind"] != "procedural" {
+		t.Fatalf("both edits must survive: body=%v kind=%v", doc["body"], doc["kind"])
+	}
+	if parents := strings.Fields(bob.git("log", "-1", "--format=%P")); len(parents) != 2 || parents[0] != head {
+		t.Fatalf("not a merge on top of the branch: %v", parents)
+	}
+	if out := bob.git("status", "--porcelain"); out != "" {
+		t.Fatalf("left changes behind: %s", out)
+	}
+	if again := bob.ciMerge("origin/main"); again.Outcome != ciMergeUpToDate {
+		t.Fatalf("second run = %+v", again)
+	}
+}
+
+// The same text on both sides, or a conflict outside lore data: nothing is
+// changed and the blocking paths are named.
+func TestE2E_CIMergeLeavesHumanConflictsAlone(t *testing.T) {
+	t.Run("same text", func(t *testing.T) {
+		_, alice, bob, mem := ciMergeWorld(t)
+		bob.lore("memory", "edit", mem, "--body", "bob's text")
+		bob.commitAll("bob")
+		alice.lore("memory", "edit", mem, "--body", "alice's text")
+		alice.commitAll("alice")
+		alice.git("push", "-q")
+		bob.git("fetch", "-q")
+		head := bob.git("rev-parse", "HEAD")
+		res := bob.ciMerge("origin/main")
+		if res.Outcome != ciMergeNeedsHuman || len(res.Blocking) != 1 || !strings.Contains(res.Blocking[0], mem) {
+			t.Fatalf("result = %+v", res)
+		}
+		if bob.git("rev-parse", "HEAD") != head || bob.git("status", "--porcelain") != "" {
+			t.Fatal("a needs-human run changed the branch")
+		}
+	})
+	t.Run("code conflict", func(t *testing.T) {
+		_, alice, bob, _ := ciMergeWorld(t)
+		if err := os.WriteFile(filepath.Join(bob.dir, "README.md"), []byte("# bob\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		bob.commitAll("bob readme")
+		if err := os.WriteFile(filepath.Join(alice.dir, "README.md"), []byte("# alice\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		alice.commitAll("alice readme")
+		alice.git("push", "-q")
+		bob.git("fetch", "-q")
+		res := bob.ciMerge("origin/main")
+		if res.Outcome != ciMergeNeedsHuman || strings.Join(res.Blocking, ",") != "README.md" {
+			t.Fatalf("result = %+v", res)
+		}
+		if _, err := os.Stat(filepath.Join(bob.dir, ".git", "MERGE_HEAD")); err == nil {
+			t.Fatal("left a merge in progress")
+		}
+	})
+}
+
+func TestE2E_CIMergeCleanAndGuards(t *testing.T) {
+	_, alice, bob, _ := ciMergeWorld(t)
+	bob.addMemory("only on feature")
+	bob.commitAll("bob")
+	alice.addMemory("only on main")
+	alice.commitAll("alice")
+	alice.git("push", "-q")
+	bob.git("fetch", "-q")
+	if res := bob.ciMerge("origin/main"); res.Outcome != ciMergeClean {
+		t.Fatalf("new rows on both sides must be a clean merge: %+v", res)
+	}
+	if err := os.WriteFile(filepath.Join(bob.dir, "scratch.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := bob.loreAny("sync", "ci-merge", "--base", "origin/main"); r.code == 0 {
+		t.Fatal("ci-merge must refuse a dirty checkout")
+	}
+	if r := bob.loreAny("sync", "ci-merge"); r.code == 0 {
+		t.Fatal("--base is required")
+	}
+}
+
+// Runs the merge step of the generated workflow — the real shell script —
+// against a local origin, with a stand-in `gh` answering for pull request #7.
+func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("jq not installed (GitHub runners have it)")
+	}
+	w, alice, bob, mem := ciMergeWorld(t)
+	bob.lore("memory", "edit", mem, "--kind", "procedural")
+	bob.commitAll("bob")
+	bob.git("push", "-q", "-u", "origin", "feature")
+	alice.lore("memory", "edit", mem, "--body", "v2 from main")
+	alice.commitAll("alice")
+	alice.git("push", "-q")
+
+	gen := alice.lore("sync", "install-action", "--dry-run", "--lore-version", "v0.1.10")
+	var doc workflowDoc
+	if err := yaml.Unmarshal([]byte(gen.stdout), &doc); err != nil {
+		t.Fatal(err)
+	}
+	script := ""
+	for _, s := range doc.Jobs["merge"].Steps {
+		if strings.Contains(s.Run, "lore sync ci-merge") {
+			script = s.Run
+		}
+	}
+	if script == "" {
+		t.Fatal("merge step not found")
+	}
+
+	// The CI checkout: a fresh clone (on main), like actions/checkout.
+	ci := w.newClone("ci")
+	stub := t.TempDir()
+	gh := "#!/bin/sh\ncase \"$*\" in\n  *headRefName*) echo feature ;;\n  *baseRefName*) echo main ;;\n  *'pr list'*) echo 7 ;;\n  *) echo \"unexpected gh $*\" >&2; exit 1 ;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(stub, "gh"), []byte(gh), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	summary := filepath.Join(t.TempDir(), "summary.md")
+	env := []string{
+		"PATH=" + stub + string(os.PathListSeparator) + filepath.Dir(e2eBin) + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"EVENT=pull_request", "PR=7", "GITHUB_STEP_SUMMARY=" + summary,
+	}
+	r := w.run(ci.dir, env, "bash", "-e", "-o", "pipefail", "-c", script)
+	if r.code != 0 {
+		t.Fatalf("workflow script failed: %d\n%s\n%s", r.code, r.stdout, r.stderr)
+	}
+	if !strings.Contains(r.stdout, "#7 (feature <- main): "+ciMergeMerged) {
+		t.Fatalf("unexpected run: %s", r.stdout)
+	}
+	if got, _ := os.ReadFile(summary); !strings.Contains(string(got), "#7: merged") {
+		t.Fatalf("summary = %q", got)
+	}
+	// The pushed branch now merges cleanly into main.
+	bob.git("fetch", "-q")
+	bob.git("reset", "-q", "--hard", "origin/feature")
+	if res := bob.ciMerge("origin/main"); res.Outcome != ciMergeUpToDate {
+		t.Fatalf("pushed branch not up to date with main: %+v", res)
+	}
+	if doc := bob.readDoc("memories", mem); doc["body"] != "v2 from main" || doc["kind"] != "procedural" {
+		t.Fatalf("pushed merge lost an edit: %v", doc)
+	}
+}
+
+// The playbooks pipe `mission add --json` and `mission show --json` into jq
+// (.data.id, .data.tasks, .data.target_date); both flags were documented but
+// did not exist, and an invalid --target was silently dropped.
+func TestE2E_MissionJSONForScripts(t *testing.T) {
+	w := newWorld(t)
+	alice := w.newClone("alice")
+	alice.lore("init", "--non-interactive", "--name=app")
+	var added struct {
+		Data struct {
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		} `json:"data"`
+	}
+	r := alice.lore("mission", "add", "Ship v0.2", "--target=2026-06-15", "--json")
+	if err := json.Unmarshal([]byte(r.stdout), &added); err != nil || !strings.HasPrefix(added.Data.ID, "msn_") || added.Data.Title != "Ship v0.2" {
+		t.Fatalf("mission add --json: %v %s", err, r.stdout)
+	}
+	var tl struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	r = alice.lore("tasklist", "add", "--title=Sprint", "--body=current sprint", "--json")
+	if err := json.Unmarshal([]byte(r.stdout), &tl); err != nil || !strings.HasPrefix(tl.Data.ID, "tlt_") {
+		t.Fatalf("tasklist add --json: %v %s", err, r.stdout)
+	}
+	alice.lore("task", "add", "first", "--tasklist="+tl.Data.ID, "--mission="+added.Data.ID)
+	alice.lore("task", "add", "second", "--tasklist="+tl.Data.ID, "--mission="+added.Data.ID)
+	var shown struct {
+		Data struct {
+			Title      string `json:"title"`
+			Status     string `json:"status"`
+			TargetDate string `json:"target_date"`
+			Tasks      []struct {
+				Status string `json:"status"`
+			} `json:"tasks"`
+		} `json:"data"`
+	}
+	r = alice.lore("mission", "show", added.Data.ID, "--json")
+	if err := json.Unmarshal([]byte(r.stdout), &shown); err != nil {
+		t.Fatalf("mission show --json: %v %s", err, r.stdout)
+	}
+	if shown.Data.Title != "Ship v0.2" || shown.Data.Status == "" || !strings.HasPrefix(shown.Data.TargetDate, "2026-06-15") || len(shown.Data.Tasks) != 2 || shown.Data.Tasks[0].Status == "" {
+		t.Fatalf("mission show --json payload: %+v", shown.Data)
+	}
+	if r := alice.loreAny("mission", "add", "bad date", "--target=15/06/2026"); r.code == 0 {
+		t.Fatal("an invalid --target must be refused, not dropped")
 	}
 }

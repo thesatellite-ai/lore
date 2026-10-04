@@ -16,6 +16,7 @@ const (
 	FlagNoInherit  = "no-inherit"
 	FlagLimit      = "limit"
 	FlagDryRun     = "dry-run"
+	FlagForce      = "force"
 	FlagConfirm    = "confirm"
 	FlagIDs        = "ids"
 	FlagInclude    = "include"
@@ -130,4 +131,17 @@ const (
 	FlagKeepOurs       = "keep-ours"
 	FlagPrefer         = "prefer"
 	FlagArchivedBefore = "archived-before"
+)
+
+// Git sync (lore sync ci-merge / install-action).
+const (
+	// FlagBase names the branch or ref merged into the current branch.
+	FlagBase = "base"
+	// FlagBranch names a branch whose pushes trigger the installed workflow
+	// (repeatable).
+	FlagBranch = "branch"
+	// FlagManual installs a workflow that only runs when started by hand.
+	FlagManual = "manual"
+	// FlagLoreVersion pins the lore release a workflow downloads.
+	FlagLoreVersion = "lore-version"
 )

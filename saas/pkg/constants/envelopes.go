@@ -43,6 +43,9 @@ const (
 	KindRunReplay = "run.replay"
 
 	KindMissionList = "mission.list"
+	KindMissionAdd  = "mission.add"
+	KindMissionShow = "mission.show"
+	KindTasklistAdd = "tasklist.add"
 
 	KindTaskList   = "task.list"
 	KindTaskShow   = "task.show"
