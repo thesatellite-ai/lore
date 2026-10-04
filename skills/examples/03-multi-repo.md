@@ -19,13 +19,13 @@ lore repo add api   --origin=git@github.com:acme/api.git
 
 ```bash
 # Repo-scoped (only visible in that repo's context)
-lore memory add "Tailwind v4 only — no Mantine here"  --repo=web
-lore memory add "Mantine v7 for forms + tables"        --repo=admin
-lore memory add "gqlgen schema-first; resolvers ONLY in resolver/" --repo=api
+lore memory add --body="Tailwind v4 only — no Mantine here"  --repo=web
+lore memory add --body="Mantine v7 for forms + tables"        --repo=admin
+lore memory add --body="gqlgen schema-first; resolvers ONLY in resolver/" --repo=api
 
 # Cross-cutting (visible to ALL repos)
-lore memory add "All times in UTC; client charges USD"
-lore memory add "Conventional commits: type(scope): description"
+lore memory add --body="All times in UTC; client charges USD"
+lore memory add --body="Conventional commits: type(scope): description"
 
 lore render --repo=web   --target=../web/CLAUDE.md
 lore render --repo=admin --target=../admin/CLAUDE.md

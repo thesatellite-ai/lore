@@ -47,7 +47,7 @@ lore learn reject --all                    # batch — every pending candidate
 
 ```bash
 # add
-lore memory add "Tailwind v4 only" [--repo=web] [--kind=manual] [--allow-secrets]
+lore memory add --body="Tailwind v4 only" [--repo=web] [--kind=manual] [--allow-secrets]
 
 # search (FTS5 BM25; LIKE fallback)
 lore memory search "tailwind" [--limit=10] [--all-repos|--master-only|--no-inherit] [--include-archived] [--json]
@@ -96,7 +96,7 @@ JSON envelope:
 ## Rule (hard constraints)
 
 ```bash
-lore rule add --severity=must --activation=always "no fmt.Println in prod" [--globs='["**/*.go"]']
+lore rule add --severity=must --activation=always --body="no fmt.Println in prod" [--globs='["**/*.go"]']
 lore rule list [--json]
 lore rule show <id> [--json]
 ```
@@ -131,7 +131,7 @@ Status: `proposed | accepted | superseded | rejected`.
 ## Hotfix (loud recurring warnings)
 
 ```bash
-lore hotfix add --severity=high --title="ent regen wipes resolver helpers" "Beware: ent regen wipes resolver/ helpers"
+lore hotfix add --severity=high --title="ent regen wipes resolver helpers" --body="Beware: ent regen wipes resolver/ helpers"
 lore hotfix list [--json]
 lore hotfix show <id> [--json]
 ```
@@ -146,8 +146,8 @@ Severity: `info | low | medium | high | critical`. Hotfixes are **never truncate
 # mission = container for tasks
 lore mission add "Ship v0.1" --target=2026-06-30 --body="..." [--json]   # --json: the new mission (.data.id)
 lore mission list [--status=active|paused|done|cancelled] [--json]
-lore mission show <id|MS-N> [--json]   # --json: mission fields + .data.tasks
-lore mission done <id|MS-N>
+lore mission show <id> [--json]   # --json: mission fields + .data.tasks
+lore mission done <id>
 
 # task = discrete work — `--tasklist` is REQUIRED.
 # `--commitment` is REQUIRED for agent callers (no default; missing = hard error)
@@ -167,14 +167,14 @@ lore task list [--status=…] [--commitment=…] [--mission=<id>] \
 lore task triage                   # commitment=proposed (AI-suggested, not committed)
 lore task someday                  # commitment=someday (parking lot)
 lore task deferred                 # snoozed: deferred_until in the future
-lore task show <id|T-N> [--json]
-lore task start <id|T-N>           # auto-promotes commitment=accepted, clears defer
-lore task done <id|T-N>            # auto-promotes commitment=accepted, clears defer
-lore task cancel <id|T-N>
+lore task show <id> [--json]
+lore task start <id>           # auto-promotes commitment=accepted, clears defer
+lore task done <id>            # auto-promotes commitment=accepted, clears defer
+lore task cancel <id>
 lore task search <query> [--all]   # default surfaces only ActiveTask hits
 
 # task edit — reparent, reassign, reprioritize, commit/snooze in one place
-lore task edit <id|T-N> \
+lore task edit <id> \
   [--title=…] [--body=…] [--priority=…] [--status=…] \
   [--commitment=accepted|proposed|someday] \
   [--defer-until=YYYY-MM-DD | --clear-defer] \
@@ -208,7 +208,7 @@ lore actor list [--json]
 lore actor show <act_id> [--json]
 
 # snapshot — point-in-time knowledge captures
-lore snapshot add --title="<t>" "<body>"     # body via arg or stdin
+lore snapshot add --title="<t>" --body="<body>"     # body via arg or stdin
 lore snapshot list [--json]
 lore snapshot show <id> [--json]
 lore snapshot archive / unarchive <id>
@@ -577,7 +577,7 @@ lore tag attach --on-table=memories --on-id=mem_<id> --tag=urgent
 lore tag detach --on-table=memories --on-id=mem_<id> --tag=urgent
 
 # comment
-lore comment add --on-table=decisions --on-id=dec_<id> "agreed; revisit Q3"
+lore comment add --on-table=decisions --on-id=dec_<id> --body="agreed; revisit Q3"
 lore comment list [--on-table=...] [--on-id=...] [--json]
 ```
 

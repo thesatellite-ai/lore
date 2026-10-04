@@ -75,7 +75,7 @@ lore.
 
 ### 9. Suggest immediate hand-edits I should consider
 - Memories that are clearly rules → promote via:
-  `lore rule add --severity=must "<text>"; lore memory archive M-N`
+  `lore rule add --severity=must "<text>"; lore memory archive mem_<id>`
 - Memories that are clearly hotfixes (recurring traps) → same shape with
   `hotfix add --severity=high`.
 - Print 3-5 specific suggestions based on what was imported.

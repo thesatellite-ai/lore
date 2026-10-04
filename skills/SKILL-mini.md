@@ -12,13 +12,13 @@ Respond with ONE fenced bash block containing literal `lore` commands. No prose 
 
 GOOD — memory trigger:
 ```bash
-lore memory add "We use UTC for all timestamps"
+lore memory add --body="We use UTC for all timestamps"
 lore render
 ```
 
 GOOD — rule trigger:
 ```bash
-lore rule add --severity=must "Never wrap stdlib errors with fmt.Errorf"
+lore rule add --severity=must --body="Never wrap stdlib errors with fmt.Errorf"
 lore render
 ```
 
@@ -51,9 +51,9 @@ When the user statement contains the word **"decided"** AND a **"because"** clau
 
 DO NOT EVER emit this:
 ```bash
-lore rule add --severity=must "<X>" --body="<Y>"
+lore rule add --severity=must --body="<X> because <Y>"
 ```
-That is wrong on TWO counts: (a) `rule add` does not accept `--body`, and (b) the right verb is `decision add`, not `rule add`.
+That is the wrong verb: a choice plus its reason is a decision (`decision add`), not a rule.
 
 You MUST emit this instead:
 ```bash
@@ -251,17 +251,17 @@ T[no, that's not how we do it]           → rule add --severity=must "<correct 
 T[actually we have a rule against that]  → rule list | grep -i …; if absent add it
 T[capture X twice | duplicate this rule | does this already exist?]
                                           → ALWAYS search first: lore rule search "X" --json; report whether it exists; only add if absent. The CLI does NOT auto-dedupe — adding the same rule twice creates two rows.
-T[scratch the previous rule about X]     → rule search "X" --json; lore rule archive R-N (or rule edit)
+T[scratch the previous rule about X]     → rule search "X" --json; lore rule archive rul_<id> (or rule edit)
 T[update the X prompt | edit the X template | the X prompt needs an update]
                                           → lore prompt edit <X> --body="<new body>"
                                           # edit MUTATES in place; no need to show first if user provided the new content
 T[update the X pattern | edit pattern X]  → lore pattern edit <X> --body="<new body>"
-T[flag D-N for re-eval | revisit D-N later | re-evaluate decision | conditions changed for D-N but don't archive yet]
-                                          → lore comment add --on-table=decisions --on-id=D-N --body="REVISIT: <why>; conditions changed <when>"
-                                          # OR: lore tag attach --on-table=decisions --on-id=D-N --name=revisit
-                                          # Do NOT create a NEW decision; the existing D-N is still active.
-T[update what we said about X]           → rule search "X" --json; lore rule edit R-N (or archive + add)
-T[reverse the rule about X]              → rule search "X" --json; lore rule archive R-N then add new with opposite content
+T[flag dec_<id> for re-eval | revisit dec_<id> later | re-evaluate decision | conditions changed for dec_<id> but don't archive yet]
+                                          → lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>; conditions changed <when>"
+                                          # OR: lore tag attach --on-table=decisions --on-id=dec_<id> --name=revisit
+                                          # Do NOT create a NEW decision; the existing dec_<id> is still active.
+T[update what we said about X]           → rule search "X" --json; lore rule edit rul_<id> (or archive + add)
+T[reverse the rule about X]              → rule search "X" --json; lore rule archive rul_<id> (then add a new rule with the opposite content)
 T[yes, that's the right call] (non-obvious) → decision add
 T[we tried X and it broke]               → incident add --title=<t> --body=<what>
 
@@ -270,14 +270,14 @@ T[high priority: X]                      → task add "<X>" --priority=high
 T[urgent: X]                             → task add "<X>" --priority=urgent
 T[track an initiative: X]                → mission add "<X>" --target=YYYY-MM-DD
 T[what tasks are open?]                  → task list --status=todo --json
-T[start work on T-N]                     → task start T-N
-T[mark T-N done]                         → task done T-N
-T[mark M-N done | mission M-N is complete | ship M-N]
-                                         → mission done M-N
-                                         # mission has its own done verb; do NOT use task done for an M-N ID
-T[cancel T-N]                            → task cancel T-N
-T[cancel T-N because <reason> | cancel with note]
-                                         → task cancel T-N; lore comment add --on-table=tasks --on-id=T-N --body="cancelled: <reason>"
+T[start work on tsk_<id>]                     → task start tsk_<id>
+T[mark tsk_<id> done]                         → task done tsk_<id>
+T[mark msn_<id> done | mission msn_<id> is complete | ship msn_<id>]
+                                         → mission done msn_<id>
+                                         # mission has its own done verb; do NOT use task done for an msn_<id> ID
+T[cancel tsk_<id>]                            → task cancel tsk_<id>
+T[cancel tsk_<id> because <reason> | cancel with note]
+                                         → task cancel tsk_<id>; lore comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"
                                          # capture the reason so future readers see WHY, not just that it was cancelled
 T[remind me on <date> to X]              → reminder add "<X>" --due=<date>
 T[every week, remind me to X]            → reminder add "<X>" --due=<next> --recurrence=7d
@@ -304,12 +304,12 @@ T[remove my persisted identity | go back to auto-detected | unset identity | res
                                           #   anonymize → toggles anon mode (anon:<random> per session); identity FILE stays
                                           #   unset     → REMOVES ~/.lore/identity.toml entirely → fall back to auto-resolve
 T[set my identity to X | record me as X]  → lore identity set --actor="<X>"
-T[set up a benchmark eval for X | author a bench task for rule R-N]
+T[set up a benchmark eval for X | author a bench task for rule rul_<id>]
                                           → lore bench eval add --category=<rule-trigger|hotfix-avoid|...> --link=<kind>:<id> --prompt-file=- --grader-kind=programmatic --grader-cmd='...'
                                           # --link kinds (SINGULAR): rule | hotfix | decision | memory
                                           # NOT supported by --link: task, mission, pattern, playbook, etc.
                                           # NOTE: this is META (defining a benchmark eval), NOT capturing knowledge.
-                                          # Do NOT emit `rule add` for "set up an eval for rule R-N" requests.
+                                          # Do NOT emit `rule add` for "set up an eval for rule rul_<id>" requests.
 T[run the benchmark | execute the eval set]
                                           → lore bench run start --model=<m> --runs-per-arm=<n> --parallel=<p>
 T[run a multi-arm bench | bench with baseline + with_skill + ablation arms]
@@ -367,7 +367,7 @@ T[who modified X | audit trail for X | who changed X | when was X last edited]
                                           → sqlite3 .lore/lore.db "SELECT tx_at,actor_id,op,entity_id FROM audit_log WHERE entity_id='<X>' OR entity_table='<X>' ORDER BY tx_at DESC LIMIT 20"
                                           # (raw SQL — no dedicated CLI verb yet for audit log)
 T[why did you do X?]                     → why-context --last-render --rendered
-T[show me M-N | T-N | R-N | D-N]        → <kind> show <code>
+T[show me mem_<id> | tsk_<id> | rul_<id> | dec_<id>]        → <kind> show <code>
 
 T[capture for <repo> repo: <text>]       → rule add --repo=<repo> "<text>"; render
 T[pre-create a tag | create tag X without attaching | reserve tag name]
@@ -445,14 +445,13 @@ scope:       no --scope flag — use --repo=<mount> for a repo, omit for project
 
 ## ID PREFIXES
 
+Every id is `<prefix>_<32 hex>`; find one with `lore <kind> list` or `search`. There are no short forms (`M-3`, `T-19` were removed).
+
 ```
-M-N   memory      mem_…
-R-N   rule        rul_…
-D-N   decision    dec_…
-H-N   hotfix      hfx_…
-T-N   task        tsk_…
-MS-N  mission     msn_…
-P-N   plan/pattern/playbook (context-dependent)
+mem_  memory      rul_  rule        dec_  decision    hfx_  hotfix
+tsk_  task        tlt_  tasklist    msn_  mission     pln_  plan
+pat_  pattern     pbk_  playbook    prm_  prompt      snp_  snapshot
+inc_  incident    hnd_  handoff     rmd_  reminder    cmt_  comment
 ```
 
 ## 20 PLAYBOOKS
@@ -467,7 +466,7 @@ P1  bootstrap new project
     lore render
 
 P2  capture a correction
-    lore rule add --severity=must "<corrected behavior>"
+    lore rule add --severity=must --body="<corrected behavior>"
     lore render
 
 P3  capture a decision
@@ -475,14 +474,14 @@ P3  capture a decision
     lore render
 
 P4  capture a recurring warning
-    lore hotfix add --severity=high --title="<headline>" "<warning>"
+    lore hotfix add --severity=high --title="<headline>" --body="<warning>"
     lore render
 
 P5  multi-repo scoping
     lore repo add web   --origin=git@…
     lore repo add api   --origin=git@…
-    lore memory add "<web-only fact>"  --repo=web
-    lore memory add "<cross-cutting>"
+    lore memory add --body="<web-only fact>"  --repo=web
+    lore memory add --body="<cross-cutting>"
     lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
     lore render --repo=api --out=api/.lore/LORE.md --target=api/CLAUDE.md
 
@@ -542,16 +541,16 @@ TEAM SYNC (.lore/data/ = one committed JSON file per shared row; automatic)
     settle with `lore <entity> edit <id> --body "…"` after the user picks; never delete the file
 
 P14 promote memory → rule  (ALL 4 STEPS REQUIRED — do NOT skip the show)
-    lore memory show M-N --json | jq -r '.data.body'   # MUST fetch the actual body first;
+    lore memory show mem_<id> --json | jq -r '.data.body'   # MUST fetch the actual body first;
                                                           # never invent the rule text.
-    lore rule add --severity=must "<text from show>"
-    lore memory archive M-N
+    lore rule add --severity=must --body="<text from show>"
+    lore memory archive mem_<id>
     lore render
 
 P15 demote rule → memory
-    lore rule show R-N --json | jq -r '.data.body'
-    lore memory add "<text>"
-    lore rule archive R-N
+    lore rule show rul_<id> --json | jq -r '.data.body'
+    lore memory add --body="<text>"
+    lore rule archive rul_<id>
     lore render
 
 P16 periodic review
@@ -641,7 +640,7 @@ You: (User said "suggestion", "not a commitment", "worth thinking about" — use
 
 User: I'm running in CI with --read-only mode and I tried to capture a rule — what happens? Show me the command I'd run.
 You: (Show the command WITH `--read-only`, and explain the rejection.)
-  lore rule add --read-only --severity=must "<text>"
+  lore rule add --read-only --severity=must --body="<text>"
   # → fails with E_READ_ONLY: write rejected; --read-only mode refuses all mutations.
   # In CI you should only run read commands (list/show/search/render --dry-run) under --read-only.
 
@@ -713,7 +712,7 @@ You: (NO CAPTURE. The prompt ENDS in `?`, uses "musing", "maybe", "someday", "wh
 
 User: Yeah let me think — oh by the way, remember we always run migrations in transactions. Anyway, what's next?
 You:
-  lore rule add --severity=must "Always run migrations in transactions"
+  lore rule add --severity=must --body="Always run migrations in transactions"
   lore render
   (then answer the user's "what's next?")
 
@@ -724,22 +723,22 @@ You:
 
 User: Remember: we use UTC for all timestamps.
 You:
-  lore memory add "We use UTC for all timestamps"
+  lore memory add --body="We use UTC for all timestamps"
   lore render
 
 User: Don't forget — tests run via task test, not go test.
 You:
-  lore memory add "Tests run via task test, not go test directly"
+  lore memory add --body="Tests run via task test, not go test directly"
   lore render
 
 User: We never use globals in this code.
 You:
-  lore rule add --severity=must "Do not use package-level globals in this codebase"
+  lore rule add --severity=must --body="Do not use package-level globals in this codebase"
   lore render
 
 User: Capture this for the api repo: gqlgen resolvers may NOT call other resolvers directly.
 You:
-  lore rule add --severity=must --repo=api "gqlgen resolvers may NOT call other resolvers directly"
+  lore rule add --severity=must --repo=api --body="gqlgen resolvers may NOT call other resolvers directly"
   lore render
 
 User: Add a task to refactor the auth middleware, high priority.
@@ -798,7 +797,7 @@ User: Scratch the previous rule about avoiding globals — we DO use a single gl
 You: (REVERSING a captured rule requires search + archive + new-add in ONE response. Emit ALL THREE commands together, using `$(…)` to chain. Do NOT stop after the search.)
   RID=$(lore rule search "globals" --json | jq -r '.data[0].code')
   lore rule archive "$RID"
-  lore rule add --severity=should "A single global request-id context is allowed for tracing"
+  lore rule add --severity=should --body="A single global request-id context is allowed for tracing"
   lore render
 
 User: What rules apply to this project?

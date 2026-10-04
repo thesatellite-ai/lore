@@ -6,10 +6,10 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 
 | Intent | Command |
 |---|---|
-| Persist any free-form fact | `lore memory add "<text>"` |
-| Persist a hard constraint with severity | `lore rule add --severity=must "<text>"` |
+| Persist any free-form fact | `lore memory add --body="<text>"` |
+| Persist a hard constraint with severity | `lore rule add --severity=must --body="<text>"` |
 | Persist a decision rationale (ADR-style) | `lore decision add --title="<t>" --body="<why>"` |
-| Persist a recurring warning | `lore hotfix add --severity=high --title="<headline>" "<text>"` |
+| Persist a recurring warning | `lore hotfix add --severity=high --title="<headline>" --body="<text>"` |
 | Reusable code pattern | `lore pattern add --title=<n> --body="<code>"` |
 | Reusable procedure | `lore playbook add --title=<n> --body="<steps>"` |
 | Reusable LLM prompt | `lore prompt add --title=<n> --body="<prompt>"` |
@@ -40,15 +40,15 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Multi-phase plan | `lore plan add --title=<t>` |
 | Hand off context to a collaborator | `lore handoff add --to=<name> --body=<ctx>` |
 | Active task list view | `lore task list --status=in_progress` |
-| Start a task | `lore task start <id\|T-N>` |
-| Finish a task | `lore task done <id\|T-N>` |
-| Cancel a task | `lore task cancel <id\|T-N>` |
+| Start a task | `lore task start <id\|tsk_<id>>` |
+| Finish a task | `lore task done <id\|tsk_<id>>` |
+| Cancel a task | `lore task cancel <id\|tsk_<id>>` |
 | Pause / resume a mission | `lore mission pause <id>` / `mission resume <id>` |
 | Acknowledge a handoff | `lore handoff ack <id>` |
 | Future reminder | `lore reminder add "<msg>" --due=YYYY-MM-DD` |
 | Recurring reminder | `... --recurrence=7d\|30d\|1m\|3m\|6m\|1y` |
 | Tag/label any entity | `lore tag attach --on-table=<t> --on-id=<id> --tag=<n>` |
-| Discuss any entity | `lore comment add --on-table=<t> --on-id=<id> "<text>"` |
+| Discuss any entity | `lore comment add --on-table=<t> --on-id=<id> --body="<text>"` |
 
 ## Lifecycle / cleanup
 

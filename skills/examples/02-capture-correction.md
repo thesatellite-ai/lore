@@ -16,7 +16,7 @@ lore rule add \
     --severity=must \
     --activation=glob \
     --globs='["**/*.go", "!**/*_test.go"]' \
-    "Do not wrap stdlib errors with fmt.Errorf; return them directly."
+    --body="Do not wrap stdlib errors with fmt.Errorf; return them directly."
 # ✓ rul_<id> rul_019e...
 #   severity:   must
 #   activation: glob

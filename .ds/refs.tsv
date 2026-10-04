@@ -1,19 +1,19 @@
-# docsync refs format=2 extract=1 repo=lore commit=980f010 scanned_at=2026-10-04T04:44:47Z
+# docsync refs format=2 extract=1 repo=lore commit=39a6dd4 scanned_at=2026-10-04T06:06:17Z
 id	repo	doc	line	verb	carrier	acked_hash	seen_hash	sentence_hash	env	args
-sync-datanames-nhh4krj2	lore	LORE_SYNC_SPEC.md	314	block	block		1f861404f99026f841d062726cc760271cea780ad9419e07d84b64db6d5b769b			id=sync-datanames-nhh4krj2
-sync-formatversion-h8e7vzn7	lore	LORE_SYNC_SPEC.md	336	block	block		6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b			id=sync-formatversion-h8e7vzn7
-sync-timelayout-ykcphmfb	lore	LORE_SYNC_SPEC.md	337	block	block		993c6801ac15ae4179eb0cba86ce057b8e68f485943e9e348e5e0e9d774a5068			id=sync-timelayout-ykcphmfb
-sync-syncedtables-rgmtjeph	lore	LORE_SYNC_SPEC.md	355	block	block		94e343be6a0fc360f0e83ef3744a578a147421bc9a389b389a2bba30f440b34a			id=sync-syncedtables-rgmtjeph
-sync-localtables-dcpb69pj	lore	LORE_SYNC_SPEC.md	356	block	block		876ec341be89fbac975dc6f8461eb95271ff1794d4784c777762716f9e5002c8			id=sync-localtables-dcpb69pj
-sync-volatile-4t6jsc7v	lore	LORE_SYNC_SPEC.md	357	block	block		25cd00c6b5cac55b4efe333e5ac7f6f0dada831e23ee73cedc6ab54cc23a01a8			id=sync-volatile-4t6jsc7v
-sync-racywindow-zrv7fwan	lore	LORE_SYNC_SPEC.md	390	block	block		3a1f9463c8540c95a690728913a0378d56cb583fe1fa2315e4a431b3b3f9dcba			id=sync-racywindow-zrv7fwan
-sync-drainrounds-2adqnp3a	lore	LORE_SYNC_SPEC.md	391	block	block		4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a			id=sync-drainrounds-2adqnp3a
-sync-strategyfor-ycedma28	lore	LORE_SYNC_SPEC.md	453	block	block		e8fe877fa7950f7dee13fed59dedb05de866239020802f7869a6c394ef0cebf2			id=sync-strategyfor-ycedma28
-sync-gitattributes-xzr8sqyk	lore	LORE_SYNC_SPEC.md	486	block	block		22a7f83e410ab51ff0bd980903b44bc20991c2d3734062506cb1652138f55a3d			id=sync-gitattributes-xzr8sqyk
-sync-mergedriver-config-bur8yta8	lore	LORE_SYNC_SPEC.md	487	block	block		87b399b98872a40caa24e06b395a8603d674e8947be2ae3b649de63a8d4cdd43			id=sync-mergedriver-config-bur8yta8
-sync-hooklines-3282rwuw	lore	LORE_SYNC_SPEC.md	511	block	block	2d5b034fc5b17eedb9339e3a746acd33ba2a97c007a31a4f047268b4613435fb	19c460371b87763ba11757d32bebd774e332b4929d8f18f1ea7f97080227cd9f			id=sync-hooklines-3282rwuw
-sync-locktimeout-rh9uf4cq	lore	LORE_SYNC_SPEC.md	573	block	block		3fe98fb5539e5215e19bbc4725c81218953709d2c6a357742267459173f7ca3d			id=sync-locktimeout-rh9uf4cq
-sync-maxfilesize-zk9m2syn	lore	LORE_SYNC_SPEC.md	574	block	block		e7d30a86bb0c5d9c861f00e11b7b1a4ee8f855db5c0d7207ef4f5368177ea994			id=sync-maxfilesize-zk9m2syn
+sync-datanames-nhh4krj2	lore	LORE_SYNC_SPEC.md	329	block	block		1f861404f99026f841d062726cc760271cea780ad9419e07d84b64db6d5b769b			id=sync-datanames-nhh4krj2
+sync-formatversion-h8e7vzn7	lore	LORE_SYNC_SPEC.md	351	block	block		6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b			id=sync-formatversion-h8e7vzn7
+sync-timelayout-ykcphmfb	lore	LORE_SYNC_SPEC.md	352	block	block		993c6801ac15ae4179eb0cba86ce057b8e68f485943e9e348e5e0e9d774a5068			id=sync-timelayout-ykcphmfb
+sync-syncedtables-rgmtjeph	lore	LORE_SYNC_SPEC.md	370	block	block		94e343be6a0fc360f0e83ef3744a578a147421bc9a389b389a2bba30f440b34a			id=sync-syncedtables-rgmtjeph
+sync-localtables-dcpb69pj	lore	LORE_SYNC_SPEC.md	371	block	block		876ec341be89fbac975dc6f8461eb95271ff1794d4784c777762716f9e5002c8			id=sync-localtables-dcpb69pj
+sync-volatile-4t6jsc7v	lore	LORE_SYNC_SPEC.md	372	block	block		25cd00c6b5cac55b4efe333e5ac7f6f0dada831e23ee73cedc6ab54cc23a01a8			id=sync-volatile-4t6jsc7v
+sync-racywindow-zrv7fwan	lore	LORE_SYNC_SPEC.md	405	block	block		3a1f9463c8540c95a690728913a0378d56cb583fe1fa2315e4a431b3b3f9dcba			id=sync-racywindow-zrv7fwan
+sync-drainrounds-2adqnp3a	lore	LORE_SYNC_SPEC.md	406	block	block		4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a			id=sync-drainrounds-2adqnp3a
+sync-strategyfor-ycedma28	lore	LORE_SYNC_SPEC.md	468	block	block		e8fe877fa7950f7dee13fed59dedb05de866239020802f7869a6c394ef0cebf2			id=sync-strategyfor-ycedma28
+sync-gitattributes-xzr8sqyk	lore	LORE_SYNC_SPEC.md	501	block	block		22a7f83e410ab51ff0bd980903b44bc20991c2d3734062506cb1652138f55a3d			id=sync-gitattributes-xzr8sqyk
+sync-mergedriver-config-bur8yta8	lore	LORE_SYNC_SPEC.md	502	block	block		87b399b98872a40caa24e06b395a8603d674e8947be2ae3b649de63a8d4cdd43			id=sync-mergedriver-config-bur8yta8
+sync-hooklines-3282rwuw	lore	LORE_SYNC_SPEC.md	526	block	block	2d5b034fc5b17eedb9339e3a746acd33ba2a97c007a31a4f047268b4613435fb	19c460371b87763ba11757d32bebd774e332b4929d8f18f1ea7f97080227cd9f			id=sync-hooklines-3282rwuw
+sync-locktimeout-rh9uf4cq	lore	LORE_SYNC_SPEC.md	588	block	block		3fe98fb5539e5215e19bbc4725c81218953709d2c6a357742267459173f7ca3d			id=sync-locktimeout-rh9uf4cq
+sync-maxfilesize-zk9m2syn	lore	LORE_SYNC_SPEC.md	589	block	block		e7d30a86bb0c5d9c861f00e11b7b1a4ee8f855db5c0d7207ef4f5368177ea994			id=sync-maxfilesize-zk9m2syn
 sync-datanames-nhh4krj2	lore	README.md	284	block	block		1f861404f99026f841d062726cc760271cea780ad9419e07d84b64db6d5b769b			id=sync-datanames-nhh4krj2
 sync-syncedtables-rgmtjeph	lore	README.md	300	block	block		94e343be6a0fc360f0e83ef3744a578a147421bc9a389b389a2bba30f440b34a			id=sync-syncedtables-rgmtjeph
 sync-localtables-dcpb69pj	lore	README.md	301	block	block		876ec341be89fbac975dc6f8461eb95271ff1794d4784c777762716f9e5002c8			id=sync-localtables-dcpb69pj

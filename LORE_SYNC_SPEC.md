@@ -100,6 +100,21 @@ Copies only: a bare remote cloned from the repo, the real `lore.db` copied in, t
 
 Found while building it: the first `ProbeMerge` used plain `git merge-tree`, which runs a driver the clone has configured, so in a developer's clone it answered "clean" where GitHub reports a conflict. Fixed with `--attr-source=<empty tree>` (git 2.40+).
 
+### Test gate and use-case coverage (after v0.1.13)
+
+- **One gate:** `task check` runs build, lint (vet, gofmt, staticcheck, six-target cross-build), race tests, every module's tests, `go mod tidy` check, scenarios, chaos and `ds check`, then stamps the tested tree. The committed `.githooks/pre-push` (enabled by `task lore:hooks:install`) runs it unless it already passed for exactly the code being pushed, and refuses to push code it did not test. Pinned by `prepush_hook_test.go`.
+- **True coverage:** `task lore:test:cover` builds the end-to-end binary with `-cover` (`LORE_E2E_COVERDIR`), so subprocess runs count. Measured with the shell scenarios too, CLI functions reached by no test went from 81 of 543 to 0 of 550 (`usecases_{tasks,misc,bench}_test.go`, every function mutation-checked).
+- **Docs drift gate extended:** `TestDocsMatchCLI` now checks positional arguments (cobra `ValidateArgs`) and flag values. It found 55 examples passing body text positionally (`lore memory add "…"`), which every body-primary command refuses; all fixed, and those commands now declare `Args: bodyOnlyArgs` so the rule is visible to cobra and the test.
+
+| Bug found by the new tests | Fix |
+|---|---|
+| `lore directive install` re-install blanked `$RID` in the block it writes into CLAUDE.md (`ReplaceAllString` expands `$`); `lore render`'s pointer stitch had the same shape | `ReplaceAllLiteralString` in both |
+| `task list` printed `T-tsk_…` ids no command accepts; help, `directive.go` and 58 doc lines still advertised the removed `T-N` / `MS-N` / `R-N` short ids | full opaque ids everywhere; SKILL-mini's prefix table rewritten |
+| `mission show --json` task dates were timestamps while `mission list` / `task list` give dates | same `taskBrief` shape |
+| `bench run start` printed every count as 0/0: the summary was a `map[string]any` holding ints live and float64 after storage | typed `benchRunSummary` converted at the single storage boundary; `bench result regrade --run` no longer discards its errors |
+| `.DS_Store` / `Thumbs.db` in `.lore/data` warned on every command, and lore's `!.lore/data/**` exception let them be committed | skipped by the scan; re-ignored after the exception |
+| SC-5 (two terminals writing at once) lost a memory 2 runs in 100, found only once `task check` ran it under load and the scenario kept its errors: (1) the tx_at clock read and wrote its config row outside a transaction, so two processes both inserted the first row (`UNIQUE config.key`); (2) every command's FTS5 probe created and dropped a table, so a concurrent `quick_check` failed with "database schema has changed", reported as `E_DB_CORRUPT` | the clock is one IMMEDIATE transaction (`TestTxAtWaitsForTheWriteLock`: deterministic, the old code fails it 5/5); `fts5.Available` reads `pragma_module_list` and never writes (`TestAvailableDoesNotChangeSchema`); `QuickCheck` retries a concurrent schema change (`TestRetryOnSchemaChange`); SC-5 now prints the error of any lost write. 0 failures in 100 runs after the fix |
+
 Not changed, needs a decision: `.lore/LORE.md` gets a new random `AICODER:CANARY` id on every render, so any clone that re-renders after a pull shows `LORE.md` modified even when no rule changed. It merges cleanly (`merge=lore-keep-ours`) but is noise in `git status`.
 
 ### Deferred features and gaps closed (previously skipped scenarios)
@@ -372,7 +387,7 @@ Every ent schema table is in exactly one class. A unit test walks `dbent/schema`
 As built (see §0 Deltas for why this replaced "file first"):
 
 ```
-lore rule add "Use JWT"
+lore rule add --body="Use JWT"
   │
   ├─ start-of-command pass (full): import what git changed
   ├─ the command writes the row through ent (natural-key rows get a deterministic id, E2)
@@ -561,7 +576,7 @@ Grouped by area. Each row is a case the implementation must handle and a test mu
 | # | Case | Fix |
 |---|---|---|
 | E24 | Mixed lore versions on a team: older binary reads a newer file with extra fields | Unknown fields kept in a raw side map and written back verbatim. Newer `_v` major than supported → read-only for that file + "upgrade lore" hint. Never drop fields. |
-| E25 | Schema migration renames / reshapes a field | Upcasters per `_v` applied on read; `lore sync migrate` rewrites all files to the new `_v` in one commit on main. Branches with old-format files keep importing via upcasters. |
+| E25 | Schema migration renames / reshapes a field | Upcasters per `_v` applied on read (`upcast` in `codec.go`; the format is still `_v` 1, so none exist yet); a file newer than the running lore is refused with `newer-format` rather than misread. To rewrite every file in the current format after a format bump, run `lore sync export --all` (designed as `sync migrate`) and commit on main. Branches with old-format files keep importing via the upcasters. |
 | E26 | Windows `core.autocrlf` rewrites line endings → hashes differ, spurious diffs | `.gitattributes` forces `eol=lf` for lore paths; reader normalizes CRLF before parsing. |
 | E27 | Local-only tables (query_log, runs) reference synced rows that vanish on branch switch | No foreign keys from local tables to synced tables (or `ON DELETE SET NULL`); readers tolerate missing targets. |
 | E28 | Two lore processes at once (two agents in one repo) | `.lore/state/sync.lock` (flock) around reconcile and around each write; SQLite WAL already serialises DB writes. |

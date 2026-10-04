@@ -250,9 +250,9 @@ If you find yourself paraphrasing the user's question into a statement and captu
 
 When the user statement contains the word **"decided"** AND a **"because"** clause, the correct verb is `decision add`, NOT `rule add`.
 
-**Wrong** (two bugs in one line: `rule add` doesn't accept `--body`, and the verb is wrong):
+**Wrong** (the verb: a choice plus its reason is a decision, not a rule):
 ```bash
-lore rule add --severity=must "<X>" --body="<Y>"
+lore rule add --severity=must --body="<X> because <Y>"
 ```
 
 **Right:**
@@ -275,7 +275,7 @@ When the user asks to **delete**, **wipe**, **drop**, **rm -rf**, **start fresh*
 | User says | You should emit |
 |---|---|
 | "Delete the .lore dir entirely — wipe everything." | `lore backup` first, then warn "This is irreversible — confirm and I'll proceed." Do NOT silently `rm -rf .lore`. |
-| "Drop all rules." | `lore backup`, then `lore rule list --json` to review, then `lore rule archive R-N` (soft) or `lore rule delete R-N --confirm` (hard). |
+| "Drop all rules." | `lore backup`, then `lore rule list --json` to review, then `lore rule archive rul_<id>` (soft) or `lore rule delete rul_<id> --confirm` (hard). |
 | "Reset the DB." | `lore backup`, then `lore doctor`, then `lore repair` if needed — never just `rm`. |
 | "Start completely fresh." | Same as "delete": backup first, confirm, then proceed. |
 
@@ -353,17 +353,17 @@ When the user wants to flag, revisit, or update an EXISTING capture, do NOT crea
 
 | User says | Run |
 |---|---|
-| "Flag D-N for re-evaluation / revisit later" | `lore comment add --on-table=decisions --on-id=D-N --body="REVISIT: <why>"` (D-N stays active) |
-| "Mark mission M-N as done / ship M-N" | `lore mission done M-N` (mission has its own `done` verb — NOT `task done` for M-N IDs) |
-| "Cancel T-N because <reason>" | `lore task cancel T-N` + `lore comment add --on-table=tasks --on-id=T-N --body="cancelled: <reason>"` (CLI has no native --reason flag) |
-| "Unarchive R-N" | `lore rule unarchive R-N` (every entity supports unarchive after archive) |
-| "Update D-N's body" / "Edit decision D-N" | `lore decision edit D-N --body="<new>"` (direct mutation; no need to show first if user provided the new content) |
+| "Flag dec_<id> for re-evaluation / revisit later" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>"` (dec_<id> stays active) |
+| "Mark mission msn_<id> as done / ship msn_<id>" | `lore mission done msn_<id>` (mission has its own `done` verb — NOT `task done` for msn_<id> IDs) |
+| "Cancel tsk_<id> because <reason>" | `lore task cancel tsk_<id>` + `lore comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"` (CLI has no native --reason flag) |
+| "Unarchive rul_<id>" | `lore rule unarchive rul_<id>` (every entity supports unarchive after archive) |
+| "Update dec_<id>'s body" / "Edit decision dec_<id>" | `lore decision edit dec_<id> --body="<new>"` (direct mutation; no need to show first if user provided the new content) |
 | "Update the X prompt template" | `lore prompt edit <X> --body="<new>"` |
 | "Update pattern X" | `lore pattern edit <X> --body="<new>"` |
 | "Bulk archive mem_<id>, mem_<id>, mem_<id>" | One `lore memory archive` call per ID (no bulk syntax — emit 3 commands) |
-| "Mission M-N is complete / ship M-N" | `lore mission done M-N` (mission has its own `done` verb; do NOT use `task done` for M-N IDs) |
-| "Done with mission M-N" | `lore mission done MS-N` (mission/handoff have no `archive` — use status transitions: `mission done`, `mission cancel`, `mission pause`/`resume`, `handoff ack`) |
-| "Flag D-N for re-eval (don't archive)" | `lore comment add --on-table=decisions --on-id=D-N --body="REVISIT: <why>"` (D-N stays active; do NOT create a new decision) |
+| "Mission msn_<id> is complete / ship msn_<id>" | `lore mission done msn_<id>` (mission has its own `done` verb; do NOT use `task done` for msn_<id> IDs) |
+| "Done with mission msn_<id>" | `lore mission done msn_<id>` (mission/handoff have no `archive` — use status transitions: `mission done`, `mission cancel`, `mission pause`/`resume`, `handoff ack`) |
+| "Flag dec_<id> for re-eval (don't archive)" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>"` (dec_<id> stays active; do NOT create a new decision) |
 
 ### Correction / confirmation (revising captured knowledge)
 
@@ -372,15 +372,15 @@ When the user asks to **revise**, **scratch**, **reverse**, or **update** an exi
 ```bash
 RID=$(lore rule search "globals" --json | jq -r '.data[0].code')
 lore rule archive "$RID"
-lore rule add --severity=should "A single global request-id context is allowed for tracing"
+lore rule add --severity=should --body="A single global request-id context is allowed for tracing"
 lore render
 ```
 
 | User says | Run |
 |---|---|
-| "Scratch the previous rule about X" | `rule search "X"` → `rule archive R-N` (atomic, via `$(…)`) |
-| "Update what we said about X" | `rule search "X"` → `rule edit R-N` or archive + add new |
-| "Reverse the rule about X" | `rule search "X"` → `rule archive R-N` → add new with opposite content |
+| "Scratch the previous rule about X" | `rule search "X"` → `rule archive rul_<id>` (atomic, via `$(…)`) |
+| "Update what we said about X" | `rule search "X"` → `rule edit rul_<id>` or archive + add new |
+| "Reverse the rule about X" | `rule search "X"` → `rule archive rul_<id>` → add new with opposite content |
 
 | User says | Run |
 |---|---|
@@ -461,7 +461,7 @@ lore render
 | "archive mem_<id>" / "stop showing mem_<id>" | `lore memory archive mem_<id>` (works for every entity: rule, decision, hotfix, pattern, playbook, prompt, project, repo) |
 | "unarchive mem_<id>" | `lore memory unarchive mem_<id>` |
 | "mem_<id> is no longer true as of today" (bitemporal — keep history) | `lore memory invalidate mem_<id>` (sets `valid_until=now`; preferred over archive when you want to remember WHEN it became wrong) |
-| "supersede mem_<id> with new memory X" | `lore memory add "X" --supersedes=mem_<id>` (preserves chain) |
+| "supersede mem_<id> with new memory X" | `lore memory add --body="X" --supersedes=mem_<id>` (preserves chain) |
 | "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit mem_<id> --body="..."` (no chain — use `--supersedes` instead if audit trail matters) |
 | "archive project PRJ-X" / "retire repo REP-Y" | `lore project archive PRJ-X` / `lore repo archive REP-Y` |
 
@@ -536,8 +536,8 @@ The agent's **directive step 5** (rendered into `.lore/LORE.md`, reached via the
 
 | User says | Run |
 |---|---|
-| "set up a benchmark eval for X / author a bench task for rule R-N" | `lore bench eval add --category=… --link=<kind>:<id> --prompt-file=- --grader-kind=programmatic --grader-cmd='…'` — **META, not capture**. Do NOT emit `rule add` for "set up an eval *for* rule R-N" requests; the user wants to test the rule, not re-capture it. |
-| "set up a benchmark task" | `lore bench eval add --category=… --link=rule:R-N --prompt-file=… --grader-kind=…` |
+| "set up a benchmark eval for X / author a bench task for rule rul_<id>" | `lore bench eval add --category=… --link=<kind>:<id> --prompt-file=- --grader-kind=programmatic --grader-cmd='…'` — **META, not capture**. Do NOT emit `rule add` for "set up an eval *for* rule rul_<id>" requests; the user wants to test the rule, not re-capture it. |
+| "set up a benchmark task" | `lore bench eval add --category=… --link=rule:rul_<id> --prompt-file=… --grader-kind=…` |
 | "list benchmark tasks" | `lore bench eval list [--category=…] [--json]` |
 | "show task E1-001" | `lore bench eval show E1-001 --json` |
 | "edit the grader" | `lore bench eval edit E1-001 --grader-cmd='…'` |
@@ -610,8 +610,8 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 
 | User asks for | Status | Workaround |
 |---|---|---|
-| `lore task block <T-N>` | No native verb (despite `blocked` being a valid status enum) | `lore task edit T-N --status=blocked` (works via universal `edit`) |
-| Cancel-with-reason as one verb | `task cancel` has no `--reason` flag | Two-cmd: `task cancel T-N` + `comment add --on-table=tasks --on-id=T-N --body="cancelled: <reason>"` |
+| `lore task block <tsk_id>` | No native verb (despite `blocked` being a valid status enum) | `lore task edit tsk_<id> --status=blocked` (works via universal `edit`) |
+| Cancel-with-reason as one verb | `task cancel` has no `--reason` flag | Two-cmd: `task cancel tsk_<id>` + `comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"` |
 
 ### Hard delete (escape hatch)
 
@@ -623,8 +623,8 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 `<kind> delete <id>` works on 25 entities. **Requires `--confirm`** to fire — accidentally typing it without the flag returns an error pointing at archive. Soft-archive should be preferred whenever the entity supports it (memory, rule, decision, hotfix, pattern, playbook, prompt, snapshot, project, repo); delete is the escape hatch for "I captured a secret" / "I need it gone for real."
 
 > **Closed gaps** (do NOT re-add as workarounds):
-> - "Attach tasks to a tasklist" → `lore task edit T-N --tasklist=<tlt_id>` (covered by universal `edit`)
-> - "Move task between tasklists / missions / plans" → `task edit T-N --tasklist=… --mission=… --plan=…` (or `--clear-mission` to detach)
+> - "Attach tasks to a tasklist" → `lore task edit tsk_<id> --tasklist=<tlt_id>` (covered by universal `edit`)
+> - "Move task between tasklists / missions / plans" → `task edit tsk_<id> --tasklist=… --mission=… --plan=…` (or `--clear-mission` to detach)
 > - "Batch reject learn candidates" → `lore learn reject --all` or `--ids=a,b,c`
 > - "`learn list --json` not actually JSON" → fixed; emits `{schema_version,kind,data}` envelope
 > - "`memory search ""` returns null" → fixed; emits `results: []`
@@ -721,7 +721,7 @@ Read-only mode, render-diff check. **Recipe: [PLAYBOOKS.md § P12](./PLAYBOOKS.m
 ### P14 — Promote a memory to a rule
 Soft fact turns out to be a hard constraint. **Recipe: [PLAYBOOKS.md § P14](./PLAYBOOKS.md).**
 
-> **ALL 4 STEPS REQUIRED — do NOT skip the show.** The first step (`lore memory show M-N`) fetches the actual body so the rule text is faithful to the original — never invent or paraphrase the rule content. Order: `memory show` → `rule add` → `memory archive` → `render`.
+> **ALL 4 STEPS REQUIRED — do NOT skip the show.** The first step (`lore memory show mem_<id>`) fetches the actual body so the rule text is faithful to the original — never invent or paraphrase the rule content. Order: `memory show` → `rule add` → `memory archive` → `render`.
 
 ### P15 — Demote a rule to a memory
 Rule was too strict; relax it. **Recipe: [PLAYBOOKS.md § P15](./PLAYBOOKS.md).**
