@@ -458,6 +458,7 @@ type taskListFlags struct {
 	status          string
 	commitment      string
 	mission         string
+	assignee        string
 	all             bool
 	includeProposed bool
 	includeSomeday  bool
@@ -478,6 +479,7 @@ func newTaskListCommand() *cobra.Command {
 	cmd.Flags().StringVar(&f.status, constants.FlagStatus, "", "filter: todo | in_progress | done | cancelled | blocked (empty = default active set, see --all)")
 	cmd.Flags().StringVar(&f.commitment, constants.FlagCommitment, "", "filter: accepted | proposed | someday")
 	cmd.Flags().StringVar(&f.mission, constants.FlagMission, "", "filter by mission_id")
+	cmd.Flags().StringVar(&f.assignee, constants.FlagAssignee, "", "filter by assignee: actor_id (act_*), "+constants.ActorRefMe+", stable_key or display name")
 	cmd.Flags().BoolVar(&f.all, constants.FlagAll, false, "show everything: done/cancelled + proposed/someday + deferred")
 	cmd.Flags().BoolVar(&f.includeProposed, constants.FlagIncludeProposed, false, "also include commitment=proposed")
 	cmd.Flags().BoolVar(&f.includeSomeday, constants.FlagIncludeSomeday, false, "also include commitment=someday")
@@ -543,6 +545,13 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 	}
 	if f.mission != "" {
 		q = q.Where(entTask.MissionID(f.mission))
+	}
+	if f.assignee != "" {
+		actorID, err := resolveActorRef(ctx, client, f.assignee)
+		if err != nil {
+			return err
+		}
+		q = q.Where(entTask.AssignedToActorID(actorID))
 	}
 	rows, err := q.Order(ent.Asc(entTask.FieldID)).All(ctx)
 	if err != nil {

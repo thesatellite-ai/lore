@@ -166,6 +166,106 @@ func TestUC_Tasks_ListFiltersAndViews(t *testing.T) {
 	}
 }
 
+// task list --assignee (resolveActorRef): every reference form, the empty
+// and unknown cases, ambiguity, the never-writes guarantee for @me, and the
+// intersection with the other filters.
+func TestUC_Tasks_ListAssignee(t *testing.T) {
+	c := ucProject(t)
+	tl := ucTasklist(t, c)
+	createdBy := func(id string) string {
+		return ucScalar(t, c, "SELECT created_by_actor_id FROM tasks WHERE id = ?", id)
+	}
+	// asActor runs one task add under another identity and returns that
+	// identity's actor id (taken from the row's created_by). Agent callers
+	// must state a commitment.
+	asActor := func(stableKey, title string) string {
+		c.env = []string{"LORE_ACTOR=" + stableKey}
+		defer func() { c.env = nil }()
+		return createdBy(ucID(t, c, "task", "add", title, "--tasklist="+tl, "--commitment=accepted"))
+	}
+
+	me := createdBy(ucID(t, c, "task", "add", "unassigned", "--tasklist="+tl))
+	bot := asActor("agent:review-bot", "made by bot")
+	idle := asActor("agent:idle-bot", "made by idle")
+	for _, id := range []string{me, bot, idle} {
+		if !strings.HasPrefix(id, "act_") {
+			t.Fatalf("expected actor ids, got me=%q bot=%q idle=%q", me, bot, idle)
+		}
+	}
+	if me == bot || bot == idle || me == idle {
+		t.Fatalf("identities must map to distinct actors: %q %q %q", me, bot, idle)
+	}
+	c.lore("task", "add", "mine todo", "--tasklist="+tl, "--assigned-to="+me)
+	c.lore("task", "start", ucID(t, c, "task", "add", "mine started", "--tasklist="+tl, "--assigned-to="+me))
+	c.lore("task", "done", ucID(t, c, "task", "add", "mine finished", "--tasklist="+tl, "--assigned-to="+me))
+	c.lore("task", "add", "theirs", "--tasklist="+tl, "--assigned-to="+bot)
+	c.lore("task", "add", "their idea", "--tasklist="+tl, "--assigned-to="+bot, "--commitment=proposed")
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--assignee=" + me}, "mine started,mine todo"},
+		{[]string{"--assignee=@me"}, "mine started,mine todo"},
+		{[]string{"--assignee=" + bot}, "theirs"},
+		{[]string{"--assignee=agent:review-bot"}, "theirs"},
+		{[]string{"--assignee=review-bot"}, "theirs"},
+		{[]string{"--assignee=Review-Bot"}, "theirs"},
+		{[]string{"--assignee=  review-bot  "}, "theirs"},
+		{[]string{"--assignee=" + idle}, ""},
+		{[]string{"--assignee=idle-bot", "--all"}, ""},
+		{[]string{"--assignee=" + me, "--status=in_progress"}, "mine started"},
+		{[]string{"--assignee=" + me, "--status=done"}, "mine finished"},
+		{[]string{"--assignee=" + bot, "--status=done"}, ""},
+		{[]string{"--assignee=" + me, "--all"}, "mine finished,mine started,mine todo"},
+		{[]string{"--assignee=" + bot, "--include-proposed"}, "their idea,theirs"},
+		{[]string{"--assignee=" + bot, "--commitment=proposed"}, "their idea"},
+		{[]string{"--assignee=@me", "--read-only"}, "mine started,mine todo"},
+	} {
+		got := ucListTitles(t, c, tc.args...)
+		sortStrings(got)
+		if strings.Join(got, ",") != tc.want {
+			t.Fatalf("task list %v = %v, want %q", tc.args, got, tc.want)
+		}
+	}
+	if out := c.lore("task", "list", "--assignee="+idle).stdout; !strings.Contains(out, "(no tasks)") {
+		t.Fatalf("an assignee with no tasks must say so: %q", out)
+	}
+
+	for _, ref := range []string{"act_00000000000070008000000000000000", "nobody-here", "agent:nobody-here"} {
+		if r := c.loreAny("task", "list", "--assignee="+ref); r.code == 0 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
+			t.Fatalf("unknown --assignee %q must be E_NOT_FOUND: %d %s", ref, r.code, r.stderr)
+		}
+	}
+	if r := c.loreAny("task", "list", "--assignee=   "); r.code == 0 || !strings.Contains(r.stderr, "E_INVALID_INPUT") {
+		t.Fatalf("a blank --assignee must be E_INVALID_INPUT: %d %s", r.code, r.stderr)
+	}
+
+	// Two actors sharing a display name: the name alone is refused, each id
+	// still works.
+	twinAgent := asActor("agent:twin", "by twin agent")
+	twinHuman := asActor("human:twin@example.com", "by twin human")
+	r := c.loreAny("task", "list", "--assignee=twin")
+	if r.code == 0 || !strings.Contains(r.stderr, "E_INVALID_INPUT") || !strings.Contains(r.stderr, twinAgent) || !strings.Contains(r.stderr, twinHuman) {
+		t.Fatalf("an ambiguous name must list both candidates: %d %s", r.code, r.stderr)
+	}
+	if got := ucListTitles(t, c, "--assignee="+twinHuman); len(got) != 0 {
+		t.Fatalf("twin id filter = %v, want none", got)
+	}
+
+	// @me for an identity that has never written: not found, and no actor row
+	// is created by the lookup.
+	c.env = []string{"LORE_ACTOR=agent:never-wrote"}
+	r = c.loreAny("task", "list", "--assignee=@me")
+	c.env = nil
+	if r.code == 0 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
+		t.Fatalf("@me for an unseen identity must be E_NOT_FOUND: %d %s", r.code, r.stderr)
+	}
+	if n := ucScalar(t, c, "SELECT COUNT(*) FROM actors WHERE stable_key = ?", "agent:never-wrote"); n != "0" {
+		t.Fatalf("--assignee=@me must not create an actor row, found %s", n)
+	}
+}
+
 // start / done / cancel (updateTaskStatus) with their side effects, and show
 // in both forms (lookupTask, fullFromTask).
 func TestUC_Tasks_StatusTransitionsAndShow(t *testing.T) {
