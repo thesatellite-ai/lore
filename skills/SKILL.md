@@ -442,6 +442,7 @@ lore render
 | "track an initiative: X" | `lore mission add "<X>" --target=YYYY-MM-DD` |
 | "what tasks are open?" | `lore task list --json` (default already hides done + cancelled; use `--all` for full history, `--status=X` for explicit filter) |
 | "show everything including done/cancelled" | `lore task list --all --json` |
+| "what is assigned to me / to X?" | `lore task list --assignee=@me --json` (also takes an actor_id (act_*), stable_key or display name; composes with `--status`, `--all` etc.) |
 | "start work on tsk_<id>" | `lore task start tsk_<id>` |
 | "mark tsk_<id> done" | `lore task done tsk_<id>` |
 | "cancel tsk_<id>" | `lore task cancel tsk_<id>` |

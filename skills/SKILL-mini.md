@@ -270,6 +270,7 @@ T[high priority: X]                      → task add "<X>" --priority=high
 T[urgent: X]                             → task add "<X>" --priority=urgent
 T[track an initiative: X]                → mission add "<X>" --target=YYYY-MM-DD
 T[what tasks are open?]                  → task list --status=todo --json
+T[what is assigned to me / to X?]        → task list --assignee=@me --json   (or act_<id> / stable_key / display name)
 T[start work on tsk_<id>]                     → task start tsk_<id>
 T[mark tsk_<id> done]                         → task done tsk_<id>
 T[mark msn_<id> done | mission msn_<id> is complete | ship msn_<id>]

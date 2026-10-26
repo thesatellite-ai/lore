@@ -40,6 +40,7 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Multi-phase plan | `lore plan add --title=<t>` |
 | Hand off context to a collaborator | `lore handoff add --to=<name> --body=<ctx>` |
 | Active task list view | `lore task list --status=in_progress` |
+| My tasks / tasks assigned to someone | `lore task list --assignee=@me` (or `--assignee=<act_id\|stable_key\|display name>`) |
 | Start a task | `lore task start <id\|tsk_<id>>` |
 | Finish a task | `lore task done <id\|tsk_<id>>` |
 | Cancel a task | `lore task cancel <id\|tsk_<id>>` |

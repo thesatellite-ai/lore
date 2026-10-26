@@ -61,6 +61,7 @@ const (
 	FlagMission       = "mission"
 	FlagPlan          = "plan"
 	FlagAssignedTo    = "assigned-to"
+	FlagAssignee      = "assignee"
 	FlagCreatedBy     = "created-by"
 	FlagValidatedBy   = "validated-by"
 	FlagFrom          = "from"
@@ -144,4 +145,13 @@ const (
 	FlagManual = "manual"
 	// FlagLoreVersion pins the lore release a workflow downloads.
 	FlagLoreVersion = "lore-version"
+)
+
+// Actor-reference flag values (read-side filters such as task list
+// --assignee).
+const (
+	// ActorRefMe stands for the current CLI invoker's actor, resolved through
+	// the same identity chain every `add` command uses (--actor, LORE_ACTOR,
+	// ~/.lore/identity.toml, git config, ...).
+	ActorRefMe = "@me"
 )
