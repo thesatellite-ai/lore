@@ -161,9 +161,11 @@ lore task add "Wire FTS5 backend" \
   --due=2026-05-20 \
   --assigned-to=act_<id> \
   --created-by=act_<id>      # optional — defaults to current identity
-lore task list [--status=…] [--commitment=…] [--mission=<id>] \
+lore task list [--status=…] [--commitment=…] [--mission=<id>] [--assignee=<ref>] \
                [--include-proposed] [--include-someday] [--include-deferred] [--all] [--json]
                                    # default = ActiveTask (accepted, not done/cancelled, not future-deferred)
+                                   # --assignee: filter by assignee: actor_id (act_*), @me, stable_key or display name
+                                   #   (a display name shared by several actors is refused with the candidate ids)
 lore task triage                   # commitment=proposed (AI-suggested, not committed)
 lore task someday                  # commitment=someday (parking lot)
 lore task deferred                 # snoozed: deferred_until in the future
