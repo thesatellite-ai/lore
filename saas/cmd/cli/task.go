@@ -10,6 +10,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -745,9 +746,20 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 		return nil
 	}
 
-	printTaskRowsWithState(rows, states)
-	// Store and personal tasks of this repo's sources, with their label (F20).
-	printExternalRows(ctx, os.Stdout, tableTasks, "")
+	// Store and personal tasks of this repo's sources, with their label
+	// (F20). "(no tasks)" only when no source has any: in a client repo
+	// whose work lives in the store it would contradict the rows below it.
+	if len(rows) > 0 {
+		printTaskRowsWithState(rows, states)
+		printExternalRows(ctx, os.Stdout, tableTasks, "")
+		return nil
+	}
+	var ext bytes.Buffer
+	if printExternalRows(ctx, &ext, tableTasks, "") == 0 {
+		printTaskRowsWithState(nil, nil)
+		return nil
+	}
+	_, _ = os.Stdout.Write(ext.Bytes())
 	return nil
 }
 
@@ -932,6 +944,11 @@ func newTaskShowCommand() *cobra.Command {
 			}
 			t, err := lookupTask(cmd.Context(), client, projectID, args[0])
 			if err != nil {
+				if from == "" {
+					if handled, serr := showStoreTask(cmd.Context(), args[0], jsonOut); handled {
+						return serr
+					}
+				}
 				return err
 			}
 			t = newerTask(cmd.Context(), t)

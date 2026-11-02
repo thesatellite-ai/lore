@@ -87,13 +87,19 @@ func TestCheckMatrix(t *testing.T) {
 	}
 }
 
-// stable_key in a client actor copy warns (does not block) while the export
-// does not project actors yet (StableKeyBlocks); agent details block.
-func TestStableKeyOnlyWarns(t *testing.T) {
+// stable_key in a client actor copy BLOCKS (BUG-D2, fail closed): the
+// export writes only the projection, so a person's email in a client repo
+// is a leak, never a warning. Agent details block too. A projection alone
+// passes.
+func TestStableKeyBlocks(t *testing.T) {
 	it := Item{Where: "a", Path: ".lore/data/actors/" + actID + ".json", Content: []byte(`{"id":"` + actID + `","display_name":"Alice","kind":"human","stable_key":"human:alice@northwind.example","handle":"alice"}`)}
 	fs := Check([]Item{it}, index(), Options{ClientRepo: true})
-	if len(fs) != 1 || fs[0].Warn != !StableKeyBlocks || len(Blocking(fs)) != map[bool]int{true: 1, false: 0}[StableKeyBlocks] {
-		t.Fatalf("got %+v", fs)
+	if len(fs) != 1 || fs[0].Warn || len(Blocking(fs)) != 1 {
+		t.Fatalf("stable_key must block: %+v", fs)
+	}
+	it.Content = []byte(`{"_table":"actors","_v":1,"id":"` + actID + `","display_name":"Alice","kind":"human"}`)
+	if fs := Check([]Item{it}, index(), Options{ClientRepo: true}); len(fs) != 0 {
+		t.Fatalf("the projection must pass: %+v", fs)
 	}
 	it.Content = []byte(`{"id":"` + actID + `","kind":"agent","label":"backend-1","stable_key":"agent:backend-1"}`)
 	if fs := Check([]Item{it}, index(), Options{ClientRepo: true}); len(Blocking(fs)) != 1 {

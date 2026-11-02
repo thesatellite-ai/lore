@@ -215,11 +215,17 @@ func printTaskSignals(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	return printClaimOn(ctx, st, w.Folder, id)
+}
+
+// printClaimOn prints the claim on task id in folder of the signals ref st
+// as this clone sees it now.
+func printClaimOn(ctx context.Context, st *signals.Store, folder, id string) error {
 	v, err := st.Read(ctx)
 	if err != nil {
 		return coordError(err)
 	}
-	p := signals.ClaimPath(w.Folder, id)
+	p := signals.ClaimPath(folder, id)
 	s, ok := v.Board[p]
 	fmt.Println()
 	if !ok {

@@ -16,6 +16,13 @@ import (
 	"saas/pkg/aicoder/xref"
 )
 
+// rosterTables are the tables whose ids F15 does not treat as pointers:
+// the org roster (actors, teams), which a client row may name.
+var rosterTables = map[string]bool{tableActors: true, tableTeams: true}
+
+// tableTeams is the roster's teams table (natural_ids.go "Team").
+const tableTeams = "teams"
+
 // routeKind is who can read the project a write is routed to.
 func routeKind(route writeRoute) xref.Kind {
 	switch {
@@ -50,6 +57,14 @@ func checkReferences(ctx context.Context, route writeRoute, refs []string) error
 		to := xref.Client
 		samePersonal := false
 		if r, ok := where[ref.RowID]; ok {
+			if rosterTables[r.Table] {
+				// A roster id (person, agent, team) is not a pointer into
+				// hidden content: a client row may name one, and the client
+				// copy of the actor is the F18 projection {id, display name,
+				// kind}. The leak check exempts the same ids (leakcheck
+				// Index.actors), so both guards agree.
+				continue
+			}
 			switch {
 			case strings.HasPrefix(r.Source, cachedb.SourcePersonal+":"):
 				to = xref.Personal
