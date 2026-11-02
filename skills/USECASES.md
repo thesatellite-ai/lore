@@ -39,6 +39,13 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Group tasks (alt grouping) | `lore tasklist add --title=<t>` |
 | Multi-phase plan | `lore plan add --title=<t>` |
 | Hand off context to a collaborator | `lore handoff add --for @<handle> [--task <id>] "<ctx>"` |
+| Share a row with the whole team at once, on any branch | `lore task add "<title>" --live` (tasks are live by default) |
+| Land finished live rows on main now | `lore land --all` |
+| See which org, identity and stores apply here | `lore whoami` |
+| Keep an internal note out of a client repo | `lore memory add --body "<text>" --to <org>` |
+| Take the next ready task as an agent | `lore task next --mission <id>` |
+| Keep an agent's claim alive | `lore task heartbeat` |
+| Check a PR body for internal content before posting | `lore check pr-body <file>` |
 | Active task list view | `lore task list --status=in_progress` |
 | My tasks / tasks assigned to someone | `lore task list --assignee=@me` (or `--assignee=<act_id\|stable_key\|display name>`) |
 | Start a task | `lore task start <id\|tsk_<id>>` |
