@@ -70,8 +70,8 @@ A real one, from the worked example: the crashed `frontend-1` woke up after `fro
 <!-- example: agents#crash-and-reclaim only=8 -->
 ```console
 # frontend-1, in agents/globex-web
-$ lore task done tsk_01a1…99bc
-ERROR: [E_LOST_CLAIM] tsk_01a1…99bc is held by agent:frontend-2 since 10:57AM (your claim is not on the signals ref); your token ct_dfe0b… expired 10:45AM
+$ lore task done tsk_54fe…28f2
+ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:frontend-2 since 10:57AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:45AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 ```

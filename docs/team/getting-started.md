@@ -25,7 +25,7 @@ In a repo that has a remote (here `github.com/alice/notes-app`), run `lore init`
 # alice, in notes-app
 $ lore init --non-interactive --name=notes-app
 ✓ lore initialized at /home/alice/work/notes-app
-    project_id: prj_01a1…3c7b
+    project_id: prj_7a67…9504
     name:       notes-app
     origin:     https://github.com/alice/notes-app
     db:         /home/alice/work/notes-app/.lore/lore.db
@@ -47,9 +47,9 @@ With no config at all, there is no org, and your identity comes from your git em
 # alice, in notes-app
 $ lore whoami
 org        none  (matched by: nothing matched)
-identity   alice <human:alice@example.com>   act_3686…c40e  (from: git config)
+identity   alice <human:alice@example.com>   act_2ad3…f891  (from: git config)
 repo       no org  (fallback identity, personal everywhere/ notes only)
-project    prj_01a1…3c7b
+project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
 personal   local: everywhere/
@@ -65,18 +65,18 @@ Tasks are live by default. Adding one writes it to the hidden ref `refs/lore/liv
 ```console
 # alice, in notes-app
 $ lore task add 'fix login timeout'
-✓ tsk_01a1…d4bd tsk_01a1…d4bd — fix login timeout [medium]
+✓ tsk_162d…9666 tsk_162d…9666 — fix login timeout [medium]
 lore live: (live, pushed)
 $ lore task list
-○ tsk_01a1…d4bd fix login timeout [medium]
+○ tsk_162d…9666 fix login timeout [medium]
 $ git status --short
 $ git ls-remote origin
-b5b3ee63c227	HEAD
-b5b3ee63c227	refs/heads/main
-36b5c6c22cfe	refs/lore/live
+601d2850ffd0	HEAD
+601d2850ffd0	refs/heads/main
+86dbae476bd6	refs/lore/live
 $ lore live show
-task_lists tlt_01a1…0ec9     live      since 2026-11-02 18:41
-tasks      tsk_01a1…d4bd     live      since 2026-11-02 18:41
+task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
+tasks      tsk_162d…9666     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 ```
 <!-- /example -->
@@ -90,18 +90,18 @@ Finishing a task lands it: lore writes it to `main`'s `.lore/data` with a commit
 <!-- example: getting-started#first-landing -->
 ```console
 # alice, in notes-app
-$ lore task done tsk_01a1…d4bd
-✓ tsk_01a1…d4bd done
+$ lore task done tsk_162d…9666
+✓ tsk_162d…9666 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
-lore live: landed on main (7217f21); leaves live once main is fetched
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 $ git fetch -q origin && git log --oneline origin/main
-7217f21 lore: land 2 rows (_root)
-b5b3ee6 lore: init
-3c0a2dd init
+9b40ce7 lore: land 2 rows (_root)
+601d285 lore: init
+05513aa init
 $ lore live show
-task_lists tlt_01a1…0ec9     live      since 2026-11-02 18:41
-tasks      tsk_01a1…d4bd     live      since 2026-11-02 18:41
+task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
+tasks      tsk_162d…9666     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 $ lore sync
 · already in sync
@@ -123,9 +123,9 @@ If you used lore before, your identity may be in `~/.lore/identity.toml`. The fi
 $ lore whoami
 lore: migrated /home/alice/.lore/identity.toml → identity.yaml (old file kept as identity.toml.migrated)
 org        none  (matched by: nothing matched)
-identity   Alice Doe <human:alice@example.com>   act_3686…c40e  (from: identity.yaml)
+identity   Alice Doe <human:alice@example.com>   act_2ad3…f891  (from: identity.yaml)
 repo       no org  (fallback identity, personal everywhere/ notes only)
-project    prj_01a1…3c7b
+project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
 personal   local: everywhere/
@@ -190,15 +190,15 @@ $ lore store init git@github.com:northwind/lore
 # alice, in tools
 $ lore whoami
 org        northwind  (matched by: own pattern github.com/northwind/* of northwind)
-identity   Alice Doe <human:alice@northwind.example>   act_0263…5705  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@northwind.example>   act_c0f3…b5b8  @alice  (from: org entry (config.yaml))
 repo       own repo  (no client guards)
-project    prj_01a1…b47e
+project    prj_05e9…4603
 remotes    github.com/northwind/tools
 stores     git@github.com:northwind/lore on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   local: northwind/, everywhere/
 $ lore actor register
-✓ act_0263…5705 Alice Doe (@alice) registered in northwind org/
+✓ act_c0f3…b5b8 Alice Doe (@alice) registered in northwind org/
 lore: [northwind/org] 3 file(s) pushed
 ```
 <!-- /example -->
@@ -212,9 +212,9 @@ Repos outside the org keep your fallback identity, never a company one:
 # alice, in notes-app
 $ lore whoami
 org        none  (matched by: nothing matched)   hint: lore org use northwind
-identity   Alice Doe <human:alice@example.com>   act_3686…c40e  (from: top-level identity (config.yaml))
+identity   Alice Doe <human:alice@example.com>   act_2ad3…f891  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity, personal everywhere/ notes only)
-project    prj_01a1…3c7b
+project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   local: everywhere/

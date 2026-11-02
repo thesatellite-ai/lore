@@ -103,9 +103,10 @@ _on() {
   mkdir -p "$home/$dir"
   local EXTRA_ENV="${EXTRA_ENV:-}"
   if [ -n "${CLOCK:-}" ]; then
-    # Test clock (loretest builds only): every command runs STEP seconds after the last,
-    # so lore's 60 s fetch cache never hides a teammate's write in the examples.
-    CLOCK=$(date -u -d "$CLOCK + ${STEP:-70} seconds" +%Y-%m-%dT%H:%M:%SZ)
+    # Test clock (loretest builds only): every command runs STEP seconds after the last
+    # (5 s by default, like a person typing; a section that needs lore's 60 s fetch cache
+    # to expire between steps, such as the agents example, sets a larger STEP).
+    CLOCK=$(date -u -d "$CLOCK + ${STEP:-5} seconds" +%Y-%m-%dT%H:%M:%SZ)
     # git commits made in the same step carry the same time, so merge times match lore's clock.
     EXTRA_ENV="$EXTRA_ENV LORE_NOW=$CLOCK GIT_AUTHOR_DATE=$CLOCK GIT_COMMITTER_DATE=$CLOCK"
   fi
@@ -162,8 +163,12 @@ on!() { _on fail "$@"; }
 quiet() {
   local name="$1" dir="$2" cmd="$3" home="$WORLD/home/$1"
   mkdir -p "$home/$dir"
+  local extra="${EXTRA_ENV:-}"
+  # Setup steps share the examples' clock (without moving it), so rows they create
+  # never look newer than the examples that follow.
+  [ -n "${CLOCK:-}" ] && extra="$extra LORE_NOW=$CLOCK GIT_AUTHOR_DATE=$CLOCK GIT_COMMITTER_DATE=$CLOCK"
   # shellcheck disable=SC2046
-  if ! (cd "$home/$dir" && $(envfor "$name") ${EXTRA_ENV:-} bash -c "$cmd") > "$WORLD/quiet.log" 2>&1; then
+  if ! (cd "$home/$dir" && $(envfor "$name") $extra bash -c "$cmd") > "$WORLD/quiet.log" 2>&1; then
     FAILURES=$((FAILURES + 1))
     echo "SETUP FAILED: $name ($dir) \$ $cmd" >&2
     cat "$WORLD/quiet.log" >&2

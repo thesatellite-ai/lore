@@ -16,21 +16,21 @@ In a repo without a remote, nothing is ever pushed. Tasks are still live by defa
 ```console
 # alice, in scratch
 $ lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
-✓ rul_01a1…3658 rul_01a1…3658 
+✓ rul_7a67…9504 rul_7a67…9504 
   scope: [master] severity: must
 lore sync: exported 1
 lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore task add 'write the README'
-✓ tsk_01a1…5d7e tsk_01a1…5d7e — write the README [medium]
+✓ tsk_2ad3…f891 tsk_2ad3…f891 — write the README [medium]
 lore live: (live, local: no remote)
-$ lore task done tsk_01a1…5d7e
-✓ tsk_01a1…5d7e done
+$ lore task done tsk_2ad3…f891
+✓ tsk_2ad3…f891 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, local: no remote)
 $ lore land --all --dry-run
 would land 2 row(s) to main (_root/):
-  tlt_01a1…1d5a     land  named by lore land
-  tsk_01a1…5d7e     land  named by lore land
+  tlt_162d…9666     land  named by lore land
+  tsk_2ad3…f891     land  named by lore land
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -52,7 +52,7 @@ live:
 ```console
 # alice, in scratch
 $ lore task add 'tidy the scripts folder'
-✓ tsk_01a1…3946 tsk_01a1…3946 — tidy the scripts folder [medium]
+✓ tsk_54fe…28f2 tsk_54fe…28f2 — tidy the scripts folder [medium]
 lore sync: exported 1
 lore sync: 5 file(s) in .lore/data not committed — commit them with your change
 $ git status --short

@@ -37,9 +37,9 @@ orgs:
 # alice, in acme-app
 $ lore whoami
 org        northwind  (matched by: link in <redacted>, project id + remote)
-identity   Alice Doe <human:alice@northwind.example>   act_0263…5705  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@northwind.example>   act_7a67…9504  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-project    prj_01a1…7ef2
+project    prj_2ad3…f891
 remotes    github.com/acme/app
 stores     <redacted> on branch main  (org folder <redacted>)
 internal   <redacted> <redacted>/
@@ -49,9 +49,9 @@ personal   local: northwind/, everywhere/
 # alice, in betalabs-api
 $ lore whoami
 org        betalabs  (matched by: own pattern github.com/betalabs/* of betalabs)
-identity   Alice Doe <human:alice@betalabs.example>   act_e248…9854  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@betalabs.example>   act_162d…9666  @alice  (from: org entry (config.yaml))
 repo       own repo  (no client guards)
-project    prj_01a1…dc9a
+project    prj_54fe…28f2
 remotes    github.com/betalabs/api
 stores     <redacted> on branch main  (org folder <redacted>)
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
@@ -60,9 +60,9 @@ personal   local: betalabs/, everywhere/
 # alice, in forked-tool
 $ lore whoami
 org        none  (matched by: nothing matched)   hint: lore org use <entry> (northwind, betalabs)
-identity   Alice Doe <human:alice@example.com>   act_3686…c40e  (from: top-level identity (config.yaml))
+identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity, personal everywhere/ notes only)
-project    prj_01a1…d46a
+project    prj_c0f3…b5b8
 remotes    github.com/someone/tool
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   local: everywhere/
@@ -79,23 +79,23 @@ Personal notes follow the same split: a note written in a Northwind repo is file
 ```console
 # alice, in acme-app
 $ lore memory add --body 'ask the Acme PM before touching the payment flow' --to me
-✓ mem_01a1…312f mem_01a1…312f [me]
+✓ mem_76bd…3f10 mem_76bd…3f10 [me]
   filed: --to me → personal northwind/
   scope: [master]
 
 # alice, in betalabs-api
 $ lore memory add --body 'betalabs deploys only on Tuesdays' --to me
-✓ mem_01a1…3c57 mem_01a1…3c57 [me]
+✓ mem_d431…313a mem_d431…313a [me]
   filed: --to me → personal betalabs/
   scope: [master]
 
 # alice, in acme-app
 $ lore memory list
-mem_01a1…312f  ask the Acme PM before touching the payment flow  [me]
+mem_76bd…3f10  ask the Acme PM before touching the payment flow  [me]
 
 # alice, in betalabs-api
 $ lore memory list
-mem_01a1…3c57  betalabs deploys only on Tuesdays  [me]
+mem_d431…313a  betalabs deploys only on Tuesdays  [me]
 
 # alice, in forked-tool
 $ lore memory list

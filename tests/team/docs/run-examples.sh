@@ -34,10 +34,14 @@ source "$HERE/lib.sh"
 
 # section NAME: start a transcript and a fresh world for one docs section.
 section() {
+  [ -n "${TRANSCRIPT:-}" ] && [ -f "$TRANSCRIPT" ] && python3 "$HERE/normalize.py" "$TRANSCRIPT"
   mkdir -p "$OUT"
   TRANSCRIPT="$OUT/$1.txt"
   : > "$TRANSCRIPT"
   new_world "$SCRATCH/world-$1"
+  # Every section runs on the test clock (LORE_NOW and git dates), so times, ages and
+  # commit dates are the same on every run; normalize.py then fixes the random ids.
+  CLOCK=2026-11-02T10:00:00Z STEP=5
   echo "== $1" >&2
 }
 
@@ -263,7 +267,7 @@ s_agency() {
   on alice work/acme-app "printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on WhatsApp first.\n' > pr.md"
   on! alice work/acme-app "lore check pr-body pr.md"
   on alice work/acme-app "printf 'Fixes checkout totals for INR.\n' | lore check pr-body -"
-  on_known BUG-D2 alice work/acme-app "rm pr.md && lore check leaks --ci"
+  on alice work/acme-app "rm pr.md && lore check leaks --ci"
 
   note "agent rule refused"
   on alice work/acme-app "lore agent start --label backend-1 --owner @alice"
@@ -274,7 +278,7 @@ s_agency() {
   note "share"
   on alice work/acme-app "lore memory add --body 'checkout must support INR and USD'"
   local m2; m2=$(id mem)
-  TTY=1 ANSWER=y on_known BUG-D1 alice work/acme-app "lore share $m2 --to repo"
+  TTY=1 ANSWER=y on alice work/acme-app "lore share $m2 --to repo"
   on alice work/acme-app "git status --short"
 
   note "client view"
@@ -505,7 +509,8 @@ s_agents() {
     quiet alice work "git clone -q https://github.com/globex/$r && cd $r && lore org link northwind --project globex --yes"
   done
   quiet alice work/globex-api "lore actor register"
-  CLOCK=2026-11-02T10:00:00Z
+  # 70 s per step: past lore's 60 s fetch cache, so each agent sees the others' last write.
+  STEP=70
 
   note "plan"
   cat > "$WORLD/home/alice/work/globex-api/invite.yaml" <<'Y'
@@ -579,7 +584,7 @@ Y
   note "mission status"
   on alice work/globex-proxy "lore mission status $mis"
   on alice work/globex-proxy "lore task show $tg --from northwind/globex"
-  on alice work/globex-proxy "lore task show $tf --from northwind/globex"
+  on alice work/globex-proxy "lore task show $tf"
 }
 
 # ---------------------------------------------------------------------------
@@ -738,6 +743,7 @@ main() {
   for s in "${want[@]}"; do
     "s_${s//-/_}"
   done
+  python3 "$HERE/normalize.py" "$TRANSCRIPT"
   if [ ${#KNOWN[@]} -ne 0 ]; then
     echo "run-examples: ${#KNOWN[@]} known failure(s), each a reported lore bug (see the KNOWN FAILURE lines above):" >&2
     printf '  %s\n' "${KNOWN[@]}" >&2

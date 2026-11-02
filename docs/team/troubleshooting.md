@@ -21,7 +21,7 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-○ tsk_01a1…9a35 review the retry logic [medium]
+○ tsk_162d…9666 review the retry logic [medium]
 ```
 <!-- /example -->
 
@@ -85,7 +85,7 @@ Two org entries match the repo at the same rule, so lore will not pick one:
 $ lore whoami
 org        refused  (the patterns of 2 org entries match this repo (initech, northwind) (candidates: initech, northwind))
 identity   (not resolved: the org is refused above)
-project    prj_01a1…19f5
+project    prj_7a67…9504
 remotes    github.com/acme/site
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   local: everywhere/
@@ -127,7 +127,7 @@ A staging entry (or a typo in `branch:`) names a store branch that does not exis
 $ LORE_ORG=northwind-stag lore org link northwind-stag --project acme --yes
 This marks github.com/acme/app as a CLIENT repo of northwind-stag: internal notes default to github.com/northwind/lore acme/,
 and the leak guards turn on for everyone in northwind-stag.
-  link: project prj_01a1…90ea at github.com/acme/app → github.com/northwind/lore@staging:acme/ (default=false)
+  link: project prj_54fe…28f2 at github.com/acme/app → github.com/northwind/lore@staging:acme/ (default=false)
 ERROR: [E_INVALID_INPUT] stores: store branch does not exist: github.com/northwind/lore has no branch staging; create it with `lore store init git@github.com:northwind/lore --branch staging`
   hint: a store branch is created only on purpose: `lore store init <url> --branch <branch>`
 (exit 1)
@@ -143,7 +143,7 @@ Coordination writes need the remote to confirm them; they are never queued:
 <!-- example: errors#offline-claim only=1 -->
 ```console
 # alice, in acme-app
-$ lore task claim tsk_01a1…0aa4
+$ lore task claim tsk_2ad3…f891
 ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): gitremote: fetch: gitremote: remote did not confirm the push: fatal: '/srv/git/github.com/northwind/lore' does not appear to be a git repository
 fatal: Could not read from remote repository.
 Please make sure you have the correct access rights
@@ -168,9 +168,9 @@ A commit, a live write to a client repo or a pull request text contains internal
 # alice, in acme-app
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
-  src/notes.ts:1                           matches internal note mem_01a1…147f (10 words)
-Move it:  lore move mem_01a1…147f --to <org>
-Share it on purpose: lore share mem_01a1…147f --to repo
+  src/notes.ts:1                           matches internal note mem_54fe…28f2 (10 words)
+Move it:  lore move mem_54fe…28f2 --to <org>
+Share it on purpose: lore share mem_54fe…28f2 --to repo
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 1)
 ```
@@ -190,19 +190,19 @@ Some git hosts or server hooks accept only branches and tags. Live rows then sta
 ```console
 # dev2, in portal
 $ lore task add 'set up the portal CI'
-✓ tsk_01a1…5074 tsk_01a1…5074 — set up the portal CI [medium]
+✓ tsk_05e9…4603 tsk_05e9…4603 — set up the portal CI [medium]
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
-local     54a7d2872e8f
+local     601d2850ffd0
 tracking  (none)
 seen      (none)
 pending   2 write(s) not confirmed by the remote
-  _root/task_lists/tlt_01a1…7e9c.json
-  _root/tasks/tsk_01a1…5074.json
+  _root/task_lists/tlt_c0f3…b5b8.json
+  _root/tasks/tsk_05e9…4603.json
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: tracking refspec installed, not forced into refs/lore/*
-  - live: last fetch 0s ago
+  - live: last fetch 15s ago
   - live: 2 live write(s) not pushed yet
   - live: 2 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
   - live: 1 row(s) waiting to land; the next live write or `lore sync` lands them
@@ -224,9 +224,9 @@ Without a terminal (a script, CI, an agent's tool call) and whenever a CI variab
 # alice, in acme-app
 $ lore whoami
 org        northwind  (matched by: link in <redacted>, project id + remote)
-identity   Alice Doe <human:alice@northwind.example>   act_0263…5705  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@northwind.example>   act_7a67…9504  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-project    prj_01a1…fe45
+project    prj_2ad3…f891
 remotes    github.com/acme/app
 stores     <redacted> on branch main  (org folder <redacted>)
 internal   <redacted> <redacted>/

@@ -33,13 +33,13 @@ Create the staging branch once, switch this repo to staging, link it there (link
 $ lore store init git@github.com:northwind/lore --branch staging
 ✓ wrote lore-store.yaml to github.com/northwind/lore (new branch staging, first commit) and pushed
 $ lore org use northwind-stag
-✓ prj_01a1…5996 uses org northwind-stag on this machine
+✓ prj_7a67…9504 uses org northwind-stag on this machine
   recorded in /home/alice/.lore/config.yaml (machine-only, nothing committed)
 $ lore whoami
 org        northwind-stag  (matched by: lore org use (this machine))
-identity   Alice Doe <human:alice@northwind.example>   act_0263…5705  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@northwind.example>   act_2ad3…f891  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-project    prj_01a1…5996
+project    prj_7a67…9504
 remotes    github.com/acme/app
 stores     <redacted> on branch staging  (org folder <redacted>)
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
@@ -47,28 +47,26 @@ personal   local: northwind-stag/, everywhere/
 $ lore org link northwind-stag --project acme --yes
 This marks github.com/acme/app as a CLIENT repo of northwind-stag: internal notes default to github.com/northwind/lore acme/,
 and the leak guards turn on for everyone in northwind-stag.
-  link: project prj_01a1…5996 at github.com/acme/app → github.com/northwind/lore@staging:acme/ (default=false)
-✓ github.com/acme/app (prj_01a1…5996, github.com/acme/app) linked to github.com/northwind/lore acme/ (created; pushed)
+  link: project prj_7a67…9504 at github.com/acme/app → github.com/northwind/lore@staging:acme/ (default=false)
+✓ github.com/acme/app (prj_7a67…9504, github.com/acme/app) linked to github.com/northwind/lore acme/ (created; pushed)
   nothing was written to this repo
 $ lore task add 'seed staging with demo data' --to northwind-stag
-✓ tsk_01a1…1ef3 tsk_01a1…1ef3 — seed staging with demo data [medium] → [northwind-stag/acme]
+✓ tsk_162d…9666 tsk_162d…9666 — seed staging with demo data [medium] → [northwind-stag/acme]
 lore live: (live, pushed)
 $ lore task list
-(no tasks)
-tsk_01a1…1ef3  seed staging with demo data  todo  [northwind-stag/acme]
+tsk_162d…9666  seed staging with demo data  todo  [northwind-stag/acme]
 $ lore org use northwind
-✓ prj_01a1…5996 uses org northwind on this machine
+✓ prj_7a67…9504 uses org northwind on this machine
   recorded in /home/alice/.lore/config.yaml (machine-only, nothing committed)
 $ lore task list
 (no tasks)
 $ LORE_ORG=northwind-stag lore task list
-(no tasks)
-tsk_01a1…1ef3  seed staging with demo data  todo  [northwind-stag/acme]
+tsk_162d…9666  seed staging with demo data  todo  [northwind-stag/acme]
 $ git ls-remote https://github.com/northwind/lore
-dfe8b2e3a581	HEAD
-dfe8b2e3a581	refs/heads/main
-db7069436190	refs/heads/staging
-e55edb8481a2	refs/lore/live/staging
+601d2850ffd0	HEAD
+601d2850ffd0	refs/heads/main
+86dbae476bd6	refs/heads/staging
+9b40ce71af28	refs/lore/live/staging
 ```
 <!-- /example -->
 

@@ -18,12 +18,12 @@ The mistake, and what the client sees:
 ```console
 # alice, in acme-app
 $ lore task add 'chase Acme about the unpaid March invoice' --to repo
-✓ tsk_01a1…be4c tsk_01a1…be4c — chase Acme about the unpaid March invoice [medium]
+✓ tsk_7a67…9504 tsk_7a67…9504 — chase Acme about the unpaid March invoice [medium]
 lore live: (live, pushed)
 
 # acmedev, in app
 $ lore sync >/dev/null; lore task list
-○ tsk_01a1…be4c chase Acme about the unpaid March invoice [medium]
+○ tsk_7a67…9504 chase Acme about the unpaid March invoice [medium]
 ```
 <!-- /example -->
 
@@ -32,16 +32,16 @@ The cleanup: `lore live purge` removes the row from live and writes its id to a 
 <!-- example: leak-cleanup#purge -->
 ```console
 # alice, in acme-app
-$ lore live purge tsk_01a1…be4c
-✓ purged tsk_01a1…be4c from live; run `lore live compact` to drop them from the ref's history too
+$ lore live purge tsk_7a67…9504
+✓ purged tsk_7a67…9504 from live; run `lore live compact` to drop them from the ref's history too
 lore live: (live, pushed)
 $ lore live compact --dry-run
 refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2
 $ lore live compact
-✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T111840
+✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
 epoch 2
-10a6dbf 2026-11-02 Alice Doe  lore: live compact (epoch 2)
+601d285 2026-11-02 Alice Doe  lore: live compact (epoch 2)
 
 # acmedev, in app
 $ lore sync >/dev/null; lore task list

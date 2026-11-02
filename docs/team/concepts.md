@@ -36,14 +36,14 @@ A real task file, as lore wrote it (shortened):
 $ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only refs/lore/live | grep '_root/tasks/')
 {
   "_live": {
-    "hlc": "2026-11-02T11:40:50.000Z/0000/act_dc27…5d12",
-    "live_since": "2026-11-02T11:40:50Z"
+    "hlc": "2026-11-02T10:00:10.000Z/0000/act_54fe…28f2",
+    "live_since": "2026-11-02T10:00:10Z"
   …
   "claim_epoch": 0,
   …
-  "id": "tsk_01a1…9f81",
+  "id": "tsk_7a67…9504",
   …
-  "project_id": "prj_01a1…7eac",
+  "project_id": "prj_05e9…4603",
   …
   "status": "todo",
   …
@@ -86,12 +86,12 @@ A monorepo has one live ref, with each lore project as a folder in it (`_root/` 
 $ git ls-tree -r --name-only refs/lore/live
 _live/epoch
 _live/meta.json
-_root/task_lists/tlt_01a1…bec9.json
-_root/tasks/tsk_01a1…9f81.json
-web/rules/rul_01a1…9e20.json
+_root/task_lists/tlt_162d…9666.json
+_root/tasks/tsk_7a67…9504.json
+web/rules/rul_2ad3…f891.json
 $ git log --oneline refs/lore/live
-e95d1fb lore: live 1 row (web)
-bcbca47 lore: live 2 rows (_root)
+86dbae4 lore: live 1 row (web)
+9b40ce7 lore: live 2 rows (_root)
 ```
 <!-- /example -->
 
@@ -155,15 +155,15 @@ Two entries matching at the same rule is an error (`E_ORG_AMBIGUOUS`): lore neve
 # alice, in forked-tool
 $ lore whoami --explain
 org        none  (matched by: nothing matched)   hint: lore org use <entry> (northwind, betalabs)
-identity   Alice Doe <human:alice@example.com>   act_3686…c40e  (from: top-level identity (config.yaml))
+identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity, personal everywhere/ notes only)
-project    prj_01a1…d46a
+project    prj_c0f3…b5b8
 remotes    github.com/someone/tool
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   local: everywhere/
 org resolution (first rule that answers wins):
   ✗ 1. LORE_ORG         LORE_ORG is not set
-  ✗ 2. lore org use     no `lore org use` choice for prj_01a1…d46a
+  ✗ 2. lore org use     no `lore org use` choice for prj_c0f3…b5b8
   ✗ 3. .lore/org.yaml   no .lore/org.yaml
   ✗ 4. store link       no store links this project id at these remotes (links known)
   ✗ 5. repo pattern     no entry's own: or repos: pattern matches github.com/someone/tool
