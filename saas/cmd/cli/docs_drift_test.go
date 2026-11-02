@@ -37,6 +37,8 @@ var driftDocGlobs = []string{
 	"CONTRIBUTING.md",
 	"LORE_SYNC_SPEC.md",
 	"docs/*.md",
+	"docs/team/*.md",
+	"docs/team/use-cases/*.md",
 	"skills/*.md",
 	"skills/examples/*.md",
 	"tests/README.md",

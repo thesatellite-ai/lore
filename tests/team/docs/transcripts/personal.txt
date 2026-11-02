@@ -1,0 +1,41 @@
+
+### local personal store
+alice (work/acme-app)$ lore memory add --body 'I always forget the staging VPN profile' --to me
+✓ mem_01a19d91ffc77815905895ada17843ac mem_01a19d91ffc77815905895ada17843ac [me]
+  filed: --to me → personal northwind/
+  scope: [master]
+alice (work/scratch)$ lore memory add --body 'I prefer tabs over spaces' --to me
+✓ mem_01a19d9201047049b8e034da11c19c55 mem_01a19d9201047049b8e034da11c19c55 [me]
+  filed: --to me → personal everywhere/
+  scope: [master]
+alice (work/acme-app)$ lore memory add --body 'northwind invoices go to the finance inbox' --to me --everywhere
+note mentions [northwind], a known org or repo. Save it under everywhere/ anyway? [y/N] n
+ERROR: [E_INVALID_INPUT] not saved
+(exit 1)
+alice (work/acme-app)$ lore memory list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/acme-app/.lore/backups/20261102-184237.130347982-pre-sync.sqlite
+mem_01a19d9201047049b8e034da11c19c55  I prefer tabs over spaces  [me]
+mem_01a19d91ffc77815905895ada17843ac  I always forget the staging VPN profile  [me]
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/acme-app/.git/hooks)
+alice (work/scratch)$ lore memory list
+mem_01a19d9201047049b8e034da11c19c55  I prefer tabs over spaces  [me]
+alice$ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
+everywhere/.lore/data/memories/mem_01a19d9201047049b8e034da11c19c55.json
+northwind/.lore/data/memories/mem_01a19d91ffc77815905895ada17843ac.json
+
+### git personal store
+alice$ lore store init git@github.com:alice/lore-me
+✓ wrote lore-store.yaml to github.com/alice/lore-me (new branch main, first commit) and pushed
+alice (work/acme-app)$ lore memory add --body 'the Acme invoice template lives in the shared drive' --to me
+✓ mem_01a19d9211b27b7e91349782c8bd7dd5 mem_01a19d9211b27b7e91349782c8bd7dd5 [me]
+  filed: --to me → personal northwind/
+  scope: [master]
+lore: [me] 4 file(s) pushed
+alice-devbox (work/acme-app)$ lore memory list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice-devbox/work/acme-app/.lore/backups/20261102-184238.530907087-pre-sync.sqlite
+mem_01a19d9211b27b7e91349782c8bd7dd5  the Acme invoice template lives in the shared drive  [me]
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice-devbox/work/acme-app/.git/hooks)

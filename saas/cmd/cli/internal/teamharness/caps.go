@@ -103,3 +103,36 @@ func (w *World) has(c Cap) bool {
 	}
 	return false
 }
+
+// Bug is a known open defect that a regression test pins before its fix
+// lands. While Open, the test goes PENDING — not red — at the point where
+// today's binary shows the defect, so the matrix keeps reporting it as
+// missing work owned by Owner. The gate fires only on the defect itself:
+// any other failure on the way is still red, and once the fix lands the
+// test passes on its own. Flip Open to false when the fix is merged, so a
+// later regression fails instead of hiding as pending.
+type Bug struct {
+	ID    string // e.g. "BUG-D1"
+	Owner string // the session that fixes it, e.g. "lore-stores"
+	Open  bool
+}
+
+// PendingIf marks the test PENDING when the bug is open and seen is true
+// (the defect showed); LORE_TEAM_STRICT=1 turns that into a failure.
+func (b Bug) PendingIf(t testing.TB, seen bool, what string) {
+	t.Helper()
+	if b.Open && seen {
+		pending(t, b.ID+" open ("+b.Owner+"): "+what)
+	}
+}
+
+// PendingOn is PendingIf for a command whose output holds every symptom
+// string (and no symptom given never matches).
+func (b Bug) PendingOn(t testing.TB, r Result, symptom ...string) {
+	t.Helper()
+	seen := len(symptom) > 0
+	for _, s := range symptom {
+		seen = seen && strings.Contains(r.Out(), s)
+	}
+	b.PendingIf(t, seen, strings.Join(symptom, " … "))
+}

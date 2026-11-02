@@ -198,6 +198,22 @@ tasks:
       - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./saas/cmd/cli
       - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -run 'Race' -count=5 ./saas/cmd/cli/ {{.CLI_ARGS}}
 
+  docs:examples:
+    desc: "Run every docs/team example against the real binary (tests/team/docs/run-examples.sh), then refresh the pages from the transcripts (paste.py); fails when an example misbehaves or a page is stale. One section: task lore:docs:examples -- agents"
+    cmds:
+      - testlock task lore:docs:examples:run -- {{.CLI_ARGS}}
+
+  docs:examples:run:
+    desc: "Body of lore:docs:examples WITHOUT the machine-wide test lock; call lore:docs:examples instead"
+    vars:
+      DOCS_BIN: "{{.BIN_DIR}}/lore-docs"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      # loretest: the build tag under which the binary honours LORE_NOW, so transcripts are stable.
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - LORE_BIN={{.DOCS_BIN}} tests/team/docs/run-examples.sh {{.CLI_ARGS}}
+      - LORE_BIN={{.DOCS_BIN}} python3 tests/team/docs/paste.py
+
   bench:sync:
     desc: "Sync performance: no-op pass, bootstrap and fresh-clone adopt at 1k/10k rows (numbers recorded in LORE_SYNC_SPEC.md)"
     cmds:

@@ -851,3 +851,108 @@ func TestSideEffect40_CachePruneRemovesOldProjects(t *testing.T) {
 		t.Fatal("its render file goes with it")
 	}
 }
+
+// Open bugs pinned by a regression test before lore-stores' fix lands
+// (coordinator 18:40). Set Open to false when the fix is merged.
+var (
+	bugD1ShareToRepoRefused = th.Bug{ID: "BUG-D1", Owner: "lore-stores", Open: true}
+	bugD2ActorCopyStableKey = th.Bug{ID: "BUG-D2", Owner: "lore-stores", Open: true}
+)
+
+// clientActorFields is all a client repo's actor file may hold (F18 client
+// copy: {id, display name, kind}, plus the engine's file bookkeeping).
+var clientActorFields = map[string]bool{"_table": true, "_v": true, "id": true, "display_name": true, "kind": true, "created_at": true, "updated_at": true}
+
+// clientRepoRow reads a row the client repo acme/app holds in alice's
+// checkout (.lore/data) or, failing that, on the app's live ref.
+func (a *agency) clientRepoRow(t *testing.T, table, id string) (string, bool) {
+	t.Helper()
+	if body, ok := a.aliceApp.ReadFile(mainRowPath("", table, id)); ok {
+		return body, true
+	}
+	return a.app.Read(refLive, liveRowPath(rootFolder, table, id))
+}
+
+// BUG-D1 / §6.4: a confirmed `lore share <internal memory> --to repo` in a
+// linked client repo succeeds, writes a copy with a NEW id into the client
+// repo, and the copy carries no origin field or pointer back to the internal
+// row; the provenance lives only in the internal row.
+func TestLeak_ShareInternalMemoryToClientRepoMintsAPointerFreeCopy(t *testing.T) {
+	a := newAgency(t, th.Cmd("share"), th.Flag("yes", "share"))
+	const text = "checkout must support INR and USD"
+	internal := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", text), "mem")
+	if !a.storeHas(t, folderAcme, internal) {
+		t.Fatal("the memory must start in the store's acme/ project")
+	}
+	r := a.aliceApp.Lore("share", internal, "--to", "repo", "--yes")
+	bugD1ShareToRepoRefused.PendingOn(t, r, "E_LEAK_BLOCKED", "pointers flow inward only")
+	copyID := mustID(t, r.OK(t), "mem")
+	if copyID == internal {
+		t.Fatal("the client copy gets a new id")
+	}
+	body, ok := a.clientRepoRow(t, tblMemories, copyID)
+	if !ok {
+		t.Fatalf("the copy %s must be in the client repo's .lore/data", copyID)
+	}
+	if !strings.Contains(body, text) {
+		t.Fatalf("the copy must hold the shared text: %s", body)
+	}
+	if strings.Contains(body, internal) {
+		t.Fatalf("the copy must not point back at the internal row: %s", body)
+	}
+	for _, field := range []string{"origin_id", "source_ref", "supersedes", "superseded_by"} {
+		if strings.Contains(body, `"`+field+`"`) {
+			t.Fatalf("the copy must carry no origin field %q: %s", field, body)
+		}
+	}
+	if !a.storeHas(t, folderAcme, copyID) {
+		t.Fatal("the internal row keeps the provenance (the copy's id)")
+	}
+}
+
+// BUG-D2 / F18: when an org member writes a row --to repo in a client repo,
+// the actor file exported beside it holds only {id, display name, kind} — no
+// stable_key, no email (coordinator 18:40: fixed by not copying, never by
+// loosening the check). The client's own CI leak check then passes in that
+// repo, and the commit check BLOCKS (not warns about) an actor copy that
+// holds more.
+func TestF18_ClientRepoActorCopyIsTheProjection(t *testing.T) {
+	a := newAgency(t, th.Flag("to", "rule", "add"), th.Cmd("check", "leaks"), th.Flag("ci", "check", "leaks"))
+	a.aliceApp.MustLore("rule", "add", "--body", "money amounts are integers in minor units", "--to", "repo")
+	actors, _ := filepath.Glob(filepath.Join(a.aliceApp.Dir, dataDir, tblActors, "*.json"))
+	if len(actors) == 0 {
+		t.Fatal("a client row written by alice must come with alice's actor projection")
+	}
+	for _, f := range actors {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(raw)
+		var doc map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(body), &doc); err != nil {
+			t.Fatalf("decode %s: %v\n%s", f, err, body)
+		}
+		bugD2ActorCopyStableKey.PendingIf(t, doc["stable_key"] != nil, filepath.Base(f)+" still has stable_key")
+		for k := range doc {
+			if !clientActorFields[k] {
+				t.Fatalf("an actor copy in a client repo may hold only {id, display name, kind}; %s also has %q", f, k)
+			}
+		}
+		if strings.Contains(body, "@northwind.example") || strings.Contains(body, "@acme.example") {
+			t.Fatalf("an actor copy names an email: %s", f)
+		}
+	}
+	a.aliceApp.CommitAll("rule for the client")
+	a.aliceApp.Git("push", "-q", "origin", "HEAD")
+	a.acmeApp.Git("pull", "-q", "origin", "main")
+	a.acmeApp.With("CI=1").Lore("check", "leaks", "--ci").OK(t)
+
+	file := filepath.Base(actors[0])
+	forged := dataDir + "/" + tblActors + "/" + file
+	a.aliceApp.WriteFile(forged, `{"id":"`+strings.TrimSuffix(file, ".json")+`","display_name":"`+aliceName+`","kind":"human","stable_key":"human:alice@northwind.example"}`+"\n")
+	a.aliceApp.Git("add", forged)
+	if r := a.aliceApp.TryGit("commit", "-m", "touch actor"); r.Code == 0 {
+		t.Fatalf("the commit check must block an actor copy holding more than {id, display name, kind}: %s", r.Out())
+	}
+}

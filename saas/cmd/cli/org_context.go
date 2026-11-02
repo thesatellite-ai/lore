@@ -31,6 +31,7 @@ import (
 // Env vars this file reads.
 const (
 	// envOrg chooses the org entry for this shell (F10 rule 1).
+	// ds:def id=team-env-org-m38knvc4 owner=@khanakia stability=stable desc=LORE_ORG
 	envOrg = "LORE_ORG"
 )
 

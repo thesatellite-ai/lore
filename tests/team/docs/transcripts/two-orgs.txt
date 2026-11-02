@@ -1,0 +1,73 @@
+
+### whoami per repo
+alice (work/acme-app)$ lore whoami
+org        northwind  (matched by: link in <redacted>, project id + remote)
+identity   Alice Doe <human:alice@northwind.example>   act_02638083ff857bcb918d37651f695705  @alice  (from: org entry (config.yaml))
+repo       client repo  (guards on)
+project    prj_01a19d91e1cb76d5b7a3906bf9c37ef2
+remotes    github.com/acme/app
+stores     <redacted> on branch main  (org folder <redacted>)
+internal   <redacted> <redacted>/
+links      known  1 link(s) for this repo (stores of 2 entries scanned)
+personal   local: northwind/, everywhere/
+alice (work/betalabs-api)$ lore whoami
+org        betalabs  (matched by: own pattern github.com/betalabs/* of betalabs)
+identity   Alice Doe <human:alice@betalabs.example>   act_e248b5c57d3f7bc3979c46a710d39854  @alice  (from: org entry (config.yaml))
+repo       own repo  (no client guards)
+project    prj_01a19d91e5377bd09aa06640e962dc9a
+remotes    github.com/betalabs/api
+stores     <redacted> on branch main  (org folder <redacted>)
+links      known  0 link(s) for this repo (stores of 2 entries scanned)
+personal   local: betalabs/, everywhere/
+alice (work/forked-tool)$ lore whoami
+org        none  (matched by: nothing matched)   hint: lore org use <entry> (northwind, betalabs)
+identity   Alice Doe <human:alice@example.com>   act_3686b9758592753ea25bf584466bc40e  (from: top-level identity (config.yaml))
+repo       no org  (fallback identity, personal everywhere/ notes only)
+project    prj_01a19d91e8b57e37aebd606e9963d46a
+remotes    github.com/someone/tool
+links      known  0 link(s) for this repo (stores of 2 entries scanned)
+personal   local: everywhere/
+alice (work/forked-tool)$ lore whoami --explain
+org        none  (matched by: nothing matched)   hint: lore org use <entry> (northwind, betalabs)
+identity   Alice Doe <human:alice@example.com>   act_3686b9758592753ea25bf584466bc40e  (from: top-level identity (config.yaml))
+repo       no org  (fallback identity, personal everywhere/ notes only)
+project    prj_01a19d91e8b57e37aebd606e9963d46a
+remotes    github.com/someone/tool
+links      known  0 link(s) for this repo (stores of 2 entries scanned)
+personal   local: everywhere/
+
+org resolution (first rule that answers wins):
+  ✗ 1. LORE_ORG         LORE_ORG is not set
+  ✗ 2. lore org use     no `lore org use` choice for prj_01a19d91e8b57e37aebd606e9963d46a
+  ✗ 3. .lore/org.yaml   no .lore/org.yaml
+  ✗ 4. store link       no store links this project id at these remotes (links known)
+  ✗ 5. repo pattern     no entry's own: or repos: pattern matches github.com/someone/tool
+  ✓ 6. nothing matched  no rule matched: fallback identity, personal everywhere/ notes only
+
+### personal notes split
+alice (work/acme-app)$ lore memory add --body 'ask the Acme PM before touching the payment flow' --to me
+✓ mem_01a19d91f0fb7960924b4e15d424312f mem_01a19d91f0fb7960924b4e15d424312f [me]
+  filed: --to me → personal northwind/
+  scope: [master]
+alice (work/betalabs-api)$ lore memory add --body 'betalabs deploys only on Tuesdays' --to me
+✓ mem_01a19d91f2de79e49ec00f0e55543c57 mem_01a19d91f2de79e49ec00f0e55543c57 [me]
+  filed: --to me → personal betalabs/
+  scope: [master]
+alice (work/acme-app)$ lore memory list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/acme-app/.lore/backups/20261102-184230.548489164-pre-sync.sqlite
+mem_01a19d91f0fb7960924b4e15d424312f  ask the Acme PM before touching the payment flow  [me]
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/acme-app/.git/hooks)
+alice (work/betalabs-api)$ lore memory list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/betalabs-api/.lore/backups/20261102-184231.022368323-pre-sync.sqlite
+mem_01a19d91f2de79e49ec00f0e55543c57  betalabs deploys only on Tuesdays  [me]
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/betalabs-api/.git/hooks)
+alice (work/forked-tool)$ lore memory list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/forked-tool/.lore/backups/20261102-184231.524169885-pre-sync.sqlite
+(no memories)
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/forked-tool/.git/hooks)

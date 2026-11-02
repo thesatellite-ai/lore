@@ -1,0 +1,10 @@
+const (
+	// envLiveAutopush = "0" keeps lore off the network on its own (same as
+	// live.autopush: false); `lore sync` still fetches and pushes.
+	envLiveAutopush = "LORE_LIVE_AUTOPUSH"
+	// envLiveRemote points refs/lore/* at another remote (forks, tests).
+	envLiveRemote = "LORE_LIVE_REMOTE"
+	// envLive = "0" disables live rows entirely (every row behaves as before
+	// live existed): the escape hatch for a repo that cannot use them yet.
+	envLive = "LORE_LIVE"
+)

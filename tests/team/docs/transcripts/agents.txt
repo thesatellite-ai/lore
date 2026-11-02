@@ -1,0 +1,206 @@
+
+### plan
+alice (work/globex-api)$ cat invite.yaml
+mission: {key: invite, title: "Invite landing page", to: northwind/globex}
+approvers: ["@alice"]
+tasks:
+  - {key: backend,  title: "invite mutation + email",    repo: globex-api,   timebox: 60m}
+  - {key: frontend, title: "invite landing route",       repo: globex-web,   after: [backend], timebox: 60m}
+  - {key: proxy,    title: "allow /invite on the proxy", repo: globex-proxy}
+  - {key: deploy,   title: "deploy to staging",          role: coordinator, after: [frontend, proxy], gate: required}
+alice (work/globex-api)$ lore agent start --label coord --owner @alice
+✓ act_53f00faadf3d7c3b8a8bfb0c1f2d559e agent coord (owner @alice) registered in northwind org/; LORE_ACTOR=agent:coord LORE_SESSION=s-98909107
+export LORE_ACTOR=agent:coord LORE_SESSION=s-98909107
+lore: [northwind/org] 1 file(s) pushed
+coord (work/globex-api)$ lore plan apply invite.yaml
+✓ msn_01a19d9225ef77c5b51f5cd090df3935 Invite landing page (created) → [northwind/globex]
+  tsk_01a19d9225f07b8e91b7821f65f19164 invite mutation + email       timebox 1h
+  tsk_01a19d9225f1786e990ee0dc2ea399bc invite landing route          timebox 1h  after backend
+  tsk_01a19d9225f272d5aa34ac737cf62ca3 allow /invite on the proxy  
+  tsk_01a19d9225f278fca19bf77801db0ee0 deploy to staging             after frontend,proxy  gate required
+coord (work/globex-api)$ lore plan apply invite.yaml
+✓ msn_01a19d9225ef77c5b51f5cd090df3935 Invite landing page (found) → [northwind/globex]
+  tsk_01a19d9225f07b8e91b7821f65f19164 invite mutation + email       timebox 1h
+  tsk_01a19d9225f1786e990ee0dc2ea399bc invite landing route          timebox 1h  after backend
+  tsk_01a19d9225f272d5aa34ac737cf62ca3 allow /invite on the proxy  
+  tsk_01a19d9225f278fca19bf77801db0ee0 deploy to staging             after frontend,proxy  gate required
+coord (work/globex-api)$ lore task claim msn_01a19d9225ef77c5b51f5cd090df3935
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/globex-api/.lore/backups/20261102-184244.363675638-pre-sync.sqlite
+✓ claimed msn_01a19d9225ef77c5b51f5cd090df3935 (lease 20m, token ct_8c8df…) on refs/lore/signals/main
+
+### workers start
+alice (work/agents/globex-api)$ lore agent start --label backend-1 --owner @alice
+✓ act_99b9c361cefa759ea234105c1ea7ef83 agent backend-1 (owner @alice) registered in northwind org/; LORE_ACTOR=agent:backend-1 LORE_SESSION=s-99efe7e0
+export LORE_ACTOR=agent:backend-1 LORE_SESSION=s-99efe7e0
+lore: [northwind/org] 1 file(s) pushed
+backend-1 (work/agents/globex-api)$ lore inbox
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/agents/globex-api/.lore/backups/20261102-184245.476183499-pre-sync.sqlite
+(inbox empty)
+backend-1 (work/agents/globex-api)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --repo globex-api
+✓ claimed tsk_01a19d9225f07b8e91b7821f65f19164 invite mutation + email (lease 20m, token ct_85969…) on refs/lore/signals/main
+  read its notes: lore task show tsk_01a19d9225f07b8e91b7821f65f19164
+alice (work/agents/globex-web)$ lore agent start --label frontend-1 --owner @alice
+✓ act_6aa8266ccc0977fda9292fe6d7c623a0 agent frontend-1 (owner @alice) registered in northwind org/; LORE_ACTOR=agent:frontend-1 LORE_SESSION=s-0915baf2
+export LORE_ACTOR=agent:frontend-1 LORE_SESSION=s-0915baf2
+lore: [northwind/org] 1 file(s) pushed
+frontend-1 (work/agents/globex-web)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --repo globex-web
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/agents/globex-web/.lore/backups/20261102-184247.348509563-pre-sync.sqlite
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/agents/globex-web/.git/hooks)
+ERROR: [E_NO_WORK] nothing ready:
+  tsk_01a19d9225f1786e990ee0dc2ea399bc invite landing route: waits for tsk_01a19d9225f07b8e91b7821f65f19164 to be merged (claimed by agent:backend-1)
+(exit 10)
+alice (work/agents/globex-proxy)$ lore agent start --label proxy-1 --owner @alice
+✓ act_6be045d916a972b8941fdbb268eb5a8e agent proxy-1 (owner @alice) registered in northwind org/; LORE_ACTOR=agent:proxy-1 LORE_SESSION=s-0c19263e
+export LORE_ACTOR=agent:proxy-1 LORE_SESSION=s-0c19263e
+lore: [northwind/org] 1 file(s) pushed
+proxy-1 (work/agents/globex-proxy)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --repo globex-proxy --owns nginx/sites/invite.conf
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/agents/globex-proxy/.lore/backups/20261102-184248.438836281-pre-sync.sqlite
+✓ claimed tsk_01a19d9225f272d5aa34ac737cf62ca3 allow /invite on the proxy (lease 20m, token ct_bcb2b…) on refs/lore/signals/main
+  read its notes: lore task show tsk_01a19d9225f272d5aa34ac737cf62ca3
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/agents/globex-proxy/.git/hooks)
+
+### finding
+proxy-1 (work/agents/globex-proxy)$ lore finding add --mission msn_01a19d9225ef77c5b51f5cd090df3935 'the proxy strips X-Forwarded-Host; links must use the public base URL'
+✓ mem_01a19d923e1e775bb846b1dda3e54366 finding on msn_01a19d9225ef77c5b51f5cd090df3935 (live)
+lore live: (live, pushed)
+lore live: landed on main (368515e); leaves live once main is fetched
+backend-1 (work/agents/globex-api)$ lore inbox
+msn_01a19d9225ef77c5b51f5cd090df3935  finding  proxy-1      the proxy strips X-Forwarded-Host; links must use the public base URL
+proxy-1 (work/agents/globex-proxy)$ lore task done tsk_01a19d9225f272d5aa34ac737cf62ca3
+✓ tsk_01a19d9225f272d5aa34ac737cf62ca3 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: landed on main (c6addb0); leaves live once main is fetched
+lore live: 7 row(s) left live (main holds them)
+
+### done then merged
+backend-1 (work/agents/globex-api)$ lore task note tsk_01a19d9225f07b8e91b7821f65f19164 'mutation inviteUser(email) returns a token; email template invite.html'
+✓ note cmt_01a19d9248ad767db92cdbe3680aa12f on tsk_01a19d9225f07b8e91b7821f65f19164
+lore live: landed on main (e94f274); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
+backend-1 (work/agents/globex-api)$ git switch -q -c agent/backend-1/invite && mkdir -p api && echo 'package api' > api/invite.go && git add api && git commit -qm 'invite mutation' && git push -q -u origin agent/backend-1/invite
+backend-1 (work/agents/globex-api)$ lore task done tsk_01a19d9225f07b8e91b7821f65f19164 --commit $(git rev-parse HEAD) --lesson 'invite tokens expire in 48h, documented in the README'
+✓ tsk_01a19d9225f07b8e91b7821f65f19164 done (commit afa9e07); waiting for merge
+  lesson → mem_01a19d92527276ea97cf01157a88c94e
+lore live: landed on main (76b599b); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
+lore: [northwind/globex] 2 file(s) pushed
+frontend-1 (work/agents/globex-web)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --repo globex-web
+ERROR: [E_NO_WORK] nothing ready:
+  tsk_01a19d9225f1786e990ee0dc2ea399bc invite landing route: waits for tsk_01a19d9225f07b8e91b7821f65f19164 to be merged (done, afa9e07 not on the default branch yet)
+(exit 10)
+alice (work/globex-api)$ git pull -q && git merge -q --no-ff --no-edit origin/agent/backend-1/invite && git push -q origin main
+alice (work/globex-api)$ lore task list
+✓ tsk_01a19d9225f07b8e91b7821f65f19164 merged 10:23 (found by: ancestry, bfafba0)
+lore live: landed on main (238b18a); leaves live once main is fetched
+(no tasks)
+tsk_01a19d9225f07b8e91b7821f65f19164  invite mutation + email  done  [northwind/globex]
+tsk_01a19d9225f1786e990ee0dc2ea399bc  invite landing route  todo  [northwind/globex]
+tsk_01a19d9225f272d5aa34ac737cf62ca3  allow /invite on the proxy  done  [northwind/globex]
+tsk_01a19d9225f278fca19bf77801db0ee0  deploy to staging  todo  [northwind/globex]
+frontend-1 (work/agents/globex-web)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --repo globex-web
+✓ claimed tsk_01a19d9225f1786e990ee0dc2ea399bc invite landing route (lease 20m, token ct_dfe0b…) on refs/lore/signals/main
+  read its notes: lore task show tsk_01a19d9225f1786e990ee0dc2ea399bc
+lore live: 1 row(s) left live (main holds them)
+
+### crash and reclaim
+frontend-1 (work/agents/globex-web)$ git switch -q -c agent/frontend-1/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'route + loader'
+frontend-1 (work/agents/globex-web)$ lore task note tsk_01a19d9225f1786e990ee0dc2ea399bc 'route + loader done, form next'
+✓ note cmt_01a19d9263517b988cfa81948aff47e1 on tsk_01a19d9225f1786e990ee0dc2ea399bc
+  work branch agent/frontend-1/invite-route pushed
+lore live: landed on main (57c571d); leaves live once main is fetched
+coord (work/globex-api)$ lore inbox
+msn_01a19d9225ef77c5b51f5cd090df3935  EXPIRED  frontend-1   tsk_01a19d9225f1786e990ee0dc2ea399bc claimed by frontend-1, lease expired 8 min ago; work branch pushed (agent/frontend-1/invite-route)
+msn_01a19d9225ef77c5b51f5cd090df3935  finding  proxy-1      the proxy strips X-Forwarded-Host; links must use the public base URL
+coord (work/globex-api)$ lore mission status msn_01a19d9225ef77c5b51f5cd090df3935
+msn_01a19d9225ef77c5b51f5cd090df3935 Invite landing page   4 tasks · 2 done · 0 claimed · 0 ready · 1 waiting · 0 gated · 1 expired · 0 blocked
+  waiting   tsk_01a19d9225f278fca19bf77801db0ee0  deploy to staging                         waits for tsk_01a19d9225f1786e990ee0dc2ea399bc to be merged (in_progress)
+  done      tsk_01a19d9225f07b8e91b7821f65f19164  invite mutation + email      backend-1    merged 10:23 12m (timebox 1h)
+  done      tsk_01a19d9225f272d5aa34ac737cf62ca3  allow /invite on the proxy   proxy-1      not merged yet 4m
+  expired   tsk_01a19d9225f1786e990ee0dc2ea399bc  invite landing route         frontend-1   work branch agent/frontend-1/invite-route 30m (timebox 1h)
+alice (work/agents/fe2/globex-web)$ lore agent start --label frontend-2 --owner @alice
+✓ act_043c31f94220771983f1957c4db6d556 agent frontend-2 (owner @alice) registered in northwind org/; LORE_ACTOR=agent:frontend-2 LORE_SESSION=s-400132ac
+export LORE_ACTOR=agent:frontend-2 LORE_SESSION=s-400132ac
+lore: [northwind/org] 1 file(s) pushed
+frontend-2 (work/agents/fe2/globex-web)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --repo globex-web
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/agents/fe2/globex-web/.lore/backups/20261102-184301.677865875-pre-sync.sqlite
+✓ claimed tsk_01a19d9225f1786e990ee0dc2ea399bc invite landing route (lease 20m, token ct_20ba7…) on refs/lore/signals/main; reclaim, attempt 2; previous holder frontend-1 timed out
+  read its notes: lore task show tsk_01a19d9225f1786e990ee0dc2ea399bc
+lore live: 1 row(s) left live (main holds them)
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/agents/fe2/globex-web/.git/hooks)
+frontend-2 (work/agents/fe2/globex-web)$ git fetch -q origin agent/frontend-1/invite-route && git log --oneline -1 FETCH_HEAD
+2668cf7 route + loader
+frontend-1 (work/agents/globex-web)$ lore task done tsk_01a19d9225f1786e990ee0dc2ea399bc
+ERROR: [E_LOST_CLAIM] tsk_01a19d9225f1786e990ee0dc2ea399bc is held by agent:frontend-2 since 10:57AM (your claim is not on the signals ref); your token ct_dfe0b… expired 10:45AM
+  hint: stop work on this task; `lore task next` finds other work
+(exit 12)
+frontend-2 (work/agents/fe2/globex-web)$ git switch -q -c agent/frontend-2/invite-route FETCH_HEAD && echo form >> src/routes/invite.tsx && git commit -qam 'invite form' && git push -q -u origin agent/frontend-2/invite-route && lore task done tsk_01a19d9225f1786e990ee0dc2ea399bc --commit $(git rev-parse HEAD)
+✓ tsk_01a19d9225f1786e990ee0dc2ea399bc done (commit 2234f65); waiting for merge
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: landed on main (1e806a3); leaves live once main is fetched
+alice (work/globex-web)$ git pull -q && git merge -q --no-ff --no-edit origin/agent/frontend-2/invite-route && git push -q origin main && lore task list >/dev/null
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/globex-web/.lore/backups/20261102-184304.568296049-pre-sync.sqlite
+✓ tsk_01a19d9225f1786e990ee0dc2ea399bc merged 11:02 (found by: ancestry, 0604bc9)
+lore live: landed on main (66c23a8); leaves live once main is fetched
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/globex-web/.git/hooks)
+
+### merged by hand
+coord (work/globex-api)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --role coordinator
+ERROR: [E_NO_WORK] nothing ready:
+  tsk_01a19d9225f278fca19bf77801db0ee0 deploy to staging: waits for tsk_01a19d9225f272d5aa34ac737cf62ca3 to be merged (done, merge unknown)
+(exit 10)
+alice (work/globex-proxy)$ lore task merged tsk_01a19d9225f272d5aa34ac737cf62ca3
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/globex-proxy/.lore/backups/20261102-184306.349419965-pre-sync.sqlite
+✓ tsk_01a19d9225f272d5aa34ac737cf62ca3 merged (marked by hand, 11:04)
+lore live: landed on main (06c5945); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/globex-proxy/.git/hooks)
+
+### gate
+coord (work/globex-api)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --role coordinator
+ERROR: [E_NO_WORK] nothing ready:
+  tsk_01a19d9225f278fca19bf77801db0ee0 deploy to staging: gate needs approval (lore gate approve tsk_01a19d9225f278fca19bf77801db0ee0)
+(exit 10)
+coord (work/globex-api)$ lore gate approve tsk_01a19d9225f278fca19bf77801db0ee0
+ERROR: [E_INVALID_INPUT] approvals come from your identity file, never from LORE_ACTOR (LORE_ACTOR is set here)
+  hint: an agent session cannot approve; run `lore gate approve` in your own shell
+(exit 1)
+alice (work/globex-api)$ lore gate approve tsk_01a19d9225f278fca19bf77801db0ee0
+✓ tsk_01a19d9225f278fca19bf77801db0ee0 approved by Alice Doe (org entry (config.yaml)), hash 13fc8469…
+lore live: 1 row(s) left live (main holds them)
+coord (work/globex-api)$ lore task next --mission msn_01a19d9225ef77c5b51f5cd090df3935 --role coordinator
+✓ claimed tsk_01a19d9225f278fca19bf77801db0ee0 deploy to staging (lease 20m, token ct_e8929…) on refs/lore/signals/main
+  read its notes: lore task show tsk_01a19d9225f278fca19bf77801db0ee0
+
+### mission status
+alice (work/globex-proxy)$ lore mission status msn_01a19d9225ef77c5b51f5cd090df3935
+msn_01a19d9225ef77c5b51f5cd090df3935 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
+  done      tsk_01a19d9225f1786e990ee0dc2ea399bc  invite landing route         act_043c31f94220771983f1957c4db6d556 merged 11:02 24m (timebox 1h; act_6aa8266ccc0977fda9292fe6d7c623a0 20m + act_043c31f94220771983f1957c4db6d556 4m)
+  done      tsk_01a19d9225f272d5aa34ac737cf62ca3  allow /invite on the proxy   proxy-1      merged 11:04 4m
+  claimed   tsk_01a19d9225f278fca19bf77801db0ee0  deploy to staging            coord        working (until 11:29) 1m
+  done      tsk_01a19d9225f07b8e91b7821f65f19164  invite mutation + email      backend-1    merged 10:23 12m (timebox 1h)
+alice (work/globex-proxy)$ lore task show tsk_01a19d9225f278fca19bf77801db0ee0 --from northwind/globex
+tsk_01a19d9225f278fca19bf77801db0ee0 tsk_01a19d9225f278fca19bf77801db0ee0
+  title:    deploy to staging
+  status:   in_progress
+  priority: medium
+  source:   northwind/globex
+alice (work/globex-proxy)$ lore task show tsk_01a19d9225f1786e990ee0dc2ea399bc --from northwind/globex
+tsk_01a19d9225f1786e990ee0dc2ea399bc tsk_01a19d9225f1786e990ee0dc2ea399bc
+  title:    invite landing route
+  status:   done
+  priority: medium
+  source:   northwind/globex

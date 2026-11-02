@@ -4,6 +4,8 @@ Real-user scenarios for lore for teams: live rows, landing, ride-along, compacti
 
 The suite runs ahead of the code. A test whose commands are not in the binary yet skips as `PENDING: not built yet: lore <cmd> --<flag>`; once `lore <cmd> --help` lists the command and flag, the test runs for real and stays red until the behaviour matches the spec.
 
+A regression test for a known open bug (a `th.Bug` with `Open: true`, e.g. BUG-D1 owned by lore-stores) skips as `PENDING: BUG-D1 open (lore-stores): …` only at the point where today's binary shows that exact defect; any other failure is still red, and once the fix lands the test passes on its own. Set `Open: false` when the fix is merged, so a later regression fails instead of hiding as pending.
+
 ## Run it
 
 ```bash

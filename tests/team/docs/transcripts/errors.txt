@@ -1,0 +1,99 @@
+
+### config invalid
+alice$ lore config check
+✗ /home/alice/.lore/config.yaml
+  - orgs[0] "northwind": stores[0].branch "release/2026": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+ERROR: [E_CONFIG_INVALID] /home/alice/.lore/config.yaml is not valid
+  hint: fix the problems listed above; nothing else in lore reads an invalid config
+(exit 1)
+alice (work/acme-app)$ lore whoami
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lorecfg: load /home/alice/.lore/config.yaml: cfgkit: 1 problem(s):
+orgs[0] "northwind": stores[0].branch "release/2026": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+  hint: run `lore config check` for every problem with its location
+(exit 1)
+
+### not a store
+alice (work/acme-app)$ lore whoami
+ERROR: [E_NOT_A_STORE] <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, package.json, src/)
+  hint: create one with `lore store init <url>` in a new empty repo
+(exit 19)
+alice$ lore store doctor
+! <redacted>  (entries northwind; branches main)
+    <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, package.json, src/)
+✓ <redacted>  (entries northwind; branches main)
+  direct pushes to a store branch are confirmed on the next write; a refusal is reported there
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention
+(exit 1)
+
+### org ambiguous
+alice (work/acme-site)$ lore whoami
+org        refused  (the patterns of 2 org entries match this repo (initech, northwind) (candidates: initech, northwind))
+identity   (not resolved: the org is refused above)
+project    prj_01a19d92b1c571eab49599919ee919f5
+remotes    github.com/acme/site
+links      known  0 link(s) for this repo (stores of 2 entries scanned)
+personal   local: everywhere/
+ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (initech, northwind) (candidates: initech, northwind)
+  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+(exit 17)
+alice (work/acme-site)$ lore memory add --body 'the site deploys from the release branch'
+ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (initech, northwind) (candidates: initech, northwind)
+  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+(exit 17)
+
+### link unknown
+dev2 (work/acme-app)$ lore memory add --body 'the client wants weekly demos'
+ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: cannot read northwind: github.com/northwind/lore (never fetched)
+  hint: retry when the store is reachable, or pass --to repo|<org>|me to choose the target yourself
+(exit 18)
+
+### offline claim
+alice (work/acme-app)$ lore task claim tsk_01a19d92b87f77f3a034f6c4d9220aa4
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/alice/work/acme-app/.lore/backups/20261102-184321.352303394-pre-sync.sqlite
+ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): gitremote: fetch: gitremote: remote did not confirm the push: fatal: '/srv/git/github.com/northwind/lore' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+  hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
+(exit 15)
+alice (work/acme-app)$ lore memory add --body 'the API keys rotate every 90 days' --to northwind || true
+✓ mem_01a19d92bcde73f2aa5000fa8ce3fc52 mem_01a19d92bcde73f2aa5000fa8ce3fc52 [northwind/acme]
+  filed: --to northwind → the linked project acme/
+  scope: [master]
+lore: [northwind/acme] 1 file(s) offline: committed in the local clone, pushed by the next command
+alice (work/acme-app)$ lore sync
+· already in sync
+
+### store branch missing
+alice (work/acme-app)$ LORE_ORG=northwind-stag lore org link northwind-stag --project acme --yes
+This marks github.com/acme/app as a CLIENT repo of northwind-stag: internal notes default to github.com/northwind/lore acme/,
+and the leak guards turn on for everyone in northwind-stag.
+  link: project prj_01a19d92a2fc76a298e34838a63890ea at github.com/acme/app → github.com/northwind/lore@staging:acme/ (default=false)
+ERROR: [E_INVALID_INPUT] stores: store branch does not exist: github.com/northwind/lore has no branch staging; create it with `lore store init git@github.com:northwind/lore --branch staging`
+  hint: a store branch is created only on purpose: `lore store init <url> --branch <branch>`
+(exit 1)
+
+### refs refused by the host
+dev2 (work/portal)$ lore task add 'set up the portal CI'
+✓ tsk_01a19d92c1377bee9f980e2e38575074 tsk_01a19d92c1377bee9f980e2e38575074 — set up the portal CI [medium]
+lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+dev2 (work/portal)$ lore live diff
+local     54a7d2872e8fddb5cd95467545c6150c88f5a36f
+tracking  (none)
+seen      (none)
+pending   2 write(s) not confirmed by the remote
+  _root/task_lists/tlt_01a19d92c11f7c8e99ae35f8ca417e9c.json
+  _root/tasks/tsk_01a19d92c1377bee9f980e2e38575074.json
+lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+dev2 (work/portal)$ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
+  - live: tracking refspec installed, not forced into refs/lore/*
+  - live: last fetch 0s ago
+  - live: 2 live write(s) not pushed yet
+  - live: 2 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
+  - live: 1 row(s) waiting to land; the next live write or `lore sync` lands them
+  - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
+  - live: post-commit and pre-push hook blocks installed
+  - live: the remote refused a push to refs/lore/live, so live rows stay on this machine (the host may allow only branches and tags): [remote rejected] (pre-receive hook declined)

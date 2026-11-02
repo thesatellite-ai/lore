@@ -44,6 +44,7 @@ import (
 )
 
 // Environment variables of live rows (§1 "Environment variables").
+// ds:def id=team-env-live-hc3w5qby owner=@khanakia stability=stable desc="LORE_LIVE* environment switches"
 const (
 	// envLiveAutopush = "0" keeps lore off the network on its own (same as
 	// live.autopush: false); `lore sync` still fetches and pushes.

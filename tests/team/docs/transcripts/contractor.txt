@@ -1,0 +1,57 @@
+
+### one store per client
+alice$ lore store init git@github.com:northwind/lore-org && lore store init git@github.com:northwind/lore-acme && lore store init git@github.com:northwind/lore-globex
+✓ wrote lore-store.yaml to github.com/northwind/lore-org (new branch main, first commit) and pushed
+✓ wrote lore-store.yaml to github.com/northwind/lore-acme (new branch main, first commit) and pushed
+✓ wrote lore-store.yaml to github.com/northwind/lore-globex (new branch main, first commit) and pushed
+alice (work/acme-app)$ lore org link northwind --project acme --store git@github.com:northwind/lore-acme --yes
+This marks github.com/acme/app as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore-acme acme/,
+and the leak guards turn on for everyone in northwind.
+  link: project prj_01a19d91cd247338b5fd8ca7f51df4ee at github.com/acme/app → github.com/northwind/lore-acme@main:acme/ (default=false)
+✓ github.com/acme/app (prj_01a19d91cd247338b5fd8ca7f51df4ee, github.com/acme/app) linked to github.com/northwind/lore-acme acme/ (created; pushed)
+  nothing was written to this repo
+alice (work/acme-app)$ lore actor register
+✓ act_02638083ff857bcb918d37651f695705 Alice Doe (@alice) registered in northwind ./
+lore: [northwind/.] 3 file(s) pushed
+alice (work/acme-app)$ lore memory add --body 'the Acme staging database is restored every Sunday night'
+✓ mem_01a19d91d7b070feb942fee4c7b678f6 mem_01a19d91d7b070feb942fee4c7b678f6 [northwind/acme]
+  filed: defaults.client_repos.memory = northwind (a kind not listed goes to the linked project) → the linked project acme/
+  scope: [master]
+lore: [northwind/acme] 2 file(s) pushed
+alice (work/acme-app)$ lore rule add --to northwind/. --body 'every client estimate is reviewed by two people before it is sent'
+✓ rul_01a19d91da3874df9be7b6aa86965b23 rul_01a19d91da3874df9be7b6aa86965b23 [northwind/.]
+  filed: --to northwind/.
+  scope: [master] severity: must
+lore: [northwind/.] 1 file(s) pushed
+
+### contractor view
+cont1 (work/acme-app)$ lore whoami
+org        northwind  (matched by: link in github.com/northwind/lore-acme acme/, project id + remote)
+identity   Casey Contractor <human:cont1@northwind.example>   act_8b27eeef63fe7294b52b3b2daeafd2ad  @cont1  (from: org entry (config.yaml))
+repo       client repo  (guards on)
+project    prj_01a19d91cd247338b5fd8ca7f51df4ee
+remotes    github.com/acme/app
+stores     git@github.com:northwind/lore-org on branch main  (org folder .)
+           git@github.com:northwind/lore-acme on branch main
+internal   github.com/northwind/lore-acme acme/
+links      known  1 link(s) for this repo (stores of 1 entry scanned)
+personal   local: northwind/, everywhere/
+cont1 (work/acme-app)$ lore actor register
+✓ act_8b27eeef63fe7294b52b3b2daeafd2ad Casey Contractor (@cont1) registered in northwind ./
+lore: [northwind/.] 1 file(s) pushed
+cont1 (work/acme-app)$ lore memory list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: /home/cont1/work/acme-app/.lore/backups/20261102-184225.158645462-pre-sync.sqlite
+mem_01a19d91d7b070feb942fee4c7b678f6  the Acme staging database is restored every Sunday night  [northwind/acme]
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/cont1/work/acme-app/.git/hooks)
+cont1$ lore store show
+<redacted>
+  entries   northwind   branches main
+  clone     /home/cont1/.lore/clones/github.com/northwind/lore-org.git (bare)   default branch main   last fetch 2026-11-02T18:42:24Z
+<redacted>
+  entries   northwind   branches main
+  clone     /home/cont1/.lore/clones/github.com/northwind/lore-acme.git (bare)   default branch main   last fetch 2026-11-02T18:42:24Z
+cont1$ ls ~/.lore/clones/github.com/northwind
+lore-acme.git
+lore-org.git

@@ -1,4 +1,4 @@
-# docsync refs format=2 extract=1 repo=lore commit=9abb4c1 scanned_at=2026-11-02T15:07:14Z
+# docsync refs format=2 extract=1 repo=lore commit=cd82f40 scanned_at=2026-11-02T18:50:00Z
 id	repo	doc	line	verb	carrier	acked_hash	seen_hash	sentence_hash	env	args
 sync-datanames-nhh4krj2	lore	LORE_SYNC_SPEC.md	329	block	block		1f861404f99026f841d062726cc760271cea780ad9419e07d84b64db6d5b769b			id=sync-datanames-nhh4krj2
 sync-formatversion-h8e7vzn7	lore	LORE_SYNC_SPEC.md	351	block	block		6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b			id=sync-formatversion-h8e7vzn7
@@ -11,14 +11,23 @@ sync-drainrounds-2adqnp3a	lore	LORE_SYNC_SPEC.md	406	block	block		4b227777d4dd1f
 sync-strategyfor-ycedma28	lore	LORE_SYNC_SPEC.md	468	block	block	b2c5c58c544a98cce0667f2c1a0c206470240ab968431c6ae6fe32d6ef5c8f97	e8fe877fa7950f7dee13fed59dedb05de866239020802f7869a6c394ef0cebf2			id=sync-strategyfor-ycedma28
 sync-gitattributes-xzr8sqyk	lore	LORE_SYNC_SPEC.md	503	block	block		22a7f83e410ab51ff0bd980903b44bc20991c2d3734062506cb1652138f55a3d			id=sync-gitattributes-xzr8sqyk
 sync-mergedriver-config-bur8yta8	lore	LORE_SYNC_SPEC.md	504	block	block		87b399b98872a40caa24e06b395a8603d674e8947be2ae3b649de63a8d4cdd43			id=sync-mergedriver-config-bur8yta8
-sync-hooklines-3282rwuw	lore	LORE_SYNC_SPEC.md	528	block	block	7da85a56cfa5a72092d0a5f54d15d3ad7c1f94545b0eebb857986befb4393745	19c460371b87763ba11757d32bebd774e332b4929d8f18f1ea7f97080227cd9f			id=sync-hooklines-3282rwuw
+sync-hooklines-3282rwuw	lore	LORE_SYNC_SPEC.md	528	block	block	00eebfaeac4e23e8b502377f2a482030ac03a30d6af3125fbfe610fab2693c82	19c460371b87763ba11757d32bebd774e332b4929d8f18f1ea7f97080227cd9f			id=sync-hooklines-3282rwuw
 sync-locktimeout-rh9uf4cq	lore	LORE_SYNC_SPEC.md	592	block	block		3fe98fb5539e5215e19bbc4725c81218953709d2c6a357742267459173f7ca3d			id=sync-locktimeout-rh9uf4cq
 sync-maxfilesize-zk9m2syn	lore	LORE_SYNC_SPEC.md	593	block	block		e7d30a86bb0c5d9c861f00e11b7b1a4ee8f855db5c0d7207ef4f5368177ea994			id=sync-maxfilesize-zk9m2syn
-sync-datanames-nhh4krj2	lore	README.md	284	block	block		1f861404f99026f841d062726cc760271cea780ad9419e07d84b64db6d5b769b			id=sync-datanames-nhh4krj2
-sync-syncedtables-rgmtjeph	lore	README.md	300	block	block	e26974d0e9be41395d0ffa7f1e73416d0f93e1769c2a22f0c18d82c1a8353bf7	94e343be6a0fc360f0e83ef3744a578a147421bc9a389b389a2bba30f440b34a			id=sync-syncedtables-rgmtjeph
-sync-localtables-dcpb69pj	lore	README.md	301	block	block		876ec341be89fbac975dc6f8461eb95271ff1794d4784c777762716f9e5002c8			id=sync-localtables-dcpb69pj
-sync-volatile-4t6jsc7v	lore	README.md	302	block	block		25cd00c6b5cac55b4efe333e5ac7f6f0dada831e23ee73cedc6ab54cc23a01a8			id=sync-volatile-4t6jsc7v
-sync-mergedriver-config-bur8yta8	lore	README.md	305	block	block		87b399b98872a40caa24e06b395a8603d674e8947be2ae3b649de63a8d4cdd43			id=sync-mergedriver-config-bur8yta8
-sync-strategyfor-ycedma28	lore	README.md	306	block	block	b2c5c58c544a98cce0667f2c1a0c206470240ab968431c6ae6fe32d6ef5c8f97	e8fe877fa7950f7dee13fed59dedb05de866239020802f7869a6c394ef0cebf2			id=sync-strategyfor-ycedma28
-sync-env-qmha7pjc	lore	README.md	317	block	block		bd5b39d825c2289ef12ad3e57b3bfea4a97c1dc6a796c3ef39f40c89909fdbad			id=sync-env-qmha7pjc
-sync-hooklines-3282rwuw	lore	README.md	320	block	block	7da85a56cfa5a72092d0a5f54d15d3ad7c1f94545b0eebb857986befb4393745	19c460371b87763ba11757d32bebd774e332b4929d8f18f1ea7f97080227cd9f			id=sync-hooklines-3282rwuw
+sync-datanames-nhh4krj2	lore	README.md	304	block	block		1f861404f99026f841d062726cc760271cea780ad9419e07d84b64db6d5b769b			id=sync-datanames-nhh4krj2
+sync-syncedtables-rgmtjeph	lore	README.md	320	block	block	e26974d0e9be41395d0ffa7f1e73416d0f93e1769c2a22f0c18d82c1a8353bf7	94e343be6a0fc360f0e83ef3744a578a147421bc9a389b389a2bba30f440b34a			id=sync-syncedtables-rgmtjeph
+sync-localtables-dcpb69pj	lore	README.md	321	block	block		876ec341be89fbac975dc6f8461eb95271ff1794d4784c777762716f9e5002c8			id=sync-localtables-dcpb69pj
+sync-volatile-4t6jsc7v	lore	README.md	322	block	block		25cd00c6b5cac55b4efe333e5ac7f6f0dada831e23ee73cedc6ab54cc23a01a8			id=sync-volatile-4t6jsc7v
+sync-mergedriver-config-bur8yta8	lore	README.md	325	block	block		87b399b98872a40caa24e06b395a8603d674e8947be2ae3b649de63a8d4cdd43			id=sync-mergedriver-config-bur8yta8
+sync-strategyfor-ycedma28	lore	README.md	326	block	block	b2c5c58c544a98cce0667f2c1a0c206470240ab968431c6ae6fe32d6ef5c8f97	e8fe877fa7950f7dee13fed59dedb05de866239020802f7869a6c394ef0cebf2			id=sync-strategyfor-ycedma28
+sync-env-qmha7pjc	lore	README.md	337	block	block		bd5b39d825c2289ef12ad3e57b3bfea4a97c1dc6a796c3ef39f40c89909fdbad			id=sync-env-qmha7pjc
+sync-hooklines-3282rwuw	lore	README.md	340	block	block	00eebfaeac4e23e8b502377f2a482030ac03a30d6af3125fbfe610fab2693c82	19c460371b87763ba11757d32bebd774e332b4929d8f18f1ea7f97080227cd9f			id=sync-hooklines-3282rwuw
+team-env-live-hc3w5qby	lore	docs/team/commands.md	1068	block	block		b5810794c0a549f34343ab8cde3d002375de11e5654dcb7346e168a52663d90a			id=team-env-live-hc3w5qby
+team-env-actor-53pv3fuc	lore	docs/team/commands.md	1069	block	block		43b81ced44bf7bbb635ae05aae17de690c31a58a0587594cf01224a98be1338f			id=team-env-actor-53pv3fuc
+team-env-org-m38knvc4	lore	docs/team/commands.md	1070	block	block		e2d5041156b91e0f017bdd944acb2e48c76d2bb4120402e5c12993e616248218			id=team-env-org-m38knvc4
+team-config-defaults-vcrgzmhf	lore	docs/team/commands.md	1087	block	block		b24e576a674bbcbe9615016b9d83b8690e1c77d080f8025db5f1aa70bfc93f15			id=team-config-defaults-vcrgzmhf
+team-live-kinds-62s7pcxa	lore	docs/team/commands.md	1088	block	block		0267bb47233a247b6d0d549e0a028530d3e7cdcc9c0067766fbc1a0f455fc228			id=team-live-kinds-62s7pcxa
+team-exit-codes-vt2j5m98	lore	docs/team/commands.md	1124	block	block		8bdf527a59a6c992c97ad9f5b57d4fd7139746a107857311bfac302687bb4ce6			id=team-exit-codes-vt2j5m98
+team-store-allowed-yhy36m4v	lore	docs/team/how-it-works.md	402	block	block		4738157868ab00c9eb380d439b57b96883cf9fa30091bd5bda44b9dc569937cc			id=team-store-allowed-yhy36m4v
+team-leak-words-jpw3kpv4	lore	docs/team/how-it-works.md	407	block	block		2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3			id=team-leak-words-jpw3kpv4
+team-ci-markers-t4gm77bb	lore	docs/team/troubleshooting.md	219	block	block		113edb7591fe24f44671ccb98fddf412e689053c70b895d476e90af8f233e5dc			id=team-ci-markers-t4gm77bb

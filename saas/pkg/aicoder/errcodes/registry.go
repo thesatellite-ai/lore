@@ -128,6 +128,7 @@ const ExitGeneric = 1
 // must tell "nothing to do" (10) from "lost a race" (11) from "you were
 // fenced out" (12–14) without parsing text, so these numbers are a
 // contract: never renumber, only add. Codes absent here exit ExitGeneric.
+// ds:def id=team-exit-codes-vt2j5m98 owner=@khanakia stability=stable desc="exit statuses of the team error codes"
 var exitCodes = map[Code]int{
 	NoWork:       10,
 	Contended:    11,

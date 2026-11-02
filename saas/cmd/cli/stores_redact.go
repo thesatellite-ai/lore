@@ -16,6 +16,7 @@ const envCI = "CI"
 // ciMarkers are environment variables that mean "this output goes to a CI
 // log someone else may read" (coordinator Q-stores-3): set → guard output
 // names no internal id, path, store or org.
+// ds:def id=team-ci-markers-t4gm77bb owner=@khanakia stability=stable desc="CI variables that turn on redacted output"
 var ciMarkers = []string{envCI, "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE", "CIRCLECI", "JENKINS_URL", "TF_BUILD", "BITBUCKET_BUILD_NUMBER"}
 
 // inCI reports whether any CI marker is set.
