@@ -135,7 +135,7 @@ func TestOwnerAlive_DeadPid(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	alive, err := ownerAlive(path)
+	alive, err := ownerAlive(path, pidAlive)
 	if err != nil {
 		t.Fatalf("ownerAlive: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestOwnerAlive_OurPid(t *testing.T) {
 	}
 	defer l.Release()
 
-	alive, err := ownerAlive(path)
+	alive, err := ownerAlive(path, pidAlive)
 	if err != nil {
 		t.Fatalf("ownerAlive: %v", err)
 	}

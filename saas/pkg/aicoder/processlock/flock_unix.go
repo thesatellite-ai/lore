@@ -8,6 +8,10 @@ import (
 	"syscall"
 )
 
+// reclaimStaleOnBusy keeps the historical Unix behaviour: a busy lock whose
+// recorded pid is dead is deleted and retried (R23 #27).
+const reclaimStaleOnBusy = true
+
 // errLockBusy is the internal sentinel returned when flock fails with EWOULDBLOCK.
 var errLockBusy = errors.New("processlock: flock busy")
 
