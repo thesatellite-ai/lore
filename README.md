@@ -283,26 +283,21 @@ A sync pass runs automatically before and after every command; these subcommands
 
 ### Teams, stores and agents
 
-Design and every rule: [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md). Live rows are shared with everyone at once on one hidden ref per repo (`refs/lore/live`) and land on `main` when finished; internal and personal notes live in separate lore-only store repos; agents claim tasks with a lease on a second hidden ref (`refs/lore/signals`).
+Lore works for a whole team, several repos, several companies and a crew of AI agents, with git as the only infrastructure:
 
-| Command | Use case |
-|---|---|
-| `lore task add "…" --live` / `--no-live` | Share a row with everyone at once, or keep it with the branch (the kind sets the default; tasks are live) |
-| `lore land [id] [--all] [--dry-run]` | Land finished live rows on `main` now (they also land by themselves, or ride along with your next push on a protected `main`) |
-| `lore live show` / `diff` / `log` / `restore` / `compact` / `purge` | Inspect and repair the live ref |
-| `lore explain <id>` | Every place an id exists, which copy won and why, the land decision |
-| `lore org use <entry>` / `lore org link <org> --project <folder>` / `lore org import <url>` | Pick an org for this repo, tie a client repo to its internal project (for the whole team), adopt a team's suggested config |
-| `lore store init <url> [--branch <b>]` / `show [--links]` / `open` / `forget` / `doctor` | Manage lore-only store repos |
-| `lore memory add --body "…" --to repo\|<org>\|<org>/<folder>\|me` | Choose who a row is for; `--create` makes a new store folder on purpose |
-| `lore share <id> --to repo` / `lore move <id> --to <org>` | Copy or move a row to another audience (new id; shows the text and asks) |
-| `lore check leaks` / `lore check pr-body <file>` | Leak checks: internal content never reaches a client repo, a commit message or a pull request |
-| `lore actor register` / `lore team add` / `lore agent start --label <name> --owner @you` | The roster: people, teams and per-session agent actors |
-| `lore task claim <id>` / `next` / `heartbeat` / `release` / `done --pr <n>` | Agents take work with a lease and a token; a crashed agent's task is picked up after the lease expires |
-| `lore task revoke` / `reassign` / `cancel` | Human overrides; the old holder is fenced out |
-| `lore task add … --after <id>[:merged]` / `lore gate request` / `lore gate approve` | Dependencies (done or merged on `main`) and human gates agents stop at |
-| `lore inbox` / `lore handoff add --for @x` / `lore finding add` / `lore mission status <id>` | Coordination views: what is for you, notes for the next agent, findings every agent sees, a mission at a glance |
-| `lore plan apply plan.yaml` / `lore resource claim <name>` | Create a mission and its tasks from a file (a re-run adds nothing); hold a shared resource with a lease |
-| `lore cache prune` / `lore context --internal` | Caches and internal renders live outside the checkout (`~/.lore/cache`, `~/.lore/render`) |
+- **Tasks reach teammates at once, on any branch.** Live rows are shared on one hidden ref per repo (`refs/lore/live`) and land on `main` by themselves when finished, or ride along with your next push when `main` is protected.
+- **Internal notes stay internal.** Notes a client must never read live in a store, a separate lore-only repo linked to the client repo; leak checks stop internal text from reaching the client's commits and pull requests.
+- **Several repos, one product; one person, several companies.** Repos link to one shared project; each repo loads exactly one org, with its own identity, roster and personal notes.
+- **Agents do not step on each other.** `lore task next` claims a task with a lease on a second hidden ref (`refs/lore/signals`); a crashed agent's task is picked up when its lease runs out, and people approve gates.
+
+```bash
+lore task add "fix login timeout" --assign @dev1          # live: dev1 sees it on their next command
+lore org link northwind --project acme                    # once: tie a client repo to an internal project
+lore memory add --body "they approve faster on WhatsApp"  # in a client repo: goes to the store, not the repo
+lore task next --mission msn_01a1…                        # an agent takes the next ready task
+```
+
+Read on in [docs/team](docs/team/README.md): [overview](docs/team/overview.md), [concepts](docs/team/concepts.md), [getting started](docs/team/getting-started.md), [use cases](docs/team/README.md#use-cases) (small team, agency and client repo, group of repos, contractor, two companies, personal notes, agents on one mission), [how it works](docs/team/how-it-works.md), [agents](docs/team/agents.md), [commands reference](docs/team/commands.md) and [troubleshooting](docs/team/troubleshooting.md). The design and every rule: [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md).
 
 ## Team sync through git
 

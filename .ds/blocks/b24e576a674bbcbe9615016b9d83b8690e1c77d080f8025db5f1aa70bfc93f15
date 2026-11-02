@@ -1,0 +1,16 @@
+const (
+	DefaultLiveMaxAge          = 7 * Day          // TEAM-026
+	DefaultLiveFetchTTL        = 60 * time.Second // TEAM-025
+	DefaultLiveAutopush        = true
+	DefaultLiveCompactAfter    = 1000
+	DefaultLiveRemote          = "origin"
+	DefaultLeaseTTL            = 20 * time.Minute
+	DefaultLeaseRenewEvery     = 5 * time.Minute
+	DefaultLeaseGrace          = 2 * time.Minute
+	DefaultLeasePushRetries    = 5
+	DefaultMaxClaimsPerAgent   = 1
+	DefaultMaxAttempts         = 3
+	DefaultLinkIndexMaxAge     = time.Hour
+	DefaultMergeCheck          = MergeCheckNone
+	DefaultAgentDetailsSetting = AgentDetailsInternal
+)

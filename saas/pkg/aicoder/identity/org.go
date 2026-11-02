@@ -23,6 +23,7 @@ import (
 )
 
 // Environment variables read here. Named once so docs and tests agree.
+// ds:def id=team-env-actor-53pv3fuc owner=@khanakia stability=stable desc="LORE_ACTOR and LORE_SESSION"
 const (
 	// EnvActor names the acting agent for this session (agent:<label>).
 	EnvActor = "LORE_ACTOR"

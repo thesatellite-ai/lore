@@ -174,6 +174,7 @@ func summarise(bad []string) []string {
 // anything under a project's .lore/ folder (`<folder>/.lore/**` or, for the
 // root project, `.lore/**`). A project folder is one path segment: nested
 // folders would make two stores' folder names incomparable (F13).
+// ds:def id=team-store-allowed-yhy36m4v owner=@khanakia stability=stable desc="files a lore store may hold"
 func Allowed(p string) bool {
 	if p == "" || strings.HasPrefix(p, "/") || path.Clean(p) != p {
 		return false

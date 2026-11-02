@@ -323,3 +323,35 @@ func TestHarness_UnbuiltSubcommandIsPendingNotAPass(t *testing.T) {
 		t.Fatalf("a built subcommand runs normally: %+v", rec)
 	}
 }
+
+// A known open bug makes its regression test PENDING only where the defect
+// shows; a closed bug, an absent symptom, or an empty symptom list never
+// skips, and LORE_TEAM_STRICT=1 turns the pending into a failure.
+func TestBug_PendingOnlyWhileOpenAndSeen(t *testing.T) {
+	t.Setenv(EnvStrict, "")
+	open := Bug{ID: "BUG-X1", Owner: "lore-x", Open: true}
+	refused := Result{Stderr: "ERROR: [E_LEAK_BLOCKED] xref: pointers flow inward only"}
+	for _, c := range []struct {
+		name    string
+		bug     Bug
+		symptom []string
+		skip    bool
+	}{
+		{"open and seen", open, []string{"E_LEAK_BLOCKED", "inward only"}, true},
+		{"open, one symptom missing", open, []string{"E_LEAK_BLOCKED", "E_CYCLE"}, false},
+		{"open, no symptom given", open, nil, false},
+		{"closed and seen", Bug{ID: "BUG-X1", Owner: "lore-x"}, []string{"E_LEAK_BLOCKED"}, false},
+	} {
+		rec := runRec(t, func(tb testing.TB) { c.bug.PendingOn(tb, refused, c.symptom...) })
+		if got := rec.skipped != ""; got != c.skip || rec.failed != "" {
+			t.Fatalf("%s: skipped=%q failed=%q", c.name, rec.skipped, rec.failed)
+		}
+		if c.skip && !strings.HasPrefix(rec.skipped, PendingPrefix+" BUG-X1 open (lore-x)") {
+			t.Fatalf("%s: the pending reason must name the bug and its owner: %q", c.name, rec.skipped)
+		}
+	}
+	t.Setenv(EnvStrict, "1")
+	if rec := runRec(t, func(tb testing.TB) { open.PendingIf(tb, true, "seen") }); rec.failed == "" {
+		t.Fatal("strict mode must fail an open bug's test, not skip it")
+	}
+}

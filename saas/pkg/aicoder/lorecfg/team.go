@@ -75,6 +75,7 @@ const (
 
 // Built-in defaults for the top-level blocks (§1 "Config keys"). Each is
 // named so `lore config check`, docs and the merge below agree.
+// ds:def id=team-config-defaults-vcrgzmhf owner=@khanakia stability=stable desc="built-in defaults of ~/.lore/config.yaml"
 const (
 	DefaultLiveMaxAge          = 7 * Day          // TEAM-026
 	DefaultLiveFetchTTL        = 60 * time.Second // TEAM-025
@@ -95,6 +96,7 @@ const (
 // DefaultLiveKinds lists the kinds that are live unless config says
 // otherwise (fixed rule 2, §3.2). Keys are table names, the same names the
 // sync registry uses.
+// ds:def id=team-live-kinds-62s7pcxa owner=@khanakia stability=stable desc="kinds that are live by default"
 func DefaultLiveKinds() map[string]bool {
 	return map[string]bool{
 		"tasks": true, "missions": true, "handoffs": true, "comments": true,

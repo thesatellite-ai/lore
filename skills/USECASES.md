@@ -25,7 +25,7 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Intent | Command |
 |---|---|
 | Create an initiative | `lore mission add "<title>"` |
-| Create a discrete work item | `lore task add "<title>" --tasklist=<tlt_id> --priority=<p>` (tasklist required) |
+| Create a discrete work item | `lore task add "<title>" --priority=<p>` (`--tasklist=<tlt_id>` optional: the default list is used, created on demand) |
 | Attach task to mission | `lore task add "<t>" --tasklist=<tlt_id> --mission=<msn_id>` |
 | Attach task to plan | `lore task add "<t>" --tasklist=<tlt_id> --plan=<pln_id>` |
 | Assign task to an actor | `lore task add "<t>" --tasklist=<tlt_id> --assigned-to=<act_id>` |
@@ -39,13 +39,6 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Group tasks (alt grouping) | `lore tasklist add --title=<t>` |
 | Multi-phase plan | `lore plan add --title=<t>` |
 | Hand off context to a collaborator | `lore handoff add --for @<handle> [--task <id>] "<ctx>"` |
-| Share a row with the whole team at once, on any branch | `lore task add "<title>" --live` (tasks are live by default) |
-| Land finished live rows on main now | `lore land --all` |
-| See which org, identity and stores apply here | `lore whoami` |
-| Keep an internal note out of a client repo | `lore memory add --body "<text>" --to <org>` |
-| Take the next ready task as an agent | `lore task next --mission <id>` |
-| Keep an agent's claim alive | `lore task heartbeat` |
-| Check a PR body for internal content before posting | `lore check pr-body <file>` |
 | Active task list view | `lore task list --status=in_progress` |
 | My tasks / tasks assigned to someone | `lore task list --assignee=@me` (or `--assignee=<act_id\|stable_key\|display name>`) |
 | Start a task | `lore task start <id\|tsk_<id>>` |
@@ -57,6 +50,41 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Recurring reminder | `... --recurrence=7d\|30d\|1m\|3m\|6m\|1y` |
 | Tag/label any entity | `lore tag attach --on-table=<t> --on-id=<id> --tag=<n>` |
 | Discuss any entity | `lore comment add --on-table=<t> --on-id=<id> --body="<text>"` |
+
+## Teams, stores and agents
+
+Full guide with real examples: [docs/team](../docs/team/README.md).
+
+| Intent | Command |
+|---|---|
+| See which org, identity and stores apply here, and why | `lore whoami` (`--explain` for every rule) |
+| Share a row with the whole team at once, on any branch | `lore task add "<title>"` (tasks are live by default); other kinds: `--live` |
+| Keep a row with the branch instead | `--no-live` |
+| Give a task to a teammate | `lore task add "<title>" --assign @<handle>` |
+| See a teammate's new row now (skip the 60 s fetch cache) | `lore sync` |
+| Land finished live rows on main now | `lore land --all` (`--dry-run` shows the plan) |
+| Why did this row (not) land, which copy wins | `lore explain <id>` |
+| Make a new empty repo a store | `lore store init <url>` (another store branch: `--branch <b>`) |
+| Tie a client repo to its internal project (once, for the whole team) | `lore org link <org> --project <folder>` |
+| Join the org's roster | `lore actor register` |
+| Keep an internal note out of a client repo | `lore memory add --body "<text>"` (default in a client repo) or `--to <org>` |
+| Put a row into the client repo on purpose | `--to repo` |
+| A private note only you see | `--to me` (`--everywhere` to load it in every repo) |
+| Choose an org for this repo on this machine | `lore org use <entry>` (one command: `LORE_ORG=<entry> lore …`) |
+| Share an internal note with the client on purpose | `lore share <id> --to repo` (shows the text, asks) |
+| A row was filed in the wrong place | `lore move <id> --to <target>` |
+| Check a PR body for internal content before posting | `lore check pr-body <file>` (or `-` for stdin) |
+| An internal row reached the client's live ref | `lore live purge <id>`, then `lore live compact` |
+| Start an agent session | `lore agent start --label <name> --owner @<you>` and export what it prints |
+| Create a mission and its tasks from a file (re-run adds nothing) | `lore plan apply <file>` |
+| Take the next ready task as an agent | `lore task next --mission <id> [--repo <name>]` (exit 10: nothing ready) |
+| Keep an agent's claim alive | `lore task heartbeat --daemon <id>` |
+| Record progress and push the work branch | `lore task note <id> "<text>"` |
+| Finish with the code that did it | `lore task done <id> --commit <sha>` (or `--pr <n>`) |
+| Mark a done task merged when lore cannot see it | `lore task merged <id>` |
+| Stop agents until a person approves | `lore gate request <id>`; the person runs `lore gate approve <id>` |
+| The whole mission at a glance | `lore mission status <id>` |
+| What needs me | `lore inbox` |
 
 ## Lifecycle / cleanup
 

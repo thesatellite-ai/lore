@@ -39,6 +39,7 @@ import (
 // MinRunWords is the text rule's threshold (F16: "any run of ≥ 8
 // consecutive words"). Seven matching words are allowed: short shared
 // phrases ("send the estimate before the call") are common English.
+// ds:def id=team-leak-words-jpw3kpv4 owner=@khanakia stability=stable desc="words in a run the leak text rule matches"
 const MinRunWords = 8
 
 // Rule names a finding's rule.
