@@ -180,6 +180,8 @@ func Locate(ctx context.Context, dir, base string, o Options) (Located, error) {
 	backup, err := migrate(ctx, tomlPath, yamlPath)
 	var pe *ParseError
 	switch {
+	case errors.Is(err, errMigratedElsewhere):
+		return Located{Path: yamlPath, Format: FormatYAML, Exists: true}, nil
 	case errors.As(err, &pe):
 		// Malformed: reading it as TOML fails the same way, so do not promise
 		// a read. Load on the returned Located returns the same line-numbered
@@ -289,30 +291,60 @@ func Remove(dir, base string) (bool, error) {
 	return removed, nil
 }
 
+// errMigratedElsewhere reports that another process migrated the same TOML
+// while this one was working: the TOML is gone and the YAML exists. It is not
+// a failure; Locate reads the YAML and stays quiet, because the process that
+// did the migration already printed the notice (BUG-R1).
+var errMigratedElsewhere = errors.New("migrated by another process")
+
 // migrate writes the YAML equivalent of tomlPath to yamlPath and renames the
 // TOML to its backup name. Every key is carried over, including keys the
 // current lore version does not read, because the TOML is decoded generically
 // rather than into lore's struct. Returns the backup path.
+//
+// Two lore processes may migrate the same file at once (two commands started
+// together on a fresh machine). Invariant: a loser never deletes the YAML,
+// because the winner's YAML is the only copy of the config once its TOML has
+// been renamed. Every "the TOML is gone" outcome with a YAML present returns
+// errMigratedElsewhere instead.
 func migrate(_ context.Context, tomlPath, yamlPath string) (string, error) {
+	out, perm, err := convertLegacy(tomlPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", migratedElsewhere(yamlPath, err)
+		}
+		return "", err
+	}
+	return commitMigration(tomlPath, yamlPath, out, perm)
+}
+
+// convertLegacy reads tomlPath and returns its YAML form and file mode.
+func convertLegacy(tomlPath string) ([]byte, fs.FileMode, error) {
 	info, err := os.Stat(tomlPath)
 	if err != nil {
-		return "", fmt.Errorf("stat: %w", err)
+		return nil, 0, fmt.Errorf("stat: %w", err)
 	}
 	raw, err := os.ReadFile(tomlPath)
 	if err != nil {
-		return "", fmt.Errorf("read: %w", err)
+		return nil, 0, fmt.Errorf("read: %w", err)
 	}
 	// A generic tree is the only shape that keeps unknown keys; this is the
 	// format boundary, and the tree goes straight to the YAML encoder.
 	var tree map[string]any
 	if err := parseTOML(tomlPath, raw, &tree); err != nil {
-		return "", err
+		return nil, 0, err
 	}
 	out, err := encodeYAML(tree)
 	if err != nil {
-		return "", err
+		return nil, 0, err
 	}
-	if err := writeAtomic(yamlPath, out, info.Mode().Perm()); err != nil {
+	return out, info.Mode().Perm(), nil
+}
+
+// commitMigration writes the converted YAML and moves the TOML to its backup.
+// Split from convertLegacy so a test can run another migration in between.
+func commitMigration(tomlPath, yamlPath string, out []byte, perm fs.FileMode) (string, error) {
+	if err := writeAtomic(yamlPath, out, perm); err != nil {
 		return "", err
 	}
 	backup, err := backupName(tomlPath)
@@ -321,12 +353,27 @@ func migrate(_ context.Context, tomlPath, yamlPath string) (string, error) {
 		return "", err
 	}
 	if err := os.Rename(tomlPath, backup); err != nil {
-		// Without the rename both files exist and the warning would fire on
-		// every run; undo the YAML so the next run retries cleanly.
-		_ = os.Remove(yamlPath) // undo the half-done migration; the error being returned is the one to report
+		if errors.Is(err, fs.ErrNotExist) {
+			// Another process renamed the TOML after writing the same YAML:
+			// that YAML is now the only copy, so it must stay.
+			return "", migratedElsewhere(yamlPath, err)
+		}
+		// The TOML is still here, so removing the YAML loses nothing; without
+		// it both files exist and the "ignored" warning would fire on every
+		// run, so the next run retries cleanly instead.
+		_ = os.Remove(yamlPath)
 		return "", fmt.Errorf("keep backup: %w", err)
 	}
 	return backup, nil
+}
+
+// migratedElsewhere maps a vanished TOML to errMigratedElsewhere when the YAML
+// exists, else returns cause unchanged (a real failure).
+func migratedElsewhere(yamlPath string, cause error) error {
+	if ok, err := exists(yamlPath); err == nil && ok {
+		return errMigratedElsewhere
+	}
+	return cause
 }
 
 // encodeYAML marshals a TOML-decoded tree. TOML local date/time values decode
