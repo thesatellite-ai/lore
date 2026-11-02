@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -107,6 +108,14 @@ func init() {
 	rootCmd.AddCommand(newLearnCommand())
 	rootCmd.AddCommand(newLearnFromRootAliasCommand()) // lore learn-from docs at root
 	rootCmd.AddCommand(newIdentityCommand())
+	rootCmd.AddCommand(newWhoamiCommand())
+	rootCmd.AddCommand(newOrgCommand())
+	rootCmd.AddCommand(newStoreCommand())
+	rootCmd.AddCommand(newCacheCommand())
+	rootCmd.AddCommand(newCheckCommand())
+	rootCmd.AddCommand(newShareCommand())
+	rootCmd.AddCommand(newMoveCommand())
+	rootCmd.AddCommand(newContextCommand())
 	rootCmd.AddCommand(newSupportBundleCommand())
 	rootCmd.AddCommand(newTaskCommand())
 	rootCmd.AddCommand(newMissionCommand())
@@ -135,6 +144,12 @@ func init() {
 	rootCmd.AddCommand(newMergeDriverCommand())
 	rootCmd.AddCommand(newAuditCommand())
 	registerExtraCommands(rootCmd)
+	attachRosterCommands(rootCmd)
+	attachStoreSubcommands(rootCmd)
+	addCoordCommands(rootCmd) // lore-signals: agent, resource, gate, inbox, handoff, finding, plan apply (coord_cmd.go)
+	// Live rows (LORE_TEAM_SPEC F1–F8): --live/--no-live, land, live, and the
+	// pre-run hook. Last, so it sees every command registered above.
+	wireLive(rootCmd)
 }
 
 func main() {
@@ -142,11 +157,50 @@ func main() {
 	err := rootCmd.Execute()
 	// Export this command's writes to .lore/data (and wire git) even when the
 	// command failed part-way: rows it already wrote must not be left behind.
-	finishSyncSessions(context.Background())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+explainStorageError(err).Error())
-		os.Exit(1)
+	// A refusal found while storing the command's writes (a leak-blocked
+	// live write) fails the command when nothing else did.
+	if ferr := finishSyncSessions(context.Background()); ferr != nil && err == nil {
+		err = ferr
 	}
+	// Rows written into a store or personal project reach their home
+	// (LORE_TEAM_SPEC §3.2: committed and pushed at once).
+	if ferr := flushExternalProjects(context.Background()); ferr != nil && err == nil {
+		err = ferr
+	}
+	if err != nil {
+		err = explainStorageError(err)
+		fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+err.Error())
+		if hint := errorHint(err); hint != "" {
+			fmt.Fprintln(os.Stderr, hintPrefix+hint)
+		}
+		os.Exit(exitStatus(err))
+	}
+}
+
+// hintPrefix starts the line under ERROR that carries a CLIError's next step,
+// so the spec's two-line messages (LORE_TEAM_SPEC F10, F12) read as written.
+const hintPrefix = "  hint: "
+
+// errorHint is the actionable next step of the first CLIError in err's chain,
+// or "" when there is none. Hint is kept out of CLIError.Error() on purpose
+// (errcodes/error.go), so the CLI is the one place that prints it.
+func errorHint(err error) string {
+	var cli *errcodes.CLIError
+	if errors.As(err, &cli) {
+		return cli.Hint
+	}
+	return ""
+}
+
+// exitStatus is the process exit status for a failed command: the code's
+// dedicated status when the error carries a registered code that has one
+// (errcodes.ExitCode; LORE_TEAM_SPEC §1), else errcodes.ExitGeneric.
+func exitStatus(err error) int {
+	var cli *errcodes.CLIError
+	if errors.As(err, &cli) {
+		return errcodes.ExitCode(cli.Code)
+	}
+	return errcodes.ExitGeneric
 }
 
 // sqliteFullMarker is SQLite's SQLITE_FULL message.

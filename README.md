@@ -273,7 +273,7 @@ A sync pass runs automatically before and after every command; these subcommands
 | `lore sync promote <id> --to <branch>` | Commit a row onto another local branch (an urgent rule onto `main`) — never pushes |
 | `lore sync dupes` / `lore sync merge-rows <table> --keep <id> --drop <id>` | Find and fold rows two clones recorded independently |
 | `lore sync export --all` | Rewrite every file from the DB (recreate a deleted `.lore/data`) |
-| `lore sync purge --archived-before 90d --confirm` | Permanently remove archived rows; records them in `_purged.json` so old clones never resurrect them |
+| `lore sync purge --archived-before 90d --confirm` | Durably remove archived rows; records them in `_purged.json` so old clones never resurrect them |
 | `lore sync fix-projects` | Collapse duplicate project ids after two people bootstrapped in parallel |
 | `lore sync install-git` | Install the merge driver, `.gitattributes` rules and hook blocks now (otherwise automatic); fails with `E_SYNC_DATA_IGNORED` when git ignores `.lore/data` |
 | `lore sync install-action` / `uninstall-action` | Opt in to (or remove) a GitHub workflow that settles lore-data conflicts in pull requests; `--manual`, `--branch`, `--dry-run` |
@@ -304,7 +304,7 @@ lore keeps a fast SQLite cache in `.lore/lore.db` (gitignored) and writes every 
 
 <!-- ds:block id=sync-mergedriver-config-bur8yta8 -->
 <!-- ds:block id=sync-strategyfor-ycedma28 -->
-**Merges.** One file per row means two people adding knowledge never conflict. Editing *different fields* of the same row merges cleanly through lore's git merge driver; editing the *same text* on two branches is a real conflict that a person settles. Details, and what happens in pull requests, in [Merges and pull requests](#merges-and-pull-requests).
+**Merges.** One file per row means two people adding knowledge never conflict. Editing *different fields* of the same row merges cleanly through lore's git merge driver; editing the *same text* on two branches is a real conflict that a person settles. List fields that are sets (labels, approvers, team members, project links) merge both sides' additions and never conflict, and an edit beats a delete. Details, and what happens in pull requests, in [Merges and pull requests](#merges-and-pull-requests).
 
 **Every write is captured.** Database triggers record every change to a shared table, so `lore tui`, raw SQL and `sqlite3` edits are exported too. A row whose file disappears goes to `lore sync trash` first, so a `git clean` or a stash is always recoverable.
 
@@ -318,7 +318,7 @@ lore keeps a fast SQLite cache in `.lore/lore.db` (gitignored) and writes every 
 **Switches.** `LORE_SYNC=0` turns sync off (cache-only, as before). `LORE_SYNC_GIT=0` keeps the files but never touches git config, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` silences progress lines. `LORE_SYNC_ALLOW_SECRETS=1` exports flagged rows for one run.
 
 <!-- ds:block id=sync-hooklines-3282rwuw -->
-**Hooks.** lore chains a small marked block into the hooks directory git already uses (`.git/hooks`, or the one a hook manager such as husky owns via `core.hooksPath`); it never repoints `core.hooksPath` and never replaces your scripts. Every block is a no-op when lore is not installed, and the pre-commit block skips with an "upgrade it" note on a lore too old to have `sync hook`, so committed hooks never block a teammate who has not upgraded. The blocks are POSIX `sh`; on Windows, Git for Windows runs hooks and merge drivers through its bundled shell, so `lore.exe` only needs to be on `PATH`. Several lore projects in one repo (a monorepo) each get their own block.
+**Hooks.** lore chains a small marked block into the hooks directory git already uses (`.git/hooks`, or the one a hook manager such as husky owns via `core.hooksPath`); it never repoints `core.hooksPath` and never replaces your scripts. Every block is a no-op when lore is not installed, and the pre-commit block skips with an "upgrade it" note on a lore too old to have `sync hook`, so committed hooks never block a teammate who has not upgraded. The blocks are POSIX `sh`; on Windows, Git for Windows runs hooks and merge drivers through its bundled shell, so `lore.exe` only needs to be on `PATH`. Several lore projects in one repo (a monorepo) each get their own block. The `commit-msg` block adds a `Lore-Task:` trailer for the task you hold (so a squash merge is still recognised as finishing it) and runs the leak check (internal text pasted into a client repo is refused, see `lore check leaks`). The `post-commit` and `pre-push` blocks carry finished live rows onto a protected `main` (a `lore: land N rows` commit that rides along with your push); they are one block per repo and skip quietly on a lore too old to have `lore land`.
 
 ### Merges and pull requests
 

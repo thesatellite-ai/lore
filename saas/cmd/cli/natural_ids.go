@@ -36,6 +36,7 @@ type naturalIDSpec struct {
 var naturalIDSpecs = map[string]naturalIDSpec{
 	"Actor":           {table: "actors", prefix: ids.PrefixActor, fields: []string{"stable_key"}},
 	"Tag":             {table: "tags", prefix: ids.PrefixTag, fields: []string{"project_id", "name"}},
+	"Team":            {table: "teams", prefix: ids.PrefixTeam, fields: []string{"project_id", "handle"}},
 	"Repo":            {table: "repos", prefix: ids.PrefixRepo, fields: []string{"project_id", "mount_name"}},
 	"Prompt":          {table: "prompts", prefix: ids.PrefixPrompt, fields: []string{"project_id", "name"}},
 	"ProjectConfig":   {table: "project_configs", prefix: ids.PrefixProjectConfig, fields: []string{"project_id", "key"}},

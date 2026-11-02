@@ -152,6 +152,6 @@ const (
 const (
 	// ActorRefMe stands for the current CLI invoker's actor, resolved through
 	// the same identity chain every `add` command uses (--actor, LORE_ACTOR,
-	// ~/.lore/identity.toml, git config, ...).
+	// ~/.lore/identity.yaml, git config, ...).
 	ActorRefMe = "@me"
 )

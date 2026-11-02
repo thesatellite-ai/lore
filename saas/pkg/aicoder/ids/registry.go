@@ -81,6 +81,8 @@ const (
 	PrefixActivityArchive    = "aac"
 	PrefixCodeSymbol         = "csy"
 	PrefixCommitLink         = "cml"
+	// PrefixTeam: roster teams (LORE_TEAM_SPEC F18).
+	PrefixTeam = "tem"
 )
 
 // AllPrefixes lists every registered prefix. Used by ValidateAny and tests.
@@ -152,4 +154,5 @@ var AllPrefixes = []string{
 	PrefixActivityArchive,
 	PrefixCodeSymbol,
 	PrefixCommitLink,
+	PrefixTeam,
 }

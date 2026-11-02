@@ -214,6 +214,21 @@ func runRender(ctx context.Context, f *renderFlags) error {
 		fmt.Fprintln(os.Stderr, style.Warn("WARN: render_history write failed: "+err.Error()))
 	}
 
+	// Second target (F20, D9): internal, global and personal context goes
+	// to ~/.lore/render/<project-id>.md, outside the checkout, with only an
+	// import line in CLAUDE.local.md. The automatic re-render after a sync
+	// (quiet) leaves it to the next explicit `lore render`, so a plain
+	// command never reaches a store for it.
+	if !f.quiet {
+		root, err := os.Getwd()
+		if err != nil {
+			return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+		}
+		if err := renderInternal(ctx, root, f.quiet); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

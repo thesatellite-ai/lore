@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -146,6 +147,29 @@ func TestHookLines(t *testing.T) {
 	}
 }
 
+// commit-msg carries two lines from two features: the Lore-Task trailer
+// (F9, never fails a commit) and then the F16 leak check over the final
+// message (may refuse). Both must survive, in that order, at the top level
+// and in a monorepo sub-project.
+func TestHookLinesCommitMsgCarriesTrailerThenLeakCheck(t *testing.T) {
+	t.Parallel()
+	for _, rel := range []string{"", "services/api"} {
+		lines := hookLines(rel)[hookCommitMsg]
+		if len(lines) != 2 {
+			t.Fatalf("%q: commit-msg has %d lines, want trailer + leak check: %q", rel, len(lines), lines)
+		}
+		if !strings.Contains(lines[0], "task hook commit-msg") || !strings.HasSuffix(lines[0], "|| true") {
+			t.Fatalf("%q: first line must add the trailer and never fail: %s", rel, lines[0])
+		}
+		if !strings.Contains(lines[1], "check leaks --staged --commit-msg") || !strings.HasSuffix(lines[1], "|| exit $?") {
+			t.Fatalf("%q: second line must run the leak check and be able to refuse: %s", rel, lines[1])
+		}
+		if !strings.Contains(lines[1], BinaryName+" check leaks --help") {
+			t.Fatalf("%q: leak check must probe so an older lore never refuses a commit: %s", rel, lines[1])
+		}
+	}
+}
+
 func TestGitAttributeLines(t *testing.T) {
 	t.Parallel()
 	joined := strings.Join(gitAttributeLines, "\n")
@@ -216,9 +240,7 @@ func TestPreCommitLineAgainstOldAndNewLore(t *testing.T) {
 		{"current, accepts", "#!/bin/sh\nexit 0\n", 0, ""},
 	} {
 		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, BinaryName), []byte(tc.script), 0o755); err != nil {
-			t.Fatal(err)
-		}
+		writeExecutable(t, filepath.Join(dir, BinaryName), tc.script)
 		cmd := exec.Command("sh", "-c", line)
 		cmd.Env = []string{"PATH=" + dir + string(os.PathListSeparator) + "/usr/bin:/bin"}
 		var stderr strings.Builder
@@ -233,6 +255,22 @@ func TestPreCommitLineAgainstOldAndNewLore(t *testing.T) {
 		if code != tc.wantCode || !strings.Contains(stderr.String(), tc.wantStderr) {
 			t.Fatalf("%s: exit %d stderr %q", tc.name, code, stderr.String())
 		}
+	}
+}
+
+// writeExecutable writes a stand-in program that the test execs right away.
+// It holds syscall.ForkLock while the file is open for writing: a parallel
+// test that forks in that window would inherit the write descriptor until its
+// child execs, and exec'ing the script then fails with ETXTBSY ("text file
+// busy", exit 126). The hook's probe hides that stderr, so the failure read as
+// "lore too old" in a loaded full-suite run while the test passed alone.
+func writeExecutable(t *testing.T, path, script string) {
+	t.Helper()
+	syscall.ForkLock.RLock()
+	err := os.WriteFile(path, []byte(script), 0o755)
+	syscall.ForkLock.RUnlock()
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

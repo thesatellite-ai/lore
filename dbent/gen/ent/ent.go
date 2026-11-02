@@ -62,6 +62,7 @@ import (
 	"dbent/gen/ent/tasklist"
 	"dbent/gen/ent/taskview"
 	"dbent/gen/ent/tastepref"
+	"dbent/gen/ent/team"
 	"dbent/gen/ent/techdoc"
 	"dbent/gen/ent/techdocpage"
 	"dbent/gen/ent/trustedplugin"
@@ -194,6 +195,7 @@ func checkColumn(t, c string) error {
 			tasklist.Table:           tasklist.ValidColumn,
 			taskview.Table:           taskview.ValidColumn,
 			tastepref.Table:          tastepref.ValidColumn,
+			team.Table:               team.ValidColumn,
 			techdoc.Table:            techdoc.ValidColumn,
 			techdocpage.Table:        techdocpage.ValidColumn,
 			trustedplugin.Table:      trustedplugin.ValidColumn,

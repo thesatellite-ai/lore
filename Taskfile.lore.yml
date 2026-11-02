@@ -164,6 +164,40 @@ tasks:
       - go test -race ./saas/pkg/aicoder/lsync/... ./saas/pkg/aicoder/merge3/... ./saas/pkg/aicoder/canonjson/... ./saas/pkg/aicoder/gitsetup/... ./saas/pkg/aicoder/ids/...
       - go test ./saas/cmd/cli/...
 
+  test:team:
+    desc: "Team e2e suite (LORE_TEAM_SPEC.md): real binary, real git, many actors. Not built yet = PENDING (skip); LORE_TEAM_STRICT=1 fails pending tests, LORE_TEAM_FORCE=1 skips the capability probe. Extra go test flags after --"
+    cmds:
+      - testlock task lore:test:team:run -- {{.CLI_ARGS}}
+
+  test:team:run:
+    desc: "Body of lore:test:team WITHOUT the machine-wide test lock; call lore:test:team instead"
+    vars:
+      TEAM_BIN: "{{.BIN_DIR}}/lore-team"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      # loretest: the build tag under which the binary honours LORE_NOW (test clock).
+      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./saas/cmd/cli
+      # go test -json → pass / FAIL / pending matrix; exits 1 only on real failures
+      # (pipefail so a build failure of the test binary is not swallowed by the pipe).
+      - |
+        set -o pipefail
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
+          | go run ./saas/cmd/cli/internal/teamharness/matrix
+
+  test:team:race:
+    desc: "Team e2e race tests repeated (default -count=5; override: task lore:test:team:race -- -count=10)"
+    cmds:
+      - testlock task lore:test:team:race:run -- {{.CLI_ARGS}}
+
+  test:team:race:run:
+    desc: "Body of lore:test:team:race WITHOUT the machine-wide test lock; call lore:test:team:race instead"
+    vars:
+      TEAM_BIN: "{{.BIN_DIR}}/lore-team"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./saas/cmd/cli
+      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -run 'Race' -count=5 ./saas/cmd/cli/ {{.CLI_ARGS}}
+
   bench:sync:
     desc: "Sync performance: no-op pass, bootstrap and fresh-clone adopt at 1k/10k rows (numbers recorded in LORE_SYNC_SPEC.md)"
     cmds:
@@ -208,7 +242,23 @@ tasks:
   schema:gen:
     desc: "Regenerate ent code from schema (after editing dbent/schema/*.go)"
     cmds:
-      - cd dbent && go run ./cmd/entg .
+      # dbent/cmd/entg runs the entgql extension, which reads ../apidash/gqlgen.yml
+      # and writes ../apidash/internal/graph/schemas/ent.graphql. This repo has no
+      # apidash module, so when it is absent a throwaway one is created for the run
+      # and removed afterwards (also on failure). The gql_*.go files in dbent/gen
+      # come from the extension itself, not from that config.
+      - |
+        made=""
+        if [ ! -e apidash ]; then
+          made=1
+          mkdir -p apidash/internal/graph/schemas
+          printf 'schema:\n  - internal/graph/schemas/*.graphqls\n' > apidash/gqlgen.yml
+        fi
+        # task's shell has no reliable EXIT trap: capture the status, clean, re-raise.
+        rc=0
+        (cd dbent && go run ./cmd/entg .) || rc=$?
+        if [ -n "$made" ]; then rm -rf apidash; fi
+        exit $rc
 
   schema:migrate:
     desc: "Apply schema to SQLite DB"

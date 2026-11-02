@@ -503,7 +503,7 @@ func newBenchEvalDeleteCommand() *cobra.Command {
 	var confirm bool
 	cmd := &cobra.Command{
 		Use:   "delete <code-or-id>",
-		Short: "Permanently delete (refuses if any results reference it)",
+		Short: "Durably delete (refuses if any results reference it)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseIfReadOnly(&f); err != nil {

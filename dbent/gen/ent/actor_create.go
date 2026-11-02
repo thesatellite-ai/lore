@@ -70,6 +70,76 @@ func (_c *ActorCreate) SetStableKey(v string) *ActorCreate {
 	return _c
 }
 
+// SetOwnerActorID sets the "owner_actor_id" field.
+func (_c *ActorCreate) SetOwnerActorID(v string) *ActorCreate {
+	_c.mutation.SetOwnerActorID(v)
+	return _c
+}
+
+// SetNillableOwnerActorID sets the "owner_actor_id" field if the given value is not nil.
+func (_c *ActorCreate) SetNillableOwnerActorID(v *string) *ActorCreate {
+	if v != nil {
+		_c.SetOwnerActorID(*v)
+	}
+	return _c
+}
+
+// SetLabel sets the "label" field.
+func (_c *ActorCreate) SetLabel(v string) *ActorCreate {
+	_c.mutation.SetLabel(v)
+	return _c
+}
+
+// SetNillableLabel sets the "label" field if the given value is not nil.
+func (_c *ActorCreate) SetNillableLabel(v *string) *ActorCreate {
+	if v != nil {
+		_c.SetLabel(*v)
+	}
+	return _c
+}
+
+// SetHandle sets the "handle" field.
+func (_c *ActorCreate) SetHandle(v string) *ActorCreate {
+	_c.mutation.SetHandle(v)
+	return _c
+}
+
+// SetNillableHandle sets the "handle" field if the given value is not nil.
+func (_c *ActorCreate) SetNillableHandle(v *string) *ActorCreate {
+	if v != nil {
+		_c.SetHandle(*v)
+	}
+	return _c
+}
+
+// SetActive sets the "active" field.
+func (_c *ActorCreate) SetActive(v bool) *ActorCreate {
+	_c.mutation.SetActive(v)
+	return _c
+}
+
+// SetNillableActive sets the "active" field if the given value is not nil.
+func (_c *ActorCreate) SetNillableActive(v *bool) *ActorCreate {
+	if v != nil {
+		_c.SetActive(*v)
+	}
+	return _c
+}
+
+// SetLeftAt sets the "left_at" field.
+func (_c *ActorCreate) SetLeftAt(v time.Time) *ActorCreate {
+	_c.mutation.SetLeftAt(v)
+	return _c
+}
+
+// SetNillableLeftAt sets the "left_at" field if the given value is not nil.
+func (_c *ActorCreate) SetNillableLeftAt(v *time.Time) *ActorCreate {
+	if v != nil {
+		_c.SetLeftAt(*v)
+	}
+	return _c
+}
+
 // SetLastSeenAt sets the "last_seen_at" field.
 func (_c *ActorCreate) SetLastSeenAt(v time.Time) *ActorCreate {
 	_c.mutation.SetLastSeenAt(v)
@@ -171,6 +241,10 @@ func (_c *ActorCreate) defaults() {
 		v := actor.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.Active(); !ok {
+		v := actor.DefaultActive
+		_c.mutation.SetActive(v)
+	}
 	if _, ok := _c.mutation.LastSeenAt(); !ok {
 		v := actor.DefaultLastSeenAt()
 		_c.mutation.SetLastSeenAt(v)
@@ -212,6 +286,9 @@ func (_c *ActorCreate) check() error {
 		if err := actor.StableKeyValidator(v); err != nil {
 			return &ValidationError{Name: "stable_key", err: fmt.Errorf(`ent: validator failed for field "Actor.stable_key": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.Active(); !ok {
+		return &ValidationError{Name: "active", err: errors.New(`ent: missing required field "Actor.active"`)}
 	}
 	if _, ok := _c.mutation.LastSeenAt(); !ok {
 		return &ValidationError{Name: "last_seen_at", err: errors.New(`ent: missing required field "Actor.last_seen_at"`)}
@@ -276,6 +353,26 @@ func (_c *ActorCreate) createSpec() (*Actor, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.StableKey(); ok {
 		_spec.SetField(actor.FieldStableKey, field.TypeString, value)
 		_node.StableKey = value
+	}
+	if value, ok := _c.mutation.OwnerActorID(); ok {
+		_spec.SetField(actor.FieldOwnerActorID, field.TypeString, value)
+		_node.OwnerActorID = &value
+	}
+	if value, ok := _c.mutation.Label(); ok {
+		_spec.SetField(actor.FieldLabel, field.TypeString, value)
+		_node.Label = &value
+	}
+	if value, ok := _c.mutation.Handle(); ok {
+		_spec.SetField(actor.FieldHandle, field.TypeString, value)
+		_node.Handle = &value
+	}
+	if value, ok := _c.mutation.Active(); ok {
+		_spec.SetField(actor.FieldActive, field.TypeBool, value)
+		_node.Active = value
+	}
+	if value, ok := _c.mutation.LeftAt(); ok {
+		_spec.SetField(actor.FieldLeftAt, field.TypeTime, value)
+		_node.LeftAt = &value
 	}
 	if value, ok := _c.mutation.LastSeenAt(); ok {
 		_spec.SetField(actor.FieldLastSeenAt, field.TypeTime, value)
@@ -401,6 +498,90 @@ func (u *ActorUpsert) UpdateDisplayName() *ActorUpsert {
 	return u
 }
 
+// SetOwnerActorID sets the "owner_actor_id" field.
+func (u *ActorUpsert) SetOwnerActorID(v string) *ActorUpsert {
+	u.Set(actor.FieldOwnerActorID, v)
+	return u
+}
+
+// UpdateOwnerActorID sets the "owner_actor_id" field to the value that was provided on create.
+func (u *ActorUpsert) UpdateOwnerActorID() *ActorUpsert {
+	u.SetExcluded(actor.FieldOwnerActorID)
+	return u
+}
+
+// ClearOwnerActorID clears the value of the "owner_actor_id" field.
+func (u *ActorUpsert) ClearOwnerActorID() *ActorUpsert {
+	u.SetNull(actor.FieldOwnerActorID)
+	return u
+}
+
+// SetLabel sets the "label" field.
+func (u *ActorUpsert) SetLabel(v string) *ActorUpsert {
+	u.Set(actor.FieldLabel, v)
+	return u
+}
+
+// UpdateLabel sets the "label" field to the value that was provided on create.
+func (u *ActorUpsert) UpdateLabel() *ActorUpsert {
+	u.SetExcluded(actor.FieldLabel)
+	return u
+}
+
+// ClearLabel clears the value of the "label" field.
+func (u *ActorUpsert) ClearLabel() *ActorUpsert {
+	u.SetNull(actor.FieldLabel)
+	return u
+}
+
+// SetHandle sets the "handle" field.
+func (u *ActorUpsert) SetHandle(v string) *ActorUpsert {
+	u.Set(actor.FieldHandle, v)
+	return u
+}
+
+// UpdateHandle sets the "handle" field to the value that was provided on create.
+func (u *ActorUpsert) UpdateHandle() *ActorUpsert {
+	u.SetExcluded(actor.FieldHandle)
+	return u
+}
+
+// ClearHandle clears the value of the "handle" field.
+func (u *ActorUpsert) ClearHandle() *ActorUpsert {
+	u.SetNull(actor.FieldHandle)
+	return u
+}
+
+// SetActive sets the "active" field.
+func (u *ActorUpsert) SetActive(v bool) *ActorUpsert {
+	u.Set(actor.FieldActive, v)
+	return u
+}
+
+// UpdateActive sets the "active" field to the value that was provided on create.
+func (u *ActorUpsert) UpdateActive() *ActorUpsert {
+	u.SetExcluded(actor.FieldActive)
+	return u
+}
+
+// SetLeftAt sets the "left_at" field.
+func (u *ActorUpsert) SetLeftAt(v time.Time) *ActorUpsert {
+	u.Set(actor.FieldLeftAt, v)
+	return u
+}
+
+// UpdateLeftAt sets the "left_at" field to the value that was provided on create.
+func (u *ActorUpsert) UpdateLeftAt() *ActorUpsert {
+	u.SetExcluded(actor.FieldLeftAt)
+	return u
+}
+
+// ClearLeftAt clears the value of the "left_at" field.
+func (u *ActorUpsert) ClearLeftAt() *ActorUpsert {
+	u.SetNull(actor.FieldLeftAt)
+	return u
+}
+
 // SetLastSeenAt sets the "last_seen_at" field.
 func (u *ActorUpsert) SetLastSeenAt(v time.Time) *ActorUpsert {
 	u.Set(actor.FieldLastSeenAt, v)
@@ -506,6 +687,104 @@ func (u *ActorUpsertOne) SetDisplayName(v string) *ActorUpsertOne {
 func (u *ActorUpsertOne) UpdateDisplayName() *ActorUpsertOne {
 	return u.Update(func(s *ActorUpsert) {
 		s.UpdateDisplayName()
+	})
+}
+
+// SetOwnerActorID sets the "owner_actor_id" field.
+func (u *ActorUpsertOne) SetOwnerActorID(v string) *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetOwnerActorID(v)
+	})
+}
+
+// UpdateOwnerActorID sets the "owner_actor_id" field to the value that was provided on create.
+func (u *ActorUpsertOne) UpdateOwnerActorID() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateOwnerActorID()
+	})
+}
+
+// ClearOwnerActorID clears the value of the "owner_actor_id" field.
+func (u *ActorUpsertOne) ClearOwnerActorID() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.ClearOwnerActorID()
+	})
+}
+
+// SetLabel sets the "label" field.
+func (u *ActorUpsertOne) SetLabel(v string) *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetLabel(v)
+	})
+}
+
+// UpdateLabel sets the "label" field to the value that was provided on create.
+func (u *ActorUpsertOne) UpdateLabel() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateLabel()
+	})
+}
+
+// ClearLabel clears the value of the "label" field.
+func (u *ActorUpsertOne) ClearLabel() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.ClearLabel()
+	})
+}
+
+// SetHandle sets the "handle" field.
+func (u *ActorUpsertOne) SetHandle(v string) *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetHandle(v)
+	})
+}
+
+// UpdateHandle sets the "handle" field to the value that was provided on create.
+func (u *ActorUpsertOne) UpdateHandle() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateHandle()
+	})
+}
+
+// ClearHandle clears the value of the "handle" field.
+func (u *ActorUpsertOne) ClearHandle() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.ClearHandle()
+	})
+}
+
+// SetActive sets the "active" field.
+func (u *ActorUpsertOne) SetActive(v bool) *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetActive(v)
+	})
+}
+
+// UpdateActive sets the "active" field to the value that was provided on create.
+func (u *ActorUpsertOne) UpdateActive() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateActive()
+	})
+}
+
+// SetLeftAt sets the "left_at" field.
+func (u *ActorUpsertOne) SetLeftAt(v time.Time) *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetLeftAt(v)
+	})
+}
+
+// UpdateLeftAt sets the "left_at" field to the value that was provided on create.
+func (u *ActorUpsertOne) UpdateLeftAt() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateLeftAt()
+	})
+}
+
+// ClearLeftAt clears the value of the "left_at" field.
+func (u *ActorUpsertOne) ClearLeftAt() *ActorUpsertOne {
+	return u.Update(func(s *ActorUpsert) {
+		s.ClearLeftAt()
 	})
 }
 
@@ -783,6 +1062,104 @@ func (u *ActorUpsertBulk) SetDisplayName(v string) *ActorUpsertBulk {
 func (u *ActorUpsertBulk) UpdateDisplayName() *ActorUpsertBulk {
 	return u.Update(func(s *ActorUpsert) {
 		s.UpdateDisplayName()
+	})
+}
+
+// SetOwnerActorID sets the "owner_actor_id" field.
+func (u *ActorUpsertBulk) SetOwnerActorID(v string) *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetOwnerActorID(v)
+	})
+}
+
+// UpdateOwnerActorID sets the "owner_actor_id" field to the value that was provided on create.
+func (u *ActorUpsertBulk) UpdateOwnerActorID() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateOwnerActorID()
+	})
+}
+
+// ClearOwnerActorID clears the value of the "owner_actor_id" field.
+func (u *ActorUpsertBulk) ClearOwnerActorID() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.ClearOwnerActorID()
+	})
+}
+
+// SetLabel sets the "label" field.
+func (u *ActorUpsertBulk) SetLabel(v string) *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetLabel(v)
+	})
+}
+
+// UpdateLabel sets the "label" field to the value that was provided on create.
+func (u *ActorUpsertBulk) UpdateLabel() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateLabel()
+	})
+}
+
+// ClearLabel clears the value of the "label" field.
+func (u *ActorUpsertBulk) ClearLabel() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.ClearLabel()
+	})
+}
+
+// SetHandle sets the "handle" field.
+func (u *ActorUpsertBulk) SetHandle(v string) *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetHandle(v)
+	})
+}
+
+// UpdateHandle sets the "handle" field to the value that was provided on create.
+func (u *ActorUpsertBulk) UpdateHandle() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateHandle()
+	})
+}
+
+// ClearHandle clears the value of the "handle" field.
+func (u *ActorUpsertBulk) ClearHandle() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.ClearHandle()
+	})
+}
+
+// SetActive sets the "active" field.
+func (u *ActorUpsertBulk) SetActive(v bool) *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetActive(v)
+	})
+}
+
+// UpdateActive sets the "active" field to the value that was provided on create.
+func (u *ActorUpsertBulk) UpdateActive() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateActive()
+	})
+}
+
+// SetLeftAt sets the "left_at" field.
+func (u *ActorUpsertBulk) SetLeftAt(v time.Time) *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.SetLeftAt(v)
+	})
+}
+
+// UpdateLeftAt sets the "left_at" field to the value that was provided on create.
+func (u *ActorUpsertBulk) UpdateLeftAt() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.UpdateLeftAt()
+	})
+}
+
+// ClearLeftAt clears the value of the "left_at" field.
+func (u *ActorUpsertBulk) ClearLeftAt() *ActorUpsertBulk {
+	return u.Update(func(s *ActorUpsert) {
+		s.ClearLeftAt()
 	})
 }
 

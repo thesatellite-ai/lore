@@ -25,6 +25,8 @@ type Comment struct {
 	EntityTable string `json:"entity_table,omitempty"`
 	// EntityID holds the value of the "entity_id" field.
 	EntityID string `json:"entity_id,omitempty"`
+	// EntityProjectID holds the value of the "entity_project_id" field.
+	EntityProjectID *string `json:"entity_project_id,omitempty"`
 	// Body holds the value of the "body" field.
 	Body string `json:"body,omitempty"`
 	// CreatedByActorID holds the value of the "created_by_actor_id" field.
@@ -37,7 +39,7 @@ func (*Comment) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case comment.FieldID, comment.FieldEntityTable, comment.FieldEntityID, comment.FieldBody, comment.FieldCreatedByActorID:
+		case comment.FieldID, comment.FieldEntityTable, comment.FieldEntityID, comment.FieldEntityProjectID, comment.FieldBody, comment.FieldCreatedByActorID:
 			values[i] = new(sql.NullString)
 		case comment.FieldCreatedAt, comment.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -85,6 +87,13 @@ func (_m *Comment) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
 				_m.EntityID = value.String
+			}
+		case comment.FieldEntityProjectID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_project_id", values[i])
+			} else if value.Valid {
+				_m.EntityProjectID = new(string)
+				*_m.EntityProjectID = value.String
 			}
 		case comment.FieldBody:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -146,6 +155,11 @@ func (_m *Comment) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
 	builder.WriteString(_m.EntityID)
+	builder.WriteString(", ")
+	if v := _m.EntityProjectID; v != nil {
+		builder.WriteString("entity_project_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("body=")
 	builder.WriteString(_m.Body)

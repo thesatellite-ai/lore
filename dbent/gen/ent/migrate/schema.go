@@ -33,6 +33,11 @@ var (
 		{Name: "kind", Type: field.TypeEnum, Enums: []string{"human", "agent", "hook", "plugin", "cron", "system"}},
 		{Name: "display_name", Type: field.TypeString},
 		{Name: "stable_key", Type: field.TypeString, Unique: true},
+		{Name: "owner_actor_id", Type: field.TypeString, Nullable: true},
+		{Name: "label", Type: field.TypeString, Nullable: true},
+		{Name: "handle", Type: field.TypeString, Nullable: true},
+		{Name: "active", Type: field.TypeBool, Default: true},
+		{Name: "left_at", Type: field.TypeTime, Nullable: true},
 		{Name: "last_seen_at", Type: field.TypeTime},
 	}
 	// ActorsTable holds the schema information for the "actors" table.
@@ -45,6 +50,11 @@ var (
 				Name:    "actor_kind",
 				Unique:  false,
 				Columns: []*schema.Column{ActorsColumns[3]},
+			},
+			{
+				Name:    "actor_handle",
+				Unique:  false,
+				Columns: []*schema.Column{ActorsColumns[8]},
 			},
 		},
 	}
@@ -389,6 +399,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "entity_table", Type: field.TypeString},
 		{Name: "entity_id", Type: field.TypeString},
+		{Name: "entity_project_id", Type: field.TypeString, Nullable: true},
 		{Name: "body", Type: field.TypeString, Size: 2147483647},
 		{Name: "created_by_actor_id", Type: field.TypeString, Nullable: true},
 	}
@@ -606,12 +617,26 @@ var (
 		{Name: "to_actor_id", Type: field.TypeString, Nullable: true},
 		{Name: "body", Type: field.TypeString, Size: 2147483647},
 		{Name: "status_str", Type: field.TypeString},
+		{Name: "task_id", Type: field.TypeString, Nullable: true},
+		{Name: "mission_id", Type: field.TypeString, Nullable: true},
 	}
 	// HandoffsTable holds the schema information for the "handoffs" table.
 	HandoffsTable = &schema.Table{
 		Name:       "handoffs",
 		Columns:    HandoffsColumns,
 		PrimaryKey: []*schema.Column{HandoffsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "handoff_task_id",
+				Unique:  false,
+				Columns: []*schema.Column{HandoffsColumns[8]},
+			},
+			{
+				Name:    "handoff_mission_id",
+				Unique:  false,
+				Columns: []*schema.Column{HandoffsColumns[9]},
+			},
+		},
 	}
 	// HotfixesColumns holds the columns for the "hotfixes" table.
 	HotfixesColumns = []*schema.Column{
@@ -717,6 +742,7 @@ var (
 		{Name: "src_id", Type: field.TypeString},
 		{Name: "dst_table", Type: field.TypeString},
 		{Name: "dst_id", Type: field.TypeString},
+		{Name: "dst_project_id", Type: field.TypeString, Nullable: true},
 		{Name: "relation", Type: field.TypeString},
 		{Name: "confidence", Type: field.TypeEnum, Enums: []string{"extracted", "inferred", "ambiguous"}, Default: "extracted"},
 	}
@@ -934,6 +960,8 @@ var (
 		{Name: "target_date", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_by_actor_id", Type: field.TypeString, Nullable: true},
+		{Name: "approvers", Type: field.TypeJSON, Nullable: true},
+		{Name: "idempotency_key", Type: field.TypeString, Nullable: true},
 	}
 	// MissionsTable holds the schema information for the "missions" table.
 	MissionsTable = &schema.Table{
@@ -945,6 +973,11 @@ var (
 				Name:    "mission_project_id_status",
 				Unique:  false,
 				Columns: []*schema.Column{MissionsColumns[3], MissionsColumns[6]},
+			},
+			{
+				Name:    "mission_project_id_idempotency_key",
+				Unique:  false,
+				Columns: []*schema.Column{MissionsColumns[3], MissionsColumns[11]},
 			},
 		},
 	}
@@ -1506,6 +1539,23 @@ var (
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_by_actor_id", Type: field.TypeString, Nullable: true},
 		{Name: "assigned_to_actor_id", Type: field.TypeString, Nullable: true},
+		{Name: "assigned_team", Type: field.TypeString, Nullable: true},
+		{Name: "blocked_by", Type: field.TypeJSON, Nullable: true},
+		{Name: "claim_epoch", Type: field.TypeInt, Default: 0},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "claim_log", Type: field.TypeJSON, Nullable: true},
+		{Name: "timebox_seconds", Type: field.TypeInt64, Nullable: true},
+		{Name: "gate", Type: field.TypeEnum, Nullable: true, Enums: []string{"required", "requested", "approved"}},
+		{Name: "approved_by", Type: field.TypeString, Nullable: true},
+		{Name: "approved_at", Type: field.TypeTime, Nullable: true},
+		{Name: "approved_hash", Type: field.TypeString, Nullable: true},
+		{Name: "done_by", Type: field.TypeString, Nullable: true},
+		{Name: "done_commit", Type: field.TypeString, Nullable: true},
+		{Name: "done_pr", Type: field.TypeInt, Nullable: true},
+		{Name: "merged_at", Type: field.TypeTime, Nullable: true},
+		{Name: "work_branch", Type: field.TypeString, Nullable: true},
+		{Name: "idempotency_key", Type: field.TypeString, Nullable: true},
+		{Name: "role", Type: field.TypeString, Nullable: true},
 		{Name: "mission_id", Type: field.TypeString, Nullable: true},
 		{Name: "plan_id", Type: field.TypeString, Nullable: true},
 		{Name: "tasklist_id", Type: field.TypeString, Nullable: true},
@@ -1518,19 +1568,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "tasks_missions_tasks",
-				Columns:    []*schema.Column{TasksColumns[16]},
+				Columns:    []*schema.Column{TasksColumns[33]},
 				RefColumns: []*schema.Column{MissionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tasks_plans_tasks",
-				Columns:    []*schema.Column{TasksColumns[17]},
+				Columns:    []*schema.Column{TasksColumns[34]},
 				RefColumns: []*schema.Column{PlansColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tasks_task_lists_tasks",
-				Columns:    []*schema.Column{TasksColumns[18]},
+				Columns:    []*schema.Column{TasksColumns[35]},
 				RefColumns: []*schema.Column{TaskListsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1549,22 +1599,32 @@ var (
 			{
 				Name:    "task_mission_id",
 				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[16]},
+				Columns: []*schema.Column{TasksColumns[33]},
 			},
 			{
 				Name:    "task_tasklist_id",
 				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[18]},
+				Columns: []*schema.Column{TasksColumns[35]},
 			},
 			{
 				Name:    "task_plan_id",
 				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[17]},
+				Columns: []*schema.Column{TasksColumns[34]},
 			},
 			{
 				Name:    "task_due_at",
 				Unique:  false,
 				Columns: []*schema.Column{TasksColumns[11]},
+			},
+			{
+				Name:    "task_project_id_mission_id_idempotency_key",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[3], TasksColumns[33], TasksColumns[31]},
+			},
+			{
+				Name:    "task_assigned_team",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[16]},
 			},
 		},
 	}
@@ -1614,6 +1674,31 @@ var (
 		Name:       "taste_prefs",
 		Columns:    TastePrefsColumns,
 		PrimaryKey: []*schema.Column{TastePrefsColumns[0]},
+	}
+	// TeamsColumns holds the columns for the "teams" table.
+	TeamsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "project_id", Type: field.TypeString},
+		{Name: "handle", Type: field.TypeString},
+		{Name: "display_name", Type: field.TypeString, Nullable: true},
+		{Name: "member_actor_ids", Type: field.TypeJSON, Nullable: true},
+		{Name: "active", Type: field.TypeBool, Default: true},
+		{Name: "left_at", Type: field.TypeTime, Nullable: true},
+	}
+	// TeamsTable holds the schema information for the "teams" table.
+	TeamsTable = &schema.Table{
+		Name:       "teams",
+		Columns:    TeamsColumns,
+		PrimaryKey: []*schema.Column{TeamsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "team_project_id_handle",
+				Unique:  true,
+				Columns: []*schema.Column{TeamsColumns[3], TeamsColumns[4]},
+			},
+		},
 	}
 	// TechDocsColumns holds the columns for the "tech_docs" table.
 	TechDocsColumns = []*schema.Column{
@@ -1792,6 +1877,7 @@ var (
 		TaskListsTable,
 		TaskViewsTable,
 		TastePrefsTable,
+		TeamsTable,
 		TechDocsTable,
 		TechDocPagesTable,
 		TrustedPluginsTable,

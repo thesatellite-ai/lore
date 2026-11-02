@@ -98,6 +98,37 @@ var builtinPatterns = []Pattern{
 		Regex:   regexp.MustCompile(`-----BEGIN OPENSSH PRIVATE KEY-----`),
 		Builtin: true,
 	},
+	// LORE_TEAM_SPEC §6.5 / C20: the extended set, run on notes, handoffs,
+	// comments, live writes, signals, landing commits and commit messages.
+	{
+		// scheme://user:password@host — a database or broker URL with its
+		// password inline. A bare user@host (ssh) has no ":<secret>@".
+		Name:    "url_with_password",
+		Regex:   regexp.MustCompile(`\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@]+:[^\s/@]{3,}@[^\s/]+`),
+		Builtin: true,
+	},
+	{
+		Name:    "authorization_bearer",
+		Regex:   regexp.MustCompile(`(?i)\bauthorization\s*[:=]\s*bearer\s+[A-Za-z0-9._~+/=-]{12,}`),
+		Builtin: true,
+	},
+	{
+		// password=… / passwd: … / pwd=… with a literal value; placeholders
+		// (<…>, ${…}, ***) are not values.
+		Name:    "password_pair",
+		Regex:   regexp.MustCompile(`(?i)\b(?:password|passwd|pwd)\s*[=:]\s*["']?[^\s"'<>${}*]{6,}`),
+		Builtin: true,
+	},
+	{
+		Name:    "npm_token",
+		Regex:   regexp.MustCompile(`\bnpm_[A-Za-z0-9]{36}\b`),
+		Builtin: true,
+	},
+	{
+		Name:    "twilio_api_key",
+		Regex:   regexp.MustCompile(`\bSK[0-9a-fA-F]{32}\b`),
+		Builtin: true,
+	},
 }
 
 // Scanner holds the active set of patterns. Use NewScanner to construct.

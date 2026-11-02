@@ -186,7 +186,7 @@ cookbookrecipe  longer multi-step recipe      cookbookrecipe add --name="<n>" --
 tastepref       subjective preference         tastepref add "<text>"   (NOT memory — for "I prefer X" / "my taste is Y")
 suggestion      tentative idea, not committed suggestion add --title="<t>" --body="<b>"
 workspace       editor / IDE configuration    workspace add --name="<n>" --body="<spec>"
-handoff         session-to-session note       handoff add --to=<actor> --body="<context>"
+handoff         session-to-session note       handoff add --for @<handle> [--task <id>] "<context>"
 reminder        time-based, recurrence-aware  reminder add "<msg>" --due=YYYY-MM-DD [--recurrence=<dur>]
 tag             polymorphic label             tag attach --on-table=<plural> --on-id=<id> --name=<n>
                                               tag add --name=<n>     # pre-create standalone (no attachment yet)
@@ -330,7 +330,7 @@ T[export evals to YAML | dump eval set for git | save evals to disk]
                                           → lore bench eval export --to=bench/tasks/
 T[import evals from YAML | load eval set from disk]
                                           → lore bench eval import --from=bench/tasks/
-T[delete eval X permanently]              → lore bench eval delete X --confirm   (refuses if bench_result rows reference it)
+T[delete eval X durably]              → lore bench eval delete X --confirm   (refuses if bench_result rows reference it)
 T[show me eval E1-001 | inspect the grader for X]
                                           → lore bench eval show <code>
 T[regrade after fixing the grader]        → lore bench result regrade --run=<run>   (free; no LLM cost)

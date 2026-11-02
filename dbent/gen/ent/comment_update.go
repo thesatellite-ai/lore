@@ -63,6 +63,26 @@ func (_u *CommentUpdate) SetNillableEntityID(v *string) *CommentUpdate {
 	return _u
 }
 
+// SetEntityProjectID sets the "entity_project_id" field.
+func (_u *CommentUpdate) SetEntityProjectID(v string) *CommentUpdate {
+	_u.mutation.SetEntityProjectID(v)
+	return _u
+}
+
+// SetNillableEntityProjectID sets the "entity_project_id" field if the given value is not nil.
+func (_u *CommentUpdate) SetNillableEntityProjectID(v *string) *CommentUpdate {
+	if v != nil {
+		_u.SetEntityProjectID(*v)
+	}
+	return _u
+}
+
+// ClearEntityProjectID clears the value of the "entity_project_id" field.
+func (_u *CommentUpdate) ClearEntityProjectID() *CommentUpdate {
+	_u.mutation.ClearEntityProjectID()
+	return _u
+}
+
 // SetBody sets the "body" field.
 func (_u *CommentUpdate) SetBody(v string) *CommentUpdate {
 	_u.mutation.SetBody(v)
@@ -185,6 +205,12 @@ func (_u *CommentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(comment.FieldEntityID, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.EntityProjectID(); ok {
+		_spec.SetField(comment.FieldEntityProjectID, field.TypeString, value)
+	}
+	if _u.mutation.EntityProjectIDCleared() {
+		_spec.ClearField(comment.FieldEntityProjectID, field.TypeString)
+	}
 	if value, ok := _u.mutation.Body(); ok {
 		_spec.SetField(comment.FieldBody, field.TypeString, value)
 	}
@@ -247,6 +273,26 @@ func (_u *CommentUpdateOne) SetNillableEntityID(v *string) *CommentUpdateOne {
 	if v != nil {
 		_u.SetEntityID(*v)
 	}
+	return _u
+}
+
+// SetEntityProjectID sets the "entity_project_id" field.
+func (_u *CommentUpdateOne) SetEntityProjectID(v string) *CommentUpdateOne {
+	_u.mutation.SetEntityProjectID(v)
+	return _u
+}
+
+// SetNillableEntityProjectID sets the "entity_project_id" field if the given value is not nil.
+func (_u *CommentUpdateOne) SetNillableEntityProjectID(v *string) *CommentUpdateOne {
+	if v != nil {
+		_u.SetEntityProjectID(*v)
+	}
+	return _u
+}
+
+// ClearEntityProjectID clears the value of the "entity_project_id" field.
+func (_u *CommentUpdateOne) ClearEntityProjectID() *CommentUpdateOne {
+	_u.mutation.ClearEntityProjectID()
 	return _u
 }
 
@@ -401,6 +447,12 @@ func (_u *CommentUpdateOne) sqlSave(ctx context.Context) (_node *Comment, err er
 	}
 	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(comment.FieldEntityID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.EntityProjectID(); ok {
+		_spec.SetField(comment.FieldEntityProjectID, field.TypeString, value)
+	}
+	if _u.mutation.EntityProjectIDCleared() {
+		_spec.ClearField(comment.FieldEntityProjectID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Body(); ok {
 		_spec.SetField(comment.FieldBody, field.TypeString, value)

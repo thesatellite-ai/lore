@@ -31,7 +31,6 @@ import (
 	"dbent"
 	"saas/pkg/aicoder/audit"
 	"saas/pkg/aicoder/gitsetup"
-	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/security"
@@ -121,6 +120,9 @@ func preCommandSync(ctx context.Context, rctx *projresolve.Context, db *sql.DB) 
 	}
 	s.wroteFiles = s.wroteFiles || len(rep.Exported)+len(rep.Removed) > 0
 	printSyncReport(rep)
+	// Live rows: store what the pass diverted, then make lore.db show the
+	// live version of every live row (live wins, F1).
+	liveStoreAndApply(ctx, db, root, rep.Diverted)
 }
 
 // finishSyncSessions runs the end-of-command pass for every project the
@@ -128,7 +130,7 @@ func preCommandSync(ctx context.Context, rctx *projresolve.Context, db *sql.DB) 
 // changes arrived, and reminds the user about uncommitted lore files.
 // Called from main after the command returns (success or failure: a
 // failed command may still have written rows).
-func finishSyncSessions(ctx context.Context) {
+func finishSyncSessions(ctx context.Context) error {
 	for _, s := range syncSessions {
 		db := dbent.InitDB(s.dbPath)
 		if err := dbent.ApplyPragmas(db); err != nil {
@@ -148,6 +150,8 @@ func finishSyncSessions(ctx context.Context) {
 		}
 		printSyncReport(rep)
 		s.wroteFiles = s.wroteFiles || len(rep.Exported)+len(rep.Removed) > 0
+		liveStoreAndApply(ctx, db, s.root, rep.Diverted)
+		liveFinishProject(ctx, db, s.root)
 		rerenderIfDue(ctx, db, s.root)
 		// Read-only commands never write: the wiring changes hooks, config,
 		// .gitattributes, .gitignore and the workflow file.
@@ -159,6 +163,7 @@ func finishSyncSessions(ctx context.Context) {
 		}
 		_ = db.Close() // finished with it; close errors are not actionable
 	}
+	return finishLive(ctx)
 }
 
 // runSyncPass runs one pass that exports the running command's own writes
@@ -185,6 +190,9 @@ func syncOptions(db *sql.DB, root, dataDir string, kind lsync.ChangeKind) lsync.
 		OnChange:     auditChange,
 	}
 	o.CheckSecrets = secretCheck()
+	// Rows the write router places on the live ref are handed back by the
+	// pass instead of written to .lore/data (live_wire.go).
+	o.Divert = liveDivertFor(context.Background(), db, root)
 	return o
 }
 
@@ -300,7 +308,7 @@ func needsMaterialize(root string) bool {
 	if !lsync.MetaExists(filepath.Join(marker, lsync.DataDirName)) {
 		return false
 	}
-	for _, f := range []string{projresolve.ModeAFile, projresolve.ModeBFile} {
+	for _, f := range projresolve.ProjectMarkerFiles() {
 		if _, err := os.Lstat(filepath.Join(marker, f)); err == nil {
 			return false
 		}
@@ -443,12 +451,31 @@ func hookLines(projectRel string) map[string][]string {
 	// for the command keeps their commits working; they get a note instead.
 	probe := BinaryName + " sync hook --help >/dev/null 2>&1"
 	tooOld := `echo "` + BinaryName + `: installed ` + BinaryName + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`
-	return map[string][]string{
+	// post-commit and pre-push carry live rows to a protected main (F6).
+	// They are repo-wide (one ride-along commit covers every project of a
+	// monorepo), so their block has one marker per repo (liveHookMarker)
+	// and no cd: git runs hooks at the top level. A lore too old to know the
+	// hook names must not refuse a push, so both probe first.
+	rideProbe := BinaryName + " land --help >/dev/null 2>&1"
+	hooks := map[string][]string{
 		"pre-commit":    {"( " + cd + "if command -v " + BinaryName + " >/dev/null 2>&1; then if " + probe + "; then " + BinaryName + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"},
 		"post-checkout": refresh,
 		"post-merge":    refresh,
 		"post-rewrite":  refresh,
 	}
+	// commit-msg (C8): the Lore-Task: trailer (F9; lore-signals' handler,
+	// never fails a commit). git passes the message file relative to the
+	// top level, so it is made absolute before the project cd.
+	// Then the F16 leak check on the final message (may refuse; probed).
+	// One slice for both: a second assignment would drop a line.
+	absMsg := `m="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; `
+	hooks[hookCommitMsg] = []string{
+		"( " + absMsg + cd + guard + BinaryName + ` task hook commit-msg "$m" >/dev/null 2>&1 ) || true`,
+		"( " + absMsg + cd + "if command -v " + BinaryName + " >/dev/null 2>&1 && " + BinaryName + " check leaks --help >/dev/null 2>&1; then " + BinaryName + ` check leaks --staged --commit-msg "$m"; fi ) || exit $?`,
+	}
+	hooks[hookPostCommit] = []string{"( " + guard + rideProbe + " && " + BinaryName + " sync hook post-commit ) || true"}
+	hooks[hookPrePush] = []string{"if command -v " + BinaryName + " >/dev/null 2>&1 && " + rideProbe + "; then " + BinaryName + ` sync hook pre-push "$@" || exit $?; fi`}
+	return hooks
 }
 
 // projectRelPath returns dir relative to the repository's top level, slash
@@ -470,6 +497,13 @@ func projectRelPath(toplevel, dir string) string {
 	}
 	return filepath.ToSlash(rel)
 }
+
+// hookCommitMsg is git's commit-msg hook.
+const hookCommitMsg = "commit-msg"
+
+// liveHookMarker names the repo-wide live block in post-commit and
+// pre-push (one per repo whatever the number of lore projects in it).
+const liveHookMarker = gitBlockMarker + ":live"
 
 // isRepoRoot reports whether a project path relative to the repository's
 // top level names the top level itself ("" from a failed Rel, "." from a
@@ -538,7 +572,11 @@ func ensureGitWiring(ctx context.Context, root string) (gitWiringResult, error) 
 	}
 	rel := projectRelPath(repo.Toplevel, root)
 	for hook, lines := range hookLines(rel) {
-		ch, err := gitsetup.EnsureHookBlock(repo.HooksDir, hook, hookMarker(rel), lines)
+		marker := hookMarker(rel)
+		if hook == hookPostCommit || hook == hookPrePush {
+			marker = liveHookMarker
+		}
+		ch, err := gitsetup.EnsureHookBlock(repo.HooksDir, hook, marker, lines)
 		if err != nil {
 			return res, err
 		}
@@ -796,7 +834,7 @@ func currentAuditActor(ctx context.Context, q lsync.Execer) string {
 	if auditActor != "" {
 		return auditActor
 	}
-	key := identity.Resolve(identity.Inputs{}).StableKey
+	key := identityBestEffort(ctx).StableKey
 	var id string
 	if err := q.QueryRowContext(ctx, `SELECT id FROM actors WHERE stable_key = ?`, key).Scan(&id); err == nil && id != "" {
 		auditActor = id

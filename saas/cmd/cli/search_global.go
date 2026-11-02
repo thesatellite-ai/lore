@@ -206,18 +206,34 @@ you want to scope to one type. This is the cross-entity hammer.`,
 			// per entity (single batch per entity)
 			hydrateGlobalHits(cmd.Context(), client, merged)
 
+			// Rows outside this checkout (linked store projects, global,
+			// personal; F20) are matched as plain text and listed after the
+			// repo's hits, each with its source label.
+			extText := plainSearchText(query)
 			if jsonOut {
 				printJSON(constants.KindSearchGlobal, map[string]any{
-					"query": query,
-					"count": len(merged),
-					"hits":  merged,
+					"query":    query,
+					"count":    len(merged),
+					"hits":     merged,
+					"external": externalJSONRows(cmd.Context(), "", extText),
 				}, len(merged))
 				return nil
 			}
 			if len(merged) == 0 {
+				var ext strings.Builder
+				if printExternalRows(cmd.Context(), &ext, "", extText) > 0 {
+					fmt.Printf("No hits in this repo; outside this checkout:\n\n%s", ext.String())
+					return nil
+				}
 				fmt.Println(style.Muted("(no matches)"))
 				return nil
 			}
+			defer func() {
+				var ext strings.Builder
+				if printExternalRows(cmd.Context(), &ext, "", extText) > 0 {
+					fmt.Printf("\nOutside this checkout:\n\n%s", ext.String())
+				}
+			}()
 			fmt.Printf("Found %d hits for %q across %d entity types:\n\n", len(merged), query, len(perTable))
 			for _, h := range merged {
 				kindTag := fmt.Sprintf("[%-10s]", h.Entity)
@@ -247,6 +263,21 @@ you want to scope to one type. This is the cross-entity hammer.`,
 	cmd.Flags().BoolVar(&masterOnly, constants.FlagMasterOnly, false, "only master-scoped rows")
 	cmd.Flags().BoolVar(&noInherit, constants.FlagNoInherit, false, "strict scope (reserved)")
 	return cmd
+}
+
+// plainSearchText turns an FTS5 query into the plain text matched against
+// rows outside the checkout: operators, quotes and wildcards dropped.
+func plainSearchText(q string) string {
+	r := strings.NewReplacer(`"`, " ", "*", " ", "(", " ", ")", " ")
+	var words []string
+	for _, w := range strings.Fields(r.Replace(q)) {
+		switch w {
+		case "AND", "OR", "NOT", "NEAR":
+			continue
+		}
+		words = append(words, w)
+	}
+	return strings.Join(words, " ")
 }
 
 // hydrateGlobalHits fetches per-entity rows by ID to fill id,

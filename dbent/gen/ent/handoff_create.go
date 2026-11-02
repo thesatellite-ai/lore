@@ -97,6 +97,34 @@ func (_c *HandoffCreate) SetStatusStr(v string) *HandoffCreate {
 	return _c
 }
 
+// SetTaskID sets the "task_id" field.
+func (_c *HandoffCreate) SetTaskID(v string) *HandoffCreate {
+	_c.mutation.SetTaskID(v)
+	return _c
+}
+
+// SetNillableTaskID sets the "task_id" field if the given value is not nil.
+func (_c *HandoffCreate) SetNillableTaskID(v *string) *HandoffCreate {
+	if v != nil {
+		_c.SetTaskID(*v)
+	}
+	return _c
+}
+
+// SetMissionID sets the "mission_id" field.
+func (_c *HandoffCreate) SetMissionID(v string) *HandoffCreate {
+	_c.mutation.SetMissionID(v)
+	return _c
+}
+
+// SetNillableMissionID sets the "mission_id" field if the given value is not nil.
+func (_c *HandoffCreate) SetNillableMissionID(v *string) *HandoffCreate {
+	if v != nil {
+		_c.SetMissionID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *HandoffCreate) SetID(v string) *HandoffCreate {
 	_c.mutation.SetID(v)
@@ -271,6 +299,14 @@ func (_c *HandoffCreate) createSpec() (*Handoff, *sqlgraph.CreateSpec) {
 		_spec.SetField(handoff.FieldStatusStr, field.TypeString, value)
 		_node.StatusStr = value
 	}
+	if value, ok := _c.mutation.TaskID(); ok {
+		_spec.SetField(handoff.FieldTaskID, field.TypeString, value)
+		_node.TaskID = &value
+	}
+	if value, ok := _c.mutation.MissionID(); ok {
+		_spec.SetField(handoff.FieldMissionID, field.TypeString, value)
+		_node.MissionID = &value
+	}
 	return _node, _spec
 }
 
@@ -392,6 +428,42 @@ func (u *HandoffUpsert) SetStatusStr(v string) *HandoffUpsert {
 // UpdateStatusStr sets the "status_str" field to the value that was provided on create.
 func (u *HandoffUpsert) UpdateStatusStr() *HandoffUpsert {
 	u.SetExcluded(handoff.FieldStatusStr)
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *HandoffUpsert) SetTaskID(v string) *HandoffUpsert {
+	u.Set(handoff.FieldTaskID, v)
+	return u
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *HandoffUpsert) UpdateTaskID() *HandoffUpsert {
+	u.SetExcluded(handoff.FieldTaskID)
+	return u
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *HandoffUpsert) ClearTaskID() *HandoffUpsert {
+	u.SetNull(handoff.FieldTaskID)
+	return u
+}
+
+// SetMissionID sets the "mission_id" field.
+func (u *HandoffUpsert) SetMissionID(v string) *HandoffUpsert {
+	u.Set(handoff.FieldMissionID, v)
+	return u
+}
+
+// UpdateMissionID sets the "mission_id" field to the value that was provided on create.
+func (u *HandoffUpsert) UpdateMissionID() *HandoffUpsert {
+	u.SetExcluded(handoff.FieldMissionID)
+	return u
+}
+
+// ClearMissionID clears the value of the "mission_id" field.
+func (u *HandoffUpsert) ClearMissionID() *HandoffUpsert {
+	u.SetNull(handoff.FieldMissionID)
 	return u
 }
 
@@ -530,6 +602,48 @@ func (u *HandoffUpsertOne) SetStatusStr(v string) *HandoffUpsertOne {
 func (u *HandoffUpsertOne) UpdateStatusStr() *HandoffUpsertOne {
 	return u.Update(func(s *HandoffUpsert) {
 		s.UpdateStatusStr()
+	})
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *HandoffUpsertOne) SetTaskID(v string) *HandoffUpsertOne {
+	return u.Update(func(s *HandoffUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *HandoffUpsertOne) UpdateTaskID() *HandoffUpsertOne {
+	return u.Update(func(s *HandoffUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *HandoffUpsertOne) ClearTaskID() *HandoffUpsertOne {
+	return u.Update(func(s *HandoffUpsert) {
+		s.ClearTaskID()
+	})
+}
+
+// SetMissionID sets the "mission_id" field.
+func (u *HandoffUpsertOne) SetMissionID(v string) *HandoffUpsertOne {
+	return u.Update(func(s *HandoffUpsert) {
+		s.SetMissionID(v)
+	})
+}
+
+// UpdateMissionID sets the "mission_id" field to the value that was provided on create.
+func (u *HandoffUpsertOne) UpdateMissionID() *HandoffUpsertOne {
+	return u.Update(func(s *HandoffUpsert) {
+		s.UpdateMissionID()
+	})
+}
+
+// ClearMissionID clears the value of the "mission_id" field.
+func (u *HandoffUpsertOne) ClearMissionID() *HandoffUpsertOne {
+	return u.Update(func(s *HandoffUpsert) {
+		s.ClearMissionID()
 	})
 }
 
@@ -835,6 +949,48 @@ func (u *HandoffUpsertBulk) SetStatusStr(v string) *HandoffUpsertBulk {
 func (u *HandoffUpsertBulk) UpdateStatusStr() *HandoffUpsertBulk {
 	return u.Update(func(s *HandoffUpsert) {
 		s.UpdateStatusStr()
+	})
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *HandoffUpsertBulk) SetTaskID(v string) *HandoffUpsertBulk {
+	return u.Update(func(s *HandoffUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *HandoffUpsertBulk) UpdateTaskID() *HandoffUpsertBulk {
+	return u.Update(func(s *HandoffUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *HandoffUpsertBulk) ClearTaskID() *HandoffUpsertBulk {
+	return u.Update(func(s *HandoffUpsert) {
+		s.ClearTaskID()
+	})
+}
+
+// SetMissionID sets the "mission_id" field.
+func (u *HandoffUpsertBulk) SetMissionID(v string) *HandoffUpsertBulk {
+	return u.Update(func(s *HandoffUpsert) {
+		s.SetMissionID(v)
+	})
+}
+
+// UpdateMissionID sets the "mission_id" field to the value that was provided on create.
+func (u *HandoffUpsertBulk) UpdateMissionID() *HandoffUpsertBulk {
+	return u.Update(func(s *HandoffUpsert) {
+		s.UpdateMissionID()
+	})
+}
+
+// ClearMissionID clears the value of the "mission_id" field.
+func (u *HandoffUpsertBulk) ClearMissionID() *HandoffUpsertBulk {
+	return u.Update(func(s *HandoffUpsert) {
+		s.ClearMissionID()
 	})
 }
 

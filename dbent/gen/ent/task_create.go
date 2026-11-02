@@ -8,6 +8,7 @@ import (
 	"dbent/gen/ent/plan"
 	"dbent/gen/ent/task"
 	"dbent/gen/ent/tasklist"
+	"dbent/schema"
 	"errors"
 	"fmt"
 	"time"
@@ -262,6 +263,228 @@ func (_c *TaskCreate) SetNillableAssignedToActorID(v *string) *TaskCreate {
 	return _c
 }
 
+// SetAssignedTeam sets the "assigned_team" field.
+func (_c *TaskCreate) SetAssignedTeam(v string) *TaskCreate {
+	_c.mutation.SetAssignedTeam(v)
+	return _c
+}
+
+// SetNillableAssignedTeam sets the "assigned_team" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableAssignedTeam(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetAssignedTeam(*v)
+	}
+	return _c
+}
+
+// SetBlockedBy sets the "blocked_by" field.
+func (_c *TaskCreate) SetBlockedBy(v []schema.TaskDependency) *TaskCreate {
+	_c.mutation.SetBlockedBy(v)
+	return _c
+}
+
+// SetClaimEpoch sets the "claim_epoch" field.
+func (_c *TaskCreate) SetClaimEpoch(v int) *TaskCreate {
+	_c.mutation.SetClaimEpoch(v)
+	return _c
+}
+
+// SetNillableClaimEpoch sets the "claim_epoch" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableClaimEpoch(v *int) *TaskCreate {
+	if v != nil {
+		_c.SetClaimEpoch(*v)
+	}
+	return _c
+}
+
+// SetAttempts sets the "attempts" field.
+func (_c *TaskCreate) SetAttempts(v int) *TaskCreate {
+	_c.mutation.SetAttempts(v)
+	return _c
+}
+
+// SetNillableAttempts sets the "attempts" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableAttempts(v *int) *TaskCreate {
+	if v != nil {
+		_c.SetAttempts(*v)
+	}
+	return _c
+}
+
+// SetClaimLog sets the "claim_log" field.
+func (_c *TaskCreate) SetClaimLog(v []schema.ClaimLogEntry) *TaskCreate {
+	_c.mutation.SetClaimLog(v)
+	return _c
+}
+
+// SetTimeboxSeconds sets the "timebox_seconds" field.
+func (_c *TaskCreate) SetTimeboxSeconds(v int64) *TaskCreate {
+	_c.mutation.SetTimeboxSeconds(v)
+	return _c
+}
+
+// SetNillableTimeboxSeconds sets the "timebox_seconds" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableTimeboxSeconds(v *int64) *TaskCreate {
+	if v != nil {
+		_c.SetTimeboxSeconds(*v)
+	}
+	return _c
+}
+
+// SetGate sets the "gate" field.
+func (_c *TaskCreate) SetGate(v task.Gate) *TaskCreate {
+	_c.mutation.SetGate(v)
+	return _c
+}
+
+// SetNillableGate sets the "gate" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableGate(v *task.Gate) *TaskCreate {
+	if v != nil {
+		_c.SetGate(*v)
+	}
+	return _c
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (_c *TaskCreate) SetApprovedBy(v string) *TaskCreate {
+	_c.mutation.SetApprovedBy(v)
+	return _c
+}
+
+// SetNillableApprovedBy sets the "approved_by" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableApprovedBy(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetApprovedBy(*v)
+	}
+	return _c
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (_c *TaskCreate) SetApprovedAt(v time.Time) *TaskCreate {
+	_c.mutation.SetApprovedAt(v)
+	return _c
+}
+
+// SetNillableApprovedAt sets the "approved_at" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableApprovedAt(v *time.Time) *TaskCreate {
+	if v != nil {
+		_c.SetApprovedAt(*v)
+	}
+	return _c
+}
+
+// SetApprovedHash sets the "approved_hash" field.
+func (_c *TaskCreate) SetApprovedHash(v string) *TaskCreate {
+	_c.mutation.SetApprovedHash(v)
+	return _c
+}
+
+// SetNillableApprovedHash sets the "approved_hash" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableApprovedHash(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetApprovedHash(*v)
+	}
+	return _c
+}
+
+// SetDoneBy sets the "done_by" field.
+func (_c *TaskCreate) SetDoneBy(v string) *TaskCreate {
+	_c.mutation.SetDoneBy(v)
+	return _c
+}
+
+// SetNillableDoneBy sets the "done_by" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableDoneBy(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetDoneBy(*v)
+	}
+	return _c
+}
+
+// SetDoneCommit sets the "done_commit" field.
+func (_c *TaskCreate) SetDoneCommit(v string) *TaskCreate {
+	_c.mutation.SetDoneCommit(v)
+	return _c
+}
+
+// SetNillableDoneCommit sets the "done_commit" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableDoneCommit(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetDoneCommit(*v)
+	}
+	return _c
+}
+
+// SetDonePr sets the "done_pr" field.
+func (_c *TaskCreate) SetDonePr(v int) *TaskCreate {
+	_c.mutation.SetDonePr(v)
+	return _c
+}
+
+// SetNillableDonePr sets the "done_pr" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableDonePr(v *int) *TaskCreate {
+	if v != nil {
+		_c.SetDonePr(*v)
+	}
+	return _c
+}
+
+// SetMergedAt sets the "merged_at" field.
+func (_c *TaskCreate) SetMergedAt(v time.Time) *TaskCreate {
+	_c.mutation.SetMergedAt(v)
+	return _c
+}
+
+// SetNillableMergedAt sets the "merged_at" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableMergedAt(v *time.Time) *TaskCreate {
+	if v != nil {
+		_c.SetMergedAt(*v)
+	}
+	return _c
+}
+
+// SetWorkBranch sets the "work_branch" field.
+func (_c *TaskCreate) SetWorkBranch(v string) *TaskCreate {
+	_c.mutation.SetWorkBranch(v)
+	return _c
+}
+
+// SetNillableWorkBranch sets the "work_branch" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableWorkBranch(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetWorkBranch(*v)
+	}
+	return _c
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (_c *TaskCreate) SetIdempotencyKey(v string) *TaskCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableIdempotencyKey(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetIdempotencyKey(*v)
+	}
+	return _c
+}
+
+// SetRole sets the "role" field.
+func (_c *TaskCreate) SetRole(v string) *TaskCreate {
+	_c.mutation.SetRole(v)
+	return _c
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableRole(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetRole(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *TaskCreate) SetID(v string) *TaskCreate {
 	_c.mutation.SetID(v)
@@ -346,6 +569,14 @@ func (_c *TaskCreate) defaults() {
 		v := task.DefaultCommitment
 		_c.mutation.SetCommitment(v)
 	}
+	if _, ok := _c.mutation.ClaimEpoch(); !ok {
+		v := task.DefaultClaimEpoch
+		_c.mutation.SetClaimEpoch(v)
+	}
+	if _, ok := _c.mutation.Attempts(); !ok {
+		v := task.DefaultAttempts
+		_c.mutation.SetAttempts(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := task.DefaultID()
 		_c.mutation.SetID(v)
@@ -398,6 +629,37 @@ func (_c *TaskCreate) check() error {
 	if v, ok := _c.mutation.Commitment(); ok {
 		if err := task.CommitmentValidator(v); err != nil {
 			return &ValidationError{Name: "commitment", err: fmt.Errorf(`ent: validator failed for field "Task.commitment": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ClaimEpoch(); !ok {
+		return &ValidationError{Name: "claim_epoch", err: errors.New(`ent: missing required field "Task.claim_epoch"`)}
+	}
+	if v, ok := _c.mutation.ClaimEpoch(); ok {
+		if err := task.ClaimEpochValidator(v); err != nil {
+			return &ValidationError{Name: "claim_epoch", err: fmt.Errorf(`ent: validator failed for field "Task.claim_epoch": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Attempts(); !ok {
+		return &ValidationError{Name: "attempts", err: errors.New(`ent: missing required field "Task.attempts"`)}
+	}
+	if v, ok := _c.mutation.Attempts(); ok {
+		if err := task.AttemptsValidator(v); err != nil {
+			return &ValidationError{Name: "attempts", err: fmt.Errorf(`ent: validator failed for field "Task.attempts": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.TimeboxSeconds(); ok {
+		if err := task.TimeboxSecondsValidator(v); err != nil {
+			return &ValidationError{Name: "timebox_seconds", err: fmt.Errorf(`ent: validator failed for field "Task.timebox_seconds": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.Gate(); ok {
+		if err := task.GateValidator(v); err != nil {
+			return &ValidationError{Name: "gate", err: fmt.Errorf(`ent: validator failed for field "Task.gate": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.DonePr(); ok {
+		if err := task.DonePrValidator(v); err != nil {
+			return &ValidationError{Name: "done_pr", err: fmt.Errorf(`ent: validator failed for field "Task.done_pr": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.ID(); ok {
@@ -500,6 +762,74 @@ func (_c *TaskCreate) createSpec() (*Task, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AssignedToActorID(); ok {
 		_spec.SetField(task.FieldAssignedToActorID, field.TypeString, value)
 		_node.AssignedToActorID = &value
+	}
+	if value, ok := _c.mutation.AssignedTeam(); ok {
+		_spec.SetField(task.FieldAssignedTeam, field.TypeString, value)
+		_node.AssignedTeam = &value
+	}
+	if value, ok := _c.mutation.BlockedBy(); ok {
+		_spec.SetField(task.FieldBlockedBy, field.TypeJSON, value)
+		_node.BlockedBy = value
+	}
+	if value, ok := _c.mutation.ClaimEpoch(); ok {
+		_spec.SetField(task.FieldClaimEpoch, field.TypeInt, value)
+		_node.ClaimEpoch = value
+	}
+	if value, ok := _c.mutation.Attempts(); ok {
+		_spec.SetField(task.FieldAttempts, field.TypeInt, value)
+		_node.Attempts = value
+	}
+	if value, ok := _c.mutation.ClaimLog(); ok {
+		_spec.SetField(task.FieldClaimLog, field.TypeJSON, value)
+		_node.ClaimLog = value
+	}
+	if value, ok := _c.mutation.TimeboxSeconds(); ok {
+		_spec.SetField(task.FieldTimeboxSeconds, field.TypeInt64, value)
+		_node.TimeboxSeconds = &value
+	}
+	if value, ok := _c.mutation.Gate(); ok {
+		_spec.SetField(task.FieldGate, field.TypeEnum, value)
+		_node.Gate = &value
+	}
+	if value, ok := _c.mutation.ApprovedBy(); ok {
+		_spec.SetField(task.FieldApprovedBy, field.TypeString, value)
+		_node.ApprovedBy = &value
+	}
+	if value, ok := _c.mutation.ApprovedAt(); ok {
+		_spec.SetField(task.FieldApprovedAt, field.TypeTime, value)
+		_node.ApprovedAt = &value
+	}
+	if value, ok := _c.mutation.ApprovedHash(); ok {
+		_spec.SetField(task.FieldApprovedHash, field.TypeString, value)
+		_node.ApprovedHash = &value
+	}
+	if value, ok := _c.mutation.DoneBy(); ok {
+		_spec.SetField(task.FieldDoneBy, field.TypeString, value)
+		_node.DoneBy = &value
+	}
+	if value, ok := _c.mutation.DoneCommit(); ok {
+		_spec.SetField(task.FieldDoneCommit, field.TypeString, value)
+		_node.DoneCommit = &value
+	}
+	if value, ok := _c.mutation.DonePr(); ok {
+		_spec.SetField(task.FieldDonePr, field.TypeInt, value)
+		_node.DonePr = &value
+	}
+	if value, ok := _c.mutation.MergedAt(); ok {
+		_spec.SetField(task.FieldMergedAt, field.TypeTime, value)
+		_node.MergedAt = &value
+	}
+	if value, ok := _c.mutation.WorkBranch(); ok {
+		_spec.SetField(task.FieldWorkBranch, field.TypeString, value)
+		_node.WorkBranch = &value
+	}
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
+		_spec.SetField(task.FieldIdempotencyKey, field.TypeString, value)
+		_node.IdempotencyKey = &value
+	}
+	if value, ok := _c.mutation.Role(); ok {
+		_spec.SetField(task.FieldRole, field.TypeString, value)
+		_node.Role = &value
 	}
 	if nodes := _c.mutation.MissionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -862,6 +1192,324 @@ func (u *TaskUpsert) ClearAssignedToActorID() *TaskUpsert {
 	return u
 }
 
+// SetAssignedTeam sets the "assigned_team" field.
+func (u *TaskUpsert) SetAssignedTeam(v string) *TaskUpsert {
+	u.Set(task.FieldAssignedTeam, v)
+	return u
+}
+
+// UpdateAssignedTeam sets the "assigned_team" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateAssignedTeam() *TaskUpsert {
+	u.SetExcluded(task.FieldAssignedTeam)
+	return u
+}
+
+// ClearAssignedTeam clears the value of the "assigned_team" field.
+func (u *TaskUpsert) ClearAssignedTeam() *TaskUpsert {
+	u.SetNull(task.FieldAssignedTeam)
+	return u
+}
+
+// SetBlockedBy sets the "blocked_by" field.
+func (u *TaskUpsert) SetBlockedBy(v []schema.TaskDependency) *TaskUpsert {
+	u.Set(task.FieldBlockedBy, v)
+	return u
+}
+
+// UpdateBlockedBy sets the "blocked_by" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateBlockedBy() *TaskUpsert {
+	u.SetExcluded(task.FieldBlockedBy)
+	return u
+}
+
+// ClearBlockedBy clears the value of the "blocked_by" field.
+func (u *TaskUpsert) ClearBlockedBy() *TaskUpsert {
+	u.SetNull(task.FieldBlockedBy)
+	return u
+}
+
+// SetClaimEpoch sets the "claim_epoch" field.
+func (u *TaskUpsert) SetClaimEpoch(v int) *TaskUpsert {
+	u.Set(task.FieldClaimEpoch, v)
+	return u
+}
+
+// UpdateClaimEpoch sets the "claim_epoch" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateClaimEpoch() *TaskUpsert {
+	u.SetExcluded(task.FieldClaimEpoch)
+	return u
+}
+
+// AddClaimEpoch adds v to the "claim_epoch" field.
+func (u *TaskUpsert) AddClaimEpoch(v int) *TaskUpsert {
+	u.Add(task.FieldClaimEpoch, v)
+	return u
+}
+
+// SetAttempts sets the "attempts" field.
+func (u *TaskUpsert) SetAttempts(v int) *TaskUpsert {
+	u.Set(task.FieldAttempts, v)
+	return u
+}
+
+// UpdateAttempts sets the "attempts" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateAttempts() *TaskUpsert {
+	u.SetExcluded(task.FieldAttempts)
+	return u
+}
+
+// AddAttempts adds v to the "attempts" field.
+func (u *TaskUpsert) AddAttempts(v int) *TaskUpsert {
+	u.Add(task.FieldAttempts, v)
+	return u
+}
+
+// SetClaimLog sets the "claim_log" field.
+func (u *TaskUpsert) SetClaimLog(v []schema.ClaimLogEntry) *TaskUpsert {
+	u.Set(task.FieldClaimLog, v)
+	return u
+}
+
+// UpdateClaimLog sets the "claim_log" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateClaimLog() *TaskUpsert {
+	u.SetExcluded(task.FieldClaimLog)
+	return u
+}
+
+// ClearClaimLog clears the value of the "claim_log" field.
+func (u *TaskUpsert) ClearClaimLog() *TaskUpsert {
+	u.SetNull(task.FieldClaimLog)
+	return u
+}
+
+// SetTimeboxSeconds sets the "timebox_seconds" field.
+func (u *TaskUpsert) SetTimeboxSeconds(v int64) *TaskUpsert {
+	u.Set(task.FieldTimeboxSeconds, v)
+	return u
+}
+
+// UpdateTimeboxSeconds sets the "timebox_seconds" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateTimeboxSeconds() *TaskUpsert {
+	u.SetExcluded(task.FieldTimeboxSeconds)
+	return u
+}
+
+// AddTimeboxSeconds adds v to the "timebox_seconds" field.
+func (u *TaskUpsert) AddTimeboxSeconds(v int64) *TaskUpsert {
+	u.Add(task.FieldTimeboxSeconds, v)
+	return u
+}
+
+// ClearTimeboxSeconds clears the value of the "timebox_seconds" field.
+func (u *TaskUpsert) ClearTimeboxSeconds() *TaskUpsert {
+	u.SetNull(task.FieldTimeboxSeconds)
+	return u
+}
+
+// SetGate sets the "gate" field.
+func (u *TaskUpsert) SetGate(v task.Gate) *TaskUpsert {
+	u.Set(task.FieldGate, v)
+	return u
+}
+
+// UpdateGate sets the "gate" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateGate() *TaskUpsert {
+	u.SetExcluded(task.FieldGate)
+	return u
+}
+
+// ClearGate clears the value of the "gate" field.
+func (u *TaskUpsert) ClearGate() *TaskUpsert {
+	u.SetNull(task.FieldGate)
+	return u
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *TaskUpsert) SetApprovedBy(v string) *TaskUpsert {
+	u.Set(task.FieldApprovedBy, v)
+	return u
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateApprovedBy() *TaskUpsert {
+	u.SetExcluded(task.FieldApprovedBy)
+	return u
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *TaskUpsert) ClearApprovedBy() *TaskUpsert {
+	u.SetNull(task.FieldApprovedBy)
+	return u
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *TaskUpsert) SetApprovedAt(v time.Time) *TaskUpsert {
+	u.Set(task.FieldApprovedAt, v)
+	return u
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateApprovedAt() *TaskUpsert {
+	u.SetExcluded(task.FieldApprovedAt)
+	return u
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *TaskUpsert) ClearApprovedAt() *TaskUpsert {
+	u.SetNull(task.FieldApprovedAt)
+	return u
+}
+
+// SetApprovedHash sets the "approved_hash" field.
+func (u *TaskUpsert) SetApprovedHash(v string) *TaskUpsert {
+	u.Set(task.FieldApprovedHash, v)
+	return u
+}
+
+// UpdateApprovedHash sets the "approved_hash" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateApprovedHash() *TaskUpsert {
+	u.SetExcluded(task.FieldApprovedHash)
+	return u
+}
+
+// ClearApprovedHash clears the value of the "approved_hash" field.
+func (u *TaskUpsert) ClearApprovedHash() *TaskUpsert {
+	u.SetNull(task.FieldApprovedHash)
+	return u
+}
+
+// SetDoneBy sets the "done_by" field.
+func (u *TaskUpsert) SetDoneBy(v string) *TaskUpsert {
+	u.Set(task.FieldDoneBy, v)
+	return u
+}
+
+// UpdateDoneBy sets the "done_by" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateDoneBy() *TaskUpsert {
+	u.SetExcluded(task.FieldDoneBy)
+	return u
+}
+
+// ClearDoneBy clears the value of the "done_by" field.
+func (u *TaskUpsert) ClearDoneBy() *TaskUpsert {
+	u.SetNull(task.FieldDoneBy)
+	return u
+}
+
+// SetDoneCommit sets the "done_commit" field.
+func (u *TaskUpsert) SetDoneCommit(v string) *TaskUpsert {
+	u.Set(task.FieldDoneCommit, v)
+	return u
+}
+
+// UpdateDoneCommit sets the "done_commit" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateDoneCommit() *TaskUpsert {
+	u.SetExcluded(task.FieldDoneCommit)
+	return u
+}
+
+// ClearDoneCommit clears the value of the "done_commit" field.
+func (u *TaskUpsert) ClearDoneCommit() *TaskUpsert {
+	u.SetNull(task.FieldDoneCommit)
+	return u
+}
+
+// SetDonePr sets the "done_pr" field.
+func (u *TaskUpsert) SetDonePr(v int) *TaskUpsert {
+	u.Set(task.FieldDonePr, v)
+	return u
+}
+
+// UpdateDonePr sets the "done_pr" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateDonePr() *TaskUpsert {
+	u.SetExcluded(task.FieldDonePr)
+	return u
+}
+
+// AddDonePr adds v to the "done_pr" field.
+func (u *TaskUpsert) AddDonePr(v int) *TaskUpsert {
+	u.Add(task.FieldDonePr, v)
+	return u
+}
+
+// ClearDonePr clears the value of the "done_pr" field.
+func (u *TaskUpsert) ClearDonePr() *TaskUpsert {
+	u.SetNull(task.FieldDonePr)
+	return u
+}
+
+// SetMergedAt sets the "merged_at" field.
+func (u *TaskUpsert) SetMergedAt(v time.Time) *TaskUpsert {
+	u.Set(task.FieldMergedAt, v)
+	return u
+}
+
+// UpdateMergedAt sets the "merged_at" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateMergedAt() *TaskUpsert {
+	u.SetExcluded(task.FieldMergedAt)
+	return u
+}
+
+// ClearMergedAt clears the value of the "merged_at" field.
+func (u *TaskUpsert) ClearMergedAt() *TaskUpsert {
+	u.SetNull(task.FieldMergedAt)
+	return u
+}
+
+// SetWorkBranch sets the "work_branch" field.
+func (u *TaskUpsert) SetWorkBranch(v string) *TaskUpsert {
+	u.Set(task.FieldWorkBranch, v)
+	return u
+}
+
+// UpdateWorkBranch sets the "work_branch" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateWorkBranch() *TaskUpsert {
+	u.SetExcluded(task.FieldWorkBranch)
+	return u
+}
+
+// ClearWorkBranch clears the value of the "work_branch" field.
+func (u *TaskUpsert) ClearWorkBranch() *TaskUpsert {
+	u.SetNull(task.FieldWorkBranch)
+	return u
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (u *TaskUpsert) SetIdempotencyKey(v string) *TaskUpsert {
+	u.Set(task.FieldIdempotencyKey, v)
+	return u
+}
+
+// UpdateIdempotencyKey sets the "idempotency_key" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateIdempotencyKey() *TaskUpsert {
+	u.SetExcluded(task.FieldIdempotencyKey)
+	return u
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (u *TaskUpsert) ClearIdempotencyKey() *TaskUpsert {
+	u.SetNull(task.FieldIdempotencyKey)
+	return u
+}
+
+// SetRole sets the "role" field.
+func (u *TaskUpsert) SetRole(v string) *TaskUpsert {
+	u.Set(task.FieldRole, v)
+	return u
+}
+
+// UpdateRole sets the "role" field to the value that was provided on create.
+func (u *TaskUpsert) UpdateRole() *TaskUpsert {
+	u.SetExcluded(task.FieldRole)
+	return u
+}
+
+// ClearRole clears the value of the "role" field.
+func (u *TaskUpsert) ClearRole() *TaskUpsert {
+	u.SetNull(task.FieldRole)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
 // Using this option is equivalent to using:
 //
@@ -1214,6 +1862,377 @@ func (u *TaskUpsertOne) UpdateAssignedToActorID() *TaskUpsertOne {
 func (u *TaskUpsertOne) ClearAssignedToActorID() *TaskUpsertOne {
 	return u.Update(func(s *TaskUpsert) {
 		s.ClearAssignedToActorID()
+	})
+}
+
+// SetAssignedTeam sets the "assigned_team" field.
+func (u *TaskUpsertOne) SetAssignedTeam(v string) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetAssignedTeam(v)
+	})
+}
+
+// UpdateAssignedTeam sets the "assigned_team" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateAssignedTeam() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateAssignedTeam()
+	})
+}
+
+// ClearAssignedTeam clears the value of the "assigned_team" field.
+func (u *TaskUpsertOne) ClearAssignedTeam() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearAssignedTeam()
+	})
+}
+
+// SetBlockedBy sets the "blocked_by" field.
+func (u *TaskUpsertOne) SetBlockedBy(v []schema.TaskDependency) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetBlockedBy(v)
+	})
+}
+
+// UpdateBlockedBy sets the "blocked_by" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateBlockedBy() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateBlockedBy()
+	})
+}
+
+// ClearBlockedBy clears the value of the "blocked_by" field.
+func (u *TaskUpsertOne) ClearBlockedBy() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearBlockedBy()
+	})
+}
+
+// SetClaimEpoch sets the "claim_epoch" field.
+func (u *TaskUpsertOne) SetClaimEpoch(v int) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetClaimEpoch(v)
+	})
+}
+
+// AddClaimEpoch adds v to the "claim_epoch" field.
+func (u *TaskUpsertOne) AddClaimEpoch(v int) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.AddClaimEpoch(v)
+	})
+}
+
+// UpdateClaimEpoch sets the "claim_epoch" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateClaimEpoch() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateClaimEpoch()
+	})
+}
+
+// SetAttempts sets the "attempts" field.
+func (u *TaskUpsertOne) SetAttempts(v int) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetAttempts(v)
+	})
+}
+
+// AddAttempts adds v to the "attempts" field.
+func (u *TaskUpsertOne) AddAttempts(v int) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.AddAttempts(v)
+	})
+}
+
+// UpdateAttempts sets the "attempts" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateAttempts() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateAttempts()
+	})
+}
+
+// SetClaimLog sets the "claim_log" field.
+func (u *TaskUpsertOne) SetClaimLog(v []schema.ClaimLogEntry) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetClaimLog(v)
+	})
+}
+
+// UpdateClaimLog sets the "claim_log" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateClaimLog() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateClaimLog()
+	})
+}
+
+// ClearClaimLog clears the value of the "claim_log" field.
+func (u *TaskUpsertOne) ClearClaimLog() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearClaimLog()
+	})
+}
+
+// SetTimeboxSeconds sets the "timebox_seconds" field.
+func (u *TaskUpsertOne) SetTimeboxSeconds(v int64) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetTimeboxSeconds(v)
+	})
+}
+
+// AddTimeboxSeconds adds v to the "timebox_seconds" field.
+func (u *TaskUpsertOne) AddTimeboxSeconds(v int64) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.AddTimeboxSeconds(v)
+	})
+}
+
+// UpdateTimeboxSeconds sets the "timebox_seconds" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateTimeboxSeconds() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateTimeboxSeconds()
+	})
+}
+
+// ClearTimeboxSeconds clears the value of the "timebox_seconds" field.
+func (u *TaskUpsertOne) ClearTimeboxSeconds() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearTimeboxSeconds()
+	})
+}
+
+// SetGate sets the "gate" field.
+func (u *TaskUpsertOne) SetGate(v task.Gate) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetGate(v)
+	})
+}
+
+// UpdateGate sets the "gate" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateGate() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateGate()
+	})
+}
+
+// ClearGate clears the value of the "gate" field.
+func (u *TaskUpsertOne) ClearGate() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearGate()
+	})
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *TaskUpsertOne) SetApprovedBy(v string) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetApprovedBy(v)
+	})
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateApprovedBy() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateApprovedBy()
+	})
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *TaskUpsertOne) ClearApprovedBy() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearApprovedBy()
+	})
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *TaskUpsertOne) SetApprovedAt(v time.Time) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetApprovedAt(v)
+	})
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateApprovedAt() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateApprovedAt()
+	})
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *TaskUpsertOne) ClearApprovedAt() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearApprovedAt()
+	})
+}
+
+// SetApprovedHash sets the "approved_hash" field.
+func (u *TaskUpsertOne) SetApprovedHash(v string) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetApprovedHash(v)
+	})
+}
+
+// UpdateApprovedHash sets the "approved_hash" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateApprovedHash() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateApprovedHash()
+	})
+}
+
+// ClearApprovedHash clears the value of the "approved_hash" field.
+func (u *TaskUpsertOne) ClearApprovedHash() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearApprovedHash()
+	})
+}
+
+// SetDoneBy sets the "done_by" field.
+func (u *TaskUpsertOne) SetDoneBy(v string) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetDoneBy(v)
+	})
+}
+
+// UpdateDoneBy sets the "done_by" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateDoneBy() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateDoneBy()
+	})
+}
+
+// ClearDoneBy clears the value of the "done_by" field.
+func (u *TaskUpsertOne) ClearDoneBy() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearDoneBy()
+	})
+}
+
+// SetDoneCommit sets the "done_commit" field.
+func (u *TaskUpsertOne) SetDoneCommit(v string) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetDoneCommit(v)
+	})
+}
+
+// UpdateDoneCommit sets the "done_commit" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateDoneCommit() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateDoneCommit()
+	})
+}
+
+// ClearDoneCommit clears the value of the "done_commit" field.
+func (u *TaskUpsertOne) ClearDoneCommit() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearDoneCommit()
+	})
+}
+
+// SetDonePr sets the "done_pr" field.
+func (u *TaskUpsertOne) SetDonePr(v int) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetDonePr(v)
+	})
+}
+
+// AddDonePr adds v to the "done_pr" field.
+func (u *TaskUpsertOne) AddDonePr(v int) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.AddDonePr(v)
+	})
+}
+
+// UpdateDonePr sets the "done_pr" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateDonePr() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateDonePr()
+	})
+}
+
+// ClearDonePr clears the value of the "done_pr" field.
+func (u *TaskUpsertOne) ClearDonePr() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearDonePr()
+	})
+}
+
+// SetMergedAt sets the "merged_at" field.
+func (u *TaskUpsertOne) SetMergedAt(v time.Time) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetMergedAt(v)
+	})
+}
+
+// UpdateMergedAt sets the "merged_at" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateMergedAt() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateMergedAt()
+	})
+}
+
+// ClearMergedAt clears the value of the "merged_at" field.
+func (u *TaskUpsertOne) ClearMergedAt() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearMergedAt()
+	})
+}
+
+// SetWorkBranch sets the "work_branch" field.
+func (u *TaskUpsertOne) SetWorkBranch(v string) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetWorkBranch(v)
+	})
+}
+
+// UpdateWorkBranch sets the "work_branch" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateWorkBranch() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateWorkBranch()
+	})
+}
+
+// ClearWorkBranch clears the value of the "work_branch" field.
+func (u *TaskUpsertOne) ClearWorkBranch() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearWorkBranch()
+	})
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (u *TaskUpsertOne) SetIdempotencyKey(v string) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetIdempotencyKey(v)
+	})
+}
+
+// UpdateIdempotencyKey sets the "idempotency_key" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateIdempotencyKey() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateIdempotencyKey()
+	})
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (u *TaskUpsertOne) ClearIdempotencyKey() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearIdempotencyKey()
+	})
+}
+
+// SetRole sets the "role" field.
+func (u *TaskUpsertOne) SetRole(v string) *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetRole(v)
+	})
+}
+
+// UpdateRole sets the "role" field to the value that was provided on create.
+func (u *TaskUpsertOne) UpdateRole() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateRole()
+	})
+}
+
+// ClearRole clears the value of the "role" field.
+func (u *TaskUpsertOne) ClearRole() *TaskUpsertOne {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearRole()
 	})
 }
 
@@ -1736,6 +2755,377 @@ func (u *TaskUpsertBulk) UpdateAssignedToActorID() *TaskUpsertBulk {
 func (u *TaskUpsertBulk) ClearAssignedToActorID() *TaskUpsertBulk {
 	return u.Update(func(s *TaskUpsert) {
 		s.ClearAssignedToActorID()
+	})
+}
+
+// SetAssignedTeam sets the "assigned_team" field.
+func (u *TaskUpsertBulk) SetAssignedTeam(v string) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetAssignedTeam(v)
+	})
+}
+
+// UpdateAssignedTeam sets the "assigned_team" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateAssignedTeam() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateAssignedTeam()
+	})
+}
+
+// ClearAssignedTeam clears the value of the "assigned_team" field.
+func (u *TaskUpsertBulk) ClearAssignedTeam() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearAssignedTeam()
+	})
+}
+
+// SetBlockedBy sets the "blocked_by" field.
+func (u *TaskUpsertBulk) SetBlockedBy(v []schema.TaskDependency) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetBlockedBy(v)
+	})
+}
+
+// UpdateBlockedBy sets the "blocked_by" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateBlockedBy() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateBlockedBy()
+	})
+}
+
+// ClearBlockedBy clears the value of the "blocked_by" field.
+func (u *TaskUpsertBulk) ClearBlockedBy() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearBlockedBy()
+	})
+}
+
+// SetClaimEpoch sets the "claim_epoch" field.
+func (u *TaskUpsertBulk) SetClaimEpoch(v int) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetClaimEpoch(v)
+	})
+}
+
+// AddClaimEpoch adds v to the "claim_epoch" field.
+func (u *TaskUpsertBulk) AddClaimEpoch(v int) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.AddClaimEpoch(v)
+	})
+}
+
+// UpdateClaimEpoch sets the "claim_epoch" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateClaimEpoch() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateClaimEpoch()
+	})
+}
+
+// SetAttempts sets the "attempts" field.
+func (u *TaskUpsertBulk) SetAttempts(v int) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetAttempts(v)
+	})
+}
+
+// AddAttempts adds v to the "attempts" field.
+func (u *TaskUpsertBulk) AddAttempts(v int) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.AddAttempts(v)
+	})
+}
+
+// UpdateAttempts sets the "attempts" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateAttempts() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateAttempts()
+	})
+}
+
+// SetClaimLog sets the "claim_log" field.
+func (u *TaskUpsertBulk) SetClaimLog(v []schema.ClaimLogEntry) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetClaimLog(v)
+	})
+}
+
+// UpdateClaimLog sets the "claim_log" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateClaimLog() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateClaimLog()
+	})
+}
+
+// ClearClaimLog clears the value of the "claim_log" field.
+func (u *TaskUpsertBulk) ClearClaimLog() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearClaimLog()
+	})
+}
+
+// SetTimeboxSeconds sets the "timebox_seconds" field.
+func (u *TaskUpsertBulk) SetTimeboxSeconds(v int64) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetTimeboxSeconds(v)
+	})
+}
+
+// AddTimeboxSeconds adds v to the "timebox_seconds" field.
+func (u *TaskUpsertBulk) AddTimeboxSeconds(v int64) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.AddTimeboxSeconds(v)
+	})
+}
+
+// UpdateTimeboxSeconds sets the "timebox_seconds" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateTimeboxSeconds() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateTimeboxSeconds()
+	})
+}
+
+// ClearTimeboxSeconds clears the value of the "timebox_seconds" field.
+func (u *TaskUpsertBulk) ClearTimeboxSeconds() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearTimeboxSeconds()
+	})
+}
+
+// SetGate sets the "gate" field.
+func (u *TaskUpsertBulk) SetGate(v task.Gate) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetGate(v)
+	})
+}
+
+// UpdateGate sets the "gate" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateGate() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateGate()
+	})
+}
+
+// ClearGate clears the value of the "gate" field.
+func (u *TaskUpsertBulk) ClearGate() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearGate()
+	})
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *TaskUpsertBulk) SetApprovedBy(v string) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetApprovedBy(v)
+	})
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateApprovedBy() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateApprovedBy()
+	})
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *TaskUpsertBulk) ClearApprovedBy() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearApprovedBy()
+	})
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *TaskUpsertBulk) SetApprovedAt(v time.Time) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetApprovedAt(v)
+	})
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateApprovedAt() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateApprovedAt()
+	})
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *TaskUpsertBulk) ClearApprovedAt() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearApprovedAt()
+	})
+}
+
+// SetApprovedHash sets the "approved_hash" field.
+func (u *TaskUpsertBulk) SetApprovedHash(v string) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetApprovedHash(v)
+	})
+}
+
+// UpdateApprovedHash sets the "approved_hash" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateApprovedHash() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateApprovedHash()
+	})
+}
+
+// ClearApprovedHash clears the value of the "approved_hash" field.
+func (u *TaskUpsertBulk) ClearApprovedHash() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearApprovedHash()
+	})
+}
+
+// SetDoneBy sets the "done_by" field.
+func (u *TaskUpsertBulk) SetDoneBy(v string) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetDoneBy(v)
+	})
+}
+
+// UpdateDoneBy sets the "done_by" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateDoneBy() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateDoneBy()
+	})
+}
+
+// ClearDoneBy clears the value of the "done_by" field.
+func (u *TaskUpsertBulk) ClearDoneBy() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearDoneBy()
+	})
+}
+
+// SetDoneCommit sets the "done_commit" field.
+func (u *TaskUpsertBulk) SetDoneCommit(v string) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetDoneCommit(v)
+	})
+}
+
+// UpdateDoneCommit sets the "done_commit" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateDoneCommit() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateDoneCommit()
+	})
+}
+
+// ClearDoneCommit clears the value of the "done_commit" field.
+func (u *TaskUpsertBulk) ClearDoneCommit() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearDoneCommit()
+	})
+}
+
+// SetDonePr sets the "done_pr" field.
+func (u *TaskUpsertBulk) SetDonePr(v int) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetDonePr(v)
+	})
+}
+
+// AddDonePr adds v to the "done_pr" field.
+func (u *TaskUpsertBulk) AddDonePr(v int) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.AddDonePr(v)
+	})
+}
+
+// UpdateDonePr sets the "done_pr" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateDonePr() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateDonePr()
+	})
+}
+
+// ClearDonePr clears the value of the "done_pr" field.
+func (u *TaskUpsertBulk) ClearDonePr() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearDonePr()
+	})
+}
+
+// SetMergedAt sets the "merged_at" field.
+func (u *TaskUpsertBulk) SetMergedAt(v time.Time) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetMergedAt(v)
+	})
+}
+
+// UpdateMergedAt sets the "merged_at" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateMergedAt() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateMergedAt()
+	})
+}
+
+// ClearMergedAt clears the value of the "merged_at" field.
+func (u *TaskUpsertBulk) ClearMergedAt() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearMergedAt()
+	})
+}
+
+// SetWorkBranch sets the "work_branch" field.
+func (u *TaskUpsertBulk) SetWorkBranch(v string) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetWorkBranch(v)
+	})
+}
+
+// UpdateWorkBranch sets the "work_branch" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateWorkBranch() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateWorkBranch()
+	})
+}
+
+// ClearWorkBranch clears the value of the "work_branch" field.
+func (u *TaskUpsertBulk) ClearWorkBranch() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearWorkBranch()
+	})
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (u *TaskUpsertBulk) SetIdempotencyKey(v string) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetIdempotencyKey(v)
+	})
+}
+
+// UpdateIdempotencyKey sets the "idempotency_key" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateIdempotencyKey() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateIdempotencyKey()
+	})
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (u *TaskUpsertBulk) ClearIdempotencyKey() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearIdempotencyKey()
+	})
+}
+
+// SetRole sets the "role" field.
+func (u *TaskUpsertBulk) SetRole(v string) *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.SetRole(v)
+	})
+}
+
+// UpdateRole sets the "role" field to the value that was provided on create.
+func (u *TaskUpsertBulk) UpdateRole() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.UpdateRole()
+	})
+}
+
+// ClearRole clears the value of the "role" field.
+func (u *TaskUpsertBulk) ClearRole() *TaskUpsertBulk {
+	return u.Update(func(s *TaskUpsert) {
+		s.ClearRole()
 	})
 }
 

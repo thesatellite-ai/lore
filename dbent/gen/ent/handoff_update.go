@@ -103,6 +103,46 @@ func (_u *HandoffUpdate) SetNillableStatusStr(v *string) *HandoffUpdate {
 	return _u
 }
 
+// SetTaskID sets the "task_id" field.
+func (_u *HandoffUpdate) SetTaskID(v string) *HandoffUpdate {
+	_u.mutation.SetTaskID(v)
+	return _u
+}
+
+// SetNillableTaskID sets the "task_id" field if the given value is not nil.
+func (_u *HandoffUpdate) SetNillableTaskID(v *string) *HandoffUpdate {
+	if v != nil {
+		_u.SetTaskID(*v)
+	}
+	return _u
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (_u *HandoffUpdate) ClearTaskID() *HandoffUpdate {
+	_u.mutation.ClearTaskID()
+	return _u
+}
+
+// SetMissionID sets the "mission_id" field.
+func (_u *HandoffUpdate) SetMissionID(v string) *HandoffUpdate {
+	_u.mutation.SetMissionID(v)
+	return _u
+}
+
+// SetNillableMissionID sets the "mission_id" field if the given value is not nil.
+func (_u *HandoffUpdate) SetNillableMissionID(v *string) *HandoffUpdate {
+	if v != nil {
+		_u.SetMissionID(*v)
+	}
+	return _u
+}
+
+// ClearMissionID clears the value of the "mission_id" field.
+func (_u *HandoffUpdate) ClearMissionID() *HandoffUpdate {
+	_u.mutation.ClearMissionID()
+	return _u
+}
+
 // Mutation returns the HandoffMutation object of the builder.
 func (_u *HandoffUpdate) Mutation() *HandoffMutation {
 	return _u.mutation
@@ -208,6 +248,18 @@ func (_u *HandoffUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.StatusStr(); ok {
 		_spec.SetField(handoff.FieldStatusStr, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.TaskID(); ok {
+		_spec.SetField(handoff.FieldTaskID, field.TypeString, value)
+	}
+	if _u.mutation.TaskIDCleared() {
+		_spec.ClearField(handoff.FieldTaskID, field.TypeString)
+	}
+	if value, ok := _u.mutation.MissionID(); ok {
+		_spec.SetField(handoff.FieldMissionID, field.TypeString, value)
+	}
+	if _u.mutation.MissionIDCleared() {
+		_spec.ClearField(handoff.FieldMissionID, field.TypeString)
+	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -301,6 +353,46 @@ func (_u *HandoffUpdateOne) SetNillableStatusStr(v *string) *HandoffUpdateOne {
 	if v != nil {
 		_u.SetStatusStr(*v)
 	}
+	return _u
+}
+
+// SetTaskID sets the "task_id" field.
+func (_u *HandoffUpdateOne) SetTaskID(v string) *HandoffUpdateOne {
+	_u.mutation.SetTaskID(v)
+	return _u
+}
+
+// SetNillableTaskID sets the "task_id" field if the given value is not nil.
+func (_u *HandoffUpdateOne) SetNillableTaskID(v *string) *HandoffUpdateOne {
+	if v != nil {
+		_u.SetTaskID(*v)
+	}
+	return _u
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (_u *HandoffUpdateOne) ClearTaskID() *HandoffUpdateOne {
+	_u.mutation.ClearTaskID()
+	return _u
+}
+
+// SetMissionID sets the "mission_id" field.
+func (_u *HandoffUpdateOne) SetMissionID(v string) *HandoffUpdateOne {
+	_u.mutation.SetMissionID(v)
+	return _u
+}
+
+// SetNillableMissionID sets the "mission_id" field if the given value is not nil.
+func (_u *HandoffUpdateOne) SetNillableMissionID(v *string) *HandoffUpdateOne {
+	if v != nil {
+		_u.SetMissionID(*v)
+	}
+	return _u
+}
+
+// ClearMissionID clears the value of the "mission_id" field.
+func (_u *HandoffUpdateOne) ClearMissionID() *HandoffUpdateOne {
+	_u.mutation.ClearMissionID()
 	return _u
 }
 
@@ -438,6 +530,18 @@ func (_u *HandoffUpdateOne) sqlSave(ctx context.Context) (_node *Handoff, err er
 	}
 	if value, ok := _u.mutation.StatusStr(); ok {
 		_spec.SetField(handoff.FieldStatusStr, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TaskID(); ok {
+		_spec.SetField(handoff.FieldTaskID, field.TypeString, value)
+	}
+	if _u.mutation.TaskIDCleared() {
+		_spec.ClearField(handoff.FieldTaskID, field.TypeString)
+	}
+	if value, ok := _u.mutation.MissionID(); ok {
+		_spec.SetField(handoff.FieldMissionID, field.TypeString, value)
+	}
+	if _u.mutation.MissionIDCleared() {
+		_spec.ClearField(handoff.FieldMissionID, field.TypeString)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &Handoff{config: _u.config}

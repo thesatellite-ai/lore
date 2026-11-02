@@ -410,14 +410,20 @@ func newMemoryListCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list memories").WithCause(err)
 			}
+			// Store, global and personal rows (F20) follow the repo's own,
+			// each with its source label.
 			if jsonOut {
-				printJSON(constants.KindMemoryList, rows, len(rows))
+				data := withExternalJSON(cmd.Context(), rows, tblMemoriesName)
+				printJSON(constants.KindMemoryList, data, len(data))
 				return nil
 			}
 			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no memories)"))
+				if printExternalHere(cmd.Context(), tblMemoriesName) == 0 {
+					fmt.Println(style.Muted("(no memories)"))
+				}
 				return nil
 			}
+			defer printExternalHere(cmd.Context(), tblMemoriesName)
 			for _, m := range rows {
 				body := m.Body
 				if len(body) > 80 {

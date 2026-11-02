@@ -62,6 +62,7 @@ import (
 	"dbent/gen/ent/tasklist"
 	"dbent/gen/ent/taskview"
 	"dbent/gen/ent/tastepref"
+	"dbent/gen/ent/team"
 	"dbent/gen/ent/techdoc"
 	"dbent/gen/ent/techdocpage"
 	"dbent/gen/ent/trustedplugin"
@@ -258,6 +259,31 @@ func (_q *ActorQuery) collectField(ctx context.Context, oneNode bool, opCtx *gra
 			if _, ok := fieldSeen[actor.FieldStableKey]; !ok {
 				selectedFields = append(selectedFields, actor.FieldStableKey)
 				fieldSeen[actor.FieldStableKey] = struct{}{}
+			}
+		case "ownerActorID":
+			if _, ok := fieldSeen[actor.FieldOwnerActorID]; !ok {
+				selectedFields = append(selectedFields, actor.FieldOwnerActorID)
+				fieldSeen[actor.FieldOwnerActorID] = struct{}{}
+			}
+		case "label":
+			if _, ok := fieldSeen[actor.FieldLabel]; !ok {
+				selectedFields = append(selectedFields, actor.FieldLabel)
+				fieldSeen[actor.FieldLabel] = struct{}{}
+			}
+		case "handle":
+			if _, ok := fieldSeen[actor.FieldHandle]; !ok {
+				selectedFields = append(selectedFields, actor.FieldHandle)
+				fieldSeen[actor.FieldHandle] = struct{}{}
+			}
+		case "active":
+			if _, ok := fieldSeen[actor.FieldActive]; !ok {
+				selectedFields = append(selectedFields, actor.FieldActive)
+				fieldSeen[actor.FieldActive] = struct{}{}
+			}
+		case "leftAt":
+			if _, ok := fieldSeen[actor.FieldLeftAt]; !ok {
+				selectedFields = append(selectedFields, actor.FieldLeftAt)
+				fieldSeen[actor.FieldLeftAt] = struct{}{}
 			}
 		case "lastSeenAt":
 			if _, ok := fieldSeen[actor.FieldLastSeenAt]; !ok {
@@ -1857,6 +1883,11 @@ func (_q *CommentQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 				selectedFields = append(selectedFields, comment.FieldEntityID)
 				fieldSeen[comment.FieldEntityID] = struct{}{}
 			}
+		case "entityProjectID":
+			if _, ok := fieldSeen[comment.FieldEntityProjectID]; !ok {
+				selectedFields = append(selectedFields, comment.FieldEntityProjectID)
+				fieldSeen[comment.FieldEntityProjectID] = struct{}{}
+			}
 		case "body":
 			if _, ok := fieldSeen[comment.FieldBody]; !ok {
 				selectedFields = append(selectedFields, comment.FieldBody)
@@ -2983,6 +3014,16 @@ func (_q *HandoffQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 				selectedFields = append(selectedFields, handoff.FieldStatusStr)
 				fieldSeen[handoff.FieldStatusStr] = struct{}{}
 			}
+		case "taskID":
+			if _, ok := fieldSeen[handoff.FieldTaskID]; !ok {
+				selectedFields = append(selectedFields, handoff.FieldTaskID)
+				fieldSeen[handoff.FieldTaskID] = struct{}{}
+			}
+		case "missionID":
+			if _, ok := fieldSeen[handoff.FieldMissionID]; !ok {
+				selectedFields = append(selectedFields, handoff.FieldMissionID)
+				fieldSeen[handoff.FieldMissionID] = struct{}{}
+			}
 		case "id":
 		case "__typename":
 		default:
@@ -3622,6 +3663,11 @@ func (_q *KnowledgeRefQuery) collectField(ctx context.Context, oneNode bool, opC
 			if _, ok := fieldSeen[knowledgeref.FieldDstID]; !ok {
 				selectedFields = append(selectedFields, knowledgeref.FieldDstID)
 				fieldSeen[knowledgeref.FieldDstID] = struct{}{}
+			}
+		case "dstProjectID":
+			if _, ok := fieldSeen[knowledgeref.FieldDstProjectID]; !ok {
+				selectedFields = append(selectedFields, knowledgeref.FieldDstProjectID)
+				fieldSeen[knowledgeref.FieldDstProjectID] = struct{}{}
 			}
 		case "relation":
 			if _, ok := fieldSeen[knowledgeref.FieldRelation]; !ok {
@@ -4562,6 +4608,16 @@ func (_q *MissionQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 			if _, ok := fieldSeen[mission.FieldCreatedByActorID]; !ok {
 				selectedFields = append(selectedFields, mission.FieldCreatedByActorID)
 				fieldSeen[mission.FieldCreatedByActorID] = struct{}{}
+			}
+		case "approvers":
+			if _, ok := fieldSeen[mission.FieldApprovers]; !ok {
+				selectedFields = append(selectedFields, mission.FieldApprovers)
+				fieldSeen[mission.FieldApprovers] = struct{}{}
+			}
+		case "idempotencyKey":
+			if _, ok := fieldSeen[mission.FieldIdempotencyKey]; !ok {
+				selectedFields = append(selectedFields, mission.FieldIdempotencyKey)
+				fieldSeen[mission.FieldIdempotencyKey] = struct{}{}
 			}
 		case "id":
 		case "__typename":
@@ -7586,6 +7642,91 @@ func (_q *TaskQuery) collectField(ctx context.Context, oneNode bool, opCtx *grap
 				selectedFields = append(selectedFields, task.FieldAssignedToActorID)
 				fieldSeen[task.FieldAssignedToActorID] = struct{}{}
 			}
+		case "assignedTeam":
+			if _, ok := fieldSeen[task.FieldAssignedTeam]; !ok {
+				selectedFields = append(selectedFields, task.FieldAssignedTeam)
+				fieldSeen[task.FieldAssignedTeam] = struct{}{}
+			}
+		case "blockedBy":
+			if _, ok := fieldSeen[task.FieldBlockedBy]; !ok {
+				selectedFields = append(selectedFields, task.FieldBlockedBy)
+				fieldSeen[task.FieldBlockedBy] = struct{}{}
+			}
+		case "claimEpoch":
+			if _, ok := fieldSeen[task.FieldClaimEpoch]; !ok {
+				selectedFields = append(selectedFields, task.FieldClaimEpoch)
+				fieldSeen[task.FieldClaimEpoch] = struct{}{}
+			}
+		case "attempts":
+			if _, ok := fieldSeen[task.FieldAttempts]; !ok {
+				selectedFields = append(selectedFields, task.FieldAttempts)
+				fieldSeen[task.FieldAttempts] = struct{}{}
+			}
+		case "claimLog":
+			if _, ok := fieldSeen[task.FieldClaimLog]; !ok {
+				selectedFields = append(selectedFields, task.FieldClaimLog)
+				fieldSeen[task.FieldClaimLog] = struct{}{}
+			}
+		case "timeboxSeconds":
+			if _, ok := fieldSeen[task.FieldTimeboxSeconds]; !ok {
+				selectedFields = append(selectedFields, task.FieldTimeboxSeconds)
+				fieldSeen[task.FieldTimeboxSeconds] = struct{}{}
+			}
+		case "gate":
+			if _, ok := fieldSeen[task.FieldGate]; !ok {
+				selectedFields = append(selectedFields, task.FieldGate)
+				fieldSeen[task.FieldGate] = struct{}{}
+			}
+		case "approvedBy":
+			if _, ok := fieldSeen[task.FieldApprovedBy]; !ok {
+				selectedFields = append(selectedFields, task.FieldApprovedBy)
+				fieldSeen[task.FieldApprovedBy] = struct{}{}
+			}
+		case "approvedAt":
+			if _, ok := fieldSeen[task.FieldApprovedAt]; !ok {
+				selectedFields = append(selectedFields, task.FieldApprovedAt)
+				fieldSeen[task.FieldApprovedAt] = struct{}{}
+			}
+		case "approvedHash":
+			if _, ok := fieldSeen[task.FieldApprovedHash]; !ok {
+				selectedFields = append(selectedFields, task.FieldApprovedHash)
+				fieldSeen[task.FieldApprovedHash] = struct{}{}
+			}
+		case "doneBy":
+			if _, ok := fieldSeen[task.FieldDoneBy]; !ok {
+				selectedFields = append(selectedFields, task.FieldDoneBy)
+				fieldSeen[task.FieldDoneBy] = struct{}{}
+			}
+		case "doneCommit":
+			if _, ok := fieldSeen[task.FieldDoneCommit]; !ok {
+				selectedFields = append(selectedFields, task.FieldDoneCommit)
+				fieldSeen[task.FieldDoneCommit] = struct{}{}
+			}
+		case "donePr":
+			if _, ok := fieldSeen[task.FieldDonePr]; !ok {
+				selectedFields = append(selectedFields, task.FieldDonePr)
+				fieldSeen[task.FieldDonePr] = struct{}{}
+			}
+		case "mergedAt":
+			if _, ok := fieldSeen[task.FieldMergedAt]; !ok {
+				selectedFields = append(selectedFields, task.FieldMergedAt)
+				fieldSeen[task.FieldMergedAt] = struct{}{}
+			}
+		case "workBranch":
+			if _, ok := fieldSeen[task.FieldWorkBranch]; !ok {
+				selectedFields = append(selectedFields, task.FieldWorkBranch)
+				fieldSeen[task.FieldWorkBranch] = struct{}{}
+			}
+		case "idempotencyKey":
+			if _, ok := fieldSeen[task.FieldIdempotencyKey]; !ok {
+				selectedFields = append(selectedFields, task.FieldIdempotencyKey)
+				fieldSeen[task.FieldIdempotencyKey] = struct{}{}
+			}
+		case "role":
+			if _, ok := fieldSeen[task.FieldRole]; !ok {
+				selectedFields = append(selectedFields, task.FieldRole)
+				fieldSeen[task.FieldRole] = struct{}{}
+			}
 		case "id":
 		case "__typename":
 		default:
@@ -7995,6 +8136,130 @@ func newTastePrefPaginateArgs(rv map[string]any) *tasteprefPaginateArgs {
 	}
 	if v, ok := rv[whereField].(*TastePrefWhereInput); ok {
 		args.opts = append(args.opts, WithTastePrefFilter(v.Filter))
+	}
+	return args
+}
+
+// CollectFields tells the query-builder to eagerly load connected nodes by resolver context.
+func (_q *TeamQuery) CollectFields(ctx context.Context, satisfies ...string) (*TeamQuery, error) {
+	fc := graphql.GetFieldContext(ctx)
+	if fc == nil {
+		return _q, nil
+	}
+	if err := _q.collectField(ctx, false, graphql.GetOperationContext(ctx), fc.Field, nil, satisfies...); err != nil {
+		return nil, err
+	}
+	return _q, nil
+}
+
+func (_q *TeamQuery) collectField(ctx context.Context, oneNode bool, opCtx *graphql.OperationContext, collected graphql.CollectedField, path []string, satisfies ...string) error {
+	path = append([]string(nil), path...)
+	var (
+		unknownSeen    bool
+		fieldSeen      = make(map[string]struct{}, len(team.Columns))
+		selectedFields = []string{team.FieldID}
+	)
+	for _, field := range graphql.CollectFields(opCtx, collected.Selections, satisfies) {
+		switch field.Name {
+		case "createdAt":
+			if _, ok := fieldSeen[team.FieldCreatedAt]; !ok {
+				selectedFields = append(selectedFields, team.FieldCreatedAt)
+				fieldSeen[team.FieldCreatedAt] = struct{}{}
+			}
+		case "updatedAt":
+			if _, ok := fieldSeen[team.FieldUpdatedAt]; !ok {
+				selectedFields = append(selectedFields, team.FieldUpdatedAt)
+				fieldSeen[team.FieldUpdatedAt] = struct{}{}
+			}
+		case "projectID":
+			if _, ok := fieldSeen[team.FieldProjectID]; !ok {
+				selectedFields = append(selectedFields, team.FieldProjectID)
+				fieldSeen[team.FieldProjectID] = struct{}{}
+			}
+		case "handle":
+			if _, ok := fieldSeen[team.FieldHandle]; !ok {
+				selectedFields = append(selectedFields, team.FieldHandle)
+				fieldSeen[team.FieldHandle] = struct{}{}
+			}
+		case "displayName":
+			if _, ok := fieldSeen[team.FieldDisplayName]; !ok {
+				selectedFields = append(selectedFields, team.FieldDisplayName)
+				fieldSeen[team.FieldDisplayName] = struct{}{}
+			}
+		case "memberActorIds":
+			if _, ok := fieldSeen[team.FieldMemberActorIds]; !ok {
+				selectedFields = append(selectedFields, team.FieldMemberActorIds)
+				fieldSeen[team.FieldMemberActorIds] = struct{}{}
+			}
+		case "active":
+			if _, ok := fieldSeen[team.FieldActive]; !ok {
+				selectedFields = append(selectedFields, team.FieldActive)
+				fieldSeen[team.FieldActive] = struct{}{}
+			}
+		case "leftAt":
+			if _, ok := fieldSeen[team.FieldLeftAt]; !ok {
+				selectedFields = append(selectedFields, team.FieldLeftAt)
+				fieldSeen[team.FieldLeftAt] = struct{}{}
+			}
+		case "id":
+		case "__typename":
+		default:
+			unknownSeen = true
+		}
+	}
+	if !unknownSeen {
+		_q.Select(selectedFields...)
+	}
+	return nil
+}
+
+type teamPaginateArgs struct {
+	first, last   *int
+	after, before *Cursor
+	opts          []TeamPaginateOption
+}
+
+func newTeamPaginateArgs(rv map[string]any) *teamPaginateArgs {
+	args := &teamPaginateArgs{}
+	if rv == nil {
+		return args
+	}
+	if v := rv[firstField]; v != nil {
+		args.first = v.(*int)
+	}
+	if v := rv[lastField]; v != nil {
+		args.last = v.(*int)
+	}
+	if v := rv[afterField]; v != nil {
+		args.after = v.(*Cursor)
+	}
+	if v := rv[beforeField]; v != nil {
+		args.before = v.(*Cursor)
+	}
+	if v, ok := rv[orderByField]; ok {
+		switch v := v.(type) {
+		case map[string]any:
+			var (
+				err1, err2 error
+				order      = &TeamOrder{Field: &TeamOrderField{}, Direction: entgql.OrderDirectionAsc}
+			)
+			if d, ok := v[directionField]; ok {
+				err1 = order.Direction.UnmarshalGQL(d)
+			}
+			if f, ok := v[fieldField]; ok {
+				err2 = order.Field.UnmarshalGQL(f)
+			}
+			if err1 == nil && err2 == nil {
+				args.opts = append(args.opts, WithTeamOrder(order))
+			}
+		case *TeamOrder:
+			if v != nil {
+				args.opts = append(args.opts, WithTeamOrder(v))
+			}
+		}
+	}
+	if v, ok := rv[whereField].(*TeamWhereInput); ok {
+		args.opts = append(args.opts, WithTeamFilter(v.Filter))
 	}
 	return args
 }

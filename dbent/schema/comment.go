@@ -34,6 +34,13 @@ func (Comment) Fields() []ent.Field {
 			Annotations(enttui.Editable{}),
 		field.String("entity_id").NotEmpty().Match(idValidatorRE).
 			Annotations(enttui.Editable{}),
+		// entity_project_id: project of the target row when it is not this
+		// comment's own project (a cross-project reference, LORE_TEAM_SPEC
+		// F15). Nil = same project, so every comment written before the
+		// team feature stays valid. Direction rules (client → internal and
+		// anything → personal are refused) are enforced by the leak checks
+		// (F16), not here.
+		field.String("entity_project_id").Optional().Nillable(),
 		field.Text("body").NotEmpty().
 			Annotations(enttui.Editable{}),
 		field.String("created_by_actor_id").Optional().Nillable().

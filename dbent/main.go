@@ -211,7 +211,7 @@ const busyTimeoutMS = 5000
 
 // ApplyPragmas applies the canonical pragma block for production SQLite.
 // Run AFTER InitDB but BEFORE the first table is created (auto_vacuum is
-// permanent once tables exist).
+// durable once tables exist).
 //
 // Caller policy: every lore binary calls ApplyPragmas exactly once
 // in its startup path. PLAN.md Round 26 ship-gate item.

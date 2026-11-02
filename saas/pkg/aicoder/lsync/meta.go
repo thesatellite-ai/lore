@@ -58,8 +58,18 @@ func MetaExists(dataDir string) bool {
 	return err == nil
 }
 
+// writeProjectMeta sets _v and project_id in _meta.json and keeps every
+// other key the file already holds (a store project's links and global
+// flag, F11): lsync owns only these two keys.
 func writeProjectMeta(dataDir string, m ProjectMeta) error {
-	doc := map[string]any{keyVersion: int64(FormatVersion)}
+	doc := map[string]any{}
+	if b, err := readRowFile(filepath.Join(dataDir, MetaFileName)); err == nil {
+		if cur, err := canonjson.Decode(b, canonjson.DefaultMaxDepth); err == nil {
+			doc = cur
+		}
+	}
+	doc[keyVersion] = int64(FormatVersion)
+	delete(doc, metaKeyProjectID)
 	if m.ProjectID != "" {
 		doc[metaKeyProjectID] = m.ProjectID
 	}

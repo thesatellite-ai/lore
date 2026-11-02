@@ -21,6 +21,7 @@ import (
 
 func newMissionCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "mission", Short: "Manage missions (containers for tasks)"}
+	cmd.AddCommand(newMissionStatusCommand())
 	cmd.AddCommand(newMissionAddCommand())
 	cmd.AddCommand(newMissionListCommand())
 	cmd.AddCommand(newMissionDoneCommand())
@@ -113,6 +114,9 @@ func newMissionEditCommand() *cobra.Command {
 func newMissionAddCommand() *cobra.Command {
 	var f commonFlags
 	var body, target, createdBy string
+	var approvers []string
+	var key string
+	var to toFlags
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "add <title>",
@@ -122,6 +126,16 @@ func newMissionAddCommand() *cobra.Command {
 			title, err := textnorm.Normalize(strings.Join(args, " "))
 			if err != nil {
 				return errcodes.New(errcodes.InvalidInput, "title: "+err.Error())
+			}
+			var approverIDs []string
+			if len(approvers) > 0 { // before routing: see preResolveHandle
+				if approverIDs, err = resolveApprovers(cmd.Context(), approvers); err != nil {
+					return err
+				}
+			}
+			route, err := routeWrite(cmd.Context(), &f, to, kindMission, title)
+			if err != nil {
+				return err
 			}
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
@@ -133,9 +147,22 @@ func newMissionAddCommand() *cobra.Command {
 				return err
 			}
 
+			if key != "" {
+				if m, err := client.Mission.Query().Where(entMission.ProjectID(projectID), entMission.IdempotencyKey(key)).First(cmd.Context()); err == nil {
+					if jsonOut {
+						printJSON(constants.KindMissionAdd, m, 0)
+						return nil
+					}
+					fmt.Printf("%s %s %s — %s (already added with --key %s)\n", style.Success("✓"), m.ID, style.Code(m.ID), m.Title, key)
+					return nil
+				}
+			}
 			create := client.Mission.Create().
 				SetProjectID(projectID).
 				SetTitle(title)
+			if key != "" {
+				create.SetIdempotencyKey(key)
+			}
 			if body != "" {
 				b, err := textnorm.Normalize(body)
 				if err == nil {
@@ -160,6 +187,9 @@ func newMissionAddCommand() *cobra.Command {
 				}
 			}
 			create.SetCreatedByActorID(actorID)
+			if len(approverIDs) > 0 {
+				create.SetApprovers(approverIDs)
+			}
 
 			m, err := create.Save(cmd.Context())
 			if err != nil {
@@ -169,15 +199,22 @@ func newMissionAddCommand() *cobra.Command {
 				printJSON(constants.KindMissionAdd, m, 0)
 				return nil
 			}
-			fmt.Printf("%s %s %s — %s\n", style.Success("✓"), m.ID, style.Code(m.ID), title)
+			label := ""
+			if route.Label != "" {
+				label = " → " + route.Label
+			}
+			fmt.Printf("%s %s %s — %s%s\n", style.Success("✓"), m.ID, style.Code(m.ID), title, label)
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	bindToFlags(cmd, &to, false)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output (the created mission)")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "longer description")
 	cmd.Flags().StringVar(&target, constants.FlagTarget, "", "target completion date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
+	cmd.Flags().StringSliceVar(&approvers, flagApprovers, nil, "only these people (@handle,…) may approve the mission's gates")
+	cmd.Flags().StringVar(&key, flagKey, "", "idempotency key: a re-run with the same key adds nothing")
 	return cmd
 }
 

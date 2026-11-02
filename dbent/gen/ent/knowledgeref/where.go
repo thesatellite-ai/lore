@@ -94,6 +94,11 @@ func DstID(v string) predicate.KnowledgeRef {
 	return predicate.KnowledgeRef(sql.FieldEQ(FieldDstID, v))
 }
 
+// DstProjectID applies equality check predicate on the "dst_project_id" field. It's identical to DstProjectIDEQ.
+func DstProjectID(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldEQ(FieldDstProjectID, v))
+}
+
 // Relation applies equality check predicate on the "relation" field. It's identical to RelationEQ.
 func Relation(v string) predicate.KnowledgeRef {
 	return predicate.KnowledgeRef(sql.FieldEQ(FieldRelation, v))
@@ -437,6 +442,81 @@ func DstIDEqualFold(v string) predicate.KnowledgeRef {
 // DstIDContainsFold applies the ContainsFold predicate on the "dst_id" field.
 func DstIDContainsFold(v string) predicate.KnowledgeRef {
 	return predicate.KnowledgeRef(sql.FieldContainsFold(FieldDstID, v))
+}
+
+// DstProjectIDEQ applies the EQ predicate on the "dst_project_id" field.
+func DstProjectIDEQ(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldEQ(FieldDstProjectID, v))
+}
+
+// DstProjectIDNEQ applies the NEQ predicate on the "dst_project_id" field.
+func DstProjectIDNEQ(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldNEQ(FieldDstProjectID, v))
+}
+
+// DstProjectIDIn applies the In predicate on the "dst_project_id" field.
+func DstProjectIDIn(vs ...string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldIn(FieldDstProjectID, vs...))
+}
+
+// DstProjectIDNotIn applies the NotIn predicate on the "dst_project_id" field.
+func DstProjectIDNotIn(vs ...string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldNotIn(FieldDstProjectID, vs...))
+}
+
+// DstProjectIDGT applies the GT predicate on the "dst_project_id" field.
+func DstProjectIDGT(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldGT(FieldDstProjectID, v))
+}
+
+// DstProjectIDGTE applies the GTE predicate on the "dst_project_id" field.
+func DstProjectIDGTE(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldGTE(FieldDstProjectID, v))
+}
+
+// DstProjectIDLT applies the LT predicate on the "dst_project_id" field.
+func DstProjectIDLT(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldLT(FieldDstProjectID, v))
+}
+
+// DstProjectIDLTE applies the LTE predicate on the "dst_project_id" field.
+func DstProjectIDLTE(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldLTE(FieldDstProjectID, v))
+}
+
+// DstProjectIDContains applies the Contains predicate on the "dst_project_id" field.
+func DstProjectIDContains(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldContains(FieldDstProjectID, v))
+}
+
+// DstProjectIDHasPrefix applies the HasPrefix predicate on the "dst_project_id" field.
+func DstProjectIDHasPrefix(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldHasPrefix(FieldDstProjectID, v))
+}
+
+// DstProjectIDHasSuffix applies the HasSuffix predicate on the "dst_project_id" field.
+func DstProjectIDHasSuffix(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldHasSuffix(FieldDstProjectID, v))
+}
+
+// DstProjectIDIsNil applies the IsNil predicate on the "dst_project_id" field.
+func DstProjectIDIsNil() predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldIsNull(FieldDstProjectID))
+}
+
+// DstProjectIDNotNil applies the NotNil predicate on the "dst_project_id" field.
+func DstProjectIDNotNil() predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldNotNull(FieldDstProjectID))
+}
+
+// DstProjectIDEqualFold applies the EqualFold predicate on the "dst_project_id" field.
+func DstProjectIDEqualFold(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldEqualFold(FieldDstProjectID, v))
+}
+
+// DstProjectIDContainsFold applies the ContainsFold predicate on the "dst_project_id" field.
+func DstProjectIDContainsFold(v string) predicate.KnowledgeRef {
+	return predicate.KnowledgeRef(sql.FieldContainsFold(FieldDstProjectID, v))
 }
 
 // RelationEQ applies the EQ predicate on the "relation" field.
