@@ -32,6 +32,7 @@ import (
 	"dbent"
 	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/lsync"
@@ -239,8 +240,7 @@ func openStoreProject(ctx context.Context, cfg *lorecfg.Config, ref storeProject
 		},
 	}
 	if !liveDisabled() {
-		p.live = newStoreLiveSession(ctx, st.Repo, st.Remote, stores.RemoteName, filepath.Join(st.Dir, storeStateDir), branch, sig)
-		p.live.prepare(ctx, liveCmdState.fetchKind())
+		p.live = storeLiveSessionFor(ctx, st, branch, sig)
 		p.liveFolder = storeLiveFolder(ref.Folder)
 	}
 	if err := p.materialize(ctx, files, stored); err != nil {
@@ -445,8 +445,14 @@ func (p *externalProject) syncOptions(db *sql.DB) lsync.Options {
 func (p *externalProject) flush(ctx context.Context) error {
 	err := p.flushBranch(ctx)
 	if p.live != nil {
-		p.live.finishStore(withStoreWrite(ctx), p.liveFolder)
-		p.live.release()
+		if !p.live.finished {
+			p.live.finishStore(withStoreWrite(ctx), p.liveFolder)
+		} else {
+			// The session was finished by another folder of the same store
+			// branch this command: land this folder too, then push.
+			p.live.autoLand(withStoreWrite(ctx), p.liveFolder)
+			p.live.push(withStoreWrite(ctx), false)
+		}
 	}
 	return err
 }
@@ -511,6 +517,34 @@ func (p *externalProject) diff() (stores.RowChanges, error) {
 	return rc, nil
 }
 
+// storeLiveSessions holds ONE live session per (bare clone, store branch)
+// for this command: two mirrors of one store branch (the linked project and
+// the org folder's roster) share it, because a second session would wait
+// out the first one's live lock in the same process (~30 s).
+var storeLiveSessions = map[string]*liveSession{}
+
+// storeLiveSessionFor returns the command's live session for a store
+// branch, preparing it (fetch + integrate) once.
+func storeLiveSessionFor(ctx context.Context, st *stores.Store, branch string, sig gitref.Signature) *liveSession {
+	key := st.Dir + "\x00" + branch
+	if s := storeLiveSessions[key]; s != nil {
+		return s
+	}
+	s := newStoreLiveSession(ctx, st.Repo, st.Remote, stores.RemoteName, filepath.Join(st.Dir, storeStateDir), branch, sig)
+	s.prepare(ctx, liveCmdState.fetchKind())
+	storeLiveSessions[key] = s
+	return s
+}
+
+// releaseStoreLiveSessions drops every store live lock at the end of the
+// command.
+func releaseStoreLiveSessions() {
+	for k, s := range storeLiveSessions {
+		s.release()
+		delete(storeLiveSessions, k)
+	}
+}
+
 // flushExternalProjects runs after every command (main): each opened
 // external project's writes reach their home. Errors are printed; the
 // command's own exit status is decided by the command.
@@ -530,6 +564,7 @@ func flushExternalProjects(ctx context.Context) error {
 		}
 	}
 	openedExternal = nil
+	releaseStoreLiveSessions()
 	return first
 }
 

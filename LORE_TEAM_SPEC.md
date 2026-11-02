@@ -15,9 +15,15 @@ Everything lore does today stays: **every row is one JSON file in `.lore/data/`,
 
 </Callout>
 
+<Callout type="info" title="Implementation status (2026-11-02)">
+
+Phases P1–P4 are built on branch `lore-team` (not yet on `main`): config and org resolution (lorecfg, orgresolve, identity), live rows and landing (live, rowroute, lsync merge driver), stores, links, roster, cache, render and leak checks (stores, cachedb, leakcheck, xref), and signals and agent coordination (signals, queue, mergewatch). The team scenario suite (`task lore:test:team`, tag `teame2e`) runs every flow with the real binary and real git: 136 of 136 pass, and the full gate (`task lore:check`) is green. Deltas from the original design are folded into the sections they change (coordinator answers of 2026-11-02, e.g. F10 rules 2–3 and 6, F9 trailer, F14 `--create`, D8 client row fields). Changes: [CHANGELOG.md](CHANGELOG.md). P5 is not started.
+
+</Callout>
+
 <Callout type="note" title="Status of this document">
 
-Design only. Nothing here is built unless a row says **exists** and cites a file and line; every such citation was checked against `main` (commit `2310f2e`) on 2026-11-02. Several things an earlier draft called "existing" are not usable as they are; §10 lists each as a code prerequisite. The owner's decisions of 2026-11-02 (D1–D12, Q-a, Q-b) are folded in and recorded as ADRs in §11. Work is tracked in lore task `tsk_01a198535b4979cfa658b4950d23450e`; a mission for the phases in §13 is created after approval.
+Written as a design: nothing was built when this was written unless a row says **exists** and cites a file and line; every such citation was checked against `main` (commit `2310f2e`) on 2026-11-02. Several things an earlier draft called "existing" are not usable as they are; §10 lists each as a code prerequisite. The owner's decisions of 2026-11-02 (D1–D12, Q-a, Q-b) are folded in and recorded as ADRs in §11. Work is tracked in lore task `tsk_01a198535b4979cfa658b4950d23450e`; a mission for the phases in §13 is created after approval.
 
 </Callout>
 

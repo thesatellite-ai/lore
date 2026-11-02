@@ -177,7 +177,9 @@ Bodies can be passed with `--body="…"` or piped: `echo "text" | lore memory ad
 | `lore init [path]` | Create a new project (`.lore/lore.db`, schema, gitignore, Project row). `--name`, `--non-interactive` |
 | `lore setup` | One-time post-install/upgrade migrations (builds the search index). Run once per project after install/upgrade |
 | `lore directive install` | Inject the lore agent-directive block into `CLAUDE.md` / `AGENTS.md` so agents know to use lore (`remove` to undo, `show` to print it) |
-| `lore identity` | Manage the persisted human/agent identity at `~/.lore/identity.toml` |
+| `lore identity` | Manage your identity: the fallback one in `~/.lore/identity.yaml` (migrated from `identity.toml`), and one per org with `lore identity set --org <org>` |
+| `lore whoami` | The org this repo resolves to and why, your identity, and what loads here |
+| `lore config check` | Validate `~/.lore/config.yaml` (orgs, stores, patterns, durations) and say where each problem is |
 | `lore config` | Get/set DB-level config keys (`dbconfig` table) |
 | `lore version` | Version, schema version, build info (`--json`) |
 | `lore doctor` | Health checks; exit 0 healthy / 1 degraded / 2 broken |
@@ -278,6 +280,29 @@ A sync pass runs automatically before and after every command; these subcommands
 | `lore sync install-git` | Install the merge driver, `.gitattributes` rules and hook blocks now (otherwise automatic); fails with `E_SYNC_DATA_IGNORED` when git ignores `.lore/data` |
 | `lore sync install-action` / `uninstall-action` | Opt in to (or remove) a GitHub workflow that settles lore-data conflicts in pull requests; `--manual`, `--branch`, `--dry-run` |
 | `lore sync ci-merge --base origin/main` | Merge a base branch in when only lore data conflicts and lore settles it all (what that workflow runs; never pushes) |
+
+### Teams, stores and agents
+
+Design and every rule: [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md). Live rows are shared with everyone at once on one hidden ref per repo (`refs/lore/live`) and land on `main` when finished; internal and personal notes live in separate lore-only store repos; agents claim tasks with a lease on a second hidden ref (`refs/lore/signals`).
+
+| Command | Use case |
+|---|---|
+| `lore task add "…" --live` / `--no-live` | Share a row with everyone at once, or keep it with the branch (the kind sets the default; tasks are live) |
+| `lore land [id] [--all] [--dry-run]` | Land finished live rows on `main` now (they also land by themselves, or ride along with your next push on a protected `main`) |
+| `lore live show` / `diff` / `log` / `restore` / `compact` / `purge` | Inspect and repair the live ref |
+| `lore explain <id>` | Every place an id exists, which copy won and why, the land decision |
+| `lore org use <entry>` / `lore org link <org> --project <folder>` / `lore org import <url>` | Pick an org for this repo, tie a client repo to its internal project (for the whole team), adopt a team's suggested config |
+| `lore store init <url> [--branch <b>]` / `show [--links]` / `open` / `forget` / `doctor` | Manage lore-only store repos |
+| `lore memory add --body "…" --to repo\|<org>\|<org>/<folder>\|me` | Choose who a row is for; `--create` makes a new store folder on purpose |
+| `lore share <id> --to repo` / `lore move <id> --to <org>` | Copy or move a row to another audience (new id; shows the text and asks) |
+| `lore check leaks` / `lore check pr-body <file>` | Leak checks: internal content never reaches a client repo, a commit message or a pull request |
+| `lore actor register` / `lore team add` / `lore agent start --label <name> --owner @you` | The roster: people, teams and per-session agent actors |
+| `lore task claim <id>` / `next` / `heartbeat` / `release` / `done --pr <n>` | Agents take work with a lease and a token; a crashed agent's task is picked up after the lease expires |
+| `lore task revoke` / `reassign` / `cancel` | Human overrides; the old holder is fenced out |
+| `lore task add … --after <id>[:merged]` / `lore gate request` / `lore gate approve` | Dependencies (done or merged on `main`) and human gates agents stop at |
+| `lore inbox` / `lore handoff add --for @x` / `lore finding add` / `lore mission status <id>` | Coordination views: what is for you, notes for the next agent, findings every agent sees, a mission at a glance |
+| `lore plan apply plan.yaml` / `lore resource claim <name>` | Create a mission and its tasks from a file (a re-run adds nothing); hold a shared resource with a lease |
+| `lore cache prune` / `lore context --internal` | Caches and internal renders live outside the checkout (`~/.lore/cache`, `~/.lore/render`) |
 
 ## Team sync through git
 

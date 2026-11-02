@@ -677,6 +677,58 @@ lore identity anonymize on   # anon:<random> per session (off to stop)
 
 ---
 
+## Teams: orgs, live rows, stores, agents
+
+Full design: `LORE_TEAM_SPEC.md`. Check where you are first:
+
+```bash
+lore whoami                                   # org, why it matched, identity, what loads here
+lore config check                             # validate ~/.lore/config.yaml
+```
+
+Live rows (shared with everyone at once; tasks are live by default):
+
+```bash
+lore rule add --body "never run migrations from the app container" --live
+lore land --all --dry-run                     # what would land on main now
+lore live show                                # this project's live rows
+lore explain tsk_01                           # where an id lives and which copy won
+```
+
+Orgs and stores (internal notes never go into a client repo):
+
+```bash
+lore store init git@github.com:northwind/lore            # once, in an empty repo
+lore org link northwind --project acme                   # tie this client repo to its internal project
+lore memory add --body "client prefers calls" --to northwind
+lore memory add --body "my own reminder" --to me
+lore share mem_01 --to repo                              # copy to the client on purpose (asks)
+lore check pr-body body.md                               # before posting a PR body or comment
+```
+
+Agents (one actor per session; claims have a lease):
+
+```bash
+lore agent start --label backend-1 --owner @alice        # prints LORE_ACTOR / LORE_SESSION to export
+lore inbox
+lore task next --mission mis_12                          # claims the best ready task (exit 10 = no work)
+lore task heartbeat                                      # keep the claim alive
+lore task note tsk_30 "mutation done; tests next"
+lore task done tsk_30 --pr 412 --lesson "tokens expire in 48h"
+lore finding add --mission mis_12 "the proxy strips X-Forwarded-Host"
+lore handoff add --for @frontend-2 --task tsk_31 "form is half done"
+```
+
+Humans coordinating:
+
+```bash
+lore plan apply plan.yaml                     # mission + tasks; a re-run adds nothing
+lore task add "invite UI" --after tsk_30:merged
+lore gate request tsk_31 && lore gate approve tsk_31
+lore mission status mis_12
+lore task revoke tsk_31                       # the holder is fenced out
+```
+
 ## Support Bundle (incident reporting)
 
 ```bash

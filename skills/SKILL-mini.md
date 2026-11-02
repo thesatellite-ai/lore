@@ -583,6 +583,22 @@ P20 migrate to new lore version
     lore render
 ```
 
+## TEAMS (orgs, live rows, agents)
+
+Tasks are live: they reach everyone at once on any branch and land on main when done (`--live` / `--no-live` per write). In a client repo a note without `--to` goes to the internal store; share on purpose only. Exit 12/13/14 = the task is no longer yours: stop. Agents never approve gates.
+
+```bash
+lore whoami                                           # org, why, identity: run once per repo
+lore check pr-body body.md                            # before posting a PR body or comment
+lore share mem_01 --to repo                           # deliberate share into the client repo
+lore agent start --label backend-1 --owner @alice     # export what it prints
+lore inbox
+lore task next --mission mis_12                       # exit 10 = no ready work
+lore task heartbeat
+lore task note tsk_30 "progress"
+lore task done tsk_30 --pr 412 --lesson "what you learned"
+```
+
 ## TOP ERROR CODES
 
 ```

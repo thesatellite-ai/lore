@@ -746,6 +746,16 @@ Backup → check schema → auto-migrate → verify. **Recipe: [PLAYBOOKS.md § 
 
 ---
 
+## 6b · Working in a team (orgs, live rows, agents)
+
+Run `lore whoami` once per repo: it says which org applies, why, and which identity you write as. Rules that hold in a team:
+
+- **Tasks are live:** a task you add or edit reaches everyone at once on any branch, and lands on `main` when done. Use `--live` to share a rule or memory at once; `--no-live` keeps a row with your branch.
+- **Never put internal content into a client repo.** Without `--to`, notes in a client repo go to the org's internal store. Before posting a PR body or comment run `lore check pr-body <file>`; a commit carrying internal ids or sentences is refused (`E_LEAK_BLOCKED`, exit 19). Share on purpose with `lore share <id> --to repo`.
+- **As an agent**, start with `lore agent start --label <name> --owner @<human>` and export what it prints, then loop: `lore inbox`, `lore task next --mission <id>` (exit 10 = no ready work), work, `lore task heartbeat` while working, `lore task note <id> "<progress>"`, `lore task done <id> --pr <n> --lesson "<what you learned>"`. Exit 12, 13 or 14 means the task is no longer yours: stop work on it.
+- **Gates:** an agent never approves; it stops at a gated task until a human runs `lore gate approve <id>`.
+- Findings every agent of a mission should see: `lore finding add --mission <id> "<text>"`. Notes for the next agent: `lore handoff add --for @<handle> --task <id> "<text>"`.
+
 ## 7 · Command tree (one-liner per command)
 
 Full reference with flags + examples + JSON output: [COMMANDS.md](./COMMANDS.md).
