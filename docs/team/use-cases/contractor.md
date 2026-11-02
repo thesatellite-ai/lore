@@ -49,19 +49,19 @@ $ lore store init git@github.com:northwind/lore-org && lore store init git@githu
 $ lore org link northwind --project acme --store git@github.com:northwind/lore-acme --yes
 This marks github.com/acme/app as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore-acme acme/,
 and the leak guards turn on for everyone in northwind.
-  link: project prj_01a1…f4ee at github.com/acme/app → github.com/northwind/lore-acme@main:acme/ (default=false)
-✓ github.com/acme/app (prj_01a1…f4ee, github.com/acme/app) linked to github.com/northwind/lore-acme acme/ (created; pushed)
+  link: project prj_7a67…9504 at github.com/acme/app → github.com/northwind/lore-acme@main:acme/ (default=false)
+✓ github.com/acme/app (prj_7a67…9504, github.com/acme/app) linked to github.com/northwind/lore-acme acme/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
-✓ act_0263…5705 Alice Doe (@alice) registered in northwind ./
+✓ act_2ad3…f891 Alice Doe (@alice) registered in northwind ./
 lore: [northwind/.] 3 file(s) pushed
 $ lore memory add --body 'the Acme staging database is restored every Sunday night'
-✓ mem_01a1…78f6 mem_01a1…78f6 [northwind/acme]
+✓ mem_162d…9666 mem_162d…9666 [northwind/acme]
   filed: defaults.client_repos.memory = northwind (a kind not listed goes to the linked project) → the linked project acme/
   scope: [master]
 lore: [northwind/acme] 2 file(s) pushed
 $ lore rule add --to northwind/. --body 'every client estimate is reviewed by two people before it is sent'
-✓ rul_01a1…5b23 rul_01a1…5b23 [northwind/.]
+✓ rul_54fe…28f2 rul_54fe…28f2 [northwind/.]
   filed: --to northwind/.
   scope: [master] severity: must
 lore: [northwind/.] 1 file(s) pushed
@@ -75,9 +75,9 @@ Casey, in the same client repo, sees the link, the Acme note and the company sto
 # cont1, in acme-app
 $ lore whoami
 org        northwind  (matched by: link in github.com/northwind/lore-acme acme/, project id + remote)
-identity   Casey Contractor <human:cont1@northwind.example>   act_8b27…d2ad  @cont1  (from: org entry (config.yaml))
+identity   Casey Contractor <human:cont1@northwind.example>   act_05e9…4603  @cont1  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-project    prj_01a1…f4ee
+project    prj_7a67…9504
 remotes    github.com/acme/app
 stores     git@github.com:northwind/lore-org on branch main  (org folder .)
            git@github.com:northwind/lore-acme on branch main
@@ -85,19 +85,19 @@ internal   github.com/northwind/lore-acme acme/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   local: northwind/, everywhere/
 $ lore actor register
-✓ act_8b27…d2ad Casey Contractor (@cont1) registered in northwind ./
+✓ act_05e9…4603 Casey Contractor (@cont1) registered in northwind ./
 lore: [northwind/.] 1 file(s) pushed
 $ lore memory list
-mem_01a1…78f6  the Acme staging database is restored every Sunday night  [northwind/acme]
+mem_162d…9666  the Acme staging database is restored every Sunday night  [northwind/acme]
 
 # cont1, in ~
 $ lore store show
 <redacted>
   entries   northwind   branches main
-  clone     /home/cont1/.lore/clones/github.com/northwind/lore-org.git (bare)   default branch main   last fetch 2026-11-02T18:42:24Z
+  clone     /home/cont1/.lore/clones/github.com/northwind/lore-org.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
 <redacted>
   entries   northwind   branches main
-  clone     /home/cont1/.lore/clones/github.com/northwind/lore-acme.git (bare)   default branch main   last fetch 2026-11-02T18:42:24Z
+  clone     /home/cont1/.lore/clones/github.com/northwind/lore-acme.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
 $ ls ~/.lore/clones/github.com/northwind
 lore-acme.git
 lore-org.git

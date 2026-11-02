@@ -21,13 +21,13 @@ personal:
 ```console
 # alice, in acme-app
 $ lore memory add --body 'I always forget the staging VPN profile' --to me
-✓ mem_01a1…43ac mem_01a1…43ac [me]
+✓ mem_7a67…9504 mem_7a67…9504 [me]
   filed: --to me → personal northwind/
   scope: [master]
 
 # alice, in scratch
 $ lore memory add --body 'I prefer tabs over spaces' --to me
-✓ mem_01a1…9c55 mem_01a1…9c55 [me]
+✓ mem_2ad3…f891 mem_2ad3…f891 [me]
   filed: --to me → personal everywhere/
   scope: [master]
 
@@ -37,17 +37,17 @@ note mentions [northwind], a known org or repo. Save it under everywhere/ anyway
 ERROR: [E_INVALID_INPUT] not saved
 (exit 1)
 $ lore memory list
-mem_01a1…9c55  I prefer tabs over spaces  [me]
-mem_01a1…43ac  I always forget the staging VPN profile  [me]
+mem_2ad3…f891  I prefer tabs over spaces  [me]
+mem_7a67…9504  I always forget the staging VPN profile  [me]
 
 # alice, in scratch
 $ lore memory list
-mem_01a1…9c55  I prefer tabs over spaces  [me]
+mem_2ad3…f891  I prefer tabs over spaces  [me]
 
 # alice, in ~
 $ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
-everywhere/.lore/data/memories/mem_01a1…9c55.json
-northwind/.lore/data/memories/mem_01a1…43ac.json
+everywhere/.lore/data/memories/mem_2ad3…f891.json
+northwind/.lore/data/memories/mem_7a67…9504.json
 ```
 <!-- /example -->
 
@@ -63,14 +63,14 @@ $ lore store init git@github.com:alice/lore-me
 
 # alice, in acme-app
 $ lore memory add --body 'the Acme invoice template lives in the shared drive' --to me
-✓ mem_01a1…7dd5 mem_01a1…7dd5 [me]
+✓ mem_162d…9666 mem_162d…9666 [me]
   filed: --to me → personal northwind/
   scope: [master]
 lore: [me] 4 file(s) pushed
 
 # alice-devbox, in acme-app
 $ lore memory list
-mem_01a1…7dd5  the Acme invoice template lives in the shared drive  [me]
+mem_162d…9666  the Acme invoice template lives in the shared drive  [me]
 ```
 <!-- /example -->
 

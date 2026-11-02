@@ -48,10 +48,10 @@ Live always wins over branch data, so an edit made by a teammate on live is what
 <!-- example: small-team#explain -->
 ```console
 # dev1, in billing
-$ lore explain tsk_01a1…9a35
-tsk_01a1…9a35 in /home/dev1/work/billing (folder _root)
-  fetched 2s ago
-  live (local f9aa0e2): row, live since 2026-11-02T18:41:45Z, hlc 2026-11-02T18:41:48.072Z/0000/act_9ede…5b9b
+$ lore explain tsk_162d…9666
+tsk_162d…9666 in /home/dev1/work/billing (folder _root)
+  fetched 35s ago
+  live (local 6d00426): row, live since 2026-11-02T10:00:15Z, hlc 2026-11-02T10:00:40.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: present
   wins: the live copy (rule 4: if a row id is in live, live wins)
@@ -91,7 +91,7 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-○ tsk_01a1…9a35 review the retry logic [medium]
+○ tsk_162d…9666 review the retry logic [medium]
 ```
 <!-- /example -->
 
@@ -114,15 +114,15 @@ Your branch, your index and your working folder are never touched: lore builds c
 ```console
 # dev2, in portal
 $ lore task add 'set up the portal CI'
-✓ tsk_01a1…5074 tsk_01a1…5074 — set up the portal CI [medium]
+✓ tsk_05e9…4603 tsk_05e9…4603 — set up the portal CI [medium]
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
-local     54a7d2872e8f
+local     601d2850ffd0
 tracking  (none)
 seen      (none)
 pending   2 write(s) not confirmed by the remote
-  _root/task_lists/tlt_01a1…7e9c.json
-  _root/tasks/tsk_01a1…5074.json
+  _root/task_lists/tlt_c0f3…b5b8.json
+  _root/tasks/tsk_05e9…4603.json
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 ```
 <!-- /example -->
@@ -168,20 +168,20 @@ When the remote refuses a direct push to `main` (GitHub's "protected branch" mes
 <!-- example: small-team#protected-main only=2,4,5 -->
 ```console
 # dev1, in billing
-$ lore sync >/dev/null && lore task done tsk_01a1…2d49
-✓ tsk_01a1…2d49 done
+$ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
+✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-lore: added "lore: land 1 row (_root)" to feat/login (tsk_01a1…2d49)
-[feat/login a0d102d] fix login timeout
+lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
+[feat/login 7898daa] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 $ git log --oneline -3
-6e5fa3f lore: land 1 row (_root)
-a0d102d fix login timeout
-aa3962b tighten retry
+ccfb0bb lore: land 1 row (_root)
+7898daa fix login timeout
+9b40ce7 tighten retry
 ```
 <!-- /example -->
 
@@ -211,10 +211,10 @@ Every live write is a commit, so the live ref's history grows. Compaction replac
 $ lore live compact --dry-run
 refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2
 $ lore live compact
-✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T111840
+✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
 epoch 2
-10a6dbf 2026-11-02 Alice Doe  lore: live compact (epoch 2)
+601d285 2026-11-02 Alice Doe  lore: live compact (epoch 2)
 ```
 <!-- /example -->
 
@@ -243,36 +243,36 @@ The ref always holds one commit; a heartbeat replaces it:
 <!-- example: internals#signals only=2,3,4,5,6 -->
 ```console
 # backend-1, in acme-app
-$ lore task claim tsk_01a1…eb3a
-✓ claimed tsk_01a1…eb3a renew the Acme SSL certificate (lease 20m, token ct_e813f…) on refs/lore/signals/main
+$ lore task claim tsk_c0f3…b5b8
+✓ claimed tsk_c0f3…b5b8 renew the Acme SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 
 # alice, in ~
 $ cd ~/.lore/clones/github.com/northwind/lore.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
-acme/claims/tsk_01a1…eb3a.json
-73b1c4c lore: signals
+acme/claims/tsk_c0f3…b5b8.json
+05513aa lore: signals
 $ cd ~/.lore/clones/github.com/northwind/lore.git && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
-  "task": "tsk_01a1…eb3a",
+  "task": "tsk_c0f3…b5b8",
   "project": "acme",
-  "holder": "act_99b9…ef83",
+  "holder": "act_3b62…e913",
   "holder_label": "agent:backend-1",
-  "session": "s-124467b7",
-  "claim_token": "ct_e813f…",
+  "session": "s-10e90368",
+  "claim_token": "ct_a5f6f…",
   "claim_epoch": 1,
-  "since": "2026-11-02T11:56:00Z",
-  "expires": "2026-11-02T12:16:00Z",
+  "since": "2026-11-02T10:01:15Z",
+  "expires": "2026-11-02T10:21:15Z",
   "renewed_seq": 0,
   "host": "devbox"
 }
 
 # backend-1, in acme-app
-$ lore task heartbeat tsk_01a1…eb3a
-✓ tsk_01a1…eb3a renewed until 2026-11-02T12:19:30Z (seq 1)
+$ lore task heartbeat tsk_c0f3…b5b8
+✓ tsk_c0f3…b5b8 renewed until 2026-11-02T10:21:30Z (seq 1)
 
 # alice, in ~
 $ cd ~/.lore/clones/github.com/northwind/lore.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main
-f417b45 lore: signals
+dfd8dc8 lore: signals
 ```
 <!-- /example -->
 
@@ -313,34 +313,33 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 <!-- example: agents#done-then-merged only=3,4,5,6,7 -->
 ```console
 # backend-1, in agents/globex-api
-$ lore task done tsk_01a1…9164 --commit $(git rev-parse HEAD) --lesson 'invite tokens expire in 48h, documented in the README'
-✓ tsk_01a1…9164 done (commit afa9e07); waiting for merge
-  lesson → mem_01a1…c94e
-lore live: landed on main (76b599b); leaves live once main is fetched
+$ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite tokens expire in 48h, documented in the README'
+✓ tsk_162d…9666 done (commit 05513aa); waiting for merge
+  lesson → mem_3b62…e913
+lore live: landed on main (dfd8dc8); leaves live once main is fetched
 lore live: 1 row(s) left live (main holds them)
 lore: [northwind/globex] 2 file(s) pushed
 
 # frontend-1, in agents/globex-web
-$ lore task next --mission msn_01a1…3935 --repo globex-web
+$ lore task next --mission msn_2ad3…f891 --repo globex-web
 ERROR: [E_NO_WORK] nothing ready:
-  tsk_01a1…99bc invite landing route: waits for tsk_01a1…9164 to be merged (done, afa9e07 not on the default branch yet)
+  tsk_54fe…28f2 invite landing route: waits for tsk_162d…9666 to be merged (done, 05513aa not on the default branch yet)
 (exit 10)
 
 # alice, in globex-api
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent/backend-1/invite && git push -q origin main
 $ lore task list
-✓ tsk_01a1…9164 merged 10:23 (found by: ancestry, bfafba0)
-lore live: landed on main (238b18a); leaves live once main is fetched
-(no tasks)
-tsk_01a1…9164  invite mutation + email  done  [northwind/globex]
-tsk_01a1…99bc  invite landing route  todo  [northwind/globex]
-tsk_01a1…2ca3  allow /invite on the proxy  done  [northwind/globex]
-tsk_01a1…0ee0  deploy to staging  todo  [northwind/globex]
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, cf563f3)
+lore live: landed on main (df3a55c); leaves live once main is fetched
+tsk_162d…9666  invite mutation + email  done  [northwind/globex]
+tsk_54fe…28f2  invite landing route  todo  [northwind/globex]
+tsk_05e9…4603  allow /invite on the proxy  done  [northwind/globex]
+tsk_c0f3…b5b8  deploy to staging  todo  [northwind/globex]
 
 # frontend-1, in agents/globex-web
-$ lore task next --mission msn_01a1…3935 --repo globex-web
-✓ claimed tsk_01a1…99bc invite landing route (lease 20m, token ct_dfe0b…) on refs/lore/signals/main
-  read its notes: lore task show tsk_01a1…99bc
+$ lore task next --mission msn_2ad3…f891 --repo globex-web
+✓ claimed tsk_54fe…28f2 invite landing route (lease 20m, token ct_dfebf…) on refs/lore/signals/main
+  read its notes: lore task show tsk_54fe…28f2
 lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
@@ -386,11 +385,11 @@ $ git -C ~/.lore/clones/github.com/northwind/lore.git cat-file -p main:acme/.lor
   "_v": 1,
   "links": [
     {
-      "project_id": "prj_01a1…7eac",
+      "project_id": "prj_05e9…4603",
       "remote": "github.com/acme/app"
     }
   ],
-  "project_id": "prj_01a1…254e"
+  "project_id": "prj_d431…313a"
 }
 ```
 <!-- /example -->
@@ -425,9 +424,9 @@ A **leak** is internal or personal content reaching anything the client can read
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
-  src/notes.ts:1                           matches internal note mem_01a1…147f (10 words)
-Move it:  lore move mem_01a1…147f --to <org>
-Share it on purpose: lore share mem_01a1…147f --to repo
+  src/notes.ts:1                           matches internal note mem_54fe…28f2 (10 words)
+Move it:  lore move mem_54fe…28f2 --to <org>
+Share it on purpose: lore share mem_54fe…28f2 --to repo
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 1)
 ```
@@ -455,9 +454,9 @@ What hooks cannot stop, honestly: `git commit --no-verify`, edits in the GitHub 
 $ lore render
 ✓ .lore/LORE.md (12255 bytes; 1R + 0HF)
 ✓ /home/alice/work/acme-app/CLAUDE.md (pointer → .lore/LORE.md)
-✓ internal context → /tmp/<redacted>/alice/.lore/render/prj_01a1…fe45.md (8 rows, outside the checkout); CLAUDE.local.md holds only the import line
+✓ internal context → /tmp/<redacted>/alice/.lore/render/prj_2ad3…f891.md (8 rows, outside the checkout); CLAUDE.local.md holds only the import line
 $ cat CLAUDE.local.md; git check-ignore -v CLAUDE.local.md
-@~/.lore/render/prj_01a1…fe45.md
+@~/.lore/render/prj_2ad3…f891.md
 .git/info/exclude:8:/CLAUDE.local.md	CLAUDE.local.md
 $ head -12 ~/.lore/render/*.md
 <!-- generated by lore; internal: never quote this content in client files, commits, PRs or chat -->

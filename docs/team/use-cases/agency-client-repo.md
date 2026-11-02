@@ -46,9 +46,9 @@ Once per client repo, anyone at Northwind links it to an internal project. Lore 
 # alice, in acme-app
 $ lore whoami
 org        northwind  (matched by: repos pattern github.com/acme/* of northwind)
-identity   Alice Doe <human:alice@northwind.example>   act_0263…5705  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@northwind.example>   act_7a67…9504  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-project    prj_01a1…fe45
+project    prj_2ad3…f891
 remotes    github.com/acme/app
 stores     git@github.com:northwind/lore on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
@@ -56,26 +56,26 @@ personal   local: northwind/, everywhere/
 $ lore org link northwind --project acme
 This marks github.com/acme/app as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore acme/,
 and the leak guards turn on for everyone in northwind.
-  link: project prj_01a1…fe45 at github.com/acme/app → github.com/northwind/lore@main:acme/ (default=false)
+  link: project prj_2ad3…f891 at github.com/acme/app → github.com/northwind/lore@main:acme/ (default=false)
 Continue? [y/N] y
-✓ github.com/acme/app (prj_01a1…fe45, github.com/acme/app) linked to github.com/northwind/lore acme/ (created; pushed)
+✓ github.com/acme/app (prj_2ad3…f891, github.com/acme/app) linked to github.com/northwind/lore acme/ (created; pushed)
   nothing was written to this repo
 $ git status --short
 $ lore actor register
-✓ act_0263…5705 Alice Doe (@alice) registered in northwind org/
+✓ act_7a67…9504 Alice Doe (@alice) registered in northwind org/
 lore: [northwind/org] 3 file(s) pushed
 
 # dev1, in acme-app
 $ lore actor register
-✓ act_b75c…d7d2 Dev One (@dev1) registered in northwind org/
+✓ act_162d…9666 Dev One (@dev1) registered in northwind org/
 lore: [northwind/org] 1 file(s) pushed
 
 # alice, in acme-app
 $ lore whoami
 org        northwind  (matched by: link in github.com/northwind/lore acme/, project id + remote)
-identity   Alice Doe <human:alice@northwind.example>   act_0263…5705  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@northwind.example>   act_7a67…9504  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-project    prj_01a1…fe45
+project    prj_2ad3…f891
 remotes    github.com/acme/app
 stores     git@github.com:northwind/lore on branch main  (org folder org)
 internal   github.com/northwind/lore acme/
@@ -92,17 +92,17 @@ Notes go to the internal project by default; a project rule goes into the repo w
 ```console
 # alice, in acme-app
 $ lore memory add --body 'they approve estimates faster when we send them on WhatsApp first'
-✓ mem_01a1…147f mem_01a1…147f [northwind/acme]
+✓ mem_54fe…28f2 mem_54fe…28f2 [northwind/acme]
   filed: defaults.client_repos.memory = northwind (personal config) → the linked project acme/
   scope: [master]
 lore: [northwind/acme] 2 file(s) pushed
 $ lore rule add --body 'money is stored in minor units' --to repo
-✓ rul_01a1…1be7 rul_01a1…1be7 
+✓ rul_05e9…4603 rul_05e9…4603 
   scope: [master] severity: must
 lore sync: exported 2
 lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ git status --short
-?? .lore/data/actors/act_0263…5705.json
+?? .lore/data/actors/act_7a67…9504.json
 ?? .lore/data/rules/
 ```
 <!-- /example -->
@@ -115,18 +115,17 @@ An internal task for dev1, from any branch. dev1 sees it in the list and inbox, 
 ```console
 # alice, in acme-app
 $ git switch -q -c feat/checkout && lore task add 'send invoice reminder before demo' --to northwind --assign @dev1
-✓ tsk_01a1…9ad8 tsk_01a1…9ad8 — send invoice reminder before demo [medium] → [northwind/acme]
+✓ tsk_c0f3…b5b8 tsk_c0f3…b5b8 — send invoice reminder before demo [medium] → [northwind/acme]
 
 # dev1, in acme-app
 $ lore sync >/dev/null; git switch -q -c feat/login && lore task list
-(no tasks)
-tsk_01a1…9ad8  send invoice reminder before demo  todo  [northwind/acme]
+tsk_c0f3…b5b8  send invoice reminder before demo  todo  [northwind/acme]
 $ lore inbox
--  assigned              tsk_01a1…9ad8  send invoice reminder before demo
-$ lore task done tsk_01a1…9ad8
-✓ tsk_01a1…9ad8 done
+-  assigned              tsk_c0f3…b5b8  send invoice reminder before demo
+$ lore task done tsk_c0f3…b5b8
+✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: landed on main (cf89016); leaves live once main is fetched
+lore live: landed on main (601d285); leaves live once main is fetched
 $ git status --short
 ```
 <!-- /example -->
@@ -141,9 +140,9 @@ For AI agents, `lore render` writes the internal context outside the checkout; t
 $ lore render
 ✓ .lore/LORE.md (12255 bytes; 1R + 0HF)
 ✓ /home/alice/work/acme-app/CLAUDE.md (pointer → .lore/LORE.md)
-✓ internal context → /tmp/<redacted>/alice/.lore/render/prj_01a1…fe45.md (8 rows, outside the checkout); CLAUDE.local.md holds only the import line
+✓ internal context → /tmp/<redacted>/alice/.lore/render/prj_2ad3…f891.md (8 rows, outside the checkout); CLAUDE.local.md holds only the import line
 $ cat CLAUDE.local.md; git check-ignore -v CLAUDE.local.md
-@~/.lore/render/prj_01a1…fe45.md
+@~/.lore/render/prj_2ad3…f891.md
 .git/info/exclude:8:/CLAUDE.local.md	CLAUDE.local.md
 $ head -12 ~/.lore/render/*.md
 <!-- generated by lore; internal: never quote this content in client files, commits, PRs or chat -->
@@ -161,9 +160,9 @@ If someone pastes internal text into a file of Acme's repo, the commit is blocke
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
-  src/notes.ts:1                           matches internal note mem_01a1…147f (10 words)
-Move it:  lore move mem_01a1…147f --to <org>
-Share it on purpose: lore share mem_01a1…147f --to repo
+  src/notes.ts:1                           matches internal note mem_54fe…28f2 (10 words)
+Move it:  lore move mem_54fe…28f2 --to <org>
+Share it on purpose: lore share mem_54fe…28f2 --to repo
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 1)
 ```
@@ -177,9 +176,9 @@ Agents check a pull request body or comment before posting it; the same text is 
 $ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on WhatsApp first.\n' > pr.md
 $ lore check pr-body pr.md
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this text would share internal content with the client repo:
-  PR body                                  matches internal note mem_01a1…147f (11 words)
-Move it:  lore move mem_01a1…147f --to <org>
-Share it on purpose: lore share mem_01a1…147f --to repo
+  PR body                                  matches internal note mem_54fe…28f2 (11 words)
+Move it:  lore move mem_54fe…28f2 --to <org>
+Share it on purpose: lore share mem_54fe…28f2 --to repo
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 19)
 $ printf 'Fixes checkout totals for INR.\n' | lore check pr-body -
@@ -193,10 +192,9 @@ Agents must say where a rule goes in a client repo; lore refuses to guess for th
 ```console
 # alice, in acme-app
 $ lore agent start --label backend-1 --owner @alice
-✓ act_99b9…ef83 agent backend-1 (owner @alice) registered in northwind org/; LORE_ACTOR=agent:backend-1 LORE_SESSION=s-b281b59e
-export LORE_ACTOR=agent:backend-1 LORE_SESSION=s-b281b59e
+✓ act_76bd…3f10 agent backend-1 (owner @alice) registered in northwind org/; LORE_ACTOR=agent:backend-1 LORE_SESSION=s-10e90368
+export LORE_ACTOR=agent:backend-1 LORE_SESSION=s-10e90368
 lore: [northwind/org] 1 file(s) pushed
-lore live: pushed waiting live writes
 $ lore rule add --body 'require prepayment from this client'
 ERROR: [E_INVALID_INPUT] stores: this write needs an explicit --to: a rule written by an agent in a client repo must pass --to (repo or northwind); nothing written
 (exit 1)
@@ -213,14 +211,14 @@ Acme's own developer uses lore in the same repo with no config. They see the pro
 $ git pull -q && lore memory list
 (no memories)
 $ lore rule list
-rul_01a1…1be7 [must/always] money is stored in minor units
+rul_05e9…4603 [must/always] money is stored in minor units
 $ lore task list
 (no tasks)
 $ lore whoami
 org        none  (matched by: nothing matched)
-identity   dev <human:dev@acme.example>   act_dc27…5d12  (from: git config)
+identity   dev <human:dev@acme.example>   act_28f8…03df  (from: git config)
 repo       no org  (fallback identity, personal everywhere/ notes only)
-project    prj_01a1…fe45
+project    prj_2ad3…f891
 remotes    github.com/acme/app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
 personal   local: everywhere/
@@ -250,7 +248,6 @@ no match in any ref
 - **Short sentences slip through the text check.** The commit check matches runs of 8 or more words. "they approve faster on WhatsApp" (5 words) pasted into a file is not caught; a longer copy is. Paraphrase is never caught. The check stops copy-paste accidents; it is not a wall.
 - **No store, no guess.** If the store cannot be read and there is no cached link index, writes without `--to` fail with `E_LINK_UNKNOWN`; see [Troubleshooting](../troubleshooting.md#e_link_unknown).
 - **Rules in a client repo** default to the repo in this config, so a person at a terminal can add them; an agent (or a script without a terminal) must pass `--to repo` or `--to northwind` explicitly.
-- **Known bug (BUG-D2):** today a Northwind person's actor file can be copied into the client repo with their email (`stable_key`), and `lore check leaks --ci` in the client's CI then fails, also on the client's own developers' actor files. A fix is in progress.
 - **`lore check pr-body`** checks a pull request text before an agent posts it; pass the file or `-` for stdin. Like the commit check, it matches copied runs of words.
 - Acme's own developers can use lore normally in the same repo (recipe "the client also uses lore"): their config is empty or names their own org, and they never see Northwind's store.
 - To share one internal note with Acme on purpose, see [Sharing an internal note with the client](sharing-a-note.md).

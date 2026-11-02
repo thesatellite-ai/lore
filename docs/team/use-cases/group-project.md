@@ -18,24 +18,24 @@ Link each repo to the same folder (once per repo, by anyone at Northwind):
 $ lore org link northwind --project globex --yes
 This marks github.com/globex/globex-api as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore globex/,
 and the leak guards turn on for everyone in northwind.
-  link: project prj_01a1…59ff at github.com/globex/globex-api → github.com/northwind/lore@main:globex/ (default=false)
-✓ github.com/globex/globex-api (prj_01a1…59ff, github.com/globex/globex-api) linked to github.com/northwind/lore globex/ (created; pushed)
+  link: project prj_7a67…9504 at github.com/globex/globex-api → github.com/northwind/lore@main:globex/ (default=false)
+✓ github.com/globex/globex-api (prj_7a67…9504, github.com/globex/globex-api) linked to github.com/northwind/lore globex/ (created; pushed)
   nothing was written to this repo
 
 # alice, in globex-web
 $ lore org link northwind --project globex --yes
 This marks github.com/globex/globex-web as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore globex/,
 and the leak guards turn on for everyone in northwind.
-  link: project prj_01a1…bee0 at github.com/globex/globex-web → github.com/northwind/lore@main:globex/ (default=false)
-✓ github.com/globex/globex-web (prj_01a1…bee0, github.com/globex/globex-web) linked to github.com/northwind/lore globex/ (pushed)
+  link: project prj_2ad3…f891 at github.com/globex/globex-web → github.com/northwind/lore@main:globex/ (default=false)
+✓ github.com/globex/globex-web (prj_2ad3…f891, github.com/globex/globex-web) linked to github.com/northwind/lore globex/ (pushed)
   nothing was written to this repo
 
 # alice, in globex-proxy
 $ lore org link northwind --project globex --yes
 This marks github.com/globex/globex-proxy as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore globex/,
 and the leak guards turn on for everyone in northwind.
-  link: project prj_01a1…ca8b at github.com/globex/globex-proxy → github.com/northwind/lore@main:globex/ (default=false)
-✓ github.com/globex/globex-proxy (prj_01a1…ca8b, github.com/globex/globex-proxy) linked to github.com/northwind/lore globex/ (pushed)
+  link: project prj_162d…9666 at github.com/globex/globex-proxy → github.com/northwind/lore@main:globex/ (default=false)
+✓ github.com/globex/globex-proxy (prj_162d…9666, github.com/globex/globex-proxy) linked to github.com/northwind/lore globex/ (pushed)
   nothing was written to this repo
 ```
 <!-- /example -->
@@ -46,16 +46,16 @@ The first link created `globex/` in the store; the others joined it. Now a missi
 ```console
 # alice, in globex-api
 $ lore mission add 'Invite landing page' --to northwind/globex --key invite
-✓ msn_01a1…db8b msn_01a1…db8b — Invite landing page → [northwind/globex]
+✓ msn_05e9…4603 msn_05e9…4603 — Invite landing page → [northwind/globex]
 lore live: (live, pushed)
-$ lore task add 'invite mutation + email' --to northwind/globex --mission msn_01a1…db8b --repo globex-api --key invite/backend
-✓ tsk_01a1…8bbe tsk_01a1…8bbe — invite mutation + email [medium] → [northwind/globex]
+$ lore task add 'invite mutation + email' --to northwind/globex --mission msn_05e9…4603 --repo globex-api --key invite/backend
+✓ tsk_c0f3…b5b8 tsk_c0f3…b5b8 — invite mutation + email [medium] → [northwind/globex]
 lore live: (live, pushed)
-$ lore task add 'invite landing route' --to northwind/globex --mission msn_01a1…db8b --repo globex-web --after tsk_01a1…8bbe --key invite/frontend
-✓ tsk_01a1…04c8 tsk_01a1…04c8 — invite landing route [medium] → [northwind/globex]
+$ lore task add 'invite landing route' --to northwind/globex --mission msn_05e9…4603 --repo globex-web --after tsk_c0f3…b5b8 --key invite/frontend
+✓ tsk_76bd…3f10 tsk_76bd…3f10 — invite landing route [medium] → [northwind/globex]
 lore live: (live, pushed)
-$ lore task add 'invite mutation + email' --to northwind/globex --mission msn_01a1…db8b --repo globex-api --key invite/backend
-✓ tsk_01a1…8bbe tsk_01a1…8bbe — invite mutation + email (already added with --key invite/backend)
+$ lore task add 'invite mutation + email' --to northwind/globex --mission msn_05e9…4603 --repo globex-api --key invite/backend
+✓ tsk_c0f3…b5b8 tsk_c0f3…b5b8 — invite mutation + email (already added with --key invite/backend)
 ```
 <!-- /example -->
 
@@ -65,15 +65,14 @@ Any of the three repos shows the group's tasks, and `lore mission status` shows 
 ```console
 # alice, in globex-web
 $ lore task list
-(no tasks)
-tsk_01a1…8bbe  invite mutation + email  todo  [northwind/globex]
-tsk_01a1…04c8  invite landing route  todo  [northwind/globex]
+tsk_c0f3…b5b8  invite mutation + email  todo  [northwind/globex]
+tsk_76bd…3f10  invite landing route  todo  [northwind/globex]
 
 # alice, in globex-proxy
-$ lore mission status msn_01a1…db8b
-msn_01a1…db8b Invite landing page   2 tasks · 0 done · 0 claimed · 1 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
-  waiting   tsk_01a1…04c8  invite landing route                      waits for tsk_01a1…8bbe to be merged (todo)
-  ready     tsk_01a1…8bbe  invite mutation + email                   
+$ lore mission status msn_05e9…4603
+msn_05e9…4603 Invite landing page   2 tasks · 0 done · 0 claimed · 1 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
+  ready     tsk_c0f3…b5b8  invite mutation + email                   
+  waiting   tsk_76bd…3f10  invite landing route                      waits for tsk_c0f3…b5b8 to be merged (todo)
 ```
 <!-- /example -->
 

@@ -10,7 +10,6 @@ The [agency setup](agency-client-repo.md#the-config): `acme/app` linked to `nort
 
 ## The commands
 
-> **Known bug (BUG-D1):** in the current build `lore share --to repo` from a linked client repo is refused with `E_LEAK_BLOCKED … pointers flow inward only`, as the output below shows. A fix is in progress; this page describes the intended behaviour and the example will show the successful share once the fix lands.
 
 `lore share` copies a row to a wider audience. It always shows the exact text and asks first. The copy gets a **new id** and carries no pointer back to the internal row, so the client repo never learns that an internal row exists; only the internal row records where it was shared:
 
@@ -18,18 +17,19 @@ The [agency setup](agency-client-repo.md#the-config): `acme/app` linked to `nort
 ```console
 # alice, in acme-app
 $ lore memory add --body 'checkout must support INR and USD'
-✓ mem_01a1…2197 mem_01a1…2197 [northwind/acme]
+✓ mem_d431…313a mem_d431…313a [northwind/acme]
   filed: defaults.client_repos.memory = northwind (personal config) → the linked project acme/
   scope: [master]
 lore: [northwind/acme] 1 file(s) pushed
-$ lore share mem_01a1…2197 --to repo
+$ lore share mem_d431…313a --to repo
 This becomes visible to everyone with access to github.com/acme/app:
   "checkout must support INR and USD"
 Share it? [y/N] y
-ERROR: [E_LEAK_BLOCKED] xref: pointers flow inward only: a client-readable row may not point at a internal row (the pointer alone reveals it); nothing written
-  hint: write the pointer on the internal side instead (e.g. --to <org>), where the client cannot read it
+✓ mem_b4f4…a5b0 shared copy of mem_d431…313a, in this repo (the copy has no pointer back; the original records the copy)
+lore: [northwind/acme] 1 file(s) pushed
 $ git status --short
 ?? .lore/LORE.md
+?? .lore/data/memories/
 ?? CLAUDE.md
 ```
 <!-- /example -->
