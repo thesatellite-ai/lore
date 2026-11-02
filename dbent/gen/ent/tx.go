@@ -130,6 +130,8 @@ type Tx struct {
 	TaskView *TaskViewClient
 	// TastePref is the client for interacting with the TastePref builders.
 	TastePref *TastePrefClient
+	// Team is the client for interacting with the Team builders.
+	Team *TeamClient
 	// TechDoc is the client for interacting with the TechDoc builders.
 	TechDoc *TechDocClient
 	// TechDocPage is the client for interacting with the TechDocPage builders.
@@ -331,6 +333,7 @@ func (tx *Tx) init() {
 	tx.TaskList = NewTaskListClient(tx.config)
 	tx.TaskView = NewTaskViewClient(tx.config)
 	tx.TastePref = NewTastePrefClient(tx.config)
+	tx.Team = NewTeamClient(tx.config)
 	tx.TechDoc = NewTechDocClient(tx.config)
 	tx.TechDocPage = NewTechDocPageClient(tx.config)
 	tx.TrustedPlugin = NewTrustedPluginClient(tx.config)

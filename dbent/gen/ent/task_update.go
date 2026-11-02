@@ -9,12 +9,14 @@ import (
 	"dbent/gen/ent/predicate"
 	"dbent/gen/ent/task"
 	"dbent/gen/ent/tasklist"
+	"dbent/schema"
 	"errors"
 	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 )
 
@@ -314,6 +316,358 @@ func (_u *TaskUpdate) ClearAssignedToActorID() *TaskUpdate {
 	return _u
 }
 
+// SetAssignedTeam sets the "assigned_team" field.
+func (_u *TaskUpdate) SetAssignedTeam(v string) *TaskUpdate {
+	_u.mutation.SetAssignedTeam(v)
+	return _u
+}
+
+// SetNillableAssignedTeam sets the "assigned_team" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableAssignedTeam(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetAssignedTeam(*v)
+	}
+	return _u
+}
+
+// ClearAssignedTeam clears the value of the "assigned_team" field.
+func (_u *TaskUpdate) ClearAssignedTeam() *TaskUpdate {
+	_u.mutation.ClearAssignedTeam()
+	return _u
+}
+
+// SetBlockedBy sets the "blocked_by" field.
+func (_u *TaskUpdate) SetBlockedBy(v []schema.TaskDependency) *TaskUpdate {
+	_u.mutation.SetBlockedBy(v)
+	return _u
+}
+
+// AppendBlockedBy appends value to the "blocked_by" field.
+func (_u *TaskUpdate) AppendBlockedBy(v []schema.TaskDependency) *TaskUpdate {
+	_u.mutation.AppendBlockedBy(v)
+	return _u
+}
+
+// ClearBlockedBy clears the value of the "blocked_by" field.
+func (_u *TaskUpdate) ClearBlockedBy() *TaskUpdate {
+	_u.mutation.ClearBlockedBy()
+	return _u
+}
+
+// SetClaimEpoch sets the "claim_epoch" field.
+func (_u *TaskUpdate) SetClaimEpoch(v int) *TaskUpdate {
+	_u.mutation.ResetClaimEpoch()
+	_u.mutation.SetClaimEpoch(v)
+	return _u
+}
+
+// SetNillableClaimEpoch sets the "claim_epoch" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableClaimEpoch(v *int) *TaskUpdate {
+	if v != nil {
+		_u.SetClaimEpoch(*v)
+	}
+	return _u
+}
+
+// AddClaimEpoch adds value to the "claim_epoch" field.
+func (_u *TaskUpdate) AddClaimEpoch(v int) *TaskUpdate {
+	_u.mutation.AddClaimEpoch(v)
+	return _u
+}
+
+// SetAttempts sets the "attempts" field.
+func (_u *TaskUpdate) SetAttempts(v int) *TaskUpdate {
+	_u.mutation.ResetAttempts()
+	_u.mutation.SetAttempts(v)
+	return _u
+}
+
+// SetNillableAttempts sets the "attempts" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableAttempts(v *int) *TaskUpdate {
+	if v != nil {
+		_u.SetAttempts(*v)
+	}
+	return _u
+}
+
+// AddAttempts adds value to the "attempts" field.
+func (_u *TaskUpdate) AddAttempts(v int) *TaskUpdate {
+	_u.mutation.AddAttempts(v)
+	return _u
+}
+
+// SetClaimLog sets the "claim_log" field.
+func (_u *TaskUpdate) SetClaimLog(v []schema.ClaimLogEntry) *TaskUpdate {
+	_u.mutation.SetClaimLog(v)
+	return _u
+}
+
+// AppendClaimLog appends value to the "claim_log" field.
+func (_u *TaskUpdate) AppendClaimLog(v []schema.ClaimLogEntry) *TaskUpdate {
+	_u.mutation.AppendClaimLog(v)
+	return _u
+}
+
+// ClearClaimLog clears the value of the "claim_log" field.
+func (_u *TaskUpdate) ClearClaimLog() *TaskUpdate {
+	_u.mutation.ClearClaimLog()
+	return _u
+}
+
+// SetTimeboxSeconds sets the "timebox_seconds" field.
+func (_u *TaskUpdate) SetTimeboxSeconds(v int64) *TaskUpdate {
+	_u.mutation.ResetTimeboxSeconds()
+	_u.mutation.SetTimeboxSeconds(v)
+	return _u
+}
+
+// SetNillableTimeboxSeconds sets the "timebox_seconds" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableTimeboxSeconds(v *int64) *TaskUpdate {
+	if v != nil {
+		_u.SetTimeboxSeconds(*v)
+	}
+	return _u
+}
+
+// AddTimeboxSeconds adds value to the "timebox_seconds" field.
+func (_u *TaskUpdate) AddTimeboxSeconds(v int64) *TaskUpdate {
+	_u.mutation.AddTimeboxSeconds(v)
+	return _u
+}
+
+// ClearTimeboxSeconds clears the value of the "timebox_seconds" field.
+func (_u *TaskUpdate) ClearTimeboxSeconds() *TaskUpdate {
+	_u.mutation.ClearTimeboxSeconds()
+	return _u
+}
+
+// SetGate sets the "gate" field.
+func (_u *TaskUpdate) SetGate(v task.Gate) *TaskUpdate {
+	_u.mutation.SetGate(v)
+	return _u
+}
+
+// SetNillableGate sets the "gate" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableGate(v *task.Gate) *TaskUpdate {
+	if v != nil {
+		_u.SetGate(*v)
+	}
+	return _u
+}
+
+// ClearGate clears the value of the "gate" field.
+func (_u *TaskUpdate) ClearGate() *TaskUpdate {
+	_u.mutation.ClearGate()
+	return _u
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (_u *TaskUpdate) SetApprovedBy(v string) *TaskUpdate {
+	_u.mutation.SetApprovedBy(v)
+	return _u
+}
+
+// SetNillableApprovedBy sets the "approved_by" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableApprovedBy(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetApprovedBy(*v)
+	}
+	return _u
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (_u *TaskUpdate) ClearApprovedBy() *TaskUpdate {
+	_u.mutation.ClearApprovedBy()
+	return _u
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (_u *TaskUpdate) SetApprovedAt(v time.Time) *TaskUpdate {
+	_u.mutation.SetApprovedAt(v)
+	return _u
+}
+
+// SetNillableApprovedAt sets the "approved_at" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableApprovedAt(v *time.Time) *TaskUpdate {
+	if v != nil {
+		_u.SetApprovedAt(*v)
+	}
+	return _u
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (_u *TaskUpdate) ClearApprovedAt() *TaskUpdate {
+	_u.mutation.ClearApprovedAt()
+	return _u
+}
+
+// SetApprovedHash sets the "approved_hash" field.
+func (_u *TaskUpdate) SetApprovedHash(v string) *TaskUpdate {
+	_u.mutation.SetApprovedHash(v)
+	return _u
+}
+
+// SetNillableApprovedHash sets the "approved_hash" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableApprovedHash(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetApprovedHash(*v)
+	}
+	return _u
+}
+
+// ClearApprovedHash clears the value of the "approved_hash" field.
+func (_u *TaskUpdate) ClearApprovedHash() *TaskUpdate {
+	_u.mutation.ClearApprovedHash()
+	return _u
+}
+
+// SetDoneBy sets the "done_by" field.
+func (_u *TaskUpdate) SetDoneBy(v string) *TaskUpdate {
+	_u.mutation.SetDoneBy(v)
+	return _u
+}
+
+// SetNillableDoneBy sets the "done_by" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableDoneBy(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetDoneBy(*v)
+	}
+	return _u
+}
+
+// ClearDoneBy clears the value of the "done_by" field.
+func (_u *TaskUpdate) ClearDoneBy() *TaskUpdate {
+	_u.mutation.ClearDoneBy()
+	return _u
+}
+
+// SetDoneCommit sets the "done_commit" field.
+func (_u *TaskUpdate) SetDoneCommit(v string) *TaskUpdate {
+	_u.mutation.SetDoneCommit(v)
+	return _u
+}
+
+// SetNillableDoneCommit sets the "done_commit" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableDoneCommit(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetDoneCommit(*v)
+	}
+	return _u
+}
+
+// ClearDoneCommit clears the value of the "done_commit" field.
+func (_u *TaskUpdate) ClearDoneCommit() *TaskUpdate {
+	_u.mutation.ClearDoneCommit()
+	return _u
+}
+
+// SetDonePr sets the "done_pr" field.
+func (_u *TaskUpdate) SetDonePr(v int) *TaskUpdate {
+	_u.mutation.ResetDonePr()
+	_u.mutation.SetDonePr(v)
+	return _u
+}
+
+// SetNillableDonePr sets the "done_pr" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableDonePr(v *int) *TaskUpdate {
+	if v != nil {
+		_u.SetDonePr(*v)
+	}
+	return _u
+}
+
+// AddDonePr adds value to the "done_pr" field.
+func (_u *TaskUpdate) AddDonePr(v int) *TaskUpdate {
+	_u.mutation.AddDonePr(v)
+	return _u
+}
+
+// ClearDonePr clears the value of the "done_pr" field.
+func (_u *TaskUpdate) ClearDonePr() *TaskUpdate {
+	_u.mutation.ClearDonePr()
+	return _u
+}
+
+// SetMergedAt sets the "merged_at" field.
+func (_u *TaskUpdate) SetMergedAt(v time.Time) *TaskUpdate {
+	_u.mutation.SetMergedAt(v)
+	return _u
+}
+
+// SetNillableMergedAt sets the "merged_at" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableMergedAt(v *time.Time) *TaskUpdate {
+	if v != nil {
+		_u.SetMergedAt(*v)
+	}
+	return _u
+}
+
+// ClearMergedAt clears the value of the "merged_at" field.
+func (_u *TaskUpdate) ClearMergedAt() *TaskUpdate {
+	_u.mutation.ClearMergedAt()
+	return _u
+}
+
+// SetWorkBranch sets the "work_branch" field.
+func (_u *TaskUpdate) SetWorkBranch(v string) *TaskUpdate {
+	_u.mutation.SetWorkBranch(v)
+	return _u
+}
+
+// SetNillableWorkBranch sets the "work_branch" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableWorkBranch(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetWorkBranch(*v)
+	}
+	return _u
+}
+
+// ClearWorkBranch clears the value of the "work_branch" field.
+func (_u *TaskUpdate) ClearWorkBranch() *TaskUpdate {
+	_u.mutation.ClearWorkBranch()
+	return _u
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (_u *TaskUpdate) SetIdempotencyKey(v string) *TaskUpdate {
+	_u.mutation.SetIdempotencyKey(v)
+	return _u
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableIdempotencyKey(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetIdempotencyKey(*v)
+	}
+	return _u
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (_u *TaskUpdate) ClearIdempotencyKey() *TaskUpdate {
+	_u.mutation.ClearIdempotencyKey()
+	return _u
+}
+
+// SetRole sets the "role" field.
+func (_u *TaskUpdate) SetRole(v string) *TaskUpdate {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableRole(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetRole(*v)
+	}
+	return _u
+}
+
+// ClearRole clears the value of the "role" field.
+func (_u *TaskUpdate) ClearRole() *TaskUpdate {
+	_u.mutation.ClearRole()
+	return _u
+}
+
 // SetMission sets the "mission" edge to the Mission entity.
 func (_u *TaskUpdate) SetMission(v *Mission) *TaskUpdate {
 	return _u.SetMissionID(v.ID)
@@ -410,6 +764,31 @@ func (_u *TaskUpdate) check() error {
 			return &ValidationError{Name: "commitment", err: fmt.Errorf(`ent: validator failed for field "Task.commitment": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ClaimEpoch(); ok {
+		if err := task.ClaimEpochValidator(v); err != nil {
+			return &ValidationError{Name: "claim_epoch", err: fmt.Errorf(`ent: validator failed for field "Task.claim_epoch": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Attempts(); ok {
+		if err := task.AttemptsValidator(v); err != nil {
+			return &ValidationError{Name: "attempts", err: fmt.Errorf(`ent: validator failed for field "Task.attempts": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TimeboxSeconds(); ok {
+		if err := task.TimeboxSecondsValidator(v); err != nil {
+			return &ValidationError{Name: "timebox_seconds", err: fmt.Errorf(`ent: validator failed for field "Task.timebox_seconds": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Gate(); ok {
+		if err := task.GateValidator(v); err != nil {
+			return &ValidationError{Name: "gate", err: fmt.Errorf(`ent: validator failed for field "Task.gate": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DonePr(); ok {
+		if err := task.DonePrValidator(v); err != nil {
+			return &ValidationError{Name: "done_pr", err: fmt.Errorf(`ent: validator failed for field "Task.done_pr": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -493,6 +872,124 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.AssignedToActorIDCleared() {
 		_spec.ClearField(task.FieldAssignedToActorID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AssignedTeam(); ok {
+		_spec.SetField(task.FieldAssignedTeam, field.TypeString, value)
+	}
+	if _u.mutation.AssignedTeamCleared() {
+		_spec.ClearField(task.FieldAssignedTeam, field.TypeString)
+	}
+	if value, ok := _u.mutation.BlockedBy(); ok {
+		_spec.SetField(task.FieldBlockedBy, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBlockedBy(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, task.FieldBlockedBy, value)
+		})
+	}
+	if _u.mutation.BlockedByCleared() {
+		_spec.ClearField(task.FieldBlockedBy, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ClaimEpoch(); ok {
+		_spec.SetField(task.FieldClaimEpoch, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedClaimEpoch(); ok {
+		_spec.AddField(task.FieldClaimEpoch, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Attempts(); ok {
+		_spec.SetField(task.FieldAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAttempts(); ok {
+		_spec.AddField(task.FieldAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ClaimLog(); ok {
+		_spec.SetField(task.FieldClaimLog, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedClaimLog(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, task.FieldClaimLog, value)
+		})
+	}
+	if _u.mutation.ClaimLogCleared() {
+		_spec.ClearField(task.FieldClaimLog, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.TimeboxSeconds(); ok {
+		_spec.SetField(task.FieldTimeboxSeconds, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedTimeboxSeconds(); ok {
+		_spec.AddField(task.FieldTimeboxSeconds, field.TypeInt64, value)
+	}
+	if _u.mutation.TimeboxSecondsCleared() {
+		_spec.ClearField(task.FieldTimeboxSeconds, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.Gate(); ok {
+		_spec.SetField(task.FieldGate, field.TypeEnum, value)
+	}
+	if _u.mutation.GateCleared() {
+		_spec.ClearField(task.FieldGate, field.TypeEnum)
+	}
+	if value, ok := _u.mutation.ApprovedBy(); ok {
+		_spec.SetField(task.FieldApprovedBy, field.TypeString, value)
+	}
+	if _u.mutation.ApprovedByCleared() {
+		_spec.ClearField(task.FieldApprovedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.ApprovedAt(); ok {
+		_spec.SetField(task.FieldApprovedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ApprovedAtCleared() {
+		_spec.ClearField(task.FieldApprovedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ApprovedHash(); ok {
+		_spec.SetField(task.FieldApprovedHash, field.TypeString, value)
+	}
+	if _u.mutation.ApprovedHashCleared() {
+		_spec.ClearField(task.FieldApprovedHash, field.TypeString)
+	}
+	if value, ok := _u.mutation.DoneBy(); ok {
+		_spec.SetField(task.FieldDoneBy, field.TypeString, value)
+	}
+	if _u.mutation.DoneByCleared() {
+		_spec.ClearField(task.FieldDoneBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.DoneCommit(); ok {
+		_spec.SetField(task.FieldDoneCommit, field.TypeString, value)
+	}
+	if _u.mutation.DoneCommitCleared() {
+		_spec.ClearField(task.FieldDoneCommit, field.TypeString)
+	}
+	if value, ok := _u.mutation.DonePr(); ok {
+		_spec.SetField(task.FieldDonePr, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedDonePr(); ok {
+		_spec.AddField(task.FieldDonePr, field.TypeInt, value)
+	}
+	if _u.mutation.DonePrCleared() {
+		_spec.ClearField(task.FieldDonePr, field.TypeInt)
+	}
+	if value, ok := _u.mutation.MergedAt(); ok {
+		_spec.SetField(task.FieldMergedAt, field.TypeTime, value)
+	}
+	if _u.mutation.MergedAtCleared() {
+		_spec.ClearField(task.FieldMergedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.WorkBranch(); ok {
+		_spec.SetField(task.FieldWorkBranch, field.TypeString, value)
+	}
+	if _u.mutation.WorkBranchCleared() {
+		_spec.ClearField(task.FieldWorkBranch, field.TypeString)
+	}
+	if value, ok := _u.mutation.IdempotencyKey(); ok {
+		_spec.SetField(task.FieldIdempotencyKey, field.TypeString, value)
+	}
+	if _u.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(task.FieldIdempotencyKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(task.FieldRole, field.TypeString, value)
+	}
+	if _u.mutation.RoleCleared() {
+		_spec.ClearField(task.FieldRole, field.TypeString)
 	}
 	if _u.mutation.MissionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -885,6 +1382,358 @@ func (_u *TaskUpdateOne) ClearAssignedToActorID() *TaskUpdateOne {
 	return _u
 }
 
+// SetAssignedTeam sets the "assigned_team" field.
+func (_u *TaskUpdateOne) SetAssignedTeam(v string) *TaskUpdateOne {
+	_u.mutation.SetAssignedTeam(v)
+	return _u
+}
+
+// SetNillableAssignedTeam sets the "assigned_team" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableAssignedTeam(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetAssignedTeam(*v)
+	}
+	return _u
+}
+
+// ClearAssignedTeam clears the value of the "assigned_team" field.
+func (_u *TaskUpdateOne) ClearAssignedTeam() *TaskUpdateOne {
+	_u.mutation.ClearAssignedTeam()
+	return _u
+}
+
+// SetBlockedBy sets the "blocked_by" field.
+func (_u *TaskUpdateOne) SetBlockedBy(v []schema.TaskDependency) *TaskUpdateOne {
+	_u.mutation.SetBlockedBy(v)
+	return _u
+}
+
+// AppendBlockedBy appends value to the "blocked_by" field.
+func (_u *TaskUpdateOne) AppendBlockedBy(v []schema.TaskDependency) *TaskUpdateOne {
+	_u.mutation.AppendBlockedBy(v)
+	return _u
+}
+
+// ClearBlockedBy clears the value of the "blocked_by" field.
+func (_u *TaskUpdateOne) ClearBlockedBy() *TaskUpdateOne {
+	_u.mutation.ClearBlockedBy()
+	return _u
+}
+
+// SetClaimEpoch sets the "claim_epoch" field.
+func (_u *TaskUpdateOne) SetClaimEpoch(v int) *TaskUpdateOne {
+	_u.mutation.ResetClaimEpoch()
+	_u.mutation.SetClaimEpoch(v)
+	return _u
+}
+
+// SetNillableClaimEpoch sets the "claim_epoch" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableClaimEpoch(v *int) *TaskUpdateOne {
+	if v != nil {
+		_u.SetClaimEpoch(*v)
+	}
+	return _u
+}
+
+// AddClaimEpoch adds value to the "claim_epoch" field.
+func (_u *TaskUpdateOne) AddClaimEpoch(v int) *TaskUpdateOne {
+	_u.mutation.AddClaimEpoch(v)
+	return _u
+}
+
+// SetAttempts sets the "attempts" field.
+func (_u *TaskUpdateOne) SetAttempts(v int) *TaskUpdateOne {
+	_u.mutation.ResetAttempts()
+	_u.mutation.SetAttempts(v)
+	return _u
+}
+
+// SetNillableAttempts sets the "attempts" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableAttempts(v *int) *TaskUpdateOne {
+	if v != nil {
+		_u.SetAttempts(*v)
+	}
+	return _u
+}
+
+// AddAttempts adds value to the "attempts" field.
+func (_u *TaskUpdateOne) AddAttempts(v int) *TaskUpdateOne {
+	_u.mutation.AddAttempts(v)
+	return _u
+}
+
+// SetClaimLog sets the "claim_log" field.
+func (_u *TaskUpdateOne) SetClaimLog(v []schema.ClaimLogEntry) *TaskUpdateOne {
+	_u.mutation.SetClaimLog(v)
+	return _u
+}
+
+// AppendClaimLog appends value to the "claim_log" field.
+func (_u *TaskUpdateOne) AppendClaimLog(v []schema.ClaimLogEntry) *TaskUpdateOne {
+	_u.mutation.AppendClaimLog(v)
+	return _u
+}
+
+// ClearClaimLog clears the value of the "claim_log" field.
+func (_u *TaskUpdateOne) ClearClaimLog() *TaskUpdateOne {
+	_u.mutation.ClearClaimLog()
+	return _u
+}
+
+// SetTimeboxSeconds sets the "timebox_seconds" field.
+func (_u *TaskUpdateOne) SetTimeboxSeconds(v int64) *TaskUpdateOne {
+	_u.mutation.ResetTimeboxSeconds()
+	_u.mutation.SetTimeboxSeconds(v)
+	return _u
+}
+
+// SetNillableTimeboxSeconds sets the "timebox_seconds" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableTimeboxSeconds(v *int64) *TaskUpdateOne {
+	if v != nil {
+		_u.SetTimeboxSeconds(*v)
+	}
+	return _u
+}
+
+// AddTimeboxSeconds adds value to the "timebox_seconds" field.
+func (_u *TaskUpdateOne) AddTimeboxSeconds(v int64) *TaskUpdateOne {
+	_u.mutation.AddTimeboxSeconds(v)
+	return _u
+}
+
+// ClearTimeboxSeconds clears the value of the "timebox_seconds" field.
+func (_u *TaskUpdateOne) ClearTimeboxSeconds() *TaskUpdateOne {
+	_u.mutation.ClearTimeboxSeconds()
+	return _u
+}
+
+// SetGate sets the "gate" field.
+func (_u *TaskUpdateOne) SetGate(v task.Gate) *TaskUpdateOne {
+	_u.mutation.SetGate(v)
+	return _u
+}
+
+// SetNillableGate sets the "gate" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableGate(v *task.Gate) *TaskUpdateOne {
+	if v != nil {
+		_u.SetGate(*v)
+	}
+	return _u
+}
+
+// ClearGate clears the value of the "gate" field.
+func (_u *TaskUpdateOne) ClearGate() *TaskUpdateOne {
+	_u.mutation.ClearGate()
+	return _u
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (_u *TaskUpdateOne) SetApprovedBy(v string) *TaskUpdateOne {
+	_u.mutation.SetApprovedBy(v)
+	return _u
+}
+
+// SetNillableApprovedBy sets the "approved_by" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableApprovedBy(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetApprovedBy(*v)
+	}
+	return _u
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (_u *TaskUpdateOne) ClearApprovedBy() *TaskUpdateOne {
+	_u.mutation.ClearApprovedBy()
+	return _u
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (_u *TaskUpdateOne) SetApprovedAt(v time.Time) *TaskUpdateOne {
+	_u.mutation.SetApprovedAt(v)
+	return _u
+}
+
+// SetNillableApprovedAt sets the "approved_at" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableApprovedAt(v *time.Time) *TaskUpdateOne {
+	if v != nil {
+		_u.SetApprovedAt(*v)
+	}
+	return _u
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (_u *TaskUpdateOne) ClearApprovedAt() *TaskUpdateOne {
+	_u.mutation.ClearApprovedAt()
+	return _u
+}
+
+// SetApprovedHash sets the "approved_hash" field.
+func (_u *TaskUpdateOne) SetApprovedHash(v string) *TaskUpdateOne {
+	_u.mutation.SetApprovedHash(v)
+	return _u
+}
+
+// SetNillableApprovedHash sets the "approved_hash" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableApprovedHash(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetApprovedHash(*v)
+	}
+	return _u
+}
+
+// ClearApprovedHash clears the value of the "approved_hash" field.
+func (_u *TaskUpdateOne) ClearApprovedHash() *TaskUpdateOne {
+	_u.mutation.ClearApprovedHash()
+	return _u
+}
+
+// SetDoneBy sets the "done_by" field.
+func (_u *TaskUpdateOne) SetDoneBy(v string) *TaskUpdateOne {
+	_u.mutation.SetDoneBy(v)
+	return _u
+}
+
+// SetNillableDoneBy sets the "done_by" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableDoneBy(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetDoneBy(*v)
+	}
+	return _u
+}
+
+// ClearDoneBy clears the value of the "done_by" field.
+func (_u *TaskUpdateOne) ClearDoneBy() *TaskUpdateOne {
+	_u.mutation.ClearDoneBy()
+	return _u
+}
+
+// SetDoneCommit sets the "done_commit" field.
+func (_u *TaskUpdateOne) SetDoneCommit(v string) *TaskUpdateOne {
+	_u.mutation.SetDoneCommit(v)
+	return _u
+}
+
+// SetNillableDoneCommit sets the "done_commit" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableDoneCommit(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetDoneCommit(*v)
+	}
+	return _u
+}
+
+// ClearDoneCommit clears the value of the "done_commit" field.
+func (_u *TaskUpdateOne) ClearDoneCommit() *TaskUpdateOne {
+	_u.mutation.ClearDoneCommit()
+	return _u
+}
+
+// SetDonePr sets the "done_pr" field.
+func (_u *TaskUpdateOne) SetDonePr(v int) *TaskUpdateOne {
+	_u.mutation.ResetDonePr()
+	_u.mutation.SetDonePr(v)
+	return _u
+}
+
+// SetNillableDonePr sets the "done_pr" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableDonePr(v *int) *TaskUpdateOne {
+	if v != nil {
+		_u.SetDonePr(*v)
+	}
+	return _u
+}
+
+// AddDonePr adds value to the "done_pr" field.
+func (_u *TaskUpdateOne) AddDonePr(v int) *TaskUpdateOne {
+	_u.mutation.AddDonePr(v)
+	return _u
+}
+
+// ClearDonePr clears the value of the "done_pr" field.
+func (_u *TaskUpdateOne) ClearDonePr() *TaskUpdateOne {
+	_u.mutation.ClearDonePr()
+	return _u
+}
+
+// SetMergedAt sets the "merged_at" field.
+func (_u *TaskUpdateOne) SetMergedAt(v time.Time) *TaskUpdateOne {
+	_u.mutation.SetMergedAt(v)
+	return _u
+}
+
+// SetNillableMergedAt sets the "merged_at" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableMergedAt(v *time.Time) *TaskUpdateOne {
+	if v != nil {
+		_u.SetMergedAt(*v)
+	}
+	return _u
+}
+
+// ClearMergedAt clears the value of the "merged_at" field.
+func (_u *TaskUpdateOne) ClearMergedAt() *TaskUpdateOne {
+	_u.mutation.ClearMergedAt()
+	return _u
+}
+
+// SetWorkBranch sets the "work_branch" field.
+func (_u *TaskUpdateOne) SetWorkBranch(v string) *TaskUpdateOne {
+	_u.mutation.SetWorkBranch(v)
+	return _u
+}
+
+// SetNillableWorkBranch sets the "work_branch" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableWorkBranch(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetWorkBranch(*v)
+	}
+	return _u
+}
+
+// ClearWorkBranch clears the value of the "work_branch" field.
+func (_u *TaskUpdateOne) ClearWorkBranch() *TaskUpdateOne {
+	_u.mutation.ClearWorkBranch()
+	return _u
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (_u *TaskUpdateOne) SetIdempotencyKey(v string) *TaskUpdateOne {
+	_u.mutation.SetIdempotencyKey(v)
+	return _u
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableIdempotencyKey(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetIdempotencyKey(*v)
+	}
+	return _u
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (_u *TaskUpdateOne) ClearIdempotencyKey() *TaskUpdateOne {
+	_u.mutation.ClearIdempotencyKey()
+	return _u
+}
+
+// SetRole sets the "role" field.
+func (_u *TaskUpdateOne) SetRole(v string) *TaskUpdateOne {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableRole(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetRole(*v)
+	}
+	return _u
+}
+
+// ClearRole clears the value of the "role" field.
+func (_u *TaskUpdateOne) ClearRole() *TaskUpdateOne {
+	_u.mutation.ClearRole()
+	return _u
+}
+
 // SetMission sets the "mission" edge to the Mission entity.
 func (_u *TaskUpdateOne) SetMission(v *Mission) *TaskUpdateOne {
 	return _u.SetMissionID(v.ID)
@@ -994,6 +1843,31 @@ func (_u *TaskUpdateOne) check() error {
 			return &ValidationError{Name: "commitment", err: fmt.Errorf(`ent: validator failed for field "Task.commitment": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ClaimEpoch(); ok {
+		if err := task.ClaimEpochValidator(v); err != nil {
+			return &ValidationError{Name: "claim_epoch", err: fmt.Errorf(`ent: validator failed for field "Task.claim_epoch": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Attempts(); ok {
+		if err := task.AttemptsValidator(v); err != nil {
+			return &ValidationError{Name: "attempts", err: fmt.Errorf(`ent: validator failed for field "Task.attempts": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TimeboxSeconds(); ok {
+		if err := task.TimeboxSecondsValidator(v); err != nil {
+			return &ValidationError{Name: "timebox_seconds", err: fmt.Errorf(`ent: validator failed for field "Task.timebox_seconds": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Gate(); ok {
+		if err := task.GateValidator(v); err != nil {
+			return &ValidationError{Name: "gate", err: fmt.Errorf(`ent: validator failed for field "Task.gate": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DonePr(); ok {
+		if err := task.DonePrValidator(v); err != nil {
+			return &ValidationError{Name: "done_pr", err: fmt.Errorf(`ent: validator failed for field "Task.done_pr": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1094,6 +1968,124 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 	}
 	if _u.mutation.AssignedToActorIDCleared() {
 		_spec.ClearField(task.FieldAssignedToActorID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AssignedTeam(); ok {
+		_spec.SetField(task.FieldAssignedTeam, field.TypeString, value)
+	}
+	if _u.mutation.AssignedTeamCleared() {
+		_spec.ClearField(task.FieldAssignedTeam, field.TypeString)
+	}
+	if value, ok := _u.mutation.BlockedBy(); ok {
+		_spec.SetField(task.FieldBlockedBy, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBlockedBy(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, task.FieldBlockedBy, value)
+		})
+	}
+	if _u.mutation.BlockedByCleared() {
+		_spec.ClearField(task.FieldBlockedBy, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ClaimEpoch(); ok {
+		_spec.SetField(task.FieldClaimEpoch, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedClaimEpoch(); ok {
+		_spec.AddField(task.FieldClaimEpoch, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Attempts(); ok {
+		_spec.SetField(task.FieldAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAttempts(); ok {
+		_spec.AddField(task.FieldAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ClaimLog(); ok {
+		_spec.SetField(task.FieldClaimLog, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedClaimLog(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, task.FieldClaimLog, value)
+		})
+	}
+	if _u.mutation.ClaimLogCleared() {
+		_spec.ClearField(task.FieldClaimLog, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.TimeboxSeconds(); ok {
+		_spec.SetField(task.FieldTimeboxSeconds, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedTimeboxSeconds(); ok {
+		_spec.AddField(task.FieldTimeboxSeconds, field.TypeInt64, value)
+	}
+	if _u.mutation.TimeboxSecondsCleared() {
+		_spec.ClearField(task.FieldTimeboxSeconds, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.Gate(); ok {
+		_spec.SetField(task.FieldGate, field.TypeEnum, value)
+	}
+	if _u.mutation.GateCleared() {
+		_spec.ClearField(task.FieldGate, field.TypeEnum)
+	}
+	if value, ok := _u.mutation.ApprovedBy(); ok {
+		_spec.SetField(task.FieldApprovedBy, field.TypeString, value)
+	}
+	if _u.mutation.ApprovedByCleared() {
+		_spec.ClearField(task.FieldApprovedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.ApprovedAt(); ok {
+		_spec.SetField(task.FieldApprovedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ApprovedAtCleared() {
+		_spec.ClearField(task.FieldApprovedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ApprovedHash(); ok {
+		_spec.SetField(task.FieldApprovedHash, field.TypeString, value)
+	}
+	if _u.mutation.ApprovedHashCleared() {
+		_spec.ClearField(task.FieldApprovedHash, field.TypeString)
+	}
+	if value, ok := _u.mutation.DoneBy(); ok {
+		_spec.SetField(task.FieldDoneBy, field.TypeString, value)
+	}
+	if _u.mutation.DoneByCleared() {
+		_spec.ClearField(task.FieldDoneBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.DoneCommit(); ok {
+		_spec.SetField(task.FieldDoneCommit, field.TypeString, value)
+	}
+	if _u.mutation.DoneCommitCleared() {
+		_spec.ClearField(task.FieldDoneCommit, field.TypeString)
+	}
+	if value, ok := _u.mutation.DonePr(); ok {
+		_spec.SetField(task.FieldDonePr, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedDonePr(); ok {
+		_spec.AddField(task.FieldDonePr, field.TypeInt, value)
+	}
+	if _u.mutation.DonePrCleared() {
+		_spec.ClearField(task.FieldDonePr, field.TypeInt)
+	}
+	if value, ok := _u.mutation.MergedAt(); ok {
+		_spec.SetField(task.FieldMergedAt, field.TypeTime, value)
+	}
+	if _u.mutation.MergedAtCleared() {
+		_spec.ClearField(task.FieldMergedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.WorkBranch(); ok {
+		_spec.SetField(task.FieldWorkBranch, field.TypeString, value)
+	}
+	if _u.mutation.WorkBranchCleared() {
+		_spec.ClearField(task.FieldWorkBranch, field.TypeString)
+	}
+	if value, ok := _u.mutation.IdempotencyKey(); ok {
+		_spec.SetField(task.FieldIdempotencyKey, field.TypeString, value)
+	}
+	if _u.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(task.FieldIdempotencyKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(task.FieldRole, field.TypeString, value)
+	}
+	if _u.mutation.RoleCleared() {
+		_spec.ClearField(task.FieldRole, field.TypeString)
 	}
 	if _u.mutation.MissionCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -78,7 +78,64 @@ func (Task) Fields() []ent.Field {
 		field.String("tasklist_id").Optional().Nillable(),
 		field.String("plan_id").Optional().Nillable(),
 		field.String("created_by_actor_id").Optional().Nillable(),
+		// assigned_to_actor_id is the spec's `assignee` (LORE_TEAM_SPEC
+		// §3.5): content, lands with the row. Assignment is never a signal.
 		field.String("assigned_to_actor_id").Optional().Nillable(),
+
+		// ---- lore for teams (LORE_TEAM_SPEC §7, §10 C14) ----------------
+		// Every field below is optional or defaulted so rows written before
+		// the team feature stay valid (empty = feature unused on this row).
+		// The completion time is the existing completed_at (the spec's
+		// `done_at`); assignee is assigned_to_actor_id above.
+
+		// assigned_team: team id (tem_…) when `--assign @team` named a team
+		// instead of a person. Refused in linked client repos (TEAM-030).
+		field.String("assigned_team").Optional().Nillable(),
+		// blocked_by: `--after` edges. Nil/empty = no dependencies.
+		field.JSON("blocked_by", []TaskDependency{}).Optional(),
+		// claim_epoch: fencing counter mirrored from the claim signal (F7).
+		// Raised by every claim, revoke, reassign and cancel; a holder whose
+		// claim carries an older epoch is fenced out (E_LOST_CLAIM,
+		// E_REASSIGNED, E_CANCELLED). Only ever written by a CAS-pushed live
+		// write, so two branches never raise it independently.
+		field.Int("claim_epoch").Default(0).NonNegative(),
+		// attempts: reclaims after an expired lease; at agents.max_attempts
+		// the task turns blocked (poison-task limit, §7.2).
+		field.Int("attempts").Default(0).NonNegative(),
+		// claim_log: last ClaimLogMax coordination events, newest last.
+		field.JSON("claim_log", []ClaimLogEntry{}).Optional(),
+		// timebox_seconds: `--timebox 60m` as seconds; nil = no time box.
+		// Active lease time is summed across holders by the views.
+		field.Int64("timebox_seconds").Optional().Nillable().NonNegative(),
+		// gate: nil = ungated; see TaskGate in enums.go.
+		field.Enum("gate").Values(taskGateValues...).Optional().Nillable(),
+		// approved_by / approved_at / approved_hash: the human approval of
+		// the gate. approved_hash covers title + body, so an edit to either
+		// voids the approval (§7.4).
+		field.String("approved_by").Optional().Nillable(),
+		field.Time("approved_at").Optional().Nillable(),
+		field.String("approved_hash").Optional().Nillable(),
+		// done_by: actor id that finished the task (completed_at is when).
+		field.String("done_by").Optional().Nillable(),
+		// done_commit / done_pr: the code that finished it (`task done
+		// --commit | --pr`), read by the merged check (F9).
+		field.String("done_commit").Optional().Nillable(),
+		field.Int("done_pr").Optional().Nillable().Positive(),
+		// merged_at: set once, to the merge commit's committer date, when
+		// done_commit (or the Lore-Task trailer) is seen on the default
+		// branch. Deterministic so two finders write the same value (F9).
+		field.Time("merged_at").Optional().Nillable(),
+		// work_branch: the branch a holder pushes its work to, so a
+		// replacement agent can fetch it (§7.4).
+		field.String("work_branch").Optional().Nillable(),
+		// idempotency_key: plan-file key (`--key`); `lore plan apply` run
+		// twice finds the row by (project_id, mission_id, key) and does not
+		// add it again. Not a DB unique constraint: uniqueness is the
+		// writer's job (two branches may legitimately carry one key until
+		// they merge, and DB-level uniqueness would break that import).
+		field.String("idempotency_key").Optional().Nillable(),
+		// role: plan role (`coordinator`, …) matched by `task next --role`.
+		field.String("role").Optional().Nillable(),
 	}
 }
 func (Task) Edges() []ent.Edge {
@@ -105,5 +162,7 @@ func (Task) Indexes() []ent.Index {
 		index.Fields("tasklist_id"),
 		index.Fields("plan_id"),
 		index.Fields("due_at"),
+		index.Fields("project_id", "mission_id", "idempotency_key"),
+		index.Fields("assigned_team"),
 	}
 }

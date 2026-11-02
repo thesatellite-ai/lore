@@ -35,6 +35,12 @@ const (
 	// Intended for RFC3339 UTC timestamps such as updated_at, which compare
 	// correctly as strings.
 	StrategyMax
+	// StrategySet merges JSON arrays that are sets (`_meta.json` links,
+	// labels) three ways: an element either side added is kept, an element
+	// either side removed from base is dropped, nothing is ever reported as
+	// a conflict. Ours' order comes first, then theirs' additions. A side
+	// that deleted the key or holds a non-array falls back to a conflict.
+	StrategySet
 )
 
 // Side identifies one side of the merge.
@@ -128,7 +134,9 @@ func Merge(base, ours, theirs map[string]any, p Policy) (Result, error) {
 		case tEqB:
 			put(res.Merged, k, o)
 		default:
-			resolveClash(&res, k, o, t, p)
+			if err := resolveClash(&res, k, b, o, t, p); err != nil {
+				return Result{}, err
+			}
 		}
 	}
 	sort.Strings(res.AutoResolved)
@@ -136,7 +144,7 @@ func Merge(base, ours, theirs map[string]any, p Policy) (Result, error) {
 }
 
 // resolveClash applies the key's strategy when both sides changed it.
-func resolveClash(res *Result, k string, o, t presence, p Policy) {
+func resolveClash(res *Result, k string, b, o, t presence, p Policy) error {
 	strategy := StrategyConflict
 	if p.StrategyFor != nil {
 		strategy = p.StrategyFor(k)
@@ -149,7 +157,7 @@ func resolveClash(res *Result, k string, o, t presence, p Policy) {
 			put(res.Merged, k, o)
 		}
 		res.AutoResolved = append(res.AutoResolved, k)
-		return
+		return nil
 	case StrategyMax:
 		os, oIsStr := o.val.(string)
 		ts, tIsStr := t.val.(string)
@@ -160,19 +168,86 @@ func resolveClash(res *Result, k string, o, t presence, p Policy) {
 				put(res.Merged, k, o)
 			}
 			res.AutoResolved = append(res.AutoResolved, k)
-			return
+			return nil
 		}
 		// Non-string or deleted on one side: no meaningful max — fall
 		// through to a reported conflict rather than guess.
+	case StrategySet:
+		if merged, ok, err := mergeSet(b, o, t); err != nil {
+			return err
+		} else if ok {
+			res.Merged[k] = merged
+			res.AutoResolved = append(res.AutoResolved, k)
+			return nil
+		}
 	}
 	res.Conflicts = append(res.Conflicts, Conflict{Key: k, Ours: o.val, Theirs: t.val})
 	os, oIsStr := o.val.(string)
 	ts, tIsStr := t.val.(string)
 	if o.ok && t.ok && oIsStr && tIsStr {
 		res.Merged[k] = MarkConflict(os, ts)
-		return
+		return nil
 	}
 	put(res.Merged, k, o)
+	return nil
+}
+
+// mergeSet is StrategySet's three-way set merge. ok is false when ours or
+// theirs is absent or not an array (the clash is then reported). A base
+// that is absent or not an array counts as the empty set.
+func mergeSet(b, o, t presence) ([]any, bool, error) {
+	ol, oOK := o.val.([]any)
+	tl, tOK := t.val.([]any)
+	if !o.ok || !t.ok || !oOK || !tOK {
+		return nil, false, nil
+	}
+	bl, _ := b.val.([]any)
+	keyset := func(list []any) (map[string]bool, error) {
+		set := make(map[string]bool, len(list))
+		for _, v := range list {
+			key, err := canonjson.CompactValue(v)
+			if err != nil {
+				return nil, fmt.Errorf("merge3: %w", err)
+			}
+			set[key] = true
+		}
+		return set, nil
+	}
+	inBase, err := keyset(bl)
+	if err != nil {
+		return nil, false, err
+	}
+	inOurs, err := keyset(ol)
+	if err != nil {
+		return nil, false, err
+	}
+	inTheirs, err := keyset(tl)
+	if err != nil {
+		return nil, false, err
+	}
+	out := make([]any, 0, len(ol)+len(tl))
+	seen := map[string]bool{}
+	add := func(v any, key string) {
+		if !seen[key] {
+			seen[key] = true
+			out = append(out, v)
+		}
+	}
+	for _, v := range ol {
+		key, _ := canonjson.CompactValue(v) // encoded once already above
+		// Keep what theirs still has, and what ours added.
+		if inTheirs[key] || !inBase[key] {
+			add(v, key)
+		}
+	}
+	for _, v := range tl {
+		key, _ := canonjson.CompactValue(v)
+		// Theirs' additions; an element ours removed from base stays gone.
+		if !inOurs[key] && !inBase[key] {
+			add(v, key)
+		}
+	}
+	return out, true, nil
 }
 
 // MarkConflict renders a string conflict with git-style markers.

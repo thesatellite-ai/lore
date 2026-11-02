@@ -39,6 +39,7 @@ type ruleAddFlags struct {
 	sourceRef    string
 	supersedes   string
 	createdBy    string
+	to           toFlags
 }
 
 func newRuleCommand() *cobra.Command {
@@ -90,14 +91,19 @@ func newRuleListCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list rules").WithCause(err)
 			}
+			// Store, global and personal rows (F20) follow the repo's own.
 			if jsonOut {
-				printJSON(constants.KindRuleList, rows, len(rows))
+				data := withExternalJSON(cmd.Context(), rows, tblRulesName)
+				printJSON(constants.KindRuleList, data, len(data))
 				return nil
 			}
 			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no rules)"))
+				if printExternalHere(cmd.Context(), tblRulesName) == 0 {
+					fmt.Println(style.Muted("(no rules)"))
+				}
 				return nil
 			}
+			defer printExternalHere(cmd.Context(), tblRulesName)
 			for _, r := range rows {
 				body := r.Body
 				if len(body) > 60 {
@@ -190,6 +196,8 @@ Severity drives verifier behavior:
 	cmd.Flags().StringVar(&f.sourceRef, constants.FlagSourceRef, "", "free-form provenance pointer")
 	cmd.Flags().StringVar(&f.supersedes, constants.FlagSupersedes, "", "rule_id (rul_*) this entry replaces")
 	cmd.Flags().StringVar(&f.createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
+	bindToFlags(cmd, &f.to, true)
+	bindCreateFlag(cmd, &f.to)
 	return cmd
 }
 
@@ -204,9 +212,16 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 
 	if matches := security.NewScanner().Scan(body); len(matches) > 0 && !f.allowSecrets {
 		return errcodes.New(errcodes.SecretDetected,
-			fmt.Sprintf("body contains %s pattern (preview: %s)",
+			fmt.Sprintf("body contains a secret (credential pattern %s, preview %s)",
 				matches[0].PatternName, matches[0].Preview)).
 			WithHint("use --allow-secrets to override")
+	}
+
+	// F10 / F14: decide which project the row goes to (this repo, a store
+	// project, the personal store) and open it; refusals fail closed.
+	route, err := routeWrite(ctx, &f.commonFlags, f.to, "rule", body)
+	if err != nil {
+		return err
 	}
 
 	rctx, client, err := resolveContext(&f.commonFlags)
@@ -258,7 +273,8 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 		return errcodes.New(errcodes.Internal, "create rule").WithCause(err)
 	}
 
-	fmt.Printf("%s %s %s\n", style.Success("✓"), r.ID, style.Code(r.ID))
+	fmt.Printf("%s %s %s %s\n", style.Success("✓"), r.ID, style.Code(r.ID), route.Label)
+	printRoute(route)
 	if repoID != "" {
 		fmt.Printf("  scope: %s severity: %s\n",
 			style.ScopeBadge("repo:"+rctx.RepoMount), f.severity)
@@ -296,6 +312,7 @@ type decisionAddFlags struct {
 	sourceRef  string
 	supersedes string
 	createdBy  string
+	to         toFlags
 }
 
 func newDecisionListCommand() *cobra.Command {
@@ -437,6 +454,8 @@ func newDecisionAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&f.supersedes, constants.FlagSupersedes, "", "decision_id (dec_*) this entry replaces")
 	cmd.Flags().StringVar(&f.createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
 	_ = cmd.MarkFlagRequired(constants.FlagTitle)
+	bindToFlags(cmd, &f.to, true)
+	bindCreateFlag(cmd, &f.to)
 	return cmd
 }
 
@@ -451,6 +470,13 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	title, err := textnorm.Normalize(f.title)
 	if err != nil {
 		return errcodes.New(errcodes.InvalidInput, "title: "+err.Error())
+	}
+
+	// F10 / F14: decide which project the row goes to (this repo, a store
+	// project, the personal store) and open it; refusals fail closed.
+	route, err := routeWrite(ctx, &f.commonFlags, f.to, "decision", body)
+	if err != nil {
+		return err
 	}
 
 	rctx, client, err := resolveContext(&f.commonFlags)
@@ -499,7 +525,8 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create decision").WithCause(err)
 	}
-	fmt.Printf("%s %s %s — %s\n", style.Success("✓"), d.ID, style.Code(d.ID), title)
+	fmt.Printf("%s %s %s — %s %s\n", style.Success("✓"), d.ID, style.Code(d.ID), title, route.Label)
+	printRoute(route)
 	return nil
 }
 

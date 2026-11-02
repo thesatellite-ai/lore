@@ -84,6 +84,11 @@ func EntityID(v string) predicate.Comment {
 	return predicate.Comment(sql.FieldEQ(FieldEntityID, v))
 }
 
+// EntityProjectID applies equality check predicate on the "entity_project_id" field. It's identical to EntityProjectIDEQ.
+func EntityProjectID(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldEQ(FieldEntityProjectID, v))
+}
+
 // Body applies equality check predicate on the "body" field. It's identical to BodyEQ.
 func Body(v string) predicate.Comment {
 	return predicate.Comment(sql.FieldEQ(FieldBody, v))
@@ -302,6 +307,81 @@ func EntityIDEqualFold(v string) predicate.Comment {
 // EntityIDContainsFold applies the ContainsFold predicate on the "entity_id" field.
 func EntityIDContainsFold(v string) predicate.Comment {
 	return predicate.Comment(sql.FieldContainsFold(FieldEntityID, v))
+}
+
+// EntityProjectIDEQ applies the EQ predicate on the "entity_project_id" field.
+func EntityProjectIDEQ(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldEQ(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDNEQ applies the NEQ predicate on the "entity_project_id" field.
+func EntityProjectIDNEQ(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldNEQ(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDIn applies the In predicate on the "entity_project_id" field.
+func EntityProjectIDIn(vs ...string) predicate.Comment {
+	return predicate.Comment(sql.FieldIn(FieldEntityProjectID, vs...))
+}
+
+// EntityProjectIDNotIn applies the NotIn predicate on the "entity_project_id" field.
+func EntityProjectIDNotIn(vs ...string) predicate.Comment {
+	return predicate.Comment(sql.FieldNotIn(FieldEntityProjectID, vs...))
+}
+
+// EntityProjectIDGT applies the GT predicate on the "entity_project_id" field.
+func EntityProjectIDGT(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldGT(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDGTE applies the GTE predicate on the "entity_project_id" field.
+func EntityProjectIDGTE(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldGTE(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDLT applies the LT predicate on the "entity_project_id" field.
+func EntityProjectIDLT(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldLT(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDLTE applies the LTE predicate on the "entity_project_id" field.
+func EntityProjectIDLTE(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldLTE(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDContains applies the Contains predicate on the "entity_project_id" field.
+func EntityProjectIDContains(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldContains(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDHasPrefix applies the HasPrefix predicate on the "entity_project_id" field.
+func EntityProjectIDHasPrefix(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldHasPrefix(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDHasSuffix applies the HasSuffix predicate on the "entity_project_id" field.
+func EntityProjectIDHasSuffix(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldHasSuffix(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDIsNil applies the IsNil predicate on the "entity_project_id" field.
+func EntityProjectIDIsNil() predicate.Comment {
+	return predicate.Comment(sql.FieldIsNull(FieldEntityProjectID))
+}
+
+// EntityProjectIDNotNil applies the NotNil predicate on the "entity_project_id" field.
+func EntityProjectIDNotNil() predicate.Comment {
+	return predicate.Comment(sql.FieldNotNull(FieldEntityProjectID))
+}
+
+// EntityProjectIDEqualFold applies the EqualFold predicate on the "entity_project_id" field.
+func EntityProjectIDEqualFold(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldEqualFold(FieldEntityProjectID, v))
+}
+
+// EntityProjectIDContainsFold applies the ContainsFold predicate on the "entity_project_id" field.
+func EntityProjectIDContainsFold(v string) predicate.Comment {
+	return predicate.Comment(sql.FieldContainsFold(FieldEntityProjectID, v))
 }
 
 // BodyEQ applies the EQ predicate on the "body" field.

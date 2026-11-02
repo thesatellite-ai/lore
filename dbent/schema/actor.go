@@ -50,7 +50,7 @@ func (Actor) Fields() []ent.Field {
 		// stable_key: resolved identity from R32 chain. Unique because
 		// two rows with same key would corrupt cross-machine merging.
 		// Format examples (R32):
-		//   human:amank@example.com         from git config user.email
+		//   human:alice@example.com         from git config user.email
 		//   agent:claude-code               from LORE_ACTOR
 		//   auto:a3f9c1k2                   sha256(machine-id)[:12]
 		//   auto:ephemeral-7f3a2c           last-resort session salt
@@ -59,6 +59,27 @@ func (Actor) Fields() []ent.Field {
 			NotEmpty().
 			Unique().
 			Immutable(),
+
+		// ---- roster (LORE_TEAM_SPEC F18, §10 C15) ----------------------
+		// All optional/defaulted so actors written before the roster
+		// existed stay valid. The roster lives in the org folder of the
+		// org's store; a client repo only ever receives the projection
+		// {id, display_name, kind}, never owner_actor_id or stable_key.
+
+		// owner_actor_id: for kind=agent, the human actor that runs it.
+		field.String("owner_actor_id").Optional().Nillable(),
+		// label: for kind=agent, the session label (`frontend-2`); one
+		// agent actor per label.
+		field.String("label").Optional().Nillable(),
+		// handle: display alias used as @handle. Unique per roster, which
+		// the writer checks against actors AND teams of the roster; not a
+		// DB constraint because one cache can hold several projects' rows.
+		field.String("handle").Optional().Nillable(),
+		// active: false once deactivated; actors are never deleted, so old
+		// rows that cite them still resolve.
+		field.Bool("active").Default(true),
+		// left_at: when the actor was deactivated.
+		field.Time("left_at").Optional().Nillable(),
 
 		// last_seen_at: updated lazily; surfaced by `aicoder identity show`.
 		field.Time("last_seen_at").
@@ -79,5 +100,6 @@ func (Actor) Edges() []ent.Edge {
 func (Actor) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("kind"),
+		index.Fields("handle"),
 	}
 }

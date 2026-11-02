@@ -134,6 +134,26 @@ func (_c *MissionCreate) SetNillableCreatedByActorID(v *string) *MissionCreate {
 	return _c
 }
 
+// SetApprovers sets the "approvers" field.
+func (_c *MissionCreate) SetApprovers(v []string) *MissionCreate {
+	_c.mutation.SetApprovers(v)
+	return _c
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (_c *MissionCreate) SetIdempotencyKey(v string) *MissionCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (_c *MissionCreate) SetNillableIdempotencyKey(v *string) *MissionCreate {
+	if v != nil {
+		_c.SetIdempotencyKey(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *MissionCreate) SetID(v string) *MissionCreate {
 	_c.mutation.SetID(v)
@@ -325,6 +345,14 @@ func (_c *MissionCreate) createSpec() (*Mission, *sqlgraph.CreateSpec) {
 		_spec.SetField(mission.FieldCreatedByActorID, field.TypeString, value)
 		_node.CreatedByActorID = &value
 	}
+	if value, ok := _c.mutation.Approvers(); ok {
+		_spec.SetField(mission.FieldApprovers, field.TypeJSON, value)
+		_node.Approvers = value
+	}
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
+		_spec.SetField(mission.FieldIdempotencyKey, field.TypeString, value)
+		_node.IdempotencyKey = &value
+	}
 	if nodes := _c.mutation.TasksIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -498,6 +526,42 @@ func (u *MissionUpsert) UpdateCreatedByActorID() *MissionUpsert {
 // ClearCreatedByActorID clears the value of the "created_by_actor_id" field.
 func (u *MissionUpsert) ClearCreatedByActorID() *MissionUpsert {
 	u.SetNull(mission.FieldCreatedByActorID)
+	return u
+}
+
+// SetApprovers sets the "approvers" field.
+func (u *MissionUpsert) SetApprovers(v []string) *MissionUpsert {
+	u.Set(mission.FieldApprovers, v)
+	return u
+}
+
+// UpdateApprovers sets the "approvers" field to the value that was provided on create.
+func (u *MissionUpsert) UpdateApprovers() *MissionUpsert {
+	u.SetExcluded(mission.FieldApprovers)
+	return u
+}
+
+// ClearApprovers clears the value of the "approvers" field.
+func (u *MissionUpsert) ClearApprovers() *MissionUpsert {
+	u.SetNull(mission.FieldApprovers)
+	return u
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (u *MissionUpsert) SetIdempotencyKey(v string) *MissionUpsert {
+	u.Set(mission.FieldIdempotencyKey, v)
+	return u
+}
+
+// UpdateIdempotencyKey sets the "idempotency_key" field to the value that was provided on create.
+func (u *MissionUpsert) UpdateIdempotencyKey() *MissionUpsert {
+	u.SetExcluded(mission.FieldIdempotencyKey)
+	return u
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (u *MissionUpsert) ClearIdempotencyKey() *MissionUpsert {
+	u.SetNull(mission.FieldIdempotencyKey)
 	return u
 }
 
@@ -678,6 +742,48 @@ func (u *MissionUpsertOne) UpdateCreatedByActorID() *MissionUpsertOne {
 func (u *MissionUpsertOne) ClearCreatedByActorID() *MissionUpsertOne {
 	return u.Update(func(s *MissionUpsert) {
 		s.ClearCreatedByActorID()
+	})
+}
+
+// SetApprovers sets the "approvers" field.
+func (u *MissionUpsertOne) SetApprovers(v []string) *MissionUpsertOne {
+	return u.Update(func(s *MissionUpsert) {
+		s.SetApprovers(v)
+	})
+}
+
+// UpdateApprovers sets the "approvers" field to the value that was provided on create.
+func (u *MissionUpsertOne) UpdateApprovers() *MissionUpsertOne {
+	return u.Update(func(s *MissionUpsert) {
+		s.UpdateApprovers()
+	})
+}
+
+// ClearApprovers clears the value of the "approvers" field.
+func (u *MissionUpsertOne) ClearApprovers() *MissionUpsertOne {
+	return u.Update(func(s *MissionUpsert) {
+		s.ClearApprovers()
+	})
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (u *MissionUpsertOne) SetIdempotencyKey(v string) *MissionUpsertOne {
+	return u.Update(func(s *MissionUpsert) {
+		s.SetIdempotencyKey(v)
+	})
+}
+
+// UpdateIdempotencyKey sets the "idempotency_key" field to the value that was provided on create.
+func (u *MissionUpsertOne) UpdateIdempotencyKey() *MissionUpsertOne {
+	return u.Update(func(s *MissionUpsert) {
+		s.UpdateIdempotencyKey()
+	})
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (u *MissionUpsertOne) ClearIdempotencyKey() *MissionUpsertOne {
+	return u.Update(func(s *MissionUpsert) {
+		s.ClearIdempotencyKey()
 	})
 }
 
@@ -1025,6 +1131,48 @@ func (u *MissionUpsertBulk) UpdateCreatedByActorID() *MissionUpsertBulk {
 func (u *MissionUpsertBulk) ClearCreatedByActorID() *MissionUpsertBulk {
 	return u.Update(func(s *MissionUpsert) {
 		s.ClearCreatedByActorID()
+	})
+}
+
+// SetApprovers sets the "approvers" field.
+func (u *MissionUpsertBulk) SetApprovers(v []string) *MissionUpsertBulk {
+	return u.Update(func(s *MissionUpsert) {
+		s.SetApprovers(v)
+	})
+}
+
+// UpdateApprovers sets the "approvers" field to the value that was provided on create.
+func (u *MissionUpsertBulk) UpdateApprovers() *MissionUpsertBulk {
+	return u.Update(func(s *MissionUpsert) {
+		s.UpdateApprovers()
+	})
+}
+
+// ClearApprovers clears the value of the "approvers" field.
+func (u *MissionUpsertBulk) ClearApprovers() *MissionUpsertBulk {
+	return u.Update(func(s *MissionUpsert) {
+		s.ClearApprovers()
+	})
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (u *MissionUpsertBulk) SetIdempotencyKey(v string) *MissionUpsertBulk {
+	return u.Update(func(s *MissionUpsert) {
+		s.SetIdempotencyKey(v)
+	})
+}
+
+// UpdateIdempotencyKey sets the "idempotency_key" field to the value that was provided on create.
+func (u *MissionUpsertBulk) UpdateIdempotencyKey() *MissionUpsertBulk {
+	return u.Update(func(s *MissionUpsert) {
+		s.UpdateIdempotencyKey()
+	})
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (u *MissionUpsertBulk) ClearIdempotencyKey() *MissionUpsertBulk {
+	return u.Update(func(s *MissionUpsert) {
+		s.ClearIdempotencyKey()
 	})
 }
 

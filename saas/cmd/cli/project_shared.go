@@ -1,7 +1,7 @@
 // project_shared.go — Mode B (shared DB) project commands
 //
 // Mode B lets multiple project roots share a single SQLite file. Each root
-// has a 2-line .lore/lore.toml pointing to the shared DB + selecting
+// has a 2-key .lore/lore.yaml pointing to the shared DB + selecting
 // a project_id; the DB itself holds rows from every project, partitioned by
 // the project_id foreign key
 //
@@ -10,7 +10,7 @@
 //
 //	lore project shared-init --db <path> [--name <project-name>]
 //	    creates the shared DB if missing, applies the schema, INSERTs a
-//	    new Project row, writes .lore/lore.toml at cwd
+//	    new Project row, writes .lore/lore.yaml at cwd
 //
 //	lore project shared-list --db <path>
 //	    lists every project row in the shared DB
@@ -33,6 +33,7 @@ import (
 	"dbent/pkg/dbent_migrate"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/ids"
+	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
@@ -40,14 +41,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// pointerFilePerm is lore.yaml's mode: world-readable like the TOML it
+// replaces, because it holds a path and an opaque id, never a secret.
+const pointerFilePerm = 0o644
+
 func newProjectSharedInitCommand() *cobra.Command {
 	var dbPath, name string
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "shared-init",
-		Short: "Initialize Mode B (shared DB) project — writes .lore/lore.toml at cwd",
+		Short: "Initialize Mode B (shared DB) project — writes .lore/lore.yaml at cwd",
 		Long: `Creates (or attaches to) a shared SQLite file at --db, registers a
-new project row, and writes .lore/lore.toml at cwd so subsequent commands
+new project row, and writes .lore/lore.yaml at cwd so subsequent commands
 operate against the shared DB
 
 Refuses if cwd already has .lore/ (use a clean directory).`,
@@ -129,10 +134,10 @@ Refuses if cwd already has .lore/ (use a clean directory).`,
 			if err := os.MkdirAll(markerDir, 0o755); err != nil {
 				return errcodes.New(errcodes.Internal, "create .lore/").WithCause(err)
 			}
-			tomlBody := fmt.Sprintf("db_path = %q\nproject_id = %q\n", dbPath, proj.ID)
-			tomlPath := filepath.Join(markerDir, projresolve.ModeBFile)
-			if err := os.WriteFile(tomlPath, []byte(tomlBody), 0o644); err != nil {
-				return errcodes.New(errcodes.Internal, "write toml pointer").WithCause(err)
+			ptr := projresolve.Pointer{DBPath: dbPath, ProjectID: proj.ID}
+			tomlPath, err := lorecfg.Write(cmd.Context(), markerDir, projresolve.ModeBBase, &ptr, pointerFilePerm, lorecfg.Options{})
+			if err != nil {
+				return errcodes.New(errcodes.Internal, "write lore.yaml pointer").WithCause(err)
 			}
 
 			if jsonOut {
@@ -140,7 +145,7 @@ Refuses if cwd already has .lore/ (use a clean directory).`,
 					"project_id":   proj.ID,
 					"project_name": proj.Name,
 					"db_path":      expanded,
-					"toml_path":    tomlPath,
+					"toml_path":    tomlPath, // key kept for JSON consumers; value is the lore.yaml path
 					"reused":       existing != nil,
 				}, 0)
 				return nil
@@ -152,7 +157,7 @@ Refuses if cwd already has .lore/ (use a clean directory).`,
 			fmt.Printf("%s %s project %q\n", style.Success("✓"), verb, name)
 			fmt.Printf("    project_id: %s\n", style.Code(proj.ID))
 			fmt.Printf("    db:         %s\n", expanded)
-			fmt.Printf("    toml:       %s\n", tomlPath)
+			fmt.Printf("    pointer:    %s\n", tomlPath)
 			return nil
 		},
 	}

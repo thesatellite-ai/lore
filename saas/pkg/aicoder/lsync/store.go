@@ -60,6 +60,15 @@ func listRowIDs(ctx context.Context, q execer, t *Table) ([]string, error) {
 	return out, rows.Err()
 }
 
+// Actor projection (D8): table, column and the placeholder key prefix.
+const (
+	actorsTableName = "actors"
+	stableKeyColumn = "stable_key"
+	// ProjectedKeyPrefix starts the stable_key lore.db gives an actor known
+	// only from a client repo's projection {id, display_name, kind}.
+	ProjectedKeyPrefix = "projected:"
+)
+
 // upsertRow writes a document's values into the DB.
 //
 // Insert path: every live column is bound; a NOT NULL column the document
@@ -84,6 +93,13 @@ func upsertRow(ctx context.Context, q execer, t *Table, cols, volatile []Column,
 				continue
 			}
 			v = zeroFor(c, now)
+			if t.Name == actorsTableName && c.Name == stableKeyColumn {
+				// A client repo's actor copy carries no stable_key (D8); the
+				// column is NOT NULL and UNIQUE, so an insert gets a key that
+				// is unique per id and names nobody. An update never sets it:
+				// a clone that knows the real key keeps it.
+				v = ProjectedKeyPrefix + fmt.Sprint(ra.values[idColumn])
+			}
 		} else if c.Name != idColumn {
 			updates = append(updates, quoteIdent(c.Name)+" = excluded."+quoteIdent(c.Name))
 		}

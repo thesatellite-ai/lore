@@ -13,6 +13,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 )
 
@@ -141,6 +142,44 @@ func (_u *MissionUpdate) SetNillableCreatedByActorID(v *string) *MissionUpdate {
 // ClearCreatedByActorID clears the value of the "created_by_actor_id" field.
 func (_u *MissionUpdate) ClearCreatedByActorID() *MissionUpdate {
 	_u.mutation.ClearCreatedByActorID()
+	return _u
+}
+
+// SetApprovers sets the "approvers" field.
+func (_u *MissionUpdate) SetApprovers(v []string) *MissionUpdate {
+	_u.mutation.SetApprovers(v)
+	return _u
+}
+
+// AppendApprovers appends value to the "approvers" field.
+func (_u *MissionUpdate) AppendApprovers(v []string) *MissionUpdate {
+	_u.mutation.AppendApprovers(v)
+	return _u
+}
+
+// ClearApprovers clears the value of the "approvers" field.
+func (_u *MissionUpdate) ClearApprovers() *MissionUpdate {
+	_u.mutation.ClearApprovers()
+	return _u
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (_u *MissionUpdate) SetIdempotencyKey(v string) *MissionUpdate {
+	_u.mutation.SetIdempotencyKey(v)
+	return _u
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (_u *MissionUpdate) SetNillableIdempotencyKey(v *string) *MissionUpdate {
+	if v != nil {
+		_u.SetIdempotencyKey(*v)
+	}
+	return _u
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (_u *MissionUpdate) ClearIdempotencyKey() *MissionUpdate {
+	_u.mutation.ClearIdempotencyKey()
 	return _u
 }
 
@@ -286,6 +325,23 @@ func (_u *MissionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CreatedByActorIDCleared() {
 		_spec.ClearField(mission.FieldCreatedByActorID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Approvers(); ok {
+		_spec.SetField(mission.FieldApprovers, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedApprovers(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, mission.FieldApprovers, value)
+		})
+	}
+	if _u.mutation.ApproversCleared() {
+		_spec.ClearField(mission.FieldApprovers, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.IdempotencyKey(); ok {
+		_spec.SetField(mission.FieldIdempotencyKey, field.TypeString, value)
+	}
+	if _u.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(mission.FieldIdempotencyKey, field.TypeString)
 	}
 	if _u.mutation.TasksCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -468,6 +524,44 @@ func (_u *MissionUpdateOne) ClearCreatedByActorID() *MissionUpdateOne {
 	return _u
 }
 
+// SetApprovers sets the "approvers" field.
+func (_u *MissionUpdateOne) SetApprovers(v []string) *MissionUpdateOne {
+	_u.mutation.SetApprovers(v)
+	return _u
+}
+
+// AppendApprovers appends value to the "approvers" field.
+func (_u *MissionUpdateOne) AppendApprovers(v []string) *MissionUpdateOne {
+	_u.mutation.AppendApprovers(v)
+	return _u
+}
+
+// ClearApprovers clears the value of the "approvers" field.
+func (_u *MissionUpdateOne) ClearApprovers() *MissionUpdateOne {
+	_u.mutation.ClearApprovers()
+	return _u
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (_u *MissionUpdateOne) SetIdempotencyKey(v string) *MissionUpdateOne {
+	_u.mutation.SetIdempotencyKey(v)
+	return _u
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (_u *MissionUpdateOne) SetNillableIdempotencyKey(v *string) *MissionUpdateOne {
+	if v != nil {
+		_u.SetIdempotencyKey(*v)
+	}
+	return _u
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (_u *MissionUpdateOne) ClearIdempotencyKey() *MissionUpdateOne {
+	_u.mutation.ClearIdempotencyKey()
+	return _u
+}
+
 // AddTaskIDs adds the "tasks" edge to the Task entity by IDs.
 func (_u *MissionUpdateOne) AddTaskIDs(ids ...string) *MissionUpdateOne {
 	_u.mutation.AddTaskIDs(ids...)
@@ -640,6 +734,23 @@ func (_u *MissionUpdateOne) sqlSave(ctx context.Context) (_node *Mission, err er
 	}
 	if _u.mutation.CreatedByActorIDCleared() {
 		_spec.ClearField(mission.FieldCreatedByActorID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Approvers(); ok {
+		_spec.SetField(mission.FieldApprovers, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedApprovers(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, mission.FieldApprovers, value)
+		})
+	}
+	if _u.mutation.ApproversCleared() {
+		_spec.ClearField(mission.FieldApprovers, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.IdempotencyKey(); ok {
+		_spec.SetField(mission.FieldIdempotencyKey, field.TypeString, value)
+	}
+	if _u.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(mission.FieldIdempotencyKey, field.TypeString)
 	}
 	if _u.mutation.TasksCleared() {
 		edge := &sqlgraph.EdgeSpec{

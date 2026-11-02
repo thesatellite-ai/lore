@@ -62,6 +62,7 @@ import (
 	"dbent/gen/ent/tasklist"
 	"dbent/gen/ent/taskview"
 	"dbent/gen/ent/tastepref"
+	"dbent/gen/ent/team"
 	"dbent/gen/ent/techdoc"
 	"dbent/gen/ent/techdocpage"
 	"dbent/gen/ent/trustedplugin"
@@ -17324,6 +17325,302 @@ func (_m *TastePref) ToEdge(order *TastePrefOrder) *TastePrefEdge {
 		order = DefaultTastePrefOrder
 	}
 	return &TastePrefEdge{
+		Node:   _m,
+		Cursor: order.Field.toCursor(_m),
+	}
+}
+
+// TeamEdge is the edge representation of Team.
+type TeamEdge struct {
+	Node   *Team  `json:"node"`
+	Cursor Cursor `json:"cursor"`
+}
+
+// TeamConnection is the connection containing edges to Team.
+type TeamConnection struct {
+	Edges      []*TeamEdge `json:"edges"`
+	PageInfo   PageInfo    `json:"pageInfo"`
+	TotalCount int         `json:"totalCount"`
+}
+
+func (c *TeamConnection) build(nodes []*Team, pager *teamPager, after *Cursor, first *int, before *Cursor, last *int) {
+	c.PageInfo.HasNextPage = before != nil
+	c.PageInfo.HasPreviousPage = after != nil
+	if first != nil && *first+1 == len(nodes) {
+		c.PageInfo.HasNextPage = true
+		nodes = nodes[:len(nodes)-1]
+	} else if last != nil && *last+1 == len(nodes) {
+		c.PageInfo.HasPreviousPage = true
+		nodes = nodes[:len(nodes)-1]
+	}
+	var nodeAt func(int) *Team
+	if last != nil {
+		n := len(nodes) - 1
+		nodeAt = func(i int) *Team {
+			return nodes[n-i]
+		}
+	} else {
+		nodeAt = func(i int) *Team {
+			return nodes[i]
+		}
+	}
+	c.Edges = make([]*TeamEdge, len(nodes))
+	for i := range nodes {
+		node := nodeAt(i)
+		c.Edges[i] = &TeamEdge{
+			Node:   node,
+			Cursor: pager.toCursor(node),
+		}
+	}
+	if l := len(c.Edges); l > 0 {
+		c.PageInfo.StartCursor = &c.Edges[0].Cursor
+		c.PageInfo.EndCursor = &c.Edges[l-1].Cursor
+	}
+	if c.TotalCount == 0 {
+		c.TotalCount = len(nodes)
+	}
+}
+
+// TeamPaginateOption enables pagination customization.
+type TeamPaginateOption func(*teamPager) error
+
+// WithTeamOrder configures pagination ordering.
+func WithTeamOrder(order *TeamOrder) TeamPaginateOption {
+	if order == nil {
+		order = DefaultTeamOrder
+	}
+	o := *order
+	return func(pager *teamPager) error {
+		if err := o.Direction.Validate(); err != nil {
+			return err
+		}
+		if o.Field == nil {
+			o.Field = DefaultTeamOrder.Field
+		}
+		pager.order = &o
+		return nil
+	}
+}
+
+// WithTeamFilter configures pagination filter.
+func WithTeamFilter(filter func(*TeamQuery) (*TeamQuery, error)) TeamPaginateOption {
+	return func(pager *teamPager) error {
+		if filter == nil {
+			return errors.New("TeamQuery filter cannot be nil")
+		}
+		pager.filter = filter
+		return nil
+	}
+}
+
+type teamPager struct {
+	reverse bool
+	order   *TeamOrder
+	filter  func(*TeamQuery) (*TeamQuery, error)
+}
+
+func newTeamPager(opts []TeamPaginateOption, reverse bool) (*teamPager, error) {
+	pager := &teamPager{reverse: reverse}
+	for _, opt := range opts {
+		if err := opt(pager); err != nil {
+			return nil, err
+		}
+	}
+	if pager.order == nil {
+		pager.order = DefaultTeamOrder
+	}
+	return pager, nil
+}
+
+func (p *teamPager) applyFilter(query *TeamQuery) (*TeamQuery, error) {
+	if p.filter != nil {
+		return p.filter(query)
+	}
+	return query, nil
+}
+
+func (p *teamPager) toCursor(_m *Team) Cursor {
+	return p.order.Field.toCursor(_m)
+}
+
+func (p *teamPager) applyCursors(query *TeamQuery, after, before *Cursor) (*TeamQuery, error) {
+	direction := p.order.Direction
+	if p.reverse {
+		direction = direction.Reverse()
+	}
+	for _, predicate := range entgql.CursorsPredicate(after, before, DefaultTeamOrder.Field.column, p.order.Field.column, direction) {
+		query = query.Where(predicate)
+	}
+	return query, nil
+}
+
+func (p *teamPager) applyOrder(query *TeamQuery) *TeamQuery {
+	direction := p.order.Direction
+	if p.reverse {
+		direction = direction.Reverse()
+	}
+	query = query.Order(p.order.Field.toTerm(direction.OrderTermOption()))
+	if p.order.Field != DefaultTeamOrder.Field {
+		query = query.Order(DefaultTeamOrder.Field.toTerm(direction.OrderTermOption()))
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(p.order.Field.column)
+	}
+	return query
+}
+
+func (p *teamPager) orderExpr(query *TeamQuery) sql.Querier {
+	direction := p.order.Direction
+	if p.reverse {
+		direction = direction.Reverse()
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(p.order.Field.column)
+	}
+	return sql.ExprFunc(func(b *sql.Builder) {
+		b.Ident(p.order.Field.column).Pad().WriteString(string(direction))
+		if p.order.Field != DefaultTeamOrder.Field {
+			b.Comma().Ident(DefaultTeamOrder.Field.column).Pad().WriteString(string(direction))
+		}
+	})
+}
+
+// Paginate executes the query and returns a relay based cursor connection to Team.
+func (_m *TeamQuery) Paginate(
+	ctx context.Context, after *Cursor, first *int,
+	before *Cursor, last *int, opts ...TeamPaginateOption,
+) (*TeamConnection, error) {
+	if err := validateFirstLast(first, last); err != nil {
+		return nil, err
+	}
+	pager, err := newTeamPager(opts, last != nil)
+	if err != nil {
+		return nil, err
+	}
+	if _m, err = pager.applyFilter(_m); err != nil {
+		return nil, err
+	}
+	conn := &TeamConnection{Edges: []*TeamEdge{}}
+	ignoredEdges := !hasCollectedField(ctx, edgesField)
+	if hasCollectedField(ctx, totalCountField) || hasCollectedField(ctx, pageInfoField) {
+		hasPagination := after != nil || first != nil || before != nil || last != nil
+		if hasPagination || ignoredEdges {
+			c := _m.Clone()
+			c.ctx.Fields = nil
+			if conn.TotalCount, err = c.Count(ctx); err != nil {
+				return nil, err
+			}
+			conn.PageInfo.HasNextPage = first != nil && conn.TotalCount > 0
+			conn.PageInfo.HasPreviousPage = last != nil && conn.TotalCount > 0
+		}
+	}
+	if ignoredEdges || (first != nil && *first == 0) || (last != nil && *last == 0) {
+		return conn, nil
+	}
+	if _m, err = pager.applyCursors(_m, after, before); err != nil {
+		return nil, err
+	}
+	limit := paginateLimit(first, last)
+	if limit != 0 {
+		_m.Limit(limit)
+	}
+	if field := collectedField(ctx, edgesField, nodeField); field != nil {
+		if err := _m.collectField(ctx, limit == 1, graphql.GetOperationContext(ctx), *field, []string{edgesField, nodeField}); err != nil {
+			return nil, err
+		}
+	}
+	_m = pager.applyOrder(_m)
+	nodes, err := _m.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	conn.build(nodes, pager, after, first, before, last)
+	return conn, nil
+}
+
+var (
+	// TeamOrderFieldCreatedAt orders Team by created_at.
+	TeamOrderFieldCreatedAt = &TeamOrderField{
+		Value: func(_m *Team) (ent.Value, error) {
+			return _m.CreatedAt, nil
+		},
+		column: team.FieldCreatedAt,
+		toTerm: team.ByCreatedAt,
+		toCursor: func(_m *Team) Cursor {
+			return Cursor{
+				ID:    _m.ID,
+				Value: _m.CreatedAt,
+			}
+		},
+	}
+)
+
+// String implement fmt.Stringer interface.
+func (f TeamOrderField) String() string {
+	var str string
+	switch f.column {
+	case TeamOrderFieldCreatedAt.column:
+		str = "CREATED_AT"
+	}
+	return str
+}
+
+// MarshalGQL implements graphql.Marshaler interface.
+func (f TeamOrderField) MarshalGQL(w io.Writer) {
+	io.WriteString(w, strconv.Quote(f.String()))
+}
+
+// UnmarshalGQL implements graphql.Unmarshaler interface.
+func (f *TeamOrderField) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("TeamOrderField %T must be a string", v)
+	}
+	switch str {
+	case "CREATED_AT":
+		*f = *TeamOrderFieldCreatedAt
+	default:
+		return fmt.Errorf("%s is not a valid TeamOrderField", str)
+	}
+	return nil
+}
+
+// TeamOrderField defines the ordering field of Team.
+type TeamOrderField struct {
+	// Value extracts the ordering value from the given Team.
+	Value    func(*Team) (ent.Value, error)
+	column   string // field or computed.
+	toTerm   func(...sql.OrderTermOption) team.OrderOption
+	toCursor func(*Team) Cursor
+}
+
+// TeamOrder defines the ordering of Team.
+type TeamOrder struct {
+	Direction OrderDirection  `json:"direction"`
+	Field     *TeamOrderField `json:"field"`
+}
+
+// DefaultTeamOrder is the default ordering of Team.
+var DefaultTeamOrder = &TeamOrder{
+	Direction: entgql.OrderDirectionAsc,
+	Field: &TeamOrderField{
+		Value: func(_m *Team) (ent.Value, error) {
+			return _m.ID, nil
+		},
+		column: team.FieldID,
+		toTerm: team.ByID,
+		toCursor: func(_m *Team) Cursor {
+			return Cursor{ID: _m.ID}
+		},
+	},
+}
+
+// ToEdge converts Team into TeamEdge.
+func (_m *Team) ToEdge(order *TeamOrder) *TeamEdge {
+	if order == nil {
+		order = DefaultTeamOrder
+	}
+	return &TeamEdge{
 		Node:   _m,
 		Cursor: order.Field.toCursor(_m),
 	}

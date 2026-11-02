@@ -316,7 +316,7 @@ func MarkRerendered(ctx context.Context, db *sql.DB) error {
 // archivedAtColumn marks soft-deleted rows (LifecycleMixin and friends).
 const archivedAtColumn = "archived_at"
 
-// PurgeArchived permanently removes rows archived before cutoff: each goes
+// PurgeArchived durably removes rows archived before cutoff: each goes
 // to the trash, its id is appended to _purged.json (so an old clone's ADOPT
 // never resurrects it, E47), and the next Reconcile removes its file.
 // Returns the purged "table/id" keys.

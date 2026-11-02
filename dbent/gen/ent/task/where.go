@@ -140,6 +140,76 @@ func AssignedToActorID(v string) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldAssignedToActorID, v))
 }
 
+// AssignedTeam applies equality check predicate on the "assigned_team" field. It's identical to AssignedTeamEQ.
+func AssignedTeam(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldAssignedTeam, v))
+}
+
+// ClaimEpoch applies equality check predicate on the "claim_epoch" field. It's identical to ClaimEpochEQ.
+func ClaimEpoch(v int) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldClaimEpoch, v))
+}
+
+// Attempts applies equality check predicate on the "attempts" field. It's identical to AttemptsEQ.
+func Attempts(v int) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldAttempts, v))
+}
+
+// TimeboxSeconds applies equality check predicate on the "timebox_seconds" field. It's identical to TimeboxSecondsEQ.
+func TimeboxSeconds(v int64) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldTimeboxSeconds, v))
+}
+
+// ApprovedBy applies equality check predicate on the "approved_by" field. It's identical to ApprovedByEQ.
+func ApprovedBy(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldApprovedBy, v))
+}
+
+// ApprovedAt applies equality check predicate on the "approved_at" field. It's identical to ApprovedAtEQ.
+func ApprovedAt(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldApprovedAt, v))
+}
+
+// ApprovedHash applies equality check predicate on the "approved_hash" field. It's identical to ApprovedHashEQ.
+func ApprovedHash(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldApprovedHash, v))
+}
+
+// DoneBy applies equality check predicate on the "done_by" field. It's identical to DoneByEQ.
+func DoneBy(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDoneBy, v))
+}
+
+// DoneCommit applies equality check predicate on the "done_commit" field. It's identical to DoneCommitEQ.
+func DoneCommit(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDoneCommit, v))
+}
+
+// DonePr applies equality check predicate on the "done_pr" field. It's identical to DonePrEQ.
+func DonePr(v int) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDonePr, v))
+}
+
+// MergedAt applies equality check predicate on the "merged_at" field. It's identical to MergedAtEQ.
+func MergedAt(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldMergedAt, v))
+}
+
+// WorkBranch applies equality check predicate on the "work_branch" field. It's identical to WorkBranchEQ.
+func WorkBranch(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldWorkBranch, v))
+}
+
+// IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
+func IdempotencyKey(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
+// Role applies equality check predicate on the "role" field. It's identical to RoleEQ.
+func Role(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldRole, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldCreatedAt, v))
@@ -1133,6 +1203,936 @@ func AssignedToActorIDEqualFold(v string) predicate.Task {
 // AssignedToActorIDContainsFold applies the ContainsFold predicate on the "assigned_to_actor_id" field.
 func AssignedToActorIDContainsFold(v string) predicate.Task {
 	return predicate.Task(sql.FieldContainsFold(FieldAssignedToActorID, v))
+}
+
+// AssignedTeamEQ applies the EQ predicate on the "assigned_team" field.
+func AssignedTeamEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldAssignedTeam, v))
+}
+
+// AssignedTeamNEQ applies the NEQ predicate on the "assigned_team" field.
+func AssignedTeamNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldAssignedTeam, v))
+}
+
+// AssignedTeamIn applies the In predicate on the "assigned_team" field.
+func AssignedTeamIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldAssignedTeam, vs...))
+}
+
+// AssignedTeamNotIn applies the NotIn predicate on the "assigned_team" field.
+func AssignedTeamNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldAssignedTeam, vs...))
+}
+
+// AssignedTeamGT applies the GT predicate on the "assigned_team" field.
+func AssignedTeamGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldAssignedTeam, v))
+}
+
+// AssignedTeamGTE applies the GTE predicate on the "assigned_team" field.
+func AssignedTeamGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldAssignedTeam, v))
+}
+
+// AssignedTeamLT applies the LT predicate on the "assigned_team" field.
+func AssignedTeamLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldAssignedTeam, v))
+}
+
+// AssignedTeamLTE applies the LTE predicate on the "assigned_team" field.
+func AssignedTeamLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldAssignedTeam, v))
+}
+
+// AssignedTeamContains applies the Contains predicate on the "assigned_team" field.
+func AssignedTeamContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldAssignedTeam, v))
+}
+
+// AssignedTeamHasPrefix applies the HasPrefix predicate on the "assigned_team" field.
+func AssignedTeamHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldAssignedTeam, v))
+}
+
+// AssignedTeamHasSuffix applies the HasSuffix predicate on the "assigned_team" field.
+func AssignedTeamHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldAssignedTeam, v))
+}
+
+// AssignedTeamIsNil applies the IsNil predicate on the "assigned_team" field.
+func AssignedTeamIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldAssignedTeam))
+}
+
+// AssignedTeamNotNil applies the NotNil predicate on the "assigned_team" field.
+func AssignedTeamNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldAssignedTeam))
+}
+
+// AssignedTeamEqualFold applies the EqualFold predicate on the "assigned_team" field.
+func AssignedTeamEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldAssignedTeam, v))
+}
+
+// AssignedTeamContainsFold applies the ContainsFold predicate on the "assigned_team" field.
+func AssignedTeamContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldAssignedTeam, v))
+}
+
+// BlockedByIsNil applies the IsNil predicate on the "blocked_by" field.
+func BlockedByIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldBlockedBy))
+}
+
+// BlockedByNotNil applies the NotNil predicate on the "blocked_by" field.
+func BlockedByNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldBlockedBy))
+}
+
+// ClaimEpochEQ applies the EQ predicate on the "claim_epoch" field.
+func ClaimEpochEQ(v int) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldClaimEpoch, v))
+}
+
+// ClaimEpochNEQ applies the NEQ predicate on the "claim_epoch" field.
+func ClaimEpochNEQ(v int) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldClaimEpoch, v))
+}
+
+// ClaimEpochIn applies the In predicate on the "claim_epoch" field.
+func ClaimEpochIn(vs ...int) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldClaimEpoch, vs...))
+}
+
+// ClaimEpochNotIn applies the NotIn predicate on the "claim_epoch" field.
+func ClaimEpochNotIn(vs ...int) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldClaimEpoch, vs...))
+}
+
+// ClaimEpochGT applies the GT predicate on the "claim_epoch" field.
+func ClaimEpochGT(v int) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldClaimEpoch, v))
+}
+
+// ClaimEpochGTE applies the GTE predicate on the "claim_epoch" field.
+func ClaimEpochGTE(v int) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldClaimEpoch, v))
+}
+
+// ClaimEpochLT applies the LT predicate on the "claim_epoch" field.
+func ClaimEpochLT(v int) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldClaimEpoch, v))
+}
+
+// ClaimEpochLTE applies the LTE predicate on the "claim_epoch" field.
+func ClaimEpochLTE(v int) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldClaimEpoch, v))
+}
+
+// AttemptsEQ applies the EQ predicate on the "attempts" field.
+func AttemptsEQ(v int) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldAttempts, v))
+}
+
+// AttemptsNEQ applies the NEQ predicate on the "attempts" field.
+func AttemptsNEQ(v int) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldAttempts, v))
+}
+
+// AttemptsIn applies the In predicate on the "attempts" field.
+func AttemptsIn(vs ...int) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldAttempts, vs...))
+}
+
+// AttemptsNotIn applies the NotIn predicate on the "attempts" field.
+func AttemptsNotIn(vs ...int) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldAttempts, vs...))
+}
+
+// AttemptsGT applies the GT predicate on the "attempts" field.
+func AttemptsGT(v int) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldAttempts, v))
+}
+
+// AttemptsGTE applies the GTE predicate on the "attempts" field.
+func AttemptsGTE(v int) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldAttempts, v))
+}
+
+// AttemptsLT applies the LT predicate on the "attempts" field.
+func AttemptsLT(v int) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldAttempts, v))
+}
+
+// AttemptsLTE applies the LTE predicate on the "attempts" field.
+func AttemptsLTE(v int) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldAttempts, v))
+}
+
+// ClaimLogIsNil applies the IsNil predicate on the "claim_log" field.
+func ClaimLogIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldClaimLog))
+}
+
+// ClaimLogNotNil applies the NotNil predicate on the "claim_log" field.
+func ClaimLogNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldClaimLog))
+}
+
+// TimeboxSecondsEQ applies the EQ predicate on the "timebox_seconds" field.
+func TimeboxSecondsEQ(v int64) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldTimeboxSeconds, v))
+}
+
+// TimeboxSecondsNEQ applies the NEQ predicate on the "timebox_seconds" field.
+func TimeboxSecondsNEQ(v int64) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldTimeboxSeconds, v))
+}
+
+// TimeboxSecondsIn applies the In predicate on the "timebox_seconds" field.
+func TimeboxSecondsIn(vs ...int64) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldTimeboxSeconds, vs...))
+}
+
+// TimeboxSecondsNotIn applies the NotIn predicate on the "timebox_seconds" field.
+func TimeboxSecondsNotIn(vs ...int64) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldTimeboxSeconds, vs...))
+}
+
+// TimeboxSecondsGT applies the GT predicate on the "timebox_seconds" field.
+func TimeboxSecondsGT(v int64) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldTimeboxSeconds, v))
+}
+
+// TimeboxSecondsGTE applies the GTE predicate on the "timebox_seconds" field.
+func TimeboxSecondsGTE(v int64) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldTimeboxSeconds, v))
+}
+
+// TimeboxSecondsLT applies the LT predicate on the "timebox_seconds" field.
+func TimeboxSecondsLT(v int64) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldTimeboxSeconds, v))
+}
+
+// TimeboxSecondsLTE applies the LTE predicate on the "timebox_seconds" field.
+func TimeboxSecondsLTE(v int64) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldTimeboxSeconds, v))
+}
+
+// TimeboxSecondsIsNil applies the IsNil predicate on the "timebox_seconds" field.
+func TimeboxSecondsIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldTimeboxSeconds))
+}
+
+// TimeboxSecondsNotNil applies the NotNil predicate on the "timebox_seconds" field.
+func TimeboxSecondsNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldTimeboxSeconds))
+}
+
+// GateEQ applies the EQ predicate on the "gate" field.
+func GateEQ(v Gate) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldGate, v))
+}
+
+// GateNEQ applies the NEQ predicate on the "gate" field.
+func GateNEQ(v Gate) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldGate, v))
+}
+
+// GateIn applies the In predicate on the "gate" field.
+func GateIn(vs ...Gate) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldGate, vs...))
+}
+
+// GateNotIn applies the NotIn predicate on the "gate" field.
+func GateNotIn(vs ...Gate) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldGate, vs...))
+}
+
+// GateIsNil applies the IsNil predicate on the "gate" field.
+func GateIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldGate))
+}
+
+// GateNotNil applies the NotNil predicate on the "gate" field.
+func GateNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldGate))
+}
+
+// ApprovedByEQ applies the EQ predicate on the "approved_by" field.
+func ApprovedByEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldApprovedBy, v))
+}
+
+// ApprovedByNEQ applies the NEQ predicate on the "approved_by" field.
+func ApprovedByNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldApprovedBy, v))
+}
+
+// ApprovedByIn applies the In predicate on the "approved_by" field.
+func ApprovedByIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldApprovedBy, vs...))
+}
+
+// ApprovedByNotIn applies the NotIn predicate on the "approved_by" field.
+func ApprovedByNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldApprovedBy, vs...))
+}
+
+// ApprovedByGT applies the GT predicate on the "approved_by" field.
+func ApprovedByGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldApprovedBy, v))
+}
+
+// ApprovedByGTE applies the GTE predicate on the "approved_by" field.
+func ApprovedByGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldApprovedBy, v))
+}
+
+// ApprovedByLT applies the LT predicate on the "approved_by" field.
+func ApprovedByLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldApprovedBy, v))
+}
+
+// ApprovedByLTE applies the LTE predicate on the "approved_by" field.
+func ApprovedByLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldApprovedBy, v))
+}
+
+// ApprovedByContains applies the Contains predicate on the "approved_by" field.
+func ApprovedByContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldApprovedBy, v))
+}
+
+// ApprovedByHasPrefix applies the HasPrefix predicate on the "approved_by" field.
+func ApprovedByHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldApprovedBy, v))
+}
+
+// ApprovedByHasSuffix applies the HasSuffix predicate on the "approved_by" field.
+func ApprovedByHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldApprovedBy, v))
+}
+
+// ApprovedByIsNil applies the IsNil predicate on the "approved_by" field.
+func ApprovedByIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldApprovedBy))
+}
+
+// ApprovedByNotNil applies the NotNil predicate on the "approved_by" field.
+func ApprovedByNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldApprovedBy))
+}
+
+// ApprovedByEqualFold applies the EqualFold predicate on the "approved_by" field.
+func ApprovedByEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldApprovedBy, v))
+}
+
+// ApprovedByContainsFold applies the ContainsFold predicate on the "approved_by" field.
+func ApprovedByContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldApprovedBy, v))
+}
+
+// ApprovedAtEQ applies the EQ predicate on the "approved_at" field.
+func ApprovedAtEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldApprovedAt, v))
+}
+
+// ApprovedAtNEQ applies the NEQ predicate on the "approved_at" field.
+func ApprovedAtNEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldApprovedAt, v))
+}
+
+// ApprovedAtIn applies the In predicate on the "approved_at" field.
+func ApprovedAtIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldApprovedAt, vs...))
+}
+
+// ApprovedAtNotIn applies the NotIn predicate on the "approved_at" field.
+func ApprovedAtNotIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldApprovedAt, vs...))
+}
+
+// ApprovedAtGT applies the GT predicate on the "approved_at" field.
+func ApprovedAtGT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldApprovedAt, v))
+}
+
+// ApprovedAtGTE applies the GTE predicate on the "approved_at" field.
+func ApprovedAtGTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldApprovedAt, v))
+}
+
+// ApprovedAtLT applies the LT predicate on the "approved_at" field.
+func ApprovedAtLT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldApprovedAt, v))
+}
+
+// ApprovedAtLTE applies the LTE predicate on the "approved_at" field.
+func ApprovedAtLTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldApprovedAt, v))
+}
+
+// ApprovedAtIsNil applies the IsNil predicate on the "approved_at" field.
+func ApprovedAtIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldApprovedAt))
+}
+
+// ApprovedAtNotNil applies the NotNil predicate on the "approved_at" field.
+func ApprovedAtNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldApprovedAt))
+}
+
+// ApprovedHashEQ applies the EQ predicate on the "approved_hash" field.
+func ApprovedHashEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldApprovedHash, v))
+}
+
+// ApprovedHashNEQ applies the NEQ predicate on the "approved_hash" field.
+func ApprovedHashNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldApprovedHash, v))
+}
+
+// ApprovedHashIn applies the In predicate on the "approved_hash" field.
+func ApprovedHashIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldApprovedHash, vs...))
+}
+
+// ApprovedHashNotIn applies the NotIn predicate on the "approved_hash" field.
+func ApprovedHashNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldApprovedHash, vs...))
+}
+
+// ApprovedHashGT applies the GT predicate on the "approved_hash" field.
+func ApprovedHashGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldApprovedHash, v))
+}
+
+// ApprovedHashGTE applies the GTE predicate on the "approved_hash" field.
+func ApprovedHashGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldApprovedHash, v))
+}
+
+// ApprovedHashLT applies the LT predicate on the "approved_hash" field.
+func ApprovedHashLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldApprovedHash, v))
+}
+
+// ApprovedHashLTE applies the LTE predicate on the "approved_hash" field.
+func ApprovedHashLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldApprovedHash, v))
+}
+
+// ApprovedHashContains applies the Contains predicate on the "approved_hash" field.
+func ApprovedHashContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldApprovedHash, v))
+}
+
+// ApprovedHashHasPrefix applies the HasPrefix predicate on the "approved_hash" field.
+func ApprovedHashHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldApprovedHash, v))
+}
+
+// ApprovedHashHasSuffix applies the HasSuffix predicate on the "approved_hash" field.
+func ApprovedHashHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldApprovedHash, v))
+}
+
+// ApprovedHashIsNil applies the IsNil predicate on the "approved_hash" field.
+func ApprovedHashIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldApprovedHash))
+}
+
+// ApprovedHashNotNil applies the NotNil predicate on the "approved_hash" field.
+func ApprovedHashNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldApprovedHash))
+}
+
+// ApprovedHashEqualFold applies the EqualFold predicate on the "approved_hash" field.
+func ApprovedHashEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldApprovedHash, v))
+}
+
+// ApprovedHashContainsFold applies the ContainsFold predicate on the "approved_hash" field.
+func ApprovedHashContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldApprovedHash, v))
+}
+
+// DoneByEQ applies the EQ predicate on the "done_by" field.
+func DoneByEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDoneBy, v))
+}
+
+// DoneByNEQ applies the NEQ predicate on the "done_by" field.
+func DoneByNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldDoneBy, v))
+}
+
+// DoneByIn applies the In predicate on the "done_by" field.
+func DoneByIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldDoneBy, vs...))
+}
+
+// DoneByNotIn applies the NotIn predicate on the "done_by" field.
+func DoneByNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldDoneBy, vs...))
+}
+
+// DoneByGT applies the GT predicate on the "done_by" field.
+func DoneByGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldDoneBy, v))
+}
+
+// DoneByGTE applies the GTE predicate on the "done_by" field.
+func DoneByGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldDoneBy, v))
+}
+
+// DoneByLT applies the LT predicate on the "done_by" field.
+func DoneByLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldDoneBy, v))
+}
+
+// DoneByLTE applies the LTE predicate on the "done_by" field.
+func DoneByLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldDoneBy, v))
+}
+
+// DoneByContains applies the Contains predicate on the "done_by" field.
+func DoneByContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldDoneBy, v))
+}
+
+// DoneByHasPrefix applies the HasPrefix predicate on the "done_by" field.
+func DoneByHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldDoneBy, v))
+}
+
+// DoneByHasSuffix applies the HasSuffix predicate on the "done_by" field.
+func DoneByHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldDoneBy, v))
+}
+
+// DoneByIsNil applies the IsNil predicate on the "done_by" field.
+func DoneByIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldDoneBy))
+}
+
+// DoneByNotNil applies the NotNil predicate on the "done_by" field.
+func DoneByNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldDoneBy))
+}
+
+// DoneByEqualFold applies the EqualFold predicate on the "done_by" field.
+func DoneByEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldDoneBy, v))
+}
+
+// DoneByContainsFold applies the ContainsFold predicate on the "done_by" field.
+func DoneByContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldDoneBy, v))
+}
+
+// DoneCommitEQ applies the EQ predicate on the "done_commit" field.
+func DoneCommitEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDoneCommit, v))
+}
+
+// DoneCommitNEQ applies the NEQ predicate on the "done_commit" field.
+func DoneCommitNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldDoneCommit, v))
+}
+
+// DoneCommitIn applies the In predicate on the "done_commit" field.
+func DoneCommitIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldDoneCommit, vs...))
+}
+
+// DoneCommitNotIn applies the NotIn predicate on the "done_commit" field.
+func DoneCommitNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldDoneCommit, vs...))
+}
+
+// DoneCommitGT applies the GT predicate on the "done_commit" field.
+func DoneCommitGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldDoneCommit, v))
+}
+
+// DoneCommitGTE applies the GTE predicate on the "done_commit" field.
+func DoneCommitGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldDoneCommit, v))
+}
+
+// DoneCommitLT applies the LT predicate on the "done_commit" field.
+func DoneCommitLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldDoneCommit, v))
+}
+
+// DoneCommitLTE applies the LTE predicate on the "done_commit" field.
+func DoneCommitLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldDoneCommit, v))
+}
+
+// DoneCommitContains applies the Contains predicate on the "done_commit" field.
+func DoneCommitContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldDoneCommit, v))
+}
+
+// DoneCommitHasPrefix applies the HasPrefix predicate on the "done_commit" field.
+func DoneCommitHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldDoneCommit, v))
+}
+
+// DoneCommitHasSuffix applies the HasSuffix predicate on the "done_commit" field.
+func DoneCommitHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldDoneCommit, v))
+}
+
+// DoneCommitIsNil applies the IsNil predicate on the "done_commit" field.
+func DoneCommitIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldDoneCommit))
+}
+
+// DoneCommitNotNil applies the NotNil predicate on the "done_commit" field.
+func DoneCommitNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldDoneCommit))
+}
+
+// DoneCommitEqualFold applies the EqualFold predicate on the "done_commit" field.
+func DoneCommitEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldDoneCommit, v))
+}
+
+// DoneCommitContainsFold applies the ContainsFold predicate on the "done_commit" field.
+func DoneCommitContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldDoneCommit, v))
+}
+
+// DonePrEQ applies the EQ predicate on the "done_pr" field.
+func DonePrEQ(v int) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDonePr, v))
+}
+
+// DonePrNEQ applies the NEQ predicate on the "done_pr" field.
+func DonePrNEQ(v int) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldDonePr, v))
+}
+
+// DonePrIn applies the In predicate on the "done_pr" field.
+func DonePrIn(vs ...int) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldDonePr, vs...))
+}
+
+// DonePrNotIn applies the NotIn predicate on the "done_pr" field.
+func DonePrNotIn(vs ...int) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldDonePr, vs...))
+}
+
+// DonePrGT applies the GT predicate on the "done_pr" field.
+func DonePrGT(v int) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldDonePr, v))
+}
+
+// DonePrGTE applies the GTE predicate on the "done_pr" field.
+func DonePrGTE(v int) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldDonePr, v))
+}
+
+// DonePrLT applies the LT predicate on the "done_pr" field.
+func DonePrLT(v int) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldDonePr, v))
+}
+
+// DonePrLTE applies the LTE predicate on the "done_pr" field.
+func DonePrLTE(v int) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldDonePr, v))
+}
+
+// DonePrIsNil applies the IsNil predicate on the "done_pr" field.
+func DonePrIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldDonePr))
+}
+
+// DonePrNotNil applies the NotNil predicate on the "done_pr" field.
+func DonePrNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldDonePr))
+}
+
+// MergedAtEQ applies the EQ predicate on the "merged_at" field.
+func MergedAtEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldMergedAt, v))
+}
+
+// MergedAtNEQ applies the NEQ predicate on the "merged_at" field.
+func MergedAtNEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldMergedAt, v))
+}
+
+// MergedAtIn applies the In predicate on the "merged_at" field.
+func MergedAtIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldMergedAt, vs...))
+}
+
+// MergedAtNotIn applies the NotIn predicate on the "merged_at" field.
+func MergedAtNotIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldMergedAt, vs...))
+}
+
+// MergedAtGT applies the GT predicate on the "merged_at" field.
+func MergedAtGT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldMergedAt, v))
+}
+
+// MergedAtGTE applies the GTE predicate on the "merged_at" field.
+func MergedAtGTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldMergedAt, v))
+}
+
+// MergedAtLT applies the LT predicate on the "merged_at" field.
+func MergedAtLT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldMergedAt, v))
+}
+
+// MergedAtLTE applies the LTE predicate on the "merged_at" field.
+func MergedAtLTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldMergedAt, v))
+}
+
+// MergedAtIsNil applies the IsNil predicate on the "merged_at" field.
+func MergedAtIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldMergedAt))
+}
+
+// MergedAtNotNil applies the NotNil predicate on the "merged_at" field.
+func MergedAtNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldMergedAt))
+}
+
+// WorkBranchEQ applies the EQ predicate on the "work_branch" field.
+func WorkBranchEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldWorkBranch, v))
+}
+
+// WorkBranchNEQ applies the NEQ predicate on the "work_branch" field.
+func WorkBranchNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldWorkBranch, v))
+}
+
+// WorkBranchIn applies the In predicate on the "work_branch" field.
+func WorkBranchIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldWorkBranch, vs...))
+}
+
+// WorkBranchNotIn applies the NotIn predicate on the "work_branch" field.
+func WorkBranchNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldWorkBranch, vs...))
+}
+
+// WorkBranchGT applies the GT predicate on the "work_branch" field.
+func WorkBranchGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldWorkBranch, v))
+}
+
+// WorkBranchGTE applies the GTE predicate on the "work_branch" field.
+func WorkBranchGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldWorkBranch, v))
+}
+
+// WorkBranchLT applies the LT predicate on the "work_branch" field.
+func WorkBranchLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldWorkBranch, v))
+}
+
+// WorkBranchLTE applies the LTE predicate on the "work_branch" field.
+func WorkBranchLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldWorkBranch, v))
+}
+
+// WorkBranchContains applies the Contains predicate on the "work_branch" field.
+func WorkBranchContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldWorkBranch, v))
+}
+
+// WorkBranchHasPrefix applies the HasPrefix predicate on the "work_branch" field.
+func WorkBranchHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldWorkBranch, v))
+}
+
+// WorkBranchHasSuffix applies the HasSuffix predicate on the "work_branch" field.
+func WorkBranchHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldWorkBranch, v))
+}
+
+// WorkBranchIsNil applies the IsNil predicate on the "work_branch" field.
+func WorkBranchIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldWorkBranch))
+}
+
+// WorkBranchNotNil applies the NotNil predicate on the "work_branch" field.
+func WorkBranchNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldWorkBranch))
+}
+
+// WorkBranchEqualFold applies the EqualFold predicate on the "work_branch" field.
+func WorkBranchEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldWorkBranch, v))
+}
+
+// WorkBranchContainsFold applies the ContainsFold predicate on the "work_branch" field.
+func WorkBranchContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldWorkBranch, v))
+}
+
+// IdempotencyKeyEQ applies the EQ predicate on the "idempotency_key" field.
+func IdempotencyKeyEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyNEQ applies the NEQ predicate on the "idempotency_key" field.
+func IdempotencyKeyNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyIn applies the In predicate on the "idempotency_key" field.
+func IdempotencyKeyIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldIdempotencyKey, vs...))
+}
+
+// IdempotencyKeyNotIn applies the NotIn predicate on the "idempotency_key" field.
+func IdempotencyKeyNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldIdempotencyKey, vs...))
+}
+
+// IdempotencyKeyGT applies the GT predicate on the "idempotency_key" field.
+func IdempotencyKeyGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyGTE applies the GTE predicate on the "idempotency_key" field.
+func IdempotencyKeyGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyLT applies the LT predicate on the "idempotency_key" field.
+func IdempotencyKeyLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyLTE applies the LTE predicate on the "idempotency_key" field.
+func IdempotencyKeyLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyContains applies the Contains predicate on the "idempotency_key" field.
+func IdempotencyKeyContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyHasPrefix applies the HasPrefix predicate on the "idempotency_key" field.
+func IdempotencyKeyHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyHasSuffix applies the HasSuffix predicate on the "idempotency_key" field.
+func IdempotencyKeyHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyIsNil applies the IsNil predicate on the "idempotency_key" field.
+func IdempotencyKeyIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldIdempotencyKey))
+}
+
+// IdempotencyKeyNotNil applies the NotNil predicate on the "idempotency_key" field.
+func IdempotencyKeyNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldIdempotencyKey))
+}
+
+// IdempotencyKeyEqualFold applies the EqualFold predicate on the "idempotency_key" field.
+func IdempotencyKeyEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldIdempotencyKey, v))
+}
+
+// IdempotencyKeyContainsFold applies the ContainsFold predicate on the "idempotency_key" field.
+func IdempotencyKeyContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldIdempotencyKey, v))
+}
+
+// RoleEQ applies the EQ predicate on the "role" field.
+func RoleEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldRole, v))
+}
+
+// RoleNEQ applies the NEQ predicate on the "role" field.
+func RoleNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldRole, v))
+}
+
+// RoleIn applies the In predicate on the "role" field.
+func RoleIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldRole, vs...))
+}
+
+// RoleNotIn applies the NotIn predicate on the "role" field.
+func RoleNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldRole, vs...))
+}
+
+// RoleGT applies the GT predicate on the "role" field.
+func RoleGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldRole, v))
+}
+
+// RoleGTE applies the GTE predicate on the "role" field.
+func RoleGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldRole, v))
+}
+
+// RoleLT applies the LT predicate on the "role" field.
+func RoleLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldRole, v))
+}
+
+// RoleLTE applies the LTE predicate on the "role" field.
+func RoleLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldRole, v))
+}
+
+// RoleContains applies the Contains predicate on the "role" field.
+func RoleContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldRole, v))
+}
+
+// RoleHasPrefix applies the HasPrefix predicate on the "role" field.
+func RoleHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldRole, v))
+}
+
+// RoleHasSuffix applies the HasSuffix predicate on the "role" field.
+func RoleHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldRole, v))
+}
+
+// RoleIsNil applies the IsNil predicate on the "role" field.
+func RoleIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldRole))
+}
+
+// RoleNotNil applies the NotNil predicate on the "role" field.
+func RoleNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldRole))
+}
+
+// RoleEqualFold applies the EqualFold predicate on the "role" field.
+func RoleEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldRole, v))
+}
+
+// RoleContainsFold applies the ContainsFold predicate on the "role" field.
+func RoleContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldRole, v))
 }
 
 // HasMission applies the HasEdge predicate on the "mission" edge.

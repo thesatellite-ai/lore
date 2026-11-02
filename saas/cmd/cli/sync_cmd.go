@@ -116,6 +116,15 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
   lore sync resolve 3 --take other`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// A fresh clone (or a checkout whose lore.db was never built
+			// because every write went to a store) is materialised first,
+			// exactly as any other command does.
+			if err := maybeMaterialize(cmd.Context(), &f); err != nil {
+				return errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(err)
+			}
+			// Store writes made offline wait in the bare clones; `lore sync`
+			// is the explicit "deliver everything now" (§5.3).
+			syncStores(cmd.Context())
 			t, err := openSyncTarget(&f)
 			if err != nil {
 				return err
@@ -191,6 +200,7 @@ func newSyncStatusCommand() *cobra.Command {
 			for _, e := range st.Errors {
 				fmt.Println(style.Error(fmt.Sprintf("  %s %s: %s", e.Kind, e.Path, e.Detail)))
 			}
+			printLiveStatus(cmd.Context(), t.root)
 			return nil
 		},
 	}
@@ -423,7 +433,7 @@ func newSyncPurgeCommand() *cobra.Command {
 	var confirm, dryRun bool
 	cmd := &cobra.Command{
 		Use:   "purge",
-		Short: "Permanently remove rows archived before a cutoff",
+		Short: "Durably remove rows archived before a cutoff",
 		Long: `purge deletes archived rows for good: their files are removed, and their ids
 are recorded in .lore/data/_purged.json so an old clone never brings them
 back. Run it on main and commit the result. Rows go to the local trash first.
@@ -438,7 +448,7 @@ back. Run it on main and commit the result. Rows go to the local trash first.
 				return errcodes.New(errcodes.InvalidInput, "bad --archived-before").WithCause(err)
 			}
 			if !confirm && !dryRun {
-				return errcodes.New(errcodes.InvalidInput, "purge is permanent; pass --confirm (or --dry-run to preview)")
+				return errcodes.New(errcodes.InvalidInput, "purge is durable; pass --confirm (or --dry-run to preview)")
 			}
 			t, err := openSyncTarget(&f)
 			if err != nil {
@@ -471,7 +481,7 @@ back. Run it on main and commit the result. Rows go to the local trash first.
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&before, constants.FlagArchivedBefore, "", "cutoff: date (2006-01-02) or age (90d, 720h)")
-	cmd.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "required: purge is permanent")
+	cmd.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "required: purge is durable")
 	cmd.Flags().BoolVar(&dryRun, constants.FlagDryRun, false, "count what would be purged")
 	return cmd
 }
@@ -602,8 +612,10 @@ chained into that directory's scripts.`,
 
 // Hook names `lore sync hook` accepts.
 const (
-	hookPreCommit = "pre-commit"
-	hookRefresh   = "refresh"
+	hookPreCommit  = "pre-commit"
+	hookRefresh    = "refresh"
+	hookPostCommit = "post-commit"
+	hookPrePush    = "pre-push"
 )
 
 // newSyncHookCommand is what the git hook blocks call. Hidden: it is an
@@ -611,11 +623,22 @@ const (
 func newSyncHookCommand() *cobra.Command {
 	var f commonFlags
 	return &cobra.Command{
-		Use:    "hook <pre-commit|refresh>",
+		Use:    "hook <pre-commit|refresh|post-commit|pre-push>",
 		Short:  "Entry point for lore's git hook blocks",
 		Hidden: true,
-		Args:   cobra.ExactArgs(1),
+		Args:   cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// lore's own ride-along commit runs git; its hooks must not
+			// re-enter lore (F6 re-entry guard).
+			if os.Getenv(envRideActive) != "" {
+				return nil
+			}
+			switch args[0] {
+			case hookPostCommit:
+				return livePostCommitHook(cmd.Context())
+			case hookPrePush:
+				return livePrePushHook(cmd.Context(), cmd.InOrStdin())
+			}
 			t, err := openSyncTarget(&f)
 			if err != nil {
 				// Not a lore project (e.g. a hook copied around): never
@@ -668,6 +691,10 @@ func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error 
 	if err != nil {
 		return nil // not a git repo
 	}
+	// A branch file of a live row is shadowed by live (fixed rule 4): it is
+	// neither checked nor staged here, so a stale or hand-edited copy never
+	// rides into the user's commit (F6 "dirty landed path").
+	changed, shadowed := withoutLiveRows(ctx, t.db, changed)
 	scan := secretCheck()
 	for _, p := range changed {
 		b, rerr := os.ReadFile(filepath.Join(t.root, p))
@@ -690,8 +717,15 @@ func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error 
 			WithHint("resolve the markers inside the JSON values (or `lore sync resolve`), then commit again")
 	}
 	if len(changed) > 0 {
-		if err := gitsetup.Add(ctx, t.root, rel); err != nil {
-			fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"could not stage .lore/data: "+err.Error()))
+		specs := []string{rel}
+		if shadowed {
+			specs = changed
+		}
+		for _, p := range specs {
+			if err := gitsetup.Add(ctx, t.root, p); err != nil {
+				fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"could not stage .lore/data: "+err.Error()))
+				break
+			}
 		}
 	}
 	return nil

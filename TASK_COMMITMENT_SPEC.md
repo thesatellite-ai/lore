@@ -5,7 +5,7 @@ status: accepted
 
 # Task commitment & deferral — spec
 
-<DocStatus state="review" owner="amank" updated="2026-05-17"></DocStatus>
+<DocStatus state="review" owner="alice" updated="2026-05-17"></DocStatus>
 
 Give every task two new orthogonal axes besides lifecycle `status`: **commitment** (is this real / agreed?) and **deferral** (real, but not now). The driver: AI agents create *all* tasks and set *all* state — there is no human triage step — so speculative tasks must be distinguishable from agreed ones without a human in the loop, and the failure mode must be loud, never silent.
 

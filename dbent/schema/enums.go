@@ -63,6 +63,29 @@ var taskStatusValues = []string{
 	string(TaskStatusBlocked),
 }
 
+// --- Task.gate (LORE_TEAM_SPEC §7.2, TEAM-028) ---------------------------
+//
+// A gate stops agents from claiming or finishing a task until a human
+// approves it. The column is nullable: nil means "no gate", so every task
+// written before the team feature stays ungated. Order of the lifecycle:
+// required (set by a plan or a human) → requested (the holder asks
+// mid-task, `lore gate request`) → approved (`lore gate approve`, human
+// only). Editing title or body voids an approval (approved_hash).
+
+type TaskGate string
+
+const (
+	TaskGateRequired  TaskGate = "required"
+	TaskGateRequested TaskGate = "requested"
+	TaskGateApproved  TaskGate = "approved"
+)
+
+var taskGateValues = []string{
+	string(TaskGateRequired),
+	string(TaskGateRequested),
+	string(TaskGateApproved),
+}
+
 // --- Task.commitment -------------------------------------------------------
 //
 // Orthogonal to status (lifecycle). Answers "is this task agreed work?":

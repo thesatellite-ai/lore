@@ -27,6 +27,10 @@ const (
 	FieldBody = "body"
 	// FieldStatusStr holds the string denoting the status_str field in the database.
 	FieldStatusStr = "status_str"
+	// FieldTaskID holds the string denoting the task_id field in the database.
+	FieldTaskID = "task_id"
+	// FieldMissionID holds the string denoting the mission_id field in the database.
+	FieldMissionID = "mission_id"
 	// Table holds the table name of the handoff in the database.
 	Table = "handoffs"
 )
@@ -41,6 +45,8 @@ var Columns = []string{
 	FieldToActorID,
 	FieldBody,
 	FieldStatusStr,
+	FieldTaskID,
+	FieldMissionID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -117,4 +123,14 @@ func ByBody(opts ...sql.OrderTermOption) OrderOption {
 // ByStatusStr orders the results by the status_str field.
 func ByStatusStr(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatusStr, opts...).ToFunc()
+}
+
+// ByTaskID orders the results by the task_id field.
+func ByTaskID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTaskID, opts...).ToFunc()
+}
+
+// ByMissionID orders the results by the mission_id field.
+func ByMissionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMissionID, opts...).ToFunc()
 }

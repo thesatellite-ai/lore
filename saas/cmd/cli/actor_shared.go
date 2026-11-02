@@ -17,7 +17,6 @@ import (
 	"dbent/gen/ent"
 	entActor "dbent/gen/ent/actor"
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/identity"
 	"saas/pkg/constants"
 )
 
@@ -29,7 +28,10 @@ func resolveCurrentActorID(ctx context.Context, client *ent.Client) (string, err
 	if id, ok := currentActorCache[client]; ok {
 		return id, nil
 	}
-	r := identity.Resolve(identity.Inputs{})
+	r, err := resolveIdentityHere(ctx)
+	if err != nil {
+		return "", err
+	}
 	actor, err := upsertActor(ctx, client, r)
 	if err != nil {
 		return "", errcodes.New(errcodes.Internal, "resolve current actor").WithCause(err)
@@ -71,7 +73,11 @@ func resolveActorRef(ctx context.Context, client *ent.Client, ref string) (strin
 			WithHint("pass an actor id (act_*), " + constants.ActorRefMe + ", a stable_key or a display name")
 	}
 	if ref == constants.ActorRefMe {
-		key := identity.Resolve(identity.Inputs{}).StableKey
+		r, err := resolveIdentityHere(ctx)
+		if err != nil {
+			return "", err
+		}
+		key := r.StableKey
 		a, err := client.Actor.Query().Where(entActor.StableKey(key)).Only(ctx)
 		if ent.IsNotFound(err) {
 			return "", errcodes.New(errcodes.NotFound, "current identity "+key+" has no actor in this project yet").

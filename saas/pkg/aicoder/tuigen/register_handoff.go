@@ -53,6 +53,8 @@ func registerHandoff(app *runtime.App, client *ent.Client) {
 					entHandoff.FromActorIDContainsFold(opts.Filter),
 					entHandoff.ToActorIDContainsFold(opts.Filter),
 					entHandoff.StatusStrContainsFold(opts.Filter),
+					entHandoff.TaskIDContainsFold(opts.Filter),
+					entHandoff.MissionIDContainsFold(opts.Filter),
 				))
 			}
 			// Phase E — structured per-column filters. AND-composed.
@@ -113,6 +115,32 @@ func registerHandoff(app *runtime.App, client *ent.Client) {
 					case runtime.OpContains:
 						q = q.Where(entHandoff.StatusStrContainsFold(f.Value))
 					}
+				case "task_id":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entHandoff.TaskIDEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entHandoff.TaskIDNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entHandoff.TaskIDContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entHandoff.TaskIDIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entHandoff.TaskIDNotNil())
+					}
+				case "mission_id":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entHandoff.MissionIDEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entHandoff.MissionIDNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entHandoff.MissionIDContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entHandoff.MissionIDIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entHandoff.MissionIDNotNil())
+					}
 				}
 			}
 			// Phase D — multi-column sort stack. Each Sort entry walks the
@@ -161,6 +189,18 @@ func registerHandoff(app *runtime.App, client *ent.Client) {
 							q = q.Order(ent.Asc(entHandoff.FieldStatusStr))
 						} else {
 							q = q.Order(ent.Desc(entHandoff.FieldStatusStr))
+						}
+					case "task_id":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entHandoff.FieldTaskID))
+						} else {
+							q = q.Order(ent.Desc(entHandoff.FieldTaskID))
+						}
+					case "mission_id":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entHandoff.FieldMissionID))
+						} else {
+							q = q.Order(ent.Desc(entHandoff.FieldMissionID))
 						}
 					}
 				}
@@ -285,6 +325,36 @@ func registerHandoff(app *runtime.App, client *ent.Client) {
 				Align:      "",
 				Get: func(r *ent.Handoff) string {
 					return r.StatusStr
+				},
+			},
+			{
+				Key:        "task_id",
+				Label:      "Task Id",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Handoff) string {
+					if r.TaskID == nil {
+						return ""
+					}
+					return *r.TaskID
+				},
+			},
+			{
+				Key:        "mission_id",
+				Label:      "Mission Id",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Handoff) string {
+					if r.MissionID == nil {
+						return ""
+					}
+					return *r.MissionID
 				},
 			},
 		},

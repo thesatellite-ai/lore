@@ -221,3 +221,48 @@ func TestScan_LongCleanContent(t *testing.T) {
 		t.Error("false positive on long clean content")
 	}
 }
+
+// C20 / §6.5: the extended patterns, each with near-misses that must stay
+// clean (a test of the matrix, not of one string).
+func TestExtendedPatterns(t *testing.T) {
+	s := NewScanner()
+	hits := map[string]string{
+		"postgres://admin:hunter2pass@db.internal:5432/app": "url_with_password",
+		"redis://default:s3cr3tvalue@cache:6379":            "url_with_password",
+		"Authorization: Bearer abcDEF123456789xyz":          "authorization_bearer",
+		"authorization=bearer abcdefghijklmnop":             "authorization_bearer",
+		"password=Tr0ub4dor&3":                              "password_pair",
+		`PASSWD: "longenough"`:                              "password_pair",
+		"npm_" + strings.Repeat("a1B2", 9):                  "npm_token",
+		"SK" + strings.Repeat("0123456789abcdef", 2):        "twilio_api_key",
+	}
+	for in, want := range hits {
+		found := false
+		for _, m := range s.Scan(in) {
+			if m.PatternName == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q: want %s, got %v", in, want, s.Scan(in))
+		}
+	}
+	clean := []string{
+		"git@github.com:acme/app.git",
+		"https://github.com/acme/app",
+		"ssh://git@github.com/acme/app",
+		"https://user@example.com/path",
+		"password=<your password>",
+		"password=${DB_PASSWORD}",
+		"password: ***",
+		"set the password in gopass",
+		"Authorization: Bearer <token>",
+		"npm_install is a script name",
+		"SKU1234",
+	}
+	for _, in := range clean {
+		if m := s.Scan(in); len(m) > 0 {
+			t.Errorf("%q must stay clean, got %v", in, m)
+		}
+	}
+}

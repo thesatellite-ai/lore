@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"saas/pkg/constants"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/identity"
+	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
 
@@ -40,6 +42,7 @@ func newTaskCommand() *cobra.Command {
 	cmd.AddCommand(newTaskEditCommand())
 	cmd.AddCommand(newTaskSearchCommand())
 	cmd.AddCommand(newDeleteCommand(taskDeleteTarget))
+	cmd.AddCommand(taskCoordCommands()...)
 	return cmd
 }
 
@@ -180,6 +183,8 @@ type taskEditFlags struct {
 	clearPlan       bool
 	assignedTo      string
 	clearAssignedTo bool
+	team            teamTaskFlags
+	from            string
 }
 
 func newTaskEditCommand() *cobra.Command {
@@ -191,6 +196,9 @@ func newTaskEditCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseIfReadOnly(&f.commonFlags); err != nil {
 				return err
+			}
+			if f.from != "" && f.from != toRepo {
+				return editTaskFrom(cmd, args[0], f)
 			}
 			rctx, client, err := resolveContext(&f.commonFlags)
 			if err != nil {
@@ -283,6 +291,61 @@ func newTaskEditCommand() *cobra.Command {
 			if f.clearAssignedTo {
 				upd.ClearAssignedToActorID()
 			}
+			if ch(flagAfter) {
+				deps, err := parseAfter(cmd.Context(), client, projectID, f.team.after, deref(t.RepoID))
+				if err != nil {
+					return err
+				}
+				if err := checkNoCycle(cmd.Context(), client, projectID, t.ID, deps); err != nil {
+					return err
+				}
+				if len(deps) == 0 {
+					upd.ClearBlockedBy()
+				} else {
+					upd.SetBlockedBy(deps)
+				}
+			}
+			if ch(flagAssign) {
+				a, err := resolveAssign(cmd.Context(), client, projectID, f.team.assign)
+				if err != nil {
+					return err
+				}
+				if a.ActorID != "" {
+					upd.SetAssignedToActorID(a.ActorID).ClearAssignedTeam()
+				} else {
+					upd.SetAssignedTeam(a.TeamID).ClearAssignedToActorID()
+				}
+			}
+			if ch(flagTimebox) {
+				tb, err := timeboxSeconds(f.team.timebox)
+				if err != nil {
+					return err
+				}
+				if tb == 0 {
+					upd.ClearTimeboxSeconds()
+				} else {
+					upd.SetTimeboxSeconds(tb)
+				}
+			}
+			if ch(flagRef) {
+				refs, rowRefs, err := parseTaskRefs(f.team.refs)
+				if err != nil {
+					return err
+				}
+				if err := checkReferences(cmd.Context(), writeRoute{Repo: true}, rowRefs); err != nil {
+					return err
+				}
+				if err := saveTaskRefs(cmd.Context(), client, projectID, t.ID, refs, false, ""); err != nil {
+					return err
+				}
+			}
+			if ch(flagRole) {
+				if f.team.role == "" {
+					upd.ClearRole()
+				} else {
+					upd.SetRole(f.team.role)
+				}
+			}
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "update task").WithCause(err)
 			}
@@ -307,6 +370,8 @@ func newTaskEditCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&f.clearPlan, constants.FlagClearPlan, false, "detach from plan")
 	cmd.Flags().StringVar(&f.assignedTo, constants.FlagAssignedTo, "", "actor_id (act_*) to assign to")
 	cmd.Flags().BoolVar(&f.clearAssignedTo, constants.FlagClearAssignee, false, "unassign")
+	bindTeamTaskFlags(cmd, &f.team, false)
+	bindFromFlag(cmd, &f.from)
 	return cmd
 }
 
@@ -322,6 +387,8 @@ type taskAddFlags struct {
 	plan       string
 	assignedTo string
 	createdBy  string
+	team       teamTaskFlags
+	to         toFlags
 }
 
 func newTaskAddCommand() *cobra.Command {
@@ -342,11 +409,12 @@ func newTaskAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&f.deferUntil, constants.FlagDeferUntil, "", "snooze until date (YYYY-MM-DD); hides from active list until then")
 	cmd.Flags().StringVar(&f.due, constants.FlagDue, "", "due date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&f.mission, constants.FlagMission, "", "mission_id (msn_*) to attach to")
-	cmd.Flags().StringVar(&f.tasklist, constants.FlagTasklist, "", "tasklist_id (tlt_*) — REQUIRED")
+	cmd.Flags().StringVar(&f.tasklist, constants.FlagTasklist, "", "tasklist_id (tlt_*); default: the project's default list (created on demand)")
 	cmd.Flags().StringVar(&f.plan, constants.FlagPlan, "", "plan_id (pln_*) to attach to")
 	cmd.Flags().StringVar(&f.assignedTo, constants.FlagAssignedTo, "", "actor_id (act_*) the task is assigned to")
 	cmd.Flags().StringVar(&f.createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
-	_ = cmd.MarkFlagRequired(constants.FlagTasklist)
+	bindTeamTaskFlags(cmd, &f.team, true)
+	bindToFlags(cmd, &f.to, false)
 	return cmd
 }
 
@@ -357,6 +425,25 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	cleanTitle, err := textnorm.Normalize(title)
 	if err != nil {
 		return errcodes.New(errcodes.InvalidInput, "title: "+err.Error())
+	}
+	// F14: which project the task goes to (this repo, a store project, or
+	// personal); for anything but this repo it points f at that project.
+	repoName := f.commonFlags.flagRepo // routeWrite clears it for a store project
+	here := checkoutProjectID()
+	// People handles resolve on the roster BEFORE routing: routeWrite holds
+	// the store mirror's lock until the command ends, and the roster read
+	// would wait on it.
+	preAssign := preResolveHandle(ctx, f.team.assign)
+	route, err := routeWrite(ctx, &f.commonFlags, f.to, kindTask, cleanTitle)
+	if err != nil {
+		return err
+	}
+	refs, rowRefs, err := parseTaskRefs(f.team.refs)
+	if err != nil {
+		return err
+	}
+	if err := checkReferences(ctx, route, rowRefs); err != nil {
+		return err
 	}
 
 	rctx, client, err := resolveContext(&f.commonFlags)
@@ -373,6 +460,11 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	if err != nil {
 		return err
 	}
+	if !route.Repo && repoName != "" {
+		if repoID, err = repoIDFor(ctx, client, projectID, repoName, true); err != nil {
+			return err
+		}
+	}
 
 	// Commitment axis (orthogonal to status). Agent callers MUST pass
 	// --commitment explicitly — no silent default in either direction
@@ -383,6 +475,45 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 			"--commitment is required for agent callers").
 			WithHint("accepted = user asked / starting now; " +
 				"proposed = your speculative idea; someday = parking lot")
+	}
+
+	if existing, err := findByKey(ctx, client, projectID, f.mission, f.team.key); err != nil {
+		return err
+	} else if existing != nil {
+		if f.team.json {
+			printJSON(constants.KindTaskShow, fullFromTask(existing), 0)
+			return nil
+		}
+		fmt.Printf("%s %s %s — %s (already added with --key %s)\n", style.Success("✓"), existing.ID, style.Code(existing.ID), existing.Title, f.team.key)
+		return nil
+	}
+	if f.tasklist == "" {
+		if f.tasklist, err = defaultTasklist(ctx, client, projectID); err != nil {
+			return err
+		}
+	}
+	deps, err := parseAfter(ctx, client, projectID, f.team.after, repoID)
+	if err != nil {
+		return err
+	}
+	assign := assignTarget{ActorID: preAssign}
+	if preAssign == "" {
+		if assign, err = resolveAssign(ctx, client, projectID, f.team.assign); err != nil {
+			return err
+		}
+	}
+	if assign.TeamID != "" && route.Repo && route.Situation != nil && route.Situation.Result.Role == orgresolve.RoleClient {
+		return errcodes.New(errcodes.InvalidInput, "a team cannot be assigned in a linked client repo: team names are internal (TEAM-030)").
+			WithHint("assign a person (--assign @handle), or keep the task internal with --to <org>")
+	}
+	if len(f.team.after) > 0 {
+		if err := checkReferences(ctx, route, afterIDs(f.team.after)); err != nil {
+			return err
+		}
+	}
+	tb, err := timeboxSeconds(f.team.timebox)
+	if err != nil {
+		return err
 	}
 
 	create := client.Task.Create().
@@ -436,6 +567,24 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 		}
 	}
 	create.SetCreatedByActorID(createdBy)
+	if len(deps) > 0 {
+		create.SetBlockedBy(deps)
+	}
+	if assign.ActorID != "" {
+		create.SetAssignedToActorID(assign.ActorID)
+	}
+	if assign.TeamID != "" {
+		create.SetAssignedTeam(assign.TeamID)
+	}
+	if tb > 0 {
+		create.SetTimeboxSeconds(tb)
+	}
+	if f.team.role != "" {
+		create.SetRole(f.team.role)
+	}
+	if f.team.key != "" {
+		create.SetIdempotencyKey(f.team.key)
+	}
 	if f.due != "" {
 		t, err := time.Parse("2006-01-02", f.due)
 		if err != nil {
@@ -448,8 +597,19 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create task").WithCause(err)
 	}
-	fmt.Printf("%s %s %s — %s [%s]\n",
-		style.Success("✓"), t.ID, style.Code(t.ID), cleanTitle, f.priority)
+	if err := saveTaskRefs(ctx, client, projectID, t.ID, refs, !route.Repo, here); err != nil {
+		return err
+	}
+	if f.team.json {
+		printJSON(constants.KindTaskShow, fullFromTask(t), 0)
+		return nil
+	}
+	label := ""
+	if route.Label != "" {
+		label = " → " + route.Label
+	}
+	fmt.Printf("%s %s %s — %s [%s]%s\n",
+		style.Success("✓"), t.ID, style.Code(t.ID), cleanTitle, f.priority, label)
 	return nil
 }
 
@@ -464,6 +624,7 @@ type taskListFlags struct {
 	includeSomeday  bool
 	includeDeferred bool
 	jsonOutput      bool
+	team            taskListTeamFlags
 }
 
 func newTaskListCommand() *cobra.Command {
@@ -485,6 +646,7 @@ func newTaskListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&f.includeSomeday, constants.FlagIncludeSomeday, false, "also include commitment=someday")
 	cmd.Flags().BoolVar(&f.includeDeferred, constants.FlagIncludeDeferred, false, "also include deferred (deferred_until in the future)")
 	cmd.Flags().BoolVar(&f.jsonOutput, constants.FlagJSON, false, "JSON output")
+	bindTaskListTeamFlags(cmd, &f.team)
 	return cmd
 }
 
@@ -499,6 +661,10 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 	if err != nil {
 		return err
 	}
+	if repoID, err := resolveRepoID(ctx, client, projectID, rctx.RepoMount); err == nil {
+		lazyMergedCheck(ctx, client, projectID, repoID)
+	}
+	groupMergedCheck(ctx)
 
 	q := client.Task.Query().Where(entTask.ProjectID(projectID))
 
@@ -557,24 +723,42 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "list tasks").WithCause(err)
 	}
+	rows, states, err := applyTaskListTeam(ctx, client, &f.team, rows)
+	if err != nil {
+		return err
+	}
 
 	if f.jsonOutput {
 		out := make([]taskBrief, 0, len(rows))
 		for _, t := range rows {
 			out = append(out, briefFromTask(t))
 		}
-		printJSON(constants.KindTaskList, out, len(out))
+		ext := externalJSONRows(ctx, tableTasks, "")
+		all := make([]any, 0, len(out)+len(ext))
+		for _, b := range out {
+			all = append(all, b)
+		}
+		for _, e := range ext {
+			all = append(all, e)
+		}
+		printJSON(constants.KindTaskList, all, len(all))
 		return nil
 	}
 
-	printTaskRows(rows)
+	printTaskRowsWithState(rows, states)
+	// Store and personal tasks of this repo's sources, with their label (F20).
+	printExternalRows(ctx, os.Stdout, tableTasks, "")
 	return nil
 }
 
 // printTaskRows renders the human task list. Shows the commitment chip only
 // when it isn't the common case (accepted) and the deferral wake date, so
 // triage/someday/deferred views are self-explaining
-func printTaskRows(rows []*ent.Task) {
+func printTaskRows(rows []*ent.Task) { printTaskRowsWithState(rows, nil) }
+
+// printTaskRowsWithState is printTaskRows plus each task's coordination
+// state (§3.5: working / EXPIRED / gate / merged), when known.
+func printTaskRowsWithState(rows []*ent.Task, states map[string]string) {
 	if len(rows) == 0 {
 		fmt.Println(style.Muted("(no tasks)"))
 		return
@@ -596,8 +780,12 @@ func printTaskRows(rows []*ent.Task) {
 		// The full opaque id: it is what every command takes (the short
 		// "T-N" form was removed, so printing a "T-" prefix here produced
 		// ids no command accepts).
-		fmt.Printf("%s %s %s [%s]%s%s%s\n",
-			statusBadge, t.ID, t.Title, t.Priority, due, commit, defer_)
+		state := ""
+		if st := states[t.ID]; st != "" {
+			state = "  " + st
+		}
+		fmt.Printf("%s %s %s [%s]%s%s%s%s\n",
+			statusBadge, t.ID, t.Title, t.Priority, due, commit, defer_, state)
 	}
 }
 
@@ -687,34 +875,6 @@ func newTaskStartCommand() *cobra.Command {
 	return cmd
 }
 
-func newTaskDoneCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use:   "done <id>",
-		Short: "Mark task as done",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return updateTaskStatus(cmd.Context(), &f, args[0], entTask.StatusDone, "completed")
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	return cmd
-}
-
-func newTaskCancelCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use:   "cancel <id>",
-		Short: "Mark task as cancelled",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return updateTaskStatus(cmd.Context(), &f, args[0], entTask.StatusCancelled, "cancelled")
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	return cmd
-}
-
 func updateTaskStatus(ctx context.Context, f *commonFlags, idArg string, target entTask.Status, label string) error {
 	rctx, client, err := resolveContext(f)
 	if err != nil {
@@ -751,12 +911,16 @@ func updateTaskStatus(ctx context.Context, f *commonFlags, idArg string, target 
 
 func newTaskShowCommand() *cobra.Command {
 	var f commonFlags
-	var jsonOut bool
+	var jsonOut, showSignals bool
+	var from string
 	cmd := &cobra.Command{
 		Use:   "show <id>",
 		Short: "Show task details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if from != "" && from != toRepo {
+				return showTaskFrom(cmd.Context(), args[0], from, jsonOut)
+			}
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
@@ -770,6 +934,7 @@ func newTaskShowCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			t = newerTask(cmd.Context(), t)
 			if jsonOut {
 				printJSON(constants.KindTaskShow, fullFromTask(t), 0)
 				return nil
@@ -788,15 +953,24 @@ func newTaskShowCommand() *cobra.Command {
 			if t.MissionID != nil {
 				fmt.Printf("  mission:  %s\n", *t.MissionID)
 			}
+			if t.DoneBy != nil {
+				fmt.Printf("  done by:  %s\n", actorName(cmd.Context(), client, *t.DoneBy))
+			}
 			if t.Body != nil && *t.Body != "" {
 				fmt.Println()
 				fmt.Println(*t.Body)
+			}
+			printTaskNotes(cmd.Context(), client, t.ID)
+			if showSignals {
+				return printTaskSignals(cmd.Context(), t.ID)
 			}
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
+	cmd.Flags().BoolVar(&showSignals, flagSignals, false, "show the claim as seen now (holder, token prefix, expires, renewed_seq)")
+	bindFromFlag(cmd, &from)
 	return cmd
 }
 
@@ -888,7 +1062,7 @@ func parseCommitment(s string) (entTask.Commitment, error) {
 // agent identity. Used to force an explicit --commitment on agent task
 // creation (no silent default — see TASK_COMMITMENT_SPEC.md ADR-TASK-1)
 func callerIsAgent() bool {
-	return identity.Resolve(identity.Inputs{}).Kind == "agent"
+	return identityBestEffort(context.Background()).Kind == identity.KindAgent
 }
 
 // activeTaskFilter applies the one shared ActiveTask predicate:

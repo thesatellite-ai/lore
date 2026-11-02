@@ -10,7 +10,8 @@ package identity
 //
 //	 1. --actor=<value>             CLI flag
 //	 2. LORE_ACTOR               env var
-//	 3. ~/.lore/identity.toml    persisted explicit identity
+//	 3. ~/.lore/identity.yaml    persisted explicit identity (a legacy
+//	                                identity.toml is migrated on first read)
 //	 4. git config user.email       project-local OR global
 //	 5. $USER + hostname            OS-derived
 //	 6. machine-id hash             /etc/machine-id (Linux), IOPlatformUUID (macOS), MachineGuid (Win)
@@ -19,7 +20,7 @@ package identity
 //
 // Returned actor format (R32):
 //
-//	human:amank@example.com         named human
+//	human:alice@example.com         named human
 //	agent:claude-code               env-set AI agent
 //	auto:a3f9c1k2                   synthesized stable
 //	auto:ephemeral-7f3a2c           synthesized ephemeral, warn
@@ -28,6 +29,7 @@ package identity
 // Catches: R32 (8-step chain), R37 Block 2 (actors).
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -37,8 +39,44 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
+	"saas/pkg/aicoder/lorecfg"
 )
+
+// Where the persisted identity lives: ~/<LoreHomeDir>/<FileBase>.yaml.
+const (
+	// LoreHomeDir is lore's per-user directory under $HOME.
+	LoreHomeDir = ".lore"
+	// FileBase is the identity config's base name; lorecfg picks the
+	// extension (.yaml, or a legacy .toml it migrates).
+	FileBase = "identity"
+	// FilePerm keeps the identity private to the user, as it always was.
+	FilePerm = 0o600
+)
+
+// File is the persisted identity (~/.lore/identity.yaml).
+//
+//	display_name: alice
+//	stable_key: human:alice@example.com   # optional; computed from display_name otherwise
+//
+// The toml tags read a legacy identity.toml in place when its migration
+// could not be written.
+type File struct {
+	DisplayName string `yaml:"display_name" toml:"display_name"`
+	StableKey   string `yaml:"stable_key" toml:"stable_key"`
+}
+
+// RefFields lets a future secret-store resolver fill these values from a
+// reference (lorecfg.RefResolver); with none registered they stay literal.
+func (f *File) RefFields() []*string { return []*string{&f.DisplayName, &f.StableKey} }
+
+// Dir returns ~/.lore, the directory the identity file lives in.
+func Dir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("identity: resolve HOME: %w", err)
+	}
+	return filepath.Join(home, LoreHomeDir), nil
+}
 
 // Step records which step in the chain produced the resolved identity.
 // Useful for `aicoder doctor` ("source: git config user.email (step 4)").
@@ -48,7 +86,7 @@ const (
 	StepUnresolved    Step = iota
 	StepFlag               // 1
 	StepEnv                // 2
-	StepIdentityToml       // 3
+	StepIdentityFile       // 3
 	StepGitConfig          // 4
 	StepOSUser             // 5
 	StepMachineID          // 6
@@ -62,8 +100,8 @@ func (s Step) String() string {
 		return "flag"
 	case StepEnv:
 		return "env"
-	case StepIdentityToml:
-		return "identity.toml"
+	case StepIdentityFile:
+		return "identity.yaml"
 	case StepGitConfig:
 		return "git config"
 	case StepOSUser:
@@ -74,6 +112,10 @@ func (s Step) String() string {
 		return "persisted-salt"
 	case StepEphemeralSalt:
 		return "ephemeral-salt"
+	case StepOrgConfig:
+		return stepOrgConfigName
+	case StepTopConfig:
+		return stepTopConfigName
 	default:
 		return "unresolved"
 	}
@@ -91,6 +133,14 @@ type Resolved struct {
 	DisplayName string // shown in CLI output / audit log
 	Kind        string // 'human' | 'agent' | 'auto' | 'anon'
 	Step        Step   // which step matched
+	// Org is the org entry the identity belongs to; "" on the fallback chain.
+	Org string
+	// Handle is the roster handle from the org entry (display only).
+	Handle string
+	// Session is LORE_SESSION for an agent actor in an org.
+	Session string
+	// Notes are one-line warnings for whoami / doctor (never fatal).
+	Notes []string
 }
 
 // Inputs are the values that may have been provided by the caller.
@@ -101,58 +151,75 @@ type Inputs struct {
 // Resolve runs the chain. Always returns a Resolved value (never errors out
 // on fundamental resolution); the caller decides whether to warn loud.
 func Resolve(in Inputs) Resolved {
+	r, _ := resolveChain(in, nil)
+	return r
+}
+
+// resolveChain runs the 8-step chain. A candidate key for which skip returns
+// true is passed over (the next step is tried) and reported in skipped, so
+// the no-org fallback can refuse an org's identity (F10 rule 6). nil skip
+// accepts everything. The salt steps produce random keys and are never
+// skipped.
+func resolveChain(in Inputs, skip func(key string) bool) (Resolved, []Resolved) {
+	var skipped []Resolved
+	take := func(r Resolved) bool {
+		if skip != nil && skip(r.StableKey) {
+			skipped = append(skipped, r)
+			return false
+		}
+		return true
+	}
+
 	// Step 1: --actor flag
 	if v := strings.TrimSpace(in.FlagActor); v != "" {
-		return Resolved{
-			StableKey:   v,
-			DisplayName: extractDisplayName(v),
-			Kind:        kindFromKey(v),
-			Step:        StepFlag,
+		if r := (Resolved{StableKey: v, DisplayName: extractDisplayName(v), Kind: kindFromKey(v), Step: StepFlag}); take(r) {
+			return r, skipped
 		}
 	}
 
 	// Step 2: LORE_ACTOR env
-	if v := strings.TrimSpace(os.Getenv("LORE_ACTOR")); v != "" {
-		return Resolved{
-			StableKey:   v,
-			DisplayName: extractDisplayName(v),
-			Kind:        kindFromKey(v),
-			Step:        StepEnv,
+	if v := strings.TrimSpace(os.Getenv(EnvActor)); v != "" {
+		if r := (Resolved{StableKey: v, DisplayName: extractDisplayName(v), Kind: kindFromKey(v), Step: StepEnv}); take(r) {
+			return r, skipped
 		}
 	}
 
-	// Step 3: ~/.lore/identity.toml
-	if r, ok := tryIdentityToml(); ok {
-		r.Step = StepIdentityToml
-		return r
+	// Step 3: ~/.lore/identity.yaml
+	if r, ok := tryIdentityFile(context.Background()); ok {
+		r.Step = StepIdentityFile
+		if take(r) {
+			return r, skipped
+		}
 	}
 
 	// Step 4: git config user.email
 	if email, ok := tryGitConfig(); ok {
-		return Resolved{
-			StableKey:   "human:" + email,
-			DisplayName: extractDisplayName("human:" + email),
-			Kind:        "human",
-			Step:        StepGitConfig,
+		r := Resolved{StableKey: "human:" + email, DisplayName: extractDisplayName("human:" + email), Kind: KindHuman, Step: StepGitConfig}
+		if take(r) {
+			return r, skipped
 		}
 	}
 
 	// Step 5: $USER + hostname
 	if r, ok := tryOSUser(); ok {
 		r.Step = StepOSUser
-		return r
+		if take(r) {
+			return r, skipped
+		}
 	}
 
 	// Step 6: machine-id
 	if r, ok := tryMachineID(); ok {
 		r.Step = StepMachineID
-		return r
+		if take(r) {
+			return r, skipped
+		}
 	}
 
 	// Step 7: persisted random salt
 	if r, ok := tryPersistedSalt(); ok {
 		r.Step = StepPersistedSalt
-		return r
+		return r, skipped
 	}
 
 	// Step 8: ephemeral session salt (last resort, NOT persisted).
@@ -162,31 +229,24 @@ func Resolve(in Inputs) Resolved {
 		DisplayName: "ephemeral-" + rnd,
 		Kind:        "auto",
 		Step:        StepEphemeralSalt,
-	}
+	}, skipped
 }
 
-// tryIdentityToml reads ~/.lore/identity.toml.
-//
-// Format:
-//
-//	display_name = "amank"
-//	stable_key = "human:amank@example.com"  (optional; computed from display_name otherwise)
-func tryIdentityToml() (Resolved, bool) {
-	home, err := os.UserHomeDir()
+// tryIdentityFile reads ~/.lore/identity.yaml (see File). A file that cannot
+// be read falls through to the next step, as the TOML reader always did, but
+// never silently: lorecfg prints that the file is skipped and why (F19).
+func tryIdentityFile(ctx context.Context) (Resolved, bool) {
+	dir, err := Dir()
 	if err != nil {
 		return Resolved{}, false
 	}
-	path := filepath.Join(home, ".lore", "identity.toml")
-	data, err := os.ReadFile(path)
-	if err != nil {
+	loc, err := lorecfg.Locate(ctx, dir, FileBase, lorecfg.Options{})
+	if err != nil || !loc.Exists {
 		return Resolved{}, false
 	}
-
-	var t struct {
-		DisplayName string `toml:"display_name"`
-		StableKey   string `toml:"stable_key"`
-	}
-	if err := toml.Unmarshal(data, &t); err != nil {
+	t, err := lorecfg.Load[File](ctx, loc, lorecfg.Options{})
+	if err != nil {
+		lorecfg.NoticeSkipped(lorecfg.Options{}, loc.Path, err)
 		return Resolved{}, false
 	}
 
@@ -309,8 +369,8 @@ func tryPersistedSalt() (Resolved, bool) {
 	}, true
 }
 
-// extractDisplayName turns a stable_key like "human:amank@example.com" into
-// a friendly "amank". Conservative: if anything looks unfamiliar, returns
+// extractDisplayName turns a stable_key like "human:alice@example.com" into
+// a friendly "alice". Conservative: if anything looks unfamiliar, returns
 // the full key (caller can override via display_name field on the actors row).
 func extractDisplayName(stableKey string) string {
 	parts := strings.SplitN(stableKey, ":", 2)
@@ -318,7 +378,7 @@ func extractDisplayName(stableKey string) string {
 		return stableKey
 	}
 	value := parts[1]
-	// "amank@example.com" → "amank"
+	// "alice@example.com" → "alice"
 	if at := strings.IndexByte(value, '@'); at > 0 {
 		return value[:at]
 	}

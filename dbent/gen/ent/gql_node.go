@@ -62,6 +62,7 @@ import (
 	"dbent/gen/ent/tasklist"
 	"dbent/gen/ent/taskview"
 	"dbent/gen/ent/tastepref"
+	"dbent/gen/ent/team"
 	"dbent/gen/ent/techdoc"
 	"dbent/gen/ent/techdocpage"
 	"dbent/gen/ent/trustedplugin"
@@ -369,6 +370,11 @@ var tasteprefImplementors = []string{"TastePref", "Node"}
 
 // IsNode implements the Node interface check for GQLGen.
 func (*TastePref) IsNode() {}
+
+var teamImplementors = []string{"Team", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*Team) IsNode() {}
 
 var techdocImplementors = []string{"TechDoc", "Node"}
 
@@ -976,6 +982,15 @@ func (c *Client) noder(ctx context.Context, table string, id string) (Noder, err
 			Where(tastepref.ID(id))
 		if fc := graphql.GetFieldContext(ctx); fc != nil {
 			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, tasteprefImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
+	case team.Table:
+		query := c.Team.Query().
+			Where(team.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, teamImplementors...); err != nil {
 				return nil, err
 			}
 		}
@@ -2023,6 +2038,22 @@ func (c *Client) noders(ctx context.Context, table string, ids []string) ([]Node
 		query := c.TastePref.Query().
 			Where(tastepref.IDIn(ids...))
 		query, err := query.CollectFields(ctx, tasteprefImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
+	case team.Table:
+		query := c.Team.Query().
+			Where(team.IDIn(ids...))
+		query, err := query.CollectFields(ctx, teamImplementors...)
 		if err != nil {
 			return nil, err
 		}

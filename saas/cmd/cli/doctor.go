@@ -165,6 +165,10 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 		}
 		if r.DBOK && syncApplies(rctx) {
 			doctorSync(ctx, rctx, db, r)
+			// Live rows (LORE_TEAM_SPEC §9.4): refspec, hooks, rows only in
+			// live, waiting landings, compaction (live_doctor.go).
+			dataDir, _ := syncDataDir(rctx.DBPath)
+			doctorLive(ctx, filepath.Dir(filepath.Dir(dataDir)), r)
 		}
 		r.WALSizeBytes = walSize(rctx.DBPath)
 		if r.WALSizeBytes > 100*1024*1024 {
@@ -200,6 +204,13 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 			r.Status = doctorDegraded
 		}
 	}
+
+	// 5. Stores (LORE_TEAM_SPEC §6.6, §9.4): untrusted host, unpushed
+	// store work, CLAUDE.local.md.
+	doctorStores(ctx, r)
+	// 6. Signals (F7 Debug): ref size, expired files, atomic push support
+	// (coord_doctor.go, lore-signals).
+	doctorSignals(ctx, r)
 
 	r.OK = r.Status == doctorHealthy
 	return r, nil

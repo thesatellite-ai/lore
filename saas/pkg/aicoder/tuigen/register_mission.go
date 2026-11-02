@@ -54,6 +54,7 @@ func registerMission(app *runtime.App, client *ent.Client) {
 					entMission.ProjectIDContainsFold(opts.Filter),
 					entMission.TitleContainsFold(opts.Filter),
 					entMission.CreatedByActorIDContainsFold(opts.Filter),
+					entMission.IdempotencyKeyContainsFold(opts.Filter),
 				))
 			}
 			// Phase E — structured per-column filters. AND-composed.
@@ -126,6 +127,19 @@ func registerMission(app *runtime.App, client *ent.Client) {
 					case runtime.OpNotNull:
 						q = q.Where(entMission.CreatedByActorIDNotNil())
 					}
+				case "idempotency_key":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entMission.IdempotencyKeyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entMission.IdempotencyKeyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entMission.IdempotencyKeyContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entMission.IdempotencyKeyIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entMission.IdempotencyKeyNotNil())
+					}
 				}
 			}
 			// Phase D — multi-column sort stack. Each Sort entry walks the
@@ -186,6 +200,12 @@ func registerMission(app *runtime.App, client *ent.Client) {
 							q = q.Order(ent.Asc(entMission.FieldCreatedByActorID))
 						} else {
 							q = q.Order(ent.Desc(entMission.FieldCreatedByActorID))
+						}
+					case "idempotency_key":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entMission.FieldIdempotencyKey))
+						} else {
+							q = q.Order(ent.Desc(entMission.FieldIdempotencyKey))
 						}
 					}
 				}
@@ -346,6 +366,21 @@ func registerMission(app *runtime.App, client *ent.Client) {
 						return ""
 					}
 					return *r.CreatedByActorID
+				},
+			},
+			{
+				Key:        "idempotency_key",
+				Label:      "Idempotency Key",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Mission) string {
+					if r.IdempotencyKey == nil {
+						return ""
+					}
+					return *r.IdempotencyKey
 				},
 			},
 		},

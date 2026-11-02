@@ -67,8 +67,8 @@ func MergeFiles(ctx context.Context, basePath, oursPath, theirsPath, repoPath st
 	if err != nil {
 		return MergeOutcome{}, fmt.Errorf("lsync: read theirs: %w", err)
 	}
-	oDoc, oErr := decodeDoc(ours)
-	tDoc, tErr := decodeDoc(theirs)
+	oDoc, oErr := decodeDriverSide(ours)
+	tDoc, tErr := decodeDriverSide(theirs)
 	var bDoc map[string]any
 	if len(bytes.TrimSpace(base)) > 0 {
 		bDoc, err = decodeDoc(base)
@@ -84,19 +84,51 @@ func MergeFiles(ctx context.Context, basePath, oursPath, theirsPath, repoPath st
 	}
 
 	strategy := func(string) merge3.Strategy { return merge3.StrategyConflict }
-	if tbl, _ := oDoc[keyTable].(string); tbl != "" {
+	if path.Base(filepath.ToSlash(repoPath)) == MetaFileName {
+		strategy = metaStrategy
+	} else if tbl, _ := oDoc[keyTable].(string); tbl != "" {
 		reg, _ := NewRegistry()
 		if t, ok := reg.Table(tbl); ok {
 			strategy = StrategyFor(t)
 		}
 	}
+	// F4 step 1: settle the file first (add/add, delete versus edit,
+	// two tombstones), then field level with the newer side chosen by hlc
+	// when both carry one, else by updated_at (step 2).
+	bF := merge3.Absent()
+	if bDoc != nil {
+		bF = driverSide(bDoc)
+	}
+	oF, tF := driverSide(oDoc), driverSide(tDoc)
 	newer := merge3.SideOurs
-	if firstIsNewer(tDoc, oDoc) {
+	if docIsNewer(tDoc, oDoc) {
 		newer = merge3.SideTheirs
 	}
-	res, err := merge3.Merge(bDoc, oDoc, tDoc, merge3.Policy{StrategyFor: strategy, Newer: newer})
+	fr, err := merge3.MergeFile(bF, oF, tF, merge3.Policy{StrategyFor: strategy, Newer: newer})
 	if err != nil {
 		return MergeOutcome{}, err
+	}
+	if fr.File.Kind != merge3.FileRow {
+		// A tombstone (or nothing): written as is, no field decisions.
+		doc := fr.File.Doc
+		if doc == nil {
+			doc = oDoc
+		}
+		out, err := canonjson.Encode(doc)
+		if err != nil {
+			return MergeOutcome{}, err
+		}
+		if err := os.WriteFile(oursPath, out, dataFileMode); err != nil {
+			return MergeOutcome{}, fmt.Errorf("lsync: write merge result: %w", err)
+		}
+		return MergeOutcome{}, nil
+	}
+	res := fr.Fields
+	if fr.Decision != merge3.DecisionFieldMerge {
+		res = merge3.Result{Merged: fr.File.Doc}
+	}
+	if fr.Decision == merge3.DecisionModifyBeatsDelete {
+		res.AutoResolved = append(res.AutoResolved, keyDeletedVsEdited)
 	}
 	for _, c := range res.Conflicts {
 		if _, isStr := res.Merged[c.Key].(string); isStr && c.Ours != nil {
@@ -117,6 +149,75 @@ func MergeFiles(ctx context.Context, basePath, oursPath, theirsPath, repoPath st
 	}
 	return MergeOutcome{Conflicted: len(res.Conflicts) > 0, AutoResolved: res.AutoResolved}, nil
 }
+
+// keyDeletedVsEdited is reported in AutoResolved when one side deleted
+// the row (a tombstone) and the other edited it: the edit was kept (F4).
+const keyDeletedVsEdited = "(deleted on one side, edited on the other: kept)"
+
+// liveBlockKey is the `_live` block of a live file (§3.3); its hlc orders
+// edits and deleted:true marks a tombstone.
+const liveBlockKey = "_live"
+
+// decodeDriverSide decodes one side: a row file, or a live tombstone
+// (which carries only the id and its `_live` block, no `_v`).
+func decodeDriverSide(b []byte) (map[string]any, error) {
+	doc, err := decodeDoc(b)
+	if err == nil {
+		return doc, nil
+	}
+	raw, rerr := canonjson.Decode(b, canonjson.DefaultMaxDepth)
+	if rerr == nil && driverSide(raw).Kind == merge3.FileTombstone {
+		return raw, nil
+	}
+	return nil, err
+}
+
+// driverSide classifies a decoded side: a tombstone carries
+// `_live.deleted: true`, anything else is a row.
+func driverSide(doc map[string]any) merge3.File {
+	if blk, ok := doc[liveBlockKey].(map[string]any); ok {
+		if del, _ := blk["deleted"].(bool); del {
+			return merge3.Tombstone(doc)
+		}
+	}
+	return merge3.Row(doc)
+}
+
+// docIsNewer reports whether a is the newer edit: by `_live.hlc` when both
+// carry one (it orders edits even when clocks disagree, F4), else by
+// updated_at.
+func docIsNewer(a, b map[string]any) bool {
+	ha, hb := liveHLC(a), liveHLC(b)
+	if ha != "" && hb != "" {
+		return ha > hb // fixed-width form: string order is hlc order
+	}
+	return firstIsNewer(a, b)
+}
+
+func liveHLC(doc map[string]any) string {
+	blk, ok := doc[liveBlockKey].(map[string]any)
+	if !ok {
+		return ""
+	}
+	s, _ := blk["hlc"].(string)
+	return s
+}
+
+// metaStrategy merges _meta.json: links is a set (two concurrent `lore org
+// link` runs both survive, never markers); anything else is a loud
+// conflict.
+func metaStrategy(key string) merge3.Strategy {
+	if key == metaKeyLinks {
+		return merge3.StrategySet
+	}
+	if key == keyVersion {
+		return merge3.StrategyMax
+	}
+	return merge3.StrategyConflict
+}
+
+// metaKeyLinks is the list of links in a store project's _meta.json (F11).
+const metaKeyLinks = "links"
 
 func compactOrNull(v any) string {
 	if v == nil {

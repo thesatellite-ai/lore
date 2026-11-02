@@ -79,6 +79,25 @@ const (
 	Internal       Code = "E_INTERNAL"
 	NotImplemented Code = "E_NOT_IMPLEMENTED"
 	Unsupported    Code = "E_UNSUPPORTED"
+
+	// ── Lore for teams (LORE_TEAM_SPEC §1 "Error codes") ────────────
+	// Coordination and org codes carry their own process exit status
+	// (see ExitCode) so agents and scripts can branch without parsing text.
+	NoWork        Code = "E_NO_WORK"
+	Contended     Code = "E_CONTENDED"
+	LostClaim     Code = "E_LOST_CLAIM"
+	Cancelled     Code = "E_CANCELLED"
+	Reassigned    Code = "E_REASSIGNED"
+	Offline       Code = "E_OFFLINE"
+	AmbiguousID   Code = "E_AMBIGUOUS_ID"
+	OrgAmbiguous  Code = "E_ORG_AMBIGUOUS"
+	OrgDisagrees  Code = "E_ORG_DISAGREES"
+	LinkUnknown   Code = "E_LINK_UNKNOWN"
+	NotAStore     Code = "E_NOT_A_STORE"
+	LeakBlocked   Code = "E_LEAK_BLOCKED"
+	Cycle         Code = "E_CYCLE"
+	OldLore       Code = "E_OLD_LORE"
+	ConfigInvalid Code = "E_CONFIG_INVALID"
 )
 
 // All returns every registered code. Used by `lore errors list` and tests.
@@ -94,7 +113,44 @@ func All() []Code {
 		AuditChainBroken,
 		SyncDataIgnored,
 		NotFound, Internal, NotImplemented, Unsupported,
+		NoWork, Contended, LostClaim, Cancelled, Reassigned, Offline, AmbiguousID,
+		OrgAmbiguous, OrgDisagrees, LinkUnknown, NotAStore, LeakBlocked, Cycle, OldLore,
+		ConfigInvalid,
 	}
+}
+
+// ExitGeneric is the process exit status of every error without a
+// dedicated one: the CLI's historical "something failed".
+const ExitGeneric = 1
+
+// exitCodes maps the codes that have their own process exit status
+// (LORE_TEAM_SPEC §1 "Error codes"). Agents loop on `lore task next` and
+// must tell "nothing to do" (10) from "lost a race" (11) from "you were
+// fenced out" (12–14) without parsing text, so these numbers are a
+// contract: never renumber, only add. Codes absent here exit ExitGeneric.
+var exitCodes = map[Code]int{
+	NoWork:       10,
+	Contended:    11,
+	LostClaim:    12,
+	Cancelled:    13,
+	Reassigned:   14,
+	Offline:      15,
+	AmbiguousID:  16,
+	OrgAmbiguous: 17,
+	OrgDisagrees: 17,
+	LinkUnknown:  18,
+	NotAStore:    19,
+	LeakBlocked:  19,
+	Cycle:        19,
+	OldLore:      19,
+}
+
+// ExitCode returns the process exit status for code c.
+func ExitCode(c Code) int {
+	if n, ok := exitCodes[c]; ok {
+		return n
+	}
+	return ExitGeneric
 }
 
 // Description returns a one-line human description for documentation.
@@ -110,8 +166,8 @@ func Description(c Code) string {
 		InodeMismatch:         "DB file inode changed since last open; verify external mutation",
 		DiskFull:              "no space left on device for write or backup",
 		ReadOnlyFS:            "DB path is on a read-only filesystem",
-		NotProjectRoot:        "current directory is not an lore project (no .lore/lore.db or lore.toml)",
-		AmbiguousProject:      "both .lore/lore.db AND .lore/lore.toml present (Mode A vs Mode B ambiguity)",
+		NotProjectRoot:        "current directory is not an lore project (no .lore/lore.db or lore.yaml)",
+		AmbiguousProject:      "both .lore/lore.db AND a .lore/lore.yaml (or lore.toml) pointer present (Mode A vs Mode B ambiguity)",
 		ProjectNotFound:       "project_id not registered in this DB",
 		ProjectNameCollision:  "multiple projects share that name; specify by opaque ID",
 		RepoNotFound:          "repo mount_name or rep_id not found in current project",
@@ -139,6 +195,21 @@ func Description(c Code) string {
 		Internal:              "internal error; please file a bug report with `lore support-bundle`",
 		NotImplemented:        "feature not yet implemented (deferred to v0.2 or v1.0+)",
 		Unsupported:           "operation not supported in current mode",
+		NoWork:                "`lore task next` found no ready task; the message lists why each candidate is blocked",
+		Contended:             "ready work exists but every claim attempt lost a race; retry after a short wait",
+		LostClaim:             "your claim token is no longer on the signals ref (lease expired or reclaimed); stop work on this task",
+		Cancelled:             "a human cancelled the task while you held it; stop work on this task",
+		Reassigned:            "a human reassigned the task while you held it; stop work on this task",
+		Offline:               "a coordination write (claim, renew, release, done, approve, hold) could not be confirmed by the remote; nothing was queued",
+		AmbiguousID:           "the id exists in two loaded sources; name one with --from",
+		OrgAmbiguous:          "two org entries match this repo at the same rule; choose one with `lore org use <entry>`",
+		OrgDisagrees:          "LORE_ORG or `lore org use` names a different org than the store link; pass --force-org to override",
+		LinkUnknown:           "lore cannot tell whether this repo is a client repo (store unreachable, no cached link index); pass --to or retry online",
+		NotAStore:             "the repo is not a lore store (no lore-store.yaml marker, or it holds non-lore files)",
+		LeakBlocked:           "the write would put internal content where the client can read it; see `lore check leaks --explain`",
+		Cycle:                 "the dependency would create a cycle between tasks",
+		OldLore:               "this lore binary is below the live ref's min_lore_version; upgrade lore (reads still work)",
+		ConfigInvalid:         "~/.lore/config.yaml failed validation; run `lore config check`",
 	}
 	if d, ok := descs[c]; ok {
 		return d

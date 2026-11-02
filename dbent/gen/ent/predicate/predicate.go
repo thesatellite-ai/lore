@@ -180,6 +180,9 @@ type TaskView func(*sql.Selector)
 // TastePref is the predicate function for tastepref builders.
 type TastePref func(*sql.Selector)
 
+// Team is the predicate function for team builders.
+type Team func(*sql.Selector)
+
 // TechDoc is the predicate function for techdoc builders.
 type TechDoc func(*sql.Selector)
 

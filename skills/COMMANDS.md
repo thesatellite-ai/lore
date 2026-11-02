@@ -532,7 +532,7 @@ lore plan add --title="Q2 roadmap" --body="..."
 lore tasklist add --title="Triage queue" --body="..." [--json]   # --json: .data.id, for task add --tasklist
 lore workflow add --title="release" --body="..."
 lore workspace add --title="dev" --body="..."
-lore handoff add --to=alice --body="ctx for next session"
+lore handoff add --for @alice --task tsk_31 "ctx for next session"
 ```
 
 `plan show --json` eager-loads attached tasks.

@@ -1,6 +1,7 @@
 package projresolve
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ func setupModeB(t *testing.T, tomlContent string) string {
 	if err := os.MkdirAll(filepath.Join(dir, MarkerDir), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, MarkerDir, ModeBFile), []byte(tomlContent), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, MarkerDir, ModeBLegacyFile), []byte(tomlContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -57,7 +58,7 @@ project_id = "prj_018f3b2c9a8e7891b4f51234567890ab"`)
 
 func TestDetectMode_Ambiguous(t *testing.T) {
 	dir := setupModeA(t)
-	if err := os.WriteFile(filepath.Join(dir, MarkerDir, ModeBFile), []byte("db_path=\"x\"\nproject_id=\"y\""), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, MarkerDir, ModeBLegacyFile), []byte("db_path=\"x\"\nproject_id=\"y\""), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -75,13 +76,13 @@ func TestDetectMode_NotProjectRoot(t *testing.T) {
 	}
 }
 
-func TestLoadTOML_Valid(t *testing.T) {
+func TestLoadPointer_Valid(t *testing.T) {
 	dir := setupModeB(t, `db_path = "/tmp/test.db"
 project_id = "prj_018f3b2c9a8e7891b4f51234567890ab"`)
 
-	p, err := LoadTOML(dir)
+	p, err := LoadPointer(context.Background(), dir)
 	if err != nil {
-		t.Fatalf("LoadTOML: %v", err)
+		t.Fatalf("LoadPointer: %v", err)
 	}
 	if p.DBPath != "/tmp/test.db" {
 		t.Errorf("DBPath = %q", p.DBPath)
@@ -91,19 +92,19 @@ project_id = "prj_018f3b2c9a8e7891b4f51234567890ab"`)
 	}
 }
 
-func TestLoadTOML_MissingDBPath(t *testing.T) {
+func TestLoadPointer_MissingDBPath(t *testing.T) {
 	dir := setupModeB(t, `project_id = "prj_xxx"`)
-	_, err := LoadTOML(dir)
-	if !errors.Is(err, ErrTomlMissingField) {
-		t.Errorf("expected ErrTomlMissingField, got %v", err)
+	_, err := LoadPointer(context.Background(), dir)
+	if !errors.Is(err, ErrPointerMissingField) {
+		t.Errorf("expected ErrPointerMissingField, got %v", err)
 	}
 }
 
-func TestLoadTOML_MissingProjectID(t *testing.T) {
+func TestLoadPointer_MissingProjectID(t *testing.T) {
 	dir := setupModeB(t, `db_path = "/tmp/x.db"`)
-	_, err := LoadTOML(dir)
-	if !errors.Is(err, ErrTomlMissingField) {
-		t.Errorf("expected ErrTomlMissingField, got %v", err)
+	_, err := LoadPointer(context.Background(), dir)
+	if !errors.Is(err, ErrPointerMissingField) {
+		t.Errorf("expected ErrPointerMissingField, got %v", err)
 	}
 }
 
@@ -248,7 +249,7 @@ func TestResolve_NoProjectRoot_Refuses(t *testing.T) {
 
 func TestResolve_AmbiguousMarker_Refuses(t *testing.T) {
 	dir := setupModeA(t)
-	if err := os.WriteFile(filepath.Join(dir, MarkerDir, ModeBFile), []byte("db_path=\"x\"\nproject_id=\"y\""), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, MarkerDir, ModeBLegacyFile), []byte("db_path=\"x\"\nproject_id=\"y\""), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_ = os.Chdir(dir)

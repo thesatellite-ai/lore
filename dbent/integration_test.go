@@ -91,8 +91,8 @@ func TestActor_CreateAndLookup(t *testing.T) {
 
 	a, err := client.Actor.Create().
 		SetKind("human").
-		SetDisplayName("amank").
-		SetStableKey("human:amank@example.com").
+		SetDisplayName("alice").
+		SetStableKey("human:alice@example.com").
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("Actor create: %v", err)
@@ -106,7 +106,7 @@ func TestActor_CreateAndLookup(t *testing.T) {
 	_, err = client.Actor.Create().
 		SetKind("human").
 		SetDisplayName("dupe").
-		SetStableKey("human:amank@example.com").
+		SetStableKey("human:alice@example.com").
 		Save(ctx)
 	if err == nil {
 		t.Error("expected UNIQUE violation on duplicate stable_key")

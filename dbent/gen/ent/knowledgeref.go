@@ -29,6 +29,8 @@ type KnowledgeRef struct {
 	DstTable string `json:"dst_table,omitempty"`
 	// DstID holds the value of the "dst_id" field.
 	DstID string `json:"dst_id,omitempty"`
+	// DstProjectID holds the value of the "dst_project_id" field.
+	DstProjectID *string `json:"dst_project_id,omitempty"`
 	// Relation holds the value of the "relation" field.
 	Relation string `json:"relation,omitempty"`
 	// Confidence holds the value of the "confidence" field.
@@ -41,7 +43,7 @@ func (*KnowledgeRef) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case knowledgeref.FieldID, knowledgeref.FieldSrcTable, knowledgeref.FieldSrcID, knowledgeref.FieldDstTable, knowledgeref.FieldDstID, knowledgeref.FieldRelation, knowledgeref.FieldConfidence:
+		case knowledgeref.FieldID, knowledgeref.FieldSrcTable, knowledgeref.FieldSrcID, knowledgeref.FieldDstTable, knowledgeref.FieldDstID, knowledgeref.FieldDstProjectID, knowledgeref.FieldRelation, knowledgeref.FieldConfidence:
 			values[i] = new(sql.NullString)
 		case knowledgeref.FieldCreatedAt, knowledgeref.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -101,6 +103,13 @@ func (_m *KnowledgeRef) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field dst_id", values[i])
 			} else if value.Valid {
 				_m.DstID = value.String
+			}
+		case knowledgeref.FieldDstProjectID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field dst_project_id", values[i])
+			} else if value.Valid {
+				_m.DstProjectID = new(string)
+				*_m.DstProjectID = value.String
 			}
 		case knowledgeref.FieldRelation:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -167,6 +176,11 @@ func (_m *KnowledgeRef) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("dst_id=")
 	builder.WriteString(_m.DstID)
+	builder.WriteString(", ")
+	if v := _m.DstProjectID; v != nil {
+		builder.WriteString("dst_project_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("relation=")
 	builder.WriteString(_m.Relation)
