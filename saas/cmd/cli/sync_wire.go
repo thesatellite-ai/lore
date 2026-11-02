@@ -193,6 +193,9 @@ func syncOptions(db *sql.DB, root, dataDir string, kind lsync.ChangeKind) lsync.
 	// Rows the write router places on the live ref are handed back by the
 	// pass instead of written to .lore/data (live_wire.go).
 	o.Divert = liveDivertFor(context.Background(), db, root)
+	// A client repo receives actors only as the F18 projection
+	// (client_actor_export.go).
+	o.ExportDoc = clientActorExport(context.Background(), root)
 	return o
 }
 

@@ -42,8 +42,11 @@ type writeRoute struct {
 	Situation *orgSituation
 }
 
-// identityKindAgent is identity.Resolved.Kind for agent actors.
-const identityKindAgent = "agent"
+// identity.Resolved.Kind values for agent and human actors.
+const (
+	identityKindAgent = "agent"
+	identityKindHuman = "human"
+)
 
 // routeWrite decides the target project of one write (F14, F17) and, for a
 // store or personal project, opens it and points c at it. kind is the row

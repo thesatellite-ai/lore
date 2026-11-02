@@ -125,6 +125,12 @@ type Options struct {
 	// returned in Report.Diverted instead of being written to .lore/data,
 	// and it stays dirty until the caller calls ClearDirty (live.go).
 	Divert func(RowRef) bool
+	// ExportDoc, when set, may replace a row's encoded bytes just before
+	// they are written to .lore/data (and become the row's base). The CLI
+	// uses it in client repos to write an actor as the F18 projection
+	// {id, display name, kind} while lore.db keeps the full row; importing
+	// the projection back never clears a column it lacks (upsertRow).
+	ExportDoc func(table string, b []byte) []byte
 }
 
 // FileError is one file that could not be synced.
@@ -1068,6 +1074,9 @@ func (e *engine) exportDoc(ctx context.Context, k rowKey, t *Table, dbDoc map[st
 	b, err := encodeDoc(dbDoc, extra)
 	if err != nil {
 		return err
+	}
+	if e.o.ExportDoc != nil {
+		b = e.o.ExportDoc(k.table, b)
 	}
 	if e.o.CheckSecrets != nil {
 		if why := e.o.CheckSecrets(b); why != "" {

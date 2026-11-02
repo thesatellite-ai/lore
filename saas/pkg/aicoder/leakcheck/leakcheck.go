@@ -153,13 +153,12 @@ type Finding struct {
 }
 
 // StableKeyBlocks decides whether a person's stable_key in a client repo's
-// actor file blocks a commit. The spec's client copy is {id, display name,
-// kind} (F18), but until the export writes that projection (lore-live, C15
-// follow-up) every client-repo actor file carries its stable_key, and
-// blocking would stop every commit of every org member. So it is reported
-// as a warning; agent details (owner_actor_id, label — D8) always block.
-// Flip to true once the export projects actors.
-const StableKeyBlocks = false
+// actor file blocks a commit. The client copy is {id, display name, kind}
+// (F18), and the export writes exactly that projection in client repos
+// (cmd/cli client_actor_export.go), so anything more blocks: fail closed
+// (coordinator ruling 18:40, BUG-D2). Kept as a named switch so the one
+// place the rule's strength is decided stays visible.
+const StableKeyBlocks = true
 
 // warnOnlyActorKeys are the actor columns that only warn while
 // StableKeyBlocks is false.

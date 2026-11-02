@@ -178,6 +178,8 @@ type coordView struct {
 	folder string
 	// lister gives the fresh task rows (live wins); nil = lore.db only.
 	lister coordLister
+	// labels names actors (this project, then the org roster).
+	labels *actorLabels
 }
 
 func openCoordView(ctx context.Context) (*coordView, func(), error) {
@@ -219,7 +221,7 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 		done()
 		return nil, nil, err
 	}
-	cv := &coordView{client: client, project: projectID, w: nil}
+	cv := &coordView{client: client, project: projectID, w: nil, labels: &actorLabels{local: client}}
 	if werr == nil {
 		cv.w = w
 	}
@@ -237,7 +239,7 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 	} else if repoID, err := resolveRepoID(ctx, client, projectID, rctx.RepoMount); err == nil {
 		lazyMergedCheck(ctx, client, projectID, repoID)
 	}
-	return cv, done, nil
+	return cv, func() { cv.labels.close(); done() }, nil
 }
 
 // tasks returns the project's tasks with live rows winning.
@@ -297,23 +299,10 @@ func workBranchOf(t *ent.Task, s signals.Signal) string {
 	return s.WorkBranch
 }
 
-// actorLabel names an actor for views: its handle, else its display name
-// with an agent's kind prefix dropped, else the id.
+// actorLabel names an actor for views (actorLabels: this project, then
+// the org roster).
 func (cv *coordView) actorLabel(ctx context.Context, id string) string {
-	if id == "" {
-		return ""
-	}
-	a, err := cv.client.Actor.Get(ctx, id)
-	if err != nil {
-		return id
-	}
-	if a.Handle != nil && *a.Handle != "" {
-		return "@" + *a.Handle
-	}
-	if a.Label != nil && *a.Label != "" {
-		return *a.Label
-	}
-	return strings.TrimPrefix(a.DisplayName, "agent:")
+	return cv.labels.label(ctx, id)
 }
 
 // leaseTime is the task's active lease time across holders (time boxes).

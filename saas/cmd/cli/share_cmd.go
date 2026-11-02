@@ -23,13 +23,26 @@ import (
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
+	"saas/pkg/aicoder/stores"
 
 	"github.com/spf13/cobra"
 )
 
 // Fields a shared copy never carries: they would point back at the
-// narrower row or its project, or carry the old row's live state.
-var shareDropFields = []string{"_live", "supersedes", "superseded_by", "source_ref", "origin_id"}
+// narrower row or its project, or carry the old row's live state. The names
+// are the real columns (dbent/schema: superseded_by_id, source_ref, …).
+var shareDropFields = []string{"_live", "superseded_by_id", "source_ref", "origin_id", "origin_url", "repo_id"}
+
+// Actor columns of a shared copy (§6.4: no origin fields). The copy is the
+// sharer's statement, so created_by_actor_id names the sharer; every other
+// *_actor_id / *_actor_ids column (validated by, reviewed by, assigned to,
+// members …) would tell the wider audience who handled the original, so it
+// is cleared.
+const (
+	shareCreatorField     = "created_by_actor_id"
+	shareActorFieldSuffix = "_actor_id"
+	shareActorListSuffix  = "_actor_ids"
+)
 
 // shareFlags are the flags of share and move.
 type shareFlags struct {
@@ -119,7 +132,8 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 	if err != nil {
 		return err
 	}
-	doc := copyForShare(src.doc, newID, targetPID, cliClock().Now())
+	sharer := actorIDFor(me.StableKey)
+	doc := copyForShare(src.doc, newID, targetPID, sharer, cliClock().Now())
 	body, err := canonjson.Encode(doc)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "encode the copy").WithCause(err)
@@ -139,8 +153,18 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 	if err := atomicWriteFile(dst, body, externalFileMode); err != nil {
 		return errcodes.New(errcodes.Internal, "write the copy").WithCause(err)
 	}
+	if route.Repo {
+		if err := ensureSharerProjection(targetRoot, sharer, me.DisplayName); err != nil {
+			return err
+		}
+	}
 	if route.Project != nil {
 		if err := route.Project.importFiles(ctx); err != nil {
+			return err
+		}
+	}
+	if !move && src.project != nil {
+		if err := recordShareProvenance(ctx, src, newID); err != nil {
 			return err
 		}
 	}
@@ -155,7 +179,11 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 	if label == "" {
 		label = "this repo"
 	}
-	fmt.Printf("✓ %s %s %s, in %s (the copy has no pointer back)\n", newID, verb, id, redactIfQuiet(label))
+	note := "the copy has no pointer back"
+	if !move && src.project != nil {
+		note += "; the original records the copy"
+	}
+	fmt.Printf("✓ %s %s %s, in %s (%s)\n", newID, verb, id, redactIfQuiet(label), note)
 	return nil
 }
 
@@ -192,14 +220,33 @@ func routeRoot(route writeRoute) (string, string, error) {
 }
 
 // copyForShare is the shared copy: new id, the target's project id, fresh
-// timestamps, and none of shareDropFields.
-func copyForShare(doc map[string]any, newID, projectID string, now time.Time) map[string]any {
+// timestamps, none of shareDropFields, the sharer as its creator and no
+// other actor column (see shareCreatorField).
+func copyForShare(doc map[string]any, newID, projectID, sharer string, now time.Time) map[string]any {
 	out := make(map[string]any, len(doc))
 	for k, v := range doc {
 		out[k] = v
 	}
 	for _, k := range shareDropFields {
 		delete(out, k)
+	}
+	for k := range out {
+		switch {
+		case k == shareCreatorField:
+		case strings.HasSuffix(k, shareActorFieldSuffix):
+			out[k] = nil
+		case strings.HasSuffix(k, shareActorListSuffix):
+			out[k] = []any{}
+		}
+	}
+	if _, ok := out[shareCreatorField]; ok {
+		// Only tables that have the column: an unknown key would land in
+		// the row's extra fields.
+		if sharer == "" {
+			out[shareCreatorField] = nil
+		} else {
+			out[shareCreatorField] = sharer
+		}
 	}
 	out["id"] = newID
 	if _, ok := out["project_id"]; ok && projectID != "" {
@@ -347,4 +394,71 @@ func deleteShared(ctx context.Context, src *sharedRow) error {
 func (p *externalProject) importFiles(ctx context.Context) error {
 	_, err := p.pass(ctx, false)
 	return err
+}
+
+// ensureSharerProjection makes sure the client repo holds an actor file for
+// the person a shared copy names (created_by_actor_id), so every clone can
+// resolve the name. It is written as the F18 client projection {id, display
+// name, kind} and never replaces an existing file: the export keeps an
+// existing one projected (client_actor_export.go).
+func ensureSharerProjection(root, actorID, displayName string) error {
+	if actorID == "" {
+		return nil
+	}
+	path := filepath.Join(root, projresolve.MarkerDir, lsync.DataDirName, tableActors, actorID+".json")
+	if _, err := os.Lstat(path); err == nil {
+		return nil
+	}
+	doc := stores.ClientActorProjection(map[string]any{
+		"_table": tableActors, "_v": lsync.FormatVersion, "id": actorID,
+		"display_name": displayName, "kind": identityKindHuman,
+	}, nil, "", false)
+	b, err := canonjson.Encode(doc)
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "encode the actor projection").WithCause(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), externalDirMode); err != nil {
+		return errcodes.New(errcodes.Internal, "write the actor projection").WithCause(err)
+	}
+	if err := atomicWriteFile(path, b, externalFileMode); err != nil {
+		return errcodes.New(errcodes.Internal, "write the actor projection").WithCause(err)
+	}
+	return nil
+}
+
+// shareProvenanceField lists, on the internal (narrower) row, the ids of the
+// copies shared from it (§6.4: "the internal row records the copy"). The
+// copy itself never points back; the wider audience cannot read this field.
+// It is not a schema column: lsync keeps it as one of the row's extra
+// fields, so it travels with the row file.
+const shareProvenanceField = "shared_as"
+
+// recordShareProvenance appends copyID to the source row's
+// shareProvenanceField in its store or personal project and imports the
+// change, so the command's flush commits it to that project.
+func recordShareProvenance(ctx context.Context, src *sharedRow, copyID string) error {
+	doc := make(map[string]any, len(src.doc)+1)
+	for k, v := range src.doc {
+		doc[k] = v
+	}
+	var list []any
+	if prev, ok := doc[shareProvenanceField].([]any); ok {
+		list = append(list, prev...)
+	}
+	doc[shareProvenanceField] = append(list, copyID)
+	path := src.file
+	if path == "" {
+		path = filepath.Join(src.project.Root, projresolve.MarkerDir, lsync.DataDirName, src.table, src.id+".json")
+	}
+	b, err := canonjson.Encode(doc)
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "encode the provenance").WithCause(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), externalDirMode); err != nil {
+		return errcodes.New(errcodes.Internal, "record the provenance").WithCause(err)
+	}
+	if err := atomicWriteFile(path, b, externalFileMode); err != nil {
+		return errcodes.New(errcodes.Internal, "record the provenance").WithCause(err)
+	}
+	return src.project.importFiles(ctx)
 }

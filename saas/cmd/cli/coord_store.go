@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"encoding/json"
@@ -257,12 +258,35 @@ func (r *storeRows) Get(ctx context.Context, id string) (coord.Doc, bool, error)
 // List implements the listing half (task next): branch rows overlaid with
 // live ones.
 func (r *storeRows) List(ctx context.Context) ([]coord.Doc, error) {
+	return r.listTable(ctx, tableTasks)
+}
+
+// Notes returns the task's notes (comments rows of the store project),
+// oldest first, for `task show` (§7.5 step 5).
+func (r *storeRows) Notes(ctx context.Context, taskID string) ([]coord.Doc, error) {
+	all, err := r.listTable(ctx, tableComments)
+	if err != nil {
+		return nil, err
+	}
+	var out []coord.Doc
+	for _, d := range all {
+		if d.Str("entity_table") == tableTasks && d.Str("entity_id") == taskID {
+			out = append(out, d)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Str("created_at") < out[j].Str("created_at") })
+	return out, nil
+}
+
+// listTable reads every row of one table of the store project: the store
+// branch's files overlaid with the live ref (live wins, a tombstone hides).
+func (r *storeRows) listTable(ctx context.Context, table string) ([]coord.Doc, error) {
 	tree, err := r.refresh(ctx)
 	if err != nil {
 		return nil, err
 	}
 	byID := map[string]coord.Doc{}
-	dir := strings.TrimSuffix(storeDataPath(r.sp.folder, tableTasks, "x"), "x.json")
+	dir := strings.TrimSuffix(storeDataPath(r.sp.folder, table, "x"), "x.json")
 	files, err := r.sp.st.Repo.ReadTree(ctx, stores.TrackingBranch(r.sp.branch), strings.TrimSuffix(dir, "/"))
 	if err == nil {
 		for p, b := range files {
@@ -273,7 +297,7 @@ func (r *storeRows) List(ctx context.Context) ([]coord.Doc, error) {
 	}
 	rows, _ := tree.Rows(r.sp.folder)
 	for k, f := range rows {
-		if k.Table != tableTasks {
+		if k.Table != table {
 			continue
 		}
 		if f.Deleted() {

@@ -7,6 +7,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	entTask "dbent/gen/ent/task"
@@ -21,7 +23,37 @@ import (
 
 // showTaskFrom prints a task read from the named source.
 func showTaskFrom(ctx context.Context, id, from string, jsonOut bool) error {
-	_, t, err := openTaskCoord(ctx, id, from)
+	w, err := openCoordWorld(ctx)
+	if err != nil {
+		return err
+	}
+	return showCoordTask(ctx, w, id, from, jsonOut)
+}
+
+// showStoreTask is `task show <id>` for an id this repo's lore.db does not
+// hold: F1 lookup walks every loaded source, so a store task of the linked
+// project is shown from any client repo of the group without --from, as
+// `task done` and `mission status` already find it (lore-docs BUG-D3).
+// handled is false when no linked source has the id either; the caller
+// then reports its own not-found error.
+func showStoreTask(ctx context.Context, id string, jsonOut bool) (handled bool, err error) {
+	w, werr := openCoordWorld(ctx)
+	if werr != nil || len(w.Links) == 0 {
+		return false, nil
+	}
+	err = showCoordTask(ctx, w, id, "", jsonOut)
+	if errcodes.IsCode(err, errcodes.NotFound) {
+		return false, nil
+	}
+	return true, err
+}
+
+// showCoordTask prints a task row read through the coordination target of
+// from ("" = the normal lookup): everything a replacement reads first
+// (§7.5 step 5) — the row, its after list and gate, the claim as this clone
+// sees it now, and its notes.
+func showCoordTask(ctx context.Context, w *coordWorld, id, from string, jsonOut bool) error {
+	t, err := openCoordTargetFrom(ctx, w, id, from)
 	if err != nil {
 		return err
 	}
@@ -31,22 +63,115 @@ func showTaskFrom(ctx context.Context, id, from string, jsonOut bool) error {
 		return coordError(err)
 	}
 	if !ok {
-		return errcodes.New(errcodes.NotFound, "task "+id+" not found in "+from)
+		msg := "task " + id + " not found"
+		if from != "" {
+			msg += " in " + from
+		}
+		return errcodes.New(errcodes.NotFound, msg)
 	}
 	if jsonOut {
 		printJSON(constants.KindTaskShow, map[string]any(d), 0)
 		return nil
 	}
-	fmt.Printf("%s %s\n", id, style.Code(id))
-	fmt.Printf("  title:    %s\n", d.Str("title"))
-	fmt.Printf("  status:   %s\n", d.Str("status"))
-	fmt.Printf("  priority: %s\n", d.Str("priority"))
-	fmt.Printf("  source:   %s\n", from)
-	if b := d.Str("body"); b != "" {
-		fmt.Println()
-		fmt.Println(b)
+	source := from
+	if source == "" {
+		source = coordSourceName(w, t)
 	}
-	return nil
+	labels := &actorLabels{}
+	defer labels.close()
+	printCoordTask(ctx, t, d, source, labels)
+	if nl, ok := t.Rows.(coordNoteLister); ok {
+		notes, err := nl.Notes(ctx, id)
+		if err != nil {
+			return coordError(err)
+		}
+		printCoordNotes(ctx, notes, labels)
+	}
+	return printClaimOn(ctx, t.Signals, t.Folder, id)
+}
+
+// coordNoteLister is a coordination target that can list a task's notes
+// itself (a store project read from git, not from lore.db).
+type coordNoteLister interface {
+	Notes(ctx context.Context, taskID string) ([]coord.Doc, error)
+}
+
+// coordSourceName names where a row was read: <org>/<folder> for a store
+// project, repo for this checkout's own project.
+func coordSourceName(w *coordWorld, t coordTarget) string {
+	if isStoreTarget(t) && w.Org != nil {
+		return w.Org.Name + "/" + t.Folder
+	}
+	return toRepo
+}
+
+// printCoordTask prints the row fields, in `task show`'s layout.
+func printCoordTask(ctx context.Context, t coordTarget, d coord.Doc, source string, labels *actorLabels) {
+	s := coord.Summarize(d)
+	field := func(name, v string) {
+		if v != "" {
+			fmt.Printf("  %-9s %s\n", name+":", v)
+		}
+	}
+	fmt.Printf("%s %s\n", s.ID, style.Code(s.ID))
+	field("title", s.Title)
+	field("status", s.Status)
+	field("priority", s.Priority)
+	field("commit", s.Commitment)
+	field("mission", s.MissionID)
+	if s.RepoID != "" {
+		repo := s.RepoID
+		if l, ok := t.Rows.(coordLister); ok {
+			repo = l.RepoName(s.RepoID)
+		}
+		field("repo", repo)
+	}
+	field("role", s.Role)
+	field("assigned", labels.label(ctx, s.Assignee))
+	if len(s.After) > 0 {
+		deps := make([]string, 0, len(s.After))
+		for _, dep := range s.After {
+			deps = append(deps, fmt.Sprintf("%s (until %s)", dep.TaskID, dep.Until))
+		}
+		field("after", strings.Join(deps, ", "))
+	}
+	field("gate", s.Gate)
+	if s.Timebox > 0 {
+		field("timebox", shortDuration(s.Timebox))
+	}
+	if s.Attempts > 0 {
+		field("attempts", strconv.Itoa(s.Attempts))
+	}
+	field("branch", s.WorkBranch)
+	field("done by", labels.label(ctx, s.DoneBy))
+	if s.DonePR > 0 {
+		field("pr", "#"+strconv.Itoa(s.DonePR))
+	}
+	field("commit", s.DoneCommit)
+	if !s.MergedAt.IsZero() {
+		field("merged", s.MergedAt.UTC().Format(time.RFC3339))
+	}
+	field("source", source)
+	if s.Body != "" {
+		fmt.Println()
+		fmt.Println(s.Body)
+	}
+}
+
+// printCoordNotes lists notes oldest first with their author's label.
+func printCoordNotes(ctx context.Context, notes []coord.Doc, labels *actorLabels) {
+	if len(notes) == 0 {
+		return
+	}
+	fmt.Println()
+	fmt.Println("  notes:")
+	for _, n := range notes {
+		line := "    " + n.Time("created_at").UTC().Format("2006-01-02 15:04") + "  " + n.Str("body")
+		if who := labels.label(ctx, n.Str("created_by_actor_id")); who != "" {
+			line += "  (" + who + ")"
+		}
+		fmt.Println(line)
+	}
 }
 
 // editTaskFrom applies the edit flags a store row supports (title, body,
