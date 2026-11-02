@@ -8,10 +8,6 @@ import (
 	"syscall"
 )
 
-// reclaimStaleOnBusy keeps the historical Unix behaviour: a busy lock whose
-// recorded pid is dead is deleted and retried (R23 #27).
-const reclaimStaleOnBusy = true
-
 // errLockBusy is the internal sentinel returned when flock fails with EWOULDBLOCK.
 var errLockBusy = errors.New("processlock: flock busy")
 
@@ -34,18 +30,4 @@ func tryAcquire(path string) (*Lock, error) {
 		return nil, err
 	}
 	return &Lock{path: path, file: f, owned: true}, nil
-}
-
-// pidAlive returns true if pid is a running process.
-// On Unix, kill(pid, 0) returns nil if the process exists (and we can signal it),
-// returns ESRCH if it doesn't.
-func pidAlive(pid int) bool {
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	if err := p.Signal(syscall.Signal(0)); err != nil {
-		return errors.Is(err, syscall.EPERM)
-	}
-	return true
 }

@@ -5,7 +5,6 @@ package processlock
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -77,25 +76,5 @@ func TestWindows_CloseWithoutUnlockFrees(t *testing.T) {
 			t.Fatalf("lock not freed by close: %v", err)
 		}
 		time.Sleep(20 * time.Millisecond)
-	}
-}
-
-// TestWindows_PidAlive checks the OpenProcess/GetExitCodeProcess probe
-// against our own pid, an exited child, and invalid pids.
-func TestWindows_PidAlive(t *testing.T) {
-	if !pidAlive(os.Getpid()) {
-		t.Error("own pid reads as dead")
-	}
-	cmd := exec.Command("cmd", "/c", "exit", "0")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("run child: %v", err)
-	}
-	if pidAlive(cmd.Process.Pid) {
-		t.Error("exited child reads as alive")
-	}
-	for _, pid := range []int{0, -1} {
-		if pidAlive(pid) {
-			t.Errorf("pid %d reads as alive", pid)
-		}
 	}
 }

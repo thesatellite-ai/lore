@@ -10,9 +10,11 @@
 //     and only carries the holder's pid for diagnostics. On Unix the lock is
 //     advisory (not enforced against non-cooperating processes) — adequate
 //     for mini's "single user, multiple terminals" model.
-//   - Self-healing: on Unix a busy lock whose recorded pid is dead is
-//     reclaimed (R23 #27). On Windows a busy LockFileEx range already proves
-//     a live holder, so no pid-based reclaim is attempted there.
+//   - Self-healing by construction (R23 #27): a stale lock from a killed
+//     process is already released by the kernel, so a busy lock always has a
+//     live holder. The file is never deleted to "reclaim" it: deleting a file
+//     another process has locked lets a third process lock a fresh file, and
+//     two processes then both believe they hold the lock.
 //   - Skipped entirely under read-only mode (R18 #23) to keep CI throughput
 //     unconstrained.
 //   - Acquired LATE in the command flow (R29 #17) — after interactive prompts
@@ -33,8 +35,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -57,45 +57,28 @@ type Lock struct {
 	unlock func() error
 }
 
-// primitives are the OS-specific operations Acquire composes. They are
-// injected so the acquire/reclaim decision is testable on any OS with fakes;
-// production code always uses osPrimitives.
-type primitives struct {
-	// tryAcquire opens path and takes the OS lock without waiting. It
-	// returns errLockBusy when another handle holds the lock.
-	tryAcquire func(path string) (*Lock, error)
-	// pidAlive reports whether pid is a running process.
-	pidAlive func(pid int) bool
-	// reclaimOnDeadOwner allows deleting a busy lock file whose recorded
-	// owner pid is dead. See reclaimStaleOnBusy in the per-OS files.
-	reclaimOnDeadOwner bool
-}
-
-// osPrimitives is the real implementation for the build target.
-var osPrimitives = primitives{
-	tryAcquire:         tryAcquire,
-	pidAlive:           pidAlive,
-	reclaimOnDeadOwner: reclaimStaleOnBusy,
-}
+// tryLockFunc opens path and takes the OS lock without waiting, returning
+// errLockBusy when another handle holds it. Injected so acquire's decision
+// is testable with fakes; production code always passes tryAcquire.
+type tryLockFunc func(path string) (*Lock, error)
 
 // Acquire takes an exclusive lock at path. Steps:
 //
 //  1. If LORE_READ_ONLY=1 is set, return ErrReadOnly (caller skips lock).
 //  2. Ensure parent dir exists (mkdir -p).
 //  3. Try to open + lock the file without waiting. If another process holds
-//     the lock, return ErrLockHeld — on Unix only after checking the
-//     recorded pid and reclaiming the file when that pid is dead.
+//     the lock, return ErrLockHeld (the caller decides whether to retry).
 //  4. Write our own pid + start_at to the file content for forensics.
 //
 // A lock file that exists but is not locked (left behind by a crashed run or
 // by an older lore that used the file's existence as the lock) is simply
 // locked and reused; it never blocks.
 func Acquire(path string) (*Lock, error) {
-	return acquire(path, osPrimitives)
+	return acquire(path, tryAcquire)
 }
 
-// acquire is Acquire with the OS primitives injected.
-func acquire(path string, p primitives) (*Lock, error) {
+// acquire is Acquire with the OS lock primitive injected.
+func acquire(path string, try tryLockFunc) (*Lock, error) {
 	if os.Getenv("LORE_READ_ONLY") == "1" {
 		return nil, ErrReadOnly
 	}
@@ -104,30 +87,14 @@ func acquire(path string, p primitives) (*Lock, error) {
 		return nil, fmt.Errorf("processlock: mkdir parent: %w", err)
 	}
 
-	// Attempt acquisition. If it fails AND the existing pid is dead, reclaim.
-	for attempt := 0; attempt < 2; attempt++ {
-		l, err := p.tryAcquire(path)
-		if err == nil {
-			return l, nil
-		}
-		if !errors.Is(err, errLockBusy) {
-			return nil, err
-		}
-		if !p.reclaimOnDeadOwner {
-			return nil, ErrLockHeld
-		}
-
-		// Lock busy — check if owner is alive.
-		if alive, _ := ownerAlive(path, p.pidAlive); !alive {
-			// Stale lock; remove and retry once.
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return nil, fmt.Errorf("processlock: reclaim stale: %w", err)
-			}
-			continue
-		}
+	l, err := try(path)
+	if errors.Is(err, errLockBusy) {
 		return nil, ErrLockHeld
 	}
-	return nil, ErrLockHeld
+	if err != nil {
+		return nil, err
+	}
+	return l, nil
 }
 
 // Release drops the lock. Idempotent. Safe to call from defer even if Acquire
@@ -154,29 +121,9 @@ func (l *Lock) Release() error {
 	return unlockErr
 }
 
-// ownerAlive reads the lock file content and checks if the owning pid is alive.
-// Returns (alive, error). On parse errors, treats as alive (safe default — better
-// to refuse than to incorrectly reclaim).
-func ownerAlive(path string, pidAlive func(int) bool) (bool, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false, err
-	}
-	line := strings.SplitN(strings.TrimSpace(string(data)), "\n", 2)[0]
-	parts := strings.SplitN(line, " ", 2)
-	if len(parts) == 0 {
-		return true, nil
-	}
-	pid, err := strconv.Atoi(parts[0])
-	if err != nil || pid <= 0 {
-		return true, nil
-	}
-	return pidAlive(pid), nil
-}
-
 // writeContent writes pid + timestamp to an open lock file.
 // Format: "<pid> <iso8601-timestamp>\n"
-// Read by ownerAlive() and by `aicoder doctor` for diagnostics.
+// Diagnostics only: nothing decides on it (see the package doc).
 func writeContent(f *os.File) error {
 	if err := f.Truncate(0); err != nil {
 		return err

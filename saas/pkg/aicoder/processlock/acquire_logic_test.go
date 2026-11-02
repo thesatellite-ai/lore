@@ -8,63 +8,47 @@ import (
 	"testing"
 )
 
-// errOpenFailed stands in for a non-busy OS error from tryAcquire.
+// errOpenFailed stands in for a non-busy OS error from the lock primitive.
 var errOpenFailed = errors.New("open failed")
 
-// fakeOS scripts tryAcquire results and records calls, so the
-// acquire/reclaim decision can be exercised on any OS.
-type fakeOS struct {
-	results []error // per tryAcquire call; nil means success
-	calls   int
-	alive   bool
-}
+// deadPidContent is a lock file written by a process that no longer exists
+// (pid far above any real pid limit).
+const deadPidContent = "9999999 2026-01-01T00:00:00Z\n"
 
-func (f *fakeOS) primitives(t *testing.T, reclaim bool) primitives {
-	return primitives{
-		tryAcquire: func(path string) (*Lock, error) {
-			i := f.calls
-			f.calls++
-			if i >= len(f.results) {
-				t.Fatalf("unexpected tryAcquire call #%d", i+1)
-			}
-			if err := f.results[i]; err != nil {
-				return nil, err
-			}
-			file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
-			if err != nil {
-				t.Fatalf("fake open: %v", err)
-			}
-			return &Lock{path: path, file: file, owned: true}, nil
-		},
-		pidAlive:           func(int) bool { return f.alive },
-		reclaimOnDeadOwner: reclaim,
+// fakeTry returns a tryLockFunc that answers with result (nil = success,
+// opening the real file) and counts its calls.
+func fakeTry(t *testing.T, result error, calls *int) tryLockFunc {
+	return func(path string) (*Lock, error) {
+		*calls++
+		if result != nil {
+			return nil, result
+		}
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+		if err != nil {
+			t.Fatalf("fake open: %v", err)
+		}
+		return &Lock{path: path, file: file, owned: true}, nil
 	}
 }
 
-// TestAcquireDecisionMatrix covers every branch of acquire across the
-// reclaim policy (Unix: on, Windows: off) × owner liveness × file content.
+// TestAcquireDecisionMatrix covers every branch of acquire: OS lock result
+// (free, busy, other error) × whether a lock file already exists. A busy
+// lock is reported as held and its file is never touched, whatever pid the
+// file records.
 func TestAcquireDecisionMatrix(t *testing.T) {
-	const pidContent = "4242 2026-01-01T00:00:00Z\n"
 	tests := []struct {
-		name        string
-		content     string // "" = no file planted
-		reclaim     bool
-		alive       bool
-		results     []error
-		wantErr     error // nil = lock acquired
-		wantCalls   int
-		wantRemoved bool
+		name    string
+		content string // "" = no file planted
+		result  error
+		wantErr error // nil = lock acquired
 	}{
-		{name: "free lock", results: []error{nil}, wantCalls: 1},
-		{name: "free lock, unlocked leftover file", content: pidContent, results: []error{nil}, wantCalls: 1},
-		{name: "busy, live owner, reclaim on", content: pidContent, reclaim: true, alive: true, results: []error{errLockBusy}, wantErr: ErrLockHeld, wantCalls: 1},
-		{name: "busy, dead owner, reclaim on", content: pidContent, reclaim: true, results: []error{errLockBusy, nil}, wantCalls: 2, wantRemoved: true},
-		{name: "busy, dead owner, reclaim on, still busy", content: pidContent, reclaim: true, results: []error{errLockBusy, errLockBusy}, wantErr: ErrLockHeld, wantCalls: 2, wantRemoved: true},
-		{name: "busy, unparseable owner, reclaim on", content: "garbage\n", reclaim: true, results: []error{errLockBusy}, wantErr: ErrLockHeld, wantCalls: 1},
-		{name: "busy, dead owner, reclaim off", content: pidContent, results: []error{errLockBusy}, wantErr: ErrLockHeld, wantCalls: 1},
-		{name: "busy, live owner, reclaim off", content: pidContent, alive: true, results: []error{errLockBusy}, wantErr: ErrLockHeld, wantCalls: 1},
-		{name: "os error passes through", results: []error{errOpenFailed}, wantErr: errOpenFailed, wantCalls: 1},
-		{name: "os error passes through, reclaim on", content: pidContent, reclaim: true, results: []error{errOpenFailed}, wantErr: errOpenFailed, wantCalls: 1},
+		{name: "free lock, no file"},
+		{name: "free lock, leftover dead-pid file", content: deadPidContent},
+		{name: "busy, no file", result: errLockBusy, wantErr: ErrLockHeld},
+		{name: "busy, dead-pid file", content: deadPidContent, result: errLockBusy, wantErr: ErrLockHeld},
+		{name: "busy, unparseable file", content: "garbage\n", result: errLockBusy, wantErr: ErrLockHeld},
+		{name: "os error passes through", result: errOpenFailed, wantErr: errOpenFailed},
+		{name: "os error passes through, file present", content: deadPidContent, result: errOpenFailed, wantErr: errOpenFailed},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -74,8 +58,11 @@ func TestAcquireDecisionMatrix(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			f := &fakeOS{results: tc.results, alive: tc.alive}
-			l, err := acquire(path, f.primitives(t, tc.reclaim))
+			calls := 0
+			l, err := acquire(path, fakeTry(t, tc.result, &calls))
+			if calls != 1 {
+				t.Errorf("lock primitive called %d times, want 1", calls)
+			}
 			if tc.wantErr == nil {
 				if err != nil || l == nil {
 					t.Fatalf("want lock, got %v (lock=%v)", err, l)
@@ -83,29 +70,61 @@ func TestAcquireDecisionMatrix(t *testing.T) {
 				if rerr := l.Release(); rerr != nil {
 					t.Fatalf("release: %v", rerr)
 				}
-			} else {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("want %v, got %v", tc.wantErr, err)
-				}
-				if l != nil {
-					t.Fatalf("want nil lock on error, got %v", l)
-				}
-				// Release after a failed Acquire is a defer-friendly no-op.
-				if rerr := l.Release(); rerr != nil {
-					t.Fatalf("release of nil lock: %v", rerr)
-				}
+				return
 			}
-			if f.calls != tc.wantCalls {
-				t.Errorf("tryAcquire calls = %d, want %d", f.calls, tc.wantCalls)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("want %v, got %v", tc.wantErr, err)
 			}
-			if tc.content != "" && tc.wantErr != nil {
-				_, statErr := os.Stat(path)
-				removed := errors.Is(statErr, os.ErrNotExist)
-				if removed != tc.wantRemoved {
-					t.Errorf("file removed = %v, want %v", removed, tc.wantRemoved)
+			if l != nil {
+				t.Fatalf("want nil lock on error, got %v", l)
+			}
+			// Release after a failed Acquire is a defer-friendly no-op.
+			if rerr := l.Release(); rerr != nil {
+				t.Fatalf("release of nil lock: %v", rerr)
+			}
+			if tc.content != "" {
+				got, rerr := os.ReadFile(path)
+				if rerr != nil || string(got) != tc.content {
+					t.Errorf("lock file changed on error: %q, %v", got, rerr)
 				}
 			}
 		})
+	}
+}
+
+// TestAcquire_BusyDeadPidFileNotDeleted pins the two-holders race fix with
+// the real OS lock: the holder's pid line is overwritten with a dead pid (as
+// happens in the window between a new holder locking and writing its pid),
+// and a second Acquire must still refuse without deleting or replacing the
+// file — otherwise a third Acquire would lock a fresh file alongside the
+// live holder.
+func TestAcquire_BusyDeadPidFileNotDeleted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "lock")
+	held, err := Acquire(path)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	defer func() { _ = held.Release() }()
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(deadPidContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		l, err := Acquire(path)
+		if !errors.Is(err, ErrLockHeld) {
+			_ = l.Release()
+			t.Fatalf("attempt %d: want ErrLockHeld, got %v", i+1, err)
+		}
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("lock file gone: %v", err)
+	}
+	if !os.SameFile(before, after) {
+		t.Fatal("lock file was replaced while held")
 	}
 }
 
