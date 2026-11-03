@@ -28,6 +28,13 @@ import (
 	"saas/pkg/aicoder/stores"
 )
 
+// personalLabel marks a row of the personal store (rule P) in lists and
+// write confirmations, the way "[org/project]" marks a store row. It is
+// also how a route is recognised as personal (share, xref), so it is
+// printed output and a decision value at once: never change one without
+// the other.
+const personalLabel = "[me]"
+
 // writeRoute is where one write command writes.
 type writeRoute struct {
 	// Repo: this repo's own project (the command's usual DB).
@@ -243,7 +250,7 @@ func openPersonalProject(ctx context.Context, cfg *lorecfg.Config, folder string
 		if err := ensureProjectRow(files, folder); err != nil {
 			return nil, err
 		}
-		p := &externalProject{Label: "[me]", Root: root}
+		p := &externalProject{Label: personalLabel, Root: root}
 		if err := p.materialize(ctx, files, stored); err != nil {
 			return nil, err
 		}
@@ -258,7 +265,7 @@ func openPersonalProject(ctx context.Context, cfg *lorecfg.Config, folder string
 	if err != nil {
 		return nil, err
 	}
-	p.Label = "[me]"
+	p.Label = personalLabel
 	return p, nil
 }
 

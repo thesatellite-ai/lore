@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ds:def id=doctor-statuses-y6sro1m4 owner=@khanakia stability=stable desc="lore doctor statuses and their exit codes (healthy 0, degraded 1, broken 2)"
 // Doctor statuses — a stable contract for monitoring (exit 0 / 1 / 2).
 const (
 	doctorHealthy  = "healthy"
@@ -196,7 +197,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	}
 
 	// 4. PATH conflicts
-	if conflicts := findPathConflicts("aicoder"); len(conflicts) > 1 {
+	if conflicts := findPathConflicts(BinaryName); len(conflicts) > 1 {
 		r.PathsConflict = conflicts
 		r.Warnings = append(r.Warnings,
 			fmt.Sprintf("multiple lore binaries on PATH: %s", strings.Join(conflicts, ", ")))

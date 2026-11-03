@@ -72,7 +72,7 @@ org roster and prints LORE_ACTOR and LORE_SESSION for the agent's shell. Every
 claim, heartbeat and done by the agent then carries that actor and session (F18).
 
 Example:
-  eval "$(lore agent start --label frontend-2 --owner @alice | tail -1)"`,
+  eval "$(lore agent start --label agent-frontend --owner @alice | tail -1)"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := validateAgentLabel(label); err != nil {
@@ -113,7 +113,7 @@ Example:
 			return nil
 		},
 	}
-	start.Flags().StringVar(&label, flagLabel, "", "the agent's label (one actor per label), e.g. frontend-2")
+	start.Flags().StringVar(&label, flagLabel, "", "the agent's label (one actor per label), e.g. agent-frontend")
 	start.Flags().StringVar(&owner, flagOwner, "", "the owning person (@handle); default: you")
 	_ = start.MarkFlagRequired(flagLabel)
 	cmd.AddCommand(start)
@@ -177,7 +177,7 @@ Example:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if scope == scopeMachine {
-				return errcodes.New(errcodes.NotImplemented, "--scope machine defers to the machine's lock (testlock); run the command under `testlock` instead")
+				return errcodes.New(errcodes.NotImplemented, "--scope machine defers to a machine-wide lock; run the command under your machine's own lock tool (for example flock) instead")
 			}
 			ctx := cmd.Context()
 			w, err := openCoordWorld(ctx)

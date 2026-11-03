@@ -167,7 +167,10 @@ func runInit(ctx context.Context, projectRoot string) error {
 	}
 
 	// 7. Create initial Project row
-	create := client.Project.Create().SetName(name)
+	// Times from the CLI clock (LORE_NOW in test builds), not the schema
+	// defaults, so `lore project show` is stable in docs examples.
+	now := cliClock().Now()
+	create := client.Project.Create().SetName(name).SetCreatedAt(now).SetUpdatedAt(now).SetLastActiveAt(now)
 	if originURL != "" {
 		create.SetOriginURL(originURL)
 	}
@@ -314,6 +317,9 @@ func ensureGitignore(ctx context.Context, projectRoot string) error {
 		".lore/lore.db",
 		".lore/lore.db-shm",
 		".lore/lore.db-wal",
+		// restore/repair keep the replaced DB as lore.db.broken.<stamp>: a
+		// whole database with private rows, never to be committed.
+		".lore/lore.db.broken.*",
 		".lore/state/",
 		".lore/backups/",
 	}

@@ -43,6 +43,8 @@ func (s *Store) Init(ctx context.Context, branch string, marker Marker, sig gitr
 		return InitResult{}, err
 	}
 	if fr.Offline {
+		// %v on purpose: ErrOffline is the identity callers branch on; the
+		// transport cause is detail for the message only.
 		return InitResult{}, fmt.Errorf("%w: %s: %v", ErrOffline, s.Norm, fr.Err)
 	}
 	for _, b := range uniqueStrings(branch, s.DefaultBranch()) {

@@ -234,14 +234,14 @@ you want to scope to one type. This is the cross-entity hammer.`,
 					fmt.Printf("\nOutside this checkout:\n\n%s", ext.String())
 				}
 			}()
-			fmt.Printf("Found %d hits for %q across %d entity types:\n\n", len(merged), query, len(perTable))
+			fmt.Printf("Found %d %s for %q across %d %s:\n\n", len(merged), plural(len(merged), "hit", "hits"), query, len(perTable), plural(len(perTable), "entity type", "entity types"))
 			for _, h := range merged {
 				kindTag := fmt.Sprintf("[%-10s]", h.Entity)
 				pretty := h.Pretty
 				if pretty == "" {
 					pretty = h.ID
 				}
-				body := h.Snippet
+				body := plainSnippet(h.Snippet)
 				if body == "" {
 					body = h.Body
 				}
@@ -255,6 +255,7 @@ you want to scope to one type. This is the cross-entity hammer.`,
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringSliceVar(&tables, "tables", nil, "restrict to these entity types (e.g. memory,rule,decision)")
+	// ds:def id=search-defaults-87uy20io owner=@khanakia stability=stable desc="lore search defaults (--limit 20, --per-table 10)"
 	cmd.Flags().IntVar(&limit, constants.FlagLimit, 20, "max total hits after merge (default 20)")
 	cmd.Flags().IntVar(&perTableLimit, "per-table", 10, "per-entity top-K before merge (default 10)")
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON envelope output")
@@ -557,3 +558,11 @@ func truncBody(s string, n int) string {
 	}
 	return s[:n-3] + "..."
 }
+
+// snippetMarks are the match markers FTS5 snippet() wraps hits in
+// (fts5/search.go). They stay in --json output, where a caller may render
+// them, and are removed for the terminal, where they would print raw.
+var snippetMarks = strings.NewReplacer("<b>", "", "</b>", "")
+
+// plainSnippet is a snippet as the terminal shows it.
+func plainSnippet(s string) string { return snippetMarks.Replace(s) }

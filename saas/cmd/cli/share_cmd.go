@@ -57,10 +57,10 @@ func newShareLikeCommand(move bool) *cobra.Command {
 	f := &shareFlags{}
 	use, short, example := "share <id> --to <target>", "Copy a row to a wider audience (new id; shows the text and asks)",
 		`  lore share mem_0c12 --to repo
-  lore share mem_77 --to northwind`
+  lore share mem_77 --to agency`
 	if move {
 		use, short, example = "move <id> --to <target>", "Move a row to another project (new id; the original is deleted; asks first)",
-			`  lore move mem_0b77 --to northwind`
+			`  lore move mem_0b77 --to agency`
 	}
 	cmd := &cobra.Command{
 		Use: use, Short: short, Example: example,
@@ -194,7 +194,7 @@ func targetAudience(route writeRoute) string {
 		return strings.Join(route.Situation.Remotes, ", ")
 	case route.Repo:
 		return "this repo"
-	case route.Label == "[me]":
+	case route.Label == personalLabel:
 		return "only you (personal)"
 	}
 	return redactIfQuiet(route.Label)

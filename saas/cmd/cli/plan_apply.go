@@ -25,6 +25,7 @@ import (
 
 // planFile is the YAML shape of a plan (§7.5 invite.yaml). Field names are
 // the file format users write.
+// ds:def id=plan-file-zo3uef01 owner=@khanakia stability=stable desc="the YAML shape of a plan file (lore plan apply)"
 type planFile struct {
 	Mission struct {
 		Key   string `yaml:"key"`

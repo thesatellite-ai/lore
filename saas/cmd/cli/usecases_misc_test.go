@@ -550,7 +550,7 @@ func TestUC_MiscSetupStampsFingerprint(t *testing.T) {
 		t.Fatalf("setup must be re-runnable: %s", r.stdout)
 	}
 	c.lore("memory", "add", "--body", "searchable after setup")
-	if r := c.lore("search", "searchable"); !strings.Contains(r.stdout, "Found 1 hits") {
+	if r := c.lore("search", "searchable"); !strings.Contains(r.stdout, "Found 1 hit for") {
 		t.Fatalf("search index not working after setup: %s", r.stdout)
 	}
 }

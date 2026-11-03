@@ -113,7 +113,7 @@ func printCoordTask(ctx context.Context, t coordTarget, d coord.Doc, source stri
 			fmt.Printf("  %-9s %s\n", name+":", v)
 		}
 	}
-	fmt.Printf("%s %s\n", s.ID, style.Code(s.ID))
+	fmt.Printf("%s\n", style.Code(s.ID))
 	field("title", s.Title)
 	field("status", s.Status)
 	field("priority", s.Priority)

@@ -23,8 +23,8 @@ func newOrgUnlinkCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unlink <org> --project <folder>",
 		Short: "Remove this repo's link to an internal project in the org's store",
-		Example: `  lore org unlink northwind --project acme
-  lore org unlink northwind --project acme --yes`,
+		Example: `  lore org unlink agency --project client
+  lore org unlink agency --project client --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

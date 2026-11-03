@@ -84,8 +84,11 @@ func ParseRowPath(p string) (folder string, k RowKey, ok bool) {
 	if strings.HasPrefix(p, metaFolder+"/") || !strings.HasSuffix(p, rowExt) {
 		return "", RowKey{}, false
 	}
+	// At least <folder>/<table>/<id>.json; the folder may itself hold
+	// slashes, so only the last two parts are fixed.
+	const minRowPathParts = 3
 	parts := strings.Split(p, "/")
-	if len(parts) < 3 {
+	if len(parts) < minRowPathParts {
 		return "", RowKey{}, false
 	}
 	n := len(parts)

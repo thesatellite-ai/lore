@@ -140,6 +140,7 @@ func mergeRow(p string, b []byte, inB bool, o []byte, inO bool, t []byte, inT bo
 	}
 	tf, err := sideFile(t, inT)
 	if err != nil {
+		// Their copy is unreadable: never guess, keep ours if present.
 		return o, nil, inO, nil
 	}
 	if !inO && !inT {

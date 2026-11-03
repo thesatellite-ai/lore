@@ -122,9 +122,13 @@ Refuses if cwd already has .lore/ (use a clean directory).`,
 				if err != nil {
 					return errcodes.New(errcodes.Internal, "generate project id").WithCause(err)
 				}
+				now := cliClock().Now() // created/last-active honour LORE_NOW in test builds
 				proj, err = client.Project.Create().
 					SetID(newID).
 					SetName(name).
+					SetCreatedAt(now).
+					SetUpdatedAt(now).
+					SetLastActiveAt(now).
 					Save(cmd.Context())
 				if err != nil {
 					return errcodes.New(errcodes.Internal, "create project row").WithCause(err)

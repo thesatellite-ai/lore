@@ -54,7 +54,7 @@ func newOrgUseCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "use <entry>",
 		Short: "Choose the org entry for this project on this machine (not committed)",
-		Example: `  lore org use northwind-stag     # work against the staging store branch here
+		Example: `  lore org use agency-stag     # work against the staging store branch here
   lore org use --clear             # back to automatic resolution`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -119,8 +119,8 @@ func newOrgSetCommand() *cobra.Command {
 with no config of their own. Names only, never URLs. Accepted only when the
 repo's remote matches the org's own: patterns; refused in client repos.
 Commit the file with git afterwards.`,
-		Example: `  lore org set northwind --commit
-  lore org set northwind --commit --project lore-tools`,
+		Example: `  lore org set agency --commit
+  lore org set agency --commit --project lore-tools`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !commit {
@@ -177,9 +177,9 @@ func newOrgLinkCommand(writer orgresolve.LinkWriter) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "link <org> --project <folder>",
 		Short: "Link this repo to an internal project in the org's store",
-		Example: `  lore org link northwind --project acme
-  lore org link northwind --project lore-tools --own
-  lore org link northwind --project globex --default --dry-run`,
+		Example: `  lore org link agency --project client
+  lore org link agency --project lore-tools --own
+  lore org link agency --project client2 --default --dry-run`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

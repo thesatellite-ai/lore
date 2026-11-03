@@ -153,7 +153,7 @@ func newMissionAddCommand() *cobra.Command {
 						printJSON(constants.KindMissionAdd, m, 0)
 						return nil
 					}
-					fmt.Printf("%s %s %s — %s (already added with --key %s)\n", style.Success("✓"), m.ID, style.Code(m.ID), m.Title, key)
+					fmt.Printf("%s %s — %s (already added with --key %s)\n", style.Success("✓"), style.Code(m.ID), m.Title, key)
 					return nil
 				}
 			}
@@ -203,7 +203,7 @@ func newMissionAddCommand() *cobra.Command {
 			if route.Label != "" {
 				label = " → " + route.Label
 			}
-			fmt.Printf("%s %s %s — %s%s\n", style.Success("✓"), m.ID, style.Code(m.ID), title, label)
+			fmt.Printf("%s %s — %s%s\n", style.Success("✓"), style.Code(m.ID), title, label)
 			return nil
 		},
 	}
@@ -404,7 +404,7 @@ func newMissionShowCommand() *cobra.Command {
 				printJSON(constants.KindMissionShow, missionShowJSON{Mission: m, Tasks: briefs}, len(briefs))
 				return nil
 			}
-			fmt.Printf("%s %s\n", m.ID, style.Code(m.ID))
+			fmt.Printf("%s\n", style.Code(m.ID))
 			fmt.Printf("  title:  %s\n", m.Title)
 			fmt.Printf("  status: %s\n", m.Status)
 			if m.TargetDate != nil {

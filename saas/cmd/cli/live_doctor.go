@@ -57,7 +57,7 @@ func doctorLive(ctx context.Context, projectRoot string, r *doctorReport) {
 	}
 	snap, err := s.ref.Snapshot(ctx)
 	if err == nil && snap.Ahead() {
-		p, _ := s.ref.Pending()
+		p, _ := s.ref.Pending() // display only: max(len, 1) below still reports the unpushed state
 		note(fmt.Sprintf("%d live write(s) not pushed yet", max(len(p), 1)))
 	}
 	folder := s.folderFor(projectRoot)
@@ -104,7 +104,7 @@ func doctorLive(ctx context.Context, projectRoot string, r *doctorReport) {
 		warn(fmt.Sprintf("%d live row(s) carry conflict markers and cannot land (`lore sync conflicts`)", conflicts))
 	}
 	if n, err := s.ref.CommitCount(ctx); err == nil && n > 0 {
-		_, tree, _ := s.ref.LocalTree(ctx)
+		_, tree, _ := s.ref.LocalTree(ctx) // display only: an unreadable tree shows epoch 0
 		note(fmt.Sprintf("live ref: %d commit(s) since the last compaction (epoch %d; automatic past %d)", n, tree.Epoch(), s.cfg.CompactAfter))
 	}
 	doctorLiveHooks(ctx, s, warn, note)
@@ -166,7 +166,7 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 			break
 		}
 	}
-	snap, _ := s.ref.Snapshot(ctx)
+	snap, _ := s.ref.Snapshot(ctx) // display only (`lore live explain`): unreadable refs show as none
 	fmt.Printf("%s in %s (folder %s)\n", id, s.toplevel, folder)
 	if at := live.FetchStamp(s.stateDir); !at.IsZero() {
 		fmt.Printf("  fetched %s ago\n", s.clk.Now().Sub(at).Round(time.Second))
@@ -196,7 +196,7 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 	}
 	branchPath := mainDataPath(folder, table+"/"+id+".json")
 	if table != "" {
-		if b, ok, _ := s.repo.ReadFile(ctx, "HEAD", branchPath); ok {
+		if b, ok, _ := s.repo.ReadFile(ctx, "HEAD", branchPath); ok { // display only: a read error shows as absent
 			fmt.Printf("  this branch (HEAD): %s (%d bytes)\n", branchPath, len(b))
 		} else {
 			fmt.Println("  this branch (HEAD): not present")
@@ -253,6 +253,8 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 }
 
 func mustPending(s *liveSession) []live.PendingEntry {
+	// Display only: an unreadable pending list shows as zero waiting
+	// writes; `lore live doctor` reports the read failure separately.
 	p, _ := s.ref.Pending()
 	return p
 }

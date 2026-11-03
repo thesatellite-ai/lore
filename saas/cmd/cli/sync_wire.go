@@ -33,7 +33,6 @@ import (
 	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/security"
 	"saas/pkg/aicoder/style"
 )
 
@@ -188,6 +187,9 @@ func syncOptions(db *sql.DB, root, dataDir string, kind lsync.ChangeKind) lsync.
 		Backup:       backupBeforeSync(db, root),
 		DBChangeKind: kind,
 		OnChange:     auditChange,
+		// The CLI clock, so conflict and trash times honour LORE_NOW in
+		// test builds like every other team-command time.
+		Now: func() time.Time { return cliClock().Now() },
 	}
 	o.CheckSecrets = secretCheck()
 	// Rows the write router places on the live ref are handed back by the
@@ -205,7 +207,12 @@ func secretCheck() func([]byte) string {
 	if os.Getenv(envSyncAllowSecret) == envValueOn {
 		return nil
 	}
-	scanner := security.NewScanner()
+	scanner, err := secretScanner()
+	if err != nil {
+		// Fail closed: a pattern the user wrote must not silently stop
+		// applying, so every file is refused with the reason.
+		return func([]byte) string { return err.Error() }
+	}
 	return func(b []byte) string {
 		if m := scanner.Scan(string(b)); len(m) > 0 {
 			return "credential pattern " + m[0].PatternName + " found"
@@ -439,8 +446,10 @@ func mergeDriverConfig() [][2]string {
 }
 
 // hookLines returns the block chained into each git hook. Every block is a
-// no-op when lore is not installed, and only pre-commit may fail the git
-// operation (on invalid / conflicted lore files).
+// no-op when lore is not installed. Three hooks may fail the git
+// operation: pre-commit (invalid / conflicted lore files), commit-msg (the
+// leak check on the final message) and pre-push (a fresh ride-along commit
+// stops the push so the next one carries it); the others never do.
 // ds:def id=sync-hooklines-3282rwuw owner=@khanakia stability=stable desc="hook blocks chained into git hooks"
 func hookLines(projectRel string) map[string][]string {
 	cd := ""
@@ -574,7 +583,15 @@ func ensureGitWiring(ctx context.Context, root string) (gitWiringResult, error) 
 		res.Workflow = syncActionRefresh{Note: "could not check the lore-sync-merge workflow: " + err.Error()}
 	}
 	rel := projectRelPath(repo.Toplevel, root)
-	for hook, lines := range hookLines(rel) {
+	hooks := hookLines(rel)
+	// Sorted: map order is random, and res.Hooks is printed and in JSON.
+	names := make([]string, 0, len(hooks))
+	for hook := range hooks {
+		names = append(names, hook)
+	}
+	sort.Strings(names)
+	for _, hook := range names {
+		lines := hooks[hook]
 		marker := hookMarker(rel)
 		if hook == hookPostCommit || hook == hookPrePush {
 			marker = liveHookMarker

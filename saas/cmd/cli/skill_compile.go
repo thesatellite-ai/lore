@@ -64,7 +64,7 @@ func newSkillCompileCommand() *cobra.Command {
 	f := &skillCompileFlags{}
 	cmd := &cobra.Command{
 		Use:   "compile",
-		Short: "Compress the canonical bundle into a smaller .md via LLM",
+		Short: "Compress the canonical bundle into a smaller .md via a model",
 		Long: `Reads every .md file under --source-dir (defaults to ./skill), concatenates
 them with file headers, and asks the LLM to produce a compressed bundle
 following the compression rules baked into this command
@@ -88,13 +88,13 @@ The compiler is non-deterministic — re-running produces slightly different out
 	cmd.Flags().StringVar(&f.output, "output", "",
 		"output path (default: <source-dir>/SKILL-<target>-draft.md — compiler output is NEVER canonical; bench-verify and pass --output explicitly to promote)")
 	cmd.Flags().StringVar(&f.model, constants.FlagModel, "claude-sonnet-4-6",
-		"compressor model — must be strong (sonnet or better); haiku tends to under-compress")
+		"compressor model — must be a strong model; small models tend to under-compress")
 	cmd.Flags().IntVar(&f.budgetBytes, constants.FlagBudgetBytes, 14000,
-		"target byte budget for the output (LLM is told to aim for this size)")
+		"target byte budget for the output (the model is told to aim for this size)")
 	cmd.Flags().Float64Var(&f.temperature, "temperature", 0.2,
 		"sampling temperature (low for stability; raise to 0.5+ for more aggressive editorial choices)")
 	cmd.Flags().IntVar(&f.timeoutSec, "timeout", 300,
-		"LLM call timeout in seconds")
+		"model call timeout in seconds")
 	cmd.Flags().BoolVar(&f.dryRun, constants.FlagDryRun, false,
 		"print the result to stdout instead of writing the file")
 	cmd.Flags().BoolVar(&f.jsonOut, constants.FlagJSON, false, "JSON output envelope")

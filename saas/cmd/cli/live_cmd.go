@@ -110,7 +110,7 @@ func newLiveDiffCommand() *cobra.Command {
 				return errcodes.New(errcodes.Internal, "read live ref").WithCause(err)
 			}
 			fmt.Printf("local     %s\ntracking  %s\nseen      %s\n", orNone(snap.Local), orNone(snap.Tracking), orNone(snap.Seen))
-			pending, _ := s.ref.Pending()
+			pending, _ := s.ref.Pending() // display only: an unreadable list shows as 0 pending
 			fmt.Printf("pending   %d write(s) not confirmed by the remote\n", len(pending))
 			for _, p := range pending {
 				fmt.Println("  " + p.Path)

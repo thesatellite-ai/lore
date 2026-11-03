@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SC-30: aicoder errors list
+# SC-30: lore errors list
 # Catches: R29-50
 source "$(dirname "$0")/../lib/common.sh"
 need jq

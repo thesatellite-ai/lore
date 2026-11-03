@@ -23,7 +23,6 @@ import (
 	"saas/pkg/aicoder/fts5"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/security"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
 
@@ -151,7 +150,7 @@ func mapResolveError(err error) error {
 	switch {
 	case err == projresolve.ErrNotProjectRoot:
 		return errcodes.New(errcodes.NotProjectRoot,
-			"current directory is not an lore project (no .lore/lore.db or lore.yaml)").
+			"current directory is not a lore project (no .lore/lore.db or lore.yaml)").
 			WithHint("run `lore init` here, or cd into a project root")
 	case err == projresolve.ErrAmbiguousProject:
 		return errcodes.New(errcodes.AmbiguousProject,
@@ -315,7 +314,10 @@ func runMemoryAdd(ctx context.Context, f *memoryAddFlags, rawBody string) error 
 	}
 
 	// 2. Secret scrub. Refuse unless --allow-secrets
-	scanner := security.NewScanner()
+	scanner, err := secretScanner()
+	if err != nil {
+		return err
+	}
 	if matches := scanner.Scan(body); len(matches) > 0 && !f.allowSecrets {
 		preview := matches[0].Preview
 		return errcodes.New(errcodes.SecretDetected,
@@ -383,8 +385,7 @@ func runMemoryAdd(ctx context.Context, f *memoryAddFlags, rawBody string) error 
 	}
 
 	// 6. Output success
-	fmt.Printf("%s %s %s %s\n", style.Success("✓"), mem.ID,
-		style.Code(mem.ID), route.Label)
+	fmt.Printf("%s %s %s\n", style.Success("✓"), style.Code(mem.ID), route.Label)
 	printRoute(route)
 	if repoID != "" {
 		fmt.Printf("  scope: %s\n", style.ScopeBadge("repo:"+rctx.RepoMount))

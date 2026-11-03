@@ -471,6 +471,7 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	// --commitment explicitly — no silent default in either direction
 	// (TASK_COMMITMENT_SPEC.md ADR-TASK-1). Non-agent / manual callers
 	// fall back to the schema default (accepted)
+	// ds:def id=task-commitment-agent-rule-lxfnerf7 owner=@khanakia stability=stable desc="agents must pass --commitment on task add"
 	if f.commitment == "" && callerIsAgent() {
 		return errcodes.New(errcodes.InvalidInput,
 			"--commitment is required for agent callers").
@@ -485,7 +486,7 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 			printJSON(constants.KindTaskShow, fullFromTask(existing), 0)
 			return nil
 		}
-		fmt.Printf("%s %s %s — %s (already added with --key %s)\n", style.Success("✓"), existing.ID, style.Code(existing.ID), existing.Title, f.team.key)
+		fmt.Printf("%s %s — %s (already added with --key %s)\n", style.Success("✓"), style.Code(existing.ID), existing.Title, f.team.key)
 		return nil
 	}
 	if f.tasklist == "" {
@@ -609,8 +610,7 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	if route.Label != "" {
 		label = " → " + route.Label
 	}
-	fmt.Printf("%s %s %s — %s [%s]%s\n",
-		style.Success("✓"), t.ID, style.Code(t.ID), cleanTitle, f.priority, label)
+	fmt.Printf("%s %s — %s [%s]%s\n", style.Success("✓"), style.Code(t.ID), cleanTitle, f.priority, label)
 	return nil
 }
 
@@ -759,7 +759,7 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 		printTaskRowsWithState(nil, nil)
 		return nil
 	}
-	_, _ = os.Stdout.Write(ext.Bytes())
+	_, _ = os.Stdout.Write(ext.Bytes()) // like every fmt.Print of this command: a closed stdout has no one to report to
 	return nil
 }
 
@@ -826,7 +826,7 @@ func newTaskTriageCommand() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "triage",
-		Short: "Show proposed tasks (AI-suggested, not yet committed)",
+		Short: "Show proposed tasks (agent-suggested, not yet committed)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTaskView(cmd.Context(), &f, func(q *ent.TaskQuery) *ent.TaskQuery {
 				return q.Where(
@@ -956,7 +956,7 @@ func newTaskShowCommand() *cobra.Command {
 				printJSON(constants.KindTaskShow, fullFromTask(t), 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", t.ID, style.Code(t.ID))
+			fmt.Printf("%s\n", style.Code(t.ID))
 			fmt.Printf("  title:    %s\n", t.Title)
 			fmt.Printf("  status:   %s\n", t.Status)
 			fmt.Printf("  priority: %s\n", t.Priority)

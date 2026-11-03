@@ -47,7 +47,7 @@ func txAtMonotonicHook() ent.Hook {
 			if !ok {
 				return next.Mutate(ctx, m)
 			}
-			tx, err := nextTxAt(ctx, mm.Client(), time.Now().UTC())
+			tx, err := nextTxAt(ctx, mm.Client(), cliClock().Now().UTC())
 			if err != nil {
 				return nil, fmt.Errorf("tx_at clock: %w", err)
 			}

@@ -37,7 +37,7 @@ func printExternalRows(ctx context.Context, w io.Writer, table, text string) int
 		fmt.Fprintln(os.Stderr, style.Muted("lore: "+n))
 	}
 	for _, r := range rows {
-		if r.Table == "projects" {
+		if r.Table == tableProjects {
 			continue
 		}
 		t := r.Title

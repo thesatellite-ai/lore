@@ -96,7 +96,7 @@ func newWorld(t *testing.T) *world {
 	}
 	w.base = []string{
 		"HOME=" + w.home,
-		"PATH=" + filepath.Dir(e2eBin) + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"PATH=" + e2ePath(),
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",
 		"LORE_SYNC_QUIET=0",
@@ -1446,4 +1446,24 @@ func readFileE2E(t *testing.T, p string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// e2ePath is the PATH the e2e binary runs with: its own directory first,
+// then the caller's PATH minus every directory that holds another lore
+// binary. Without that, `lore doctor` on a machine with lore installed
+// rightly reports "multiple lore binaries on PATH" and a fresh test
+// project is never healthy.
+func e2ePath() string {
+	own := filepath.Dir(e2eBin)
+	parts := []string{own}
+	for _, d := range filepath.SplitList(os.Getenv("PATH")) {
+		if d == "" || filepath.Clean(d) == filepath.Clean(own) {
+			continue
+		}
+		if fi, err := os.Stat(filepath.Join(d, BinaryName)); err == nil && !fi.IsDir() {
+			continue // another lore: keep the test hermetic
+		}
+		parts = append(parts, d)
+	}
+	return strings.Join(parts, string(os.PathListSeparator))
 }

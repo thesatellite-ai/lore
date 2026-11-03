@@ -158,13 +158,23 @@ type Waiting struct {
 // WaitKind is a closed set of reasons a matched task is not ready.
 type WaitKind string
 
+// The wait kinds. The string values are shown in `mission status` and the
+// JSON views, so they are part of the CLI output: never rename one.
 const (
+	// WaitDependency: an unfinished blocked_by edge.
 	WaitDependency WaitKind = "waiting"
-	WaitGate       WaitKind = "gated"
-	WaitClaimed    WaitKind = "claimed"
-	WaitBlocked    WaitKind = "blocked"
-	WaitCycle      WaitKind = "cycle"
-	WaitPoison     WaitKind = "poison"
+	// WaitGate: the task's gate needs a human approval.
+	WaitGate WaitKind = "gated"
+	// WaitClaimed: someone holds a live claim on the task.
+	WaitClaimed WaitKind = "claimed"
+	// WaitBlocked: the task's own status is blocked. Not set by Next today
+	// (blocked tasks are not open, so they never reach the wait list); kept
+	// so views can share one vocabulary with the queue.
+	WaitBlocked WaitKind = "blocked"
+	// WaitCycle: the blocked_by edges form a cycle; it can never be ready.
+	WaitCycle WaitKind = "cycle"
+	// WaitPoison: its claim expired after MaxAttempts attempts; it needs a human.
+	WaitPoison WaitKind = "poison"
 )
 
 // Result is a ready-queue decision.
@@ -300,9 +310,13 @@ func describe(t Task) string {
 	return string(t.Status)
 }
 
+// shortSHALen is the abbreviated commit length shown in wait reasons
+// (git's default abbreviation).
+const shortSHALen = 7
+
 func shortSHA(s string) string {
-	if len(s) > 7 {
-		return s[:7]
+	if len(s) > shortSHALen {
+		return s[:shortSHALen]
 	}
 	return s
 }

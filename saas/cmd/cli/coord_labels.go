@@ -50,7 +50,7 @@ func (l *actorLabels) label(ctx context.Context, id string) string {
 // close releases the roster handle.
 func (l *actorLabels) close() {
 	if l.roster != nil {
-		_ = l.roster.client.Close()
+		_ = l.roster.client.Close() // read-only roster handle: a close error is not actionable
 		l.roster = nil
 	}
 }

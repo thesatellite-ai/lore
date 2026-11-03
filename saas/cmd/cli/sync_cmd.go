@@ -443,7 +443,7 @@ back. Run it on main and commit the result. Rows go to the local trash first.
   lore sync purge --archived-before 2026-01-01 --confirm`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cutoff, err := parseCutoff(before, time.Now())
+			cutoff, err := parseCutoff(before, cliClock().Now())
 			if err != nil {
 				return errcodes.New(errcodes.InvalidInput, "bad --archived-before").WithCause(err)
 			}
@@ -600,8 +600,8 @@ chained into that directory's scripts.`,
 			fmt.Printf("  hooks dir:   %s\n", res.HooksDir)
 			fmt.Printf("  attributes:  changed=%v\n", res.Attributes)
 			fmt.Printf("  gitignore:   changed=%v\n", res.Gitignore)
-			fmt.Printf("  config:      %s\n", strings.Join(res.Config, ", "))
-			fmt.Printf("  hooks:       %s\n", strings.Join(res.Hooks, ", "))
+			fmt.Printf("  config:      %s\n", joinOrUnchanged(res.Config))
+			fmt.Printf("  hooks:       %s\n", joinOrUnchanged(res.Hooks))
 			return nil
 		},
 	}
@@ -714,7 +714,7 @@ func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error 
 	}
 	if len(bad) > 0 {
 		return errcodes.New(errcodes.InvalidInput, "refusing to commit broken lore files: "+strings.Join(bad, ", ")).
-			WithHint("resolve the markers inside the JSON values (or `lore sync resolve`), then commit again")
+			WithHint(brokenFilesHint(bad))
 	}
 	if len(changed) > 0 {
 		specs := []string{rel}
@@ -731,19 +731,54 @@ func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error 
 	return nil
 }
 
+// Reasons brokenLoreFile gives; printed after each refused path and read
+// back by brokenFilesHint, so the hint names what is actually wrong.
+const (
+	brokenConflictMarkers = "conflict markers"
+	brokenInvalidJSON     = "invalid JSON"
+)
+
+// brokenFilesHint is the next step for a refused pre-commit. Each entry of
+// bad is "<path> (<reason>)"; a reason that is neither broken-file kind is
+// the secret scan's.
+func brokenFilesHint(bad []string) string {
+	var markers, invalid, secret bool
+	for _, b := range bad {
+		switch {
+		case strings.Contains(b, "("+brokenConflictMarkers):
+			markers = true
+		case strings.Contains(b, "("+brokenInvalidJSON+")"):
+			invalid = true
+		default:
+			secret = true
+		}
+	}
+	var steps []string
+	if invalid {
+		steps = append(steps, "fix the JSON syntax of the files marked invalid JSON")
+	}
+	if markers {
+		steps = append(steps, "resolve the conflict markers (or `"+BinaryName+" sync resolve`)")
+	}
+	if secret {
+		steps = append(steps, "remove the credential from the files that hold one")
+	}
+	return strings.Join(steps, "; ") + ", then commit again"
+}
+
 // brokenLoreFile explains why b is not committable ("" when fine): raw git
 // conflict hunks, invalid JSON, or merge markers inside a string value.
 func brokenLoreFile(b []byte) string {
 	if merge3.ContainsConflictMarkers(string(b)) {
-		return "conflict markers"
+		return brokenConflictMarkers
 	}
 	doc, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
 	if err != nil {
-		return "invalid JSON"
+		return brokenInvalidJSON
 	}
 	for k, v := range doc {
 		if s, ok := v.(string); ok && merge3.ContainsConflictMarkers(s) {
-			return "conflict markers in " + k
+			return brokenConflictMarkers + " in " + k
 		}
 	}
 	return ""
@@ -1054,4 +1089,16 @@ func newSyncMergeRowsCommand() *cobra.Command {
 	cmd.Flags().StringVar(&keep, constants.FlagKeep, "", "id of the row to keep")
 	cmd.Flags().StringVar(&drop, constants.FlagDrop, "", "id of the duplicate to remove")
 	return cmd
+}
+
+// unchangedWord is printed by `lore sync install-git` for a list with no
+// changes, instead of an empty value.
+const unchangedWord = "unchanged"
+
+// joinOrUnchanged lists what changed, or says nothing did.
+func joinOrUnchanged(items []string) string {
+	if len(items) == 0 {
+		return unchangedWord
+	}
+	return strings.Join(items, ", ")
 }

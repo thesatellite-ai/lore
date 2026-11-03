@@ -26,7 +26,7 @@ const tableTeams = "teams"
 // routeKind is who can read the project a write is routed to.
 func routeKind(route writeRoute) xref.Kind {
 	switch {
-	case route.Project != nil && route.Label == "[me]":
+	case route.Project != nil && route.Label == personalLabel:
 		return xref.Personal
 	case route.Project != nil:
 		return xref.Internal
@@ -68,7 +68,7 @@ func checkReferences(ctx context.Context, route writeRoute, refs []string) error
 			switch {
 			case strings.HasPrefix(r.Source, cachedb.SourcePersonal+":"):
 				to = xref.Personal
-				samePersonal = route.Label == "[me]"
+				samePersonal = route.Label == personalLabel
 			case strings.HasPrefix(r.Source, cachedb.SourceStore+":"):
 				to = xref.Internal
 			}

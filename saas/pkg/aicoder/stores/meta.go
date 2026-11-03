@@ -81,6 +81,9 @@ func ParseStoreMeta(b []byte) (StoreMeta, error) {
 			if !isObj {
 				return StoreMeta{}, fmt.Errorf("stores: %s: links[%d] must be an object", metaFileName, i)
 			}
+			// A missing or non-string id/remote reads "" and is refused just
+			// below; the bool flags are omitted when false, so absent (or a
+			// non-bool) reads false.
 			l := LinkRecord{}
 			l.ProjectID, _ = obj[linkKeyProjectID].(string)
 			l.Remote, _ = obj[linkKeyRemote].(string)

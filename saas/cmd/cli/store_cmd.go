@@ -52,8 +52,8 @@ func newStoreInitCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init <url>",
 		Short: "Make an empty repo a lore store (writes lore-store.yaml and pushes)",
-		Example: `  lore store init git@github.com:northwind/lore
-  lore store init git@github.com:northwind/lore --branch staging`,
+		Example: `  lore store init git@github.com:agency/notes
+  lore store init git@github.com:agency/notes --branch staging`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -325,7 +325,7 @@ func newStoreOpenCommand() *cobra.Command {
 		Long: `Lore never needs a checkout of a store. This makes one for reading: a detached
 worktree, so lore can keep writing the branch itself (a ref checked out in any
 worktree is never written by lore).`,
-		Example: `  lore store open git@github.com:northwind/lore`,
+		Example: `  lore store open git@github.com:agency/notes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -386,7 +386,7 @@ func newStoreForgetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "forget <url>",
 		Short:   "Delete this machine's clone of a store (refused while it holds unpushed work)",
-		Example: `  lore store forget git@github.com:northwind/lore`,
+		Example: `  lore store forget git@github.com:agency/notes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

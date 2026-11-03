@@ -129,6 +129,7 @@ func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []strin
 		}
 	} else {
 		// Default v0.1 sources per Round 38 / Tier 2 #8
+		// ds:def id=learn-from-default-paths-9c6aqzqm owner=@khanakia stability=stable desc="lore learn-from docs default sources"
 		for _, name := range []string{"CLAUDE.md", "AGENTS.md", "README.md"} {
 			p := filepath.Join(rctx.ProjectRoot, name)
 			if _, err := os.Stat(p); err == nil {
@@ -232,7 +233,7 @@ func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []strin
 	fmt.Println(style.Hint("  next:"))
 	fmt.Println(style.Hint("    lore learn list                       # review pending candidates"))
 	fmt.Println(style.Hint("    lore learn promote <id>               # accept one"))
-	fmt.Println(style.Hint("    lore learn promote --job=" + jobID + " --all   # bulk accept (deferred)"))
+	fmt.Println(style.Hint("    lore learn reject <id>                # drop one"))
 	return nil
 }
 

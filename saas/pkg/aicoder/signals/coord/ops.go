@@ -53,13 +53,16 @@ type Env struct {
 	Held   HeldStore
 }
 
-// Kinds of fencing failure (§7.4), mapped by the CLI to E_LOST_CLAIM,
-// E_CANCELLED and E_REASSIGNED.
+// FenceKind is the kind of fencing failure (§7.4), mapped by the CLI to
+// E_LOST_CLAIM, E_CANCELLED and E_REASSIGNED.
 type FenceKind string
 
 const (
-	FenceLost       FenceKind = "lost"
-	FenceCancelled  FenceKind = "cancelled"
+	// FenceLost: the claim expired or was revoked (E_LOST_CLAIM).
+	FenceLost FenceKind = "lost"
+	// FenceCancelled: the task was cancelled while held (E_CANCELLED).
+	FenceCancelled FenceKind = "cancelled"
+	// FenceReassigned: the task now has another assignee (E_REASSIGNED).
 	FenceReassigned FenceKind = "reassigned"
 )
 
@@ -382,6 +385,8 @@ func Renew(ctx context.Context, env Env, id string) (signals.Signal, error) {
 	if err == nil {
 		if rec, ok := env.Held.Get(env.Caller.Session, id); ok {
 			rec.Expires = renewed.Expires
+			// Held is a cache of the holder's own past, never the source of
+			// truth (HeldRecord): the renewal is already on the signals ref.
 			_ = env.Held.Put(env.Caller.Session, rec, renewed.Expires)
 		}
 	}
@@ -422,7 +427,7 @@ func Release(ctx context.Context, env Env, id string) error {
 		return classify(ctx, env, id, err)
 	}
 	if err == nil {
-		_ = env.Held.Drop(env.Caller.Session, id, now)
+		_ = env.Held.Drop(env.Caller.Session, id, now) // cache only (HeldRecord); the release is already on the signals ref
 	}
 	return err
 }
@@ -472,7 +477,7 @@ func HolderWrite(ctx context.Context, env Env, id string, dropClaim bool, mutate
 		return nil, classify(ctx, env, id, err)
 	}
 	if err == nil && dropClaim {
-		_ = env.Held.Drop(env.Caller.Session, id, env.Signals.Clock.Now())
+		_ = env.Held.Drop(env.Caller.Session, id, env.Signals.Clock.Now()) // cache only (HeldRecord); the write is already on the signals ref
 	}
 	return written, err
 }
@@ -500,8 +505,11 @@ func MarkDone(by, commit string, pr int) func(Doc, time.Time) error {
 type OverrideKind string
 
 const (
-	OverrideRevoke   OverrideKind = "revoke"
-	OverrideCancel   OverrideKind = "cancel"
+	// OverrideRevoke drops the claim; the task stays open for others.
+	OverrideRevoke OverrideKind = "revoke"
+	// OverrideCancel drops the claim and cancels the task.
+	OverrideCancel OverrideKind = "cancel"
+	// OverrideReassign drops the claim and hands the task to a new assignee.
 	OverrideReassign OverrideKind = "reassign"
 )
 

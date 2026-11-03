@@ -129,6 +129,7 @@ func runRender(ctx context.Context, f *renderFlags) error {
 		return err
 	}
 
+	// ds:def id=render-pins-ez0g6hen owner=@khanakia stability=stable desc="what render pins into the context file (must rules, critical/high hotfixes, directive)"
 	// Hybrid: pin only severity=must rules + critical/high hotfixes +
 	// directive into CLAUDE.md. Everything else (should/may rules,
 	// memories, decisions, patterns, …) is fetched via `lore search`
@@ -445,7 +446,10 @@ func persistRenderHistory(ctx context.Context, client *ent.Client, projectID, re
 	}{Included: summary}
 	scopeJSON, _ := json.Marshal(scope)
 
+	// created_at from the CLI clock, not the schema default, so a test
+	// build's LORE_NOW fixes what `lore why-context` shows.
 	create := client.RenderHistory.Create().
+		SetCreatedAt(cliClock().Now()).
 		SetProjectID(projectID).
 		SetTargetPath(target).
 		SetRenderedText(body).
