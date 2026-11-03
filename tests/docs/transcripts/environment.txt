@@ -1,0 +1,153 @@
+
+### live off
+alice (work/website)$ LORE_LIVE=0 lore task add 'Update the privacy page'
+✓ tsk_7a670ae8548ed05bf57ad29ad0759504 — Update the privacy page [medium]
+lore sync: exported 2
+lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ git status --short
+?? .lore/data/task_lists/
+?? .lore/data/tasks/
+alice (work/website)$ lore task add 'Check the contact form on a phone'
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Check the contact form on a phone [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore live show
+tasks      tsk_2ad3618e878ebbf527d34d446ef4f891     live      since 2026-11-02 10:00
+1 live rows in _root (epoch 1)
+
+### autopush off
+alice (work/website)$ LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — Renew the SSL certificate [medium]
+lore live: (live, not pushed yet: 1 waiting; autopush is off, `lore sync` pushes)
+alice (work/website)$ lore live diff
+local     601d2850ffd047c2890d2472633cc4dbdabe12fd
+tracking  86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
+seen      86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
+pending   1 write(s) not confirmed by the remote
+  _root/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
+lore live: pushed waiting live writes
+alice (work/website)$ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_162df51b7f78b785c97c26b41ea89666
+ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
+  hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
+(exit 15)
+alice (work/website)$ lore sync
+· already in sync
+
+### live remote
+alice (work)$ git clone -q -o upstream https://github.com/client/website website-fork && cd website-fork && git remote
+upstream
+alice (work/website-fork)$ lore task list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/website-fork/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+(no tasks)
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website-fork/.git/hooks)
+alice (work/website-fork)$ LORE_LIVE_REMOTE=upstream lore task list
+○ tsk_2ad3618e878ebbf527d34d446ef4f891 Check the contact form on a phone [medium]
+○ tsk_162df51b7f78b785c97c26b41ea89666 Renew the SSL certificate [medium]
+
+### trace
+alice (work/website)$ LORE_TRACE=1 lore task list 2>&1 | grep '^trace:' | head -6
+trace: git rev-parse --is-bare-repository --show-object-format (<time>, ok)
+trace: git rev-parse --show-toplevel (<time>, ok)
+trace: git rev-parse --path-format=absolute --git-common-dir (<time>, ok)
+trace: git config --get remote.origin.url (<time>, ok)
+trace: git config --get-all remote.origin.fetch (<time>, ok)
+trace: git check-ref-format refs/lore/live (<time>, ok)
+
+### sync quiet
+alice (work/website)$ lore rule add --body 'Run the tests before you push'
+✓ rul_54fe984c9b495744c0217776765a28f2 
+  scope: [master] severity: must
+lore sync: exported 1
+lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
+✓ mem_05e99e22e9e86e96fe4daa7777994603 
+  scope: [master]
+
+### sync git off
+alice (work/shop)$ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
+✓ lore initialized at ~/work/shop
+    project_id: prj_c0f3c11a5724b0cfd74b256190d9b5b8
+    name:       shop
+    origin:     https://github.com/client/shop
+    db:         ~/work/shop/.lore/lore.db
+    identity:   human:alice@agency.example (git config)
+
+  next: lore learn-from docs   to bootstrap from existing markdown
+lore sync: exported 2 rows to .lore/data — review and commit it
+lore sync: backup of lore.db before bootstrap: ~/work/shop/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+alice (work/shop)$ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
+(no .gitattributes)
+alice (work/shop)$ lore sync
+· already in sync
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/shop/.git/hooks)
+alice (work/shop)$ ls .git/hooks | grep -v sample; cat .gitattributes
+commit-msg
+post-checkout
+post-commit
+post-merge
+post-rewrite
+pre-commit
+pre-push
+# >>> lore-sync >>>
+.lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
+.lore/data/*.json text eol=lf merge=lore linguist-generated=true
+.lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
+# <<< lore-sync <<<
+
+### sync allow secrets
+alice (work/website)$ lore memory add --allow-secrets --body 'The staging password is password=example-only'
+✓ mem_76bd560aff0771fab8457dbfa9823f10 
+  scope: [master]
+lore sync: secret-detected memories/mem_76bd560aff0771fab8457dbfa9823f10.json: credential pattern password_pair found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
+alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
+0
+alice (work/website)$ LORE_SYNC_ALLOW_SECRETS=1 lore sync
+lore sync: exported 1
+alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
+1
+
+### network drive
+alice (work/Dropbox/website)$ lore rule list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/Dropbox/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website/.lore/lore.db is inside a "dropbox" folder
+  hint: SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set LORE_ALLOW_NETWORK_FS=1
+(exit 1)
+alice (work/Dropbox/website)$ LORE_ALLOW_NETWORK_FS=1 lore rule list
+(no rules)
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/Dropbox/website/.git/hooks)
+
+### db path outside
+alice (work/blog)$ printf 'db_path: ../client.db\nproject_id: %s\n' $(grep project_id .lore/lore.yaml | cut -d' ' -f2) > .lore/lore.yaml.new && mv .lore/lore.yaml.new .lore/lore.yaml && cat .lore/lore.yaml
+db_path: ../client.db
+project_id: prj_d4314eba822f1bf5908b2b8ded5f313a
+alice (work/blog)$ lore rule list
+ERROR: [E_INTERNAL] resolve project: projresolve: path contains traversal sequence or refers outside allowed roots: "../client.db"
+(exit 1)
+alice (work/blog)$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list
+rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] Posts go out on Tuesdays
+
+### lore home
+alice (work/docs)$ cat .lore/lore.yaml
+db_path: ${LORE_HOME}/client-docs.db
+project_id: prj_28f8d32584b2db54ffb146bede5b03df
+alice (work/docs)$ LORE_HOME=~/shared-dbs lore rule add --body 'Every page needs a meta description'
+✓ rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 
+  scope: [master] severity: must
+alice (work/docs)$ LORE_HOME=~/shared-dbs lore rule list
+rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 [must/always] Every page needs a meta description
+alice (work/docs)$ lore rule list
+(no rules)
+alice$ ls ~/.lore
+cache
+client-docs.db
+
+### colour
+alice (work/website)$ unset NO_COLOR; lore doctor | head -1 | cat -v
+Status: HEALTHY
+alice (work/website)$ unset NO_COLOR; FORCE_COLOR=1 lore doctor | head -1 | cat -v
+Status: ^[[92mHEALTHY^[[0m
+alice (work/website)$ NO_COLOR=1 FORCE_COLOR=1 lore doctor | head -1 | cat -v
+Status: HEALTHY

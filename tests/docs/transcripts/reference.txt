@@ -164,3 +164,92 @@ last_vacuum_at=
 schema_version=1
 alice (work/website)$ lore config get schema_version
 1
+
+### default branch
+alice$ cat .lore/config.yaml
+default_branch: develop
+alice (work/website)$ lore task add 'Fix the footer links'
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 — Fix the footer links [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore task done tsk_05e99e22e9e86e96fe4daa7777994603
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: (live, pushed)
+lore live: landed on main (601d285); leaves live once main is fetched
+alice (work/website)$ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
+601d285 lore: land 2 rows (_root)
+86dbae4 lore: init
+86dbae4 lore: init
+
+### sync data ignored
+alice (work/website)$ mkdir -p .lore/data/tasks && echo '*.json' > .lore/data/tasks/.gitignore
+alice (work/website)$ lore sync install-git
+lore sync: git ignores lore data, so teammates will not receive it:
+  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
+change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
+ERROR: [E_SYNC_DATA_IGNORED] lore sync: git ignores lore data, so teammates will not receive it:
+  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
+change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
+(exit 1)
+
+### no work
+alice (work/landing)$ lore task next
+ERROR: [E_NO_WORK] nothing ready: no open task matches
+(exit 10)
+
+### store marker
+alice$ cat .lore/config.yaml
+orgs:
+  - name: agency
+    identity: {key: "human:alice@agency.example", name: "Alice", handle: alice}
+    stores:
+      - {url: "git@github.com:agency/notes", org_folder: org}
+    repos: [github.com/client/*]
+  - name: freelance
+    identity: {key: "human:alice@example.com", name: "Alice", handle: alice}
+    stores:
+      - {url: "git@github.com:other/notes", org_folder: org}
+    repos: [github.com/client/*]
+alice$ lore store init git@github.com:agency/notes
+✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
+alice$ lore store init git@github.com:other/notes
+✓ wrote lore-store.yaml to github.com/other/notes (new branch main, first commit) and pushed
+alice$ git clone -q https://github.com/agency/notes notes-checkout && cat notes-checkout/lore-store.yaml
+lore_store: 1
+created: "2026-11-02"
+org_folder: org
+
+### org use
+alice (work/website)$ lore whoami
+org        refused  (the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance))
+identity   (not resolved: the org is refused above)
+project    prj_c0f3c11a5724b0cfd74b256190d9b5b8
+remotes    github.com/client/website
+links      known  0 link(s) for this repo (stores of 2 entries scanned)
+personal   local: everywhere/
+ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance)
+  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+(exit 17)
+alice (work/website)$ lore org use agency
+✓ prj_c0f3c11a5724b0cfd74b256190d9b5b8 uses org agency on this machine
+  recorded in ~/.lore/config.yaml (machine-only, nothing committed)
+alice$ grep -A3 repo_orgs ~/.lore/config.yaml
+repo_orgs:
+  prj_c0f3c11a5724b0cfd74b256190d9b5b8: {org: agency, remotes: [github.com/client/website]}
+alice (work/website)$ lore org link agency --project client --yes
+This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
+and the leak guards turn on for everyone in agency.
+  link: project prj_c0f3c11a5724b0cfd74b256190d9b5b8 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_c0f3c11a5724b0cfd74b256190d9b5b8, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  nothing was written to this repo
+
+### force org
+alice (work/website)$ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
+ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
+  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+(exit 17)
+alice (work/website)$ LORE_ORG=freelance lore memory add --force-org --to freelance/client --create --body 'The client pays invoices in 30 days'
+✓ mem_76bd560aff0771fab8457dbfa9823f10 [freelance/client]
+  filed: --to freelance/client
+  scope: [master]
+lore: [freelance/client] 4 file(s) pushed

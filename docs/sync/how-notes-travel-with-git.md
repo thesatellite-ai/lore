@@ -182,6 +182,74 @@ $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin mai
 ```
 <!-- /example -->
 
+`LORE_SYNC_QUIET=1` hides the `lore sync:` lines that the first command prints:
+
+<!-- example: environment#sync-quiet -->
+```console
+# alice, in website
+$ lore rule add --body 'Run the tests before you push'
+✓ rul_54fe…28f2 
+  scope: [master] severity: must
+lore sync: exported 1
+lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+$ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
+✓ mem_05e9…4603 
+  scope: [master]
+```
+<!-- /example -->
+
+`LORE_SYNC_GIT=0` writes the files but leaves git alone: no hooks and no `.gitattributes` until a pass runs without it:
+
+<!-- example: environment#sync-git-off -->
+```console
+# alice, in shop
+$ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
+✓ lore initialized at ~/work/shop
+    project_id: prj_c0f3…b5b8
+    name:       shop
+    origin:     https://github.com/client/shop
+    db:         ~/work/shop/.lore/lore.db
+    identity:   human:alice@agency.example (git config)
+  next: lore learn-from docs   to bootstrap from existing markdown
+lore sync: exported 2 rows to .lore/data — review and commit it
+$ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
+(no .gitattributes)
+$ lore sync
+· already in sync
+$ ls .git/hooks | grep -v sample; cat .gitattributes
+commit-msg
+post-checkout
+post-commit
+post-merge
+post-rewrite
+pre-commit
+pre-push
+# >>> lore-sync >>>
+.lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
+.lore/data/*.json text eol=lf merge=lore linguist-generated=true
+.lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
+# <<< lore-sync <<<
+```
+<!-- /example -->
+
+A row that looks like a password is kept out of `.lore/data` even when `--allow-secrets` let it into the database; `LORE_SYNC_ALLOW_SECRETS=1` writes it for one run, and the next commit would share it:
+
+<!-- example: environment#sync-allow-secrets -->
+```console
+# alice, in website
+$ lore memory add --allow-secrets --body 'The staging password is password=example-only'
+✓ mem_76bd…3f10 
+  scope: [master]
+lore sync: secret-detected memories/mem_76bd…3f10.json: credential pattern password_pair found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
+$ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
+0
+$ LORE_SYNC_ALLOW_SECRETS=1 lore sync
+lore sync: exported 1
+$ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
+1
+```
+<!-- /example -->
+
 The database remembers which rows still need a file, so a row written with sync off, or by another tool that changed `lore.db` directly, is never lost: the next pass writes it out.
 
 ## Pitfalls

@@ -855,8 +855,35 @@ Y
   on alice . "lore cache prune --older-than 30d"
 }
 
+# ---------------------------------------------------------------------------
+# live-repair: the live ref deleted on the server and put back with `lore live
+# restore`, and --trace showing the git commands lore runs (docs/team/commands.md,
+# docs/team/troubleshooting.md).
+s_live_repair() {
+  section live-repair
+  remote agency/billing
+  person alice alice@agency.example
+  quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
+
+  note "live ref deleted"
+  on alice work/billing "lore task add 'send the March invoices'"
+  on alice work/billing "lore task add 'chase the unpaid February invoice'"
+  on alice work/billing "git push -q origin :refs/lore/live && git ls-remote origin"
+  on! alice work/billing "lore task add 'close the books for Q1'"
+  on alice work/billing "lore doctor | grep 'remote live ref'"
+
+  note "live restore"
+  on alice work/billing "lore live restore"
+  on alice work/billing "git ls-remote origin refs/lore/live"
+  on alice work/billing "lore task add 'close the books for Q1'"
+  on alice work/billing "lore task list"
+
+  note "trace"
+  on alice work/billing "lore sync --trace 2>&1 | grep -e '^trace: git fetch' -e '^trace: git push' -e '^·'"
+}
+
 main() {
-  local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people)
+  local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people live_repair)
   local want=("$@")
   [ ${#want[@]} -eq 0 ] && want=("${all[@]}")
   for s in "${want[@]}"; do

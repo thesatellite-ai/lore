@@ -95,6 +95,36 @@ lore refuses a few risky setups on its own. Each refusal has one environment var
 
 Use them for one command, not in your shell profile, so the refusal is back next time.
 
+A repo in a `Dropbox` folder, refused and then let through for one command:
+
+<!-- example: environment#network-drive -->
+```console
+# alice, in Dropbox/website
+$ lore rule list
+ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website/.lore/lore.db is inside a "dropbox" folder
+  hint: SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set LORE_ALLOW_NETWORK_FS=1
+(exit 1)
+$ LORE_ALLOW_NETWORK_FS=1 lore rule list
+(no rules)
+```
+<!-- /example -->
+
+A pointer file whose `db_path` climbs out with `..`, refused and then let through:
+
+<!-- example: environment#db-path-outside -->
+```console
+# alice, in blog
+$ printf 'db_path: ../client.db\nproject_id: %s\n' $(grep project_id .lore/lore.yaml | cut -d' ' -f2) > .lore/lore.yaml.new && mv .lore/lore.yaml.new .lore/lore.yaml && cat .lore/lore.yaml
+db_path: ../client.db
+project_id: prj_d431…313a
+$ lore rule list
+ERROR: [E_INTERNAL] resolve project: projresolve: path contains traversal sequence or refers outside allowed roots: "../client.db"
+(exit 1)
+$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list
+rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays
+```
+<!-- /example -->
+
 ## Pitfalls
 
 - **The check looks at shapes, not meaning.** A password written as plain words ("the password is blue-horse-42") does not match any pattern. Never rely on lore as your only guard.
