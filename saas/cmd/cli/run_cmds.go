@@ -1,10 +1,10 @@
 // run_cmds.go — `lore run start / step / end / cancel / replay / show`
 //
 // What this is: a descriptive log of every agent attempt at a task. Mini
-// does NOT execute runs — the agent (Claude Code / Cursor / human / hook)
+// does NOT execute runs — the agent (a coding agent / human / hook)
 // opens a run before starting work, appends steps as it goes, closes the
 // run when done. The DB later answers "why did T-7 fail twice?", "how much
-// did Opus cost us this week?", "show me the transcript of R-3"
+// did runs cost us this week?", "show me the transcript of R-3"
 //
 // Schema is intentionally minimal:
 //
@@ -153,8 +153,8 @@ func newRunStartCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&task, "task", "", "task id (tsk_…)")
 	cmd.Flags().StringVar(&mission, constants.FlagMission, "", "mission id (msn_…)")
-	cmd.Flags().StringVar(&model, constants.FlagModel, "", "model identifier (e.g. claude-opus-4-7)")
-	cmd.Flags().StringVar(&agent, constants.FlagAgent, "", "agent kind: claude-code | cursor | aider | codex-cli | manual")
+	cmd.Flags().StringVar(&model, constants.FlagModel, "", "model identifier, as the agent reports it")
+	cmd.Flags().StringVar(&agent, constants.FlagAgent, "", "agent kind, free text (your coding agent's name, or manual)")
 	cmd.Flags().StringVar(&retryOf, "retry-of", "", "previous run-id this is retrying")
 	cmd.Flags().StringVar(&goal, constants.FlagGoal, "", "free-form description of what the run is trying to do")
 	cmd.Flags().StringVar(&kind, constants.FlagKind, "", "run kind (default: 'task' if --task given, else 'general')")

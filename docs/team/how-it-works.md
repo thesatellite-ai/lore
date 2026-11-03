@@ -475,7 +475,7 @@ The guards catch copy-paste mistakes; they are not a wall. See [Cleaning up afte
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (12254 bytes; 1R + 0HF)
+✓ .lore/LORE.md (12293 bytes; 1R + 0HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 ✓ internal context → /tmp/<redacted>/alice/.lore/render/prj_2ad3…f891.md (8 rows, outside the checkout); CLAUDE.local.md holds only the import line
 $ cat CLAUDE.local.md; git check-ignore -v CLAUDE.local.md

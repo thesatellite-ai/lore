@@ -21,7 +21,7 @@ package identity
 // Returned actor format (R32):
 //
 //	human:alice@example.com         named human
-//	agent:claude-code               env-set AI agent
+//	agent:claude-code               env-set coding agent
 //	auto:a3f9c1k2                   synthesized stable
 //	auto:ephemeral-7f3a2c           synthesized ephemeral, warn
 //	anon:<random>                   --identity anonymize mode

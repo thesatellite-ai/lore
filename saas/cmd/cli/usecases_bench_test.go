@@ -4,7 +4,7 @@ package main
 // compiler (`lore skill compile`) and the TUI's tables screen. The bench run
 // and the skill compiler call a model through llmcall.Auto(), which — with
 // ANTHROPIC_API_KEY unset and no "ollama:" model prefix — shells out to a
-// `claude` CLI found on PATH; the end-to-end tests put a stand-in script
+// hosted model's command-line tool found on PATH; the end-to-end tests put a stand-in script
 // there, so the real commands run with canned model output and no network.
 
 import (
@@ -649,7 +649,7 @@ func TestUC_BenchTUITablesHelpers(t *testing.T) {
 
 // ── end to end, with a stand-in model ───────────────────────────────────────
 
-// fakeClaude installs a `claude` that answers with script (a POSIX sh body
+// fakeClaude installs a stand-in model command-line tool that answers with script (a POSIX sh body
 // that may read the prompt on stdin) and returns the env for running lore
 // against it.
 func fakeClaude(t *testing.T, script string) []string {

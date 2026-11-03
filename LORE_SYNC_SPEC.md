@@ -378,7 +378,7 @@ Every ent schema table is in exactly one class. A unit test walks `dbent/schema`
 | **local** | Never leaves the machine | query_log, render_history, audit_log, sessions, runs, run_steps, assemble_runs, assemble_citations, compress_runs, learn_runs, learn_candidate, suggestions, drafts, bench_evals, bench_runs, bench_results, intervention_metric, activities_archive, identity_profiles, task_views, config, pii_patterns, mount_alias, schema_migration, knowledge_revisions (E5) |
 | **derived** | Rebuilt from synced data or from the code tree | FTS5 virtual tables (`*_fts`), code_file, code_symbols, snapshot |
 
-**Volatile columns inside synced tables** stay out of the file and live in a local overlay table `sync_local_overlay(entity_table, entity_id, column, value)`: `last_accessed_at`, `trust_score` decay updates, `actor.last_seen_at`, `confidence` (LLM-graded, re-gradable), any counter. If a column is ever both shared and churned, split it.
+**Volatile columns inside synced tables** stay out of the file and live in a local overlay table `sync_local_overlay(entity_table, entity_id, column, value)`: `last_accessed_at`, `trust_score` decay updates, `actor.last_seen_at`, `confidence` (graded by a model, re-gradable), any counter. If a column is ever both shared and churned, split it.
 
 ## 8. Flows
 

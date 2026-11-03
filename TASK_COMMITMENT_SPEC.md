@@ -7,7 +7,7 @@ status: accepted
 
 <DocStatus state="review" owner="alice" updated="2026-05-17"></DocStatus>
 
-Give every task two new orthogonal axes besides lifecycle `status`: **commitment** (is this real / agreed?) and **deferral** (real, but not now). The driver: AI agents create *all* tasks and set *all* state — there is no human triage step — so speculative tasks must be distinguishable from agreed ones without a human in the loop, and the failure mode must be loud, never silent.
+Give every task two new orthogonal axes besides lifecycle `status`: **commitment** (is this real / agreed?) and **deferral** (real, but not now). The driver: coding agents create *all* tasks and set *all* state — there is no human triage step — so speculative tasks must be distinguishable from agreed ones without a human in the loop, and the failure mode must be loud, never silent.
 
 Tasks for this work live in the sibling [`TASKS.md`](./TASKS.md) (per repo rule: specs hold design, not checklists).
 
@@ -19,12 +19,12 @@ Tasks for this work live in the sibling [`TASKS.md`](./TASKS.md) (per repo rule:
 
 ## Why we need it
 
-<FiveWhys problem="AI-created tasks pollute the active list and get auto-started">
+<FiveWhys problem="Agent-created tasks pollute the active list and get auto-started">
 
-<Why>AI agents generate tasks speculatively ("we could also refactor X") while doing other work.</Why>
+<Why>Coding agents generate tasks speculatively ("we could also refactor X") while doing other work.</Why>
 <Why>Those land as `status=todo`, indistinguishable from tasks the user actually asked for.</Why>
-<Why>A later AI session reads the task list, sees `todo`, and treats speculative ideas as agreed work — starting or reporting them.</Why>
-<Why>There is no human triage step (the AI sets all state), so nothing downgrades a speculative task.</Why>
+<Why>A later agent session reads the task list, sees `todo`, and treats speculative ideas as agreed work — starting or reporting them.</Why>
+<Why>There is no human triage step (the agent sets all state), so nothing downgrades a speculative task.</Why>
 <Why>The data model has no axis for "is this agreed?" — only lifecycle status. Root cause: missing commitment axis.</Why>
 
 </FiveWhys>
@@ -90,7 +90,7 @@ Disappears from the active list until 2026-07-01, then returns automatically. No
 
 ### Context
 
-AI agents are the sole actors: they create tasks and drive every status transition. There is no human triage. Speculative and agreed tasks currently look identical (`status=todo`). A silent default for the new axis is unsafe in both directions — defaulting to `accepted` lets speculative junk pollute the active list (the original complaint); defaulting to `proposed` silently hides real work (violates the repo skeleton-honesty rule).
+Coding agents are the sole actors: they create tasks and drive every status transition. There is no human triage. Speculative and agreed tasks currently look identical (`status=todo`). A silent default for the new axis is unsafe in both directions — defaulting to `accepted` lets speculative junk pollute the active list (the original complaint); defaulting to `proposed` silently hides real work (violates the repo skeleton-honesty rule).
 
 ### Decision
 

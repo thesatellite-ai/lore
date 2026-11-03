@@ -1,12 +1,12 @@
 // skill_compile.go — `lore skill compile` command
 //
-// Reads the canonical bundle (SKILL.md + sibling docs) and asks an LLM
+// Reads the canonical bundle (SKILL.md + sibling docs) and asks a model
 // to produce a compressed `mini` bundle suitable for small-context or
 // weak-instruction-following models. The output is a single .md file
 //
-// The compiler is deliberately a wrapper around an LLM call — no
+// The compiler is deliberately a wrapper around a model call — no
 // hand-coded parsers or templates. That choice trades determinism for
-// editorial flexibility: the LLM handles the "what to keep, what to
+// editorial flexibility: the model handles the "what to keep, what to
 // drop" judgment that's hard to express in code. Every regeneration
 // drifts slightly; treat the output as a draft, review before commit
 //
@@ -66,7 +66,7 @@ func newSkillCompileCommand() *cobra.Command {
 		Use:   "compile",
 		Short: "Compress the canonical bundle into a smaller .md via a model",
 		Long: `Reads every .md file under --source-dir (defaults to ./skill), concatenates
-them with file headers, and asks the LLM to produce a compressed bundle
+them with file headers, and asks the model to produce a compressed bundle
 following the compression rules baked into this command
 
 Currently supported targets:
@@ -135,10 +135,10 @@ func runSkillCompile(ctx context.Context, f *skillCompileFlags) error {
 		fmt.Printf("  budget:       %d bytes (target)\n", f.budgetBytes)
 		fmt.Printf("  model:        %s\n", f.model)
 		fmt.Printf("  output:       %s\n", f.output)
-		fmt.Println("  calling LLM…")
+		fmt.Println("  calling model…")
 	}
 
-	// 3. Call the LLM
+	// 3. Call the model
 	caller := llmcall.Auto()
 	resp, err := caller.Call(ctx, f.model, prompt, llmcall.Options{
 		Temperature: f.temperature,
@@ -146,7 +146,7 @@ func runSkillCompile(ctx context.Context, f *skillCompileFlags) error {
 		Timeout:     time.Duration(f.timeoutSec) * time.Second,
 	})
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "llm call").WithCause(err)
+		return errcodes.New(errcodes.Internal, "model call").WithCause(err)
 	}
 
 	// 4. Extract just the compressed markdown — strip any preamble like
@@ -197,7 +197,7 @@ func runSkillCompile(ctx context.Context, f *skillCompileFlags) error {
 }
 
 // collectSkillSources walks source-dir and returns matching files sorted
-// in a stable order. SKILL.md always comes first so the LLM sees the
+// in a stable order. SKILL.md always comes first so the model sees the
 // canonical structure before any sibling expansion
 func collectSkillSources(sourceDir string, globs []string) (map[string]string, int, error) {
 	files := map[string]string{}
@@ -232,7 +232,7 @@ func collectSkillSources(sourceDir string, globs []string) (map[string]string, i
 	return files, totalBytes, nil
 }
 
-// buildSkillCompressPrompt assembles the LLM prompt: a system-y preamble
+// buildSkillCompressPrompt assembles the model prompt: a system-y preamble
 // stating the compression rules, then the concatenated source bundle
 // with file headers
 func buildSkillCompressPrompt(files map[string]string, budgetBytes int) string {
@@ -267,7 +267,7 @@ func buildSkillCompressPrompt(files map[string]string, budgetBytes int) string {
 }
 
 // compressionRules is the heart of the compiler — it's the editorial
-// brief the LLM follows. Tuned against the hand-authored SKILL-mini.md
+// brief the model follows. Tuned against the hand-authored SKILL-mini.md
 // that scored 100% on the 3-eval bench at qwen3-coder + qwen2.5-coder:1.5b
 func compressionRules(budgetBytes int) string {
 	return fmt.Sprintf(`# TASK
@@ -435,7 +435,7 @@ suitable for small-context (32K) and weak-instruction-following models
         → lore bench run start --model=<m> --runs-per-arm=<n> --parallel=<p>
     T[list benchmark evals | show me the eval set]
         → lore bench eval list --json
-    T[regrade after fixing the grader]    → lore bench result regrade --run=<run>  (free; no LLM cost)
+    T[regrade after fixing the grader]    → lore bench result regrade --run=<run>  (free; no model cost)
     T[live tally during a bench run]      → lore bench result stats                (no args = latest run)
     T[summary of run X | headline numbers for X]
         → lore bench report summary <X>          (no arg = latest)
@@ -483,8 +483,8 @@ suitable for small-context (32K) and weak-instruction-following models
     Critical: do NOT create a NEW decision when the user wants to flag an existing one. The old decision stays active until explicitly archived
 
 32. **TRIGGER GRAMMAR must include bench grader meta-tools:**
-    T[test the grader against a sample file | check if X would pass without running LLM]
-        → lore bench grader test <eval-code> --output-file=<path>   (offline; no LLM cost)
+    T[test the grader against a sample file | check if X would pass without running a model]
+        → lore bench grader test <eval-code> --output-file=<path>   (offline; no model cost)
     T[why did this result fail | grader trace for one result]
         → lore bench grader debug <result-id>
     T[which graders are broken | audit graders for flakiness]
@@ -505,10 +505,10 @@ last byte of the bundle. Aim for ~%d bytes total
 }
 
 // extractCompressedOutput strips any leading prose like "Here is the
-// compressed bundle:" before the first `---` frontmatter line. LLMs
+// compressed bundle:" before the first `---` frontmatter line. Models
 // often add such preambles despite being told not to
 func extractCompressedOutput(raw string) string {
-	// Strip code fence wrapping if the LLM put the whole thing in ```markdown blocks
+	// Strip code fence wrapping if the model put the whole thing in ```markdown blocks
 	trimmed := strings.TrimSpace(raw)
 	if strings.HasPrefix(trimmed, "```") {
 		// drop first fence line

@@ -1,7 +1,7 @@
 // bench_run.go — `lore bench run *` commands
 //
 // One BenchRun row per execution. Spawns N evals × M arms × R attempts
-// LLM calls, applies the configured grader to each output, persists a
+// model calls, applies the configured grader to each output, persists a
 // BenchResult row per attempt, then rolls up summary stats into the
 // BenchRun row
 //
@@ -75,7 +75,7 @@ func newBenchRunStartCommand() *cobra.Command {
 		Short: "Start a benchmark run (synchronous)",
 		Long: `Executes a benchmark run synchronously. For each enabled BenchEval
 row, for each arm (default: baseline + with_skill), for --runs-per-arm
-attempts: calls the LLM, grades the output, persists a BenchResult row
+attempts: calls the model, grades the output, persists a BenchResult row
 
 When the run completes, the BenchRun row is updated with the summary
 (pass-rate per arm, per category, total cost)

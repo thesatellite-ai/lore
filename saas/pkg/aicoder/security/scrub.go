@@ -11,7 +11,7 @@
 //   - GitHub tokens (ghp_ / gho_ / ghu_ / ghs_ / ghr_)
 //   - JWTs (header.payload.signature with eyJ-prefix)
 //   - Stripe live keys (sk_live_)
-//   - OpenAI keys (sk-)
+//   - hosted model API keys (sk-)
 //   - PEM private key blocks (-----BEGIN ... PRIVATE KEY-----)
 //   - Slack tokens (xox[abp]-)
 //   - Google API keys (AIza)

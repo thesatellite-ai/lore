@@ -24,7 +24,7 @@ Here `CLAUDE.md` already has hand-written notes. After `lore render` the pointer
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (12459 bytes; 1R + 1HF)
+✓ .lore/LORE.md (12498 bytes; 1R + 1HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 $ cat CLAUDE.md
 <!-- lore:pointer:start -->
@@ -100,7 +100,7 @@ $ cat AGENTS.md
 ```console
 # alice, in website
 $ lore render --out docs/agent-notes.md --target AGENTS.md
-✓ docs/agent-notes.md (12459 bytes; 1R + 1HF)
+✓ docs/agent-notes.md (12498 bytes; 1R + 1HF)
 ✓ ~/work/website/AGENTS.md (pointer → docs/agent-notes.md)
 $ cat AGENTS.md; ls docs
 <!-- lore:pointer:start -->
@@ -150,7 +150,7 @@ $ lore why-context
 render_id:    rnd_7a67…9504
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
-total_bytes:  12459
+total_bytes:  12498
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
 scope:        {"included":{"rules":1,"hotfixes":1,"memories":0}}
 ```
