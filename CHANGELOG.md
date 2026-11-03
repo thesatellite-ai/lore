@@ -35,6 +35,7 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1�
 
 ### Fixed
 
+- After `lore.db` is rebuilt from `.lore/data` in a repo without an org, the next write reuses the person's actor row instead of adding a second actor with a random id.
 - The same person on a second machine (new HOME, fresh clone) reuses their existing actor row, which a client repo holds only as a projection, instead of adding a new actor with a random id to the repo.
 - `lore task note` in a repo linked to a store fails closed when the store or link status cannot be read (nothing printed, nothing written) instead of writing the note into this checkout; a plain repo with no org still writes it as before.
 - `lore task note` on a task you do not hold writes the note where that task's notes live (the store project for a store task or an internal client task) and prints ✓ only after the write succeeded; it no longer prints ✓ and then fails with E_LEAK_BLOCKED.
