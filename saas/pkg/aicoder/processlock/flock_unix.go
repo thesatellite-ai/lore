@@ -31,17 +31,3 @@ func tryAcquire(path string) (*Lock, error) {
 	}
 	return &Lock{path: path, file: f, owned: true}, nil
 }
-
-// pidAlive returns true if pid is a running process.
-// On Unix, kill(pid, 0) returns nil if the process exists (and we can signal it),
-// returns ESRCH if it doesn't.
-func pidAlive(pid int) bool {
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	if err := p.Signal(syscall.Signal(0)); err != nil {
-		return errors.Is(err, syscall.EPERM)
-	}
-	return true
-}
