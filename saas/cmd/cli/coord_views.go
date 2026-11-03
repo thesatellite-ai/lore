@@ -37,12 +37,29 @@ import (
 // (the finished words of §1 "finished").
 const (
 	handoffOpen     = "open"
+	handoffAccepted = "accepted"
+	handoffDeclined = "declined"
 	flagFor         = "for"
 	legacyHandoffTo = "to"
 	flagTask        = "task"
 	flagSince       = "since"
 	flagAck         = "ack"
 	tableMemories   = "memories"
+)
+
+// Row states of `lore mission status`: a closed set. The values are printed
+// in the table and are the keys of the JSON "counts" object, so they are
+// CLI output: never rename one. Waiting and gated rows take the queue's
+// own wait kind, so those two are defined from it.
+const (
+	missionStateDone      = "done"
+	missionStateCancelled = "cancelled"
+	missionStateBlocked   = "blocked"
+	missionStateClaimed   = "claimed"
+	missionStateExpired   = "expired"
+	missionStateReady     = "ready"
+	missionStateWaiting   = string(queue.WaitDependency)
+	missionStateGated     = string(queue.WaitGate)
 )
 
 // ---------------------------------------------------------------- finding
@@ -94,7 +111,7 @@ func newHandoffForCommand() *cobra.Command {
 grouped under the task's mission.
 
 Example:
-  lore handoff add --for @frontend-2 --task tsk_31 "form is half done; tests in invite.test.tsx"`,
+  lore handoff add --for @agent-frontend --task tsk_31 "form is half done; tests in invite.test.tsx"`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -211,7 +228,7 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 		return nil, nil, err
 	}
 	done := func() {
-		_ = client.Close()
+		_ = client.Close() // end of command: a close error is not actionable
 		if haveTarget {
 			target.Close()
 		}
@@ -394,6 +411,8 @@ Example:
 			}
 			var marker inboxMarker
 			if b, err := os.ReadFile(inboxMarkerPath(cv.w)); err == nil {
+				// A corrupt marker reads as "never acked": the inbox shows
+				// everything, which is the safe direction.
 				_ = json.Unmarshal(b, &marker)
 			}
 			cut := marker.Acked
@@ -420,6 +439,9 @@ Example:
 				}
 			}
 			if ack {
+				// Best effort: the ack marker is a display convenience. Marshal of
+				// a struct holding one time.Time cannot fail, and a failed write
+				// only means the next `inbox` shows the same items again.
 				b, _ := json.Marshal(inboxMarker{Acked: cv.now()})
 				if err := os.MkdirAll(cv.w.StateDir, 0o755); err == nil {
 					_ = os.WriteFile(inboxMarkerPath(cv.w), b, 0o600)
@@ -620,32 +642,32 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 		s, claimed, active := cv.claim(t.ID)
 		switch {
 		case t.Status == entTask.StatusDone:
-			row.State, row.Who = "done", cv.actorLabel(ctx, deref(t.DoneBy))
+			row.State, row.Who = missionStateDone, cv.actorLabel(ctx, deref(t.DoneBy))
 			if t.MergedAt != nil {
 				row.Detail = "merged " + t.MergedAt.UTC().Format("15:04")
 			} else {
 				row.Detail = "not merged yet"
 			}
 		case t.Status == entTask.StatusCancelled:
-			row.State = "cancelled"
+			row.State = missionStateCancelled
 		case t.Status == entTask.StatusBlocked:
-			row.State = "blocked"
+			row.State = missionStateBlocked
 		case claimed && active:
-			row.State, row.Who, row.Detail = "claimed", holderLabel(s), "working (until "+s.Expires.UTC().Format("15:04")+")"
+			row.State, row.Who, row.Detail = missionStateClaimed, holderLabel(s), "working (until "+s.Expires.UTC().Format("15:04")+")"
 		case claimed:
-			row.State, row.Who = "expired", holderLabel(s)
+			row.State, row.Who = missionStateExpired, holderLabel(s)
 			if b := workBranchOf(t, s); b == "" {
 				row.Detail = "work lost: never pushed"
 			} else {
 				row.Detail = "work branch " + b
 			}
 		case ready[t.ID]:
-			row.State = "ready"
+			row.State = missionStateReady
 		default:
 			w := waiting[t.ID]
 			row.State, row.Detail = string(w.Kind), w.Reason
 			if w.Kind == queue.WaitGate {
-				row.State = "gated"
+				row.State = missionStateGated
 			}
 		}
 		if used, per := cv.leaseTime(t); used > 0 || t.TimeboxSeconds != nil {
@@ -659,7 +681,7 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 		return nil
 	}
 	fmt.Printf("%s %s   %d tasks · %d done · %d claimed · %d ready · %d waiting · %d gated · %d expired · %d blocked\n",
-		m.ID, m.Title, len(rows), counts["done"], counts["claimed"], counts["ready"], counts["waiting"], counts["gated"], counts["expired"], counts["blocked"])
+		m.ID, m.Title, len(rows), counts[missionStateDone], counts[missionStateClaimed], counts[missionStateReady], counts[missionStateWaiting], counts[missionStateGated], counts[missionStateExpired], counts[missionStateBlocked])
 	for _, r := range rows {
 		fmt.Printf("  %-9s %s  %-28s %-12s %s\n", r.State, r.ID, r.Title, r.Who, r.Detail)
 	}

@@ -1,7 +1,7 @@
 // Package errcodes is the canonical registry of stable error codes for
 // lore. Every CLI error path produces a CLIError with a code from
 // this registry. Codes are stable across minor versions and documented in
-// docs/errors.md (TBD).
+// docs/reference/errors.md.
 //
 // Catches: R29 #48-50 (every error has registered code + actionable message + doc URL).
 //
@@ -167,7 +167,7 @@ func Description(c Code) string {
 		InodeMismatch:         "DB file inode changed since last open; verify external mutation",
 		DiskFull:              "no space left on device for write or backup",
 		ReadOnlyFS:            "DB path is on a read-only filesystem",
-		NotProjectRoot:        "current directory is not an lore project (no .lore/lore.db or lore.yaml)",
+		NotProjectRoot:        "current directory is not a lore project (no .lore/lore.db or lore.yaml)",
 		AmbiguousProject:      "both .lore/lore.db AND a .lore/lore.yaml (or lore.toml) pointer present (Mode A vs Mode B ambiguity)",
 		ProjectNotFound:       "project_id not registered in this DB",
 		ProjectNameCollision:  "multiple projects share that name; specify by opaque ID",
@@ -184,7 +184,7 @@ func Description(c Code) string {
 		InvalidIdentifier:     "identifier contains disallowed character",
 		SecretDetected:        "input contains a credential pattern; refusing to store. Use --allow-secrets to override (logged)",
 		RootRefused:           "lore refuses to run as root; set LORE_ALLOW_ROOT=1 to override",
-		SymlinkDB:             "DB path is a symlink; refusing for safety. Use --allow-symlink-db to override",
+		SymlinkDB:             "DB path is a symlink; refusing for safety. Delete the symlink and re-init, or restore lore.db from a backup",
 		SymlinkLoop:           "filesystem walk encountered a symlink loop",
 		UIDMismatch:           "EUID does not match HOME owner (sudo PRESERVE_ENV detected); refusing",
 		LockHeld:              "another lore process is holding the project flock",

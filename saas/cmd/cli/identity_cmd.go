@@ -68,7 +68,7 @@ func newIdentitySetCommand() *cobra.Command {
 		Use:   "set <name> | --org <entry> --key human:<email> [--name …] [--handle …]",
 		Short: "Persist an identity: the fallback (~/.lore/identity.yaml) or one org's (--org)",
 		Example: `  lore identity set alice
-  lore identity set --org northwind --key human:alice@northwind.example --name "Alice Doe" --handle alice`,
+  lore identity set --org agency --key human:alice@agency.example --name "Alice Doe" --handle alice`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if orgName != "" {

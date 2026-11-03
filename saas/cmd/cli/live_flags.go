@@ -179,7 +179,7 @@ func livePreRun(cmd *cobra.Command) error {
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil
+		return nil // no working directory: no project, so nothing to wire live for
 	}
 	root := liveProjectRoot(cwd)
 	if root == "" {

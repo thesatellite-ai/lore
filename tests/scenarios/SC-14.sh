@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SC-14: aicoder why-context --last-render
+# SC-14: lore why-context --last-render
 # Catches: R22-11, R34-7
 source "$(dirname "$0")/../lib/common.sh"
 need jq

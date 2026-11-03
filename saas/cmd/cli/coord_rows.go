@@ -38,12 +38,22 @@ import (
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
+	"saas/pkg/constants"
 )
 
 // Tables of the rows coordination writes.
 const (
 	tableTasks    = "tasks"
 	tableMissions = "missions"
+)
+
+// Other table names the team commands branch on, taken from the canonical
+// entity list so a table name is spelled in exactly one place.
+const (
+	tableProjects  = string(constants.EntityProject)
+	tableTags      = string(constants.EntityTag)
+	tableDecisions = string(constants.EntityDecision)
+	tableHandoffs  = string(constants.EntityHandoff)
 )
 
 // Keys of a task document this file reads.
@@ -131,22 +141,25 @@ func openRepoTarget(ctx context.Context, w *coordWorld) (coordTarget, error) {
 	}
 	db := dbent.InitDB(rctx.DBPath)
 	if err := dbent.ApplyPragmas(db); err != nil {
-		_ = client.Close()
-		_ = db.Close()
+		_ = client.Close() // the pragma error is the one to report
+		_ = db.Close()     // the pragma error is the one to report
 		return coordTarget{}, errcodes.New(errcodes.Internal, "open lore.db").WithCause(err)
 	}
 	folder := s.folderFor(root)
 	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
 	if err != nil {
-		_ = client.Close()
-		_ = db.Close()
+		_ = client.Close() // the project error is the one to report
+		_ = db.Close()     // the project error is the one to report
 		return coordTarget{}, err
 	}
+	// A mount not registered as a repo (E_REPO_NOT_FOUND) leaves the rows
+	// unscoped ("" = any repo) rather than failing a coordination command:
+	// the repo id only narrows which rows a checkout sees first.
 	repoID, _ := resolveRepoID(ctx, client, projectID, rctx.RepoMount)
 	rows := &liveRows{s: s, folder: folder, db: db, client: client, projectID: projectID, repoID: repoID, actor: w.ActorID}
 	return coordTarget{
 		Rows: rows, Signals: w.repoSignals(), Folder: folder, Repo: rctx.RepoMount,
-		close: func() { _ = db.Close(); _ = client.Close() },
+		close: func() { _ = db.Close(); _ = client.Close() }, // end of command: close errors are not actionable
 	}, nil
 }
 

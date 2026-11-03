@@ -118,6 +118,8 @@ func decodeBlock(m map[string]any) (Block, error) {
 			return b, err
 		}
 	}
+	// Flags are omitted when false (toMap), so absent reads false; a
+	// non-bool value also reads false, the conservative choice for each.
 	b.Deleted, _ = m[blockDeleted].(bool)
 	b.Conflict, _ = m[blockConflict].(bool)
 	b.Companion, _ = m[blockCompanion].(bool)

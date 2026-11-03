@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/cachedb"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/stores"
@@ -281,10 +282,10 @@ func buildInternalRender(repo, org string, plan *externalPlan, rows []cachedb.Ro
 func writeRenderRows(b *strings.Builder, rows []cachedb.Row, company bool) {
 	byTable := map[string][]cachedb.Row{}
 	for _, r := range rows {
-		if r.Table == "projects" || r.Table == "actors" || r.Table == "teams" || r.Table == "tags" {
+		if r.Table == tableProjects || r.Table == tableActors || r.Table == tableTeams || r.Table == tableTags {
 			continue // structure, not context
 		}
-		if r.Table == "tasks" && (r.Status == "done" || r.Status == "cancelled") {
+		if r.Table == tableTasks && (r.Status == string(entTask.StatusDone) || r.Status == string(entTask.StatusCancelled)) {
 			continue
 		}
 		byTable[r.Table] = append(byTable[r.Table], r)

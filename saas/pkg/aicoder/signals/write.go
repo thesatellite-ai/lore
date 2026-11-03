@@ -209,6 +209,8 @@ func (s *Store) fetchState(ctx context.Context) (string, map[string][]byte, erro
 	switch {
 	case errors.Is(err, gitremote.ErrRemoteRefMissing):
 		if old, ok, rerr := s.Repo.ResolveRef(ctx, track); rerr == nil && ok {
+			// Best effort: a stale tracking ref left behind is deleted again
+			// by the next fetch that finds the remote ref missing.
 			_ = s.Repo.DeleteRef(ctx, track, old)
 		}
 		return "", map[string][]byte{}, nil
@@ -265,7 +267,7 @@ func (s *Store) Read(ctx context.Context) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	v, _ := s.view(ctx, tree)
+	v, _ := s.view(ctx, tree) // unparsable signal paths matter only to a writer, which cleans them up
 	return v, nil
 }
 
@@ -275,7 +277,7 @@ func (s *Store) Local(ctx context.Context) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	v, _ := s.view(ctx, tree)
+	v, _ := s.view(ctx, tree) // unparsable signal paths matter only to a writer, which cleans them up
 	return v, nil
 }
 
@@ -284,10 +286,13 @@ func (s *Store) Local(ctx context.Context) (View, error) {
 const (
 	backoffBase = 40 * time.Millisecond
 	backoffCap  = 800 * time.Millisecond
+	// backoffMaxShift bounds the doubling so the shift can never overflow;
+	// base<<5 is already past backoffCap, so the cap still decides.
+	backoffMaxShift = 5
 )
 
 func (s *Store) backoff(ctx context.Context, attempt int) error {
-	d := backoffBase << min(attempt, 5)
+	d := backoffBase << min(attempt, backoffMaxShift)
 	if d > backoffCap {
 		d = backoffCap
 	}
@@ -339,9 +344,12 @@ func (s *Store) Write(ctx context.Context, decide Decide) (Result, error) {
 	}
 }
 
+// shortOIDLen is how many hex digits of an oid trace lines show.
+const shortOIDLen = 8
+
 func short(oid string) string {
-	if len(oid) > 8 {
-		return oid[:8]
+	if len(oid) > shortOIDLen {
+		return oid[:shortOIDLen]
 	}
 	if oid == "" {
 		return "none"
@@ -450,6 +458,9 @@ func (s *Store) ordered(ctx context.Context, res Result, sigUpdate gitremote.Ref
 	for i, u := range rest {
 		again, err := s.push(ctx, []gitremote.RefUpdate{u}, false)
 		if err != nil || again {
+			// %v, not %w, on purpose: the CLI classifies with errors.As, and a
+			// wrapped inner *OfflineError would turn this partial push into
+			// E_OFFLINE. Only ErrPartial is part of the error's identity.
 			return res, false, fmt.Errorf("%w: companion %d: %v", ErrPartial, i+1, errors.Join(err, errAgain(again)))
 		}
 	}
@@ -470,6 +481,7 @@ func (s *Store) finish(ctx context.Context, res Result, sigUpdate gitremote.RefU
 		if rc, ok := c.(RemoteCompanion); ok {
 			if err := rc.PushSelf(ctx); err != nil {
 				s.recordTracking(ctx, sigUpdate)
+				// %v on purpose: see the companion push error above.
 				return res, false, fmt.Errorf("%w: companion %d on its own remote: %v", ErrPartial, i+1, err)
 			}
 		}

@@ -8,7 +8,7 @@
 // invocation opens its own SQLite connection, applies pragmas, runs the
 // requested command, and exits
 //
-// Per PLAN.md Round 26 ship-gate / canonical v0.1 spec
+// User documentation: docs/README.md.
 package main
 
 import (
@@ -44,8 +44,7 @@ It collects project knowledge (rules, memories, decisions, hotfixes, patterns,
 snapshots, playbooks), retrieves the relevant parts via hybrid search, and
 renders compact context files such as CLAUDE.md
 
-This binary is part of the v0.1 ship gate. See PLAN.md (canonical spec at
-the top) for design rationale.`,
+Documentation: docs/README.md in the lore repository.`,
 	Version:       version,
 	SilenceErrors: true, // we render errors ourselves via style + JSON envelope
 	SilenceUsage:  true,

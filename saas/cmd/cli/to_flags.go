@@ -44,7 +44,7 @@ type toFlags struct {
 func bindToFlags(cmd *cobra.Command, f *toFlags, withYes bool) {
 	cmd.Flags().StringVar(&f.To, flagTo, "", "where the row goes: repo | <org> | <org>/<folder> | me | me/<org>")
 	cmd.Flags().BoolVar(&f.Everywhere, flagEverywhere, false, "with --to me: file the note under everywhere/ (loads in every repo)")
-	cmd.Flags().BoolVar(&f.ForceOrg, flagForceOrg, false, "write even though LORE_ORG / `lore org use` disagrees with a store link")
+	cmd.Flags().BoolVar(&f.ForceOrg, flagForceOrg, false, "write even though LORE_ORG or lore org use disagrees with a store link")
 	if withYes {
 		cmd.Flags().BoolVar(&f.Yes, flagYes, false, "confirm without a prompt")
 	}

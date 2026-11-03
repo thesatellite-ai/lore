@@ -101,11 +101,11 @@ func (h HeldStore) write(f heldFile, now time.Time) error {
 	_, werr := tmp.Write(append(b, '\n'))
 	cerr := tmp.Close()
 	if werr != nil || cerr != nil {
-		_ = os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name()) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("coord: write held: %w", errors.Join(werr, cerr))
 	}
 	if err := os.Rename(tmp.Name(), h.Path); err != nil {
-		_ = os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name()) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("coord: save held: %w", err)
 	}
 	return nil

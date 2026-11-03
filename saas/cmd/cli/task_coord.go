@@ -22,6 +22,7 @@ import (
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
+	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
 )
@@ -205,7 +206,7 @@ Examples:
 			if mc, ok := t.Rows.(interface{ MergedCheck(context.Context) }); ok {
 				mc.MergedCheck(ctx)
 			}
-			repo, _ := cmd.Flags().GetString("repo")
+			repo, _ := cmd.Flags().GetString(constants.FlagRepo) // registered below: GetString errors only for an unknown flag name
 			f.Repo = repo
 			f.Here = t.Repo
 			res, err := coord.Next(ctx, w.env(t), coord.NextRequest{
@@ -229,7 +230,7 @@ Examples:
 	}
 	cmd.Flags().StringVar(&f.Mission, flagMission, "", "only tasks of this mission")
 	cmd.Flags().StringVar(&f.Role, flagRole, "", "plan role (e.g. coordinator)")
-	cmd.Flags().String("repo", "", "only tasks of this repo (a repo name of the group)")
+	cmd.Flags().String(constants.FlagRepo, "", "only tasks of this repo (a repo name of the group)")
 	cmd.Flags().StringSliceVar(&owns, flagOwns, nil, "paths the claim owns")
 	return cmd
 }
@@ -474,8 +475,8 @@ with exit 14 (E_REASSIGNED). With --from @handle instead of an id it reassigns e
 open task assigned to that person (offboarding, cookbook 9).
 
 Examples:
-  lore task reassign tsk_31 --assign @dev1
-  lore task reassign --from @dev1 --assign @alice`,
+  lore task reassign tsk_31 --assign @bob
+  lore task reassign --from @bob --assign @alice`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

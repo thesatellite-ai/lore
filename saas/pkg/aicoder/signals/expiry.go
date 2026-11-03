@@ -140,15 +140,15 @@ func (s SeenStore) Save(_ context.Context, ref string, o Observations) error {
 	_, werr := tmp.Write(append(b, '\n'))
 	cerr := tmp.Close()
 	if werr != nil || cerr != nil {
-		_ = os.Remove(name)
+		_ = os.Remove(name) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("signals: write observations: %w", errors.Join(werr, cerr))
 	}
 	if err := os.Chmod(name, seenFileMode); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		_ = os.Remove(name)
+		_ = os.Remove(name) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("signals: chmod observations: %w", err)
 	}
 	if err := os.Rename(name, s.Path); err != nil {
-		_ = os.Remove(name)
+		_ = os.Remove(name) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("signals: save observations: %w", err)
 	}
 	return nil

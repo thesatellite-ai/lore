@@ -213,7 +213,7 @@ func (p *externalPlan) addPersonalSources(ctx context.Context, s *orgSituation) 
 				continue
 			}
 			p.Key.Commits["personal:"+f] = filesHash(files)
-			p.Sources = append(p.Sources, cachedb.SourceFiles{Source: cachedb.PersonalSource(f), Label: "[me]", Files: files})
+			p.Sources = append(p.Sources, cachedb.SourceFiles{Source: cachedb.PersonalSource(f), Label: personalLabel, Files: files})
 		}
 		return nil
 	}
@@ -247,7 +247,7 @@ func (p *externalPlan) addPersonalSources(ctx context.Context, s *orgSituation) 
 		if err != nil {
 			return storeCLIError(err, "read the personal store")
 		}
-		p.Sources = append(p.Sources, cachedb.SourceFiles{Source: cachedb.PersonalSource(f), Label: "[me]", Files: files, LiveFiles: liveFolder(liveTree, f)})
+		p.Sources = append(p.Sources, cachedb.SourceFiles{Source: cachedb.PersonalSource(f), Label: personalLabel, Files: files, LiveFiles: liveFolder(liveTree, f)})
 	}
 	return nil
 }

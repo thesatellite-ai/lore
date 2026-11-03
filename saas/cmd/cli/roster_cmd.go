@@ -19,6 +19,7 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/rowroute"
+	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
 )
@@ -121,7 +122,7 @@ func (r *roster) handleTaken(ctx context.Context, handle, stableKey string) (str
 }
 
 // tableActors is the roster table (.lore/data/actors).
-const tableActors = "actors"
+const tableActors = string(constants.EntityActor)
 
 // defaultHandle is the roster handle when the identity names none: the
 // local part of the email in a human stable key (human:dev3@acme.example →
@@ -219,8 +220,8 @@ func newActorRegisterCommand() *cobra.Command {
 		Use:   "register",
 		Short: "Put yourself (or, with --kind agent, an agent you own) on the org roster",
 		Example: `  lore actor register
-  lore actor register --kind agent --label frontend-2 --owner @alice
-  lore agent start --label frontend-2 --owner @alice   # same, and prints the session env`,
+  lore actor register --kind agent --label agent-frontend --owner @alice
+  lore agent start --label agent-frontend --owner @alice   # same, and prints the session env`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
@@ -281,7 +282,7 @@ func newActorDeactivateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "deactivate <@handle>",
 		Short:   "Mark someone as gone (active=false, left_at); actors are never deleted",
-		Example: `  lore actor deactivate @dev3`,
+		Example: `  lore actor deactivate @carol`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -361,7 +362,7 @@ func newTeamAddCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "add <@handle> --members @a,@b",
 		Short:   "Create or update a team; @handle then resolves to the team",
-		Example: `  lore team add @frontend --name "Frontend" --members @dev1,@dev2`,
+		Example: `  lore team add @frontend --name "Frontend" --members @bob,@carol`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

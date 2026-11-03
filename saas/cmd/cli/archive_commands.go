@@ -65,7 +65,7 @@ func runArchive(cmd *cobra.Command, t archiveTarget, idArg string) error {
 	if err != nil {
 		return errcodes.New(errcodes.NotFound, fmt.Sprintf("%s %q not found", t.label, idArg))
 	}
-	if err := t.archive(cmd.Context(), client, id, time.Now()); err != nil {
+	if err := t.archive(cmd.Context(), client, id, cliClock().Now()); err != nil {
 		return errcodes.New(errcodes.Internal, "archive "+t.label).WithCause(err)
 	}
 	fmt.Printf("%s %s archived\n", style.Success("✓"), pretty)
@@ -139,6 +139,25 @@ func archiveCmdPair(t archiveTarget) (*cobra.Command, *cobra.Command) {
 	return arch, un
 }
 
+// deleteShort is the help line of `<kind> delete`. Only kinds that have an
+// `archive` command are told archive is the better choice.
+func deleteShort(t archiveTarget) string {
+	if t.archive == nil {
+		return fmt.Sprintf("HARD-delete a %s (no undo)", t.label)
+	}
+	return fmt.Sprintf("HARD-delete a %s (no undo; archive is usually what you want)", t.label)
+}
+
+// deleteHint is the hint when --confirm is missing. It names the archive
+// command only where one exists: tasks, missions and the other delete-only
+// kinds have none, and the hint used to suggest `task archive <id>`.
+func deleteHint(t archiveTarget, id string) string {
+	if t.archive == nil {
+		return "a hard delete cannot be undone; pass --confirm if you really mean it"
+	}
+	return fmt.Sprintf("prefer `%s %s archive %s` for soft-delete (reversible); pass --confirm if you really mean hard-delete", BinaryName, t.label, id)
+}
+
 // newDeleteCommand builds a `<kind> delete <id>` cobra command for entities
 // that support hard delete. Requires --confirm to fire — prevents the
 // fat-finger / "wait that wasn't supposed to be a real delete" case
@@ -152,7 +171,7 @@ func newDeleteCommand(t archiveTarget) *cobra.Command {
 	var confirm bool
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
-		Short: fmt.Sprintf("HARD-delete a %s (no undo; archive is usually what you want)", t.label),
+		Short: deleteShort(t),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseIfReadOnly(&f); err != nil {
@@ -161,7 +180,7 @@ func newDeleteCommand(t archiveTarget) *cobra.Command {
 			if !confirm {
 				return errcodes.New(errcodes.InvalidInput,
 					"--confirm required to hard-delete").
-					WithHint(fmt.Sprintf("prefer `%s archive %s` for soft-delete (reversible); pass --confirm if you really mean hard-delete", t.label, args[0]))
+					WithHint(deleteHint(t, args[0]))
 			}
 			_, client, err := resolveContext(&f)
 			if err != nil {
@@ -466,7 +485,7 @@ func newMemoryShowCommand() *cobra.Command {
 				printJSON(constants.KindMemoryShow, r, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", r.ID, style.Code(r.ID))
+			fmt.Printf("%s\n", style.Code(r.ID))
 			fmt.Printf("  kind:   %s\n", r.Kind)
 			fmt.Printf("  trust:  %.2f\n", r.TrustScore)
 			fmt.Printf("  source: %s\n", r.SourceKind)
@@ -508,7 +527,7 @@ func newMemoryInvalidateCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.NotFound, fmt.Sprintf("memory %q not found", args[0]))
 			}
-			if err := client.Memory.UpdateOneID(r.ID).SetValidUntil(time.Now()).Exec(cmd.Context()); err != nil {
+			if err := client.Memory.UpdateOneID(r.ID).SetValidUntil(cliClock().Now()).Exec(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "invalidate memory").WithCause(err)
 			}
 			fmt.Printf("%s %s invalidated (valid_until=now)\n", style.Success("✓"), r.ID)

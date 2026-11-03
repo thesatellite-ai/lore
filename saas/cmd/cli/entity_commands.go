@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"saas/pkg/constants"
 	"time"
@@ -195,7 +196,7 @@ func newSnapshotAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create snapshot").WithCause(err)
 			}
-			fmt.Printf("%s %s %s — %s\n", style.Success("✓"), r.ID, style.Code(r.ID), title)
+			fmt.Printf("%s %s — %s\n", style.Success("✓"), style.Code(r.ID), title)
 			return nil
 		},
 	}
@@ -272,7 +273,7 @@ func newSnapshotShowCommand() *cobra.Command {
 				printJSON(constants.KindSnapshotShow, s, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", s.ID, style.Code(s.ID))
+			fmt.Printf("%s\n", style.Code(s.ID))
 			fmt.Printf("  title:    %s\n", s.Title)
 			fmt.Printf("  taken_at: %s\n", s.TakenAt.Format(time.RFC3339))
 			fmt.Println()
@@ -320,7 +321,7 @@ func newPluginListCommand() *cobra.Command {
 				return nil
 			}
 			for _, p := range rows {
-				fmt.Printf("%s %s  sha256:%s\n", style.Code(p.ID), p.Name, p.Sha256[:12])
+				fmt.Printf("%s %s  sha256:%s\n", style.Code(p.ID), p.Name, shortFingerprint(p.Sha256))
 			}
 			return nil
 		},
@@ -328,6 +329,34 @@ func newPluginListCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
+}
+
+// sha256HexLen is the length of a hex-encoded SHA-256 digest.
+const sha256HexLen = 64
+
+// pluginFingerprintShown is how many hex digits of a plugin's sha256 the
+// list and trust confirmations print.
+const pluginFingerprintShown = 12
+
+// validPluginSHA256 checks a --sha256 value before it is stored: a trusted
+// plugin row is compared against the plugin file's digest, so anything but
+// a full 64-digit hex SHA-256 can never match and used to crash the list.
+func validPluginSHA256(s string) error {
+	if _, err := hex.DecodeString(s); err != nil || len(s) != sha256HexLen {
+		return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("--sha256 must be a %d-digit hex SHA-256 digest, got %q", sha256HexLen, s)).
+			WithHint("compute it with: sha256sum <plugin file>")
+	}
+	return nil
+}
+
+// shortFingerprint is the printed prefix of a stored digest. It never
+// slices past the end: rows saved before validPluginSHA256 existed may hold
+// a short value, and listing them must not crash.
+func shortFingerprint(s string) string {
+	if len(s) > pluginFingerprintShown {
+		return s[:pluginFingerprintShown]
+	}
+	return s
 }
 
 func newPluginTrustCommand() *cobra.Command {
@@ -339,6 +368,9 @@ func newPluginTrustCommand() *cobra.Command {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
+			if err := validPluginSHA256(sha); err != nil {
+				return err
+			}
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
@@ -347,7 +379,7 @@ func newPluginTrustCommand() *cobra.Command {
 			create := client.TrustedPlugin.Create().
 				SetName(name).
 				SetSha256(sha).
-				SetTrustedAt(time.Now())
+				SetTrustedAt(cliClock().Now())
 			actorID, err := resolveCurrentActorID(cmd.Context(), client)
 			if err != nil {
 				return err
@@ -357,7 +389,7 @@ func newPluginTrustCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "trust plugin").WithCause(err)
 			}
-			fmt.Printf("%s plugin trusted: %s (sha256:%s)\n", style.Success("✓"), r.Name, r.Sha256[:12])
+			fmt.Printf("%s plugin trusted: %s (sha256:%s)\n", style.Success("✓"), r.Name, shortFingerprint(r.Sha256))
 			return nil
 		},
 	}
@@ -871,7 +903,7 @@ func newTechDocShowCommand() *cobra.Command {
 				printJSON(constants.KindTechDocShow, d, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", d.ID, style.Code(d.ID))
+			fmt.Printf("%s\n", style.Code(d.ID))
 			fmt.Printf("  name:     %s\n", d.Name)
 			if d.BaseURL != nil {
 				fmt.Printf("  base_url: %s\n", *d.BaseURL)

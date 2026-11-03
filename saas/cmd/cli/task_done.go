@@ -14,7 +14,6 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
-	"saas/pkg/aicoder/security"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
@@ -366,7 +365,11 @@ const toRepo = "repo"
 // refuseSecrets refuses text holding a credential pattern (as `memory add`
 // does without --allow-secrets).
 func refuseSecrets(body string) error {
-	if m := security.NewScanner().Scan(body); len(m) > 0 {
+	scanner, err := secretScanner()
+	if err != nil {
+		return err
+	}
+	if m := scanner.Scan(body); len(m) > 0 {
 		return errcodes.New(errcodes.SecretDetected, fmt.Sprintf("text contains a credential pattern: %s (preview: %s)", m[0].PatternName, m[0].Preview)).
 			WithHint("remove the secret; lore never stores credentials in shared rows")
 	}

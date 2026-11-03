@@ -76,9 +76,13 @@ const (
 // Outcome of one rule in the trace.
 type Outcome string
 
+// The trace outcomes, shown verbatim by `lore explain org`.
 const (
-	OutcomeHit        Outcome = "hit"
-	OutcomeMiss       Outcome = "miss"
+	// OutcomeHit: the rule decided the org.
+	OutcomeHit Outcome = "hit"
+	// OutcomeMiss: the rule ran and did not apply.
+	OutcomeMiss Outcome = "miss"
+	// OutcomeNotReached: an earlier rule already decided.
 	OutcomeNotReached Outcome = "not reached"
 )
 

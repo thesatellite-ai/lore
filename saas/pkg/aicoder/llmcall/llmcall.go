@@ -107,6 +107,7 @@ func (r *router) Call(ctx context.Context, model, prompt string, opts Options) (
 	}
 }
 
+// ds:def id=env-ollama-host-hj0y341b owner=@khanakia stability=stable desc="OLLAMA_HOST and its default for local models"
 func ollamaHostOrDefault() string {
 	if h := os.Getenv("OLLAMA_HOST"); h != "" {
 		// OLLAMA_HOST may be bare host:port or full URL; normalize.

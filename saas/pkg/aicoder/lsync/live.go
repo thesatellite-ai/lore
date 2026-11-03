@@ -156,7 +156,7 @@ func DirtyRefs(ctx context.Context, db *sql.DB) ([]RowRef, error) {
 	for rows.Next() {
 		var r RowRef
 		if err := rows.Scan(&r.Table, &r.ID, &r.HasBase); err != nil {
-			_ = rows.Close()
+			_ = rows.Close() // the scan error is the one to report
 			return nil, fmt.Errorf("lsync: scan dirty: %w", err)
 		}
 		out = append(out, r)

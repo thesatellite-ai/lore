@@ -39,9 +39,12 @@ const TrailerKey = "Lore-Task"
 type Method string
 
 const (
+	// MethodAncestry: done_commit is an ancestor of the target branch.
 	MethodAncestry Method = "ancestry"
-	MethodTrailer  Method = "trailer"
-	MethodAdapter  Method = "adapter"
+	// MethodTrailer: a commit on the target carries `Lore-Task: <id>`.
+	MethodTrailer Method = "trailer"
+	// MethodAdapter: the forge adapter reports done_pr merged.
+	MethodAdapter Method = "adapter"
 	// MethodManual is `lore task merged <id>`.
 	MethodManual Method = "manual"
 )
@@ -130,6 +133,8 @@ func (c Checker) Check(ctx context.Context, cand Candidate) (Finding, bool, []St
 	default:
 		commit, at, ok, err := c.Adapter.MergedPR(ctx, cand.DonePR)
 		if err != nil {
+			// An adapter failure is a trace step, not a command failure:
+			// the merge stays undetected and the next check retries.
 			steps = append(steps, Step{Method: MethodAdapter, Result: "error: " + err.Error()})
 			return Finding{}, false, steps, nil
 		}
@@ -142,9 +147,13 @@ func (c Checker) Check(ctx context.Context, cand Candidate) (Finding, bool, []St
 	return Finding{}, false, steps, nil
 }
 
+// shortSHALen is the abbreviated commit length shown in trace steps
+// (git's default abbreviation).
+const shortSHALen = 7
+
 func short(s string) string {
-	if len(s) > 7 {
-		return s[:7]
+	if len(s) > shortSHALen {
+		return s[:shortSHALen]
 	}
 	return s
 }

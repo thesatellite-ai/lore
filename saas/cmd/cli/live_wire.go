@@ -668,7 +668,7 @@ func (s *liveSession) store(ctx context.Context, db *sql.DB, folder string, dive
 			}
 		}
 		if derr := lsync.DropRows(ctx, db, never, "refused by the leak check"); derr != nil {
-			return fmt.Errorf("%w (and %v)", err, derr)
+			return fmt.Errorf("%w (and %v)", err, derr) // %v: the leak refusal stays the one classified cause (exit 19)
 		}
 		return err
 	}
@@ -780,6 +780,8 @@ func liveFinishProject(ctx context.Context, db *sql.DB, projectRoot string) {
 		return
 	}
 	folder := s.folderFor(projectRoot)
+	// A read error on either side compares equal (zero OID) and skips the
+	// re-apply; the next command applies the tree it reads.
 	before, _, _ := s.ref.LocalTree(ctx)
 	s.finish(ctx, folder)
 	if after, _, _ := s.ref.LocalTree(ctx); after != before {
@@ -886,12 +888,12 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 		fmt.Fprintf(os.Stderr, "%s(live, not pushed yet: %d waiting; offline)\n", liveLogPrefix, s.waiting())
 	case live.PushRefused:
 		fmt.Fprintf(os.Stderr, "%s(live, not pushed yet: %d waiting; the remote refused refs/lore/live: %s)\n", liveLogPrefix, s.waiting(), out.Detail)
-		_ = writeLiveNote(s.stateDir, liveNoteRefused, out.Detail)
+		_ = writeLiveNote(s.stateDir, liveNoteRefused, out.Detail) // best effort: the note only feeds `lore live doctor`; the refusal was printed above
 	case live.PushRetriesOut:
 		fmt.Fprintf(os.Stderr, "%s(live, not pushed yet: %d waiting; lost %d races, the next command retries)\n", liveLogPrefix, s.waiting(), out.Attempts)
 	}
 	if out.Status == live.PushDone {
-		_ = writeLiveNote(s.stateDir, liveNoteRefused, "")
+		_ = writeLiveNote(s.stateDir, liveNoteRefused, "") // best effort: clears a stale doctor note
 	}
 }
 
@@ -904,7 +906,7 @@ func (s *liveSession) printNotes() {
 
 // waiting counts pending live writes.
 func (s *liveSession) waiting() int {
-	p, _ := s.ref.Pending()
+	p, _ := s.ref.Pending() // display only: feeds the "%d waiting" count of a status line
 	if len(p) == 0 {
 		return 1
 	}

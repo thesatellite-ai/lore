@@ -19,7 +19,6 @@ import (
 	entHotfix "dbent/gen/ent/hotfix"
 	entRule "dbent/gen/ent/rule"
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/security"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
 
@@ -147,7 +146,7 @@ func newRuleShowCommand() *cobra.Command {
 				printJSON(constants.KindRuleShow, r, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", r.ID, style.Code(r.ID))
+			fmt.Printf("%s\n", style.Code(r.ID))
 			fmt.Printf("  severity:   %s\n", r.Severity)
 			fmt.Printf("  activation: %s\n", r.Activation)
 			fmt.Println()
@@ -210,7 +209,11 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 		return errcodes.New(errcodes.EmptyBody, err.Error())
 	}
 
-	if matches := security.NewScanner().Scan(body); len(matches) > 0 && !f.allowSecrets {
+	scanner, err := secretScanner()
+	if err != nil {
+		return err
+	}
+	if matches := scanner.Scan(body); len(matches) > 0 && !f.allowSecrets {
 		return errcodes.New(errcodes.SecretDetected,
 			fmt.Sprintf("body contains a secret (credential pattern %s, preview %s)",
 				matches[0].PatternName, matches[0].Preview)).
@@ -273,7 +276,7 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 		return errcodes.New(errcodes.Internal, "create rule").WithCause(err)
 	}
 
-	fmt.Printf("%s %s %s %s\n", style.Success("✓"), r.ID, style.Code(r.ID), route.Label)
+	fmt.Printf("%s %s %s\n", style.Success("✓"), style.Code(r.ID), route.Label)
 	printRoute(route)
 	if repoID != "" {
 		fmt.Printf("  scope: %s severity: %s\n",
@@ -401,7 +404,7 @@ func newDecisionShowCommand() *cobra.Command {
 				printJSON(constants.KindDecisionShow, r, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", r.ID, style.Code(r.ID))
+			fmt.Printf("%s\n", style.Code(r.ID))
 			fmt.Printf("  title:  %s\n", r.Title)
 			fmt.Printf("  status: %s\n", r.Status)
 			if r.Body != "" {
@@ -525,7 +528,7 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create decision").WithCause(err)
 	}
-	fmt.Printf("%s %s %s — %s %s\n", style.Success("✓"), d.ID, style.Code(d.ID), title, route.Label)
+	fmt.Printf("%s %s — %s %s\n", style.Success("✓"), style.Code(d.ID), title, route.Label)
 	printRoute(route)
 	return nil
 }
@@ -636,7 +639,7 @@ func newHotfixShowCommand() *cobra.Command {
 				printJSON(constants.KindHotfixShow, r, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", r.ID, style.Code(r.ID))
+			fmt.Printf("%s\n", style.Code(r.ID))
 			fmt.Printf("  severity: %s\n", r.Severity)
 			fmt.Println()
 			fmt.Println(r.Body)
@@ -745,8 +748,7 @@ func runHotfixAdd(ctx context.Context, f *hotfixAddFlags, raw string) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create hotfix").WithCause(err)
 	}
-	fmt.Printf("%s %s %s — %s [%s]\n",
-		style.Warn("⚠"), h.ID, style.Code(h.ID), title, f.severity)
+	fmt.Printf("%s %s — %s [%s]\n", style.Warn("⚠"), style.Code(h.ID), title, f.severity)
 	return nil
 }
 

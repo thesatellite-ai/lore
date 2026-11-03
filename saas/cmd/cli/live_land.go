@@ -14,6 +14,9 @@ import (
 	"strings"
 	"time"
 
+	entDecision "dbent/gen/ent/decision"
+	entMission "dbent/gen/ent/mission"
+	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/live"
@@ -34,10 +37,10 @@ const statusField = "status"
 // decisions: the spec says superseded/rejected; the decision enum has no
 // "rejected", and "deprecated" is its closest state (dbent/schema/enums.go).
 var liveFinishedStatuses = map[string]map[string]bool{
-	"tasks":     {"done": true, "cancelled": true},
-	"missions":  {"done": true, "cancelled": true},
-	"decisions": {"superseded": true, "deprecated": true},
-	"handoffs":  {"accepted": true, "declined": true},
+	tableTasks:     {string(entTask.StatusDone): true, string(entTask.StatusCancelled): true},
+	tableMissions:  {string(entMission.StatusDone): true, string(entMission.StatusCancelled): true},
+	tableDecisions: {string(entDecision.StatusSuperseded): true, string(entDecision.StatusDeprecated): true},
+	tableHandoffs:  {handoffAccepted: true, handoffDeclined: true},
 }
 
 // liveFinished applies liveFinishedStatuses to a row body.
@@ -192,7 +195,7 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 		out.Status, out.Commit, out.Detail = res.Status, res.Commit, res.Detail
 		switch res.Status {
 		case live.LandDone, live.LandNothing:
-			_ = writeLiveNote(s.stateDir, liveNoteProtected, "")
+			_ = writeLiveNote(s.stateDir, liveNoteProtected, "") // best effort: the note only feeds `lore live doctor`
 			now := s.clk.Now()
 			for _, it := range items {
 				if it.Action == live.LandCopy {
@@ -205,7 +208,7 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 				}
 			}
 		case live.LandProtected:
-			_ = writeLiveNote(s.stateDir, liveNoteProtected, res.Detail)
+			_ = writeLiveNote(s.stateDir, liveNoteProtected, res.Detail) // best effort: the note only feeds `lore live doctor`
 		}
 	}
 	if len(removeIf)+len(exact) > 0 {
@@ -402,6 +405,8 @@ func printLiveStatus(ctx context.Context, projectRoot string) {
 		fmt.Println(style.Warn("live: " + err.Error()))
 		return
 	}
+	// Display only (the land preview): unreadable refs or pending list show
+	// as none; the land itself re-reads both and fails on an error.
 	snap, _ := s.ref.Snapshot(ctx)
 	pending, _ := s.ref.Pending()
 	fmt.Printf("live rows:        %d (%s)\n", len(plan), folder)

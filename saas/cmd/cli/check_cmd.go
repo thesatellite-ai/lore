@@ -174,7 +174,7 @@ func leakIndexFor(ctx context.Context, root string) (*leakcheck.Index, string, b
 		if role != orgresolve.RoleClient && !strings.HasPrefix(r.Source, cachedb.SourcePersonal+":") {
 			continue
 		}
-		if r.Table == "projects" {
+		if r.Table == tableProjects {
 			projects[r.ID] = r.Label
 			continue
 		}
@@ -364,7 +364,7 @@ func withStoreWrite(ctx context.Context) context.Context {
 
 // storeWrite reports a context marked by withStoreWrite.
 func storeWrite(ctx context.Context) bool {
-	v, _ := ctx.Value(storeWriteKey{}).(bool)
+	v, _ := ctx.Value(storeWriteKey{}).(bool) // absent key reads false: not a store write
 	return v
 }
 

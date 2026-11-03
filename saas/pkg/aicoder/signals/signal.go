@@ -138,7 +138,7 @@ func Encode(s Signal) ([]byte, error) {
 func Decode(b []byte) (Signal, error) {
 	var s Signal
 	if err := json.Unmarshal(b, &s); err != nil {
-		return Signal{}, fmt.Errorf("%w: %v", ErrBadSignal, err)
+		return Signal{}, fmt.Errorf("%w: %w", ErrBadSignal, err)
 	}
 	switch {
 	case s.Kind != KindClaim && s.Kind != KindResource:

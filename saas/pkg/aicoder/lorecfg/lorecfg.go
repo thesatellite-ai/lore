@@ -132,7 +132,7 @@ func notice(o Options, key, msg string) {
 	if _, dup := noticed.LoadOrStore(key, struct{}{}); dup {
 		return
 	}
-	_, _ = fmt.Fprintln(o.notices(), msgPrefix+msg)
+	_, _ = fmt.Fprintln(o.notices(), msgPrefix+msg) // a notice is advisory: a failed write to the notice stream is not actionable
 }
 
 // NoticeSkipped prints, once per process, that the config file at path could
@@ -212,6 +212,13 @@ func Load[T any](ctx context.Context, loc Located, o Options) (*T, error) {
 	})
 	cfg, _, err := cfgkit.Load[T](cfgkit.WithSources(src))
 	if err != nil {
+		// A structured source (the whole file) fails as a unit, with no key,
+		// and cfgkit then renders "source <path> failed for : <cause>". The
+		// path is already in this message, so report the parse cause alone.
+		var se *cfgkit.SourceError
+		if errors.As(err, &se) && se.Key == "" && se.Source == loc.Path {
+			return nil, fmt.Errorf("lorecfg: load %s: %w", loc.Path, se.Err)
+		}
 		return nil, fmt.Errorf("lorecfg: load %s: %w", loc.Path, err)
 	}
 	if err := resolveRefs(ctx, cfg, o.Resolver); err != nil {
@@ -310,13 +317,13 @@ func migrate(_ context.Context, tomlPath, yamlPath string) (string, error) {
 	}
 	backup, err := backupName(tomlPath)
 	if err != nil {
-		_ = os.Remove(yamlPath)
+		_ = os.Remove(yamlPath) // undo the half-done migration; the error being returned is the one to report
 		return "", err
 	}
 	if err := os.Rename(tomlPath, backup); err != nil {
 		// Without the rename both files exist and the warning would fire on
 		// every run; undo the YAML so the next run retries cleanly.
-		_ = os.Remove(yamlPath)
+		_ = os.Remove(yamlPath) // undo the half-done migration; the error being returned is the one to report
 		return "", fmt.Errorf("keep backup: %w", err)
 	}
 	return backup, nil
@@ -386,19 +393,19 @@ func writeAtomic(path string, data []byte, perm fs.FileMode) (err error) {
 	tmp := f.Name()
 	defer func() {
 		if err != nil {
-			_ = os.Remove(tmp)
+			_ = os.Remove(tmp) // a leftover temp file is harmless; the write error is the one to report
 		}
 	}()
 	if _, err = f.Write(data); err != nil {
-		_ = f.Close()
+		_ = f.Close() // the write error is the one to report
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
 	if err = f.Chmod(perm); err != nil {
-		_ = f.Close()
+		_ = f.Close() // the write error is the one to report
 		return fmt.Errorf("chmod %s: %w", tmp, err)
 	}
 	if err = f.Sync(); err != nil {
-		_ = f.Close()
+		_ = f.Close() // the write error is the one to report
 		return fmt.Errorf("sync %s: %w", tmp, err)
 	}
 	if err = f.Close(); err != nil {

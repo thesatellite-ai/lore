@@ -56,6 +56,7 @@ type Lock struct {
 //     ErrLockHeld.
 //  4. Write our own pid + start_at to the file content for forensics.
 func Acquire(path string) (*Lock, error) {
+	// ds:def id=env-read-only-syjpe918 owner=@khanakia stability=stable desc="LORE_READ_ONLY=1 skips the write lock and refuses writes"
 	if os.Getenv("LORE_READ_ONLY") == "1" {
 		return nil, ErrReadOnly
 	}

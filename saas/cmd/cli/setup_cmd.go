@@ -52,6 +52,7 @@ func computeRegistryFingerprint() string {
 // warnIfSetupStale runs once per DB open. One SELECT, no schema work
 // Suppressed if LORE_NO_STALE_WARN=1 (lets CI runs stay quiet)
 func warnIfSetupStale(ctx context.Context, db *sql.DB) {
+	// ds:def id=env-no-stale-warn-ukunyu8f owner=@khanakia stability=stable desc="LORE_NO_STALE_WARN=1 silences the stale-setup warning"
 	if os.Getenv("LORE_NO_STALE_WARN") == "1" {
 		return
 	}

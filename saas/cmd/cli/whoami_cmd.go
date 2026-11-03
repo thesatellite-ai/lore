@@ -56,7 +56,7 @@ func newWhoamiCommand() *cobra.Command {
 		Short: "Show the resolved org, what decided it, your identity and what loads here",
 		Example: `  lore whoami
   lore whoami --explain        # every org rule with hit or miss
-  LORE_ORG=northwind-stag lore whoami
+  LORE_ORG=agency-stag lore whoami
   lore whoami --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

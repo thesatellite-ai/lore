@@ -143,7 +143,7 @@ func openCoordTargetFrom(ctx context.Context, w *coordWorld, id, from string) (c
 		return coordTarget{}, err
 	}
 	if _, client, err := resolveContext(&commonFlags{}); err == nil {
-		_ = client.Close()
+		_ = client.Close() // opened only for its side effect (hook wiring); nothing was read
 	}
 	rows := &storeRows{sp: sp, w: w, here: hereRepoName(ctx, w)}
 	return coordTarget{Rows: rows, Signals: w.storeSignals(sp), Folder: sp.folder, Repo: rows.here, close: sp.land}, nil
@@ -182,7 +182,7 @@ func openStoreTarget(ctx context.Context, w *coordWorld) (coordTarget, error) {
 	// clone whose first command is `task next` never gets the commit-msg
 	// hook, and its commits miss the Lore-Task trailer (F9).
 	if _, client, err := resolveContext(&commonFlags{}); err == nil {
-		_ = client.Close()
+		_ = client.Close() // opened only for its side effect (hook wiring); nothing was read
 	}
 	sp, err := openStoreSpot(ctx, w)
 	if err != nil {

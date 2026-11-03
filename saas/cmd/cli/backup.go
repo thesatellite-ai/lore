@@ -47,6 +47,7 @@ on a fresh machine without right-click-Open friction.`,
 			db := dbent.InitDB(rctx.DBPath)
 			defer db.Close()
 
+			// ds:def id=backup-default-path-hccatu2u owner=@khanakia stability=stable desc="lore backup default output (.lore/backups/<ts>.sqlite)"
 			if out == "" {
 				dir := filepath.Join(rctx.ProjectRoot, projresolve.MarkerDir, projresolve.BackupDir)
 				if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -137,7 +138,7 @@ newest (later updated_at wins; the other version is kept under
 
 			// Move current DB aside (forensics)
 			dst := rctx.DBPath
-			brokenName := dst + ".broken." + time.Now().UTC().Format("20060102-150405")
+			brokenName := dst + ".broken." + cliClock().Now().UTC().Format(brokenDBStamp)
 			if _, err := os.Stat(dst); err == nil {
 				if err := os.Rename(dst, brokenName); err != nil {
 					return errcodes.New(errcodes.Internal, "preserve old DB").WithCause(err)
@@ -180,6 +181,11 @@ newest (later updated_at wins; the other version is kept under
 	return cmd
 }
 
+// brokenDBStamp names the copy of a DB that restore/repair replaces
+// (lore.db.broken.<stamp>), sortable and UTC. `lore init` git-ignores the
+// pattern because the copy holds every private row.
+const brokenDBStamp = "20060102-150405"
+
 // preferNewestLabel is the CLI spelling of lsync.PreferNewest (whose value
 // is the empty string).
 const preferNewestLabel = "newest"
@@ -214,6 +220,7 @@ func copyFile(src, dst string) error {
 
 // repair.go — `lore repair` (S2.6)
 //
+// ds:def id=repair-tiers-79kbzg3d owner=@khanakia stability=stable desc="lore repair tiers (1 recover, 2 restore latest backup, 3 empty DB; default 2)"
 // 3-tier DR (R16 #8, R23 #44):
 //   tier 1: SQLite .recover SQL (rebuild from WAL fragments)
 //   tier 2: restore from latest .lore/backups/<ts>.sqlite
@@ -293,7 +300,7 @@ func repairTier2(ctx context.Context, rctx *projresolve.Context) error {
 		return errcodes.New(errcodes.NotFound, "no .sqlite files in backups dir")
 	}
 
-	brokenName := rctx.DBPath + ".broken." + time.Now().UTC().Format("20060102-150405")
+	brokenName := rctx.DBPath + ".broken." + cliClock().Now().UTC().Format(brokenDBStamp)
 	if _, err := os.Stat(rctx.DBPath); err == nil {
 		_ = os.Rename(rctx.DBPath, brokenName)
 	}
@@ -323,7 +330,7 @@ func repairTier2(ctx context.Context, rctx *projresolve.Context) error {
 }
 
 func repairTier3(rctx *projresolve.Context) error {
-	brokenName := rctx.DBPath + ".broken." + time.Now().UTC().Format("20060102-150405")
+	brokenName := rctx.DBPath + ".broken." + cliClock().Now().UTC().Format(brokenDBStamp)
 	if _, err := os.Stat(rctx.DBPath); err == nil {
 		_ = os.Rename(rctx.DBPath, brokenName)
 	}

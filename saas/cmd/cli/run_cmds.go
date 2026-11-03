@@ -139,13 +139,13 @@ func newRunStartCommand() *cobra.Command {
 				SetKind(runKind).
 				SetStatusStr("in_progress").
 				SetActorID(actorID).
-				SetStartedAt(time.Now()).
+				SetStartedAt(cliClock().Now()).
 				SetNotes(string(notesJSON)).
 				Save(cmd.Context())
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create run").WithCause(err)
 			}
-			fmt.Printf("%s %s %s started\n", style.Success("✓"), r.ID, style.Code(r.ID))
+			fmt.Printf("%s %s started\n", style.Success("✓"), style.Code(r.ID))
 			fmt.Println(r.ID) // bare ID on stdout for scripting
 			return nil
 		},
@@ -315,16 +315,19 @@ func newRunEndCommand() *cobra.Command {
 			}
 			notesJSON, _ := json.Marshal(notes)
 
+			// One reading of the CLI clock for both the stored end time and
+			// the printed duration, so they agree (and follow LORE_NOW in test builds).
+			completedAt := cliClock().Now()
 			upd := client.Run.UpdateOneID(runID).
 				SetStatusStr(outcome).
-				SetCompletedAt(time.Now()).
+				SetCompletedAt(completedAt).
 				SetNotes(string(notesJSON))
 			if _, err := upd.Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "close run").WithCause(err)
 			}
 			elapsed := "start time unknown"
 			if run.StartedAt != nil {
-				elapsed = time.Since(run.StartedAt.UTC()).Round(time.Second).String()
+				elapsed = completedAt.Sub(run.StartedAt.UTC()).Round(time.Second).String()
 			}
 			fmt.Printf("%s %s [%s] (%s)\n",
 				style.Success("✓"), run.ID, outcome, elapsed)
@@ -395,7 +398,7 @@ func newRunCancelCommand() *cobra.Command {
 			notesJSON, _ := json.Marshal(notes)
 			if _, err := client.Run.UpdateOneID(run.ID).
 				SetStatusStr("cancelled").
-				SetCompletedAt(time.Now()).
+				SetCompletedAt(cliClock().Now()).
 				SetNotes(string(notesJSON)).
 				Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "cancel run").WithCause(err)
@@ -441,7 +444,7 @@ func newRunShowCommand() *cobra.Command {
 				}, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", run.ID, style.Code(run.ID))
+			fmt.Printf("%s\n", style.Code(run.ID))
 			fmt.Printf("  kind:     %s\n", run.Kind)
 			fmt.Printf("  status:   %s\n", run.StatusStr)
 			if run.StartedAt != nil {
@@ -531,7 +534,7 @@ func newRunReplayCommand() *cobra.Command {
 				}, len(out))
 				return nil
 			}
-			fmt.Printf("%s  %s  [%s]\n", run.ID, style.Code(run.ID), run.StatusStr)
+			fmt.Printf("%s  [%s]\n", style.Code(run.ID), run.StatusStr)
 			fmt.Println()
 			for _, s := range steps {
 				var p stepPayload

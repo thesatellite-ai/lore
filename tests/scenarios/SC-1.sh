@@ -2,12 +2,12 @@
 # SC-1: Fresh project bootstrap → first memory → render
 # Catches: R14-1, R21-61, R22-41, ship-gate Tier-2 #1, #2, #4
 #
-# Run via: LORE=/path/to/bin/aicoder bash tests/scenarios/SC-1.sh
+# Run via: LORE=/path/to/bin/lore bash tests/scenarios/SC-1.sh
 
 set -e
 trap 'cleanup' EXIT
 
-LORE="${LORE:-aicoder}"
+LORE="${LORE:-lore}"
 
 cleanup() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
