@@ -26,6 +26,45 @@ rul_162d…9666 [must/always] Run the tests before you push
 ```
 <!-- /example -->
 
+The pointer file below names `${LORE_HOME}`, so `LORE_HOME` decides which database file the project opens. lore's own folder stays `~/.lore` either way:
+
+<!-- example: environment#lore-home -->
+```console
+# alice, in docs
+$ cat .lore/lore.yaml
+db_path: ${LORE_HOME}/client-docs.db
+project_id: prj_28f8…03df
+$ LORE_HOME=~/shared-dbs lore rule add --body 'Every page needs a meta description'
+✓ rul_4c59…6c38 
+  scope: [master] severity: must
+$ LORE_HOME=~/shared-dbs lore rule list
+rul_4c59…6c38 [must/always] Every page needs a meta description
+$ lore rule list
+(no rules)
+
+# alice, in ~
+$ ls ~/.lore
+cache
+client-docs.db
+```
+<!-- /example -->
+
+A `..` in `db_path` is refused until `LORE_ALLOW_DB_PATH_OUTSIDE=1` is set for the command:
+
+<!-- example: environment#db-path-outside -->
+```console
+# alice, in blog
+$ printf 'db_path: ../client.db\nproject_id: %s\n' $(grep project_id .lore/lore.yaml | cut -d' ' -f2) > .lore/lore.yaml.new && mv .lore/lore.yaml.new .lore/lore.yaml && cat .lore/lore.yaml
+db_path: ../client.db
+project_id: prj_d431…313a
+$ lore rule list
+ERROR: [E_INTERNAL] resolve project: projresolve: path contains traversal sequence or refers outside allowed roots: "../client.db"
+(exit 1)
+$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list
+rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays
+```
+<!-- /example -->
+
 ## Read-only and safety switches
 
 | Variable | What it does |
@@ -42,6 +81,20 @@ $ lore rule add --body 'Never put passwords in the code'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
 (exit 1)
+```
+<!-- /example -->
+
+A repo inside a folder a sync app owns (here `Dropbox`) is refused with `E_NETWORK_FS`; `LORE_ALLOW_NETWORK_FS=1` lets one command through:
+
+<!-- example: environment#network-drive -->
+```console
+# alice, in Dropbox/website
+$ lore rule list
+ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website/.lore/lore.db is inside a "dropbox" folder
+  hint: SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set LORE_ALLOW_NETWORK_FS=1
+(exit 1)
+$ LORE_ALLOW_NETWORK_FS=1 lore rule list
+(no rules)
 ```
 <!-- /example -->
 
@@ -69,6 +122,83 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 | `LORE_LIVE_REMOTE` | the git remote that holds the live rows (default `origin`), for forks and tests |
 | `LORE_TRACE` | `1` prints every git command lore runs for live rows, with timing, like `--trace` |
 
+`LORE_LIVE=0` keeps a new task out of the live list: it is written to `.lore/data` and waits for a commit, while the next task without the switch goes live as usual:
+
+<!-- example: environment#live-off -->
+```console
+# alice, in website
+$ LORE_LIVE=0 lore task add 'Update the privacy page'
+✓ tsk_7a67…9504 — Update the privacy page [medium]
+lore sync: exported 2
+lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+$ git status --short
+?? .lore/data/task_lists/
+?? .lore/data/tasks/
+$ lore task add 'Check the contact form on a phone'
+✓ tsk_2ad3…f891 — Check the contact form on a phone [medium]
+lore live: (live, pushed)
+$ lore live show
+tasks      tsk_2ad3…f891     live      since 2026-11-02 10:00
+1 live rows in _root (epoch 1)
+```
+<!-- /example -->
+
+`LORE_LIVE_AUTOPUSH=0` keeps a live write on this machine until `lore sync` pushes it, and refuses a claim, which must reach the server at once:
+
+<!-- example: environment#autopush-off -->
+```console
+# alice, in website
+$ LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'
+✓ tsk_162d…9666 — Renew the SSL certificate [medium]
+lore live: (live, not pushed yet: 1 waiting; autopush is off, `lore sync` pushes)
+$ lore live diff
+local     601d2850ffd0
+tracking  86dbae476bd6
+seen      86dbae476bd6
+pending   1 write(s) not confirmed by the remote
+  _root/tasks/tsk_162d…9666.json
+lore live: pushed waiting live writes
+$ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_162d…9666
+ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
+  hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
+(exit 15)
+$ lore sync
+· already in sync
+```
+<!-- /example -->
+
+In a clone whose remote is not called `origin`, lore finds no live rows until `LORE_LIVE_REMOTE` names the remote:
+
+<!-- example: environment#live-remote -->
+```console
+# alice, in ~
+$ git clone -q -o upstream https://github.com/client/website website-fork && cd website-fork && git remote
+upstream
+
+# alice, in website-fork
+$ lore task list
+(no tasks)
+$ LORE_LIVE_REMOTE=upstream lore task list
+○ tsk_2ad3…f891 Check the contact form on a phone [medium]
+○ tsk_162d…9666 Renew the SSL certificate [medium]
+```
+<!-- /example -->
+
+`LORE_TRACE=1` prints each git command with how long it took (the times are shown as `<time>` here, because they differ on every run):
+
+<!-- example: environment#trace -->
+```console
+# alice, in website
+$ LORE_TRACE=1 lore task list 2>&1 | grep '^trace:' | head -6
+trace: git rev-parse --is-bare-repository --show-object-format (<time>, ok)
+trace: git rev-parse --show-toplevel (<time>, ok)
+trace: git rev-parse --path-format=absolute --git-common-dir (<time>, ok)
+trace: git config --get remote.origin.url (<time>, ok)
+trace: git config --get-all remote.origin.fetch (<time>, ok)
+trace: git check-ref-format refs/lore/live (<time>, ok)
+```
+<!-- /example -->
+
 ## Who you are and which org
 
 <!-- ds:block id=team-env-org-m38knvc4 -->
@@ -86,6 +216,20 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 | `NO_COLOR` | any non-empty value turns colours off (when `--color` is `auto`) |
 | `FORCE_COLOR` | any non-empty value turns colours on (when `--color` is `auto` and `NO_COLOR` is not set) |
 | `OLLAMA_HOST` | address of a local model server for `lore bench` and `lore skill compile` (default `localhost:11434`; `http://` is added when missing) |
+
+Into a pipe lore prints no colours; `FORCE_COLOR` turns them on (`cat -v` shows the colour codes), and `NO_COLOR` wins when both are set. The example shell sets `NO_COLOR` for every command, hence the `unset`:
+
+<!-- example: environment#colour -->
+```console
+# alice, in website
+$ unset NO_COLOR; lore doctor | head -1 | cat -v
+Status: HEALTHY
+$ unset NO_COLOR; FORCE_COLOR=1 lore doctor | head -1 | cat -v
+Status: ^[[92mHEALTHY^[[0m
+$ NO_COLOR=1 FORCE_COLOR=1 lore doctor | head -1 | cat -v
+Status: HEALTHY
+```
+<!-- /example -->
 
 <!-- ds:block id=team-ci-markers-t4gm77bb -->
 **CI variables.** When any of `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD` or `BITBUCKET_BUILD_NUMBER` is set, lore treats its output as something other people may read: messages about stores and leak checks then show `<redacted>` instead of repo, store and org names. The same happens when the output does not go to a terminal (for example into a file or a pipe).

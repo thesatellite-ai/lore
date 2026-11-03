@@ -139,6 +139,22 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | `E_AUDIT_CHAIN_BROKEN` | 1 | `lore audit verify` found an audit entry that was edited or deleted | restore `lore.db` from a backup to look into it |
 | `E_SYNC_DATA_IGNORED` | 1 | git ignores `.lore/data`, so teammates would never get your notes | remove the line that ignores it from `.gitignore` |
 
+lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. A rule it cannot override, such as a `.gitignore` inside `.lore/data`, stops it with `E_SYNC_DATA_IGNORED`:
+
+<!-- example: reference#sync-data-ignored only=2 -->
+```console
+# alice, in website
+$ lore sync install-git
+lore sync: git ignores lore data, so teammates will not receive it:
+  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
+change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
+ERROR: [E_SYNC_DATA_IGNORED] lore sync: git ignores lore data, so teammates will not receive it:
+  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
+change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
+(exit 1)
+```
+<!-- /example -->
+
 ### General
 
 | Code | Exit | What it means | What to do |
@@ -167,6 +183,27 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | `E_CYCLE` | 19 | the `--after` link would make tasks wait on each other in a circle | drop one `--after` link |
 | `E_OLD_LORE` | 19 | this lore is older than the live rows here allow; reading still works | upgrade lore |
 | `E_CONFIG_INVALID` | 1 | `~/.lore/config.yaml` has a mistake | run `lore config check`; it lists every problem |
+
+Two of them for real: `lore task next` in a repo with no open task, and a write while `LORE_ORG` names another org than the repo's store link:
+
+<!-- example: reference#no-work -->
+```console
+# alice, in landing
+$ lore task next
+ERROR: [E_NO_WORK] nothing ready: no open task matches
+(exit 10)
+```
+<!-- /example -->
+
+<!-- example: reference#force-org only=1 -->
+```console
+# alice, in website
+$ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
+ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
+  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+(exit 17)
+```
+<!-- /example -->
 
 ## The full list, as lore prints it
 

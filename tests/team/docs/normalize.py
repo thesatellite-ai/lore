@@ -35,6 +35,9 @@ NANOTIME = re.compile(r"\b2\d{3}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6,9}Z")
 STATUS_ROW = re.compile(r"^  (done|ready|waiting|claimed|expired|blocked|gated)\s+\S+\s+(.*)$")
 # Wall-clock stamps lore writes outside the test clock (cache backups before a sync).
 BACKUP = re.compile(r"\d{8}-\d{6}\.\d+-pre-sync")
+# `--trace` / LORE_TRACE=1 prints how long each git command took ("trace: git … (3ms, ok)");
+# the time differs on every run, so it becomes "<time>".
+TRACE_TIME = re.compile(r"(?m)^(trace: .* \()[0-9.]+(?:ns|µs|ms|s|m[0-9.]+s)(, [^)]*\))$")
 
 
 # Each person's HOME in the example world. lib.sh already prints it as "~"; this is the
@@ -102,6 +105,7 @@ def main(path: str) -> None:
     times: dict[str, str] = {}
     text = NANOTIME.sub(lambda m: times.setdefault(m.group(0), f"2026-11-02T10:00:00.{len(times) + 1:09d}Z"), text)
     text = BACKUP.sub("20261102-100000.000000000-pre-sync", text)
+    text = TRACE_TIME.sub(lambda m: m.group(1) + "<time>" + m.group(2), text)
     text = HOME_PATH.sub("~", text)
     left = LOCAL_PATH.search(text)
     if left:

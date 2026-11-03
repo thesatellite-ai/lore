@@ -96,6 +96,23 @@ These matter when you work for an org in client repos. A **store** is a separate
 - `--color` is spelled the American way; `--colour` is an unknown flag.
 - `--repo` only scopes a command inside a multi-repo project. To run a command on another checkout, use `--db`.
 
+Here `LORE_ORG` names `freelance`, but the repo is linked to the `agency` store, so the write is refused until `--force-org` is passed:
+
+<!-- example: reference#force-org -->
+```console
+# alice, in website
+$ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
+ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
+  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+(exit 17)
+$ LORE_ORG=freelance lore memory add --force-org --to freelance/client --create --body 'The client pays invoices in 30 days'
+✓ mem_76bd…3f10 [freelance/client]
+  filed: --to freelance/client
+  scope: [master]
+lore: [freelance/client] 4 file(s) pushed
+```
+<!-- /example -->
+
 ## Related
 
 - [Command index](commands.md): every command, with a link to its guide.

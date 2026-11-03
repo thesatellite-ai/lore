@@ -56,6 +56,9 @@ SIZE_AFTER = re.compile(r" bytes\b")
 SEARCH_HIT = re.compile(r"^\[(?P<kind>[a-z ]+)\] \S+ (?P<text>.*)\(score=(?P<score>[0-9.]+)\)$")
 # Wall-clock stamps lore writes outside the test clock (cache backups before a sync).
 BACKUP = re.compile(r"\d{8}-\d{6}\.\d+-pre-sync")
+# `--trace` / LORE_TRACE=1 prints how long each git command took ("trace: git … (3ms, ok)");
+# the time differs on every run, so it becomes "<time>".
+TRACE_TIME = re.compile(r"(?m)^(trace: .* \()[0-9.]+(?:ns|µs|ms|s|m[0-9.]+s)(, [^)]*\))$")
 
 
 # Each person's HOME in the example world. lib.sh already prints it as "~"; this is the
@@ -172,6 +175,7 @@ def main(path: str) -> None:
     broken: dict[str, str] = {}
     text = BROKEN_DB.sub(lambda m: broken.setdefault(m.group(0), f"lore.db.broken.20261102-1000{len(broken):02d}"), text)
     text = BACKUP.sub("20261102-100000.000000000-pre-sync", text)
+    text = TRACE_TIME.sub(lambda m: m.group(1) + "<time>" + m.group(2), text)
     text = HOME_PATH.sub("~", text)
     left = LOCAL_PATH.search(text)
     if left:

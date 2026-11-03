@@ -121,3 +121,58 @@ EXTRA_ENV="LORE_DB=work/website/.lore/lore.db" on alice . "lore rule list"
 note "db config"
 on alice work/website "lore config list"
 on alice work/website "lore config get schema_version"
+
+# --- default_branch (docs/reference/config.md) -------------------------------------------
+note "default branch"
+quiet alice work/website "git push -q origin main:develop"
+config alice <<'Y'
+default_branch: develop
+Y
+on alice . "cat .lore/config.yaml"
+on alice work/website "lore task add 'Fix the footer links'"
+local t_footer; t_footer=$(id tsk)
+on alice work/website "lore task done $t_footer"
+on alice work/website "git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1"
+quiet alice . "rm .lore/config.yaml"
+
+# --- one error from each group (docs/reference/errors.md) --------------------------------
+note "sync data ignored"
+on alice work/website "mkdir -p .lore/data/tasks && echo '*.json' > .lore/data/tasks/.gitignore"
+on! alice work/website "lore sync install-git"
+quiet alice work/website "rm .lore/data/tasks/.gitignore"
+
+note "no work"
+lore_repo alice client/landing
+on! alice work/landing "lore task next"
+
+# --- the store marker, the org choice and --force-org (docs/reference/config.md, flags.md) ---
+remote agency/notes
+remote other/notes
+note "store marker"
+config alice <<'Y'
+orgs:
+  - name: agency
+    identity: {key: "human:alice@agency.example", name: "Alice", handle: alice}
+    stores:
+      - {url: "git@github.com:agency/notes", org_folder: org}
+    repos: [github.com/client/*]
+  - name: freelance
+    identity: {key: "human:alice@example.com", name: "Alice", handle: alice}
+    stores:
+      - {url: "git@github.com:other/notes", org_folder: org}
+    repos: [github.com/client/*]
+Y
+on alice . "cat .lore/config.yaml"
+on alice . "lore store init git@github.com:agency/notes"
+on alice . "lore store init git@github.com:other/notes"
+on alice . "git clone -q https://github.com/agency/notes notes-checkout && cat notes-checkout/lore-store.yaml"
+
+note "org use"
+on! alice work/website "lore whoami"
+on alice work/website "lore org use agency"
+on alice . "grep -A3 repo_orgs ~/.lore/config.yaml"
+on alice work/website "lore org link agency --project client --yes"
+
+note "force org"
+on! alice work/website "LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'"
+on alice work/website "LORE_ORG=freelance lore memory add --force-org --to freelance/client --create --body 'The client pays invoices in 30 days'"

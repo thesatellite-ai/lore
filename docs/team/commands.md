@@ -391,6 +391,36 @@ Flags:
 ```
 <!-- /help -->
 
+Someone deleted `refs/lore/live` on the server. From then on every live write fails with `E_READ_ONLY` and `lore doctor` says why; `lore live restore` pushes the local copy back:
+
+<!-- example: live-repair#live-ref-deleted only=3,5 -->
+```console
+# alice, in billing
+$ git push -q origin :refs/lore/live && git ls-remote origin
+601d2850ffd0	HEAD
+601d2850ffd0	refs/heads/main
+$ lore doctor | grep 'remote live ref'
+  - live: the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`
+```
+<!-- /example -->
+
+<!-- example: live-repair#live-restore -->
+```console
+# alice, in billing
+$ lore live restore
+✓ restored refs/lore/live: 3 rows (left out 0 already landed or purged)
+$ git ls-remote origin refs/lore/live
+86dbae476bd6	refs/lore/live
+$ lore task add 'close the books for Q1'
+✓ tsk_162d…9666 — close the books for Q1 [medium]
+lore live: (live, pushed)
+$ lore task list
+○ tsk_7a67…9504 send the March invoices [medium]
+○ tsk_2ad3…f891 chase the unpaid February invoice [medium]
+○ tsk_162d…9666 close the books for Q1 [medium]
+```
+<!-- /example -->
+
 ### `lore live purge`
 
 <!-- help: live purge -->

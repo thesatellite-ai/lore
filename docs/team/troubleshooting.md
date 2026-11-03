@@ -12,6 +12,17 @@ First steps for anything odd:
 - `lore store doctor`: every configured store, its marker, its clone, unpushed work.
 - `--trace` on any command (or `LORE_TRACE=1`): every git command lore runs, with timing.
 
+For example, the fetch a `lore sync` makes (the time is shown as `<time>` here):
+
+<!-- example: live-repair#trace -->
+```console
+# alice, in billing
+$ lore sync --trace 2>&1 | grep -e '^trace: git fetch' -e '^trace: git push' -e '^·'
+trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok)
+· already in sync
+```
+<!-- /example -->
+
 ## A teammate's task or `@handle` does not show up
 
 Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl: 60s`). `lore sync` always fetches. So a row a teammate wrote seconds ago may not be in your view yet. Also, `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice (an agency developer) has registered and you have fetched since. Run `lore sync`, which always fetches:

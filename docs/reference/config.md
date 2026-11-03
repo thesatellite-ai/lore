@@ -107,6 +107,64 @@ $ lore config check
 | `link_index` | see below | how long lore trusts its saved list of linked client repos |
 | `untrusted_hosts` | none | names of machines the client owns, such as `build-*.client.example`; `lore doctor` warns when your private stores are set up on one of them |
 
+When two org entries match a repo, `lore org use` records this machine's choice under `repo_orgs`:
+
+<!-- example: reference#org-use -->
+```console
+# alice, in website
+$ lore whoami
+org        refused  (the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance))
+identity   (not resolved: the org is refused above)
+project    prj_c0f3…b5b8
+remotes    github.com/client/website
+links      known  0 link(s) for this repo (stores of 2 entries scanned)
+personal   local: everywhere/
+ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance)
+  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+(exit 17)
+$ lore org use agency
+✓ prj_c0f3…b5b8 uses org agency on this machine
+  recorded in ~/.lore/config.yaml (machine-only, nothing committed)
+
+# alice, in ~
+$ grep -A3 repo_orgs ~/.lore/config.yaml
+repo_orgs:
+  prj_c0f3…b5b8: {org: agency, remotes: [github.com/client/website]}
+
+# alice, in website
+$ lore org link agency --project client --yes
+This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
+and the leak guards turn on for everyone in agency.
+  link: project prj_c0f3…b5b8 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_c0f3…b5b8, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  nothing was written to this repo
+```
+<!-- /example -->
+
+`default_branch` sends finished live rows to another branch than the one `origin/HEAD` names. Here they land on `develop`, and `main` is left alone (the message still says "main"):
+
+<!-- example: reference#default-branch -->
+```console
+# alice, in ~
+$ cat .lore/config.yaml
+default_branch: develop
+
+# alice, in website
+$ lore task add 'Fix the footer links'
+✓ tsk_05e9…4603 — Fix the footer links [medium]
+lore live: (live, pushed)
+$ lore task done tsk_05e9…4603
+✓ tsk_05e9…4603 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: (live, pushed)
+lore live: landed on main (601d285); leaves live once main is fetched
+$ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
+601d285 lore: land 2 rows (_root)
+86dbae4 lore: init
+86dbae4 lore: init
+```
+<!-- /example -->
+
 ### Keys of one org entry (`orgs:`)
 
 | Key | Default | What it means |
@@ -239,6 +297,20 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 | `lore_store` | required | the marker format version, a whole number of at least 1 (lore writes `1`) |
 | `created` | written by `lore store init` | the day the store was made, `YYYY-MM-DD` |
 | `org_folder` | none | the folder suggested for the roster and company rules; only a hint, the org entry's `org_folder` decides |
+
+`lore store init` writes the marker as the store's first commit:
+
+<!-- example: reference#store-marker only=2,4 -->
+```console
+# alice, in ~
+$ lore store init git@github.com:agency/notes
+✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
+$ git clone -q https://github.com/agency/notes notes-checkout && cat notes-checkout/lore-store.yaml
+lore_store: 1
+created: "2026-11-02"
+org_folder: org
+```
+<!-- /example -->
 
 ## `<org_folder>/.lore/lore-org.yaml`
 
