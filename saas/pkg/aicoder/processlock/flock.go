@@ -1,13 +1,20 @@
-// Package processlock provides advisory file-locking for lore.
+// Package processlock provides cross-process file locking for lore.
 //
 // Mini holds a single workspace-level lock at .lore/state/lock so that
 // concurrent invocations serialize around the database file. The lock is:
 //
-//   - Advisory (flock-style) on Unix; not enforced by the kernel for
-//     non-cooperating processes — adequate for mini's "single user, multiple
-//     terminals" model.
-//   - Self-healing: a stale lock from a killed process is detected via
-//     PID-alive probe and reclaimed (R23 #27).
+//   - Held by the operating system, never by the file's mere existence:
+//     flock(2) on Unix, LockFileEx on Windows. Both are dropped by the kernel
+//     when the holding process exits or crashes, so a killed lore can never
+//     leave the lock held. The lock file itself stays on disk between runs
+//     and only carries the holder's pid for diagnostics. On Unix the lock is
+//     advisory (not enforced against non-cooperating processes) — adequate
+//     for mini's "single user, multiple terminals" model.
+//   - Self-healing by construction (R23 #27): a stale lock from a killed
+//     process is already released by the kernel, so a busy lock always has a
+//     live holder. The file is never deleted to "reclaim" it: deleting a file
+//     another process has locked lets a third process lock a fresh file, and
+//     two processes then both believe they hold the lock.
 //   - Skipped entirely under read-only mode (R18 #23) to keep CI throughput
 //     unconstrained.
 //   - Acquired LATE in the command flow (R29 #17) — after interactive prompts
@@ -28,8 +35,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -40,22 +45,40 @@ var ErrLockHeld = errors.New("processlock: another aicoder process holds the loc
 // caller should skip locking entirely (read-only operations don't need it).
 var ErrReadOnly = errors.New("processlock: read-only mode, lock not required")
 
-// Lock represents a held lock. Call Release exactly once.
+// Lock represents a held lock. Release is idempotent.
 type Lock struct {
 	path  string
 	file  *os.File
 	owned bool
+	// unlock drops the OS lock explicitly before the file is closed. Nil on
+	// Unix, where closing the descriptor releases the flock. Set on Windows,
+	// where closing the handle also releases the lock but Microsoft documents
+	// that the release may then happen late.
+	unlock func() error
 }
+
+// tryLockFunc opens path and takes the OS lock without waiting, returning
+// errLockBusy when another handle holds it. Injected so acquire's decision
+// is testable with fakes; production code always passes tryAcquire.
+type tryLockFunc func(path string) (*Lock, error)
 
 // Acquire takes an exclusive lock at path. Steps:
 //
 //  1. If LORE_READ_ONLY=1 is set, return ErrReadOnly (caller skips lock).
 //  2. Ensure parent dir exists (mkdir -p).
-//  3. Try to open + flock the file. If it fails because another process
-//     holds the lock, read its pid; if dead, reclaim; if alive, return
-//     ErrLockHeld.
+//  3. Try to open + lock the file without waiting. If another process holds
+//     the lock, return ErrLockHeld (the caller decides whether to retry).
 //  4. Write our own pid + start_at to the file content for forensics.
+//
+// A lock file that exists but is not locked (left behind by a crashed run or
+// by an older lore that used the file's existence as the lock) is simply
+// locked and reused; it never blocks.
 func Acquire(path string) (*Lock, error) {
+	return acquire(path, tryAcquire)
+}
+
+// acquire is Acquire with the OS lock primitive injected.
+func acquire(path string, try tryLockFunc) (*Lock, error) {
 	// ds:def id=env-read-only-syjpe918 owner=@khanakia stability=stable desc="LORE_READ_ONLY=1 skips the write lock and refuses writes"
 	if os.Getenv("LORE_READ_ONLY") == "1" {
 		return nil, ErrReadOnly
@@ -65,69 +88,43 @@ func Acquire(path string) (*Lock, error) {
 		return nil, fmt.Errorf("processlock: mkdir parent: %w", err)
 	}
 
-	// Attempt acquisition. If it fails AND the existing pid is dead, reclaim.
-	for attempt := 0; attempt < 2; attempt++ {
-		l, err := tryAcquire(path)
-		if err == nil {
-			return l, nil
-		}
-		if !errors.Is(err, errLockBusy) {
-			return nil, err
-		}
-
-		// Lock busy — check if owner is alive.
-		if alive, _ := ownerAlive(path); !alive {
-			// Stale lock; remove and retry once.
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return nil, fmt.Errorf("processlock: reclaim stale: %w", err)
-			}
-			continue
-		}
+	l, err := try(path)
+	if errors.Is(err, errLockBusy) {
 		return nil, ErrLockHeld
 	}
-	return nil, ErrLockHeld
+	if err != nil {
+		return nil, err
+	}
+	return l, nil
 }
 
 // Release drops the lock. Idempotent. Safe to call from defer even if Acquire
-// returned ErrReadOnly (in that case Lock is nil — caller checks).
+// returned an error (in that case Lock is nil and Release is a no-op).
 func (l *Lock) Release() error {
 	if l == nil || !l.owned {
 		return nil
 	}
 	l.owned = false
-	// Close releases the OS-level flock automatically on Unix.
+	var unlockErr error
+	if l.unlock != nil {
+		if err := l.unlock(); err != nil {
+			unlockErr = fmt.Errorf("processlock: unlock: %w", err)
+		}
+	}
+	// Close always runs, even after a failed unlock: closing the file
+	// releases the OS lock on every platform.
 	if err := l.file.Close(); err != nil {
-		return fmt.Errorf("processlock: close: %w", err)
+		return errors.Join(unlockErr, fmt.Errorf("processlock: close: %w", err))
 	}
-	// Best-effort cleanup of the lock file content. We DON'T delete the file
-	// itself because doing so creates a TOCTOU window for the next Acquirer.
-	// Subsequent Acquire calls will re-truncate and rewrite content.
-	return nil
-}
-
-// ownerAlive reads the lock file content and checks if the owning pid is alive.
-// Returns (alive, error). On parse errors, treats as alive (safe default — better
-// to refuse than to incorrectly reclaim).
-func ownerAlive(path string) (bool, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false, err
-	}
-	line := strings.SplitN(strings.TrimSpace(string(data)), "\n", 2)[0]
-	parts := strings.SplitN(line, " ", 2)
-	if len(parts) == 0 {
-		return true, nil
-	}
-	pid, err := strconv.Atoi(parts[0])
-	if err != nil || pid <= 0 {
-		return true, nil
-	}
-	return pidAlive(pid), nil
+	// We DON'T delete the file itself because doing so creates a TOCTOU
+	// window for the next Acquirer. Subsequent Acquire calls re-truncate and
+	// rewrite content.
+	return unlockErr
 }
 
 // writeContent writes pid + timestamp to an open lock file.
 // Format: "<pid> <iso8601-timestamp>\n"
-// Read by ownerAlive() and by `aicoder doctor` for diagnostics.
+// Diagnostics only: nothing decides on it (see the package doc).
 func writeContent(f *os.File) error {
 	if err := f.Truncate(0); err != nil {
 		return err
