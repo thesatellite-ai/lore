@@ -1049,9 +1049,13 @@ lore sync ci-merge --base <ref> [--dry-run] [--json]
                                    # conflict, every conflict is in .lore/data or .lore/LORE.md, and lore settles all
                                    # of them; never pushes. --json: {outcome: up-to-date|clean|merged|needs-human,
                                    # base, commit, merged[], blocking[], reason}; exit 0 for every outcome
-lore sync install-action [--branch <b>]... [--manual] [--lore-version vX.Y.Z|latest] [--dry-run] [--force] [--json]
+lore sync install-action [--auto] [--branch <b>]... [--manual] [--lore-version vX.Y.Z|latest] [--dry-run] [--force] [--json]
                                    # opt-in: writes .github/workflows/lore-sync-merge.yml (runs ci-merge for open
-                                   # pull requests and pushes the merge); commit it to enable. Without
+                                   # pull requests and pushes the merge); commit it to enable. Runs only when
+                                   # started by hand; --auto adds pull_request + push triggers (spends Actions
+                                   # time). A re-run without --auto/--manual keeps the installed triggers;
+                                   # --manual (the default, kept for compatibility) switches back to by-hand.
+                                   # --json adds manual (bool) and auto (bool). Without
                                    # --lore-version the pin follows lore upgrades: a newer lore release rewrites
                                    # it on its next command ("commit it"); --lore-version freezes it
 lore sync uninstall-action [--force] [--json]   # delete that workflow (only if lore generated it)

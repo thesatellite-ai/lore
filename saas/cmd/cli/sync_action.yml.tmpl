@@ -18,7 +18,20 @@
 # conflict, the same text edited on both sides) is left for a person, and the
 # run summary says which pull requests need one.
 #
-# Cost: [[if .Manual]]it runs only when started by hand (Actions → lore sync merge → Run workflow).[[else]]it runs only when lore data changes (paths filter below), usually
+# Cost: [[if .Manual]]it runs only when started by hand (Actions → lore sync merge → Run workflow),
+# so it never spends Actions time (billed on private repositories) on its own.
+#
+# To run it automatically whenever lore data changes on a pull request or on
+# a pushed branch, re-run `lore sync install-action --auto` (add --branch for
+# more branches) and commit the file. Or paste these lines under "on:" below
+# (a hand-edited file no longer receives automatic lore version updates):
+#
+#   pull_request:
+#     types: [opened, synchronize, reopened]
+#     paths: ["[[.DataGlob]]"]
+#   push:
+#     branches: [[.BranchesYAML]]
+#     paths: ["[[.DataGlob]]"][[else]]it runs only when lore data changes (paths filter below), usually
 # under a minute; on a private repository that is billed Actions time. Install
 # with `lore sync install-action --manual` to run it only by hand instead.[[end]]
 #

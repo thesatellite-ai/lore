@@ -291,7 +291,7 @@ A sync pass runs automatically before and after every command; these subcommands
 | `lore sync purge --archived-before 90d --confirm` | Durably remove archived rows; records them in `_purged.json` so old clones never resurrect them |
 | `lore sync fix-projects` | Collapse duplicate project ids after two people bootstrapped in parallel |
 | `lore sync install-git` | Install the merge driver, `.gitattributes` rules and hook blocks now (otherwise automatic); fails with `E_SYNC_DATA_IGNORED` when git ignores `.lore/data` |
-| `lore sync install-action` / `uninstall-action` | Opt in to (or remove) a GitHub workflow that settles lore-data conflicts in pull requests; `--manual`, `--branch`, `--dry-run` |
+| `lore sync install-action` / `uninstall-action` | Opt in to (or remove) a GitHub workflow that settles lore-data conflicts in pull requests; runs only by hand unless `--auto`; `--branch`, `--dry-run` |
 | `lore sync ci-merge --base origin/main` | Merge a base branch in when only lore data conflicts and lore settles it all (what that workflow runs; never pushes) |
 
 ### Teams, stores and agents
@@ -375,15 +375,15 @@ A second driver, `lore-keep-ours`, handles `.lore/LORE.md`: it keeps your copy, 
 2. **Automatically**, with the optional workflow:
 
 ```bash
-lore sync install-action            # writes .github/workflows/lore-sync-merge.yml — commit it
-lore sync install-action --manual   # same, but it only runs when started from the Actions tab
+lore sync install-action            # writes .github/workflows/lore-sync-merge.yml (runs only when started from the Actions tab) — commit it
+lore sync install-action --auto     # same, but it also runs by itself when lore data changes (spends Actions time)
 lore sync install-action --dry-run  # print it, write nothing
 lore sync uninstall-action          # remove it (commit the deletion)
 ```
 
-The workflow runs when lore data changes on a pull request or on the default branch (`--branch` to choose others). For each open pull request it runs `lore sync ci-merge --base origin/<base>`, which merges the base branch in with lore's driver and commits, but only when GitHub would report a conflict, every conflict is in `.lore/data` or `.lore/LORE.md`, and the driver settles all of them; then it pushes that merge to the pull request branch. A code conflict, or the same text edited on both sides, is left alone and listed in the run summary for a person. Things to know:
+Installed with `--auto`, the workflow runs when lore data changes on a pull request or on the default branch (`--branch` to choose others); without it, it runs only when started by hand. Re-running `install-action` without `--auto` or `--manual` keeps the triggers the file already has, and the automatic version updates below never change them. For each open pull request it runs `lore sync ci-merge --base origin/<base>`, which merges the base branch in with lore's driver and commits, but only when GitHub would report a conflict, every conflict is in `.lore/data` or `.lore/LORE.md`, and the driver settles all of them; then it pushes that merge to the pull request branch. A code conflict, or the same text edited on both sides, is left alone and listed in the run summary for a person. Things to know:
 
-- It is opt-in because it uses Actions time, which is billed on private repositories. It only runs when lore data changes, and usually finishes in under a minute.
+- It is opt-in, and runs only by hand unless installed with `--auto`, because it uses Actions time, which is billed on private repositories. Automatic runs happen only when lore data changes, and usually finish in under a minute.
 - It downloads a pinned lore release (checksum-verified) and keeps that pin current by itself: when a developer runs a newer lore release in the repository, their next lore command rewrites the workflow to that release and prints `updated .github/workflows/lore-sync-merge.yml to lore vX — commit it`. It never downgrades (a teammate on an older lore leaves it alone), never acts from a development build, and never touches a file edited by hand (a checksum line in the file detects that; re-run `install-action` to take it over again). To freeze the version instead, install with `--lore-version vX.Y.Z` (or `latest`), which is never changed.
 - A lore project in a subfolder gets its own file, `lore-sync-merge-<folder>.yml`, so several projects in one repository never overwrite each other.
 - Pushes made with the default `GITHUB_TOKEN` do not start other workflows, so required checks will not re-run on its merge commit. Add a repository secret `LORE_SYNC_TOKEN` (a token with contents write access) and the workflow uses it instead.

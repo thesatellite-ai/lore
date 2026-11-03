@@ -386,14 +386,8 @@ ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_76bd560
 alice (work/website)$ git checkout -q HEAD -- .lore/data && git status --short
 
 ### workflow preview
-alice (work/website)$ lore sync install-action --dry-run | grep -A 12 '^on:'
+alice (work/website)$ lore sync install-action --dry-run | grep -A 6 '^on:'
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths: [".lore/data/**"]
-  push:
-    branches: ["main"]
-    paths: [".lore/data/**"]
   workflow_dispatch:
     inputs:
       base:
@@ -402,10 +396,11 @@ on:
         default: "main"
 
 ### workflow manual
-alice (work/website)$ lore sync install-action --manual
+alice (work/website)$ lore sync install-action
 ✓ created ~/work/website/.github/workflows/lore-sync-merge.yml
   downloads lore latest; lore moves it to newer releases as developers upgrade (commit those updates)
   runs only when started by hand (Actions → lore sync merge → Run workflow)
+  re-run with --auto to also run it when lore data changes (spends Actions time)
   commit the file to enable it; add a LORE_SYNC_TOKEN secret if required checks must re-run on its merges
 alice (work/website)$ grep -A 6 '^on:' .github/workflows/lore-sync-merge.yml
 on:
@@ -417,11 +412,20 @@ on:
         default: "main"
 
 ### workflow automatic
-alice (work/website)$ lore sync install-action
+alice (work/website)$ lore sync install-action --auto
 ✓ updated ~/work/website/.github/workflows/lore-sync-merge.yml
   downloads lore latest; lore moves it to newer releases as developers upgrade (commit those updates)
   runs when lore data changes on a pull request or on: main
   commit the file to enable it; add a LORE_SYNC_TOKEN secret if required checks must re-run on its merges
+alice (work/website)$ grep -A 7 '^on:' .github/workflows/lore-sync-merge.yml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: [".lore/data/**"]
+  push:
+    branches: ["main"]
+    paths: [".lore/data/**"]
+  workflow_dispatch:
 alice (work/website)$ lore sync uninstall-action
 ✓ removed ~/work/website/.github/workflows/lore-sync-merge.yml — commit the deletion to disable it
 
