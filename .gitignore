@@ -67,3 +67,9 @@ tmp/dist/
 .lore/
 .aicoder/
 dist/
+.claude/settings.local.json
+# BEGIN repolink (managed — do not edit)
+/CLAUDE.md
+/CONTEXT.md
+/docsi
+# END repolink
