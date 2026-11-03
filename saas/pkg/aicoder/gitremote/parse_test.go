@@ -76,3 +76,45 @@ func TestStatusNames(t *testing.T) {
 		t.Error("unknown status name")
 	}
 }
+
+// TestClassifyRejectionWordings pins every "[remote rejected]" reason git
+// versions print for a ref-lock loss (a lost race: retry) against the reasons
+// that are genuine refusals (never retried), in both update modes. The
+// "failed to update ref" row with its stderr is verbatim from Apple Git 2.50.1
+// with 12 clones pushing one bare remote at once.
+func TestClassifyRejectionWordings(t *testing.T) {
+	const dst = "refs/heads/main"
+	const lockStderr = "remote: error: cannot lock ref 'refs/heads/main': is at 1111111111111111111111111111111111111111 but expected 2222222222222222222222222222222222222222\n" +
+		"error: failed to push some refs to '../o.git'"
+	const gh006Stderr = "remote: error: GH006: Protected branch update failed for refs/heads/main.\n" +
+		"error: failed to push some refs to 'github.com:o/r.git'"
+	cases := []struct {
+		name, reason, stderr string
+		lease, ff            Status
+	}{
+		// lost races
+		{"apple git lock loss", "failed to update ref", lockStderr, StatusStale, StatusNonFastForward},
+		{"cannot lock ref", "cannot lock ref 'refs/heads/main': is at a but expected b", "", StatusStale, StatusNonFastForward},
+		{"unable to update local ref", "unable to update local ref", "", StatusStale, StatusNonFastForward},
+		{"incorrect old value", "incorrect old value provided", "", StatusStale, StatusNonFastForward},
+		{"failed to lock", "failed to lock", "", StatusStale, StatusNonFastForward},
+		{"create race", "reference already exists", "", StatusStale, StatusNonFastForward},
+		{"atomic tx lock loss", "atomic transaction failed", "", StatusStale, StatusNonFastForward},
+		// genuine refusals
+		{"pre-receive hook", "pre-receive hook declined", "", StatusRemoteRejected, StatusRemoteRejected},
+		{"update hook", "hook declined", "", StatusRemoteRejected, StatusRemoteRejected},
+		{"permission denied", "permission denied", "", StatusRemoteRejected, StatusRemoteRejected},
+		{"deny current branch", "branch is currently checked out", "", StatusRemoteRejected, StatusRemoteRejected},
+		{"gh006 protected", "protected branch hook declined", gh006Stderr, StatusProtected, StatusProtected},
+		{"gh006 generic reason", "pre-receive hook declined", gh006Stderr, StatusProtected, StatusProtected},
+		{"atomic sibling", "atomic push failure", "", StatusAtomicFailed, StatusAtomicFailed},
+	}
+	for _, c := range cases {
+		summary := summaryRemoteRej + " (" + c.reason + ")"
+		for mode, want := range map[UpdateMode]Status{ModeLease: c.lease, ModeFastForward: c.ff} {
+			if got := classifyRejection(summary, c.stderr, dst, mode); got != want {
+				t.Errorf("%s (mode %v): got %v, want %v", c.name, mode, got, want)
+			}
+		}
+	}
+}

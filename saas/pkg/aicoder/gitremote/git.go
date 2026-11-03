@@ -197,10 +197,15 @@ func parsePorcelain(out, stderr string, modes map[string]UpdateMode) map[string]
 // loser's expect-absent check passed before the winner's create landed,
 // "atomic transaction failed" when an atomic push's server-side ref
 // transaction could not take its locks because another push held them; git
-// then reports every ref of the losing push with it and applies none). It is the
+// then reports every ref of the losing push with it and applies none,
+// "failed to update ref" when receive-pack's non-atomic ref update lost the
+// ref lock — Apple Git 2.50 reports a lost race only this way, with the
+// "cannot lock ref" detail on stderr alone — and "unable to update local ref",
+// the older receive-pack wording for the same lock loss). It is the
 // same lost race as a stale lease, only detected one step later, so it must
-// be retried like one — never reported as a refusal.
-var serverRaceReasons = []string{"incorrect old value provided", "cannot lock ref", "failed to lock", "reference already exists", "atomic transaction failed"}
+// be retried like one — never reported as a refusal. Hook declines and
+// protection refusals carry their own reasons and never match these.
+var serverRaceReasons = []string{"incorrect old value provided", "cannot lock ref", "failed to lock", "reference already exists", "atomic transaction failed", "failed to update ref", "unable to update local ref"}
 
 // classifyRejection maps a "!" line's summary to a Status; mode is the
 // update's mode, which decides how a lost race is reported.
