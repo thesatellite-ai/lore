@@ -502,15 +502,10 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 		fmt.Printf("%s %s — %s (already added with --key %s)\n", style.Success("✓"), style.Code(existing.ID), existing.Title, f.team.key)
 		return nil
 	}
-	if f.tasklist == "" {
-		if f.tasklist, err = defaultTasklist(ctx, client, projectID); err != nil {
-			return err
-		}
-	}
-	deps, err := parseAfter(ctx, client, projectID, f.team.after, repoID)
-	if err != nil {
-		return err
-	}
+	// --assign resolves before anything is written (the default task list
+	// below, the task): a refused handle must leave the project, and so the
+	// store, untouched, because the flush stores whatever was written even
+	// when the command fails.
 	assign := assignTarget{ActorID: preAssign}
 	if preAssign == "" {
 		assign, err = resolveAssign(ctx, client, projectID, f.team.assign)
@@ -525,6 +520,15 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	if assign.TeamID != "" && route.Repo && route.Situation != nil && route.Situation.Result.Role == orgresolve.RoleClient {
 		return errcodes.New(errcodes.InvalidInput, "a team cannot be assigned in a linked client repo: team names are internal (TEAM-030)").
 			WithHint("assign a person (--assign @handle), or keep the task internal with --to <org>")
+	}
+	if f.tasklist == "" {
+		if f.tasklist, err = defaultTasklist(ctx, client, projectID); err != nil {
+			return err
+		}
+	}
+	deps, err := parseAfter(ctx, client, projectID, f.team.after, repoID)
+	if err != nil {
+		return err
 	}
 	if len(f.team.after) > 0 {
 		if err := checkReferences(ctx, route, afterIDs(f.team.after)); err != nil {

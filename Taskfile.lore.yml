@@ -184,6 +184,11 @@ tasks:
         LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
           | go run ./saas/cmd/cli/internal/teamharness/matrix
 
+  trial:github:
+    desc: "MANUAL ONLY, never in CI or any automatic gate: the real-repo trial (docs/team/real-repo-trial.md). Needs two empty private repos you can push to, named by LORE_TRIAL_CLIENT_REMOTE and LORE_TRIAL_STORE_REMOTE; it deletes every ref of both (only when empty or carrying the trial's marker), builds lore from this checkout and runs every team step against them, then prints a pass/fail table"
+    cmds:
+      - tests/team/trial/run.sh
+
   test:team:race:
     desc: "Team e2e race tests repeated (default -count=5; override: task lore:test:team:race -- -count=10)"
     cmds:

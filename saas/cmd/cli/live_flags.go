@@ -235,6 +235,10 @@ func explainLiveNotFound(ctx context.Context, cmd *cobra.Command, args []string,
 	if err == nil || !errors.As(err, &cli) || cli.Code != errcodes.NotFound || len(args) == 0 {
 		return err
 	}
+	var miss *handleMissError
+	if errors.As(err, &miss) {
+		return err // a roster miss, not a missing row: its own hint stands
+	}
 	id := args[0]
 	cwd, werr := os.Getwd()
 	if werr != nil {

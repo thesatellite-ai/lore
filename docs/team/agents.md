@@ -201,11 +201,9 @@ lore sync: 1 file(s) in .lore/data not committed — commit them with your chang
 $ lore team list
 @frontend         Frontend                 2 member(s)
 $ lore task add 'make the buttons blue' --assign @frontend
-lore sync: exported 1
 ✓ tsk_2ad3…f891 — make the buttons blue [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 
 # bob, in billing
 $ lore task list

@@ -19,6 +19,7 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1â€
 - **Agent coordination:** claims with a lease, a token and fencing on a second hidden ref (`refs/lore/signals`, always one commit): `lore task claim|next|heartbeat|release`, human overrides `revoke|reassign|cancel`, reclaim after expiry with an attempts limit, a ready queue that respects dependencies (`--after <id>[:merged]`), gates (`lore gate request|approve`, humans only), `lore inbox`, `lore handoff add --for`, `lore finding add`, `lore mission status`, `lore plan apply` (idempotent by key), `lore resource claim|release`, and a `Lore-Task:` commit trailer so a squash merge still counts as finishing the task. In client repos claims and work notes stay in the store; the client row carries only what the client should see.
 - **Merged watching:** a done task is marked merged once its commit, its trailer or (optionally) its GitHub pull request is seen on `main`; `lore task merged` marks it by hand.
 - Errors print their hint on the line under `ERROR:` and exit with the team error's own status (10â€“19).
+- `task lore:trial:github` runs the team story (setup, org link, live tasks, landing, leak attempts, sharing, an agents mission with a crash, compaction, staging) against two real repos named by `LORE_TRIAL_CLIENT_REMOTE` and `LORE_TRIAL_STORE_REMOTE`, scans the client's clone for internal text after every step and prints a pass/fail table. Manual only; it wipes both repos first, and only when they are empty or carry the trial's marker ([docs](docs/team/real-repo-trial.md)).
 - `lore sync install-action --auto` adds the pull request and push triggers to the workflow (they were the old default). `install-action --json` reports `auto` next to `manual`.
 
 ### Changed
@@ -35,6 +36,9 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1â€
 
 ### Fixed
 
+- Two clones creating the same store folder (for example two `lore actor register` runs from stale store fetches) no longer create two project rows: the folder's project id is derived from the store, branch and folder. Stores that already hold duplicates resolve through `_meta.json` with a warning instead of failing every `@handle` command with `E_AMBIGUOUS_PROJECT`.
+- A command refused for an unknown `@handle` (`task add --assign`, `team add --members`, `agent start --owner`, `handoff add --for`, `task reassign`) writes nothing: no default task list, and no empty roster folder pushed to a store nobody has registered in yet.
+- An `@handle` not found on a roster read from the fetch cache triggers one fresh store fetch and a retry before the refusal; a real miss on a store roster hints `lore sync` or `lore team list` (in a repo without an org it still says to register or add the team) instead of the live "landed on main" hint.
 - After `lore.db` is rebuilt from `.lore/data` in a repo without an org, the next write reuses the person's actor row instead of adding a second actor with a random id.
 - The same person on a second machine (new HOME, fresh clone) reuses their existing actor row, which a client repo holds only as a projection, instead of adding a new actor with a random id to the repo.
 - `lore task note` in a repo linked to a store fails closed when the store or link status cannot be read (nothing printed, nothing written) instead of writing the note into this checkout; a plain repo with no org still writes it as before.

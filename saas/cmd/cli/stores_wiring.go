@@ -291,7 +291,7 @@ func (w storeLinkWriter) WriteLink(ctx context.Context, plan orgresolve.LinkPlan
 	res, err := st.WriteLink(ctx, stores.LinkChange{
 		Branch: target.EffectiveBranch(), Folder: plan.Folder, Remove: w.Remove,
 		Link:       stores.LinkRecord{ProjectID: plan.ProjectID, Remote: plan.Remote, Own: plan.Own, Default: plan.Default},
-		NewProject: newStoreProjectFiles,
+		NewProject: newStoreProjectFiles(st.Norm, target.EffectiveBranch()),
 		Signature:  storeSignature(org),
 		NoPush:     !storeAutopush(cfg, org),
 	})
@@ -363,9 +363,13 @@ func pickLinkStore(ctx context.Context, m *stores.Manager, org *lorecfg.Org, pla
 }
 
 // newStoreProjectFiles is the template of a fresh store project folder
-// created by `lore org link` (see newStoreProjectFilesNamed).
-func newStoreProjectFiles(folder string) (map[string][]byte, error) {
-	return newStoreProjectFilesNamed(folder)
+// created by `lore org link` in store (normalised identity) on branch: the
+// same storeFolderProjectID rule as every other creator, so a link racing
+// another clone's first write to the folder lands on the same project.
+func newStoreProjectFiles(store, branch string) func(folder string) (map[string][]byte, error) {
+	return func(folder string) (map[string][]byte, error) {
+		return newStoreProjectFilesNamed(storeFolderKey{Store: store, Branch: branch, Folder: folder})
+	}
 }
 
 // loadTeamConfig loads ~/.lore/config.yaml with the CLI's error mapping.
