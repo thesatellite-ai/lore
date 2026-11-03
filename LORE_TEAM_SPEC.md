@@ -871,6 +871,8 @@ undetectable (no sha, no trailer, no adapter): shown as "done (merge unknown)"; 
 
 **Edge cases handled.** Squash merge: the trailer survives in the squash commit message on GitHub's default squash template; if a team's template drops it, the adapter or the manual mark covers it. A reverted merge: `merged_at` stays (it happened); a follow-up task is the honest record. A task done in a repo nobody on this machine has: checked only by someone working in that repo, or by the adapter. Checking writes nothing (principle 1).
 
+**Store unreachable.** When this repo is linked to a store project and the store cannot be opened or its task rows cannot be read (offline, auth failure, missing clone), the lazy check is skipped and the host command still succeeds, exactly as before; it is not silent, though: lore prints one line on stderr, `lore: warning: merge state not checked: <reason>; done tasks may show as not merged yet (the next lore command retries)`, so a reader knows a "done, not merged yet" view may be stale. A repo with no team coordination or no links prints nothing, since there is nothing to check.
+
 **Test.** Pure `NextReady` with edges `:done`/`:merged` × same / cross repo. Git fixture with merge commit, squash with trailer, squash without trailer, rebase. E2E: done with `--pr`, merge on the fake remote, `task next` in the dependent repo becomes ready after the next check in the source repo.
 
 **Debug.** `lore explain tsk_30` shows each check and its result; `--trace` prints the git commands.

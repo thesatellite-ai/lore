@@ -138,9 +138,10 @@ func runTaskDone(ctx context.Context, f *taskDoneFlags, id string) error {
 			if err := requireHuman(w, "finishing a task someone else claimed"); err != nil {
 				return err
 			}
-			if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideRevoke, func(d coord.Doc) {
-				_ = coord.MarkDone(w.ActorID, f.commit, f.pr)(d, w.Clock.Now())
-			}); err != nil {
+			// OverrideChecked: a refused done mark fails the whole override
+			// (claim kept, nothing written), so it never reports done.
+			if _, err := coord.OverrideChecked(ctx, w.env(t), id, coord.OverrideRevoke,
+				coord.MarkDone(w.ActorID, f.commit, f.pr)); err != nil {
 				return coordError(err)
 			}
 			return finishDone(ctx, f, id)

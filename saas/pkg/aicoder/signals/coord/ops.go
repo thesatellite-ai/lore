@@ -517,7 +517,26 @@ const (
 // the signals ref and the row's claim_epoch rises, atomically, so the
 // holder's next write is fenced out. mutate applies the kind's own change
 // (status cancelled, a new assignee). It returns the removed claim, if any.
+// A change that can fail goes through OverrideChecked instead.
 func Override(ctx context.Context, env Env, id string, kind OverrideKind, mutate func(Doc)) (*signals.Signal, error) {
+	return OverrideChecked(ctx, env, id, kind, func(d Doc, _ time.Time) error {
+		if mutate != nil {
+			mutate(d)
+		}
+		return nil
+	})
+}
+
+// OverrideChecked is Override with a mutation that may refuse, such as
+// MarkDone when a human finishes a task whose claim expired. mutate gets
+// the signals view's clock, the same instant the claim log records. Why it
+// exists: an override that ignored its mutation's error would drop the claim
+// and raise the epoch while the row change silently did not happen, and the
+// command would still report success. Invariant: when mutate returns an
+// error, nothing is written (no claim removed, no epoch raised, no row
+// staged) and the error is returned wrapped, so the caller fails closed.
+// mutate nil is the plain override.
+func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind, mutate func(Doc, time.Time) error) (*signals.Signal, error) {
 	var removed *signals.Signal
 	_, err := env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
 		removed = nil
@@ -539,7 +558,10 @@ func Override(ctx context.Context, env Env, id string, kind OverrideKind, mutate
 		epoch := doc.Epoch() + 1
 		next.SetInt(keyEpoch, epoch)
 		if mutate != nil {
-			mutate(next)
+			if err := mutate(next, v.Now); err != nil {
+				removed = nil
+				return signals.Change{}, fmt.Errorf("override %s %s: %w", kind, id, err)
+			}
 		}
 		entry := schema.ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: schema.ClaimEventRevoke,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: epoch}
