@@ -252,13 +252,16 @@ func openPersonalProject(ctx context.Context, cfg *lorecfg.Config, folder string
 		for k, v := range files {
 			stored[k] = v
 		}
-		if err := ensureProjectRow(files, folder); err != nil {
+		// No shared identity: the local personal store has one writer.
+		projectID, err := ensureProjectRow(files, storeFolderKey{Folder: folder})
+		if err != nil {
 			return nil, err
 		}
-		p := &externalProject{Label: personalLabel, Root: root}
+		p := &externalProject{Label: personalLabel, Root: root, ProjectID: projectID}
 		if err := p.materialize(ctx, files, stored); err != nil {
 			return nil, err
 		}
+		warnStrayProjectRows(p.Label, projectID, strayProjectRows(files, projectID))
 		openedExternal = append(openedExternal, p)
 		return p, nil
 	}

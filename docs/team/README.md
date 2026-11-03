@@ -75,6 +75,8 @@ $ lore sync && lore task list --mine
 
 `tests/team/docs/run-examples.sh` builds lore from this repo and runs every example on these pages in a throwaway world: a fake GitHub made of plain git repos on disk, one home folder per person, nothing on the network. It writes what each command printed to `tests/team/docs/transcripts/`. It fails when a command that should work fails, or when a command shown as an error succeeds. `tests/team/docs/paste.py` then copies that output into the pages between `<!-- example: … -->` markers, so the pages always show what the current code prints.
 
+The same kind of story also runs against two real repos on a real git host, by hand, before a release: see [Real-repo trial](real-repo-trial.md).
+
 Two things are shortened for reading: row ids (`tsk_01a19d82ec2f7ba5968210b0efbee6fe` is shown as `tsk_01a1…e6fe`) and the few lines every fresh clone prints once while it builds its local cache. Paths look like `~/work/website`: each person in the examples has their own home folder, and `~` stands for it.
 
 All names are role words, not real companies: **the agency** (org `agency`, private store `github.com/agency/notes`), **the client** (`github.com/client/website`), **client 2** (three repos, `github.com/client2/app`, `client2/api` and `client2/infra`, that make one product) and **client 3**. The people are Alice and Bob (agency developers) and Carol (the client's developer); the agents are `agent-backend`, `agent-frontend` and friends.

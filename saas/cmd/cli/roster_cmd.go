@@ -19,6 +19,7 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/rowroute"
+	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
@@ -60,6 +61,13 @@ type roster struct {
 	org   *lorecfg.Org
 	// project is the roster project's id.
 	project string
+	// ext is the org folder's mirror when the roster lives in a store; nil
+	// for "this repo".
+	ext *externalProject
+	// ownOpen is true when this roster opened ext (it was not already open
+	// in this command), so nothing has been written to it yet and a fresh
+	// re-read cannot drop a pending write.
+	ownOpen bool
 }
 
 // openRoster opens the roster for the working directory.
@@ -82,10 +90,12 @@ func openRoster(ctx context.Context, c *commonFlags) (*roster, error) {
 			return nil, errcodes.New(errcodes.InvalidInput, "org "+org.Name+" has no roster: no store sets org_folder").
 				WithHint("set org_folder on one of " + org.Name + "'s stores in ~/.lore/config.yaml")
 		}
+		before := len(openedExternal)
 		p, err := openStoreProject(ctx, s.Config, storeProjectRef{Org: org, Store: *sc, Folder: sc.OrgFolder})
 		if err != nil {
 			return nil, err
 		}
+		r.ext, r.ownOpen = p, len(openedExternal) > before
 		useExternalProject(c, p)
 		r.where = org.Name + " " + sc.OrgFolder + "/"
 	}
@@ -206,14 +216,51 @@ func (r *roster) register(ctx context.Context, sp actorSpec) (*ent.Actor, bool, 
 func (r *roster) resolveHandle(ctx context.Context, h string) (*ent.Actor, error) {
 	h = strings.TrimPrefix(h, handlePrefix)
 	a, err := r.client.Actor.Query().Where(entActor.Handle(h), entActor.Active(true)).First(ctx)
+	if ent.IsNotFound(err) && r.refreshOnMiss(ctx) {
+		a, err = r.client.Actor.Query().Where(entActor.Handle(h), entActor.Active(true)).First(ctx)
+	}
 	if ent.IsNotFound(err) {
 		return nil, errcodes.New(errcodes.InvalidInput, "no one is @"+h+" on "+r.where+"'s roster").
-			WithHint("register first: `lore actor register` (as that person)")
+			WithHint(r.missHint())
 	}
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "read the roster").WithCause(err)
 	}
 	return a, nil
+}
+
+// Next steps after an @handle is not on the roster. A store roster's
+// usual cause is a store copy older than the teammate's registration; a
+// repo roster (no org) has no store copy, so the person has not
+// registered (or their registration is not pulled yet).
+const (
+	rosterMissHint     = "run `lore sync` (your store copy may be older than a teammate's registration), or check the handle with `lore team list`"
+	repoRosterMissHint = "register first: `lore actor register` (as that person)"
+)
+
+// missHint is the hint for a handle missing from this roster.
+func (r *roster) missHint() string {
+	if r.ext != nil {
+		return rosterMissHint
+	}
+	return repoRosterMissHint
+}
+
+// refreshOnMiss re-reads the roster from a fresh store fetch when the open
+// was served by the fetch cache (a teammate registered seconds ago is not
+// in it yet), at most once per roster. It reports whether the roster was
+// re-read; a failed fetch keeps the cached roster (the miss then stands,
+// with rosterMissHint). Only a roster this lookup opened itself is
+// re-read: a mirror opened earlier in the command may hold writes.
+func (r *roster) refreshOnMiss(ctx context.Context) bool {
+	if r.ext == nil || !r.ownOpen || !r.ext.fetchCached || r.ext.refresh == nil {
+		return false
+	}
+	if err := r.ext.refresh(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, style.Warn("lore: could not refresh "+r.where+"'s roster: "+redactIfQuiet(err.Error())))
+		return false
+	}
+	return true
 }
 
 func newActorRegisterCommand() *cobra.Command {

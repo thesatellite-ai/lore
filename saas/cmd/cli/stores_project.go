@@ -60,6 +60,11 @@ type externalProject struct {
 	Root string
 	// DBPath is the project's DB.
 	DBPath string
+	// ProjectID is the folder's project (_meta.json's project_id). Commands
+	// on this project resolve to it, never to "the only project in the
+	// DB": a folder written by an older lore can hold more than one
+	// project row (storeFolderProjectID).
+	ProjectID string
 	// base is the content of every row file at open time (path relative
 	// to .lore/data); the flush commits only what differs from it.
 	base map[string][]byte
@@ -73,6 +78,15 @@ type externalProject struct {
 	live *liveSession
 	// liveFolder is this project's folder inside the store live tree.
 	liveFolder string
+	// fetchCached is true while the folder was read from a store fetch the
+	// fetch cache served (not fetched by this command).
+	fetchCached bool
+	// refresh re-reads the folder after a forced fetch; nil for a project
+	// with no store to fetch (a local personal store).
+	refresh func(ctx context.Context) error
+	// skeleton is the set of files lore added to complete the folder
+	// (_meta.json, project row) that the store does not hold yet.
+	skeleton map[string]bool
 	// unlock releases the mirror's lock (held from open to flush, so two
 	// lore processes never build or write one mirror at once, side effect
 	// 32); nil when not held.
@@ -190,26 +204,12 @@ func openStoreProject(ctx context.Context, cfg *lorecfg.Config, ref storeProject
 		return nil, storeCLIError(err, "open the store")
 	}
 	branch := ref.Store.EffectiveBranch()
-	if _, err := st.Fetch(ctx, false); err != nil {
+	fr, err := st.Fetch(ctx, false)
+	if err != nil {
 		return nil, storeCLIError(err, "fetch the store")
 	}
-	if _, ok, err := st.Tip(ctx, branch); err != nil {
-		return nil, storeCLIError(err, "read the store")
-	} else if !ok {
-		return nil, storeCLIError(fmt.Errorf("%w: %s has no branch %s; create it with `lore store init %s --branch %s`", stores.ErrNoBranch, st.Norm, branch, ref.Store.URL, branch), "open")
-	}
-	if err := st.Check(ctx, branch); err != nil {
-		return nil, storeCLIError(err, "check the store")
-	}
-	files, _, err := st.ReadProject(ctx, branch, ref.Folder)
+	files, stored, projectID, err := readStoreFolder(ctx, st, ref, branch)
 	if err != nil {
-		return nil, storeCLIError(err, "read the store project")
-	}
-	stored := make(map[string][]byte, len(files))
-	for k, v := range files {
-		stored[k] = v
-	}
-	if err := ensureProjectRow(files, ref.Folder); err != nil {
 		return nil, err
 	}
 	root, err := m.Layout.MirrorDir(ref.Store.URL, branch, ref.Folder)
@@ -222,8 +222,9 @@ func openStoreProject(ctx context.Context, cfg *lorecfg.Config, ref storeProject
 	sig := storeSignature(ref.Org)
 	push := storeAutopush(cfg, ref.Org)
 	p := &externalProject{
-		Label: "[" + ref.Org.Name + "/" + ref.Folder + "]",
-		Root:  root,
+		Label:     "[" + ref.Org.Name + "/" + ref.Folder + "]",
+		Root:      root,
+		ProjectID: projectID,
 		commit: func(ctx context.Context, rc stores.RowChanges) (string, error) {
 			res, err := st.WriteRows(ctx, branch, ref.Folder, rc, sig, !push)
 			if err != nil {
@@ -243,26 +244,142 @@ func openStoreProject(ctx context.Context, cfg *lorecfg.Config, ref storeProject
 		p.live = storeLiveSessionFor(ctx, st, branch, sig)
 		p.liveFolder = storeLiveFolder(ref.Folder)
 	}
+	p.fetchCached = fr.Cached
+	p.skeleton = skeletonPaths(files, stored)
+	// refresh re-reads the folder from a forced fetch (a roster miss that
+	// may only be the fetch cache, see roster.resolveHandle).
+	p.refresh = func(ctx context.Context) error {
+		if _, err := st.Fetch(ctx, true); err != nil {
+			return storeCLIError(err, "fetch the store")
+		}
+		files, stored, _, err := readStoreFolder(ctx, st, ref, branch)
+		if err != nil {
+			return err
+		}
+		p.fetchCached = false
+		p.skeleton = skeletonPaths(files, stored)
+		return p.materialize(ctx, files, stored)
+	}
 	if err := p.materialize(ctx, files, stored); err != nil {
 		return nil, err
 	}
+	warnStrayProjectRows(p.Label, projectID, strayProjectRows(files, projectID))
 	openedExternal = append(openedExternal, p)
 	return p, nil
 }
 
-// newStoreProjectFilesNamed is the template of a fresh store project
-// folder: _meta.json pinning a new project id plus that project's row, so
-// the engine materialises a usable project exactly as for a fresh clone.
-func newStoreProjectFilesNamed(folder string) (map[string][]byte, error) {
-	id, err := ids.New(ids.PrefixProject)
+// readStoreFolder reads one store folder at the clone's branch tip and
+// completes it into a usable project (ensureProjectRow). files is what the
+// mirror gets, stored what the store holds now (the flush commits the
+// difference), projectID the folder's project.
+func readStoreFolder(ctx context.Context, st *stores.Store, ref storeProjectRef, branch string) (files, stored map[string][]byte, projectID string, err error) {
+	if _, ok, err := st.Tip(ctx, branch); err != nil {
+		return nil, nil, "", storeCLIError(err, "read the store")
+	} else if !ok {
+		return nil, nil, "", storeCLIError(fmt.Errorf("%w: %s has no branch %s; create it with `lore store init %s --branch %s`", stores.ErrNoBranch, st.Norm, branch, ref.Store.URL, branch), "open")
+	}
+	if err := st.Check(ctx, branch); err != nil {
+		return nil, nil, "", storeCLIError(err, "check the store")
+	}
+	files, _, err = st.ReadProject(ctx, branch, ref.Folder)
 	if err != nil {
-		return nil, errcodes.New(errcodes.Internal, "mint project id").WithCause(err)
+		return nil, nil, "", storeCLIError(err, "read the store project")
+	}
+	stored = make(map[string][]byte, len(files))
+	for k, v := range files {
+		stored[k] = v
+	}
+	projectID, err = ensureProjectRow(files, storeFolderKey{Store: st.Norm, Branch: branch, Folder: ref.Folder})
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return files, stored, projectID, nil
+}
+
+// skeletonPaths are the files ensureProjectRow added to a folder (its
+// _meta.json and project row): in files, not in stored.
+func skeletonPaths(files, stored map[string][]byte) map[string]bool {
+	out := map[string]bool{}
+	for k := range files {
+		if _, ok := stored[k]; !ok {
+			out[k] = true
+		}
+	}
+	return out
+}
+
+// onlySkeleton reports whether a flush would commit nothing but the
+// folder skeleton. Such a flush is skipped: a command that only READ a
+// folder that does not exist yet (a roster lookup before anyone
+// registered, a refused write) must leave the store untouched, and the
+// first real row brings the skeleton along.
+func (p *externalProject) onlySkeleton(rc stores.RowChanges) bool {
+	if len(rc.Delete) > 0 || len(rc.Put) == 0 {
+		return false
+	}
+	for k := range rc.Put {
+		if !p.skeleton[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// storeFolderKey names one store folder the same way on every machine:
+// the store's normalised identity (host/owner/repo, stores.Store.Norm),
+// the branch and the folder path. Store is "" for a folder with no shared
+// identity (the local personal store under ~/.lore/personal, which only
+// this machine ever writes).
+type storeFolderKey struct {
+	Store  string
+	Branch string
+	Folder string
+}
+
+// storeFolderProjectID is THE rule for the project id of a store folder,
+// and every path that creates one (`lore actor register`, `lore org link`,
+// `--create`, `team add`, `--to <org>` writes, a git personal store) gets
+// its id here, through newStoreProjectFilesNamed and ensureProjectRow.
+//
+// Dedup rule: a folder's project id is derived from (store, branch,
+// folder), never minted at random. Two writers that both find the folder
+// missing (a stale fetch cache, a push race) therefore write the SAME
+// _meta.json project_id and the SAME projects/<id>.json, which the store's
+// merge (MergeStoreFile: field merge) settles as one row. A random id here
+// once gave a folder two project rows, and every @handle command then
+// failed with E_AMBIGUOUS_PROJECT. Folders that already hold two rows
+// (written by older versions) are read through _meta.json's project_id
+// (externalProject.ProjectID), so they keep working.
+//
+// A folder without a shared identity (key.Store == "") keeps a random id:
+// it has one writer, and a derived id would give every user's local
+// personal "notes" folder the same project id.
+func storeFolderProjectID(key storeFolderKey) (string, error) {
+	if key.Store == "" {
+		return ids.New(ids.PrefixProject)
+	}
+	return ids.Deterministic(ids.PrefixProject, storeFolderIDDomain, key.Store, key.Branch, key.Folder)
+}
+
+// storeFolderIDDomain separates store-folder project ids from every other
+// deterministic id, so the same strings hashed for another purpose can
+// never produce a project id.
+const storeFolderIDDomain = "store-folder-project"
+
+// newStoreProjectFilesNamed is the template of a fresh store project
+// folder: _meta.json pinning the folder's project id (storeFolderProjectID)
+// plus that project's row, so the engine materialises a usable project
+// exactly as for a fresh clone.
+func newStoreProjectFilesNamed(key storeFolderKey) (map[string][]byte, error) {
+	id, err := storeFolderProjectID(key)
+	if err != nil {
+		return nil, errcodes.New(errcodes.Internal, "derive project id").WithCause(err)
 	}
 	meta, err := (stores.StoreMeta{ProjectID: id}).Encode()
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "encode _meta.json").WithCause(err)
 	}
-	row, err := projectRowFile(id, folder)
+	row, err := projectRowFile(id, key.Folder)
 	if err != nil {
 		return nil, err
 	}
@@ -290,38 +407,73 @@ func projectRowFile(id, folder string) ([]byte, error) {
 }
 
 // ensureProjectRow completes a store project's files so the engine sees a
-// usable project: a missing _meta.json gets a new project (a folder that
-// does not exist yet), and a _meta.json whose project has no projects/
-// row gets one (folders made by other tools). The additions are committed
-// with the command's rows.
-func ensureProjectRow(files map[string][]byte, folder string) error {
+// usable project, and returns the folder's project id (_meta.json's
+// project_id, the one id every clone agrees on): a missing _meta.json gets
+// a new project (a folder that does not exist yet), and a _meta.json whose
+// project has no projects/ row gets one (folders made by other tools). The
+// additions are committed with the command's rows.
+func ensureProjectRow(files map[string][]byte, key storeFolderKey) (string, error) {
 	metaB, ok := files["_meta.json"]
 	if !ok {
-		tmpl, err := newStoreProjectFilesNamed(folder)
+		tmpl, err := newStoreProjectFilesNamed(key)
 		if err != nil {
-			return err
+			return "", err
 		}
 		for k, v := range tmpl {
 			files[k] = v
 		}
-		return nil
+		metaB = files["_meta.json"]
 	}
 	meta, err := stores.ParseStoreMeta(metaB)
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "read the project's _meta.json").WithCause(err)
+		return "", errcodes.New(errcodes.Internal, "read the project's _meta.json").WithCause(err)
 	}
 	if meta.ProjectID == "" {
-		return errcodes.New(errcodes.InvalidInput, "store folder "+folder+" has a _meta.json without project_id")
+		return "", errcodes.New(errcodes.InvalidInput, "store folder "+key.Folder+" has a _meta.json without project_id")
 	}
-	if _, ok := files["projects/"+meta.ProjectID+".json"]; ok {
-		return nil
+	if _, ok := files[projectRowPath(meta.ProjectID)]; !ok {
+		row, err := projectRowFile(meta.ProjectID, key.Folder)
+		if err != nil {
+			return "", err
+		}
+		files[projectRowPath(meta.ProjectID)] = row
 	}
-	row, err := projectRowFile(meta.ProjectID, folder)
-	if err != nil {
-		return err
+	return meta.ProjectID, nil
+}
+
+// projectRowsDir is where a project folder keeps its projects rows.
+const projectRowsDir = "projects/"
+
+// projectRowPath is the file of project id's row inside .lore/data.
+func projectRowPath(id string) string { return projectRowsDir + id + ".json" }
+
+// strayProjectRows lists the project rows of a folder other than its
+// project's own (sorted): duplicates older versions wrote when two clones
+// created the folder at once (see storeFolderProjectID). Commands ignore
+// them because they resolve the project through _meta.json.
+func strayProjectRows(files map[string][]byte, projectID string) []string {
+	var stray []string
+	for path := range files {
+		rest, ok := strings.CutPrefix(path, projectRowsDir)
+		if !ok || strings.Contains(rest, "/") {
+			continue
+		}
+		if id := strings.TrimSuffix(rest, ".json"); id != rest && id != projectID {
+			stray = append(stray, id)
+		}
 	}
-	files["projects/"+meta.ProjectID+".json"] = row
-	return nil
+	sort.Strings(stray)
+	return stray
+}
+
+// warnStrayProjectRows tells the user once per opened project that its
+// folder holds extra project rows and which one lore uses.
+func warnStrayProjectRows(label, projectID string, stray []string) {
+	if len(stray) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s %s holds %d extra project row(s) (%s) from an older lore; using %s (its _meta.json project_id)\n",
+		style.Warn("warning:"), label, len(stray), strings.Join(stray, ", "), projectID)
 }
 
 // materialize makes the mirror's .lore/data equal files and brings its DB
@@ -470,7 +622,7 @@ func (p *externalProject) flushBranch(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if len(rc.Put)+len(rc.Delete) == 0 || p.commit == nil {
+	if len(rc.Put)+len(rc.Delete) == 0 || p.commit == nil || p.onlySkeleton(rc) {
 		return nil
 	}
 	state, err := p.commit(ctx, rc)
@@ -582,6 +734,6 @@ func openedMirror(root string) *externalProject {
 // project's DB, so the command's normal code writes there and nowhere else.
 func useExternalProject(c *commonFlags, p *externalProject) {
 	c.flagDB = p.DBPath
-	c.flagProject = ""
+	c.flagProject = p.ProjectID
 	c.flagRepo = ""
 }

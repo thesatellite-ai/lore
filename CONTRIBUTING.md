@@ -18,6 +18,8 @@ task lore:test
 task check                # the full gate — must pass before you push
 ```
 
+Before a release, or after changing sync, leak checks, claims or landing, also run the manual [real-repo trial](docs/team/real-repo-trial.md) (`task lore:trial:github`) against two empty private repos of your own. It is never part of `task check` or CI.
+
 ## Pull requests
 
 - Branch from `main`; keep PRs focused.

@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -150,16 +151,35 @@ func resolveAssign(ctx context.Context, client *ent.Client, projectID, ref strin
 		id, err := resolveActorRef(ctx, client, ref)
 		return assignTarget{ActorID: id}, err
 	}
-	if id, err := resolveHandleActor(ctx, ref); err == nil {
+	id, actorErr := resolveHandleActor(ctx, ref)
+	if actorErr == nil {
 		return assignTarget{ActorID: id}, nil
 	}
 	tm, err := client.Team.Query().Where(entTeam.ProjectID(projectID), entTeam.Handle(h), entTeam.Active(true)).Only(ctx)
 	if err == nil {
 		return assignTarget{TeamID: tm.ID}, nil
 	}
-	return assignTarget{}, errcodes.New(errcodes.NotFound, "no person or team with handle @"+h).
-		WithHint("people join with `lore actor register`; teams with `lore team add`")
+	// The roster said where it lives: a store roster's miss is most often a
+	// stale store copy; a repo roster's is a person or team not added yet.
+	hint := "people join with `lore actor register`; teams with `lore team add`"
+	var miss *errcodes.CLIError
+	if errors.As(actorErr, &miss) && miss.Hint == rosterMissHint {
+		hint = rosterMissHint
+	}
+	return assignTarget{}, &handleMissError{CLIError: errcodes.New(errcodes.NotFound, "no person or team with handle @"+h).
+		WithHint(hint)}
 }
+
+// handleMissError is an @handle that is on no roster. It is E_NOT_FOUND
+// like a missing row id, but its hint is about the roster, so the live
+// "peek origin/main" explanation for missing ids (explainLiveNotFound)
+// leaves it alone.
+type handleMissError struct {
+	*errcodes.CLIError
+}
+
+// Unwrap exposes the CLIError for the exit code and the hint line.
+func (e *handleMissError) Unwrap() error { return e.CLIError }
 
 // preResolveHandle resolves an @handle naming a person on the roster ("" =
 // not a person handle, or not found: the caller then tries teams).
