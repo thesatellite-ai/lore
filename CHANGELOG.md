@@ -4,6 +4,8 @@ All notable changes to lore are recorded here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-11-03
+
 Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1–P4.
 
 ### Added
