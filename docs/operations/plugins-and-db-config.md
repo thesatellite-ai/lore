@@ -29,8 +29,6 @@ $ lore plugin list
 $ printf '#!/bin/sh\necho hello\n' > hello.sh
 $ lore plugin trust --name hello --sha256 $(sha256sum hello.sh | cut -c1-64)
 ✓ plugin trusted: hello (sha256:bfdeaeb08cff)
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ lore plugin list
 tpg_76bd…3f10 hello  sha256:bfdeaeb08cff
 ```

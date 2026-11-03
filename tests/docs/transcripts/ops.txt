@@ -246,8 +246,6 @@ alice (work/website)$ lore plugin list
 alice (work/website)$ printf '#!/bin/sh\necho hello\n' > hello.sh
 alice (work/website)$ lore plugin trust --name hello --sha256 $(sha256sum hello.sh | cut -c1-64)
 ✓ plugin trusted: hello (sha256:bfdeaeb08cff)
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore plugin list
 tpg_76bd560aff0771fab8457dbfa9823f10 hello  sha256:bfdeaeb08cff
 
@@ -317,8 +315,8 @@ rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the co
 
 ### ci
 alice (work/ci-clone)$ lore rule list
-lore sync: built .lore/lore.db from .lore/data (6 rows)
-lore sync: adopted .lore/data: imported 6, exported 0, conflicts 0
+lore sync: built .lore/lore.db from .lore/data (5 rows)
+lore sync: adopted .lore/data: imported 5, exported 0, conflicts 0
 lore sync: backup of lore.db before adopt: ~/work/ci-clone/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
