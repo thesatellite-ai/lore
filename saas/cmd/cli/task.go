@@ -10,7 +10,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -448,6 +447,11 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	if err != nil {
 		return err
 	}
+	// routeWrite checked the title; the body goes to the same repo row, so
+	// it is checked before the row exists too (trial F8).
+	if err := leakCheckRouteWrite(ctx, route, kindTask, f.body); err != nil {
+		return err
+	}
 	refs, rowRefs, err := parseTaskRefs(f.team.refs)
 	if err != nil {
 		return err
@@ -727,12 +731,14 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 	if f.mission != "" {
 		q = q.Where(entTask.MissionID(f.mission))
 	}
+	assigneeID := ""
 	if f.assignee != "" {
 		actorID, err := resolveActorRef(ctx, client, f.assignee)
 		if err != nil {
 			return err
 		}
 		q = q.Where(entTask.AssignedToActorID(actorID))
+		assigneeID = actorID
 	}
 	rows, err := q.Order(ent.Asc(entTask.FieldID)).All(ctx)
 	if err != nil {
@@ -742,18 +748,25 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 	if err != nil {
 		return err
 	}
+	// Store and personal tasks of this repo's sources pass the same filters
+	// as the rows above (stores_tasks.go; the predicate mirrors the query).
+	ext := externalTasksHere(ctx, taskListPredicate{
+		status: f.status, commitment: entTask.Commitment(f.commitment), all: f.all,
+		includeProposed: f.includeProposed, includeSomeday: f.includeSomeday, includeDeferred: f.includeDeferred,
+		mission: f.mission, assigneeID: assigneeID, now: time.Now(),
+	})
 
 	if f.jsonOutput {
 		out := make([]taskBrief, 0, len(rows))
 		for _, t := range rows {
 			out = append(out, briefFromTask(t))
 		}
-		ext := externalJSONRows(ctx, tableTasks, "")
-		all := make([]any, 0, len(out)+len(ext))
+		extJSON := externalTaskJSON(ext)
+		all := make([]any, 0, len(out)+len(extJSON))
 		for _, b := range out {
 			all = append(all, b)
 		}
-		for _, e := range ext {
+		for _, e := range extJSON {
 			all = append(all, e)
 		}
 		printJSON(constants.KindTaskList, all, len(all))
@@ -763,17 +776,14 @@ func runTaskList(ctx context.Context, f *taskListFlags) error {
 	// Store and personal tasks of this repo's sources, with their label
 	// (F20). "(no tasks)" only when no source has any: in a client repo
 	// whose work lives in the store it would contradict the rows below it.
-	if len(rows) > 0 {
-		printTaskRowsWithState(rows, states)
-		printExternalRows(ctx, os.Stdout, tableTasks, "")
-		return nil
-	}
-	var ext bytes.Buffer
-	if printExternalRows(ctx, &ext, tableTasks, "") == 0 {
+	if len(rows) == 0 && len(ext) == 0 {
 		printTaskRowsWithState(nil, nil)
 		return nil
 	}
-	_, _ = os.Stdout.Write(ext.Bytes()) // like every fmt.Print of this command: a closed stdout has no one to report to
+	if len(rows) > 0 {
+		printTaskRowsWithState(rows, states)
+	}
+	printExternalTasks(os.Stdout, ext)
 	return nil
 }
 
@@ -790,28 +800,9 @@ func printTaskRowsWithState(rows []*ent.Task, states map[string]string) {
 		return
 	}
 	for _, t := range rows {
-		statusBadge := taskStatusStyle(string(t.Status))
-		due := ""
-		if t.DueAt != nil {
-			due = " due:" + t.DueAt.Format("2006-01-02")
-		}
-		commit := ""
-		if t.Commitment != entTask.CommitmentAccepted {
-			commit = " " + style.Warn("("+string(t.Commitment)+")")
-		}
-		defer_ := ""
-		if t.DeferredUntil != nil {
-			defer_ = " " + style.Muted("⏾"+t.DeferredUntil.Format("2006-01-02"))
-		}
-		// The full opaque id: it is what every command takes (the short
-		// "T-N" form was removed, so printing a "T-" prefix here produced
-		// ids no command accepts).
-		state := ""
-		if st := states[t.ID]; st != "" {
-			state = "  " + st
-		}
-		fmt.Printf("%s %s %s [%s]%s%s%s%s\n",
-			statusBadge, t.ID, t.Title, t.Priority, due, commit, defer_, state)
+		// One line format for repo and store rows (taskListLine); the full
+		// opaque id is what every command takes.
+		fmt.Println(taskListLine(t, states[t.ID]))
 	}
 }
 

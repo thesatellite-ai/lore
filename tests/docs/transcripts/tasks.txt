@@ -268,7 +268,6 @@ alice (work/website)$ lore task list --status done
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 merged 10:04 (found by: ancestry, 05513aa)
 ✓ tsk_7a670ae8548ed05bf57ad29ad0759504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 Fix the typo on the pricing page [medium]  ✓ done · merged 10:04
-lore live: (live, pushed)
 lore live: landed on main (cf563f3); leaves live once main is fetched
 
 ### merged
@@ -282,7 +281,6 @@ lore live: (live, pushed)
 lore live: landed on main (df3a55c); leaves live once main is fetched
 alice (work/website)$ lore task merged tsk_4f89f5fcb1d81152bdf3f52979ebb64b
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b merged (marked by hand, 10:05)
-lore live: (live, pushed)
 lore live: landed on main (6d00426); leaves live once main is fetched
 
 ### link remove

@@ -100,10 +100,8 @@ alice (work/api)$ git pull -q && git merge -q --no-ff --no-edit origin/agent-bac
 alice (work/api)$ lore task list
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 merged 10:23 (found by: ancestry, cf563f3)
 lore live: landed on main (df3a55c); leaves live once main is fetched
-tsk_162df51b7f78b785c97c26b41ea89666  send the invite email from the API  done  [agency/client2]
-tsk_54fe984c9b495744c0217776765a28f2  build the invite page  todo  [agency/client2]
-tsk_05e99e22e9e86e96fe4daa7777994603  allow /invite on the proxy  done  [agency/client2]
-tsk_c0f3c11a5724b0cfd74b256190d9b5b8  deploy to staging  todo  [agency/client2]
+○ tsk_54fe984c9b495744c0217776765a28f2 build the invite page [medium]  [agency/client2]
+○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging [medium]  [agency/client2]
 agent-frontend (work/agents/app)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
 ✓ claimed tsk_54fe984c9b495744c0217776765a28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
   read its notes: lore task show tsk_54fe984c9b495744c0217776765a28f2
@@ -133,6 +131,7 @@ lore sync: built .lore/lore.db from .lore/data (2 rows)
 lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
 lore sync: backup of lore.db before adopt: ~/work/agents/fe2/app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 ✓ claimed tsk_54fe984c9b495744c0217776765a28f2 build the invite page (lease 20m, token ct_d57ca…) on refs/lore/signals/main; reclaim, attempt 2; previous holder agent-frontend timed out
+  work branch agent-frontend/invite-route
   read its notes: lore task show tsk_54fe984c9b495744c0217776765a28f2
 lore live: 1 row(s) left live (main holds them)
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/agents/fe2/app/.git/hooks)

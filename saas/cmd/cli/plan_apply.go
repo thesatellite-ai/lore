@@ -53,17 +53,36 @@ func newPlanApplyCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "apply <file>",
 		Short: "Create a mission and its tasks from a YAML plan; a re-run adds nothing",
-		Long: `Apply reads a plan:
+		// The first paragraph is the whole description on its own: the
+		// command reference shows only it, then usage and examples.
+		Long: `Apply creates a mission and all of its tasks from one YAML plan file, in one command: titles, dependencies (after), time boxes, roles, gates and the people who may approve them. Every row keeps its plan key, so running the same plan again finds the rows and adds nothing.
 
-  mission: {key: invite, title: "Invite landing page"}
+The plan file:
+
+  mission:
+    key      a stable key; a re-run finds the mission by it (else by its exact title)
+    title    required
+    to       where every row of the plan goes, like --to: repo | <org> | <org>/<folder>
+  approvers  handles that may approve the mission's gates (default: any human on the roster)
+  tasks:     a list; each task needs key and title
+    key      unique in the plan; a re-run finds the task by it
+    title    required
+    repo     the repo of the group the task belongs to (a repo name)
+    after    keys of earlier tasks it waits for: done when both are in the
+             same repo, merged when they are in different repos; add
+             :done or :merged to choose (e.g. backend:merged)
+    timebox  how long the task should take, e.g. 60m or 2h
+    role     only ` + "`" + `lore task next --role <role>` + "`" + ` takes it, e.g. coordinator
+    gate     required: a human must approve it before an agent can take it`,
+		Example: `  # invite.yaml
+  mission: {key: invite, title: "Invite landing page", to: agency/client2}
   approvers: ["@alice"]
   tasks:
-    - {key: backend,  title: "invite mutation + email", timebox: 60m}
-    - {key: frontend, title: "invite landing route", after: [backend]}
+    - {key: backend,  title: "invite mutation + email", repo: api, timebox: 60m}
+    - {key: frontend, title: "invite landing route", repo: app, after: [backend]}
     - {key: deploy,   title: "deploy to staging", role: coordinator, after: [frontend], gate: required}
 
-and creates every row and edge in one command. Rows are found again by their
-key, so running it twice changes nothing.`,
+  lore plan apply invite.yaml`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error { return runPlanApply(cmd.Context(), args[0]) },
 	}
@@ -200,17 +219,9 @@ func planTaskRow(ctx context.Context, client *ent.Client, projectID, missionID, 
 	if err != nil {
 		return nil, err
 	}
-	var deps []schema.TaskDependency
-	for _, k := range pt.After {
-		up, ok := earlier[k]
-		if !ok {
-			return nil, errcodes.New(errcodes.InvalidInput, "plan: task "+pt.Key+" is after "+k+", which is not an earlier task of the plan")
-		}
-		until := schema.DependencyUntilDone
-		if deref(up.RepoID) != repoID {
-			until = schema.DependencyUntilMerged
-		}
-		deps = append(deps, schema.TaskDependency{TaskID: up.ID, Until: until})
+	deps, err := planDeps(pt, earlier, repoID)
+	if err != nil {
+		return nil, err
 	}
 	create := client.Task.Create().SetProjectID(projectID).SetTitle(title).SetMissionID(missionID).SetTasklistID(tasklist).
 		SetIdempotencyKey(pt.Key).SetCreatedByActorID(by).SetCommitment(entTask.CommitmentAccepted)
@@ -242,4 +253,41 @@ func planTaskRow(ctx context.Context, client *ent.Client, projectID, missionID, 
 		return nil, errcodes.New(errcodes.Internal, "create task "+pt.Key).WithCause(err)
 	}
 	return t, nil
+}
+
+// planDeps turns a plan task's after: entries into dependency edges. An
+// entry is an earlier task's key, optionally with the same :done / :merged
+// suffix `task add --after <id>[:merged]` takes (depSuffixes). Without a
+// suffix it waits for done when both tasks are in the same repo and for
+// merged otherwise (F9); a suffix overrides that, e.g. backend:merged makes
+// a same-repo task wait until the backend code is on main.
+func planDeps(pt planTask, earlier map[string]*ent.Task, repoID string) ([]schema.TaskDependency, error) {
+	var deps []schema.TaskDependency
+	seen := map[string]bool{}
+	for _, raw := range pt.After {
+		k := strings.TrimSpace(raw)
+		until := schema.DependencyUntil("")
+		for suf, u := range depSuffixes {
+			if base, ok := strings.CutSuffix(k, suf); ok {
+				k, until = base, u
+			}
+		}
+		up, ok := earlier[k]
+		if !ok {
+			return nil, errcodes.New(errcodes.InvalidInput, "plan: task "+pt.Key+" is after "+raw+", which is not an earlier task of the plan").
+				WithHint("after: takes keys of earlier tasks, optionally with :done or :merged (e.g. backend:merged)")
+		}
+		if until == "" {
+			until = schema.DependencyUntilDone
+			if deref(up.RepoID) != repoID {
+				until = schema.DependencyUntilMerged
+			}
+		}
+		if seen[up.ID] {
+			continue
+		}
+		seen[up.ID] = true
+		deps = append(deps, schema.TaskDependency{TaskID: up.ID, Until: until})
+	}
+	return deps, nil
 }

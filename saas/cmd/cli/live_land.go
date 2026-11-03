@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -179,6 +180,10 @@ func (s *liveSession) plan(ctx context.Context, folder string, named landSelect)
 
 // landOutcome is what one landing pass did, for the command's output.
 type landOutcome struct {
+	// Branch is the default branch the pass landed on (default_branch: in
+	// config, else the remote's HEAD); every message about the landing names
+	// it, never a hardcoded "main". Set at the start of every pass.
+	Branch    string
 	Landed    int
 	Copied    int
 	Left      int
@@ -196,6 +201,7 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 	if s.blocked != nil {
 		return out, s.blocked
 	}
+	out.Branch = s.defaultBranch(ctx)
 	plan, err := s.plan(ctx, folder, named)
 	if err != nil {
 		return out, err
@@ -230,7 +236,7 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 		if err := leakCheckDocs(ctx, "landing", liveDocs(folder, docs)); err != nil {
 			return out, err
 		}
-		res, err := s.ref.Land(ctx, live.LandRequest{Branch: s.defaultBranch(ctx), Items: items, Layout: liveLayout})
+		res, err := s.ref.Land(ctx, live.LandRequest{Branch: out.Branch, Items: items, Layout: liveLayout})
 		if err != nil {
 			return out, err
 		}
@@ -300,28 +306,39 @@ func (s *liveSession) autoLand(ctx context.Context, folder string) {
 		fmt.Fprintln(os.Stderr, style.Error(liveLogPrefix+"land: "+err.Error()))
 		return
 	}
-	printLandOutcome(out)
+	printLandOutcome(os.Stderr, out)
 }
 
-func printLandOutcome(out landOutcome) {
+// landBranchFallback names the branch in landing messages when the pass
+// recorded none (a zero landOutcome). It is wording,
+// not a branch name, so it never claims "main" on a repo that uses another.
+const landBranchFallback = "the default branch"
+
+// printLandOutcome writes the result of a landing pass to w, naming the real
+// default branch (out.Branch) in every line.
+func printLandOutcome(w io.Writer, out landOutcome) {
+	branch := out.Branch
+	if branch == "" {
+		branch = landBranchFallback
+	}
 	switch out.Status {
 	case live.LandDone:
-		msg := fmt.Sprintf("landed on main (%s)", shortSHA(out.Commit))
+		msg := fmt.Sprintf("landed on %s (%s)", branch, shortSHA(out.Commit))
 		if out.Copied > 0 {
 			msg += fmt.Sprintf("; %d open row(s) copied, they stay live", out.Copied)
 		}
-		fmt.Fprintln(os.Stderr, style.Success(liveLogPrefix+msg+"; leaves live once main is fetched"))
+		fmt.Fprintln(w, style.Success(liveLogPrefix+msg+"; leaves live once "+branch+" is fetched"))
 	case live.LandProtected:
-		fmt.Fprintln(os.Stderr, liveLogPrefix+"main is protected: the rows ride on your next push (lore: land N rows)")
+		fmt.Fprintln(w, liveLogPrefix+branch+" is protected: the rows ride on your next push (lore: land N rows)")
 	case live.LandOffline:
-		fmt.Fprintln(os.Stderr, liveLogPrefix+"not landed yet (offline); the next command retries")
+		fmt.Fprintln(w, liveLogPrefix+"not landed yet (offline); the next command retries")
 	case live.LandRetriesOut:
-		fmt.Fprintln(os.Stderr, liveLogPrefix+"not landed yet (main kept moving); the next command retries")
+		fmt.Fprintln(w, liveLogPrefix+"not landed yet ("+branch+" kept moving); the next command retries")
 	case live.LandRefused:
-		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+"main refused the landing: "+out.Detail))
+		fmt.Fprintln(w, style.Warn(liveLogPrefix+branch+" refused the landing: "+out.Detail))
 	}
 	if out.Left > 0 {
-		fmt.Fprintf(os.Stderr, "%s%d row(s) left live (main holds them)\n", liveLogPrefix, out.Left)
+		fmt.Fprintf(w, "%s%d row(s) left live (%s holds them)\n", liveLogPrefix, out.Left, branch)
 	}
 }
 
@@ -371,10 +388,10 @@ are copied at live.max_age. land does it now for one row or a selection.
 					WithHint("settle it with `lore sync conflicts` / `lore sync resolve`, then land again")
 			}
 			if out.Status == "" {
-				fmt.Println("nothing to land: main already holds every named row")
+				fmt.Printf("nothing to land: %s already holds every named row\n", out.Branch)
 				return nil
 			}
-			printLandOutcome(out)
+			printLandOutcome(os.Stderr, out)
 			return nil
 		},
 	}
@@ -456,15 +473,16 @@ func printLiveStatus(ctx context.Context, projectRoot string) {
 		fmt.Printf("live not pushed:  %d write(s) waiting\n", max(len(pending), 1))
 	}
 	protected := readLiveNoteText(s.stateDir, liveNoteProtected)
+	branch := s.defaultBranch(ctx)
 	now := s.clk.Now()
 	for _, p := range plan {
 		age := now.Sub(p.File.Block.LiveSince).Round(time.Minute)
 		why := p.Decision.Reason
 		switch {
 		case p.Leave:
-			why = "on main; leaves live on the next sync"
+			why = "on " + branch + "; leaves live on the next sync"
 		case p.Decision.Action != live.LandStay && protected != "":
-			why = "waiting to land: main is protected, rides on your next push"
+			why = "waiting to land: " + branch + " is protected, rides on your next push"
 		case p.Decision.Action != live.LandStay:
 			why = "waiting to land (" + why + ")"
 		}

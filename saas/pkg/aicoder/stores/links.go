@@ -101,6 +101,10 @@ type LinkSource struct {
 	Config *lorecfg.Config
 	// MaxAge is link_index.max_age (0 = Config.LinkIndexMaxAge()).
 	MaxAge time.Duration
+	// ForceFetch fetches every store now, ignoring live.fetch_ttl: `lore
+	// sync` always fetches (TEAM-025), so a link a teammate just pushed is
+	// in the index after it, not a fetch_ttl later.
+	ForceFetch bool
 }
 
 // compile-time check.
@@ -277,7 +281,7 @@ func (ls *LinkSource) entryIndex(ctx context.Context, o *lorecfg.Org, allowStagi
 		if err != nil {
 			return cachedIndex{}, entryUnknown, "", err
 		}
-		fr, err := st.Fetch(ctx, false)
+		fr, err := st.Fetch(ctx, ls.ForceFetch)
 		if err != nil {
 			return cachedIndex{}, entryUnknown, "", err
 		}

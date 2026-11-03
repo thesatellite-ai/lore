@@ -91,6 +91,7 @@ func gatherOrgSituation(ctx context.Context, dir string) (*orgSituation, error) 
 	if err != nil {
 		return nil, storeCLIError(err, "read store links")
 	}
+	defBranch := storeDefaultBranchFunc(cfg)
 	s.Result, s.ResolveErr = orgresolve.Resolve(orgresolve.Inputs{
 		Config:    cfg,
 		EnvOrg:    strings.TrimSpace(os.Getenv(envOrg)),
@@ -99,9 +100,60 @@ func gatherOrgSituation(ctx context.Context, dir string) (*orgSituation, error) 
 		Committed: s.Committed,
 		Links:     links,
 		// Q1 seam: staging = a store branch other than the bare clone's HEAD.
-		StoreDefaultBranch: storeDefaultBranchFunc(cfg),
+		StoreDefaultBranch: defBranch,
 	})
+	if s.ResolveErr == nil && s.Result.Org != nil && s.ProjectID != "" && orgresolve.IsStaging(s.Result.Org, defBranch) {
+		if err := stagingLinks(ctx, s); err != nil {
+			return nil, err
+		}
+	}
 	return s, nil
+}
+
+// stagingLinks replaces the link answer of a staging entry chosen on
+// purpose with that entry's own links. Links exist per store branch
+// (TEAM-011, side effect 19): the general scan reads only the default
+// branches, so without this `whoami` would report the main branch's links
+// for a repo that nothing links on the staging branch. A store branch that
+// cannot be read makes the link status unknown (F10 fail closed).
+func stagingLinks(ctx context.Context, s *orgSituation) error {
+	org := s.Result.Org
+	l, ok, err := entryLinks(ctx, s, org)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		s.Result.Links = nil
+		s.Result.LinkStatus = orgresolve.LinkStatusUnknown
+		s.Result.LinkUnknown = true
+		s.Result.LinkDetail = "cannot read the store branch of " + org.Name
+		return nil
+	}
+	s.Result.Links = l
+	// An unknown answer from the general scan stays unknown: a store that
+	// could decide this repo was not read (it is still fail closed).
+	detail := fmt.Sprintf("%d link(s) for this repo on %s's store branch %s (links are per store branch)",
+		len(l), org.Name, strings.Join(entryBranches(org), ", "))
+	if s.Result.LinkStatus == orgresolve.LinkStatusUnknown {
+		s.Result.LinkDetail = detail + "; " + s.Result.LinkDetail
+		return nil
+	}
+	s.Result.LinkStatus = orgresolve.LinkStatusKnown
+	s.Result.LinkDetail = detail
+	return nil
+}
+
+// entryBranches lists the store branches an entry uses, once each.
+func entryBranches(o *lorecfg.Org) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, sc := range o.Stores {
+		if b := sc.EffectiveBranch(); !seen[b] {
+			seen[b] = true
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // orgResolveCLIError maps an orgresolve refusal to the CLI envelope.

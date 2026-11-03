@@ -7,6 +7,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -71,11 +72,28 @@ func livePostCommitHook(ctx context.Context) error {
 }
 
 // livePrePushHook is `lore sync hook pre-push`: git passes the refs being
-// pushed on stdin ("<local ref> <local sha> <remote ref> <remote sha>").
-// When the current branch is pushed without the current waiting rows, a
-// fresh ride commit is added and this push is stopped so the next one
-// carries it.
-func livePrePushHook(ctx context.Context, stdin io.Reader) error {
+// pushed on stdin ("<local ref> <local sha> <remote ref> <remote sha>")
+// and the remote's name and URL as args. First the F16 leak check over
+// what the push sends (leak_prepush.go; fails closed, refuses the push).
+// Then the ride-along: when the current branch is pushed without the
+// current waiting rows, a fresh ride commit is added and this push is
+// stopped so the next one carries it.
+func livePrePushHook(ctx context.Context, stdin io.Reader, args []string) error {
+	in, err := io.ReadAll(stdin)
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "read the pre-push input").WithCause(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+	}
+	remote := "" // no remote named: every remote-tracking ref counts as "already there"
+	if len(args) > 0 {
+		remote = args[0]
+	}
+	if err := prePushLeakCheck(ctx, cwd, remote, parsePushUpdates(in)); err != nil {
+		return err
+	}
 	s := liveRepoHere(ctx)
 	if s == nil {
 		return nil
@@ -92,7 +110,7 @@ func livePrePushHook(ctx context.Context, stdin io.Reader) error {
 	if err != nil {
 		return nil
 	}
-	sc := bufio.NewScanner(stdin)
+	sc := bufio.NewScanner(bytes.NewReader(in))
 	for sc.Scan() {
 		f := strings.Fields(sc.Text())
 		if len(f) < 4 || f[0] != "refs/heads/"+branch || f[1] != head {

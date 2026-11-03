@@ -13,6 +13,7 @@ import (
 
 	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/signals"
@@ -120,13 +121,14 @@ func runTaskDone(ctx context.Context, f *taskDoneFlags, id string) error {
 			// The holder's done (or a former holder's, which fencing refuses).
 			commit := f.commit
 			if commit == "" {
-				commit = workBranchHead(ctx, w)
+				commit = workBranchHead(ctx, w.Repo)
 			}
 			if _, err := coord.HolderWrite(ctx, w.env(t), id, true, func(d coord.Doc, now time.Time) ([]coord.RowWrite, error) {
 				return nil, coord.MarkDone(w.ActorID, commit, f.pr)(d, now)
 			}); err != nil {
 				return coordError(err)
 			}
+			f.commit = commit // say which commit was recorded, also when it came from the work branch
 			return finishDone(ctx, f, id)
 		case cs.claimed && cs.active:
 			return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is held by %s until %s; only the holder can finish it",
@@ -176,13 +178,28 @@ func runTaskDone(ctx context.Context, f *taskDoneFlags, id string) error {
 // its work branch without --commit: recorded as done_commit so a merge of
 // that branch is found by ancestry (F9 check 1) — the only check for a
 // store-only task in a client repo, which never gets a Lore-Task trailer
-// (Q13). "" when not on a work branch.
-func workBranchHead(ctx context.Context, w *coordWorld) string {
-	if currentWorkBranch(ctx, w.Repo) == "" {
+// (Q13). "" when not on a work branch, and "" when HEAD is already on the
+// fetched default branch: such a commit cannot be the unmerged work of the
+// task being finished (a coordinator finishing a no-code task on a branch
+// left over from another task), and recording it would mark the task merged
+// at once, with a merge time before its done time (trial finding F17). The
+// task then shows "done (merge unknown)" until `lore task merged`, as F9
+// says for a task with no recorded commit.
+func workBranchHead(ctx context.Context, r *gitref.Repo) string {
+	if currentWorkBranch(ctx, r) == "" {
 		return ""
 	}
-	oid, ok, err := w.Repo.ResolveCommit(ctx, "HEAD")
+	oid, ok, err := r.ResolveCommit(ctx, "HEAD")
 	if err != nil || !ok {
+		return ""
+	}
+	target := mergedTarget(ctx, r, defaultRemoteName)
+	tip, ok, err := r.ResolveRef(ctx, target)
+	if err != nil || !ok {
+		return "" // cannot tell whether HEAD is merged already: record nothing (fail closed)
+	}
+	merged, err := r.IsAncestor(ctx, oid, tip)
+	if err != nil || merged {
 		return ""
 	}
 	return oid

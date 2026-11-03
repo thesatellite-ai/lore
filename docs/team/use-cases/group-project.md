@@ -67,8 +67,8 @@ Any of the three repos shows the group's tasks. `lore mission status` shows the 
 ```console
 # alice, in app
 $ lore task list
-tsk_c0f3…b5b8  send the invite email from the API  todo  [agency/client2]
-tsk_76bd…3f10  build the invite page  todo  [agency/client2]
+○ tsk_c0f3…b5b8 send the invite email from the API [medium]  [agency/client2]
+○ tsk_76bd…3f10 build the invite page [medium]  [agency/client2]
 
 # alice, in infra
 $ lore mission status msn_05e9…4603

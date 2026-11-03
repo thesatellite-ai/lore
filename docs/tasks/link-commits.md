@@ -92,7 +92,6 @@ $ lore task list --status done
 ✓ tsk_2ad3…f891 merged 10:04 (found by: ancestry, 05513aa)
 ✓ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
 ✓ tsk_2ad3…f891 Fix the typo on the pricing page [medium]  ✓ done · merged 10:04
-lore live: (live, pushed)
 lore live: landed on main (cf563f3); leaves live once main is fetched
 ```
 <!-- /example -->
@@ -114,7 +113,6 @@ lore live: (live, pushed)
 lore live: landed on main (df3a55c); leaves live once main is fetched
 $ lore task merged tsk_4f89…b64b
 ✓ tsk_4f89…b64b merged (marked by hand, 10:05)
-lore live: (live, pushed)
 lore live: landed on main (6d00426); leaves live once main is fetched
 ```
 <!-- /example -->

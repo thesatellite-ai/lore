@@ -32,6 +32,17 @@ func mergedTarget(ctx context.Context, r *gitref.Repo, remote string) string {
 // set), and records merged_at once for each found (F9 "check"). It writes
 // nothing when nothing is found (principle 1) and never fails the command:
 // a broken check is a warning.
+//
+// Where the stamp goes (F9: "through the normal landing path"): when live
+// rows apply here, the row is staged on the repo's live ref (recordMerged,
+// the same path as a store task's stamp) and, being finished, lands on the
+// default branch by itself. It never goes through lore.db's export into the
+// checkout's .lore/data: that left every clone with its own uncommitted
+// copy of the row (different updated_at per clone) which blocked the next
+// `git pull` and never reached the other developers (trial finding F5).
+// Only a checkout without live rows (rows travel with the code) writes the
+// branch row, with a deterministic updated_at so two clones that find the
+// same merge write the same bytes.
 func lazyMergedCheck(ctx context.Context, client *ent.Client, projectID, repoID string) {
 	cands, err := client.Task.Query().Where(entTask.ProjectID(projectID), entTask.StatusEQ(entTask.StatusDone), entTask.MergedAtIsNil()).All(ctx)
 	if err != nil || len(cands) == 0 {
@@ -47,6 +58,7 @@ func lazyMergedCheck(ctx context.Context, client *ent.Client, projectID, repoID 
 	}
 	adapter, hasAdapter := mergeAdapter(ctx, dir)
 	ck := mergewatch.Checker{Repo: repo, Target: mergedTarget(ctx, repo, defaultRemoteName), Adapter: adapter}
+	var found []foundMerge
 	for _, t := range cands {
 		if !hasAdapter && t.RepoID != nil && repoID != "" && *t.RepoID != repoID {
 			continue // done in another repo: checked there (or by the adapter)
@@ -63,15 +75,92 @@ func lazyMergedCheck(ctx context.Context, client *ent.Client, projectID, repoID 
 			fmt.Fprintln(os.Stderr, style.Warn("lore merged check: "+err.Error()))
 			continue
 		}
-		if !ok {
-			continue
+		if ok {
+			found = append(found, foundMerge{task: t, finding: f})
 		}
-		if _, err := client.Task.UpdateOne(t).SetMergedAt(f.At).Save(ctx); err != nil {
-			fmt.Fprintln(os.Stderr, style.Warn("lore merged check: record "+t.ID+": "+err.Error()))
-			continue
-		}
-		fmt.Fprintf(os.Stderr, "%s %s merged %s (found by: %s, %s)\n", style.Success("✓"), t.ID, f.At.UTC().Format("15:04"), f.Method, shortSHA(f.Commit))
 	}
+	if len(found) == 0 {
+		return
+	}
+	if liveFor(ctx, liveProjectRoot(dir)) == nil {
+		recordMergedBranch(ctx, client, found)
+		return
+	}
+	recordMergedLive(ctx, found)
+}
+
+// foundMerge is one done task whose merge the check found.
+type foundMerge struct {
+	task    *ent.Task
+	finding mergewatch.Finding
+}
+
+// recordMergedLive stamps merged_at on the repo's live ref (F9). Each row
+// is re-read fresh first (live wins, then the newer of branch and main): a
+// teammate who found the same merge first has already stamped it, and a
+// second stamp would only repeat the same value. updated_at is left as it
+// was, so every clone that records the same merge stages the same row and
+// the landing pass finds nothing new to commit for the second one.
+func recordMergedLive(ctx context.Context, found []foundMerge) {
+	fail := func(err error) {
+		for _, m := range found {
+			reportMerged(os.Stderr, m.task.ID, m.finding, err)
+		}
+	}
+	w, err := openCoordWorld(ctx)
+	if err != nil {
+		fail(fmt.Errorf("open coordination: %w", err))
+		return
+	}
+	t, err := openRepoTarget(ctx, w)
+	if err != nil {
+		fail(fmt.Errorf("open the live ref: %w", err))
+		return
+	}
+	defer t.Close()
+	refresh := false
+	for _, m := range found {
+		ok, err := stampMerged(ctx, t.Rows, t.Signals, m.task.ID, m.finding.At)
+		if ok || err != nil {
+			reportMerged(os.Stderr, m.task.ID, m.finding, err)
+		}
+		// Recorded by us, or found already stamped by a teammate who got
+		// there first: either way the fresh live ref now holds the stamp.
+		refresh = refresh || err == nil
+	}
+	// The command that ran the check lists the tasks next (task list,
+	// mission status): import the stamped live rows into lore.db now, so
+	// the same output never says "merged" on one line and "not merged yet"
+	// on the next. The import is a live apply (live wins), not a branch
+	// write, so the checkout stays clean.
+	if lr, ok := t.Rows.(*liveRows); ok && refresh {
+		lr.s.apply(ctx, lr.db, lr.folder)
+	}
+}
+
+// recordMergedBranch stamps merged_at through lore.db, for a checkout
+// without live rows: the row is this branch's data and travels with the
+// code. updated_at becomes the later of its old value and the merge time
+// (not "now"), so the bytes depend only on the row and the merge.
+func recordMergedBranch(ctx context.Context, client *ent.Client, found []foundMerge) {
+	for _, m := range found {
+		upd := client.Task.UpdateOne(m.task).SetMergedAt(m.finding.At).SetUpdatedAt(mergedUpdatedAt(m.task.UpdatedAt, m.finding.At))
+		if _, err := upd.Save(ctx); err != nil {
+			reportMerged(os.Stderr, m.task.ID, m.finding, fmt.Errorf("record %s: %w", m.task.ID, err))
+			continue
+		}
+		reportMerged(os.Stderr, m.task.ID, m.finding, nil)
+	}
+}
+
+// mergedUpdatedAt is the updated_at a branch-row merged stamp writes: the
+// later of the row's own and the merge time, a pure function of the row
+// and the finding so two clones agree.
+func mergedUpdatedAt(old, merged time.Time) time.Time {
+	if merged.After(old) {
+		return merged.UTC()
+	}
+	return old.UTC()
 }
 
 // mergeAdapter returns the configured merge_check adapter (F9 check 3).
@@ -104,8 +193,18 @@ Example:
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
-			if w, t, err := openTaskCoord(ctx, args[0], from); err == nil && isStoreTarget(t) {
+			// A coordinated row (a store task, or this repo's own row when
+			// live rows apply) is stamped on its live ref and lands from
+			// there; writing it through lore.db would leave an uncommitted
+			// .lore/data change in this checkout (trial finding F5).
+			if w, t, err := openTaskCoord(ctx, args[0], from); err == nil {
 				defer t.Close()
+				if d, ok, gerr := t.Rows.Get(ctx, args[0]); gerr == nil && ok && d.Status() == string(entTask.StatusDone) {
+					if prev := d.Time(keyMergedAtDoc); !prev.IsZero() {
+						fmt.Printf("%s %s was already merged at %s\n", style.Success("✓"), args[0], prev.UTC().Format("2006-01-02 15:04"))
+						return nil
+					}
+				}
 				at := w.Clock.Now().UTC()
 				if _, err := coord.Update(ctx, w.env(t), args[0], func(d coord.Doc, _ time.Time) error {
 					if d.Status() != string(entTask.StatusDone) {

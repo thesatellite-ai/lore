@@ -133,6 +133,8 @@ dec_76bd…3f10 [accepted] We use Stripe and bank transfer for payments
 
 The old decision now says `superseded`. lore refuses `--supersedes` with an id that is not a row of the same kind in this project (`E_NOT_FOUND`), or a row that was already replaced (`E_INVALID_INPUT`: supersede the newer row instead, so the chain stays one line); a refused command writes nothing.
 
+Rows linked by older versions point the wrong way; run `lore doctor --fix` once to repair them.
+
 ## Step 6 — Mark a memory as no longer true
 
 `lore memory invalidate <id>` stamps the memory with a *valid until* time (the moment it stopped being true) without deleting it. Use it when a fact goes out of date, like an office move.
@@ -227,7 +229,7 @@ lore sync: secret-detected memories/mem_28f8…03df.json: credential pattern pas
 
 - **Archived rows are hidden from lists.** `lore rule list` and `lore memory list` skip archived rows; pass `--archived` to see them with an `[archived]` mark.
 - **An invalidated memory is still listed and still found by search.** `invalidate` records the end date (`valid-until` in `lore memory show`); it does not hide the row. Archive it as well if you want it out of the way.
-- **Rows written by older lore versions point the other way.** Before this was fixed, `--supersedes` stored the old id on the new row and left the old row unchanged. Such pairs keep that shape; edit them by hand if you need the chain.
+- **Rows written by older lore versions point the other way.** Before this was fixed, `--supersedes` stored the old id on the new row and left the old row unchanged. `lore doctor` lists such pairs and `lore doctor --fix` turns them around once (a second run changes nothing).
 - **`delete` wants `--confirm`, not `--yes`.** `--yes` is the answer to lore's "are you sure?" questions elsewhere; `delete` stops with `unknown flag: --yes`.
 - **Shell quotes.** Wrap the body in single quotes so the shell does not touch `$` or `!` in your text. You can also pipe the body in: `echo 'Run the tests before you push' | lore rule add`.
 - **`--allow-secrets` does not put the secret in git.** Rules and memories are checked when you add them; every kind of row is checked again before its file is written to `.lore/data`. A decision with a password in its body is added without a question, then kept out of git with a `secret-detected` line on every command. Fix the row (`edit`) or delete it. `LORE_SYNC_ALLOW_SECRETS=1` lets one run write it anyway; do not use it for real passwords.

@@ -86,7 +86,7 @@ These matter when you work for an org in client repos. A **store** is a separate
 |---|---|
 | `--body <text>` | the row's text |
 | `--created-by <actor id>` | who wrote it (an `act_` id); defaults to you |
-| `--supersedes <id>` | on `rule`, `memory`, `decision`, `hotfix` and `pattern add`: the older row this one replaces |
+| `--supersedes <id>` | on `rule`, `memory`, `decision`, `hotfix` and `pattern add`: the older row this one replaces. Rows linked by older versions point the wrong way; `lore doctor --fix` repairs them once |
 | `--allow-secrets` | on `rule add` and `memory add`: store the text even though it looks like it holds a password or key (logged) |
 
 ## Pitfalls

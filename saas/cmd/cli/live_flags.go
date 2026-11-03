@@ -251,11 +251,23 @@ func explainLiveNotFound(ctx context.Context, cmd *cobra.Command, args []string,
 			return errcodes.New(errcodes.NotFound, why)
 		}
 	}
-	peek := BinaryName + " sync peek origin/main"
+	remote, branch := "origin", defaultBranchFallback
+	if s != nil {
+		remote, branch = s.ref.RemoteName, s.defaultBranch(ctxOrBackground(ctx))
+	}
+	return cli.WithHint(livePeekHint(remote, branch, table))
+}
+
+// livePeekHint points at `lore sync peek <remote>/<branch> [table]` for an id
+// that may have landed on the default branch while this branch is older. It
+// names the real default branch (liveSession.defaultBranch), never a
+// hardcoded "main".
+func livePeekHint(remote, branch, table string) string {
+	peek := BinaryName + " sync peek " + remote + "/" + branch
 	if table != "" {
 		peek += " " + table
 	}
-	return cli.WithHint("it may have landed on main while this branch is older: `" + peek + "`")
+	return "it may have landed on " + branch + " while this branch is older: `" + peek + "`"
 }
 
 func ctxOrBackground(ctx context.Context) context.Context {

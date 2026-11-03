@@ -23,8 +23,10 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1â€
 
 ### Changed
 
+- A plan file's `after:` takes the same `:done` / `:merged` suffixes as `--after`, so a plan can make a task in the same repo wait for a merge.
 - `lore handoff add` takes `--for @handle` and `--task <id>`.
 - `lore task add --tasklist` is optional; the project's default task list is used (created on demand).
+- In a repo linked to a store, commands that run the lazy merged check print one warning line on stderr when the store cannot be reached, instead of saying nothing; the command still succeeds.
 - `lore sync install-action` writes a workflow that runs only when started by hand (`workflow_dispatch`), so it never spends CI minutes on its own; the file's header says how to turn on automatic runs. `--manual` is still accepted (it is now the default) and `--auto` with `--manual` is refused.
 - Re-running `lore sync install-action` without `--auto` or `--manual` keeps the installed workflow's triggers and branches, and the automatic lore-version update never changes triggers, so existing automatic workflows keep running.
 - `lore rule list` hides archived rules; `--archived` shows them, marked `[archived]` (as `lore memory list` does).
@@ -33,6 +35,25 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1â€
 
 ### Fixed
 
+- A merged task's `merged_at` is recorded once on the live ref and lands like any live row, instead of every clone writing its own copy into the working tree (which left checkouts dirty and blocked `git pull`). `lore task merged` takes the same path, and marking an already merged task writes nothing.
+- `lore task done` without `--commit` no longer records a HEAD that is already on the default branch, so the task is not marked merged at once by mistake; the done line names the recorded commit.
+- Reclaiming an expired task keeps the work branch the earlier holder recorded and pushed, instead of recording the reclaiming agent's own branch.
+- `lore task list` filters store tasks like repo tasks (done and cancelled hidden by default; `--status`, `--mission`, `--assignee` and the other filters apply) and prints both in one line format, with the `[org/folder]` label on store rows.
+- `lore sync` refreshes the store link index, so a teammate's new `lore org link` shows up at once.
+- `lore org link --yes` says "created; pushed" when its push had to retry after a teammate's store write, instead of "already so, nothing changed".
+- With a staging org chosen, `lore whoami` counts only the links on that store branch.
+- `lore plan apply --help` describes the plan file format (it was cut off after one line).
+- `lore share <id> --to repo` no longer refuses its own copy: the copy may carry the shared note's text (and only that note's); it is still refused when it quotes another internal note.
+- The `pre-push` hook now runs the leak check on every file version and commit message the push sends to a client repo, so a `git commit --no-verify` no longer gets internal content onto the client's remote; it fails closed when the store cannot be read. `git push --no-verify` still skips every local check.
+- Rows written to a client repo (`--to repo` for any kind) are leak-checked before they are written; a refusal prints no success line and writes nothing.
+- The `E_LEAK_BLOCKED` hint names the repo row that leaks and how to move or delete it, instead of the internal note it matched.
+- `LORE_TRACE=1` / `--trace` no longer prints the build machine's source paths for every database query; trace covers only the git commands for live rows.
+- A `..` in `db_path` is refused with `E_BAD_PATH` and a hint naming `LORE_ALLOW_DB_PATH_OUTSIDE=1`, instead of `E_INTERNAL`.
+- Landing messages name the real default branch (`default_branch:` or the remote's HEAD) instead of always saying "main".
+- A fresh clone in a cloud-synced or network folder is refused with `E_NETWORK_FS` before anything is written; before, `.lore/lore.db` was built first.
+- The docs-vs-CLI check treats only `$ ` lines in console examples as commands, so output that contains "; lore â€¦" is no longer flagged.
+- Finishing a task whose claim expired (`lore task done` by a person) now fails with the error, and writes nothing, if the done mark cannot be applied, instead of reporting success.
+- `lore doctor` reports `--supersedes` links written by older versions (stored on the new row instead of the old one), and `lore doctor --fix` turns them round; running it again changes nothing. Links it cannot decide are listed and left as they are.
 - A push that loses a race (`reference already exists`, a failed atomic transaction) is retried instead of reported as a refusal.
 - Team writes fail closed: when the store cannot be reached or read, `lore task done`, `lore task cancel` and `lore finding add` stop with an error instead of writing the row into the client repo.
 - `lore task list --mine` and `--claimed-by` stop with an error when the claims board cannot be read, instead of showing every task.

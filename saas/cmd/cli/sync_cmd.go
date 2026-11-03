@@ -120,7 +120,7 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
 			// because every write went to a store) is materialised first,
 			// exactly as any other command does.
 			if err := maybeMaterialize(cmd.Context(), &f); err != nil {
-				return errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(err)
+				return materializeError(err)
 			}
 			// Store writes made offline wait in the bare clones; `lore sync`
 			// is the explicit "deliver everything now" (§5.3).
@@ -637,7 +637,7 @@ func newSyncHookCommand() *cobra.Command {
 			case hookPostCommit:
 				return livePostCommitHook(cmd.Context())
 			case hookPrePush:
-				return livePrePushHook(cmd.Context(), cmd.InOrStdin())
+				return livePrePushHook(cmd.Context(), cmd.InOrStdin(), args[1:])
 			}
 			t, err := openSyncTarget(&f)
 			if err != nil {

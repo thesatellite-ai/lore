@@ -109,13 +109,13 @@ alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457
 
 ### network drive
 alice (work/Dropbox/website)$ lore rule list
-lore sync: built .lore/lore.db from .lore/data (2 rows)
-lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/Dropbox/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website/.lore/lore.db is inside a "dropbox" folder
+ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website is inside a "dropbox" folder
   hint: SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set LORE_ALLOW_NETWORK_FS=1
 (exit 1)
 alice (work/Dropbox/website)$ LORE_ALLOW_NETWORK_FS=1 lore rule list
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/Dropbox/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 (no rules)
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/Dropbox/website/.git/hooks)
 
@@ -124,7 +124,8 @@ alice (work/blog)$ printf 'db_path: ../client.db\nproject_id: %s\n' $(grep proje
 db_path: ../client.db
 project_id: prj_d4314eba822f1bf5908b2b8ded5f313a
 alice (work/blog)$ lore rule list
-ERROR: [E_INTERNAL] resolve project: projresolve: path contains traversal sequence or refers outside allowed roots: "../client.db"
+ERROR: [E_BAD_PATH] db_path "../client.db" has a `..` part: projresolve: path contains traversal sequence or refers outside allowed roots
+  hint: write db_path in .lore/lore.yaml without a `..` part, or set LORE_ALLOW_DB_PATH_OUTSIDE=1 for one command if the path really is meant to leave the project
 (exit 1)
 alice (work/blog)$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list
 rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] Posts go out on Tuesdays

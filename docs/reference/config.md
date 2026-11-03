@@ -141,7 +141,7 @@ and the leak guards turn on for everyone in agency.
 ```
 <!-- /example -->
 
-`default_branch` sends finished live rows to another branch than the one `origin/HEAD` names. Here they land on `develop`, and `main` is left alone (the message still says "main"):
+`default_branch` sends finished live rows to another branch than the one `origin/HEAD` names. Here they land on `develop`, the message names `develop`, and `main` is left alone:
 
 <!-- example: reference#default-branch -->
 ```console
@@ -157,7 +157,7 @@ $ lore task done tsk_05e9…4603
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+lore live: landed on develop (601d285); leaves live once develop is fetched
 $ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
 601d285 lore: land 2 rows (_root)
 86dbae4 lore: init

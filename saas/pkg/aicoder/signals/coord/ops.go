@@ -182,6 +182,14 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		if !claimable(mission, doc.Status()) {
 			return signals.Change{}, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
 		}
+		// A claim records the caller's branch only while the row has none: a
+		// reclaim (or a claim after a release) keeps the work branch the
+		// earlier holder recorded and pushed (§7.4 "Work branch"), so the
+		// replacement is pointed at that work, never at its own checkout.
+		workBranch := opts.WorkBranch
+		if recorded := doc.Str(keyWorkBranch); recorded != "" {
+			workBranch = recorded
+		}
 		tok, err := env.Signals.Tokens.New()
 		if err != nil {
 			return signals.Change{}, err
@@ -190,7 +198,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission,
 			MaxClaims: env.Agents.MaxClaims, MaxAttempts: env.Agents.MaxAttempts,
 			Row: signals.RowState{Epoch: doc.Epoch(), Attempts: doc.Int(keyAttempts)}, Token: tok,
-			WorkBranch: opts.WorkBranch, Owns: opts.Owns,
+			WorkBranch: workBranch, Owns: opts.Owns,
 		})
 		if err != nil {
 			return signals.Change{}, err
@@ -224,8 +232,8 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 				next.SetTime(keyStartedAt, now)
 			}
 		}
-		if opts.WorkBranch != "" {
-			next.SetStr(keyWorkBranch, opts.WorkBranch)
+		if workBranch != "" {
+			next.SetStr(keyWorkBranch, workBranch)
 		}
 		entry := schema.ClaimLogEntry{At: now.UTC().Truncate(time.Second), Event: schema.ClaimEventClaim,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: plan.Epoch}

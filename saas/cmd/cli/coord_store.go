@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"encoding/json"
 	"strconv"
@@ -414,15 +415,17 @@ func (r *storeRows) MergedCheck(ctx context.Context) {
 		if err != nil || !ok {
 			continue
 		}
-		next := d.Clone()
-		next.SetTime(keyMergedAtDoc, f.At)
-		reportMerged(os.Stderr, c.TaskID, f, recordMerged(ctx, r, st, c.TaskID, next))
+		if ok, err := stampMerged(ctx, r, st, c.TaskID, f.At); ok || err != nil {
+			reportMerged(os.Stderr, c.TaskID, f, err)
+		}
 	}
 }
 
-// rowStager is the staging half of coord.Rows that recording a merge needs
-// (storeRows in production; a seam for tests).
-type rowStager interface {
+// mergedRows is the half of coord.Rows that recording a merge needs: a
+// fresh read and the staging (storeRows and liveRows in production; a seam
+// for tests).
+type mergedRows interface {
+	Get(ctx context.Context, id string) (coord.Doc, bool, error)
 	Stage(ctx context.Context, rows ...coord.RowWrite) ([]signals.Companion, error)
 }
 
@@ -431,18 +434,39 @@ type signalsWriter interface {
 	Write(ctx context.Context, decide signals.Decide) (signals.Result, error)
 }
 
-// recordMerged stages the task row with merged_at and pushes it with the
-// signals write. Any failure — staging or the write — is returned, so the
-// caller reports "merged" only for a row that was actually written.
-func recordMerged(ctx context.Context, rs rowStager, st signalsWriter, id string, next coord.Doc) error {
-	comps, err := rs.Stage(ctx, coord.RowWrite{ID: id, Doc: next})
+// stampMerged records merged_at = at on task id, once (F9). The row is read
+// and staged INSIDE the signals write's decision, so a lost race (another
+// clone stamped the same merge, or wrote any live row, between our read and
+// our push) re-reads the fresh row and decides again instead of re-pushing
+// a stale commit until the retries run out. Only merged_at changes:
+// updated_at is left as it was, so two clones that find the same merge
+// stage the same row and the second has nothing to land. recorded is false
+// (with a nil error) when the row is no longer a done task without
+// merged_at, i.e. someone else recorded it first. Any failure is returned,
+// so the caller reports "merged" only for a row that was actually written.
+func stampMerged(ctx context.Context, rows mergedRows, st signalsWriter, id string, at time.Time) (recorded bool, err error) {
+	_, err = st.Write(ctx, func(signals.View) (signals.Change, error) {
+		recorded = false
+		d, ok, err := rows.Get(ctx, id)
+		if err != nil {
+			return signals.Change{}, fmt.Errorf("read %s: %w", id, err)
+		}
+		if !ok || d.Status() != string(statusDoneQ) || d.Str(keyMergedAtDoc) != "" {
+			return signals.Change{}, nil // gone, reopened, or already stamped
+		}
+		next := d.Clone()
+		next.SetTime(keyMergedAtDoc, at)
+		comps, err := rows.Stage(ctx, coord.RowWrite{ID: id, Doc: next})
+		if err != nil {
+			return signals.Change{}, fmt.Errorf("stage %s: %w", id, err)
+		}
+		recorded = true
+		return signals.Change{Companions: comps}, nil
+	})
 	if err != nil {
-		return fmt.Errorf("stage %s: %w", id, err)
+		return false, fmt.Errorf("write %s: %w", id, err)
 	}
-	if _, err := st.Write(ctx, func(signals.View) (signals.Change, error) { return signals.Change{Companions: comps}, nil }); err != nil {
-		return fmt.Errorf("write %s: %w", id, err)
-	}
-	return nil
+	return recorded, nil
 }
 
 // reportMerged prints the outcome of one found merge: "✓ merged" only when

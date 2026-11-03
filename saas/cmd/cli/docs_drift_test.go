@@ -251,6 +251,24 @@ func deliberateCLIError(line string) bool {
 	return deliberateCLIErrorOutput.MatchString(strings.TrimSpace(line))
 }
 
+// transcriptFenceLangs are the fence languages of a pasted terminal session:
+// a line is a command only when it starts with the shell prompt; every other
+// line is output. Output can contain "; lore stopped writing to it" or a hint
+// "…; lore doctor shows why", which must never be checked as a command.
+var transcriptFenceLangs = map[string]bool{"console": true, "shell-session": true}
+
+// transcriptPrompt starts a command line inside a transcript fence.
+const transcriptPrompt = "$ "
+
+// codeFence opens and closes a fenced block.
+const codeFence = "```"
+
+// fenceLang returns the language of a fence-opening line ("```console" →
+// "console").
+func fenceLang(line string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), codeFence))
+}
+
 // docInvocation is one `lore …` command found in a document.
 type docInvocation struct {
 	code string
@@ -266,7 +284,7 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 	}
 	defer func() { _ = f.Close() }() // read-only
 	var out []docInvocation
-	inFence := false
+	inFence, transcript := false, false
 	n, start := 0, 0
 	pending := ""
 	// lastLineFrom is where the previous fenced line's invocations start
@@ -278,8 +296,9 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 	for sc.Scan() {
 		n++
 		line := sc.Text()
-		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+		if strings.HasPrefix(strings.TrimSpace(line), codeFence) {
 			inFence = !inFence
+			transcript = inFence && transcriptFenceLangs[fenceLang(line)]
 			pending, lastLineFrom = "", -1
 			continue
 		}
@@ -287,6 +306,11 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 			out = out[:lastLineFrom] // an example of the error, not a command to run
 		}
 		lastLineFrom = -1
+		// In a transcript only a prompt line (or the continuation of one,
+		// held in pending) is a command; anything else is output.
+		if transcript && pending == "" && !strings.HasPrefix(strings.TrimLeft(line, " \t"), transcriptPrompt) {
+			continue
+		}
 		// A trailing backslash continues the command on the next line.
 		if inFence && strings.HasSuffix(strings.TrimRight(line, " "), "\\") {
 			if pending == "" {
@@ -553,5 +577,47 @@ func TestCobraBuiltinsAreCommands(t *testing.T) {
 		if p := checkInvocation(c); p != "" {
 			t.Errorf("checkInvocation(%q) = %q, want valid", c, p)
 		}
+	}
+}
+
+// TestTranscriptOutputIsNotACommand pins that inside a console transcript
+// only prompt lines are commands: output such as "ERROR: … deleted; lore
+// stopped writing to it" or "lore live: landed on main" is never checked,
+// while a command after `;` on a prompt line, a continued prompt line, and
+// every line of a bash fence still are. The output case once failed the gate
+// and forced a docs example to hide the failing write it was meant to show.
+func TestTranscriptOutputIsNotACommand(t *testing.T) {
+	t.Parallel()
+	doc := "```console\n" +
+		"# alice, in billing\n" +
+		"$ lore task add 'close the books'\n" +
+		"ERROR: [E_READ_ONLY] the remote live ref was deleted; lore stopped writing to it\n" +
+		"  hint: run `lore live restore`; lore keeps a copy\n" +
+		"lore live: landed on main (abc1234)\n" +
+		"$ git fetch -q; lore rule list\n" +
+		"$ lore memory list \\\n" +
+		"  --json\n" +
+		"```\n" +
+		"```bash\n" +
+		"cd repo; lore decision list\n" +
+		"lore sync\n" +
+		"```\n"
+	path := filepath.Join(t.TempDir(), "doc.md")
+	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, inv := range docInvocations(t, path) {
+		got = append(got, inv.code)
+	}
+	want := []string{
+		"lore task add 'close the books'",
+		"lore rule list",
+		"lore memory list  --json", // continuation join keeps the line's space
+		"lore decision list",
+		"lore sync",
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("invocations = %q, want %q", got, want)
 	}
 }
