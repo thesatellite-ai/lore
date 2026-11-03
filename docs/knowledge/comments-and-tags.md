@@ -21,7 +21,7 @@ Both point at a row by its *table* (the kind of row, in the plural: `rules`, `me
 ```console
 # alice, in website
 $ lore comment add --on-table decisions --on-id dec_c0f3…b5b8 --body 'The client confirmed this on the call.'
-✓ comment cmt_9a34…b418 on decisions/dec_c0f3…b5b8 
+✓ comment cmt_67e2…291e on decisions/dec_c0f3…b5b8 
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
 ```
@@ -37,19 +37,19 @@ Create the tag with `lore tag add --name`, then attach it. Tag names are lowerca
 ```console
 # alice, in website
 $ lore tag add --name payments
-✓ tag payments tag_bfed…eeea
+✓ tag payments tag_8567…366f
 lore sync: exported 1
-lore sync: 20 file(s) in .lore/data not committed — commit them with your change
+lore sync: 23 file(s) in .lore/data not committed — commit them with your change
 $ lore tag attach --tag payments --on-table decisions --on-id dec_c0f3…b5b8
 ✓ tag "payments" attached to decisions/dec_c0f3…b5b8
 lore sync: exported 1
-lore sync: 21 file(s) in .lore/data not committed — commit them with your change
+lore sync: 24 file(s) in .lore/data not committed — commit them with your change
 $ lore tag list
-payments             tag_bfed…eeea  (1 uses)
+payments             tag_8567…366f  (1 uses)
 $ lore tag detach --tag payments --on-table decisions --on-id dec_c0f3…b5b8
 ✓ detached 1 tag binding(s)
 lore sync: removed files 1
-lore sync: 20 file(s) in .lore/data not committed — commit them with your change
+lore sync: 23 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -65,7 +65,7 @@ lore sync: 20 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore comment list --on-table decisions --on-id dec_c0f3…b5b8
-cmt_9a34…b418 on decisions/dec_c0f3…b5b8  The client confirmed this on the call.
+cmt_67e2…291e on decisions/dec_c0f3…b5b8  The client confirmed this on the call.
 ```
 <!-- /example -->
 

@@ -106,14 +106,42 @@ func normalizeStoreURL(url string) (string, error) {
 var ErrBadBranch = errors.New("stores: bad store branch name")
 
 // ValidateBranch applies fixed rule 3 (a store branch may not contain "/",
-// so refs/lore/live/<branch> never clashes) and git's ref-name rules that
-// matter for a single segment.
+// so refs/lore/live/<branch> never clashes) and every rule of
+// `git check-ref-format --branch` that can apply to one path segment, so a
+// name lore accepts is always a branch git will create:
+//
+//   - not empty, not starting with "-" or ".", not ending with "." or ".lock";
+//   - no "..", no "@{", no ASCII control character or DEL;
+//   - none of space ~ ^ : ? * [ \ (and "/", rule 3);
+//   - not "HEAD" (git refuses it as a branch name).
+//
+// "@" alone is refused too although git allows refs/heads/@: git reads a
+// bare "@" as HEAD, so `git push origin @` would push the wrong thing.
 func ValidateBranch(b string) error {
+	bad := func() error {
+		return fmt.Errorf("%w: %q (one path segment; no \"/\", spaces, control characters or git specials)", ErrBadBranch, b)
+	}
 	switch {
-	case b == "", b == ".", b == "..", strings.HasPrefix(b, "-"), strings.HasPrefix(b, "."),
-		strings.HasSuffix(b, ".lock"), strings.Contains(b, ".."), strings.Contains(b, "@{"),
+	case b == "", b == branchHEAD, b == branchAt,
+		strings.HasPrefix(b, "-"), strings.HasPrefix(b, "."),
+		strings.HasSuffix(b, "."), strings.HasSuffix(b, lockSuffix),
+		strings.Contains(b, ".."), strings.Contains(b, "@{"),
 		strings.ContainsAny(b, "/ \t~^:?*[\\"):
-		return fmt.Errorf("%w: %q (one path segment; no \"/\", spaces or git specials)", ErrBadBranch, b)
+		return bad()
+	}
+	for _, r := range b {
+		if r < asciiSpace || r == asciiDEL {
+			return bad()
+		}
 	}
 	return nil
 }
+
+// Names and bytes git's ref-name rules single out (see ValidateBranch).
+const (
+	branchHEAD = "HEAD"  // git refuses HEAD as a branch name
+	branchAt   = "@"     // git's shorthand for HEAD
+	lockSuffix = ".lock" // git's lock files; a ref may not end with it
+	asciiSpace = 0x20    // bytes below this are control characters
+	asciiDEL   = 0x7f    // DEL is refused like a control character
+)

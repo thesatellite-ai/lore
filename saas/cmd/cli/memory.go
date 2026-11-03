@@ -360,8 +360,8 @@ func runMemoryAdd(ctx context.Context, f *memoryAddFlags, rawBody string) error 
 	if f.sourceRef != "" {
 		create.SetSourceRef(f.sourceRef)
 	}
-	if f.supersedes != "" {
-		create.SetSupersededByID(f.supersedes)
+	if err := checkSupersedes(ctx, client, supersedeMemory, projectID, f.supersedes); err != nil {
+		return err
 	}
 	createdBy, aerr := resolveActorIDFlag(ctx, client, f.createdBy)
 	if aerr != nil {
@@ -382,6 +382,11 @@ func runMemoryAdd(ctx context.Context, f *memoryAddFlags, rawBody string) error 
 	mem, err := create.Save(ctx)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create memory").WithCause(err)
+	}
+	if err := finishSupersedes(ctx, client, supersedeMemory, f.supersedes, mem.ID, func(ctx context.Context) error {
+		return client.Memory.DeleteOneID(mem.ID).Exec(ctx)
+	}); err != nil {
+		return err
 	}
 
 	// 6. Output success

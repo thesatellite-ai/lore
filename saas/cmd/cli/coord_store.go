@@ -11,7 +11,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -23,6 +25,7 @@ import (
 
 	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/live"
 	"saas/pkg/aicoder/lorecfg"
@@ -237,7 +240,10 @@ func (r *storeRows) Get(ctx context.Context, id string) (coord.Doc, bool, error)
 	if err != nil {
 		return nil, false, err
 	}
-	files, _ := tree.Rows(r.sp.folder)
+	files, bad := tree.Rows(r.sp.folder)
+	if err := badRowsError(bad); err != nil {
+		return nil, false, err
+	}
 	if f, ok := files[live.RowKey{Table: tableOf(id), ID: id}]; ok {
 		if f.Deleted() {
 			return nil, false, nil
@@ -245,7 +251,13 @@ func (r *storeRows) Get(ctx context.Context, id string) (coord.Doc, bool, error)
 		return coord.Doc(f.Body), true, nil
 	}
 	b, ok, err := r.sp.st.Repo.ReadFile(ctx, stores.TrackingBranch(r.sp.branch), storeDataPath(r.sp.folder, tableOf(id), id))
-	if err != nil || !ok {
+	if errors.Is(err, gitref.ErrNotFound) {
+		return nil, false, nil // the store branch was never fetched: only live rows exist
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("read %s from the store branch: %w", id, err)
+	}
+	if !ok {
 		return nil, false, nil
 	}
 	d, err := decodeDoc(b)
@@ -253,6 +265,26 @@ func (r *storeRows) Get(ctx context.Context, id string) (coord.Doc, bool, error)
 		return nil, false, fmt.Errorf("decode %s: %w", id, err)
 	}
 	return d, true, nil
+}
+
+// storeRowFileExt is the extension of a row file on a store branch (the row
+// layout's own constant is unexported in live and lsync).
+const storeRowFileExt = ".json"
+
+// badRowsError turns the live rows that failed to decode (live.Tree.Rows'
+// bad map) into one error naming them, nil when there are none. A row that
+// cannot be read is never treated as absent: an absent task looks free to
+// `task next`, an absent claim fence looks unclaimed.
+func badRowsError(bad map[string]error) error {
+	if len(bad) == 0 {
+		return nil
+	}
+	paths := make([]string, 0, len(bad))
+	for p := range bad {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	return fmt.Errorf("unreadable live rows on the store's live ref: %s (first: %w)", strings.Join(paths, ", "), bad[paths[0]])
 }
 
 // List implements the listing half (task next): branch rows overlaid with
@@ -288,14 +320,26 @@ func (r *storeRows) listTable(ctx context.Context, table string) ([]coord.Doc, e
 	byID := map[string]coord.Doc{}
 	dir := strings.TrimSuffix(storeDataPath(r.sp.folder, table, "x"), "x.json")
 	files, err := r.sp.st.Repo.ReadTree(ctx, stores.TrackingBranch(r.sp.branch), strings.TrimSuffix(dir, "/"))
-	if err == nil {
-		for p, b := range files {
-			if d, err := decodeDoc(b); err == nil {
-				byID[strings.TrimSuffix(path.Base(p), ".json")] = d
-			}
-		}
+	switch {
+	case errors.Is(err, gitref.ErrNotFound):
+		// The store branch was never fetched: only live rows exist.
+	case err != nil:
+		return nil, fmt.Errorf("read %s from the store branch: %w", table, err)
 	}
-	rows, _ := tree.Rows(r.sp.folder)
+	for p, b := range files {
+		if path.Ext(p) != storeRowFileExt {
+			continue // not a row file (a placeholder such as .gitkeep)
+		}
+		d, err := decodeDoc(b)
+		if err != nil {
+			return nil, fmt.Errorf("decode %s: %w", p, err)
+		}
+		byID[strings.TrimSuffix(path.Base(p), ".json")] = d
+	}
+	rows, bad := tree.Rows(r.sp.folder)
+	if err := badRowsError(bad); err != nil {
+		return nil, err
+	}
 	for k, f := range rows {
 		if k.Table != table {
 			continue
@@ -371,11 +415,46 @@ func (r *storeRows) MergedCheck(ctx context.Context) {
 		}
 		next := d.Clone()
 		next.SetTime(keyMergedAtDoc, f.At)
-		comps, _ := r.Stage(ctx, coord.RowWrite{ID: c.TaskID, Doc: next})
-		if _, err := st.Write(ctx, func(signals.View) (signals.Change, error) { return signals.Change{Companions: comps}, nil }); err == nil {
-			fmt.Fprintf(os.Stderr, "✓ %s merged %s (found by: %s, %s)\n", c.TaskID, f.At.UTC().Format("15:04"), f.Method, shortSHA(f.Commit))
-		}
+		reportMerged(os.Stderr, c.TaskID, f, recordMerged(ctx, r, st, c.TaskID, next))
 	}
+}
+
+// rowStager is the staging half of coord.Rows that recording a merge needs
+// (storeRows in production; a seam for tests).
+type rowStager interface {
+	Stage(ctx context.Context, rows ...coord.RowWrite) ([]signals.Companion, error)
+}
+
+// signalsWriter is the one signals.Store call recording a merge needs.
+type signalsWriter interface {
+	Write(ctx context.Context, decide signals.Decide) (signals.Result, error)
+}
+
+// recordMerged stages the task row with merged_at and pushes it with the
+// signals write. Any failure — staging or the write — is returned, so the
+// caller reports "merged" only for a row that was actually written.
+func recordMerged(ctx context.Context, rs rowStager, st signalsWriter, id string, next coord.Doc) error {
+	comps, err := rs.Stage(ctx, coord.RowWrite{ID: id, Doc: next})
+	if err != nil {
+		return fmt.Errorf("stage %s: %w", id, err)
+	}
+	if _, err := st.Write(ctx, func(signals.View) (signals.Change, error) { return signals.Change{Companions: comps}, nil }); err != nil {
+		return fmt.Errorf("write %s: %w", id, err)
+	}
+	return nil
+}
+
+// reportMerged prints the outcome of one found merge: "✓ merged" only when
+// recording it succeeded (recErr nil); otherwise that it was found but not
+// recorded and the next command retries. The host command is not failed
+// (F9: the lazy check never fails the command that ran it).
+func reportMerged(out io.Writer, id string, f mergewatch.Finding, recErr error) {
+	if recErr != nil {
+		fmt.Fprintf(out, "lore: %s merged %s (found by: %s, %s) but it could not be recorded: %v; the next lore command retries\n",
+			id, f.At.UTC().Format("15:04"), f.Method, shortSHA(f.Commit), recErr)
+		return
+	}
+	fmt.Fprintf(out, "✓ %s merged %s (found by: %s, %s)\n", id, f.At.UTC().Format("15:04"), f.Method, shortSHA(f.Commit))
 }
 
 // groupMergedCheck runs the merged check for the linked store project's

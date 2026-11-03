@@ -85,7 +85,8 @@ func writeProjectMeta(dataDir string, m ProjectMeta) error {
 }
 
 // readPurged returns the set of ids purged on main (E47). Absent file ⇒
-// empty set.
+// empty set; an "ids" value that is not a list is an error, never an empty
+// set (that would let purged rows be imported again).
 func readPurged(dataDir string) (map[string]bool, error) {
 	out := map[string]bool{}
 	b, err := readRowFile(filepath.Join(dataDir, PurgedFileName))
@@ -99,11 +100,12 @@ func readPurged(dataDir string) (map[string]bool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("lsync: %s: %w", PurgedFileName, err)
 	}
-	list, _ := doc[purgedKeyIDs].([]any)
-	for _, v := range list {
-		if s, ok := v.(string); ok {
-			out[s] = true
-		}
+	ids, err := purgedIDList(doc)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		out[id] = true
 	}
 	return out, nil
 }

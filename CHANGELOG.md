@@ -24,10 +24,23 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1â€
 
 - `lore handoff add` takes `--for @handle` and `--task <id>`.
 - `lore task add --tasklist` is optional; the project's default task list is used (created on demand).
+- `lore rule list` hides archived rules; `--archived` shows them, marked `[archived]` (as `lore memory list` does).
+- `lore identity set` needs an email: `alice@example.com`, `"Alice <alice@example.com>"`, or a name with `--key human:<email>`. A bare name is refused instead of being saved as a key that is not an email.
+- Store branch names follow every rule of `git check-ref-format --branch` (a trailing `.`, control characters and `HEAD` are refused; so is `@`).
 
 ### Fixed
 
 - A push that loses a race (`reference already exists`, a failed atomic transaction) is retried instead of reported as a refusal.
+- Team writes fail closed: when the store cannot be reached or read, `lore task done`, `lore task cancel` and `lore finding add` stop with an error instead of writing the row into the client repo.
+- `lore task list --mine` and `--claimed-by` stop with an error when the claims board cannot be read, instead of showing every task.
+- A merged task that could not be recorded says so; "âœ“ merged" is printed only when the row was written. `lore store forget`, `store show` and `store doctor` report real failures instead of "nothing to forget", "not cloned" or "branch does not exist".
+- A purge list that cannot be read stops the live apply, `lore live restore`, the landing pass and the merge driver with a clear error, so purged rows can no longer come back; a malformed purge list on one side of a merge no longer loses the other side's ids.
+- Live rows are no longer dropped from lore.db when the live bookkeeping cannot be read after a refused write, and a live row file that cannot be read is no longer treated as having left live.
+- `@team` handles resolve in a linked client repo, so assigning a task there to a team is refused with TEAM-030 as the spec says.
+- `lore playbook add` and `lore prompt add` work again (new optional `--description`, defaulting to the title); `lore snapshot add` works again (new `--source`, default `manual`, checked against the known source kinds).
+- `LORE_PROJECT_ID` and `LORE_REPO` are read when `--db` or `LORE_DB` is used outside a project folder.
+- `--supersedes <id>` marks the old row: its `superseded_by_id` names the new row and a replaced decision becomes `superseded`. Unknown or already-replaced ids are refused and nothing is written.
+- `lore doctor` no longer warns about a secret in a row that was deleted or edited clean: the recorded sync refusal is cleared when the row goes.
 
 ### Documentation
 

@@ -18,8 +18,10 @@ import (
 	entTask "dbent/gen/ent/task"
 	entTeam "dbent/gen/ent/team"
 	"saas/pkg/aicoder/cachedb"
+	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
+	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
@@ -61,11 +63,31 @@ func applyTaskListTeam(ctx context.Context, client *ent.Client, f *taskListTeamF
 		}
 		return rows, nil, nil
 	}
+	return filterTeamRows(ctx, client, f, rows, st, w.Folder, w.ActorID)
+}
+
+// boardReader is the one signals read the team filters need: the last
+// fetched copy of the claims board (signals.Store.Local; a seam for tests).
+type boardReader interface {
+	Local(ctx context.Context) (signals.View, error)
+}
+
+// filterTeamRows applies --claimed-by / --mine to rows using the claims
+// board of folder as read by rd, for actorID (this clone's actor). A board
+// that cannot be read is an error whenever a filter is set (a filter it
+// cannot answer is never shown as every row matching); without filters
+// the rows are shown without coordination state.
+func filterTeamRows(ctx context.Context, client *ent.Client, f *taskListTeamFlags, rows []*ent.Task, rd boardReader, folder, actorID string) ([]*ent.Task, map[string]string, error) {
 	// The command's own live fetch (F3) already brought refs/lore/* — the
 	// signals ref included — into the tracking refs: read that copy, no
 	// second round trip. It also records what this clone saw (expiry).
-	v, err := st.Local(ctx)
+	v, err := rd.Local(ctx)
 	if err != nil {
+		// A filter cannot be answered without the board: refuse rather
+		// than show every row as if it matched.
+		if f.claimedBy != "" || f.mine {
+			return nil, nil, coordError(fmt.Errorf("read the signals ref: %w", err))
+		}
 		return rows, nil, nil
 	}
 	var holder string
@@ -76,10 +98,13 @@ func applyTaskListTeam(ctx context.Context, client *ent.Client, f *taskListTeamF
 	}
 	myTeams := map[string]bool{}
 	if f.mine {
-		teams, _ := client.Team.Query().Where(entTeam.Active(true)).All(ctx)
+		teams, err := client.Team.Query().Where(entTeam.Active(true)).All(ctx)
+		if err != nil {
+			return nil, nil, errcodes.New(errcodes.Internal, "read teams for --mine").WithCause(err)
+		}
 		for _, tm := range teams {
 			for _, m := range tm.MemberActorIds {
-				if m == w.ActorID {
+				if m == actorID {
 					myTeams[tm.ID] = true
 				}
 			}
@@ -88,15 +113,15 @@ func applyTaskListTeam(ctx context.Context, client *ent.Client, f *taskListTeamF
 	states := map[string]string{}
 	var out []*ent.Task
 	for _, t := range rows {
-		p := signals.ClaimPath(w.Folder, t.ID)
+		p := signals.ClaimPath(folder, t.ID)
 		sig, claimed := v.Board[p]
 		_, active := v.Active(p)
 		if holder != "" && !(claimed && active && sig.Holder == holder) {
 			continue
 		}
 		if f.mine {
-			assigned := (t.AssignedToActorID != nil && *t.AssignedToActorID == w.ActorID) || (t.AssignedTeam != nil && myTeams[*t.AssignedTeam])
-			free := !claimed || !active || sig.Holder == w.ActorID
+			assigned := (t.AssignedToActorID != nil && *t.AssignedToActorID == actorID) || (t.AssignedTeam != nil && myTeams[*t.AssignedTeam])
+			free := !claimed || !active || sig.Holder == actorID
 			if !assigned || !free {
 				continue
 			}
@@ -256,9 +281,16 @@ func printClaimOn(ctx context.Context, st *signals.Store, folder, id string) err
 // replacement agent reads where its predecessor stopped (§7.5 step 5) —
 // this repo's and, with their label, internal ones pointing at it from a
 // store (F15: pointers flow inward and are shown to the team).
+//
+// A read that fails is said on stderr (as list commands report external
+// rows they could not read), never shown as "no notes": an agent taking
+// over must know its predecessor's notes may be missing.
 func printTaskNotes(ctx context.Context, client *ent.Client, id string) {
-	cs, _ := client.Comment.Query().Where(entComment.EntityTable(tableTasks), entComment.EntityID(id)).
+	cs, err := client.Comment.Query().Where(entComment.EntityTable(tableTasks), entComment.EntityID(id)).
 		Order(ent.Asc(entComment.FieldCreatedAt)).All(ctx)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, style.Muted("lore: could not read the notes of "+id+": "+err.Error()))
+	}
 	external := externalCommentsOn(ctx, id)
 	if len(cs) == 0 && len(external) == 0 {
 		return
@@ -275,12 +307,20 @@ func printTaskNotes(ctx context.Context, client *ent.Client, id string) {
 
 // externalCommentsOn returns "body  [label]" for every store or personal
 // comment whose target is task id.
+// Problems reading the external rows are printed on stderr.
 func externalCommentsOn(ctx context.Context, id string) []string {
-	rows, _ := externalRowsHere(ctx, cachedb.Query{Table: tableComments})
+	rows, notes := externalRowsHere(ctx, cachedb.Query{Table: tableComments})
+	for _, n := range notes {
+		fmt.Fprintln(os.Stderr, style.Muted("lore: "+n))
+	}
 	var out []string
 	for _, r := range rows {
 		var doc map[string]any
-		if json.Unmarshal(r.Doc, &doc) != nil || doc["entity_id"] != id {
+		if err := json.Unmarshal(r.Doc, &doc); err != nil {
+			fmt.Fprintln(os.Stderr, style.Muted("lore: skipped an unreadable note "+r.ID+" "+r.Label+": "+err.Error()))
+			continue
+		}
+		if doc["entity_id"] != id {
 			continue
 		}
 		out = append(out, r.Body+"  "+r.Label)

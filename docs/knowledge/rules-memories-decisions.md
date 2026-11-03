@@ -116,22 +116,22 @@ The client replies faster on WhatsApp than email, even on weekends
 
 ## Step 5 — Replace a row with a new one
 
-When the meaning changes, add a new row and point it at the old one with `--supersedes <old id>`. This keeps the history: the old row stays readable, and the new row says what it replaced. `--supersedes` works on `rule add`, `memory add`, `decision add`, `hotfix add` and `pattern add`.
+When the meaning changes, add a new row and name the old one with `--supersedes <old id>`. This keeps the history: the old row stays readable and records which row replaced it (`superseded_by_id`, shown as `superseded-by` in `lore memory show`). A replaced decision also moves to `superseded`. `--supersedes` works on `rule add`, `memory add`, `decision add`, `hotfix add` and `pattern add`.
 
 <!-- example: knowledge#supersedes -->
 ```console
 # alice, in website
 $ lore decision add --title 'We use Stripe and bank transfer for payments' --body 'The client asked for bank transfer too.' --supersedes dec_c0f3…b5b8
 ✓ dec_76bd…3f10 — We use Stripe and bank transfer for payments 
-lore sync: exported 1
+lore sync: exported 2
 lore sync: 7 file(s) in .lore/data not committed — commit them with your change
 $ lore decision list
-dec_c0f3…b5b8 [accepted] We use Stripe for payments
+dec_c0f3…b5b8 [superseded] We use Stripe for payments
 dec_76bd…3f10 [accepted] We use Stripe and bank transfer for payments
 ```
 <!-- /example -->
 
-The old decision still says `accepted`. If you want it to say `superseded`, mark it yourself: `lore decision edit <old-id> --status superseded`.
+The old decision now says `superseded`. lore refuses `--supersedes` with an id that is not a row of the same kind in this project (`E_NOT_FOUND`), or a row that was already replaced (`E_INVALID_INPUT`: supersede the newer row instead, so the chain stays one line); a refused command writes nothing.
 
 ## Step 6 — Mark a memory as no longer true
 
@@ -156,15 +156,22 @@ The office printer is on the second floor
 
 ## Step 7 — Retire a rule for now
 
-`archive` hides a row from the rendered file and from search without deleting it. `unarchive` brings it back.
+`archive` hides a row from `lore rule list`, the rendered file and search without deleting it. `lore rule list --archived` shows it again with an `[archived]` mark; `unarchive` brings it back.
 
-<!-- example: knowledge#archive only=1,3,4 -->
+<!-- example: knowledge#archive only=1,2,3,4,5 -->
 ```console
 # alice, in website
 $ lore rule archive rul_7a67…9504
 ✓ rul_7a67…9504 archived
 lore sync: exported 1
 lore sync: 8 file(s) in .lore/data not committed — commit them with your change
+$ lore rule list
+rul_2ad3…f891 [must/always] Never put passwords in the code
+rul_162d…9666 [should/always] Keep pull requests under 400 lines
+$ lore rule list --archived
+rul_7a67…9504 [must/always] Run the tests before you push [archived]
+rul_2ad3…f891 [must/always] Never put passwords in the code
+rul_162d…9666 [should/always] Keep pull requests under 400 lines
 $ lore render >/dev/null && grep -c 'Run the tests before you push' .lore/LORE.md || true
 0
 $ lore rule unarchive rul_7a67…9504
@@ -218,9 +225,9 @@ lore sync: secret-detected memories/mem_28f8…03df.json: credential pattern pas
 
 ## Pitfalls
 
-- **`rule list` still shows archived rules.** `lore memory list` hides archived memories unless you pass `--archived`, but `lore rule list` shows every rule with no mark. The rendered file and search do skip archived rules. Check with `lore rule show <id>` or `lore search` when in doubt.
+- **Archived rows are hidden from lists.** `lore rule list` and `lore memory list` skip archived rows; pass `--archived` to see them with an `[archived]` mark.
 - **An invalidated memory is still listed and still found by search.** `invalidate` records the end date (`valid-until` in `lore memory show`); it does not hide the row. Archive it as well if you want it out of the way.
-- **`--supersedes` does not change the old row.** The new row records the link; the old one keeps its status. Edit the old decision's status by hand (Step 5).
+- **Rows written by older lore versions point the other way.** Before this was fixed, `--supersedes` stored the old id on the new row and left the old row unchanged. Such pairs keep that shape; edit them by hand if you need the chain.
 - **`delete` wants `--confirm`, not `--yes`.** `--yes` is the answer to lore's "are you sure?" questions elsewhere; `delete` stops with `unknown flag: --yes`.
 - **Shell quotes.** Wrap the body in single quotes so the shell does not touch `$` or `!` in your text. You can also pipe the body in: `echo 'Run the tests before you push' | lore rule add`.
 - **`--allow-secrets` does not put the secret in git.** Rules and memories are checked when you add them; every kind of row is checked again before its file is written to `.lore/data`. A decision with a password in its body is added without a question, then kept out of git with a `secret-detected` line on every command. Fix the row (`edit`) or delete it. `LORE_SYNC_ALLOW_SECRETS=1` lets one run write it anyway; do not use it for real passwords.

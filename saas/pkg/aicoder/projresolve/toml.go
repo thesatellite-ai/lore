@@ -44,6 +44,14 @@ const (
 	CrashDirRel     = "crashes" // relative to ~/.lore/
 )
 
+// Environment variables of the resolution chain (step 2, between the flags
+// and the pointer file). Each mirrors one flag: --db, --project, --repo.
+const (
+	EnvDB        = "LORE_DB"
+	EnvProjectID = "LORE_PROJECT_ID"
+	EnvRepo      = "LORE_REPO"
+)
+
 // Sentinels.
 var (
 	ErrNotProjectRoot      = errors.New("projresolve: cwd is not an aicoder project root (no .lore/lore.db or lore.yaml)")
@@ -259,7 +267,7 @@ func Resolve(in Inputs) (*Context, error) {
 	explicitDB := in.FlagDB
 	explicitDBSource := "flag"
 	if explicitDB == "" {
-		if v := os.Getenv("LORE_DB"); v != "" {
+		if v := os.Getenv(EnvDB); v != "" {
 			explicitDB = v
 			explicitDBSource = "env"
 		}
@@ -272,25 +280,23 @@ func Resolve(in Inputs) (*Context, error) {
 		if explicitDB == "" {
 			return nil, err
 		}
-		return &Context{
-			Mode:          ModeA,
-			DBPath:        explicitDB,
-			ProjectRoot:   cwd,
-			RepoMount:     in.FlagRepo,
-			ProjectID:     in.FlagProject,
-			SourceDB:      explicitDBSource,
-			SourceProject: "flag",
-		}, nil
+		// The project id and repo mount follow the same flag > env chain
+		// as inside a project; only the pointer/local steps are missing.
+		c := &Context{
+			Mode:        ModeA,
+			DBPath:      explicitDB,
+			ProjectRoot: cwd,
+			RepoMount:   resolveRepoMount(in.FlagRepo),
+			SourceDB:    explicitDBSource,
+		}
+		resolveProject(c, in.FlagProject)
+		return c, nil
 	}
 
 	c := &Context{
 		Mode:        mode,
 		ProjectRoot: cwd,
-		RepoMount:   in.FlagRepo,
-	}
-
-	if c.RepoMount == "" {
-		c.RepoMount = os.Getenv("LORE_REPO")
+		RepoMount:   resolveRepoMount(in.FlagRepo),
 	}
 
 	// In Mode B, always load the pointer first so we can extract project_id
@@ -311,8 +317,8 @@ func Resolve(in Inputs) (*Context, error) {
 	switch {
 	case in.FlagDB != "":
 		c.DBPath, c.SourceDB = in.FlagDB, "flag"
-	case os.Getenv("LORE_DB") != "":
-		c.DBPath, c.SourceDB = os.Getenv("LORE_DB"), "env"
+	case os.Getenv(EnvDB) != "":
+		c.DBPath, c.SourceDB = os.Getenv(EnvDB), "env"
 	default:
 		switch mode {
 		case ModeA:
@@ -327,20 +333,36 @@ func Resolve(in Inputs) (*Context, error) {
 	}
 
 	// Resolve project id: flag > env > toml (already loaded above for Mode B).
+	resolveProject(c, in.FlagProject)
+	return c, nil
+}
+
+// resolveRepoMount applies the repo-mount chain: --repo flag, then
+// LORE_REPO. "" means master scope.
+func resolveRepoMount(flagRepo string) string {
+	if flagRepo != "" {
+		return flagRepo
+	}
+	return os.Getenv(EnvRepo)
+}
+
+// resolveProject applies the project-id chain to c: --project flag, then
+// LORE_PROJECT_ID, then whatever the pointer already put in c.ProjectID.
+// With none of them the source is "local": the caller picks the single
+// project in the database (or reports E_AMBIGUOUS_PROJECT). Every Resolve
+// path goes through here, so an explicit --db / LORE_DB outside a project
+// honours LORE_PROJECT_ID exactly like a project folder does.
+func resolveProject(c *Context, flagProject string) {
 	switch {
-	case in.FlagProject != "":
-		c.ProjectID, c.SourceProject = in.FlagProject, "flag"
-	case os.Getenv("LORE_PROJECT_ID") != "":
-		c.ProjectID, c.SourceProject = os.Getenv("LORE_PROJECT_ID"), "env"
+	case flagProject != "":
+		c.ProjectID, c.SourceProject = flagProject, "flag"
+	case os.Getenv(EnvProjectID) != "":
+		c.ProjectID, c.SourceProject = os.Getenv(EnvProjectID), "env"
 	case c.ProjectID != "":
-		// already set from toml
+		// already set from the pointer (Mode B); SourceProject says "toml".
 	default:
-		// Mode A with no flag/env: project ID is whatever single row exists in
-		// the DB. Caller queries the projects table.
 		c.SourceProject = "local"
 	}
-
-	return c, nil
 }
 
 // fileExists returns true if path stats successfully (any file kind).

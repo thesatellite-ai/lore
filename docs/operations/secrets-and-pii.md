@@ -99,7 +99,7 @@ Use them for one command, not in your shell profile, so the refusal is back next
 
 - **The check looks at shapes, not meaning.** A password written as plain words ("the password is blue-horse-42") does not match any pattern. Never rely on lore as your only guard.
 - **`--allow-secrets` rows live in your backups too.** `lore backup` copies the whole database. Do not put `.lore/backups/` in a shared folder.
-- **A forced row keeps a warning in `lore doctor`.** Each refused file shows as a `secret-detected` warning and makes doctor DEGRADED. Today that warning stays even after you delete the row (reported bug).
+- **A forced row keeps a warning in `lore doctor` while it exists.** Each refused file shows as a `secret-detected` warning and makes doctor DEGRADED. Edit the text or delete the row; once the row is gone, doctor drops the warning.
 - **Custom patterns do nothing yet** (see above), even when `lore pii-pattern list` shows them `[on]`.
 - **Support bundles are safe to share by default:** they carry counts, not note text. See [doctor](doctor.md#send-a-support-bundle-with-a-bug-report).
 

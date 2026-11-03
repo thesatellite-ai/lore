@@ -385,7 +385,7 @@ alice (work/website)$ lore memory delete mem_d4314eba822f1bf5908b2b8ded5f313a --
 lore sync: secret-detected memories/mem_d4314eba822f1bf5908b2b8ded5f313a.json: credential pattern aws_access_key found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
 ✓ mem_d4314eba822f1bf5908b2b8ded5f313a deleted (hard)
 alice (work/website)$ lore doctor
-Status: DEGRADED
+Status: HEALTHY
 Binary: 0.1.0-dev
 
 [db]
@@ -396,7 +396,7 @@ Binary: 0.1.0-dev
   baselined:        true
   pending exports:  0
   open conflicts:   0
-  file errors:      1
+  file errors:      0
   merge driver:     true
   uncommitted:      0
 
@@ -409,6 +409,3 @@ Notes:
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 20s ago
   - live: post-commit and pre-push hook blocks installed
-
-Warnings:
-  - lore file memories/mem_d4314eba822f1bf5908b2b8ded5f313a.json: credential pattern aws_access_key found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run (secret-detected)

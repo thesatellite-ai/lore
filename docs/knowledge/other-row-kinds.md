@@ -23,7 +23,7 @@ You can write almost anything as a memory. A more exact kind helps in two ways: 
 | Workflow | `lore workflow` | `wfl_` | the named steps of a process | "Code review: one approval before merge" |
 | Workspace | `lore workspace` | `wsp_` | a folder label for a stream of work | "Website redesign" |
 
-Most kinds take `--title` and `--body`. Two are different: `tastepref add` takes only `--body`, and `techdoc add` takes `--name`, `--base-url` and `--description` instead.
+Most kinds take `--title` and `--body`. Two are different: `tastepref add` takes only `--body`, and `techdoc add` takes `--name`, `--base-url` and `--description` instead. Playbooks and prompts also take an optional `--description`, a one-line summary that defaults to the title.
 
 ## Before you start
 
@@ -61,13 +61,49 @@ lore sync: 10 file(s) in .lore/data not committed — commit them with your chan
 ```
 <!-- /example -->
 
+<!-- example: knowledge#playbook -->
+```console
+# alice, in website
+$ lore playbook add --title 'How to release' --body '1. Run the tests. 2. Tag the release. 3. Post in the team chat.'
+✓ pbk_f147…5139
+lore sync: exported 1
+lore sync: 11 file(s) in .lore/data not committed — commit them with your change
+```
+<!-- /example -->
+
+A playbook and a prompt also keep a one-line summary. `--description` sets it; without it, the title is the summary:
+
+<!-- example: knowledge#prompt -->
+```console
+# alice, in website
+$ lore prompt add --title 'Review a pull request' --description 'Bugs first, then style' --body 'Read the change, list bugs first, then style notes.'
+✓ prm_2537…6bbb
+lore sync: exported 1
+lore sync: 12 file(s) in .lore/data not committed — commit them with your change
+```
+<!-- /example -->
+
+A snapshot is stamped with today's date, which `lore snapshot list` shows. `--source` says where it came from (`manual`, the default, or `learn-from`, `agent-proposal`, `plugin`, `imported`, `migrated`):
+
+<!-- example: knowledge#snapshot -->
+```console
+# alice, in website
+$ lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'
+✓ snp_b69e…5ed7 — Week 44
+lore sync: exported 1
+lore sync: 13 file(s) in .lore/data not committed — commit them with your change
+$ lore snapshot list
+snp_b69e…5ed7 Week 44   (2026-11-02)
+```
+<!-- /example -->
+
 <!-- example: knowledge#incident -->
 ```console
 # alice, in website
 $ lore incident add --title 'Site down for 20 minutes' --body 'The disk filled up with logs. We now rotate logs daily.'
-✓ inc_f147…5139
+✓ inc_0aae…a61f
 lore sync: exported 1
-lore sync: 11 file(s) in .lore/data not committed — commit them with your change
+lore sync: 14 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -75,9 +111,9 @@ lore sync: 11 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete any file you did not create.'
-✓ bhv_2537…6bbb
+✓ bhv_6a86…ed8c
 lore sync: exported 1
-lore sync: 12 file(s) in .lore/data not committed — commit them with your change
+lore sync: 15 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -85,9 +121,9 @@ lore sync: 12 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore architecturenote add --title 'How the site is built' --body 'The website reads products from the shop API and caches them for 5 minutes.'
-✓ anr_b69e…5ed7
+✓ anr_4f89…b64b
 lore sync: exported 1
-lore sync: 13 file(s) in .lore/data not committed — commit them with your change
+lore sync: 16 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -95,9 +131,9 @@ lore sync: 13 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore cookbookrecipe add --title 'Add a new page' --body 'Copy pages/about, rename it, add a link in the menu.'
-✓ cbr_0aae…a61f
+✓ cbr_77cb…76c4
 lore sync: exported 1
-lore sync: 14 file(s) in .lore/data not committed — commit them with your change
+lore sync: 17 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -105,9 +141,9 @@ lore sync: 14 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore suggestion add --title 'Add dark mode' --body 'Several users asked for it.'
-✓ sug_6a86…ed8c
+✓ sug_d191…45c2
 lore sync: exported 1
-lore sync: 15 file(s) in .lore/data not committed — commit them with your change
+lore sync: 18 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -115,9 +151,9 @@ lore sync: 15 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore workflow add --title 'Code review' --body 'One approval from a second developer before merge.'
-✓ wfl_d191…45c2
+✓ wfl_bfed…eeea
 lore sync: exported 1
-lore sync: 18 file(s) in .lore/data not committed — commit them with your change
+lore sync: 21 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -125,9 +161,9 @@ lore sync: 18 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore workspace add --title 'Website redesign' --body 'Everything for the new look of the site.'
-✓ wsp_b4d3…11aa
+✓ wsp_376c…8e1a
 lore sync: exported 1
-lore sync: 19 file(s) in .lore/data not committed — commit them with your change
+lore sync: 22 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -137,9 +173,9 @@ lore sync: 19 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore tastepref add --body 'Buttons are blue'
-✓ tst_4f89…b64b
+✓ tst_b4d3…11aa
 lore sync: exported 1
-lore sync: 16 file(s) in .lore/data not committed — commit them with your change
+lore sync: 19 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -147,9 +183,9 @@ lore sync: 16 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore techdoc add --name 'Payments docs' --base-url https://docs.example.com/payments --description 'How to take a card payment'
-✓ tdc_77cb…76c4 Payments docs
+✓ tdc_9a34…b418 Payments docs
 lore sync: exported 1
-lore sync: 17 file(s) in .lore/data not committed — commit them with your change
+lore sync: 20 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -159,15 +195,14 @@ lore sync: 17 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore incident list; lore tastepref list; lore techdoc list
-IN  inc_f147…5139
-TA  tst_4f89…b64b
-tdc_77cb…76c4 Payments docs https://docs.example.com/payments
+IN  inc_0aae…a61f
+TA  tst_b4d3…11aa
+tdc_9a34…b418 Payments docs https://docs.example.com/payments
 ```
 <!-- /example -->
 
 ## Pitfalls
 
-- **`playbook add`, `prompt add` and `snapshot add` fail in this build.** They stop with `E_INTERNAL` ("missing required field"): the command has no flag for a field the database requires. This is a reported bug. Until it is fixed, write the how-to as a cookbook recipe or a memory, and the status picture as a memory with `--kind episodic`.
 - **Some lists show only the id.** `lore incident list` and `lore tastepref list` print a two-letter tag and the id, not the text. Use `lore <kind> show <id>` or `lore search` to read them.
 - **`hotfix list` shows the body, not the title.** Keep the first words of the body clear.
 - **Not every kind has `edit` or `archive`.** Snapshots, incidents and tech docs have no `edit`; only rules, memories, decisions, hotfixes, patterns, playbooks, prompts and snapshots have `archive`. Run `lore <kind> --help` to see the verbs.

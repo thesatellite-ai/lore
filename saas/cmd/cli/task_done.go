@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	entTask "dbent/gen/ent/task"
@@ -155,6 +156,15 @@ func runTaskDone(ctx context.Context, f *taskDoneFlags, id string) error {
 		}
 		return finishDone(ctx, f, id)
 	}
+	// Coordination could not be opened: only a checkout without team
+	// coordination falls back to lore.db; any other failure stops here, so
+	// a store task or a linked client task is never finished behind the
+	// store's back (fixed rule 6).
+	if coordErr != nil {
+		if err := plainRowFallback(ctx, coordErr); err != nil {
+			return err
+		}
+	}
 	if err := plainDone(ctx, f, id); err != nil {
 		return err
 	}
@@ -293,27 +303,33 @@ func newTaskCancelCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			id := args[0]
-			if w, t, err := openTaskCoord(ctx, id, from); err == nil {
-				defer t.Close()
-				cs, err := readClaim(ctx, w, t, id)
-				if err != nil {
+			w, t, coordErr := openTaskCoord(ctx, id, from)
+			if coordErr != nil {
+				// Same rule as `task done`: only a checkout without team
+				// coordination cancels through lore.db.
+				if err := plainRowFallback(ctx, coordErr); err != nil {
+					return err
+				}
+				return updateTaskStatus(ctx, &f, id, entTask.StatusCancelled, "cancelled")
+			}
+			defer t.Close()
+			cs, err := readClaim(ctx, w, t, id)
+			if err != nil {
+				return coordError(err)
+			}
+			if cs.claimed {
+				if err := requireHuman(w, "cancelling a claimed task"); err != nil {
+					return err
+				}
+				if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideCancel, func(d coord.Doc) {
+					d["status"] = string(entTask.StatusCancelled)
+				}); err != nil {
 					return coordError(err)
 				}
-				if cs.claimed {
-					if err := requireHuman(w, "cancelling a claimed task"); err != nil {
-						return err
-					}
-					if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideCancel, func(d coord.Doc) {
-						d["status"] = string(entTask.StatusCancelled)
-					}); err != nil {
-						return coordError(err)
-					}
-					fmt.Printf("%s %s cancelled (claim by %s dropped)\n", style.Success("✓"), id, holderLabel(cs.sig))
-					return nil
-				}
+				fmt.Printf("%s %s cancelled (claim by %s dropped)\n", style.Success("✓"), id, holderLabel(cs.sig))
+				return nil
 			}
-			if w, t, err := openTaskCoord(ctx, id, from); err == nil && isStoreTarget(t) {
-				defer t.Close()
+			if isStoreTarget(t) {
 				if _, err := coord.Update(ctx, w.env(t), id, func(d coord.Doc, _ time.Time) error {
 					d["status"] = string(entTask.StatusCancelled)
 					return nil
@@ -338,25 +354,106 @@ const kindMemory = "memory"
 // repo when the row is one of its own (live or branch data), else the
 // linked store project (group work, and a client repo's own task unless
 // the org sets agent_details: client — lessons are agent work details, D8).
-// A repo without links is always "repo".
+//
+// When this checkout has no store links (or no team coordination at all)
+// it returns no --to, so the ordinary F14 resolver decides exactly as for
+// any write without --to: this repo for an own repo or no org, a refusal
+// for an unlinked client repo or an unknown link status (fixed rule 6).
+// Every other failure is returned: a row is never routed into the repo
+// because lore could not tell where it belongs.
 func rowHomeTo(ctx context.Context, id string) (toFlags, error) {
 	w, err := openCoordWorld(ctx)
-	if err != nil || len(w.Links) == 0 {
-		return toFlags{To: toRepo}, nil
+	if err != nil {
+		if isNoTeamCoordination(err) {
+			return toFlags{}, nil
+		}
+		return toFlags{}, fmt.Errorf("decide where the note on %s lives: %w", id, err)
 	}
-	if t, err := openRepoTarget(ctx, w); err == nil {
-		_, found, _ := t.Rows.Get(ctx, id)
+	if w.LinkUnknown || len(w.Links) == 0 {
+		return toFlags{}, nil
+	}
+	t, err := openRepoTarget(ctx, w)
+	switch {
+	case err == nil:
+		_, found, gerr := t.Rows.Get(ctx, id)
 		t.Close()
+		if gerr != nil {
+			return toFlags{}, fmt.Errorf("decide where the note on %s lives: read the repo's row: %w", id, gerr)
+		}
 		internal := w.Role == orgresolve.RoleClient && (w.Org == nil || w.Org.EffectiveAgentDetails() != lorecfg.AgentDetailsClient)
 		if found && !internal {
 			return toFlags{To: toRepo}, nil
 		}
+	case errcodes.IsCode(err, errcodes.NotImplemented):
+		// This checkout has no live rows (errRowsNotWired), so the row is
+		// not one this repo coordinates: the linked store project, the
+		// internal side, is its home.
+	default:
+		return toFlags{}, fmt.Errorf("decide where the note on %s lives: %w", id, err)
+	}
+	if w.Org == nil {
+		return toFlags{}, errcodes.New(errcodes.LinkUnknown, "this repo has store links but no org resolved; refusing to choose where the note on "+id+" lives").
+			WithHint("`lore whoami` shows the org and link status")
 	}
 	link, err := defaultLink(w.Links)
 	if err != nil {
 		return toFlags{}, err
 	}
 	return toFlags{To: w.Org.Name + "/" + link.Folder}, nil
+}
+
+// isNoTeamCoordination reports whether an openCoordWorld/openTaskCoord
+// failure is one of the documented "this checkout has no team
+// coordination" refusals, the only failures a task command may answer by
+// using lore.db directly:
+//   - E_UNSUPPORTED: not a git repository (openCoordWorld);
+//   - E_NOT_IMPLEMENTED: no live rows here (errRowsNotWired: lore not
+//     initialised in git, or LORE_LIVE=0);
+//   - E_IDENTITY_FAILED: no roster actor (a solo person on the fallback
+//     identity, requireActor).
+//
+// Whether the checkout is linked to a store is checked separately
+// (plainRowFallback): the same codes from a linked checkout are refusals.
+func isNoTeamCoordination(err error) bool {
+	for _, c := range []errcodes.Code{errcodes.Unsupported, errcodes.NotImplemented, errcodes.IdentityFailed} {
+		if errcodes.IsCode(err, c) {
+			return true
+		}
+	}
+	return false
+}
+
+// plainRowFallback decides whether a task command whose coordination
+// could not be opened (coordErr) may write the task through this repo's
+// lore.db instead. It may only when coordErr is a no-team refusal
+// (isNoTeamCoordination) AND the org situation, read again, shows no
+// store link and a known link status. Otherwise it returns the error to
+// report — coordErr itself, or why the situation could not be read — and
+// nothing is written (fixed rule 6: a linked client task or a store task
+// is never changed behind the store's back).
+func plainRowFallback(ctx context.Context, coordErr error) error {
+	if !isNoTeamCoordination(coordErr) {
+		return coordError(coordErr)
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+	}
+	sit, err := gatherOrgSituation(ctx, dir)
+	if err != nil {
+		return err
+	}
+	if sit.ResolveErr != nil {
+		return orgResolveCLIError(sit.ResolveErr)
+	}
+	if sit.Result.LinkUnknown {
+		return errcodes.New(errcodes.LinkUnknown, "cannot tell whether this repo is a client repo; refusing to write the task here").
+			WithHint("`lore whoami` shows the link status; fetch the store and retry")
+	}
+	if len(sit.Result.Links) > 0 {
+		return coordError(coordErr)
+	}
+	return nil
 }
 
 // toRepo is the --to value for this repo's own project.

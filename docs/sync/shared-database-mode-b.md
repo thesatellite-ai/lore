@@ -90,7 +90,7 @@ Commit `.lore/lore.yaml` only if every teammate keeps the database at the same p
 
 lore decides which database and project to use in this order: a flag (`--db`, `--project`, `--repo`), then an environment variable (`LORE_DB`, `LORE_PROJECT_ID`, `LORE_REPO`), then the pointer `.lore/lore.yaml`, then a local `.lore/lore.db`. It only looks in the current folder, never in parent folders. So from anywhere you can name the database and the project; and inside a pointer folder, `LORE_PROJECT_ID` reads another project's notes:
 
-<!-- example: projects#pick-the-database only=1,2,3 -->
+<!-- example: projects#pick-the-database -->
 ```console
 # alice, in ~
 $ lore rule list --db ~/.lore/client2.db --project api
@@ -100,6 +100,10 @@ rul_b4f4…a5b0 [must/always] Every screen works on a phone.
 
 # alice, in infra
 $ LORE_PROJECT_ID=$(grep project_id ../api/.lore/lore.yaml | cut -d' ' -f2) lore rule list
+rul_28f8…03df [must/always] Every change comes with a test.
+
+# alice, in ~
+$ LORE_DB=~/.lore/client2.db LORE_PROJECT_ID=$(grep project_id api/.lore/lore.yaml | cut -d' ' -f2) lore rule list
 rul_28f8…03df [must/always] Every change comes with a test.
 ```
 <!-- /example -->
@@ -126,7 +130,7 @@ $ lore project shared-list --db ~/.lore/client2.db
 api                            prj_76bd…3f10  last_active=2026-11-02
 app                            prj_c0f3…b5b8  last_active=2026-11-02
 infra                          prj_d431…313a  last_active=2026-11-02
-scratch                        prj_4c59…6c38  last_active=2026-11-02
+scratch                        prj_4c59…6c38  last_active=2026-11-03
 
 # alice, in scratch
 $ lore project unarchive prj_4c59…6c38
@@ -175,7 +179,7 @@ ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lo
 
 - **No sync in Mode B.** There is no `.lore/data`, so branches, pull requests and teammates never see these notes, and `lore sync` has nothing to do. Back up the shared file yourself.
 - **Both files in one folder is an error** (`E_AMBIGUOUS_PROJECT`). `shared-init` refuses a folder that has a `.lore` folder, but copying a `lore.db` in later causes this.
-- **A database with several projects needs a project.** `--db file` from outside a pointer folder must come with `--project <name-or-id>` (error `E_AMBIGUOUS_PROJECT` otherwise). Today `LORE_PROJECT_ID` is not read in that case, only `--project`: use the flag.
+- **A database with several projects needs a project.** `--db file` (or `LORE_DB`) from outside a pointer folder must come with `--project <name-or-id>` or `LORE_PROJECT_ID` (error `E_AMBIGUOUS_PROJECT` otherwise).
 - **`..` is refused in `db_path`.** A pointer whose path climbs out with `..` is refused (`E_BAD_PATH`), so a repo you cloned cannot point lore at a file outside where you expect. `LORE_ALLOW_DB_PATH_OUTSIDE=1` allows it when you really mean it.
 - **Older pointer files are converted.** A repo set up with an older lore has `.lore/lore.toml`. lore converts it to `lore.yaml` the first time it reads it and keeps the old file as `lore.toml.migrated`:
 

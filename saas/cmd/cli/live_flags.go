@@ -265,23 +265,36 @@ func ctxOrBackground(ctx context.Context) context.Context {
 	return ctx
 }
 
+// whyMissingOnLive explains an id the live tree knows about: a tombstone,
+// or an id in _live/purged.json. "" when the tree says nothing about it. An
+// unreadable purge list is reported, never read as "not purged".
+func whyMissingOnLive(tree live.Tree, folder, id string) string {
+	rows, _ := tree.Rows(folder) // undecodable files say nothing about id; they are reported by apply
+	for k, f := range rows {
+		if k.ID == id && f.Deleted() {
+			when := ""
+			if !f.Block.HLC.Wall.IsZero() {
+				when = ", " + f.Block.HLC.Wall.Format(time.DateOnly)
+			}
+			return fmt.Sprintf("%s was deleted (live%s)", id, when)
+		}
+	}
+	purged, err := tree.Purged()
+	if err != nil {
+		return fmt.Sprintf("%s: the live purge list could not be read (%v)", id, err)
+	}
+	if purged[id] {
+		return id + " was deleted on purpose (`lore live purge`)"
+	}
+	return ""
+}
+
 // whyMissing explains an id lore.db does not hold: a live tombstone, or
 // an id in origin/main's _purged.json. "" when live knows nothing.
 func (s *liveSession) whyMissing(ctx context.Context, folder, id string) string {
-	_, tree, err := s.ref.LocalTree(ctx)
-	if err == nil {
-		rows, _ := tree.Rows(folder)
-		for k, f := range rows {
-			if k.ID == id && f.Deleted() {
-				when := ""
-				if !f.Block.HLC.Wall.IsZero() {
-					when = ", " + f.Block.HLC.Wall.Format(time.DateOnly)
-				}
-				return fmt.Sprintf("%s was deleted (live%s)", id, when)
-			}
-		}
-		if purged, _ := tree.Purged(); purged[id] {
-			return id + " was deleted on purpose (`lore live purge`)"
+	if _, tree, err := s.ref.LocalTree(ctx); err == nil {
+		if why := whyMissingOnLive(tree, folder, id); why != "" {
+			return why
 		}
 	}
 	if s.purgedOnMain(ctx, folder, id) {

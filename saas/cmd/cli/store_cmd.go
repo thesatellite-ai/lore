@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -157,13 +158,25 @@ func collectStores(ctx context.Context, cfg *lorecfg.Config, m *stores.Manager) 
 	var out []*storeView
 	for _, dir := range order {
 		v := byDir[dir]
-		if st, err := m.Lookup(ctx, v.URL); err == nil {
+		st, err := m.Lookup(ctx, v.URL)
+		switch {
+		case errors.Is(err, stores.ErrNoClone):
+			// Not cloned on this machine yet: Cloned stays false.
+		case err != nil:
+			// A clone that exists but cannot be opened is a problem, not
+			// "not cloned" (it may hold unpushed work).
+			v.Problems = append(v.Problems, "open the clone: "+redactIfQuiet(err.Error()))
+		default:
 			v.Cloned, v.store = true, st
 			if t := st.LastFetch(); !t.IsZero() {
 				v.LastFetch = &t
 			}
 			v.DefaultBranch = st.DefaultBranch()
-			if un, err := st.Unpushed(ctx); err == nil && un != nil {
+			un, err := st.Unpushed(ctx)
+			switch {
+			case err != nil:
+				v.Problems = append(v.Problems, unpushedUnknownProblem+redactIfQuiet(err.Error()))
+			case un != nil:
 				v.Unpushed = un
 			}
 		}
@@ -171,6 +184,56 @@ func collectStores(ctx context.Context, cfg *lorecfg.Config, m *stores.Manager) 
 	}
 	return out, nil
 }
+
+// doctorCheckStore runs every doctor check of one store and appends what is
+// wrong to v.Problems. A check that cannot run is itself a problem: doctor
+// never passes a store it could not check.
+func doctorCheckStore(ctx context.Context, m *stores.Manager, v *storeView) {
+	st, err := m.Open(ctx, v.URL)
+	if err != nil {
+		v.Problems = append(v.Problems, redactIfQuiet(err.Error()))
+		return
+	}
+	fr, err := st.Fetch(ctx, true)
+	switch {
+	case err != nil:
+		v.Problems = append(v.Problems, "fetch: "+redactIfQuiet(err.Error()))
+	case fr.Offline:
+		v.Problems = append(v.Problems, "unreachable (using the last fetched state)")
+	default:
+		t := fr.At
+		v.LastFetch = &t
+	}
+	v.DefaultBranch = st.DefaultBranch()
+	for _, b := range v.Branches {
+		_, ok, err := st.Tip(ctx, b)
+		if err != nil {
+			v.Problems = append(v.Problems, fmt.Sprintf("branch %s: %s", b, redactIfQuiet(err.Error())))
+			continue
+		}
+		if !ok {
+			v.Problems = append(v.Problems, fmt.Sprintf("branch %s does not exist (`lore store init <url> --branch %s`)", b, b))
+			continue
+		}
+		if err := st.Check(ctx, b); err != nil {
+			v.Problems = append(v.Problems, redactIfQuiet(err.Error()))
+		}
+	}
+	un, err := st.Unpushed(ctx)
+	switch {
+	case err != nil:
+		// Doctor must not pass a store it could not check.
+		v.Problems = append(v.Problems, unpushedUnknownProblem+redactIfQuiet(err.Error()))
+	case len(un) > 0:
+		v.Unpushed = un
+		v.Problems = append(v.Problems, "unpushed work: "+strings.Join(un, ", "))
+	}
+}
+
+// unpushedUnknownProblem prefixes the problem reported when a clone's
+// unpushed work cannot be listed: "could not check" is never shown as
+// "nothing waiting".
+const unpushedUnknownProblem = "cannot list unpushed work: "
 
 func appendUnique(xs []string, x string) []string {
 	for _, y := range xs {
@@ -229,6 +292,9 @@ func newStoreShowCommand() *cobra.Command {
 			for _, v := range views {
 				fmt.Printf("%s\n", redactIfQuiet(v.URL))
 				fmt.Printf("  entries   %s   branches %s\n", strings.Join(v.Entries, ", "), strings.Join(v.Branches, ", "))
+				for _, p := range v.Problems {
+					fmt.Println("  problem   " + style.Warn(p))
+				}
 				if !v.Cloned {
 					fmt.Println("  clone     " + style.Muted("not cloned yet (the next command that needs it clones it)"))
 					continue
@@ -265,16 +331,24 @@ func newStoreShowCommand() *cobra.Command {
 // repo in the working directory (the F11 debug view of `store show
 // --links`), with the store default branches staging is decided against.
 func printHereLinks(ctx context.Context, cfg *lorecfg.Config) {
+	// A debug view: every failure is printed as the answer, never skipped
+	// (a silent gap reads as "this repo has no links").
 	dir, err := os.Getwd()
 	if err != nil {
+		fmt.Println("this repo: " + err.Error())
 		return
 	}
 	s, err := gatherOrgSituation(ctx, dir)
-	if err != nil || s.ProjectID == "" {
+	if err != nil {
+		fmt.Println("this repo: " + redactIfQuiet(err.Error()))
 		return
+	}
+	if s.ProjectID == "" {
+		return // not a lore project: nothing to look up
 	}
 	src, err := storeLinkSource(cfg)
 	if err != nil {
+		fmt.Println("this repo: " + redactIfQuiet(err.Error()))
 		return
 	}
 	res, err := src.Links(ctx, s.ProjectID, s.Remotes)
@@ -400,9 +474,14 @@ func newStoreForgetCommand() *cobra.Command {
 				return err
 			}
 			st, err := m.Lookup(ctx, url)
-			if err != nil {
+			if errors.Is(err, stores.ErrNoClone) {
 				fmt.Println(style.Muted("no clone of " + redactIfQuiet(url) + " on this machine; nothing to forget"))
 				return nil
+			}
+			if err != nil {
+				// Not "nothing to forget": a clone that cannot be opened
+				// (or a URL lore cannot place) may still hold unpushed work.
+				return storeCLIError(err, "open the clone of "+redactIfQuiet(url))
 			}
 			// Try to deliver waiting work first (PushPending takes the
 			// clone's lock itself); whatever still waits blocks the forget.
@@ -441,7 +520,7 @@ func newStoreForgetCommand() *cobra.Command {
 func removeStoreWorktrees(m *stores.Manager, cfg *lorecfg.Config, url string) error {
 	dir, err := m.Layout.WorktreeDir(url, "")
 	if err != nil {
-		return nil
+		return storeCLIError(err, "locate the store worktrees")
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return errcodes.New(errcodes.Internal, "remove the store worktrees").WithCause(err)
@@ -474,36 +553,7 @@ func newStoreDoctorCommand() *cobra.Command {
 			}
 			bad := 0
 			for _, v := range views {
-				st, err := m.Open(ctx, v.URL)
-				if err != nil {
-					v.Problems = append(v.Problems, redactIfQuiet(err.Error()))
-					bad++
-					continue
-				}
-				fr, err := st.Fetch(ctx, true)
-				switch {
-				case err != nil:
-					v.Problems = append(v.Problems, "fetch: "+redactIfQuiet(err.Error()))
-				case fr.Offline:
-					v.Problems = append(v.Problems, "unreachable (using the last fetched state)")
-				default:
-					t := fr.At
-					v.LastFetch = &t
-				}
-				v.DefaultBranch = st.DefaultBranch()
-				for _, b := range v.Branches {
-					if _, ok, _ := st.Tip(ctx, b); !ok {
-						v.Problems = append(v.Problems, fmt.Sprintf("branch %s does not exist (`lore store init <url> --branch %s`)", b, b))
-						continue
-					}
-					if err := st.Check(ctx, b); err != nil {
-						v.Problems = append(v.Problems, redactIfQuiet(err.Error()))
-					}
-				}
-				if un, err := st.Unpushed(ctx); err == nil && len(un) > 0 {
-					v.Unpushed = un
-					v.Problems = append(v.Problems, "unpushed work: "+strings.Join(un, ", "))
-				}
+				doctorCheckStore(ctx, m, v)
 				if len(v.Problems) > 0 {
 					bad++
 				}

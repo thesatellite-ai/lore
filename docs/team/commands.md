@@ -50,19 +50,21 @@ Flags:
 ### `lore identity set`
 
 <!-- help: identity set -->
-Persist an identity: the fallback (~/.lore/identity.yaml) or one org's (--org)
+Persist an identity. Your identity key is always your email with human: in front: lore tells people apart by it, so a bare name is refused (the same person spelling it differently on two machines would become two people).
 
 ```text
 Usage:
-  lore identity set <name> | --org <entry> --key human:<email> [--name …] [--handle …]
+  lore identity set <email> | <name> --key human:<email> | --org <entry> --key human:<email> [--name …] [--handle …]
 
 Examples:
-  lore identity set alice
+  lore identity set alice@example.com
+  lore identity set "Alice Doe <alice@example.com>"
+  lore identity set "Alice Doe" --key human:alice@example.com
   lore identity set --org agency --key human:alice@agency.example --name "Alice Doe" --handle alice
 
 Flags:
       --handle string   with --org: roster handle, without @
-      --key string      with --org: human:<your email in that org> (TEAM-029)
+      --key string      human:<your email> (with --org: your email in that org, TEAM-029)
       --name string     with --org: display name
       --org string      set your identity inside this org entry of ~/.lore/config.yaml
 ```

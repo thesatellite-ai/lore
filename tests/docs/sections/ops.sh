@@ -133,6 +133,6 @@ on alice work/website "lore memory add --allow-secrets --body 'Deploy key for st
 local secret_mem; secret_mem=$(id mem)
 on alice work/website "grep -rl AKIA .lore/data || echo 'not in .lore/data'"
 on alice work/website "lore memory delete $secret_mem --confirm"
-# A hard-deleted row should leave no warning behind; today doctor keeps reporting the
-# secret found in the file it refused to write (lsync file errors are not cleared on delete).
-on_known BUG-OPS1 alice work/website "lore doctor"
+# A hard-deleted row leaves no warning behind: doctor drops the refused-export
+# warning once the row is gone.
+on alice work/website "lore doctor"

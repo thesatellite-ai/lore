@@ -51,7 +51,8 @@ func (o MergeOutcome) NewerWins() []string {
 // max, scalar state takes the newer side, text clashes get conflict markers
 // INSIDE the JSON string value — the file stays valid JSON, and the importer
 // refuses marker text, so an unresolved conflict can never be imported as
-// knowledge. _purged.json merges as a set union (never conflicts). Anything
+// knowledge. _purged.json merges as a set union (it fails, leaving ours untouched,
+// only when a side's id list has the wrong shape). Anything
 // that is not a lore document (or is a newer format this binary cannot
 // fully represent) falls back to `git merge-file`.
 func MergeFiles(ctx context.Context, basePath, oursPath, theirsPath, repoPath string) (MergeOutcome, error) {
@@ -230,15 +231,19 @@ func compactOrNull(v any) string {
 	return s
 }
 
-// mergePurged unions two _purged.json id lists.
+// mergePurged unions two _purged.json id lists. A side whose id list has
+// the wrong shape fails the merge (ours is left as it was and git reports a
+// conflict): writing a union without that side's ids would let the rows it
+// purged come back.
 func mergePurged(oursPath string, oDoc, tDoc map[string]any) (MergeOutcome, error) {
 	set := map[string]bool{}
 	for _, d := range []map[string]any{oDoc, tDoc} {
-		list, _ := d[purgedKeyIDs].([]any)
-		for _, v := range list {
-			if s, ok := v.(string); ok {
-				set[s] = true
-			}
+		ids, err := purgedIDList(d)
+		if err != nil {
+			return MergeOutcome{}, fmt.Errorf("lsync: merge %s: %w", PurgedFileName, err)
+		}
+		for _, id := range ids {
+			set[id] = true
 		}
 	}
 	b, err := encodePurged(set)

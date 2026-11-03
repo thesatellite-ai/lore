@@ -189,7 +189,10 @@ func (s *liveSession) restore(ctx context.Context) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "read backup").WithCause(err)
 	}
-	keep, dropped := s.restorableTree(ctx, tree)
+	keep, dropped, err := s.restorableTree(ctx, tree)
+	if err != nil {
+		return err
+	}
 	ch := gitref.Changes{Put: map[string][]byte{}, Delete: dropped}
 	c, err := s.repo.MakeCommit(ctx, gitref.CommitRequest{
 		Base: src, Changes: ch, Message: fmt.Sprintf("lore: live restore (%d rows)", keep), Signature: s.ref.Signed(),
@@ -244,9 +247,14 @@ func (s *liveSession) restoreSource(ctx context.Context) (string, error) {
 }
 
 // restorableTree lists row paths to leave out of a restore: rows whose
-// content already sits on origin/main (landed) and purged ids.
-func (s *liveSession) restorableTree(ctx context.Context, tree live.Tree) (int, []string) {
-	purged, _ := tree.Purged()
+// content already sits on origin/main (landed) and purged ids. An
+// unreadable _live/purged.json fails the restore: pushing the backup without
+// knowing which ids were purged would bring purged rows back (fail closed).
+func (s *liveSession) restorableTree(ctx context.Context, tree live.Tree) (int, []string, error) {
+	purged, err := tree.Purged()
+	if err != nil {
+		return 0, nil, errcodes.New(errcodes.Internal, "read the purged ids of the live copy; nothing was restored").WithCause(err)
+	}
 	mainRef := "refs/remotes/" + s.ref.RemoteName + "/" + s.defaultBranch(ctx)
 	var dropped []string
 	keep := 0
@@ -272,7 +280,7 @@ func (s *liveSession) restorableTree(ctx context.Context, tree live.Tree) (int, 
 		}
 	}
 	sort.Strings(dropped)
-	return keep, dropped
+	return keep, dropped, nil
 }
 
 func newLiveCompactCommand() *cobra.Command {

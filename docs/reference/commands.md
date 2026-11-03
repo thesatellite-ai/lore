@@ -559,7 +559,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [architecturenote](#lor
 | `lore rule archive` | Archive a rule (soft-delete via archived_at) | [knowledge/rules-memories-decisions › Step 1 — Add rules](../../docs/knowledge/rules-memories-decisions.md#step-1--add-rules) |
 | `lore rule delete` | HARD-delete a rule (no undo; archive is usually what you want) | [knowledge/rules-memories-decisions › Step 1 — Add rules](../../docs/knowledge/rules-memories-decisions.md#step-1--add-rules) |
 | `lore rule edit` | Edit rule fields (use `--supersedes` on add for audited body changes) | [knowledge/rules-memories-decisions › Step 1 — Add rules](../../docs/knowledge/rules-memories-decisions.md#step-1--add-rules) |
-| `lore rule list` | List rules | [knowledge/rules-memories-decisions › Step 1 — Add rules](../../docs/knowledge/rules-memories-decisions.md#step-1--add-rules) |
+| `lore rule list` | List rules (archived ones only with --archived) | [knowledge/rules-memories-decisions › Step 1 — Add rules](../../docs/knowledge/rules-memories-decisions.md#step-1--add-rules) |
 | `lore rule search` | FTS5 search across rule body + severity + activation + source_kind | [knowledge/rules-memories-decisions › Step 1 — Add rules](../../docs/knowledge/rules-memories-decisions.md#step-1--add-rules) |
 | `lore rule show` | Show rule details | [knowledge/rules-memories-decisions › Step 1 — Add rules](../../docs/knowledge/rules-memories-decisions.md#step-1--add-rules) |
 | `lore rule unarchive` | Unarchive a rule (clear archived_at) | [knowledge/rules-memories-decisions › Step 1 — Add rules](../../docs/knowledge/rules-memories-decisions.md#step-1--add-rules) |

@@ -660,12 +660,10 @@ func (s *liveSession) store(ctx context.Context, db *sql.DB, folder string, dive
 	// to push later: rows that were never shared leave lore.db (kept in the
 	// sync trash), edits of shared rows stay unpushed and are refused again.
 	if err := leakCheckDocs(ctx, "live write", liveDocs(folder, rows)); err != nil {
-		states, _ := lsync.LiveStates(ctx, db)
-		var never []lsync.RowRef
-		for _, d := range diverted {
-			if _, wasLive := states[lsync.LiveKey{Table: d.Table, ID: d.ID}]; !wasLive && !d.HasBase && d.Doc != nil {
-				never = append(never, d.RowRef)
-			}
+		never, serr := neverSharedRows(ctx, db, diverted)
+		if serr != nil {
+			// Which rows were never shared is unknown: drop nothing.
+			return fmt.Errorf("%w (and no row was removed from lore.db: %v)", err, serr) // %v: the leak refusal stays the one classified cause (exit 19)
 		}
 		if derr := lsync.DropRows(ctx, db, never, "refused by the leak check"); derr != nil {
 			return fmt.Errorf("%w (and %v)", err, derr) // %v: the leak refusal stays the one classified cause (exit 19)
@@ -696,6 +694,24 @@ func (s *liveSession) store(ctx context.Context, db *sql.DB, folder string, dive
 	return lsync.ClearDirty(ctx, db, refs)
 }
 
+// neverSharedRows lists the diverted rows that were never on live nor in
+// a branch's .lore/data: the rows a refused live write removes from lore.db.
+// An unreadable live bookkeeping table is an error (never "nothing was
+// live"), so a failed read cannot turn every refused row into a drop.
+func neverSharedRows(ctx context.Context, db *sql.DB, diverted []lsync.DivertedRow) ([]lsync.RowRef, error) {
+	states, err := lsync.LiveStates(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("read live rows: %w", err)
+	}
+	var never []lsync.RowRef
+	for _, d := range diverted {
+		if _, wasLive := states[lsync.LiveKey{Table: d.Table, ID: d.ID}]; !wasLive && !d.HasBase && d.Doc != nil {
+			never = append(never, d.RowRef)
+		}
+	}
+	return never, nil
+}
+
 // liveDocs maps live paths to row bodies for the leak check.
 func liveDocs(folder string, rows map[live.RowKey]live.File) map[string][]byte {
 	out := make(map[string][]byte, len(rows))
@@ -710,34 +726,30 @@ func liveDocs(folder string, rows map[live.RowKey]live.File) map[string][]byte {
 	return out
 }
 
-// apply brings the folder's live rows into lore.db (live wins).
+// apply brings the folder's live rows into lore.db (live wins). An
+// unreadable purge list stops the apply (nothing is imported), because
+// without it purged rows would come back into lore.db.
 func (s *liveSession) apply(ctx context.Context, db *sql.DB, folder string) {
 	_, tree, err := s.ref.LocalTree(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+err.Error()))
 		return
 	}
-	files, bad := tree.Rows(folder)
-	for p, e := range bad {
-		fmt.Fprintln(os.Stderr, style.Warn(fmt.Sprintf("%s%s: %v", liveLogPrefix, p, e)))
+	in, err := liveApplyInput(tree, folder)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, style.Error(liveLogPrefix+"apply stopped, nothing imported: "+err.Error()))
+		return
 	}
-	rows := make(map[lsync.LiveKey]lsync.LiveDoc, len(files))
-	for k, f := range files {
-		d := lsync.LiveDoc{Deleted: f.Deleted()}
-		if !d.Deleted {
-			if d.Body, err = f.EncodeBody(); err != nil {
-				continue
-			}
-		}
-		rows[lsync.LiveKey{Table: k.Table, ID: k.ID}] = d
+	for _, w := range in.warnings {
+		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+w))
 	}
-	purged, _ := tree.Purged()
+	rows, purged := in.rows, in.purged
 	mv := s.mainView(ctx, folder)
 	landed := func(k lsync.LiveKey) ([]byte, bool) {
 		b := mv.body(ctx, live.RowKey{Table: k.Table, ID: k.ID})
 		return b, b != nil
 	}
-	rep, err := lsync.LiveApply(ctx, lsync.LiveApplyOptions{DB: db, Rows: rows, Purged: purged, Now: s.clk.Now(), Landed: landed})
+	rep, err := lsync.LiveApply(ctx, lsync.LiveApplyOptions{DB: db, Rows: rows, Unreadable: in.unreadable, Purged: purged, Now: s.clk.Now(), Landed: landed})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+"apply: "+err.Error()))
 		return
@@ -748,6 +760,51 @@ func (s *liveSession) apply(ctx context.Context, db *sql.DB, folder string) {
 	for _, k := range rep.Conflicted {
 		fmt.Fprintln(os.Stderr, style.Warn(fmt.Sprintf("%s%s has conflict markers (both sides edited the same text); see `lore sync conflicts`; it will not land until settled", liveLogPrefix, k.ID)))
 	}
+}
+
+// liveApplyIn is what apply hands to lsync.LiveApply for one folder.
+type liveApplyIn struct {
+	rows       map[lsync.LiveKey]lsync.LiveDoc
+	purged     map[string]bool
+	unreadable map[lsync.LiveKey]bool // rows still on live whose file could not be read
+	warnings   []string               // one line per unreadable row, sorted
+}
+
+// liveApplyInput reads the folder's live rows and the purge list from tree.
+// A purge list that cannot be read is an error: applying without it would
+// import rows that were purged on purpose. A row file that cannot be read is
+// reported in unreadable (with a warning) rather than left out, because a
+// row missing from the apply set is treated as having left live.
+func liveApplyInput(tree live.Tree, folder string) (liveApplyIn, error) {
+	purged, err := tree.Purged()
+	if err != nil {
+		return liveApplyIn{}, fmt.Errorf("read the live purge list: %w", err)
+	}
+	in := liveApplyIn{purged: purged, unreadable: map[lsync.LiveKey]bool{}}
+	files, bad := tree.Rows(folder)
+	for p, e := range bad {
+		if _, k, ok := live.ParseRowPath(p); ok {
+			in.unreadable[lsync.LiveKey{Table: k.Table, ID: k.ID}] = true
+		}
+		in.warnings = append(in.warnings, fmt.Sprintf("%s: %v (kept as is in lore.db)", p, e))
+	}
+	in.rows = make(map[lsync.LiveKey]lsync.LiveDoc, len(files))
+	for k, f := range files {
+		lk := lsync.LiveKey{Table: k.Table, ID: k.ID}
+		d := lsync.LiveDoc{Deleted: f.Deleted()}
+		if !d.Deleted {
+			b, err := f.EncodeBody()
+			if err != nil {
+				in.unreadable[lk] = true
+				in.warnings = append(in.warnings, fmt.Sprintf("%s: %v (kept as is in lore.db)", live.RowPath(folder, k.Table, k.ID), err))
+				continue
+			}
+			d.Body = b
+		}
+		in.rows[lk] = d
+	}
+	sort.Strings(in.warnings)
+	return in, nil
 }
 
 // finishLive pushes every repo's local live ref (F2 step 6) and reports.

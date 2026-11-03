@@ -112,6 +112,9 @@ func (e *engine) divert(ctx context.Context, k rowKey, t *Table, fc fileChange, 
 			}
 		}
 	}
+	// Deleted, or passed the secret check: an earlier secret refusal of this
+	// row no longer holds (BUG-OPS1: doctor kept reporting it).
+	e.clearErrorKind(ctx, rel, ErrKindSecret)
 	if !e.deferred[k] {
 		e.rep.Diverted = append(e.rep.Diverted, d)
 	}
@@ -230,6 +233,11 @@ type LiveApplyOptions struct {
 	DB *sql.DB
 	// Rows is the complete live folder of this project.
 	Rows map[LiveKey]LiveDoc
+	// Unreadable lists rows still on live whose file could not be read.
+	// They are not in Rows, but they have not left live either: the
+	// leave-live pass skips them, so a damaged file never drops a row's
+	// live bookkeeping or replaces it with main's copy.
+	Unreadable map[LiveKey]bool
 	// Purged ids leave lore.db when they leave live (`lore live purge`).
 	Purged map[string]bool
 	// Now stamps bookkeeping; zero = time.Now.
@@ -282,7 +290,7 @@ func LiveApply(ctx context.Context, o LiveApplyOptions) (LiveApplyReport, error)
 			}
 		}
 		for k, st := range recorded {
-			if _, still := o.Rows[k]; still {
+			if _, still := o.Rows[k]; still || o.Unreadable[k] {
 				continue
 			}
 			if err := e.leaveLive(ctx, k, st, o.Purged[k.ID], &rep); err != nil {
@@ -497,17 +505,53 @@ func AddPurged(existing []byte, ids []string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("lsync: %s: %w", PurgedFileName, err)
 		}
-		list, _ := doc[purgedKeyIDs].([]any)
-		for _, v := range list {
-			if s, ok := v.(string); ok {
-				set[s] = true
-			}
+		ids, err := purgedIDList(doc)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			set[id] = true
 		}
 	}
 	for _, id := range ids {
 		set[id] = true
 	}
 	return encodePurged(set)
+}
+
+// PurgedIDs decodes _purged.json bytes into its ids. A file that does not
+// decode, or whose "ids" value is not a list, is an error: callers decide
+// what to import or land on this set, and an empty set would let purged
+// rows back.
+func PurgedIDs(b []byte) ([]string, error) {
+	doc, err := decodeDoc(b)
+	if err != nil {
+		return nil, fmt.Errorf("lsync: %s: %w", PurgedFileName, err)
+	}
+	return purgedIDList(doc)
+}
+
+// purgedIDList reads the id list of a decoded _purged.json. A missing list is
+// empty; an "ids" value that is not a list is an error, so rewriting the file
+// can never quietly drop ids that were purged before (they would come back).
+// Non-string entries are skipped: they name no row, so skipping them
+// resurrects nothing (the same reading as readPurged and the merge driver).
+func purgedIDList(doc map[string]any) ([]string, error) {
+	raw, has := doc[purgedKeyIDs]
+	if !has {
+		return nil, nil
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("lsync: %s: %q is %T, want a list of ids", PurgedFileName, purgedKeyIDs, raw)
+	}
+	out := make([]string, 0, len(list))
+	for _, v := range list {
+		if id, ok := v.(string); ok {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 // ImportMissing imports row documents whose id lore.db does not hold yet,
