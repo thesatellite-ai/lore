@@ -394,6 +394,7 @@ func (r *storeRows) spot() liveSpot {
 func (r *storeRows) MergedCheck(ctx context.Context) {
 	docs, err := r.List(ctx)
 	if err != nil {
+		warnMergeUnchecked(os.Stderr, fmt.Errorf("read the store's task rows: %w", err))
 		return
 	}
 	ck := mergewatch.Checker{Repo: r.w.Repo, Target: mergedTarget(ctx, r.w.Repo, defaultRemoteName)}
@@ -459,21 +460,51 @@ func reportMerged(out io.Writer, id string, f mergewatch.Finding, recErr error) 
 
 // groupMergedCheck runs the merged check for the linked store project's
 // tasks of this repo (F9: "in any globex-api checkout … the next lore
-// command sees the trailer"). Silent when the repo has no links or the
-// store cannot be reached; it never fails the command.
+// command sees the trailer"). Silent when the repo has no team
+// coordination or no links; when the store cannot be reached it prints one
+// warning line on stderr. It never fails the command.
 func groupMergedCheck(ctx context.Context) {
 	w, err := openCoordWorld(ctx)
-	if err != nil || len(w.Links) == 0 {
+	if err != nil {
 		return
 	}
-	t, err := openStoreTarget(ctx, w)
+	groupMergedCheckIn(ctx, os.Stderr, w, openStoreTarget)
+}
+
+// storeTargetOpener opens the linked store project's coordination target
+// (openStoreTarget in production; a seam so tests can make the store
+// unreachable).
+type storeTargetOpener func(ctx context.Context, w *coordWorld) (coordTarget, error)
+
+// groupMergedCheckIn is groupMergedCheck for an opened world: a repo with
+// no links has nothing to check; a store that cannot be opened is reported
+// on warn (F9: the check never fails the command, but it must not look as
+// if it ran).
+func groupMergedCheckIn(ctx context.Context, warn io.Writer, w *coordWorld, open storeTargetOpener) {
+	if len(w.Links) == 0 {
+		return
+	}
+	t, err := open(ctx, w)
 	if err != nil {
+		warnMergeUnchecked(warn, fmt.Errorf("open the linked store: %w", err))
 		return
 	}
 	defer t.Close()
 	if r, ok := t.Rows.(*storeRows); ok {
 		r.MergedCheck(ctx)
 	}
+}
+
+// mergeUncheckedPrefix starts the one warning line the lazy merged check
+// prints when it could not run; scripts and tests match on it.
+const mergeUncheckedPrefix = "lore: warning: merge state not checked: "
+
+// warnMergeUnchecked prints that the lazy done → merged check (F9) did not
+// run, and why, as one line: done tasks of the linked store keep showing
+// "done, not merged yet" until a later command reaches the store.
+func warnMergeUnchecked(out io.Writer, cause error) {
+	fmt.Fprintf(out, "%s%s; done tasks may show as not merged yet (the next lore command retries)\n",
+		mergeUncheckedPrefix, oneLine(cause.Error()))
 }
 
 // statusDoneQ is the done status as task documents spell it.

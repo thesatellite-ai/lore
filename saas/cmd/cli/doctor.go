@@ -82,6 +82,9 @@ type doctorIdentityInfo struct {
 type doctorFlags struct {
 	commonFlags
 	jsonOutput bool
+	// fix applies the safe repairs doctor knows (today: reversed
+	// --supersedes links written by older versions; supersede_repair.go).
+	fix bool
 }
 
 func newDoctorCommand() *cobra.Command {
@@ -101,6 +104,8 @@ Checks:
     gitignored, merge driver missing (uncommitted files are reported,
     not counted as unhealthy)
   • Schema version (TODO: validate against expected)
+  • --supersedes links written the old way (on the new row instead of
+    the old one); --fix repairs them, and a second --fix changes nothing
 
 Exit codes are stable across versions for monitoring integration.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -114,17 +119,30 @@ Exit codes are stable across versions for monitoring integration.`,
 			} else {
 				printDoctor(report)
 			}
+			code := 0
 			switch report.Status {
 			case doctorBroken:
-				os.Exit(2)
+				code = 2
 			case doctorDegraded:
-				os.Exit(1)
+				code = 1
 			}
+			if code == 0 {
+				return nil
+			}
+			// os.Exit skips main's end-of-command sync pass, which is what
+			// writes the rows --fix repaired to .lore/data; run it first.
+			if f.fix {
+				if err := finishSyncSessions(cmd.Context()); err != nil {
+					fmt.Fprintln(os.Stderr, style.Warn("lore doctor --fix: "+err.Error()))
+				}
+			}
+			os.Exit(code)
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f.commonFlags)
 	cmd.Flags().BoolVar(&f.jsonOutput, constants.FlagJSON, false, "JSON output (stable schema)")
+	cmd.Flags().BoolVar(&f.fix, doctorFlagFix, false, "repair what doctor can fix safely (reversed --supersedes links)")
 	return cmd
 }
 
@@ -170,6 +188,11 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 			// live, waiting landings, compaction (live_doctor.go).
 			dataDir, _ := syncDataDir(rctx.DBPath)
 			doctorLive(ctx, filepath.Dir(filepath.Dir(dataDir)), r)
+		}
+		// After the sync checks, so they describe the state doctor found;
+		// --fix writes are exported by the end-of-command sync pass.
+		if r.DBOK {
+			doctorSupersedes(ctx, f, dbent.New(db).Client(), r)
 		}
 		r.WALSizeBytes = walSize(rctx.DBPath)
 		if r.WALSizeBytes > 100*1024*1024 {
