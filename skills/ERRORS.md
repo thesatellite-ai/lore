@@ -1,5 +1,7 @@
 # Error codes
 
+**In short:** every lore error has a fixed code like `E_DB_LOCKED`. Find the code here to learn what went wrong and how to fix it; scripts should check the code, not the message.
+
 Every lore error has a stable `E_*` code. When something fails, **match on the code, not the English message** — the message may change between versions, the code will not.
 
 ## Recover by inspecting the code
@@ -38,7 +40,7 @@ These codes also set the process exit status, so a script or agent can branch on
 | `E_LINK_UNKNOWN` | 18 | lore cannot tell whether this is a client repo (store unreachable); pass `--to` or retry online |
 | `E_NOT_A_STORE` / `E_LEAK_BLOCKED` / `E_CYCLE` / `E_OLD_LORE` | 19 | not a lore store; internal content would reach a client (`lore check leaks --explain`); a dependency cycle; lore too old for this live ref (upgrade) |
 
-## Full registry (37 codes as of v0.1)
+## Full registry
 
 | Code | Description |
 |---|---|

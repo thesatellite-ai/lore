@@ -1,0 +1,7 @@
+			if out == "" {
+				dir := filepath.Join(rctx.ProjectRoot, projresolve.MarkerDir, projresolve.BackupDir)
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					return errcodes.New(errcodes.Internal, "mkdir backups").WithCause(err)
+				}
+				out = filepath.Join(dir, fmt.Sprintf("%s.sqlite", time.Now().UTC().Format("20060102-150405")))
+			}

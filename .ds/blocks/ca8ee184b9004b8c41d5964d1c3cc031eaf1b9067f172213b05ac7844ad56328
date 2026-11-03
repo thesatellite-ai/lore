@@ -1,0 +1,3 @@
+	if os.Getenv("LORE_NO_STALE_WARN") == "1" {
+		return
+	}

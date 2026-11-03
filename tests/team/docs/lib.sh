@@ -3,7 +3,7 @@
 #
 # Everything lives under $WORLD (a fresh temp dir): a fake GitHub made of bare
 # repos under $WORLD/hosts/github.com/<owner>/<repo>.git, and one HOME per
-# person under $WORLD/home/<name>. Each HOME's ~/.gitconfig rewrites
+# person under $HOMES/<name>. Each HOME's ~/.gitconfig rewrites
 # https://github.com/ and git@github.com: to the fake host with
 # url.<path>.insteadOf, so lore sees the same remote URLs a real user has.
 # Nothing touches the real HOME, the real ~/.lore or the network.
@@ -19,7 +19,8 @@ new_world() {
   WORLD="$1"
   HOSTS="$WORLD/hosts/github.com"
   SHIM="$WORLD/shim"
-  mkdir -p "$HOSTS" "$SHIM" "$WORLD/home"
+  HOMES="$WORLD/home"  # one HOME per person: $HOMES/<name>
+  mkdir -p "$HOSTS" "$SHIM" "$HOMES"
   # Hooks lore installs call plain `lore` from PATH: put the binary under test first.
   ln -sf "$LORE_BIN" "$SHIM/lore"
 }
@@ -51,7 +52,7 @@ HOOK
 
 # person NAME EMAIL: a machine (HOME) for one person, with git identity and the fake GitHub.
 person() {
-  local name="$1" email="$2" home="$WORLD/home/$1"
+  local name="$1" email="$2" home="$HOMES/$1"
   mkdir -p "$home/work"
   cat > "$home/.gitconfig" <<CFG
 [user]
@@ -69,7 +70,7 @@ CFG
 
 # envfor NAME: the environment one person's commands run with (no LORE_*/GIT_* leaks from the caller).
 envfor() {
-  local home="$WORLD/home/$1"
+  local home="$HOMES/$1"
   echo env -i "HOME=$home" "PATH=$SHIM:/usr/local/bin:/usr/bin:/bin" "USER=$1" "TERM=dumb" "NO_COLOR=1" \
     "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8"
 }
@@ -84,7 +85,7 @@ FAILURES=0
 # Claim tokens are cut to the prefix lore itself prints (ct_7e165…): a full token in a
 # committed file looks like a credential to secret scanners, and readers never need it.
 clean() {
-  sed -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e "s#$WORLD/home/\([a-z0-9-]*\)#/home/\1#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
+  sed -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e "s#$HOMES/[a-z0-9-]*#~#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
 }
 
 # _answer feeds a prompt its answer (ANSWER) after a pause, so the terminal shows the
@@ -97,7 +98,7 @@ _answer() {
 # print it as "NAME (DIR)$ CMD" with its real output, and count a non-zero exit as a failure.
 # Use `on!` for a command that is expected to fail: its exit code is printed instead.
 _on() {
-  local expect="$1" name="$2" dir="$3" cmd="$4" home="$WORLD/home/$2" out code
+  local expect="$1" name="$2" dir="$3" cmd="$4" home="$HOMES/$2" out code
   local label="${AS:-$name}"
   [ "$dir" != "." ] && label="${AS:-$name} ($dir)"
   mkdir -p "$home/$dir"
@@ -161,7 +162,7 @@ on!() { _on fail "$@"; }
 
 # quiet NAME DIR CMD: setup step, not shown in transcripts; fails the run on error.
 quiet() {
-  local name="$1" dir="$2" cmd="$3" home="$WORLD/home/$1"
+  local name="$1" dir="$2" cmd="$3" home="$HOMES/$1"
   mkdir -p "$home/$dir"
   local extra="${EXTRA_ENV:-}"
   # Setup steps share the examples' clock (without moving it), so rows they create

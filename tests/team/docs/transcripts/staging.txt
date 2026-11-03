@@ -1,41 +1,41 @@
 
 ### staging branch
-alice (work/acme-app)$ lore store init git@github.com:northwind/lore --branch staging
-✓ wrote lore-store.yaml to github.com/northwind/lore (new branch staging, first commit) and pushed
-alice (work/acme-app)$ lore org use northwind-stag
-✓ prj_7a670ae8548ed05bf57ad29ad0759504 uses org northwind-stag on this machine
-  recorded in /home/alice/.lore/config.yaml (machine-only, nothing committed)
-alice (work/acme-app)$ lore whoami
-org        northwind-stag  (matched by: lore org use (this machine))
-identity   Alice Doe <human:alice@northwind.example>   act_2ad3618e878ebbf527d34d446ef4f891  @alice  (from: org entry (config.yaml))
+alice (work/website)$ lore store init git@github.com:agency/notes --branch staging
+✓ wrote lore-store.yaml to github.com/agency/notes (new branch staging, first commit) and pushed
+alice (work/website)$ lore org use agency-stag
+✓ prj_7a670ae8548ed05bf57ad29ad0759504 uses org agency-stag on this machine
+  recorded in ~/.lore/config.yaml (machine-only, nothing committed)
+alice (work/website)$ lore whoami
+org        agency-stag  (matched by: lore org use (this machine))
+identity   Alice Doe <human:alice@agency.example>   act_2ad3618e878ebbf527d34d446ef4f891  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
 project    prj_7a670ae8548ed05bf57ad29ad0759504
-remotes    github.com/acme/app
+remotes    github.com/client/website
 stores     <redacted> on branch staging  (org folder <redacted>)
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
-personal   local: northwind-stag/, everywhere/
-alice (work/acme-app)$ lore org link northwind-stag --project acme --yes
-This marks github.com/acme/app as a CLIENT repo of northwind-stag: internal notes default to github.com/northwind/lore acme/,
-and the leak guards turn on for everyone in northwind-stag.
-  link: project prj_7a670ae8548ed05bf57ad29ad0759504 at github.com/acme/app → github.com/northwind/lore@staging:acme/ (default=false)
-✓ github.com/acme/app (prj_7a670ae8548ed05bf57ad29ad0759504, github.com/acme/app) linked to github.com/northwind/lore acme/ (created; pushed)
+personal   local: agency-stag/, everywhere/
+alice (work/website)$ lore org link agency-stag --project client --yes
+This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
+and the leak guards turn on for everyone in agency-stag.
+  link: project prj_7a670ae8548ed05bf57ad29ad0759504 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
+✓ github.com/client/website (prj_7a670ae8548ed05bf57ad29ad0759504, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
-alice (work/acme-app)$ lore task add 'seed staging with demo data' --to northwind-stag
-✓ tsk_162df51b7f78b785c97c26b41ea89666 tsk_162df51b7f78b785c97c26b41ea89666 — seed staging with demo data [medium] → [northwind-stag/acme]
+alice (work/website)$ lore task add 'seed staging with demo data' --to agency-stag
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — seed staging with demo data [medium] → [agency-stag/client]
 lore live: (live, pushed)
-alice (work/acme-app)$ lore task list
+alice (work/website)$ lore task list
 lore sync: built .lore/lore.db from .lore/data (2 rows)
 lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: /home/alice/work/acme-app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-tsk_162df51b7f78b785c97c26b41ea89666  seed staging with demo data  todo  [northwind-stag/acme]
-alice (work/acme-app)$ lore org use northwind
-✓ prj_7a670ae8548ed05bf57ad29ad0759504 uses org northwind on this machine
-  recorded in /home/alice/.lore/config.yaml (machine-only, nothing committed)
-alice (work/acme-app)$ lore task list
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+tsk_162df51b7f78b785c97c26b41ea89666  seed staging with demo data  todo  [agency-stag/client]
+alice (work/website)$ lore org use agency
+✓ prj_7a670ae8548ed05bf57ad29ad0759504 uses org agency on this machine
+  recorded in ~/.lore/config.yaml (machine-only, nothing committed)
+alice (work/website)$ lore task list
 (no tasks)
-alice (work/acme-app)$ LORE_ORG=northwind-stag lore task list
-tsk_162df51b7f78b785c97c26b41ea89666  seed staging with demo data  todo  [northwind-stag/acme]
-alice (work/acme-app)$ git ls-remote https://github.com/northwind/lore
+alice (work/website)$ LORE_ORG=agency-stag lore task list
+tsk_162df51b7f78b785c97c26b41ea89666  seed staging with demo data  todo  [agency-stag/client]
+alice (work/website)$ git ls-remote https://github.com/agency/notes
 601d2850ffd047c2890d2472633cc4dbdabe12fd	HEAD
 601d2850ffd047c2890d2472633cc4dbdabe12fd	refs/heads/main
 86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a	refs/heads/staging

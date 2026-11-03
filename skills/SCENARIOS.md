@@ -1,5 +1,7 @@
 # Scenarios — what to do in 40+ concrete situations
 
+**In short:** more than 40 real situations ("I just cloned a repo that uses lore", "two people edited the same task"), each with the exact commands to run.
+
 Each entry: situation → exact commands. Stop reading at the first match.
 
 ---
@@ -234,7 +236,7 @@ lore rule list --json | jq '.data[] | select(.activation == "glob" and (.globs /
 lore why-context --last-render --rendered | grep -B2 -A2 "X"
 ```
 
-### D.7 "What did the AI receive in its last render?"
+### D.7 "What did the agent receive in its last render?"
 ```bash
 lore why-context --last-render --json | jq '.scope_summary'
 ```
@@ -422,7 +424,7 @@ lore identity show
 
 ### J.2 "Set explicit identity"
 ```bash
-lore identity set "Alice <alice@acme.com>"
+lore identity set "Alice <alice@agency.example>"
 ```
 
 ### J.3 "I'm running in CI; what identity?"
@@ -552,11 +554,11 @@ lore repair --tier=2 --confirm   # if backup exists
 # and returns E_NETWORK_FS. Best fix: move the whole project to a local disk
 # and share knowledge through git (.lore/data). Or keep the project and move
 # only the DB to a local path (git sync is then off for this project):
-mv .lore/lore.db /Users/me/local-lore/$(basename $PWD).db
+mv .lore/lore.db $HOME/local-lore/$(basename $PWD).db
 mkdir -p .lore
-ln -s /Users/me/local-lore/$(basename $PWD).db .lore/lore.db
+ln -s $HOME/local-lore/$(basename $PWD).db .lore/lore.db
 # (NOTE: symlink will be refused — instead use --db flag or LORE_DB env.)
-echo "LORE_DB=/Users/me/local-lore/$(basename $PWD).db" >> .envrc
+echo "LORE_DB=$HOME/local-lore/$(basename $PWD).db" >> .envrc
 ```
 
 ### N.6 User: "I want to delete a memory"

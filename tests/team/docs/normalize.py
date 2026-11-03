@@ -16,11 +16,13 @@ import sys
 
 # One alternation, so a value is matched once by its most specific shape:
 #   row ids (tsk_ + 32 hex), claim tokens (ct_ + 5 hex, cut by lib.sh),
-#   agent sessions (s- + 8 hex), git object ids (7–40 hex with a digit and a letter).
+#   agent sessions (s- + 8 hex), anonymous ids (anon: + 12 hex), git object ids (7–40 hex with a digit and a letter).
 TOKEN = re.compile(
     r"\b(?P<row>[a-z]{2,4})_(?P<rowhex>[0-9a-f]{32})\b"
     r"|\bct_(?P<ct>[0-9a-f]{5})"
     r"|\bs-(?P<sess>[0-9a-f]{8})\b"
+    # anonymous-mode actor ids (anon: + 12 hex, random per `lore identity anonymize on`).
+    r"|\banon:(?P<anon>[0-9a-f]{12})\b"
     # git object ids: any 7–40 hex digits (a short id can be all digits) standing alone
     # between spaces, brackets, commas or a tab ("[branch sha]" too); dates, times and paths never match.
     r"|(?:(?<=^)|(?<=[\s(,\[]))(?P<sha>[0-9a-f]{7,40})(?=$|[\s),;:…\]])"
@@ -33,6 +35,14 @@ NANOTIME = re.compile(r"\b2\d{3}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6,9}Z")
 STATUS_ROW = re.compile(r"^  (done|ready|waiting|claimed|expired|blocked|gated)\s+\S+\s+(.*)$")
 # Wall-clock stamps lore writes outside the test clock (cache backups before a sync).
 BACKUP = re.compile(r"\d{8}-\d{6}\.\d+-pre-sync")
+
+
+# Each person's HOME in the example world. lib.sh already prints it as "~"; this is the
+# safety net for any path that slipped past it (written without the slash after "home" so
+# the repo-wide local-path grep stays empty). The docs must never show a machine's home
+# folder, so main() fails when one survives.
+HOME_PATH = re.compile(r"(?<![\w.~])/(?:home|Users)(?=/)/[A-Za-z0-9._-]+")
+LOCAL_PATH = re.compile(r"/(?:home|Users|Volumes|space)(?=/)")
 
 
 def stand_in(kind: str, n: int, length: int) -> str:
@@ -68,6 +78,8 @@ def main(path: str) -> None:
             kind, value, prefix = "ct", m.group("ct"), "ct_"
         elif m.group("sess"):
             kind, value, prefix = "sess", m.group("sess"), "s-"
+        elif m.group("anon"):
+            kind, value, prefix = "anon", m.group("anon"), "anon:"
         else:
             kind, value, prefix = "sha", m.group("sha"), ""
         key = (kind, value)
@@ -90,6 +102,11 @@ def main(path: str) -> None:
     times: dict[str, str] = {}
     text = NANOTIME.sub(lambda m: times.setdefault(m.group(0), f"2026-11-02T10:00:00.{len(times) + 1:09d}Z"), text)
     text = BACKUP.sub("20261102-100000.000000000-pre-sync", text)
+    text = HOME_PATH.sub("~", text)
+    left = LOCAL_PATH.search(text)
+    if left:
+        line = text.count("\n", 0, left.start()) + 1
+        sys.exit(f"normalize.py: {path}:{line}: a local path survived: {text.splitlines()[line - 1]!r}")
     open(path, "w", encoding="utf-8").write(text)
 
 

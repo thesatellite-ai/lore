@@ -5,17 +5,17 @@ lore version 0.1.0-dev
 
 ### init
 alice (work/notes-app)$ lore init --non-interactive --name=notes-app
-✓ lore initialized at /home/alice/work/notes-app
+✓ lore initialized at ~/work/notes-app
     project_id: prj_7a670ae8548ed05bf57ad29ad0759504
     name:       notes-app
     origin:     https://github.com/alice/notes-app
-    db:         /home/alice/work/notes-app/.lore/lore.db
+    db:         ~/work/notes-app/.lore/lore.db
     identity:   human:alice@example.com (git config)
 
   next: lore learn-from docs   to bootstrap from existing markdown
 lore sync: exported 2 rows to .lore/data — review and commit it
-lore sync: backup of lore.db before bootstrap: /home/alice/work/notes-app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/notes-app/.git/hooks)
+lore sync: backup of lore.db before bootstrap: ~/work/notes-app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/notes-app/.git/hooks)
 alice (work/notes-app)$ git add -A && git commit -qm 'lore: init' && git push -q origin main
 
 ### whoami without config
@@ -27,11 +27,11 @@ project    prj_7a670ae8548ed05bf57ad29ad0759504
 remotes    github.com/alice/notes-app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
 personal   local: everywhere/
-config     /home/alice/.lore/config.yaml does not exist (no orgs configured)
+config     ~/.lore/config.yaml does not exist (no orgs configured)
 
 ### first live task
 alice (work/notes-app)$ lore task add 'fix login timeout'
-✓ tsk_162df51b7f78b785c97c26b41ea89666 tsk_162df51b7f78b785c97c26b41ea89666 — fix login timeout [medium]
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — fix login timeout [medium]
 lore live: (live, pushed)
 alice (work/notes-app)$ lore task list
 ○ tsk_162df51b7f78b785c97c26b41ea89666 fix login timeout [medium]
@@ -67,7 +67,7 @@ alice (work/notes-app)$ lore live show
 
 ### toml migration
 alice (work/notes-app)$ lore whoami
-lore: migrated /home/alice/.lore/identity.toml → identity.yaml (old file kept as identity.toml.migrated)
+lore: migrated ~/.lore/identity.toml → identity.yaml (old file kept as identity.toml.migrated)
 org        none  (matched by: nothing matched)
 identity   Alice Doe <human:alice@example.com>   act_2ad3618e878ebbf527d34d446ef4f891  (from: identity.yaml)
 repo       no org  (fallback identity, personal everywhere/ notes only)
@@ -75,7 +75,7 @@ project    prj_7a670ae8548ed05bf57ad29ad0759504
 remotes    github.com/alice/notes-app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
 personal   local: everywhere/
-config     /home/alice/.lore/config.yaml does not exist (no orgs configured)
+config     ~/.lore/config.yaml does not exist (no orgs configured)
 alice$ ls ~/.lore; cat ~/.lore/identity.yaml
 cache
 identity.toml.migrated
@@ -91,43 +91,43 @@ identity:
 personal:
   store: local
 orgs:
-  - name: northwind
-    identity: {key: "human:alice@northwind.example", name: "Alice Doe", handle: alice}
+  - name: agency
+    identity: {key: "human:alice@agency.example", name: "Alice Doe", handle: alice}
     stores:
-      - url: git@github.com:northwind/lore
+      - url: git@github.com:agency/notes
         org_folder: org
-    own:   [github.com/northwind/*]
-    repos: [github.com/acme/*]
+    own:   [github.com/agency/*]
+    repos: [github.com/client/*]
 alice$ lore config check
-✓ /home/alice/.lore/config.yaml is valid: 1 org entry (northwind)
-alice$ lore store init git@github.com:northwind/lore
-✓ wrote lore-store.yaml to github.com/northwind/lore (new branch main, first commit) and pushed
+✓ ~/.lore/config.yaml is valid: 1 org entry (agency)
+alice$ lore store init git@github.com:agency/notes
+✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
 alice (work/tools)$ lore init --non-interactive --name=tools
-✓ lore initialized at /home/alice/work/tools
+✓ lore initialized at ~/work/tools
     project_id: prj_05e99e22e9e86e96fe4daa7777994603
     name:       tools
-    origin:     https://github.com/northwind/tools
-    db:         /home/alice/work/tools/.lore/lore.db
-    identity:   human:alice@northwind.example (org entry (config.yaml))
+    origin:     https://github.com/agency/tools
+    db:         ~/work/tools/.lore/lore.db
+    identity:   human:alice@agency.example (org entry (config.yaml))
 
   next: lore learn-from docs   to bootstrap from existing markdown
 lore sync: exported 2 rows to .lore/data — review and commit it
-lore sync: backup of lore.db before bootstrap: /home/alice/work/tools/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/tools/.git/hooks)
+lore sync: backup of lore.db before bootstrap: ~/work/tools/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/tools/.git/hooks)
 alice (work/tools)$ lore whoami
-org        northwind  (matched by: own pattern github.com/northwind/* of northwind)
-identity   Alice Doe <human:alice@northwind.example>   act_c0f3c11a5724b0cfd74b256190d9b5b8  @alice  (from: org entry (config.yaml))
+org        agency  (matched by: own pattern github.com/agency/* of agency)
+identity   Alice Doe <human:alice@agency.example>   act_c0f3c11a5724b0cfd74b256190d9b5b8  @alice  (from: org entry (config.yaml))
 repo       own repo  (no client guards)
 project    prj_05e99e22e9e86e96fe4daa7777994603
-remotes    github.com/northwind/tools
-stores     git@github.com:northwind/lore on branch main  (org folder org)
+remotes    github.com/agency/tools
+stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
-personal   local: northwind/, everywhere/
+personal   local: agency/, everywhere/
 alice (work/tools)$ lore actor register
-✓ act_c0f3c11a5724b0cfd74b256190d9b5b8 Alice Doe (@alice) registered in northwind org/
-lore: [northwind/org] 3 file(s) pushed
+✓ act_c0f3c11a5724b0cfd74b256190d9b5b8 Alice Doe (@alice) registered in agency org/
+lore: [agency/org] 3 file(s) pushed
 alice (work/notes-app)$ lore whoami
-org        none  (matched by: nothing matched)   hint: lore org use northwind
+org        none  (matched by: nothing matched)   hint: lore org use agency
 identity   Alice Doe <human:alice@example.com>   act_2ad3618e878ebbf527d34d446ef4f891  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity, personal everywhere/ notes only)
 project    prj_7a670ae8548ed05bf57ad29ad0759504

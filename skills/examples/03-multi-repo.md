@@ -1,6 +1,8 @@
 # Example: Multi-repo project with scoped knowledge
 
-**Scenario:** Carol owns a platform with three repos under one product: `web` (React), `admin` (React+Mantine), `api` (Go+gqlgen). She wants per-repo memories AND cross-cutting shared knowledge.
+**In short:** one lore project can cover several repos. A note can belong to one repo, so only that repo's agent sees it, or to the whole project, so every repo sees it.
+
+**Scenario:** client 2's product is three repos: `app` (the website people use), `admin` (the back office) and `api` (the server). Alice (an agency developer) wants notes that apply to one repo only, and notes that apply to all three.
 
 ## Setup
 
@@ -10,24 +12,24 @@ git init -q
 lore init --non-interactive --name=platform
 
 # Register the three repos
-lore repo add web   --origin=git@github.com:acme/web.git
-lore repo add admin --origin=git@github.com:acme/admin.git
-lore repo add api   --origin=git@github.com:acme/api.git
+lore repo add app   --origin=git@github.com:client2/app.git
+lore repo add admin --origin=git@github.com:client2/admin.git
+lore repo add api   --origin=git@github.com:client2/api.git
 ```
 
 ## Capture knowledge with scope
 
 ```bash
 # Repo-scoped (only visible in that repo's context)
-lore memory add --body="Tailwind v4 only — no Mantine here"  --repo=web
-lore memory add --body="Mantine v7 for forms + tables"        --repo=admin
-lore memory add --body="gqlgen schema-first; resolvers ONLY in resolver/" --repo=api
+lore memory add --body="Buttons are blue on every page"         --repo=app
+lore memory add --body="Only staff can open the admin pages"   --repo=admin
+lore memory add --body="Run the API tests before you push"     --repo=api
 
 # Cross-cutting (visible to ALL repos)
-lore memory add --body="All times in UTC; client charges USD"
-lore memory add --body="Conventional commits: type(scope): description"
+lore memory add --body="All times are shown in the user's own time zone"
+lore memory add --body="Never put passwords in the code"
 
-lore render --repo=web   --target=../web/CLAUDE.md
+lore render --repo=app   --target=../app/CLAUDE.md
 lore render --repo=admin --target=../admin/CLAUDE.md
 lore render --repo=api   --target=../api/CLAUDE.md
 ```
@@ -36,21 +38,21 @@ lore render --repo=api   --target=../api/CLAUDE.md
 
 | Repo | Sees |
 |---|---|
-| `web/CLAUDE.md` | Tailwind v4 memory + 2 cross-cutting |
-| `admin/CLAUDE.md` | Mantine memory + 2 cross-cutting |
-| `api/CLAUDE.md` | gqlgen memory + 2 cross-cutting |
+| `app/CLAUDE.md` | the blue-buttons note + 2 shared notes |
+| `admin/CLAUDE.md` | the staff-only note + 2 shared notes |
+| `api/CLAUDE.md` | the API-tests note + 2 shared notes |
 
-The Mantine memory does NOT appear in `web/CLAUDE.md`. The Tailwind memory does NOT appear in `admin/CLAUDE.md`. Cross-cutting memories appear everywhere.
+The staff-only note does NOT appear in `app/CLAUDE.md`. The blue-buttons note does NOT appear in `admin/CLAUDE.md`. Shared notes appear everywhere.
 
 ## Search variations
 
 ```bash
-# Default: --repo=web sees web rows + master rows.
-lore memory search "" --repo=web --json | jq '.count'
+# Default: --repo=app sees web rows + master rows.
+lore memory search "" --repo=app --json | jq '.count'
 # 3
 
 # Strict scope (no master fallback)
-lore memory search "" --repo=web --no-inherit --json | jq '.count'
+lore memory search "" --repo=app --no-inherit --json | jq '.count'
 # 1
 
 # Master only
@@ -64,9 +66,14 @@ lore memory search "" --all-repos --json | jq '.count'
 
 ## Why this matters
 
-Without scope, every repo would see every other repo's noise. The web frontend dev would see "gqlgen resolvers in resolver/" — wrong context.
+Without scope, every repo would see every other repo's noise. The website developer would see "only staff can open the admin pages", which is not about their repo.
 
 The right mental model: **scope = audience**. Who needs to know this?
 - Only this repo? → `--repo=<name>`
 - Every repo in this project? → no flag (master scope)
 - Every project on this machine? → not lore's job; use a global tool
+
+## Pitfalls
+
+- `--no-inherit` hides the shared notes too; use it only when you really want one repo's own notes.
+- `--repo` takes the name you gave in `lore repo add` (or the `rep_…` id), not the folder name.

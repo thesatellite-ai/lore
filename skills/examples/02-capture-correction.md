@@ -1,14 +1,16 @@
 # Example: Capture a correction in real time
 
-**Scenario:** Bob is pair-programming with Claude. Claude wrote `fmt.Errorf("op: %w", err)` on a stdlib call. Bob corrects: "no, we don't wrap stdlib errors."
+**In short:** when someone corrects your agent, save the correction as a rule at once, so the next session follows it without being told again.
+
+**Scenario:** Bob (an agency developer) works with his coding agent. The agent wrote a database password straight into a Go file. Bob corrects it: "never put passwords in the code."
 
 ## Session transcript
 
 ```
-Bob:    No — we don't wrap stdlib errors with fmt.Errorf here.
-        Just return err.
+Bob:    No — never put passwords in the code.
+        Read them from an environment variable.
 
-Claude: Got it. Let me capture this so I don't forget.
+Agent:  Got it. Let me capture this so I don't forget.
 ```
 
 ```bash
@@ -16,7 +18,7 @@ lore rule add \
     --severity=must \
     --activation=glob \
     --globs='["**/*.go", "!**/*_test.go"]' \
-    --body="Do not wrap stdlib errors with fmt.Errorf; return them directly."
+    --body="Never put passwords in the code; read them from environment variables."
 # ✓ rul_<id> rul_019e...
 #   severity:   must
 #   activation: glob
@@ -26,7 +28,7 @@ lore render
 ```
 
 ```
-Claude: Captured as a must-severity rule scoped to non-test .go files.
+Agent:  Captured as a must-severity rule scoped to non-test .go files.
         Future sessions will see this in CLAUDE.md and respect it.
 ```
 
@@ -34,14 +36,14 @@ Claude: Captured as a must-severity rule scoped to non-test .go files.
 
 - `rules` table got a new row with severity=must, activation=glob
 - Rule was rendered into CLAUDE.md inside a `<rule severity="must">` block
-- The rule is NOT semantic — it's hard-coded into the AI's context every session
+- The rule is NOT semantic — it's written into the agent's context every session
 
-## Verify the AI will see it
+## Check that the agent will see it
 
 ```bash
 lore why-context --last-render --rendered | grep -A2 "rul_<id>"
 # <rule id="rul_<id>" severity="must" activation="glob">
-# Do not wrap stdlib errors with fmt.Errorf; return them directly.
+# Never put passwords in the code; read them from environment variables.
 # </rule>
 ```
 
@@ -52,3 +54,8 @@ lore why-context --last-render --rendered | grep -A2 "rul_<id>"
 - "We keep hitting this" → `hotfix add` (loud warning, never truncated)
 
 Rule = a thing we will block / warn / nudge on. Reserve for actual constraints.
+
+## Pitfalls
+
+- Choose the scope with care: `--globs` limits the rule to matching files; a pattern that matches nothing hides the rule everywhere.
+- A rule is for something you will always enforce. A preference belongs in a memory, a choice with reasons in a decision.

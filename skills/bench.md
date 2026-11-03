@@ -1,11 +1,13 @@
 # Bench engine — skill reference
 
+**In short:** lore bench measures whether your saved notes actually help an agent: it runs the same tasks with and without lore's context and compares the results.
+
 DB-backed evaluation engine. Three primary nouns + analysis/meta layer.
 
 ## When to use
 
-- User says "set up a benchmark", "evaluate my AI agent", "compare with/without lore"
-- User wants to **measure** whether captured rules/decisions/hotfixes are actually helping AI agents
+- User says "set up a benchmark", "evaluate my coding agent", "compare with/without lore"
+- User wants to **measure** whether captured rules/decisions/hotfixes are actually helping coding agents
 - User asks "is this rule working?", "did my last commit regress the bench?", "which tasks are flaky?"
 
 Don't use bench for: ad-hoc one-shot tests (use `lore render` + manual check), unit tests of code (use `go test`).
@@ -46,9 +48,9 @@ lore bench
 │   ├── show       prompt_sent + output_received + grader_trace
 │   ├── compare    side-by-side two results
 │   ├── stats      arm × grade tally for one run; live-safe (works mid-run)
-│   ├── regrade    re-grade stored outputs (NO LLM cost) — crucial
+│   ├── regrade    re-grade stored outputs (NO model cost) — crucial
 │   │              after fixing a grader bug
-│   └── replay     (stub — re-run LLM call entirely)
+│   └── replay     (stub — re-run the model call entirely)
 ├── report
 │   ├── summary    headline numbers for one run (no arg / --latest = newest)
 │   ├── compare    two-run diff: which tasks improved/regressed
@@ -57,7 +59,7 @@ lore bench
 │   ├── regressions  > 5pp drops between two latest runs
 │   └── analyze    paired t-test + Cohen's d + 95% CI
 └── grader
-    ├── test       run grader against a sample file (no LLM)
+    ├── test       run grader against a sample file (no model)
     ├── debug      inspect grader_trace for one stored result
     └── audit      flag too-strict / too-loose / error-prone graders
 ```
@@ -88,14 +90,14 @@ lore bench
 | "I fixed the grader — re-grade without re-spending" | `lore bench result regrade --run=X` |
 | "which graders are broken?" | `lore bench grader audit` |
 | "why did this result fail?" | `lore bench grader debug <id>` |
-| "test a grader without running LLM" | `lore bench grader test E1-001 --output-file=…` |
+| "test a grader without running the model" | `lore bench grader test E1-001 --output-file=…` |
 
 ## Providers + parallelism
 
 `bench run start` routes per-call based on `--model`:
 
 ```
---model=claude-haiku-4-5-20251001    →  Anthropic API if $ANTHROPIC_API_KEY set,
+--model=claude-haiku-4-5-20251001    →  hosted API if $ANTHROPIC_API_KEY set,
 --model=claude-sonnet-4-6                 else local `claude` CLI on PATH
 --model=claude-opus-4-7
 --model=ollama:qwen3-coder:latest    →  local Ollama (default localhost:11434;
@@ -106,12 +108,12 @@ lore bench
 
 Cost for `ollama:*` models is hard-coded to $0 so `--budget-cap` never trips on local runs.
 
-`--parallel=N` (default 8) controls concurrent LLM calls in flight. Tune to your provider:
+`--parallel=N` (default 8) controls concurrent model calls in flight. Tune to your provider:
 
 | Provider | Reasonable `--parallel` |
 |---|---|
-| Anthropic API (tier 1) | 4–8 |
-| Anthropic API (tier 4) | 16–32 |
+| Hosted API, `$ANTHROPIC_API_KEY` (tier 1) | 4–8 |
+| Hosted API, `$ANTHROPIC_API_KEY` (tier 4) | 16–32 |
 | Local `claude` CLI | 4–8 (CLI fork overhead) |
 | Ollama (single-model) | 8–20 (Ollama internally serializes per model unless `OLLAMA_NUM_PARALLEL` is bumped) |
 
@@ -123,7 +125,7 @@ Workers share a budget counter — `--budget-cap` is checked between calls but p
 2. **Use haiku for development** (cheapest). Sonnet for serious runs. Opus only when haiku/sonnet show no signal.
 2. **`--runs-per-arm=3` minimum** for statistical analysis; 1 is fine for quick smoke tests.
 3. **Grader bugs are the dominant error source.** Always inspect failing tasks first via `bench grader debug` before believing the headline number.
-4. **`bench result regrade`** is your friend after fixing a grader — re-runs the grader against stored output, no LLM cost.
+4. **`bench result regrade`** is your friend after fixing a grader — re-runs the grader against stored output, no model cost.
 5. **Budget cap matters.** Set `--budget-cap=5.00` for any run with --runs-per-arm > 1; aborts cleanly if cost runs away.
 6. **Same run = one model.** Cross-model comparisons via N separate runs + `bench report compare`. Multi-model arms get complicated.
 7. **`bench-CLAUDE.md` ≠ project CLAUDE.md.** The bench loads a synthesized version at repo root for the with-skill arm; default `--claude-md=bench-CLAUDE.md`.

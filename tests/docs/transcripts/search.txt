@@ -1,0 +1,135 @@
+
+### search
+alice (work/website)$ lore search payments
+Found 2 hits for "payments" across 2 entity types:
+
+[decision  ] dec_7a670ae8548ed05bf57ad29ad0759504 We use Stripe for payments  (score=0.017)
+[memory    ] mem_2ad3618e878ebbf527d34d446ef4f891 Old payments page is gone  (score=0.017)
+
+### search one kind
+alice (work/website)$ lore search payments --tables decision
+Found 1 hit for "payments" across 1 entity type:
+
+[decision  ] dec_7a670ae8548ed05bf57ad29ad0759504 We use Stripe for payments  (score=0.017)
+alice (work/website)$ lore decision search Stripe
+dec_7a670ae8548ed05bf57ad29ad0759504 [accepted] We use Stripe for payments
+
+### search json
+alice (work/website)$ lore search WhatsApp --json
+{
+  "schema_version": 1,
+  "kind": "search.global",
+  "count": 1,
+  "data": {
+    "count": 1,
+    "external": [],
+    "hits": [
+      {
+        "entity_table": "memories",
+        "entity": "memory",
+        "id": "mem_162df51b7f78b785c97c26b41ea89666",
+        "pretty": "mem_162df51b7f78b785c97c26b41ea89666",
+        "score": 0.016666666666666666,
+        "snippet": "The client replies faster on \u003cb\u003eWhatsApp\u003c/b\u003e than email"
+      }
+    ],
+    "query": "WhatsApp"
+  }
+}
+
+### archived
+alice (work/website)$ lore search payments --tables memory
+(no matches)
+alice (work/website)$ lore search payments --tables memory --include-archived
+Found 1 hit for "payments" across 1 entity type:
+
+[memory    ] mem_2ad3618e878ebbf527d34d446ef4f891 Old payments page is gone  (score=0.017)
+
+### status
+alice (work/website)$ lore search status
+ENTITY                 FTS_TABLE                   FTS   SOURCE STATUS
+architecturenote       architecturenote_fts          0        0 ✓ ok
+behaviour              behaviour_fts                 0        0 ✓ ok
+comment                comment_fts                   0        0 ✓ ok
+cookbookrecipe         cookbookrecipe_fts            0        0 ✓ ok
+decision               decision_fts                  1        1 ✓ ok
+handoff                handoff_fts                   0        0 ✓ ok
+hotfix                 hotfix_fts                    1        1 ✓ ok
+incident               incident_fts                  0        0 ✓ ok
+memory                 memory_fts                    2        2 ✓ ok
+mission                mission_fts                   0        0 ✓ ok
+pattern                pattern_fts                   0        0 ✓ ok
+plan                   plan_fts                      0        0 ✓ ok
+playbook               playbook_fts                  0        0 ✓ ok
+prompt                 prompt_fts                    0        0 ✓ ok
+rule                   rule_fts                      1        1 ✓ ok
+snapshot               snapshot_fts                  0        0 ✓ ok
+suggestion             suggestion_fts                0        0 ✓ ok
+task                   task_fts                      1        1 ✓ ok
+tasklist               tasklist_fts                  1        1 ✓ ok
+tastepref              tastepref_fts                 0        0 ✓ ok
+techdoc                techdoc_fts                   0        0 ✓ ok
+workflow               workflow_fts                  0        0 ✓ ok
+workspace              workspace_fts                 0        0 ✓ ok
+
+### rebuild
+alice (work/website)$ lore search rebuild
+✓ rebuilt 23 entity FTS tables
+alice (work/website)$ lore search rebuild --kind memory
+✓ rebuilt memory_fts
+
+### repo scope
+alice (work/website)$ lore repo add web --origin https://github.com/client/website
+✓ repo web registered (rep_54fe984c9b495744c0217776765a28f2)
+lore sync: exported 1
+lore sync: 6 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore memory add --repo web --body 'The web repo deploys on every merge to main'
+✓ mem_05e99e22e9e86e96fe4daa7777994603 
+  scope: [repo:web]
+lore sync: exported 1
+lore sync: 7 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore memory list --repo web
+mem_162df51b7f78b785c97c26b41ea89666 [retrieved] The client replies faster on WhatsApp than email
+mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The web repo deploys on every merge to main
+alice (work/website)$ lore memory list --master-only
+mem_162df51b7f78b785c97c26b41ea89666 [retrieved] The client replies faster on WhatsApp than email
+alice (work/website)$ lore memory list --repo web --no-inherit
+mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The web repo deploys on every merge to main
+alice (work/website)$ lore search deploys --all-repos
+Found 1 hit for "deploys" across 1 entity type:
+
+[memory    ] mem_05e99e22e9e86e96fe4daa7777994603 The web repo deploys on every merge to main  (score=0.017)
+
+### word forms
+alice (work/website)$ lore memory add --body 'The client sends invoices on Fridays'
+✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8 
+  scope: [master]
+lore sync: exported 1
+lore sync: 8 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore search invoice
+Found 2 hits for "invoice" across 2 entity types:
+
+[memory    ] mem_c0f3c11a5724b0cfd74b256190d9b5b8 The client sends invoices on Fridays  (score=0.017)
+[task      ] tsk_76bd560aff0771fab8457dbfa9823f10 Send the invoice reminder before Friday  (score=0.017)
+alice (work/website)$ lore search invoices
+Found 2 hits for "invoices" across 2 entity types:
+
+[memory    ] mem_c0f3c11a5724b0cfd74b256190d9b5b8 The client sends invoices on Fridays  (score=0.017)
+[task      ] tsk_76bd560aff0771fab8457dbfa9823f10 Send the invoice reminder before Friday  (score=0.017)
+alice (work/website)$ lore search 'invoi*'
+Found 2 hits for "invoi*" across 2 entity types:
+
+[memory    ] mem_c0f3c11a5724b0cfd74b256190d9b5b8 The client sends invoices on Fridays  (score=0.017)
+[task      ] tsk_76bd560aff0771fab8457dbfa9823f10 Send the invoice reminder before Friday  (score=0.017)
+alice (work/website)$ lore search 'client Fridays'
+Found 1 hit for "client Fridays" across 1 entity type:
+
+[memory    ] mem_c0f3c11a5724b0cfd74b256190d9b5b8 The client sends invoices on Fridays  (score=0.017)
+
+### querylog
+alice (work/website)$ lore querylog list
+(no querylogs)
+
+### no results
+alice (work/website)$ lore search pineapple
+(no matches)

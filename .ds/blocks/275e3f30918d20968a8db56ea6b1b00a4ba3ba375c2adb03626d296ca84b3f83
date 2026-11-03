@@ -1,0 +1,6 @@
+		for _, name := range []string{"CLAUDE.md", "AGENTS.md", "README.md"} {
+			p := filepath.Join(rctx.ProjectRoot, name)
+			if _, err := os.Stat(p); err == nil {
+				sources = append(sources, p)
+			}
+		}

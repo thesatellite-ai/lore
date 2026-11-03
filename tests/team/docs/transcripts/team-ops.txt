@@ -1,0 +1,79 @@
+
+### teams
+alice (work/billing)$ lore team add @frontend --name 'Frontend' --members @alice,@bob
+✓ tem_7a670ae8548ed05bf57ad29ad0759504 @frontend (2 member(s)) in this repo
+lore sync: exported 1
+lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+alice (work/billing)$ lore team list
+@frontend         Frontend                 2 member(s)
+alice (work/billing)$ lore task add 'make the buttons blue' --assign @frontend
+lore sync: exported 1
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — make the buttons blue [medium]
+lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
+lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+bob (work/billing)$ lore task list
+○ tsk_2ad3618e878ebbf527d34d446ef4f891 make the buttons blue [medium]
+
+### resource
+alice (work/billing)$ lore resource claim full-suite --ttl 30m
+✓ holding full-suite until 2026-11-02T10:35:50Z
+bob (work/billing)$ lore resource claim full-suite --ttl 30m
+ERROR: [E_INVALID_INPUT] full-suite is held by alice since 10:05AM (lease until 10:35AM)
+(exit 1)
+alice (work/billing)$ lore resource release full-suite
+✓ released full-suite
+bob (work/billing)$ lore resource claim full-suite --ttl 30m
+✓ holding full-suite until 2026-11-02T10:39:20Z
+
+### release
+alice (work/website)$ lore task add 'send the invoice reminder before Friday' --to agency
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — send the invoice reminder before Friday [medium] → [agency/client]
+lore live: (live, pushed)
+bob (work/website)$ lore task claim tsk_162df51b7f78b785c97c26b41ea89666
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+✓ claimed tsk_162df51b7f78b785c97c26b41ea89666 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+bob (work/website)$ lore task release tsk_162df51b7f78b785c97c26b41ea89666
+✓ released tsk_162df51b7f78b785c97c26b41ea89666
+alice (work/website)$ lore task show tsk_162df51b7f78b785c97c26b41ea89666
+lore sync: built .lore/lore.db from .lore/data (2 rows)
+lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+tsk_162df51b7f78b785c97c26b41ea89666
+  title:    send the invoice reminder before Friday
+  status:   in_progress
+  priority: medium
+  commit:   accepted
+  attempts: 1
+  source:   agency/client
+
+  claim:    none on refs/lore/signals/main
+
+### revoke
+alice (work/website)$ lore agent start --label agent-backend --owner @alice
+✓ act_54fe984c9b495744c0217776765a28f2 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+lore: [agency/org] 1 file(s) pushed
+agent-backend (work/website)$ lore task claim tsk_162df51b7f78b785c97c26b41ea89666
+✓ claimed tsk_162df51b7f78b785c97c26b41ea89666 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
+alice (work/website)$ lore task revoke tsk_162df51b7f78b785c97c26b41ea89666
+✓ revoked the claim on tsk_162df51b7f78b785c97c26b41ea89666 (was held by agent-backend)
+agent-backend (work/website)$ lore task done tsk_162df51b7f78b785c97c26b41ea89666
+ERROR: [E_LOST_CLAIM] tsk_162df51b7f78b785c97c26b41ea89666: your claim (token ct_cb04f…) was revoked by act_05e99e22e9e86e96fe4daa7777994603 at 10:17AM
+  hint: stop work on this task; `lore task next` finds other work
+(exit 12)
+
+### reassign
+alice (work/website)$ lore task add 'update the contact page' --to agency --assign @bob
+✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — update the contact page [medium] → [agency/client]
+bob (work/website)$ lore task claim tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+✓ claimed tsk_c0f3c11a5724b0cfd74b256190d9b5b8 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
+alice (work/website)$ lore task reassign tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --assign @alice
+✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 reassigned to @alice
+bob (work/website)$ lore task done tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+ERROR: [E_REASSIGNED] tsk_c0f3c11a5724b0cfd74b256190d9b5b8 was reassigned while you held it; stop work on it (now assigned to act_05e99e22e9e86e96fe4daa7777994603)
+  hint: stop work on this task; `lore task next` finds other work
+(exit 14)

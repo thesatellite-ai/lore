@@ -1,10 +1,12 @@
 ---
 name: lore
 description: |
-  Local-first memory + context-management CLI for AI coding agents. Persists rules, decisions, memories, tasks, hotfixes, patterns, playbooks, prompts, and more into a SQLite DB that compiles into CLAUDE.md for every future session.
+  Local-first memory + context-management CLI for coding agents. Persists rules, decisions, memories, tasks, hotfixes, patterns, playbooks, prompts, and more into a SQLite DB that compiles into CLAUDE.md for every future session.
 
   Load when user says: remember, don't forget, we decided, we keep hitting, we always/never X, corrects your approach, confirms a non-obvious decision, mentions lore/.lore/CLAUDE.md/render/memory add/rule add, asks "what do we know about X", wants to bootstrap from existing markdown, reports a DB/corruption/lock issue. Also load proactively in any repo containing .lore/.
 ---
+
+**In short:** lore is where you, the coding agent, save what you learn about a project: rules, decisions, notes and tasks. Answer a save request with the `lore` command itself, then `lore render`, so every later session sees it.
 
 ## OUTPUT CONTRACT
 
@@ -175,13 +177,13 @@ decision        ADR-style with rationale      decision add --title="<t>" --body=
 hotfix          loud recurring warning        hotfix add --severity=high "<text>"
 pattern         reusable code shape           pattern add --name="<n>" --body="<code>"
 playbook        reusable procedure            playbook add --name="<n>" --body="<steps>"
-prompt          LLM prompt template           prompt add --name="<n>" --body="<text>"
+prompt          model prompt template         prompt add --name="<n>" --body="<text>"
 architecturenote                              architecturenote add --title="<t>" --body="<b>"
 incident        post-mortem                   incident add --title="<t>" --body="<b>"
 mission         initiative with tasks         mission add "<title>" --target=YYYY-MM-DD
 task            work item                     task add "<title>" --priority=low|medium|high|urgent
 tasklist|plan   task grouping                 tasklist add | plan add
-behaviour       configurable AI behaviour     behaviour add --name="<n>" --body="<spec>"
+behaviour       configurable agent behaviour  behaviour add --name="<n>" --body="<spec>"
 cookbookrecipe  longer multi-step recipe      cookbookrecipe add --name="<n>" --body="<steps>"
 tastepref       subjective preference         tastepref add "<text>"   (NOT memory — for "I prefer X" / "my taste is Y")
 suggestion      tentative idea, not committed suggestion add --title="<t>" --body="<b>"
@@ -333,14 +335,14 @@ T[import evals from YAML | load eval set from disk]
 T[delete eval X durably]              → lore bench eval delete X --confirm   (refuses if bench_result rows reference it)
 T[show me eval E1-001 | inspect the grader for X]
                                           → lore bench eval show <code>
-T[regrade after fixing the grader]        → lore bench result regrade --run=<run>   (free; no LLM cost)
-T[re-run the LLM call entirely for X | replay result br_X | fresh sampling]
-                                          → lore bench result replay <result-id>      (DOES cost LLM; vs regrade which uses stored output)
+T[regrade after fixing the grader]        → lore bench result regrade --run=<run>   (free; no model cost)
+T[re-run the model call entirely for X | replay result br_X | fresh sampling]
+                                          → lore bench result replay <result-id>      (DOES cost model calls; vs regrade which uses stored output)
                                           # replay vs regrade:
                                           #   regrade → re-evaluate against stored output (free)
-                                          #   replay  → re-call LLM (costs $); use when you want fresh sampling
-T[test the grader against a sample file | check if X would pass without running LLM]
-                                          → lore bench grader test <eval-code> --output-file=<path>   (offline grader probe — no LLM call)
+                                          #   replay  → re-call the model (costs $); use when you want fresh sampling
+T[test the grader against a sample file | check if X would pass without running the model]
+                                          → lore bench grader test <eval-code> --output-file=<path>   (offline grader probe — no model call)
 T[why did this result fail | grader trace for one result]
                                           → lore bench grader debug <result-id>
 T[which graders are broken | audit graders for flakiness]
@@ -509,7 +511,7 @@ P8  mission + tasks
 P9  periodic review reminder
     lore reminder add "review rules" --due=YYYY-MM-DD --recurrence=30d
 
-P10 inspect what AI is seeing
+P10 inspect what the agent is seeing
     lore render --dry-run
     lore why-context --last-render --rendered
 
@@ -591,7 +593,7 @@ Tasks are live: they reach everyone at once on any branch and land on main when 
 lore whoami                                           # org, why, identity: run once per repo
 lore check pr-body body.md                            # before posting a PR body or comment
 lore share mem_01 --to repo                           # deliberate share into the client repo
-lore agent start --label backend-1 --owner @alice     # export what it prints
+lore agent start --label agent-backend --owner @alice     # export what it prints
 lore inbox
 lore task next --mission mis_12                       # exit 10 = no ready work
 lore task heartbeat
