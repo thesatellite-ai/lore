@@ -29,12 +29,19 @@ type naturalIDSpec struct {
 	prefix string
 	// fields are the natural-key columns in schema (index) order.
 	fields []string
+	// immutableKey marks a key that can never be edited after create
+	// (actors.stable_key). A primary-key collision then means the row of
+	// this very key already exists (e.g. as a client-repo projection), so a
+	// random id would only mint a duplicate of the same person (N1): the
+	// create fails instead of falling back. Callers find the existing row
+	// first (actorByKey).
+	immutableKey bool
 }
 
 // naturalIDSpecs is keyed by ent mutation type name. natural_ids_test.go
 // fails when a synced table gains a unique key that is missing here.
 var naturalIDSpecs = map[string]naturalIDSpec{
-	"Actor":           {table: "actors", prefix: ids.PrefixActor, fields: []string{"stable_key"}},
+	"Actor":           {table: "actors", prefix: ids.PrefixActor, fields: []string{"stable_key"}, immutableKey: true},
 	"Tag":             {table: "tags", prefix: ids.PrefixTag, fields: []string{"project_id", "name"}},
 	"Team":            {table: "teams", prefix: ids.PrefixTeam, fields: []string{"project_id", "handle"}},
 	"Repo":            {table: "repos", prefix: ids.PrefixRepo, fields: []string{"project_id", "mount_name"}},
@@ -83,7 +90,7 @@ func naturalIDHook() ent.Hook {
 			}
 			setter.SetID(id)
 			v, err := next.Mutate(ctx, m)
-			if err == nil || !isPrimaryKeyCollision(err, spec.table) {
+			if err == nil || !isPrimaryKeyCollision(err, spec.table) || spec.immutableKey {
 				return v, err
 			}
 			// The natural-key fields are editable (`prompt edit --name`,

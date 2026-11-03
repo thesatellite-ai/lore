@@ -382,13 +382,18 @@ func seedDBConfig(ctx context.Context, client *ent.Client) error {
 	return nil
 }
 
-// upsertActor finds-or-creates an actor by stable_key
+// upsertActor finds-or-creates an actor by stable_key. The lookup goes
+// through actorByKey first, so a person whose row arrived as a client-repo
+// projection (a fresh clone on a second machine) reuses that row instead of
+// minting a second actor (N1); see actorByKey for the dedup rule.
 func upsertActor(ctx context.Context, client *ent.Client, r identity.Resolved) (*ent.Actor, error) {
-	// Try lookup first via raw query because we don't have predicate access
-	// ent generates Where helpers; use them
-	// (Imports kept light by inlining here without the predicate package.)
-
-	// First insert; on UNIQUE conflict, fall back to lookup
+	existing, err := actorByKey(ctx, client, r.StableKey, true)
+	if err == nil {
+		return existing, nil
+	}
+	if !ent.IsNotFound(err) {
+		return nil, err
+	}
 	actor, err := client.Actor.Create().
 		SetKind(actorKind(r.Kind)).
 		SetDisplayName(r.DisplayName).
@@ -397,12 +402,10 @@ func upsertActor(ctx context.Context, client *ent.Client, r identity.Resolved) (
 	if err == nil {
 		return actor, nil
 	}
-	// Otherwise it must be a duplicate — find existing
-	existing, qerr := client.Actor.Query().
-		Where(entActor.StableKey(r.StableKey)).
-		Only(ctx)
-	if qerr == nil && existing != nil {
-		return existing, nil
+	// A concurrent writer on this lore.db created it between the lookup and
+	// the insert: find that row.
+	if again, qerr := actorByKey(ctx, client, r.StableKey, true); qerr == nil {
+		return again, nil
 	}
 	return nil, err
 }

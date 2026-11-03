@@ -161,7 +161,10 @@ func (r *roster) register(ctx context.Context, sp actorSpec) (*ent.Actor, bool, 
 				WithHint("choose another handle (`lore identity set --org <org> --handle <h>`); handles are unique per roster")
 		}
 	}
-	existing, err := r.client.Actor.Query().Where(entActor.StableKey(sp.StableKey)).First(ctx)
+	// actorByKey also finds this person's row when it arrived as a client
+	// repo projection (no-org repos export projections too), so a second
+	// machine refreshes that row instead of colliding on its id (N1).
+	existing, err := actorByKey(ctx, r.client, sp.StableKey, true)
 	switch {
 	case err == nil:
 		up := existing.Update().SetDisplayName(sp.Name).SetActive(true).ClearLeftAt()

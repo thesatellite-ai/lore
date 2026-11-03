@@ -71,6 +71,15 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 	}
 	w, t, err := openTaskCoord(ctx, id, from)
 	if err != nil {
+		// Same rule as `task done`: only a checkout without team
+		// coordination (no git repo, no live rows, no roster actor) and
+		// without store links writes a plain comment here. A linked repo
+		// whose target cannot be opened (store unreachable, link status
+		// unknown) fails closed: nothing printed, nothing written, so a
+		// note on a store task never lands in a client repo (N2).
+		if ferr := plainRowFallback(ctx, err); ferr != nil {
+			return ferr
+		}
 		return plainNote(ctx, id, body)
 	}
 	defer t.Close()
@@ -79,7 +88,7 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 		return coordError(err)
 	}
 	if !(cs.mine || cs.hadClaim) {
-		return plainNote(ctx, id, body)
+		return unheldNote(ctx, w, t, id, body)
 	}
 	branch := currentWorkBranch(ctx, w.Repo)
 	var cid string
@@ -132,6 +141,69 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 		fmt.Printf("  %s work branch %s NOT pushed (offline or no remote); a replacement cannot fetch it yet\n", style.Warn("!"), branch)
 	}
 	return nil
+}
+
+// unheldNote is a note by someone who does not hold the task (§7.6, D8):
+// not fenced (there is no claim to fence), but it goes where the task's
+// notes live, exactly as a holder's note would. A task of this repo with
+// notes on the repo side (own repo, no links, or agent_details: client) is
+// a normal comment row in this checkout; a store task, or a linked client
+// repo's own task whose notes stay internal, gets the comment on the
+// store's live ref. Before N2 every unheld note went to this checkout, so a
+// note on a store task was routed to the client repo and refused by the
+// leak check after a ✓ had already been printed.
+func unheldNote(ctx context.Context, w *coordWorld, t coordTarget, id, body string) error {
+	switch r := t.Rows.(type) {
+	case *liveRows:
+		return plainNote(ctx, id, body)
+	case *clientRows:
+		if !r.internalNote() {
+			return plainNote(ctx, id, body)
+		}
+	}
+	if _, found, err := t.Rows.Get(ctx, id); err != nil {
+		return coordError(err)
+	} else if !found {
+		return errcodes.New(errcodes.NotFound, "task "+id+" not found").
+			WithHint("`lore task list` shows the tasks this checkout can reach; --from picks another source")
+	}
+	cid, doc, err := newCommentDoc(id, body, w.ActorID, w.Clock.Now())
+	if err != nil {
+		return err
+	}
+	comps, err := t.Rows.Stage(ctx, coord.RowWrite{Table: tableComments, ID: cid, Doc: doc})
+	if err != nil {
+		return err
+	}
+	for _, c := range comps {
+		if err := pushCompanion(ctx, c); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("%s note %s on %s\n", style.Success("✓"), cid, id)
+	return nil
+}
+
+// pushCompanion writes one staged row commit on its own, outside a signals
+// write: build it, push it to its remote, then move the local ref. A note
+// that is not fenced has no signals ref to ride along with.
+func pushCompanion(ctx context.Context, c signals.Companion) error {
+	var rc signals.RemoteCompanion
+	switch v := c.(type) {
+	case *remoteStagedRows:
+		rc = v
+	case *stagedLiveRows:
+		rc = &remoteStagedRows{*v}
+	default:
+		return errcodes.New(errcodes.Internal, fmt.Sprintf("cannot push a %T on its own", c))
+	}
+	if _, err := rc.Prepare(ctx); err != nil {
+		return err
+	}
+	if err := rc.PushSelf(ctx); err != nil {
+		return coordError(&signals.OfflineError{Reason: "live ref push failed", Err: err})
+	}
+	return rc.Finalize(ctx)
 }
 
 // newCommentDoc builds a comment row document without any lore.db, for a
