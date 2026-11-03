@@ -11,7 +11,7 @@ import (
 
 // BenchResult is one TASK × ARM × ATTEMPT outcome — the unit of
 // statistical analysis. Each row captures the prompt sent, the raw
-// LLM response, grader trace, timing, and cost.
+// model response, grader trace, timing, and cost.
 //
 // For a typical run: 30 tasks × 2 arms × 3 attempts = 180 results.
 //
@@ -34,7 +34,7 @@ func (BenchResult) Fields() []ent.Field {
 		field.String("bench_eval_id").NotEmpty(),
 
 		// Which arm — baseline / with_skill / ablation variants for
-		// future cross-tool comparisons (e.g. raw .cursorrules).
+		// future cross-tool comparisons (e.g. another tool's raw agent instruction file).
 		field.Enum("arm").
 			Values(benchArmValues...),
 

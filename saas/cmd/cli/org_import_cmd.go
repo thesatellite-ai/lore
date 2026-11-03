@@ -1,0 +1,295 @@
+// org_import_cmd.go — `lore org import <url>` (§5.2, ADR TEAM-031): adopt
+// the org entry a team suggests in its store (<org_folder>/.lore/
+// lore-org.yaml: stores, patterns, defaults — never an identity), add it to
+// ~/.lore/config.yaml with YOUR identity, and register you on the roster in
+// the same step. It shows the entry first, refuses a name already used,
+// pins the store URLs as written in the store, and asks before accepting a
+// `repo` default or a wildcard owner pattern.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+
+	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/lorecfg"
+	"saas/pkg/aicoder/stores"
+
+	"github.com/spf13/cobra"
+)
+
+// Flags of org import.
+const (
+	flagImportKey    = "key"
+	flagImportName   = "name"
+	flagImportHandle = "handle"
+	flagImportAs     = "as"
+	flagImportBranch = "branch"
+)
+
+// attachStoreSubcommands adds the store-side org commands to `lore org`
+// (registered by org_cmd.go) when they are not there yet.
+func attachStoreSubcommands(root *cobra.Command) {
+	for _, c := range root.Commands() {
+		if c.Name() != "org" {
+			continue
+		}
+		have := map[string]bool{}
+		for _, sub := range c.Commands() {
+			have[sub.Name()] = true
+		}
+		if !have["unlink"] {
+			c.AddCommand(newOrgUnlinkCommand())
+		}
+		if !have["import"] {
+			c.AddCommand(newOrgImportCommand())
+		}
+	}
+}
+
+func newOrgImportCommand() *cobra.Command {
+	var key, name, handle, as, branch string
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   "import <store-url>",
+		Short: "Adopt the org entry a team suggests in its store, with your identity, and join its roster",
+		Example: `  lore org import git@github.com:agency/notes --key human:me@agency.example --name "Me" --handle me
+  lore org import git@github.com:agency/notes --as agency-2`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			url := args[0]
+			cfg, err := loadTeamConfig(ctx)
+			if err != nil {
+				return err
+			}
+			m, err := newStoreManager(cfg, nil)
+			if err != nil {
+				return err
+			}
+			st, err := m.Open(ctx, url)
+			if err != nil {
+				return storeCLIError(err, "open the store")
+			}
+			fr, err := st.Fetch(ctx, true)
+			if err != nil {
+				return storeCLIError(err, "fetch the store")
+			}
+			if fr.Offline {
+				return storeCLIError(fmt.Errorf("%w: %s", stores.ErrOffline, st.Norm), "fetch the store")
+			}
+			if branch == "" {
+				branch = st.DefaultBranch()
+			}
+			if err := st.Check(ctx, branch); err != nil {
+				return storeCLIError(err, "check the store")
+			}
+			sugg, orgFolder, err := readSuggestion(ctx, st, branch)
+			if err != nil {
+				return err
+			}
+			entry := lorecfg.Org{Name: sugg.Name, Own: sugg.Own, Repos: sugg.Repos}
+			if as != "" {
+				entry.Name = as
+			}
+			if entry.Name == "" {
+				return errcodes.New(errcodes.InvalidInput, "the store's lore-org.yaml names no org; pass --as <name>")
+			}
+			if cfg.FindOrg(entry.Name) != nil {
+				return errcodes.New(errcodes.InvalidInput, "an org entry named "+entry.Name+" already exists in ~/.lore/config.yaml").
+					WithHint("pass --as <another name>, or edit the existing entry")
+			}
+			for _, s := range sugg.Stores {
+				entry.Stores = append(entry.Stores, lorecfg.Store{URL: s.URL, Branch: s.Branch, OrgFolder: s.OrgFolder})
+			}
+			if len(entry.Stores) == 0 {
+				entry.Stores = []lorecfg.Store{{URL: url, OrgFolder: orgFolder}}
+			}
+			if len(sugg.Defaults.ClientRepos) > 0 {
+				entry.Defaults.ClientRepos = sugg.Defaults.ClientRepos
+			}
+			entry.Identity = lorecfg.OrgIdentity{Key: key, Name: name, Handle: handle}
+			if entry.Identity.Key == "" || entry.Identity.Name == "" {
+				return errcodes.New(errcodes.InvalidInput, "your identity in "+entry.Name+" is required: --key human:<your email there> --name \"Your Name\" [--handle h]")
+			}
+			body, err := yaml.Marshal(entry)
+			if err != nil {
+				return errcodes.New(errcodes.Internal, "encode the entry").WithCause(err)
+			}
+			fmt.Printf("This adds to ~/.lore/config.yaml:\n\n%s\n", indentBlock(string(body)))
+			risky := riskyImport(entry)
+			for _, r := range risky {
+				fmt.Println("  note: " + r)
+			}
+			if !yes {
+				if !stdinIsTTY() {
+					return errcodes.New(errcodes.InvalidInput, "confirm with --yes when there is no terminal; nothing written")
+				}
+				q := "Add it? [y/N] "
+				if len(risky) > 0 {
+					q = "Accept the notes above and add it? [y/N] "
+				}
+				if !confirmYes(q) {
+					fmt.Println("nothing written")
+					return nil
+				}
+			}
+			home, err := loreHome()
+			if err != nil {
+				return err
+			}
+			if err := appendOrgEntry(ctx, home, entry); err != nil {
+				return err
+			}
+			fmt.Printf("✓ added org entry %s\n", entry.Name)
+			if err := registerAfterImport(ctx, entry.Name); err != nil {
+				fmt.Fprintln(os.Stderr, "lore: the entry is added, but registering on the roster failed: "+redactIfQuiet(err.Error()))
+				fmt.Fprintln(os.Stderr, "      run `lore actor register` in one of "+entry.Name+"'s repos")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&key, flagImportKey, "", "your identity key in this org: human:<your email there>")
+	cmd.Flags().StringVar(&name, flagImportName, "", "your display name")
+	cmd.Flags().StringVar(&handle, flagImportHandle, "", "your @handle on the roster")
+	cmd.Flags().StringVar(&as, flagImportAs, "", "entry name, when the suggested one is taken")
+	cmd.Flags().StringVar(&branch, flagImportBranch, "", "store branch to read the suggestion from (default: the store's default branch)")
+	cmd.Flags().BoolVar(&yes, flagYes, false, "confirm without a prompt")
+	return cmd
+}
+
+// readSuggestion reads lore-org.yaml from the org folder the store's
+// marker names (or "org", then the root project).
+func readSuggestion(ctx context.Context, st *stores.Store, branch string) (stores.OrgFileDefaults, string, error) {
+	tip, ok, err := st.Tip(ctx, branch)
+	if err != nil {
+		return stores.OrgFileDefaults{}, "", storeCLIError(err, "read the store")
+	}
+	if !ok {
+		return stores.OrgFileDefaults{}, "", storeCLIError(fmt.Errorf("%w: %s has no branch %s", stores.ErrNoBranch, st.Norm, branch), "read the store")
+	}
+	candidates := []string{defaultMarkerOrgFolder, stores.RootFolder}
+	if b, found, err := st.Repo.ReadFile(ctx, tip, stores.MarkerFile); err == nil && found {
+		if mk, err := stores.ParseMarker(b); err == nil && mk.OrgFolder != "" {
+			candidates = append([]string{mk.OrgFolder}, candidates...)
+		}
+	}
+	for _, folder := range candidates {
+		f, found, err := st.ReadOrgFile(ctx, branch, folder)
+		if err != nil {
+			return stores.OrgFileDefaults{}, "", storeCLIError(err, "read lore-org.yaml")
+		}
+		if found {
+			return f, folder, nil
+		}
+	}
+	return stores.OrgFileDefaults{}, "", errcodes.New(errcodes.InvalidInput, "this store has no lore-org.yaml suggesting an org entry").
+		WithHint("ask the team to commit <org_folder>/.lore/lore-org.yaml, or add the entry to ~/.lore/config.yaml by hand")
+}
+
+// riskyImport lists what the user must accept explicitly: a default that
+// writes into client repos, and owner wildcards that match whole hosts.
+func riskyImport(o lorecfg.Org) []string {
+	var out []string
+	for kind, where := range o.Defaults.ClientRepos {
+		if where == stores.DefaultRepo {
+			out = append(out, fmt.Sprintf("defaults.client_repos.%s = repo: %s written in client repos go INTO the client repo", kind, kind))
+		}
+	}
+	for _, p := range append(append([]string{}, o.Own...), o.Repos...) {
+		segs := strings.Split(p, "/")
+		if len(segs) >= 2 && strings.Contains(segs[1], "*") {
+			out = append(out, "pattern "+p+" has a wildcard owner: it matches every account on that host")
+		}
+	}
+	return out
+}
+
+func indentBlock(s string) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = "    " + l
+	}
+	return strings.Join(lines, "\n")
+}
+
+// appendOrgEntry adds one entry under orgs: in <home>/config.yaml, keeping
+// the rest of the document (comments included), then re-validates the
+// whole file and restores the old bytes if it no longer validates.
+func appendOrgEntry(ctx context.Context, home string, entry lorecfg.Org) error {
+	path := filepath.Join(home, lorecfg.TeamFileBase+lorecfg.ExtYAML)
+	old, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return errcodes.New(errcodes.Internal, "read config.yaml").WithCause(err)
+	}
+	var doc yaml.Node
+	if len(old) > 0 {
+		if err := yaml.Unmarshal(old, &doc); err != nil {
+			return errcodes.New(errcodes.ConfigInvalid, "~/.lore/config.yaml does not parse").WithCause(err)
+		}
+	}
+	if doc.Kind == 0 {
+		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
+	}
+	root := doc.Content[0]
+	var orgs *yaml.Node
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == "orgs" {
+			orgs = root.Content[i+1]
+		}
+	}
+	if orgs == nil {
+		orgs = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "orgs"}, orgs)
+	}
+	var item yaml.Node
+	if err := item.Encode(entry); err != nil {
+		return errcodes.New(errcodes.Internal, "encode the entry").WithCause(err)
+	}
+	orgs.Content = append(orgs.Content, &item)
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "encode config.yaml").WithCause(err)
+	}
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return errcodes.New(errcodes.Internal, "create ~/.lore").WithCause(err)
+	}
+	if err := atomicWriteFile(path, out, 0o600); err != nil {
+		return errcodes.New(errcodes.Internal, "write config.yaml").WithCause(err)
+	}
+	if _, _, err := lorecfg.LoadTeam(ctx, home, lorecfg.Options{}); err != nil {
+		if len(old) > 0 {
+			_ = atomicWriteFile(path, old, 0o600) // best effort: put the user's file back
+		} else {
+			_ = os.Remove(path) // best effort: we created it
+		}
+		return errcodes.New(errcodes.ConfigInvalid, "the imported entry does not validate; nothing changed").WithCause(err)
+	}
+	return nil
+}
+
+// registerAfterImport registers the user on the new entry's roster
+// (TEAM-031), with LORE_ORG pinning resolution to that entry.
+func registerAfterImport(ctx context.Context, entryName string) error {
+	prev, had := os.LookupEnv(envOrg)
+	if err := os.Setenv(envOrg, entryName); err != nil {
+		return err
+	}
+	defer func() {
+		if had {
+			_ = os.Setenv(envOrg, prev) // restoring the caller's environment
+		} else {
+			_ = os.Unsetenv(envOrg) // restoring the caller's environment
+		}
+	}()
+	reg := newActorRegisterCommand()
+	reg.SetArgs([]string{})
+	reg.SilenceUsage, reg.SilenceErrors = true, true
+	return reg.ExecuteContext(ctx)
+}

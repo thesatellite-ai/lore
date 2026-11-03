@@ -143,6 +143,10 @@ const (
 	FlagBranch = "branch"
 	// FlagManual installs a workflow that only runs when started by hand.
 	FlagManual = "manual"
+	// FlagAuto adds the pull_request and push triggers to the installed
+	// workflow. Opt-in because automatic runs spend Actions minutes, which
+	// are billed on private repositories.
+	FlagAuto = "auto"
 	// FlagLoreVersion pins the lore release a workflow downloads.
 	FlagLoreVersion = "lore-version"
 )
@@ -152,6 +156,6 @@ const (
 const (
 	// ActorRefMe stands for the current CLI invoker's actor, resolved through
 	// the same identity chain every `add` command uses (--actor, LORE_ACTOR,
-	// ~/.lore/identity.toml, git config, ...).
+	// ~/.lore/identity.yaml, git config, ...).
 	ActorRefMe = "@me"
 )

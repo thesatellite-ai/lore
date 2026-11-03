@@ -1,0 +1,255 @@
+
+### errors list
+alice (work/website)$ lore errors list | head -4
+E_DB_LOCKED                      another lore process is holding the DB write lock
+E_DB_CORRUPT                     DB file failed quick_check; run `lore repair`
+E_DB_NOT_FOUND                   DB file does not exist at the configured path
+E_SCHEMA_VERSION_MISMATCH        DB was migrated by a newer lore; upgrade or use a different DB
+alice (work/website)$ lore errors list --json | head -9
+{
+  "schema_version": 1,
+  "count": 53,
+  "errors": [
+    {
+      "code": "E_DB_LOCKED",
+      "description": "another lore process is holding the DB write lock"
+    },
+    {
+
+### an error
+alice (work)$ lore rule list
+ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
+  hint: run `lore init` here, or cd into a project root
+(exit 1)
+
+### errors with json
+alice (work)$ lore rule list --json
+ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
+  hint: run `lore init` here, or cd into a project root
+(exit 1)
+alice (work/website)$ lore rule list --colour never
+ERROR: unknown flag: --colour
+(exit 1)
+
+### read only
+alice (work/website)$ lore rule add --body 'Never put passwords in the code'
+ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
+  hint: unset --read-only and LORE_READ_ONLY
+(exit 1)
+alice (work/website)$ lore rule add --read-only --body 'Never put passwords in the code'
+ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
+  hint: unset --read-only and LORE_READ_ONLY
+(exit 1)
+
+### exit status
+alice (work/website)$ lore task add 'Write the release notes'
+✓ tsk_7a670ae8548ed05bf57ad29ad0759504 — Write the release notes [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore task add 'Send the release notes to the client' --after tsk_7a670ae8548ed05bf57ad29ad0759504
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Send the release notes to the client [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore task edit tsk_7a670ae8548ed05bf57ad29ad0759504 --after tsk_2ad3618e878ebbf527d34d446ef4f891; echo "exit status: $?"
+ERROR: [E_CYCLE] dependency cycle: tsk_7a670ae8548ed05bf57ad29ad0759504 → tsk_2ad3618e878ebbf527d34d446ef4f891 → tsk_7a670ae8548ed05bf57ad29ad0759504
+  hint: drop one --after edge; a task may not wait on itself, even through others
+exit status: 19
+
+### config check good
+alice$ cat .lore/config.yaml
+# Everything below is optional; this file sets most keys to show where they go.
+identity:
+  key: human:alice@agency.example
+  name: Alice
+personal:
+  store: local
+orgs:
+  - name: agency
+    identity:
+      key: human:alice@agency.example
+      name: Alice
+      handle: alice
+    stores:
+      - url: github.com/agency/notes
+        org_folder: "."
+    own:
+      - github.com/agency/*
+    repos:
+      - github.com/client/*
+      - github.com/client2/**
+    defaults:
+      client_repos:
+        task: agency
+        memory: agency/website
+    agent_details: internal
+    lease:
+      ttl: 30m
+live:
+  max_age: 7d
+  fetch_ttl: 60s
+  autopush: true
+  compact_after: 1000
+  remote: origin
+  defaults:
+    memories: true
+lease:
+  ttl: 20m
+  renew_every: 5m
+  grace: 2m
+  push_retries: 5
+agents:
+  max_claims_per_agent: 1
+  max_attempts: 3
+merge_check:
+  adapter: none
+link_index:
+  max_age: 1h
+untrusted_hosts:
+  - build-*.client.example
+alice (work/website)$ lore config check
+✓ ~/.lore/config.yaml is valid: 1 org entry (agency)
+
+### config check bad
+alice$ cat .lore/config.yaml
+orgs:
+  - name: Agency
+    identity:
+      key: alice@agency.example
+    stores:
+      - url: github.com/agency/notes
+        branch: team/staging
+lease:
+  ttl: 5m
+  renew_every: 10m
+merge_check:
+  adapter: gitlab
+alice (work/website)$ lore config check
+✗ ~/.lore/config.yaml
+  - lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed
+  - merge_check: adapter "gitlab": must be "none" or "github"
+  - orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit
+  - orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029)
+  - orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
+  hint: fix the problems listed above; nothing else in lore reads an invalid config
+(exit 1)
+
+### config check typo
+alice (work/website)$ lore config check
+✗ ~/.lore/config.yaml
+  - lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
+  hint: fix the problems listed above; nothing else in lore reads an invalid config
+(exit 1)
+
+### invalid config stops writes
+alice (work/website)$ lore rule list
+(no rules)
+alice (work/website)$ lore rule add --body 'Run the tests before you push'
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
+  hint: run `lore config check` for every problem with its location
+(exit 1)
+
+### db flag
+alice$ lore rule list --db work/website/.lore/lore.db
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
+alice$ lore rule list
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
+
+### db config
+alice (work/website)$ lore config list
+db_created_at=2026-11-02T10:00:00.000000001Z
+db_uuid=cfg_54fe984c9b495744c0217776765a28f2
+fts_registry_fingerprint=a98a26bd082406f5
+last_checkpoint_at=
+last_vacuum_at=
+schema_version=1
+alice (work/website)$ lore config get schema_version
+1
+
+### default branch
+alice$ cat .lore/config.yaml
+default_branch: develop
+alice (work/website)$ lore task add 'Fix the footer links'
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 — Fix the footer links [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore task done tsk_05e99e22e9e86e96fe4daa7777994603
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: (live, pushed)
+lore live: landed on develop (601d285); leaves live once develop is fetched
+alice (work/website)$ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
+601d285 lore: land 2 rows (_root)
+86dbae4 lore: init
+86dbae4 lore: init
+
+### sync data ignored
+alice (work/website)$ mkdir -p .lore/data/tasks && echo '*.json' > .lore/data/tasks/.gitignore
+alice (work/website)$ lore sync install-git
+lore sync: git ignores lore data, so teammates will not receive it:
+  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
+change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
+ERROR: [E_SYNC_DATA_IGNORED] lore sync: git ignores lore data, so teammates will not receive it:
+  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
+change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
+(exit 1)
+
+### no work
+alice (work/landing)$ lore task next
+ERROR: [E_NO_WORK] nothing ready: no open task matches
+(exit 10)
+
+### store marker
+alice$ cat .lore/config.yaml
+orgs:
+  - name: agency
+    identity: {key: "human:alice@agency.example", name: "Alice", handle: alice}
+    stores:
+      - {url: "git@github.com:agency/notes", org_folder: org}
+    repos: [github.com/client/*]
+  - name: freelance
+    identity: {key: "human:alice@example.com", name: "Alice", handle: alice}
+    stores:
+      - {url: "git@github.com:other/notes", org_folder: org}
+    repos: [github.com/client/*]
+alice$ lore store init git@github.com:agency/notes
+✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
+alice$ lore store init git@github.com:other/notes
+✓ wrote lore-store.yaml to github.com/other/notes (new branch main, first commit) and pushed
+alice$ git clone -q https://github.com/agency/notes notes-checkout && cat notes-checkout/lore-store.yaml
+lore_store: 1
+created: "2026-11-02"
+org_folder: org
+
+### org use
+alice (work/website)$ lore whoami
+org        refused  (the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance))
+identity   (not resolved: the org is refused above)
+project    prj_c0f3c11a5724b0cfd74b256190d9b5b8
+remotes    github.com/client/website
+links      known  0 link(s) for this repo (stores of 2 entries scanned)
+personal   local: everywhere/
+ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance)
+  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+(exit 17)
+alice (work/website)$ lore org use agency
+✓ prj_c0f3c11a5724b0cfd74b256190d9b5b8 uses org agency on this machine
+  recorded in ~/.lore/config.yaml (machine-only, nothing committed)
+alice$ grep -A3 repo_orgs ~/.lore/config.yaml
+repo_orgs:
+  prj_c0f3c11a5724b0cfd74b256190d9b5b8: {org: agency, remotes: [github.com/client/website]}
+alice (work/website)$ lore org link agency --project client --yes
+This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
+and the leak guards turn on for everyone in agency.
+  link: project prj_c0f3c11a5724b0cfd74b256190d9b5b8 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_c0f3c11a5724b0cfd74b256190d9b5b8, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  nothing was written to this repo
+
+### force org
+alice (work/website)$ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
+ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
+  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+(exit 17)
+alice (work/website)$ LORE_ORG=freelance lore memory add --force-org --to freelance/client --create --body 'The client pays invoices in 30 days'
+✓ mem_76bd560aff0771fab8457dbfa9823f10 [freelance/client]
+  filed: --to freelance/client
+  scope: [master]
+lore: [freelance/client] 4 file(s) pushed

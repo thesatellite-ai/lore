@@ -1,23 +1,25 @@
 # Example: Start using lore in an existing project
 
-**Scenario:** Alice has a Go monorepo at `~/projects/api-server`. She wants Claude Code to actually remember what she teaches it. She has an old `CLAUDE.md` she's been hand-editing.
+**In short:** turn the notes file you already have into lore rows, then let lore write that file for you from now on. Do it once per project.
+
+**Scenario:** Alice (an agency developer) works on the client's website at `~/projects/website`. She wants her coding agent to remember what she teaches it. She has an old `CLAUDE.md` (the notes file her agent reads) that she has been editing by hand.
 
 ## Session transcript
 
 ```
 Alice: Let's set up lore for this project.
 
-Claude: I see ~/projects/api-server has an existing CLAUDE.md.
+Agent:  I see ~/projects/website has an existing CLAUDE.md.
         I'll initialize lore, ingest your existing markdown,
         then render a fresh CLAUDE.md from the structured store.
 ```
 
 ```bash
-cd ~/projects/api-server
+cd ~/projects/website
 lore init --non-interactive
-# ✓ lore initialized at /Users/alice/projects/api-server
+# ✓ lore initialized at ~/projects/website
 #     project_id: prj_019e...
-#     name:       api-server
+#     name:       website
 #     identity:   human:alice@example.com (git config)
 
 lore learn-from docs
@@ -25,9 +27,9 @@ lore learn-from docs
 #   review: lore learn list
 
 lore learn list --json | jq -r '.data[] | "\(.id) \(.body[0:60])"'
-# lcd_019e... "Use Tailwind v4 for styling..."
-# lcd_019e... "All errors wrapped with fmt.Errorf..."
-# lcd_019e... "Database is PostgreSQL 16 with..."
+# lcd_019e... "Run the tests before you push..."
+# lcd_019e... "Never put passwords in the code..."
+# lcd_019e... "Buttons are blue..."
 # ...
 ```
 
@@ -46,7 +48,7 @@ lore render
 ```
 
 ```
-Claude: Done. CLAUDE.md is now rendered from the lore DB.
+Agent:  Done. CLAUDE.md is now rendered from the lore DB.
         Next session I'll see the same context.
         Going forward, when you correct me, I'll capture it
         with `lore rule add` or `lore memory add` and
@@ -70,3 +72,8 @@ git status
 ```
 
 Only `CLAUDE.md` and `.gitignore` enter version control. The DB is per-developer.
+
+## Pitfalls
+
+- Review the candidates before promoting them all: `lore learn list` shows each one, and a wrong note promoted here reaches every future session.
+- Commit the files lore creates (`.lore/` data and the rendered file); a teammate who clones the repo gets the same notes.

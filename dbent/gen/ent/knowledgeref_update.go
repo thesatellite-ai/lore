@@ -91,6 +91,26 @@ func (_u *KnowledgeRefUpdate) SetNillableDstID(v *string) *KnowledgeRefUpdate {
 	return _u
 }
 
+// SetDstProjectID sets the "dst_project_id" field.
+func (_u *KnowledgeRefUpdate) SetDstProjectID(v string) *KnowledgeRefUpdate {
+	_u.mutation.SetDstProjectID(v)
+	return _u
+}
+
+// SetNillableDstProjectID sets the "dst_project_id" field if the given value is not nil.
+func (_u *KnowledgeRefUpdate) SetNillableDstProjectID(v *string) *KnowledgeRefUpdate {
+	if v != nil {
+		_u.SetDstProjectID(*v)
+	}
+	return _u
+}
+
+// ClearDstProjectID clears the value of the "dst_project_id" field.
+func (_u *KnowledgeRefUpdate) ClearDstProjectID() *KnowledgeRefUpdate {
+	_u.mutation.ClearDstProjectID()
+	return _u
+}
+
 // SetRelation sets the "relation" field.
 func (_u *KnowledgeRefUpdate) SetRelation(v string) *KnowledgeRefUpdate {
 	_u.mutation.SetRelation(v)
@@ -228,6 +248,12 @@ func (_u *KnowledgeRefUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.DstID(); ok {
 		_spec.SetField(knowledgeref.FieldDstID, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.DstProjectID(); ok {
+		_spec.SetField(knowledgeref.FieldDstProjectID, field.TypeString, value)
+	}
+	if _u.mutation.DstProjectIDCleared() {
+		_spec.ClearField(knowledgeref.FieldDstProjectID, field.TypeString)
+	}
 	if value, ok := _u.mutation.Relation(); ok {
 		_spec.SetField(knowledgeref.FieldRelation, field.TypeString, value)
 	}
@@ -315,6 +341,26 @@ func (_u *KnowledgeRefUpdateOne) SetNillableDstID(v *string) *KnowledgeRefUpdate
 	if v != nil {
 		_u.SetDstID(*v)
 	}
+	return _u
+}
+
+// SetDstProjectID sets the "dst_project_id" field.
+func (_u *KnowledgeRefUpdateOne) SetDstProjectID(v string) *KnowledgeRefUpdateOne {
+	_u.mutation.SetDstProjectID(v)
+	return _u
+}
+
+// SetNillableDstProjectID sets the "dst_project_id" field if the given value is not nil.
+func (_u *KnowledgeRefUpdateOne) SetNillableDstProjectID(v *string) *KnowledgeRefUpdateOne {
+	if v != nil {
+		_u.SetDstProjectID(*v)
+	}
+	return _u
+}
+
+// ClearDstProjectID clears the value of the "dst_project_id" field.
+func (_u *KnowledgeRefUpdateOne) ClearDstProjectID() *KnowledgeRefUpdateOne {
+	_u.mutation.ClearDstProjectID()
 	return _u
 }
 
@@ -484,6 +530,12 @@ func (_u *KnowledgeRefUpdateOne) sqlSave(ctx context.Context) (_node *KnowledgeR
 	}
 	if value, ok := _u.mutation.DstID(); ok {
 		_spec.SetField(knowledgeref.FieldDstID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DstProjectID(); ok {
+		_spec.SetField(knowledgeref.FieldDstProjectID, field.TypeString, value)
+	}
+	if _u.mutation.DstProjectIDCleared() {
+		_spec.ClearField(knowledgeref.FieldDstProjectID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Relation(); ok {
 		_spec.SetField(knowledgeref.FieldRelation, field.TypeString, value)

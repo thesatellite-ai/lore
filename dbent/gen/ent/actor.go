@@ -27,6 +27,16 @@ type Actor struct {
 	DisplayName string `json:"display_name,omitempty"`
 	// StableKey holds the value of the "stable_key" field.
 	StableKey string `json:"stable_key,omitempty"`
+	// OwnerActorID holds the value of the "owner_actor_id" field.
+	OwnerActorID *string `json:"owner_actor_id,omitempty"`
+	// Label holds the value of the "label" field.
+	Label *string `json:"label,omitempty"`
+	// Handle holds the value of the "handle" field.
+	Handle *string `json:"handle,omitempty"`
+	// Active holds the value of the "active" field.
+	Active bool `json:"active,omitempty"`
+	// LeftAt holds the value of the "left_at" field.
+	LeftAt *time.Time `json:"left_at,omitempty"`
 	// LastSeenAt holds the value of the "last_seen_at" field.
 	LastSeenAt time.Time `json:"last_seen_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -74,9 +84,11 @@ func (*Actor) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case actor.FieldID, actor.FieldKind, actor.FieldDisplayName, actor.FieldStableKey:
+		case actor.FieldActive:
+			values[i] = new(sql.NullBool)
+		case actor.FieldID, actor.FieldKind, actor.FieldDisplayName, actor.FieldStableKey, actor.FieldOwnerActorID, actor.FieldLabel, actor.FieldHandle:
 			values[i] = new(sql.NullString)
-		case actor.FieldCreatedAt, actor.FieldUpdatedAt, actor.FieldLastSeenAt:
+		case actor.FieldCreatedAt, actor.FieldUpdatedAt, actor.FieldLeftAt, actor.FieldLastSeenAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -128,6 +140,40 @@ func (_m *Actor) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field stable_key", values[i])
 			} else if value.Valid {
 				_m.StableKey = value.String
+			}
+		case actor.FieldOwnerActorID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field owner_actor_id", values[i])
+			} else if value.Valid {
+				_m.OwnerActorID = new(string)
+				*_m.OwnerActorID = value.String
+			}
+		case actor.FieldLabel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field label", values[i])
+			} else if value.Valid {
+				_m.Label = new(string)
+				*_m.Label = value.String
+			}
+		case actor.FieldHandle:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field handle", values[i])
+			} else if value.Valid {
+				_m.Handle = new(string)
+				*_m.Handle = value.String
+			}
+		case actor.FieldActive:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field active", values[i])
+			} else if value.Valid {
+				_m.Active = value.Bool
+			}
+		case actor.FieldLeftAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field left_at", values[i])
+			} else if value.Valid {
+				_m.LeftAt = new(time.Time)
+				*_m.LeftAt = value.Time
 			}
 		case actor.FieldLastSeenAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -195,6 +241,29 @@ func (_m *Actor) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("stable_key=")
 	builder.WriteString(_m.StableKey)
+	builder.WriteString(", ")
+	if v := _m.OwnerActorID; v != nil {
+		builder.WriteString("owner_actor_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Label; v != nil {
+		builder.WriteString("label=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Handle; v != nil {
+		builder.WriteString("handle=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("active=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Active))
+	builder.WriteString(", ")
+	if v := _m.LeftAt; v != nil {
+		builder.WriteString("left_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("last_seen_at=")
 	builder.WriteString(_m.LastSeenAt.Format(time.ANSIC))

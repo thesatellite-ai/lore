@@ -90,7 +90,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >    - If the user's prompt is one line and zero context, the body still has the verbatim quote + a Context section noting "no additional context — single-line ad-hoc request."
 > 3. **Open a run BEFORE doing the work** (this is the step most often skipped):
 >
->    ` + "`RID=$(lore run start --task=<tsk_id> --model=<your-model-id> --agent=claude-code --goal=\"<one-line description>\")`" + `
+>    ` + "`RID=$(lore run start --task=<tsk_id> --model=<your-model-id> --agent=<your-agent-name> --goal=\"<one-line description>\")`" + `
 >
 >    Keep ` + "`$RID`" + ` in scope for the rest of the turn. Log significant steps as you go:
 >
@@ -115,7 +115,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 >    **Even when the task is already marked done**, still open a run for verification work — the run captures what you did to confirm the state, not just net-new code. If you do truly nothing (the task is done and there's nothing to check), say so to the user explicitly instead of silently skipping
 >
-> 4. **Did the user give feedback / a correction / a "we always do X" statement?** Capture via ` + "`lore rule add`" + ` or ` + "`memory add`" + ` — never via Claude Code's auto-memory. **Then run ` + "`lore render`" + `** so the new rule surfaces in CLAUDE.md for the next session
+> 4. **Did the user give feedback / a correction / a "we always do X" statement?** Capture via ` + "`lore rule add`" + ` or ` + "`memory add`" + ` — never via your coding agent's built-in auto-memory. **Then run ` + "`lore render`" + `** so the new rule surfaces in CLAUDE.md for the next session
 >
 > 5. **Before substantive responses, search for relevant captured knowledge.** One call covers all 23 entities:
 >
@@ -145,13 +145,13 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 > ## Hard prohibitions
 >
-> - **Do NOT** write to Claude Code's built-in auto-memory at ` + "`~/.claude/projects/*/memory/`" + ` for THIS project. That's a duplicate store that competes with lore and creates a second source-of-truth no one renders. If you find yourself about to call ` + "`Write`" + ` against ` + "`~/.claude/projects/*/memory/*.md`" + `, **stop and route to lore instead**
+> - **Do NOT** write to your coding agent's built-in auto-memory (for example ` + "`~/.claude/projects/*/memory/`" + `) for THIS project. That's a duplicate store that competes with lore and creates a second source-of-truth no one renders. If you find yourself about to call ` + "`Write`" + ` against ` + "`~/.claude/projects/*/memory/*.md`" + `, **stop and route to lore instead**
 > - **Do NOT** add bullet points, sections, or inline notes to this file. Edits here are wiped on the next ` + "`lore render`" + `
 > - **Do NOT** create sibling docs (` + "`NOTES.md`" + `, ` + "`LEARNINGS.md`" + `, ` + "`TODO.md`" + `, ` + "`.ai/**/*.md`" + ` outside structured plans) as a workaround
 > - **Do NOT** skip task capture for "small" work that turns out to take 30+ minutes — create the task retroactively before going further
 > - **Do NOT** answer non-trivial requests without first checking ` + "`lore task search`" + ` for duplicates
 > - **Do NOT** start tool calls (Read / Write / Edit / Bash) for non-trivial work without first opening a run. If you realize you've done 2+ tool calls already without a run open, STOP, open the run retroactively with ` + "`run start ... --goal=\"<what you've been doing>\"`" + `, log the steps so far via ` + "`run step`" + `, then continue
-> - **Do NOT** rely on Claude Code's TodoWrite as the system of record. TodoWrite is fine as scratch state; lore tasks + runs are canonical and persist across sessions
+> - **Do NOT** rely on your agent's built-in todo list as the system of record. It is fine as scratch state; lore tasks + runs are canonical and persist across sessions
 > - **Do NOT** replace the user's verbatim words with your interpretation. Elaboration belongs in an ` + "`Implementation notes`" + ` section AFTER the verbatim quote, not instead of it. "Add quick view button" goes in the body as "Add quick view button" first; "Sheet component with Eye icon" goes BELOW it in implementation notes
 > - **Do NOT** strip URL anchors, file paths, error messages, or pretty IDs from the task body. The future session needs them to re-establish context. If the user gave a URL like ` + "`/prj/prj_xxxx/library`" + `, it goes into the body unchanged — even (especially) for one-line ad-hoc requests
 >
@@ -176,7 +176,7 @@ func newDirectiveCommand() *cobra.Command {
 		Use:   "directive",
 		Short: "Install/remove the lore agent-directive block in agent-loaded markdown",
 		Long: `Installs a fenced block at the top of CLAUDE.md / AGENTS.md (or any --target
-file) telling the AI agent to persist knowledge via lore commands
+file) telling the coding agent to persist knowledge via lore commands
 instead of inline-editing the file or creating sibling NOTES.md scratchpads
 
 Idempotent: re-running install replaces the block in place. Remove strips it.`,

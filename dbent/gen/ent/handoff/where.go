@@ -99,6 +99,16 @@ func StatusStr(v string) predicate.Handoff {
 	return predicate.Handoff(sql.FieldEQ(FieldStatusStr, v))
 }
 
+// TaskID applies equality check predicate on the "task_id" field. It's identical to TaskIDEQ.
+func TaskID(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldEQ(FieldTaskID, v))
+}
+
+// MissionID applies equality check predicate on the "mission_id" field. It's identical to MissionIDEQ.
+func MissionID(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldEQ(FieldMissionID, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Handoff {
 	return predicate.Handoff(sql.FieldEQ(FieldCreatedAt, v))
@@ -522,6 +532,156 @@ func StatusStrEqualFold(v string) predicate.Handoff {
 // StatusStrContainsFold applies the ContainsFold predicate on the "status_str" field.
 func StatusStrContainsFold(v string) predicate.Handoff {
 	return predicate.Handoff(sql.FieldContainsFold(FieldStatusStr, v))
+}
+
+// TaskIDEQ applies the EQ predicate on the "task_id" field.
+func TaskIDEQ(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldEQ(FieldTaskID, v))
+}
+
+// TaskIDNEQ applies the NEQ predicate on the "task_id" field.
+func TaskIDNEQ(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldNEQ(FieldTaskID, v))
+}
+
+// TaskIDIn applies the In predicate on the "task_id" field.
+func TaskIDIn(vs ...string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldIn(FieldTaskID, vs...))
+}
+
+// TaskIDNotIn applies the NotIn predicate on the "task_id" field.
+func TaskIDNotIn(vs ...string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldNotIn(FieldTaskID, vs...))
+}
+
+// TaskIDGT applies the GT predicate on the "task_id" field.
+func TaskIDGT(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldGT(FieldTaskID, v))
+}
+
+// TaskIDGTE applies the GTE predicate on the "task_id" field.
+func TaskIDGTE(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldGTE(FieldTaskID, v))
+}
+
+// TaskIDLT applies the LT predicate on the "task_id" field.
+func TaskIDLT(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldLT(FieldTaskID, v))
+}
+
+// TaskIDLTE applies the LTE predicate on the "task_id" field.
+func TaskIDLTE(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldLTE(FieldTaskID, v))
+}
+
+// TaskIDContains applies the Contains predicate on the "task_id" field.
+func TaskIDContains(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldContains(FieldTaskID, v))
+}
+
+// TaskIDHasPrefix applies the HasPrefix predicate on the "task_id" field.
+func TaskIDHasPrefix(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldHasPrefix(FieldTaskID, v))
+}
+
+// TaskIDHasSuffix applies the HasSuffix predicate on the "task_id" field.
+func TaskIDHasSuffix(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldHasSuffix(FieldTaskID, v))
+}
+
+// TaskIDIsNil applies the IsNil predicate on the "task_id" field.
+func TaskIDIsNil() predicate.Handoff {
+	return predicate.Handoff(sql.FieldIsNull(FieldTaskID))
+}
+
+// TaskIDNotNil applies the NotNil predicate on the "task_id" field.
+func TaskIDNotNil() predicate.Handoff {
+	return predicate.Handoff(sql.FieldNotNull(FieldTaskID))
+}
+
+// TaskIDEqualFold applies the EqualFold predicate on the "task_id" field.
+func TaskIDEqualFold(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldEqualFold(FieldTaskID, v))
+}
+
+// TaskIDContainsFold applies the ContainsFold predicate on the "task_id" field.
+func TaskIDContainsFold(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldContainsFold(FieldTaskID, v))
+}
+
+// MissionIDEQ applies the EQ predicate on the "mission_id" field.
+func MissionIDEQ(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldEQ(FieldMissionID, v))
+}
+
+// MissionIDNEQ applies the NEQ predicate on the "mission_id" field.
+func MissionIDNEQ(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldNEQ(FieldMissionID, v))
+}
+
+// MissionIDIn applies the In predicate on the "mission_id" field.
+func MissionIDIn(vs ...string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldIn(FieldMissionID, vs...))
+}
+
+// MissionIDNotIn applies the NotIn predicate on the "mission_id" field.
+func MissionIDNotIn(vs ...string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldNotIn(FieldMissionID, vs...))
+}
+
+// MissionIDGT applies the GT predicate on the "mission_id" field.
+func MissionIDGT(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldGT(FieldMissionID, v))
+}
+
+// MissionIDGTE applies the GTE predicate on the "mission_id" field.
+func MissionIDGTE(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldGTE(FieldMissionID, v))
+}
+
+// MissionIDLT applies the LT predicate on the "mission_id" field.
+func MissionIDLT(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldLT(FieldMissionID, v))
+}
+
+// MissionIDLTE applies the LTE predicate on the "mission_id" field.
+func MissionIDLTE(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldLTE(FieldMissionID, v))
+}
+
+// MissionIDContains applies the Contains predicate on the "mission_id" field.
+func MissionIDContains(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldContains(FieldMissionID, v))
+}
+
+// MissionIDHasPrefix applies the HasPrefix predicate on the "mission_id" field.
+func MissionIDHasPrefix(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldHasPrefix(FieldMissionID, v))
+}
+
+// MissionIDHasSuffix applies the HasSuffix predicate on the "mission_id" field.
+func MissionIDHasSuffix(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldHasSuffix(FieldMissionID, v))
+}
+
+// MissionIDIsNil applies the IsNil predicate on the "mission_id" field.
+func MissionIDIsNil() predicate.Handoff {
+	return predicate.Handoff(sql.FieldIsNull(FieldMissionID))
+}
+
+// MissionIDNotNil applies the NotNil predicate on the "mission_id" field.
+func MissionIDNotNil() predicate.Handoff {
+	return predicate.Handoff(sql.FieldNotNull(FieldMissionID))
+}
+
+// MissionIDEqualFold applies the EqualFold predicate on the "mission_id" field.
+func MissionIDEqualFold(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldEqualFold(FieldMissionID, v))
+}
+
+// MissionIDContainsFold applies the ContainsFold predicate on the "mission_id" field.
+func MissionIDContainsFold(v string) predicate.Handoff {
+	return predicate.Handoff(sql.FieldContainsFold(FieldMissionID, v))
 }
 
 // And groups predicates with the AND operator between them.

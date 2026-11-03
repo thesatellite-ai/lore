@@ -1,0 +1,16 @@
+var exitCodes = map[Code]int{
+	NoWork:       10,
+	Contended:    11,
+	LostClaim:    12,
+	Cancelled:    13,
+	Reassigned:   14,
+	Offline:      15,
+	AmbiguousID:  16,
+	OrgAmbiguous: 17,
+	OrgDisagrees: 17,
+	LinkUnknown:  18,
+	NotAStore:    19,
+	LeakBlocked:  19,
+	Cycle:        19,
+	OldLore:      19,
+}

@@ -54,7 +54,7 @@ func refresh(t *testing.T, dir, own string) syncActionRefresh {
 func TestRefreshUpgradesAutoPin(t *testing.T) {
 	t.Parallel()
 	dir := gitInitRepo(t)
-	file := installAt(t, dir, syncActionOptions{branches: []string{"main", "staging"}})
+	file := installAt(t, dir, syncActionOptions{auto: true, branches: []string{"main", "staging"}})
 	r := refresh(t, dir, "0.1.12")
 	if r.From != "v0.1.11" || r.To != "v0.1.12" || r.Path != file || r.Note != "" {
 		t.Fatalf("refresh = %+v", r)
@@ -170,7 +170,7 @@ func TestRefreshNeverCreatesOrTouchesForeignFiles(t *testing.T) {
 func TestRefreshKeepsManualWorkflowManual(t *testing.T) {
 	t.Parallel()
 	dir := gitInitRepo(t)
-	file := installAt(t, dir, syncActionOptions{manual: true, branches: []string{"develop"}})
+	file := installAt(t, dir, syncActionOptions{manualSet: true, branches: []string{"develop"}})
 	if r := refresh(t, dir, "0.1.12"); r.To != "v0.1.12" {
 		t.Fatalf("refresh = %+v", r)
 	}

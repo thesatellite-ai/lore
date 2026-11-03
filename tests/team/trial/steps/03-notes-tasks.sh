@@ -1,0 +1,20 @@
+# Step 03 (sourced by run.sh): internal notes in the store, live tasks across two branches.
+
+begin_step "03 internal notes, live tasks"
+ok dev1 dev1/app "lore memory add --body 'INTERNAL-MARKER-1 they approve estimates faster when we send them on WhatsApp first'"
+has "\\[agency/client\\]"
+ok dev1 dev1/app "lore rule add --body 'run the tests before you push to the shared branch' --to repo"
+ok dev1 dev1/app "git switch -q -c feat/checkout && lore task add 'INTERNAL-MARKER-2 send invoice reminder before the demo call' --to agency --assign @dev2"
+has "\\[agency/client\\]"
+ok dev1 dev1/app "lore task add 'fix checkout totals for INR' --to repo --assign @dev2"
+has "live, pushed"
+ok dev2 dev2/app "lore sync >/dev/null 2>&1; git switch -q -c feat/login && lore task list"
+has "fix checkout totals for INR"
+has "INTERNAL-MARKER-2"
+ok dev2 dev2/app "lore inbox"
+has "INTERNAL-MARKER-2"
+ok dev2 dev2/app "lore memory add --body 'INTERNAL-MARKER-3 their CTO prefers calls on Tuesday mornings before the standup'"
+has "\\[agency/client\\]"
+ok client client/app "lore sync >/dev/null 2>&1; lore task list; lore memory list"
+has "fix checkout totals for INR"
+end_step

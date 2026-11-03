@@ -1,6 +1,8 @@
 # Example: CI integration — fail-fast on stale `.lore/LORE.md`
 
-**Scenario:** Hiro wants the CI to verify that the committed `.lore/LORE.md` in the PR matches what `lore render` would produce locally. If they diverge, the PR is failing to refresh. (`lore render --dry-run` emits the generated `.lore/LORE.md` body — the agent file `CLAUDE.md` only carries the `@import` pointer, so the diff target is `.lore/LORE.md`, not `CLAUDE.md`.)
+**In short:** CI (the checks that run on every pull request) can make sure the committed `.lore/LORE.md` matches what lore would write now, so nobody forgets to re-render after adding a rule.
+
+**Scenario:** Carol (the client's developer) wants the CI to verify that the committed `.lore/LORE.md` in the PR matches what `lore render` would produce locally. If they diverge, the PR is failing to refresh. (`lore render --dry-run` emits the generated `.lore/LORE.md` body — the agent file `CLAUDE.md` only carries the `@import` pointer, so the diff target is `.lore/LORE.md`, not `CLAUDE.md`.)
 
 ## .github/workflows/lore.yml
 
@@ -86,3 +88,8 @@ There are two ways to keep `.lore/LORE.md` fresh:
 2. **Render-on-commit**: pre-commit hook auto-renders every time. ← simpler, but adds latency to every commit.
 
 Pick one. Don't do both — they fight.
+
+## Pitfalls
+
+- GitHub Actions minutes cost money on private repos; a workflow with `on: [pull_request]` runs on every pull request. Start with a manual trigger (`workflow_dispatch`) if you are not sure.
+- Use `LORE_READ_ONLY=1` in CI so a check can never change the project's data by mistake.

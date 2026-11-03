@@ -27,6 +27,16 @@ const (
 	FieldDisplayName = "display_name"
 	// FieldStableKey holds the string denoting the stable_key field in the database.
 	FieldStableKey = "stable_key"
+	// FieldOwnerActorID holds the string denoting the owner_actor_id field in the database.
+	FieldOwnerActorID = "owner_actor_id"
+	// FieldLabel holds the string denoting the label field in the database.
+	FieldLabel = "label"
+	// FieldHandle holds the string denoting the handle field in the database.
+	FieldHandle = "handle"
+	// FieldActive holds the string denoting the active field in the database.
+	FieldActive = "active"
+	// FieldLeftAt holds the string denoting the left_at field in the database.
+	FieldLeftAt = "left_at"
 	// FieldLastSeenAt holds the string denoting the last_seen_at field in the database.
 	FieldLastSeenAt = "last_seen_at"
 	// EdgeCreatedMemories holds the string denoting the created_memories edge name in mutations.
@@ -59,6 +69,11 @@ var Columns = []string{
 	FieldKind,
 	FieldDisplayName,
 	FieldStableKey,
+	FieldOwnerActorID,
+	FieldLabel,
+	FieldHandle,
+	FieldActive,
+	FieldLeftAt,
 	FieldLastSeenAt,
 }
 
@@ -83,6 +98,8 @@ var (
 	DisplayNameValidator func(string) error
 	// StableKeyValidator is a validator for the "stable_key" field. It is called by the builders before save.
 	StableKeyValidator func(string) error
+	// DefaultActive holds the default value on creation for the "active" field.
+	DefaultActive bool
 	// DefaultLastSeenAt holds the default value on creation for the "last_seen_at" field.
 	DefaultLastSeenAt func() time.Time
 	// DefaultID holds the default value on creation for the "id" field.
@@ -149,6 +166,31 @@ func ByDisplayName(opts ...sql.OrderTermOption) OrderOption {
 // ByStableKey orders the results by the stable_key field.
 func ByStableKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStableKey, opts...).ToFunc()
+}
+
+// ByOwnerActorID orders the results by the owner_actor_id field.
+func ByOwnerActorID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOwnerActorID, opts...).ToFunc()
+}
+
+// ByLabel orders the results by the label field.
+func ByLabel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLabel, opts...).ToFunc()
+}
+
+// ByHandle orders the results by the handle field.
+func ByHandle(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHandle, opts...).ToFunc()
+}
+
+// ByActive orders the results by the active field.
+func ByActive(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActive, opts...).ToFunc()
+}
+
+// ByLeftAt orders the results by the left_at field.
+func ByLeftAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLeftAt, opts...).ToFunc()
 }
 
 // ByLastSeenAt orders the results by the last_seen_at field.

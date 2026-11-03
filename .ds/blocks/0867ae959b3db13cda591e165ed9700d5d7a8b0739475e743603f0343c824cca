@@ -1,0 +1,1 @@
+	cmd.Flags().IntVar(&limit, constants.FlagLimit, 20, "max total hits after merge (default 20)")

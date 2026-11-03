@@ -74,6 +74,14 @@ func registerTask(app *runtime.App, client *ent.Client) {
 					entTask.PlanIDContainsFold(opts.Filter),
 					entTask.CreatedByActorIDContainsFold(opts.Filter),
 					entTask.AssignedToActorIDContainsFold(opts.Filter),
+					entTask.AssignedTeamContainsFold(opts.Filter),
+					entTask.ApprovedByContainsFold(opts.Filter),
+					entTask.ApprovedHashContainsFold(opts.Filter),
+					entTask.DoneByContainsFold(opts.Filter),
+					entTask.DoneCommitContainsFold(opts.Filter),
+					entTask.WorkBranchContainsFold(opts.Filter),
+					entTask.IdempotencyKeyContainsFold(opts.Filter),
+					entTask.RoleContainsFold(opts.Filter),
 				))
 			}
 			// Phase E — structured per-column filters. AND-composed.
@@ -274,6 +282,139 @@ func registerTask(app *runtime.App, client *ent.Client) {
 					case runtime.OpNotNull:
 						q = q.Where(entTask.AssignedToActorIDNotNil())
 					}
+				case "assigned_team":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.AssignedTeamEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.AssignedTeamNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.AssignedTeamContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.AssignedTeamIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.AssignedTeamNotNil())
+					}
+				case "gate":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.GateEQ(entTask.Gate(f.Value)))
+					case runtime.OpNeq:
+						q = q.Where(entTask.GateNEQ(entTask.Gate(f.Value)))
+					case runtime.OpIn, runtime.OpNotIn:
+						// Multi-select: condition value is a "|"-joined
+						// list of enum strings. Empty entries are dropped.
+						parts := strings.Split(f.Value, "|")
+						vals := make([]entTask.Gate, 0, len(parts))
+						for _, p := range parts {
+							if p == "" {
+								continue
+							}
+							vals = append(vals, entTask.Gate(p))
+						}
+						if len(vals) > 0 {
+							if f.Op == runtime.OpIn {
+								q = q.Where(entTask.GateIn(vals...))
+							} else {
+								q = q.Where(entTask.GateNotIn(vals...))
+							}
+						}
+					case runtime.OpIsNull:
+						q = q.Where(entTask.GateIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.GateNotNil())
+					}
+				case "approved_by":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.ApprovedByEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.ApprovedByNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.ApprovedByContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.ApprovedByIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.ApprovedByNotNil())
+					}
+				case "approved_hash":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.ApprovedHashEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.ApprovedHashNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.ApprovedHashContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.ApprovedHashIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.ApprovedHashNotNil())
+					}
+				case "done_by":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.DoneByEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.DoneByNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.DoneByContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.DoneByIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.DoneByNotNil())
+					}
+				case "done_commit":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.DoneCommitEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.DoneCommitNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.DoneCommitContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.DoneCommitIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.DoneCommitNotNil())
+					}
+				case "work_branch":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.WorkBranchEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.WorkBranchNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.WorkBranchContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.WorkBranchIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.WorkBranchNotNil())
+					}
+				case "idempotency_key":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.IdempotencyKeyEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.IdempotencyKeyNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.IdempotencyKeyContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.IdempotencyKeyIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.IdempotencyKeyNotNil())
+					}
+				case "role":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entTask.RoleEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entTask.RoleNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entTask.RoleContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entTask.RoleIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entTask.RoleNotNil())
+					}
 				case "tasklist_title":
 					// Cross-table filter via HasEdgeWith — applies the
 					// predicate on the target type. Sub-select semantics,
@@ -424,6 +565,72 @@ func registerTask(app *runtime.App, client *ent.Client) {
 							q = q.Order(ent.Asc(entTask.FieldAssignedToActorID))
 						} else {
 							q = q.Order(ent.Desc(entTask.FieldAssignedToActorID))
+						}
+					case "assigned_team":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldAssignedTeam))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldAssignedTeam))
+						}
+					case "gate":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldGate))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldGate))
+						}
+					case "approved_by":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldApprovedBy))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldApprovedBy))
+						}
+					case "approved_at":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldApprovedAt))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldApprovedAt))
+						}
+					case "approved_hash":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldApprovedHash))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldApprovedHash))
+						}
+					case "done_by":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldDoneBy))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldDoneBy))
+						}
+					case "done_commit":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldDoneCommit))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldDoneCommit))
+						}
+					case "merged_at":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldMergedAt))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldMergedAt))
+						}
+					case "work_branch":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldWorkBranch))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldWorkBranch))
+						}
+					case "idempotency_key":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldIdempotencyKey))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldIdempotencyKey))
+						}
+					case "role":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entTask.FieldRole))
+						} else {
+							q = q.Order(ent.Desc(entTask.FieldRole))
 						}
 					case "tasklist_title":
 						// Cross-table sort via ent's generated By<Edge>Field
@@ -752,6 +959,230 @@ func registerTask(app *runtime.App, client *ent.Client) {
 						return ""
 					}
 					return *r.AssignedToActorID
+				},
+			},
+			{
+				Key:        "assigned_team",
+				Label:      "Assigned Team",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.AssignedTeam == nil {
+						return ""
+					}
+					return *r.AssignedTeam
+				},
+			},
+			{
+				Key:        "claim_epoch",
+				Label:      "Claim Epoch",
+				Sortable:   false,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					return fmt.Sprintf("%v", r.ClaimEpoch)
+				},
+			},
+			{
+				Key:        "attempts",
+				Label:      "Attempts",
+				Sortable:   false,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					return fmt.Sprintf("%v", r.Attempts)
+				},
+			},
+			{
+				Key:        "timebox_seconds",
+				Label:      "Timebox Seconds",
+				Sortable:   false,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.TimeboxSeconds == nil {
+						return ""
+					}
+					return fmt.Sprintf("%v", *r.TimeboxSeconds)
+				},
+			},
+			{
+				Key:        "gate",
+				Label:      "Gate",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				EnumValues: []string{
+					"required",
+					"requested",
+					"approved",
+				},
+				Get: func(r *ent.Task) string {
+					if r.Gate == nil {
+						return ""
+					}
+					return string(*r.Gate)
+				},
+			},
+			{
+				Key:        "approved_by",
+				Label:      "Approved By",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.ApprovedBy == nil {
+						return ""
+					}
+					return *r.ApprovedBy
+				},
+			},
+			{
+				Key:        "approved_at",
+				Label:      "Approved At",
+				Sortable:   true,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.ApprovedAt == nil || r.ApprovedAt.IsZero() {
+						return ""
+					}
+					return r.ApprovedAt.Format("2006-01-02 15:04:05")
+				},
+			},
+			{
+				Key:        "approved_hash",
+				Label:      "Approved Hash",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.ApprovedHash == nil {
+						return ""
+					}
+					return *r.ApprovedHash
+				},
+			},
+			{
+				Key:        "done_by",
+				Label:      "Done By",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.DoneBy == nil {
+						return ""
+					}
+					return *r.DoneBy
+				},
+			},
+			{
+				Key:        "done_commit",
+				Label:      "Done Commit",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.DoneCommit == nil {
+						return ""
+					}
+					return *r.DoneCommit
+				},
+			},
+			{
+				Key:        "done_pr",
+				Label:      "Done Pr",
+				Sortable:   false,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.DonePr == nil {
+						return ""
+					}
+					return fmt.Sprintf("%v", *r.DonePr)
+				},
+			},
+			{
+				Key:        "merged_at",
+				Label:      "Merged At",
+				Sortable:   true,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.MergedAt == nil || r.MergedAt.IsZero() {
+						return ""
+					}
+					return r.MergedAt.Format("2006-01-02 15:04:05")
+				},
+			},
+			{
+				Key:        "work_branch",
+				Label:      "Work Branch",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.WorkBranch == nil {
+						return ""
+					}
+					return *r.WorkBranch
+				},
+			},
+			{
+				Key:        "idempotency_key",
+				Label:      "Idempotency Key",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.IdempotencyKey == nil {
+						return ""
+					}
+					return *r.IdempotencyKey
+				},
+			},
+			{
+				Key:        "role",
+				Label:      "Role",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Task) string {
+					if r.Role == nil {
+						return ""
+					}
+					return *r.Role
 				},
 			},
 			{

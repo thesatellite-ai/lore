@@ -1,0 +1,31 @@
+func hookLines(projectRel string) map[string][]string {
+	cd := ""
+	if !isRepoRoot(projectRel) {
+		cd = `cd "` + filepath.ToSlash(projectRel) + `" && `
+	}
+	guard := `command -v ` + BinaryName + ` >/dev/null 2>&1 && `
+	refresh := []string{"( " + cd + guard + BinaryName + " sync hook refresh >/dev/null 2>&1 ) || true"}
+	// The hook scripts may be committed (a repo's .githooks), so teammates
+	// who still run a lore without `sync hook` execute them too. Probing
+	// for the command keeps their commits working; they get a note instead.
+	probe := BinaryName + " sync hook --help >/dev/null 2>&1"
+	tooOld := `echo "` + BinaryName + `: installed ` + BinaryName + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`
+	// post-commit and pre-push carry live rows to a protected main (F6).
+	// They are repo-wide (one ride-along commit covers every project of a
+	// monorepo), so their block has one marker per repo (liveHookMarker)
+	// and no cd: git runs hooks at the top level. A lore too old to know the
+	// hook names must not refuse a push, so both probe first.
+	rideProbe := BinaryName + " land --help >/dev/null 2>&1"
+	hooks := map[string][]string{
+		"pre-commit":    {"( " + cd + "if command -v " + BinaryName + " >/dev/null 2>&1; then if " + probe + "; then " + BinaryName + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"},
+		"post-checkout": refresh,
+		"post-merge":    refresh,
+		"post-rewrite":  refresh,
+		// F16 leak check (lore-stores): every staged file and the message,
+		// fail closed when the store cannot be read. Probed like the others.
+		"commit-msg": {"( " + cd + "if command -v " + BinaryName + " >/dev/null 2>&1 && " + BinaryName + " check leaks --help >/dev/null 2>&1; then " + BinaryName + ` check leaks --staged --commit-msg "$1"; fi ) || exit $?`},
+	}
+	hooks[hookPostCommit] = []string{"( " + guard + rideProbe + " && " + BinaryName + " sync hook post-commit ) || true"}
+	hooks[hookPrePush] = []string{"if command -v " + BinaryName + " >/dev/null 2>&1 && " + rideProbe + "; then " + BinaryName + ` sync hook pre-push "$@" || exit $?; fi`}
+	return hooks
+}

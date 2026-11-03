@@ -65,7 +65,7 @@ var pointerRegex = regexp.MustCompile(
 
 // pointerBlock is the idempotent stitch dropped at the top of the agent file
 // (CLAUDE.md). relOut is the generated file's path RELATIVE to the agent
-// file's directory — Claude Code resolves `@path` imports relative to the
+// file's directory — the coding agent resolves `@path` imports relative to the
 // importing file. The prose fallback covers agents without @import support
 func pointerBlock(relOut string) string {
 	return pointerStartMarker + "\n" +
@@ -129,6 +129,7 @@ func runRender(ctx context.Context, f *renderFlags) error {
 		return err
 	}
 
+	// ds:def id=render-pins-ez0g6hen owner=@khanakia stability=stable desc="what render pins into the context file (must rules, critical/high hotfixes, directive)"
 	// Hybrid: pin only severity=must rules + critical/high hotfixes +
 	// directive into CLAUDE.md. Everything else (should/may rules,
 	// memories, decisions, patterns, …) is fetched via `lore search`
@@ -214,6 +215,21 @@ func runRender(ctx context.Context, f *renderFlags) error {
 		fmt.Fprintln(os.Stderr, style.Warn("WARN: render_history write failed: "+err.Error()))
 	}
 
+	// Second target (F20, D9): internal, global and personal context goes
+	// to ~/.lore/render/<project-id>.md, outside the checkout, with only an
+	// import line in CLAUDE.local.md. The automatic re-render after a sync
+	// (quiet) leaves it to the next explicit `lore render`, so a plain
+	// command never reaches a store for it.
+	if !f.quiet {
+		root, err := os.Getwd()
+		if err != nil {
+			return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+		}
+		if err := renderInternal(ctx, root, f.quiet); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -221,7 +237,7 @@ func runRender(ctx context.Context, f *renderFlags) error {
 // at its top, bounded by sentinel markers. Idempotent: an existing block is
 // replaced in place; a missing one is prepended; if nothing changes the file
 // is left untouched. The @import path is computed RELATIVE to agentFile's
-// directory so Claude Code resolves it correctly regardless of cwd
+// directory so the coding agent resolves it correctly regardless of cwd
 func stitchPointer(agentFile, outFile string) error {
 	absAgent, err := filepath.Abs(agentFile)
 	if err != nil {
@@ -430,7 +446,10 @@ func persistRenderHistory(ctx context.Context, client *ent.Client, projectID, re
 	}{Included: summary}
 	scopeJSON, _ := json.Marshal(scope)
 
+	// created_at from the CLI clock, not the schema default, so a test
+	// build's LORE_NOW fixes what `lore why-context` shows.
 	create := client.RenderHistory.Create().
+		SetCreatedAt(cliClock().Now()).
 		SetProjectID(projectID).
 		SetTargetPath(target).
 		SetRenderedText(body).

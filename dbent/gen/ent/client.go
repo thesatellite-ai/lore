@@ -69,6 +69,7 @@ import (
 	"dbent/gen/ent/tasklist"
 	"dbent/gen/ent/taskview"
 	"dbent/gen/ent/tastepref"
+	"dbent/gen/ent/team"
 	"dbent/gen/ent/techdoc"
 	"dbent/gen/ent/techdocpage"
 	"dbent/gen/ent/trustedplugin"
@@ -205,6 +206,8 @@ type Client struct {
 	TaskView *TaskViewClient
 	// TastePref is the client for interacting with the TastePref builders.
 	TastePref *TastePrefClient
+	// Team is the client for interacting with the Team builders.
+	Team *TeamClient
 	// TechDoc is the client for interacting with the TechDoc builders.
 	TechDoc *TechDocClient
 	// TechDocPage is the client for interacting with the TechDocPage builders.
@@ -286,6 +289,7 @@ func (c *Client) init() {
 	c.TaskList = NewTaskListClient(c.config)
 	c.TaskView = NewTaskViewClient(c.config)
 	c.TastePref = NewTastePrefClient(c.config)
+	c.Team = NewTeamClient(c.config)
 	c.TechDoc = NewTechDocClient(c.config)
 	c.TechDocPage = NewTechDocPageClient(c.config)
 	c.TrustedPlugin = NewTrustedPluginClient(c.config)
@@ -442,6 +446,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		TaskList:           NewTaskListClient(cfg),
 		TaskView:           NewTaskViewClient(cfg),
 		TastePref:          NewTastePrefClient(cfg),
+		Team:               NewTeamClient(cfg),
 		TechDoc:            NewTechDocClient(cfg),
 		TechDocPage:        NewTechDocPageClient(cfg),
 		TrustedPlugin:      NewTrustedPluginClient(cfg),
@@ -525,6 +530,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		TaskList:           NewTaskListClient(cfg),
 		TaskView:           NewTaskViewClient(cfg),
 		TastePref:          NewTastePrefClient(cfg),
+		Team:               NewTeamClient(cfg),
 		TechDoc:            NewTechDocClient(cfg),
 		TechDocPage:        NewTechDocPageClient(cfg),
 		TrustedPlugin:      NewTrustedPluginClient(cfg),
@@ -570,8 +576,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.PiiPattern, c.Plan, c.Playbook, c.Project, c.ProjectConfig, c.Prompt,
 		c.QueryLog, c.Reminder, c.RenderHistory, c.Repo, c.Rule, c.RuleVerifierRef,
 		c.Run, c.RunStep, c.SchemaMigration, c.Session, c.Snapshot, c.Suggestion,
-		c.Tag, c.Task, c.TaskList, c.TaskView, c.TastePref, c.TechDoc, c.TechDocPage,
-		c.TrustedPlugin, c.User, c.Workflow, c.Workspace,
+		c.Tag, c.Task, c.TaskList, c.TaskView, c.TastePref, c.Team, c.TechDoc,
+		c.TechDocPage, c.TrustedPlugin, c.User, c.Workflow, c.Workspace,
 	} {
 		n.Use(hooks...)
 	}
@@ -591,8 +597,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.PiiPattern, c.Plan, c.Playbook, c.Project, c.ProjectConfig, c.Prompt,
 		c.QueryLog, c.Reminder, c.RenderHistory, c.Repo, c.Rule, c.RuleVerifierRef,
 		c.Run, c.RunStep, c.SchemaMigration, c.Session, c.Snapshot, c.Suggestion,
-		c.Tag, c.Task, c.TaskList, c.TaskView, c.TastePref, c.TechDoc, c.TechDocPage,
-		c.TrustedPlugin, c.User, c.Workflow, c.Workspace,
+		c.Tag, c.Task, c.TaskList, c.TaskView, c.TastePref, c.Team, c.TechDoc,
+		c.TechDocPage, c.TrustedPlugin, c.User, c.Workflow, c.Workspace,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -717,6 +723,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.TaskView.mutate(ctx, m)
 	case *TastePrefMutation:
 		return c.TastePref.mutate(ctx, m)
+	case *TeamMutation:
+		return c.Team.mutate(ctx, m)
 	case *TechDocMutation:
 		return c.TechDoc.mutate(ctx, m)
 	case *TechDocPageMutation:
@@ -8864,6 +8872,139 @@ func (c *TastePrefClient) mutate(ctx context.Context, m *TastePrefMutation) (Val
 	}
 }
 
+// TeamClient is a client for the Team schema.
+type TeamClient struct {
+	config
+}
+
+// NewTeamClient returns a client for the Team from the given config.
+func NewTeamClient(c config) *TeamClient {
+	return &TeamClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `team.Hooks(f(g(h())))`.
+func (c *TeamClient) Use(hooks ...Hook) {
+	c.hooks.Team = append(c.hooks.Team, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `team.Intercept(f(g(h())))`.
+func (c *TeamClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Team = append(c.inters.Team, interceptors...)
+}
+
+// Create returns a builder for creating a Team entity.
+func (c *TeamClient) Create() *TeamCreate {
+	mutation := newTeamMutation(c.config, OpCreate)
+	return &TeamCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Team entities.
+func (c *TeamClient) CreateBulk(builders ...*TeamCreate) *TeamCreateBulk {
+	return &TeamCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TeamClient) MapCreateBulk(slice any, setFunc func(*TeamCreate, int)) *TeamCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TeamCreateBulk{err: fmt.Errorf("calling to TeamClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TeamCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TeamCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Team.
+func (c *TeamClient) Update() *TeamUpdate {
+	mutation := newTeamMutation(c.config, OpUpdate)
+	return &TeamUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TeamClient) UpdateOne(_m *Team) *TeamUpdateOne {
+	mutation := newTeamMutation(c.config, OpUpdateOne, withTeam(_m))
+	return &TeamUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TeamClient) UpdateOneID(id string) *TeamUpdateOne {
+	mutation := newTeamMutation(c.config, OpUpdateOne, withTeamID(id))
+	return &TeamUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Team.
+func (c *TeamClient) Delete() *TeamDelete {
+	mutation := newTeamMutation(c.config, OpDelete)
+	return &TeamDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TeamClient) DeleteOne(_m *Team) *TeamDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TeamClient) DeleteOneID(id string) *TeamDeleteOne {
+	builder := c.Delete().Where(team.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TeamDeleteOne{builder}
+}
+
+// Query returns a query builder for Team.
+func (c *TeamClient) Query() *TeamQuery {
+	return &TeamQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTeam},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Team entity by its id.
+func (c *TeamClient) Get(ctx context.Context, id string) (*Team, error) {
+	return c.Query().Where(team.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TeamClient) GetX(ctx context.Context, id string) *Team {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TeamClient) Hooks() []Hook {
+	return c.hooks.Team
+}
+
+// Interceptors returns the client interceptors.
+func (c *TeamClient) Interceptors() []Interceptor {
+	return c.inters.Team
+}
+
+func (c *TeamClient) mutate(ctx context.Context, m *TeamMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TeamCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TeamUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TeamUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TeamDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Team mutation op: %q", m.Op())
+	}
+}
+
 // TechDocClient is a client for the TechDoc schema.
 type TechDocClient struct {
 	config
@@ -9705,8 +9846,8 @@ type (
 		Memory, MemoryCodeRef, Mission, MountAlias, Pattern, PiiPattern, Plan,
 		Playbook, Project, ProjectConfig, Prompt, QueryLog, Reminder, RenderHistory,
 		Repo, Rule, RuleVerifierRef, Run, RunStep, SchemaMigration, Session, Snapshot,
-		Suggestion, Tag, Task, TaskList, TaskView, TastePref, TechDoc, TechDocPage,
-		TrustedPlugin, User, Workflow, Workspace []ent.Hook
+		Suggestion, Tag, Task, TaskList, TaskView, TastePref, Team, TechDoc,
+		TechDocPage, TrustedPlugin, User, Workflow, Workspace []ent.Hook
 	}
 	inters struct {
 		ActivityArchive, Actor, ArchitectureNote, AssembleCitation, AssembleRun,
@@ -9717,8 +9858,8 @@ type (
 		Memory, MemoryCodeRef, Mission, MountAlias, Pattern, PiiPattern, Plan,
 		Playbook, Project, ProjectConfig, Prompt, QueryLog, Reminder, RenderHistory,
 		Repo, Rule, RuleVerifierRef, Run, RunStep, SchemaMigration, Session, Snapshot,
-		Suggestion, Tag, Task, TaskList, TaskView, TastePref, TechDoc, TechDocPage,
-		TrustedPlugin, User, Workflow, Workspace []ent.Interceptor
+		Suggestion, Tag, Task, TaskList, TaskView, TastePref, Team, TechDoc,
+		TechDocPage, TrustedPlugin, User, Workflow, Workspace []ent.Interceptor
 	}
 )
 

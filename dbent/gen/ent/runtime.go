@@ -61,6 +61,7 @@ import (
 	"dbent/gen/ent/tasklist"
 	"dbent/gen/ent/taskview"
 	"dbent/gen/ent/tastepref"
+	"dbent/gen/ent/team"
 	"dbent/gen/ent/techdoc"
 	"dbent/gen/ent/techdocpage"
 	"dbent/gen/ent/trustedplugin"
@@ -131,8 +132,12 @@ func init() {
 	actorDescStableKey := actorFields[2].Descriptor()
 	// actor.StableKeyValidator is a validator for the "stable_key" field. It is called by the builders before save.
 	actor.StableKeyValidator = actorDescStableKey.Validators[0].(func(string) error)
+	// actorDescActive is the schema descriptor for active field.
+	actorDescActive := actorFields[6].Descriptor()
+	// actor.DefaultActive holds the default value on creation for the active field.
+	actor.DefaultActive = actorDescActive.Default.(bool)
 	// actorDescLastSeenAt is the schema descriptor for last_seen_at field.
-	actorDescLastSeenAt := actorFields[3].Descriptor()
+	actorDescLastSeenAt := actorFields[8].Descriptor()
 	// actor.DefaultLastSeenAt holds the default value on creation for the last_seen_at field.
 	actor.DefaultLastSeenAt = actorDescLastSeenAt.Default.(func() time.Time)
 	// actorDescID is the schema descriptor for id field.
@@ -595,7 +600,7 @@ func init() {
 		}
 	}()
 	// commentDescBody is the schema descriptor for body field.
-	commentDescBody := commentFields[2].Descriptor()
+	commentDescBody := commentFields[3].Descriptor()
 	// comment.BodyValidator is a validator for the "body" field. It is called by the builders before save.
 	comment.BodyValidator = commentDescBody.Validators[0].(func(string) error)
 	// commentDescID is the schema descriptor for id field.
@@ -1221,7 +1226,7 @@ func init() {
 	// knowledgeref.DstIDValidator is a validator for the "dst_id" field. It is called by the builders before save.
 	knowledgeref.DstIDValidator = knowledgerefDescDstID.Validators[0].(func(string) error)
 	// knowledgerefDescRelation is the schema descriptor for relation field.
-	knowledgerefDescRelation := knowledgerefFields[4].Descriptor()
+	knowledgerefDescRelation := knowledgerefFields[5].Descriptor()
 	// knowledgeref.RelationValidator is a validator for the "relation" field. It is called by the builders before save.
 	knowledgeref.RelationValidator = knowledgerefDescRelation.Validators[0].(func(string) error)
 	// knowledgerefDescID is the schema descriptor for id field.
@@ -2394,6 +2399,26 @@ func init() {
 	taskDescTitle := taskFields[2].Descriptor()
 	// task.TitleValidator is a validator for the "title" field. It is called by the builders before save.
 	task.TitleValidator = taskDescTitle.Validators[0].(func(string) error)
+	// taskDescClaimEpoch is the schema descriptor for claim_epoch field.
+	taskDescClaimEpoch := taskFields[18].Descriptor()
+	// task.DefaultClaimEpoch holds the default value on creation for the claim_epoch field.
+	task.DefaultClaimEpoch = taskDescClaimEpoch.Default.(int)
+	// task.ClaimEpochValidator is a validator for the "claim_epoch" field. It is called by the builders before save.
+	task.ClaimEpochValidator = taskDescClaimEpoch.Validators[0].(func(int) error)
+	// taskDescAttempts is the schema descriptor for attempts field.
+	taskDescAttempts := taskFields[19].Descriptor()
+	// task.DefaultAttempts holds the default value on creation for the attempts field.
+	task.DefaultAttempts = taskDescAttempts.Default.(int)
+	// task.AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
+	task.AttemptsValidator = taskDescAttempts.Validators[0].(func(int) error)
+	// taskDescTimeboxSeconds is the schema descriptor for timebox_seconds field.
+	taskDescTimeboxSeconds := taskFields[21].Descriptor()
+	// task.TimeboxSecondsValidator is a validator for the "timebox_seconds" field. It is called by the builders before save.
+	task.TimeboxSecondsValidator = taskDescTimeboxSeconds.Validators[0].(func(int64) error)
+	// taskDescDonePr is the schema descriptor for done_pr field.
+	taskDescDonePr := taskFields[28].Descriptor()
+	// task.DonePrValidator is a validator for the "done_pr" field. It is called by the builders before save.
+	task.DonePrValidator = taskDescDonePr.Validators[0].(func(int) error)
 	// taskDescID is the schema descriptor for id field.
 	taskDescID := taskMixinFields0[0].Descriptor()
 	// task.DefaultID holds the default value on creation for the id field.
@@ -2503,6 +2528,39 @@ func init() {
 	tastepref.DefaultID = tasteprefDescID.Default.(func() string)
 	// tastepref.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	tastepref.IDValidator = tasteprefDescID.Validators[0].(func(string) error)
+	teamMixin := schema.Team{}.Mixin()
+	teamMixinFields0 := teamMixin[0].Fields()
+	_ = teamMixinFields0
+	teamFields := schema.Team{}.Fields()
+	_ = teamFields
+	// teamDescCreatedAt is the schema descriptor for created_at field.
+	teamDescCreatedAt := teamMixinFields0[1].Descriptor()
+	// team.DefaultCreatedAt holds the default value on creation for the created_at field.
+	team.DefaultCreatedAt = teamDescCreatedAt.Default.(func() time.Time)
+	// teamDescUpdatedAt is the schema descriptor for updated_at field.
+	teamDescUpdatedAt := teamMixinFields0[2].Descriptor()
+	// team.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	team.DefaultUpdatedAt = teamDescUpdatedAt.Default.(func() time.Time)
+	// team.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	team.UpdateDefaultUpdatedAt = teamDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// teamDescProjectID is the schema descriptor for project_id field.
+	teamDescProjectID := teamFields[0].Descriptor()
+	// team.ProjectIDValidator is a validator for the "project_id" field. It is called by the builders before save.
+	team.ProjectIDValidator = teamDescProjectID.Validators[0].(func(string) error)
+	// teamDescHandle is the schema descriptor for handle field.
+	teamDescHandle := teamFields[1].Descriptor()
+	// team.HandleValidator is a validator for the "handle" field. It is called by the builders before save.
+	team.HandleValidator = teamDescHandle.Validators[0].(func(string) error)
+	// teamDescActive is the schema descriptor for active field.
+	teamDescActive := teamFields[4].Descriptor()
+	// team.DefaultActive holds the default value on creation for the active field.
+	team.DefaultActive = teamDescActive.Default.(bool)
+	// teamDescID is the schema descriptor for id field.
+	teamDescID := teamMixinFields0[0].Descriptor()
+	// team.DefaultID holds the default value on creation for the id field.
+	team.DefaultID = teamDescID.Default.(func() string)
+	// team.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	team.IDValidator = teamDescID.Validators[0].(func(string) error)
 	techdocMixin := schema.TechDoc{}.Mixin()
 	techdocMixinFields0 := techdocMixin[0].Fields()
 	_ = techdocMixinFields0

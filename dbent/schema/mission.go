@@ -26,6 +26,17 @@ func (Mission) Fields() []ent.Field {
 		field.Time("target_date").Optional().Nillable(),
 		field.Time("completed_at").Optional().Nillable(),
 		field.String("created_by_actor_id").Optional().Nillable(),
+		// approvers: human actor ids allowed to approve this mission's task
+		// gates (`mission add --approvers`, `approvers:` in a plan file).
+		// Nil/empty = any human on the org roster may approve; an agent
+		// actor never can (LORE_TEAM_SPEC §7.4, TEAM-028).
+		field.Strings("approvers").Optional(),
+		// idempotency_key: plan-file key (`mission add --key`, `mission: {key: …}`
+		// in a plan); `lore plan apply` run twice finds the mission by
+		// (project_id, key) and does not add it again. Not a DB unique
+		// constraint, same as tasks: uniqueness is the writer's job (two
+		// branches may carry one key until they merge).
+		field.String("idempotency_key").Optional().Nillable(),
 	}
 }
 func (Mission) Edges() []ent.Edge {
@@ -37,5 +48,6 @@ func (Mission) Edges() []ent.Edge {
 func (Mission) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("project_id", "status"),
+		index.Fields("project_id", "idempotency_key"),
 	}
 }

@@ -63,6 +63,20 @@ func (_c *CommentCreate) SetEntityID(v string) *CommentCreate {
 	return _c
 }
 
+// SetEntityProjectID sets the "entity_project_id" field.
+func (_c *CommentCreate) SetEntityProjectID(v string) *CommentCreate {
+	_c.mutation.SetEntityProjectID(v)
+	return _c
+}
+
+// SetNillableEntityProjectID sets the "entity_project_id" field if the given value is not nil.
+func (_c *CommentCreate) SetNillableEntityProjectID(v *string) *CommentCreate {
+	if v != nil {
+		_c.SetEntityProjectID(*v)
+	}
+	return _c
+}
+
 // SetBody sets the "body" field.
 func (_c *CommentCreate) SetBody(v string) *CommentCreate {
 	_c.mutation.SetBody(v)
@@ -235,6 +249,10 @@ func (_c *CommentCreate) createSpec() (*Comment, *sqlgraph.CreateSpec) {
 		_spec.SetField(comment.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
 	}
+	if value, ok := _c.mutation.EntityProjectID(); ok {
+		_spec.SetField(comment.FieldEntityProjectID, field.TypeString, value)
+		_node.EntityProjectID = &value
+	}
 	if value, ok := _c.mutation.Body(); ok {
 		_spec.SetField(comment.FieldBody, field.TypeString, value)
 		_node.Body = value
@@ -328,6 +346,24 @@ func (u *CommentUpsert) SetEntityID(v string) *CommentUpsert {
 // UpdateEntityID sets the "entity_id" field to the value that was provided on create.
 func (u *CommentUpsert) UpdateEntityID() *CommentUpsert {
 	u.SetExcluded(comment.FieldEntityID)
+	return u
+}
+
+// SetEntityProjectID sets the "entity_project_id" field.
+func (u *CommentUpsert) SetEntityProjectID(v string) *CommentUpsert {
+	u.Set(comment.FieldEntityProjectID, v)
+	return u
+}
+
+// UpdateEntityProjectID sets the "entity_project_id" field to the value that was provided on create.
+func (u *CommentUpsert) UpdateEntityProjectID() *CommentUpsert {
+	u.SetExcluded(comment.FieldEntityProjectID)
+	return u
+}
+
+// ClearEntityProjectID clears the value of the "entity_project_id" field.
+func (u *CommentUpsert) ClearEntityProjectID() *CommentUpsert {
+	u.SetNull(comment.FieldEntityProjectID)
 	return u
 }
 
@@ -451,6 +487,27 @@ func (u *CommentUpsertOne) SetEntityID(v string) *CommentUpsertOne {
 func (u *CommentUpsertOne) UpdateEntityID() *CommentUpsertOne {
 	return u.Update(func(s *CommentUpsert) {
 		s.UpdateEntityID()
+	})
+}
+
+// SetEntityProjectID sets the "entity_project_id" field.
+func (u *CommentUpsertOne) SetEntityProjectID(v string) *CommentUpsertOne {
+	return u.Update(func(s *CommentUpsert) {
+		s.SetEntityProjectID(v)
+	})
+}
+
+// UpdateEntityProjectID sets the "entity_project_id" field to the value that was provided on create.
+func (u *CommentUpsertOne) UpdateEntityProjectID() *CommentUpsertOne {
+	return u.Update(func(s *CommentUpsert) {
+		s.UpdateEntityProjectID()
+	})
+}
+
+// ClearEntityProjectID clears the value of the "entity_project_id" field.
+func (u *CommentUpsertOne) ClearEntityProjectID() *CommentUpsertOne {
+	return u.Update(func(s *CommentUpsert) {
+		s.ClearEntityProjectID()
 	})
 }
 
@@ -746,6 +803,27 @@ func (u *CommentUpsertBulk) SetEntityID(v string) *CommentUpsertBulk {
 func (u *CommentUpsertBulk) UpdateEntityID() *CommentUpsertBulk {
 	return u.Update(func(s *CommentUpsert) {
 		s.UpdateEntityID()
+	})
+}
+
+// SetEntityProjectID sets the "entity_project_id" field.
+func (u *CommentUpsertBulk) SetEntityProjectID(v string) *CommentUpsertBulk {
+	return u.Update(func(s *CommentUpsert) {
+		s.SetEntityProjectID(v)
+	})
+}
+
+// UpdateEntityProjectID sets the "entity_project_id" field to the value that was provided on create.
+func (u *CommentUpsertBulk) UpdateEntityProjectID() *CommentUpsertBulk {
+	return u.Update(func(s *CommentUpsert) {
+		s.UpdateEntityProjectID()
+	})
+}
+
+// ClearEntityProjectID clears the value of the "entity_project_id" field.
+func (u *CommentUpsertBulk) ClearEntityProjectID() *CommentUpsertBulk {
+	return u.Update(func(s *CommentUpsert) {
+		s.ClearEntityProjectID()
 	})
 }
 

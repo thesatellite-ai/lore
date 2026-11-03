@@ -1,17 +1,19 @@
 # lore Skill
 
-This directory is a **Claude Skill bundle** — a reusable knowledge package that teaches Claude (Code, Desktop, or API agents) how to use `lore`.
+**In short:** this folder teaches a coding agent how to use lore: when to save a rule or a note, which command to run, and what each error means. Install it once and the agent follows it in every session.
+
+This folder is a **skill bundle**: a set of markdown pages that teaches a coding agent how to use `lore`. It works with any agent tool that loads skills, and with any agent that can read files.
 
 ## What's a Skill?
 
-Anthropic Skills are folder-based packages that Claude auto-discovers and loads on demand. The format is published at [skills.anthropic.com](https://skills.anthropic.com) / supported in Claude Code and Claude Desktop.
+A skill is a folder of instructions that an agent tool finds by itself and reads only when the task needs it. Several coding tools support this folder format; the format is published at [skills.anthropic.com](https://skills.anthropic.com).
 
 A Skill folder always has a `SKILL.md` at the root with YAML frontmatter:
 
 ```yaml
 ---
 name: skill-name
-description: When this skill is relevant. Be specific — Claude uses this to decide when to load.
+description: When this skill is relevant. Be specific — the agent tool uses this to decide when to load.
 ---
 ```
 
@@ -35,27 +37,27 @@ skill/
     ├── 02-capture-correction.md  ← user corrects → rule add
     ├── 03-multi-repo.md          ← scoping per repo
     ├── 04-disaster-recovery.md   ← repair tier 1/2/3
-    ├── 05-decision-record.md     ← ADR-style capture
+    ├── 05-decision-record.md     ← save a decision and its reasons
     ├── 06-task-tracking.md       ← mission + tasks + sprint
-    ├── 07-search-patterns.md     ← FTS5 BM25 query syntax
+    ├── 07-search-patterns.md     ← find a note fast (search syntax)
     ├── 08-ci-integration.md      ← render-diff in CI
-    └── 09-tags-and-comments.md   ← polymorphic labels + discussions
+    └── 09-tags-and-comments.md   ← labels and comments on any row
 ```
 
 ## Install in Claude Code
 
-Drop the `skill/` folder into your project — Claude Code auto-discovers it on session start. Or to make it global across all projects:
+Put the `skill/` folder in your project and the agent tool finds it when a session starts. To use it in every project, copy it to the tool's global skills folder:
 
 ```bash
 mkdir -p ~/.claude/skills
 cp -r skill ~/.claude/skills/lore
 ```
 
-Now every Claude Code session in any project knows about lore and can use it when relevant.
+Now every session, in any project, knows about lore and uses it when it is relevant.
 
 ## Install in Claude Desktop (MCP-based)
 
-Claude Desktop loads skills via the MCP filesystem server. Point it at this directory:
+The desktop app loads skills through the MCP filesystem server (MCP: a standard way for an agent tool to reach outside files and services, like a plug socket). Point it at this folder:
 
 ```jsonc
 // ~/Library/Application Support/Claude/claude_desktop_config.json
@@ -69,9 +71,9 @@ Claude Desktop loads skills via the MCP filesystem server. Point it at this dire
 }
 ```
 
-## Install in arbitrary AI agents
+## Install in any other agent tool
 
-The folder is plain markdown — any agent that can read files can consume it. Tell the agent:
+The folder is plain markdown, so any agent that can read files can use it. Tell the agent:
 
 > Read `skill/SKILL.md` for an overview. When the user wants to capture project knowledge, use the commands documented in `skill/COMMANDS.md`. For multi-step flows, check `skill/PLAYBOOKS.md`. Match errors against `skill/ERRORS.md`.
 

@@ -21,6 +21,8 @@ const (
 	FieldEntityTable = "entity_table"
 	// FieldEntityID holds the string denoting the entity_id field in the database.
 	FieldEntityID = "entity_id"
+	// FieldEntityProjectID holds the string denoting the entity_project_id field in the database.
+	FieldEntityProjectID = "entity_project_id"
 	// FieldBody holds the string denoting the body field in the database.
 	FieldBody = "body"
 	// FieldCreatedByActorID holds the string denoting the created_by_actor_id field in the database.
@@ -36,6 +38,7 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldEntityTable,
 	FieldEntityID,
+	FieldEntityProjectID,
 	FieldBody,
 	FieldCreatedByActorID,
 }
@@ -95,6 +98,11 @@ func ByEntityTable(opts ...sql.OrderTermOption) OrderOption {
 // ByEntityID orders the results by the entity_id field.
 func ByEntityID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEntityID, opts...).ToFunc()
+}
+
+// ByEntityProjectID orders the results by the entity_project_id field.
+func ByEntityProjectID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntityProjectID, opts...).ToFunc()
 }
 
 // ByBody orders the results by the body field.

@@ -18,14 +18,14 @@ func stripChainEnv(t *testing.T) {
 
 func TestResolve_Step1_Flag(t *testing.T) {
 	stripChainEnv(t)
-	r := Resolve(Inputs{FlagActor: "human:amank@example.com"})
+	r := Resolve(Inputs{FlagActor: "human:alice@example.com"})
 	if r.Step != StepFlag {
 		t.Errorf("Step=%v", r.Step)
 	}
-	if r.StableKey != "human:amank@example.com" {
+	if r.StableKey != "human:alice@example.com" {
 		t.Errorf("StableKey=%q", r.StableKey)
 	}
-	if r.DisplayName != "amank" {
+	if r.DisplayName != "alice" {
 		t.Errorf("DisplayName=%q", r.DisplayName)
 	}
 	if r.Kind != "human" {
@@ -52,16 +52,16 @@ func TestResolve_Step3_IdentityToml(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(tmp, ".lore"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	content := `display_name = "amank"
-stable_key = "human:amank@persisted.local"`
+	content := `display_name = "alice"
+stable_key = "human:alice@persisted.local"`
 	if err := os.WriteFile(filepath.Join(tmp, ".lore", "identity.toml"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	r := Resolve(Inputs{})
-	if r.Step != StepIdentityToml {
+	if r.Step != StepIdentityFile {
 		t.Errorf("Step=%v", r.Step)
 	}
-	if r.StableKey != "human:amank@persisted.local" {
+	if r.StableKey != "human:alice@persisted.local" {
 		t.Errorf("StableKey=%q", r.StableKey)
 	}
 }
@@ -73,12 +73,12 @@ func TestResolve_Step3_TomlInfersStableKeyFromDisplayName(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(tmp, ".lore"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	content := `display_name = "amank"`
+	content := `display_name = "alice"`
 	if err := os.WriteFile(filepath.Join(tmp, ".lore", "identity.toml"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	r := Resolve(Inputs{})
-	if r.Step != StepIdentityToml {
+	if r.Step != StepIdentityFile {
 		t.Errorf("Step=%v", r.Step)
 	}
 	if !strings.HasPrefix(r.StableKey, "human:") {
@@ -117,7 +117,7 @@ func TestStep_Stable(t *testing.T) {
 	cases := map[Step]bool{
 		StepFlag:          true,
 		StepEnv:           true,
-		StepIdentityToml:  true,
+		StepIdentityFile:  true,
 		StepGitConfig:     true,
 		StepOSUser:        true,
 		StepMachineID:     true,
@@ -134,7 +134,7 @@ func TestStep_Stable(t *testing.T) {
 
 func TestExtractDisplayName(t *testing.T) {
 	cases := map[string]string{
-		"human:amank@example.com": "amank",
+		"human:alice@example.com": "alice",
 		"agent:claude-code":       "claude-code",
 		"auto:a3f9c1k2":           "a3f9c1k2",
 		"system:internal":         "internal",
@@ -149,7 +149,7 @@ func TestExtractDisplayName(t *testing.T) {
 
 func TestKindFromKey(t *testing.T) {
 	cases := map[string]string{
-		"human:amank":    "human",
+		"human:alice":    "human",
 		"agent:cc":       "agent",
 		"hook:precommit": "hook",
 		"plugin:linear":  "plugin",

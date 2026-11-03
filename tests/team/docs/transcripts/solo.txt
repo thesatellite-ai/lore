@@ -1,0 +1,32 @@
+
+### no remote
+alice (work/scratch)$ lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
+✓ rul_7a670ae8548ed05bf57ad29ad0759504 
+  scope: [master] severity: must
+lore sync: exported 1
+lore sync: 4 file(s) in .lore/data not committed — commit them with your change
+alice (work/scratch)$ lore task add 'write the README'
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — write the README [medium]
+lore live: (live, local: no remote)
+alice (work/scratch)$ lore task done tsk_2ad3618e878ebbf527d34d446ef4f891
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: (live, local: no remote)
+alice (work/scratch)$ lore land --all --dry-run
+would land 2 row(s) to main (_root/):
+  tlt_162df51b7f78b785c97c26b41ea89666     land  named by lore land
+  tsk_2ad3618e878ebbf527d34d446ef4f891     land  named by lore land
+alice (work/scratch)$ git status --short
+?? .gitattributes
+?? .gitignore
+?? .lore/
+
+### tasks with the code
+alice (work/scratch)$ lore task add 'tidy the scripts folder'
+✓ tsk_54fe984c9b495744c0217776765a28f2 — tidy the scripts folder [medium]
+lore sync: exported 1
+lore sync: 5 file(s) in .lore/data not committed — commit them with your change
+alice (work/scratch)$ git status --short
+?? .gitattributes
+?? .gitignore
+?? .lore/

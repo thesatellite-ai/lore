@@ -79,6 +79,7 @@ func Acquire(path string) (*Lock, error) {
 
 // acquire is Acquire with the OS lock primitive injected.
 func acquire(path string, try tryLockFunc) (*Lock, error) {
+	// ds:def id=env-read-only-syjpe918 owner=@khanakia stability=stable desc="LORE_READ_ONLY=1 skips the write lock and refuses writes"
 	if os.Getenv("LORE_READ_ONLY") == "1" {
 		return nil, ErrReadOnly
 	}

@@ -35,6 +35,10 @@ const (
 	FieldCompletedAt = "completed_at"
 	// FieldCreatedByActorID holds the string denoting the created_by_actor_id field in the database.
 	FieldCreatedByActorID = "created_by_actor_id"
+	// FieldApprovers holds the string denoting the approvers field in the database.
+	FieldApprovers = "approvers"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
 	// EdgeTasks holds the string denoting the tasks edge name in mutations.
 	EdgeTasks = "tasks"
 	// Table holds the table name of the mission in the database.
@@ -60,6 +64,8 @@ var Columns = []string{
 	FieldTargetDate,
 	FieldCompletedAt,
 	FieldCreatedByActorID,
+	FieldApprovers,
+	FieldIdempotencyKey,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -168,6 +174,11 @@ func ByCompletedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedByActorID orders the results by the created_by_actor_id field.
 func ByCreatedByActorID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedByActorID, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
 }
 
 // ByTasksCount orders the results by tasks count.

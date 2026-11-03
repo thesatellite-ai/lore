@@ -64,6 +64,100 @@ func (_u *ActorUpdate) SetNillableDisplayName(v *string) *ActorUpdate {
 	return _u
 }
 
+// SetOwnerActorID sets the "owner_actor_id" field.
+func (_u *ActorUpdate) SetOwnerActorID(v string) *ActorUpdate {
+	_u.mutation.SetOwnerActorID(v)
+	return _u
+}
+
+// SetNillableOwnerActorID sets the "owner_actor_id" field if the given value is not nil.
+func (_u *ActorUpdate) SetNillableOwnerActorID(v *string) *ActorUpdate {
+	if v != nil {
+		_u.SetOwnerActorID(*v)
+	}
+	return _u
+}
+
+// ClearOwnerActorID clears the value of the "owner_actor_id" field.
+func (_u *ActorUpdate) ClearOwnerActorID() *ActorUpdate {
+	_u.mutation.ClearOwnerActorID()
+	return _u
+}
+
+// SetLabel sets the "label" field.
+func (_u *ActorUpdate) SetLabel(v string) *ActorUpdate {
+	_u.mutation.SetLabel(v)
+	return _u
+}
+
+// SetNillableLabel sets the "label" field if the given value is not nil.
+func (_u *ActorUpdate) SetNillableLabel(v *string) *ActorUpdate {
+	if v != nil {
+		_u.SetLabel(*v)
+	}
+	return _u
+}
+
+// ClearLabel clears the value of the "label" field.
+func (_u *ActorUpdate) ClearLabel() *ActorUpdate {
+	_u.mutation.ClearLabel()
+	return _u
+}
+
+// SetHandle sets the "handle" field.
+func (_u *ActorUpdate) SetHandle(v string) *ActorUpdate {
+	_u.mutation.SetHandle(v)
+	return _u
+}
+
+// SetNillableHandle sets the "handle" field if the given value is not nil.
+func (_u *ActorUpdate) SetNillableHandle(v *string) *ActorUpdate {
+	if v != nil {
+		_u.SetHandle(*v)
+	}
+	return _u
+}
+
+// ClearHandle clears the value of the "handle" field.
+func (_u *ActorUpdate) ClearHandle() *ActorUpdate {
+	_u.mutation.ClearHandle()
+	return _u
+}
+
+// SetActive sets the "active" field.
+func (_u *ActorUpdate) SetActive(v bool) *ActorUpdate {
+	_u.mutation.SetActive(v)
+	return _u
+}
+
+// SetNillableActive sets the "active" field if the given value is not nil.
+func (_u *ActorUpdate) SetNillableActive(v *bool) *ActorUpdate {
+	if v != nil {
+		_u.SetActive(*v)
+	}
+	return _u
+}
+
+// SetLeftAt sets the "left_at" field.
+func (_u *ActorUpdate) SetLeftAt(v time.Time) *ActorUpdate {
+	_u.mutation.SetLeftAt(v)
+	return _u
+}
+
+// SetNillableLeftAt sets the "left_at" field if the given value is not nil.
+func (_u *ActorUpdate) SetNillableLeftAt(v *time.Time) *ActorUpdate {
+	if v != nil {
+		_u.SetLeftAt(*v)
+	}
+	return _u
+}
+
+// ClearLeftAt clears the value of the "left_at" field.
+func (_u *ActorUpdate) ClearLeftAt() *ActorUpdate {
+	_u.mutation.ClearLeftAt()
+	return _u
+}
+
 // SetLastSeenAt sets the "last_seen_at" field.
 func (_u *ActorUpdate) SetLastSeenAt(v time.Time) *ActorUpdate {
 	_u.mutation.SetLastSeenAt(v)
@@ -233,6 +327,33 @@ func (_u *ActorUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.DisplayName(); ok {
 		_spec.SetField(actor.FieldDisplayName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.OwnerActorID(); ok {
+		_spec.SetField(actor.FieldOwnerActorID, field.TypeString, value)
+	}
+	if _u.mutation.OwnerActorIDCleared() {
+		_spec.ClearField(actor.FieldOwnerActorID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Label(); ok {
+		_spec.SetField(actor.FieldLabel, field.TypeString, value)
+	}
+	if _u.mutation.LabelCleared() {
+		_spec.ClearField(actor.FieldLabel, field.TypeString)
+	}
+	if value, ok := _u.mutation.Handle(); ok {
+		_spec.SetField(actor.FieldHandle, field.TypeString, value)
+	}
+	if _u.mutation.HandleCleared() {
+		_spec.ClearField(actor.FieldHandle, field.TypeString)
+	}
+	if value, ok := _u.mutation.Active(); ok {
+		_spec.SetField(actor.FieldActive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.LeftAt(); ok {
+		_spec.SetField(actor.FieldLeftAt, field.TypeTime, value)
+	}
+	if _u.mutation.LeftAtCleared() {
+		_spec.ClearField(actor.FieldLeftAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.LastSeenAt(); ok {
 		_spec.SetField(actor.FieldLastSeenAt, field.TypeTime, value)
 	}
@@ -379,6 +500,100 @@ func (_u *ActorUpdateOne) SetNillableDisplayName(v *string) *ActorUpdateOne {
 	if v != nil {
 		_u.SetDisplayName(*v)
 	}
+	return _u
+}
+
+// SetOwnerActorID sets the "owner_actor_id" field.
+func (_u *ActorUpdateOne) SetOwnerActorID(v string) *ActorUpdateOne {
+	_u.mutation.SetOwnerActorID(v)
+	return _u
+}
+
+// SetNillableOwnerActorID sets the "owner_actor_id" field if the given value is not nil.
+func (_u *ActorUpdateOne) SetNillableOwnerActorID(v *string) *ActorUpdateOne {
+	if v != nil {
+		_u.SetOwnerActorID(*v)
+	}
+	return _u
+}
+
+// ClearOwnerActorID clears the value of the "owner_actor_id" field.
+func (_u *ActorUpdateOne) ClearOwnerActorID() *ActorUpdateOne {
+	_u.mutation.ClearOwnerActorID()
+	return _u
+}
+
+// SetLabel sets the "label" field.
+func (_u *ActorUpdateOne) SetLabel(v string) *ActorUpdateOne {
+	_u.mutation.SetLabel(v)
+	return _u
+}
+
+// SetNillableLabel sets the "label" field if the given value is not nil.
+func (_u *ActorUpdateOne) SetNillableLabel(v *string) *ActorUpdateOne {
+	if v != nil {
+		_u.SetLabel(*v)
+	}
+	return _u
+}
+
+// ClearLabel clears the value of the "label" field.
+func (_u *ActorUpdateOne) ClearLabel() *ActorUpdateOne {
+	_u.mutation.ClearLabel()
+	return _u
+}
+
+// SetHandle sets the "handle" field.
+func (_u *ActorUpdateOne) SetHandle(v string) *ActorUpdateOne {
+	_u.mutation.SetHandle(v)
+	return _u
+}
+
+// SetNillableHandle sets the "handle" field if the given value is not nil.
+func (_u *ActorUpdateOne) SetNillableHandle(v *string) *ActorUpdateOne {
+	if v != nil {
+		_u.SetHandle(*v)
+	}
+	return _u
+}
+
+// ClearHandle clears the value of the "handle" field.
+func (_u *ActorUpdateOne) ClearHandle() *ActorUpdateOne {
+	_u.mutation.ClearHandle()
+	return _u
+}
+
+// SetActive sets the "active" field.
+func (_u *ActorUpdateOne) SetActive(v bool) *ActorUpdateOne {
+	_u.mutation.SetActive(v)
+	return _u
+}
+
+// SetNillableActive sets the "active" field if the given value is not nil.
+func (_u *ActorUpdateOne) SetNillableActive(v *bool) *ActorUpdateOne {
+	if v != nil {
+		_u.SetActive(*v)
+	}
+	return _u
+}
+
+// SetLeftAt sets the "left_at" field.
+func (_u *ActorUpdateOne) SetLeftAt(v time.Time) *ActorUpdateOne {
+	_u.mutation.SetLeftAt(v)
+	return _u
+}
+
+// SetNillableLeftAt sets the "left_at" field if the given value is not nil.
+func (_u *ActorUpdateOne) SetNillableLeftAt(v *time.Time) *ActorUpdateOne {
+	if v != nil {
+		_u.SetLeftAt(*v)
+	}
+	return _u
+}
+
+// ClearLeftAt clears the value of the "left_at" field.
+func (_u *ActorUpdateOne) ClearLeftAt() *ActorUpdateOne {
+	_u.mutation.ClearLeftAt()
 	return _u
 }
 
@@ -580,6 +795,33 @@ func (_u *ActorUpdateOne) sqlSave(ctx context.Context) (_node *Actor, err error)
 	}
 	if value, ok := _u.mutation.DisplayName(); ok {
 		_spec.SetField(actor.FieldDisplayName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OwnerActorID(); ok {
+		_spec.SetField(actor.FieldOwnerActorID, field.TypeString, value)
+	}
+	if _u.mutation.OwnerActorIDCleared() {
+		_spec.ClearField(actor.FieldOwnerActorID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Label(); ok {
+		_spec.SetField(actor.FieldLabel, field.TypeString, value)
+	}
+	if _u.mutation.LabelCleared() {
+		_spec.ClearField(actor.FieldLabel, field.TypeString)
+	}
+	if value, ok := _u.mutation.Handle(); ok {
+		_spec.SetField(actor.FieldHandle, field.TypeString, value)
+	}
+	if _u.mutation.HandleCleared() {
+		_spec.ClearField(actor.FieldHandle, field.TypeString)
+	}
+	if value, ok := _u.mutation.Active(); ok {
+		_spec.SetField(actor.FieldActive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.LeftAt(); ok {
+		_spec.SetField(actor.FieldLeftAt, field.TypeTime, value)
+	}
+	if _u.mutation.LeftAtCleared() {
+		_spec.ClearField(actor.FieldLeftAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.LastSeenAt(); ok {
 		_spec.SetField(actor.FieldLastSeenAt, field.TypeTime, value)

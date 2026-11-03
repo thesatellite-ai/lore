@@ -79,6 +79,7 @@ var syncedTables = map[string]string{
 	"tags":               "classification shared by the team",
 	"task_lists":         "work tracking",
 	"tasks":              "work tracking",
+	"teams":              "roster groups (LORE_TEAM_SPEC F18); live in the org folder of the org's store",
 	"taste_prefs":        "knowledge",
 	"tech_docs":          "registry of documentation sources (pages are re-fetched locally)",
 	"workflows":          "knowledge",

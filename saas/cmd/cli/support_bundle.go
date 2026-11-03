@@ -49,7 +49,7 @@ func newSupportBundleCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "support-bundle",
 		Short: "Produce a sanitized incident-report bundle",
-		Long: `Produces a JSON bundle of mini's state for bug reports
+		Long: `Produces a JSON bundle of lore's state for bug reports
 
 By default, NO memory/decision/rule content is included. Pass
 --include-content to include it (requires explicit confirmation).`,
@@ -59,7 +59,7 @@ By default, NO memory/decision/rule content is included. Pass
 
 			bundle := supportBundle{
 				SchemaVersion: 1,
-				GeneratedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+				GeneratedAt:   cliClock().Now().UTC().Format(time.RFC3339Nano),
 				BinaryVersion: version,
 				GoVersion:     runtime.Version(),
 				OS:            runtime.GOOS,

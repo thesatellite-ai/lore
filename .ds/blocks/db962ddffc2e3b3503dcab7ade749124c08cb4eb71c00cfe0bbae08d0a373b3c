@@ -1,0 +1,43 @@
+func newRepairCommand() *cobra.Command {
+	var f commonFlags
+	var tier int
+	var confirm bool
+	cmd := &cobra.Command{
+		Use:   "repair",
+		Short: "Recover from a corrupted DB",
+		Long: `repair attempts disaster recovery. Three tiers:
+
+  --tier=1   SQLite .recover (rebuild from WAL fragments)
+  --tier=2   restore from latest .lore/backups/*.sqlite (recommended)
+  --tier=3   bootstrap empty DB (last resort)
+
+Requires --confirm to make destructive changes.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !confirm {
+				return errcodes.New(errcodes.InvalidInput,
+					"repair is destructive; pass --confirm to proceed")
+			}
+			rctx, err := projresolve.Resolve(projresolve.Inputs{
+				FlagDB: f.flagDB, FlagProject: f.flagProject,
+			})
+			if err != nil {
+				return mapResolveError(err)
+			}
+
+			switch tier {
+			case 2:
+				return repairTier2(cmd.Context(), rctx)
+			case 3:
+				return repairTier3(rctx)
+			default:
+				return errcodes.New(errcodes.NotImplemented,
+					fmt.Sprintf("repair tier %d not implemented in v0.1", tier)).
+					WithHint("use --tier=2 (recommended) or --tier=3")
+			}
+		},
+	}
+	bindCommonFlags(cmd, &f)
+	cmd.Flags().IntVar(&tier, "tier", 2, "DR tier: 1 .recover | 2 restore-from-backup | 3 bootstrap-empty")
+	cmd.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "required to proceed")
+	return cmd
+}

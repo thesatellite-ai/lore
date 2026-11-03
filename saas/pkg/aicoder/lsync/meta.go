@@ -58,8 +58,18 @@ func MetaExists(dataDir string) bool {
 	return err == nil
 }
 
+// writeProjectMeta sets _v and project_id in _meta.json and keeps every
+// other key the file already holds (a store project's links and global
+// flag, F11): lsync owns only these two keys.
 func writeProjectMeta(dataDir string, m ProjectMeta) error {
-	doc := map[string]any{keyVersion: int64(FormatVersion)}
+	doc := map[string]any{}
+	if b, err := readRowFile(filepath.Join(dataDir, MetaFileName)); err == nil {
+		if cur, err := canonjson.Decode(b, canonjson.DefaultMaxDepth); err == nil {
+			doc = cur
+		}
+	}
+	doc[keyVersion] = int64(FormatVersion)
+	delete(doc, metaKeyProjectID)
 	if m.ProjectID != "" {
 		doc[metaKeyProjectID] = m.ProjectID
 	}
@@ -75,7 +85,8 @@ func writeProjectMeta(dataDir string, m ProjectMeta) error {
 }
 
 // readPurged returns the set of ids purged on main (E47). Absent file ⇒
-// empty set.
+// empty set; an "ids" value that is not a list is an error, never an empty
+// set (that would let purged rows be imported again).
 func readPurged(dataDir string) (map[string]bool, error) {
 	out := map[string]bool{}
 	b, err := readRowFile(filepath.Join(dataDir, PurgedFileName))
@@ -89,11 +100,12 @@ func readPurged(dataDir string) (map[string]bool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("lsync: %s: %w", PurgedFileName, err)
 	}
-	list, _ := doc[purgedKeyIDs].([]any)
-	for _, v := range list {
-		if s, ok := v.(string); ok {
-			out[s] = true
-		}
+	ids, err := purgedIDList(doc)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		out[id] = true
 	}
 	return out, nil
 }

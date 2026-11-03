@@ -1,7 +1,7 @@
 // bench_run.go — `lore bench run *` commands
 //
 // One BenchRun row per execution. Spawns N evals × M arms × R attempts
-// LLM calls, applies the configured grader to each output, persists a
+// model calls, applies the configured grader to each output, persists a
 // BenchResult row per attempt, then rolls up summary stats into the
 // BenchRun row
 //
@@ -41,7 +41,7 @@ import (
 func newBenchRunGroup() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "Execute benchmark runs against an LLM",
+		Short: "Execute benchmark runs against a model",
 	}
 	cmd.AddCommand(newBenchRunStartCommand())
 	cmd.AddCommand(newBenchRunListCommand())
@@ -75,7 +75,7 @@ func newBenchRunStartCommand() *cobra.Command {
 		Short: "Start a benchmark run (synchronous)",
 		Long: `Executes a benchmark run synchronously. For each enabled BenchEval
 row, for each arm (default: baseline + with_skill), for --runs-per-arm
-attempts: calls the LLM, grades the output, persists a BenchResult row
+attempts: calls the model, grades the output, persists a BenchResult row
 
 When the run completes, the BenchRun row is updated with the summary
 (pass-rate per arm, per category, total cost)
@@ -98,8 +98,8 @@ given USD threshold.`,
 	}
 	bindCommonFlags(cmd, &f.commonFlags)
 	cmd.Flags().StringVar(&f.model, constants.FlagModel, "claude-haiku-4-5-20251001",
-		"LLM model. Cloud: claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-7. "+
-			"Local: prefix with `ollama:` — e.g. `ollama:qwen3-coder:latest` (set OLLAMA_HOST to override default localhost:11434).")
+		"model id: a hosted model id as the provider names it (the default is one), "+
+			"or a local model prefixed with ollama: — e.g. ollama:qwen3-coder:latest (set OLLAMA_HOST to override default localhost:11434).")
 	cmd.Flags().Float64Var(&f.temperature, "temperature", 0.2, "sampling temperature")
 	cmd.Flags().IntVar(&f.runsPerArm, "runs-per-arm", 1,
 		"attempts per (eval, arm); 3+ recommended for variance control")
@@ -120,7 +120,7 @@ given USD threshold.`,
 			"permission, do not ask clarifying questions.\n\nTask follows:\n---\n\n",
 		"text prepended to both arms (controls runner-env as confound)")
 	cmd.Flags().IntVar(&f.parallel, "parallel", 8,
-		"concurrent LLM calls in flight (1 = serial; tune to your provider's rate limit)")
+		"concurrent model calls in flight (1 = serial; tune to your provider's rate limit)")
 	cmd.Flags().BoolVar(&f.jsonOut, constants.FlagJSON, false, "JSON output (envelope)")
 	return cmd
 }

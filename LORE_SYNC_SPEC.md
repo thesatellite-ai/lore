@@ -77,7 +77,7 @@ These were pre-existing and unrelated to the sync design, but sync's extra write
 | Duplicated project-file counter; hardcoded doctor statuses and flag names | `lsync.CountRowFiles`; named constants in `doctor.go` and `saas/pkg/constants/flags.go` | build + lint |
 | (found in self-review) A natural-key merge left references dangling in rows imported later in the same pass (tables sync in name order) | merges are re-applied after every drain round; id rewrites never touch `_lore_sync_*` bookkeeping | `TestNaturalKeyMerge_RewritesRowsImportedLater` |
 
-### Found by a trial migration of a real repo (ifpghub_backend)
+### Found by a trial migration of a real repo (a multi-repo product API)
 
 Copies only: a bare remote cloned from the repo, the real `lore.db` copied in, two clones (A migrates, B joins fresh with the repo's `core.hooksPath .githooks`), the same memory edited on two branches and merged. The real repo was not touched. Migration: 1,690 rows → 1,691 files (7 MB) in about 1 s; B rebuilt its DB in about 1 s with all 11 shared tables matching the original row for row.
 
@@ -374,11 +374,11 @@ Every ent schema table is in exactly one class. A unit test walks `dbent/schema`
 
 | Class | Meaning | Tables (proposed — confirm in review) |
 |---|---|---|
-| **synced** | Written to `.lore/data/`, follows branches | project, repo, actor (sanitized, E4), memory, rule, decision, hotfix, pattern, playbook, prompt, architecture_notes, cookbook_recipes, incidents, behaviours, plans, mission, task, tasklist, reminder, handoffs, tag, entity_tag, knowledge_ref, comment, commit_link, rule_verifier_ref, memory_code_ref, project_config, external_sources |
+| **synced** | Written to `.lore/data/`, follows branches | project, repo, actor (sanitized, E4), memory, rule, decision, hotfix, pattern, playbook, prompt, architecture_notes, cookbook_recipes, incidents, behaviours, plans, mission, task, tasklist, team (roster groups, LORE_TEAM_SPEC F18), reminder, handoffs, tag, entity_tag, knowledge_ref, comment, commit_link, rule_verifier_ref, memory_code_ref, project_config, external_sources |
 | **local** | Never leaves the machine | query_log, render_history, audit_log, sessions, runs, run_steps, assemble_runs, assemble_citations, compress_runs, learn_runs, learn_candidate, suggestions, drafts, bench_evals, bench_runs, bench_results, intervention_metric, activities_archive, identity_profiles, task_views, config, pii_patterns, mount_alias, schema_migration, knowledge_revisions (E5) |
 | **derived** | Rebuilt from synced data or from the code tree | FTS5 virtual tables (`*_fts`), code_file, code_symbols, snapshot |
 
-**Volatile columns inside synced tables** stay out of the file and live in a local overlay table `sync_local_overlay(entity_table, entity_id, column, value)`: `last_accessed_at`, `trust_score` decay updates, `actor.last_seen_at`, `confidence` (LLM-graded, re-gradable), any counter. If a column is ever both shared and churned, split it.
+**Volatile columns inside synced tables** stay out of the file and live in a local overlay table `sync_local_overlay(entity_table, entity_id, column, value)`: `last_accessed_at`, `trust_score` decay updates, `actor.last_seen_at`, `confidence` (graded by a model, re-gradable), any counter. If a column is ever both shared and churned, split it.
 
 ## 8. Flows
 
@@ -466,7 +466,7 @@ lore task list              → reconcile: diff old HEAD tree vs new → rows of
 | Row archived on one side, edited on other | conflict on `archived_at` / edited field lines — never a modify/delete conflict, because there are no hard deletes (E9) |
 
 <!-- ds:block id=sync-strategyfor-ycedma28 -->
-**`lore merge-driver %O %A %B %P` (local merges, rebases, pulls):** field-level 3-way merge per file.
+**`lore merge-driver %O %A %B %P` (local merges, rebases, pulls):** field-level 3-way merge per file. The file is settled first (`merge3.MergeFile`, LORE_TEAM_SPEC F4 step 1, C12): a row added on both sides is merged field by field from an empty base, an edit beats a delete (a live tombstone, `_live.deleted: true`) and the driver says which side deleted it, and two tombstones stay one tombstone. Only then are fields merged:
 
 | base → ours | base → theirs | result |
 |---|---|---|
@@ -474,6 +474,8 @@ lore task list              → reconcile: diff old HEAD tree vs new → rows of
 | changed | unchanged | take ours |
 | changed to X | changed to X | X |
 | changed to X | changed to Y | **enum, number, boolean, timestamp, reference (`*_id`)** (status, priority, archived_at): newest `updated_at` wins; the driver prints which fields that decided (`MergeOutcome.NewerWins`). **free text and JSON** (title, body): real conflict — driver writes git-style conflict markers inside the string value and exits 1, so the human resolves it (with `lore <entity> edit`, or by editing the value). |
+| set-like list columns (`approvers`, `member_actor_ids`, `labels`, `_meta.json` `links`) | | three-way set merge: both sides' additions kept, removals honoured, never a conflict |
+| scalars on live rows | | when both sides carry an `hlc`, the higher hlc wins instead of `updated_at` (F4 step 2) |
 | `updated_at` | always | max(ours, theirs) |
 | unknown fields | | same rules, preserved verbatim |
 
@@ -492,7 +494,7 @@ A host's web merge (GitHub, GitLab) never runs custom drivers, so "same row, dif
 
    It then commits the merge (hooks skipped: the result was validated, and an interactive hook must not decide an unattended merge) and exits 0. Outcomes: `up-to-date`, `clean` (the host can merge as is), `merged` (caller pushes), `needs-human`. It never pushes.
 
-The workflow (`.github/workflows/lore-sync-merge.yml`, generated from `sync_action.yml.tmpl` with the CLI's own constants) triggers on `pull_request` and on pushes to the chosen branches, both filtered to the lore data paths, plus `workflow_dispatch`; `--manual` keeps only the last. It downloads a pinned lore release (checksum-verified), runs `ci-merge` for the event's PR or for every open same-repository PR on the pushed base, pushes `merged` results, and lists `needs-human` ones in the run summary. It needs `contents: write`; pushes made with `GITHUB_TOKEN` start no other workflows, so a `LORE_SYNC_TOKEN` secret is used instead when present. Fork PRs are skipped. `install-action` only overwrites or deletes a file that starts with its marker line (`--force` otherwise).
+The workflow (`.github/workflows/lore-sync-merge.yml`, generated from `sync_action.yml.tmpl` with the CLI's own constants) triggers only on `workflow_dispatch` by default, so it never spends CI minutes on its own; its header comment gives the exact trigger lines to paste. `--auto` adds `pull_request` and pushes to the chosen branches, both filtered to the lore data paths. `--manual` is accepted as a no-op alias of the default; `--auto` with `--manual` is refused. A re-run without either flag keeps the installed file's triggers and branches, and the pin refresh below never changes triggers. It downloads a pinned lore release (checksum-verified), runs `ci-merge` for the event's PR or for every open same-repository PR on the pushed base, pushes `merged` results, and lists `needs-human` ones in the run summary. It needs `contents: write`; pushes made with `GITHUB_TOKEN` start no other workflows, so a `LORE_SYNC_TOKEN` secret is used instead when present. Fork PRs are skipped. `install-action` only overwrites or deletes a file that starts with its marker line (`--force` otherwise).
 
 **Keeping the pin current (`refreshSyncActionPin`, part of the git wiring on every command).** The file records its pin under the marker: `auto` (installed without `--lore-version`) or `fixed`, plus a SHA-256 checksum of the file without that line (line endings normalised, so a CRLF checkout is not an edit). When the running lore is a release newer than an `auto` pin, the file is re-rendered from the settings it states (branches, manual, project folder) with the new version, written atomically, and the user is told to commit it. Never: downgrade, act from a development build, change a `fixed` pin, create the file, touch a file without the marker, or overwrite a hand-edited one (checksum mismatch; files from v0.1.11, which have no checksum, are compared with a re-render ignoring comments). Read-only commands and `LORE_SYNC_GIT=0` skip the whole wiring step. The lore version is part of the wiring cache key and the workflow file a watched path, so an upgrade or an edit re-runs the check once. A subfolder project uses `lore-sync-merge-<folder>.yml` and its own concurrency group; a v0.1.11 root-named file belonging to a subfolder project is moved to that name. Two branches bumping the pin to different versions is an ordinary one-line git conflict: keep the newer.
 
@@ -504,13 +506,17 @@ Lore checks and repairs this on every command, idempotently, in the per-clone `.
 
 ```ini
 [merge "lore"]
-    name = lore field-level merge
+    name = lore field-level row merge
     driver = lore merge-driver %O %A %B %P
+[merge "lore-keep-ours"]
+    name = lore: keep ours, re-render after merge
+    driver = lore merge-driver --keep-ours %O %A %B %P
 ```
 
 ```gitattributes
 .lore/data/**/*.json  text eol=lf merge=lore linguist-generated=true
-.lore/LORE.md         text eol=lf merge=lore-regen linguist-generated=true
+.lore/data/*.json     text eol=lf merge=lore linguist-generated=true
+.lore/LORE.md         text eol=lf merge=lore-keep-ours linguist-generated=true
 ```
 
 **Hooks** — git never auto-runs hooks from a clone; each clone must opt in. Lore installs them on its first command in a clone (anyone who can create lore data has run lore, so the hook exists wherever data can be lost). As built, lore never changes `core.hooksPath`:
@@ -528,6 +534,8 @@ Hooks provided (all optional — correctness never depends on them):
 
 - `pre-commit`: run a pass; refuse the commit when any lore file is invalid JSON, carries conflict markers (raw, or inside a JSON string value), or matches a credential pattern; otherwise stage `.lore/data/`. The hook first checks that the installed lore has `sync hook`: hook scripts may be committed (`.githooks`), and a teammate on an older lore must still be able to commit (they get an "upgrade it" note).
 - `post-checkout` / `post-merge` / `post-rewrite`: `lore sync hook refresh` — imports immediately and re-renders `.lore/LORE.md` when rows arrived. Never fails the git operation.
+- `commit-msg`: first `lore task hook commit-msg` adds the `Lore-Task: <id>` trailer for the task you hold (LORE_TEAM_SPEC F9, C8; never fails a commit); then the F16 leak check (LORE_TEAM_SPEC §6.3) on the final message: `lore check leaks --staged --commit-msg "$1"` over every staged file and the message, failing closed when the store cannot be read; probed with `check leaks --help` first so an older lore never refuses a commit.
+- `post-commit` / `pre-push`: the protected-main ride-along (LORE_TEAM_SPEC F6). `post-commit` adds a `lore: land N rows` commit for finished live rows; `pre-push` re-adds it when it was dropped and stops that push once so the ride-along goes with it. They are repo-wide (one block per repo, no `cd`, so one ride-along commit covers every project of a monorepo), probe `lore land --help` first so an older lore never refuses a push, and do nothing while `LORE_RIDE_ACTIVE=1` (set by lore for its own commits and pushes).
 
 ## 11. Edge cases
 
@@ -593,14 +601,14 @@ As built, the numbers behind E28 and E32 are named constants: a pass waits up to
 
 | # | Case | Fix |
 |---|---|---|
-| E33 | A secret or PII in a memory body gets committed and pushed — git history is effectively permanent | Run the existing PII/secret scanner on the canonical JSON at write time, not only on `add` input (edits too). `--allow-secrets` still exists but now prints that the value will be committed to git. Pre-commit hook re-scans staged lore files. |
+| E33 | A secret or PII in a memory body gets committed and pushed — git history is effectively durable | Run the existing PII/secret scanner on the canonical JSON at write time, not only on `add` input (edits too). `--allow-secrets` still exists but now prints that the value will be committed to git. Pre-commit hook re-scans staged lore files. |
 | E34 | Hostile JSON from a teammate's branch (path traversal in a field, oversized file, deeply nested JSON) | Importer derives paths only from validated ids (`ids.ValidateAny`), caps file size and nesting depth, never follows symlinks inside `.lore/data` (same posture as the existing `lore.db` symlink refusal in `saas/cmd/cli/memory.go:83`). |
 
 ### 11.6 Derived and generated files
 
 | # | Case | Fix |
 |---|---|---|
-| E35 | `.lore/LORE.md` is generated and committed (not in `ensureGitignore`) → conflicts on nearly every merge | Keep it committed (agents read it via `@import` before any lore command runs on a fresh clone), give it `merge=lore-regen`: the driver regenerates it from the merged data instead of merging text. Reconcile also re-renders when synced data changed. On GitHub (no driver) a conflict here is resolved by taking either side; the next lore command re-renders. |
+| E35 | `.lore/LORE.md` is generated and committed (not in `ensureGitignore`) → conflicts on nearly every merge | Keep it committed (agents read it via `@import` before any lore command runs on a fresh clone), give it `merge=lore-keep-ours`: the driver keeps our side instead of merging text, and lore re-renders it from the merged data. Reconcile also re-renders when synced data changed. On GitHub (no driver) a conflict here is resolved by taking either side; the next lore command re-renders. |
 | E36 | FTS5 index after a large branch switch | Incremental delete+insert per changed row; if more than a named threshold of rows changed, drop and rebuild the FTS table instead (faster). |
 
 ### 11.7 Human workflow
@@ -712,7 +720,7 @@ All phases shipped; sync is on by default (`LORE_SYNC=0` turns it off). Per-phas
 | **P1 — model** | Table classification registry + test (every table classified, E6 counter gate); canonical serializer + upcaster framework; unknown-field preservation; deterministic ids for natural-key tables (E2) | Round-trip test: DB row → file → DB row byte-identical for every synced kind; classification test fails when a new table is added unclassified (verified by breaking it) |
 | **P2 — write path** | File-first atomic writes, `sync_state`, sync lock, PII scan on canonical JSON, "not committed" warning; triggers + `sync_outbox` generated from the registry and the drain step (§12.1) | Crash-injection test between file and DB write recovers on next command (E29); a raw `sqlite3` UPDATE and a tui edit both reach the file on the next command (E41, E42) |
 | **P3 — reconcile** | Fingerprint, incremental import, full-import fallback, deferred-FK import, `sync_errors`, dangling-ref report, FTS incremental + rebuild threshold, non-git fallback (E17) | Two-clone integration harness passes: add / edit / archive / branch switch / merge / rebase / stash / revert / force-push (E15–E22) |
-| **P4 — merge** | `lore merge-driver` (field-level 3-way, loud on text), `lore-regen` driver for `LORE.md`, `.gitattributes` writer | Harness merges with the driver AND with plain `git merge` (no driver, simulating GitHub) and asserts no silent loss in either |
+| **P4 — merge** | `lore merge-driver` (field-level 3-way, loud on text), `lore-keep-ours` driver for `LORE.md`, `.gitattributes` writer | Harness merges with the driver AND with plain `git merge` (no driver, simulating GitHub) and asserts no silent loss in either |
 | **P5 — git wiring** | Auto-config of merge driver + `core.hooksPath` with chaining into existing hook dirs (E46 husky / `.githooks`); optional hooks | Fresh-clone test: first lore command configures everything; existing `.githooks/pre-commit` (sync_go style) still runs after lore appends |
 | **P6 — migration + default on** | BOOTSTRAP and ADOPT (§12.3) with pre-backup; both-sides-changed resolution (§12.2) and `lore sync resolve`; `backup restore --prefer` (E43); `_purged.json` (E47); `lore doctor` checks (E1, E8, E12, E30, E38, E48); `lore init` adopts existing `.lore/data`; rollout guide (§12.4); flip default | Harness: two clones with independent pre-existing `lore.db` files bootstrap + adopt, merge, and end with identical data and a clean doctor; old-binary DB adopted without loss |
 | **P7 — done** | read another branch's rows: `lore sync peek origin/feature/x [table]` (designed as `task list --ref`); `lore sync promote <id> --to <branch>`; `lore sync purge --archived-before` | e2e peek / promote / purge tests |

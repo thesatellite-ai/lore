@@ -72,6 +72,7 @@ func RegisterAll(app *runtime.App, client *ent.Client) {
 	registerTaskList(app, client)
 	registerTaskView(app, client)
 	registerTastePref(app, client)
+	registerTeam(app, client)
 	registerTechDoc(app, client)
 	registerTechDocPage(app, client)
 	registerTrustedPlugin(app, client)

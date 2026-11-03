@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// Prompt: YAML-style slash command template (Continue.dev pattern, R15 #7).
-// Single LLM input string with {{args.foo}} placeholders.
+// Prompt: YAML-style slash command template (R15 #7).
+// Single model input string with {{args.foo}} placeholders.
 type Prompt struct{ ent.Schema }
 
 func (Prompt) Mixin() []ent.Mixin {

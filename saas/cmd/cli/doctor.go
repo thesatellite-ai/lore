@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ds:def id=doctor-statuses-y6sro1m4 owner=@khanakia stability=stable desc="lore doctor statuses and their exit codes (healthy 0, degraded 1, broken 2)"
 // Doctor statuses — a stable contract for monitoring (exit 0 / 1 / 2).
 const (
 	doctorHealthy  = "healthy"
@@ -81,6 +82,9 @@ type doctorIdentityInfo struct {
 type doctorFlags struct {
 	commonFlags
 	jsonOutput bool
+	// fix applies the safe repairs doctor knows (today: reversed
+	// --supersedes links written by older versions; supersede_repair.go).
+	fix bool
 }
 
 func newDoctorCommand() *cobra.Command {
@@ -100,6 +104,8 @@ Checks:
     gitignored, merge driver missing (uncommitted files are reported,
     not counted as unhealthy)
   • Schema version (TODO: validate against expected)
+  • --supersedes links written the old way (on the new row instead of
+    the old one); --fix repairs them, and a second --fix changes nothing
 
 Exit codes are stable across versions for monitoring integration.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -113,17 +119,30 @@ Exit codes are stable across versions for monitoring integration.`,
 			} else {
 				printDoctor(report)
 			}
+			code := 0
 			switch report.Status {
 			case doctorBroken:
-				os.Exit(2)
+				code = 2
 			case doctorDegraded:
-				os.Exit(1)
+				code = 1
 			}
+			if code == 0 {
+				return nil
+			}
+			// os.Exit skips main's end-of-command sync pass, which is what
+			// writes the rows --fix repaired to .lore/data; run it first.
+			if f.fix {
+				if err := finishSyncSessions(cmd.Context()); err != nil {
+					fmt.Fprintln(os.Stderr, style.Warn("lore doctor --fix: "+err.Error()))
+				}
+			}
+			os.Exit(code)
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f.commonFlags)
 	cmd.Flags().BoolVar(&f.jsonOutput, constants.FlagJSON, false, "JSON output (stable schema)")
+	cmd.Flags().BoolVar(&f.fix, doctorFlagFix, false, "repair what doctor can fix safely (reversed --supersedes links)")
 	return cmd
 }
 
@@ -165,6 +184,15 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 		}
 		if r.DBOK && syncApplies(rctx) {
 			doctorSync(ctx, rctx, db, r)
+			// Live rows (LORE_TEAM_SPEC §9.4): refspec, hooks, rows only in
+			// live, waiting landings, compaction (live_doctor.go).
+			dataDir, _ := syncDataDir(rctx.DBPath)
+			doctorLive(ctx, filepath.Dir(filepath.Dir(dataDir)), r)
+		}
+		// After the sync checks, so they describe the state doctor found;
+		// --fix writes are exported by the end-of-command sync pass.
+		if r.DBOK {
+			doctorSupersedes(ctx, f, dbent.New(db).Client(), r)
 		}
 		r.WALSizeBytes = walSize(rctx.DBPath)
 		if r.WALSizeBytes > 100*1024*1024 {
@@ -192,7 +220,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	}
 
 	// 4. PATH conflicts
-	if conflicts := findPathConflicts("aicoder"); len(conflicts) > 1 {
+	if conflicts := findPathConflicts(BinaryName); len(conflicts) > 1 {
 		r.PathsConflict = conflicts
 		r.Warnings = append(r.Warnings,
 			fmt.Sprintf("multiple lore binaries on PATH: %s", strings.Join(conflicts, ", ")))
@@ -200,6 +228,13 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 			r.Status = doctorDegraded
 		}
 	}
+
+	// 5. Stores (LORE_TEAM_SPEC §6.6, §9.4): untrusted host, unpushed
+	// store work, CLAUDE.local.md.
+	doctorStores(ctx, r)
+	// 6. Signals (F7 Debug): ref size, expired files, atomic push support
+	// (coord_doctor.go, lore-signals).
+	doctorSignals(ctx, r)
 
 	r.OK = r.Status == doctorHealthy
 	return r, nil
@@ -241,7 +276,7 @@ func doctorSync(ctx context.Context, rctx *projresolve.Context, db *sql.DB, r *d
 	seen := map[string]bool{}
 	var fileErrs []lsync.FileError
 	for _, e := range st.Errors {
-		if e.Kind == lsync.ErrKindSecret {
+		if e.Kind == lsync.ErrKindSecret && refusedRowStillExists(ctx, db, e.Path) {
 			fileErrs = append(fileErrs, e)
 		}
 	}
@@ -425,3 +460,32 @@ func findPathConflicts(name string) []string {
 	}
 	return unique
 }
+
+// refusedRowStillExists reports whether the row behind a recorded
+// secret-refusal ("<table>/<id>.json") is still in the database. A row that
+// was deleted since its export was refused can never be exported, so its
+// recorded refusal is stale and doctor must not keep warning about it
+// (BUG-OPS1). Anything doctor cannot decide (unknown table, malformed path,
+// a failing query) counts as still there: a stale warning is better than a
+// hidden secret.
+func refusedRowStillExists(ctx context.Context, db *sql.DB, rel string) bool {
+	table, file, ok := strings.Cut(rel, "/")
+	id, isJSON := strings.CutSuffix(file, dataRowFileExt)
+	if !ok || !isJSON || id == "" || strings.Contains(id, "/") {
+		return true
+	}
+	reg, _ := lsync.NewRegistry()
+	if _, synced := reg.Table(table); !synced {
+		return true
+	}
+	// table is a registry name (a fixed schema identifier), never user text.
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM "`+table+`" WHERE id = ?`, id).Scan(&n); err != nil {
+		return true
+	}
+	return n > 0
+}
+
+// dataRowFileExt is the extension of one row's file in .lore/data
+// ("<table>/<id>.json").
+const dataRowFileExt = ".json"

@@ -48,6 +48,9 @@ func registerActor(app *runtime.App, client *ent.Client) {
 					entActor.IDContainsFold(opts.Filter),
 					entActor.DisplayNameContainsFold(opts.Filter),
 					entActor.StableKeyContainsFold(opts.Filter),
+					entActor.OwnerActorIDContainsFold(opts.Filter),
+					entActor.LabelContainsFold(opts.Filter),
+					entActor.HandleContainsFold(opts.Filter),
 				))
 			}
 			// Phase E — structured per-column filters. AND-composed.
@@ -107,6 +110,45 @@ func registerActor(app *runtime.App, client *ent.Client) {
 					case runtime.OpContains:
 						q = q.Where(entActor.StableKeyContainsFold(f.Value))
 					}
+				case "owner_actor_id":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entActor.OwnerActorIDEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entActor.OwnerActorIDNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entActor.OwnerActorIDContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entActor.OwnerActorIDIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entActor.OwnerActorIDNotNil())
+					}
+				case "label":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entActor.LabelEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entActor.LabelNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entActor.LabelContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entActor.LabelIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entActor.LabelNotNil())
+					}
+				case "handle":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entActor.HandleEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entActor.HandleNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entActor.HandleContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entActor.HandleIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entActor.HandleNotNil())
+					}
 				}
 			}
 			// Phase D — multi-column sort stack. Each Sort entry walks the
@@ -149,6 +191,30 @@ func registerActor(app *runtime.App, client *ent.Client) {
 							q = q.Order(ent.Asc(entActor.FieldStableKey))
 						} else {
 							q = q.Order(ent.Desc(entActor.FieldStableKey))
+						}
+					case "owner_actor_id":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entActor.FieldOwnerActorID))
+						} else {
+							q = q.Order(ent.Desc(entActor.FieldOwnerActorID))
+						}
+					case "label":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entActor.FieldLabel))
+						} else {
+							q = q.Order(ent.Desc(entActor.FieldLabel))
+						}
+					case "handle":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entActor.FieldHandle))
+						} else {
+							q = q.Order(ent.Desc(entActor.FieldHandle))
+						}
+					case "left_at":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entActor.FieldLeftAt))
+						} else {
+							q = q.Order(ent.Desc(entActor.FieldLeftAt))
 						}
 					case "last_seen_at":
 						if k.Dir == runtime.Asc {
@@ -257,6 +323,78 @@ func registerActor(app *runtime.App, client *ent.Client) {
 				Align:      "",
 				Get: func(r *ent.Actor) string {
 					return r.StableKey
+				},
+			},
+			{
+				Key:        "owner_actor_id",
+				Label:      "Owner Actor Id",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Actor) string {
+					if r.OwnerActorID == nil {
+						return ""
+					}
+					return *r.OwnerActorID
+				},
+			},
+			{
+				Key:        "label",
+				Label:      "Label",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Actor) string {
+					if r.Label == nil {
+						return ""
+					}
+					return *r.Label
+				},
+			},
+			{
+				Key:        "handle",
+				Label:      "Handle",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Actor) string {
+					if r.Handle == nil {
+						return ""
+					}
+					return *r.Handle
+				},
+			},
+			{
+				Key:        "active",
+				Label:      "Active",
+				Sortable:   false,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Actor) string {
+					return fmt.Sprintf("%v", r.Active)
+				},
+			},
+			{
+				Key:        "left_at",
+				Label:      "Left At",
+				Sortable:   true,
+				Filterable: false,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Actor) string {
+					if r.LeftAt == nil || r.LeftAt.IsZero() {
+						return ""
+					}
+					return r.LeftAt.Format("2006-01-02 15:04:05")
 				},
 			},
 			{

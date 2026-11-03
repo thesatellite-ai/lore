@@ -49,6 +49,7 @@ func registerKnowledgeRef(app *runtime.App, client *ent.Client) {
 					entKnowledgeRef.SrcIDContainsFold(opts.Filter),
 					entKnowledgeRef.DstTableContainsFold(opts.Filter),
 					entKnowledgeRef.DstIDContainsFold(opts.Filter),
+					entKnowledgeRef.DstProjectIDContainsFold(opts.Filter),
 					entKnowledgeRef.RelationContainsFold(opts.Filter),
 				))
 			}
@@ -101,6 +102,19 @@ func registerKnowledgeRef(app *runtime.App, client *ent.Client) {
 						q = q.Where(entKnowledgeRef.DstIDNEQ(f.Value))
 					case runtime.OpContains:
 						q = q.Where(entKnowledgeRef.DstIDContainsFold(f.Value))
+					}
+				case "dst_project_id":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entKnowledgeRef.DstProjectIDEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entKnowledgeRef.DstProjectIDNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entKnowledgeRef.DstProjectIDContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entKnowledgeRef.DstProjectIDIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entKnowledgeRef.DstProjectIDNotNil())
 					}
 				case "relation":
 					switch f.Op {
@@ -184,6 +198,12 @@ func registerKnowledgeRef(app *runtime.App, client *ent.Client) {
 							q = q.Order(ent.Asc(entKnowledgeRef.FieldDstID))
 						} else {
 							q = q.Order(ent.Desc(entKnowledgeRef.FieldDstID))
+						}
+					case "dst_project_id":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entKnowledgeRef.FieldDstProjectID))
+						} else {
+							q = q.Order(ent.Desc(entKnowledgeRef.FieldDstProjectID))
 						}
 					case "relation":
 						if k.Dir == runtime.Asc {
@@ -302,6 +322,21 @@ func registerKnowledgeRef(app *runtime.App, client *ent.Client) {
 				Align:      "",
 				Get: func(r *ent.KnowledgeRef) string {
 					return r.DstID
+				},
+			},
+			{
+				Key:        "dst_project_id",
+				Label:      "Dst Project Id",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.KnowledgeRef) string {
+					if r.DstProjectID == nil {
+						return ""
+					}
+					return *r.DstProjectID
 				},
 			},
 			{
