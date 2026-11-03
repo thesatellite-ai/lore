@@ -637,6 +637,12 @@ func (e *engine) syncOne(ctx context.Context, k rowKey, fc fileChange, fileChang
 	kind := e.dbChangeKind()
 	switch {
 	case !fileChanged && !dbChanged:
+		if dbDoc == nil {
+			// Deleted before it was ever exported (a row refused for a
+			// secret, say): its recorded refusal no longer applies
+			// (BUG-OPS1).
+			e.clearError(ctx, rel)
+		}
 		return e.clearDirty(ctx, k)
 	case !fileChanged && dbChanged:
 		if err := e.exportDoc(ctx, k, t, dbDoc); err != nil {
@@ -1065,6 +1071,9 @@ func (e *engine) exportDoc(ctx context.Context, k rowKey, t *Table, dbDoc map[st
 		if err := e.dropBase(ctx, rel); err != nil {
 			return err
 		}
+		// The row is gone: a refusal recorded for it (a secret) no longer
+		// describes anything (BUG-OPS1: doctor kept reporting it).
+		e.clearError(ctx, rel)
 		return e.clearDirty(ctx, k)
 	}
 	extra, err := e.loadExtra(ctx, rel)
@@ -1257,6 +1266,15 @@ func (e *engine) record(ctx context.Context, rel, kind, detail string, block boo
 
 func (e *engine) clearError(ctx context.Context, rel string) {
 	if _, err := e.tx.ExecContext(ctx, `DELETE FROM `+tblErrors+` WHERE path = ?`, rel); err != nil {
+		e.rep.Warnings = append(e.rep.Warnings, "could not clear sync error: "+err.Error())
+	}
+}
+
+// clearErrorKind removes rel's recorded error only when it is of kind, so
+// a path that passed one check never hides a different problem recorded
+// for its file this pass (an unreadable branch file, say).
+func (e *engine) clearErrorKind(ctx context.Context, rel, kind string) {
+	if _, err := e.tx.ExecContext(ctx, `DELETE FROM `+tblErrors+` WHERE path = ? AND kind = ?`, rel, kind); err != nil {
 		e.rep.Warnings = append(e.rep.Warnings, "could not clear sync error: "+err.Error())
 	}
 }

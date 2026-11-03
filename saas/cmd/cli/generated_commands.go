@@ -13,6 +13,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"saas/pkg/constants"
 	"strings"
@@ -149,8 +150,8 @@ func newPatternAddCommand() *cobra.Command {
 				return errcodes.New(errcodes.InvalidInput, "body: "+err.Error())
 			}
 			create.SetBody(cleanBody)
-			if supersedes != "" {
-				create.SetSupersededByID(supersedes)
+			if err := checkSupersedes(cmd.Context(), client, supersedePattern, projectID, supersedes); err != nil {
+				return err
 			}
 			actorID, err := resolveCreatedBy(cmd.Context(), client, createdBy)
 			if err != nil {
@@ -160,6 +161,11 @@ func newPatternAddCommand() *cobra.Command {
 			row, err := create.Save(cmd.Context())
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create pattern").WithCause(err)
+			}
+			if err := finishSupersedes(cmd.Context(), client, supersedePattern, supersedes, row.ID, func(ctx context.Context) error {
+				return client.Pattern.DeleteOneID(row.ID).Exec(ctx)
+			}); err != nil {
+				return err
 			}
 			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
@@ -282,7 +288,7 @@ func newPlaybookGroup() *cobra.Command {
 
 func newPlaybookAddCommand() *cobra.Command {
 	var f commonFlags
-	var title, body, createdBy string
+	var title, description, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
 		Args:  bodyOnlyArgs,
@@ -307,6 +313,11 @@ func newPlaybookAddCommand() *cobra.Command {
 				}
 				create.SetName(cleanTitle)
 			}
+			cleanDesc, err := knowledgeDescription(description, title)
+			if err != nil {
+				return err
+			}
+			create.SetDescription(cleanDesc)
 			resolvedBody, err := resolveBodyInput(args, body)
 			if err != nil {
 				return err
@@ -333,6 +344,7 @@ func newPlaybookAddCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "title (required)")
 	_ = cmd.MarkFlagRequired(constants.FlagTitle)
+	cmd.Flags().StringVar(&description, constants.FlagDescription, "", "one-line summary (default: the title)")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "body (required; pass --body=<v> or pipe via stdin)")
 	cmd.Flags().StringVar(&createdBy, constants.FlagCreatedBy, "", "actor_id; defaults to current identity")
 	return cmd
@@ -433,7 +445,7 @@ func newPromptGroup() *cobra.Command {
 
 func newPromptAddCommand() *cobra.Command {
 	var f commonFlags
-	var title, body, createdBy string
+	var title, description, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
 		Args:  bodyOnlyArgs,
@@ -457,6 +469,11 @@ func newPromptAddCommand() *cobra.Command {
 				}
 				create.SetName(cleanTitle)
 			}
+			cleanDesc, err := knowledgeDescription(description, title)
+			if err != nil {
+				return err
+			}
+			create.SetDescription(cleanDesc)
 			resolvedBody, err := resolveBodyInput(args, body)
 			if err != nil {
 				return err
@@ -483,6 +500,7 @@ func newPromptAddCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "title (required)")
 	_ = cmd.MarkFlagRequired(constants.FlagTitle)
+	cmd.Flags().StringVar(&description, constants.FlagDescription, "", "one-line summary (default: the title)")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "body (required; pass --body=<v> or pipe via stdin)")
 	cmd.Flags().StringVar(&createdBy, constants.FlagCreatedBy, "", "actor_id; defaults to current identity")
 	return cmd

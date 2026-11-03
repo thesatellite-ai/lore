@@ -670,7 +670,7 @@ lore repair --tier=3 --confirm    # bootstrap empty DB (last resort)
 
 ```bash
 lore identity show           # who am I, what resolution step won
-lore identity set "Alice"    # persist to ~/.lore/identity.toml
+lore identity set "Alice <alice@example.com>"    # persist to ~/.lore/identity.yaml (an email is required)
 lore identity unset          # remove that file; resolution falls back down the chain
 lore identity anonymize on   # anon:<random> per session (off to stop)
 ```

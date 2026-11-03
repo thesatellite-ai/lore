@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,8 +18,8 @@ import (
 	entDecision "dbent/gen/ent/decision"
 	entMission "dbent/gen/ent/mission"
 	entTask "dbent/gen/ent/task"
-	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/live"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/style"
@@ -76,19 +77,57 @@ type mainView struct {
 	purged map[string]bool
 }
 
+// mainView is the display and body-read form of loadMainView: when main's
+// _purged.json cannot be read, purged is empty. Only callers that never
+// decide on purged ids use it (`lore live explain`, apply's landed-copy
+// reads); the landing plan uses loadMainView.
 func (s *liveSession) mainView(ctx context.Context, folder string) *mainView {
-	v := &mainView{s: s, ref: "refs/remotes/" + s.ref.RemoteName + "/" + s.defaultBranch(ctx), folder: folder, purged: map[string]bool{}}
-	if b, ok, err := s.repo.ReadFile(ctx, v.ref, mainDataPath(folder, lsync.PurgedFileName)); err == nil && ok {
-		if doc, err := canonjson.Decode(b, canonjson.DefaultMaxDepth); err == nil {
-			list, _ := doc["ids"].([]any)
-			for _, x := range list {
-				if id, ok := x.(string); ok {
-					v.purged[id] = true
-				}
-			}
-		}
+	v, err := s.loadMainView(ctx, folder)
+	if err != nil {
+		v.purged = map[string]bool{} // display only: see the doc comment
 	}
 	return v
+}
+
+// loadMainView reads the fetched default branch's view of folder, with the
+// ids its _purged.json lists. An absent file is an empty set; a read error,
+// a file that does not decode, or an id list of the wrong shape is an error
+// (the returned view still reads bodies), because landing decides on the
+// purged ids and an empty set would land rows main purged on purpose.
+func (s *liveSession) loadMainView(ctx context.Context, folder string) (*mainView, error) {
+	v := &mainView{s: s, ref: "refs/remotes/" + s.ref.RemoteName + "/" + s.defaultBranch(ctx), folder: folder}
+	set, err := s.mainPurged(ctx, v.ref, folder)
+	if err != nil {
+		return v, err
+	}
+	v.purged = set
+	return v, nil
+}
+
+// mainPurged reads the ids in ref's _purged.json for folder. A ref that
+// does not exist yet (the branch was never fetched or created) holds no
+// purge list, the same as an absent file.
+func (s *liveSession) mainPurged(ctx context.Context, ref, folder string) (map[string]bool, error) {
+	p := mainDataPath(folder, lsync.PurgedFileName)
+	set := map[string]bool{}
+	b, ok, err := s.repo.ReadFile(ctx, ref, p)
+	if errors.Is(err, gitref.ErrNotFound) {
+		return set, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read %s:%s: %w", ref, p, err)
+	}
+	if !ok {
+		return set, nil
+	}
+	ids, err := lsync.PurgedIDs(b)
+	if err != nil {
+		return nil, fmt.Errorf("%s:%s: %w", ref, p, err)
+	}
+	for _, id := range ids {
+		set[id] = true
+	}
+	return set, nil
 }
 
 func (v *mainView) body(ctx context.Context, k live.RowKey) []byte {
@@ -107,7 +146,10 @@ func (s *liveSession) plan(ctx context.Context, folder string, named landSelect)
 		return nil, err
 	}
 	rows, _ := tree.Rows(folder)
-	mv := s.mainView(ctx, folder)
+	mv, err := s.loadMainView(ctx, folder)
+	if err != nil {
+		return nil, fmt.Errorf("main's purge list: %w; nothing was landed", err)
+	}
 	now := s.clk.Now()
 	keys := make([]live.RowKey, 0, len(rows))
 	for k := range rows {

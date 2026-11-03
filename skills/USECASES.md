@@ -178,7 +178,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Intent | Command |
 |---|---|
 | Who am I to lore? | `lore identity show` |
-| Override identity | `lore identity set "<name>"` |
+| Override identity | `lore identity set "<Name> <email>"` (the identity key is the email; a bare name is refused) |
 
 ## Diagnostics
 

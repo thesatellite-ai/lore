@@ -114,9 +114,9 @@ want a worked transcript     → examples/
 | **Rule** | Hard constraint with severity. `must` blocks, `should` warns, `may` suggests. **Only `must`-severity rules are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `should`/`may` surface via search. | `rule add --severity=<s>` |
 | **Decision** | A choice and the reasons for it (like an ADR: a short record of what was chosen and why). **Not pinned in `.lore/LORE.md`** — surfaces via `lore search`. | `decision add --title=… --body=<why>` |
 | **Hotfix** | Loud warning we keep hitting. **Only `critical` + `high` severity hotfixes are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `medium`/`low` surface via search. Hotfix styling stays loud regardless of where it appears. | `hotfix add --severity=<s>` |
-| **Pattern** | Reusable code shape. | `pattern add --name=…` |
-| **Playbook** | Reusable procedure. | `playbook add --name=…` |
-| **Prompt** | Reusable prompt template for a model. | `prompt add --name=…` |
+| **Pattern** | Reusable code shape. | `pattern add --title=… --body=<code>` |
+| **Playbook** | Reusable procedure. | `playbook add --title=… --body=<steps>` |
+| **Prompt** | Reusable prompt template for a model. | `prompt add --title=… --body=<text>` |
 | **Mission** | Initiative containing tasks. | `mission add "<title>"` |
 | **Task** | Discrete work item with status + priority. **Must belong to a tasklist** — `--tasklist=<tlt_id>` is required. | `task add "<title>" --tasklist=tlt_… --priority=…` |
 | **TaskList / Plan** | Alternative groupings for tasks. | `tasklist add` / `plan add` |
@@ -130,7 +130,7 @@ want a worked transcript     → examples/
 | Flag | Where it applies | Notes |
 |---|---|---|
 | `--created-by=<act_id>` | every entity with `created_by_actor_id` (memory, rule, decision, hotfix, pattern, playbook, prompt, architecture-note, behaviour, cookbook-recipe, incident, suggestion, tastepref, plan, mission, task, reminder) | Auto-fills from current identity (`identity show`) when omitted. |
-| `--supersedes=<id>` | memory, rule, decision, hotfix, pattern | Marks the new row as the replacement for `<id>`. |
+| `--supersedes=<id>` | memory, rule, decision, hotfix, pattern | Marks the new row as the replacement for `<id>`; the old row records the new id in `superseded_by_id` (a replaced decision becomes `superseded`). Unknown or already-replaced ids are refused and nothing is written. |
 | `--repo=<mount\|rep_id>` | memory, rule, decision, hotfix, pattern, task | Scope to a repo within the project (master-scope when omitted). |
 | `--mission`, `--tasklist`, `--plan` | task | Parent groupings. `--tasklist` is REQUIRED. |
 | `--assigned-to=<act_id>` | task | Assignee. |
@@ -507,7 +507,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "what decisions about X?" | `lore decision list --json \| jq '.data[] \| select(.title \| test("X";"i"))'` |
 | "why did you do X?" | `lore why-context --last-render --rendered` |
 | "show me mem_<id>", "show me tsk_<id>", "show me dec_<id>" | `lore <kind> show <id>` |
-| "show all rules INCLUDING archived" | `lore rule list --json` (archived rules are included; check `archived_at`) |
+| "show all rules INCLUDING archived" | `lore rule list --archived --json` (plain `rule list` hides archived rules; `--archived` shows them marked `[archived]`) |
 | "rules under project X (cross-project peek)" | `lore rule list --project=X --json` (one-shot override, doesn't change cwd project) |
 
 ### Render + introspect
@@ -571,8 +571,8 @@ The agent's **directive step 5** (rendered into `.lore/LORE.md`, reached via the
 |---|---|
 | "who am I / whoami / what identity" | `lore identity show` |
 | "anonymize captures / hide my name" | `lore identity anonymize` (toggles anon mode; file stays) |
-| "set my identity to X" | `lore identity set "X"` |
-| "unset identity / go back to auto-detected" | `lore identity unset` (REMOVES ~/.lore/identity.toml entirely; distinct from `anonymize`) |
+| "set my identity to X" | `lore identity set "X <x@example.com>"` (an email is required: `alice@x`, `"Name <email>"`, or a name with `--key human:<email>`) |
+| "unset identity / go back to auto-detected" | `lore identity unset` (REMOVES ~/.lore/identity.yaml entirely; distinct from `anonymize`) |
 | "is everything OK?" | `lore doctor` |
 | "what does doctor check?" | `lore doctor --help` (or `--json` to see structured output of checks) |
 | "back up the DB" | `lore backup` |

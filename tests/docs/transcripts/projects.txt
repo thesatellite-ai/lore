@@ -113,8 +113,7 @@ rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] Every screen works on a phone
 alice (work/infra)$ LORE_PROJECT_ID=$(grep project_id ../api/.lore/lore.yaml | cut -d' ' -f2) lore rule list
 rul_28f8d32584b2db54ffb146bede5b03df [must/always] Every change comes with a test.
 alice (work)$ LORE_DB=~/.lore/client2.db LORE_PROJECT_ID=$(grep project_id api/.lore/lore.yaml | cut -d' ' -f2) lore rule list
-ERROR: [E_AMBIGUOUS_PROJECT] DB has multiple projects; specify --project=<id|name>
-  hint: run `lore project list` to see available IDs
+rul_28f8d32584b2db54ffb146bede5b03df [must/always] Every change comes with a test.
 
 ### archive a project
 alice (work)$ mkdir -p scratch && cd scratch && lore project shared-init --db '${HOME}/.lore/client2.db' --name scratch
@@ -128,7 +127,7 @@ alice (work)$ lore project shared-list --db ~/.lore/client2.db
 api                            prj_76bd560aff0771fab8457dbfa9823f10  last_active=2026-11-02
 app                            prj_c0f3c11a5724b0cfd74b256190d9b5b8  last_active=2026-11-02
 infra                          prj_d4314eba822f1bf5908b2b8ded5f313a  last_active=2026-11-02
-scratch                        prj_4c590afb2a0cc7ae1b97b7e4e62d6c38  last_active=2026-11-02
+scratch                        prj_4c590afb2a0cc7ae1b97b7e4e62d6c38  last_active=2026-11-03
 alice (work/scratch)$ lore project unarchive prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 ✓ scratch unarchived
 alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38

@@ -435,6 +435,15 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	// the store mirror's lock until the command ends, and the roster read
 	// would wait on it.
 	preAssign := preResolveHandle(ctx, f.team.assign)
+	// A team handle is looked up on the roster too, for the same reason:
+	// in a linked client repo the routed project holds no teams, and the
+	// TEAM-030 refusal below must still see that @handle is a team.
+	var preTeam string
+	if preAssign == "" && strings.HasPrefix(strings.TrimSpace(f.team.assign), handlePrefix) {
+		if preTeam, err = resolveHandleTeam(ctx, f.team.assign); err != nil {
+			return err
+		}
+	}
 	route, err := routeWrite(ctx, &f.commonFlags, f.to, kindTask, cleanTitle)
 	if err != nil {
 		return err
@@ -500,7 +509,12 @@ func runTaskAdd(ctx context.Context, f *taskAddFlags, title string) error {
 	}
 	assign := assignTarget{ActorID: preAssign}
 	if preAssign == "" {
-		if assign, err = resolveAssign(ctx, client, projectID, f.team.assign); err != nil {
+		assign, err = resolveAssign(ctx, client, projectID, f.team.assign)
+		switch {
+		case err != nil && preTeam != "" && errcodes.IsCode(err, errcodes.NotFound):
+			// Not in the routed project, but a team on the roster.
+			assign = assignTarget{TeamID: preTeam}
+		case err != nil:
 			return err
 		}
 	}

@@ -42,5 +42,4 @@ A page marks a block with `<!-- example: <section>#<heading> -->` and `<!-- /exa
 
 `on_known BUG-…` marks an example that fails today because of a reported lore bug. The run prints it and does not fail; once the bug is fixed the run says `KNOWN FAILURE NOW PASSES` and the mark should be removed.
 
-- `BUG-K1` (knowledge): `lore playbook add` and `lore prompt add` stop with `E_INTERNAL` (missing required field `description`).
-- `BUG-K2` (knowledge): `lore snapshot add` stops with `E_INTERNAL` (missing required field `source_kind`).
+There are no known failures today.

@@ -253,7 +253,7 @@ func doctorSync(ctx context.Context, rctx *projresolve.Context, db *sql.DB, r *d
 	seen := map[string]bool{}
 	var fileErrs []lsync.FileError
 	for _, e := range st.Errors {
-		if e.Kind == lsync.ErrKindSecret {
+		if e.Kind == lsync.ErrKindSecret && refusedRowStillExists(ctx, db, e.Path) {
 			fileErrs = append(fileErrs, e)
 		}
 	}
@@ -437,3 +437,32 @@ func findPathConflicts(name string) []string {
 	}
 	return unique
 }
+
+// refusedRowStillExists reports whether the row behind a recorded
+// secret-refusal ("<table>/<id>.json") is still in the database. A row that
+// was deleted since its export was refused can never be exported, so its
+// recorded refusal is stale and doctor must not keep warning about it
+// (BUG-OPS1). Anything doctor cannot decide (unknown table, malformed path,
+// a failing query) counts as still there: a stale warning is better than a
+// hidden secret.
+func refusedRowStillExists(ctx context.Context, db *sql.DB, rel string) bool {
+	table, file, ok := strings.Cut(rel, "/")
+	id, isJSON := strings.CutSuffix(file, dataRowFileExt)
+	if !ok || !isJSON || id == "" || strings.Contains(id, "/") {
+		return true
+	}
+	reg, _ := lsync.NewRegistry()
+	if _, synced := reg.Table(table); !synced {
+		return true
+	}
+	// table is a registry name (a fixed schema identifier), never user text.
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM "`+table+`" WHERE id = ?`, id).Scan(&n); err != nil {
+		return true
+	}
+	return n > 0
+}
+
+// dataRowFileExt is the extension of one row's file in .lore/data
+// ("<table>/<id>.json").
+const dataRowFileExt = ".json"

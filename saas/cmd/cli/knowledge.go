@@ -58,10 +58,10 @@ func newRuleCommand() *cobra.Command {
 func newRuleListCommand() *cobra.Command {
 	var f commonFlags
 	var scope repoScopeFlags
-	var jsonOut bool
+	var jsonOut, includeArchived bool
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List rules",
+		Short: "List rules (archived ones only with --archived)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
@@ -77,6 +77,11 @@ func newRuleListCommand() *cobra.Command {
 				return err
 			}
 			q := client.Rule.Query().Where(entRule.ProjectID(projectID))
+			// Archived rules no longer bind anyone (render skips them too),
+			// so the default list hides them like memory list does.
+			if !includeArchived {
+				q = q.Where(entRule.ArchivedAtIsNil())
+			}
 			switch resolveRepoScope(scope, repoID) {
 			case scopeAll:
 			case scopeMasterOnly:
@@ -108,7 +113,11 @@ func newRuleListCommand() *cobra.Command {
 				if len(body) > 60 {
 					body = body[:57] + "..."
 				}
-				fmt.Printf("%s [%s/%s] %s\n", r.ID, r.Severity, r.Activation, body)
+				badge := ""
+				if r.ArchivedAt != nil {
+					badge = style.Muted(" [archived]")
+				}
+				fmt.Printf("%s [%s/%s] %s%s\n", r.ID, r.Severity, r.Activation, body, badge)
 			}
 			return nil
 		},
@@ -116,6 +125,7 @@ func newRuleListCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	bindRepoScopeFlags(cmd, &scope)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
+	cmd.Flags().BoolVar(&includeArchived, constants.FlagArchived, false, "include archived rules")
 	return cmd
 }
 
@@ -256,8 +266,8 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 	if f.sourceRef != "" {
 		create.SetSourceRef(f.sourceRef)
 	}
-	if f.supersedes != "" {
-		create.SetSupersededByID(f.supersedes)
+	if err := checkSupersedes(ctx, client, supersedeRule, projectID, f.supersedes); err != nil {
+		return err
 	}
 	createdBy, err := resolveActorIDFlag(ctx, client, f.createdBy)
 	if err != nil {
@@ -274,6 +284,11 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 	r, err := create.Save(ctx)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create rule").WithCause(err)
+	}
+	if err := finishSupersedes(ctx, client, supersedeRule, f.supersedes, r.ID, func(ctx context.Context) error {
+		return client.Rule.DeleteOneID(r.ID).Exec(ctx)
+	}); err != nil {
+		return err
 	}
 
 	fmt.Printf("%s %s %s\n", style.Success("✓"), style.Code(r.ID), route.Label)
@@ -509,8 +524,8 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	if f.sourceRef != "" {
 		create.SetSourceRef(f.sourceRef)
 	}
-	if f.supersedes != "" {
-		create.SetSupersededByID(f.supersedes)
+	if err := checkSupersedes(ctx, client, supersedeDecision, projectID, f.supersedes); err != nil {
+		return err
 	}
 	createdBy, err := resolveActorIDFlag(ctx, client, f.createdBy)
 	if err != nil {
@@ -527,6 +542,11 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	d, err := create.Save(ctx)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create decision").WithCause(err)
+	}
+	if err := finishSupersedes(ctx, client, supersedeDecision, f.supersedes, d.ID, func(ctx context.Context) error {
+		return client.Decision.DeleteOneID(d.ID).Exec(ctx)
+	}); err != nil {
+		return err
 	}
 	fmt.Printf("%s %s — %s %s\n", style.Success("✓"), style.Code(d.ID), title, route.Label)
 	printRoute(route)
@@ -729,8 +749,8 @@ func runHotfixAdd(ctx context.Context, f *hotfixAddFlags, raw string) error {
 	if repoID != "" {
 		create.SetRepoID(repoID)
 	}
-	if f.supersedes != "" {
-		create.SetSupersededByID(f.supersedes)
+	if err := checkSupersedes(ctx, client, supersedeHotfix, projectID, f.supersedes); err != nil {
+		return err
 	}
 	createdBy, err := resolveActorIDFlag(ctx, client, f.createdBy)
 	if err != nil {
@@ -747,6 +767,11 @@ func runHotfixAdd(ctx context.Context, f *hotfixAddFlags, raw string) error {
 	h, err := create.Save(ctx)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create hotfix").WithCause(err)
+	}
+	if err := finishSupersedes(ctx, client, supersedeHotfix, f.supersedes, h.ID, func(ctx context.Context) error {
+		return client.Hotfix.DeleteOneID(h.ID).Exec(ctx)
+	}); err != nil {
+		return err
 	}
 	fmt.Printf("%s %s — %s [%s]\n", style.Warn("⚠"), style.Code(h.ID), title, f.severity)
 	return nil

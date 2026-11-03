@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"dbent/gen/ent"
+	entTeam "dbent/gen/ent/team"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/identity"
@@ -550,6 +551,33 @@ func resolveHandleActor(ctx context.Context, handle string) (string, error) {
 		return "", err
 	}
 	return a.ID, nil
+}
+
+// resolveHandleTeam returns the id of the active team @handle on the org
+// roster (the store's org folder, where `lore team add` writes it), or ""
+// when no such team exists. It is the roster read a linked client repo
+// needs: its own lore.db holds no teams (team names are internal), so a
+// lookup there alone could never see the team and the TEAM-030 refusal
+// would be unreachable. A roster that cannot be read is an error, never
+// "no team".
+func resolveHandleTeam(ctx context.Context, handle string) (string, error) {
+	h := strings.TrimPrefix(strings.TrimSpace(handle), handlePrefix)
+	if h == "" {
+		return "", errcodes.New(errcodes.InvalidInput, "empty handle")
+	}
+	r, err := openRoster(ctx, &commonFlags{})
+	if err != nil {
+		return "", err
+	}
+	defer r.client.Close()
+	tm, err := r.client.Team.Query().Where(entTeam.ProjectID(r.project), entTeam.Handle(h), entTeam.Active(true)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", errcodes.New(errcodes.Internal, "read the roster's teams").WithCause(err)
+	}
+	return tm.ID, nil
 }
 
 // openTasksAssignedTo lists open task ids assigned to actor in this project.

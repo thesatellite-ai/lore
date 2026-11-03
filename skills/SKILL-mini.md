@@ -175,19 +175,19 @@ memory          free-form fact                memory add "<text>"
 rule            constraint + severity         rule add --severity=must|should|may "<text>"
 decision        ADR-style with rationale      decision add --title="<t>" --body="<why>"
 hotfix          loud recurring warning        hotfix add --severity=high "<text>"
-pattern         reusable code shape           pattern add --name="<n>" --body="<code>"
-playbook        reusable procedure            playbook add --name="<n>" --body="<steps>"
-prompt          model prompt template         prompt add --name="<n>" --body="<text>"
+pattern         reusable code shape           pattern add --title="<t>" --body="<code>"
+playbook        reusable procedure            playbook add --title="<t>" --body="<steps>"
+prompt          model prompt template         prompt add --title="<t>" --body="<text>"
 architecturenote                              architecturenote add --title="<t>" --body="<b>"
 incident        post-mortem                   incident add --title="<t>" --body="<b>"
 mission         initiative with tasks         mission add "<title>" --target=YYYY-MM-DD
 task            work item                     task add "<title>" --priority=low|medium|high|urgent
 tasklist|plan   task grouping                 tasklist add | plan add
-behaviour       configurable agent behaviour  behaviour add --name="<n>" --body="<spec>"
-cookbookrecipe  longer multi-step recipe      cookbookrecipe add --name="<n>" --body="<steps>"
+behaviour       configurable agent behaviour  behaviour add --title="<t>" --body="<spec>"
+cookbookrecipe  longer multi-step recipe      cookbookrecipe add --title="<t>" --body="<steps>"
 tastepref       subjective preference         tastepref add "<text>"   (NOT memory — for "I prefer X" / "my taste is Y")
 suggestion      tentative idea, not committed suggestion add --title="<t>" --body="<b>"
-workspace       editor / IDE configuration    workspace add --name="<n>" --body="<spec>"
+workspace       editor / IDE configuration    workspace add --title="<t>" --body="<spec>"
 handoff         session-to-session note       handoff add --for @<handle> [--task <id>] "<context>"
 reminder        time-based, recurrence-aware  reminder add "<msg>" --due=YYYY-MM-DD [--recurrence=<dur>]
 tag             polymorphic label             tag attach --on-table=<plural> --on-id=<id> --name=<n>
@@ -232,19 +232,19 @@ T[we should X]                           → rule add --severity=should "<X>"
 T[we never X | don't X]                  → rule add --severity=must "Do not <X>"
 T[we decided X because Y]                → decision add --title="<X>" --body="<Y>"
 T[we keep hitting X | watch out for X]   → hotfix add --severity=high "<X>"
-T[this pattern: <code>]                  → pattern add --name=<n> --body="<code>"
-T[the procedure for X is …]              → playbook add --name=<n> --body="<steps>"
+T[this pattern: <code>]                  → pattern add --title=<t> --body="<code>"
+T[the procedure for X is …]              → playbook add --title=<t> --body="<steps>"
 T[capture our X workflow | deploy workflow | CI workflow | release workflow | named multi-step process]
-                                          → workflow add --name=<n> --body="<steps>"
+                                          → workflow add --title=<t> --body="<steps>"
                                           # workflow vs playbook: if user says "workflow" → workflow add. If they say "procedure" or "playbook" → playbook add.
-T[use this prompt: …]                    → prompt add --name=<n> --body="<text>"
+T[use this prompt: …]                    → prompt add --title=<t> --body="<text>"
 T[the architecture is … | architecture decision: … | note our architecture | system architecture: …]
                                          → architecturenote add --title=<t> --body=<b>
                                          # "architecture" word → architecturenote, even if "decision" also appears.
                                          # Pure decision (no architecture word): "we decided X because Y" → decision add (see CRITICAL DISCRIMINATION RULES).
 T[my taste preference is X | I prefer X | I strongly prefer X]
                                          → tastepref add "<X>"   (NOT memory_add — preferences have a dedicated entity)
-T[here's a longer recipe: …]             → cookbookrecipe add --name=<n> --body="<steps>"
+T[here's a longer recipe: …]             → cookbookrecipe add --title=<t> --body="<steps>"
 T[suggestion: … | quick suggestion | tentative idea: … | not a commitment but … | worth thinking about: … | we could probably X]
                                          → suggestion add --title=<t> --body=<b>
                                          # suggestion vs memory: if the user signals "tentative" / "not a commitment" / "worth thinking about" / "we could probably" — use `suggestion add`, NOT `memory add`. Memory is for known facts; suggestion is for proposed-not-committed ideas.
@@ -305,8 +305,8 @@ T[remove my persisted identity | go back to auto-detected | unset identity | res
                                           → lore identity unset
                                           # identity unset vs anonymize:
                                           #   anonymize → toggles anon mode (anon:<random> per session); identity FILE stays
-                                          #   unset     → REMOVES ~/.lore/identity.toml entirely → fall back to auto-resolve
-T[set my identity to X | record me as X]  → lore identity set --actor="<X>"
+                                          #   unset     → REMOVES ~/.lore/identity.yaml entirely → fall back to auto-resolve
+T[set my identity to X | record me as X]  → lore identity set "<X> <email>"
 T[set up a benchmark eval for X | author a bench task for rule rul_<id>]
                                           → lore bench eval add --category=<rule-trigger|hotfix-avoid|...> --link=<kind>:<id> --prompt-file=- --grader-kind=programmatic --grader-cmd='...'
                                           # --link kinds (SINGULAR): rule | hotfix | decision | memory

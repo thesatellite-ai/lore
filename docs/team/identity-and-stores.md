@@ -235,7 +235,7 @@ $ lore cache prune --older-than 30d
 
 ## Pitfalls
 
-- **Use an email as the identity key, not a name.** `lore identity set "Alice Doe"` is accepted and gives the key `human:Alice Doe`. The same person on another machine with another spelling becomes a second person.
+- **The identity key is an email, never a name.** `lore identity set "Alice Doe"` is refused (`E_INVALID_INPUT`), because the same person on another machine with another spelling would become a second person. To keep a display name, pass the email too: `lore identity set "Alice Doe <alice@example.com>"` or `lore identity set "Alice Doe" --key human:alice@example.com`.
 - **`lore identity show` does not show anonymous mode.** After `anonymize on` it still prints your normal identity; the `anon:…` name is used only for the writes that follow.
 - **`lore org import` asks before risky defaults.** A suggested entry that sends rows into client repos, or a pattern that matches a whole host, needs your yes. `--yes` accepts it without a prompt, so read the printed entry first.
 - **`lore org set` is refused in client repos.** Use `lore org use <org>` there: it is a choice for your machine only and is never committed.

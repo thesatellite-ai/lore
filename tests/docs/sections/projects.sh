@@ -56,7 +56,7 @@ note "pick the database"
 on alice work "lore rule list --db ~/.lore/client2.db --project api"
 on alice work "LORE_DB=~/.lore/client2.db lore rule list --project app"
 on alice work/infra "LORE_PROJECT_ID=\$(grep project_id ../api/.lore/lore.yaml | cut -d' ' -f2) lore rule list"
-on_known BUG-S1 alice work "LORE_DB=~/.lore/client2.db LORE_PROJECT_ID=\$(grep project_id api/.lore/lore.yaml | cut -d' ' -f2) lore rule list"
+on alice work "LORE_DB=~/.lore/client2.db LORE_PROJECT_ID=\$(grep project_id api/.lore/lore.yaml | cut -d' ' -f2) lore rule list"
 
 note "archive a project"
 on alice work "mkdir -p scratch && cd scratch && lore project shared-init --db '\${HOME}/.lore/client2.db' --name scratch"
