@@ -102,7 +102,9 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 		return err
 	}
 	var c commonFlags
-	route, err := routeWrite(ctx, &c, f.to, singularKind(src.table), rowText(src.doc))
+	// The copy is meant to carry this row's text: routeWrite's write-time
+	// leak check allows exactly this row (leak_write.go).
+	route, err := routeWrite(withSharedSource(ctx, id), &c, f.to, singularKind(src.table), rowText(src.doc))
 	if err != nil {
 		return err
 	}
@@ -142,7 +144,7 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 		return err
 	}
 	if route.Repo {
-		if err := leakCheckDocs(ctx, "share", map[string][]byte{filepath.ToSlash(filepath.Join(".lore/data", src.table, newID+".json")): body}); err != nil {
+		if err := leakCheckShare(ctx, id, filepath.ToSlash(filepath.Join(".lore/data", src.table, newID+".json")), body); err != nil {
 			return err
 		}
 	}

@@ -80,7 +80,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Start an agent session | `lore agent start --label <name> --owner @<you>` and export what it prints |
 | Create a mission and its tasks from a file (re-run adds nothing) | `lore plan apply <file>` |
 | Take the next ready task as an agent | `lore task next --mission <id> [--repo <name>]` (exit 10: nothing ready) |
-| Keep an agent's claim alive | `lore task heartbeat --daemon <id>` |
+| Keep an agent's claim alive | `lore task heartbeat --daemon <id>`, started from a process that lives as long as the agent (it stops when the process that started it exits), or `lore task heartbeat` from the agent tool's hook |
 | Record progress and push the work branch | `lore task note <id> "<text>"` |
 | Finish with the code that did it | `lore task done <id> --commit <sha>` (or `--pr <n>`) |
 | Mark a done task merged when lore cannot see it | `lore task merged <id>` |
@@ -168,6 +168,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 |---|---|
 | Is everything OK? | `lore doctor` (exit 0 healthy, 1 degraded, 2 broken) |
 | JSON health snapshot | `lore doctor --json` |
+| Repair what doctor can fix safely (`--supersedes` links written by older versions) | `lore doctor --fix` (safe to re-run) |
 | Create a backup | `lore backup [--out=<path>]` |
 | Restore from a backup | `lore restore <path> --confirm` |
 | Auto-repair (WAL → backup → bootstrap) | `lore repair --tier=2 --confirm` |

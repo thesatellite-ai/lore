@@ -42,8 +42,6 @@ Usage:
 Examples:
   lore config check
   HOME=/tmp/test-home lore config check
-
-Flags:
 ```
 <!-- /help -->
 
@@ -209,8 +207,6 @@ Usage:
 
 Examples:
   lore actor deactivate @carol
-
-Flags:
 ```
 <!-- /help -->
 
@@ -226,8 +222,6 @@ Usage:
 Available Commands:
   add         Create or update a team; @handle then resolves to the team
   list        List the roster's teams
-
-Flags:
 ```
 <!-- /help -->
 
@@ -299,8 +293,6 @@ Usage:
 
 Examples:
   lore store forget git@github.com:agency/notes
-
-Flags:
 ```
 <!-- /help -->
 
@@ -332,8 +324,6 @@ List this project's live rows, or print one live file
 ```text
 Usage:
   lore live show [id]
-
-Flags:
 ```
 <!-- /help -->
 
@@ -345,8 +335,6 @@ Local, tracking and remote live ref, and the writes not pushed yet
 ```text
 Usage:
   lore live diff
-
-Flags:
 ```
 <!-- /help -->
 
@@ -386,19 +374,21 @@ When the remote live ref was deleted or replaced (a mirror push, a mistaken dele
 ```text
 Usage:
   lore live restore
-
-Flags:
 ```
 <!-- /help -->
 
 Someone deleted `refs/lore/live` on the server. From then on every live write fails with `E_READ_ONLY` and `lore doctor` says why; `lore live restore` pushes the local copy back:
 
-<!-- example: live-repair#live-ref-deleted only=3,5 -->
+<!-- example: live-repair#live-ref-deleted only=3,4,5 -->
 ```console
 # alice, in billing
 $ git push -q origin :refs/lore/live && git ls-remote origin
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main
+$ lore task add 'close the books for Q1'
+ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it: live: the remote live ref was deleted or rewritten (local copy kept as refs/lore-backup/live/20261102T100020)
+  hint: your local copy is kept under refs/lore-backup/live/; run `lore live restore` to put it back
+(exit 1)
 $ lore doctor | grep 'remote live ref'
   - live: the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`
 ```
@@ -429,8 +419,6 @@ purge removes the rows from the live ref and lists their ids in _live/purged.jso
 ```text
 Usage:
   lore live purge <id>...
-
-Flags:
 ```
 <!-- /help -->
 
@@ -459,13 +447,11 @@ Flags:
 ### `lore explain`
 
 <!-- help: explain -->
-Show every copy of a row (live, this branch, main), which one wins and why, and its land decision
+Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision
 
 ```text
 Usage:
   lore explain <id>
-
-Flags:
 ```
 <!-- /help -->
 
@@ -847,13 +833,22 @@ Flags:
 ### `lore plan apply`
 
 <!-- help: plan apply -->
-Apply reads a plan:
+Apply creates a mission and all of its tasks from one YAML plan file, in one command: titles, dependencies (after), time boxes, roles, gates and the people who may approve them. Every row keeps its plan key, so running the same plan again finds the rows and adds nothing.
 
 ```text
 Usage:
   lore plan apply <file>
 
-Flags:
+Examples:
+  # invite.yaml
+  mission: {key: invite, title: "Invite landing page", to: agency/client2}
+  approvers: ["@alice"]
+  tasks:
+    - {key: backend,  title: "invite mutation + email", repo: api, timebox: 60m}
+    - {key: frontend, title: "invite landing route", repo: app, after: [backend]}
+    - {key: deploy,   title: "deploy to staging", role: coordinator, after: [frontend], gate: required}
+
+  lore plan apply invite.yaml
 ```
 <!-- /help -->
 
@@ -1034,8 +1029,6 @@ Release a resource you hold
 ```text
 Usage:
   lore resource release <name>
-
-Flags:
 ```
 <!-- /help -->
 

@@ -218,7 +218,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [architecturenote](#lor
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore explain` | Show every copy of a row (live, this branch, main), which one wins and why, and its land decision | [team/commands › lore explain](../../docs/team/commands.md#lore-explain) |
+| `lore explain` | Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision | [team/commands › lore explain](../../docs/team/commands.md#lore-explain) |
 
 ### lore external-source
 

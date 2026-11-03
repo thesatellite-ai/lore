@@ -86,6 +86,11 @@ func routeWrite(ctx context.Context, c *commonFlags, f toFlags, kind, text strin
 	route.Rule = dec.Rule
 	if dec.Repo {
 		route.Repo = true
+		// F16 at write time (trial F8, F9): a row routed to this repo is
+		// leak-checked before anything is written (leak_write.go).
+		if err := leakCheckRouteWrite(ctx, route, kind, text); err != nil {
+			return writeRoute{}, err
+		}
 		return route, nil
 	}
 	org := s.Result.Org

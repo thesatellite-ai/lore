@@ -66,6 +66,7 @@ func doctorLive(ctx context.Context, projectRoot string, r *doctorReport) {
 		warn("read live ref: " + err.Error())
 		return
 	}
+	branch := s.defaultBranch(ctx)
 	only, old, waiting, conflicts := 0, 0, 0, 0
 	now := s.clk.Now()
 	for _, p := range plan {
@@ -88,17 +89,17 @@ func doctorLive(ctx context.Context, projectRoot string, r *doctorReport) {
 		}
 	}
 	if only > 0 {
-		note(fmt.Sprintf("%d row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)", only))
+		note(liveOnlyNote(only, branch))
 	}
 	if waiting > 0 {
 		why := "the next live write or `lore sync` lands them"
 		if readLiveNoteText(s.stateDir, liveNoteProtected) != "" {
-			why = "main is protected: they ride on your next push"
+			why = liveProtectedWhy(branch)
 		}
 		note(fmt.Sprintf("%d row(s) waiting to land; %s", waiting, why))
 	}
 	if old > 0 {
-		warn(fmt.Sprintf("%d live row(s) older than live.max_age not copied to main yet (run `lore sync`)", old))
+		warn(liveOldWarn(old, branch))
 	}
 	if conflicts > 0 {
 		warn(fmt.Sprintf("%d live row(s) carry conflict markers and cannot land (`lore sync conflicts`)", conflicts))
@@ -111,6 +112,40 @@ func doctorLive(ctx context.Context, projectRoot string, r *doctorReport) {
 	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--is-shallow-repository"}}); err == nil && strings.TrimSpace(string(out)) == "true" {
 		warn("shallow clone: landing and merged checks need the default branch's history")
 	}
+}
+
+// The doctor and explain lines below name the repo's real default branch
+// (liveSession.defaultBranch: default_branch: in config, else origin/HEAD,
+// else main), never a hardcoded "main", the same way printLandOutcome does.
+
+// liveOnlyNote is the doctor note for rows that exist only in live.
+func liveOnlyNote(n int, branch string) string {
+	return fmt.Sprintf("%d row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach %s at live.max_age)", n, branch)
+}
+
+// liveProtectedWhy says why rows wait when the default branch is protected.
+func liveProtectedWhy(branch string) string {
+	return branch + " is protected: they ride on your next push"
+}
+
+// liveOldWarn is the doctor warning for live rows past live.max_age.
+func liveOldWarn(n int, branch string) string {
+	return fmt.Sprintf("%d live row(s) older than live.max_age not copied to %s yet (run `lore sync`)", n, branch)
+}
+
+// liveHooksMissingWarn is the doctor warning for missing hook blocks.
+func liveHooksMissingWarn(missing []string, branch string) string {
+	return "git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + "); run `lore sync install-git`"
+}
+
+// explainLeaveLine is explain's land line for a finished row.
+func explainLeaveLine(branch string) string {
+	return "leaves live on the next sync (finished, " + branch + " holds it)"
+}
+
+// explainWaitsLine is explain's land line while the default branch is protected.
+func explainWaitsLine(branch string) string {
+	return "waits: " + branch + " is protected; rides on your next push"
 }
 
 // doctorLiveHooks checks the post-commit and pre-push blocks (F6).
@@ -128,7 +163,7 @@ func doctorLiveHooks(ctx context.Context, s *liveSession, warn, note func(string
 		}
 	}
 	if len(missing) > 0 {
-		warn("git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected main); run `lore sync install-git`")
+		warn(liveHooksMissingWarn(missing, s.defaultBranch(ctx)))
 		return
 	}
 	note("post-commit and pre-push hook blocks installed")
@@ -139,7 +174,7 @@ func doctorLiveHooks(ctx context.Context, s *liveSession, warn, note func(string
 func newExplainCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "explain <id>",
-		Short: "Show every copy of a row (live, this branch, main), which one wins and why, and its land decision",
+		Short: "Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, folder, err := liveHere(cmd)
@@ -230,7 +265,7 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 	case table != "":
 		fmt.Println("  wins: this branch's copy (not live)")
 	default:
-		fmt.Println("  not found in live or on this branch; it may have landed on main: `lore sync peek origin/main`")
+		fmt.Println("  not found in live or on this branch; " + livePeekHint(s.ref.RemoteName, s.defaultBranch(ctx), ""))
 	}
 	if lf != nil {
 		plan, err := s.plan(ctx, folder, nil)
@@ -241,9 +276,9 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 				}
 				what := string(p.Decision.Action) + ": " + p.Decision.Reason
 				if p.Leave {
-					what = "leaves live on the next sync (finished, main holds it)"
+					what = explainLeaveLine(s.defaultBranch(ctx))
 				} else if p.Decision.Action != live.LandStay && readLiveNoteText(s.stateDir, liveNoteProtected) != "" {
-					what = "waits: main is protected; rides on your next push"
+					what = explainWaitsLine(s.defaultBranch(ctx))
 				}
 				fmt.Println("  land: " + what)
 			}

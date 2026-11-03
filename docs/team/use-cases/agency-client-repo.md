@@ -88,6 +88,16 @@ personal   local: agency/, everywhere/
 
 `whoami` now says the org was matched by the link, and names the internal project.
 
+Without a terminal (a script, an agent's tool call) or with a CI variable set, `whoami` hides the store URL, the internal folder and the org folder, so those internal names never end up in a log the client can read. It decides by where the output goes, not by the repo. The same lines then read:
+
+```text
+org        agency  (matched by: link in <redacted>, project id + remote)
+stores     <redacted> on branch main  (org folder <redacted>)
+internal   <redacted> <redacted>/
+```
+
+On your own terminal it prints them. `lore whoami --share` prints them on purpose, but only on a terminal. See [Troubleshooting](../troubleshooting.md#whoami-prints-redacted).
+
 Notes go to the internal project by default. A project rule goes into the repo with `--to repo`:
 
 <!-- example: agency#internal-by-default only=1,2,3 lines=6 -->
@@ -121,7 +131,7 @@ $ git switch -q -c feat/checkout && lore task add 'send invoice reminder before 
 
 # bob, in website
 $ lore sync >/dev/null; git switch -q -c feat/login && lore task list
-tsk_c0f3…b5b8  send invoice reminder before demo  todo  [agency/client]
+○ tsk_c0f3…b5b8 send invoice reminder before demo [medium]  [agency/client]
 $ lore inbox
 -  assigned              tsk_c0f3…b5b8  send invoice reminder before demo
 $ lore task done tsk_c0f3…b5b8
@@ -163,12 +173,18 @@ $ mkdir -p src && echo '// they approve estimates faster when we send them on Wh
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
   src/notes.ts:1                           matches internal note mem_54fe…28f2 (10 words)
-Move it:  lore move mem_54fe…28f2 --to <org>
-Share it on purpose: lore share mem_54fe…28f2 --to repo
+Remove the internal text from src/notes.ts
+To give the client an internal note on purpose: lore share <id> --to repo (a new copy; it shows the text and asks)
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 1)
 ```
 <!-- /example -->
+
+Lore checks twice. At commit, the `pre-commit` hook checks the staged files and the `commit-msg` hook checks the message. At push, the `pre-push` hook checks every file version and commit message the push would send that the client's remote does not have yet. The push check refuses internal ids, internal sentences and secrets by the same rules, and it fails closed: if the store cannot be read, the push is refused. To get past it, rewrite the commits that carry the text (`git commit --amend`, or `git rebase`) and push again.
+
+A row written to the client repo (`--to repo`, or a kind whose default is the repo) is checked before it is written: if it quotes an internal note, lore refuses with `E_LEAK_BLOCKED`, says "Nothing written" and writes nothing.
+
+`git commit --no-verify` and `git push --no-verify` skip every local check. So the client's CI should run `lore check leaks --ci` as the backstop. It needs no store, so it catches internal rows by their ids and structure, not pasted sentences.
 
 Agents check a pull request body or comment before posting it. The same text is refused there. An unrelated text passes:
 
@@ -179,8 +195,8 @@ $ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on 
 $ lore check pr-body pr.md
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this text would share internal content with the client repo:
   PR body                                  matches internal note mem_54fe…28f2 (11 words)
-Move it:  lore move mem_54fe…28f2 --to <org>
-Share it on purpose: lore share mem_54fe…28f2 --to repo
+Remove the internal text before posting
+To give the client an internal note on purpose: lore share <id> --to repo (a new copy; it shows the text and asks)
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 19)
 $ printf 'Fixes checkout totals for INR.\n' | lore check pr-body -
@@ -247,6 +263,7 @@ no match in any ref
 ## Pitfalls
 
 - **The first command after a teammate registers** may not find `@bob` for up to 60 seconds (the fetch cache). `lore sync` refreshes at once.
+- **`--no-verify` skips every local check.** `git commit --no-verify` skips the commit check and `git push --no-verify` the push check. Only `lore check leaks --ci` in the client's CI is left, and it sees ids, not sentences.
 - **Short sentences slip through the text check.** The commit check matches runs of 8 or more words. "they approve faster on WhatsApp" (5 words) pasted into a file is not caught. A longer copy is. Paraphrase is never caught. The check stops copy-paste accidents. It is not a wall.
 - **No store, no guess.** If the store cannot be read and there is no cached link index, writes without `--to` fail with `E_LINK_UNKNOWN`. See [Troubleshooting](../troubleshooting.md#e_link_unknown).
 - **Rules in a client repo** default to the repo in this config, so a person at a terminal can add them. An agent (or a script without a terminal) must pass `--to repo` or `--to agency` explicitly.

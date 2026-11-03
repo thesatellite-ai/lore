@@ -92,6 +92,12 @@ $ lore doctor --json | head -8
 ```
 <!-- /example -->
 
+## Step 4 — Repair what doctor can fix
+
+`--fix` — repair what doctor can fix safely: `--supersedes` links written by older versions. Safe to re-run.
+
+Doctor lists those links in its report, then `lore doctor --fix` turns each one around so the old row records the row that replaced it. A second `--fix` finds nothing left to change.
+
 ## Try it: what DEGRADED and BROKEN look like
 
 When the database file is damaged, doctor says BROKEN, exits 2 and names the fix:

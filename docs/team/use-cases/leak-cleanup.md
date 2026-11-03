@@ -79,5 +79,6 @@ Carol no longer sees it. A fresh mirror of everything the remote serves (every b
 ## Pitfalls
 
 - **Prevent it next time:** in a client repo, leave `--to` out for internal kinds. They go to the store (the agency's private notes repo) by default. Use `--to repo` only when the client should read the row.
+- **Text pasted into a file is checked twice:** at commit (the `pre-commit` and `commit-msg` hooks) and at push (the `pre-push` hook, which checks every commit the push would send and refuses when the store cannot be read). `git commit --no-verify` and `git push --no-verify` skip every local check. Run `lore check leaks --ci` in the client's CI as the backstop; it catches internal row ids, not pasted sentences.
 - **`lore live restore`** puts live rows back after someone deleted or rewrote the remote live ref. It never re-pushes a purged id or a row already on `origin/main`.
 - **End of an engagement:** the client may ask for its data to be removed from the agency's store. Then that store's folder must be purged, or its history rewritten. With one store per client, you just delete one repo.

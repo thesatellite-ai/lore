@@ -129,9 +129,11 @@ type LinkChange struct {
 
 // LinkResult reports a link write.
 type LinkResult struct {
-	// CreatedFolder is true when the folder project was created.
+	// CreatedFolder is true when this run created the folder project.
 	CreatedFolder bool
-	// Changed is false when the link was already there (or already gone).
+	// Changed is false when the link was already there (or already gone)
+	// before this run. A change this run committed stays true even when a
+	// lost push race made a later attempt find it already in place.
 	Changed bool
 	Write   WriteResult
 }
@@ -156,8 +158,13 @@ func (s *Store) WriteLink(ctx context.Context, ch LinkChange) (LinkResult, error
 	}
 	wr, err := s.Write(ctx, WriteRequest{
 		Branch: ch.Branch, Message: msg, Signature: ch.Signature, NoPush: ch.NoPush,
+		// Apply runs once per push attempt. Its decisions are per attempt
+		// (created, changed), but the result is sticky across attempts: when
+		// a push loses a race, the next attempt builds on a merge that
+		// already holds THIS run's commit, so it finds "nothing to do" —
+		// and yet this run is what wrote the link (trial F1).
 		Apply: func(ctx context.Context, base Snapshot) (gitref.Changes, error) {
-			res.CreatedFolder, res.Changed = false, false
+			created, changed := false, false
 			if err := s.checkSnapshot(ctx, base, ch.Branch); err != nil {
 				return gitref.Changes{}, err
 			}
@@ -202,14 +209,16 @@ func (s *Store) WriteLink(ctx context.Context, ch LinkChange) (LinkResult, error
 				if meta, err = ParseStoreMeta(nb); err != nil {
 					return gitref.Changes{}, err
 				}
-				res.CreatedFolder = true
+				created = true
 			}
 			if ch.Remove {
-				res.Changed = meta.RemoveLink(ch.Link.ProjectID, ch.Link.Remote)
+				changed = meta.RemoveLink(ch.Link.ProjectID, ch.Link.Remote)
 			} else {
-				res.Changed = meta.AddLink(ch.Link)
+				changed = meta.AddLink(ch.Link)
 			}
-			if !res.Changed && !res.CreatedFolder {
+			res.CreatedFolder = res.CreatedFolder || created
+			res.Changed = res.Changed || changed
+			if !changed && !created {
 				return gitref.Changes{}, nil
 			}
 			b, err := meta.Encode()

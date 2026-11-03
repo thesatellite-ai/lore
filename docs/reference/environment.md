@@ -58,7 +58,8 @@ $ printf 'db_path: ../client.db\nproject_id: %s\n' $(grep project_id .lore/lore.
 db_path: ../client.db
 project_id: prj_d431…313a
 $ lore rule list
-ERROR: [E_INTERNAL] resolve project: projresolve: path contains traversal sequence or refers outside allowed roots: "../client.db"
+ERROR: [E_BAD_PATH] db_path "../client.db" has a `..` part: projresolve: path contains traversal sequence or refers outside allowed roots
+  hint: write db_path in .lore/lore.yaml without a `..` part, or set LORE_ALLOW_DB_PATH_OUTSIDE=1 for one command if the path really is meant to leave the project
 (exit 1)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list
 rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays
@@ -90,7 +91,7 @@ A repo inside a folder a sync app owns (here `Dropbox`) is refused with `E_NETWO
 ```console
 # alice, in Dropbox/website
 $ lore rule list
-ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website/.lore/lore.db is inside a "dropbox" folder
+ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website is inside a "dropbox" folder
   hint: SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set LORE_ALLOW_NETWORK_FS=1
 (exit 1)
 $ LORE_ALLOW_NETWORK_FS=1 lore rule list

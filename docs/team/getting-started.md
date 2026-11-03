@@ -207,7 +207,7 @@ lore: [agency/org] 3 file(s) pushed
 ```
 <!-- /example -->
 
-`lore whoami` now names the org, the rule that chose it (`own pattern`), your identity there and the store. `lore actor register` put you on the org's roster. Now teammates can write `--assign @alice`.
+`lore whoami` now names the org, the rule that chose it (`own pattern`), your identity there and the store. Run without a terminal (a script, an agent's tool call) or with a CI variable set, it prints `<redacted>` in place of store URLs and internal folders, so they never reach a log someone else reads; see [Troubleshooting](troubleshooting.md#whoami-prints-redacted). `lore actor register` put you on the org's roster. Now teammates can write `--assign @alice`.
 
 Repos outside the org keep your fallback identity, never a company one:
 

@@ -496,6 +496,10 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	if err != nil {
 		return err
 	}
+	// routeWrite checked the body; the title lands in the same repo row.
+	if err := leakCheckRouteWrite(ctx, route, "decision", title); err != nil {
+		return err
+	}
 
 	rctx, client, err := resolveContext(&f.commonFlags)
 	if err != nil {

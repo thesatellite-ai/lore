@@ -38,12 +38,12 @@ alice (work/app)$ lore task list
 lore sync: built .lore/lore.db from .lore/data (2 rows)
 lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
 lore sync: backup of lore.db before adopt: ~/work/app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-tsk_c0f3c11a5724b0cfd74b256190d9b5b8  send the invite email from the API  todo  [agency/client2]
-tsk_76bd560aff0771fab8457dbfa9823f10  build the invite page  todo  [agency/client2]
+○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 send the invite email from the API [medium]  [agency/client2]
+○ tsk_76bd560aff0771fab8457dbfa9823f10 build the invite page [medium]  [agency/client2]
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
 alice (work/app)$ lore task list --all-repos
-tsk_c0f3c11a5724b0cfd74b256190d9b5b8  send the invite email from the API  todo  [agency/client2]
-tsk_76bd560aff0771fab8457dbfa9823f10  build the invite page  todo  [agency/client2]
+○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 send the invite email from the API [medium]  [agency/client2]
+○ tsk_76bd560aff0771fab8457dbfa9823f10 build the invite page [medium]  [agency/client2]
 alice (work/infra)$ lore mission status msn_05e99e22e9e86e96fe4daa7777994603
 lore sync: built .lore/lore.db from .lore/data (2 rows)
 lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0

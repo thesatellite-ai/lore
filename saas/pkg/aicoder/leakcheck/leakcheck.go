@@ -63,6 +63,11 @@ type Item struct {
 	// .lore/data/<table>/<id>.json is a row file.
 	Path    string
 	Content []byte
+	// AllowRows names internal rows whose TEXT this item may carry because
+	// it is a deliberate copy of them (`lore share`, §6.4). Only the text
+	// rule honours it, and only for this item: every other internal row
+	// still blocks, and the id and reference rules are unchanged.
+	AllowRows []string
 }
 
 // Index is what the id and text rules compare against: every internal and
@@ -75,9 +80,15 @@ type Index struct {
 	ProjectIDs map[string]string
 	// actors are roster ids: a client row may reference them (projection).
 	actors map[string]bool
-	// shingles maps a normalised MinRunWords-word window to the row id
-	// whose text holds it.
-	shingles map[string]string
+	// shingles maps a normalised MinRunWords-word window to every row id
+	// whose text holds it, in index order. Every row is kept (not only the
+	// first) so that allowing one row's text for a shared copy never hides
+	// a second internal row that holds the same words.
+	shingles map[string][]string
+	// sharedFrom maps the id of a deliberately shared copy to the internal
+	// row it was copied from (IndexRow.SharedAs): that copy's row file may
+	// carry the source's text, nothing else may.
+	sharedFrom map[string]string
 }
 
 // IndexRow is one internal row for NewIndex.
@@ -87,12 +98,16 @@ type IndexRow struct {
 	Label  string
 	Texts  []string
 	Source string
+	// SharedAs lists the ids of copies `lore share` made of this row (the
+	// row's shared_as field, which only the internal side can read). The
+	// row file of such a copy is allowed to carry this row's text.
+	SharedAs []string
 }
 
 // NewIndex builds an Index. Actor rows feed only the actor exception, never
 // the text rule (names are not secrets on their own).
 func NewIndex(rows []IndexRow, projectIDs map[string]string) *Index {
-	idx := &Index{IDs: map[string]string{}, ProjectIDs: map[string]string{}, actors: map[string]bool{}, shingles: map[string]string{}}
+	idx := &Index{IDs: map[string]string{}, ProjectIDs: map[string]string{}, actors: map[string]bool{}, shingles: map[string][]string{}, sharedFrom: map[string]string{}}
 	for k, v := range projectIDs {
 		idx.ProjectIDs[k] = v
 	}
@@ -105,17 +120,30 @@ func NewIndex(rows []IndexRow, projectIDs map[string]string) *Index {
 			continue
 		}
 		idx.IDs[r.ID] = r.Label
+		for _, c := range r.SharedAs {
+			idx.sharedFrom[c] = r.ID
+		}
 		for _, t := range r.Texts {
 			words := Words(t)
 			for i := 0; i+MinRunWords <= len(words); i++ {
 				k := strings.Join(words[i:i+MinRunWords], " ")
-				if _, ok := idx.shingles[k]; !ok {
-					idx.shingles[k] = r.ID
+				if !containsID(idx.shingles[k], r.ID) {
+					idx.shingles[k] = append(idx.shingles[k], r.ID)
 				}
 			}
 		}
 	}
 	return idx
+}
+
+// containsID reports whether ids holds id (shingle owner lists are short).
+func containsID(ids []string, id string) bool {
+	for _, x := range ids {
+		if x == id {
+			return true
+		}
+	}
+	return false
 }
 
 // Tables with special handling.
@@ -145,6 +173,9 @@ type Finding struct {
 	Label string
 	// Words is the length of the matched run (text rule).
 	Words int
+	// Path is the checked item's repo-relative path ("" for a commit
+	// message or PR body), so a caller can name the repo row that leaks.
+	Path string
 	// Detail explains it in one line.
 	Detail string
 	// Warn marks a finding that is reported but does not block (see
@@ -218,6 +249,7 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 		scanner = security.NewScanner()
 	}
 	for _, it := range items {
+		start := len(out)
 		content := string(it.Content)
 		if m := rowPathRe.FindStringSubmatch(it.Path); m != nil {
 			out = append(out, checkRowFile(it, m[1], m[2], idx, o)...)
@@ -225,7 +257,7 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 			out = append(out, idHits(it, content, idx)...)
 		}
 		if idx != nil {
-			out = append(out, textHits(it, content, idx)...)
+			out = append(out, textHits(it, content, idx, allowedRows(it, idx))...)
 		}
 		if scanner != nil {
 			for _, s := range scanner.Scan(content) {
@@ -233,8 +265,27 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 					Detail: "credential pattern " + s.PatternName + " (" + s.Preview + ")"})
 			}
 		}
+		for i := start; i < len(out); i++ {
+			out[i].Path = it.Path
+		}
 	}
 	sortFindings(out)
+	return out
+}
+
+// allowedRows is the set of internal rows whose text item may carry: the
+// caller's AllowRows plus, for the row file of a deliberately shared copy,
+// the row it was copied from (Index.sharedFrom).
+func allowedRows(it Item, idx *Index) map[string]bool {
+	out := map[string]bool{}
+	for _, id := range it.AllowRows {
+		out[id] = true
+	}
+	if m := rowPathRe.FindStringSubmatch(it.Path); m != nil {
+		if src, ok := idx.sharedFrom[m[2]]; ok {
+			out[src] = true
+		}
+	}
 	return out
 }
 
@@ -363,7 +414,8 @@ func idHits(it Item, content string, idx *Index) []Finding {
 
 // textHits finds runs of ≥ MinRunWords words shared with an internal row:
 // one finding per (item, internal row), with the longest run's length.
-func textHits(it Item, content string, idx *Index) []Finding {
+// Rows in allowed are skipped (a deliberate shared copy of them).
+func textHits(it Item, content string, idx *Index, allowed map[string]bool) []Finding {
 	if len(idx.shingles) == 0 {
 		return nil
 	}
@@ -384,21 +436,23 @@ func textHits(it Item, content string, idx *Index) []Finding {
 		for j := 0; j < MinRunWords; j++ {
 			parts[j] = words[i+j].w
 		}
-		row, ok := idx.shingles[strings.Join(parts, " ")]
-		if !ok {
-			continue
-		}
-		n := MinRunWords
-		for i+n < len(words) {
-			parts = append(parts[1:], words[i+n].w)
-			if idx.shingles[strings.Join(parts, " ")] != row {
-				break
+		for _, row := range idx.shingles[strings.Join(parts, " ")] {
+			if allowed[row] {
+				continue
 			}
-			n++
-		}
-		if f, ok := best[row]; !ok || n > f.Words {
-			best[row] = Finding{Rule: RuleText, Where: it.Where, Line: words[i].line, RowID: row, Label: idx.IDs[row], Words: n,
-				Detail: fmt.Sprintf("matches internal note %s (%d words)", row, n)}
+			n := MinRunWords
+			run := append([]string(nil), parts...)
+			for i+n < len(words) {
+				run = append(run[1:], words[i+n].w)
+				if !containsID(idx.shingles[strings.Join(run, " ")], row) {
+					break
+				}
+				n++
+			}
+			if f, ok := best[row]; !ok || n > f.Words {
+				best[row] = Finding{Rule: RuleText, Where: it.Where, Line: words[i].line, RowID: row, Label: idx.IDs[row], Words: n,
+					Detail: fmt.Sprintf("matches internal note %s (%d words)", row, n)}
+			}
 		}
 	}
 	out := make([]Finding, 0, len(best))

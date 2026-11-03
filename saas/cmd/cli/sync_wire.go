@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -30,6 +31,7 @@ import (
 
 	"dbent"
 	"saas/pkg/aicoder/audit"
+	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
@@ -362,6 +364,12 @@ func materializeFromData(ctx context.Context, root string) (err error) {
 
 // maybeMaterialize runs materializeFromData for the cwd project when the
 // command did not point at an explicit DB.
+//
+// The network-FS refusal (E_NETWORK_FS) runs BEFORE anything is written: a
+// fresh clone inside a cloud-synced folder must get the refusal with no
+// .lore/lore.db, .lore/state or backup created there, the same order
+// `lore init` keeps. The refusal is returned as is (a coded error); see
+// materializeError.
 func maybeMaterialize(ctx context.Context, c *commonFlags) error {
 	if c.flagDB != "" || os.Getenv(envDBPath) != "" {
 		return nil
@@ -370,7 +378,22 @@ func maybeMaterialize(ctx context.Context, c *commonFlags) error {
 	if err != nil || !needsMaterialize(cwd) {
 		return nil
 	}
+	if err := checkNetworkFS(cwd); err != nil {
+		return err
+	}
 	return materializeFromData(ctx, cwd)
+}
+
+// materializeError is how callers report a maybeMaterialize failure: an
+// error that already carries a code (the E_NETWORK_FS refusal) is returned
+// unchanged so the user sees that code and its hint; anything else is an
+// E_INTERNAL failure to build lore.db.
+func materializeError(err error) error {
+	var coded *errcodes.CLIError
+	if errors.As(err, &coded) {
+		return err
+	}
+	return errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(err)
 }
 
 // rerenderIfDue re-renders LORE.md when rows were imported since its last

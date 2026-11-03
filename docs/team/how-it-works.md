@@ -194,7 +194,7 @@ ccfb0bb lore: land 1 row (_root)
 ```
 <!-- /example -->
 
-The ride-along commit is built with a scratch staging area, so your staged changes are untouched. If one of the row files has uncommitted edits, lore skips it and says why. The `pre-push` hook only checks. If the ride-along commit is missing (after an amend or reset) or older than live, it adds a fresh one and asks you to push again. `git push --no-verify` skips the check, and the rows simply ride on a later push. A pull request closed without merging lands nothing; the rows stay live and ride again.
+The ride-along commit is built with a scratch staging area, so your staged changes are untouched. If one of the row files has uncommitted edits, lore skips it and says why. The `pre-push` hook only checks (in a client repo it also runs the leak check, see [Leak guards](#leak-guards)). If the ride-along commit is missing (after an amend or reset) or older than live, it adds a fresh one and asks you to push again. `git push --no-verify` skips the check (and the leak check), and the rows simply ride on a later push. A pull request closed without merging lands nothing; the rows stay live and ride again.
 
 ## Merging two versions of a row
 
@@ -321,6 +321,8 @@ Claims for tasks of a linked client repo sit on the **store's** signals list, ne
  no commit, no trailer, no adapter → "done (merge unknown)"; `lore task merged <id>` marks it by hand
 ```
 
+If the linked store cannot be reached, the command still runs and prints `lore: warning: merge state not checked: <reason>; done tasks may show as not merged yet (the next lore command retries)`.
+
 While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` trailer (a last line in the commit message) to your commits. It does this only when the task row lives in the repo you commit to, or is that repo's own linked client task. A task that lives only in the store never puts its id into a client repo's commits. Its merge is found by ancestry (is the commit part of `main`'s history?) or the adapter.
 
 `--after tsk_X` waits for **merged** when the task it waits on is in another repo, and for **done** in the same repo. `--after tsk_X:done` or `:merged` overrides it.
@@ -346,10 +348,8 @@ $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && g
 $ lore task list
 ✓ tsk_162d…9666 merged 10:23 (found by: ancestry, cf563f3)
 lore live: landed on main (df3a55c); leaves live once main is fetched
-tsk_162d…9666  send the invite email from the API  done  [agency/client2]
-tsk_54fe…28f2  build the invite page  todo  [agency/client2]
-tsk_05e9…4603  allow /invite on the proxy  done  [agency/client2]
-tsk_c0f3…b5b8  deploy to staging  todo  [agency/client2]
+○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
+○ tsk_c0f3…b5b8 deploy to staging [medium]  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
@@ -427,8 +427,9 @@ A **leak** is internal or personal content reaching anything the client can read
  3. checks            id rule:   a row of another project, or a pointer to an internal/personal row
                       text rule: 8 or more consecutive words that also appear in an internal or personal row
                       secrets:   credential patterns
-                      run at: pre-commit (all staged files), commit-msg, every write to the client's
-                      live ref, every landing commit, `lore check pr-body`; unsure → block
+                      run at: pre-commit (all staged files), commit-msg, pre-push (every commit
+                      and file version the push sends), every write to the client's live ref,
+                      every landing commit, `lore check pr-body`; unsure → block
  4. one deliberate    `lore share` shows the text, asks, writes a copy with a new id
     step to share     (agents cannot pass --yes)
 ```
@@ -440,18 +441,18 @@ $ mkdir -p src && echo '// they approve estimates faster when we send them on Wh
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
   src/notes.ts:1                           matches internal note mem_54fe…28f2 (10 words)
-Move it:  lore move mem_54fe…28f2 --to <org>
-Share it on purpose: lore share mem_54fe…28f2 --to repo
+Remove the internal text from src/notes.ts
+To give the client an internal note on purpose: lore share <id> --to repo (a new copy; it shows the text and asks)
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 1)
 ```
 <!-- /example -->
 
-The client's own CI can run `lore check leaks --ci`. It needs no store and prints no internal name: it checks ids and structure only.
+The pre-push check refuses a push whose new commits carry internal ids, internal sentences or secrets, and refuses when the store cannot be read. `git commit --no-verify` and `git push --no-verify` skip every local check, so the client's own CI should run `lore check leaks --ci` as the backstop. It needs no store and prints no internal name: it checks ids and structure only, so it does not see pasted sentences.
 
 What hooks cannot stop, honestly:
 
-- `git commit --no-verify`, and edits in the GitHub web interface.
+- `git commit --no-verify` and `git push --no-verify` (they skip every local check), and edits in the GitHub web interface.
 - A teammate without lore.
 - Text that was reworded instead of copied.
 - An agent writing internal text into a pull request body it never checked.

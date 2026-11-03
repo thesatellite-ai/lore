@@ -25,7 +25,7 @@ trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- or
 
 ## A teammate's task or `@handle` does not show up
 
-Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl: 60s`). `lore sync` always fetches. So a row a teammate wrote seconds ago may not be in your view yet. Also, `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice (an agency developer) has registered and you have fetched since. Run `lore sync`, which always fetches:
+Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl: 60s`). `lore sync` always fetches, and it also refreshes the store link index, so a link a teammate just made shows up in `lore whoami` after it. So a row a teammate wrote seconds ago may not be in your view yet. Also, `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice (an agency developer) has registered and you have fetched since. Run `lore sync`, which always fetches:
 
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console
@@ -191,18 +191,20 @@ A **leak** is internal or personal content reaching something the client can rea
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
   src/notes.ts:1                           matches internal note mem_54fe…28f2 (10 words)
-Move it:  lore move mem_54fe…28f2 --to <org>
-Share it on purpose: lore share mem_54fe…28f2 --to repo
+Remove the internal text from src/notes.ts
+To give the client an internal note on purpose: lore share <id> --to repo (a new copy; it shows the text and asks)
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 1)
 ```
 <!-- /example -->
 
 - The text should not be there: remove it, or `lore move <id> --to <org>` if a note was filed in the wrong place.
+- When the leaking file is a lore row of this repo (a rule, memory or task file), the hint names that row: `lore move <row> --to <org>` to keep it internal, or `lore <kind> delete <row> --confirm` to remove it.
+- When a `lore <kind> add --to repo` is refused, the hint says "Nothing written": nothing was saved; write it with `--to <org>` instead.
 - It really should be shared with the client: `lore share <id> --to repo` (see [Sharing an internal note](use-cases/sharing-a-note.md)).
 - `lore check leaks --explain` shows the rule and the matched words.
 
-Never bypass the check with `git commit --no-verify` in a client repo. If something already reached the client, follow [Cleaning up after a leak](use-cases/leak-cleanup.md).
+The same check runs again at push (the `pre-push` hook), on every commit the push would send; there the fix is to rewrite the commits that carry the text (`git commit --amend`, or `git rebase`). Never bypass either check with `git commit --no-verify` or `git push --no-verify` in a client repo: they skip every local check, and only `lore check leaks --ci` in the client's CI (ids, not sentences) is left. If something already reached the client, follow [Cleaning up after a leak](use-cases/leak-cleanup.md).
 
 ## "live, not pushed yet": the host refuses `refs/lore/*`
 

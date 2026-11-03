@@ -852,6 +852,10 @@ $ lore task list
 
 ```text
 record:  lore task done <id> [--commit <sha> | --pr <n>] → done_commit / done_pr in the row (content, lands)
+  a holder's done on its work branch without --commit records the branch HEAD, only when that commit is not on the
+  fetched default branch yet (otherwise, or with no fetched default branch, nothing is recorded: merge unknown)
+  merged_at is written onto the live ref (one field; it lands like any live row), so checkouts stay clean and two clones
+  that find the same merge write the same bytes
 trailer: while an actor holds a claim, lore's commit-msg hook adds "Lore-Task: <id>" to that actor's commits in the task's repo,
   only when the held task row lives in the repo being committed to, or is that repo's linked client task row (§7.6;
   then the CLIENT row's id). A store-only task gets no trailer (fail closed: the F16 id rule would block it and is
@@ -1153,7 +1157,9 @@ CheckLeaks(staged files + commit message | live write | landing commit | PR body
   2. text rule: normalise (lowercase, Unicode NFKC, collapse whitespace, strip punctuation), then any run of ≥ 8
      consecutive words that also appears in an internal or personal row loaded for this repo → block
   3. secret rule: the extended secret patterns (§6.5)
-  runs at: pre-commit (all staged files, not only .lore/), commit-msg, every write to the client's live ref,
+  runs at: every row write routed to the client repo (refused before anything is written), pre-commit (all staged
+           files, not only .lore/), commit-msg, pre-push (every file version and commit message the push sends that the
+           remote lacks), every write to the client's live ref,
            every landing commit, `lore check pr-body` (agents run it before opening a PR or posting a comment)
   cannot decide (store unreadable, no cached index) → block with "cannot check: store unreachable"
       (the hook fails closed; bypassing it is the user's deliberate --no-verify)
@@ -1497,7 +1503,8 @@ Hooks are local and optional, so a determined or careless person can always leak
 
 | Path | Why hooks miss it | What remains |
 |---|---|---|
-| `git commit --no-verify`, a changed `core.hooksPath`, a teammate without lore | the hook never runs | the client CI check (ids and structure only); the leak is caught late or not at all for plain text |
+| `git commit --no-verify` | the commit hooks never run | the pre-push leak check (same rules, fails closed) |
+| `git push --no-verify`, a changed `core.hooksPath`, a teammate without lore | no hook runs | the client CI check (ids and structure only); the leak is caught late or not at all for plain text |
 | edits in the GitHub web UI | no local hook | the client CI check |
 | an agent writing internal text into a PR body, issue comment, chat or a screenshot | not a commit | the fixed "never quote" header in the render, `lore check pr-body`, and the agent's own instructions |
 | text paraphrased rather than copied | the text rule matches runs of words | nothing technical; this is a people problem |

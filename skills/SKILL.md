@@ -130,7 +130,7 @@ want a worked transcript     → examples/
 | Flag | Where it applies | Notes |
 |---|---|---|
 | `--created-by=<act_id>` | every entity with `created_by_actor_id` (memory, rule, decision, hotfix, pattern, playbook, prompt, architecture-note, behaviour, cookbook-recipe, incident, suggestion, tastepref, plan, mission, task, reminder) | Auto-fills from current identity (`identity show`) when omitted. |
-| `--supersedes=<id>` | memory, rule, decision, hotfix, pattern | Marks the new row as the replacement for `<id>`; the old row records the new id in `superseded_by_id` (a replaced decision becomes `superseded`). Unknown or already-replaced ids are refused and nothing is written. |
+| `--supersedes=<id>` | memory, rule, decision, hotfix, pattern | Marks the new row as the replacement for `<id>`; the old row records the new id in `superseded_by_id` (a replaced decision becomes `superseded`). Unknown or already-replaced ids are refused and nothing is written. Rows linked by older versions point the wrong way; run `lore doctor --fix` once to repair them. |
 | `--repo=<mount\|rep_id>` | memory, rule, decision, hotfix, pattern, task | Scope to a repo within the project (master-scope when omitted). |
 | `--mission`, `--tasklist`, `--plan` | task | Parent groupings. `--tasklist` is REQUIRED. |
 | `--assigned-to=<act_id>` | task | Assignee. |
@@ -753,7 +753,7 @@ Backup → check schema → auto-migrate → verify. **Recipe: [PLAYBOOKS.md § 
 Run `lore whoami` once per repo: it says which org applies, why, and which identity you write as. Rules that hold in a team:
 
 - **Tasks are live:** a task you add or edit reaches everyone at once on any branch, and lands on `main` when done. Use `--live` to share a rule or memory at once; `--no-live` keeps a row with your branch.
-- **Never put internal content into a client repo.** Without `--to`, notes in a client repo go to the org's internal store. Before posting a PR body or comment run `lore check pr-body <file>`; a commit carrying internal ids or sentences is refused (`E_LEAK_BLOCKED`, exit 19). Share on purpose with `lore share <id> --to repo`.
+- **Never put internal content into a client repo.** Without `--to`, notes in a client repo go to the org's internal store. Before posting a PR body or comment run `lore check pr-body <file>`; a commit carrying internal ids or sentences is refused (`E_LEAK_BLOCKED`, exit 19), and so is a push of one (the pre-push hook). Never pass `--no-verify` to `git commit` or `git push` there: it skips every local check. Share on purpose with `lore share <id> --to repo`.
 - **As an agent**, start with `lore agent start --label <name> --owner @<human>` and export what it prints, then loop: `lore inbox`, `lore task next --mission <id>` (exit 10 = no ready work), work, `lore task heartbeat` while working, `lore task note <id> "<progress>"`, `lore task done <id> --pr <n> --lesson "<what you learned>"`. Exit 12, 13 or 14 means the task is no longer yours: stop work on it.
 - **Gates:** an agent never approves; it stops at a gated task until a human runs `lore gate approve <id>`.
 - Findings every agent of a mission should see: `lore finding add --mission <id> "<text>"`. Notes for the next agent: `lore handoff add --for @<handle> --task <id> "<text>"`.

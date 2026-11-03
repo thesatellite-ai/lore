@@ -12,11 +12,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"saas/pkg/aicoder/cachedb"
@@ -96,7 +98,7 @@ names no internal id, store or org.`,
 				}
 				items = append(items, st...)
 			}
-			return runLeakCheck(ctx, root, items, explain, "this commit")
+			return runLeakCheck(ctx, root, items, explain, leakContext{action: leakActionCommit, what: "this commit"})
 		},
 	}
 	cmd.Flags().BoolVar(&ci, flagCheckCI, false, "CI mode: ids and structure only, no store access, names nothing internal")
@@ -129,7 +131,7 @@ func newCheckPRBodyCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.InvalidInput, "read the body").WithCause(err)
 			}
-			if err := runLeakCheck(ctx, root, []leakcheck.Item{{Where: wherePRBody, Content: b}}, explain, "this text"); err != nil {
+			if err := runLeakCheck(ctx, root, []leakcheck.Item{{Where: wherePRBody, Content: b}}, explain, leakContext{action: leakActionText, what: "this text"}); err != nil {
 				return err
 			}
 			fmt.Println("✓ nothing internal found (a copy-paste check: a paraphrase passes it)")
@@ -178,13 +180,26 @@ func leakIndexFor(ctx context.Context, root string) (*leakcheck.Index, string, b
 			projects[r.ID] = r.Label
 			continue
 		}
-		ir = append(ir, leakcheck.IndexRow{ID: r.ID, Table: r.Table, Label: r.Label, Source: r.Source, Texts: []string{r.Title, r.Body}})
+		ir = append(ir, leakcheck.IndexRow{ID: r.ID, Table: r.Table, Label: r.Label, Source: r.Source, Texts: []string{r.Title, r.Body}, SharedAs: sharedCopies(r.Doc)})
 	}
 	return leakcheck.NewIndex(ir, projects), s.ProjectID, client, nil
 }
 
+// sharedCopies reads an internal row's shareProvenanceField: the ids of
+// the copies `lore share` made of it, whose row files may carry its text.
+// A document without the field (or unreadable) has none: the safe answer.
+func sharedCopies(doc []byte) []string {
+	var d struct {
+		SharedAs []string `json:"shared_as"`
+	}
+	if json.Unmarshal(doc, &d) != nil {
+		return nil
+	}
+	return d.SharedAs
+}
+
 // runLeakCheck checks items and prints a block report (E_LEAK_BLOCKED).
-func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, explain bool, what string) error {
+func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, explain bool, lc leakContext) error {
 	idx, pid, client, err := leakIndexFor(ctx, root)
 	if err != nil {
 		if !leakcheck.NeedsIndex(items) {
@@ -194,7 +209,7 @@ func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, expl
 			if len(fs) == 0 {
 				return nil
 			}
-			return leakBlockedError(fs, explain, what)
+			return leakBlockedError(fs, explain, lc)
 		}
 		return err
 	}
@@ -208,14 +223,17 @@ func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, expl
 	if len(block) == 0 {
 		return nil
 	}
-	return leakBlockedError(block, explain, what)
+	return leakBlockedError(block, explain, lc)
 }
 
-// leakBlockedError formats findings as the F16 block message.
-func leakBlockedError(fs []leakcheck.Finding, explain bool, what string) error {
+// leakBlockedError formats findings as the F16 block message. Each
+// finding gets a fix that applies to what lc says was refused (F10): a row
+// file in this repo is named by ITS id (move it to the org or delete it),
+// never by the internal note it matched, which is internal already.
+func leakBlockedError(fs []leakcheck.Finding, explain bool, lc leakContext) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "lore: blocked, %s would share internal content with the client repo:\n", what)
-	var moves []string
+	fmt.Fprintf(&b, "lore: blocked, %s would share internal content with the client repo:\n", lc.what)
+	var fixes []string
 	seen := map[string]bool{}
 	for _, f := range fs {
 		where := f.Where
@@ -230,19 +248,105 @@ func leakBlockedError(fs []leakcheck.Finding, explain bool, what string) error {
 			detail = fmt.Sprintf("[%s rule] %s %s", f.Rule, detail, f.Label)
 		}
 		fmt.Fprintf(&b, "  %-40s %s\n", where, detail)
-		if f.RowID != "" && !seen[f.RowID] && f.Rule != leakcheck.RuleActor {
-			seen[f.RowID] = true
-			moves = append(moves, f.RowID)
+		if fix := leakFix(f, lc); fix != "" && !seen[fix] {
+			seen[fix] = true
+			fixes = append(fixes, fix)
 		}
 	}
-	for _, id := range moves {
-		fmt.Fprintf(&b, "Move it:  lore move %s --to <org>\nShare it on purpose: lore share %s --to repo\n", id, id)
+	for _, fix := range fixes {
+		b.WriteString(fix + "\n")
+	}
+	if lc.action != leakActionShare {
+		b.WriteString("To give the client an internal note on purpose: lore share <id> --to repo (a new copy; it shows the text and asks)\n")
 	}
 	b.WriteString("(a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)")
 	if inCI() {
 		return errcodes.New(errcodes.LeakBlocked, fmt.Sprintf("blocked: %d finding(s) of internal content (details hidden in CI)", len(fs)))
 	}
 	return errcodes.New(errcodes.LeakBlocked, b.String())
+}
+
+// leakAction is the operation a leak check refused. The fix the block
+// message offers depends on it: a staged file is edited, a pushed commit
+// must be rewritten, a refused write never happened.
+type leakAction int
+
+// Leak actions.
+const (
+	// leakActionCommit: staged files and the commit message (pre-commit,
+	// commit-msg, `lore check leaks`).
+	leakActionCommit leakAction = iota
+	// leakActionPush: the commits a `git push` would send (pre-push).
+	leakActionPush
+	// leakActionText: a pull request body or comment (`lore check pr-body`).
+	leakActionText
+	// leakActionWrite: a row about to be written to this repo; nothing was
+	// written.
+	leakActionWrite
+	// leakActionShare: `lore share … --to repo`; the copy carries text of
+	// an internal row other than the one shared.
+	leakActionShare
+	// leakActionLive: a live write or landing commit to this repo's refs.
+	leakActionLive
+)
+
+// leakContext says what a leak check guards, for its block message.
+type leakContext struct {
+	action leakAction
+	// what names the refused thing in the first line ("this commit").
+	what string
+	// source is the row being shared (leakActionShare only).
+	source string
+}
+
+// leakFix is the one-line fix for a finding, or "" when the finding needs
+// none beyond the listing (the same fix is printed once).
+func leakFix(f leakcheck.Finding, lc leakContext) string {
+	if f.Rule == leakcheck.RuleActor {
+		return ""
+	}
+	switch lc.action {
+	case leakActionShare:
+		if f.RowID == "" || f.RowID == lc.source {
+			return "Not shared: the copy breaks a leak rule that sharing does not lift; nothing written"
+		}
+		return fmt.Sprintf("Not shared: %s also carries text of internal note %s, which stays internal. Remove that part from %s, then share it again; nothing written", lc.source, f.RowID, lc.source)
+	case leakActionWrite:
+		return "Nothing written. Keep it internal: write it with --to <org> instead of --to repo, or leave out the internal text"
+	case leakActionText:
+		return "Remove the internal text before posting"
+	}
+	if id, table, ok := repoRowOf(f.Path); ok {
+		kind := singularKind(table)
+		switch lc.action {
+		case leakActionPush:
+			return fmt.Sprintf("%s (a %s in this repo) is in a commit you are pushing: rewrite that commit without it (git commit --amend, or git rebase), then keep it internal: lore move %s --to <org>", id, kind, id)
+		case leakActionLive:
+			return fmt.Sprintf("Keep %s internal: lore move %s --to <org>, or edit it so it no longer carries the internal text", id, id)
+		}
+		return fmt.Sprintf("%s is a %s in this repo. Keep it internal: lore move %s --to <org>   or remove it: lore %s delete %s --confirm", id, kind, id, kind, id)
+	}
+	where := f.Path
+	if where == "" {
+		where = "the commit message"
+	}
+	if lc.action == leakActionPush {
+		return "Remove the internal text from " + where + " and rewrite the commit(s) that carry it (git commit --amend, or git rebase) before pushing"
+	}
+	return "Remove the internal text from " + where
+}
+
+// repoRowPathRe matches a row file of this repo's .lore/data (any project
+// folder of a monorepo): .lore/data/<table>/<id>.json.
+var repoRowPathRe = regexp.MustCompile(`(?:^|/)\.lore/data/([a-z_]+)/([a-z]{3}_[0-9a-f]{32})\.json$`)
+
+// repoRowOf returns the row id and table of a repo row file path.
+func repoRowOf(path string) (id, table string, ok bool) {
+	m := repoRowPathRe.FindStringSubmatch(path)
+	if m == nil {
+		return "", "", false
+	}
+	return m[2], m[1], true
 }
 
 // stagedItems reads every staged file (added, copied, modified, renamed)
@@ -385,5 +489,18 @@ func leakCheckDocs(ctx context.Context, where string, docs map[string][]byte) er
 	for p, b := range docs {
 		items = append(items, leakcheck.Item{Where: where + " " + p, Path: p, Content: b})
 	}
-	return runLeakCheck(ctx, root, items, false, "this "+where)
+	return runLeakCheck(ctx, root, items, false, leakContext{action: leakActionLive, what: "this " + where})
+}
+
+// leakCheckShare is the F16 check of a `lore share … --to repo` copy before
+// it is written. Only the text of the shared row itself is allowed in the
+// copy (§6.4: sharing is the deliberate exception); every other internal
+// row, the id and reference rules and the secret rule still block.
+func leakCheckShare(ctx context.Context, sourceID, path string, body []byte) error {
+	root, err := os.Getwd()
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+	}
+	items := []leakcheck.Item{{Where: "share " + path, Path: path, Content: body, AllowRows: []string{sourceID}}}
+	return runLeakCheck(ctx, root, items, false, leakContext{action: leakActionShare, what: "this share", source: sourceID})
 }

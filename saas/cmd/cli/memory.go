@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"saas/pkg/constants"
@@ -72,7 +73,7 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 	// Fresh clone (or deleted cache): .lore/data exists but lore.db does
 	// not. Build the cache from the files before resolving the project.
 	if err := maybeMaterialize(context.Background(), c); err != nil {
-		return nil, nil, errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(err)
+		return nil, nil, materializeError(err)
 	}
 
 	ctx, err := projresolve.Resolve(projresolve.Inputs{
@@ -145,18 +146,24 @@ func rawDBFromClient(client *ent.Client) *sql.DB {
 	return clientToRawDB[client]
 }
 
-// mapResolveError wraps projresolve sentinels with appropriate error codes
+// mapResolveError wraps projresolve sentinels with appropriate error codes.
+// An error that already carries a code (projresolve's E_BAD_PATH refusal,
+// with its hint) is passed through unchanged, so it is never re-labelled
+// E_INTERNAL.
 func mapResolveError(err error) error {
+	var coded *errcodes.CLIError
 	switch {
-	case err == projresolve.ErrNotProjectRoot:
+	case errors.As(err, &coded):
+		return err
+	case errors.Is(err, projresolve.ErrNotProjectRoot):
 		return errcodes.New(errcodes.NotProjectRoot,
 			"current directory is not a lore project (no .lore/lore.db or lore.yaml)").
 			WithHint("run `lore init` here, or cd into a project root")
-	case err == projresolve.ErrAmbiguousProject:
+	case errors.Is(err, projresolve.ErrAmbiguousProject):
 		return errcodes.New(errcodes.AmbiguousProject,
 			"both .lore/lore.db AND a .lore/lore.yaml (or lore.toml) pointer present").
 			WithHint("delete the one you don't need (Mode A uses lore.db; Mode B uses lore.yaml)")
-	case err == projresolve.ErrBadPath:
+	case errors.Is(err, projresolve.ErrBadPath):
 		return errcodes.New(errcodes.BadPath, err.Error())
 	default:
 		return errcodes.New(errcodes.Internal, "resolve project").WithCause(err)

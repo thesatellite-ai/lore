@@ -90,7 +90,7 @@ lore refuses a few risky setups on its own. Each refusal has one environment var
 |---|---|---|
 | `LORE_ALLOW_ROOT` | Running as the root (administrator) user: `E_ROOT_REFUSED`. | Files created as root can no longer be changed by your normal user, and a mistake as root can damage the whole machine. |
 | `LORE_ALLOW_NETWORK_FS` | A database on a network drive or a cloud-synced folder (shared network folders, folders a sync app copies between computers): `E_NETWORK_FS`. | SQLite databases get damaged silently when two machines or a sync app touch the file. Keep the repo on a local disk; git shares the notes anyway. |
-| `LORE_ALLOW_DB_PATH_OUTSIDE` | A `..` (a step up out of the folder) in the database path of a `.lore/lore.toml` pointer file: `E_BAD_PATH`. | A path that climbs out of the project can point lore at someone else's files. |
+| `LORE_ALLOW_DB_PATH_OUTSIDE` | A `..` (a step up out of the folder) in the database path of a `.lore/lore.yaml` pointer file: `E_BAD_PATH`. | A path that climbs out of the project can point lore at someone else's files. |
 | `--allow-secrets` (a flag, not a variable) | Saving a note that looks like a secret: `E_SECRET_DETECTED`. | See Step 1. |
 
 Use them for one command, not in your shell profile, so the refusal is back next time.
@@ -101,7 +101,7 @@ A repo in a `Dropbox` folder, refused and then let through for one command:
 ```console
 # alice, in Dropbox/website
 $ lore rule list
-ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website/.lore/lore.db is inside a "dropbox" folder
+ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website is inside a "dropbox" folder
   hint: SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set LORE_ALLOW_NETWORK_FS=1
 (exit 1)
 $ LORE_ALLOW_NETWORK_FS=1 lore rule list
@@ -118,7 +118,8 @@ $ printf 'db_path: ../client.db\nproject_id: %s\n' $(grep project_id .lore/lore.
 db_path: ../client.db
 project_id: prj_d431…313a
 $ lore rule list
-ERROR: [E_INTERNAL] resolve project: projresolve: path contains traversal sequence or refers outside allowed roots: "../client.db"
+ERROR: [E_BAD_PATH] db_path "../client.db" has a `..` part: projresolve: path contains traversal sequence or refers outside allowed roots
+  hint: write db_path in .lore/lore.yaml without a `..` part, or set LORE_ALLOW_DB_PATH_OUTSIDE=1 for one command if the path really is meant to leave the project
 (exit 1)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list
 rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays

@@ -52,20 +52,28 @@ func TestFilterTeamRowsBoardReadFails(t *testing.T) {
 	}
 }
 
-// fakeStager stages rows (or fails).
+// fakeStager reads a done row without merged_at and stages it (or fails).
 type fakeStager struct{ err error }
+
+func (s fakeStager) Get(context.Context, string) (coord.Doc, bool, error) {
+	return coord.Doc{"id": "tsk_1", "status": "done"}, true, nil
+}
 
 func (s fakeStager) Stage(context.Context, ...coord.RowWrite) ([]signals.Companion, error) {
 	return nil, s.err
 }
 
-// fakeSignals records whether a write happened (or fails it).
+// fakeSignals runs the decision like signals.Store and records whether a
+// write happened (or fails it).
 type fakeSignals struct {
 	err   error
 	wrote bool
 }
 
-func (s *fakeSignals) Write(context.Context, signals.Decide) (signals.Result, error) {
+func (s *fakeSignals) Write(_ context.Context, decide signals.Decide) (signals.Result, error) {
+	if _, err := decide(signals.View{}); err != nil {
+		return signals.Result{}, err
+	}
 	s.wrote = s.err == nil
 	return signals.Result{}, s.err
 }
@@ -75,7 +83,6 @@ func (s *fakeSignals) Write(context.Context, signals.Decide) (signals.Result, er
 // "✓ merged" for it; a success says "✓ merged" and nothing else.
 func TestRecordMergedReportsFailures(t *testing.T) {
 	f := mergewatch.Finding{Method: mergewatch.MethodTrailer, Commit: "0123456789abcdef", At: time.Date(2026, 11, 3, 10, 30, 0, 0, time.UTC)}
-	next := coord.Doc{"id": "tsk_1"}
 	cases := []struct {
 		name               string
 		stageErr, writeErr error
@@ -88,9 +95,9 @@ func TestRecordMergedReportsFailures(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sw := &fakeSignals{err: tc.writeErr}
-			err := recordMerged(t.Context(), fakeStager{err: tc.stageErr}, sw, "tsk_1", next)
-			if (err == nil) != tc.wantOK || sw.wrote != tc.wantWrote {
-				t.Fatalf("err=%v wrote=%v; want ok=%v wrote=%v", err, sw.wrote, tc.wantOK, tc.wantWrote)
+			ok, err := stampMerged(t.Context(), fakeStager{err: tc.stageErr}, sw, "tsk_1", f.At)
+			if (err == nil) != tc.wantOK || ok != tc.wantOK || sw.wrote != tc.wantWrote {
+				t.Fatalf("ok=%v err=%v wrote=%v; want ok=%v wrote=%v", ok, err, sw.wrote, tc.wantOK, tc.wantWrote)
 			}
 			var out bytes.Buffer
 			reportMerged(&out, "tsk_1", f, err)

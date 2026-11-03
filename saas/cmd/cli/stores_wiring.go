@@ -382,8 +382,11 @@ func loadTeamConfig(ctx context.Context) (*lorecfg.Config, error) {
 	return cfg, nil
 }
 
-// syncStores pushes waiting store writes of every configured store (the
-// `lore sync` half of stores). Best effort and quiet when nothing waits.
+// syncStores pushes waiting store writes of every configured store, then
+// fetches every store now and rebuilds the link index from what it
+// fetched (the `lore sync` half of stores: sync always fetches, TEAM-025,
+// so a link a teammate just pushed is known right after it, F11). Best
+// effort: a store problem is one muted note and the sync pass still runs.
 func syncStores(ctx context.Context) {
 	cfg, err := loadTeamConfig(ctx)
 	if err != nil || len(cfg.Orgs) == 0 {
@@ -394,4 +397,15 @@ func syncStores(ctx context.Context) {
 		return
 	}
 	pushPendingStores(ctx, cfg, m)
+	refreshLinkIndex(ctx, cfg, m)
+}
+
+// refreshLinkIndex fetches every store of every entry, ignoring
+// live.fetch_ttl, and rebuilds each entry's cached link index (a scan for
+// no project id still reads every entry). Best effort, like syncStores.
+func refreshLinkIndex(ctx context.Context, cfg *lorecfg.Config, m *stores.Manager) {
+	ls := &stores.LinkSource{Manager: m, Config: cfg, ForceFetch: true}
+	if _, err := ls.Links(ctx, "", nil); err != nil {
+		fmt.Fprintln(os.Stderr, "lore: refresh the store link index: "+redactIfQuiet(err.Error()))
+	}
 }

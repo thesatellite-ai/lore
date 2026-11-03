@@ -64,7 +64,7 @@ $ lore task claim msn_2ad3…f891
 
 ## 2. Workers start the same way
 
-Each worker registers, reads its inbox and asks for the next ready task of its repo. `agent-frontend` gets nothing yet, with the reason and exit status 10 (`E_NO_WORK`). Its task waits for the backend task to be merged:
+Each worker registers, reads its inbox and asks for the next ready task of its repo. `agent-frontend` gets nothing yet, with the reason and exit status 10 (`E_NO_WORK`). Its task waits for the backend task to be merged, because the two tasks are in different repos. A plain `after:` waits for **merged** across repos and only for **done** within one repo (see the pitfall "Done is not merged"):
 
 <!-- example: agents#workers-start -->
 ```console
@@ -108,7 +108,7 @@ $ lore task next --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invit
 
 ## 3. A finding every agent sees
 
-`agent-infra` learns something the others need. A finding is a memory pinned to the mission. It shows up in every inbox:
+`agent-infra` learns something the others need. A finding is a memory pinned to the mission. It shows up in every inbox on that agent's next fetch. Lore reuses a fetch for 60 seconds (`live.fetch_ttl`), so a finding can take up to a minute to reach another agent's inbox; `lore sync` fetches at once (`lore inbox` has no refresh flag of its own):
 
 <!-- example: agents#finding -->
 ```console
@@ -133,7 +133,7 @@ lore live: 7 row(s) left live (main holds them)
 
 ## 4. Done, then merged
 
-`agent-backend` leaves a note for whoever comes next and commits on its own branch. It finishes with the commit and a lesson. `agent-frontend` still waits: done is not merged. Alice merges the branch. The next lore command in that repo finds the commit on `main` (by ancestry: the commit is now part of `main`'s history). Then `agent-frontend` gets its task:
+`agent-backend` leaves a note for whoever comes next and commits on its own branch. It finishes with the commit and a lesson. `agent-frontend` still waits: its task is in another repo, so it waits for merged, and done is not merged. Alice merges the branch. The next lore command in that repo finds the commit on `main` (by ancestry: the commit is now part of `main`'s history). Then `agent-frontend` gets its task:
 
 <!-- example: agents#done-then-merged -->
 ```console
@@ -161,10 +161,8 @@ $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && g
 $ lore task list
 ✓ tsk_162d…9666 merged 10:23 (found by: ancestry, cf563f3)
 lore live: landed on main (df3a55c); leaves live once main is fetched
-tsk_162d…9666  send the invite email from the API  done  [agency/client2]
-tsk_54fe…28f2  build the invite page  todo  [agency/client2]
-tsk_05e9…4603  allow /invite on the proxy  done  [agency/client2]
-tsk_c0f3…b5b8  deploy to staging  todo  [agency/client2]
+○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
+○ tsk_c0f3…b5b8 deploy to staging [medium]  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
@@ -213,6 +211,7 @@ lore: [agency/org] 1 file(s) pushed
 # agent-frontend-2, in agents/fe2/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_d57ca…) on refs/lore/signals/main; reclaim, attempt 2; previous holder agent-frontend timed out
+  work branch agent-frontend/invite-route
   read its notes: lore task show tsk_54fe…28f2
 lore live: 1 row(s) left live (main holds them)
 $ git fetch -q origin agent-frontend/invite-route && git log --oneline -1 FETCH_HEAD
@@ -345,9 +344,9 @@ tsk_54fe…28f2
 
 ## Pitfalls
 
-- **Keep the lease alive.** A long test run must not let the lease expire. Run `lore task heartbeat --daemon <id>` in the background, or call `lore task heartbeat` from your agent tool's hook. A heartbeat says "alive", not "progress". Record progress with `lore task note`.
+- **Keep the lease alive.** A long test run must not let the lease expire. Call `lore task heartbeat` (no id: every claim of this session, at most once per `lease.renew_every`) from your agent tool's hook, or run the daemon. `lore task heartbeat --daemon <id>` renews at once and then every `lease.renew_every`, and checks every 5 seconds that the process that started it is still running. When that process is gone, it stops (it also stops when the claim ends). So start it from a process that lives as long as the work: the agent's own long-running shell or wrapper script, or the same shell command as the long step (`lore task heartbeat --daemon <id> & go test ./...; kill $!`). A detached launch from a short-lived script or tool call (`setsid … &`, then the script exits) stops within seconds, together with that script. It needs the agent's `LORE_ACTOR` and `LORE_SESSION` in its environment. A heartbeat says "alive", not "progress". Record progress with `lore task note`.
 - **Push work before you might die.** `lore task note` pushes the claim's work branch, so a replacement can fetch it. Work never pushed is lost with the session, and `lore mission status` says so.
-- **Done is not merged.** A task in another repo waits for **merged**. Pass `--commit <sha>` or `--pr <n>` to `lore task done`. Otherwise lore cannot see the merge (`merge unknown`); use `lore task merged <id>` to mark it by hand. With `merge_check.adapter: github`, lore asks `gh` about pull requests.
+- **Done is not merged.** A plain `after:` (or `--after <id>`) waits for **merged** when the task it waits for is in another repo, and only for **done** when both are in the same repo. To make a same-repo dependency wait for the merge, add or edit the task with `--after <id>:merged` (`:done` forces the other way): `lore task add 'build the invite page' --after tsk_162d…9666:merged`. A plan file's `after:` takes the same suffixes on a key: `after: ["backend:merged"]`. Pass `--commit <sha>` or `--pr <n>` to `lore task done` (a holder finishing on its work branch records the branch HEAD, unless that commit is already on `main`). Otherwise lore cannot see the merge (`merge unknown`); use `lore task merged <id>` to mark it by hand. With `merge_check.adapter: github`, lore asks `gh` about pull requests.
 - **Claims fail closed.** Offline, a claim, heartbeat, release, done on a claimed task or an approval fails with `E_OFFLINE` (exit 15). Nothing is queued to happen later.
 - **Speed and scale.** A claim is a git round trip (a second or two). Others see changes on their next fetch. Ten to twenty agents per store branch are fine.
 - **Task ids from the store** are found from any linked repo by every task command (`task show`, `task next`, `task done`, `mission status`); `--from agency/client2` picks the source when an id exists in two places.

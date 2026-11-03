@@ -160,6 +160,8 @@ def render_help(spec: str) -> str:
     start = next(i for i, l in enumerate(keep) if l.startswith("Usage:"))
     body = "\n".join(keep[start:]).strip()
     body = re.sub(r"\n{3,}", "\n\n", body)
+    # A command whose only flag is -h (dropped above) would print a bare "Flags:" heading.
+    body = re.sub(r"\n*^Flags:[ \t]*$(?=\n*\Z|\n\n)", "", body, flags=re.M).strip()
     lead = f"{short}\n\n" if short else ""
     return f"{lead}```text\n{body}\n```\n"
 

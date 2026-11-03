@@ -341,6 +341,7 @@ $ lore plan apply bad.yaml
 ✓ msn_4c59…6c38 Bad plan (created)
 lore live: (live, pushed)
 ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task of the plan
+  hint: after: takes keys of earlier tasks, optionally with :done or :merged (e.g. backend:merged)
 (exit 1)
 ```
 <!-- /example -->

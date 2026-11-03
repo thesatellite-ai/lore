@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lorecfg"
 )
 
@@ -51,6 +52,15 @@ const (
 	EnvProjectID = "LORE_PROJECT_ID"
 	EnvRepo      = "LORE_REPO"
 )
+
+// EnvAllowDBPathOutside is the one-command opt-in that lets db_path contain a
+// ".." segment (R27 #21). It is named in the E_BAD_PATH hint, so the refusal
+// tells the user exactly how to let the path through when they mean it.
+const EnvAllowDBPathOutside = "LORE_ALLOW_DB_PATH_OUTSIDE"
+
+// badPathHint is the next step printed under an E_BAD_PATH refusal of db_path.
+const badPathHint = "write db_path in .lore/lore.yaml without a `..` part, or set " +
+	EnvAllowDBPathOutside + "=1 for one command if the path really is meant to leave the project"
 
 // Sentinels.
 var (
@@ -177,7 +187,9 @@ func LoadPointer(ctx context.Context, rootDir string) (*Pointer, error) {
 //	${PROJECT_ROOT} - the project root passed to LoadPointer
 //
 // Refuses paths that contain ".." after expansion (R27 #21) UNLESS the
-// caller explicitly opts in via env LORE_ALLOW_DB_PATH_OUTSIDE=1.
+// caller explicitly opts in via env LORE_ALLOW_DB_PATH_OUTSIDE=1. The refusal
+// is an *errcodes.CLIError with code E_BAD_PATH and a hint naming the opt-in;
+// it wraps ErrBadPath, so errors.Is(err, ErrBadPath) still holds.
 func ExpandPath(path, projectRoot string) (string, error) {
 	expanded := path
 
@@ -209,9 +221,11 @@ func ExpandPath(path, projectRoot string) (string, error) {
 	// original path AND the cleaned form because filepath.Clean resolves
 	// embedded ".." (e.g., ./a/../b → b) which would silently allow
 	// traversal-as-typed.
-	if os.Getenv("LORE_ALLOW_DB_PATH_OUTSIDE") != "1" {
+	if os.Getenv(EnvAllowDBPathOutside) != "1" {
 		if containsParentRef(expanded) {
-			return "", fmt.Errorf("%w: %q", ErrBadPath, path)
+			return "", errcodes.Newf(errcodes.BadPath, "db_path %q has a `..` part", path).
+				WithHint(badPathHint).
+				WithCause(ErrBadPath)
 		}
 	}
 

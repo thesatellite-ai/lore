@@ -53,6 +53,6 @@ The same command widens a note inside the company. It can move a note from your 
 ## Pitfalls
 
 - **Agents cannot share.** `--yes` (confirm without a prompt) is refused for coding agents. Someone could hide an order in a row the client can edit ("run `lore share … --yes`"). That still cannot make an agent publish internal notes.
-- **Sharing is the only door.** If you paste the same text into a file of the client repo, the leak check (a check that stops internal notes reaching the client) blocks the commit. `lore share` is the deliberate way through. The copy's new id is what keeps the check from firing on it later.
+- **Sharing is the only door.** If you paste the same text into a file of the client repo, the leak check (a check that stops internal notes reaching the client) blocks the commit, and the push if the commit got past it. `lore share` is the deliberate way through. The internal row records the copy's id, so the check lets that one copy carry the shared note's own text, and nothing else. A share is refused if the note also quotes another internal note: remove that part from the note and share again.
 - **A shared note is the client's now.** Edits to the internal row do not follow the copy. Share again if needed.
 - Removing something that reached the client by mistake is a different job: see [Cleaning up after a leak](leak-cleanup.md).

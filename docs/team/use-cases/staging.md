@@ -44,7 +44,7 @@ repo       client repo  (guards on)
 project    prj_7a67…9504
 remotes    github.com/client/website
 stores     <redacted> on branch staging  (org folder <redacted>)
-links      known  1 link(s) for this repo (stores of 1 entry scanned)
+links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
 personal   local: agency-stag/, everywhere/
 $ lore org link agency-stag --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
@@ -56,14 +56,14 @@ $ lore task add 'seed staging with demo data' --to agency-stag
 ✓ tsk_162d…9666 — seed staging with demo data [medium] → [agency-stag/client]
 lore live: (live, pushed)
 $ lore task list
-tsk_162d…9666  seed staging with demo data  todo  [agency-stag/client]
+○ tsk_162d…9666 seed staging with demo data [medium]  [agency-stag/client]
 $ lore org use agency
 ✓ prj_7a67…9504 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore task list
 (no tasks)
 $ LORE_ORG=agency-stag lore task list
-tsk_162d…9666  seed staging with demo data  todo  [agency-stag/client]
+○ tsk_162d…9666 seed staging with demo data [medium]  [agency-stag/client]
 $ git ls-remote https://github.com/agency/notes
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main
@@ -88,7 +88,7 @@ With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=ag
 ## Pitfalls
 
 - **The branch must exist first.** Linking or writing to a staging entry whose branch does not exist is refused, with a hint to run `lore store init <url> --branch staging`. A typo never creates a new lore silently. See [Troubleshooting](../troubleshooting.md#store-branch-does-not-exist).
-- **Links, roster and global project are per branch.** The roster is the list of people and agents in the org. A staging entry needs its own `lore org link`, and `lore actor register` if you want `@handles` there.
+- **Links, roster and global project are per branch.** The roster is the list of people and agents in the org. A staging entry needs its own `lore org link`, and `lore actor register` if you want `@handles` there. With a staging entry chosen, `lore whoami` counts only that branch's links: `0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)` until you link it.
 - **A branch name may not contain `/`** (`release/2026` is refused by `lore config check`), so `refs/lore/live/<branch>` names can never clash.
 - `lore org use` is saved in `repo_orgs:` of your own `~/.lore/config.yaml`. Nothing is committed, and teammates are not affected.
 - To move rows between staging and main, merge the store branches yourself with git. Lore's merge driver (a small helper git calls to combine two edits of the same note) settles the row files.
