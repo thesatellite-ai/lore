@@ -83,15 +83,15 @@ func TestAcquire_StaleLockReclaim(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "lock")
 
-	// Plant a stale lock file with a definitely-dead pid (PID 1 is init on
-	// Unix, always alive — pick a high impossible pid).
+	// Plant a lock file left behind by a dead process (high impossible pid).
+	// Nothing holds the OS lock on it, so it is simply reused.
 	if err := os.WriteFile(path, []byte("9999999 stale\n"), 0o644); err != nil {
 		t.Fatalf("write stale: %v", err)
 	}
 
 	l, err := Acquire(path)
 	if err != nil {
-		t.Fatalf("expected reclaim, got %v", err)
+		t.Fatalf("expected leftover file to be reused, got %v", err)
 	}
 	defer l.Release()
 }
@@ -125,40 +125,5 @@ func TestAcquire_MakesParentDir(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Dir(path)); err != nil {
 		t.Errorf("parent dir not created: %v", err)
-	}
-}
-
-func TestOwnerAlive_DeadPid(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "lock")
-	if err := os.WriteFile(path, []byte("9999999 stale\n"), 0o644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	alive, err := ownerAlive(path)
-	if err != nil {
-		t.Fatalf("ownerAlive: %v", err)
-	}
-	if alive {
-		t.Error("expected stale pid to read as dead")
-	}
-}
-
-func TestOwnerAlive_OurPid(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "lock")
-
-	l, err := Acquire(path)
-	if err != nil {
-		t.Fatalf("Acquire: %v", err)
-	}
-	defer l.Release()
-
-	alive, err := ownerAlive(path)
-	if err != nil {
-		t.Fatalf("ownerAlive: %v", err)
-	}
-	if !alive {
-		t.Error("expected our own pid to read as alive")
 	}
 }
