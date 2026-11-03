@@ -1,0 +1,6 @@
+const (
+	// EnvActor names the acting agent for this session (agent:<label>).
+	EnvActor = "LORE_ACTOR"
+	// EnvSession is the agent session id set by `lore agent start`.
+	EnvSession = "LORE_SESSION"
+)

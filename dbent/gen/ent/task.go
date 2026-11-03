@@ -7,6 +7,8 @@ import (
 	"dbent/gen/ent/plan"
 	"dbent/gen/ent/task"
 	"dbent/gen/ent/tasklist"
+	"dbent/schema"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -56,6 +58,40 @@ type Task struct {
 	CreatedByActorID *string `json:"created_by_actor_id,omitempty"`
 	// AssignedToActorID holds the value of the "assigned_to_actor_id" field.
 	AssignedToActorID *string `json:"assigned_to_actor_id,omitempty"`
+	// AssignedTeam holds the value of the "assigned_team" field.
+	AssignedTeam *string `json:"assigned_team,omitempty"`
+	// BlockedBy holds the value of the "blocked_by" field.
+	BlockedBy []schema.TaskDependency `json:"blocked_by,omitempty"`
+	// ClaimEpoch holds the value of the "claim_epoch" field.
+	ClaimEpoch int `json:"claim_epoch,omitempty"`
+	// Attempts holds the value of the "attempts" field.
+	Attempts int `json:"attempts,omitempty"`
+	// ClaimLog holds the value of the "claim_log" field.
+	ClaimLog []schema.ClaimLogEntry `json:"claim_log,omitempty"`
+	// TimeboxSeconds holds the value of the "timebox_seconds" field.
+	TimeboxSeconds *int64 `json:"timebox_seconds,omitempty"`
+	// Gate holds the value of the "gate" field.
+	Gate *task.Gate `json:"gate,omitempty"`
+	// ApprovedBy holds the value of the "approved_by" field.
+	ApprovedBy *string `json:"approved_by,omitempty"`
+	// ApprovedAt holds the value of the "approved_at" field.
+	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+	// ApprovedHash holds the value of the "approved_hash" field.
+	ApprovedHash *string `json:"approved_hash,omitempty"`
+	// DoneBy holds the value of the "done_by" field.
+	DoneBy *string `json:"done_by,omitempty"`
+	// DoneCommit holds the value of the "done_commit" field.
+	DoneCommit *string `json:"done_commit,omitempty"`
+	// DonePr holds the value of the "done_pr" field.
+	DonePr *int `json:"done_pr,omitempty"`
+	// MergedAt holds the value of the "merged_at" field.
+	MergedAt *time.Time `json:"merged_at,omitempty"`
+	// WorkBranch holds the value of the "work_branch" field.
+	WorkBranch *string `json:"work_branch,omitempty"`
+	// IdempotencyKey holds the value of the "idempotency_key" field.
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+	// Role holds the value of the "role" field.
+	Role *string `json:"role,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the TaskQuery when eager-loading is set.
 	Edges        TaskEdges `json:"edges"`
@@ -115,9 +151,13 @@ func (*Task) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case task.FieldID, task.FieldProjectID, task.FieldRepoID, task.FieldTitle, task.FieldBody, task.FieldStatus, task.FieldPriority, task.FieldCommitment, task.FieldMissionID, task.FieldTasklistID, task.FieldPlanID, task.FieldCreatedByActorID, task.FieldAssignedToActorID:
+		case task.FieldBlockedBy, task.FieldClaimLog:
+			values[i] = new([]byte)
+		case task.FieldClaimEpoch, task.FieldAttempts, task.FieldTimeboxSeconds, task.FieldDonePr:
+			values[i] = new(sql.NullInt64)
+		case task.FieldID, task.FieldProjectID, task.FieldRepoID, task.FieldTitle, task.FieldBody, task.FieldStatus, task.FieldPriority, task.FieldCommitment, task.FieldMissionID, task.FieldTasklistID, task.FieldPlanID, task.FieldCreatedByActorID, task.FieldAssignedToActorID, task.FieldAssignedTeam, task.FieldGate, task.FieldApprovedBy, task.FieldApprovedHash, task.FieldDoneBy, task.FieldDoneCommit, task.FieldWorkBranch, task.FieldIdempotencyKey, task.FieldRole:
 			values[i] = new(sql.NullString)
-		case task.FieldCreatedAt, task.FieldUpdatedAt, task.FieldDeferredUntil, task.FieldDueAt, task.FieldStartedAt, task.FieldCompletedAt:
+		case task.FieldCreatedAt, task.FieldUpdatedAt, task.FieldDeferredUntil, task.FieldDueAt, task.FieldStartedAt, task.FieldCompletedAt, task.FieldApprovedAt, task.FieldMergedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -259,6 +299,125 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 				_m.AssignedToActorID = new(string)
 				*_m.AssignedToActorID = value.String
 			}
+		case task.FieldAssignedTeam:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field assigned_team", values[i])
+			} else if value.Valid {
+				_m.AssignedTeam = new(string)
+				*_m.AssignedTeam = value.String
+			}
+		case task.FieldBlockedBy:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field blocked_by", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.BlockedBy); err != nil {
+					return fmt.Errorf("unmarshal field blocked_by: %w", err)
+				}
+			}
+		case task.FieldClaimEpoch:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field claim_epoch", values[i])
+			} else if value.Valid {
+				_m.ClaimEpoch = int(value.Int64)
+			}
+		case task.FieldAttempts:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field attempts", values[i])
+			} else if value.Valid {
+				_m.Attempts = int(value.Int64)
+			}
+		case task.FieldClaimLog:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field claim_log", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ClaimLog); err != nil {
+					return fmt.Errorf("unmarshal field claim_log: %w", err)
+				}
+			}
+		case task.FieldTimeboxSeconds:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field timebox_seconds", values[i])
+			} else if value.Valid {
+				_m.TimeboxSeconds = new(int64)
+				*_m.TimeboxSeconds = value.Int64
+			}
+		case task.FieldGate:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field gate", values[i])
+			} else if value.Valid {
+				_m.Gate = new(task.Gate)
+				*_m.Gate = task.Gate(value.String)
+			}
+		case task.FieldApprovedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field approved_by", values[i])
+			} else if value.Valid {
+				_m.ApprovedBy = new(string)
+				*_m.ApprovedBy = value.String
+			}
+		case task.FieldApprovedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field approved_at", values[i])
+			} else if value.Valid {
+				_m.ApprovedAt = new(time.Time)
+				*_m.ApprovedAt = value.Time
+			}
+		case task.FieldApprovedHash:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field approved_hash", values[i])
+			} else if value.Valid {
+				_m.ApprovedHash = new(string)
+				*_m.ApprovedHash = value.String
+			}
+		case task.FieldDoneBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field done_by", values[i])
+			} else if value.Valid {
+				_m.DoneBy = new(string)
+				*_m.DoneBy = value.String
+			}
+		case task.FieldDoneCommit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field done_commit", values[i])
+			} else if value.Valid {
+				_m.DoneCommit = new(string)
+				*_m.DoneCommit = value.String
+			}
+		case task.FieldDonePr:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field done_pr", values[i])
+			} else if value.Valid {
+				_m.DonePr = new(int)
+				*_m.DonePr = int(value.Int64)
+			}
+		case task.FieldMergedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field merged_at", values[i])
+			} else if value.Valid {
+				_m.MergedAt = new(time.Time)
+				*_m.MergedAt = value.Time
+			}
+		case task.FieldWorkBranch:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field work_branch", values[i])
+			} else if value.Valid {
+				_m.WorkBranch = new(string)
+				*_m.WorkBranch = value.String
+			}
+		case task.FieldIdempotencyKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
+			} else if value.Valid {
+				_m.IdempotencyKey = new(string)
+				*_m.IdempotencyKey = value.String
+			}
+		case task.FieldRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field role", values[i])
+			} else if value.Valid {
+				_m.Role = new(string)
+				*_m.Role = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -383,6 +542,83 @@ func (_m *Task) String() string {
 	builder.WriteString(", ")
 	if v := _m.AssignedToActorID; v != nil {
 		builder.WriteString("assigned_to_actor_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.AssignedTeam; v != nil {
+		builder.WriteString("assigned_team=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("blocked_by=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BlockedBy))
+	builder.WriteString(", ")
+	builder.WriteString("claim_epoch=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ClaimEpoch))
+	builder.WriteString(", ")
+	builder.WriteString("attempts=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Attempts))
+	builder.WriteString(", ")
+	builder.WriteString("claim_log=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ClaimLog))
+	builder.WriteString(", ")
+	if v := _m.TimeboxSeconds; v != nil {
+		builder.WriteString("timebox_seconds=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.Gate; v != nil {
+		builder.WriteString("gate=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.ApprovedBy; v != nil {
+		builder.WriteString("approved_by=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ApprovedAt; v != nil {
+		builder.WriteString("approved_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ApprovedHash; v != nil {
+		builder.WriteString("approved_hash=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.DoneBy; v != nil {
+		builder.WriteString("done_by=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.DoneCommit; v != nil {
+		builder.WriteString("done_commit=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.DonePr; v != nil {
+		builder.WriteString("done_pr=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.MergedAt; v != nil {
+		builder.WriteString("merged_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.WorkBranch; v != nil {
+		builder.WriteString("work_branch=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.IdempotencyKey; v != nil {
+		builder.WriteString("idempotency_key=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Role; v != nil {
+		builder.WriteString("role=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

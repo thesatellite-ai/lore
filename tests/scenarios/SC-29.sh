@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SC-29: aicoder version --json schema
+# SC-29: lore version --json schema
 # Catches: R25-3, R25-11
 source "$(dirname "$0")/../lib/common.sh"
 need jq

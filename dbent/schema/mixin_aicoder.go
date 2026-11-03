@@ -72,7 +72,7 @@ func (m AicoderBaseMixin) Fields() []ent.Field {
 //
 // Columns:
 //   - trust_score      — 0.0..1.0, source-dependent default
-//   - confidence       — nullable, LLM-graded (v0.2)
+//   - confidence       — nullable, model-graded (v0.2)
 //   - last_accessed_at — lazy update via decay buffer (R27 #1)
 //   - last_validated_at — review tracking
 //   - archived_at      — soft-delete sentinel

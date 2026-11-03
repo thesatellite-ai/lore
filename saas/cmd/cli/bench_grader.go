@@ -38,7 +38,7 @@ func newBenchGraderTestCommand() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "test <eval-code>",
-		Short: "Run a grader against a sample output file (no LLM call)",
+		Short: "Run a grader against a sample output file (no model call)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if outputFile == "" {

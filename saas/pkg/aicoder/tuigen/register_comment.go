@@ -47,6 +47,7 @@ func registerComment(app *runtime.App, client *ent.Client) {
 					entComment.IDContainsFold(opts.Filter),
 					entComment.EntityTableContainsFold(opts.Filter),
 					entComment.EntityIDContainsFold(opts.Filter),
+					entComment.EntityProjectIDContainsFold(opts.Filter),
 					entComment.CreatedByActorIDContainsFold(opts.Filter),
 				))
 			}
@@ -81,6 +82,19 @@ func registerComment(app *runtime.App, client *ent.Client) {
 						q = q.Where(entComment.EntityIDNEQ(f.Value))
 					case runtime.OpContains:
 						q = q.Where(entComment.EntityIDContainsFold(f.Value))
+					}
+				case "entity_project_id":
+					switch f.Op {
+					case runtime.OpEq:
+						q = q.Where(entComment.EntityProjectIDEQ(f.Value))
+					case runtime.OpNeq:
+						q = q.Where(entComment.EntityProjectIDNEQ(f.Value))
+					case runtime.OpContains:
+						q = q.Where(entComment.EntityProjectIDContainsFold(f.Value))
+					case runtime.OpIsNull:
+						q = q.Where(entComment.EntityProjectIDIsNil())
+					case runtime.OpNotNull:
+						q = q.Where(entComment.EntityProjectIDNotNil())
 					}
 				case "created_by_actor_id":
 					switch f.Op {
@@ -131,6 +145,12 @@ func registerComment(app *runtime.App, client *ent.Client) {
 							q = q.Order(ent.Asc(entComment.FieldEntityID))
 						} else {
 							q = q.Order(ent.Desc(entComment.FieldEntityID))
+						}
+					case "entity_project_id":
+						if k.Dir == runtime.Asc {
+							q = q.Order(ent.Asc(entComment.FieldEntityProjectID))
+						} else {
+							q = q.Order(ent.Desc(entComment.FieldEntityProjectID))
 						}
 					case "created_by_actor_id":
 						if k.Dir == runtime.Asc {
@@ -219,6 +239,21 @@ func registerComment(app *runtime.App, client *ent.Client) {
 				Align:      "",
 				Get: func(r *ent.Comment) string {
 					return r.EntityID
+				},
+			},
+			{
+				Key:        "entity_project_id",
+				Label:      "Entity Project Id",
+				Sortable:   true,
+				Filterable: true,
+				Hidden:     false,
+				Width:      0,
+				Align:      "",
+				Get: func(r *ent.Comment) string {
+					if r.EntityProjectID == nil {
+						return ""
+					}
+					return *r.EntityProjectID
 				},
 			},
 			{

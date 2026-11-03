@@ -2,12 +2,12 @@
 # SC-1: Fresh project bootstrap → first memory → render
 # Catches: R14-1, R21-61, R22-41, ship-gate Tier-2 #1, #2, #4
 #
-# Run via: LORE=/path/to/bin/aicoder bash tests/scenarios/SC-1.sh
+# Run via: LORE=/path/to/bin/lore bash tests/scenarios/SC-1.sh
 
 set -e
 trap 'cleanup' EXIT
 
-LORE="${LORE:-aicoder}"
+LORE="${LORE:-lore}"
 
 cleanup() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
@@ -43,6 +43,9 @@ grep -q "Never force-push main" .lore/LORE.md || fail "LORE.md missing must rule
 
 # 4. search returns the memory via JSON output
 RESULTS=$($LORE memory search "Tailwind" --json)
-echo "$RESULTS" | jq -e '.data[0].row.body | test("Tailwind")' > /dev/null || fail "search did not return memory"
+# python3 rather than jq: jq is not installed on every dev box, and this
+# assertion must run everywhere instead of being skipped.
+echo "$RESULTS" | python3 -c 'import json,sys; sys.exit(0 if "Tailwind" in json.load(sys.stdin)["data"][0]["row"]["body"] else 1)' \
+    || fail "search did not return memory"
 
 echo "PASS: SC-1"

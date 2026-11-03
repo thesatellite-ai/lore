@@ -120,6 +120,17 @@ type Options struct {
 	// the second walk would only double the per-command cost. File changes
 	// made by others meanwhile are picked up by the next full pass.
 	DirtyOnly bool
+	// Divert, when set, is asked for every row the pass would export or
+	// import; true routes the row elsewhere (the live ref): its document is
+	// returned in Report.Diverted instead of being written to .lore/data,
+	// and it stays dirty until the caller calls ClearDirty (live.go).
+	Divert func(RowRef) bool
+	// ExportDoc, when set, may replace a row's encoded bytes just before
+	// they are written to .lore/data (and become the row's base). The CLI
+	// uses it in client repos to write an actor as the F18 projection
+	// {id, display name, kind} while lore.db keeps the full row; importing
+	// the projection back never clears a column it lacks (upsertRow).
+	ExportDoc func(table string, b []byte) []byte
 }
 
 // FileError is one file that could not be synced.
@@ -162,6 +173,9 @@ type Report struct {
 	// PendingExports counts DB changes left unexported (read-only mode,
 	// secret refusals); they are retried on the next pass.
 	PendingExports int `json:"pending_exports,omitempty"`
+	// Diverted are dirty rows Options.Divert routed elsewhere; the caller
+	// stores them and then calls ClearDirty.
+	Diverted []DivertedRow `json:"-"`
 }
 
 // Changed reports whether the pass changed anything on either side.
@@ -562,6 +576,11 @@ func (e *engine) syncOne(ctx context.Context, k rowKey, fc fileChange, fileChang
 	if !ok {
 		return e.clearDirty(ctx, k)
 	}
+	if e.o.Divert != nil {
+		if handled, err := e.divert(ctx, k, t, fc, fileChanged, dirty); handled || err != nil {
+			return err
+		}
+	}
 	rel := k.rel()
 	_, hasBase := e.bases[rel]
 	var baseDoc map[string]any
@@ -618,6 +637,12 @@ func (e *engine) syncOne(ctx context.Context, k rowKey, fc fileChange, fileChang
 	kind := e.dbChangeKind()
 	switch {
 	case !fileChanged && !dbChanged:
+		if dbDoc == nil {
+			// Deleted before it was ever exported (a row refused for a
+			// secret, say): its recorded refusal no longer applies
+			// (BUG-OPS1).
+			e.clearError(ctx, rel)
+		}
 		return e.clearDirty(ctx, k)
 	case !fileChanged && dbChanged:
 		if err := e.exportDoc(ctx, k, t, dbDoc); err != nil {
@@ -779,6 +804,12 @@ func conflictKeys(cs []merge3.Conflict) string {
 	return strings.Join(keys, ", ")
 }
 
+// setColumns are list columns that are sets (order and duplicates carry no
+// meaning): a three-way set merge keeps both sides' additions and honours
+// removals, and never conflicts (F4 step 2, C12). Lists of objects
+// (blocked_by, claim_log) are not sets.
+var setColumns = map[string]bool{"approvers": true, "member_actor_ids": true, "labels": true, "links": true}
+
 // StrategyFor returns the merge strategy per key for rows of t
 // (LORE_SYNC_SPEC.md §9): updated_at takes the max, scalar state (enums,
 // bools, numbers, timestamps, *_id references) takes the newer side, and
@@ -791,6 +822,9 @@ func StrategyFor(t *Table) func(string) merge3.Strategy {
 		}
 		if key == keyVersion || key == keyTable {
 			return merge3.StrategyMax
+		}
+		if setColumns[key] {
+			return merge3.StrategySet
 		}
 		c, ok := t.column(key)
 		if !ok {
@@ -808,6 +842,17 @@ func StrategyFor(t *Table) func(string) merge3.Strategy {
 			return merge3.StrategyNewest
 		}
 	}
+}
+
+// StrategyForTable is StrategyFor by table name, for callers outside the
+// package (the live merge, F4); nil for a table lsync does not sync.
+func StrategyForTable(name string) func(string) merge3.Strategy {
+	reg, _ := NewRegistry()
+	t, ok := reg.Table(name)
+	if !ok {
+		return nil
+	}
+	return StrategyFor(t)
 }
 
 // parseRowFile decodes and validates a row file; on failure it records the
@@ -1026,6 +1071,9 @@ func (e *engine) exportDoc(ctx context.Context, k rowKey, t *Table, dbDoc map[st
 		if err := e.dropBase(ctx, rel); err != nil {
 			return err
 		}
+		// The row is gone: a refusal recorded for it (a secret) no longer
+		// describes anything (BUG-OPS1: doctor kept reporting it).
+		e.clearError(ctx, rel)
 		return e.clearDirty(ctx, k)
 	}
 	extra, err := e.loadExtra(ctx, rel)
@@ -1035,6 +1083,9 @@ func (e *engine) exportDoc(ctx context.Context, k rowKey, t *Table, dbDoc map[st
 	b, err := encodeDoc(dbDoc, extra)
 	if err != nil {
 		return err
+	}
+	if e.o.ExportDoc != nil {
+		b = e.o.ExportDoc(k.table, b)
 	}
 	if e.o.CheckSecrets != nil {
 		if why := e.o.CheckSecrets(b); why != "" {
@@ -1215,6 +1266,15 @@ func (e *engine) record(ctx context.Context, rel, kind, detail string, block boo
 
 func (e *engine) clearError(ctx context.Context, rel string) {
 	if _, err := e.tx.ExecContext(ctx, `DELETE FROM `+tblErrors+` WHERE path = ?`, rel); err != nil {
+		e.rep.Warnings = append(e.rep.Warnings, "could not clear sync error: "+err.Error())
+	}
+}
+
+// clearErrorKind removes rel's recorded error only when it is of kind, so
+// a path that passed one check never hides a different problem recorded
+// for its file this pass (an unreadable branch file, say).
+func (e *engine) clearErrorKind(ctx context.Context, rel, kind string) {
+	if _, err := e.tx.ExecContext(ctx, `DELETE FROM `+tblErrors+` WHERE path = ? AND kind = ?`, rel, kind); err != nil {
 		e.rep.Warnings = append(e.rep.Warnings, "could not clear sync error: "+err.Error())
 	}
 }

@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"saas/pkg/constants"
@@ -23,7 +24,6 @@ import (
 	"saas/pkg/aicoder/fts5"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/security"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
 
@@ -73,7 +73,7 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 	// Fresh clone (or deleted cache): .lore/data exists but lore.db does
 	// not. Build the cache from the files before resolving the project.
 	if err := maybeMaterialize(context.Background(), c); err != nil {
-		return nil, nil, errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(err)
+		return nil, nil, materializeError(err)
 	}
 
 	ctx, err := projresolve.Resolve(projresolve.Inputs{
@@ -146,18 +146,24 @@ func rawDBFromClient(client *ent.Client) *sql.DB {
 	return clientToRawDB[client]
 }
 
-// mapResolveError wraps projresolve sentinels with appropriate error codes
+// mapResolveError wraps projresolve sentinels with appropriate error codes.
+// An error that already carries a code (projresolve's E_BAD_PATH refusal,
+// with its hint) is passed through unchanged, so it is never re-labelled
+// E_INTERNAL.
 func mapResolveError(err error) error {
+	var coded *errcodes.CLIError
 	switch {
-	case err == projresolve.ErrNotProjectRoot:
+	case errors.As(err, &coded):
+		return err
+	case errors.Is(err, projresolve.ErrNotProjectRoot):
 		return errcodes.New(errcodes.NotProjectRoot,
-			"current directory is not an lore project (no .lore/lore.db or lore.toml)").
+			"current directory is not a lore project (no .lore/lore.db or lore.yaml)").
 			WithHint("run `lore init` here, or cd into a project root")
-	case err == projresolve.ErrAmbiguousProject:
+	case errors.Is(err, projresolve.ErrAmbiguousProject):
 		return errcodes.New(errcodes.AmbiguousProject,
-			"both .lore/lore.db AND .lore/lore.toml present").
-			WithHint("delete the one you don't need (Mode A uses .db; Mode B uses .toml)")
-	case err == projresolve.ErrBadPath:
+			"both .lore/lore.db AND a .lore/lore.yaml (or lore.toml) pointer present").
+			WithHint("delete the one you don't need (Mode A uses lore.db; Mode B uses lore.yaml)")
+	case errors.Is(err, projresolve.ErrBadPath):
 		return errcodes.New(errcodes.BadPath, err.Error())
 	default:
 		return errcodes.New(errcodes.Internal, "resolve project").WithCause(err)
@@ -242,6 +248,7 @@ type memoryAddFlags struct {
 	supersedes   string
 	createdBy    string
 	validatedBy  string
+	to           toFlags
 }
 
 func newMemoryCommand() *cobra.Command {
@@ -297,6 +304,8 @@ Scope defaults to current repo (if --repo set) or project-master.`,
 	cmd.Flags().StringVar(&f.supersedes, constants.FlagSupersedes, "", "memory_id (mem_*) this entry replaces")
 	cmd.Flags().StringVar(&f.createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
 	cmd.Flags().StringVar(&f.validatedBy, constants.FlagValidatedBy, "", "actor_id (act_*) that validated this memory")
+	bindToFlags(cmd, &f.to, true)
+	bindCreateFlag(cmd, &f.to)
 	return cmd
 }
 
@@ -312,13 +321,23 @@ func runMemoryAdd(ctx context.Context, f *memoryAddFlags, rawBody string) error 
 	}
 
 	// 2. Secret scrub. Refuse unless --allow-secrets
-	scanner := security.NewScanner()
+	scanner, err := secretScanner()
+	if err != nil {
+		return err
+	}
 	if matches := scanner.Scan(body); len(matches) > 0 && !f.allowSecrets {
 		preview := matches[0].Preview
 		return errcodes.New(errcodes.SecretDetected,
-			fmt.Sprintf("body contains a credential pattern: %s (preview: %s)",
+			fmt.Sprintf("body contains a secret (credential pattern %s, preview %s)",
 				matches[0].PatternName, preview)).
 			WithHint("use --allow-secrets to override (logged loud); see also ~/.lore/pii-patterns.txt")
+	}
+
+	// F10 / F14: decide which project the row goes to (this repo, a store
+	// project, the personal store) and open it; refusals fail closed.
+	route, err := routeWrite(ctx, &f.commonFlags, f.to, "memory", body)
+	if err != nil {
+		return err
 	}
 
 	// 3. Resolve project + repo
@@ -348,8 +367,8 @@ func runMemoryAdd(ctx context.Context, f *memoryAddFlags, rawBody string) error 
 	if f.sourceRef != "" {
 		create.SetSourceRef(f.sourceRef)
 	}
-	if f.supersedes != "" {
-		create.SetSupersededByID(f.supersedes)
+	if err := checkSupersedes(ctx, client, supersedeMemory, projectID, f.supersedes); err != nil {
+		return err
 	}
 	createdBy, aerr := resolveActorIDFlag(ctx, client, f.createdBy)
 	if aerr != nil {
@@ -371,10 +390,15 @@ func runMemoryAdd(ctx context.Context, f *memoryAddFlags, rawBody string) error 
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create memory").WithCause(err)
 	}
+	if err := finishSupersedes(ctx, client, supersedeMemory, f.supersedes, mem.ID, func(ctx context.Context) error {
+		return client.Memory.DeleteOneID(mem.ID).Exec(ctx)
+	}); err != nil {
+		return err
+	}
 
 	// 6. Output success
-	fmt.Printf("%s %s %s\n", style.Success("✓"), mem.ID,
-		style.Code(mem.ID))
+	fmt.Printf("%s %s %s\n", style.Success("✓"), style.Code(mem.ID), route.Label)
+	printRoute(route)
 	if repoID != "" {
 		fmt.Printf("  scope: %s\n", style.ScopeBadge("repo:"+rctx.RepoMount))
 	} else {

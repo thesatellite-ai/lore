@@ -1,5 +1,7 @@
 # Error codes
 
+**In short:** every lore error has a fixed code like `E_DB_LOCKED`. Find the code here to learn what went wrong and how to fix it; scripts should check the code, not the message.
+
 Every lore error has a stable `E_*` code. When something fails, **match on the code, not the English message** â€” the message may change between versions, the code will not.
 
 ## Recover by inspecting the code
@@ -21,7 +23,24 @@ Auto-discovery: `lore errors list --json` returns the full registry at runtime â
 
 ---
 
-## Full registry (37 codes as of v0.1)
+## Team codes and exit statuses (lore for teams)
+
+These codes also set the process exit status, so a script or agent can branch on `$?` without parsing output. Every other error exits 1.
+
+| Code | Exit | What to do |
+|---|---|---|
+| `E_NO_WORK` | 10 | `lore task next` found nothing ready; the message lists why each candidate is blocked. Wait, or check `lore inbox` |
+| `E_CONTENDED` | 11 | ready work exists but every claim lost a race; retry after a short wait |
+| `E_LOST_CLAIM` | 12 | your claim is gone (lease expired, reclaimed or revoked); stop work on this task |
+| `E_CANCELLED` | 13 | a human cancelled the task while you held it; stop |
+| `E_REASSIGNED` | 14 | a human reassigned the task while you held it; stop |
+| `E_OFFLINE` | 15 | a coordination write could not be confirmed by the remote; nothing was queued, retry when online |
+| `E_AMBIGUOUS_ID` | 16 | the id exists in two sources; pass `--from <source>` |
+| `E_ORG_AMBIGUOUS` / `E_ORG_DISAGREES` | 17 | two org entries match, or your choice disagrees with a store link; `lore org use <entry>` or `--force-org` |
+| `E_LINK_UNKNOWN` | 18 | lore cannot tell whether this is a client repo (store unreachable); pass `--to` or retry online |
+| `E_NOT_A_STORE` / `E_LEAK_BLOCKED` / `E_CYCLE` / `E_OLD_LORE` | 19 | not a lore store; internal content would reach a client (`lore check leaks --explain`); a dependency cycle; lore too old for this live ref (upgrade) |
+
+## Full registry
 
 | Code | Description |
 |---|---|

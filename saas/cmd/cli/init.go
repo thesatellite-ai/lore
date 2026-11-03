@@ -1,7 +1,7 @@
 // aicoder_init.go — implements `lore init`
 //
 // Story S2.1 (PLAN.md). Creates a fresh Mode A project at cwd:
-//   - Refuses if .lore/lore.db or .lore/lore.toml exists (E_ALREADY_INITIALIZED)
+//   - Refuses if .lore/lore.db or .lore/lore.yaml (or legacy lore.toml) exists (E_ALREADY_INITIALIZED)
 //   - Auto-suggests project name from git remote
 //   - Initializes SQLite DB with schema migration
 //   - Seeds DBConfig singletons (schema_version, db_uuid, db_created_at)
@@ -17,7 +17,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"saas/pkg/constants"
 	"strings"
@@ -59,7 +58,7 @@ It will:
   • register the initial Project row using the auto-detected name from
     your git remote (or the directory basename if no remote)
 
-Refuses if a project already exists (.lore/lore.db or .lore/lore.toml).`,
+Refuses if a project already exists (.lore/lore.db or .lore/lore.yaml).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := "."
@@ -102,7 +101,7 @@ func runInit(ctx context.Context, projectRoot string) error {
 	// Refuse when a project already exists here. A .lore/ holding only
 	// leftovers (an empty state/ dir from a lock, backups) is not a project
 	// and must not block init.
-	for _, f := range []string{projresolve.ModeAFile, projresolve.ModeBFile} {
+	for _, f := range projresolve.ProjectMarkerFiles() {
 		if _, err := os.Lstat(filepath.Join(markerDir, f)); err == nil {
 			return errcodes.New(errcodes.AlreadyInitialized,
 				fmt.Sprintf("a lore project already exists at %s (.lore/%s)", projectRoot, f)).
@@ -128,6 +127,13 @@ func runInit(ctx context.Context, projectRoot string) error {
 
 	originURL := readGitOriginURL(projectRoot)
 
+	// Resolve the identity before anything is created: an org refusal
+	// (ambiguous org, missing org identity) must leave no half-made project.
+	resolved, err := resolveIdentityIn(ctx, projectRoot)
+	if err != nil {
+		return err
+	}
+
 	// 3. Create marker dir + state subdir
 	if err := os.MkdirAll(filepath.Join(markerDir, projresolve.StateDir), 0o755); err != nil {
 		return errcodes.New(errcodes.Internal, "create .lore/state").WithCause(err)
@@ -149,8 +155,7 @@ func runInit(ctx context.Context, projectRoot string) error {
 	client.Use(txAtMonotonicHook())
 	defer client.Close()
 
-	// 6. Resolve identity → seed initial actor row
-	resolved := identity.Resolve(identity.Inputs{})
+	// 6. Seed the initial actor row (identity resolved before step 3)
 	if !resolved.Step.Stable() {
 		fmt.Fprintln(os.Stderr, style.Warn("WARN: identity resolved via ephemeral session salt;"))
 		fmt.Fprintln(os.Stderr, style.Warn("      audit-log entries from this session won't link to future sessions."))
@@ -162,7 +167,10 @@ func runInit(ctx context.Context, projectRoot string) error {
 	}
 
 	// 7. Create initial Project row
-	create := client.Project.Create().SetName(name)
+	// Times from the CLI clock (LORE_NOW in test builds), not the schema
+	// defaults, so `lore project show` is stable in docs examples.
+	now := cliClock().Now()
+	create := client.Project.Create().SetName(name).SetCreatedAt(now).SetUpdatedAt(now).SetLastActiveAt(now)
 	if originURL != "" {
 		create.SetOriginURL(originURL)
 	}
@@ -257,7 +265,7 @@ func setupSearchIndex(ctx context.Context, db *sql.DB) {
 	}
 }
 
-// inferProjectNameFromGit returns the repo name from `git remote get-url origin`
+// inferProjectNameFromGit returns the repo name from origin's configured URL
 // Returns "" if no git remote configured
 //
 // Examples:
@@ -281,15 +289,13 @@ func inferProjectNameFromGit(dir string) string {
 	return url
 }
 
-// readGitOriginURL runs `git remote get-url origin` in dir
+// readGitOriginURL returns origin's first URL as written in git config (not
+// rewritten by url.<base>.insteadOf; see rawRemoteURLs), or "" without one.
 func readGitOriginURL(dir string) string {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
+	if rs := rawRemoteURLs(context.Background(), dir, gitOriginRemote); len(rs) > 0 {
+		return rs[0].URL
 	}
-	return strings.TrimSpace(string(out))
+	return ""
 }
 
 // alreadyIgnored reports whether git already ignores path (e.g. a broader
@@ -311,6 +317,9 @@ func ensureGitignore(ctx context.Context, projectRoot string) error {
 		".lore/lore.db",
 		".lore/lore.db-shm",
 		".lore/lore.db-wal",
+		// restore/repair keep the replaced DB as lore.db.broken.<stamp>: a
+		// whole database with private rows, never to be committed.
+		".lore/lore.db.broken.*",
 		".lore/state/",
 		".lore/backups/",
 	}
@@ -373,13 +382,18 @@ func seedDBConfig(ctx context.Context, client *ent.Client) error {
 	return nil
 }
 
-// upsertActor finds-or-creates an actor by stable_key
+// upsertActor finds-or-creates an actor by stable_key. The lookup goes
+// through actorByKey first, so a person whose row arrived as a client-repo
+// projection (a fresh clone on a second machine) reuses that row instead of
+// minting a second actor (N1); see actorByKey for the dedup rule.
 func upsertActor(ctx context.Context, client *ent.Client, r identity.Resolved) (*ent.Actor, error) {
-	// Try lookup first via raw query because we don't have predicate access
-	// ent generates Where helpers; use them
-	// (Imports kept light by inlining here without the predicate package.)
-
-	// First insert; on UNIQUE conflict, fall back to lookup
+	existing, err := actorByKey(ctx, client, r.StableKey, true)
+	if err == nil {
+		return existing, nil
+	}
+	if !ent.IsNotFound(err) {
+		return nil, err
+	}
 	actor, err := client.Actor.Create().
 		SetKind(actorKind(r.Kind)).
 		SetDisplayName(r.DisplayName).
@@ -388,12 +402,10 @@ func upsertActor(ctx context.Context, client *ent.Client, r identity.Resolved) (
 	if err == nil {
 		return actor, nil
 	}
-	// Otherwise it must be a duplicate — find existing
-	existing, qerr := client.Actor.Query().
-		Where(entActor.StableKey(r.StableKey)).
-		Only(ctx)
-	if qerr == nil && existing != nil {
-		return existing, nil
+	// A concurrent writer on this lore.db created it between the lookup and
+	// the insert: find that row.
+	if again, qerr := actorByKey(ctx, client, r.StableKey, true); qerr == nil {
+		return again, nil
 	}
 	return nil, err
 }

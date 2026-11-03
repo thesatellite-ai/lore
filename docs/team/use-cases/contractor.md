@@ -1,0 +1,122 @@
+# Contractor limited to one client
+
+**In short:** the agency hires Bob, a contractor, to work only for the client. Bob gets the company rules and that one client's private notes. He gets nothing about other clients, because each client's notes sit in their own repo, and GitHub decides who can open it.
+
+## The situation
+
+The agency hires Bob (a contractor, handle `bob`) to work only on the client. Bob must see the agency's company rules and the client's internal notes. He must see nothing about any other client.
+
+GitHub cannot limit read access to a folder inside a repo. So the only way to keep one client's notes from a contractor is to keep them in a separate repo. A store is such a repo: a separate private repo that only the agency can open, like a locked filing cabinet. Here the agency uses **one store per client**.
+
+## The config
+
+The agency splits its stores. There is one company store, and one store per client. In the company store, `org_folder: "."` means the store's root project is the org folder: it holds the roster (the list of people and agents) and the company rules. The entry of Alice (an agency developer) lists every store:
+
+```yaml
+orgs:
+  - name: agency
+    identity: {key: "human:alice@agency.example", name: "Alice Doe", handle: alice}
+    stores:
+      - {url: "git@github.com:agency/notes", org_folder: "."}
+      - {url: "git@github.com:agency/notes-client"}
+      - {url: "git@github.com:agency/notes-client2"}
+    repos: [github.com/client/*, github.com/client2/*]
+```
+
+Bob's entry lists only the company store and the client's store. GitHub gives Bob access to only those two repos:
+
+```yaml
+orgs:
+  - name: agency
+    identity: {key: "human:bob@agency.example", name: "Bob Roe", handle: bob}
+    stores:
+      - {url: "git@github.com:agency/notes", org_folder: "."}
+      - {url: "git@github.com:agency/notes-client"}
+    repos: [github.com/client/website]
+```
+
+## The commands
+
+Alice creates the three stores. She links `client/website` to the client's store with `--store`. Then she writes one client note and one company rule (`--to agency/.` is the company store's root project):
+
+<!-- example: contractor#one-store-per-client -->
+```console
+# alice, in ~
+$ lore store init git@github.com:agency/notes && lore store init git@github.com:agency/notes-client && lore store init git@github.com:agency/notes-client2
+✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
+✓ wrote lore-store.yaml to github.com/agency/notes-client (new branch main, first commit) and pushed
+✓ wrote lore-store.yaml to github.com/agency/notes-client2 (new branch main, first commit) and pushed
+
+# alice, in website
+$ lore org link agency --project client --store git@github.com:agency/notes-client --yes
+This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
+and the leak guards turn on for everyone in agency.
+  link: project prj_7a67…9504 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
+✓ github.com/client/website (prj_7a67…9504, github.com/client/website) linked to github.com/agency/notes-client client/ (created; pushed)
+  nothing was written to this repo
+$ lore actor register
+✓ act_2ad3…f891 Alice Doe (@alice) registered in agency ./
+lore: [agency/.] 3 file(s) pushed
+$ lore memory add --body 'the client staging database is restored every Sunday night'
+✓ mem_162d…9666 [agency/client]
+  filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
+  scope: [master]
+lore: [agency/client] 2 file(s) pushed
+$ lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'
+✓ rul_54fe…28f2 [agency/.]
+  filed: --to agency/.
+  scope: [master] severity: must
+lore: [agency/.] 1 file(s) pushed
+```
+<!-- /example -->
+
+Bob, in the same client repo, sees the link, the client's note and the company stores. He has clones of only the two stores in his config:
+
+<!-- example: contractor#contractor-view -->
+```console
+# bob, in website
+$ lore whoami
+org        agency  (matched by: link in github.com/agency/notes-client client/, project id + remote)
+identity   Bob Roe <human:bob@agency.example>   act_05e9…4603  @bob  (from: org entry (config.yaml))
+repo       client repo  (guards on)
+project    prj_7a67…9504
+remotes    github.com/client/website
+stores     git@github.com:agency/notes on branch main  (org folder .)
+           git@github.com:agency/notes-client on branch main
+internal   github.com/agency/notes-client client/
+links      known  1 link(s) for this repo (stores of 1 entry scanned)
+personal   local: agency/, everywhere/
+$ lore actor register
+✓ act_05e9…4603 Bob Roe (@bob) registered in agency ./
+lore: [agency/.] 1 file(s) pushed
+$ lore memory list
+mem_162d…9666  the client staging database is restored every Sunday night  [agency/client]
+
+# bob, in ~
+$ lore store show
+<redacted>
+  entries   agency   branches main
+  clone     ~/.lore/clones/github.com/agency/notes.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+<redacted>
+  entries   agency   branches main
+  clone     ~/.lore/clones/github.com/agency/notes-client.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+$ ls ~/.lore/clones/github.com/agency
+notes-client.git
+notes.git
+```
+<!-- /example -->
+
+## What happened
+
+```text
+ agency/notes          (.)       roster, company rules         Alice ✓   Bob ✓
+ agency/notes-client   client/   the client's internal notes   Alice ✓   Bob ✓
+ agency/notes-client2  client2/  client 2's internal notes     Alice ✓   Bob ✗ (not in config, no GitHub access)
+```
+
+## Pitfalls
+
+- **GitHub permissions are the access control.** Leaving a store out of Bob's config is only a convenience. Removing Bob's access to that repo is what actually keeps it out of reach.
+- **Folder names are unique across an org's stores**, and exactly one store sets `org_folder`.
+- **Offboarding** (when Bob leaves) means removing two repo permissions. Then run `lore task revoke` / `lore task reassign` for his open work and `lore actor deactivate @bob`. The roster row stays, marked inactive, because old rows point at it. Copies Bob already fetched stay on Bob's machine, like any git clone.
+- The three layouts (one store for everything, one per client, or a mix) are all plain config. The commands do not change. One store per client is the recommended layout once you have contractors or NDAs (secrecy agreements).

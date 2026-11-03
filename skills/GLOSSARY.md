@@ -1,5 +1,7 @@
 # Glossary
 
+**In short:** the words lore uses, in alphabetical order, each explained in a line or two.
+
 Terms used throughout the lore documentation and CLI. Alphabetical.
 
 ## Activation
@@ -9,7 +11,7 @@ A rule's render-time scope policy. Values: `always`, `glob`, `semantic`, `manual
 The identity behind any write. Resolved via 8-step fallback chain (flag → env → toml → git config → $USER → machine-id → persisted salt → ephemeral). Always resolves; the chain step is recorded.
 
 ## AGENTS.md
-Codex / OpenAI convention for AI context files. `lore render --target=AGENTS.md` stitches the `@import` pointer into `AGENTS.md` instead of `CLAUDE.md`; the generated knowledge still lives in `.lore/LORE.md`.
+A file name several coding tools read for agent context. `lore render --target=AGENTS.md` stitches the `@import` pointer into `AGENTS.md` instead of `CLAUDE.md`; the generated knowledge still lives in `.lore/LORE.md`.
 
 ## Audit log
 Append-only, hash-chained ledger of every change to a shared row (lore writes, imports from .lore/data, merges, and external writes found in the DB). `lore audit verify` checks the chain and flags rows changed outside lore; `lore audit log` lists entries.
@@ -24,7 +26,7 @@ A benchmark task template — independent of any run. Has `code` (e.g. `E1-001`)
 One benchmark execution. Captures `model + temperature + runs_per_arm + claude_md_sha256` (for reproducibility). Status flow: `running → complete | aborted | failed`. The 1:N parent of bench_results.
 
 ## Bench result
-One row per (run × eval × arm × attempt). Stores `prompt_sent + output_received` verbatim so the grader can be re-run after a bug fix without re-spending on LLM calls. `grade` enum: `pass | fail | error | skipped`. The unit of statistical analysis.
+One row per (run × eval × arm × attempt). Stores `prompt_sent + output_received` verbatim so the grader can be re-run after a bug fix without paying for model calls again. `grade` enum: `pass | fail | error | skipped`. The unit of statistical analysis.
 
 ## BM25
 Ranking function used by SQLite FTS5. Orders search hits by term frequency × inverse document frequency. Better hits = lower bm25() values; lore flips sign so "higher score = better" for callers.
@@ -36,10 +38,10 @@ The first-time setup: `lore init` + `lore learn-from docs`. See [examples/01-boo
 Sanitized tarball produced by `lore support-bundle` for bug reports. Contains DB schema, doctor output, scrubbed audit log. No bodies / no credentials.
 
 ## Canary
-A content-derived sha256 prefix at the top of the generated knowledge file `.lore/LORE.md` (`<!-- AICODER:CANARY=rnd_<hex> -->`). Lets `why-context --last-render` look up exactly which render the AI consumed. Content-derived so renders are deterministic.
+A content-derived sha256 prefix at the top of the generated knowledge file `.lore/LORE.md` (`<!-- AICODER:CANARY=rnd_<hex> -->`). Lets `why-context --last-render` look up exactly which render the agent read. Content-derived so renders are deterministic.
 
 ## CLAUDE.md
-Anthropic's convention for AI context files. lore's default **pointer target**: `lore render` writes the compiled knowledge to `.lore/LORE.md` and stitches an idempotent `@import` pointer into CLAUDE.md, leaving any hand-written content intact. The AI reads CLAUDE.md, which imports `.lore/LORE.md`; the user writes to lore; `lore render` bridges the two.
+The context file that some coding tools read at the start of every session. lore's default **pointer target**: `lore render` writes the compiled knowledge to `.lore/LORE.md` and stitches an idempotent `@import` pointer into CLAUDE.md, leaving any hand-written content intact. The agent reads CLAUDE.md, which imports `.lore/LORE.md`; the user writes to lore; `lore render` bridges the two.
 
 ## Comment
 Polymorphic free-form note attached to any entity via `--on-table` + `--on-id`. Timeline-ordered.
@@ -102,7 +104,7 @@ A program git runs instead of its line-by-line merge for files `.gitattributes` 
 `lore sync ci-merge --base <ref>` — merges a base branch into the current branch with lore's driver and commits, only when the host would see a conflict, every conflict is in lore data, and lore settles all of them; otherwise reports `needs-human` and changes nothing. Never pushes. What the optional pull-request workflow runs.
 
 ## lore-sync-merge workflow
-`.github/workflows/lore-sync-merge.yml`, written by `lore sync install-action` (opt-in; `--manual` for run-by-hand only). Runs `ci-merge` for open pull requests when lore data changes and pushes the merges it is allowed to make. Uses a `LORE_SYNC_TOKEN` secret when present so required checks re-run on its merge commits. Its lore version is pinned `auto` (follows the newest lore release a developer runs in the repo; never downgraded) or `fixed` (`--lore-version`); a checksum line marks hand edits, which stop the automatic updates.
+`.github/workflows/lore-sync-merge.yml`, written by `lore sync install-action` (opt-in; runs only when started by hand unless installed with `--auto`; a re-run or a version update keeps the triggers the file already has). Runs `ci-merge` for open pull requests (with `--auto`, whenever lore data changes) and pushes the merges it is allowed to make. Uses a `LORE_SYNC_TOKEN` secret when present so required checks re-run on its merge commits. Its lore version is pinned `auto` (follows the newest lore release a developer runs in the repo; never downgraded) or `fixed` (`--lore-version`); a checksum line marks hand edits, which stop the automatic updates.
 
 ## Mode B
 Shared DB mode. Multiple project roots pointing at a single shared SQLite file via `.lore/lore.toml`. Used when many sibling projects want one knowledge base.
@@ -168,7 +170,7 @@ lore strips bidi-override + zero-width characters from input text. Prevents copy
 Timestamp-prefixed UUID variant. lore uses UUIDv7 for all IDs so insert order ≈ chronological order (id-sorted = newest last). Critical for FTS5 + audit chain ordering.
 
 ## why-context
-Introspection command. Shows what the most recent render included/excluded and why. Use when "the AI seems to be missing X."
+Introspection command. Shows what the most recent render included/excluded and why. Use when "the agent seems to be missing X."
 
 ## WAL
 SQLite's Write-Ahead Log mode. lore uses it via PRAGMA for crash safety + concurrent readers. Sidecar files: `lore.db-wal`, `lore.db-shm`.

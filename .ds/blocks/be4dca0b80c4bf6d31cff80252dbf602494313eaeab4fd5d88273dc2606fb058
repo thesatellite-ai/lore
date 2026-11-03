@@ -1,0 +1,5 @@
+const (
+	doctorHealthy  = "healthy"
+	doctorDegraded = "degraded"
+	doctorBroken   = "broken"
+)

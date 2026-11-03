@@ -66,6 +66,7 @@ import (
 	"dbent/gen/ent/tasklist"
 	"dbent/gen/ent/taskview"
 	"dbent/gen/ent/tastepref"
+	"dbent/gen/ent/team"
 	"dbent/gen/ent/techdoc"
 	"dbent/gen/ent/techdocpage"
 	"dbent/gen/ent/trustedplugin"
@@ -1698,6 +1699,33 @@ func (f TraverseTastePref) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.TastePrefQuery", q)
 }
 
+// The TeamFunc type is an adapter to allow the use of ordinary function as a Querier.
+type TeamFunc func(context.Context, *ent.TeamQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f TeamFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.TeamQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.TeamQuery", q)
+}
+
+// The TraverseTeam type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseTeam func(context.Context, *ent.TeamQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseTeam) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseTeam) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.TeamQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.TeamQuery", q)
+}
+
 // The TechDocFunc type is an adapter to allow the use of ordinary function as a Querier.
 type TechDocFunc func(context.Context, *ent.TechDocQuery) (ent.Value, error)
 
@@ -1979,6 +2007,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.TaskViewQuery, predicate.TaskView, taskview.OrderOption]{typ: ent.TypeTaskView, tq: q}, nil
 	case *ent.TastePrefQuery:
 		return &query[*ent.TastePrefQuery, predicate.TastePref, tastepref.OrderOption]{typ: ent.TypeTastePref, tq: q}, nil
+	case *ent.TeamQuery:
+		return &query[*ent.TeamQuery, predicate.Team, team.OrderOption]{typ: ent.TypeTeam, tq: q}, nil
 	case *ent.TechDocQuery:
 		return &query[*ent.TechDocQuery, predicate.TechDoc, techdoc.OrderOption]{typ: ent.TypeTechDoc, tq: q}, nil
 	case *ent.TechDocPageQuery:

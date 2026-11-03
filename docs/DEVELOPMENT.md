@@ -1,5 +1,7 @@
 # Development
 
+**In short:** this page is for people who change lore itself. It shows how the code is laid out, how to build and test it, and how a new version is released. If you only use lore, you do not need it.
+
 Internal build / release notes. End-user docs live in the top-level [README](../README.md).
 
 ## How it works
@@ -10,7 +12,7 @@ Internal build / release notes. End-user docs live in the top-level [README](../
 | Sync | `saas/pkg/aicoder/lsync` reconciles both directions around every command; design in [LORE_SYNC_SPEC.md](../LORE_SYNC_SPEC.md) |
 | Search | SQLite FTS5 (built into the binary) + hybrid ranking |
 | Output | Compiles stored knowledge into `CLAUDE.md` / `AGENTS.md` / `.cursorrules` |
-| Agent loop | Claude skill captures corrections & decisions back into the db |
+| Agent loop | The lore skill (an instruction file the coding agent loads) captures corrections & decisions back into the db |
 
 ## Layout
 
@@ -35,7 +37,7 @@ Requires Go 1.26+ and [Task](https://taskfile.dev/).
 ```sh
 task lore:build          # → tmp/bin/lore (version stamped from git describe)
 task lore:build:debug    # with debug symbols
-task lore:install:all    # build + install binary AND the Claude skill locally
+task lore:install:all    # build + install binary AND the lore skill locally
 task lore:skill:install  # (re)install the skill to ~/.claude/skills/lore
 task lore:test           # unit + integration tests (race detector)
 task lore:test:sync      # sync engine + CLI end-to-end suite (real git, real binary)

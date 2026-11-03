@@ -1,0 +1,6 @@
+	if f.commitment == "" && callerIsAgent() {
+		return errcodes.New(errcodes.InvalidInput,
+			"--commitment is required for agent callers").
+			WithHint("accepted = user asked / starting now; " +
+				"proposed = your speculative idea; someday = parking lot")
+	}

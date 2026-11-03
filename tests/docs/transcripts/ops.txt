@@ -1,0 +1,409 @@
+
+### doctor
+alice (work/website)$ lore doctor
+Status: HEALTHY
+Binary: 0.1.0-dev
+
+[db]
+  ok:       true
+  wal_size: 4152 bytes
+
+[sync]
+  baselined:        true
+  pending exports:  0
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  uncommitted:      0
+
+[identity]
+  resolved: human:alice@agency.example
+  source:   git config
+  stable:   yes
+
+Notes:
+  - live: tracking refspec installed, not forced into refs/lore/*
+  - live: last fetch 5s ago
+  - live: post-commit and pre-push hook blocks installed
+alice (work/website)$ lore doctor --json | head -8
+{
+  "schema_version": 1,
+  "ok": true,
+  "status": "healthy",
+  "db_ok": true,
+  "wal_size_bytes": 4152,
+  "identity": {
+    "resolved": "human:alice@agency.example",
+
+### audit log
+alice (work/website)$ lore rule add --body 'Never put passwords in the code'
+✓ rul_7a670ae8548ed05bf57ad29ad0759504 
+  scope: [master] severity: must
+lore sync: exported 1
+lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore audit log
+2026-11-02T10:00:00Z  rules.write                  rules/rul_7a670ae8548ed05bf57ad29ad0759504  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  memories.write               memories/mem_162df51b7f78b785c97c26b41ea89666  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe984c9b495744c0217776765a28f2  by act_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore audit verify
+✓ audit chain intact (3 entries)
+
+### audit tamper
+alice (work/website)$ lore audit verify
+✓ audit chain intact (3 entries)
+✗ hash mismatch: rules/rul_54fe984c9b495744c0217776765a28f2 changed outside lore
+ERROR: [E_AUDIT_CHAIN_BROKEN] hash mismatch: 1 row(s) changed outside lore
+  hint: inspect them (`lore <kind> show <id>`); the next lore command records them as external writes
+(exit 1)
+alice (work/website)$ lore rule list
+lore sync: exported 1
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Pushing without tests is fine
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore audit log --limit 2
+2026-11-02T10:00:00Z  rules.external-write         rules/rul_54fe984c9b495744c0217776765a28f2  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  rules.write                  rules/rul_7a670ae8548ed05bf57ad29ad0759504  by act_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore audit verify
+✓ audit chain intact (4 entries)
+! 1 change(s) were made outside lore and later recorded (action *.external-write; see `lore audit log`)
+alice (work/website)$ lore rule edit rul_54fe984c9b495744c0217776765a28f2 --body 'Run the tests before you push'
+✓ rul_54fe984c9b495744c0217776765a28f2 updated
+lore sync: exported 1
+lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore rule list
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+
+### backup
+alice (work/website)$ lore backup --out .lore/backups/before-buttons.sqlite
+✓ ~/work/website/.lore/backups/before-buttons.sqlite (1441792 bytes)
+alice (work/website)$ ls .lore/backups
+20261102-100000.000000000-pre-sync.sqlite
+before-buttons.sqlite
+
+### restore
+alice (work/website)$ lore rule add --body 'Buttons are blue'
+✓ rul_05e99e22e9e86e96fe4daa7777994603 
+  scope: [master] severity: must
+lore sync: exported 1
+lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore rule list
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Buttons are blue
+alice (work/website)$ lore restore .lore/backups/before-buttons.sqlite
+ERROR: [E_INVALID_INPUT] refusing to overwrite DB without --confirm
+(exit 1)
+alice (work/website)$ lore restore .lore/backups/before-buttons.sqlite --confirm
+✓ restored from .lore/backups/before-buttons.sqlite
+  previous DB preserved at: ~/work/website/.lore/lore.db.broken.20261102-100000
+  next command re-syncs .lore/data preferring: db
+alice (work/website)$ lore rule list
+lore sync: adopted .lore/data: imported 4, exported 0, conflicts 2
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+lore sync: conflict actors/act_2ad3618e878ebbf527d34d446ef4f891.json: kept db — restore preferred the DB
+lore sync: conflict rules/rul_05e99e22e9e86e96fe4daa7777994603.json: kept db — not in the restored DB; file removed
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ git status --short
+ M .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
+?? .lore/data/rules/rul_7a670ae8548ed05bf57ad29ad0759504.json
+
+### repair
+alice (work/website)$ lore doctor
+Status: BROKEN
+Binary: 0.1.0-dev
+
+[db]
+  ok:       false
+  wal_size: 0 bytes
+
+[identity]
+  resolved: human:alice@agency.example
+  source:   git config
+  stable:   yes
+
+Errors:
+  - E_DB_CORRUPT: DB file is corrupt (pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)); recover with `lore repair --tier=2 --confirm` (latest backup) — shared rows also rebuild from .lore/data
+(exit 2)
+alice (work/website)$ lore rule list
+ERROR: [E_INTERNAL] apply pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)
+(exit 1)
+alice (work/website)$ lore repair --tier=2 --confirm
+✓ restored from ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+  previous (broken) DB at: ~/work/website/.lore/lore.db.broken.20261102-100001
+alice (work/website)$ lore rule list
+lore sync: adopted .lore/data: imported 4, exported 0, conflicts 1
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+lore sync: conflict actors/act_2ad3618e878ebbf527d34d446ef4f891.json: kept db — restore preferred the DB
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+
+### after repair
+alice (work/website)$ lore doctor
+Status: DEGRADED
+Binary: 0.1.0-dev
+
+[db]
+  ok:       true
+  wal_size: 4152 bytes
+
+[sync]
+  baselined:        true
+  pending exports:  0
+  open conflicts:   1
+  file errors:      0
+  merge driver:     true
+  uncommitted:      2
+
+[identity]
+  resolved: human:alice@agency.example
+  source:   git config
+  stable:   yes
+
+Notes:
+  - live: tracking refspec installed, not forced into refs/lore/*
+  - live: last fetch 0s ago
+  - live: post-commit and pre-push hook blocks installed
+
+Warnings:
+  - 1 sync conflict(s) kept aside; see `lore sync conflicts`
+(exit 1)
+alice (work/website)$ lore sync conflicts | head -3
+#1 actors/act_2ad3618e878ebbf527d34d446ef4f891 kept=db open at 2026-11-02T10:01:55Z
+    {
+      "_table": "actors",
+alice (work/website)$ lore sync resolve 1 --take kept
+✓ conflict #1 resolved (kept)
+alice (work/website)$ lore doctor
+Status: HEALTHY
+Binary: 0.1.0-dev
+
+[db]
+  ok:       true
+  wal_size: 4152 bytes
+
+[sync]
+  baselined:        true
+  pending exports:  0
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  uncommitted:      2
+
+[identity]
+  resolved: human:alice@agency.example
+  source:   git config
+  stable:   yes
+
+Notes:
+  - live: tracking refspec installed, not forced into refs/lore/*
+  - live: last fetch 15s ago
+  - live: post-commit and pre-push hook blocks installed
+
+### repair tier 1
+alice (work/website)$ lore repair --tier=1 --confirm
+ERROR: [E_NOT_IMPLEMENTED] repair tier 1 not implemented in v0.1
+  hint: use --tier=2 (recommended) or --tier=3
+(exit 1)
+
+### rebuild from data
+alice (work/website)$ mv .lore/lore.db .lore/lore.db.old && rm -f .lore/lore.db-wal .lore/lore.db-shm
+alice (work/website)$ lore rule list
+lore sync: built .lore/lore.db from .lore/data (5 rows)
+lore sync: adopted .lore/data: imported 5, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+alice (work/website)$ lore doctor | head -1
+Status: HEALTHY
+
+### support bundle
+alice (work/website)$ lore support-bundle --out bundle.json
+✓ wrote support bundle to bundle.json (1528 bytes)
+alice (work/website)$ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
+  "binary_version": "0.1.0-dev",
+    "status": "healthy",
+    "binary_version": "0.1.0-dev",
+    "memories": 1,
+    "rules": 2,
+  "sanitized": true,
+
+### pii pattern
+alice (work/website)$ lore pii-pattern add --name invoice-number --regex 'INV-[0-9]{6}'
+✓ pii-pattern invoice-number added (disabled — run `pii-pattern enable pip_c0f3c11a5724b0cfd74b256190d9b5b8`)
+alice (work/website)$ lore pii-pattern list
+[off] invoice-number  (user)
+alice (work/website)$ lore pii-pattern enable pip_c0f3c11a5724b0cfd74b256190d9b5b8
+✓ pii-pattern pip_c0f3c11a5724b0cfd74b256190d9b5b8 enabled
+alice (work/website)$ lore pii-pattern list
+[on] invoice-number  (user)
+
+### plugin
+alice (work/website)$ lore plugin list
+(no trusted plugins)
+alice (work/website)$ printf '#!/bin/sh\necho hello\n' > hello.sh
+alice (work/website)$ lore plugin trust --name hello --sha256 $(sha256sum hello.sh | cut -c1-64)
+✓ plugin trusted: hello (sha256:bfdeaeb08cff)
+alice (work/website)$ lore plugin list
+tpg_76bd560aff0771fab8457dbfa9823f10 hello  sha256:bfdeaeb08cff
+
+### db config
+alice (work/website)$ lore config get schema_version
+1
+alice (work/website)$ lore config set team.note 'Ask Bob before changing the build'
+✓ team.note=Ask Bob before changing the build
+alice (work/website)$ lore config get team.note
+Ask Bob before changing the build
+alice (work/website)$ lore config get color
+ERROR: [E_NOT_FOUND] config key "color" not found
+  hint: it may have landed on main while this branch is older: `lore sync peek origin/main`
+(exit 1)
+
+### errors list
+alice (work/website)$ lore errors list | head -5
+E_DB_LOCKED                      another lore process is holding the DB write lock
+E_DB_CORRUPT                     DB file failed quick_check; run `lore repair`
+E_DB_NOT_FOUND                   DB file does not exist at the configured path
+E_SCHEMA_VERSION_MISMATCH        DB was migrated by a newer lore; upgrade or use a different DB
+E_MIGRATION_INCOMPLETE           a schema migration did not finish; run `lore setup`
+alice (work/website)$ lore errors list | wc -l
+53
+alice (work/website)$ lore errors list --json | head -9
+{
+  "schema_version": 1,
+  "count": 53,
+  "errors": [
+    {
+      "code": "E_DB_LOCKED",
+      "description": "another lore process is holding the DB write lock"
+    },
+    {
+
+### read only
+alice (work/website)$ lore rule add --body 'Buttons are blue'
+ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
+  hint: unset --read-only and LORE_READ_ONLY
+(exit 1)
+alice (work/website)$ lore rule list
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+alice (work/website)$ lore rule add --read-only --body 'Buttons are blue'
+ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
+  hint: unset --read-only and LORE_READ_ONLY
+(exit 1)
+
+### stale warning
+alice (work/website)$ lore rule list
+⚠ search index is out of date
+  run `lore setup` to rebuild
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+alice (work/website)$ lore rule list
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+alice (work/website)$ lore setup
+⚠ search index is out of date
+  run `lore setup` to rebuild
+→ running ent schema migration...
+→ building FTS5 search index...
+✓ setup complete (registry fingerprint: 601d2850ffd047c2)
+alice (work/website)$ lore rule list
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+
+### ci
+alice (work/ci-clone)$ lore rule list
+lore sync: built .lore/lore.db from .lore/data (5 rows)
+lore sync: adopted .lore/data: imported 5, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/ci-clone/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
+alice (work/ci-clone)$ lore doctor
+Status: DEGRADED
+Binary: 0.1.0-dev
+
+[db]
+  ok:       true
+  wal_size: 4152 bytes
+
+[sync]
+  baselined:        true
+  pending exports:  0
+  open conflicts:   0
+  file errors:      0
+  merge driver:     false
+  uncommitted:      0
+
+[identity]
+  resolved: human:alice@agency.example
+  source:   git config
+  stable:   yes
+
+Notes:
+  - live: tracking refspec installed, not forced into refs/lore/*
+  - live: last fetch 5s ago
+
+Warnings:
+  - lore merge driver not configured in this clone (any lore command or `lore sync install-git` installs it)
+  - live: git hook block missing in post-commit, pre-push (rows cannot ride along on a protected main); run `lore sync install-git`
+(exit 1)
+alice (work/ci-clone)$ lore sync install-git
+✓ git wired for lore data
+  hooks dir:   ~/work/ci-clone/.git/hooks
+  attributes:  changed=false
+  gitignore:   changed=false
+  config:      merge.lore.name, merge.lore.driver, merge.lore-keep-ours.name, merge.lore-keep-ours.driver
+  hooks:       commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push
+alice (work/ci-clone)$ lore audit verify
+✓ audit chain intact (0 entries)
+alice (work/ci-clone)$ lore doctor --json > doctor.json; echo "doctor exit $?"
+doctor exit 0
+alice (work/ci-clone)$ grep '"status"' doctor.json
+  "status": "healthy",
+alice (work/ci-clone)$ lore context --internal
+<!-- generated by lore; internal: never quote this content in client files, commits, PRs or chat -->
+(nothing internal or personal loads in this repo)
+
+### secret refused
+alice (work/website)$ lore memory add --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
+ERROR: [E_SECRET_DETECTED] body contains a secret (credential pattern aws_access_key, preview AKIA****)
+  hint: use --allow-secrets to override (logged loud); see also ~/.lore/pii-patterns.txt
+(exit 1)
+
+### allow secrets
+alice (work/website)$ lore memory add --allow-secrets --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
+✓ mem_d4314eba822f1bf5908b2b8ded5f313a 
+  scope: [master]
+lore sync: secret-detected memories/mem_d4314eba822f1bf5908b2b8ded5f313a.json: credential pattern aws_access_key found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
+alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'
+not in .lore/data
+alice (work/website)$ lore memory delete mem_d4314eba822f1bf5908b2b8ded5f313a --confirm
+lore sync: secret-detected memories/mem_d4314eba822f1bf5908b2b8ded5f313a.json: credential pattern aws_access_key found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
+✓ mem_d4314eba822f1bf5908b2b8ded5f313a deleted (hard)
+alice (work/website)$ lore doctor
+Status: HEALTHY
+Binary: 0.1.0-dev
+
+[db]
+  ok:       true
+  wal_size: 4152 bytes
+
+[sync]
+  baselined:        true
+  pending exports:  0
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  uncommitted:      0
+
+[identity]
+  resolved: human:alice@agency.example
+  source:   git config
+  stable:   yes
+
+Notes:
+  - live: tracking refspec installed, not forced into refs/lore/*
+  - live: last fetch 20s ago
+  - live: post-commit and pre-push hook blocks installed

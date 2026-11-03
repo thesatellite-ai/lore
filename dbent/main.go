@@ -6,15 +6,11 @@ import (
 	"dbent/gen/ent"
 	"fmt"
 	"lace/db"
-	"os"
-	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"github.com/fatih/color"
 )
 
 type EntDB struct {
@@ -30,8 +26,12 @@ func New(db *sql.DB) EntDB {
 	// docs/postgres-to-sqlite-migration.md.
 	drv := entsql.OpenDB(dialect.SQLite, db)
 
-	// client := ent.NewClient(ent.Driver(drv), ent.Debug())
-	client := ent.NewClient(ent.Driver(&CustomDriver{drv}))
+	// The driver is used as is. It once wrapped Query to print the Go source
+	// file and line of every database call under LORE_TRACE=1; that printed
+	// absolute paths from the build machine in shipped binaries, and the
+	// trace switch is defined as "the git commands lore runs for live rows",
+	// not database calls, so the wrapper was removed (no_build_path_test.go).
+	client := ent.NewClient(ent.Driver(drv))
 
 	client.Intercept(
 		ent.InterceptFunc(func(next ent.Querier) ent.Querier {
@@ -54,32 +54,6 @@ func New(db *sql.DB) EntDB {
 	return EntDB{
 		client: client,
 	}
-}
-
-type CustomDriver struct {
-	*entsql.Driver
-}
-
-func (d *CustomDriver) Query(ctx context.Context, query string, args, v any) error {
-	err := d.Driver.Query(ctx, query, args, v)
-	// fmt.Println("Custom ERROR", err)
-	FileWithLineNum()
-	return err
-}
-
-// FileWithLineNum return the file name and line number of the current file
-func FileWithLineNum() string {
-	if os.Getenv("LORE_TRACE") != "1" {
-		return ""
-	}
-	for i := 1; i < 15; i++ {
-		_, file, line, ok := runtime.Caller(i)
-		if ok && (!strings.Contains(file, "/vendor") && !strings.Contains(file, "/ent") && !strings.Contains(file, "generated.go")) {
-			fmt.Println(time.Now().Format(time.RFC3339), color.GreenString(file), color.GreenString(strconv.FormatInt(int64(line), 10)))
-			return file + ":" + strconv.FormatInt(int64(line), 10)
-		}
-	}
-	return ""
 }
 
 func WithTx(ctx context.Context, client *ent.Client, fn func(tx *ent.Tx) error) error {
@@ -211,7 +185,7 @@ const busyTimeoutMS = 5000
 
 // ApplyPragmas applies the canonical pragma block for production SQLite.
 // Run AFTER InitDB but BEFORE the first table is created (auto_vacuum is
-// permanent once tables exist).
+// durable once tables exist).
 //
 // Caller policy: every lore binary calls ApplyPragmas exactly once
 // in its startup path. PLAN.md Round 26 ship-gate item.

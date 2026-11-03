@@ -18,8 +18,10 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"saas/pkg/constants"
+	"strings"
 	"time"
 
 	"dbent/gen/ent"
@@ -34,6 +36,7 @@ import (
 	entTrustedPlugin "dbent/gen/ent/trustedplugin"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
+	"saas/pkg/aicoder/textnorm"
 
 	"github.com/spf13/cobra"
 )
@@ -159,7 +162,7 @@ var snapshotArchiveTarget = archiveTarget{
 
 func newSnapshotAddCommand() *cobra.Command {
 	var f commonFlags
-	var title, body string
+	var title, body, source string
 	cmd := &cobra.Command{
 		Use: "add", Short: "Add a snapshot (--title and --body required)",
 		Args: bodyOnlyArgs,
@@ -172,6 +175,10 @@ func newSnapshotAddCommand() *cobra.Command {
 				return err
 			}
 			body = b
+			kind, err := parseSourceKind(source)
+			if err != nil {
+				return err
+			}
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
@@ -185,7 +192,8 @@ func newSnapshotAddCommand() *cobra.Command {
 				SetProjectID(projectID).
 				SetTitle(title).
 				SetBody(body).
-				SetTakenAt(time.Now())
+				SetSourceKind(kind.String()).
+				SetTakenAt(cliClock().Now())
 			actorID, err := resolveCurrentActorID(cmd.Context(), client)
 			if err != nil {
 				return err
@@ -195,13 +203,15 @@ func newSnapshotAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create snapshot").WithCause(err)
 			}
-			fmt.Printf("%s %s %s — %s\n", style.Success("✓"), r.ID, style.Code(r.ID), title)
+			fmt.Printf("%s %s — %s\n", style.Success("✓"), style.Code(r.ID), title)
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "snapshot title (required)")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "body (required; --body=<v> or pipe via stdin)")
+	cmd.Flags().StringVar(&source, constants.FlagSource, constants.SourceManual.String(),
+		"where the snapshot came from: "+strings.Join(sourceKindNames(), " | "))
 	_ = cmd.MarkFlagRequired(constants.FlagTitle)
 	return cmd
 }
@@ -272,7 +282,7 @@ func newSnapshotShowCommand() *cobra.Command {
 				printJSON(constants.KindSnapshotShow, s, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", s.ID, style.Code(s.ID))
+			fmt.Printf("%s\n", style.Code(s.ID))
 			fmt.Printf("  title:    %s\n", s.Title)
 			fmt.Printf("  taken_at: %s\n", s.TakenAt.Format(time.RFC3339))
 			fmt.Println()
@@ -320,7 +330,7 @@ func newPluginListCommand() *cobra.Command {
 				return nil
 			}
 			for _, p := range rows {
-				fmt.Printf("%s %s  sha256:%s\n", style.Code(p.ID), p.Name, p.Sha256[:12])
+				fmt.Printf("%s %s  sha256:%s\n", style.Code(p.ID), p.Name, shortFingerprint(p.Sha256))
 			}
 			return nil
 		},
@@ -328,6 +338,34 @@ func newPluginListCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
+}
+
+// sha256HexLen is the length of a hex-encoded SHA-256 digest.
+const sha256HexLen = 64
+
+// pluginFingerprintShown is how many hex digits of a plugin's sha256 the
+// list and trust confirmations print.
+const pluginFingerprintShown = 12
+
+// validPluginSHA256 checks a --sha256 value before it is stored: a trusted
+// plugin row is compared against the plugin file's digest, so anything but
+// a full 64-digit hex SHA-256 can never match and used to crash the list.
+func validPluginSHA256(s string) error {
+	if _, err := hex.DecodeString(s); err != nil || len(s) != sha256HexLen {
+		return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("--sha256 must be a %d-digit hex SHA-256 digest, got %q", sha256HexLen, s)).
+			WithHint("compute it with: sha256sum <plugin file>")
+	}
+	return nil
+}
+
+// shortFingerprint is the printed prefix of a stored digest. It never
+// slices past the end: rows saved before validPluginSHA256 existed may hold
+// a short value, and listing them must not crash.
+func shortFingerprint(s string) string {
+	if len(s) > pluginFingerprintShown {
+		return s[:pluginFingerprintShown]
+	}
+	return s
 }
 
 func newPluginTrustCommand() *cobra.Command {
@@ -339,6 +377,9 @@ func newPluginTrustCommand() *cobra.Command {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
+			if err := validPluginSHA256(sha); err != nil {
+				return err
+			}
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
@@ -347,7 +388,7 @@ func newPluginTrustCommand() *cobra.Command {
 			create := client.TrustedPlugin.Create().
 				SetName(name).
 				SetSha256(sha).
-				SetTrustedAt(time.Now())
+				SetTrustedAt(cliClock().Now())
 			actorID, err := resolveCurrentActorID(cmd.Context(), client)
 			if err != nil {
 				return err
@@ -357,7 +398,7 @@ func newPluginTrustCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "trust plugin").WithCause(err)
 			}
-			fmt.Printf("%s plugin trusted: %s (sha256:%s)\n", style.Success("✓"), r.Name, r.Sha256[:12])
+			fmt.Printf("%s plugin trusted: %s (sha256:%s)\n", style.Success("✓"), r.Name, shortFingerprint(r.Sha256))
 			return nil
 		},
 	}
@@ -871,7 +912,7 @@ func newTechDocShowCommand() *cobra.Command {
 				printJSON(constants.KindTechDocShow, d, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", d.ID, style.Code(d.ID))
+			fmt.Printf("%s\n", style.Code(d.ID))
 			fmt.Printf("  name:     %s\n", d.Name)
 			if d.BaseURL != nil {
 				fmt.Printf("  base_url: %s\n", *d.BaseURL)
@@ -942,6 +983,7 @@ func newConfigCommand() *cobra.Command {
 	cmd.AddCommand(newConfigGetCommand())
 	cmd.AddCommand(newConfigSetCommand())
 	cmd.AddCommand(newConfigListCommand())
+	cmd.AddCommand(newConfigCheckCommand())
 	return cmd
 }
 
@@ -1045,4 +1087,73 @@ func newConfigListCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
+}
+
+// ── shared add-command helpers ───────────────────────────────────────────
+
+// knownSourceKinds returns the closed set of provenance values a row's
+// source_kind may hold (constants.SourceKind; the LifecycleMixin comment in
+// dbent/schema lists the same set). One list feeds both the --source help
+// text and the validation below, so they can never disagree. A function, not
+// a package var, so no caller can mutate the set.
+func knownSourceKinds() []constants.SourceKind {
+	return []constants.SourceKind{
+		constants.SourceManual,
+		constants.SourceLearnFrom,
+		constants.SourceAgentProposal,
+		constants.SourcePlugin,
+		constants.SourceImported,
+		constants.SourceMigrated,
+	}
+}
+
+// sourceKindNames returns the accepted --source values in their canonical
+// order, for help text and error messages.
+func sourceKindNames() []string {
+	out := make([]string, 0, len(knownSourceKinds()))
+	for _, k := range knownSourceKinds() {
+		out = append(out, k.String())
+	}
+	return out
+}
+
+// parseSourceKind validates a --source value against the closed set. An
+// empty value means a person typed the row, so it reads as manual. Any other
+// value outside the set is refused with E_INVALID_INPUT rather than stored,
+// because source_kind feeds trust and filtering and a typo would silently
+// fall out of every filter.
+func parseSourceKind(v string) (constants.SourceKind, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return constants.SourceManual, nil
+	}
+	for _, k := range knownSourceKinds() {
+		if k.String() == v {
+			return k, nil
+		}
+	}
+	return "", errcodes.New(errcodes.InvalidInput,
+		fmt.Sprintf("--%s %q: want one of %s", constants.FlagSource, v, strings.Join(sourceKindNames(), ", ")))
+}
+
+// knowledgeDescription returns the one-line summary stored in a playbook's
+// or prompt's required description column. The schema refuses an empty
+// description, and every documented `add` call passes only --title and
+// --body, so an omitted --description falls back to the title: the title is
+// already the short human name of the row, which is exactly what a summary
+// line shows. Both values go through textnorm like the title and body.
+func knowledgeDescription(description, title string) (string, error) {
+	d := strings.TrimSpace(description)
+	if d == "" {
+		d = strings.TrimSpace(title)
+	}
+	if d == "" {
+		return "", errcodes.New(errcodes.InvalidInput,
+			fmt.Sprintf("--%s (or --%s) must not be empty", constants.FlagDescription, constants.FlagTitle))
+	}
+	clean, err := textnorm.Normalize(d)
+	if err != nil {
+		return "", errcodes.New(errcodes.InvalidInput, "description: "+err.Error())
+	}
+	return clean, nil
 }

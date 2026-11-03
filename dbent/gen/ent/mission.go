@@ -4,6 +4,7 @@ package ent
 
 import (
 	"dbent/gen/ent/mission"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -35,6 +36,10 @@ type Mission struct {
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	// CreatedByActorID holds the value of the "created_by_actor_id" field.
 	CreatedByActorID *string `json:"created_by_actor_id,omitempty"`
+	// Approvers holds the value of the "approvers" field.
+	Approvers []string `json:"approvers,omitempty"`
+	// IdempotencyKey holds the value of the "idempotency_key" field.
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the MissionQuery when eager-loading is set.
 	Edges        MissionEdges `json:"edges"`
@@ -68,7 +73,9 @@ func (*Mission) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case mission.FieldID, mission.FieldProjectID, mission.FieldTitle, mission.FieldBody, mission.FieldStatus, mission.FieldCreatedByActorID:
+		case mission.FieldApprovers:
+			values[i] = new([]byte)
+		case mission.FieldID, mission.FieldProjectID, mission.FieldTitle, mission.FieldBody, mission.FieldStatus, mission.FieldCreatedByActorID, mission.FieldIdempotencyKey:
 			values[i] = new(sql.NullString)
 		case mission.FieldCreatedAt, mission.FieldUpdatedAt, mission.FieldTargetDate, mission.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -151,6 +158,21 @@ func (_m *Mission) assignValues(columns []string, values []any) error {
 				_m.CreatedByActorID = new(string)
 				*_m.CreatedByActorID = value.String
 			}
+		case mission.FieldApprovers:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field approvers", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Approvers); err != nil {
+					return fmt.Errorf("unmarshal field approvers: %w", err)
+				}
+			}
+		case mission.FieldIdempotencyKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
+			} else if value.Valid {
+				_m.IdempotencyKey = new(string)
+				*_m.IdempotencyKey = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -224,6 +246,14 @@ func (_m *Mission) String() string {
 	builder.WriteString(", ")
 	if v := _m.CreatedByActorID; v != nil {
 		builder.WriteString("created_by_actor_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("approvers=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Approvers))
+	builder.WriteString(", ")
+	if v := _m.IdempotencyKey; v != nil {
+		builder.WriteString("idempotency_key=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

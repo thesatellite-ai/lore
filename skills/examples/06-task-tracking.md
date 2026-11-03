@@ -1,17 +1,19 @@
 # Example: Mission with tasks across a sprint
 
-**Scenario:** Frank is starting a 2-week sprint to ship v0.2. Wants tracked work items, priorities, due dates, and a single command to see "what's next?".
+**In short:** a mission is one goal ("launch the new website"); tasks are the steps toward it. Add the tasks once, then ask lore what is next each day and mark each one done.
+
+**Scenario:** Alice (an agency developer) has two weeks to launch the client's new website. She wants a list of the work with priorities and due dates, and one command that says "what's next?".
 
 ## Day 0 — create the mission
 
 ```bash
 M=$(lore mission add \
-    "Ship v0.2 — FTS5 + plugins + MCP server" \
+    "Launch the new website" \
     --target=2026-06-15 \
-    --body="Sprint goal: open the plugin protocol, ship MCP server alpha, expand FTS5 to all entity types." \
+    --body="Goal: the new website is live before the client's Friday demo." \
     --json | jq -r '.data.id')
 echo "Mission: $M"
-TL=$(lore tasklist add --title="v0.2 sprint" --body="sprint backlog" --json | jq -r '.data.id')   # every task belongs to a tasklist
+TL=$(lore tasklist add --title="launch" --body="work for the launch" --json | jq -r '.data.id')   # every task belongs to a tasklist
 # Mission: msn_019e...
 ```
 
@@ -21,12 +23,12 @@ TL=$(lore tasklist add --title="v0.2 sprint" --body="sprint backlog" --json | jq
 # Agents MUST pass --commitment (no default). Work the user agreed to = accepted;
 # your own speculative ideas = proposed (they land under `lore task triage`, not the
 # default list); parking-lot ideas = someday.
-lore task add "Design plugin manifest schema"         --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-20
-lore task add "Wire MCP server stub"                  --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-25
-lore task add "Extend FTS5 to rules + decisions"      --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-05-30
-lore task add "Document plugin lifecycle"             --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-06-05
-lore task add "v0.2 release notes draft"              --tasklist=$TL --mission=$M --commitment=proposed --priority=low  --due=2026-06-10
-lore task add "macOS notarization config"             --tasklist=$TL --mission=$M --commitment=someday --priority=low
+lore task add "Make the buttons blue"                 --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-20
+lore task add "Add the contact form"                  --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-25
+lore task add "Run the tests before you push"         --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-05-30
+lore task add "Write the launch checklist"            --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-06-05
+lore task add "Send the invoice reminder before Friday's demo" --tasklist=$TL --mission=$M --commitment=proposed --priority=low  --due=2026-06-10
+lore task add "Add a dark mode"                       --tasklist=$TL --mission=$M --commitment=someday --priority=low
 
 lore mission show $M --json | jq '.data.tasks | length'
 # 6
@@ -78,7 +80,7 @@ lore mission show $M --json | jq '{
 
 ```
 {
-  "mission":  "Ship v0.2 — FTS5 + plugins + MCP server",
+  "mission":  "Launch the new website",
   "target":   "2026-06-15",
   "status":   "active",
   "todo":     1,
@@ -98,5 +100,10 @@ lore mission done $M
 
 - **Use `--mission`** rather than naming the goal in every task title.
 - **Pretty IDs are persistent** within a project (`tsk_<id>` always means task id 1 in this project).
-- **Use tags for cross-cutting concerns** (`lore tag attach --on-table=tasks --on-id=tsk_<id> --tag=blocked-on-vendor`).
+- **Use tags for cross-cutting concerns** (`lore tag attach --on-table=tasks --on-id=tsk_<id> --tag=waiting-for-client`).
 - **Reminders attach to tasks**: `lore reminder add "Follow up on tsk_<id>" --due=2026-05-25 --on-table=tasks --on-id=tsk_<id>`.
+
+## Pitfalls
+
+- Agents must pass `--commitment`; a task an agent made up on its own (`proposed`) waits in `lore task triage` until a person accepts it.
+- Run `lore task start` before `lore task done`, so the task records when work began.

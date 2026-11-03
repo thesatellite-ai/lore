@@ -53,6 +53,40 @@ const (
 	FieldCreatedByActorID = "created_by_actor_id"
 	// FieldAssignedToActorID holds the string denoting the assigned_to_actor_id field in the database.
 	FieldAssignedToActorID = "assigned_to_actor_id"
+	// FieldAssignedTeam holds the string denoting the assigned_team field in the database.
+	FieldAssignedTeam = "assigned_team"
+	// FieldBlockedBy holds the string denoting the blocked_by field in the database.
+	FieldBlockedBy = "blocked_by"
+	// FieldClaimEpoch holds the string denoting the claim_epoch field in the database.
+	FieldClaimEpoch = "claim_epoch"
+	// FieldAttempts holds the string denoting the attempts field in the database.
+	FieldAttempts = "attempts"
+	// FieldClaimLog holds the string denoting the claim_log field in the database.
+	FieldClaimLog = "claim_log"
+	// FieldTimeboxSeconds holds the string denoting the timebox_seconds field in the database.
+	FieldTimeboxSeconds = "timebox_seconds"
+	// FieldGate holds the string denoting the gate field in the database.
+	FieldGate = "gate"
+	// FieldApprovedBy holds the string denoting the approved_by field in the database.
+	FieldApprovedBy = "approved_by"
+	// FieldApprovedAt holds the string denoting the approved_at field in the database.
+	FieldApprovedAt = "approved_at"
+	// FieldApprovedHash holds the string denoting the approved_hash field in the database.
+	FieldApprovedHash = "approved_hash"
+	// FieldDoneBy holds the string denoting the done_by field in the database.
+	FieldDoneBy = "done_by"
+	// FieldDoneCommit holds the string denoting the done_commit field in the database.
+	FieldDoneCommit = "done_commit"
+	// FieldDonePr holds the string denoting the done_pr field in the database.
+	FieldDonePr = "done_pr"
+	// FieldMergedAt holds the string denoting the merged_at field in the database.
+	FieldMergedAt = "merged_at"
+	// FieldWorkBranch holds the string denoting the work_branch field in the database.
+	FieldWorkBranch = "work_branch"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
+	// FieldRole holds the string denoting the role field in the database.
+	FieldRole = "role"
 	// EdgeMission holds the string denoting the mission edge name in mutations.
 	EdgeMission = "mission"
 	// EdgeTasklist holds the string denoting the tasklist edge name in mutations.
@@ -105,6 +139,23 @@ var Columns = []string{
 	FieldPlanID,
 	FieldCreatedByActorID,
 	FieldAssignedToActorID,
+	FieldAssignedTeam,
+	FieldBlockedBy,
+	FieldClaimEpoch,
+	FieldAttempts,
+	FieldClaimLog,
+	FieldTimeboxSeconds,
+	FieldGate,
+	FieldApprovedBy,
+	FieldApprovedAt,
+	FieldApprovedHash,
+	FieldDoneBy,
+	FieldDoneCommit,
+	FieldDonePr,
+	FieldMergedAt,
+	FieldWorkBranch,
+	FieldIdempotencyKey,
+	FieldRole,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -128,6 +179,18 @@ var (
 	ProjectIDValidator func(string) error
 	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
 	TitleValidator func(string) error
+	// DefaultClaimEpoch holds the default value on creation for the "claim_epoch" field.
+	DefaultClaimEpoch int
+	// ClaimEpochValidator is a validator for the "claim_epoch" field. It is called by the builders before save.
+	ClaimEpochValidator func(int) error
+	// DefaultAttempts holds the default value on creation for the "attempts" field.
+	DefaultAttempts int
+	// AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
+	AttemptsValidator func(int) error
+	// TimeboxSecondsValidator is a validator for the "timebox_seconds" field. It is called by the builders before save.
+	TimeboxSecondsValidator func(int64) error
+	// DonePrValidator is a validator for the "done_pr" field. It is called by the builders before save.
+	DonePrValidator func(int) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -215,6 +278,30 @@ func CommitmentValidator(c Commitment) error {
 		return nil
 	default:
 		return fmt.Errorf("task: invalid enum value for commitment field: %q", c)
+	}
+}
+
+// Gate defines the type for the "gate" enum field.
+type Gate string
+
+// Gate values.
+const (
+	GateRequired  Gate = "required"
+	GateRequested Gate = "requested"
+	GateApproved  Gate = "approved"
+)
+
+func (ga Gate) String() string {
+	return string(ga)
+}
+
+// GateValidator is a validator for the "gate" field enum values. It is called by the builders before save.
+func GateValidator(ga Gate) error {
+	switch ga {
+	case GateRequired, GateRequested, GateApproved:
+		return nil
+	default:
+		return fmt.Errorf("task: invalid enum value for gate field: %q", ga)
 	}
 }
 
@@ -316,6 +403,81 @@ func ByAssignedToActorID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAssignedToActorID, opts...).ToFunc()
 }
 
+// ByAssignedTeam orders the results by the assigned_team field.
+func ByAssignedTeam(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAssignedTeam, opts...).ToFunc()
+}
+
+// ByClaimEpoch orders the results by the claim_epoch field.
+func ByClaimEpoch(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClaimEpoch, opts...).ToFunc()
+}
+
+// ByAttempts orders the results by the attempts field.
+func ByAttempts(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAttempts, opts...).ToFunc()
+}
+
+// ByTimeboxSeconds orders the results by the timebox_seconds field.
+func ByTimeboxSeconds(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTimeboxSeconds, opts...).ToFunc()
+}
+
+// ByGate orders the results by the gate field.
+func ByGate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGate, opts...).ToFunc()
+}
+
+// ByApprovedBy orders the results by the approved_by field.
+func ByApprovedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldApprovedBy, opts...).ToFunc()
+}
+
+// ByApprovedAt orders the results by the approved_at field.
+func ByApprovedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldApprovedAt, opts...).ToFunc()
+}
+
+// ByApprovedHash orders the results by the approved_hash field.
+func ByApprovedHash(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldApprovedHash, opts...).ToFunc()
+}
+
+// ByDoneBy orders the results by the done_by field.
+func ByDoneBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDoneBy, opts...).ToFunc()
+}
+
+// ByDoneCommit orders the results by the done_commit field.
+func ByDoneCommit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDoneCommit, opts...).ToFunc()
+}
+
+// ByDonePr orders the results by the done_pr field.
+func ByDonePr(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDonePr, opts...).ToFunc()
+}
+
+// ByMergedAt orders the results by the merged_at field.
+func ByMergedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMergedAt, opts...).ToFunc()
+}
+
+// ByWorkBranch orders the results by the work_branch field.
+func ByWorkBranch(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWorkBranch, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
+}
+
+// ByRole orders the results by the role field.
+func ByRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRole, opts...).ToFunc()
+}
+
 // ByMissionField orders the results by mission field.
 func ByMissionField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -408,6 +570,24 @@ func (e *Commitment) UnmarshalGQL(val interface{}) error {
 	*e = Commitment(str)
 	if err := CommitmentValidator(*e); err != nil {
 		return fmt.Errorf("%s is not a valid Commitment", str)
+	}
+	return nil
+}
+
+// MarshalGQL implements graphql.Marshaler interface.
+func (e Gate) MarshalGQL(w io.Writer) {
+	io.WriteString(w, strconv.Quote(e.String()))
+}
+
+// UnmarshalGQL implements graphql.Unmarshaler interface.
+func (e *Gate) UnmarshalGQL(val interface{}) error {
+	str, ok := val.(string)
+	if !ok {
+		return fmt.Errorf("enum %T must be a string", val)
+	}
+	*e = Gate(str)
+	if err := GateValidator(*e); err != nil {
+		return fmt.Errorf("%s is not a valid Gate", str)
 	}
 	return nil
 }

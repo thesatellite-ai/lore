@@ -37,9 +37,24 @@ var driftDocGlobs = []string{
 	"CONTRIBUTING.md",
 	"LORE_SYNC_SPEC.md",
 	"docs/*.md",
+	"docs/team/*.md",
+	"docs/team/use-cases/*.md",
 	"skills/*.md",
 	"skills/examples/*.md",
 	"tests/README.md",
+}
+
+// driftOptionalDocGlobs are doc sections that may be empty or missing while
+// they are being written: they are checked when present but do not count
+// toward the "the docs set exists" guard below, which covers only
+// driftDocGlobs. Move a glob into driftDocGlobs once its folder ships.
+var driftOptionalDocGlobs = []string{
+	"docs/reference/*.md",
+	"docs/knowledge/*.md",
+	"docs/tasks/*.md",
+	"docs/sync/*.md",
+	"docs/operations/*.md",
+	"docs/choosing/*.md",
 }
 
 // driftAllowed lists invocations that are wrong on purpose, keyed by the
@@ -174,6 +189,10 @@ type driftFinding struct {
 }
 
 func TestDocsMatchCLI(t *testing.T) {
+	// cobra adds `completion` and `help` only when the root executes; add
+	// them now so docs that run them are checked like any other command.
+	rootCmd.InitDefaultHelpCmd()
+	rootCmd.InitDefaultCompletionCmd()
 	var files []string
 	for _, g := range driftDocGlobs {
 		m, err := filepath.Glob(filepath.Join(docsRoot, g))
@@ -184,6 +203,13 @@ func TestDocsMatchCLI(t *testing.T) {
 	}
 	if len(files) < len(driftDocGlobs) {
 		t.Fatalf("expected the docs set to exist, found %v", files)
+	}
+	for _, g := range driftOptionalDocGlobs {
+		m, err := filepath.Glob(filepath.Join(docsRoot, g))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, m...) // no match is fine: the section is not written yet
 	}
 	var findings []driftFinding
 	checked := 0
@@ -213,6 +239,36 @@ func TestDocsMatchCLI(t *testing.T) {
 	}
 }
 
+// deliberateCLIErrorOutput is the pasted output of an example that shows
+// lore refusing a wrong flag or command on purpose (a troubleshooting page
+// demonstrating "unknown flag"). The command line right above it is the
+// error being taught, so it is not checked. Only the parser's own refusals
+// count: any other ERROR keeps the command checked.
+var deliberateCLIErrorOutput = regexp.MustCompile(`^ERROR: unknown (flag|shorthand flag|command)\b`)
+
+// deliberateCLIError reports whether a fenced line is such output.
+func deliberateCLIError(line string) bool {
+	return deliberateCLIErrorOutput.MatchString(strings.TrimSpace(line))
+}
+
+// transcriptFenceLangs are the fence languages of a pasted terminal session:
+// a line is a command only when it starts with the shell prompt; every other
+// line is output. Output can contain "; lore stopped writing to it" or a hint
+// "…; lore doctor shows why", which must never be checked as a command.
+var transcriptFenceLangs = map[string]bool{"console": true, "shell-session": true}
+
+// transcriptPrompt starts a command line inside a transcript fence.
+const transcriptPrompt = "$ "
+
+// codeFence opens and closes a fenced block.
+const codeFence = "```"
+
+// fenceLang returns the language of a fence-opening line ("```console" →
+// "console").
+func fenceLang(line string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), codeFence))
+}
+
 // docInvocation is one `lore …` command found in a document.
 type docInvocation struct {
 	code string
@@ -228,17 +284,31 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 	}
 	defer func() { _ = f.Close() }() // read-only
 	var out []docInvocation
-	inFence := false
+	inFence, transcript := false, false
 	n, start := 0, 0
 	pending := ""
+	// lastLineFrom is where the previous fenced line's invocations start
+	// in out (-1: none), so a pasted "ERROR: unknown flag" right below can
+	// withdraw them (deliberateCLIError).
+	lastLineFrom := -1
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, docLineBufInitial), docLineBufMax)
 	for sc.Scan() {
 		n++
 		line := sc.Text()
-		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+		if strings.HasPrefix(strings.TrimSpace(line), codeFence) {
 			inFence = !inFence
-			pending = ""
+			transcript = inFence && transcriptFenceLangs[fenceLang(line)]
+			pending, lastLineFrom = "", -1
+			continue
+		}
+		if inFence && lastLineFrom >= 0 && deliberateCLIError(line) {
+			out = out[:lastLineFrom] // an example of the error, not a command to run
+		}
+		lastLineFrom = -1
+		// In a transcript only a prompt line (or the continuation of one,
+		// held in pending) is a command; anything else is output.
+		if transcript && pending == "" && !strings.HasPrefix(strings.TrimLeft(line, " \t"), transcriptPrompt) {
 			continue
 		}
 		// A trailing backslash continues the command on the next line.
@@ -261,6 +331,7 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 				spans = append(spans, m[1])
 			}
 		}
+		lineFrom := len(out)
 		for _, s := range spans {
 			s = foldSubstitutions(s)
 			if inFence {
@@ -274,6 +345,9 @@ func docInvocations(t *testing.T, path string) []docInvocation {
 				}
 				out = append(out, docInvocation{code: strings.TrimSpace(rest), line: lineNo})
 			}
+		}
+		if inFence && len(out) > lineFrom {
+			lastLineFrom = lineFrom
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -462,4 +536,88 @@ func lookupFlag(cmd *cobra.Command, name string) *pflag.Flag {
 		return &pflag.Flag{Name: name}
 	}
 	return nil
+}
+
+// TestDeliberateCLIErrorExemption pins the exemption rule: only a fenced
+// command whose very next line is lore's own unknown-flag/command refusal is
+// withdrawn; every other command (and other errors) stays checked.
+func TestDeliberateCLIErrorExemption(t *testing.T) {
+	t.Parallel()
+	doc := "```\n" +
+		"$ lore rule list --colour never\n" +
+		"ERROR: unknown flag: --colour\n" +
+		"$ lore rule list --json\n" +
+		"ERROR: [E_NOT_PROJECT_ROOT] not a project\n" +
+		"$ lore nosuchverb\n" +
+		"\n" +
+		"ERROR: unknown command \"nosuchverb\" for \"lore\"\n" +
+		"$ lore memory list\n" +
+		"```\n" +
+		"ERROR: unknown flag: --x\n"
+	path := filepath.Join(t.TempDir(), "doc.md")
+	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, inv := range docInvocations(t, path) {
+		got = append(got, inv.code)
+	}
+	want := []string{"lore rule list --json", "lore nosuchverb", "lore memory list"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("invocations = %q, want %q", got, want)
+	}
+}
+
+// TestCobraBuiltinsAreCommands pins that `lore completion` and `lore help`
+// resolve once cobra's defaults are initialised (docs run both).
+func TestCobraBuiltinsAreCommands(t *testing.T) {
+	rootCmd.InitDefaultHelpCmd()
+	rootCmd.InitDefaultCompletionCmd()
+	for _, c := range []string{"lore completion bash", "lore help task"} {
+		if p := checkInvocation(c); p != "" {
+			t.Errorf("checkInvocation(%q) = %q, want valid", c, p)
+		}
+	}
+}
+
+// TestTranscriptOutputIsNotACommand pins that inside a console transcript
+// only prompt lines are commands: output such as "ERROR: … deleted; lore
+// stopped writing to it" or "lore live: landed on main" is never checked,
+// while a command after `;` on a prompt line, a continued prompt line, and
+// every line of a bash fence still are. The output case once failed the gate
+// and forced a docs example to hide the failing write it was meant to show.
+func TestTranscriptOutputIsNotACommand(t *testing.T) {
+	t.Parallel()
+	doc := "```console\n" +
+		"# alice, in billing\n" +
+		"$ lore task add 'close the books'\n" +
+		"ERROR: [E_READ_ONLY] the remote live ref was deleted; lore stopped writing to it\n" +
+		"  hint: run `lore live restore`; lore keeps a copy\n" +
+		"lore live: landed on main (abc1234)\n" +
+		"$ git fetch -q; lore rule list\n" +
+		"$ lore memory list \\\n" +
+		"  --json\n" +
+		"```\n" +
+		"```bash\n" +
+		"cd repo; lore decision list\n" +
+		"lore sync\n" +
+		"```\n"
+	path := filepath.Join(t.TempDir(), "doc.md")
+	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, inv := range docInvocations(t, path) {
+		got = append(got, inv.code)
+	}
+	want := []string{
+		"lore task add 'close the books'",
+		"lore rule list",
+		"lore memory list  --json", // continuation join keeps the line's space
+		"lore decision list",
+		"lore sync",
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("invocations = %q, want %q", got, want)
+	}
 }

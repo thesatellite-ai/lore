@@ -1,4 +1,4 @@
-# AI Agent Guidelines
+# Coding Agent Guidelines
 
 Go workspace with heavy **code generation**. Never modify `gen/`, `generated/`, or `ent/` directories.
 

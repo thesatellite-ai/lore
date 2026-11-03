@@ -393,10 +393,10 @@ func newBenchResultRegradeCommand() *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{
 		Use:   "regrade [result-id]",
-		Short: "Re-grade stored outputs without re-running the LLM",
+		Short: "Re-grade stored outputs without re-running the model",
 		Long: `Re-runs the eval's current grader against the stored output_received
 of each matching result. Useful after fixing a grader bug — saves the
-LLM cost of re-querying
+model cost of re-querying
 
 Either pass a single <result-id> OR use --run=<id-or-code> [--all] to
 regrade a whole run.`,
@@ -495,7 +495,7 @@ func newBenchResultReplayCommand() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "replay <result-id>",
-		Short: "Re-run the LLM call entirely (vs regrade which uses stored output)",
+		Short: "Re-run the model call entirely (vs regrade which uses stored output)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return errcodes.New(errcodes.NotImplemented,

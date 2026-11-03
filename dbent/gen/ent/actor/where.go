@@ -85,6 +85,26 @@ func StableKey(v string) predicate.Actor {
 	return predicate.Actor(sql.FieldEQ(FieldStableKey, v))
 }
 
+// OwnerActorID applies equality check predicate on the "owner_actor_id" field. It's identical to OwnerActorIDEQ.
+func OwnerActorID(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldOwnerActorID, v))
+}
+
+// Handle applies equality check predicate on the "handle" field. It's identical to HandleEQ.
+func Handle(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldHandle, v))
+}
+
+// Active applies equality check predicate on the "active" field. It's identical to ActiveEQ.
+func Active(v bool) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldActive, v))
+}
+
+// LeftAt applies equality check predicate on the "left_at" field. It's identical to LeftAtEQ.
+func LeftAt(v time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldLeftAt, v))
+}
+
 // LastSeenAt applies equality check predicate on the "last_seen_at" field. It's identical to LastSeenAtEQ.
 func LastSeenAt(v time.Time) predicate.Actor {
 	return predicate.Actor(sql.FieldEQ(FieldLastSeenAt, v))
@@ -318,6 +338,291 @@ func StableKeyEqualFold(v string) predicate.Actor {
 // StableKeyContainsFold applies the ContainsFold predicate on the "stable_key" field.
 func StableKeyContainsFold(v string) predicate.Actor {
 	return predicate.Actor(sql.FieldContainsFold(FieldStableKey, v))
+}
+
+// OwnerActorIDEQ applies the EQ predicate on the "owner_actor_id" field.
+func OwnerActorIDEQ(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDNEQ applies the NEQ predicate on the "owner_actor_id" field.
+func OwnerActorIDNEQ(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldNEQ(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDIn applies the In predicate on the "owner_actor_id" field.
+func OwnerActorIDIn(vs ...string) predicate.Actor {
+	return predicate.Actor(sql.FieldIn(FieldOwnerActorID, vs...))
+}
+
+// OwnerActorIDNotIn applies the NotIn predicate on the "owner_actor_id" field.
+func OwnerActorIDNotIn(vs ...string) predicate.Actor {
+	return predicate.Actor(sql.FieldNotIn(FieldOwnerActorID, vs...))
+}
+
+// OwnerActorIDGT applies the GT predicate on the "owner_actor_id" field.
+func OwnerActorIDGT(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldGT(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDGTE applies the GTE predicate on the "owner_actor_id" field.
+func OwnerActorIDGTE(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldGTE(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDLT applies the LT predicate on the "owner_actor_id" field.
+func OwnerActorIDLT(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldLT(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDLTE applies the LTE predicate on the "owner_actor_id" field.
+func OwnerActorIDLTE(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldLTE(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDContains applies the Contains predicate on the "owner_actor_id" field.
+func OwnerActorIDContains(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldContains(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDHasPrefix applies the HasPrefix predicate on the "owner_actor_id" field.
+func OwnerActorIDHasPrefix(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldHasPrefix(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDHasSuffix applies the HasSuffix predicate on the "owner_actor_id" field.
+func OwnerActorIDHasSuffix(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldHasSuffix(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDIsNil applies the IsNil predicate on the "owner_actor_id" field.
+func OwnerActorIDIsNil() predicate.Actor {
+	return predicate.Actor(sql.FieldIsNull(FieldOwnerActorID))
+}
+
+// OwnerActorIDNotNil applies the NotNil predicate on the "owner_actor_id" field.
+func OwnerActorIDNotNil() predicate.Actor {
+	return predicate.Actor(sql.FieldNotNull(FieldOwnerActorID))
+}
+
+// OwnerActorIDEqualFold applies the EqualFold predicate on the "owner_actor_id" field.
+func OwnerActorIDEqualFold(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldEqualFold(FieldOwnerActorID, v))
+}
+
+// OwnerActorIDContainsFold applies the ContainsFold predicate on the "owner_actor_id" field.
+func OwnerActorIDContainsFold(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldContainsFold(FieldOwnerActorID, v))
+}
+
+// LabelEQ applies the EQ predicate on the "label" field.
+func LabelEQ(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldLabel, v))
+}
+
+// LabelNEQ applies the NEQ predicate on the "label" field.
+func LabelNEQ(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldNEQ(FieldLabel, v))
+}
+
+// LabelIn applies the In predicate on the "label" field.
+func LabelIn(vs ...string) predicate.Actor {
+	return predicate.Actor(sql.FieldIn(FieldLabel, vs...))
+}
+
+// LabelNotIn applies the NotIn predicate on the "label" field.
+func LabelNotIn(vs ...string) predicate.Actor {
+	return predicate.Actor(sql.FieldNotIn(FieldLabel, vs...))
+}
+
+// LabelGT applies the GT predicate on the "label" field.
+func LabelGT(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldGT(FieldLabel, v))
+}
+
+// LabelGTE applies the GTE predicate on the "label" field.
+func LabelGTE(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldGTE(FieldLabel, v))
+}
+
+// LabelLT applies the LT predicate on the "label" field.
+func LabelLT(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldLT(FieldLabel, v))
+}
+
+// LabelLTE applies the LTE predicate on the "label" field.
+func LabelLTE(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldLTE(FieldLabel, v))
+}
+
+// LabelContains applies the Contains predicate on the "label" field.
+func LabelContains(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldContains(FieldLabel, v))
+}
+
+// LabelHasPrefix applies the HasPrefix predicate on the "label" field.
+func LabelHasPrefix(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldHasPrefix(FieldLabel, v))
+}
+
+// LabelHasSuffix applies the HasSuffix predicate on the "label" field.
+func LabelHasSuffix(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldHasSuffix(FieldLabel, v))
+}
+
+// LabelIsNil applies the IsNil predicate on the "label" field.
+func LabelIsNil() predicate.Actor {
+	return predicate.Actor(sql.FieldIsNull(FieldLabel))
+}
+
+// LabelNotNil applies the NotNil predicate on the "label" field.
+func LabelNotNil() predicate.Actor {
+	return predicate.Actor(sql.FieldNotNull(FieldLabel))
+}
+
+// LabelEqualFold applies the EqualFold predicate on the "label" field.
+func LabelEqualFold(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldEqualFold(FieldLabel, v))
+}
+
+// LabelContainsFold applies the ContainsFold predicate on the "label" field.
+func LabelContainsFold(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldContainsFold(FieldLabel, v))
+}
+
+// HandleEQ applies the EQ predicate on the "handle" field.
+func HandleEQ(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldHandle, v))
+}
+
+// HandleNEQ applies the NEQ predicate on the "handle" field.
+func HandleNEQ(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldNEQ(FieldHandle, v))
+}
+
+// HandleIn applies the In predicate on the "handle" field.
+func HandleIn(vs ...string) predicate.Actor {
+	return predicate.Actor(sql.FieldIn(FieldHandle, vs...))
+}
+
+// HandleNotIn applies the NotIn predicate on the "handle" field.
+func HandleNotIn(vs ...string) predicate.Actor {
+	return predicate.Actor(sql.FieldNotIn(FieldHandle, vs...))
+}
+
+// HandleGT applies the GT predicate on the "handle" field.
+func HandleGT(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldGT(FieldHandle, v))
+}
+
+// HandleGTE applies the GTE predicate on the "handle" field.
+func HandleGTE(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldGTE(FieldHandle, v))
+}
+
+// HandleLT applies the LT predicate on the "handle" field.
+func HandleLT(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldLT(FieldHandle, v))
+}
+
+// HandleLTE applies the LTE predicate on the "handle" field.
+func HandleLTE(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldLTE(FieldHandle, v))
+}
+
+// HandleContains applies the Contains predicate on the "handle" field.
+func HandleContains(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldContains(FieldHandle, v))
+}
+
+// HandleHasPrefix applies the HasPrefix predicate on the "handle" field.
+func HandleHasPrefix(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldHasPrefix(FieldHandle, v))
+}
+
+// HandleHasSuffix applies the HasSuffix predicate on the "handle" field.
+func HandleHasSuffix(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldHasSuffix(FieldHandle, v))
+}
+
+// HandleIsNil applies the IsNil predicate on the "handle" field.
+func HandleIsNil() predicate.Actor {
+	return predicate.Actor(sql.FieldIsNull(FieldHandle))
+}
+
+// HandleNotNil applies the NotNil predicate on the "handle" field.
+func HandleNotNil() predicate.Actor {
+	return predicate.Actor(sql.FieldNotNull(FieldHandle))
+}
+
+// HandleEqualFold applies the EqualFold predicate on the "handle" field.
+func HandleEqualFold(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldEqualFold(FieldHandle, v))
+}
+
+// HandleContainsFold applies the ContainsFold predicate on the "handle" field.
+func HandleContainsFold(v string) predicate.Actor {
+	return predicate.Actor(sql.FieldContainsFold(FieldHandle, v))
+}
+
+// ActiveEQ applies the EQ predicate on the "active" field.
+func ActiveEQ(v bool) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldActive, v))
+}
+
+// ActiveNEQ applies the NEQ predicate on the "active" field.
+func ActiveNEQ(v bool) predicate.Actor {
+	return predicate.Actor(sql.FieldNEQ(FieldActive, v))
+}
+
+// LeftAtEQ applies the EQ predicate on the "left_at" field.
+func LeftAtEQ(v time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldEQ(FieldLeftAt, v))
+}
+
+// LeftAtNEQ applies the NEQ predicate on the "left_at" field.
+func LeftAtNEQ(v time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldNEQ(FieldLeftAt, v))
+}
+
+// LeftAtIn applies the In predicate on the "left_at" field.
+func LeftAtIn(vs ...time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldIn(FieldLeftAt, vs...))
+}
+
+// LeftAtNotIn applies the NotIn predicate on the "left_at" field.
+func LeftAtNotIn(vs ...time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldNotIn(FieldLeftAt, vs...))
+}
+
+// LeftAtGT applies the GT predicate on the "left_at" field.
+func LeftAtGT(v time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldGT(FieldLeftAt, v))
+}
+
+// LeftAtGTE applies the GTE predicate on the "left_at" field.
+func LeftAtGTE(v time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldGTE(FieldLeftAt, v))
+}
+
+// LeftAtLT applies the LT predicate on the "left_at" field.
+func LeftAtLT(v time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldLT(FieldLeftAt, v))
+}
+
+// LeftAtLTE applies the LTE predicate on the "left_at" field.
+func LeftAtLTE(v time.Time) predicate.Actor {
+	return predicate.Actor(sql.FieldLTE(FieldLeftAt, v))
+}
+
+// LeftAtIsNil applies the IsNil predicate on the "left_at" field.
+func LeftAtIsNil() predicate.Actor {
+	return predicate.Actor(sql.FieldIsNull(FieldLeftAt))
+}
+
+// LeftAtNotNil applies the NotNil predicate on the "left_at" field.
+func LeftAtNotNil() predicate.Actor {
+	return predicate.Actor(sql.FieldNotNull(FieldLeftAt))
 }
 
 // LastSeenAtEQ applies the EQ predicate on the "last_seen_at" field.

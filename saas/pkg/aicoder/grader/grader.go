@@ -92,6 +92,7 @@ func gradeProgrammatic(ctx context.Context, fields map[string]any, output string
 	tmp.Close()
 
 	c := exec.CommandContext(ctx, "bash", "-c", cmd)
+	// ds:def id=grader-output-file-ce8ma3vq owner=@khanakia stability=stable desc="$OUTPUT_FILE given to programmatic graders"
 	c.Env = append(os.Environ(), "OUTPUT_FILE="+tmp.Name())
 	stdout, stderr := &strings.Builder{}, &strings.Builder{}
 	c.Stdout = stdout
@@ -131,7 +132,7 @@ func gradeLLMJudge(ctx context.Context, fields map[string]any, output string, ca
 		judge = "claude-opus-4-7"
 	}
 	if caller == nil {
-		return Verdict{Trace: map[string]any{"error": "no llm caller available"}},
+		return Verdict{Trace: map[string]any{"error": "no model caller available"}},
 			errors.New("llm-judge grader: nil caller")
 	}
 	prompt := buildJudgePrompt(rubric, output)

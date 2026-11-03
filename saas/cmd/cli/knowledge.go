@@ -19,7 +19,6 @@ import (
 	entHotfix "dbent/gen/ent/hotfix"
 	entRule "dbent/gen/ent/rule"
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/security"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
 
@@ -39,6 +38,7 @@ type ruleAddFlags struct {
 	sourceRef    string
 	supersedes   string
 	createdBy    string
+	to           toFlags
 }
 
 func newRuleCommand() *cobra.Command {
@@ -58,10 +58,10 @@ func newRuleCommand() *cobra.Command {
 func newRuleListCommand() *cobra.Command {
 	var f commonFlags
 	var scope repoScopeFlags
-	var jsonOut bool
+	var jsonOut, includeArchived bool
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List rules",
+		Short: "List rules (archived ones only with --archived)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
@@ -77,6 +77,11 @@ func newRuleListCommand() *cobra.Command {
 				return err
 			}
 			q := client.Rule.Query().Where(entRule.ProjectID(projectID))
+			// Archived rules no longer bind anyone (render skips them too),
+			// so the default list hides them like memory list does.
+			if !includeArchived {
+				q = q.Where(entRule.ArchivedAtIsNil())
+			}
 			switch resolveRepoScope(scope, repoID) {
 			case scopeAll:
 			case scopeMasterOnly:
@@ -90,20 +95,29 @@ func newRuleListCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list rules").WithCause(err)
 			}
+			// Store, global and personal rows (F20) follow the repo's own.
 			if jsonOut {
-				printJSON(constants.KindRuleList, rows, len(rows))
+				data := withExternalJSON(cmd.Context(), rows, tblRulesName)
+				printJSON(constants.KindRuleList, data, len(data))
 				return nil
 			}
 			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no rules)"))
+				if printExternalHere(cmd.Context(), tblRulesName) == 0 {
+					fmt.Println(style.Muted("(no rules)"))
+				}
 				return nil
 			}
+			defer printExternalHere(cmd.Context(), tblRulesName)
 			for _, r := range rows {
 				body := r.Body
 				if len(body) > 60 {
 					body = body[:57] + "..."
 				}
-				fmt.Printf("%s [%s/%s] %s\n", r.ID, r.Severity, r.Activation, body)
+				badge := ""
+				if r.ArchivedAt != nil {
+					badge = style.Muted(" [archived]")
+				}
+				fmt.Printf("%s [%s/%s] %s%s\n", r.ID, r.Severity, r.Activation, body, badge)
 			}
 			return nil
 		},
@@ -111,6 +125,7 @@ func newRuleListCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	bindRepoScopeFlags(cmd, &scope)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
+	cmd.Flags().BoolVar(&includeArchived, constants.FlagArchived, false, "include archived rules")
 	return cmd
 }
 
@@ -141,7 +156,7 @@ func newRuleShowCommand() *cobra.Command {
 				printJSON(constants.KindRuleShow, r, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", r.ID, style.Code(r.ID))
+			fmt.Printf("%s\n", style.Code(r.ID))
 			fmt.Printf("  severity:   %s\n", r.Severity)
 			fmt.Printf("  activation: %s\n", r.Activation)
 			fmt.Println()
@@ -190,6 +205,8 @@ Severity drives verifier behavior:
 	cmd.Flags().StringVar(&f.sourceRef, constants.FlagSourceRef, "", "free-form provenance pointer")
 	cmd.Flags().StringVar(&f.supersedes, constants.FlagSupersedes, "", "rule_id (rul_*) this entry replaces")
 	cmd.Flags().StringVar(&f.createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
+	bindToFlags(cmd, &f.to, true)
+	bindCreateFlag(cmd, &f.to)
 	return cmd
 }
 
@@ -202,11 +219,22 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 		return errcodes.New(errcodes.EmptyBody, err.Error())
 	}
 
-	if matches := security.NewScanner().Scan(body); len(matches) > 0 && !f.allowSecrets {
+	scanner, err := secretScanner()
+	if err != nil {
+		return err
+	}
+	if matches := scanner.Scan(body); len(matches) > 0 && !f.allowSecrets {
 		return errcodes.New(errcodes.SecretDetected,
-			fmt.Sprintf("body contains %s pattern (preview: %s)",
+			fmt.Sprintf("body contains a secret (credential pattern %s, preview %s)",
 				matches[0].PatternName, matches[0].Preview)).
 			WithHint("use --allow-secrets to override")
+	}
+
+	// F10 / F14: decide which project the row goes to (this repo, a store
+	// project, the personal store) and open it; refusals fail closed.
+	route, err := routeWrite(ctx, &f.commonFlags, f.to, "rule", body)
+	if err != nil {
+		return err
 	}
 
 	rctx, client, err := resolveContext(&f.commonFlags)
@@ -238,8 +266,8 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 	if f.sourceRef != "" {
 		create.SetSourceRef(f.sourceRef)
 	}
-	if f.supersedes != "" {
-		create.SetSupersededByID(f.supersedes)
+	if err := checkSupersedes(ctx, client, supersedeRule, projectID, f.supersedes); err != nil {
+		return err
 	}
 	createdBy, err := resolveActorIDFlag(ctx, client, f.createdBy)
 	if err != nil {
@@ -257,8 +285,14 @@ func runRuleAdd(ctx context.Context, f *ruleAddFlags, raw string) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create rule").WithCause(err)
 	}
+	if err := finishSupersedes(ctx, client, supersedeRule, f.supersedes, r.ID, func(ctx context.Context) error {
+		return client.Rule.DeleteOneID(r.ID).Exec(ctx)
+	}); err != nil {
+		return err
+	}
 
-	fmt.Printf("%s %s %s\n", style.Success("✓"), r.ID, style.Code(r.ID))
+	fmt.Printf("%s %s %s\n", style.Success("✓"), style.Code(r.ID), route.Label)
+	printRoute(route)
 	if repoID != "" {
 		fmt.Printf("  scope: %s severity: %s\n",
 			style.ScopeBadge("repo:"+rctx.RepoMount), f.severity)
@@ -296,6 +330,7 @@ type decisionAddFlags struct {
 	sourceRef  string
 	supersedes string
 	createdBy  string
+	to         toFlags
 }
 
 func newDecisionListCommand() *cobra.Command {
@@ -384,7 +419,7 @@ func newDecisionShowCommand() *cobra.Command {
 				printJSON(constants.KindDecisionShow, r, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", r.ID, style.Code(r.ID))
+			fmt.Printf("%s\n", style.Code(r.ID))
 			fmt.Printf("  title:  %s\n", r.Title)
 			fmt.Printf("  status: %s\n", r.Status)
 			if r.Body != "" {
@@ -437,6 +472,8 @@ func newDecisionAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&f.supersedes, constants.FlagSupersedes, "", "decision_id (dec_*) this entry replaces")
 	cmd.Flags().StringVar(&f.createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
 	_ = cmd.MarkFlagRequired(constants.FlagTitle)
+	bindToFlags(cmd, &f.to, true)
+	bindCreateFlag(cmd, &f.to)
 	return cmd
 }
 
@@ -451,6 +488,17 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	title, err := textnorm.Normalize(f.title)
 	if err != nil {
 		return errcodes.New(errcodes.InvalidInput, "title: "+err.Error())
+	}
+
+	// F10 / F14: decide which project the row goes to (this repo, a store
+	// project, the personal store) and open it; refusals fail closed.
+	route, err := routeWrite(ctx, &f.commonFlags, f.to, "decision", body)
+	if err != nil {
+		return err
+	}
+	// routeWrite checked the body; the title lands in the same repo row.
+	if err := leakCheckRouteWrite(ctx, route, "decision", title); err != nil {
+		return err
 	}
 
 	rctx, client, err := resolveContext(&f.commonFlags)
@@ -480,8 +528,8 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	if f.sourceRef != "" {
 		create.SetSourceRef(f.sourceRef)
 	}
-	if f.supersedes != "" {
-		create.SetSupersededByID(f.supersedes)
+	if err := checkSupersedes(ctx, client, supersedeDecision, projectID, f.supersedes); err != nil {
+		return err
 	}
 	createdBy, err := resolveActorIDFlag(ctx, client, f.createdBy)
 	if err != nil {
@@ -499,7 +547,13 @@ func runDecisionAdd(ctx context.Context, f *decisionAddFlags, raw string) error 
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create decision").WithCause(err)
 	}
-	fmt.Printf("%s %s %s — %s\n", style.Success("✓"), d.ID, style.Code(d.ID), title)
+	if err := finishSupersedes(ctx, client, supersedeDecision, f.supersedes, d.ID, func(ctx context.Context) error {
+		return client.Decision.DeleteOneID(d.ID).Exec(ctx)
+	}); err != nil {
+		return err
+	}
+	fmt.Printf("%s %s — %s %s\n", style.Success("✓"), style.Code(d.ID), title, route.Label)
+	printRoute(route)
 	return nil
 }
 
@@ -609,7 +663,7 @@ func newHotfixShowCommand() *cobra.Command {
 				printJSON(constants.KindHotfixShow, r, 0)
 				return nil
 			}
-			fmt.Printf("%s %s\n", r.ID, style.Code(r.ID))
+			fmt.Printf("%s\n", style.Code(r.ID))
 			fmt.Printf("  severity: %s\n", r.Severity)
 			fmt.Println()
 			fmt.Println(r.Body)
@@ -699,8 +753,8 @@ func runHotfixAdd(ctx context.Context, f *hotfixAddFlags, raw string) error {
 	if repoID != "" {
 		create.SetRepoID(repoID)
 	}
-	if f.supersedes != "" {
-		create.SetSupersededByID(f.supersedes)
+	if err := checkSupersedes(ctx, client, supersedeHotfix, projectID, f.supersedes); err != nil {
+		return err
 	}
 	createdBy, err := resolveActorIDFlag(ctx, client, f.createdBy)
 	if err != nil {
@@ -718,8 +772,12 @@ func runHotfixAdd(ctx context.Context, f *hotfixAddFlags, raw string) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create hotfix").WithCause(err)
 	}
-	fmt.Printf("%s %s %s — %s [%s]\n",
-		style.Warn("⚠"), h.ID, style.Code(h.ID), title, f.severity)
+	if err := finishSupersedes(ctx, client, supersedeHotfix, f.supersedes, h.ID, func(ctx context.Context) error {
+		return client.Hotfix.DeleteOneID(h.ID).Exec(ctx)
+	}); err != nil {
+		return err
+	}
+	fmt.Printf("%s %s — %s [%s]\n", style.Warn("⚠"), style.Code(h.ID), title, f.severity)
 	return nil
 }
 

@@ -1,0 +1,19 @@
+func Allowed(p string) bool {
+	if p == "" || strings.HasPrefix(p, "/") || path.Clean(p) != p {
+		return false
+	}
+	if p == MarkerFile || p == allowedGitattributes {
+		return true
+	}
+	if !strings.Contains(p, "/") {
+		return strings.HasPrefix(p, allowedReadmePrefix) || strings.HasPrefix(p, allowedLicensePrefix)
+	}
+	if rest, ok := strings.CutPrefix(p, allowedWorkflowDir); ok {
+		return !strings.Contains(rest, "/") && strings.HasPrefix(rest, allowedWorkflowName) && strings.HasSuffix(rest, allowedWorkflowExt)
+	}
+	if strings.HasPrefix(p, loreDir+"/") {
+		return true
+	}
+	first, rest, _ := strings.Cut(p, "/")
+	return first != "" && first != loreDir && strings.HasPrefix(rest, loreDir+"/")
+}

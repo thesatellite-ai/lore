@@ -116,6 +116,15 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
   lore sync resolve 3 --take other`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// A fresh clone (or a checkout whose lore.db was never built
+			// because every write went to a store) is materialised first,
+			// exactly as any other command does.
+			if err := maybeMaterialize(cmd.Context(), &f); err != nil {
+				return materializeError(err)
+			}
+			// Store writes made offline wait in the bare clones; `lore sync`
+			// is the explicit "deliver everything now" (§5.3).
+			syncStores(cmd.Context())
 			t, err := openSyncTarget(&f)
 			if err != nil {
 				return err
@@ -191,6 +200,7 @@ func newSyncStatusCommand() *cobra.Command {
 			for _, e := range st.Errors {
 				fmt.Println(style.Error(fmt.Sprintf("  %s %s: %s", e.Kind, e.Path, e.Detail)))
 			}
+			printLiveStatus(cmd.Context(), t.root)
 			return nil
 		},
 	}
@@ -423,7 +433,7 @@ func newSyncPurgeCommand() *cobra.Command {
 	var confirm, dryRun bool
 	cmd := &cobra.Command{
 		Use:   "purge",
-		Short: "Permanently remove rows archived before a cutoff",
+		Short: "Durably remove rows archived before a cutoff",
 		Long: `purge deletes archived rows for good: their files are removed, and their ids
 are recorded in .lore/data/_purged.json so an old clone never brings them
 back. Run it on main and commit the result. Rows go to the local trash first.
@@ -433,12 +443,12 @@ back. Run it on main and commit the result. Rows go to the local trash first.
   lore sync purge --archived-before 2026-01-01 --confirm`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cutoff, err := parseCutoff(before, time.Now())
+			cutoff, err := parseCutoff(before, cliClock().Now())
 			if err != nil {
 				return errcodes.New(errcodes.InvalidInput, "bad --archived-before").WithCause(err)
 			}
 			if !confirm && !dryRun {
-				return errcodes.New(errcodes.InvalidInput, "purge is permanent; pass --confirm (or --dry-run to preview)")
+				return errcodes.New(errcodes.InvalidInput, "purge is durable; pass --confirm (or --dry-run to preview)")
 			}
 			t, err := openSyncTarget(&f)
 			if err != nil {
@@ -471,7 +481,7 @@ back. Run it on main and commit the result. Rows go to the local trash first.
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&before, constants.FlagArchivedBefore, "", "cutoff: date (2006-01-02) or age (90d, 720h)")
-	cmd.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "required: purge is permanent")
+	cmd.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "required: purge is durable")
 	cmd.Flags().BoolVar(&dryRun, constants.FlagDryRun, false, "count what would be purged")
 	return cmd
 }
@@ -590,8 +600,8 @@ chained into that directory's scripts.`,
 			fmt.Printf("  hooks dir:   %s\n", res.HooksDir)
 			fmt.Printf("  attributes:  changed=%v\n", res.Attributes)
 			fmt.Printf("  gitignore:   changed=%v\n", res.Gitignore)
-			fmt.Printf("  config:      %s\n", strings.Join(res.Config, ", "))
-			fmt.Printf("  hooks:       %s\n", strings.Join(res.Hooks, ", "))
+			fmt.Printf("  config:      %s\n", joinOrUnchanged(res.Config))
+			fmt.Printf("  hooks:       %s\n", joinOrUnchanged(res.Hooks))
 			return nil
 		},
 	}
@@ -602,8 +612,10 @@ chained into that directory's scripts.`,
 
 // Hook names `lore sync hook` accepts.
 const (
-	hookPreCommit = "pre-commit"
-	hookRefresh   = "refresh"
+	hookPreCommit  = "pre-commit"
+	hookRefresh    = "refresh"
+	hookPostCommit = "post-commit"
+	hookPrePush    = "pre-push"
 )
 
 // newSyncHookCommand is what the git hook blocks call. Hidden: it is an
@@ -611,11 +623,22 @@ const (
 func newSyncHookCommand() *cobra.Command {
 	var f commonFlags
 	return &cobra.Command{
-		Use:    "hook <pre-commit|refresh>",
+		Use:    "hook <pre-commit|refresh|post-commit|pre-push>",
 		Short:  "Entry point for lore's git hook blocks",
 		Hidden: true,
-		Args:   cobra.ExactArgs(1),
+		Args:   cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// lore's own ride-along commit runs git; its hooks must not
+			// re-enter lore (F6 re-entry guard).
+			if os.Getenv(envRideActive) != "" {
+				return nil
+			}
+			switch args[0] {
+			case hookPostCommit:
+				return livePostCommitHook(cmd.Context())
+			case hookPrePush:
+				return livePrePushHook(cmd.Context(), cmd.InOrStdin(), args[1:])
+			}
 			t, err := openSyncTarget(&f)
 			if err != nil {
 				// Not a lore project (e.g. a hook copied around): never
@@ -668,6 +691,10 @@ func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error 
 	if err != nil {
 		return nil // not a git repo
 	}
+	// A branch file of a live row is shadowed by live (fixed rule 4): it is
+	// neither checked nor staged here, so a stale or hand-edited copy never
+	// rides into the user's commit (F6 "dirty landed path").
+	changed, shadowed := withoutLiveRows(ctx, t.db, changed)
 	scan := secretCheck()
 	for _, p := range changed {
 		b, rerr := os.ReadFile(filepath.Join(t.root, p))
@@ -687,29 +714,71 @@ func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error 
 	}
 	if len(bad) > 0 {
 		return errcodes.New(errcodes.InvalidInput, "refusing to commit broken lore files: "+strings.Join(bad, ", ")).
-			WithHint("resolve the markers inside the JSON values (or `lore sync resolve`), then commit again")
+			WithHint(brokenFilesHint(bad))
 	}
 	if len(changed) > 0 {
-		if err := gitsetup.Add(ctx, t.root, rel); err != nil {
-			fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"could not stage .lore/data: "+err.Error()))
+		specs := []string{rel}
+		if shadowed {
+			specs = changed
+		}
+		for _, p := range specs {
+			if err := gitsetup.Add(ctx, t.root, p); err != nil {
+				fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"could not stage .lore/data: "+err.Error()))
+				break
+			}
 		}
 	}
 	return nil
+}
+
+// Reasons brokenLoreFile gives; printed after each refused path and read
+// back by brokenFilesHint, so the hint names what is actually wrong.
+const (
+	brokenConflictMarkers = "conflict markers"
+	brokenInvalidJSON     = "invalid JSON"
+)
+
+// brokenFilesHint is the next step for a refused pre-commit. Each entry of
+// bad is "<path> (<reason>)"; a reason that is neither broken-file kind is
+// the secret scan's.
+func brokenFilesHint(bad []string) string {
+	var markers, invalid, secret bool
+	for _, b := range bad {
+		switch {
+		case strings.Contains(b, "("+brokenConflictMarkers):
+			markers = true
+		case strings.Contains(b, "("+brokenInvalidJSON+")"):
+			invalid = true
+		default:
+			secret = true
+		}
+	}
+	var steps []string
+	if invalid {
+		steps = append(steps, "fix the JSON syntax of the files marked invalid JSON")
+	}
+	if markers {
+		steps = append(steps, "resolve the conflict markers (or `"+BinaryName+" sync resolve`)")
+	}
+	if secret {
+		steps = append(steps, "remove the credential from the files that hold one")
+	}
+	return strings.Join(steps, "; ") + ", then commit again"
 }
 
 // brokenLoreFile explains why b is not committable ("" when fine): raw git
 // conflict hunks, invalid JSON, or merge markers inside a string value.
 func brokenLoreFile(b []byte) string {
 	if merge3.ContainsConflictMarkers(string(b)) {
-		return "conflict markers"
+		return brokenConflictMarkers
 	}
 	doc, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
 	if err != nil {
-		return "invalid JSON"
+		return brokenInvalidJSON
 	}
 	for k, v := range doc {
 		if s, ok := v.(string); ok && merge3.ContainsConflictMarkers(s) {
-			return "conflict markers in " + k
+			return brokenConflictMarkers + " in " + k
 		}
 	}
 	return ""
@@ -1020,4 +1089,16 @@ func newSyncMergeRowsCommand() *cobra.Command {
 	cmd.Flags().StringVar(&keep, constants.FlagKeep, "", "id of the row to keep")
 	cmd.Flags().StringVar(&drop, constants.FlagDrop, "", "id of the duplicate to remove")
 	return cmd
+}
+
+// unchangedWord is printed by `lore sync install-git` for a list with no
+// changes, instead of an empty value.
+const unchangedWord = "unchanged"
+
+// joinOrUnchanged lists what changed, or says nothing did.
+func joinOrUnchanged(items []string) string {
+	if len(items) == 0 {
+		return unchangedWord
+	}
+	return strings.Join(items, ", ")
 }

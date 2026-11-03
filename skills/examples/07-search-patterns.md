@@ -1,61 +1,63 @@
 # Example: Search patterns — getting the right rows back
 
-**Scenario:** Greta has a project with 500 memories accumulated over a year. She wants to find specific things fast.
+**In short:** `lore memory search` finds notes by words, best match first. Quote a phrase, combine words with OR / NOT, end a word with `*` to match its longer forms, and use `--repo` to look in one repo only.
+
+**Scenario:** Bob (an agency developer) has a project with 500 notes saved over a year. He wants to find one fast.
 
 ## Basic search
 
 ```bash
-lore memory search "redis"
-# FTS5 BM25 ranking. Matches "redis", "Redis", "REDIS" via unicode61 tokenizer.
+lore memory search "invoice"
+# Best matches first. Upper and lower case do not matter: "Invoice" and "INVOICE" match too.
 ```
 
 ```bash
-lore memory search "redis" --json | jq '.count, .results[0:3]'
+lore memory search "invoice" --json | jq '.count, .results[0:3]'
 ```
 
 ## Phrase search
 
 ```bash
-lore memory search '"connection pool"'
+lore memory search '"unpaid invoice"'
 # Quoted phrase — matches the words IN ORDER, adjacent.
 ```
 
 ## Boolean
 
 ```bash
-lore memory search "redis OR cache"
-# Either word. Uppercase OR / AND / NOT — FTS5 syntax.
+lore memory search "invoice OR receipt"
+# Either word. Write OR / AND / NOT in capitals.
 ```
 
 ```bash
-lore memory search "auth NOT deprecated"
-# Has "auth" but not "deprecated".
+lore memory search "client NOT staging"
+# Has "client" but not "staging".
 ```
 
 ## Prefix
 
 ```bash
-lore memory search "auth*"
-# Matches authenticate, authorize, authentication, etc.
+lore memory search "pay*"
+# Matches pay, payment, payments, paying, etc.
 ```
 
 ## Scope
 
 ```bash
-# Default: cwd's repo (if any) + master
-lore memory search "tailwind" --repo=web
+# Default: the repo you are in (if any) + master (the shared notes every repo sees)
+lore memory search "invoice" --repo=app
 
 # All repos
-lore memory search "tailwind" --all-repos
+lore memory search "invoice" --all-repos
 
-# Master only (cross-cutting)
-lore memory search "tailwind" --master-only
+# Master only (notes for every repo)
+lore memory search "invoice" --master-only
 
 # Strict scope (don't include master fallback)
-lore memory search "tailwind" --repo=web --no-inherit
+lore memory search "invoice" --repo=app --no-inherit
 
 # Include archived
-lore memory search "tailwind" --include-archived
+lore memory search "invoice" --include-archived
 ```
 
 ## Limits
@@ -69,18 +71,18 @@ lore memory search "" --limit=0         # unlimited (careful)
 
 ```bash
 lore memory search "" --json
-# No FTS5 — returns everything, newest first, scoped by flags.
+# No search at all: returns everything, newest first, scoped by flags.
 # Same as `lore memory list --json` but supports scope flags.
 ```
 
 ## Filter results with jq
 
 ```bash
-# Memories about auth, only high-trust ones
-lore memory search "auth" --json | jq '.results[] | select(.trust_score >= 0.7)'
+# Notes about invoices, only well-trusted ones (trust_score: how much lore trusts a note, 0 to 1)
+lore memory search "invoice" --json | jq '.results[] | select(.trust_score >= 0.7)'
 
 # IDs only (for piping into another command)
-lore memory search "deprecated" --json | jq -r '.results[].id'
+lore memory search "WhatsApp" --json | jq -r '.results[].id'
 
 # Count by kind
 lore memory list --json | jq -r '.data[].kind' | sort | uniq -c
@@ -88,11 +90,11 @@ lore memory list --json | jq -r '.data[].kind' | sort | uniq -c
 
 ## Cross-entity search (workaround for v0.1)
 
-There's no global "search across all kinds" yet. Compose:
+There is no single search across every kind of row (notes, rules, decisions and so on) yet. Loop over the kinds instead:
 
 ```bash
 for kind in memory rule decision hotfix pattern playbook; do
-    hits=$(lore $kind list --json | jq --arg q "tailwind" -r '
+    hits=$(lore $kind list --json | jq --arg q "invoice" -r '
         .data[] | select((.body // .title // "") | test($q;"i"))
                 | "[\(input_line_number)] \(.id) \($q)"' 2>/dev/null)
     [ -n "$hits" ] && echo "=== $kind ===" && echo "$hits"
@@ -103,8 +105,13 @@ done
 
 | Reason | Fix |
 |---|---|
-| FTS5 not yet indexed for that DB | `lore doctor` — first read triggers backfill |
+| The search index is not built yet for that database | `lore doctor` — first read triggers backfill |
 | Wrong scope | Try `--all-repos`, `--master-only`, or remove `--repo=` |
 | Memory archived | `--include-archived` |
-| Tokenizer split your query weirdly | Try prefix (`foo*`) or phrase (`"foo bar"`) |
+| The search split your query into words in an odd way | Try prefix (`foo*`) or phrase (`"foo bar"`) |
 | Genuine miss | The fact wasn't captured — `lore memory add` to fix the gap |
+
+## Pitfalls
+
+- By default search looks in the current repo plus the shared notes; pass `--all-repos` to look everywhere.
+- Archived notes are left out unless you pass `--include-archived`.

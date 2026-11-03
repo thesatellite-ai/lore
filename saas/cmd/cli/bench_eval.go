@@ -51,7 +51,7 @@ templates. Each task has a prompt, a grader spec, an optional link to a
 captured rule/hotfix/decision/memory it exercises, and expected pass-rates
 that the bench runner uses to flag suspect graders
 
-Use ` + "`lore bench run start`" + ` to actually execute these against an LLM.`,
+Use ` + "`lore bench run start`" + ` to actually execute these against a model.`,
 	}
 	cmd.AddCommand(newBenchEvalAddCommand())
 	cmd.AddCommand(newBenchEvalListCommand())
@@ -503,7 +503,7 @@ func newBenchEvalDeleteCommand() *cobra.Command {
 	var confirm bool
 	cmd := &cobra.Command{
 		Use:   "delete <code-or-id>",
-		Short: "Permanently delete (refuses if any results reference it)",
+		Short: "Durably delete (refuses if any results reference it)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseIfReadOnly(&f); err != nil {

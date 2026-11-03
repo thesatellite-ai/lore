@@ -21,7 +21,7 @@ func (RenderHistory) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("project_id").NotEmpty().Immutable(),
 		field.String("repo_id").Optional().Nillable(),
-		// 'CLAUDE.md' (v0.1). Multi-target adds AGENTS.md / .cursor/rules at v0.2.
+		// Path of the rendered agent instruction file (one target in v0.1; more targets at v0.2).
 		field.String("target_path").NotEmpty(),
 		// Full text emitted. Bounded by render budget (default 200KB).
 		field.Text("rendered_text").NotEmpty(),

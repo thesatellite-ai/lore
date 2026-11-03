@@ -1,8 +1,8 @@
 // why_context.go — `lore why-context` (S2.10)
 //
 // Reads the most recent render_history row and shows what was emitted to
-// CLAUDE.md. Critical for debugging hallucinations: "why did Claude say
-// that?" → see exactly what context it received
+// the context file. Critical for debugging hallucinations: "why did the
+// agent say that?" → see exactly what context it received
 //
 // Catches: R22 #11, R34.7 (renamed from `lore why <run_id>`)
 package main
@@ -32,11 +32,11 @@ func newWhyContextCommand() *cobra.Command {
 	f := &whyContextFlags{}
 	cmd := &cobra.Command{
 		Use:   "why-context",
-		Short: "Show the last rendered context (what Claude saw)",
-		Long: `why-context surfaces the exact text that was last written to CLAUDE.md
+		Short: "Show the last rendered context (what the agent saw)",
+		Long: `why-context surfaces the exact text that was last written to the context file
 
 Use this when debugging hallucinations or unexpected agent behavior:
-"What was in the context file when Claude wrote that response?"
+"What was in the context file when the agent wrote that response?"
 
 Default summary mode shows counts + sha256 + paths. Use --rendered to print
 the full text.`,

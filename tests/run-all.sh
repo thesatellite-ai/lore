@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run-all.sh — execute every SC-* and CH-* sequentially. Summary at end.
 set -u
-LORE="${LORE:-/tmp/aicoder}"
+LORE="${LORE:-lore}"
 export LORE
 
 PASS=0; FAIL=0; SKIP=0

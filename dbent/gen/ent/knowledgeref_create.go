@@ -75,6 +75,20 @@ func (_c *KnowledgeRefCreate) SetDstID(v string) *KnowledgeRefCreate {
 	return _c
 }
 
+// SetDstProjectID sets the "dst_project_id" field.
+func (_c *KnowledgeRefCreate) SetDstProjectID(v string) *KnowledgeRefCreate {
+	_c.mutation.SetDstProjectID(v)
+	return _c
+}
+
+// SetNillableDstProjectID sets the "dst_project_id" field if the given value is not nil.
+func (_c *KnowledgeRefCreate) SetNillableDstProjectID(v *string) *KnowledgeRefCreate {
+	if v != nil {
+		_c.SetDstProjectID(*v)
+	}
+	return _c
+}
+
 // SetRelation sets the "relation" field.
 func (_c *KnowledgeRefCreate) SetRelation(v string) *KnowledgeRefCreate {
 	_c.mutation.SetRelation(v)
@@ -283,6 +297,10 @@ func (_c *KnowledgeRefCreate) createSpec() (*KnowledgeRef, *sqlgraph.CreateSpec)
 		_spec.SetField(knowledgeref.FieldDstID, field.TypeString, value)
 		_node.DstID = value
 	}
+	if value, ok := _c.mutation.DstProjectID(); ok {
+		_spec.SetField(knowledgeref.FieldDstProjectID, field.TypeString, value)
+		_node.DstProjectID = &value
+	}
 	if value, ok := _c.mutation.Relation(); ok {
 		_spec.SetField(knowledgeref.FieldRelation, field.TypeString, value)
 		_node.Relation = value
@@ -400,6 +418,24 @@ func (u *KnowledgeRefUpsert) SetDstID(v string) *KnowledgeRefUpsert {
 // UpdateDstID sets the "dst_id" field to the value that was provided on create.
 func (u *KnowledgeRefUpsert) UpdateDstID() *KnowledgeRefUpsert {
 	u.SetExcluded(knowledgeref.FieldDstID)
+	return u
+}
+
+// SetDstProjectID sets the "dst_project_id" field.
+func (u *KnowledgeRefUpsert) SetDstProjectID(v string) *KnowledgeRefUpsert {
+	u.Set(knowledgeref.FieldDstProjectID, v)
+	return u
+}
+
+// UpdateDstProjectID sets the "dst_project_id" field to the value that was provided on create.
+func (u *KnowledgeRefUpsert) UpdateDstProjectID() *KnowledgeRefUpsert {
+	u.SetExcluded(knowledgeref.FieldDstProjectID)
+	return u
+}
+
+// ClearDstProjectID clears the value of the "dst_project_id" field.
+func (u *KnowledgeRefUpsert) ClearDstProjectID() *KnowledgeRefUpsert {
+	u.SetNull(knowledgeref.FieldDstProjectID)
 	return u
 }
 
@@ -545,6 +581,27 @@ func (u *KnowledgeRefUpsertOne) SetDstID(v string) *KnowledgeRefUpsertOne {
 func (u *KnowledgeRefUpsertOne) UpdateDstID() *KnowledgeRefUpsertOne {
 	return u.Update(func(s *KnowledgeRefUpsert) {
 		s.UpdateDstID()
+	})
+}
+
+// SetDstProjectID sets the "dst_project_id" field.
+func (u *KnowledgeRefUpsertOne) SetDstProjectID(v string) *KnowledgeRefUpsertOne {
+	return u.Update(func(s *KnowledgeRefUpsert) {
+		s.SetDstProjectID(v)
+	})
+}
+
+// UpdateDstProjectID sets the "dst_project_id" field to the value that was provided on create.
+func (u *KnowledgeRefUpsertOne) UpdateDstProjectID() *KnowledgeRefUpsertOne {
+	return u.Update(func(s *KnowledgeRefUpsert) {
+		s.UpdateDstProjectID()
+	})
+}
+
+// ClearDstProjectID clears the value of the "dst_project_id" field.
+func (u *KnowledgeRefUpsertOne) ClearDstProjectID() *KnowledgeRefUpsertOne {
+	return u.Update(func(s *KnowledgeRefUpsert) {
+		s.ClearDstProjectID()
 	})
 }
 
@@ -861,6 +918,27 @@ func (u *KnowledgeRefUpsertBulk) SetDstID(v string) *KnowledgeRefUpsertBulk {
 func (u *KnowledgeRefUpsertBulk) UpdateDstID() *KnowledgeRefUpsertBulk {
 	return u.Update(func(s *KnowledgeRefUpsert) {
 		s.UpdateDstID()
+	})
+}
+
+// SetDstProjectID sets the "dst_project_id" field.
+func (u *KnowledgeRefUpsertBulk) SetDstProjectID(v string) *KnowledgeRefUpsertBulk {
+	return u.Update(func(s *KnowledgeRefUpsert) {
+		s.SetDstProjectID(v)
+	})
+}
+
+// UpdateDstProjectID sets the "dst_project_id" field to the value that was provided on create.
+func (u *KnowledgeRefUpsertBulk) UpdateDstProjectID() *KnowledgeRefUpsertBulk {
+	return u.Update(func(s *KnowledgeRefUpsert) {
+		s.UpdateDstProjectID()
+	})
+}
+
+// ClearDstProjectID clears the value of the "dst_project_id" field.
+func (u *KnowledgeRefUpsertBulk) ClearDstProjectID() *KnowledgeRefUpsertBulk {
+	return u.Update(func(s *KnowledgeRefUpsert) {
+		s.ClearDstProjectID()
 	})
 }
 

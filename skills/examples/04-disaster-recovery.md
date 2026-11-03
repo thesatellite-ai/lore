@@ -1,6 +1,8 @@
 # Example: My DB is broken
 
-**Scenario:** Dave opens his project and `lore doctor` reports broken. Power loss happened mid-write.
+**In short:** if lore's local database breaks (for example after a power cut), `lore repair` fixes it in up to three steps, from gentlest to most drastic. Take backups so the second step always has one to use.
+
+**Scenario:** Bob (an agency developer) opens his project and `lore doctor` reports broken. The power went out while lore was writing.
 
 ## Triage
 

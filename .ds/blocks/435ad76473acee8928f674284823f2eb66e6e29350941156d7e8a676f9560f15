@@ -1,0 +1,5 @@
+	rules, err := client.Rule.Query().Where(
+		entRule.Or(entRule.ProjectID(projectID), entRule.ProjectIDIsNil()),
+		entRule.ArchivedAtIsNil(),
+		entRule.SeverityEQ(entRule.SeverityMust),
+	).Order(ent.Asc(entRule.FieldID)).All(ctx)

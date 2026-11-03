@@ -11,7 +11,7 @@ import (
 
 // BenchRun represents ONE benchmark execution — N tasks × M arms ×
 // R attempts. Holds the configuration used (model, temperature,
-// claude.md sha) plus a denormalized summary post-completion.
+// agent instruction file sha) plus a denormalized summary post-completion.
 //
 // Status flow: running → complete | aborted | failed.
 type BenchRun struct{ ent.Schema }
@@ -36,7 +36,7 @@ func (BenchRun) Fields() []ent.Field {
 		field.Float("temperature").Default(0.2),
 		field.Int("runs_per_arm").Default(3).NonNegative(),
 
-		// Reproducibility: pin which CLAUDE.md the with-skill arm saw.
+		// Reproducibility: pin which agent instruction file the with-skill arm saw.
 		field.String("claude_md_sha256").Optional().Nillable(),
 		field.Int("claude_md_size_bytes").Optional().Nillable(),
 

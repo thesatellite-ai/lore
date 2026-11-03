@@ -13,6 +13,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"saas/pkg/constants"
 	"strings"
@@ -149,8 +150,8 @@ func newPatternAddCommand() *cobra.Command {
 				return errcodes.New(errcodes.InvalidInput, "body: "+err.Error())
 			}
 			create.SetBody(cleanBody)
-			if supersedes != "" {
-				create.SetSupersededByID(supersedes)
+			if err := checkSupersedes(cmd.Context(), client, supersedePattern, projectID, supersedes); err != nil {
+				return err
 			}
 			actorID, err := resolveCreatedBy(cmd.Context(), client, createdBy)
 			if err != nil {
@@ -161,7 +162,12 @@ func newPatternAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create pattern").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			if err := finishSupersedes(cmd.Context(), client, supersedePattern, supersedes, row.ID, func(ctx context.Context) error {
+				return client.Pattern.DeleteOneID(row.ID).Exec(ctx)
+			}); err != nil {
+				return err
+			}
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -282,7 +288,7 @@ func newPlaybookGroup() *cobra.Command {
 
 func newPlaybookAddCommand() *cobra.Command {
 	var f commonFlags
-	var title, body, createdBy string
+	var title, description, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
 		Args:  bodyOnlyArgs,
@@ -307,6 +313,11 @@ func newPlaybookAddCommand() *cobra.Command {
 				}
 				create.SetName(cleanTitle)
 			}
+			cleanDesc, err := knowledgeDescription(description, title)
+			if err != nil {
+				return err
+			}
+			create.SetDescription(cleanDesc)
 			resolvedBody, err := resolveBodyInput(args, body)
 			if err != nil {
 				return err
@@ -326,13 +337,14 @@ func newPlaybookAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create playbook").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "title (required)")
 	_ = cmd.MarkFlagRequired(constants.FlagTitle)
+	cmd.Flags().StringVar(&description, constants.FlagDescription, "", "one-line summary (default: the title)")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "body (required; pass --body=<v> or pipe via stdin)")
 	cmd.Flags().StringVar(&createdBy, constants.FlagCreatedBy, "", "actor_id; defaults to current identity")
 	return cmd
@@ -433,7 +445,7 @@ func newPromptGroup() *cobra.Command {
 
 func newPromptAddCommand() *cobra.Command {
 	var f commonFlags
-	var title, body, createdBy string
+	var title, description, body, createdBy string
 	cmd := &cobra.Command{
 		Use:   "add",
 		Args:  bodyOnlyArgs,
@@ -457,6 +469,11 @@ func newPromptAddCommand() *cobra.Command {
 				}
 				create.SetName(cleanTitle)
 			}
+			cleanDesc, err := knowledgeDescription(description, title)
+			if err != nil {
+				return err
+			}
+			create.SetDescription(cleanDesc)
 			resolvedBody, err := resolveBodyInput(args, body)
 			if err != nil {
 				return err
@@ -476,13 +493,14 @@ func newPromptAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create prompt").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "title (required)")
 	_ = cmd.MarkFlagRequired(constants.FlagTitle)
+	cmd.Flags().StringVar(&description, constants.FlagDescription, "", "one-line summary (default: the title)")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "body (required; pass --body=<v> or pipe via stdin)")
 	cmd.Flags().StringVar(&createdBy, constants.FlagCreatedBy, "", "actor_id; defaults to current identity")
 	return cmd
@@ -630,7 +648,7 @@ func newArchitectureNoteAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create architecturenote").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -792,7 +810,7 @@ func newBehaviourAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create behaviour").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -939,7 +957,7 @@ func newCookbookRecipeAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create cookbookrecipe").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -1085,7 +1103,7 @@ func newIncidentAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create incident").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -1234,7 +1252,7 @@ func newSuggestionAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create suggestion").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -1375,7 +1393,7 @@ func newTastePrefAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create tastepref").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -1521,7 +1539,7 @@ func newPlanAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create plan").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -1669,7 +1687,7 @@ func newTaskListAddCommand() *cobra.Command {
 				printJSON(constants.KindTasklistAdd, row, 0)
 				return nil
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -1811,7 +1829,7 @@ func newWorkflowAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create workflow").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -1952,7 +1970,7 @@ func newWorkspaceAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create workspace").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -2106,7 +2124,7 @@ func newHandoffAddCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create handoff").WithCause(err)
 			}
-			fmt.Printf("%s %s %s\n", style.Success("✓"), row.ID, style.Code(row.ID))
+			fmt.Printf("%s %s\n", style.Success("✓"), style.Code(row.ID))
 			return nil
 		},
 	}
@@ -2437,7 +2455,7 @@ func newReminderListCommand() *cobra.Command {
 				fmt.Println(style.Muted("(no reminders)"))
 				return nil
 			}
-			now := time.Now()
+			now := cliClock().Now()
 			for _, r := range rows {
 				marker := " "
 				if r.DueAt.Before(now) && r.DoneAt == nil {
@@ -2554,7 +2572,7 @@ func newReminderDoneCommand() *cobra.Command {
 				fmt.Printf("%s rescheduled to %s\n", style.Success("✓"), next.Format("2006-01-02"))
 				return nil
 			}
-			_, err = client.Reminder.UpdateOne(r).SetDoneAt(time.Now()).Save(cmd.Context())
+			_, err = client.Reminder.UpdateOne(r).SetDoneAt(cliClock().Now()).Save(cmd.Context())
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "mark done").WithCause(err)
 			}
@@ -2571,6 +2589,7 @@ func newReminderDoneCommand() *cobra.Command {
 // regenerating forces this map to compile-fail if not updated
 type ymdShift struct{ y, m, d int }
 
+// ds:def id=reminder-recurrence-gs41nylk owner=@khanakia stability=stable desc="reminder --recurrence values and how far each advances the due date"
 var recurrenceShift = map[entReminder.Recurrence]ymdShift{
 	entReminder.Recurrence7d:  {0, 0, 7},
 	entReminder.Recurrence30d: {0, 0, 30},

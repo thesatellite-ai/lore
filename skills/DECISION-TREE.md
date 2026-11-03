@@ -1,5 +1,7 @@
 # Decision tree — pick the right command
 
+**In short:** answer a few yes/no questions and this page tells you which command to use, for example whether something you learned is a rule, a decision or a memory.
+
 When the user's intent is ambiguous, walk this tree top-down.
 
 ## "I want to persist something"
@@ -29,7 +31,7 @@ Is it a hard CONSTRAINT we should enforce?
             │
             ├── Code shape         → pattern add
             ├── Multi-step process → playbook add
-            ├── LLM prompt         → prompt add
+            ├── Model prompt       → prompt add
             ├── Architecture note  → architecturenote add
             │
             └── Generic fact       → memory add
@@ -131,7 +133,7 @@ Searched on demand (run `lore search "<keywords>"` per turn):
   - Anything else captured but not in the "non-skippable" tier
 ```
 
-## "I want to know what the AI saw"
+## "I want to know what the agent saw"
 
 ```
 Most recent render?        → lore why-context --last-render

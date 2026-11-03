@@ -2,10 +2,10 @@
 # SC-27: Worktree detection — .git as file (not dir)
 # Catches: R18-15
 #
-# Per R14, aicoder does NOT walk up to find .lore/. From inside a worktree,
+# Per R14, lore does NOT walk up to find .lore/. From inside a worktree,
 # commands either need explicit --db or a fresh .lore/ in the worktree.
 # This scenario verifies: (1) worktree's .git is a regular file, and
-# (2) `aicoder memory add --db=<main>` from inside the worktree works.
+# (2) `lore memory add --db=<main>` from inside the worktree works.
 source "$(dirname "$0")/../lib/common.sh"
 mk_tmp
 git init -q .
@@ -20,7 +20,7 @@ git worktree add "$TMP/wt" -b feature >/dev/null 2>&1 || skip "git worktree unav
 cd "$TMP/wt"
 [ -f .git ] || fail "worktree .git is not a regular file"
 
-# Without --db, aicoder refuses (no walk-up). That refusal IS the correct behavior.
+# Without --db, lore refuses (no walk-up). That refusal IS the correct behavior.
 $LORE memory add --body "should-refuse" 2>&1 | grep -qE "E_NOT_PROJECT_ROOT|not an aicoder" \
     || fail "worktree without --db should refuse"
 

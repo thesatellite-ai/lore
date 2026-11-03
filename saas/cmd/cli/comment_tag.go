@@ -68,6 +68,7 @@ func newCommentCommand() *cobra.Command {
 
 func newCommentAddCommand() *cobra.Command {
 	var f commonFlags
+	var to toFlags
 	var entityTable, entityID, bodyFlag string
 	cmd := &cobra.Command{
 		Use:   "add",
@@ -92,6 +93,15 @@ Examples:
 				return errcodes.New(errcodes.InvalidInput,
 					"--on-table and --on-id are required")
 			}
+			// F14: which project the comment lives in; F15: a pointer may
+			// only flow inward (client → internal is refused).
+			route, err := routeWrite(cmd.Context(), &f, to, "comment", body)
+			if err != nil {
+				return err
+			}
+			if err := checkReferences(cmd.Context(), route, []string{entityID}); err != nil {
+				return err
+			}
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
@@ -106,8 +116,9 @@ Examples:
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "create comment").WithCause(err)
 			}
-			fmt.Printf("%s comment %s on %s/%s\n",
-				style.Success("✓"), style.Code(row.ID), entityTable, entityID)
+			fmt.Printf("%s comment %s on %s/%s %s\n",
+				style.Success("✓"), style.Code(row.ID), entityTable, entityID, route.Label)
+			printRoute(route)
 			return nil
 		},
 	}
@@ -117,6 +128,8 @@ Examples:
 	cmd.Flags().StringVar(&bodyFlag, constants.FlagBody, "", "body (required; --body=<v> or pipe via stdin)")
 	_ = cmd.MarkFlagRequired(constants.FlagOnTable)
 	_ = cmd.MarkFlagRequired(constants.FlagOnID)
+	bindToFlags(cmd, &to, true)
+	bindCreateFlag(cmd, &to)
 	return cmd
 }
 

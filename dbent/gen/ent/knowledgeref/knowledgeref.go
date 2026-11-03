@@ -28,6 +28,8 @@ const (
 	FieldDstTable = "dst_table"
 	// FieldDstID holds the string denoting the dst_id field in the database.
 	FieldDstID = "dst_id"
+	// FieldDstProjectID holds the string denoting the dst_project_id field in the database.
+	FieldDstProjectID = "dst_project_id"
 	// FieldRelation holds the string denoting the relation field in the database.
 	FieldRelation = "relation"
 	// FieldConfidence holds the string denoting the confidence field in the database.
@@ -45,6 +47,7 @@ var Columns = []string{
 	FieldSrcID,
 	FieldDstTable,
 	FieldDstID,
+	FieldDstProjectID,
 	FieldRelation,
 	FieldConfidence,
 }
@@ -145,6 +148,11 @@ func ByDstTable(opts ...sql.OrderTermOption) OrderOption {
 // ByDstID orders the results by the dst_id field.
 func ByDstID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDstID, opts...).ToFunc()
+}
+
+// ByDstProjectID orders the results by the dst_project_id field.
+func ByDstProjectID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDstProjectID, opts...).ToFunc()
 }
 
 // ByRelation orders the results by the relation field.
