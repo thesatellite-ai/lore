@@ -24,7 +24,7 @@ import (
 
 // Files of the internal render.
 const (
-	// claudeLocalFile is the per-checkout import file Claude Code reads and
+	// claudeLocalFile is the per-checkout import file the coding agent reads and
 	// git ignores by convention; lore also excludes it explicitly.
 	claudeLocalFile = "CLAUDE.local.md"
 	// renderHeader is the fixed first line of every internal render

@@ -37,8 +37,8 @@ const BinaryName = "lore"
 // rootCmd is the cobra root for the lore binary
 var rootCmd = &cobra.Command{
 	Use:   BinaryName,
-	Short: "lore — local-first memory and context compiler for AI coding agents",
-	Long: `lore is a local-first memory and context compiler for AI coding agents
+	Short: "lore — local-first memory and context compiler for coding agents",
+	Long: `lore is a local-first memory and context compiler for coding agents
 
 It collects project knowledge (rules, memories, decisions, hotfixes, patterns,
 snapshots, playbooks), retrieves the relevant parts via hybrid search, and

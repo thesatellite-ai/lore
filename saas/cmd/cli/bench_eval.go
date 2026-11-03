@@ -51,7 +51,7 @@ templates. Each task has a prompt, a grader spec, an optional link to a
 captured rule/hotfix/decision/memory it exercises, and expected pass-rates
 that the bench runner uses to flag suspect graders
 
-Use ` + "`lore bench run start`" + ` to actually execute these against an LLM.`,
+Use ` + "`lore bench run start`" + ` to actually execute these against a model.`,
 	}
 	cmd.AddCommand(newBenchEvalAddCommand())
 	cmd.AddCommand(newBenchEvalListCommand())

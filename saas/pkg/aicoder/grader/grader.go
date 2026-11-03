@@ -132,7 +132,7 @@ func gradeLLMJudge(ctx context.Context, fields map[string]any, output string, ca
 		judge = "claude-opus-4-7"
 	}
 	if caller == nil {
-		return Verdict{Trace: map[string]any{"error": "no llm caller available"}},
+		return Verdict{Trace: map[string]any{"error": "no model caller available"}},
 			errors.New("llm-judge grader: nil caller")
 	}
 	prompt := buildJudgePrompt(rubric, output)

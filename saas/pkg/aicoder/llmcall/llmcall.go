@@ -1,9 +1,10 @@
-// Package llmcall is a thin, pluggable abstraction over LLM invocation
+// Package llmcall is a thin, pluggable abstraction over model calls
 // used by the bench engine.
 //
-// Two providers shipped: the `claude` CLI (default; matches Phase-1
-// runner.py behavior) and a direct Anthropic API caller (used when
-// ANTHROPIC_API_KEY is set and --provider=api selected).
+// Providers shipped: a hosted model's command-line tool (default;
+// matches Phase-1 runner.py behavior), a direct call to the hosted
+// model's API (used when its API key variable, read below, is set), and
+// a local Ollama model.
 //
 // The interface is intentionally minimal:
 //
@@ -46,7 +47,7 @@ type Options struct {
 	Temperature float64       // 0..1
 	MaxTokens   int           // default 4096
 	Timeout     time.Duration // default 120s
-	// DisableTools is honored only by the claude CLI provider (which
+	// DisableTools is honored only by the command-line provider (which
 	// uses --tools "" to suppress tool-use stubs).
 	DisableTools bool
 }
@@ -73,13 +74,13 @@ type Caller interface {
 //   - "ollama:<model>"     → Ollama (default host http://localhost:11434,
 //     override via OLLAMA_HOST). Model name after the prefix is passed
 //     verbatim to /api/chat — so "ollama:qwen3-coder:latest" works.
-//   - "openai:<model>"     → Ollama-compatible OpenAI endpoint (reserved
-//     for future LM Studio / vLLM support; not wired yet).
-//   - anything else        → Anthropic API if ANTHROPIC_API_KEY set,
-//     otherwise the local `claude` CLI.
+//   - "openai:<model>"     → reserved prefix for a future local
+//     chat-completions endpoint (LM Studio / vLLM); not wired yet.
+//   - anything else        → the hosted model's API if its API key is set,
+//     otherwise the hosted model's local command-line tool.
 //
 // Using a router (not a single fixed provider) means a single bench run
-// can mix providers — e.g. llm-judge graders calling Claude haiku while
+// can mix providers — e.g. llm-judge graders calling a hosted model while
 // the system-under-test is a local Ollama model.
 func Auto() Caller {
 	return &router{
@@ -119,7 +120,11 @@ func ollamaHostOrDefault() string {
 	return "http://localhost:11434"
 }
 
-// ── provider: claude CLI ────────────────────────────────────────────────────
+// ── provider: hosted model command-line tool ───────────────────────────────
+
+// cliBinary is the hosted model's command-line program, run through PATH.
+// It is a real program name, so it stays exactly as the vendor ships it.
+const cliBinary = "claude"
 
 type claudeCLI struct{}
 
@@ -127,8 +132,8 @@ func (c *claudeCLI) Name() string { return "claude-cli" }
 
 func (c *claudeCLI) Call(ctx context.Context, model, prompt string, opts Options) (Response, error) {
 	opts = opts.withDefaults()
-	if _, err := exec.LookPath("claude"); err != nil {
-		return Response{}, fmt.Errorf("claude CLI not on PATH; install or set ANTHROPIC_API_KEY")
+	if _, err := exec.LookPath(cliBinary); err != nil {
+		return Response{}, fmt.Errorf("model command-line tool %q not on PATH; install it or set ANTHROPIC_API_KEY", cliBinary)
 	}
 	// We do NOT override the user's settings/hooks. The user's actual
 	// environment (caveman-mode banners, statusline offers, etc.) is part
@@ -147,7 +152,7 @@ func (c *claudeCLI) Call(ctx context.Context, model, prompt string, opts Options
 	}
 	cctx, cancel := context.WithTimeout(ctx, opts.Timeout)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, "claude", args...)
+	cmd := exec.CommandContext(cctx, cliBinary, args...)
 	cmd.Stdin = strings.NewReader(prompt)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -161,7 +166,7 @@ func (c *claudeCLI) Call(ctx context.Context, model, prompt string, opts Options
 				ElapsedMs:    elapsed,
 				ProviderUsed: c.Name(),
 			},
-			fmt.Errorf("claude CLI failed: %w (stderr: %s)", err, stderr.String())
+			fmt.Errorf("model command-line tool failed: %w (stderr: %s)", err, stderr.String())
 	}
 	out := stdout.String()
 	inTok := estimateTokens(prompt)
@@ -176,7 +181,7 @@ func (c *claudeCLI) Call(ctx context.Context, model, prompt string, opts Options
 	}, nil
 }
 
-// ── provider: anthropic API (direct) ────────────────────────────────────────
+// ── provider: hosted model API (direct) ────────────────────────────────────
 
 type anthropicAPI struct {
 	apiKey string
@@ -243,7 +248,7 @@ func (a *anthropicAPI) Call(ctx context.Context, model, prompt string, opts Opti
 	}
 	if ar.Error != nil {
 		return Response{ElapsedMs: elapsed, ProviderUsed: a.Name()},
-			errors.New("anthropic api: " + ar.Error.Message)
+			errors.New("hosted model api: " + ar.Error.Message)
 	}
 	var text string
 	for _, c := range ar.Content {
@@ -368,7 +373,7 @@ type CostRate struct {
 	OutputPerMTok float64
 }
 
-// Per-model rate table — sourced from public Anthropic pricing as of
+// Per-model rate table — sourced from the vendor's public pricing as of
 // 2026-01. Wrong rates produce wrong cost estimates but never wrong
 // pass/fail verdicts.
 var rateTable = map[string]CostRate{

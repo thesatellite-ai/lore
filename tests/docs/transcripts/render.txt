@@ -1,7 +1,7 @@
 
 ### render
 alice (work/website)$ lore render
-✓ .lore/LORE.md (12459 bytes; 1R + 1HF)
+✓ .lore/LORE.md (12498 bytes; 1R + 1HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 alice (work/website)$ cat CLAUDE.md
 <!-- lore:pointer:start -->
@@ -63,7 +63,7 @@ alice (work/website)$ cat AGENTS.md
 
 ### out
 alice (work/website)$ lore render --out docs/agent-notes.md --target AGENTS.md
-✓ docs/agent-notes.md (12459 bytes; 1R + 1HF)
+✓ docs/agent-notes.md (12498 bytes; 1R + 1HF)
 ✓ ~/work/website/AGENTS.md (pointer → docs/agent-notes.md)
 alice (work/website)$ cat AGENTS.md; ls docs
 <!-- lore:pointer:start -->
@@ -100,14 +100,14 @@ alice (work/website)$ lore why-context
 render_id:    rnd_7a670ae8548ed05bf57ad29ad0759504
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
-total_bytes:  12459
+total_bytes:  12498
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
 scope:        {"included":{"rules":1,"hotfixes":1,"memories":0}}
 alice (work/website)$ lore why-context --rendered | head -8
 render_id:    rnd_7a670ae8548ed05bf57ad29ad0759504
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
-total_bytes:  12459
+total_bytes:  12498
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
 scope:        {"included":{"rules":1,"hotfixes":1,"memories":0}}
 

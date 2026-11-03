@@ -443,7 +443,7 @@ Track every agent attempt at a task — what model, which agent, tokens, cost, t
 RID=$(lore run start \
     --task=tsk_<id> \
     --model=claude-opus-4-7 \
-    --agent=claude-code \
+    --agent=my-agent \
     --goal="wire auth middleware against JWT provider" | tail -1)
 
 # Append steps as the agent works

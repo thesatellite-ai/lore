@@ -7,7 +7,7 @@ status: review
 
 <DocStatus state="review" owner="khanakia" updated="2026-11-02"></DocStatus>
 
-Make lore the one place a whole company's people and AI agents keep their shared memory and their shared work, with git as the only infrastructure: private notes stay private, internal notes never reach a client, several repos act as one product, people see a task the moment it is assigned, and many agents can work one mission without stepping on each other.
+Make lore the one place a whole company's people and coding agents keep their shared memory and their shared work, with git as the only infrastructure: private notes stay private, internal notes never reach a client, several repos act as one product, people see a task the moment it is assigned, and many agents can work one mission without stepping on each other.
 
 <Callout type="info" title="One-paragraph summary">
 
@@ -1308,7 +1308,7 @@ labels: [<mount name>] for this repo, [<org>/<folder>] for store projects, [me] 
   me → linked → repo → global
 ```
 
-**Edge cases handled.** Tools that cannot follow an import (`.cursorrules`, Codex): lore never writes internal content into a tracked path for them; they get context through `lore context --internal` or an MCP tool, and `lore doctor` warns until `.dockerignore` and similar exclude any in-checkout internal file. Two repos linked to one project each have their own cache file; writes go to the store first, so the other repo sees them on its next command.
+**Edge cases handled.** Tools that cannot follow an import (`.cursorrules`, agents that read only `AGENTS.md`): lore never writes internal content into a tracked path for them; they get context through `lore context --internal` or an MCP tool, and `lore doctor` warns until `.dockerignore` and similar exclude any in-checkout internal file. Two repos linked to one project each have their own cache file; writes go to the store first, so the other repo sees them on its next command.
 
 **Test.** Existing lsync engine plus a meta-key test: `lore org use` to another entry, then `lore search` shows no old-entry rows. Render test: the checkout contains no internal string anywhere after `lore render` (scan every file).
 
@@ -1511,7 +1511,7 @@ Hooks are local and optional, so a determined or careless person can always leak
 
 ### 7.1 The goal
 
-Several agents (Claude sessions on the Mac, tmux sessions on devbox, other tools) work one mission across several repos with a human owner. Today they coordinate through chat briefs and luck: two agents pick the same work, an agent waits on a dead process, a crashed agent's progress is lost, and nobody sees the whole mission. Lore already holds missions, tasks, actors and handoffs; with live rows, signals and stores it becomes the shared coordination layer, with git as the only infrastructure.
+Several agents (agent sessions on a laptop, tmux sessions on a dev server, other tools) work one mission across several repos with a human owner. Today they coordinate through chat briefs and luck: two agents pick the same work, an agent waits on a dead process, a crashed agent's progress is lost, and nobody sees the whole mission. Lore already holds missions, tasks, actors and handoffs; with live rows, signals and stores it becomes the shared coordination layer, with git as the only infrastructure.
 
 ### 7.2 Building blocks
 
@@ -2920,7 +2920,7 @@ A row exists once; rows in other projects point at it by project id and row id. 
 
 </Details>
 
-<Details summary="33. How can lore become the coordination layer for many AI agents working one mission?">
+<Details summary="33. How can lore become the coordination layer for many coding agents working one mission?">
 
 Agents are per-session actors with an owner; tasks are claimed through signals with a token and fencing, kept alive by heartbeats, picked from a ready queue that respects dependencies (done or merged), handed over with notes and handoffs, and stopped at gates only a human on the roster can approve (TEAM-028). Detail: §7, F7, F9.
 
@@ -3019,7 +3019,7 @@ For a task in a linked client repo, claims and leases go on the store's signals 
 
 <Details summary="44. Where is CLAUDE.local.md written, and why?">
 
-In the checkout root, excluded through `.git/info/exclude` (so the client's `.gitignore` is not changed), and it contains one line: `@~/.lore/render/<project-id>.md`. Claude Code loads `CLAUDE.local.md` automatically and follows the import, so the agent gets the internal context, while the content itself sits outside the checkout where Docker builds, ZIPs, rsync and uploads cannot pick it up. Detail: F20, TEAM-019.
+In the checkout root, excluded through `.git/info/exclude` (so the client's `.gitignore` is not changed), and it contains one line: `@~/.lore/render/<project-id>.md`. A coding agent that reads `CLAUDE.md` also loads `CLAUDE.local.md` automatically and follows the import, so the agent gets the internal context, while the content itself sits outside the checkout where Docker builds, ZIPs, rsync and uploads cannot pick it up. Detail: F20, TEAM-019.
 
 **Status:** decided (D9) — Updated 2026-11-02
 

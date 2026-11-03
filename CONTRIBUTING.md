@@ -22,7 +22,7 @@ task check                # the full gate — must pass before you push
 
 - Branch from `main`; keep PRs focused.
 - `task check` passes (build, lint, every test suite, tidy, scenarios, chaos, docs). The pre-push hook enforces it once `task lore:hooks:install` has run.
-- Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`). No AI-attribution / co-author trailers in commit messages.
+- Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`). No attribution trailers for coding agents or tools, and no co-author trailers, in commit messages.
 - A push to `main` auto-publishes a release — maintainers handle merges with that in mind. Use `[skip release]` in the commit subject for docs-only changes.
 
 ## Contributor license terms

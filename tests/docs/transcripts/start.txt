@@ -38,7 +38,7 @@ rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push
 
 ### render
 alice (work/website)$ lore render
-✓ .lore/LORE.md (12254 bytes; 1R + 0HF)
+✓ .lore/LORE.md (12293 bytes; 1R + 0HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 alice (work/website)$ cat CLAUDE.md
 <!-- lore:pointer:start -->
