@@ -145,14 +145,15 @@ on alice work/website "git checkout -q HEAD -- .lore/data && git status --short"
 
 # --- docs/sync/github-workflow.md -------------------------------------------------------
 note "workflow preview"
-on alice work/website "lore sync install-action --dry-run | grep -A 12 '^on:'"
+on alice work/website "lore sync install-action --dry-run | grep -A 6 '^on:'"
 
 note "workflow manual"
-on alice work/website "lore sync install-action --manual"
+on alice work/website "lore sync install-action"
 on alice work/website "grep -A 6 '^on:' .github/workflows/lore-sync-merge.yml"
 
 note "workflow automatic"
-on alice work/website "lore sync install-action"
+on alice work/website "lore sync install-action --auto"
+on alice work/website "grep -A 7 '^on:' .github/workflows/lore-sync-merge.yml"
 on alice work/website "lore sync uninstall-action"
 
 note "ci merge"

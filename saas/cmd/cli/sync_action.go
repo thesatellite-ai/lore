@@ -5,7 +5,11 @@ package main
 //
 // Opt-in on purpose: the workflow spends Actions time, which is billed on
 // private repositories, so lore never installs it on its own (unlike the
-// local git hooks). The file is generated from sync_action.yml.tmpl with the
+// local git hooks). For the same reason a new install only runs when started
+// by hand (workflow_dispatch); --auto adds the pull_request and push
+// triggers. Re-running install-action, and the pin refresh below, keep the
+// triggers an installed file already has unless --auto or --manual is given,
+// so nobody's workflow starts or stops spending minutes without asking. The file is generated from sync_action.yml.tmpl with the
 // same constants the CLI uses (driver outcomes, data paths), so the workflow
 // and the binary it downloads cannot drift apart.
 //
@@ -168,8 +172,16 @@ type syncActionParams struct {
 
 // syncActionOptions are install-action's inputs.
 type syncActionOptions struct {
-	branches    []string
-	manual      bool
+	branches []string
+	// manual is the resolved trigger choice that syncActionParamsFor
+	// renders: true writes workflow_dispatch only. installSyncAction sets
+	// it from auto / manualSet / the installed file (resolveSyncActionManual).
+	manual bool
+	// auto is --auto: add the pull_request and push triggers.
+	auto bool
+	// manualSet is --manual given explicitly: workflow_dispatch only, even
+	// over an installed workflow that has automatic triggers.
+	manualSet   bool
 	loreVersion string
 	// pin defaults to auto; installSyncAction sets fixed when --lore-version
 	// was given.
@@ -190,8 +202,10 @@ type syncActionResult struct {
 	Pin syncActionPin `json:"pin,omitempty"`
 	// Branches are the branches whose pushes trigger it (none when manual).
 	Branches []string `json:"branches,omitempty"`
-	// Manual is true when the workflow only runs by hand.
+	// Manual is true when the workflow only runs by hand (no automatic
+	// triggers); Auto is its opposite, spelled out for readers of the JSON.
 	Manual bool `json:"manual"`
+	Auto   bool `json:"auto"`
 	// Content is the generated file (--dry-run only).
 	Content string `json:"content,omitempty"`
 }
@@ -230,17 +244,21 @@ The workflow runs ` + "`lore sync ci-merge`" + ` for open pull requests: it merg
 branch in with lore and pushes, only when every conflict is in lore data and
 lore settles all of them. Anything else is left for a person.
 
-It runs when lore data changes on a pull request or on a --branch (default:
-the remote's default branch). It uses Actions time (billed on private
-repositories); --manual installs it to run only when started by hand.
+By default it runs only when started by hand (Actions → lore sync merge →
+Run workflow), so it never spends Actions time (billed on private
+repositories) on its own. --auto makes it run whenever lore data changes on a
+pull request or on a --branch (default: the remote's default branch).
+Re-running install-action keeps the triggers an installed file already has
+unless --auto or --manual is given; --manual is accepted for compatibility
+(it is the default) and switches an automatic workflow back to manual.
 
 Commit the file to enable it. Its lore version keeps itself current: when a
 developer runs a newer lore release here, their next lore command rewrites
 the file to that release (commit it). --lore-version pins a version that is
 never changed. A subfolder project gets its own lore-sync-merge-<folder>.yml.`,
 		Example: `  lore sync install-action
-  lore sync install-action --branch main --branch staging
-  lore sync install-action --manual
+  lore sync install-action --auto
+  lore sync install-action --auto --branch main --branch staging
   lore sync install-action --dry-run`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -260,7 +278,8 @@ never changed. A subfolder project gets its own lore-sync-merge-<folder>.yml.`,
 		},
 	}
 	cmd.Flags().StringArrayVar(&o.branches, constants.FlagBranch, nil, "branch whose pushes trigger the workflow (repeatable; default: the remote's default branch)")
-	cmd.Flags().BoolVar(&o.manual, constants.FlagManual, false, "run only when started by hand (no automatic triggers)")
+	cmd.Flags().BoolVar(&o.auto, constants.FlagAuto, false, "also run automatically when lore data changes on a pull request or a --branch (spends Actions time)")
+	cmd.Flags().BoolVar(&o.manualSet, constants.FlagManual, false, "run only when started by hand: already the default, kept for compatibility (switches an automatic workflow back)")
 	cmd.Flags().StringVar(&o.loreVersion, constants.FlagLoreVersion, "", "lore release the workflow downloads: vX.Y.Z or latest (default: this lore's version)")
 	cmd.Flags().BoolVar(&o.dryRun, constants.FlagDryRun, false, "print the workflow; write nothing")
 	cmd.Flags().BoolVar(&o.force, constants.FlagForce, false, "overwrite a file at that path that lore did not generate")
@@ -300,6 +319,11 @@ func installSyncAction(ctx context.Context, dir string, o syncActionOptions) (sy
 	if err != nil {
 		return syncActionResult{}, errcodes.New(errcodes.Unsupported, "install-action needs a git repository").WithCause(err)
 	}
+	prefix := lorePathPrefix(repo.Toplevel, dir)
+	file := filepath.Join(repo.Toplevel, filepath.FromSlash(syncActionFileRel(prefix)))
+	if o, err = resolveSyncActionTriggers(repo.Toplevel, prefix, file, o); err != nil {
+		return syncActionResult{}, err
+	}
 	params, err := syncActionParamsFor(ctx, repo.Toplevel, dir, o)
 	if err != nil {
 		return syncActionResult{}, err
@@ -308,9 +332,7 @@ func installSyncAction(ctx context.Context, dir string, o syncActionOptions) (sy
 	if err != nil {
 		return syncActionResult{}, errcodes.New(errcodes.Internal, "render workflow").WithCause(err)
 	}
-	prefix := lorePathPrefix(repo.Toplevel, dir)
-	file := filepath.Join(repo.Toplevel, filepath.FromSlash(syncActionFileRel(prefix)))
-	res := syncActionResult{Path: file, LoreVersion: params.LoreVersion, Pin: syncActionPinAuto, Manual: o.manual}
+	res := syncActionResult{Path: file, LoreVersion: params.LoreVersion, Pin: syncActionPinAuto, Manual: o.manual, Auto: !o.manual}
 	if o.pin != "" {
 		res.Pin = o.pin
 	}
@@ -343,6 +365,60 @@ func installSyncAction(ctx context.Context, dir string, o syncActionOptions) (sy
 		return res, errcodes.New(errcodes.Internal, "remove the old shared workflow file").WithCause(err)
 	}
 	return res, nil
+}
+
+// resolveSyncActionTriggers settles o.manual (the triggers to write) and, on
+// a re-run without --branch, the branches:
+//   - --auto and --manual together are refused;
+//   - --auto adds the automatic triggers, --manual removes them;
+//   - with neither, an installed lore-generated workflow keeps the triggers
+//     it has (an automatic workflow must not silently stop, a manual one
+//     must not silently start spending minutes);
+//   - a new install (or an unreadable / foreign file) is manual only;
+//   - without --branch, an installed workflow keeps its branches.
+//
+// file is the project's workflow path; the subfolder project's legacy
+// root-named file counts as installed when its own file is absent.
+func resolveSyncActionTriggers(toplevel, prefix, file string, o syncActionOptions) (syncActionOptions, error) {
+	if o.auto && o.manualSet {
+		return o, errcodes.New(errcodes.InvalidInput, fmt.Sprintf("--%s and --%s contradict each other; pass one", constants.FlagAuto, constants.FlagManual))
+	}
+	installed, ok := installedSyncActionSettings(toplevel, prefix, file)
+	switch {
+	case o.auto:
+		o.manual = false
+	case o.manualSet:
+		o.manual = true
+	case ok:
+		o.manual = installed.manual
+	default:
+		o.manual = true // new installs never spend Actions minutes on their own
+	}
+	if ok && len(o.branches) == 0 {
+		o.branches = installed.branches
+	}
+	return o, nil
+}
+
+// installedSyncActionSettings reads the settings of the lore-generated
+// workflow at file (or the project's legacy root-named one). ok is false
+// when there is none, it is someone else's file, or it cannot be parsed;
+// a read error that matters surfaces later, when install-action writes.
+func installedSyncActionSettings(toplevel, prefix, file string) (syncActionSettings, bool) {
+	b, err := os.ReadFile(file)
+	if errors.Is(err, fs.ErrNotExist) {
+		if legacy := legacySyncActionFor(toplevel, prefix); legacy != "" {
+			b, err = os.ReadFile(legacy)
+		}
+	}
+	if err != nil || !strings.HasPrefix(string(b), syncActionMarker) {
+		return syncActionSettings{}, false
+	}
+	s, err := parseSyncAction(string(b))
+	if err != nil {
+		return syncActionSettings{}, false
+	}
+	return s, true
 }
 
 // writeSyncActionFile writes content atomically (temp file + rename), so two
@@ -695,6 +771,8 @@ func refreshSyncActionPin(ctx context.Context, repo gitsetup.Repo, root, own str
 	if s.version != loreVersionLatest && !releaseLess(s.version, target) {
 		return syncActionRefresh{}, nil // same or newer: never downgrade
 	}
+	// Triggers come from the installed file, never from install-action's
+	// default: a version bump must not start or stop a workflow's runs.
 	o := syncActionOptions{branches: s.branches, manual: s.manual, pin: syncActionPinAuto}
 	if edited, err := syncActionEdited(ctx, repo.Toplevel, root, content, s, o); err != nil || edited {
 		if err != nil {
@@ -803,6 +881,7 @@ func printSyncAction(res syncActionResult) {
 	}
 	if res.Manual {
 		fmt.Println("  runs only when started by hand (Actions → lore sync merge → Run workflow)")
+		fmt.Printf("  re-run with --%s to also run it when lore data changes (spends Actions time)\n", constants.FlagAuto)
 	} else {
 		fmt.Printf("  runs when lore data changes on a pull request or on: %s\n", strings.Join(res.Branches, ", "))
 	}

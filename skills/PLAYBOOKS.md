@@ -305,7 +305,7 @@ lore memory edit <id> --body "<what the user chose>"
 git add .lore/data && git commit && git push      # the PR merges normally now
 ```
 
-To have this happen without anyone: `lore sync install-action`, then commit `.github/workflows/lore-sync-merge.yml`. It is opt-in (it uses Actions time, billed on private repos; `--manual` makes it run only by hand), it only pushes merges where every conflict was lore data and lore settled it, and it lists everything else in the run summary. Add a `LORE_SYNC_TOKEN` secret if required checks must re-run on its merge commits. After a lore upgrade, the next lore command may print `updated …lore-sync-merge.yml to lore vX — commit it`: commit that one-line change with your work.
+To have this happen without anyone: `lore sync install-action --auto`, then commit `.github/workflows/lore-sync-merge.yml`. It is opt-in (it uses Actions time, billed on private repos; without `--auto` it runs only when started by hand from the Actions tab), it only pushes merges where every conflict was lore data and lore settled it, and it lists everything else in the run summary. Add a `LORE_SYNC_TOKEN` secret if required checks must re-run on its merge commits. After a lore upgrade, the next lore command may print `updated …lore-sync-merge.yml to lore vX — commit it`: commit that one-line change with your work.
 
 ---
 

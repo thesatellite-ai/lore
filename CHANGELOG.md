@@ -19,11 +19,14 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1â€
 - **Agent coordination:** claims with a lease, a token and fencing on a second hidden ref (`refs/lore/signals`, always one commit): `lore task claim|next|heartbeat|release`, human overrides `revoke|reassign|cancel`, reclaim after expiry with an attempts limit, a ready queue that respects dependencies (`--after <id>[:merged]`), gates (`lore gate request|approve`, humans only), `lore inbox`, `lore handoff add --for`, `lore finding add`, `lore mission status`, `lore plan apply` (idempotent by key), `lore resource claim|release`, and a `Lore-Task:` commit trailer so a squash merge still counts as finishing the task. In client repos claims and work notes stay in the store; the client row carries only what the client should see.
 - **Merged watching:** a done task is marked merged once its commit, its trailer or (optionally) its GitHub pull request is seen on `main`; `lore task merged` marks it by hand.
 - Errors print their hint on the line under `ERROR:` and exit with the team error's own status (10â€“19).
+- `lore sync install-action --auto` adds the pull request and push triggers to the workflow (they were the old default). `install-action --json` reports `auto` next to `manual`.
 
 ### Changed
 
 - `lore handoff add` takes `--for @handle` and `--task <id>`.
 - `lore task add --tasklist` is optional; the project's default task list is used (created on demand).
+- `lore sync install-action` writes a workflow that runs only when started by hand (`workflow_dispatch`), so it never spends CI minutes on its own; the file's header says how to turn on automatic runs. `--manual` is still accepted (it is now the default) and `--auto` with `--manual` is refused.
+- Re-running `lore sync install-action` without `--auto` or `--manual` keeps the installed workflow's triggers and branches, and the automatic lore-version update never changes triggers, so existing automatic workflows keep running.
 - `lore rule list` hides archived rules; `--archived` shows them, marked `[archived]` (as `lore memory list` does).
 - `lore identity set` needs an email: `alice@example.com`, `"Alice <alice@example.com>"`, or a name with `--key human:<email>`. A bare name is refused instead of being saved as a key that is not an email.
 - Store branch names follow every rule of `git check-ref-format --branch` (a trailing `.`, control characters and `HEAD` are refused; so is `@`).

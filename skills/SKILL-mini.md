@@ -539,7 +539,8 @@ TEAM SYNC (.lore/data/ = one committed JSON file per shared row; automatic)
     lore sync peek origin/<branch> [table]            another branch, read-only
     lore sync promote <id> --to main                  local commit on main (confirm first)
     PR conflict in .lore/data on GitHub → on the branch: git pull origin main; settle; push
-    lore sync install-action                          opt-in workflow that does that for PRs (ask first)
+    lore sync install-action [--auto]                 opt-in workflow that does that for PRs (ask first);
+                                                      runs only by hand unless --auto (spends Actions time)
     conflict markers live INSIDE the JSON value; `lore <entity> show` has both sides,
     settle with `lore <entity> edit <id> --body "…"` after the user picks; never delete the file
 
