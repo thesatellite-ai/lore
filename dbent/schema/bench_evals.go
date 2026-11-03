@@ -22,7 +22,7 @@ import (
 //	hotfix-avoid     — exercises a captured hotfix trap
 //	decision-respect — exercises a captured decision with revisit criteria
 //	convention       — exercises a soft-preference memory
-//	capture-back     — tests whether the AI emits aicoder commands
+//	capture-back     — tests whether the coding agent emits aicoder commands
 //	custom           — anything else
 type BenchEval struct{ ent.Schema }
 

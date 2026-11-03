@@ -41,7 +41,7 @@ func (ProjectConfig) Fields() []ent.Field {
 
 		// key examples (see PLAN.md Round 38 for full list):
 		//   'default_behaviour'      enum
-		//   'default_model'          'claude-opus-4-7'
+		//   'default_model'          '<model-id>'
 		//   'last_global_sync_at'    iso8601
 		//   'render_targets'         JSON array
 		//   'decay_half_life_days'   '180' (memories), '365' (rules)

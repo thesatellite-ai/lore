@@ -31,7 +31,7 @@ func (KnowledgeRef) Fields() []ent.Field {
 		field.String("dst_project_id").Optional().Nillable(),
 		// 'mentions' | 'derived_from' | 'caused_by' | 'conflicts_with' | 'supersedes'
 		field.String("relation").NotEmpty(),
-		// 'extracted' (user/regex) | 'inferred' (LLM) | 'ambiguous' (multi-target)
+		// 'extracted' (user/regex) | 'inferred' (model) | 'ambiguous' (multi-target)
 		field.Enum("confidence").
 			Values(knowledgeRefConfidenceValues...).
 			Default(string(KnowledgeRefConfidenceExtracted)),

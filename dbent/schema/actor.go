@@ -15,7 +15,7 @@ import (
 //
 // 6 kinds:
 //   - human   real person (resolved via git config / env / prompt)
-//   - agent   AI agent (Claude Code, Cursor, Codex CLI)
+//   - agent   coding agent (any agent CLI or editor integration)
 //   - hook    git/editor hook script invoking aicoder
 //   - plugin  registered mini plugin (Linear, Slack, etc.)
 //   - cron    scheduled task
@@ -51,7 +51,7 @@ func (Actor) Fields() []ent.Field {
 		// two rows with same key would corrupt cross-machine merging.
 		// Format examples (R32):
 		//   human:alice@example.com         from git config user.email
-		//   agent:claude-code               from LORE_ACTOR
+		//   agent:my-agent                  from LORE_ACTOR
 		//   auto:a3f9c1k2                   sha256(machine-id)[:12]
 		//   auto:ephemeral-7f3a2c           last-resort session salt
 		//   anon:9e8d7c6b                   anon mode
