@@ -73,6 +73,7 @@ $ cat .git/hooks/pre-commit
 | `pre-commit` | runs a pass, then refuses the commit if a note file is broken JSON, has conflict markers, or looks like it holds a password or key; otherwise stages `.lore/data` |
 | `post-checkout`, `post-merge`, `post-rewrite` | reads the new files in at once after a checkout, pull, merge or rebase; never fails the git command |
 | `commit-msg` | adds a `Lore-Task:` line for the task you are working on, then checks the message and staged files for internal notes that must not reach a client repo (see [Lore for teams](../team/README.md)) |
+| `pre-push` | in a client repo, leak-checks every file version and commit message the push sends that the remote does not have (refuses internal ids, internal sentences and secrets; refuses the push when the store cannot be read). `git push --no-verify` skips it |
 | `post-commit`, `pre-push` | carry finished live rows (tasks on the live list that are done) to a protected main (a main branch GitHub will not let you push to directly) in a small extra commit (see [How it works › Protected main](../team/how-it-works.md#protected-main-the-ride-along-commit)) |
 
 ## Try it — a broken note file is refused
