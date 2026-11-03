@@ -1,27 +1,29 @@
 # Solo developer
 
+**In short:** you work alone in one repo and want no company setup at all. Lore works as before. Your rules, notes and tasks are files in `.lore/data`, saved with your code.
+
 ## The situation
 
-One person, one repo. You want lore exactly as before: rules, notes and tasks in `.lore/data`, committed with your code. No company, no store, no teammates.
+One person, one repo. You want lore exactly as before: rules, notes and tasks in `.lore/data`, committed with your code. No company, no store (separate private notes repo), no teammates.
 
 ## The config
 
-None. Without `~/.lore/config.yaml` there is no org, and your identity comes from your git email.
+None. Without `~/.lore/config.yaml` there is no org (company setup). Your identity comes from your git email.
 
 ## The commands
 
-In a repo without a remote, nothing is ever pushed. Tasks are still live by default, so they sit on a local `refs/lore/live` until they land:
+In a repo without a remote, nothing is ever pushed. Tasks are still live by default. Live means they go to a hidden list that is not a branch (the hidden ref `refs/lore/live`). Without a remote that list stays on your machine until the tasks land (are written to `main`'s `.lore/data`):
 
 <!-- example: solo#no-remote -->
 ```console
 # alice, in scratch
 $ lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
-✓ rul_7a67…9504 rul_7a67…9504 
+✓ rul_7a67…9504 
   scope: [master] severity: must
 lore sync: exported 1
 lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore task add 'write the README'
-✓ tsk_2ad3…f891 tsk_2ad3…f891 — write the README [medium]
+✓ tsk_2ad3…f891 — write the README [medium]
 lore live: (live, local: no remote)
 $ lore task done tsk_2ad3…f891
 ✓ tsk_2ad3…f891 done
@@ -38,9 +40,9 @@ $ git status --short
 ```
 <!-- /example -->
 
-Once the repo has a remote, the same task is pushed to `refs/lore/live` on the remote and lands on `main` when it is done; see [Getting started](../getting-started.md#4-your-first-live-task).
+Once the repo has a remote, the same task is pushed to `refs/lore/live` on the remote. It lands on `main` when it is done. See [Getting started](../getting-started.md#4-your-first-live-task).
 
-If you prefer tasks to travel with your branch like every other row, turn live off for tasks:
+Do you want tasks to travel with your branch like every other row? Then turn live off for tasks:
 
 ```yaml
 # ~/.lore/config.yaml
@@ -52,7 +54,7 @@ live:
 ```console
 # alice, in scratch
 $ lore task add 'tidy the scripts folder'
-✓ tsk_54fe…28f2 tsk_54fe…28f2 — tidy the scripts folder [medium]
+✓ tsk_54fe…28f2 — tidy the scripts folder [medium]
 lore sync: exported 1
 lore sync: 5 file(s) in .lore/data not committed — commit them with your change
 $ git status --short
@@ -62,7 +64,7 @@ $ git status --short
 ```
 <!-- /example -->
 
-The task is now a file in `.lore/data` on your branch ("not committed — commit them with your change"), exactly as lore worked before.
+The task is now a file in `.lore/data` on your branch ("not committed — commit them with your change"). That is exactly how lore worked before.
 
 ## What happened
 
@@ -73,8 +75,8 @@ The task is now a file in `.lore/data` on your branch ("not committed — commit
  (no remote: stays local until one exists)
 ```
 
-## Gotchas
+## Pitfalls
 
-- With no remote, live rows say `(live, local: no remote)` and stay on this machine; `lore land --all --dry-run` shows what would land once there is a remote `main` to land on.
-- Rules, decisions and memories were never live by default; they still travel with your branch unless you pass `--live`.
+- With no remote, live rows say `(live, local: no remote)` and stay on this machine. `lore land --all --dry-run` shows what would land once there is a remote `main` to land on.
+- Rules, decisions and memories were never live by default. They still travel with your branch unless you pass `--live`.
 - `lore whoami` shows `org none` and `config … does not exist (no orgs configured)`. That is the expected state, not an error.

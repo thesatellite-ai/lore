@@ -4,9 +4,9 @@
 
 <h1 align="center">lore</h1>
 
-<p align="center"><strong>Give your AI coding agent a memory.</strong></p>
+<p align="center"><strong>Give your coding agent a memory.</strong></p>
 
-<p align="center">The local-first memory &amp; context layer for AI coding agents — capture rules, decisions, and gotchas once, and lore compiles them into the <code>CLAUDE.md</code> / <code>AGENTS.md</code> your agent reads every session. No cloud, no API keys, nothing leaves your machine.</p>
+<p align="center">The local-first memory &amp; context layer for coding agents — capture rules, decisions, and gotchas once, and lore compiles them into the <code>CLAUDE.md</code> / <code>AGENTS.md</code> your agent reads every session. No cloud, no API keys, nothing leaves your machine.</p>
 
 <p align="center">
   <a href="https://github.com/thesatellite-ai/lore/releases"><img src="https://img.shields.io/github/v/release/thesatellite-ai/lore?color=10B981&label=release" alt="Latest release"></a>
@@ -17,12 +17,15 @@
   <a href="https://github.com/thesatellite-ai/lore/stargazers"><img src="https://img.shields.io/github/stars/thesatellite-ai/lore?style=social" alt="GitHub stars"></a>
 </p>
 
-lore is an open-source, local-first **memory and context-management CLI for AI coding agents** — Claude Code, Cursor, Windsurf, Cline, GitHub Copilot, and Codex. It captures what you and your agent learn about a project — rules, decisions, patterns, gotchas, tasks — and turns it into the `CLAUDE.md` / `AGENTS.md` your agent reads every session. So it stops forgetting context and stops repeating the same mistakes.
+**In short:** lore is a small command-line tool that remembers what your project knows: rules like "Run the tests before you push", decisions like "We use Stripe for payments", and tasks like "Send the invoice reminder before Friday's demo". It saves them as small files in your git repo and writes the important ones into the file your coding agent reads every time it starts, so the agent stops forgetting. Nothing goes to a cloud service.
 
-One command to install, nothing to run, everything stays on your machine. Ships with a Claude Code skill so the agent saves and recalls knowledge for you automatically.
+lore is an open-source, local-first **memory and context-management CLI for coding agents** such as Cursor, Windsurf, Cline, GitHub Copilot and Codex. It captures what you and your agent learn about a project — rules, decisions, patterns, gotchas, tasks — and turns it into the `CLAUDE.md` / `AGENTS.md` your agent reads every session. So it stops forgetting context and stops repeating the same mistakes.
 
+One command to install, nothing to run, everything stays on your machine. It ships with a skill (a short instruction file your coding agent loads) so the agent saves and recalls knowledge for you automatically.
+
+- [Documentation](#documentation)
 - [Why lore?](#why-lore)
-  - [lore vs other AI memory tools](#lore-vs-other-ai-memory-tools)
+  - [lore vs other agent memory tools](#lore-vs-other-agent-memory-tools)
 - [Install](#install)
   - [Install the skill (required)](#install-the-skill-do-this-now--required)
 - [Quick start](#quick-start)
@@ -42,20 +45,30 @@ One command to install, nothing to run, everything stays on your machine. Ships 
 - [FAQ](#faq)
 - [Building from source / contributing](#building-from-source--contributing)
 
+## Documentation
+
+![How lore works: a note goes down from people and agents through lore into git, and teammates' notes come back up as the context file agents read](docs/assets/architecture.svg)
+
+- **[Learning path](docs/README.md#learning-path):** thirteen steps from your first rule to a team with a client, private notes and several agents, each with a guide and a real example.
+- **[Start from your goal](docs/README.md#start-from-your-goal):** "I want to…" and the page that does it.
+- **[Decision guides](docs/choosing/README.md):** notes in each repo or in one database, with the code or live, how to lay out stores, which org and identity setup, which file your coding tool reads, and when to use agents, claims and gates.
+- **[Feature index](docs/reference/features.md):** every feature with its code, its guide and a runnable example.
+- **[Reference](docs/reference/README.md):** every command, flag, config key, environment variable and error code.
+
 ## Why lore?
 
-Most AI memory tools bolt a vector database onto your agent and hope it retrieves the right thing at runtime. lore takes the opposite bet: **your agent already reads `CLAUDE.md` / `AGENTS.md` at the start of every session** — so lore makes *that file* the memory. `lore render` writes your knowledge to `.lore/LORE.md` and stitches an `@import` pointer into `CLAUDE.md`, so your hand-written content is preserved and recall is just your agent reading the file it already reads. No embeddings, no API keys, no runtime retrieval lottery, and nothing leaves your machine.
+Most agent memory tools bolt a vector database (a search engine that matches by rough meaning, not by exact words) onto your agent and hope it finds the right thing when it is needed. lore takes the opposite bet: **your agent already reads `CLAUDE.md` / `AGENTS.md` at the start of every session** — so lore makes *that file* the memory. `lore render` writes your knowledge to `.lore/LORE.md` and adds an `@import` pointer (one line that says "read that file too") to `CLAUDE.md`, so your hand-written content is kept and recall is just your agent reading the file it already reads. No embeddings, no API keys, no runtime retrieval lottery, and nothing leaves your machine.
 
 - **Local-first & private** — a SQLite cache under `.lore/` plus plain JSON files you commit yourself. No cloud, no account, no telemetry. Nothing leaves your laptop unless you `git push` it.
-- **Shared through git, per branch** — every shared row is one small JSON file under `.lore/data/`. Knowledge learned on a feature branch stays on that branch and reaches `main` when the PR merges, exactly like code. No server, no S3, no sync service.
+- **Shared through git, per branch** — every shared row (one note) is one small JSON file under `.lore/data/`. Knowledge learned on a feature branch stays on that branch and reaches `main` when the PR merges, exactly like code. No server, no S3, no sync service.
 - **Deterministic recall** — must-follow rules and critical warnings are *pinned* into the rendered file; everything else is one `lore search` away. No embedding drift, no "why didn't it remember that?"
 - **Structured, not a blob** — `rule` (with severity), `decision` (with rationale), `hotfix`, `pattern`, `playbook`, `task`, `run` — each entity is rendered the way it's meant to be read, not dumped as one undifferentiated wall of text.
-- **Works with the tools you already use** — renders `CLAUDE.md`, `AGENTS.md`, or `.cursorrules` via `--target`. Claude Code, Cursor, Windsurf, Cline, Copilot, Codex.
+- **Works with the tools you already use** — renders `CLAUDE.md`, `AGENTS.md`, or `.cursorrules` via `--target`, for Cursor, Windsurf, Cline, Copilot, Codex and other coding agents.
 - **Token-budget-aware** — the hybrid render pins only `must` rules + critical hotfixes; the long tail stays searchable, so your context window stays lean as knowledge grows.
 - **Knowledge + work in one place** — tasks, missions, agent runs, and git-commit links live next to the knowledge they relate to.
 - **Free & open source** — no seats, no usage tiers, no rug pull.
 
-### lore vs other AI memory tools
+### lore vs other agent memory tools
 
 | | **lore** | Cloud memory APIs | Vector RAG memory | Hand-written rules files |
 |---|:---:|:---:|:---:|:---:|
@@ -76,9 +89,9 @@ If you want a hosted, embeddings-based agent memory, plenty of those exist. If y
 
 > **lore needs two pieces, both required:**
 > 1. the **`lore` binary** (the actual CLI/engine), and
-> 2. the **Claude skill** (teaches Claude Code *when/how* to call `lore`).
+> 2. the **lore skill** (teaches your coding agent *when/how* to call `lore`).
 >
-> The Homebrew and script installers below install **both**. If you install the binary manually, install the skill separately (see [Install the skill](#install-the-skill)). The skill without the binary does nothing; the binary without the skill works but Claude won't use it automatically.
+> The Homebrew and script installers below install **both**. If you install the binary manually, install the skill separately (see [Install the skill](#install-the-skill-do-this-now--required)). The skill without the binary does nothing; the binary without the skill works but your agent won't use it automatically.
 
 ### Homebrew (macOS / Linux)
 
@@ -102,9 +115,9 @@ Or grab a tarball from [Releases](https://github.com/thesatellite-ai/lore/releas
 
 ### Install the skill (do this now — required)
 
-lore needs **both** the binary *and* the Claude skill. The skill teaches Claude Code **when and how** to call `lore` (capture on corrections/decisions/"remember this", retrieve before answering, keep `CLAUDE.md` current). Without it the binary works but Claude won't use it automatically.
+lore needs **both** the binary *and* the lore skill. The skill teaches your coding agent **when and how** to call `lore` (save a note when you correct it, make a decision or say "remember this"; look things up before answering; keep `CLAUDE.md` current). Without it the binary works but your agent won't use it automatically.
 
-The Homebrew and `curl … | sh` / PowerShell installers **already install the skill** to `~/.claude/skills/lore` — you're done, just **restart Claude Code**.
+The Homebrew and `curl … | sh` / PowerShell installers **already install the skill** to `~/.claude/skills/lore` — you're done, just **restart your coding agent**.
 
 Installed the binary some other way? Add the skill with one of:
 
@@ -117,7 +130,7 @@ mkdir -p ~/.claude/skills/lore               # manual: from a tarball/checkout
 cp -R skills/. ~/.claude/skills/lore/
 ```
 
-Then **restart Claude Code** so it loads.
+Then **restart your coding agent** so it loads.
 
 ## Quick start
 
@@ -129,12 +142,12 @@ lore setup               # build the search index
 lore directive install   # add the agent-directive block to CLAUDE.md / AGENTS.md
 
 # capture knowledge
-lore memory add --body="use Tailwind v4, not v3"
-lore rule add --body="never force-push main"
-lore decision add --title="Bundler" --body="Vite over Webpack: faster dev server"
+lore memory add --body="The client replies faster on WhatsApp than email"
+lore rule add --body="Run the tests before you push"
+lore decision add --title="Payments" --body="We use Stripe for payments"
 
 # retrieve it
-lore search "tailwind"            # search across all knowledge
+lore search "whatsapp"           # search across all knowledge
 lore render                      # compile knowledge → .lore/LORE.md + @import pointer in CLAUDE.md
 
 lore tui                         # browse everything interactively
@@ -240,7 +253,7 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 | `lore external-source` | Register sources for `learn-from`: `add / enable / disable / list` (disabled by default) |
 | `lore bench` | Benchmark engine — define, run, and report on eval tasks: `eval / run / report / result / grader` |
 | `lore directive` | Install/remove/show the agent-directive block |
-| `lore skill` | Meta-tools for the Claude skill bundle (`compile` — compress the canonical bundle via LLM) |
+| `lore skill` | Meta-tools for the lore skill bundle (`compile` — shorten the main bundle with a model) |
 | `lore session` / `lore querylog` | Inspect sessions and the query log |
 | `lore actor` | Inspect actors (humans, agents, hooks, plugins) |
 | `lore behaviour` / `lore suggestion` | Behaviours and suggestions |
@@ -283,17 +296,17 @@ A sync pass runs automatically before and after every command; these subcommands
 
 ### Teams, stores and agents
 
-Lore works for a whole team, several repos, several companies and a crew of AI agents, with git as the only infrastructure:
+Lore works for a whole team, several repos, several companies and a crew of coding agents, with git as the only infrastructure:
 
-- **Tasks reach teammates at once, on any branch.** Live rows are shared on one hidden ref per repo (`refs/lore/live`) and land on `main` by themselves when finished, or ride along with your next push when `main` is protected.
-- **Internal notes stay internal.** Notes a client must never read live in a store, a separate lore-only repo linked to the client repo; leak checks stop internal text from reaching the client's commits and pull requests.
-- **Several repos, one product; one person, several companies.** Repos link to one shared project; each repo loads exactly one org, with its own identity, roster and personal notes.
-- **Agents do not step on each other.** `lore task next` claims a task with a lease on a second hidden ref (`refs/lore/signals`); a crashed agent's task is picked up when its lease runs out, and people approve gates.
+- **Tasks reach teammates at once, on any branch.** Live rows (notes every teammate sees at once) are shared on one hidden list on GitHub that is not a branch (git calls it a ref: `refs/lore/live`, one per repo). They land on `main` by themselves when finished, or ride along with your next push when `main` is protected.
+- **Internal notes stay internal.** Notes a client must never read live in a store: a separate notes-only repo linked to the client repo, like a locked filing cabinet next to it. Leak checks stop internal text from reaching the client's commits and pull requests.
+- **Several repos, one product; one person, several companies.** Repos link to one shared project; each repo loads exactly one org (one company), with its own identity, roster (the list of people and agents) and personal notes.
+- **Agents do not step on each other.** `lore task next` claims a task: the agent puts its name on it, like writing your name on a whiteboard job. The claim has a lease, so it runs out after a set time unless the agent keeps saying it is alive, and it is kept on a second hidden ref (`refs/lore/signals`). A crashed agent's task is picked up when its lease runs out, and people approve gates (steps that wait for a person to say yes).
 
 ```bash
-lore task add "fix login timeout" --assign @dev1          # live: dev1 sees it on their next command
-lore org link northwind --project acme                    # once: tie a client repo to an internal project
-lore memory add --body "they approve faster on WhatsApp"  # in a client repo: goes to the store, not the repo
+lore task add "Send the invoice reminder before Friday's demo" --assign @bob  # live: Bob sees it on his next command
+lore org link agency --project client                     # once: tie a client repo to an internal project
+lore memory add --body "The client replies faster on WhatsApp than email"  # in a client repo: goes to the store, not the repo
 lore task next --mission msn_01a1…                        # an agent takes the next ready task
 ```
 
@@ -412,11 +425,11 @@ Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses 
 
 ## FAQ
 
-**Which AI coding agents does lore support?** Any agent that reads a project-instructions file. lore renders `CLAUDE.md` (Claude Code), `AGENTS.md` (Cursor, Codex, and others), or `.cursorrules` via `lore render --target`. Works alongside Claude Code, Cursor, Windsurf, Cline, GitHub Copilot, and OpenAI Codex.
+**Which coding agents does lore support?** Any agent that reads a project-instructions file. lore renders `CLAUDE.md`, `AGENTS.md` (Cursor, Codex, and others), or `.cursorrules` via `lore render --target`. Works alongside Cursor, Windsurf, Cline, GitHub Copilot, Codex and other coding agents.
 
 **Does lore send my code or knowledge to the cloud?** No. Everything lives under `.lore/` in your repo: a local SQLite cache plus JSON files. No account, no network calls, no telemetry — knowledge only leaves your machine when you `git push` it yourself.
 
-**Does it use an LLM, embeddings, or an API key?** No. Retrieval is SQLite FTS5 full-text search — fast, deterministic, and free. There's no vector database and no embedding bill.
+**Does it use a model, embeddings, or an API key?** No. Search is SQLite FTS5 full-text search (it matches the words you type) — fast, always the same answer, and free. There's no vector database and no embedding bill.
 
 **How is this different from just writing `CLAUDE.md` by hand?** lore keeps knowledge structured (rules vs decisions vs hotfixes, with severity), deduplicated, scoped per-repo, searchable, and versioned — then regenerates `.lore/LORE.md` deterministically and `@import`s it from `CLAUDE.md`, leaving your hand-written content untouched. Hand-written instruction files rot, contradict each other, and quietly blow your token budget.
 
@@ -428,7 +441,7 @@ Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses 
 
 **I accidentally ran `git clean` / reverted a commit — is the knowledge gone?** No. Rows whose file disappears are copied to `lore sync trash` before they leave the cache; `lore sync trash restore <id>` brings one back.
 
-**Is capture and recall really automatic?** With the bundled Claude skill, the agent captures decisions, rules, and corrections and recalls relevant knowledge on its own. You can also drive everything by hand with the CLI.
+**Is capture and recall really automatic?** With the bundled lore skill, the agent captures decisions, rules, and corrections and recalls relevant knowledge on its own. You can also drive everything by hand with the CLI.
 
 **Is lore free and open source?** Yes — free, open source, no seats or usage tiers.
 
@@ -436,4 +449,4 @@ Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses 
 
 See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (build, release, Homebrew tap) and **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-<sub><strong>lore</strong> — open-source, local-first memory &amp; context management for AI coding agents. Persistent <code>CLAUDE.md</code> / <code>AGENTS.md</code> memory for Claude Code, Cursor, Windsurf, Cline, GitHub Copilot, and Codex. No cloud, no API keys, no embeddings.</sub>
+<sub><strong>lore</strong> — open-source, local-first memory &amp; context management for coding agents. Persistent <code>CLAUDE.md</code> / <code>AGENTS.md</code> memory for Cursor, Windsurf, Cline, GitHub Copilot, Codex and other coding agents. No cloud, no API keys, no embeddings.</sub>

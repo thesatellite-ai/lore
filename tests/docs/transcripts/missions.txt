@@ -1,0 +1,182 @@
+
+### mission add
+alice (work/website)$ lore mission add 'Open the online shop' --target 2026-11-30 --body 'The shop goes live with ten products and a launch email.'
+✓ msn_7a670ae8548ed05bf57ad29ad0759504 — Open the online shop
+lore live: (live, pushed)
+alice (work/website)$ lore task add 'Take the product photos' --mission msn_7a670ae8548ed05bf57ad29ad0759504
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Take the product photos [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore task add 'Write the product pages' --mission msn_7a670ae8548ed05bf57ad29ad0759504 --after tsk_2ad3618e878ebbf527d34d446ef4f891
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — Write the product pages [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore task add 'Send the invoice reminder'
+✓ tsk_54fe984c9b495744c0217776765a28f2 — Send the invoice reminder [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore task edit tsk_54fe984c9b495744c0217776765a28f2 --mission msn_7a670ae8548ed05bf57ad29ad0759504
+✓ tsk_54fe984c9b495744c0217776765a28f2 updated
+lore live: (live, pushed)
+
+### mission list
+alice (work/website)$ lore mission list
+msn_7a670ae8548ed05bf57ad29ad0759504 [active] Open the online shop   (3 tasks)
+alice (work/website)$ lore mission show msn_7a670ae8548ed05bf57ad29ad0759504
+msn_7a670ae8548ed05bf57ad29ad0759504
+  title:  Open the online shop
+  status: active
+  target: 2026-11-30
+
+The shop goes live with ten products and a launch email.
+
+Tasks:
+  tsk_2ad3618e878ebbf527d34d446ef4f891 [todo] Take the product photos
+  tsk_162df51b7f78b785c97c26b41ea89666 [todo] Write the product pages
+  tsk_54fe984c9b495744c0217776765a28f2 [todo] Send the invoice reminder
+
+### mission status
+alice (work/website)$ lore mission status msn_7a670ae8548ed05bf57ad29ad0759504
+msn_7a670ae8548ed05bf57ad29ad0759504 Open the online shop   3 tasks · 0 done · 0 claimed · 2 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
+  ready     tsk_54fe984c9b495744c0217776765a28f2  Send the invoice reminder                 
+  ready     tsk_2ad3618e878ebbf527d34d446ef4f891  Take the product photos                   
+  waiting   tsk_162df51b7f78b785c97c26b41ea89666  Write the product pages                   waits for tsk_2ad3618e878ebbf527d34d446ef4f891 to be done (todo)
+alice (work/website)$ lore task done tsk_2ad3618e878ebbf527d34d446ef4f891 --no-lesson
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 done
+lore live: (live, pushed)
+lore live: landed on main (601d285); leaves live once main is fetched
+alice (work/website)$ lore mission status msn_7a670ae8548ed05bf57ad29ad0759504
+msn_7a670ae8548ed05bf57ad29ad0759504 Open the online shop   3 tasks · 1 done · 0 claimed · 2 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
+  done      tsk_2ad3618e878ebbf527d34d446ef4f891  Take the product photos      alice        not merged yet
+  ready     tsk_54fe984c9b495744c0217776765a28f2  Send the invoice reminder                 
+  ready     tsk_162df51b7f78b785c97c26b41ea89666  Write the product pages                   
+
+### mission tasks
+alice (work/website)$ lore task list --mission msn_7a670ae8548ed05bf57ad29ad0759504
+○ tsk_162df51b7f78b785c97c26b41ea89666 Write the product pages [medium]
+○ tsk_54fe984c9b495744c0217776765a28f2 Send the invoice reminder [medium]
+
+### mission edit
+alice (work/website)$ lore mission edit msn_7a670ae8548ed05bf57ad29ad0759504 --target 2026-12-07 --title 'Open the online shop before Christmas'
+✓ msn_7a670ae8548ed05bf57ad29ad0759504 updated
+lore live: (live, pushed)
+lore live: 2 row(s) left live (main holds them)
+alice (work/website)$ lore mission search christmas
+msn_7a670ae8548ed05bf57ad29ad0759504 [active] Open the online shop before Christmas
+
+### pause
+alice (work/website)$ lore mission pause msn_7a670ae8548ed05bf57ad29ad0759504
+✓ msn_7a670ae8548ed05bf57ad29ad0759504 paused
+lore live: (live, pushed)
+alice (work/website)$ lore mission list
+msn_7a670ae8548ed05bf57ad29ad0759504 [paused] Open the online shop before Christmas   (3 tasks)
+alice (work/website)$ lore mission resume msn_7a670ae8548ed05bf57ad29ad0759504
+✓ msn_7a670ae8548ed05bf57ad29ad0759504 resumed
+lore live: (live, pushed)
+
+### mission done
+alice (work/website)$ lore mission done msn_7a670ae8548ed05bf57ad29ad0759504
+✓ msn_7a670ae8548ed05bf57ad29ad0759504 completed
+lore live: (live, pushed)
+lore live: landed on main (86dbae4); leaves live once main is fetched
+alice (work/website)$ lore mission list
+(no missions)
+alice (work/website)$ lore mission list --all
+msn_7a670ae8548ed05bf57ad29ad0759504 [done] Open the online shop before Christmas   (3 tasks)
+
+### mission delete
+alice (work/website)$ lore mission add 'Test mission, please ignore'
+✓ msn_05e99e22e9e86e96fe4daa7777994603 — Test mission, please ignore
+lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
+alice (work/website)$ lore mission delete msn_05e99e22e9e86e96fe4daa7777994603
+ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
+  hint: a hard delete cannot be undone; pass --confirm if you really mean it
+(exit 1)
+alice (work/website)$ lore mission delete msn_05e99e22e9e86e96fe4daa7777994603 --confirm
+✓ msn_05e99e22e9e86e96fe4daa7777994603 deleted (hard)
+lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
+
+### plan add
+alice (work/website)$ lore plan add --title 'Newsletter plan' --body 'Collect emails on the home page first, then send one newsletter a month.'
+✓ pln_c0f3c11a5724b0cfd74b256190d9b5b8
+lore sync: exported 1
+lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore plan list
+PL  pln_c0f3c11a5724b0cfd74b256190d9b5b8
+alice (work/website)$ lore plan search newsletter
+pln_c0f3c11a5724b0cfd74b256190d9b5b8 Newsletter plan
+alice (work/website)$ lore plan edit pln_c0f3c11a5724b0cfd74b256190d9b5b8 --status approved
+✓ plan pln_c0f3c11a5724b0cfd74b256190d9b5b8 updated
+lore sync: exported 1
+lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+
+### plan file
+alice (work/website)$ cat newsletter.yaml
+mission: {key: newsletter, title: "Start the monthly newsletter"}
+tasks:
+  - {key: form,  title: "Add the sign-up form to the home page", timebox: 90m}
+  - {key: first, title: "Write the first newsletter", after: [form]}
+  - {key: send,  title: "Send the first newsletter", after: [first]}
+
+### plan apply
+alice (work/website)$ lore plan apply newsletter.yaml
+✓ msn_76bd560aff0771fab8457dbfa9823f10 Start the monthly newsletter (created)
+  tsk_d4314eba822f1bf5908b2b8ded5f313a Add the sign-up form to the home page  timebox 1h30m
+  tsk_b4f4765e593d51fd1352985e8af3a5b0 Write the first newsletter    after form
+  tsk_28f8d32584b2db54ffb146bede5b03df Send the first newsletter     after first
+lore live: (live, pushed)
+alice (work/website)$ lore mission status msn_76bd560aff0771fab8457dbfa9823f10
+msn_76bd560aff0771fab8457dbfa9823f10 Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
+  ready     tsk_d4314eba822f1bf5908b2b8ded5f313a  Add the sign-up form to the home page              0s (timebox 1h30m)
+  waiting   tsk_28f8d32584b2db54ffb146bede5b03df  Send the first newsletter                 waits for tsk_b4f4765e593d51fd1352985e8af3a5b0 to be done (todo)
+  waiting   tsk_b4f4765e593d51fd1352985e8af3a5b0  Write the first newsletter                waits for tsk_d4314eba822f1bf5908b2b8ded5f313a to be done (todo)
+
+### plan apply again
+alice (work/website)$ lore plan apply newsletter.yaml
+✓ msn_76bd560aff0771fab8457dbfa9823f10 Start the monthly newsletter (found)
+  tsk_d4314eba822f1bf5908b2b8ded5f313a Add the sign-up form to the home page  timebox 1h30m
+  tsk_b4f4765e593d51fd1352985e8af3a5b0 Write the first newsletter    after form
+  tsk_28f8d32584b2db54ffb146bede5b03df Send the first newsletter     after first
+
+### plan errors
+alice (work/website)$ cat bad.yaml
+mission: {title: "Bad plan"}
+tasks:
+  - {key: b, title: "Second", after: [a]}
+  - {key: a, title: "First"}
+alice (work/website)$ lore plan apply bad.yaml
+✓ msn_4c590afb2a0cc7ae1b97b7e4e62d6c38 Bad plan (created)
+lore live: (live, pushed)
+ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task of the plan
+(exit 1)
+
+### register
+alice (work/website)$ lore actor register
+✓ act_3b6283bc4392c556bbae5f094246e913 alice (@alice) already registered (refreshed) in this repo
+lore live: (live, pushed)
+lore live: landed on main (05513aa); leaves live once main is fetched
+
+### handoff
+alice (work/website)$ lore task add 'Write the about page'
+✓ tsk_f147dd95f1aaf742dd4f5214843a5139 — Write the about page [medium]
+lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
+alice (work/website)$ lore handoff add --for @alice --task tsk_f147dd95f1aaf742dd4f5214843a5139 'Two of the three sections are written; the team photo is still missing'
+✓ handoff hnd_2537f9b2f7de77bfe5ca958860216bbb for @alice
+lore live: (live, pushed)
+alice (work/website)$ lore inbox
+-  handoff  @alice       tsk_f147dd95f1aaf742dd4f5214843a5139  Two of the three sections are written; the team photo is still missing
+
+### handoff ack
+alice (work/website)$ lore handoff ack hnd_2537f9b2f7de77bfe5ca958860216bbb
+✓ hnd_2537f9b2f7de77bfe5ca958860216bbb acked
+lore live: (live, pushed)
+alice (work/website)$ lore inbox
+(inbox empty)
+alice (work/website)$ lore handoff search photo
+hnd_2537f9b2f7de77bfe5ca958860216bbb [acked] Two of the three sections are written; the team photo is still missing
+
+### handoff unknown
+alice (work/website)$ lore handoff add --for @dave 'The logo files are in the shared drive'
+ERROR: [E_INVALID_INPUT] no one is @dave on this repo's roster
+  hint: register first: `lore actor register` (as that person)
+(exit 1)

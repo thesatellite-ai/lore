@@ -1,29 +1,29 @@
 
 ### the mistake
-alice (work/acme-app)$ lore task add 'chase Acme about the unpaid March invoice' --to repo
+alice (work/website)$ lore task add 'chase the client about the unpaid March invoice' --to repo
 lore sync: built .lore/lore.db from .lore/data (2 rows)
 lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: /home/alice/work/acme-app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-✓ tsk_7a670ae8548ed05bf57ad29ad0759504 tsk_7a670ae8548ed05bf57ad29ad0759504 — chase Acme about the unpaid March invoice [medium]
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+✓ tsk_7a670ae8548ed05bf57ad29ad0759504 — chase the client about the unpaid March invoice [medium]
 lore live: (live, pushed)
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/acme-app/.git/hooks)
-acmedev (work/app)$ lore sync >/dev/null; lore task list
-○ tsk_7a670ae8548ed05bf57ad29ad0759504 chase Acme about the unpaid March invoice [medium]
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+carol (work/app)$ lore sync >/dev/null; lore task list
+○ tsk_7a670ae8548ed05bf57ad29ad0759504 chase the client about the unpaid March invoice [medium]
 
 ### purge
-alice (work/acme-app)$ lore live purge tsk_7a670ae8548ed05bf57ad29ad0759504
+alice (work/website)$ lore live purge tsk_7a670ae8548ed05bf57ad29ad0759504
 ✓ purged tsk_7a670ae8548ed05bf57ad29ad0759504 from live; run `lore live compact` to drop them from the ref's history too
 lore live: (live, pushed)
-alice (work/acme-app)$ lore live compact --dry-run
+alice (work/website)$ lore live compact --dry-run
 refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2
-alice (work/acme-app)$ lore live compact
+alice (work/website)$ lore live compact
 ✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
-alice (work/acme-app)$ lore live log
+alice (work/website)$ lore live log
 epoch 2
 601d285 2026-11-02 Alice Doe  lore: live compact (epoch 2)
-acmedev (work/app)$ lore sync >/dev/null; lore task list
+carol (work/app)$ lore sync >/dev/null; lore task list
 (no tasks)
-newdev (work)$ git clone -q --mirror https://github.com/acme/app app.git && cd app.git && git for-each-ref --format='%(refname)' && for c in $(git rev-list --all); do git grep -q -i 'unpaid March' $c && echo "found in $c"; done; echo 'searched every commit the remote serves'
+newdev (work)$ git clone -q --mirror https://github.com/client/website app.git && cd app.git && git for-each-ref --format='%(refname)' && for c in $(git rev-list --all); do git grep -q -i 'unpaid March' $c && echo "found in $c"; done; echo 'searched every commit the remote serves'
 refs/heads/main
 refs/lore/live
 searched every commit the remote serves

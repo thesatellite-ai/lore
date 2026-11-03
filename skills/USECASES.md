@@ -1,5 +1,7 @@
 # Use-case index
 
+**In short:** a map from "I want to do X" to the one command that does it. Skim it when you are not sure which command to reach for.
+
 Map of "I want to do X" → exact command. Skim this first when you're unsure which command to reach for.
 
 ## Capture knowledge
@@ -12,7 +14,7 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Persist a recurring warning | `lore hotfix add --severity=high --title="<headline>" --body="<text>"` |
 | Reusable code pattern | `lore pattern add --title=<n> --body="<code>"` |
 | Reusable procedure | `lore playbook add --title=<n> --body="<steps>"` |
-| Reusable LLM prompt | `lore prompt add --title=<n> --body="<prompt>"` |
+| Reusable model prompt | `lore prompt add --title=<n> --body="<prompt>"` |
 | Architectural note | `lore architecturenote add --title=<t> --body=<b>` |
 | Behaviour mode preset | `lore behaviour add --title=<n> --body=<b>` |
 | Recipe (cookbook entry) | `lore cookbookrecipe add --title=<n> --body=<b>` |
@@ -145,7 +147,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Change the generated knowledge-file path | `lore render --out=docs/LORE.md` |
 | Write the generated file only (no pointer stitch) | `lore render --no-pointer` |
 | See what render would produce (the `.lore/LORE.md` body) | `lore render --dry-run` |
-| What did the AI actually see? | `lore why-context --last-render` |
+| What did the agent actually see? | `lore why-context --last-render` |
 | Same as above in JSON | `lore why-context --last-render --json` |
 | Last rendered text | `lore why-context --last-render --rendered` |
 

@@ -1,7 +1,7 @@
 ---
 name: lore
 description: |
-  Local-first memory + context-management CLI for AI coding agents. The canonical place to persist what you learn about a project — rules you must follow, decisions and their rationale, recurring warnings, free-form memories, patterns, playbooks, prompts, tasks, missions, plans, reminders, and tags. Compiles structured knowledge into CLAUDE.md (or AGENTS.md, .cursorrules, etc.) that every future AI session reads.
+  Local-first memory + context-management CLI for coding agents. The canonical place to persist what you learn about a project — rules you must follow, decisions and their rationale, recurring warnings, free-form memories, patterns, playbooks, prompts, tasks, missions, plans, reminders, and tags. Compiles structured knowledge into CLAUDE.md (or AGENTS.md, .cursorrules, etc.) that every future agent session reads.
 
   ALWAYS load this skill when the user:
   • says "remember", "don't forget", "we decided", "we keep hitting", "we always X", "we never X"
@@ -17,6 +17,8 @@ license: same as lore
 ---
 
 # lore Skill
+
+**In short:** lore is where you, the coding agent, save what you learn about a project: rules, decisions, notes and tasks. You save with one command and run `lore render`; every later session then finds it through `CLAUDE.md` (or `AGENTS.md`) and `lore search`. Use it instead of keeping things only in your reply, which is lost when the session ends.
 
 You are working in a project that may use `lore` — a local SQLite-backed knowledge base that compiles into `CLAUDE.md` (and AGENTS.md, .cursor/rules, etc.). Treat it as **the canonical place to persist what you learn**. If you remember it only in your reply, it dies with the session. If you write it to lore, every future session sees it.
 
@@ -86,7 +88,7 @@ After capture, **always** run `lore render`. Without render, the captured knowle
 | **[examples/04-disaster-recovery.md](./examples/04-disaster-recovery.md)** | DB is broken / corrupt / missing — three-tier repair. |
 | **[examples/05-decision-record.md](./examples/05-decision-record.md)** | Capturing a non-trivial architectural decision with rationale + revisit criteria. |
 | **[examples/06-task-tracking.md](./examples/06-task-tracking.md)** | Mission + tasks across a sprint — populate, query, complete, report. |
-| **[examples/07-search-patterns.md](./examples/07-search-patterns.md)** | FTS5 BM25 query syntax (phrase, boolean, prefix), scope flags, jq filtering. |
+| **[examples/07-search-patterns.md](./examples/07-search-patterns.md)** | Search syntax (phrase, AND/OR/NOT, prefix), scope flags, jq filtering. Search uses FTS5, SQLite's built-in word search, which ranks the best match first (BM25). |
 | **[examples/08-ci-integration.md](./examples/08-ci-integration.md)** | CI: render-diff check, read-only mode, pre-commit / pre-push hooks. |
 | **[examples/09-tags-and-comments.md](./examples/09-tags-and-comments.md)** | Polymorphic tags + comments — when to use each vs a standalone entity. |
 
@@ -110,11 +112,11 @@ want a worked transcript     → examples/
 |---|---|---|
 | **Memory** | Free-form learned fact. "We use Tailwind v4." | `memory add` |
 | **Rule** | Hard constraint with severity. `must` blocks, `should` warns, `may` suggests. **Only `must`-severity rules are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `should`/`may` surface via search. | `rule add --severity=<s>` |
-| **Decision** | Architectural choice with rationale. ADR-style. **Not pinned in `.lore/LORE.md`** — surfaces via `lore search`. | `decision add --title=… --body=<why>` |
+| **Decision** | A choice and the reasons for it (like an ADR: a short record of what was chosen and why). **Not pinned in `.lore/LORE.md`** — surfaces via `lore search`. | `decision add --title=… --body=<why>` |
 | **Hotfix** | Loud warning we keep hitting. **Only `critical` + `high` severity hotfixes are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `medium`/`low` surface via search. Hotfix styling stays loud regardless of where it appears. | `hotfix add --severity=<s>` |
 | **Pattern** | Reusable code shape. | `pattern add --name=…` |
 | **Playbook** | Reusable procedure. | `playbook add --name=…` |
-| **Prompt** | Reusable LLM prompt template. | `prompt add --name=…` |
+| **Prompt** | Reusable prompt template for a model. | `prompt add --name=…` |
 | **Mission** | Initiative containing tasks. | `mission add "<title>"` |
 | **Task** | Discrete work item with status + priority. **Must belong to a tasklist** — `--tasklist=<tlt_id>` is required. | `task add "<title>" --tasklist=tlt_… --priority=…` |
 | **TaskList / Plan** | Alternative groupings for tasks. | `tasklist add` / `plan add` |
@@ -470,7 +472,7 @@ lore render
 
 | User says | Run |
 |---|---|
-| "tell the agent to use lore, not inline CLAUDE.md" / "stop the AI from writing memories into the file" | `lore directive install` (idempotent; default target CLAUDE.md at cwd) |
+| "tell the agent to use lore, not inline CLAUDE.md" / "stop the agent from writing memories into the file" | `lore directive install` (idempotent; default target CLAUDE.md at cwd) |
 | "drop the directive in AGENTS.md too" | `lore directive install --target=AGENTS.md` (or `--target=CLAUDE.md,AGENTS.md`) |
 | "what does the directive block say?" | `lore directive show` (prints to stdout, no write) |
 | "strip the directive block" | `lore directive remove [--target=...]` |
@@ -518,7 +520,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "put the generated file somewhere else" | `lore render --out=docs/LORE.md` |
 | "write the generated file only, leave CLAUDE.md alone" | `lore render --no-pointer` |
 | "render just one repo's slice" | `lore render --repo=<mount> --out=<mount>/.lore/LORE.md --target=<mount>/CLAUDE.md` |
-| "what did the AI actually see?" | `lore why-context --last-render` |
+| "what did the agent actually see?" | `lore why-context --last-render` |
 
 ### What's pinned in `.lore/LORE.md` vs searched on demand
 
@@ -556,11 +558,11 @@ The agent's **directive step 5** (rendered into `.lore/LORE.md`, reached via the
 | "is the delta significant?" | `lore bench report analyze <run>` (paired t-test, Cohen's d) |
 | "per-category breakdown" | `lore bench report by-category <run>` |
 | "which evals regressed?" | `lore bench report regressions --since=last-week` |
-| "test grader against a sample file (no LLM)" | `lore bench grader test E1-001 --output-file=<path>` |
+| "test grader against a sample file (no model call)" | `lore bench grader test E1-001 --output-file=<path>` |
 | "why did result X fail (grader trace)" | `lore bench grader debug <result-id>` |
 | "audit graders for flakiness" | `lore bench grader audit` |
 | "regrade after fixing the grader (free)" | `lore bench result regrade --run=<run>` |
-| "replay (re-LLM-call) one result" | `lore bench result replay <result-id>` ($, vs free `regrade`) |
+| "replay (call the model again for) one result" | `lore bench result replay <result-id>` ($, vs free `regrade`) |
 | "compile a small-model skill bundle" | `lore skill compile --target=mini --model=claude-sonnet-4-6` |
 
 ### Health / recovery
@@ -656,7 +658,7 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
                                │
                                ▼
         ┌───────────────────────────────────────────────┐
-        │  FUTURE SESSION (you or another AI) reads    │   ← consume
+        │  FUTURE SESSION (you or another agent) reads │   ← consume
         │  CLAUDE.md → context loop closes              │
         └───────────────────────────────────────────────┘
 ```
@@ -707,7 +709,7 @@ Group tasks under an initiative. **Recipe: [PLAYBOOKS.md § P8](./PLAYBOOKS.md).
 ### P9 — Reminder for periodic review
 Once-off, recurring, or attached to a specific entity. **Recipe: [PLAYBOOKS.md § P9](./PLAYBOOKS.md).**
 
-### P10 — Inspect what the AI is seeing
+### P10 — Inspect what the agent is seeing
 "Why is X missing from the context?" **Recipe: [PLAYBOOKS.md § P10](./PLAYBOOKS.md).**
 
 ### P11 — Migrate from .cursorrules / AGENTS.md
@@ -921,7 +923,7 @@ Quick reactions:
 | Anti-pattern | Why bad | Do instead |
 |---|---|---|
 | Capturing in your reply but not calling `lore` | Dies with the session | `lore memory add` |
-| Calling `lore memory add` but skipping `lore render` | Knowledge is in DB but invisible to AI | Always `render` after capture |
+| Calling `lore memory add` but skipping `lore render` | Knowledge is in DB but invisible to the agent | Always `render` after capture |
 | Adding a rule for a one-off preference | Pollutes future sessions | Use `memory add` for soft preferences; `rule add` for true constraints |
 | Mixing repo-scoped + master memories without `--repo` | Memories leak into other repos' renders | Always pass `--repo=<mount>` for repo-specific captures |
 | Bypassing secret-scrub without user consent | Leaks credentials into DB | Refuse loudly; require explicit `--allow-secrets` only with user OK |
@@ -938,7 +940,7 @@ Quick reactions:
 ## 11 · Hard rules (non-negotiable)
 
 1. **Capture is cheap. Forgetting is expensive.** When unsure, write a memory.
-2. **Render after every write.** Otherwise the AI doesn't see it.
+2. **Render after every write.** Otherwise the agent doesn't see it.
 3. **Never bypass secret-scrub silently.** `--allow-secrets` requires explicit user consent.
 4. **Read-only mode is honored.** If `LORE_READ_ONLY=1` or `--read-only`, refuse writes.
 5. **Scope before storing.** Repo-specific → `--repo=<mount>`. Cross-cutting → master.

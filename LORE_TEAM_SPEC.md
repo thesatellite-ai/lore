@@ -49,28 +49,28 @@ Written as a design: nothing was built when this was written unless a row says *
 
 ```mermaid
 flowchart LR
-  subgraph CLIENT["github.com/acme/app — the client can read all of this"]
+  subgraph CLIENT["github.com/client/website — the client can read all of this"]
     B["branches: feat/x, feat/y<br/>.lore/data rows travel with the code"]
     M["main: .lore/data<br/>DURABLE HOME"]
     L["refs/lore/live<br/>live rows, one ref, projects as folders"]
     S["refs/lore/signals<br/>(own or unlinked repos; client repos use the store's)"]
   end
-  subgraph STORE["github.com/northwind/lore — a lore-only store, the client cannot read it"]
-    SM["branch main: org/, acme/, globex/ projects"]
+  subgraph STORE["github.com/agency/notes — a lore-only store, the client cannot read it"]
+    SM["branch main: org/, client/, client2/ projects"]
     SL["refs/lore/live/main"]
     SS["refs/lore/signals/main<br/>claims, leases, heartbeats"]
   end
-  P["your personal store<br/>everywhere/, northwind/, betalabs/"]
+  P["your personal store<br/>everywhere/, agency/, client3/"]
   B -- "branch merges" --> M
   L -- "finished, lore land, or max-age copy" --> M
   SL -- "finished, lore land, or max-age copy" --> SM
-  SM -.->|"link acme/ ← acme/app, stored only in the store"| CLIENT
+  SM -.->|"link client/ ← client/website, stored only in the store"| CLIENT
 ```
 
 1. **`.lore/data` on `main` is the durable home of every row.** On other branches rows behave like code and reach `main` when the branch merges.
 2. **Any row can be made live.** Live rows are shared with everyone at once on `refs/lore/live`, whatever branch each person is on, and live wins over any branch copy. Live is temporary sharing: a row lands on `main` when it is finished, when someone runs `lore land`, or as a copy at its max age.
 3. **Short-lived facts are signals, not rows.** Who is working on a task right now, until when, and who holds the shared test suite sit on `refs/lore/signals`, which is replaced in place and never grows history.
-4. **Internal notes live in a store.** A store is a separate lore-only repo (for example `northwind/lore`) with one folder per project (`org/`, `acme/`, `globex/`). A client repo is linked to its internal project once; the link is saved only in the store.
+4. **Internal notes live in a store.** A store is a separate lore-only repo (for example `agency/notes`) with one folder per project (`org/`, `client/`, `client2/`). A client repo is linked to its internal project once; the link is saved only in the store.
 5. **Personal notes live in your personal store**, filed by the org you were in when you wrote them.
 6. **One person, many orgs.** Each org has its own identity, roster and stores in `~/.lore/config.yaml`; a repo loads exactly one org plus your personal notes, never two orgs.
 7. **Agents coordinate through lore.** A claim is a compare-and-swap push on the signals ref with a unique token; tasks, dependencies, notes, gates and outcomes are ordinary rows.
@@ -94,7 +94,7 @@ Settled with the owner. Where any later section and these rules disagree, these 
 
 1. **`.lore/data` on the default branch is the durable home of every row.** On every other branch, rows live in that branch's `.lore/data` and behave like code. The default branch is read from `origin/HEAD` (override: `default_branch:` in config); this spec writes it as `main`.
 2. **Any row can be made live** (rule, decision, memory, task, mission, handoff, comment, note) with `--live` on `add` or `edit`. The kind of row only sets the default (`live.defaults`, per org). Live means shared with everyone at once, whatever branch they are on.
-3. **One live ref per repo, projects as folders.** A code repo has exactly one live ref, `refs/lore/live`. A store has one per store branch, `refs/lore/live/<branch>`, and never a plain `refs/lore/live`. Inside the ref's tree each lore project is a folder: `_root/` for a project at the repo root, `web/` for a project in `web/`, `acme/` in a store. Each project still has its own lore and reads and writes only its own folder. A store `branch:` may not contain `/`, and project folder names beginning with `_` are reserved (`_root`, `_live`); code branch names are unrestricted. There is no `.lore/live/` folder.
+3. **One live ref per repo, projects as folders.** A code repo has exactly one live ref, `refs/lore/live`. A store has one per store branch, `refs/lore/live/<branch>`, and never a plain `refs/lore/live`. Inside the ref's tree each lore project is a folder: `_root/` for a project at the repo root, `web/` for a project in `web/`, `client/` in a store. Each project still has its own lore and reads and writes only its own folder. A store `branch:` may not contain `/`, and project folder names beginning with `_` are reserved (`_root`, `_live`); code branch names are unrestricted. There is no `.lore/live/` folder.
 4. **If a row id is in live, live wins. Always.** Lore never reads `main` or another branch to decide which version of a row is true. On the default branch only, lookup may read through to its own fetched upstream (`origin/main`) for a row that exists nowhere locally (never overriding a local or live copy; rule `default-branch-read-through`, shown by `lore explain` and `--trace`). (It also reads `origin/main` to check that a landing arrived and to see whether a commit merged.)
 5. **Lookup order for any command on an id:** for each loaded source in order (this repo, then each linked store project, then the org's global project, then the personal store), look in that source's live folder, then in its branch data; the first hit is edited. A tombstone stops the search ("deleted"). An id found in two sources is refused until the caller names one with `--from`. Nothing found is an error with a `lore sync peek` hint. `--live` on a row found only in branch data puts the new version into live. Details: F1.
 6. **Landing writes the row to `main`; a row leaves live only when it is finished.** A live row is written to `main`'s `.lore/data` when (a) it gets a finished status, (b) someone runs `lore land` (one id, `--all`, `--kind`, `--mission`; `--dry-run` shows the plan), or (c) it reaches the max age (`live.max_age`, default 7 days) while still open, as a copy that is refreshed every max age while it differs. Finished means: task `done`/`cancelled`, decision `superseded`/`rejected`; rules, memories, notes and comments count as finished on every write, so each write lands a copy at once while the row stays live as long as it is being edited (ADR TEAM-027). It leaves live only when it is finished **and** lore sees that `main`'s file has the same content as the live file. One id is one file, so landing twice overwrites the same file and can never duplicate a row. Code branches merging, being squashed or being deleted never trigger, delay or lose a landing.
@@ -139,7 +139,7 @@ One name per thing. Real row ids are long (`tsk_01a1985b…`, UUIDv7, `saas/pkg/
 | **linked project** | the internal project a client repo is linked to; a **group** is one linked project with several links; a **global project** is marked `"global": true` and loads in every repo of the org |
 | **personal store** | your own store: `everywhere/` for notes that load everywhere, one folder per org for notes that load only in that org's repos |
 | **source** | where a cached row came from: `repo`, `store:<org>/<folder>`, `personal:<folder>` |
-| **label** | how a source is shown in lists: `[app]` (this repo's mount name), `[northwind/acme]`, `[me]` |
+| **label** | how a source is shown in lists: `[app]` (this repo's mount name), `[agency/client]`, `[me]` |
 | **actor** | a person or agent on a roster (`actors` table); kinds `human`, `agent`, `hook`, `plugin`, `cron`, `system` (`dbent/schema/actor.go:16`–`22`) |
 | **stable_key** | an actor's immutable unique key; for people, `human:<email in that org>` (`dbent/schema/actor.go:58`–`61`) |
 | **handle** | a roster display alias, unique per roster, used as `@alice`; resolves to one actor or one team |
@@ -152,7 +152,7 @@ One name per thing. Real row ids are long (`tsk_01a1985b…`, UUIDv7, `saas/pkg/
 |---|---|---|
 | `refs/heads/*` | every repo | branches (code) |
 | `refs/lore/live` | code repo | live rows of every project in the repo, as folders (`_root/`, `web/`) |
-| `refs/lore/live/<branch>` | store | live rows of every project on that store branch (`acme/`, `globex/`) |
+| `refs/lore/live/<branch>` | store | live rows of every project on that store branch (`client/`, `client2/`) |
 | `refs/lore/signals` | code repo (own or unlinked) | signals, one parentless commit |
 | `refs/lore/signals/<branch>` | store | signals for that store branch |
 | `refs/lore-remote/origin/*` | every clone, local only | tracking copies of the remote's `refs/lore/*`, written by fetch; lore merges from them |
@@ -347,7 +347,7 @@ refs/lore/live  (one commit; its tree:)
     rules/rul_0d21.json
 ```
 
-Each project still has its own lore: lore in `web/` reads and writes only `web/` in that tree, exactly as it reads only `web/.lore/data` on a branch. A store does the same per store branch (`refs/lore/live/main` holds `org/`, `acme/`, `globex/`), and because a store `branch:` may not contain `/`, `refs/lore/live/main` and `refs/lore/live/release-2026` can never clash.
+Each project still has its own lore: lore in `web/` reads and writes only `web/` in that tree, exactly as it reads only `web/.lore/data` on a branch. A store does the same per store branch (`refs/lore/live/main` holds `org/`, `client/`, `client2/`), and because a store `branch:` may not contain `/`, `refs/lore/live/main` and `refs/lore/live/release-2026` can never clash.
 
 ### Hidden is not private
 
@@ -363,7 +363,7 @@ Lore keeps two kinds of shared state apart, because they behave differently:
 
 | | Content | Signals |
 |---|---|---|
-| Examples | tasks, assignments, rules, decisions, notes, outcomes (`done_by`, `merged_at`) | "frontend-2 is working on tsk_31 until 14:20", heartbeats, "agent X holds the full test suite" |
+| Examples | tasks, assignments, rules, decisions, notes, outcomes (`done_by`, `merged_at`) | "agent-frontend-2 is working on tsk_31 until 14:20", heartbeats, "agent X holds the full test suite" |
 | Changes | when something is decided or learned | every few minutes |
 | Stored as | rows: branch data, live ref, landing on `main` | files on the signals ref, replaced in place |
 | History | yes; it is the record | none: the ref is always one commit, old ones are garbage-collected |
@@ -383,11 +383,11 @@ Lore keeps two kinds of shared state apart, because they behave differently:
 ### 3.2 Writing: `--live` picks *when*, `--to` picks *who*
 
 ```console
-$ lore task add "fix login timeout" --assign @dev1          # tasks are live by default: everyone sees it now
+$ lore task add "fix login timeout" --assign @alice          # tasks are live by default: everyone sees it now
 $ lore rule add --body "never run migrations from the app container" --live
 $ lore memory add --body "staging DB is restored every Sunday"       # not live by default: travels with this branch
 $ lore task add "update the README table" --no-live           # waits for the branch to merge
-$ lore memory add --body "client prefers WhatsApp" --to northwind   # into the linked internal project, in the store
+$ lore memory add --body "client prefers WhatsApp" --to agency   # into the linked internal project, in the store
 $ lore memory add --body "I forget the staging VPN" --to me          # into your personal notes for this org
 ```
 
@@ -428,10 +428,10 @@ The live file is the row in the same canonical JSON as `.lore/data`, plus a smal
 
 ```json
 {
-  "kind": "claim", "task": "tsk_31", "project": "globex",
+  "kind": "claim", "task": "tsk_31", "project": "client2",
   "holder": "act_c47a", "session": "s-7f2e", "claim_token": "ct_9b1e…",
   "claim_epoch": 4, "expires": "2026-11-02T14:20:00Z", "renewed_seq": 17,
-  "work_branch": "agent/frontend-2/invite-route", "host": "devbox"
+  "work_branch": "agent-frontend-2/invite-route", "host": "devbox"
 }
 ```
 
@@ -452,8 +452,8 @@ Every view combines the row and the signal:
 $ lore task list --mission mis_12
 ID      TITLE                     ASSIGNEE     STATE
 tsk_30  invite mutation + email   @backend     ✓ done · merged 11:52
-tsk_31  invite landing route      @frontend    ▶ working: frontend-2 (until 14:20)
-tsk_32  allow /invite on proxy    @proxy-1     ▶ EXPIRED 4 min ago (proxy-1)
+tsk_31  invite landing route      @frontend    ▶ working: agent-frontend-2 (until 14:20)
+tsk_32  allow /invite on proxy    @agent-infra     ▶ EXPIRED 4 min ago (agent-infra)
 tsk_33  deploy to staging         —            ⏸ gate: needs approval
 ```
 
@@ -500,10 +500,10 @@ Every flow below uses the same template: **Purpose · Example · Contract · Edg
 **Example.**
 
 ```console
-dev1 (acme/app, feat/login)$ lore task done tsk_50
-✓ tsk_50 done   [northwind/acme] live → landing on northwind/lore main
-dev1$ lore task show tsk_99
-error E_AMBIGUOUS_ID: tsk_99 exists in [app] and [northwind/acme]; pass --from app or --from northwind/acme
+alice (client/website, feat/login)$ lore task done tsk_50
+✓ tsk_50 done   [agency/client] live → landing on agency/notes main
+alice$ lore task show tsk_99
+error E_AMBIGUOUS_ID: tsk_99 exists in [app] and [agency/client]; pass --from app or --from agency/client
 ```
 
 **Contract.**
@@ -536,7 +536,7 @@ out:  exactly one hit → that copy is read or edited
 
 **Edge cases handled.** Detached HEAD (branch data = the commit's tree). A row that landed on `main` while you stand on a not-yet-pulled `main`: found through the read-through rule (step 3). A row that landed on `main` while your feature branch is older: not found, the hint says "it may have landed on main: `lore sync peek origin/main tasks`". Store offline: the last fetched store data is used and marked. Same id copied by a fork (F11 refuses the link). A row whose live copy has conflict markers is shown with a warning and cannot land (F4).
 
-**Test.** Seams `Git`, `Clock`, `StoreIndex`. Pure `Lookup(id, sources)` table test over: id in live / branch / both / neither / tombstoned / purged × source repo / store / global / personal × one source vs two × cache fresh / stale / offline × detached HEAD. E2E: cookbook 12, `lore task done tsk_50` from the client repo edits the store's live row and nothing in `acme/app` changes.
+**Test.** Seams `Git`, `Clock`, `StoreIndex`. Pure `Lookup(id, sources)` table test over: id in live / branch / both / neither / tombstoned / purged × source repo / store / global / personal × one source vs two × cache fresh / stale / offline × detached HEAD. E2E: cookbook 12, `lore task done tsk_50` from the client repo edits the store's live row and nothing in `client/website` changes.
 
 **Debug.** `lore explain tsk_50` lists every place the id exists, the rule step that chose the winner and the age of each fetch. `lore doctor` row: "ids present in two sources".
 
@@ -547,10 +547,10 @@ out:  exactly one hit → that copy is read or edited
 **Example.**
 
 ```console
-dev2 (feat/payments)$ lore task add "fix login timeout" --assign @dev1
-✓ tsk_02 fix login timeout → @dev1   (live, pushed)
-dev1 (feat/login)$ lore task list --mine
-[app] live  tsk_02  fix login timeout  todo  from dev2  1 min ago
+bob (feat/payments)$ lore task add "fix login timeout" --assign @alice
+✓ tsk_02 fix login timeout → @alice   (live, pushed)
+alice (feat/login)$ lore task list --mine
+[app] live  tsk_02  fix login timeout  todo  from bob  1 min ago
 ```
 
 **Contract.**
@@ -621,7 +621,7 @@ Git hooks `post-checkout` and `post-merge` (installed today, `saas/cmd/cli/sync_
 
 ```console
 $ lore live log tsk_02
-merged tsk_02: status "done" (dev1, hlc …0007) over "in_progress" (dev2, hlc …0005); title kept both edits → conflict, see lore sync conflicts
+merged tsk_02: status "done" (alice, hlc …0007) over "in_progress" (bob, hlc …0005); title kept both edits → conflict, see lore sync conflicts
 ```
 
 **Contract.**
@@ -634,7 +634,7 @@ step: 1. file level first:
            added on both, different content  → merge3 with an empty base
            deleted (tombstone) on one side, unchanged on the other → deleted
            deleted on one side, MODIFIED on the other → modify wins: the row stays (live), the tombstone is dropped,
-             and the row will land again; lore prints "tsk_02 was deleted by dev2 but edited by dev1; kept"
+             and the row will land again; lore prints "tsk_02 was deleted by bob but edited by alice; kept"
       2. field level (existing merge3, saas/pkg/aicoder/merge3/merge3.go:106, via saas/pkg/aicoder/lsync/mergedriver.go:57):
            status, priority, dates, numbers → the side with the higher hlc wins (not wall-clock updated_at)
            text fields → both edits kept with conflict markers inside the value
@@ -658,12 +658,12 @@ Claims are never merged: a lost claim is decided again from scratch (F7).
 **Example.**
 
 ```console
-dev1$ lore task done tsk_02
+alice$ lore task done tsk_02
 ✓ tsk_02 done → landed on main (a7c1e09), leaves live once main is fetched
 $ lore land --mission mis_12 --dry-run
-would land 4 rows to northwind/lore main (globex/):
+would land 4 rows to agency/notes main (client2/):
   tsk_30 done → land, then leave live
-  tsk_31 open → copy (stays live; claimed by frontend-2)
+  tsk_31 open → copy (stays live; claimed by agent-frontend-2)
   mem_44 memory, finished on write → land, then leave live
   tsk_33 open, gate requested → copy (stays live)
 $ lore land --all --kind rule
@@ -721,10 +721,10 @@ Any lore that writes live, or runs lore sync, performs this check for the rows i
 **Example.**
 
 ```console
-dev1 (feat/login)$ git commit -m "fix login timeout"
+alice (feat/login)$ git commit -m "fix login timeout"
 [feat/login 4e1d2aa] fix login timeout
 lore: added "lore: land 1 row" to feat/login (tsk_02)
-dev1$ git push
+alice$ git push
 ```
 
 **Contract.**
@@ -758,11 +758,11 @@ Ride snapshots are always the current live content, so two pull requests carryin
 **Example.**
 
 ```console
-frontend-2$ lore task claim tsk_31 --owns "src/routes/invite/"
-✓ claimed tsk_31 (lease 20m, token ct_9b1e…) on northwind/lore signals/main
-frontend-2$ lore task heartbeat --daemon tsk_31 &
-frontend-1 (zombie, woke up)$ lore task done tsk_31
-error E_LOST_CLAIM: tsk_31 is held by frontend-2 since 13:58 (your token ct_51aa… expired 13:54); exit 12
+agent-frontend-2$ lore task claim tsk_31 --owns "src/routes/invite/"
+✓ claimed tsk_31 (lease 20m, token ct_9b1e…) on agency/notes signals/main
+agent-frontend-2$ lore task heartbeat --daemon tsk_31 &
+agent-frontend (zombie, woke up)$ lore task done tsk_31
+error E_LOST_CLAIM: tsk_31 is held by agent-frontend-2 since 13:58 (your token ct_51aa… expired 13:54); exit 12
 ```
 
 **Contract: every signals write.**
@@ -791,7 +791,7 @@ error E_LOST_CLAIM: tsk_31 is held by frontend-2 since 13:58 (your token ct_51aa
 
 A holder whose renewals keep failing stops work at `expires − lease.grace` and exits `E_LOST_CLAIM` from the daemon. Heartbeats come from `lore task heartbeat --daemon` (started by `lore agent start`) or from an agent-tool hook calling `lore task heartbeat` (rate-limited to `lease.renew_every`); progress is recorded separately as notes.
 
-**Edge cases handled.** Two sessions with the same actor: the claim records `session` (`LORE_SESSION` for agents, `<stable_key>@<hostname>` for humans); a second session gets "held by agent:frontend-1 in another session (devbox); set a different LORE_ACTOR". A human cancels while an agent works: the agent's next renew or done gets `E_CANCELLED` (13). Reassign: `E_REASSIGNED` (14). A claim race on a task that sits only in the store branch (not live yet): add/add is never merged; the loser re-decides. A rejected push caused by an unrelated signal (another agent's renewal): retry, never counted as a lost claim. A poison task: past `max_attempts` reclaims it becomes `blocked` with the reason "failed 3 times" and goes to the owner's inbox. Clock skew: expiry needs both the time check and an unchanged `renewed_seq`, so a skewed reader cannot steal a live lease; doctor warns on skew.
+**Edge cases handled.** Two sessions with the same actor: the claim records `session` (`LORE_SESSION` for agents, `<stable_key>@<hostname>` for humans); a second session gets "held by agent:agent-frontend in another session (devbox); set a different LORE_ACTOR". A human cancels while an agent works: the agent's next renew or done gets `E_CANCELLED` (13). Reassign: `E_REASSIGNED` (14). A claim race on a task that sits only in the store branch (not live yet): add/add is never merged; the loser re-decides. A rejected push caused by an unrelated signal (another agent's renewal): retry, never counted as a lost claim. A poison task: past `max_attempts` reclaims it becomes `blocked` with the reason "failed 3 times" and goes to the owner's inbox. Clock skew: expiry needs both the time check and an unchanged `renewed_seq`, so a skewed reader cannot steal a live lease; doctor warns on skew.
 
 **Test.** `FaultRemote` injecting a racing writer between fetch and push, `Clock` per agent with skew. Matrix: free / held-valid / held-expired-within-grace / expired × rejection by own task / unrelated file × offline × renew after reclaim × cancel while held × same actor two sessions × atomic push supported or not. E2E: four agents race `task next`, exactly one wins each task, total pushes stay under 4 × tasks; kill one agent, the task is reclaimed after `ttl + grace`; the zombie's `done` fails with exit 12.
 
@@ -839,11 +839,11 @@ reader with remote epoch > local epoch (F3 step 3):
 **Example.**
 
 ```console
-backend-1$ lore task done tsk_30 --pr 412
+agent-backend$ lore task done tsk_30 --pr 412
 ✓ tsk_30 done (pr #412); waiting for merge
-frontend-1$ lore task next --mission mis_12 --repo frontend
+agent-frontend$ lore task next --mission mis_12 --repo frontend
 nothing ready: tsk_31 waits for tsk_30 to be MERGED (done, pr #412 open); exit 10
-… later, in any globex-api checkout …
+… later, in any api checkout …
 $ lore task list
 ✓ tsk_30 merged 11:52 (found by: Lore-Task trailer on origin/main 9c3e1f0)
 ```
@@ -882,13 +882,13 @@ undetectable (no sha, no trailer, no adapter): shown as "done (merge unknown)"; 
 **Example.**
 
 ```console
-~/work/acme-app$ lore whoami
-org        northwind            (matched by: link in northwind/lore acme/, project id + remote)
-identity   Alice Doe <human:alice@northwind.example>   act_3f9c
+~/work/website$ lore whoami
+org        agency            (matched by: link in agency/notes client/, project id + remote)
+identity   Alice Doe <human:alice@agency.example>   act_3f9c
 repo       client repo            (guards on)
-internal   northwind/lore acme/ on branch main (default link)
-global     northwind/lore org/
-personal   khanakia/lore-me: northwind/, everywhere/
+internal   agency/notes client/ on branch main (default link)
+global     agency/notes org/
+personal   alice/lore-me: agency/, everywhere/
 ```
 
 **Contract.**
@@ -925,13 +925,13 @@ out:  {entry, matched_by, repo_role: client | own | none}
 
 ```yaml
 # .lore/org.yaml — committed; names only
-org: northwind
+org: agency
 project: lore-tools   # the internal project folder, optional
 ```
 
-**Edge cases handled.** ssh versus https remotes and `.git` suffixes: URLs are normalised to `host/owner/repo` (lowercase host, no scheme, no user, no `.git`). Patterns use `*` for one path segment and `**` for any depth. Several remotes: all are tried; two different orgs from two remotes is ambiguous. A repo with no remote: only rules 1–2 can match (rule 3 needs a remote to check against `own:`). Remotes are read from the raw `remote.<name>.url` config, never through `git remote get-url`, which applies `url.insteadOf`. Entries that share one store URL are one org: `LORE_ORG=northwind-stag` in a repo linked by `northwind` is not a disagreement. `repo_orgs` accepts the short form `prj_…: northwind`; `lore org use` writes `{org, remotes}`. Because `repo_orgs` is keyed by project id, `lore org use` in a fork overwrites the choice for the upstream clone on the same machine (accepted limitation). An ambiguous repo cannot `lore init` (its identity is refused), so the hint is `LORE_ORG=<entry> lore init`, then `lore org use <entry>`. A changed resolution between commands: the cache is rebuilt (F20).
+**Edge cases handled.** ssh versus https remotes and `.git` suffixes: URLs are normalised to `host/owner/repo` (lowercase host, no scheme, no user, no `.git`). Patterns use `*` for one path segment and `**` for any depth. Several remotes: all are tried; two different orgs from two remotes is ambiguous. A repo with no remote: only rules 1–2 can match (rule 3 needs a remote to check against `own:`). Remotes are read from the raw `remote.<name>.url` config, never through `git remote get-url`, which applies `url.insteadOf`. Entries that share one store URL are one org: `LORE_ORG=agency-stag` in a repo linked by `agency` is not a disagreement. `repo_orgs` accepts the short form `prj_…: agency`; `lore org use` writes `{org, remotes}`. Because `repo_orgs` is keyed by project id, `lore org use` in a fork overwrites the choice for the upstream clone on the same machine (accepted limitation). An ambiguous repo cannot `lore init` (its identity is refused), so the hint is `LORE_ORG=<entry> lore init`, then `lore org use <entry>`. A changed resolution between commands: the cache is rebuilt (F20).
 
-**Test.** Pure `ResolveOrg(Env, Config, CommittedOrg, Remotes, LinkIndex)` over the matrix in §9.2. E2E: a two-org `HOME` with acme, betalabs, a fork and a staging entry; `lore whoami` in each (cookbook 11 and 13).
+**Test.** Pure `ResolveOrg(Env, Config, CommittedOrg, Remotes, LinkIndex)` over the matrix in §9.2. E2E: a two-org `HOME` with client, client3, a fork and a staging entry; `lore whoami` in each (cookbook 11 and 13).
 
 **Debug.** `lore explain org` prints every rule with hit or miss and the reason; `lore whoami` always prints `matched by:`.
 
@@ -942,10 +942,10 @@ project: lore-tools   # the internal project folder, optional
 **Example.**
 
 ```console
-~/work/acme-app$ lore org link northwind --project acme
-This marks acme/app as a CLIENT repo of northwind: internal notes default to northwind/lore acme/,
-and the leak guards turn on for everyone in northwind. Continue? [y/N] y
-✓ acme/app (prj_01a1…, github.com/acme/app) linked to northwind/lore acme/ (created; pushed)
+~/work/website$ lore org link agency --project client
+This marks client/website as a CLIENT repo of agency: internal notes default to agency/notes client/,
+and the leak guards turn on for everyone in agency. Continue? [y/N] y
+✓ client/website (prj_01a1…, github.com/client/website) linked to agency/notes client/ (created; pushed)
   nothing was written to this repo
 ```
 
@@ -969,7 +969,7 @@ scan (the link index):
 out:  link written and pushed; every teammate's next command finds it
 ```
 
-**Edge cases handled.** A fork or template copy carrying the same project id but another remote: the scan matches on id **and** remote, so the fork is not treated as linked; lore warns "this repo shares a project id with acme/app; run `lore project reid` if it is a different project". A repo linked from two folders (`acme/` and `globex/`): `--to northwind` uses the link marked default (`lore org link … --default`); with no default lore refuses and lists the candidates (TEAM-032). `lore org unlink` asks for confirmation, like link. Links exist per store branch; a staging entry needs its own link (ADR TEAM-011).
+**Edge cases handled.** A fork or template copy carrying the same project id but another remote: the scan matches on id **and** remote, so the fork is not treated as linked; lore warns "this repo shares a project id with client/website; run `lore project reid` if it is a different project". A repo linked from two folders (`client/` and `client2/`): `--to agency` uses the link marked default (`lore org link … --default`); with no default lore refuses and lists the candidates (TEAM-032). `lore org unlink` asks for confirmation, like link. Links exist per store branch; a staging entry needs its own link (ADR TEAM-011).
 
 **Test.** Pure `ScanLinks(trees)`; matrix: 0/1/2 links × `--own` × `--default` × duplicate link × folder missing / not a project × concurrent link by two people × fork with same id. E2E: link from clone A; clone B's `whoami` shows the internal project; unlink; relink.
 
@@ -982,10 +982,10 @@ out:  link written and pushed; every teammate's next command finds it
 **Example.**
 
 ```console
-$ lore store init git@github.com:northwind/lore
-✓ wrote lore-store.yaml to northwind/lore (branch main) and pushed
+$ lore store init git@github.com:agency/notes
+✓ wrote lore-store.yaml to agency/notes (branch main) and pushed
 $ lore whoami
-error E_NOT_A_STORE: github.com/northwind/globex-docs is listed under stores: but is not a lore store
+error E_NOT_A_STORE: github.com/agency/docs is listed under stores: but is not a lore store
   (no lore-store.yaml; it holds non-lore files such as src/, package.json)
   create one with `lore store init <url>` in a new empty repo
 ```
@@ -1019,15 +1019,15 @@ A code repo's own `.lore/` is unaffected: these checks apply only to repos liste
 
 ```yaml
 orgs:
-  - name: northwind
-    identity: {key: "human:alice@northwind.example", name: "Alice Doe"}
+  - name: agency
+    identity: {key: "human:alice@agency.example", name: "Alice Doe"}
     stores:
-      - url: git@github.com:northwind/lore-org       # company rules and roster
+      - url: git@github.com:agency/notes       # company rules and roster
         org_folder: .
-      - url: git@github.com:northwind/lore-acme      # one client, NDA
-      - url: git@github.com:northwind/lore           # everything else, one folder per client
-    own:   [github.com/northwind/*]
-    repos: [github.com/acme/*, github.com/globex/*]
+      - url: git@github.com:agency/notes-client      # one client, NDA
+      - url: git@github.com:agency/notes           # everything else, one folder per client
+    own:   [github.com/agency/*]
+    repos: [github.com/client/*, github.com/client2/*]
 ```
 
 **Contract.**
@@ -1056,10 +1056,10 @@ out:  sources for F20, targets for F14
 **Example.**
 
 ```console
-~/work/acme-app$ lore memory add --body "client is slow to pay"
-✓ mem_0b77 → northwind/lore acme/ (default for memories in client repos)
-~/work/acme-app$ LORE_ACTOR=agent:backend-1 lore rule add --body "require prepayment from this client"
-error: agents writing a rule in a client repo must pass --to (repo or northwind); nothing written
+~/work/website$ lore memory add --body "client is slow to pay"
+✓ mem_0b77 → agency/notes client/ (default for memories in client repos)
+~/work/website$ LORE_ACTOR=agent:agent-backend lore rule add --body "require prepayment from this client"
+error: agents writing a rule in a client repo must pass --to (repo or agency); nothing written
 ```
 
 **Contract.**
@@ -1084,7 +1084,7 @@ no --to:
 out:  (source, folder, live?) for F2 or the branch write
 ```
 
-**Edge cases handled.** A personal default `memory: repo` while the store says `memory: northwind`: the store wins (stricter); doctor shows the difference. `--to otherorg` from a northwind repo: refused. `--to repo` in a client repo by an agent: allowed but the leak check (F16) still runs.
+**Edge cases handled.** A personal default `memory: repo` while the store says `memory: agency`: the store wins (stricter); doctor shows the difference. `--to otherorg` from an agency repo: refused. `--to repo` in a client repo by an agent: allowed but the leak check (F16) still runs.
 
 **Test.** Pure `ResolveTarget` over every `--to` form × kind × repo role × actor kind × TTY × store default vs personal default × link unknown. E2E: cookbook 3.
 
@@ -1097,19 +1097,19 @@ out:  (source, folder, live?) for F2 or the branch write
 **Example.**
 
 ```console
-northwind dev (acme/app)$ lore task show tsk_01
+agency dev (client/website)$ lore task show tsk_01
 tsk_01  migrate checkout to the new API              [app]
-  cmt_10  dev2   staging is ready for you             [app]
-  cmt_88  alice   client is slow to test, push them    [northwind/acme]
-acme dev (acme/app)$ lore task show tsk_01
+  cmt_10  bob   staging is ready for you             [app]
+  cmt_88  alice   client is slow to test, push them    [agency/client]
+client dev (client/website)$ lore task show tsk_01
 tsk_01  migrate checkout to the new API              [app]
-  cmt_10  dev2   staging is ready for you             [app]
+  cmt_10  bob   staging is ready for you             [app]
 ```
 
 **Contract.**
 
 ```text
-a reference = (project id, row id); written for people as acme/app:tsk_01
+a reference = (project id, row id); written for people as client/website:tsk_01
 existing pieces: comments point with entity_table + entity_id (dbent/schema/comment.go:33, :35); knowledge refs
   src_table/src_id → dst_table/dst_id + relation (dbent/schema/knowledge_ref.go:23–28); commit links
   entity_table/entity_id/sha (dbent/schema/commit_link.go:27–29)
@@ -1117,7 +1117,7 @@ new: optional entity_project_id on comments and dst_project_id on knowledge refs
   existing row stays valid (schema change + merge driver + export, phase P3)
 direction:  internal → client yes · personal → anything yes · internal → internal yes
             client → internal NO · anything → personal NO (the pointer alone reveals the hidden row)
-resolve: only among loaded sources (F20); anything else prints "→ acme/app:tsk_01 (not available here)", never an error
+resolve: only among loaded sources (F20); anything else prints "→ client/website:tsk_01 (not available here)", never an error
 ```
 
 **Edge cases handled.** A client row pointing at an internal id: refused by F16 at commit, live write and landing. Agent work notes for a client task (D8) are internal rows pointing at the client task, which is the allowed direction.
@@ -1135,10 +1135,10 @@ resolve: only among loaded sources (F20); anything else prints "→ acme/app:tsk
 ```console
 $ git commit -m "fix checkout"
 lore: blocked, this commit would share internal content with the client repo:
-  .lore/data/memories/mem_0b77….json   id belongs to northwind/acme
+  .lore/data/memories/mem_0b77….json   id belongs to agency/client
   src/checkout.ts:42                    matches internal note mem_0b77 (14 words)
   commit message                        matches internal note mem_0c12 (9 words)
-Move it:  lore move mem_0b77 --to northwind
+Move it:  lore move mem_0b77 --to agency
 Share it on purpose: lore share mem_0c12 --to repo
 ```
 
@@ -1173,12 +1173,12 @@ out:  findings; with --explain the rule, the source and the matched words
 **Example.**
 
 ```console
-~/work/acme-app$ lore memory add --body "ask Raj about the staging creds" --to me
-✓ mem_77 → personal northwind/ (loads only in northwind repos)
+~/work/website$ lore memory add --body "ask Bob for the staging password" --to me
+✓ mem_77 → personal agency/ (loads only in agency repos)
 ~/scratch$ lore memory add --body "I prefer tabs" --to me
 ✓ mem_78 → personal everywhere/
-~/work/acme-app$ lore memory add --body "betalabs invoices go to finance@" --to me --everywhere
-note mentions betalabs, a known org. Save it under everywhere/ anyway? [y/N]
+~/work/website$ lore memory add --body "client3 invoices go to finance@" --to me --everywhere
+note mentions client3, a known org. Save it under everywhere/ anyway? [y/N]
 ```
 
 **Contract.**
@@ -1193,7 +1193,7 @@ load:  in a repo of org X: personal X/ and everywhere/; never another org's fold
 
 **Edge cases handled.** A personal store that is `local` (`~/.lore/personal`): same folders. The same person in two orgs: two folders, never mixed. Old notes in the root project of an existing personal store: `lore doctor` offers to move them into `everywhere/`.
 
-**Test.** Pure `PlacePersonal(org, flags, text, knownNames)`. E2E: write in an acme repo, run `lore memory list` in a betalabs repo, the note is absent.
+**Test.** Pure `PlacePersonal(org, flags, text, knownNames)`. E2E: write in a client repo, run `lore memory list` in a client3 repo, the note is absent.
 
 **Debug.** `lore explain mem_77` shows the folder and why.
 
@@ -1204,11 +1204,11 @@ load:  in a repo of org X: personal X/ and everywhere/; never another org's fold
 **Example.**
 
 ```console
-$ lore identity set --org northwind --key human:alice@northwind.example --name "Alice Doe" --handle alice
+$ lore identity set --org agency --key human:alice@agency.example --name "Alice Doe" --handle alice
 $ lore actor register
-✓ act_3f9c Alice Doe (@alice) registered in northwind org/ (pushed)
-$ lore agent start --label frontend-2 --owner @alice
-✓ act_c912 agent frontend-2 (owner @alice) registered; LORE_ACTOR=agent:frontend-2 LORE_SESSION=s-7f2e
+✓ act_3f9c Alice Doe (@alice) registered in agency org/ (pushed)
+$ lore agent start --label agent-frontend-2 --owner @alice
+✓ act_c912 agent agent-frontend-2 (owner @alice) registered; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-7f2e
 ```
 
 **Contract.**
@@ -1282,11 +1282,11 @@ The team config adds `~/.lore/config.yaml` (orgs, personal store, `repo_orgs`), 
 **Example.**
 
 ```console
-~/work/acme-app$ cat CLAUDE.local.md
+~/work/website$ cat CLAUDE.local.md
 @~/.lore/render/prj_01a1….md
-~/work/acme-app$ head -3 ~/.lore/render/prj_01a1….md
+~/work/website$ head -3 ~/.lore/render/prj_01a1….md
 <!-- generated by lore; internal: never quote this content in client files, commits, PRs or chat -->
-# Internal context for acme/app (northwind)
+# Internal context for client/website (agency)
 ```
 
 **Contract.**
@@ -1321,14 +1321,14 @@ labels: [<mount name>] for this repo, [<org>/<folder>] for store projects, [me] 
 A **store** is a git repo that holds only lore projects, like a shared notebook kept apart from the code. Each project is a folder with its own `.lore/`; each follows every fixed rule (its store branch is its `main`, it has a live ref and a signals ref). Lore already supports several projects in one repo: each gets its own hook block (`saas/cmd/cli/sync_wire.go:488`) and its own merge workflow file (`saas/cmd/cli/sync_action.go:60`).
 
 ```filetree
-github.com/northwind/lore              Northwind's store (Acme cannot read it)
+github.com/agency/notes              the agency's store (the client cannot read it)
   lore-store.yaml                       marker: this repo is a lore store
   org/.lore/data/                       company rules, roster, teams (org_folder: org)
   org/.lore/lore-org.yaml               team defaults, read on every resolve
-  acme/.lore/data/                      internal project for Acme, linked from acme/app
-  globex/.lore/data/                      group project, linked from every Globex repo
-  refs/lore/live/main                   live rows: folders org/, acme/, globex/
-  refs/lore/signals/main                claims and leases: folders acme/, globex/
+  client/.lore/data/                      internal project for the client, linked from client/website
+  client2/.lore/data/                      group project, linked from every client 2 repo
+  refs/lore/live/main                   live rows: folders org/, client/, client2/
+  refs/lore/signals/main                claims and leases: folders client/, client2/
 ```
 
 Why a code repo may never be a store (ADR TEAM-014):
@@ -1345,45 +1345,45 @@ A notebook getting many small commits is fine: nothing builds or deploys from it
 # ~/.lore/config.yaml
 
 identity:                                     # repos that match no org (F10 rule 6)
-  key: human:alice@khanakia.example
+  key: human:alice@example.com
   name: Alice Doe
 
 personal:
-  store: git@github.com:khanakia/lore-me      # or: local (~/.lore/personal)
+  store: git@github.com:alice/lore-me      # or: local (~/.lore/personal)
 
 orgs:
-  - name: northwind
+  - name: agency
     identity:
-      key: human:alice@northwind.example
+      key: human:alice@agency.example
       name: Alice Doe
       handle: alice
     stores:
-      - url: git@github.com:northwind/lore
+      - url: git@github.com:agency/notes
         branch: main                          # default main; may not contain "/"
         org_folder: org                       # where the roster, teams and company rules live
-    own:   [github.com/northwind/*]          # our own code repos: no client guards
-    repos: [github.com/acme/*, github.com/globex/*]   # client repos we work in
+    own:   [github.com/agency/*]          # our own code repos: no client guards
+    repos: [github.com/client/*, github.com/client2/*]   # client repos we work in
     defaults:
-      client_repos: {task: northwind, memory: northwind, rule: repo, decision: repo}   # TEAM-035: agents must still pass --to for rules
+      client_repos: {task: agency, memory: agency, rule: repo, decision: repo}   # TEAM-035: agents must still pass --to for rules
     agent_details: internal                   # D8; "client" keeps agent notes in the client repo
     live: {defaults: {tasks: true}, max_age: 7d}
 
-  - name: northwind-stag                     # staging lore: same store, other branch (Q-a)
-    identity: {key: "human:alice@northwind.example", name: "Alice Doe"}
+  - name: agency-stag                     # staging lore: same store, other branch (Q-a)
+    identity: {key: "human:alice@agency.example", name: "Alice Doe"}
     stores:
-      - url: git@github.com:northwind/lore
+      - url: git@github.com:agency/notes
         branch: staging
         org_folder: org
 
-  - name: betalabs
-    identity: {key: "human:alice@betalabs.example", name: "Alice Doe"}
+  - name: client3
+    identity: {key: "human:alice@client3.example", name: "Alice Doe"}
     stores:
-      - url: git@github.com:betalabs/lore
+      - url: git@github.com:client3/notes
         org_folder: org
-    own: [github.com/betalabs/*]
+    own: [github.com/client3/*]
 
 repo_orgs:                                    # written by `lore org use` (machine-only)
-  prj_01a1…: northwind
+  prj_01a1…: agency
 ```
 
 | Field | Meaning |
@@ -1406,13 +1406,13 @@ A team commits a suggested entry to its store (`org/.lore/lore-org.yaml`: stores
   config.yaml
   identity.yaml                          fallback identity (no org)
   clones/github.com/
-    northwind/lore.git                  ONE bare clone per URL, shared by northwind and northwind-stag
-    betalabs/lore.git
-    khanakia/lore-me.git                 personal store (when it is a git repo)
+    agency/notes.git                  ONE bare clone per URL, shared by agency and agency-stag
+    client3/notes.git
+    alice/lore-me.git                 personal store (when it is a git repo)
   personal/                              personal store (when it is local)
   cache/                                 per-project caches and link indexes (F11, F20)
   render/                                internal render per code project (F20)
-  worktrees/github.com/northwind/lore/main/   optional, `lore store open`, never needed by lore
+  worktrees/github.com/agency/notes/main/   optional, `lore store open`, never needed by lore
 ```
 
 Bare clones fetch `+refs/heads/*:refs/remotes/origin/*` and `+refs/lore/*:refs/lore-remote/origin/*` (F3). Lore reads and writes them without a checkout, which needs bare-safe tree helpers (code prerequisite C3). Deleting a clone is safe: it is cloned again on the next command, unless it holds unpushed live writes or landings; `lore store doctor` lists those and `lore store forget` refuses while any exist.
@@ -1424,8 +1424,8 @@ Each org entry names one store branch. A store branch is a **separate lore**: lo
 A staging entry (any entry whose store branch is not the store's default branch) gets **no automatic matching**: its `repos:` and `own:` patterns and its links are ignored by F10 steps 4 and 5. It is selected only on purpose:
 
 ```console
-~/work/acme-app$ lore org use northwind-stag          # machine-only, this repo
-~/work/acme-app$ LORE_ORG=northwind-stag lore task list   # this shell
+~/work/website$ lore org use agency-stag          # machine-only, this repo
+~/work/website$ LORE_ORG=agency-stag lore task list   # this shell
 ```
 
 Normal work always resolves to the default-branch entry. Links, the roster and the global project exist per branch, so a staging entry needs its own `lore org link` and registrations.
@@ -1471,10 +1471,10 @@ F16: the id rule, the text rule (normaliser plus 8-word threshold) and the secre
 
 ```console
 $ lore share mem_0c12 --to repo
-This becomes visible to everyone with access to acme/app:
+This becomes visible to everyone with access to client/website:
   "Checkout must support INR and USD"
 Share it? [y/N] y
-✓ shared as mem_9a41 in acme/app .lore/data (the internal row mem_0c12 records the copy)
+✓ shared as mem_9a41 in client/website .lore/data (the internal row mem_0c12 records the copy)
 ```
 
 `lore share` always shows the text and asks. The copy gets a new id and no origin fields; the provenance is stored only in the internal row. Agent actors cannot pass `--yes`, so a prompt injected into a client-writable row ("run `lore share … --yes`") cannot make an agent share. `lore move` works the same way and tombstones the original.
@@ -1499,13 +1499,13 @@ Hooks are local and optional, so a determined or careless person can always leak
 | edits in the GitHub web UI | no local hook | the client CI check |
 | an agent writing internal text into a PR body, issue comment, chat or a screenshot | not a commit | the fixed "never quote" header in the render, `lore check pr-body`, and the agent's own instructions |
 | text paraphrased rather than copied | the text rule matches runs of words | nothing technical; this is a people problem |
-| a client-owned dev environment (client VM, Codespace, client CI runner) | `~/.lore/clones` and `config.yaml` sit on the client's machine | do not configure Northwind stores on client-owned machines; doctor warns when the hostname matches a configured `untrusted_hosts` pattern |
+| a client-owned dev environment (client VM, Codespace, client CI runner) | `~/.lore/clones` and `config.yaml` sit on the client's machine | do not configure agency stores on client-owned machines; doctor warns when the hostname matches a configured `untrusted_hosts` pattern |
 | an agent with file access reading another org's clone directly (`git -C ~/.lore/clones/…`) | the org barrier is in lore's loader, not on disk | run agents for different orgs as different OS users or containers |
 | backups of `~/.lore` and checkouts (Time Machine, iCloud) | outside lore | the offboarding checklist (§8, recipe 9) |
 
 **Leak cleanup runbook.** If an internal row reached a client repo's live ref: (1) `lore live purge <id>` writes the id to `_live/purged.json` on the live ref, so every clone drops it on its next fetch and never pushes it back (entries expire after 30 days; a clone that has not run since then could push it again, which doctor detects as a re-added purged id); (2) `lore live compact` removes it from the ref's history; (3) if it landed on `main`, it is a normal git history problem (revert plus, if needed, a history rewrite); (4) rotate anything secret. `lore live restore` never re-pushes a purged id or a row already on `origin/main`.
 
-**End of engagement.** A client asking for its data to be removed from Northwind's store needs a purge or history rewrite of that store's folder; with one store per client it is deleting one repo.
+**End of engagement.** A client asking for its data to be removed from the agency's store needs a purge or history rewrite of that store's folder; with one store per client it is deleting one repo.
 
 ## 7. Many agents, one mission
 
@@ -1518,14 +1518,14 @@ Several agents (Claude sessions on the Mac, tmux sessions on devbox, other tools
 | Block | What it is | Content or signal |
 |---|---|---|
 | **Agent actor** | one actor of kind `agent` per session label, with `owner_actor_id` and a label, on the org roster (F18); `LORE_ACTOR` + `LORE_SESSION` set by `lore agent start` | content (roster) |
-| **Assignment** | `--assign @frontend` sets `assigned_team`; `--assign @dev1` sets `assignee`. In a linked client repo `--assign @team` is refused (team names are internal; TEAM-030): assign a person, or keep the task internal with `--to <org>` | content |
+| **Assignment** | `--assign @frontend` sets `assigned_team`; `--assign @alice` sets `assignee`. In a linked client repo `--assign @team` is refused (team names are internal; TEAM-030): assign a person, or keep the task internal with `--to <org>` | content |
 | **Claim** | `lore task claim` / `lore task next`: a claim signal with `claim_token`, fenced by `claim_epoch` (F7) | signal (+ one `claim_log` entry) |
 | **Heartbeat** | `lore task heartbeat --daemon` or a tool hook renews the lease; alive only, never progress | signal |
 | **Reclaim** | an expired claim (time and unchanged `renewed_seq`) is free; `attempts` counts holders (first claim 1, each reclaim +1); past `max_attempts` the task is `blocked` | signal + content |
 | **Dependencies** | `--after tsk_30[:done\|:merged]`; cycles refused at add and edit, re-checked after merges | content (`blocked_by`) |
 | **Ready queue** | `lore task next` (§7.3) | view |
 | **Notes** | `lore task note tsk_31 "route + loader done"`: progress checkpoints (comments) | content |
-| **Handoffs** | `lore handoff add --for @frontend-2 --task tsk_31 "…"` over the existing table (`dbent/schema/handoffs.go:19`–`22`) | content |
+| **Handoffs** | `lore handoff add --for @agent-frontend-2 --task tsk_31 "…"` over the existing table (`dbent/schema/handoffs.go:19`–`22`) | content |
 | **Findings** | `lore finding add --mission mis_12 "…"`: a memory that inherits the mission's project and liveness | content |
 | **Gates** | fields `gate: required → requested → approved`, `approved_by`, `approved_at`, `approved_hash`; `lore gate request` mid-task, `lore gate approve` by a human | content |
 | **Time boxes** | `--timebox 60m`: active lease time summed across holders | content (field) + view |
@@ -1568,25 +1568,25 @@ out:  claimed → the task, its notes, its handoffs, its work_branch to fetch
 - **Claim log:** each task keeps its last 20 claim events (claim, reclaim with previous holder, release, revoke, approve) in `claim_log`, which lands with the task; bounded by design (principle 1).
 - **Version floor:** `_live/meta.json` and `_meta.json` carry `min_lore_version` and `features: [live, signals]`; older binaries go read-only. The gate is a set of fields, not a new status, so an old binary reading the row does not crash on an unknown enum value (`TaskStatus` today: `dbent/schema/enums.go:51`–`55`).
 
-### 7.5 Worked example: four agents on one Globex mission
+### 7.5 Worked example: four agents on one client 2 mission
 
-**Setup.** Alice (human owner) and a coordinator agent on the Mac; workers in tmux on devbox: `backend-1` in `globex-api`, `frontend-1` in `globex-web`, `proxy-1` in `globex-proxy`. All three repos are linked to `northwind/lore globex/` (an internal group project, so all coordination data is in Northwind's store; the Globex repos gain nothing but landed code). Tasks are live by default, so plan rows sit on `refs/lore/live/main` (folder `globex/`) and land when finished; claims sit on `refs/lore/signals/main`.
+**Setup.** Alice (human owner) and a coordinator agent on the Mac; workers in tmux on devbox: `agent-backend` in `api`, `agent-frontend` in `app`, `agent-infra` in `infra`. All three repos are linked to `agency/notes client2/` (an internal group project, so all coordination data is in the agency's store; the client 2 repos gain nothing but landed code). Tasks are live by default, so plan rows sit on `refs/lore/live/main` (folder `client2/`) and land when finished; claims sit on `refs/lore/signals/main`.
 
 ```console
 # 1. the coordinator writes the plan once (a re-run is a no-op thanks to the keys)
-coord$ lore agent start --label coord --owner @alice
-coord$ lore plan apply invite.yaml
-✓ mis_12 Invite landing page → northwind/lore globex/ (live, pushed)
+agent-coord$ lore agent start --label agent-coord --owner @alice
+agent-coord$ lore plan apply invite.yaml
+✓ mis_12 Invite landing page → agency/notes client2/ (live, pushed)
   tsk_30 invite mutation + email       repo backend   timebox 60m
   tsk_31 invite landing route          repo frontend  after tsk_30 (merged, other repo)  timebox 60m
   tsk_32 allow /invite on the proxy    repo proxy
   tsk_33 deploy to staging             role coordinator  after tsk_31,tsk_32  gate required
-coord$ lore task claim mis_12          # coordinator lease on the mission
+agent-coord$ lore task claim mis_12          # coordinator lease on the mission
 ```
 
 ```yaml
 # invite.yaml
-mission: {key: invite, title: "Invite landing page", to: northwind/globex}
+mission: {key: invite, title: "Invite landing page", to: agency/client2}
 tasks:
   - {key: backend,  title: "invite mutation + email",    repo: backend,  timebox: 60m}
   - {key: frontend, title: "invite landing route",       repo: frontend, after: [backend], timebox: 60m}
@@ -1596,65 +1596,65 @@ tasks:
 
 ```console
 # 2. each worker starts the same way
-backend-1$  lore agent start --label backend-1 --owner @alice && lore inbox && lore task next --mission mis_12 --repo backend
+agent-backend$  lore agent start --label agent-backend --owner @alice && lore inbox && lore task next --mission mis_12 --repo backend
 ✓ claimed tsk_30 invite mutation + email (lease 20m); heartbeat running
-frontend-1$ lore task next --mission mis_12 --repo frontend
-nothing ready: tsk_31 waits for tsk_30 to be merged (claimed by backend-1, 3 min ago); exit 10
-proxy-1$    lore task next --mission mis_12 --repo proxy --owns nginx/sites/invite.conf
+agent-frontend$ lore task next --mission mis_12 --repo frontend
+nothing ready: tsk_31 waits for tsk_30 to be merged (claimed by agent-backend, 3 min ago); exit 10
+agent-infra$    lore task next --mission mis_12 --repo proxy --owns nginx/sites/invite.conf
 ✓ claimed tsk_32 allow /invite on the proxy
 ```
 
 ```console
 # 3. a finding one agent learns, every agent sees (it inherits mis_12's project and liveness)
-proxy-1$ lore finding add --mission mis_12 "the proxy strips X-Forwarded-Host; links must use the public base URL"
-✓ mem_51 → northwind/lore globex/ (live, pushed)
-backend-1$ lore inbox
-mis_12  finding  proxy-1  the proxy strips X-Forwarded-Host; links must use the public base URL
+agent-infra$ lore finding add --mission mis_12 "the proxy strips X-Forwarded-Host; links must use the public base URL"
+✓ mem_51 → agency/notes client2/ (live, pushed)
+agent-backend$ lore inbox
+mis_12  finding  agent-infra  the proxy strips X-Forwarded-Host; links must use the public base URL
 ```
 
 ```console
 # 4. backend finishes; frontend becomes ready once the code is on main
-backend-1$ lore task note tsk_30 "mutation inviteUser(email) returns token; email template invite.html"
-backend-1$ lore task done tsk_30 --pr 412 --lesson "invite tokens expire in 48h, documented in README"
-✓ tsk_30 done (pr #412); lesson → northwind/lore globex/ mem_52
+agent-backend$ lore task note tsk_30 "mutation inviteUser(email) returns token; email template invite.html"
+agent-backend$ lore task done tsk_30 --pr 412 --lesson "invite tokens expire in 48h, documented in README"
+✓ tsk_30 done (pr #412); lesson → agency/notes client2/ mem_52
 … Alice merges PR #412; tsk_30 is a store task, so its commits carry no Lore-Task trailer (F9, Q13); the next lore command finds the recorded commit on origin/main by ancestry, or the PR through the GitHub adapter …
-frontend-1$ lore task next --mission mis_12 --repo frontend
-✓ claimed tsk_31 invite landing route (lease 20m); work branch agent/frontend-1/invite-route
+agent-frontend$ lore task next --mission mis_12 --repo frontend
+✓ claimed tsk_31 invite landing route (lease 20m); work branch agent-frontend/invite-route
 ```
 
 ```console
 # 5. an agent dies; its work is picked up, not lost
-(frontend-1's session crashes after `lore task note tsk_31 "route + loader done, form next"`, which pushed its work branch)
-coord$ lore inbox
-mis_12  EXPIRED  tsk_31 claimed by frontend-1, lease expired 4 min ago; work branch pushed (agent/frontend-1/invite-route)
-coord$ (starts a replacement session in tmux on devbox)
-frontend-2$ lore agent start --label frontend-2 --owner @alice && lore task next --mission mis_12 --repo frontend
-✓ claimed tsk_31 (reclaim, attempt 2; previous holder frontend-1 timed out)
-  read its notes: lore task show tsk_31 · fetch its work: git fetch origin agent/frontend-1/invite-route
+(agent-frontend's session crashes after `lore task note tsk_31 "route + loader done, form next"`, which pushed its work branch)
+agent-coord$ lore inbox
+mis_12  EXPIRED  tsk_31 claimed by agent-frontend, lease expired 4 min ago; work branch pushed (agent-frontend/invite-route)
+agent-coord$ (starts a replacement session in tmux on devbox)
+agent-frontend-2$ lore agent start --label agent-frontend-2 --owner @alice && lore task next --mission mis_12 --repo frontend
+✓ claimed tsk_31 (reclaim, attempt 2; previous holder agent-frontend timed out)
+  read its notes: lore task show tsk_31 · fetch its work: git fetch origin agent-frontend/invite-route
 ```
 
 ```console
 # 6. the gate stops agents until a human says go
-coord$ lore task next --mission mis_12 --role coordinator
+agent-coord$ lore task next --mission mis_12 --role coordinator
 nothing ready: tsk_33 deploy to staging: gate needs approval (lore gate approve tsk_33); exit 10
 alice$  lore gate approve tsk_33
 ✓ tsk_33 approved by Alice Doe (identity file), hash 3f1a…
-coord$ lore task next --mission mis_12 --role coordinator
+agent-coord$ lore task next --mission mis_12 --role coordinator
 ✓ claimed tsk_33 deploy to staging
 ```
 
 ```console
-# 7. the whole mission at a glance, from any Globex repo
+# 7. the whole mission at a glance, from any client 2 repo
 $ lore mission status mis_12
 mis_12 Invite landing page   4 tasks · 3 done · 1 claimed · 0 waiting · 0 gated · 0 blocked
-  ✓ tsk_30  backend   backend-1   41m (timebox 60m)   merged 11:52
-  ✓ tsk_31  frontend  frontend-2  55m (timebox 60m; frontend-1 18m + frontend-2 37m)   merged 13:40
-  ✓ tsk_32  proxy     proxy-1     18m   merged 12:05
-  ▶ tsk_33  -         coord       working (until 14:20) · approved by Alice 13:44
-findings 1 · handoffs 0 · lessons 2 (northwind/lore globex/)
+  ✓ tsk_30  backend   agent-backend   41m (timebox 60m)   merged 11:52
+  ✓ tsk_31  frontend  agent-frontend-2  55m (timebox 60m; agent-frontend 18m + agent-frontend-2 37m)   merged 13:40
+  ✓ tsk_32  proxy     agent-infra     18m   merged 12:05
+  ▶ tsk_33  -         agent-coord       working (until 14:20) · approved by Alice 13:44
+findings 1 · handoffs 0 · lessons 2 (agency/notes client2/)
 ```
 
-Walk-through against the rules: plan rows are content on the store's live ref (rule 2); claims and heartbeats are signals (rule 10) and never land; `tsk_31` waits for **merged** because its dependency is in another repo (F9); frontend-2 is a new agent actor, registered by `lore agent start` (F18); the zombie frontend-1, if it woke up, would fail with `E_LOST_CLAIM` (F7); the approval comes from Alice's identity file, not from an env var (§7.4); every finished task lands on `northwind/lore` `main` in `globex/.lore/data` with its outcome and claim log (F5).
+Walk-through against the rules: plan rows are content on the store's live ref (rule 2); claims and heartbeats are signals (rule 10) and never land; `tsk_31` waits for **merged** because its dependency is in another repo (F9); agent-frontend-2 is a new agent actor, registered by `lore agent start` (F18); the zombie agent-frontend, if it woke up, would fail with `E_LOST_CLAIM` (F7); the approval comes from Alice's identity file, not from an env var (§7.4); every finished task lands on `agency/notes` `main` in `client2/.lore/data` with its outcome and claim log (F5).
 
 In a single-repo mission in the org's **own** repo, the same commands work with the repo's own `refs/lore/live` and `refs/lore/signals`.
 
@@ -1665,7 +1665,7 @@ When the task belongs to a linked client repo, the client sees only what a clien
 | Data | Default home | Why |
 |---|---|---|
 | the task row: title, status, assignee, `done_*`, `merged_at`, and `claim_epoch` (a bare number for fencing; side effect 41) | the client repo (live, then `main`) | the client tracks the work |
-| claims, leases, heartbeats, time box | the **store's** signals ref, folder of the linked project, keyed `acme/app:tsk_01` | how the agency runs agents is internal |
+| claims, leases, heartbeats, time box | the **store's** signals ref, folder of the linked project, keyed `client/website:tsk_01` | how the agency runs agents is internal |
 | agent and human work notes, handoffs, claim log, `attempts`, `work_branch`, time box | a linked internal row in the store project, pointing at the client task (internal → client, allowed by F15) | same |
 | the assignee's actor file | a human: the projection `{id, display name, kind}` in the client repo. An agent: the projection of its owning human (or the org display name when it has no owner); the agent's label and actor never appear | the client can see who is on it, nothing more; how many agents run is internal (fail closed) |
 
@@ -1728,10 +1728,10 @@ $ lore init && lore rule add --body "use pnpm"
 **Config:** none beyond the defaults (tasks are live).
 
 ```console
-dev1$ lore actor register        # each developer once; with no org the actor row is live, so @dev1 resolves on every clone
-dev2$ lore task add "review the retry logic" --assign @dev3      # live, pushed
-dev3$ lore task list --mine                                       # sees it on the next command, any branch
-dev3$ lore task done tsk_05 --commit 4e1d2aa                      # finished → lands on main (direct, or rides dev3's next push)
+alice$ lore actor register        # each developer once; with no org the actor row is live, so @alice resolves on every clone
+bob$ lore task add "review the retry logic" --assign @carol      # live, pushed
+carol$ lore task list --mine                                       # sees it on the next command, any branch
+carol$ lore task done tsk_05 --commit 4e1d2aa                      # finished → lands on main (direct, or rides carol's next push)
 ```
 
 **Result:** open tasks are shared at once; finished tasks are in `main`'s `.lore/data` and leave live once `main` holds the same content; rules and decisions travel with the code unless someone adds `--live`.
@@ -1740,38 +1740,38 @@ dev3$ lore task done tsk_05 --commit 4e1d2aa                      # finished →
 
 <Details summary="3. Client project with internal notes">
 
-**Situation:** Northwind builds `acme/app`; Acme can read the repo. Northwind wants notes like "send the estimate before the call" that Acme never sees.
+**Situation:** The agency builds `client/website`; the client can read the repo. The agency wants notes like "send the estimate before the call" that the client never sees.
 
-**Config:** the `northwind` entry (§5.2) and one link, made once by anyone at Northwind:
+**Config:** the `agency` entry (§5.2) and one link, made once by anyone at the agency:
 
 ```console
-~/work/acme-app$ lore org link northwind --project acme
-~/work/acme-app$ lore memory add --body "they approve faster on WhatsApp"     # → northwind/lore acme/ (default)
-~/work/acme-app$ lore rule add --body "money is stored in minor units" --to repo
-~/work/acme-app$ lore render                                           # .lore/LORE.md: repo rows; ~/.lore/render/…: the rest
+~/work/website$ lore org link agency --project client
+~/work/website$ lore memory add --body "they approve faster on WhatsApp"     # → agency/notes client/ (default)
+~/work/website$ lore rule add --body "Run the tests before you push" --to repo
+~/work/website$ lore render                                           # .lore/LORE.md: repo rows; ~/.lore/render/…: the rest
 ```
 
-**Result:** the agent sees everything (through the `CLAUDE.local.md` import line); `acme/app` contains only the rule, and the checkout holds no internal text, so a Docker build or ZIP carries none. The commit check (F16) backs it up.
+**Result:** the agent sees everything (through the `CLAUDE.local.md` import line); `client/website` contains only the rule, and the checkout holds no internal text, so a Docker build or ZIP carries none. The commit check (F16) backs it up.
 
 </Details>
 
 <Details summary="4. Contractor scoped to one client">
 
-**Situation:** a contractor works only on Acme and must not see other clients.
+**Situation:** a contractor works only on the client and must not see other clients.
 
-**Config:** Northwind uses one store per client (recipe 14). The contractor gets access to the company store and Acme's store only:
+**Config:** The agency uses one store per client (recipe 14). The contractor gets access to the company store and the client's store only:
 
 ```yaml
 orgs:
-  - name: northwind
-    identity: {key: "human:contractor@northwind.example", name: "Contractor Name", handle: cont1}
+  - name: agency
+    identity: {key: "human:contractor@agency.example", name: "Contractor Name", handle: bob}
     stores:
-      - {url: "git@github.com:northwind/lore-org", org_folder: "."}
-      - {url: "git@github.com:northwind/lore-acme"}
-    repos: [github.com/acme/app]
+      - {url: "git@github.com:agency/notes", org_folder: "."}
+      - {url: "git@github.com:agency/notes-client"}
+    repos: [github.com/client/website]
 ```
 
-**Result:** their lore shows company rules, the roster and Acme's internal notes, and nothing else; GitHub permissions are the access control. Offboarding them is removing two repo permissions (recipe 9).
+**Result:** their lore shows company rules, the roster and the client's internal notes, and nothing else; GitHub permissions are the access control. Offboarding them is removing two repo permissions (recipe 9).
 
 </Details>
 
@@ -1783,30 +1783,30 @@ orgs:
 
 ```yaml
 personal:
-  store: git@github.com:khanakia/lore-me
+  store: git@github.com:alice/lore-me
 ```
 
-**Result:** notes written on the Mac appear on devbox on the next command there. A note written in a Northwind repo is filed under `northwind/` and loads only in Northwind repos; `--everywhere` files it under `everywhere/` (F17).
+**Result:** notes written on the Mac appear on devbox on the next command there. A note written in an agency repo is filed under `agency/` and loads only in agency repos; `--everywhere` files it under `everywhere/` (F17).
 
 </Details>
 
-<Details summary="6. Globex feature across backend, frontend, proxy">
+<Details summary="6. Client 2 feature across backend, frontend, proxy">
 
 **Situation:** one feature, three repos.
 
-**Config:** the `globex/` project in Northwind's store, linked from every Globex repo:
+**Config:** the `client2/` project in the agency's store, linked from every client 2 repo:
 
 ```console
-globex-api$  lore org link northwind --project globex
-globex-web$ lore org link northwind --project globex
-globex-proxy$       lore org link northwind --project globex
-$ lore mission add "Invite landing page" --to northwind/globex --key invite
-$ lore task add "invite mutation" --to northwind/globex --mission mis_12 --repo backend --key invite/backend
-$ lore task add "landing route" --to northwind/globex --mission mis_12 --repo frontend --after tsk_30 --key invite/frontend
-$ lore task list --from northwind/globex --all-repos
+api$  lore org link agency --project client2
+app$ lore org link agency --project client2
+infra$       lore org link agency --project client2
+$ lore mission add "Invite landing page" --to agency/client2 --key invite
+$ lore task add "invite mutation" --to agency/client2 --mission mis_12 --repo backend --key invite/backend
+$ lore task add "landing route" --to agency/client2 --mission mis_12 --repo frontend --after tsk_30 --key invite/frontend
+$ lore task list --from agency/client2 --all-repos
 ```
 
-**Result:** the mission and tasks are live on `refs/lore/live/main` (folder `globex/`) and land in `globex/.lore/data` when finished; each repo shows its part; the frontend task waits until the backend task is merged (F9).
+**Result:** the mission and tasks are live on `refs/lore/live/main` (folder `client2/`) and land in `client2/.lore/data` when finished; each repo shows its part; the frontend task waits until the backend task is merged (F9).
 
 </Details>
 
@@ -1824,11 +1824,11 @@ $ lore rule add --body "never run migrations from the app container" --live   # 
 
 <Details summary="8. The client's own developers also use lore">
 
-**Situation:** Acme's developers install lore in `acme/app`.
+**Situation:** The client's developers install lore in `client/website`.
 
-**Config:** theirs is empty, or lists Acme's own org.
+**Config:** theirs is empty, or lists the client's own org.
 
-**Result:** they see the client repo's rows and live rows, including tasks Northwind agents finish (status, assignee, outcome). They cannot clone `northwind/lore`, so its projects, the link and the agent claims do not exist for them, and nothing in `acme/app` names them.
+**Result:** they see the client repo's rows and live rows, including tasks agency agents finish (status, assignee, outcome). They cannot clone `agency/notes`, so its projects, the link and the agent claims do not exist for them, and nothing in `client/website` names them.
 
 </Details>
 
@@ -1854,8 +1854,8 @@ $ lore rule add --body "never run migrations from the app container" --live   # 
 
 ```console
 $ lore memory add --body "prune the pnpm store before the Docker build or the image doubles" --to me
-$ lore share mem_1a2b --to northwind        # the linked internal project (asks first) → new id mem_7c01
-$ lore share mem_7c01 --to northwind/org    # every Northwind repo (asks first) → new id mem_7c02
+$ lore share mem_1a2b --to agency        # the linked internal project (asks first) → new id mem_7c01
+$ lore share mem_7c01 --to agency/org    # every agency repo (asks first) → new id mem_7c02
 ```
 
 **Result:** each audience has its own row with its own id; the earlier rows record where they were shared. Nothing points from a wider audience back to a narrower one.
@@ -1864,19 +1864,19 @@ $ lore share mem_7c01 --to northwind/org    # every Northwind repo (asks first) 
 
 <Details summary="11. One person, two companies">
 
-**Situation:** Alice works for Northwind and Beta Labs on the same laptop, with a different email in each.
+**Situation:** Alice works for the agency and client 3 on the same laptop, with a different email in each.
 
 **Config:** the three-entry `config.yaml` from §5.2.
 
 ```console
-$ cd ~/work/acme-app && lore whoami
-org        northwind   (matched by: link in northwind/lore acme/, project id + remote)
-identity   Alice Doe <human:alice@northwind.example>   act_3f9c
-$ cd ~/work/betalabs-api && lore whoami
-org        betalabs     (matched by: own pattern github.com/betalabs/*)
-identity   Alice Doe <human:alice@betalabs.example>     act_5d10
+$ cd ~/work/website && lore whoami
+org        agency   (matched by: link in agency/notes client/, project id + remote)
+identity   Alice Doe <human:alice@agency.example>   act_3f9c
+$ cd ~/work/client3-api && lore whoami
+org        client3     (matched by: own pattern github.com/client3/*)
+identity   Alice Doe <human:alice@client3.example>     act_5d10
 $ cd ~/work/forked-tool && lore whoami
-org        none         (no rule matched)   hint: lore org use betalabs
+org        none         (no rule matched)   hint: lore org use client3
 ```
 
 **Result:** each repo loads one company's stores and identity, never both. Personal notes follow the same split (F17).
@@ -1885,37 +1885,37 @@ org        none         (no rule matched)   hint: lore org use betalabs
 
 <Details summary="12. Internal tasks the client never sees">
 
-**Situation:** Alice is in `acme/app` on any branch and needs dev1 to send an invoice reminder before the demo. Acme must never see that task.
+**Situation:** Alice is in `client/website` on any branch and needs bob to send an invoice reminder before the demo. The client must never see that task.
 
-**Config:** the `northwind` entry and the `acme` link from recipe 3.
+**Config:** the `agency` entry and the `client` link from recipe 3.
 
 ```console
-alice (acme/app, feat/checkout)$ lore task add "send invoice reminder before demo" --to northwind --assign @dev1 --ref tsk_12 --ref commit:a1b2c3
-✓ tsk_50 → northwind/lore acme/ (live, pushed)
-dev1 (acme/app, feat/login)$ lore task list
+alice (client/website, feat/checkout)$ lore task add "send invoice reminder before demo" --to agency --assign @bob --ref tsk_12 --ref commit:a1b2c3
+✓ tsk_50 → agency/notes client/ (live, pushed)
+bob (client/website, feat/login)$ lore task list
 FROM               ID      TITLE                                 STATE   WHO
 [app]              tsk_12  checkout redesign                     in progress  alice
-[northwind/acme]  tsk_50  send invoice reminder before demo     todo    dev1
-dev1$ lore task done tsk_50          # F1 finds it in the store's live folder; it lands on the store's main
+[agency/client]  tsk_50  send invoice reminder before demo     todo    bob
+bob$ lore task done tsk_50          # F1 finds it in the store's live folder; it lands on the store's main
 ```
 
-**Result:** the task, its references to `tsk_12` and commit `a1b2c3`, and its outcome live only in the store. `acme/app` gains nothing.
+**Result:** the task, its references to `tsk_12` and commit `a1b2c3`, and its outcome live only in the store. `client/website` gains nothing.
 
 </Details>
 
 <Details summary="13. Same store, separate staging lore">
 
-**Situation:** Northwind wants a staging lore (test notes, staging-only tasks) that never mixes with the real one, without a second store repo.
+**Situation:** The agency wants a staging lore (test notes, staging-only tasks) that never mixes with the real one, without a second store repo.
 
-**Config:** the `northwind-stag` entry from §5.2 (same URL, `branch: staging`). It has no automatic matching (Q-a).
+**Config:** the `agency-stag` entry from §5.2 (same URL, `branch: staging`). It has no automatic matching (Q-a).
 
 ```console
-~/work/acme-app$ lore store init git@github.com:northwind/lore --branch staging   # once: creates the branch
-~/work/acme-app$ lore org use northwind-stag            # machine-only, this repo
-~/work/acme-app$ lore org link northwind-stag --project acme   # links exist per store branch
-~/work/acme-app$ lore task add "seed staging with demo data" --to northwind-stag
-✓ tsk_61 → northwind/lore acme/ on branch staging (live on refs/lore/live/staging, pushed)
-~/work/acme-app$ lore org use northwind                 # back to normal work
+~/work/website$ lore store init git@github.com:agency/notes --branch staging   # once: creates the branch
+~/work/website$ lore org use agency-stag            # machine-only, this repo
+~/work/website$ lore org link agency-stag --project client   # links exist per store branch
+~/work/website$ lore task add "seed staging with demo data" --to agency-stag
+✓ tsk_61 → agency/notes client/ on branch staging (live on refs/lore/live/staging, pushed)
+~/work/website$ lore org use agency                 # back to normal work
 ```
 
 **Result:** the row lives on the store's `staging` branch and its live ref; nobody on the `main` entry sees it, and lore never moves it to `main`.
@@ -1930,29 +1930,29 @@ dev1$ lore task done tsk_50          # F1 finds it in the store's live folder; i
 
 ```yaml
 stores:
-  - {url: "git@github.com:northwind/lore", org_folder: org}     # org/, acme/, globex/, betaclient/
+  - {url: "git@github.com:agency/notes", org_folder: org}     # org/, client/, client2/, betaclient/
 ```
 
 **Config, one per client:**
 
 ```yaml
 stores:
-  - {url: "git@github.com:northwind/lore-org", org_folder: "."}
-  - {url: "git@github.com:northwind/lore-acme"}
-  - {url: "git@github.com:northwind/lore-globex"}
+  - {url: "git@github.com:agency/notes", org_folder: "."}
+  - {url: "git@github.com:agency/notes-client"}
+  - {url: "git@github.com:agency/notes-client2"}
 ```
 
 **Config, mixed:**
 
 ```yaml
 stores:
-  - {url: "git@github.com:northwind/lore", org_folder: org}     # most clients
-  - {url: "git@github.com:northwind/lore-acme"}                 # NDA client with a contractor
+  - {url: "git@github.com:agency/notes", org_folder: org}     # most clients
+  - {url: "git@github.com:agency/notes-client"}                 # NDA client with a contractor
 ```
 
 ```console
-$ lore store init git@github.com:northwind/lore-acme       # new, empty repo; writes lore-store.yaml
-$ cd ~/work/acme-app && lore org link northwind --project acme --store git@github.com:northwind/lore-acme
+$ lore store init git@github.com:agency/notes-client       # new, empty repo; writes lore-store.yaml
+$ cd ~/work/website && lore org link agency --project client --store git@github.com:agency/notes-client
 ```
 
 **Result:** the same commands work in every layout; lore finds the linked project in whichever store holds the link (F13). Folder names must be unique across stores. Recommended for agencies with contractors or NDAs: one store per client.
@@ -1961,26 +1961,26 @@ $ cd ~/work/acme-app && lore org link northwind --project acme --store git@githu
 
 <Details summary="15. Agents working on a client's task">
 
-**Situation:** a Northwind agent fixes a bug tracked in `acme/app`; Acme should see the task's progress, not how Northwind runs agents.
+**Situation:** An agency agent fixes a bug tracked in `client/website`; the client should see the task's progress, not how the agency runs agents.
 
 ```console
-backend-1 (acme/app)$ lore task claim tsk_14                     # claim on northwind/lore signals/main, folder acme/
-backend-1$ lore task note tsk_14 "reproduced; root cause in rounding"   # internal row in northwind/lore acme/, points at acme/app:tsk_14
-backend-1$ lore task done tsk_14 --pr 88
-backend-1$ lore task note tsk_14 "fixed rounding; see PR #88" --to repo  # one note the client should see
+agent-backend (client/website)$ lore task claim tsk_14                     # claim on agency/notes signals/main, folder client/
+agent-backend$ lore task note tsk_14 "reproduced; root cause in rounding"   # internal row in agency/notes client/, points at client/website:tsk_14
+agent-backend$ lore task done tsk_14 --pr 88
+agent-backend$ lore task note tsk_14 "fixed rounding; see PR #88" --to repo  # one note the client should see
 ```
 
-**Result:** `acme/app` holds the task with status, assignee projection, `done_pr` and later `merged_at`, plus the one shared note. Claims, heartbeats, the time box and the working notes are in Northwind's store (§7.6).
+**Result:** `client/website` holds the task with status, assignee projection, `done_pr` and later `merged_at`, plus the one shared note. Claims, heartbeats, the time box and the working notes are in the agency's store (§7.6).
 
 </Details>
 
 <Details summary="16. A client monorepo with several lore projects">
 
-**Situation:** `acme/app` has a root project and a project in `web/`.
+**Situation:** `client/website` has a root project and a project in `web/`.
 
 ```console
-~/work/acme-app$ lore task add "fix header" --live          # root project
-~/work/acme-app/web$ lore rule add --body "use the design tokens" --live
+~/work/website$ lore task add "fix header" --live          # root project
+~/work/website/web$ lore rule add --body "use the design tokens" --live
 $ git ls-tree -r --name-only refs/lore/live
 _live/epoch
 _live/meta.json
@@ -2047,11 +2047,11 @@ Reused, not reinvented: the e2e harness `saas/cmd/cli/sync_e2e_test.go:86` (`new
 | E5 | four agents race `task next`; one winner per task; kill one; reclaim after ttl + grace; zombie `done` exits 12 | F7, §7.3 |
 | E6 | compaction while A holds a pending write | F8 |
 | E7 | squash-merge with trailer → dependent becomes ready | F9 |
-| E8 | two-org `HOME` with acme, betalabs, fork, staging: `whoami` in each | F10 |
+| E8 | two-org `HOME` with client, client3, fork, staging: `whoami` in each | F10 |
 | E9 | link on A, B sees the internal project; fork with same id does not | F11 |
 | E10 | a code repo listed under `stores:` is refused | F12 |
 | E11 | cookbook 3 plus a pasted internal sentence in `src/`: blocked; CI mode prints no internal names; the checkout contains no internal text after `lore render` | F16, F20 |
-| E12 | personal note in acme repo absent in betalabs repo | F17 |
+| E12 | personal note in client repo absent in client3 repo | F17 |
 | E13 | upgrade the binary over old TOML files | F19 |
 
 ### 9.4 Debug tools
@@ -2284,7 +2284,7 @@ Git refuses `refs/lore/live/web` while `refs/lore/live` exists, and branch names
 
 ### Decision
 
-A code repo has one `refs/lore/live`; a store has one `refs/lore/live/<branch>` per store branch and no plain `refs/lore/live`. Projects are folders in the ref's tree (`_root/`, `web/`, `acme/`). A store `branch:` may not contain `/`; folder names beginning with `_` are reserved (`_root`, `_live`). Code branch names are unrestricted. The signals ref follows the same layout.
+A code repo has one `refs/lore/live`; a store has one `refs/lore/live/<branch>` per store branch and no plain `refs/lore/live`. Projects are folders in the ref's tree (`_root/`, `web/`, `client/`). A store `branch:` may not contain `/`; folder names beginning with `_` are reserved (`_root`, `_live`). Code branch names are unrestricted. The signals ref follows the same layout.
 
 ### Consequences
 
@@ -2297,7 +2297,7 @@ A code repo has one `refs/lore/live`; a store has one `refs/lore/live/<branch>` 
 
 ### Context
 
-An earlier draft put a group project inside a code repo (`globex-docs`).
+An earlier draft put a group project inside a code repo (`docs`).
 
 ### Decision
 
@@ -2306,7 +2306,7 @@ A store is always a separate lore-only repo with a `lore-store.yaml` marker. `lo
 ### Consequences
 
 - Store commits never reach code history, CI or deploys; code repos are never bare-cloned by lore.
-- The Globex docs group moves to a folder in a store.
+- The client 2 docs group moves to a folder in a store.
 
 </ADR>
 
@@ -2417,7 +2417,7 @@ An org entry whose store branch is not the store's default branch is ignored by 
 
 ### Consequences
 
-- No ambiguity between `northwind` and `northwind-stag`; side effect 18 closed.
+- No ambiguity between `agency` and `agency-stag`; side effect 18 closed.
 
 </ADR>
 
@@ -2605,7 +2605,7 @@ One place for every known side effect. Rows closed by a decision stay listed so 
 | 1 | `refs/lore/live` and `refs/lore/live/<folder>` cannot both exist | one ref per repo, projects as folders (TEAM-013) | closed by D1 | 2026-11-02 |
 | 2 | "created on `main` lands at once" landed claims and store rows instantly | trigger dropped (TEAM-015) | closed by D2 | 2026-11-02 |
 | 3 | a protected store branch blocks landing (nothing to ride on) | setup requirement: store branches accept direct pushes; `lore store doctor` checks; otherwise rows wait in live | handled | 2026-11-02 |
-| 4 | `--to northwind` is ambiguous when a repo has two links | the link marked `--default` is used; no default → refuse and list the candidates (TEAM-032) | closed by Q6 | 2026-11-02 |
+| 4 | `--to agency` is ambiguous when a repo has two links | the link marked `--default` is used; no default → refuse and list the candidates (TEAM-032) | closed by Q6 | 2026-11-02 |
 | 5 | forks and template copies share the project id | links match on id and remote; `lore project reid` (F11) | handled | 2026-11-02 |
 | 6 | linking flips client guards for the whole team | confirmation; `--own` only for `own:` patterns (F11) | handled | 2026-11-02 |
 | 7 | the ride-along needs `post-commit`; a missed one costs an extra push | F6; measure how often the extra push happens | handled, to measure | 2026-11-02 |
@@ -2619,7 +2619,7 @@ One place for every known side effect. Rows closed by a decision stay listed so 
 | 15 | the "branch merged" trigger needed branch tracking | trigger dropped (TEAM-015) | closed by D5 | 2026-11-02 |
 | 16 | personal notes crossed org lines | filed by place (TEAM-021) | closed by D11 | 2026-11-02 |
 | 17 | `repos:` patterns and links could disagree | links are checked before patterns (F10 step 4 before 5) | handled | 2026-11-02 |
-| 18 | `northwind` and `northwind-stag` both matched every repo | staging entries are never matched automatically (TEAM-022) | closed by Q-a | 2026-11-02 |
+| 18 | `agency` and `agency-stag` both matched every repo | staging entries are never matched automatically (TEAM-022) | closed by Q-a | 2026-11-02 |
 | 19 | links, roster and global projects exist per store branch | documented; run `lore org link` and `lore actor register` once per branch | accepted | 2026-11-02 |
 | 20 | deleting a bare clone with unpushed work loses it | `lore store forget` refuses; doctor lists them | handled | 2026-11-02 |
 | 21 | delete versus edit produced partial rows | file-level rule before merge3 (F4) | handled | 2026-11-02 |
@@ -2696,15 +2696,15 @@ Yes, it already works: `main`'s `.lore/data` is the main database, a git merge i
 
 </Details>
 
-<Details summary="5. Can Northwind have one global memory and decision bank for all its repos?">
+<Details summary="5. Can the agency have one global memory and decision bank for all its repos?">
 
-Yes: a project in Northwind's store marked `"global": true` (usually the org folder) is read in every Northwind repo; rows marked `"enforce": true` are shown as company rules a repo cannot override, in the internal render only. Detail: F11, F20, §6.2.
+Yes: a project in the agency's store marked `"global": true` (usually the org folder) is read in every agency repo; rows marked `"enforce": true` are shown as company rules a repo cannot override, in the internal render only. Detail: F11, F20, §6.2.
 
 **Status:** decided — Updated 2026-11-02
 
 </Details>
 
-<Details summary="6. Can there be a Northwind team lore where each dev has his own user id, decentralised?">
+<Details summary="6. Can there be an agency team lore where each dev has his own user id, decentralised?">
 
 Yes. Each person and each agent session is an actor on the org's roster (in the org folder of the org's store), with an id derived from `stable_key`, so the same person gets the same id on every machine; `stable_key` is the person's email in that org. There is no server. Detail: F18, TEAM-029.
 
@@ -2744,9 +2744,9 @@ They will. `.lore/data` on `main` is the durable home of every row, tasks includ
 
 </Details>
 
-<Details summary="11. How does a task dev2 creates reach dev1's machine? It must be pushed to GitHub first, no?">
+<Details summary="11. How does a task bob creates reach alice's machine? It must be pushed to GitHub first, no?">
 
-Yes, it goes through GitHub, but lore does the push and the fetch itself: dev2's lore pushes `refs/lore/live` when the task is written, and dev1's lore fetches it on the next command (cached 60 s). No branch commit, no pull request. Detail: F2, F3.
+Yes, it goes through GitHub, but lore does the push and the fetch itself: bob's lore pushes `refs/lore/live` when the task is written, and alice's lore fetches it on the next command (cached 60 s). No branch commit, no pull request. Detail: F2, F3.
 
 **Status:** decided — Updated 2026-11-02
 
@@ -2754,7 +2754,7 @@ Yes, it goes through GitHub, but lore does the push and the fetch itself: dev2's
 
 <Details summary="12. A client can see the client repo. How do internal notes stay hidden but still tied to the project?">
 
-They live in Northwind's store, in an internal project linked to the client repo. The link is stored only in the store, the internal render and cache are outside the checkout, and lore shows both sides only to Northwind people. Detail: F11, F20, §6, cookbook 3 and 12.
+They live in the agency's store, in an internal project linked to the client repo. The link is stored only in the store, the internal render and cache are outside the checkout, and lore shows both sides only to agency people. Detail: F11, F20, §6, cookbook 3 and 12.
 
 **Status:** decided — Updated 2026-11-02
 
@@ -2792,9 +2792,9 @@ Yes: `.lore/lore.db` is one cache per checkout (each worktree has its own) holdi
 
 </Details>
 
-<Details summary="17. How do several repos (Globex backend, frontend, infra…) work as one unit?">
+<Details summary="17. How do several repos (Client 2 backend, frontend, infra…) work as one unit?">
 
-One internal project (`northwind/lore globex/`) linked from every Globex repo holds the cross-repo missions and facts; each task carries its repo, and `--all-repos` shows the whole product. Detail: cookbook 6, §7.5.
+One internal project (`agency/notes client2/`) linked from every client 2 repo holds the cross-repo missions and facts; each task carries its repo, and `--all-repos` shows the whole product. Detail: cookbook 6, §7.5.
 
 **Status:** decided — Updated 2026-11-02
 
@@ -2896,15 +2896,15 @@ No. It was renamed to `refs/lore/live` when the model changed from "announce cop
 
 </Details>
 
-<Details summary="30. How do internal tasks work: shared among Northwind, never seen by the client, never in the code repo?">
+<Details summary="30. How do internal tasks work: shared among the agency, never seen by the client, never in the code repo?">
 
-Write them with `--to northwind` from the client repo (or rely on the default): they go to the linked project's live folder in Northwind's store, every Northwind dev sees them labelled `[northwind/acme]`, and they land on the store branch when done. Nothing is written to the client repo. Detail: F14, cookbook 12.
+Write them with `--to agency` from the client repo (or rely on the default): they go to the linked project's live folder in the agency's store, every agency dev sees them labelled `[agency/client]`, and they land on the store branch when done. Nothing is written to the client repo. Detail: F14, cookbook 12.
 
 **Status:** decided — Updated 2026-11-02
 
 </Details>
 
-<Details summary="31. How does lore know which internal folder (acme/) belongs to which client repo, and can the internal store be live too?">
+<Details summary="31. How does lore know which internal folder (client/) belongs to which client repo, and can the internal store be live too?">
 
 `lore org link <org> --project <folder>` saves the client repo's project id and remote in that folder's `_meta.json` in the store; everyone's lore finds it through the link index. Stores are normal lore repos, so they have live refs (`refs/lore/live/<branch>`, one per store branch, projects as folders) and landing. Detail: F11, TEAM-013. With two links, `--to <org>` uses the one marked `--default`; with none, lore refuses and lists the candidates (TEAM-032).
 
@@ -2928,7 +2928,7 @@ Agents are per-session actors with an owner; tasks are claimed through signals w
 
 </Details>
 
-<Details summary="34. How many repos are inside the northwind org, and what do stores:, own: and repos: mean?">
+<Details summary="34. How many repos are inside the agency org, and what do stores:, own: and repos: mean?">
 
 An org has one or more **stores** (`stores:`, lore-only repos) and any number of code repos: its own (`own:` patterns) and clients' (`repos:` patterns, plus links). In a client repo without `--to`, `defaults.client_repos` decides the target:
 
@@ -2953,7 +2953,7 @@ One bare clone per store URL at `~/.lore/clones/<host>/<owner>/<repo>.git`, shar
 
 </Details>
 
-<Details summary="36. Can an org use the same store repo on a different branch, e.g. northwind-stag?">
+<Details summary="36. Can an org use the same store repo on a different branch, e.g. agency-stag?">
 
 Yes: a second entry with the same URL and `branch: staging` uses the same bare clone. That branch is a completely separate lore, and the staging entry is never matched automatically: choose it with `lore org use` or `LORE_ORG`. Detail: §5.4, TEAM-011, TEAM-022, cookbook 13.
 
@@ -2979,7 +2979,7 @@ No. One id is one file (`.lore/data/tasks/tsk_02.json`). Landing again overwrite
 
 <Details summary="39. How are signals 'binned' technically, and does lore still read them? What is assigned versus claimed?">
 
-Every signals write is a new commit **with no parent**, holding the complete current state, pushed with `--force-with-lease`. The ref then points only at that commit; the previous commit is unreachable and git's garbage collection deletes it. Expired signals are ignored by readers and left out of the next write. Lore reads signals on every view: `assignee` (who should do it) is content in the task row and lands; the claim (who is doing it now, until when) is a signal and never lands. Views show both: "assigned @frontend · ▶ working: frontend-2 (until 14:20)" or "EXPIRED". Detail: §3.5, F7, TEAM-016.
+Every signals write is a new commit **with no parent**, holding the complete current state, pushed with `--force-with-lease`. The ref then points only at that commit; the previous commit is unreachable and git's garbage collection deletes it. Expired signals are ignored by readers and left out of the next write. Lore reads signals on every view: `assignee` (who should do it) is content in the task row and lands; the claim (who is doing it now, until when) is a signal and never lands. Views show both: "assigned @frontend · ▶ working: agent-frontend-2 (until 14:20)" or "EXPIRED". Detail: §3.5, F7, TEAM-016.
 
 **Status:** decided (D4) — Updated 2026-11-02
 
@@ -3059,7 +3059,7 @@ Start each with `lore agent start --label <name> --owner @you` (its own actor an
 
 <Details summary="49. Can a repo hard-wire its org and project in a committed file?">
 
-Only in the org's own repos: `.lore/org.yaml` with names only (`org: northwind`, optional `project:`), never store URLs, accepted only when the remote matches the org's `own:` patterns and no store links the repo as a client. In client repos it is refused; their link lives inside the store (`lore org link`), so the client repo contains nothing about the org. Detail: F10, TEAM-023.
+Only in the org's own repos: `.lore/org.yaml` with names only (`org: agency`, optional `project:`), never store URLs, accepted only when the remote matches the org's `own:` patterns and no store links the repo as a client. In client repos it is refused; their link lives inside the store (`lore org link`), so the client repo contains nothing about the org. Detail: F10, TEAM-023.
 
 **Status:** decided (Q-b) — Updated 2026-11-02
 

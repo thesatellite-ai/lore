@@ -1,64 +1,66 @@
 # Small team in one repo
 
+**In short:** Alice and Bob (agency developers) work in one repo on different branches. When Bob gives Alice a task, she sees it on her next command, without waiting for a merge. When she finishes it, the task is saved on `main` by itself.
+
 ## The situation
 
-dev1 and dev2 work in one repo, `github.com/initech/billing`, each on their own feature branch. When dev2 gives dev1 a task, dev1 must see it now, not after dev2's branch merges.
+Alice and Bob work in one repo, `github.com/agency/billing`, each on their own feature branch. When Bob gives Alice a task, Alice must see it now, not after Bob's branch merges.
 
 ## The config
 
-None. Tasks are live by default, and with no org each developer registers on the repo's own roster so `@handles` work.
+None. Tasks are live by default: they go to a hidden list on GitHub that is not a branch (`refs/lore/live`), so every teammate sees them at once. With no org (company setup), each developer registers on the repo's own roster (the list of people and agents) so `@handles` work.
 
 ## The commands
 
-Each developer registers once. With no org, the actor row itself is live, so `@dev1` resolves on every clone after the next fetch:
+Each developer registers once. With no org, the roster entry itself is live. So `@alice` works on every clone after the next fetch:
 
 <!-- example: small-team#register -->
 ```console
-# dev1, in billing
+# alice, in billing
 $ lore actor register
-✓ act_7a67…9504 dev1 (@dev1) already registered (refreshed) in this repo
+✓ act_7a67…9504 alice (@alice) already registered (refreshed) in this repo
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
 
-# dev2, in billing
+# bob, in billing
 $ lore actor register
-✓ act_2ad3…f891 dev2 (@dev2) registered in this repo
+✓ act_2ad3…f891 bob (@bob) registered in this repo
 lore live: (live, pushed)
 lore live: landed on main (86dbae4); leaves live once main is fetched
 lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
 
-dev2, on `feat/payments`, gives dev1 a task; dev1, on `feat/login`, sees it. dev1's first command ran within a minute of their previous fetch, so it used the cached view; `lore sync` fetches at once:
+Bob, on `feat/payments`, gives Alice a task. Alice, on `feat/login`, sees it. Her first command ran within 60 seconds of her previous fetch, so it used the cached view. `lore sync` fetches at once:
 
 <!-- example: small-team#assign-across-branches -->
 ```console
-# dev2, in billing
-$ git switch -q -c feat/payments && lore task add 'review the retry logic' --assign @dev1
-✓ tsk_162d…9666 tsk_162d…9666 — review the retry logic [medium]
+# bob, in billing
+$ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
+✓ tsk_162d…9666 — check the checkout page on a phone [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
 
-# dev1, in billing
+# alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-○ tsk_162d…9666 review the retry logic [medium]
+○ tsk_162d…9666 check the checkout page on a phone [medium]
 $ lore inbox
--  assigned              tsk_162d…9666  review the retry logic
+-  assigned              tsk_162d…9666  check the checkout page on a phone
 ```
 <!-- /example -->
 
-dev1 finishes it and names the commit that did the work. The task lands on `main` straight away (this repo's `main` is not protected yet), as a commit of its own:
+Alice finishes it and names the commit that did the work. The task lands on `main` straight away, as a commit of its own (this repo's `main` is not protected yet):
 
 <!-- example: small-team#done-lands-on-main -->
 ```console
-# dev1, in billing
+# alice, in billing
 $ lore task start tsk_162d…9666
 ✓ tsk_162d…9666 started
 lore live: (live, pushed)
-$ echo retry > retry.txt && git add retry.txt && git commit -qm 'tighten retry' && lore task done tsk_162d…9666 --commit $(git rev-parse --short HEAD)
+$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done tsk_162d…9666 --commit $(git rev-parse --short HEAD)
 ✓ tsk_162d…9666 done (commit 9b40ce7); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
@@ -73,19 +75,19 @@ cf563f3 init
  .../tsk_162d…9666.json      | 40 ++++++++++++++++++++++
  2 files changed, 51 insertions(+)
 $ git log --oneline -1 && git status --short
-9b40ce7 tighten retry
+9b40ce7 fix the checkout page on phones
 ```
 <!-- /example -->
 
-dev1's branch and working folder are untouched: the landing was pushed to the remote's `main` directly.
+Alice's branch and working folder are untouched. The landing was pushed to the remote's `main` directly.
 
-An urgent rule, from any branch, with `--live`: everyone sees it at once, and because a rule is finished on every write, a copy lands on `main` immediately:
+An urgent rule can be added from any branch with `--live`. Everyone sees it at once. A rule counts as finished on write, so a copy lands on `main` at once:
 
 <!-- example: small-team#urgent-rule -->
 ```console
-# dev2, in billing
-$ lore rule add --body 'never run migrations from the app container' --live
-✓ rul_05e9…4603 rul_05e9…4603 
+# bob, in billing
+$ lore rule add --body 'Never deploy on a Friday' --live
+✓ rul_05e9…4603 
   scope: [master] severity: must
 lore live: (live, pushed)
 lore live: landed on main (df3a55c); leaves live once main is fetched
@@ -96,24 +98,24 @@ df3a55c lore: land 1 row (_root)
 
 ## When main is protected
 
-Most teams protect `main`. Then the landing waits and rides on the developer's next push, as a separate commit:
+Most teams protect `main` (only pull requests may change it). Then the landing waits and rides on the developer's next push, as a separate commit:
 
 <!-- example: small-team#protected-main -->
 ```console
-# dev2, in billing
-$ lore task add 'rotate the webhook secret' --assign @dev1
-✓ tsk_c0f3…b5b8 tsk_c0f3…b5b8 — rotate the webhook secret [medium]
+# bob, in billing
+$ lore task add 'ask the client for the new logo' --assign @alice
+✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
 lore live: (live, pushed)
 lore live: 3 row(s) left live (main holds them)
 
-# dev1, in billing
+# alice, in billing
 $ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
 ✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ lore explain tsk_c0f3…b5b8
-tsk_c0f3…b5b8 in /home/dev1/work/billing (folder _root)
+tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
   live (local 34ee210): row, live since 2026-11-02T10:01:10Z, hlc 2026-11-02T10:01:15.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
@@ -128,28 +130,28 @@ lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
 $ git log --oneline -3
 ccfb0bb lore: land 1 row (_root)
 7898daa fix login timeout
-9b40ce7 tighten retry
+9b40ce7 fix the checkout page on phones
 $ git push -q -u origin feat/login
 $ git status --short
 ```
 <!-- /example -->
 
-`lore explain` says why the row has not landed yet ("waits: main is protected; rides on your next push"). The commit hook added `lore: land 1 row (_root)` on top of dev1's own commit; the pull request for `feat/login` now carries the task's file, and merging it lands the task. `git status` stays clean.
+`lore explain` says why the row has not landed yet ("waits: main is protected; rides on your next push"). The commit hook (a small script git runs after each commit) added `lore: land 1 row (_root)` on top of Alice's own commit. The pull request for `feat/login` now carries the task's file, and merging it lands the task. `git status` stays clean.
 
 ## What happened
 
 ```text
- dev2 (feat/payments)            remote                          dev1 (feat/login)
- task add --assign @dev1 ──push──▶ refs/lore/live ──fetch (≤60s, or lore sync)──▶ task list --mine
+ bob (feat/payments)            remote                          alice (feat/login)
+ task add --assign @alice ──push──▶ refs/lore/live ──fetch (≤60s, or lore sync)──▶ task list --mine
                                                                   task done
                                   refs/heads/main ◀──push "lore: land 2 rows"──┘   (unprotected)
                                   feat/login PR   ◀──"lore: land 1 row" rides on git push   (protected)
 ```
 
-## Gotchas
+## Pitfalls
 
-- **The 60-second cache.** Each command fetches at most once a minute (`live.fetch_ttl`). Right after a teammate writes, run `lore sync` if you need it now.
-- **Register first.** `--assign @dev1` fails with `E_NOT_FOUND: no person or team with handle @dev1` until dev1 has run `lore actor register` and your clone has fetched since.
+- **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
+- **Register first.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your clone has fetched since.
 - **Rules and decisions travel with the code** unless you pass `--live`. That is on purpose: most rules belong with the change that needs them.
-- **`git push --no-verify`** skips the ride-along check; the rows simply wait and ride on a later push.
+- **`git push --no-verify`** skips the ride-along check. The rows simply wait and ride on a later push.
 - **Unprotected `main`** receives small `lore: land N rows` commits directly. They change only files under `.lore/data`.

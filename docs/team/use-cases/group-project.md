@@ -1,96 +1,98 @@
 # Several repos as one product
 
+**In short:** client 2's product is three repos, but the plan for one feature should be one list, not three. The agency keeps that plan in one internal project that all three repos link to. So every repo shows the same mission and tasks.
+
 ## The situation
 
-Globex's product is three repos: `globex/globex-api` (backend), `globex/globex-web` (frontend) and `globex/globex-proxy`. Northwind plans one feature, "Invite landing page", that needs work in all three. Each repo keeps its own lore, but the plan, its tasks and what the team learns along the way should be one thing that every repo shows.
+Client 2's product is three repos: `client2/api` (backend), `client2/app` (frontend) and `client2/infra`. The agency plans one feature, "Invite landing page", that needs work in all three. Each repo keeps its own lore. But the plan, its tasks and what the team learns along the way should be one thing that every repo shows.
 
 ## The config
 
-The same `northwind` org entry as in [Agency with a client repo](agency-client-repo.md#the-config); `repos:` already matches `github.com/globex/*`. The shared work lives in one internal project, `globex/`, in Northwind's store. A project that several repos link to is called a **group**.
+The same `agency` org entry as in [Agency with a client repo](agency-client-repo.md#the-config). Its `repos:` already matches `github.com/client2/*`. The shared work lives in one internal project, `client2/`, in the agency's store (a separate private repo only the agency can open). A project that several repos link to is called a **group**.
 
 ## The commands
 
-Link each repo to the same folder (once per repo, by anyone at Northwind):
+Link each repo to the same folder. Anyone at the agency can do it, once per repo. Here Alice (an agency developer) does it:
 
 <!-- example: group#link-three-repos only=1,2,3 -->
 ```console
-# alice, in globex-api
-$ lore org link northwind --project globex --yes
-This marks github.com/globex/globex-api as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore globex/,
-and the leak guards turn on for everyone in northwind.
-  link: project prj_7a67…9504 at github.com/globex/globex-api → github.com/northwind/lore@main:globex/ (default=false)
-✓ github.com/globex/globex-api (prj_7a67…9504, github.com/globex/globex-api) linked to github.com/northwind/lore globex/ (created; pushed)
+# alice, in api
+$ lore org link agency --project client2 --yes
+This marks github.com/client2/api as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
+and the leak guards turn on for everyone in agency.
+  link: project prj_7a67…9504 at github.com/client2/api → github.com/agency/notes@main:client2/ (default=false)
+✓ github.com/client2/api (prj_7a67…9504, github.com/client2/api) linked to github.com/agency/notes client2/ (created; pushed)
   nothing was written to this repo
 
-# alice, in globex-web
-$ lore org link northwind --project globex --yes
-This marks github.com/globex/globex-web as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore globex/,
-and the leak guards turn on for everyone in northwind.
-  link: project prj_2ad3…f891 at github.com/globex/globex-web → github.com/northwind/lore@main:globex/ (default=false)
-✓ github.com/globex/globex-web (prj_2ad3…f891, github.com/globex/globex-web) linked to github.com/northwind/lore globex/ (pushed)
+# alice, in app
+$ lore org link agency --project client2 --yes
+This marks github.com/client2/app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
+and the leak guards turn on for everyone in agency.
+  link: project prj_2ad3…f891 at github.com/client2/app → github.com/agency/notes@main:client2/ (default=false)
+✓ github.com/client2/app (prj_2ad3…f891, github.com/client2/app) linked to github.com/agency/notes client2/ (pushed)
   nothing was written to this repo
 
-# alice, in globex-proxy
-$ lore org link northwind --project globex --yes
-This marks github.com/globex/globex-proxy as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore globex/,
-and the leak guards turn on for everyone in northwind.
-  link: project prj_162d…9666 at github.com/globex/globex-proxy → github.com/northwind/lore@main:globex/ (default=false)
-✓ github.com/globex/globex-proxy (prj_162d…9666, github.com/globex/globex-proxy) linked to github.com/northwind/lore globex/ (pushed)
+# alice, in infra
+$ lore org link agency --project client2 --yes
+This marks github.com/client2/infra as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
+and the leak guards turn on for everyone in agency.
+  link: project prj_162d…9666 at github.com/client2/infra → github.com/agency/notes@main:client2/ (default=false)
+✓ github.com/client2/infra (prj_162d…9666, github.com/client2/infra) linked to github.com/agency/notes client2/ (pushed)
   nothing was written to this repo
 ```
 <!-- /example -->
 
-The first link created `globex/` in the store; the others joined it. Now a mission and its tasks, each saying which repo it is for, with a dependency between them. `--key` makes each command safe to run twice:
+The first link created `client2/` in the store. The others joined it. Now add a mission (a bigger goal made of tasks) and its tasks. Each task says which repo it is for, and one task waits for the other. `--key` makes each command safe to run twice:
 
 <!-- example: group#mission-across-repos only=1,2,3,4 -->
 ```console
-# alice, in globex-api
-$ lore mission add 'Invite landing page' --to northwind/globex --key invite
-✓ msn_05e9…4603 msn_05e9…4603 — Invite landing page → [northwind/globex]
+# alice, in api
+$ lore mission add 'Invite landing page' --to agency/client2 --key invite
+✓ msn_05e9…4603 — Invite landing page → [agency/client2]
 lore live: (live, pushed)
-$ lore task add 'invite mutation + email' --to northwind/globex --mission msn_05e9…4603 --repo globex-api --key invite/backend
-✓ tsk_c0f3…b5b8 tsk_c0f3…b5b8 — invite mutation + email [medium] → [northwind/globex]
+$ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e9…4603 --repo api --key invite/backend
+✓ tsk_c0f3…b5b8 — send the invite email from the API [medium] → [agency/client2]
 lore live: (live, pushed)
-$ lore task add 'invite landing route' --to northwind/globex --mission msn_05e9…4603 --repo globex-web --after tsk_c0f3…b5b8 --key invite/frontend
-✓ tsk_76bd…3f10 tsk_76bd…3f10 — invite landing route [medium] → [northwind/globex]
+$ lore task add 'build the invite page' --to agency/client2 --mission msn_05e9…4603 --repo app --after tsk_c0f3…b5b8 --key invite/frontend
+✓ tsk_76bd…3f10 — build the invite page [medium] → [agency/client2]
 lore live: (live, pushed)
-$ lore task add 'invite mutation + email' --to northwind/globex --mission msn_05e9…4603 --repo globex-api --key invite/backend
-✓ tsk_c0f3…b5b8 tsk_c0f3…b5b8 — invite mutation + email (already added with --key invite/backend)
+$ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e9…4603 --repo api --key invite/backend
+✓ tsk_c0f3…b5b8 — send the invite email from the API (already added with --key invite/backend)
 ```
 <!-- /example -->
 
-Any of the three repos shows the group's tasks, and `lore mission status` shows the whole plan, including why a task waits:
+Any of the three repos shows the group's tasks. `lore mission status` shows the whole plan, including why a task waits:
 
 <!-- example: group#mission-across-repos only=5,7 -->
 ```console
-# alice, in globex-web
+# alice, in app
 $ lore task list
-tsk_c0f3…b5b8  invite mutation + email  todo  [northwind/globex]
-tsk_76bd…3f10  invite landing route  todo  [northwind/globex]
+tsk_c0f3…b5b8  send the invite email from the API  todo  [agency/client2]
+tsk_76bd…3f10  build the invite page  todo  [agency/client2]
 
-# alice, in globex-proxy
+# alice, in infra
 $ lore mission status msn_05e9…4603
 msn_05e9…4603 Invite landing page   2 tasks · 0 done · 0 claimed · 1 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
-  ready     tsk_c0f3…b5b8  invite mutation + email                   
-  waiting   tsk_76bd…3f10  invite landing route                      waits for tsk_c0f3…b5b8 to be merged (todo)
+  ready     tsk_c0f3…b5b8  send the invite email from the API              
+  waiting   tsk_76bd…3f10  build the invite page                     waits for tsk_c0f3…b5b8 to be merged (todo)
 ```
 <!-- /example -->
 
-The landing route waits for the backend task to be **merged**, not just done, because it is for another repo: the frontend should start against backend code that is really on `main`. See [Done, then merged](../how-it-works.md#done-then-merged).
+The frontend task ("build the invite page") waits for the backend task to be **merged**, not just done. That is because it is for another repo: the frontend should start against backend code that is really on `main`. See [Done, then merged](../how-it-works.md#done-then-merged).
 
 ## What happened
 
 ```text
- github.com/globex/globex-api   ─┐
- github.com/globex/globex-web   ─┼─ link ──▶ northwind/lore  globex/.lore/data/_meta.json  links: [api, web, proxy]
- github.com/globex/globex-proxy ─┘                           refs/lore/live/main  globex/missions/…, globex/tasks/…
-                                                             (land on the store's main when finished)
- the Globex repos themselves gain nothing but the code
+ github.com/client2/api   ─┐
+ github.com/client2/app   ─┼─ link ──▶ agency/notes  client2/.lore/data/_meta.json  links: [api, app, infra]
+ github.com/client2/infra ─┘                         refs/lore/live/main  client2/missions/…, client2/tasks/…
+                                                                          (land on the store's main when finished)
+ the client 2 repos themselves gain nothing but the code
 ```
 
-## Gotchas
+## Pitfalls
 
-- **`--repo` takes the repo's lore name** (the name given to `lore init --name`, usually the repo name). A task with no repo is offered only to callers that pass no `--repo`, or a matching `--role`.
-- **Every repo lists every group task.** `lore task list` in `globex-web` shows the backend task too; use the mission status, or `lore task next --repo globex-web`, to see only what is ready for one repo.
-- **Same key, same row.** Running the `task add … --key invite/backend` command again prints "already added with --key invite/backend" and changes nothing. A whole plan can be applied from a file with `lore plan apply`; see [AI agents on one mission](agents-mission.md).
-- Nothing about the plan is visible to Globex: it is all in Northwind's store.
+- **`--repo` takes the repo's lore name**: the name given to `lore init --name`, usually the repo name. A task with no repo is offered only to callers that pass no `--repo`, or a matching `--role`.
+- **Every repo lists every group task.** `lore task list` in `app` shows the backend task too. To see only what is ready for one repo, use the mission status, or `lore task next --repo app`.
+- **Same key, same row.** Running the `task add … --key invite/backend` command again prints "already added with --key invite/backend" and changes nothing. You can apply a whole plan from a file with `lore plan apply`. See [Agents on one mission](agents-mission.md).
+- Client 2 can see nothing about the plan. It is all in the agency's store.

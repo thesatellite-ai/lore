@@ -1,26 +1,26 @@
 
 ### whoami per repo
-alice (work/acme-app)$ lore whoami
-org        northwind  (matched by: link in <redacted>, project id + remote)
-identity   Alice Doe <human:alice@northwind.example>   act_7a670ae8548ed05bf57ad29ad0759504  @alice  (from: org entry (config.yaml))
+alice (work/website)$ lore whoami
+org        agency  (matched by: link in <redacted>, project id + remote)
+identity   Alice Doe <human:alice@agency.example>   act_7a670ae8548ed05bf57ad29ad0759504  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
 project    prj_2ad3618e878ebbf527d34d446ef4f891
-remotes    github.com/acme/app
+remotes    github.com/client/website
 stores     <redacted> on branch main  (org folder <redacted>)
 internal   <redacted> <redacted>/
 links      known  1 link(s) for this repo (stores of 2 entries scanned)
-personal   local: northwind/, everywhere/
-alice (work/betalabs-api)$ lore whoami
-org        betalabs  (matched by: own pattern github.com/betalabs/* of betalabs)
-identity   Alice Doe <human:alice@betalabs.example>   act_162df51b7f78b785c97c26b41ea89666  @alice  (from: org entry (config.yaml))
+personal   local: agency/, everywhere/
+alice (work/client3-api)$ lore whoami
+org        client3  (matched by: own pattern github.com/client3/* of client3)
+identity   Alice Doe <human:alice@client3.example>   act_162df51b7f78b785c97c26b41ea89666  @alice  (from: org entry (config.yaml))
 repo       own repo  (no client guards)
 project    prj_54fe984c9b495744c0217776765a28f2
-remotes    github.com/betalabs/api
+remotes    github.com/client3/api
 stores     <redacted> on branch main  (org folder <redacted>)
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: betalabs/, everywhere/
+personal   local: client3/, everywhere/
 alice (work/forked-tool)$ lore whoami
-org        none  (matched by: nothing matched)   hint: lore org use <entry> (northwind, betalabs)
+org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e99e22e9e86e96fe4daa7777994603  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity, personal everywhere/ notes only)
 project    prj_c0f3c11a5724b0cfd74b256190d9b5b8
@@ -28,7 +28,7 @@ remotes    github.com/someone/tool
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   local: everywhere/
 alice (work/forked-tool)$ lore whoami --explain
-org        none  (matched by: nothing matched)   hint: lore org use <entry> (northwind, betalabs)
+org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e99e22e9e86e96fe4daa7777994603  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity, personal everywhere/ notes only)
 project    prj_c0f3c11a5724b0cfd74b256190d9b5b8
@@ -45,29 +45,29 @@ org resolution (first rule that answers wins):
   ✓ 6. nothing matched  no rule matched: fallback identity, personal everywhere/ notes only
 
 ### personal notes split
-alice (work/acme-app)$ lore memory add --body 'ask the Acme PM before touching the payment flow' --to me
-✓ mem_76bd560aff0771fab8457dbfa9823f10 mem_76bd560aff0771fab8457dbfa9823f10 [me]
-  filed: --to me → personal northwind/
+alice (work/website)$ lore memory add --body 'ask the client PM before touching the payment flow' --to me
+✓ mem_76bd560aff0771fab8457dbfa9823f10 [me]
+  filed: --to me → personal agency/
   scope: [master]
-alice (work/betalabs-api)$ lore memory add --body 'betalabs deploys only on Tuesdays' --to me
-✓ mem_d4314eba822f1bf5908b2b8ded5f313a mem_d4314eba822f1bf5908b2b8ded5f313a [me]
-  filed: --to me → personal betalabs/
+alice (work/client3-api)$ lore memory add --body 'client3 deploys only on Tuesdays' --to me
+✓ mem_d4314eba822f1bf5908b2b8ded5f313a [me]
+  filed: --to me → personal client3/
   scope: [master]
-alice (work/acme-app)$ lore memory list
+alice (work/website)$ lore memory list
 lore sync: built .lore/lore.db from .lore/data (2 rows)
 lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: /home/alice/work/acme-app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-mem_76bd560aff0771fab8457dbfa9823f10  ask the Acme PM before touching the payment flow  [me]
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/acme-app/.git/hooks)
-alice (work/betalabs-api)$ lore memory list
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+mem_76bd560aff0771fab8457dbfa9823f10  ask the client PM before touching the payment flow  [me]
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+alice (work/client3-api)$ lore memory list
 lore sync: built .lore/lore.db from .lore/data (2 rows)
 lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: /home/alice/work/betalabs-api/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-mem_d4314eba822f1bf5908b2b8ded5f313a  betalabs deploys only on Tuesdays  [me]
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/betalabs-api/.git/hooks)
+lore sync: backup of lore.db before adopt: ~/work/client3-api/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+mem_d4314eba822f1bf5908b2b8ded5f313a  client3 deploys only on Tuesdays  [me]
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/client3-api/.git/hooks)
 alice (work/forked-tool)$ lore memory list
 lore sync: built .lore/lore.db from .lore/data (2 rows)
 lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: /home/alice/work/forked-tool/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+lore sync: backup of lore.db before adopt: ~/work/forked-tool/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 (no memories)
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in /home/alice/work/forked-tool/.git/hooks)
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/forked-tool/.git/hooks)

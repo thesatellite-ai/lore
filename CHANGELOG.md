@@ -28,3 +28,13 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1â€
 ### Fixed
 
 - A push that loses a race (`reference already exists`, a failed atomic transaction) is retried instead of reported as a refusal.
+
+### Documentation
+
+- A new documentation home, [docs/README.md](docs/README.md), with a learning path in thirteen steps (from your first rule to a team with a client, private notes and several agents), a "Start from your goal" table, and a list of every page.
+- Step-by-step guides for one person's work: writing notes down, search and render ([docs/knowledge](docs/knowledge/README.md)), tasks, missions, plans, reminders and run logs ([docs/tasks](docs/tasks/README.md)), notes in git, branches, conflicts, hooks and the GitHub workflow ([docs/sync](docs/sync/README.md)), and health checks, backups, the audit log, secrets, CI and `lore bench` ([docs/operations](docs/operations/README.md)).
+- Decision guides in [docs/choosing](docs/choosing/README.md): notes in each repo or in one database, with the code or live, how to lay out stores, which org and identity setup, which file your coding tool reads, and when to use agents, claims and gates.
+- Reference tables in [docs/reference](docs/reference/README.md) for every command, flag, config key, environment variable and error code, and a [feature index](docs/reference/features.md) that names the guide and a runnable example for each feature.
+- Every page now starts with a short "In short" summary, explains each technical word in everyday words the first time it appears, and uses everyday examples ("Run the tests before you push", "We use Stripe for payments"). The team guide uses role names throughout (the agency, the client, Alice, Bob and Carol), and has a new page on [identity and store housekeeping](docs/team/identity-and-stores.md).
+- The output on these pages is pasted from real runs of lore in throwaway folders, so it matches the program; the scripts are in [tests/docs](tests/docs/README.md) and tests/team/docs.
+- An architecture picture, [docs/assets/architecture.svg](docs/assets/architecture.svg), on the README and the documentation home.

@@ -1,5 +1,7 @@
 # Playbooks
 
+**In short:** step-by-step recipes for common jobs, such as setting up a new project or recovering a broken database. Copy the commands, change the names, run them.
+
 Multi-step recipes for common situations. Each playbook is **safe to run verbatim** — copy + paste, swap names, done.
 
 ---
@@ -22,7 +24,7 @@ done
 lore render                            # writes .lore/LORE.md + @import pointer in CLAUDE.md
 ```
 
-After this, the AI (next session) reads `CLAUDE.md`, which `@import`s `.lore/LORE.md` automatically.
+After this, the agent (next session) reads `CLAUDE.md`, which `@import`s `.lore/LORE.md` automatically.
 
 ---
 
@@ -195,7 +197,7 @@ lore reminder add "Re-evaluate SQLite choice" --due=2026-12-31 \
 
 ---
 
-## P10 — Inspect what the AI is actually seeing
+## P10 — Inspect what the agent is actually seeing
 
 ```bash
 lore render
@@ -205,7 +207,7 @@ lore why-context --last-render --json | jq
 lore why-context --last-render --rendered
 ```
 
-Useful when the AI is "missing" context — verify the rule/memory is actually included.
+Useful when the agent is "missing" context — verify the rule/memory is actually included.
 
 ---
 
@@ -244,7 +246,7 @@ Any write attempt under `--read-only` or `LORE_READ_ONLY=1` returns `E_READ_ONLY
 
 ## P13 — Onboard a new teammate
 
-The user wants to bring Alice up to speed on a project that already uses lore.
+The user wants to bring Alice (an agency developer) up to speed on a project that already uses lore.
 
 ```bash
 # 1. Make sure the shared knowledge is committed (lore exports it automatically)
@@ -258,7 +260,7 @@ git clone <repo>; cd <repo>
 #    `lore init` would adopt the shared project too)
 lore memory list
 
-# 4. Alice opens her AI tool of choice — CLAUDE.md @imports the same .lore/LORE.md
+# 4. Alice opens her coding tool of choice — CLAUDE.md @imports the same .lore/LORE.md
 ```
 
 Shared knowledge lives in `.lore/data/` — one committed JSON file per row — and travels with the code: it follows branches, merges with PRs, and arrives on `git pull` (the post-merge hook imports it immediately). `.lore/lore.db` is a gitignored per-developer cache rebuilt from those files. Alice's captures are exported to `.lore/data/` as she makes them and reach the team when she commits and pushes them.

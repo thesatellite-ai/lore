@@ -1,6 +1,8 @@
 # Example: Tags + comments for cross-cutting metadata
 
-**Scenario:** Iris wants to mark certain memories as "draft", attach review comments to decisions, and find all "blocked" tasks regardless of mission.
+**In short:** a tag is a one-word label you can put on any row ("draft", "blocked"); a comment is a short note attached to one row, like a sticky note. Use tags to group rows and comments to talk about one.
+
+**Scenario:** Alice (an agency developer) wants to mark some notes as "draft", add review comments to decisions, and find every "blocked" task in any mission.
 
 ## Tags
 
@@ -66,7 +68,7 @@ lore comment list --json | jq '.data[]'   # (replace with eventual `tag uses` cm
 lore comment add \
     --on-table=decisions \
     --on-id=dec_019e... \
-    "Revisited 2026-08-01. Still holds; pgvector recall acceptable at 5M vectors."
+    "Checked again on 2026-08-01. Still right: Stripe fees are below 3% of sales."
 ```
 
 ### List comments
@@ -103,3 +105,8 @@ A `tag` is for filtering. A `comment` is for context. A `memory` is for the thin
 `entity_table + entity_id` lets tags + comments attach to **every** entity without requiring a column for each. So a tag named "needs-review" works equally well on memories, decisions, tasks, hotfixes, playbooks — all 24+ entity kinds.
 
 This is why `--on-table` is required: SQLite has no foreign-key polymorphism, so the table name + id together form the link.
+
+## Pitfalls
+
+- `--on-id` needs the full row id (`dec_` plus 32 hex digits), not a short form.
+- A tag must exist (`lore tag add`) before you attach it.

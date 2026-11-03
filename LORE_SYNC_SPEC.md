@@ -77,7 +77,7 @@ These were pre-existing and unrelated to the sync design, but sync's extra write
 | Duplicated project-file counter; hardcoded doctor statuses and flag names | `lsync.CountRowFiles`; named constants in `doctor.go` and `saas/pkg/constants/flags.go` | build + lint |
 | (found in self-review) A natural-key merge left references dangling in rows imported later in the same pass (tables sync in name order) | merges are re-applied after every drain round; id rewrites never touch `_lore_sync_*` bookkeeping | `TestNaturalKeyMerge_RewritesRowsImportedLater` |
 
-### Found by a trial migration of a real repo (globex-api)
+### Found by a trial migration of a real repo (a multi-repo product API)
 
 Copies only: a bare remote cloned from the repo, the real `lore.db` copied in, two clones (A migrates, B joins fresh with the repo's `core.hooksPath .githooks`), the same memory edited on two branches and merged. The real repo was not touched. Migration: 1,690 rows → 1,691 files (7 MB) in about 1 s; B rebuilt its DB in about 1 s with all 11 shared tables matching the original row for row.
 
@@ -506,13 +506,17 @@ Lore checks and repairs this on every command, idempotently, in the per-clone `.
 
 ```ini
 [merge "lore"]
-    name = lore field-level merge
+    name = lore field-level row merge
     driver = lore merge-driver %O %A %B %P
+[merge "lore-keep-ours"]
+    name = lore: keep ours, re-render after merge
+    driver = lore merge-driver --keep-ours %O %A %B %P
 ```
 
 ```gitattributes
 .lore/data/**/*.json  text eol=lf merge=lore linguist-generated=true
-.lore/LORE.md         text eol=lf merge=lore-regen linguist-generated=true
+.lore/data/*.json     text eol=lf merge=lore linguist-generated=true
+.lore/LORE.md         text eol=lf merge=lore-keep-ours linguist-generated=true
 ```
 
 **Hooks** — git never auto-runs hooks from a clone; each clone must opt in. Lore installs them on its first command in a clone (anyone who can create lore data has run lore, so the hook exists wherever data can be lost). As built, lore never changes `core.hooksPath`:
@@ -604,7 +608,7 @@ As built, the numbers behind E28 and E32 are named constants: a pass waits up to
 
 | # | Case | Fix |
 |---|---|---|
-| E35 | `.lore/LORE.md` is generated and committed (not in `ensureGitignore`) → conflicts on nearly every merge | Keep it committed (agents read it via `@import` before any lore command runs on a fresh clone), give it `merge=lore-regen`: the driver regenerates it from the merged data instead of merging text. Reconcile also re-renders when synced data changed. On GitHub (no driver) a conflict here is resolved by taking either side; the next lore command re-renders. |
+| E35 | `.lore/LORE.md` is generated and committed (not in `ensureGitignore`) → conflicts on nearly every merge | Keep it committed (agents read it via `@import` before any lore command runs on a fresh clone), give it `merge=lore-keep-ours`: the driver keeps our side instead of merging text, and lore re-renders it from the merged data. Reconcile also re-renders when synced data changed. On GitHub (no driver) a conflict here is resolved by taking either side; the next lore command re-renders. |
 | E36 | FTS5 index after a large branch switch | Incremental delete+insert per changed row; if more than a named threshold of rows changed, drop and rebuild the FTS table instead (faster). |
 
 ### 11.7 Human workflow
@@ -716,7 +720,7 @@ All phases shipped; sync is on by default (`LORE_SYNC=0` turns it off). Per-phas
 | **P1 — model** | Table classification registry + test (every table classified, E6 counter gate); canonical serializer + upcaster framework; unknown-field preservation; deterministic ids for natural-key tables (E2) | Round-trip test: DB row → file → DB row byte-identical for every synced kind; classification test fails when a new table is added unclassified (verified by breaking it) |
 | **P2 — write path** | File-first atomic writes, `sync_state`, sync lock, PII scan on canonical JSON, "not committed" warning; triggers + `sync_outbox` generated from the registry and the drain step (§12.1) | Crash-injection test between file and DB write recovers on next command (E29); a raw `sqlite3` UPDATE and a tui edit both reach the file on the next command (E41, E42) |
 | **P3 — reconcile** | Fingerprint, incremental import, full-import fallback, deferred-FK import, `sync_errors`, dangling-ref report, FTS incremental + rebuild threshold, non-git fallback (E17) | Two-clone integration harness passes: add / edit / archive / branch switch / merge / rebase / stash / revert / force-push (E15–E22) |
-| **P4 — merge** | `lore merge-driver` (field-level 3-way, loud on text), `lore-regen` driver for `LORE.md`, `.gitattributes` writer | Harness merges with the driver AND with plain `git merge` (no driver, simulating GitHub) and asserts no silent loss in either |
+| **P4 — merge** | `lore merge-driver` (field-level 3-way, loud on text), `lore-keep-ours` driver for `LORE.md`, `.gitattributes` writer | Harness merges with the driver AND with plain `git merge` (no driver, simulating GitHub) and asserts no silent loss in either |
 | **P5 — git wiring** | Auto-config of merge driver + `core.hooksPath` with chaining into existing hook dirs (E46 husky / `.githooks`); optional hooks | Fresh-clone test: first lore command configures everything; existing `.githooks/pre-commit` (sync_go style) still runs after lore appends |
 | **P6 — migration + default on** | BOOTSTRAP and ADOPT (§12.3) with pre-backup; both-sides-changed resolution (§12.2) and `lore sync resolve`; `backup restore --prefer` (E43); `_purged.json` (E47); `lore doctor` checks (E1, E8, E12, E30, E38, E48); `lore init` adopts existing `.lore/data`; rollout guide (§12.4); flip default | Harness: two clones with independent pre-existing `lore.db` files bootstrap + adopt, merge, and end with identical data and a clean doctor; old-binary DB adopted without loss |
 | **P7 — done** | read another branch's rows: `lore sync peek origin/feature/x [table]` (designed as `task list --ref`); `lore sync promote <id> --to <branch>`; `lore sync purge --archived-before` | e2e peek / promote / purge tests |

@@ -214,6 +214,33 @@ tasks:
       - LORE_BIN={{.DOCS_BIN}} tests/team/docs/run-examples.sh {{.CLI_ARGS}}
       - LORE_BIN={{.DOCS_BIN}} python3 tests/team/docs/paste.py
 
+  docs:examples:core:
+    desc: "Run every non-team docs example (tests/docs/run-examples.sh, one file per section in tests/docs/sections) against the real binary, then refresh docs/** (not docs/team) from the transcripts and regenerate the commands index; fails when an example misbehaves. One section: task lore:docs:examples:core -- start"
+    cmds:
+      - testlock task lore:docs:examples:core:run -- {{.CLI_ARGS}}
+
+  docs:examples:core:run:
+    desc: "Body of lore:docs:examples:core WITHOUT the machine-wide test lock; call lore:docs:examples:core instead"
+    vars:
+      DOCS_BIN: "{{.BIN_DIR}}/lore-docs"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      # loretest: the build tag under which the binary honours LORE_NOW, so transcripts are stable.
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - LORE_BIN={{.DOCS_BIN}} tests/docs/run-examples.sh {{.CLI_ARGS}}
+      - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/paste.py
+      - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/commands_index.py
+
+  docs:examples:core:check:
+    desc: "Fail when a non-team docs page or the generated commands index is stale against the transcripts and the real binary (no examples are re-run)"
+    vars:
+      DOCS_BIN: "{{.BIN_DIR}}/lore-docs"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/paste.py --check
+      - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/commands_index.py --check
+
   bench:sync:
     desc: "Sync performance: no-op pass, bootstrap and fresh-clone adopt at 1k/10k rows (numbers recorded in LORE_SYNC_SPEC.md)"
     cmds:

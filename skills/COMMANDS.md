@@ -1,5 +1,7 @@
 # Commands Reference
 
+**In short:** every lore command with its main flags, one example and a sample of its `--json` output. Look a command up here when you know what you want to do.
+
 Every command is listed below with: signature, key flags, example, and JSON output sample.
 
 All commands accept the universal flags from SKILL.md (`--db`, `--project`, `--repo`, `--read-only`, `--json`, `--color`).
@@ -166,7 +168,7 @@ lore task list [--status=…] [--commitment=…] [--mission=<id>] [--assignee=<r
                                    # default = ActiveTask (accepted, not done/cancelled, not future-deferred)
                                    # --assignee: filter by assignee: actor_id (act_*), @me, stable_key or display name
                                    #   (a display name shared by several actors is refused with the candidate ids)
-lore task triage                   # commitment=proposed (AI-suggested, not committed)
+lore task triage                   # commitment=proposed (agent-suggested, not committed)
 lore task someday                  # commitment=someday (parking lot)
 lore task deferred                 # snoozed: deferred_until in the future
 lore task show <id> [--json]
@@ -434,7 +436,7 @@ lore link remove cml_xxx --confirm
 
 ## Run logging (descriptive, agent-driven)
 
-Track every agent attempt at a task — what model, which agent, tokens, cost, transcript. Mini does NOT execute runs; the agent (Claude Code / Cursor / human / hook) records descriptively.
+Track every agent attempt at a task — what model, which agent, tokens, cost, transcript. Mini does NOT execute runs; the agent (a coding tool, a human or a hook) records what happened.
 
 ```bash
 # Open a run before starting work; returns run-id on stdout
@@ -476,7 +478,7 @@ lore run replay $RID --json    # programmatic
 
 ## Agent directive
 
-The CLI ships a loud, prescriptive directive block you can pin to the top of any agent-loaded markdown so future AI sessions don't inline-write memories/tasks into the file (and don't create sibling `NOTES.md` / `LEARNINGS.md` scratchpads as a workaround):
+The CLI ships a loud, prescriptive directive block you can pin to the top of any agent-loaded markdown so future agent sessions don't inline-write memories/tasks into the file (and don't create sibling `NOTES.md` / `LEARNINGS.md` scratchpads as a workaround):
 
 ```bash
 lore directive install                                # default: CLAUDE.md at cwd
@@ -689,7 +691,7 @@ lore config check                             # validate ~/.lore/config.yaml
 Live rows (shared with everyone at once; tasks are live by default):
 
 ```bash
-lore rule add --body "never run migrations from the app container" --live
+lore rule add --body "Never deploy on a Friday" --live
 lore land --all --dry-run                     # what would land on main now
 lore live show                                # this project's live rows
 lore explain tsk_01                           # where an id lives and which copy won
@@ -698,9 +700,9 @@ lore explain tsk_01                           # where an id lives and which copy
 Orgs and stores (internal notes never go into a client repo):
 
 ```bash
-lore store init git@github.com:northwind/lore            # once, in an empty repo
-lore org link northwind --project acme                   # tie this client repo to its internal project
-lore memory add --body "client prefers calls" --to northwind
+lore store init git@github.com:agency/notes            # once, in an empty repo
+lore org link agency --project client                   # tie this client repo to its internal project
+lore memory add --body "client prefers calls" --to agency
 lore memory add --body "my own reminder" --to me
 lore share mem_01 --to repo                              # copy to the client on purpose (asks)
 lore check pr-body body.md                               # before posting a PR body or comment
@@ -709,14 +711,14 @@ lore check pr-body body.md                               # before posting a PR b
 Agents (one actor per session; claims have a lease):
 
 ```bash
-lore agent start --label backend-1 --owner @alice        # prints LORE_ACTOR / LORE_SESSION to export
+lore agent start --label agent-backend --owner @alice        # prints LORE_ACTOR / LORE_SESSION to export
 lore inbox
 lore task next --mission mis_12                          # claims the best ready task (exit 10 = no work)
 lore task heartbeat                                      # keep the claim alive
 lore task note tsk_30 "mutation done; tests next"
 lore task done tsk_30 --pr 412 --lesson "tokens expire in 48h"
-lore finding add --mission mis_12 "the proxy strips X-Forwarded-Host"
-lore handoff add --for @frontend-2 --task tsk_31 "form is half done"
+lore finding add --mission mis_12 "invite links must use the public website address"
+lore handoff add --for @agent-frontend-2 --task tsk_31 "form is half done"
 ```
 
 Humans coordinating:
@@ -763,7 +765,7 @@ lore <cmd> --help                 # per-command help
 
 ## Bench — evaluation engine
 
-DB-backed benchmark framework for measuring AI agent performance with vs without lore context. Three nouns: `eval` (task templates), `run` (one benchmark execution), `result` (one task × arm × attempt). Plus `report`/`grader`/`config` for analysis.
+DB-backed benchmark framework for measuring coding agent performance with vs without lore context. Three nouns: `eval` (task templates), `run` (one benchmark execution), `result` (one task × arm × attempt). Plus `report`/`grader`/`config` for analysis.
 
 See `BENCH_DESIGN.md` and `EVAL_PLAN.md` at repo root for full methodology.
 
@@ -843,15 +845,15 @@ lore bench run start --model=<model> [--runs-per-arm=N] [--parallel=N] \
     [--budget-cap=<usd>] [--temperature=<f>]
 
 # Models (router picks provider per call by prefix):
-#   claude-haiku-4-5-20251001    → Anthropic API ($ANTHROPIC_API_KEY) or
+#   claude-haiku-4-5-20251001    → hosted API ($ANTHROPIC_API_KEY) or
 #   claude-sonnet-4-6              local `claude` CLI on PATH
 #   claude-opus-4-7
 #   ollama:qwen3-coder:latest    → local Ollama (set $OLLAMA_HOST to override
 #   ollama:qwen2.5:32b             default http://localhost:11434);
 #   ollama:qwen2.5-coder:1.5b      cost = $0 so budget-cap doesn't trip
 #
-# --parallel=N (default 8): concurrent LLM calls in flight. Tune to your
-# provider's rate limit (4-8 for Anthropic tier 1, 16-32 for tier 4,
+# --parallel=N (default 8): concurrent model calls in flight. Tune to your
+# provider's rate limit (4-8 for hosted API tier 1, 16-32 for tier 4,
 # 8-20 for Ollama which serializes internally per model).
 
 lore bench run list [--model=… --since=7d] [--json]
@@ -871,8 +873,8 @@ lore bench result stats [--run=<id> | --latest] [--json]
     # persisted so far. Default with no args = latest run.
 lore bench result compare <id-a> <id-b>   # side-by-side diff
 lore bench result regrade <id>            # re-run grader on stored output,
-                                              # NO LLM call required
-lore bench result replay  <id>            # re-run the LLM call entirely
+                                              # NO model call required
+lore bench result replay  <id>            # re-run the model call entirely
 ```
 
 ### `lore bench report` — analysis
@@ -918,11 +920,11 @@ lore bench grader audit                  # flags too-strict/too-loose/flaky
 
 The `skill` group manages the SKILL.md bundle (the docs you're reading right now).
 
-### `lore skill compile` — LLM-compressed bundle (DRAFT GENERATOR — not ship-ready)
+### `lore skill compile` — model-compressed bundle (DRAFT GENERATOR — not ship-ready)
 
 > **⚠ Status: draft generator, not ship-ready.** Head-to-head benching showed the auto-compiled output scores ~70-75% on the 30-eval suite vs the hand-tuned canonical `SKILL-mini.md` at 100%. Treat compiler output as a starting draft for human review; never ship un-bench-verified.
 
-Reads every `.md` under `--source-dir` and asks an LLM to produce a compressed `SKILL-mini.md` (~13-25KB) suitable for small-context (≤32K) or weak-instruction-following models. The compiler's editorial rules are baked into the command (see `skill_compile.go::compressionRules`); update them there, then re-run.
+Reads every `.md` under `--source-dir` and asks a model to produce a compressed `SKILL-mini.md` (~13-25KB) suitable for small-context (≤32K) or weak-instruction-following models. The compiler's editorial rules are baked into the command (see `skill_compile.go::compressionRules`); update them there, then re-run.
 
 ```bash
 lore skill compile --target=mini \
@@ -936,11 +938,11 @@ lore skill compile --target=mini \
 ```
 
 - **`--model=` recommendations:** `claude-sonnet-4-6` (default; ~$0.18 / compile) gives best editorial judgment. `claude-haiku-4-5-20251001` is ~5× cheaper but tends to under-compress. `ollama:qwen2.5:32b` is free + local but slower (~3-5 min).
-- **`--budget-bytes=`** is a *target* the LLM aims for; not a hard cap.
+- **`--budget-bytes=`** is a *target* the model aims for; not a hard cap.
 - **`--temperature=`** at 0.2 is stable; raise to 0.5+ for more aggressive editorial trimming on retry.
 - **`--dry-run`** prints the compiled output to stdout instead of writing the file. Use to A/B before overwriting.
 
-**Non-determinism note:** the compiler is an LLM call. Same input does NOT produce the same output across runs. Always `git diff` before committing. Bench-verify the new bundle against your eval set before promoting it.
+**Non-determinism note:** the compiler is a model call. Same input does NOT produce the same output across runs. Always `git diff` before committing. Bench-verify the new bundle against your eval set before promoting it.
 
 **Mandatory workflow — DO NOT ship compiler output without these steps:**
 
@@ -972,7 +974,7 @@ lore bench report compare mini-draft-verify-$(date +%Y%m%d) mini-canonical-$(dat
 #    NEVER promote a draft that scored below canonical.
 ```
 
-**Why the bench-verify is non-negotiable:** the LLM compiler partially follows the editorial brief but consistently drops 1-2 critical examples per regen. Without an A/B vs canonical, those regressions ship silently.
+**Why the bench-verify is non-negotiable:** the model-based compiler partially follows the editorial brief but consistently drops 1-2 critical examples per regen. Without an A/B vs canonical, those regressions ship silently.
 
 JSON envelope:
 ```json
@@ -1009,8 +1011,8 @@ Intent                                       → Command
 "future-self reminder"                       → reminder add
 "label arbitrary entity"                     → tag attach
 "discuss arbitrary entity"                   → comment add
-"refresh the AI context file"                → render
-"why does the AI see X?"                     → why-context --last-render
+"refresh the agent context file"             → render
+"why does the agent see X?"                  → why-context --last-render
 "is my project healthy?"                     → doctor
 "my DB is broken"                            → repair --tier=2 --confirm
 "what error codes exist?"                    → errors list --json

@@ -1,0 +1,9 @@
+type planFile struct {
+	Mission struct {
+		Key   string `yaml:"key"`
+		Title string `yaml:"title"`
+		To    string `yaml:"to"`
+	} `yaml:"mission"`
+	Approvers []string   `yaml:"approvers"`
+	Tasks     []planTask `yaml:"tasks"`
+}

@@ -1,0 +1,8 @@
+var recurrenceShift = map[entReminder.Recurrence]ymdShift{
+	entReminder.Recurrence7d:  {0, 0, 7},
+	entReminder.Recurrence30d: {0, 0, 30},
+	entReminder.Recurrence1m:  {0, 1, 0},
+	entReminder.Recurrence3m:  {0, 3, 0},
+	entReminder.Recurrence6m:  {0, 6, 0},
+	entReminder.Recurrence1y:  {1, 0, 0},
+}

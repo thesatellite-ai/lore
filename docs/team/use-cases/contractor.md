@@ -1,120 +1,122 @@
 # Contractor limited to one client
 
+**In short:** the agency hires Bob, a contractor, to work only for the client. Bob gets the company rules and that one client's private notes. He gets nothing about other clients, because each client's notes sit in their own repo, and GitHub decides who can open it.
+
 ## The situation
 
-Northwind hires a contractor, Casey (`cont1`), to work only on Acme. Casey must see Northwind's company rules and Acme's internal notes, and nothing about any other client.
+The agency hires Bob (a contractor, handle `bob`) to work only on the client. Bob must see the agency's company rules and the client's internal notes. He must see nothing about any other client.
 
-GitHub cannot limit read access to a folder inside a repo. So the only way to keep one client's notes from a contractor is to keep them in a separate repo: **one store per client**.
+GitHub cannot limit read access to a folder inside a repo. So the only way to keep one client's notes from a contractor is to keep them in a separate repo. A store is such a repo: a separate private repo that only the agency can open, like a locked filing cabinet. Here the agency uses **one store per client**.
 
 ## The config
 
-Northwind splits its stores: a company store (`org_folder: "."` means the store's root project is the org folder, with the roster and company rules), and one store per client. Alice's entry lists them all:
+The agency splits its stores. There is one company store, and one store per client. In the company store, `org_folder: "."` means the store's root project is the org folder: it holds the roster (the list of people and agents) and the company rules. The entry of Alice (an agency developer) lists every store:
 
 ```yaml
 orgs:
-  - name: northwind
-    identity: {key: "human:alice@northwind.example", name: "Alice Doe", handle: alice}
+  - name: agency
+    identity: {key: "human:alice@agency.example", name: "Alice Doe", handle: alice}
     stores:
-      - {url: "git@github.com:northwind/lore-org", org_folder: "."}
-      - {url: "git@github.com:northwind/lore-acme"}
-      - {url: "git@github.com:northwind/lore-globex"}
-    repos: [github.com/acme/*, github.com/globex/*]
+      - {url: "git@github.com:agency/notes", org_folder: "."}
+      - {url: "git@github.com:agency/notes-client"}
+      - {url: "git@github.com:agency/notes-client2"}
+    repos: [github.com/client/*, github.com/client2/*]
 ```
 
-Casey's entry lists only the company store and Acme's store, and GitHub gives Casey access to only those two repos:
+Bob's entry lists only the company store and the client's store. GitHub gives Bob access to only those two repos:
 
 ```yaml
 orgs:
-  - name: northwind
-    identity: {key: "human:cont1@northwind.example", name: "Casey Contractor", handle: cont1}
+  - name: agency
+    identity: {key: "human:bob@agency.example", name: "Bob Roe", handle: bob}
     stores:
-      - {url: "git@github.com:northwind/lore-org", org_folder: "."}
-      - {url: "git@github.com:northwind/lore-acme"}
-    repos: [github.com/acme/app]
+      - {url: "git@github.com:agency/notes", org_folder: "."}
+      - {url: "git@github.com:agency/notes-client"}
+    repos: [github.com/client/website]
 ```
 
 ## The commands
 
-Alice creates the three stores, links `acme/app` to the Acme store with `--store`, and writes one Acme note and one company rule (`--to northwind/.` is the company store's root project):
+Alice creates the three stores. She links `client/website` to the client's store with `--store`. Then she writes one client note and one company rule (`--to agency/.` is the company store's root project):
 
 <!-- example: contractor#one-store-per-client -->
 ```console
 # alice, in ~
-$ lore store init git@github.com:northwind/lore-org && lore store init git@github.com:northwind/lore-acme && lore store init git@github.com:northwind/lore-globex
-✓ wrote lore-store.yaml to github.com/northwind/lore-org (new branch main, first commit) and pushed
-✓ wrote lore-store.yaml to github.com/northwind/lore-acme (new branch main, first commit) and pushed
-✓ wrote lore-store.yaml to github.com/northwind/lore-globex (new branch main, first commit) and pushed
+$ lore store init git@github.com:agency/notes && lore store init git@github.com:agency/notes-client && lore store init git@github.com:agency/notes-client2
+✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
+✓ wrote lore-store.yaml to github.com/agency/notes-client (new branch main, first commit) and pushed
+✓ wrote lore-store.yaml to github.com/agency/notes-client2 (new branch main, first commit) and pushed
 
-# alice, in acme-app
-$ lore org link northwind --project acme --store git@github.com:northwind/lore-acme --yes
-This marks github.com/acme/app as a CLIENT repo of northwind: internal notes default to github.com/northwind/lore-acme acme/,
-and the leak guards turn on for everyone in northwind.
-  link: project prj_7a67…9504 at github.com/acme/app → github.com/northwind/lore-acme@main:acme/ (default=false)
-✓ github.com/acme/app (prj_7a67…9504, github.com/acme/app) linked to github.com/northwind/lore-acme acme/ (created; pushed)
+# alice, in website
+$ lore org link agency --project client --store git@github.com:agency/notes-client --yes
+This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
+and the leak guards turn on for everyone in agency.
+  link: project prj_7a67…9504 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
+✓ github.com/client/website (prj_7a67…9504, github.com/client/website) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
-✓ act_2ad3…f891 Alice Doe (@alice) registered in northwind ./
-lore: [northwind/.] 3 file(s) pushed
-$ lore memory add --body 'the Acme staging database is restored every Sunday night'
-✓ mem_162d…9666 mem_162d…9666 [northwind/acme]
-  filed: defaults.client_repos.memory = northwind (a kind not listed goes to the linked project) → the linked project acme/
+✓ act_2ad3…f891 Alice Doe (@alice) registered in agency ./
+lore: [agency/.] 3 file(s) pushed
+$ lore memory add --body 'the client staging database is restored every Sunday night'
+✓ mem_162d…9666 [agency/client]
+  filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
   scope: [master]
-lore: [northwind/acme] 2 file(s) pushed
-$ lore rule add --to northwind/. --body 'every client estimate is reviewed by two people before it is sent'
-✓ rul_54fe…28f2 rul_54fe…28f2 [northwind/.]
-  filed: --to northwind/.
+lore: [agency/client] 2 file(s) pushed
+$ lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'
+✓ rul_54fe…28f2 [agency/.]
+  filed: --to agency/.
   scope: [master] severity: must
-lore: [northwind/.] 1 file(s) pushed
+lore: [agency/.] 1 file(s) pushed
 ```
 <!-- /example -->
 
-Casey, in the same client repo, sees the link, the Acme note and the company stores, and has clones of only the two stores in the config:
+Bob, in the same client repo, sees the link, the client's note and the company stores. He has clones of only the two stores in his config:
 
 <!-- example: contractor#contractor-view -->
 ```console
-# cont1, in acme-app
+# bob, in website
 $ lore whoami
-org        northwind  (matched by: link in github.com/northwind/lore-acme acme/, project id + remote)
-identity   Casey Contractor <human:cont1@northwind.example>   act_05e9…4603  @cont1  (from: org entry (config.yaml))
+org        agency  (matched by: link in github.com/agency/notes-client client/, project id + remote)
+identity   Bob Roe <human:bob@agency.example>   act_05e9…4603  @bob  (from: org entry (config.yaml))
 repo       client repo  (guards on)
 project    prj_7a67…9504
-remotes    github.com/acme/app
-stores     git@github.com:northwind/lore-org on branch main  (org folder .)
-           git@github.com:northwind/lore-acme on branch main
-internal   github.com/northwind/lore-acme acme/
+remotes    github.com/client/website
+stores     git@github.com:agency/notes on branch main  (org folder .)
+           git@github.com:agency/notes-client on branch main
+internal   github.com/agency/notes-client client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
-personal   local: northwind/, everywhere/
+personal   local: agency/, everywhere/
 $ lore actor register
-✓ act_05e9…4603 Casey Contractor (@cont1) registered in northwind ./
-lore: [northwind/.] 1 file(s) pushed
+✓ act_05e9…4603 Bob Roe (@bob) registered in agency ./
+lore: [agency/.] 1 file(s) pushed
 $ lore memory list
-mem_162d…9666  the Acme staging database is restored every Sunday night  [northwind/acme]
+mem_162d…9666  the client staging database is restored every Sunday night  [agency/client]
 
-# cont1, in ~
+# bob, in ~
 $ lore store show
 <redacted>
-  entries   northwind   branches main
-  clone     /home/cont1/.lore/clones/github.com/northwind/lore-org.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+  entries   agency   branches main
+  clone     ~/.lore/clones/github.com/agency/notes.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
 <redacted>
-  entries   northwind   branches main
-  clone     /home/cont1/.lore/clones/github.com/northwind/lore-acme.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
-$ ls ~/.lore/clones/github.com/northwind
-lore-acme.git
-lore-org.git
+  entries   agency   branches main
+  clone     ~/.lore/clones/github.com/agency/notes-client.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+$ ls ~/.lore/clones/github.com/agency
+notes-client.git
+notes.git
 ```
 <!-- /example -->
 
 ## What happened
 
 ```text
- northwind/lore-org     (.)    roster, company rules        Alice ✓   Casey ✓
- northwind/lore-acme    acme/  Acme's internal notes        Alice ✓   Casey ✓
- northwind/lore-globex  globex/ Globex's internal notes     Alice ✓   Casey ✗ (not in config, no GitHub access)
+ agency/notes          (.)       roster, company rules         Alice ✓   Bob ✓
+ agency/notes-client   client/   the client's internal notes   Alice ✓   Bob ✓
+ agency/notes-client2  client2/  client 2's internal notes     Alice ✓   Bob ✗ (not in config, no GitHub access)
 ```
 
-## Gotchas
+## Pitfalls
 
-- **GitHub permissions are the access control.** Leaving a store out of Casey's config is convenience; removing Casey's access to that repo is what actually keeps it out of reach.
+- **GitHub permissions are the access control.** Leaving a store out of Bob's config is only a convenience. Removing Bob's access to that repo is what actually keeps it out of reach.
 - **Folder names are unique across an org's stores**, and exactly one store sets `org_folder`.
-- **Offboarding** is removing two repo permissions, then `lore task revoke` / `lore task reassign` for their open work and `lore actor deactivate @cont1` (the roster row stays, marked inactive, because old rows point at it). Copies Casey already fetched stay on Casey's machine, like any git clone.
-- The three layouts (one store for everything, one per client, or a mix) are all plain config; the commands do not change. One store per client is the recommended layout once contractors or NDAs exist.
+- **Offboarding** (when Bob leaves) means removing two repo permissions. Then run `lore task revoke` / `lore task reassign` for his open work and `lore actor deactivate @bob`. The roster row stays, marked inactive, because old rows point at it. Copies Bob already fetched stay on Bob's machine, like any git clone.
+- The three layouts (one store for everything, one per client, or a mix) are all plain config. The commands do not change. One store per client is the recommended layout once you have contractors or NDAs (secrecy agreements).

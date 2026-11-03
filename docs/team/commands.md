@@ -1,8 +1,8 @@
 # Commands reference
 
-Every command, flag, environment variable, config key and exit status that lore for teams adds or changes.
+**In short:** this page lists every team command with its flags, the settings in `~/.lore/config.yaml`, the environment variables, and what each error code and exit status means. Use it to look things up. For step-by-step guides, start at the [team docs index](README.md).
 
-**How this page is made.** The usage and flag blocks below are the real `--help` output of the lore binary, and the error table is `lore errors list` joined with the exit statuses in `saas/pkg/aicoder/errcodes/registry.go`. `tests/team/docs/paste.py` regenerates them (`LORE_BIN=<lore> python3 tests/team/docs/paste.py`; with `--check` it fails when a block is stale). The environment variable and config key tables are written by hand and cited to the code that defines them, so `ds check` flags them when that code changes. Global flags every command accepts (`--color`, `--trace`, and on most commands `--db`, `--project`, `--read-only`, `--repo`, `--json`) are left out of the blocks.
+**How this page is made.** The usage and flag blocks below are the real `--help` output of the lore binary. The error table is `lore errors list` joined with the exit statuses in `saas/pkg/aicoder/errcodes/registry.go`. `tests/team/docs/paste.py` regenerates them (`LORE_BIN=<lore> python3 tests/team/docs/paste.py`; with `--check` it fails when a block is stale). The environment variable and config key tables are written by hand and cited to the code that defines them, so `ds check` flags them when that code changes. Global flags every command accepts (`--color`, `--trace`, and on most commands `--db`, `--project`, `--read-only`, `--repo`, `--json`) are left out of the blocks.
 
 Contents: [who you are](#who-you-are-and-which-org) · [stores](#stores) · [live rows](#live-rows-and-landing) · [sharing](#moving-rows-between-audiences) · [leak checks](#leak-checks-context-and-caches) · [tasks and missions](#tasks-and-missions-team-flags) · [agents](#agent-coordination) · [other kinds](#other-row-kinds-team-flags) · [environment variables](#environment-variables) · [config keys](#config-keys) · [error codes and exit statuses](#error-codes-and-exit-statuses)
 
@@ -20,7 +20,7 @@ Usage:
 Examples:
   lore whoami
   lore whoami --explain        # every org rule with hit or miss
-  LORE_ORG=northwind-stag lore whoami
+  LORE_ORG=agency-stag lore whoami
   lore whoami --json
 
 Flags:
@@ -58,7 +58,7 @@ Usage:
 
 Examples:
   lore identity set alice
-  lore identity set --org northwind --key human:alice@northwind.example --name "Alice Doe" --handle alice
+  lore identity set --org agency --key human:alice@agency.example --name "Alice Doe" --handle alice
 
 Flags:
       --handle string   with --org: roster handle, without @
@@ -78,9 +78,9 @@ Usage:
   lore org link <org> --project <folder>
 
 Examples:
-  lore org link northwind --project acme
-  lore org link northwind --project lore-tools --own
-  lore org link northwind --project globex --default --dry-run
+  lore org link agency --project client
+  lore org link agency --project lore-tools --own
+  lore org link agency --project client2 --default --dry-run
 
 Flags:
       --default --to <org>   the link --to <org> uses when this repo has several
@@ -103,8 +103,8 @@ Usage:
   lore org unlink <org> --project <folder>
 
 Examples:
-  lore org unlink northwind --project acme
-  lore org unlink northwind --project acme --yes
+  lore org unlink agency --project client
+  lore org unlink agency --project client --yes
 
 Flags:
       --dry-run          show what would change, write nothing
@@ -125,7 +125,7 @@ Usage:
   lore org use <entry>
 
 Examples:
-  lore org use northwind-stag     # work against the staging store branch here
+  lore org use agency-stag     # work against the staging store branch here
   lore org use --clear             # back to automatic resolution
 
 Flags:
@@ -143,8 +143,8 @@ Usage:
   lore org set <org> --commit
 
 Examples:
-  lore org set northwind --commit
-  lore org set northwind --commit --project lore-tools
+  lore org set agency --commit
+  lore org set agency --commit --project lore-tools
 
 Flags:
       --commit           confirm writing the committed .lore/org.yaml
@@ -162,8 +162,8 @@ Usage:
   lore org import <store-url>
 
 Examples:
-  lore org import git@github.com:northwind/lore --key human:me@northwind.example --name "Me" --handle me
-  lore org import git@github.com:northwind/lore --as northwind-2
+  lore org import git@github.com:agency/notes --key human:me@agency.example --name "Me" --handle me
+  lore org import git@github.com:agency/notes --as agency-2
 
 Flags:
       --as string       entry name, when the suggested one is taken
@@ -186,8 +186,8 @@ Usage:
 
 Examples:
   lore actor register
-  lore actor register --kind agent --label frontend-2 --owner @alice
-  lore agent start --label frontend-2 --owner @alice   # same, and prints the session env
+  lore actor register --kind agent --label agent-frontend --owner @alice
+  lore agent start --label agent-frontend --owner @alice   # same, and prints the session env
 
 Flags:
       --kind string    human (default) or agent
@@ -206,7 +206,7 @@ Usage:
   lore actor deactivate <@handle>
 
 Examples:
-  lore actor deactivate @dev3
+  lore actor deactivate @carol
 
 Flags:
 ```
@@ -241,8 +241,8 @@ Usage:
   lore store init <url>
 
 Examples:
-  lore store init git@github.com:northwind/lore
-  lore store init git@github.com:northwind/lore --branch staging
+  lore store init git@github.com:agency/notes
+  lore store init git@github.com:agency/notes --branch staging
 
 Flags:
       --branch string       the store branch to make a lore (default: the entry's branch, else main); may not contain /
@@ -279,7 +279,7 @@ Usage:
   lore store open <url>
 
 Examples:
-  lore store open git@github.com:northwind/lore
+  lore store open git@github.com:agency/notes
 
 Flags:
       --branch string   store branch (default: the entry's branch)
@@ -296,7 +296,7 @@ Usage:
   lore store forget <url>
 
 Examples:
-  lore store forget git@github.com:northwind/lore
+  lore store forget git@github.com:agency/notes
 
 Flags:
 ```
@@ -450,7 +450,7 @@ Usage:
 
 Examples:
   lore share mem_0c12 --to repo
-  lore share mem_77 --to northwind
+  lore share mem_77 --to agency
 
 Flags:
       --to string   the target: repo | <org> | <org>/<folder> | me (required)
@@ -468,7 +468,7 @@ Usage:
   lore move <id> --to <target>
 
 Examples:
-  lore move mem_0b77 --to northwind
+  lore move mem_0b77 --to agency
 
 Flags:
       --to string   the target: repo | <org> | <org>/<folder> | me (required)
@@ -591,34 +591,36 @@ Usage:
   lore task add <title>
 
 Flags:
-      --after strings            dependencies: <id>[:done|:merged][,…] (default: done in the same repo, merged across repos)
-      --assign string            assign to @handle (a person sets the assignee, a team the assigned team)
-      --assigned-to string       actor_id (act_*) the task is assigned to
-      --body string              longer description
-      --commitment string        accepted | proposed | someday (REQUIRED for agent callers)
-      --created-by string        actor_id (act_*); defaults to current identity
-      --db string                override DB path (default: cwd's .lore/lore.db)
-      --defer-until string       snooze until date (YYYY-MM-DD); hides from active list until then
-      --due string               due date (YYYY-MM-DD)
-      --everywhere               with --to me: file the note under everywhere/ (loads in every repo)
-      --force-org lore org use   write even though LORE_ORG / lore org use disagrees with a store link
-      --json                     print the new task as JSON (incl. its id)
-      --key string               idempotency key: a re-run with the same key (in the same mission) adds nothing
-      --live                     share this row with everyone at once on the live ref (refs/lore/live)
-      --mission string           mission_id (msn_*) to attach to
-      --no-live                  keep this row with the code (this branch's .lore/data)
-      --plan string              plan_id (pln_*) to attach to
-      --priority string          low | medium | high | urgent (default "medium")
-      --project string           override project (id or name)
-      --read-only                skip lock acquisition; refuse writes
-      --ref stringArray          a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
-      --repo string              scope to a specific repo (mount_name or rep_id)
-      --role task next --role    plan role matched by task next --role (e.g. coordinator)
-      --tasklist string          tasklist_id (tlt_*); default: the project's default list (created on demand)
-      --timebox duration         time box, e.g. 60m (active lease time summed across holders)
-      --to string                where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --after strings           dependencies: <id>[:done|:merged][,…] (default: done in the same repo, merged across repos)
+      --assign string           assign to @handle (a person sets the assignee, a team the assigned team)
+      --assigned-to string      actor_id (act_*) the task is assigned to
+      --body string             longer description
+      --commitment string       accepted | proposed | someday (REQUIRED for agent callers)
+      --created-by string       actor_id (act_*); defaults to current identity
+      --db string               override DB path (default: cwd's .lore/lore.db)
+      --defer-until string      snooze until date (YYYY-MM-DD); hides from active list until then
+      --due string              due date (YYYY-MM-DD)
+      --everywhere              with --to me: file the note under everywhere/ (loads in every repo)
+      --force-org               write even though LORE_ORG or lore org use disagrees with a store link
+      --json                    print the new task as JSON (incl. its id)
+      --key string              idempotency key: a re-run with the same key (in the same mission) adds nothing
+      --live                    share this row with everyone at once on the live ref (refs/lore/live)
+      --mission string          mission_id (msn_*) to attach to
+      --no-live                 keep this row with the code (this branch's .lore/data)
+      --plan string             plan_id (pln_*) to attach to
+      --priority string         low | medium | high | urgent (default "medium")
+      --project string          override project (id or name)
+      --read-only               skip lock acquisition; refuse writes
+      --ref stringArray         a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
+      --repo string             scope to a specific repo (mount_name or rep_id)
+      --role task next --role   plan role matched by task next --role (e.g. coordinator)
+      --tasklist string         tasklist_id (tlt_*); default: the project's default list (created on demand)
+      --timebox duration        time box, e.g. 60m (active lease time summed across holders)
+      --to string               where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
 ```
 <!-- /help -->
+
+In a linked client repo, `--assign` takes a person, never a whole team: `--assign @frontend` there is refused, because team names are internal to the agency. Assign a person, or keep the task internal with `--to <org>`.
 
 ### `lore task edit`
 
@@ -778,21 +780,21 @@ Usage:
   lore mission add <title>
 
 Flags:
-      --approvers strings        only these people (@handle,…) may approve the mission's gates
-      --body string              longer description
-      --created-by string        actor_id (act_*); defaults to current identity
-      --db string                override DB path (default: cwd's .lore/lore.db)
-      --everywhere               with --to me: file the note under everywhere/ (loads in every repo)
-      --force-org lore org use   write even though LORE_ORG / lore org use disagrees with a store link
-      --json                     JSON output (the created mission)
-      --key string               idempotency key: a re-run with the same key adds nothing
-      --live                     share this row with everyone at once on the live ref (refs/lore/live)
-      --no-live                  keep this row with the code (this branch's .lore/data)
-      --project string           override project (id or name)
-      --read-only                skip lock acquisition; refuse writes
-      --repo string              scope to a specific repo (mount_name or rep_id)
-      --target string            target completion date (YYYY-MM-DD)
-      --to string                where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --approvers strings   only these people (@handle,…) may approve the mission's gates
+      --body string         longer description
+      --created-by string   actor_id (act_*); defaults to current identity
+      --db string           override DB path (default: cwd's .lore/lore.db)
+      --everywhere          with --to me: file the note under everywhere/ (loads in every repo)
+      --force-org           write even though LORE_ORG or lore org use disagrees with a store link
+      --json                JSON output (the created mission)
+      --key string          idempotency key: a re-run with the same key adds nothing
+      --live                share this row with everyone at once on the live ref (refs/lore/live)
+      --no-live             keep this row with the code (this branch's .lore/data)
+      --project string      override project (id or name)
+      --read-only           skip lock acquisition; refuse writes
+      --repo string         scope to a specific repo (mount_name or rep_id)
+      --target string       target completion date (YYYY-MM-DD)
+      --to string           where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
 ```
 <!-- /help -->
 
@@ -835,7 +837,7 @@ Usage:
   lore agent start
 
 Flags:
-      --label string   the agent's label (one actor per label), e.g. frontend-2
+      --label string   the agent's label (one actor per label), e.g. agent-frontend
       --owner string   the owning person (@handle); default: you
 ```
 <!-- /help -->
@@ -911,10 +913,10 @@ Usage:
   lore task note <id> <text>
 
 Flags:
-      --everywhere               with --to me: file the note under everywhere/ (loads in every repo)
-      --force-org lore org use   write even though LORE_ORG / lore org use disagrees with a store link
-      --from string              the source of the id: repo | <org> | <org>/<folder>
-      --to string                where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --everywhere    with --to me: file the note under everywhere/ (loads in every repo)
+      --force-org     write even though LORE_ORG or lore org use disagrees with a store link
+      --from string   the source of the id: repo | <org> | <org>/<folder>
+      --to string     where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
 ```
 <!-- /help -->
 
@@ -974,6 +976,8 @@ Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder>
 ```
 <!-- /help -->
+
+Who may approve: any person (human) on the org's roster, never an agent. A mission's `approvers:` list narrows it to the people listed.
 
 ### `lore resource claim`
 
@@ -1060,7 +1064,7 @@ Flags:
 | `--to repo\|<org>\|<org>/<folder>\|me\|me/<org>` | which project the row is written to: this repo, the linked internal project, a store folder, or your personal store |
 | `--create` | with `--to <org>/<folder>`: create that store folder if it does not exist yet (without it an unknown folder is refused) |
 | `--everywhere` | with `--to me`: file the note under `everywhere/` so it loads in every repo |
-| `--live` / `--no-live` | share this row with everyone at once on the live ref, or keep it with the code |
+| `--live` / `--no-live` | share this row with everyone at once on the live list (a hidden list every teammate sees, whatever branch they are on), or keep it with the code |
 | `--force-org` | write even though `LORE_ORG` or `lore org use` disagrees with a store link |
 
 ## Environment variables
