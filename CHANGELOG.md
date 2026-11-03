@@ -35,6 +35,9 @@ Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1�
 
 ### Fixed
 
+- The same person on a second machine (new HOME, fresh clone) reuses their existing actor row, which a client repo holds only as a projection, instead of adding a new actor with a random id to the repo.
+- `lore task note` in a repo linked to a store fails closed when the store or link status cannot be read (nothing printed, nothing written) instead of writing the note into this checkout; a plain repo with no org still writes it as before.
+- `lore task note` on a task you do not hold writes the note where that task's notes live (the store project for a store task or an internal client task) and prints ✓ only after the write succeeded; it no longer prints ✓ and then fails with E_LEAK_BLOCKED.
 - A merged task's `merged_at` is recorded once on the live ref and lands like any live row, instead of every clone writing its own copy into the working tree (which left checkouts dirty and blocked `git pull`). `lore task merged` takes the same path, and marking an already merged task writes nothing.
 - `lore task done` without `--commit` no longer records a HEAD that is already on the default branch, so the task is not marked merged at once by mistake; the done line names the recorded commit.
 - Reclaiming an expired task keeps the work branch the earlier holder recorded and pushed, instead of recording the reclaiming agent's own branch.

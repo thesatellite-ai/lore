@@ -153,5 +153,5 @@ $ git status --short
 - **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
 - **Register first.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your clone has fetched since.
 - **Rules and decisions travel with the code** unless you pass `--live`. That is on purpose: most rules belong with the change that needs them.
-- **`git push --no-verify`** skips the ride-along check. The rows simply wait and ride on a later push.
+- **`git push --no-verify`** skips every local check lore runs at push: the ride-along (the rows simply wait and ride on a later push) and, in a client repo, the push leak check (see [Agency with a client repo](agency-client-repo.md)).
 - **Unprotected `main`** receives small `lore: land N rows` commits directly. They change only files under `.lore/data`.
