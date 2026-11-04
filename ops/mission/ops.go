@@ -235,7 +235,7 @@ func (o ops) showOf(ctx context.Context, src store.Source, r row.Row) (ShowOut, 
 		TargetDate: work.Time(r, fieldTarget), CompletedAt: work.Time(r, work.FieldCompleted),
 		CreatedByActorID: work.Field(r, work.FieldCreatedBy), Approvers: work.List(r, fieldApprovers),
 		IdempotencyKey: work.Field(r, work.FieldKey), PlanID: work.Field(r, work.FieldPlan), TagIDs: work.TagIDs(r),
-		Tasks: tasks, Store: work.SourceName(src), Label: work.Label(work.LabelerOf(o.env), src),
+		Tasks: tasks, Store: work.SourceOf(work.LabelerOf(o.env), src), Label: work.Label(work.LabelerOf(o.env), src),
 	}
 	if rec.CreatedByActorID == "" && !r.CreatedBy.IsZero() {
 		rec.CreatedByActorID = r.CreatedBy.String()
@@ -292,7 +292,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		out.Data = append(out.Data, Summary{
 			ID: s.Row.ID.String(), Title: work.Field(s.Row, work.FieldTitle), Body: work.Field(s.Row, work.FieldBody), Status: st,
 			TargetDate: work.TimeText(s.Row, fieldTarget), CompletedAt: work.TimeText(s.Row, work.FieldCompleted),
-			CreatedAt: s.Row.CreatedAt.UTC().Format(work.TimeLayout), Tasks: tasks, Store: work.SourceName(s.Source), Label: work.Label(work.LabelerOf(o.env), s.Source),
+			CreatedAt: s.Row.CreatedAt.UTC().Format(work.TimeLayout), Tasks: tasks, Store: work.SourceOf(work.LabelerOf(o.env), s.Source), Label: work.Label(work.LabelerOf(o.env), s.Source),
 		})
 	}
 	out.Count = len(out.Data)

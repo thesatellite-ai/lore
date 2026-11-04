@@ -3,6 +3,8 @@ package workspace
 import (
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Input and output structs of the workspace operations. Struct tags are
@@ -61,14 +63,14 @@ func (o ListOut) Text() string {
 // TagIDs (O11) and Store (`_source`, a row of a store other than repo) are
 // 0.1.18 additions, absent on a v0.1.17-shaped row.
 type Record struct {
-	ID        string    `json:"id,omitempty"`
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	ProjectID string    `json:"project_id,omitempty"`
-	Name      string    `json:"name,omitempty"`
-	Body      string    `json:"body,omitempty"`
-	TagIDs    []string  `json:"tag_ids,omitempty"`
-	Store     string    `json:"_source,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	CreatedAt time.Time       `json:"created_at,omitempty"`
+	UpdatedAt time.Time       `json:"updated_at,omitempty"`
+	ProjectID string          `json:"project_id,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Body      string          `json:"body,omitempty"`
+	TagIDs    []string        `json:"tag_ids,omitempty"`
+	Store     store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -131,11 +133,11 @@ func (o SearchOut) Text() string {
 
 // SearchHit is one v0.1.17 search hit.
 type SearchHit struct {
-	ID      string  `json:"id"`
-	Score   float64 `json:"score"`
-	Snippet string  `json:"snippet,omitempty"`
-	Row     HitRow  `json:"row"`
-	Store   string  `json:"_source,omitempty"`
+	ID      string          `json:"id"`
+	Score   float64         `json:"score"`
+	Snippet string          `json:"snippet,omitempty"`
+	Row     HitRow          `json:"row"`
+	Store   store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }

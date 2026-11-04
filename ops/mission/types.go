@@ -4,6 +4,7 @@ import (
 	"time"
 
 	opstask "github.com/thesatellite-ai/lore/ops/task"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Input and output structs of the mission operations (op/fields.go tags).
@@ -60,7 +61,7 @@ type Summary struct {
 	CompletedAt string          `json:"completed_at,omitempty"`
 	CreatedAt   string          `json:"created_at"`
 	Tasks       []opstask.Brief `json:"tasks,omitempty"`
-	Store       string          `json:"_source,omitempty"`
+	Store       store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -83,7 +84,7 @@ type Record struct {
 	TagIDs           []string        `json:"tag_ids,omitempty"`
 	Edges            Edges           `json:"edges"`
 	Tasks            []opstask.Brief `json:"tasks"`
-	Store            string          `json:"_source,omitempty"`
+	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }

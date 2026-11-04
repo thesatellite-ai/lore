@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Input and output structs of the memory operations. Struct tags are the
@@ -136,9 +137,9 @@ type Record struct {
 	Embedding op.Null[string] `json:"embedding"`
 	// TagIDs is new in 0.1.18 (O11; absent when untagged, so an untagged
 	// row prints v0.1.17's bytes).
-	TagIDs []string `json:"tag_ids,omitempty"`
-	Edges  Edges    `json:"edges"`
-	Store  string   `json:"_source,omitempty"`
+	TagIDs []string        `json:"tag_ids,omitempty"`
+	Edges  Edges           `json:"edges"`
+	Store  store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -224,7 +225,7 @@ type SearchHit struct {
 	Snippet string  `json:"snippet,omitempty"`
 	Row     HitRow  `json:"row"`
 	// Store is set for a hit of a store other than the repo's own.
-	Store string `json:"_source,omitempty"`
+	Store store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }

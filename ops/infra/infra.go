@@ -192,5 +192,6 @@ func timeOf(r row.Row, created bool) string {
 	return t.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
 }
 
-// sourceOf is the `_source` of a row of src ("" for the repo store).
-func sourceOf(src store.Source) string { return work.SourceName(src) }
+// sourceOf is the `_source` object of a row of src (zero, so omitted, for the repo store;
+// FLAG1, opsmemory.SourceOf through work.SourceOf).
+func sourceOf(l work.Labeler, src store.Source) store.SourceRef { return work.SourceOf(l, src) }

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/timeentry"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Input and output structs of the task operations. Struct tags are the op
@@ -84,7 +85,7 @@ type Brief struct {
 	DueAt         string `json:"due_at,omitempty"`
 	MissionID     string `json:"mission_id,omitempty"`
 	// Store is set for a task of a store other than the repo's own.
-	Store string `json:"_source,omitempty"`
+	Store store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 	// Line is the v0.1.17 human list line.
@@ -112,8 +113,8 @@ type Full struct {
 	RepoID        string `json:"repo_id,omitempty"`
 	CreatedAt     string `json:"created_at"`
 	// TagIDs is new in 0.1.18 (O11; absent when untagged).
-	TagIDs []string `json:"tag_ids,omitempty"`
-	Store  string   `json:"_source,omitempty"`
+	TagIDs []string        `json:"tag_ids,omitempty"`
+	Store  store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 	// Refs are the task's --ref pointers (new in the show output; v0.1.17

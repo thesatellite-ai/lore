@@ -3,6 +3,8 @@ package pattern
 import (
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Input and output structs of the pattern operations. Struct tags are the
@@ -69,24 +71,24 @@ const badge = "PA"
 // values here). TagIDs (O11) and Store (`_source`, a row of a store other
 // than repo) are 0.1.18 additions, absent on a v0.1.17-shaped row.
 type Record struct {
-	ID               string    `json:"id,omitempty"`
-	CreatedAt        time.Time `json:"created_at,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at,omitempty"`
-	TrustScore       float64   `json:"trust_score,omitempty"`
-	Confidence       float64   `json:"confidence,omitempty"`
-	LastValidatedAt  time.Time `json:"last_validated_at,omitempty,omitzero"`
-	ArchivedAt       time.Time `json:"archived_at,omitempty,omitzero"`
-	SourceKind       string    `json:"source_kind,omitempty"`
-	SourceRef        string    `json:"source_ref,omitempty"`
-	ProjectID        string    `json:"project_id,omitempty"`
-	RepoID           string    `json:"repo_id,omitempty"`
-	Title            string    `json:"title,omitempty"`
-	Body             string    `json:"body,omitempty"`
-	Language         string    `json:"language,omitempty"`
-	SupersededByID   string    `json:"superseded_by_id,omitempty"`
-	CreatedByActorID string    `json:"created_by_actor_id,omitempty"`
-	TagIDs           []string  `json:"tag_ids,omitempty"`
-	Store            string    `json:"_source,omitempty"`
+	ID               string          `json:"id,omitempty"`
+	CreatedAt        time.Time       `json:"created_at,omitempty"`
+	UpdatedAt        time.Time       `json:"updated_at,omitempty"`
+	TrustScore       float64         `json:"trust_score,omitempty"`
+	Confidence       float64         `json:"confidence,omitempty"`
+	LastValidatedAt  time.Time       `json:"last_validated_at,omitempty,omitzero"`
+	ArchivedAt       time.Time       `json:"archived_at,omitempty,omitzero"`
+	SourceKind       string          `json:"source_kind,omitempty"`
+	SourceRef        string          `json:"source_ref,omitempty"`
+	ProjectID        string          `json:"project_id,omitempty"`
+	RepoID           string          `json:"repo_id,omitempty"`
+	Title            string          `json:"title,omitempty"`
+	Body             string          `json:"body,omitempty"`
+	Language         string          `json:"language,omitempty"`
+	SupersededByID   string          `json:"superseded_by_id,omitempty"`
+	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
+	TagIDs           []string        `json:"tag_ids,omitempty"`
+	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -152,11 +154,11 @@ func (o SearchOut) Text() string {
 
 // SearchHit is one v0.1.17 search hit.
 type SearchHit struct {
-	ID      string  `json:"id"`
-	Score   float64 `json:"score"`
-	Snippet string  `json:"snippet,omitempty"`
-	Row     HitRow  `json:"row"`
-	Store   string  `json:"_source,omitempty"`
+	ID      string          `json:"id"`
+	Score   float64         `json:"score"`
+	Snippet string          `json:"snippet,omitempty"`
+	Row     HitRow          `json:"row"`
+	Store   store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }

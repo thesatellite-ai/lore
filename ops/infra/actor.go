@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // ActorListIn is the input of actor.list.
@@ -20,18 +21,18 @@ type ActorListIn struct {
 // Actor is one actor in v0.1.17's --json form (the ent Actor struct; the
 // machine-local last_seen_at no longer travels in a row).
 type Actor struct {
-	ID          string `json:"id"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	Kind        string `json:"kind"`
-	DisplayName string `json:"display_name"`
-	StableKey   string `json:"stable_key"`
-	Handle      string `json:"handle,omitempty"`
-	Label       string `json:"label,omitempty"`
-	OwnerID     string `json:"owner_actor_id,omitempty"`
-	Active      bool   `json:"active"`
-	LeftAt      string `json:"left_at,omitempty"`
-	Store       string `json:"_source,omitempty"`
+	ID          string          `json:"id"`
+	CreatedAt   string          `json:"created_at,omitempty"`
+	UpdatedAt   string          `json:"updated_at,omitempty"`
+	Kind        string          `json:"kind"`
+	DisplayName string          `json:"display_name"`
+	StableKey   string          `json:"stable_key"`
+	Handle      string          `json:"handle,omitempty"`
+	Label       string          `json:"label,omitempty"`
+	OwnerID     string          `json:"owner_actor_id,omitempty"`
+	Active      bool            `json:"active"`
+	LeftAt      string          `json:"left_at,omitempty"`
+	Store       store.SourceRef `json:"_source,omitempty,omitzero"`
 }
 
 // ActorListOut is v0.1.17's list envelope.
@@ -68,13 +69,13 @@ func (o ActorShowOut) Text() string {
 }
 
 // actorOf converts a row of src into its v0.1.17 record.
-func actorOf(s work.Sourced) Actor {
+func actorOf(lab work.Labeler, s work.Sourced) Actor {
 	r := s.Row
 	return Actor{
 		ID: r.ID.String(), CreatedAt: timeOf(r, true), UpdatedAt: timeOf(r, false),
 		Kind: work.Field(r, fieldKind), DisplayName: work.Field(r, fieldDisplayName), StableKey: work.Field(r, fieldStableKey),
 		Handle: work.Field(r, fieldHandle), Label: work.Field(r, fieldLabel), OwnerID: work.Field(r, fieldOwner),
-		Active: activeOf(r), LeftAt: work.TimeText(r, fieldLeftAt), Store: sourceOf(s.Source),
+		Active: activeOf(r), LeftAt: work.TimeText(r, fieldLeftAt), Store: sourceOf(lab, s.Source),
 	}
 }
 
@@ -97,7 +98,7 @@ func (o ops) actorList(ctx context.Context, in ActorListIn) (ActorListOut, error
 			continue
 		}
 		seen[s.Row.ID.String()] = true
-		out.Data = append(out.Data, actorOf(s))
+		out.Data = append(out.Data, actorOf(work.LabelerOf(o.env), s))
 	}
 	out.Count = len(out.Data)
 	return out, nil
@@ -114,5 +115,5 @@ func (o ops) actorShow(ctx context.Context, in IDIn) (ActorShowOut, error) {
 	if err != nil {
 		return ActorShowOut{}, err
 	}
-	return ActorShowOut{SchemaVersion: SchemaVersion, Kind: KindActorShow, Data: actorOf(work.Sourced{Source: src, Row: r})}, nil
+	return ActorShowOut{SchemaVersion: SchemaVersion, Kind: KindActorShow, Data: actorOf(work.LabelerOf(o.env), work.Sourced{Source: src, Row: r})}, nil
 }

@@ -356,7 +356,7 @@ func TestSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := call[SearchOut](t, env, OpSearch, `{"query":"gateway"}`)
-	if err != nil || out.Count != 1 || out.Data[0].Store != "" {
+	if err != nil || out.Count != 1 || out.Data[0].Store != (store.SourceRef{}) {
 		t.Fatalf("search = %+v %v", out, err)
 	}
 	if out, err = call[SearchOut](t, env, OpSearch, `{"query":"gateway","include_archived":true}`); err != nil || out.Count != 2 {

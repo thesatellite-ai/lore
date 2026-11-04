@@ -374,13 +374,18 @@ func ListAll(ctx context.Context, env Env, table row.Table, only string) ([]Sour
 	return out, nil
 }
 
-// SourceName is the `_source` of a row of src ("" for the repo store).
+// SourceName is the store name of a write output's `store` key ("" for the
+// repo store). Not `_source`: write outputs keep the plain name.
 func SourceName(src store.Source) string {
 	if src == store.SourceRepo {
 		return ""
 	}
 	return string(src)
 }
+
+// SourceOf is the `_source` object of a row of src (zero, so omitted, for the repo;
+// FLAG1, opsmemory.SourceOf).
+func SourceOf(l Labeler, src store.Source) store.SourceRef { return opsmemory.SourceOf(l, src) }
 
 // Labeler is opsmemory.Labeler: the optional Env upgrade naming a store
 // as a person reads it (wire.App.StoreLabel).
@@ -472,8 +477,8 @@ type SearchHit struct {
 	Snippet string            `json:"snippet,omitempty"`
 	Row     map[string]string `json:"row"`
 	// Relations is v0.1.17's eager-loaded references (task search only).
-	Relations Relations `json:"relations,omitzero"`
-	Store     string    `json:"_source,omitempty"`
+	Relations Relations       `json:"relations,omitzero"`
+	Store     store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 	// Human is the hit's v0.1.17 human line.
@@ -521,7 +526,7 @@ func HitOf(lab Labeler, s SearchRow, withStatus bool, cols ...string) SearchHit 
 	for _, c := range cols {
 		m[c] = Field(s.Row, c)
 	}
-	h := SearchHit{ID: s.Row.ID.String(), Score: s.Hit.Score, Snippet: s.Hit.Snippet, Row: m, Store: SourceName(s.Source), Label: Label(lab, s.Source)}
+	h := SearchHit{ID: s.Row.ID.String(), Score: s.Hit.Score, Snippet: s.Hit.Snippet, Row: m, Store: SourceOf(lab, s.Source), Label: Label(lab, s.Source)}
 	h.Human = h.ID + " " + Field(s.Row, FieldTitle)
 	if withStatus {
 		h.Human = h.ID + " [" + Field(s.Row, FieldStatus) + "] " + Field(s.Row, FieldTitle)

@@ -18,8 +18,12 @@ import (
 	"io"
 	"os"
 
+	"strings"
+
 	"saas/pkg/aicoder/cachedb"
 	"saas/pkg/aicoder/style"
+
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Keys added to an external row in --json output.
@@ -66,8 +70,29 @@ func externalJSONRows(ctx context.Context, table, text string) []map[string]any 
 			continue
 		}
 		delete(doc, "_live")
-		doc[jsonKeySource], doc[jsonKeyLabel], doc[jsonKeyLive] = r.Source, r.Label, r.Live
+		doc[jsonKeySource], doc[jsonKeyLabel], doc[jsonKeyLive] = externalSource(r.Source), r.Label, r.Live
 		out = append(out, doc)
 	}
 	return out
+}
+
+// externalSource is the `_source` object of a v0.1.17 cache row whose
+// Source is "store:<org>/<folder>" or "personal:<folder>".
+//
+// FLAG1 (owner C): `_source` is {store, store_id, folder, folder_id}, the
+// same object the core prints, so scripts read one shape. These v0.1.17
+// stores have no sto_ id (their marker predates it) and the cache row
+// does not carry the folder's prj_ id, so only the names are filled; the
+// personal store is "me" (its attached name, personalStoreEntry). Any
+// other Source is kept as the store name alone.
+func externalSource(src string) store.SourceRef {
+	kind, rest, _ := strings.Cut(src, ":")
+	switch kind {
+	case cachedb.SourceStore:
+		org, folder, _ := strings.Cut(rest, "/")
+		return store.SourceRef{Store: org, Folder: folder}
+	case cachedb.SourcePersonal:
+		return store.SourceRef{Store: personalStoreEntry, Folder: rest}
+	}
+	return store.SourceRef{Store: src}
 }

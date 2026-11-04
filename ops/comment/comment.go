@@ -143,15 +143,15 @@ func (o ListOut) Text() string {
 
 // Record is one comment in v0.1.17's --json form (the ent Comment struct).
 type Record struct {
-	ID               string `json:"id"`
-	CreatedAt        string `json:"created_at,omitempty"`
-	UpdatedAt        string `json:"updated_at,omitempty"`
-	EntityTable      string `json:"entity_table"`
-	EntityID         string `json:"entity_id"`
-	EntityProjectID  string `json:"entity_project_id,omitempty"`
-	Body             string `json:"body"`
-	CreatedByActorID string `json:"created_by_actor_id,omitempty"`
-	Store            string `json:"_source,omitempty"`
+	ID               string          `json:"id"`
+	CreatedAt        string          `json:"created_at,omitempty"`
+	UpdatedAt        string          `json:"updated_at,omitempty"`
+	EntityTable      string          `json:"entity_table"`
+	EntityID         string          `json:"entity_id"`
+	EntityProjectID  string          `json:"entity_project_id,omitempty"`
+	Body             string          `json:"body"`
+	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
+	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -194,11 +194,11 @@ func (o SearchOut) Text() string {
 
 // SearchHit is one v0.1.17 search hit.
 type SearchHit struct {
-	ID      string  `json:"id"`
-	Score   float64 `json:"score"`
-	Snippet string  `json:"snippet,omitempty"`
-	Row     HitRow  `json:"row"`
-	Store   string  `json:"_source,omitempty"`
+	ID      string          `json:"id"`
+	Score   float64         `json:"score"`
+	Snippet string          `json:"snippet,omitempty"`
+	Row     HitRow          `json:"row"`
+	Store   store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -406,7 +406,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 			Body: field(r, fieldBody), EntityID: field(r, schema.FieldEntityID), EntityTable: field(r, schema.FieldEntityTable),
 		}}
 		if src != store.SourceRepo {
-			hit.Store = string(src)
+			hit.Store = opsmemory.SourceOf(opsmemory.LabelerOf(o.env), src)
 			hit.Label = opsmemory.Label(opsmemory.LabelerOf(o.env), src)
 		}
 		out.Data = append(out.Data, hit)
@@ -454,7 +454,7 @@ func recordOf(lab opsmemory.Labeler, src store.Source, r row.Row) Record {
 		rec.CreatedByActorID = r.CreatedBy.String()
 	}
 	if src != store.SourceRepo {
-		rec.Store = string(src)
+		rec.Store = opsmemory.SourceOf(lab, src)
 		rec.Label = opsmemory.Label(lab, src)
 	}
 	return rec

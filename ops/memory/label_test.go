@@ -48,3 +48,36 @@ func TestLabel(t *testing.T) {
 		t.Error("LabelerOf invented an upgrade")
 	}
 }
+
+// describer is a Labeler that also describes a store (wire.App's FLAG1
+// upgrade).
+type describer struct{ fakeLabeler }
+
+func (describer) DescribeSource(name store.Source) store.SourceRef {
+	return store.SourceRef{Store: string(name), Folder: "acme"}
+}
+
+// TestSourceOf: FLAG1 `_source` is the zero (omitted) object for the repo store and an unset
+// source (repo rows keep their bytes), the describer's object when the
+// labeler has the upgrade, and the store name alone otherwise.
+func TestSourceOf(t *testing.T) {
+	d := describer{fakeLabeler{}}
+	cases := []struct {
+		name string
+		l    Labeler
+		src  store.Source
+		want store.SourceRef
+	}{
+		{"repo", d, store.SourceRepo, store.SourceRef{}},
+		{"empty", d, "", store.SourceRef{}},
+		{"describer", d, "northwind", store.SourceRef{Store: "northwind", Folder: "acme"}},
+		{"labeler only", fakeLabeler{}, "northwind", store.SourceRef{Store: "northwind"}},
+		{"none", nil, "me", store.SourceRef{Store: "me"}},
+	}
+	for _, c := range cases {
+		got := SourceOf(c.l, c.src)
+		if got != c.want {
+			t.Errorf("%s: SourceOf = %+v, want %+v", c.name, got, c.want)
+		}
+	}
+}

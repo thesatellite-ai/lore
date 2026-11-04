@@ -53,8 +53,9 @@ func labelCases(to string) []labelCase {
 }
 
 // TestStoreLabelInOutputs: a row of a store attached at a linked folder
-// carries v0.1.17's `_label` "[northwind/acme]" next to `_source`
-// "northwind" (the store NAME, unchanged so --to/--store round-trip), and
+// carries v0.1.17's `_label` "[northwind/acme]" next to `_source`, the
+// FLAG1 object {store, store_id, folder, folder_id} (names plus permanent
+// sto_/prj_ ids; store and folder read back as `--to northwind/acme`), and
 // the human list lines that show a store print the label; a store
 // attached at its root is labelled with its name in both. v0.1.17
 // (stores_reads.go, stores_cache.go) set `_label` to the cache's Label,
@@ -74,11 +75,11 @@ func TestStoreLabelInOutputs(t *testing.T) {
 		o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
 	}
 	setups := []struct {
-		name, label string
-		h           *opstest.H
+		name, label, folder string
+		h                   *opstest.H
 	}{
-		{"folder-attached", "[northwind/acme]", opstest.New(t, folderAttached)},
-		{"root-attached", "[" + orgStore + "]", opstest.New(t, withOrg(t), repoClient(false))},
+		{"folder-attached", "[northwind/acme]", "acme", opstest.New(t, folderAttached)},
+		{"root-attached", "[" + orgStore + "]", "", opstest.New(t, withOrg(t), repoClient(false))},
 	}
 	for _, s := range setups {
 		to := "northwind"
@@ -99,8 +100,8 @@ func TestStoreLabelInOutputs(t *testing.T) {
 				}
 				res := s.h.Must(c.list, `{}`)
 				js := s.h.JSON(res)
-				want := `"_source":"` + to + `","_label":"` + s.label + `"`
-				if !strings.Contains(js, want) {
+				want := sourceRE(to, s.folder, s.label)
+				if !want.MatchString(js) {
 					t.Errorf("%s --json lacks %s:\n%s", c.list, want, js)
 				}
 				if txt := opstest.Text(res); c.human && !strings.Contains(txt, s.label) {
@@ -122,10 +123,21 @@ func TestStoreLabelInOutputs(t *testing.T) {
 	f := setups[0].h
 	for _, op := range []string{"memory.search", "rule.search", "pattern.search", "task.search"} {
 		js := f.JSON(f.Must(op, `{"query":"labelled"}`))
-		if !strings.Contains(js, `"_source":"northwind","_label":"[northwind/acme]"`) {
+		if !sourceRE("northwind", "acme", "[northwind/acme]").MatchString(js) {
 			t.Errorf("%s hit lacks the label: %s", op, js)
 		}
 	}
+}
+
+// sourceRE matches the FLAG1 `_source` object of a row of store (attached
+// at folder; "" = its root, which has no folder keys) followed by its
+// `_label`: the names plus the permanent sto_ and prj_ ids.
+func sourceRE(store, folder, label string) *regexp.Regexp {
+	obj := `"_source":\{"store":"` + regexp.QuoteMeta(store) + `","store_id":"sto_[0-9a-f]{32}"`
+	if folder != "" {
+		obj += `,"folder":"` + regexp.QuoteMeta(folder) + `","folder_id":"prj_[0-9a-f]{32}"`
+	}
+	return regexp.MustCompile(obj + `\},"_label":"` + regexp.QuoteMeta(label) + `"`)
 }
 
 // TestExternalRowLines: memory and rule lists print the repo's rows first in

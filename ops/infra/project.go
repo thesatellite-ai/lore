@@ -20,13 +20,13 @@ type ProjectListIn struct {
 // Project is one project in v0.1.17's --json list form (the ent Project
 // struct; the machine-local last_active_at no longer travels in a row).
 type Project struct {
-	ID         string `json:"id"`
-	CreatedAt  string `json:"created_at,omitempty"`
-	UpdatedAt  string `json:"updated_at,omitempty"`
-	Name       string `json:"name"`
-	OriginURL  string `json:"origin_url,omitempty"`
-	ArchivedAt string `json:"archived_at,omitempty"`
-	Store      string `json:"_source,omitempty"`
+	ID         string          `json:"id"`
+	CreatedAt  string          `json:"created_at,omitempty"`
+	UpdatedAt  string          `json:"updated_at,omitempty"`
+	Name       string          `json:"name"`
+	OriginURL  string          `json:"origin_url,omitempty"`
+	ArchivedAt string          `json:"archived_at,omitempty"`
+	Store      store.SourceRef `json:"_source,omitempty,omitzero"`
 	// line is the v0.1.17 human line of this project.
 	line string
 }
@@ -118,7 +118,7 @@ func (o ops) projectList(ctx context.Context, in ProjectListIn) (ProjectListOut,
 		r := s.Row
 		out.Data = append(out.Data, Project{
 			ID: r.ID.String(), CreatedAt: timeOf(r, true), UpdatedAt: timeOf(r, false), Name: work.Field(r, fieldName),
-			OriginURL: work.Field(r, fieldOrigin), ArchivedAt: work.TimeText(r, fieldArchivedAt), Store: sourceOf(s.Source),
+			OriginURL: work.Field(r, fieldOrigin), ArchivedAt: work.TimeText(r, fieldArchivedAt), Store: sourceOf(work.LabelerOf(o.env), s.Source),
 			line: listLine(r, work.Field(r, fieldName)),
 		})
 	}

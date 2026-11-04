@@ -46,7 +46,24 @@
                         "type": "object",
                         "properties": {
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "active": {
                             "type": "boolean"
@@ -210,7 +227,24 @@
                       "type": "object",
                       "properties": {
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "active": {
                           "type": "boolean"
@@ -431,7 +465,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -818,7 +869,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -1115,7 +1183,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -1465,7 +1550,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -1845,7 +1947,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -2142,7 +2261,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -2491,7 +2627,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -2862,7 +3015,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -3148,7 +3318,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "author": {
                             "type": "string"
@@ -3324,7 +3511,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -3711,7 +3915,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -4012,7 +4233,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -4407,7 +4645,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "archived_at": {
                             "type": "string"
@@ -4845,7 +5100,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -5170,7 +5442,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "archived_at": {
                           "type": "string"
@@ -5898,7 +6187,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "config_json": {
                             "type": "string"
@@ -6561,7 +6867,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -6951,7 +7274,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -7248,7 +7588,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -7637,7 +7994,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "archived_at": {
                             "type": "string"
@@ -8075,7 +8449,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -8396,7 +8787,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "archived_at": {
                           "type": "string"
@@ -9120,7 +9528,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -9506,7 +9931,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -9803,7 +10245,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -9978,7 +10437,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "author": {
                             "type": "string"
@@ -10540,7 +11016,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "archived_at": {
                             "type": "string"
@@ -10997,7 +11490,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -11302,7 +11812,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "archived_at": {
                           "type": "string"
@@ -13714,7 +14241,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -13743,7 +14287,24 @@
                                   "type": "string"
                                 },
                                 "_source": {
-                                  "type": "string"
+                                  "type": "object",
+                                  "properties": {
+                                    "folder": {
+                                      "type": "string"
+                                    },
+                                    "folder_id": {
+                                      "type": "string"
+                                    },
+                                    "store": {
+                                      "type": "string"
+                                    },
+                                    "store_id": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "store"
+                                  ]
                                 },
                                 "commitment": {
                                   "type": "string"
@@ -13962,7 +14523,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "approvers": {
                           "type": "array",
@@ -14018,7 +14596,24 @@
                                 "type": "string"
                               },
                               "_source": {
-                                "type": "string"
+                                "type": "object",
+                                "properties": {
+                                  "folder": {
+                                    "type": "string"
+                                  },
+                                  "folder_id": {
+                                    "type": "string"
+                                  },
+                                  "store": {
+                                    "type": "string"
+                                  },
+                                  "store_id": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "store"
+                                ]
                               },
                               "commitment": {
                                 "type": "string"
@@ -14389,7 +14984,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -14766,7 +15378,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "approvers": {
                           "type": "array",
@@ -14822,7 +15451,24 @@
                                 "type": "string"
                               },
                               "_source": {
-                                "type": "string"
+                                "type": "object",
+                                "properties": {
+                                  "folder": {
+                                    "type": "string"
+                                  },
+                                  "folder_id": {
+                                    "type": "string"
+                                  },
+                                  "store": {
+                                    "type": "string"
+                                  },
+                                  "store_id": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "store"
+                                ]
                               },
                               "commitment": {
                                 "type": "string"
@@ -15712,7 +16358,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "archived_at": {
                             "type": "string"
@@ -16131,7 +16794,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -16428,7 +17108,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "archived_at": {
                           "type": "string"
@@ -17122,7 +17819,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -17316,7 +18030,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -17517,7 +18248,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -17891,7 +18639,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -18243,7 +19008,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "archived_at": {
                             "type": "string"
@@ -18651,7 +19433,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -18948,7 +19747,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "archived_at": {
                           "type": "string"
@@ -20052,7 +20868,24 @@
                         "type": "object",
                         "properties": {
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "archived_at": {
                             "type": "string"
@@ -20857,7 +21690,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "archived_at": {
                             "type": "string"
@@ -21254,7 +22104,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -21551,7 +22418,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "archived_at": {
                           "type": "string"
@@ -22233,7 +23117,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "done_at": {
                             "type": "string"
@@ -26513,7 +27414,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "activation": {
                             "type": "string"
@@ -26962,7 +27880,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -27287,7 +28222,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "activation": {
                           "type": "string"
@@ -29237,7 +30189,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "archived_at": {
                             "type": "string"
@@ -29641,7 +30610,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -29938,7 +30924,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "archived_at": {
                           "type": "string"
@@ -31175,7 +32178,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -31558,7 +32578,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -31859,7 +32896,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -32195,7 +33249,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "color": {
                             "type": "string"
@@ -32788,7 +33859,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -32975,7 +34063,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -33173,7 +34278,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -33547,7 +34669,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -34016,7 +35155,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "commitment": {
                             "type": "string"
@@ -34268,7 +35424,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -34606,7 +35779,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "commitment": {
                             "type": "string"
@@ -34817,7 +36007,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -35050,7 +36257,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "commitment": {
                             "type": "string"
@@ -35223,7 +36447,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "commitment": {
                             "type": "string"
@@ -35547,7 +36788,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -36603,7 +37861,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -36976,7 +38251,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -37273,7 +38565,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -37612,7 +38921,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "base_url": {
                             "type": "string"
@@ -37994,7 +39320,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -38295,7 +39638,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "base_url": {
                           "type": "string"
@@ -39424,7 +40784,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -39797,7 +41174,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -40094,7 +41488,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"
@@ -40430,7 +41841,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "body": {
                             "type": "string"
@@ -40803,7 +42231,24 @@
                             "type": "string"
                           },
                           "_source": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "folder_id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "store_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store"
+                            ]
                           },
                           "id": {
                             "type": "string"
@@ -41100,7 +42545,24 @@
                           "type": "string"
                         },
                         "_source": {
-                          "type": "string"
+                          "type": "object",
+                          "properties": {
+                            "folder": {
+                              "type": "string"
+                            },
+                            "folder_id": {
+                              "type": "string"
+                            },
+                            "store": {
+                              "type": "string"
+                            },
+                            "store_id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "store"
+                          ]
                         },
                         "body": {
                           "type": "string"

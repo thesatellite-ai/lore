@@ -123,12 +123,12 @@ type ListOut struct {
 
 // Record is one reminder in v0.1.17's --json form (its keys, sorted).
 type Record struct {
-	DoneAt     string `json:"done_at,omitempty"`
-	DueAt      string `json:"due_at"`
-	ID         string `json:"id"`
-	Message    string `json:"message"`
-	Recurrence string `json:"recurrence,omitempty"`
-	Store      string `json:"_source,omitempty"`
+	DoneAt     string          `json:"done_at,omitempty"`
+	DueAt      string          `json:"due_at"`
+	ID         string          `json:"id"`
+	Message    string          `json:"message"`
+	Recurrence string          `json:"recurrence,omitempty"`
+	Store      store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 	due   time.Time
@@ -331,7 +331,7 @@ func recordOf(lab work.Labeler, s work.Sourced) Record {
 		DueAt: due.UTC().Format(time.RFC3339), ID: s.Row.ID.String(),
 		Message:    work.Field(s.Row, schema.FieldReminderMessage),
 		Recurrence: work.Field(s.Row, schema.FieldReminderRecurrence),
-		Store:      work.SourceName(s.Source), Label: work.Label(lab, s.Source), due: due,
+		Store:      work.SourceOf(lab, s.Source), Label: work.Label(lab, s.Source), due: due,
 	}
 	if t := work.Time(s.Row, schema.FieldReminderDoneAt); !t.IsZero() {
 		rec.DoneAt = t.UTC().Format(time.RFC3339)

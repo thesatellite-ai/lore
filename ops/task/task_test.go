@@ -335,9 +335,10 @@ func TestListFilters(t *testing.T) {
 			}
 		})
 	}
-	// The org store's task carries its store label (human) and _source.
+	// The org store's task carries its store label (human) and _source
+	// (FLAG1: the object naming the store).
 	listed := h.Must(opstask.OpList, `{"store":"`+orgStore+`"}`)
-	if !strings.HasSuffix(opstest.Text(listed), "  ["+orgStore+"]\n") || !strings.Contains(h.JSON(listed), `"_source":"`+orgStore+`"`) {
+	if !strings.HasSuffix(opstest.Text(listed), "  ["+orgStore+"]\n") || !strings.Contains(h.JSON(listed), `"_source":{"store":"`+orgStore+`"`) {
 		t.Errorf("store label: %q %s", opstest.Text(listed), h.JSON(listed))
 	}
 	for _, bad := range []string{`{"commitment":"maybe"}`, `{"assignee":"nobody"}`, `{"assignee":"  "}`, `{"project":"nope"}`} {

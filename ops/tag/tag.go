@@ -123,13 +123,13 @@ type Usage struct {
 
 // Record is one tag in v0.1.17's --json form (the ent Tag struct).
 type Record struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	ProjectID string `json:"project_id"`
-	Name      string `json:"name"`
-	Color     string `json:"color,omitempty"`
-	Store     string `json:"_source,omitempty"`
+	ID        string          `json:"id"`
+	CreatedAt string          `json:"created_at,omitempty"`
+	UpdatedAt string          `json:"updated_at,omitempty"`
+	ProjectID string          `json:"project_id"`
+	Name      string          `json:"name"`
+	Color     string          `json:"color,omitempty"`
+	Store     store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -318,7 +318,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 				ProjectID: field(r, fieldProject), Name: field(r, fieldName), Color: field(r, fieldColor),
 			}
 			if src != store.SourceRepo {
-				rec.Store = string(src)
+				rec.Store = opsmemory.SourceOf(opsmemory.LabelerOf(o.env), src)
 				rec.Label = opsmemory.Label(opsmemory.LabelerOf(o.env), src)
 			}
 			out.Data = append(out.Data, rec)

@@ -467,13 +467,9 @@ func (o Ops) ProjectOf(ctx context.Context, flag string) (ids.ID[ids.Project], e
 		WithHint("name it by its prj_ id")
 }
 
-// Source is the `_source` key of a row of a store other than repo.
-func Source(src store.Source) string {
-	if src == store.SourceRepo {
-		return ""
-	}
-	return string(src)
-}
+// SourceOf is the `_source` object of a row of src (zero, so omitted, for the repo;
+// FLAG1, opsmemory.SourceOf).
+func SourceOf(l Labeler, src store.Source) store.SourceRef { return opsmemory.SourceOf(l, src) }
 
 // Labeler is opsmemory.Labeler: the optional Env upgrade naming a store
 // as a person reads it (wire.App.StoreLabel).

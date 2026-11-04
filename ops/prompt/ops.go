@@ -192,7 +192,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	out := SearchOut{SchemaVersion: content.SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, f := range found {
 		out.Data = append(out.Data, SearchHit{
-			ID: f.Row.ID.String(), Score: f.Score, Snippet: f.Snippet, Store: content.Source(f.Source), Label: content.Label(o.c.Labeler(), f.Source),
+			ID: f.Row.ID.String(), Score: f.Score, Snippet: f.Snippet, Store: content.SourceOf(o.c.Labeler(), f.Source), Label: content.Label(o.c.Labeler(), f.Source),
 			Row: HitRow{Body: content.Field(f.Row, content.FieldBody), Name: content.Field(f.Row, content.FieldName)},
 		})
 	}
@@ -208,6 +208,6 @@ func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 		ProjectID:  content.Field(r, content.FieldProject), Name: content.Field(r, content.FieldName),
 		Description: content.Field(r, fieldDescription), Body: content.Field(r, content.FieldBody),
 		ArgsSchema: content.Field(r, fieldArgsSchema), CreatedByActorID: content.CreatedBy(r),
-		TagIDs: content.TagIDs(r), Store: content.Source(src), Label: content.Label(lab, src),
+		TagIDs: content.TagIDs(r), Store: content.SourceOf(lab, src), Label: content.Label(lab, src),
 	}
 }

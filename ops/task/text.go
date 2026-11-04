@@ -47,7 +47,7 @@ func BriefOf(lab work.Labeler, src store.Source, r row.Row) Brief {
 		ID: r.ID.String(), Title: work.Field(r, work.FieldTitle), Status: work.Field(r, work.FieldStatus),
 		Priority: work.Field(r, fieldPriority), Commitment: work.Field(r, fieldCommitment),
 		DeferredUntil: work.DateText(r, fieldDeferred), DueAt: work.DateText(r, fieldDue),
-		MissionID: work.Field(r, work.FieldMission), Store: work.SourceName(src), Label: work.Label(lab, src),
+		MissionID: work.Field(r, work.FieldMission), Store: work.SourceOf(lab, src), Label: work.Label(lab, src),
 	}
 	status, priority := orDefault(b.Status, schema.TaskStatusTodo), orDefault(b.Priority, DefaultPriority)
 	line := badge(status) + " " + b.ID + " " + b.Title + " [" + priority + "]"
@@ -93,7 +93,7 @@ func fullOf(lab work.Labeler, src store.Source, r row.Row) Full {
 		StartedAt: work.TimeText(r, fieldStarted), CompletedAt: work.TimeText(r, work.FieldCompleted),
 		MissionID: work.Field(r, work.FieldMission), TaskListID: work.Field(r, work.FieldTasklist), PlanID: work.Field(r, work.FieldPlan),
 		ProjectID: work.Field(r, work.FieldProject), RepoID: work.Field(r, work.FieldRepo),
-		CreatedAt: r.CreatedAt.UTC().Format(work.TimeLayout), TagIDs: work.TagIDs(r), Store: work.SourceName(src), Label: work.Label(lab, src),
+		CreatedAt: r.CreatedAt.UTC().Format(work.TimeLayout), TagIDs: work.TagIDs(r), Store: work.SourceOf(lab, src), Label: work.Label(lab, src),
 	}
 }
 

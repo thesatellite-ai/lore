@@ -110,7 +110,7 @@ func recordOf(lab Labeler, src store.Source, r row.Row) Record {
 		rec.CreatedByActorID = r.CreatedBy.String()
 	}
 	if src != store.SourceRepo {
-		rec.Store = string(src)
+		rec.Store = SourceOf(lab, src)
 		rec.Label = Label(lab, src)
 	}
 	return rec
@@ -123,7 +123,7 @@ func hitOf(lab Labeler, src store.Source, h Hit, r row.Row) SearchHit {
 		Row: HitRow{Body: field(r, fieldBody), Kind: field(r, fieldKind), SourceKind: field(r, fieldSourceKind), TrustScore: numberOr(r, fieldTrust)},
 	}
 	if src != store.SourceRepo {
-		out.Store = string(src)
+		out.Store = SourceOf(lab, src)
 		out.Label = Label(lab, src)
 	}
 	return out

@@ -142,6 +142,6 @@ func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		ProjectID: content.Field(r, content.FieldProject), Kind: content.Field(r, fieldKind),
 		Name: content.Field(r, content.FieldName), ConfigJSON: content.Field(r, fieldConfig),
-		Enabled: on.Bool(), TagIDs: content.TagIDs(r), Store: content.Source(src), Label: content.Label(lab, src),
+		Enabled: on.Bool(), TagIDs: content.TagIDs(r), Store: content.SourceOf(lab, src), Label: content.Label(lab, src),
 	}
 }

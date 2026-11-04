@@ -93,17 +93,17 @@ type AddIn struct {
 
 // Record is the ent Plan JSON (v0.1.17 --json, status_str now status).
 type Record struct {
-	ID               string    `json:"id,omitempty"`
-	CreatedAt        time.Time `json:"created_at,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at,omitempty"`
-	ProjectID        string    `json:"project_id,omitempty"`
-	Title            string    `json:"title,omitempty"`
-	Body             string    `json:"body,omitempty"`
-	Status           string    `json:"status,omitempty"`
-	CreatedByActorID string    `json:"created_by_actor_id,omitempty"`
-	TagIDs           []string  `json:"tag_ids,omitempty"`
-	Edges            Edges     `json:"edges"`
-	Store            string    `json:"_source,omitempty"`
+	ID               string          `json:"id,omitempty"`
+	CreatedAt        time.Time       `json:"created_at,omitempty"`
+	UpdatedAt        time.Time       `json:"updated_at,omitempty"`
+	ProjectID        string          `json:"project_id,omitempty"`
+	Title            string          `json:"title,omitempty"`
+	Body             string          `json:"body,omitempty"`
+	Status           string          `json:"status,omitempty"`
+	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
+	TagIDs           []string        `json:"tag_ids,omitempty"`
+	Edges            Edges           `json:"edges"`
+	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -214,7 +214,7 @@ func recordOf(lab work.Labeler, src store.Source, r row.Row) Record {
 	return Record{
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, ProjectID: work.Field(r, work.FieldProject),
 		Title: work.Field(r, work.FieldTitle), Body: work.Field(r, work.FieldBody), Status: statusOf(r),
-		CreatedByActorID: work.Field(r, work.FieldCreatedBy), TagIDs: work.TagIDs(r), Store: work.SourceName(src), Label: work.Label(lab, src),
+		CreatedByActorID: work.Field(r, work.FieldCreatedBy), TagIDs: work.TagIDs(r), Store: work.SourceOf(lab, src), Label: work.Label(lab, src),
 	}
 }
 

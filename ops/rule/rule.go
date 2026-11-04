@@ -192,26 +192,26 @@ func (o ListOut) Text() string {
 // same order; nillable columns omitted when unset). Store is the v0.1.17
 // `_source` key of a row from another store.
 type Record struct {
-	ID                   string    `json:"id,omitempty"`
-	CreatedAt            time.Time `json:"created_at,omitempty"`
-	UpdatedAt            time.Time `json:"updated_at,omitempty"`
-	TrustScore           float64   `json:"trust_score,omitempty"`
-	Confidence           float64   `json:"confidence,omitempty"`
-	LastValidatedAt      time.Time `json:"last_validated_at,omitempty,omitzero"`
-	ArchivedAt           time.Time `json:"archived_at,omitempty,omitzero"`
-	SourceKind           string    `json:"source_kind,omitempty"`
-	SourceRef            string    `json:"source_ref,omitempty"`
-	ProjectID            string    `json:"project_id,omitempty"`
-	RepoID               string    `json:"repo_id,omitempty"`
-	Body                 string    `json:"body,omitempty"`
-	Activation           string    `json:"activation,omitempty"`
-	Globs                string    `json:"globs,omitempty"`
-	AppliesToDescription string    `json:"applies_to_description,omitempty"`
-	Severity             string    `json:"severity,omitempty"`
-	SupersededByID       string    `json:"superseded_by_id,omitempty"`
-	CreatedByActorID     string    `json:"created_by_actor_id,omitempty"`
-	TagIDs               []string  `json:"tag_ids,omitempty"`
-	Store                string    `json:"_source,omitempty"`
+	ID                   string          `json:"id,omitempty"`
+	CreatedAt            time.Time       `json:"created_at,omitempty"`
+	UpdatedAt            time.Time       `json:"updated_at,omitempty"`
+	TrustScore           float64         `json:"trust_score,omitempty"`
+	Confidence           float64         `json:"confidence,omitempty"`
+	LastValidatedAt      time.Time       `json:"last_validated_at,omitempty,omitzero"`
+	ArchivedAt           time.Time       `json:"archived_at,omitempty,omitzero"`
+	SourceKind           string          `json:"source_kind,omitempty"`
+	SourceRef            string          `json:"source_ref,omitempty"`
+	ProjectID            string          `json:"project_id,omitempty"`
+	RepoID               string          `json:"repo_id,omitempty"`
+	Body                 string          `json:"body,omitempty"`
+	Activation           string          `json:"activation,omitempty"`
+	Globs                string          `json:"globs,omitempty"`
+	AppliesToDescription string          `json:"applies_to_description,omitempty"`
+	Severity             string          `json:"severity,omitempty"`
+	SupersededByID       string          `json:"superseded_by_id,omitempty"`
+	CreatedByActorID     string          `json:"created_by_actor_id,omitempty"`
+	TagIDs               []string        `json:"tag_ids,omitempty"`
+	Store                store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -286,11 +286,11 @@ func (o SearchOut) Text() string {
 
 // SearchHit is one v0.1.17 rule search hit.
 type SearchHit struct {
-	ID      string  `json:"id"`
-	Score   float64 `json:"score"`
-	Snippet string  `json:"snippet,omitempty"`
-	Row     HitRow  `json:"row"`
-	Store   string  `json:"_source,omitempty"`
+	ID      string          `json:"id"`
+	Score   float64         `json:"score"`
+	Snippet string          `json:"snippet,omitempty"`
+	Row     HitRow          `json:"row"`
+	Store   store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -416,7 +416,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	for _, f := range found {
 		r := f.Row
 		out.Data = append(out.Data, SearchHit{
-			ID: r.ID.String(), Score: f.Hit.Score, Snippet: f.Hit.Snippet, Store: kn.SourceKey(f.Source), Label: kn.Label(kn.LabelerOf(o.env), f.Source),
+			ID: r.ID.String(), Score: f.Hit.Score, Snippet: f.Hit.Snippet, Store: kn.SourceOf(kn.LabelerOf(o.env), f.Source), Label: kn.Label(kn.LabelerOf(o.env), f.Source),
 			Row: HitRow{Activation: kn.Field(r, fieldActivation), Body: kn.Field(r, kn.FieldBody), Severity: kn.Field(r, fieldSeverity), SourceKind: kn.Field(r, kn.FieldSourceKind)},
 		})
 	}
@@ -443,6 +443,6 @@ func recordOf(lab kn.Labeler, src store.Source, r row.Row) Record {
 		Body: kn.Field(r, kn.FieldBody), Activation: kn.Field(r, fieldActivation), Globs: kn.Field(r, fieldGlobs),
 		AppliesToDescription: kn.Field(r, fieldApplies), Severity: kn.Field(r, fieldSeverity),
 		SupersededByID: kn.Field(r, kn.FieldSuperseded), CreatedByActorID: kn.CreatedBy(r),
-		TagIDs: kn.TagsOf(r), Store: kn.SourceKey(src), Label: kn.Label(lab, src),
+		TagIDs: kn.TagsOf(r), Store: kn.SourceOf(lab, src), Label: kn.Label(lab, src),
 	}
 }

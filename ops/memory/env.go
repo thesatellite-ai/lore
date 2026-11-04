@@ -79,8 +79,8 @@ type ColumnSearcher interface {
 // reads it beside a row: wire.App.StoreLabel ("northwind/acme" for the org
 // store attached at the acme folder, the bare name for a store attached
 // at its root). An Env without it labels a store with its attached name.
-// The label is display only: `_source` always stays the store name, so
-// `--to`/`--store` values read back from --json keep working.
+// The label is display only; `_source` is the store.SourceRef object
+// (SourceOf), whose store and folder names read back as `--to` values.
 type Labeler interface {
 	StoreLabel(name store.Source) string
 }
@@ -106,6 +106,25 @@ func Label(l Labeler, src store.Source) string {
 		name = l.StoreLabel(src)
 	}
 	return "[" + name + "]"
+}
+
+// SourceOf is the `_source` object of a row of src: the zero SourceRef for
+// the repo store (fields tag it omitzero, so repo rows carry no `_source`
+// and their --json bytes are unchanged),
+// else l's store.SourceDescriber answer when l (the env, through
+// LabelerOf) has that upgrade, else the store name alone.
+//
+// FLAG1 (owner C): `_source` is {store, store_id, folder, folder_id}, names
+// plus permanent ids, so a script can key on the ids; `_label` stays the
+// bracketed human text (Label).
+func SourceOf(l Labeler, src store.Source) store.SourceRef {
+	if src == store.SourceRepo || src == "" {
+		return store.SourceRef{}
+	}
+	if d, ok := l.(store.SourceDescriber); ok {
+		return d.DescribeSource(src)
+	}
+	return store.SourceRef{Store: string(src)}
 }
 
 // Hit is one search result: the row id and the store whose cache holds it.

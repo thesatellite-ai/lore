@@ -278,8 +278,10 @@ func TestInputHelpers(t *testing.T) {
 	if ScopeLabel("") != "master" || ScopeLabel("web") != "repo:web" {
 		t.Fatal("ScopeLabel")
 	}
-	if SourceKey(store.SourceRepo) != "" || SourceKey("team") != "team" {
-		t.Fatal("SourceKey")
+	// FLAG1: `_source` is an object; zero (omitted) for the repo, the name alone
+	// without a describer.
+	if got := SourceOf(nil, "team"); SourceOf(nil, store.SourceRepo) != (store.SourceRef{}) || got != (store.SourceRef{Store: "team"}) {
+		t.Fatal("SourceOf")
 	}
 }
 

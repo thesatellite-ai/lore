@@ -175,15 +175,16 @@ func TestBriefLine(t *testing.T) {
 		}
 	}
 	// With the Env's labeler, a store attached at a linked folder shows its
-	// label (v0.1.17's [northwind/acme]) while _source stays the name; the
-	// repo store gets no label either way.
+	// label (v0.1.17's [northwind/acme]) while _source names the store
+	// (FLAG1: an object; a labeler without the describer gives the name
+	// alone); the repo store gets neither.
 	lab := folderLabeler{"agency": "agency/acme"}
 	b := withState(BriefOf(lab, "agency", mk(map[string]string{"title": "T"})), "EXPIRED")
-	if want := "○ " + tid + " T [medium]  EXPIRED  [agency/acme]"; b.Line != want || b.Store != "agency" || b.Label != "[agency/acme]" {
-		t.Errorf("labelled: line %q store %q label %q, want %q agency [agency/acme]", b.Line, b.Store, b.Label, want)
+	if want := "○ " + tid + " T [medium]  EXPIRED  [agency/acme]"; b.Line != want || b.Store != (store.SourceRef{Store: "agency"}) || b.Label != "[agency/acme]" {
+		t.Errorf("labelled: line %q store %+v label %q, want %q agency [agency/acme]", b.Line, b.Store, b.Label, want)
 	}
-	if r := BriefOf(lab, store.SourceRepo, mk(map[string]string{"title": "T"})); r.Label != "" || r.Store != "" {
-		t.Errorf("repo row: store %q label %q, want both empty", r.Store, r.Label)
+	if r := BriefOf(lab, store.SourceRepo, mk(map[string]string{"title": "T"})); r.Label != "" || r.Store != (store.SourceRef{}) {
+		t.Errorf("repo row: store %+v label %q, want both empty", r.Store, r.Label)
 	}
 }
 

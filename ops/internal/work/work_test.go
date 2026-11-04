@@ -211,9 +211,14 @@ func TestTeamContextAndHandles(t *testing.T) {
 	}
 }
 
-// TestSourceName: the repo store has no _source; others name themselves.
+// TestSourceName: a write output's store key is "" for the repo; others
+// name themselves. SourceOf (FLAG1 `_source`) is zero (omitted) for the repo and the
+// name alone without a describer.
 func TestSourceName(t *testing.T) {
 	if SourceName(store.SourceRepo) != "" || SourceName("agency") != "agency" || SourceName("") != "" {
 		t.Error("SourceName")
+	}
+	if got := SourceOf(nil, "agency"); SourceOf(nil, store.SourceRepo) != (store.SourceRef{}) || got != (store.SourceRef{Store: "agency"}) {
+		t.Error("SourceOf")
 	}
 }

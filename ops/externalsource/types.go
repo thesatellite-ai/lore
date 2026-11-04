@@ -3,6 +3,8 @@ package externalsource
 import (
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Input and output structs of the external-source operations. Struct tags
@@ -61,16 +63,16 @@ func (o ListOut) Text() string {
 // ExternalSource's keys in its order (enabled omitted when false, as ent
 // printed it). TagIDs (O11) and Store (`_source`) are 0.1.18 additions.
 type Record struct {
-	ID         string    `json:"id,omitempty"`
-	CreatedAt  time.Time `json:"created_at,omitempty"`
-	UpdatedAt  time.Time `json:"updated_at,omitempty"`
-	ProjectID  string    `json:"project_id,omitempty"`
-	Kind       string    `json:"kind,omitempty"`
-	Name       string    `json:"name,omitempty"`
-	ConfigJSON string    `json:"config_json,omitempty"`
-	Enabled    bool      `json:"enabled,omitempty"`
-	TagIDs     []string  `json:"tag_ids,omitempty"`
-	Store      string    `json:"_source,omitempty"`
+	ID         string          `json:"id,omitempty"`
+	CreatedAt  time.Time       `json:"created_at,omitempty"`
+	UpdatedAt  time.Time       `json:"updated_at,omitempty"`
+	ProjectID  string          `json:"project_id,omitempty"`
+	Kind       string          `json:"kind,omitempty"`
+	Name       string          `json:"name,omitempty"`
+	ConfigJSON string          `json:"config_json,omitempty"`
+	Enabled    bool            `json:"enabled,omitempty"`
+	TagIDs     []string        `json:"tag_ids,omitempty"`
+	Store      store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }

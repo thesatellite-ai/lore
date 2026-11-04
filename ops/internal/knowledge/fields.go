@@ -172,14 +172,9 @@ func Cut(s string, n int) string {
 	return textcut.Cut(s, n, n-len(ellipsis))
 }
 
-// SourceKey is the v0.1.17 `_source` key of a row from a store other
-// than the repo's own ("" for the repo).
-func SourceKey(src store.Source) string {
-	if src == store.SourceRepo {
-		return ""
-	}
-	return string(src)
-}
+// SourceOf is the `_source` object of a row of src (zero, so omitted, for the repo;
+// FLAG1, opsmemory.SourceOf).
+func SourceOf(l Labeler, src store.Source) store.SourceRef { return opsmemory.SourceOf(l, src) }
 
 // Warning is one engine warning copied into an output (W_SCAN_DEGRADED).
 type Warning struct {

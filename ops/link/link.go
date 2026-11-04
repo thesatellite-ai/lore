@@ -166,19 +166,19 @@ func (o ListOut) Text() string {
 
 // Record is one link in v0.1.17's --json form (the ent CommitLink struct).
 type Record struct {
-	ID               string `json:"id"`
-	CreatedAt        string `json:"created_at,omitempty"`
-	UpdatedAt        string `json:"updated_at,omitempty"`
-	ProjectID        string `json:"project_id"`
-	EntityTable      string `json:"entity_table"`
-	EntityID         string `json:"entity_id"`
-	SHA              string `json:"sha"`
-	Message          string `json:"message,omitempty"`
-	RepoPath         string `json:"repo_path,omitempty"`
-	Author           string `json:"author,omitempty"`
-	CommittedAt      string `json:"committed_at,omitempty"`
-	CreatedByActorID string `json:"created_by_actor_id,omitempty"`
-	Store            string `json:"_source,omitempty"`
+	ID               string          `json:"id"`
+	CreatedAt        string          `json:"created_at,omitempty"`
+	UpdatedAt        string          `json:"updated_at,omitempty"`
+	ProjectID        string          `json:"project_id"`
+	EntityTable      string          `json:"entity_table"`
+	EntityID         string          `json:"entity_id"`
+	SHA              string          `json:"sha"`
+	Message          string          `json:"message,omitempty"`
+	RepoPath         string          `json:"repo_path,omitempty"`
+	Author           string          `json:"author,omitempty"`
+	CommittedAt      string          `json:"committed_at,omitempty"`
+	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
+	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -513,7 +513,7 @@ func recordOf(lab opsmemory.Labeler, src store.Source, r row.Row) Record {
 		rec.CreatedByActorID = r.CreatedBy.String()
 	}
 	if src != store.SourceRepo {
-		rec.Store = string(src)
+		rec.Store = opsmemory.SourceOf(lab, src)
 		rec.Label = opsmemory.Label(lab, src)
 	}
 	return rec
