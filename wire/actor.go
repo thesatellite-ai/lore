@@ -37,6 +37,18 @@ func resolveIdentity(ctx context.Context, opts Options) (identity.Resolved, erro
 	return identity.Resolve(ctx, in)
 }
 
+// EnsureActor writes the caller's actor row into target unless it is
+// there (the old binary's lore.db actor writes use it: actors are
+// core-owned in the checkout, so a lore.db-only row would never reach a
+// file). The row is the same projection every core write makes.
+func (a *App) EnsureActor(ctx context.Context, target store.Source) error {
+	st, err := a.writeState(ctx)
+	if err != nil {
+		return err
+	}
+	return a.ensureActor(ctx, st, target)
+}
+
 // fullActorRow reports whether the caller's actor row written into target
 // may carry the identity's stable key (an email) and handle. Only an
 // attached store that is not a client repo may: the repo store always gets

@@ -64,21 +64,41 @@ var coreOwned = map[string]bool{
 	"external_sources":   true,
 }
 
-// CoreOwned reports whether the new core owns table's row files.
-func CoreOwned(table string) bool { return coreOwned[table] }
+// repoOwned are core-owned in the checkout's own .lore/data only. In a
+// store mirror (Options.StoreMirror) the old code stays their one writer:
+// the roster writes actors and teams there, ensureGroupRepo writes repos,
+// and store-folder project rows are written by the store code, while the
+// core never writes these four tables into a store folder (phase 5 g9).
+var repoOwned = map[string]bool{
+	"actors":   true,
+	"projects": true,
+	"repos":    true,
+	"teams":    true,
+}
 
-// isCoreOwned is CoreOwned for this pass (Options.coreOwned when set).
+// CoreOwned reports whether the new core owns table's row files in a
+// checkout (the TUI guard, the merge driver and the file checks use it).
+func CoreOwned(table string) bool { return coreOwned[table] || repoOwned[table] }
+
+// isCoreOwned is CoreOwned for this pass (Options.coreOwned when set; a
+// store-mirror pass leaves the repoOwned tables to the old code).
 func (e *engine) isCoreOwned(table string) bool {
 	if e.o.coreOwned != nil {
 		return e.o.coreOwned[table]
+	}
+	if e.o.StoreMirror && repoOwned[table] {
+		return false
 	}
 	return CoreOwned(table)
 }
 
 // CoreOwnedTables lists the core-owned tables, sorted (for messages).
 func CoreOwnedTables() []string {
-	out := make([]string, 0, len(coreOwned))
+	out := make([]string, 0, len(coreOwned)+len(repoOwned))
 	for t := range coreOwned {
+		out = append(out, t)
+	}
+	for t := range repoOwned {
 		out = append(out, t)
 	}
 	sort.Strings(out)

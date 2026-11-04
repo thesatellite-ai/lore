@@ -589,6 +589,7 @@ func (p *externalProject) syncOptions(db *sql.DB) lsync.Options {
 		OnChange:     auditChange,
 		CheckSecrets: secretCheck(),
 		Now:          func() time.Time { return cliClock().Now() },
+		StoreMirror:  true,
 	}
 }
 

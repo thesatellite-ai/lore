@@ -21,6 +21,8 @@ import (
 	"saas/pkg/aicoder/projresolve"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // coreAuditDeleteKind is the action suffix of a core tombstone write (the
@@ -91,4 +93,18 @@ func openCoreAuditDB(ctx context.Context) (*sql.DB, error) {
 		return nil, errcodes.New(errcodes.Internal, "apply pragmas").WithCause(errors.Join(err, db.Close()))
 	}
 	return db, nil
+}
+
+// coreEnsureActor writes the current identity's actor row file into the
+// repo store through the core. Outside a git work tree (a --db command)
+// there is no repo store and nothing to write.
+func coreEnsureActor(ctx context.Context) error {
+	if coreApp == nil {
+		return nil
+	}
+	err := coreApp.EnsureActor(ctx, store.SourceRepo)
+	if errs.Has(err, errs.NotAStore) {
+		return nil
+	}
+	return err
 }

@@ -178,6 +178,10 @@ func runInit(ctx context.Context, projectRoot string) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "create project").WithCause(err)
 	}
+	// The project row FILE is the core's (one writer of .lore/data/projects).
+	if err := coreSeedProject(ctx, projectRoot, proj.ID, proj.Name, originURL); err != nil {
+		return errcodes.New(errcodes.Internal, "write the project row through the core").WithCause(err)
+	}
 
 	// 8. Auto-update .gitignore
 	if err := ensureGitignore(ctx, projectRoot); err != nil {
@@ -406,6 +410,11 @@ func upsertActor(ctx context.Context, client *ent.Client, r identity.Resolved) (
 		SetStableKey(r.StableKey).
 		Save(ctx)
 	if err == nil {
+		// actors are core-owned in the checkout: the row FILE is written by
+		// the core (F18 projection), never exported from lore.db.
+		if cerr := coreEnsureActor(ctx); cerr != nil {
+			return nil, cerr
+		}
 		return actor, nil
 	}
 	// A concurrent writer on this lore.db created it between the lookup and

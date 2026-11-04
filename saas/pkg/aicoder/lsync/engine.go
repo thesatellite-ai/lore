@@ -94,6 +94,11 @@ type Options struct {
 	// never bootstraps, and leaves DB-side changes pending.
 	ReadOnly bool
 
+	// StoreMirror marks a pass over a store mirror's .lore/data (not the
+	// checkout's own): the repoOwned tables (actors, projects, repos,
+	// teams) stay old-owned there (owned.go).
+	StoreMirror bool
+
 	// coreOwned overrides the core-owned table set (owned.go) for this
 	// pass; nil means the package set. Unexported on purpose: production
 	// callers always get the one switch. The package's older tests, which
