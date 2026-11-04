@@ -136,3 +136,20 @@ func TestIDErrors(t *testing.T) {
 	h.MustYes(decision.OpDelete, `{"id":"`+id+`"}`)
 	h.Fails(decision.OpShow, `{"id":"`+id+`"}`, errs.NotFound)
 }
+
+// TestTagFilterCold: a tagged decision read back cold (every row decoded
+// from its row file) still matches list --tag.
+func TestTagFilterCold(t *testing.T) {
+	h := opstest.New(t)
+	h.Must("tag.add", `{"name":"infra"}`)
+	id := add(t, h, `{"title":"A","body":"a","tags":["infra"]}`)
+	add(t, h, `{"title":"B","body":"b"}`)
+	c := h.ReopenCold()
+	var out decision.ListOut
+	if err := json.Unmarshal([]byte(c.JSON(c.Must(decision.OpList, `{"tags":["infra"]}`))), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Data) != 1 || out.Data[0].ID != id || len(out.Data[0].TagIDs) != 1 {
+		t.Fatalf("cold list --tag: %+v", out.Data)
+	}
+}

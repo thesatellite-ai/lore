@@ -87,3 +87,30 @@ func TestDeleteIsATombstone(t *testing.T) {
 		t.Fatalf("search %s", got)
 	}
 }
+
+// TestTagFilterCold: a tagged memory read back cold (no cache, fresh home:
+// every row decoded from its row file) still matches list --tag, and an
+// untag on the cold App drops exactly that tag.
+func TestTagFilterCold(t *testing.T) {
+	h := opstest.New(t)
+	h.Must("tag.add", `{"name":"infra"}`)
+	h.Must("tag.add", `{"name":"security"}`)
+	id := h.ID(h.Must(memory.OpAdd, `{"body":"cold","tags":["infra","security"]}`))
+	c := h.ReopenCold()
+	var out memory.ListOut
+	if err := json.Unmarshal([]byte(c.JSON(c.Must(memory.OpList, `{"tags":["infra","security"]}`))), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Data) != 1 || out.Data[0].ID != id {
+		t.Fatalf("cold list --tag: %+v", out.Data)
+	}
+	c.Must(memory.OpEdit, `{"id":"`+id+`","untags":["infra"]}`)
+	for in, want := range map[string]int{`{"tags":["security"]}`: 1, `{"tags":["infra"]}`: 0} {
+		if err := json.Unmarshal([]byte(c.JSON(c.Must(memory.OpList, in))), &out); err != nil {
+			t.Fatal(err)
+		}
+		if len(out.Data) != want {
+			t.Fatalf("after cold untag %s: %d, want %d", in, len(out.Data), want)
+		}
+	}
+}

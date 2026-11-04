@@ -339,3 +339,28 @@ func TestSearchLimitAndArchived(t *testing.T) {
 		h.Fails(rule.OpSearch, bad, errs.InvalidInput)
 	}
 }
+
+// TestTagFilterCold: a tagged rule read back cold (every row decoded from
+// its row file) still matches list --tag and keeps its tag_ids in --json;
+// a retag on the cold App keeps the other tag.
+func TestTagFilterCold(t *testing.T) {
+	h := opstest.New(t)
+	h.Must("tag.add", `{"name":"infra"}`)
+	h.Must("tag.add", `{"name":"security"}`)
+	id := add(t, h, `{"body":"cold","tags":["infra","security"]}`)
+	c := h.ReopenCold()
+	var out rule.ListOut
+	if err := json.Unmarshal([]byte(c.JSON(c.Must(rule.OpList, `{"tags":["infra"]}`))), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Data) != 1 || out.Data[0].ID != id || len(out.Data[0].TagIDs) != 2 {
+		t.Fatalf("cold list --tag: %+v", out.Data)
+	}
+	c.Must(rule.OpEdit, `{"id":"`+id+`","untags":["infra"]}`)
+	if err := json.Unmarshal([]byte(c.JSON(c.Must(rule.OpList, `{"tags":["security"]}`))), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Data) != 1 || len(out.Data[0].TagIDs) != 1 {
+		t.Fatalf("after cold untag: %+v", out.Data)
+	}
+}

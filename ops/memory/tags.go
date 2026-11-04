@@ -61,17 +61,10 @@ func tagList(list []ids.AnyID) (value.Value, error) {
 	return value.ListOf(value.KindRef, items...)
 }
 
-// tagsOf is a row's tag ids.
+// tagsOf is a row's tag ids (value.ItemStrings: the same ids whether
+// the list was built in memory or decoded from its row file).
 func tagsOf(r row.Row) []string {
-	l, ok := r.Fields[schema.FieldTagIDs].(value.List)
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(l.Items()))
-	for _, it := range l.Items() {
-		out = append(out, it.String())
-	}
-	return out
+	return value.ItemStrings(r.Fields[schema.FieldTagIDs])
 }
 
 // hasTags reports whether r carries every tag named in names (any tag of
