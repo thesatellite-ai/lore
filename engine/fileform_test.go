@@ -131,7 +131,7 @@ func TestDeleteDropsTagInEveryForm(t *testing.T) {
 		if err = w.data[store.SourceRepo].Open(store.OpenOptions{}).Write(ctx, []store.Change{{Row: sr}}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err = w.eng.Delete(ctx, Ref{ID: a.Row.ID}); err != nil {
+		if _, err = hardDelete(ctx, w.eng, Ref{ID: a.Row.ID}); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		_, got, err := w.eng.Get(ctx, Ref{ID: mid})

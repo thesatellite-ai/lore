@@ -10,6 +10,7 @@ package engine
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -54,6 +55,15 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 	}
 	if !cur.Deleted {
 		return e.remove(ctx, src, cur, true)
+	}
+	if !resurrected { // a trashed row reads as a tombstone: purge its file for real (DELETION 3.5)
+		raw, ok, terr := e.rawTrashed(ctx, src, cur.Table, cur.ID)
+		if terr != nil {
+			return Written{}, terr
+		}
+		if ok {
+			return e.remove(ctx, src, raw, true)
+		}
 	}
 	cl := e.callOf(ctx)
 	var changes []store.Change
@@ -126,6 +136,11 @@ func purgedErr(ctx context.Context, st Attached, table row.Table, id ids.AnyID) 
 // E_PURGED when its id is purged (DELETION_DESIGN 3.6: purged rows never
 // come back), else E_NOT_FOUND "<id> <what>".
 func deletedErr(ctx context.Context, st Attached, cur row.Row, what string) error {
+	if sr, gerr := st.Backend.Get(ctx, cur.Table, cur.ID); gerr == nil && !sr.Deleted {
+		if r, derr := sr.Decode(); derr == nil && trash.Is(r) {
+			return inTrashErr(r) // DELETION 3.2: a write to a trashed row says where it is
+		}
+	}
 	set, err := purgedSet(ctx, st)
 	if err != nil {
 		return err
@@ -176,7 +191,12 @@ func (e *Engine) getRow(ctx context.Context, name store.Source, table row.Table,
 	if err != nil {
 		return store.Row{}, false, err
 	}
-	return hidePurged(sr, set)
+	sr, res, err := hidePurged(sr, set)
+	if err != nil || res {
+		return sr, res, err
+	}
+	sr, err = hideTrashed(sr) // DELETION 3.2: a trashed row reads as gone
+	return sr, false, err
 }
 
 // readRows is Backend.Read of store name with purged rows hidden
@@ -190,11 +210,14 @@ func (e *Engine) readRows(ctx context.Context, name store.Source, cursor store.C
 		return nil, "", err
 	}
 	set, err := purgedSet(ctx, st)
-	if err != nil || len(set) == 0 {
-		return rows, next, err
+	if err != nil {
+		return nil, "", err
 	}
 	for i, sr := range rows {
 		if rows[i], _, err = hidePurged(sr, set); err != nil {
+			return nil, "", err
+		}
+		if rows[i], err = hideTrashed(rows[i]); err != nil { // DELETION 3.2
 			return nil, "", err
 		}
 	}

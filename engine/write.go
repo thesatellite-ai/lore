@@ -381,10 +381,12 @@ func (e *Engine) shown(field string, v value.Value) string {
 	return strconv.Quote(s)
 }
 
-// Delete writes a tombstone for a live row and applies every relation's
-// on-delete rule first (DOCS O2): restrict refuses while live rows point at
-// it (E_HAS_DEPENDENTS), cascade tombstones them too, set_null clears their
-// field, tombstone_only leaves them. Tombstones are kept forever (DQ4).
+// Delete moves a live row into the trash (DQ8, DELETION 3.1; softDelete in
+// trash.go): restrict refuses while live rows point at it
+// (E_HAS_DEPENDENTS), cascade dependents join its batch, referrers stay as
+// they are (D8). A row already in the trash answers E_IN_TRASH. remove
+// below is the tombstone write purge runs: every relation's on-delete rule
+// applies there (DOCS O2), and tombstones are kept forever (DQ4).
 func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 	src, cur, err := e.locate(ctx, ref)
 	if err != nil {
@@ -398,9 +400,9 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 		return Written{}, err
 	}
 	if cur.Deleted {
-		return Written{}, deletedErr(ctx, st, cur, "is already deleted")
+		return Written{}, deletedErr(ctx, st, cur, "is already deleted") // E_IN_TRASH for a trashed row
 	}
-	return e.remove(ctx, src, cur, false)
+	return e.softDelete(ctx, src, cur) // DQ8: every delete is soft, into the trash (DELETION 3.1)
 }
 
 // remove is Delete's write for the live row cur of store src. With purge

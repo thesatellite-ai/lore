@@ -548,11 +548,25 @@ func TestConcurrentUpdatesNeverLoseAnEdit(t *testing.T) {
 	t.Logf("%d of %d edits landed, %d through a merge", landed, len(edits), merged)
 }
 
-func TestDeleteKeepsTombstoneAndAppliesOnDelete(t *testing.T) {
+// hardDelete is the tombstone write purge runs (remove), on a backend with
+// no purged-id list: the relation rules below act there, while the soft
+// delete leaves referrers alone (DELETION D8).
+func hardDelete(ctx context.Context, e *Engine, ref Ref) (Written, error) {
+	src, cur, err := e.locate(ctx, ref)
+	if err != nil {
+		return Written{}, err
+	}
+	if cur.Deleted {
+		return Written{}, errs.New(errs.NotFound, "already deleted")
+	}
+	return e.remove(ctx, src, cur, false)
+}
+
+func TestPurgeKeepsTombstoneAndAppliesOnDelete(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	m := f.memory(t, "to delete")
-	w, err := f.eng.Delete(ctx, Ref{ID: m.ID})
+	w, err := hardDelete(ctx, f.eng, Ref{ID: m.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,12 +586,12 @@ func TestDeleteKeepsTombstoneAndAppliesOnDelete(t *testing.T) {
 
 	// memories.project_id → projects is restrict: a live memory blocks
 	// deleting its project; the tombstoned one above does not count.
-	if _, err = f.eng.Delete(ctx, Ref{ID: f.project}); err != nil {
+	if _, err = hardDelete(ctx, f.eng, Ref{ID: f.project}); err != nil {
 		t.Fatalf("a tombstoned dependent blocked the delete: %v", err)
 	}
 	f2 := setup(t)
 	f2.memory(t, "stays")
-	if _, err = f2.eng.Delete(ctx, Ref{ID: f2.project}); !errs.Has(err, errs.HasDependents) {
+	if _, err = hardDelete(ctx, f2.eng, Ref{ID: f2.project}); !errs.Has(err, errs.HasDependents) {
 		t.Fatalf("restrict not applied: %v", err)
 	}
 	if _, got, _ := f2.eng.Get(ctx, Ref{ID: f2.project}); got.Deleted {
@@ -595,7 +609,7 @@ func TestDeleteKeepsTombstoneAndAppliesOnDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f2.eng.Delete(ctx, Ref{ID: repo.Row.ID}); err != nil {
+	if _, err = hardDelete(ctx, f2.eng, Ref{ID: repo.Row.ID}); err != nil {
 		t.Fatal(err)
 	}
 	_, cleared, err := f2.eng.Get(ctx, Ref{ID: inRepo.Row.ID})
@@ -607,7 +621,7 @@ func TestDeleteKeepsTombstoneAndAppliesOnDelete(t *testing.T) {
 	}
 }
 
-func TestDeleteCascades(t *testing.T) {
+func TestPurgeCascades(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	key, err := f.eng.Create(ctx, "", schema.TableMetaKeys, map[string]value.Value{"name": txt("client"), "scope": txt("repo"), "type": txt("text")})
@@ -618,7 +632,7 @@ func TestDeleteCascades(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := f.eng.Delete(ctx, Ref{ID: key.Row.ID})
+	w, err := hardDelete(ctx, f.eng, Ref{ID: key.Row.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

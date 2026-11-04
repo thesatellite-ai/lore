@@ -362,7 +362,7 @@ func TestManyToManyDeleteRules(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = w.eng.Delete(ctx, Ref{ID: a.Row.ID})
+		_, err = hardDelete(ctx, w.eng, Ref{ID: a.Row.ID})
 		if c.refused != errs.Has(err, errs.HasDependents) || (!c.refused && err != nil) {
 			t.Errorf("%s: delete err = %v", c.rule, err)
 			continue
