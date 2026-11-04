@@ -45,3 +45,24 @@ func TestKindLayering(t *testing.T) {
 	h.MustYes(settings.OpFieldEdit, `{"kind":"host","field":"region","pattern":"^[a-z]+$","to":"kb/web"}`)
 	h.Fails(settings.OpFieldEdit, `{"kind":"host","field":"region","pattern":"^x"}`, errs.KindConflict)
 }
+
+// TestAdoptAndRehome: adopt moves a place's kind and field rows (ids kept,
+// asks first, refuses a name defined under another id), and rehome lists
+// a kind clash in the view without writing (RES 3.6, R6).
+func TestAdoptAndRehome(t *testing.T) {
+	h := multiStore(t)
+	id := h.ID(h.MustYes(settings.OpKindAdd, `{"kind":"svc","to":"kb/web"}`))
+	h.MustYes(settings.OpFieldAdd, `{"kind":"svc","field":"port","type":"number"}`)
+	h.Fails(settings.OpResAdopt, `{"from":"kb/web","to":"kb/org"}`, errs.NeedsConfirm)
+	out := h.JSON(h.MustYes(settings.OpResAdopt, `{"from":"kb/web","to":"kb/org"}`))
+	if !strings.Contains(out, `"fields":1`) {
+		t.Fatalf("adopt %s", out)
+	}
+	show := h.JSON(h.Must(settings.OpKindShow, `{"id":"svc"}`))
+	if !strings.Contains(show, id) || !strings.Contains(show, `"store":"kb/org"`) {
+		t.Errorf("after adopt %s", show)
+	}
+	if got := h.JSON(h.Must(settings.OpResRehome, `{}`)); !strings.Contains(got, `"clashes":[]`) {
+		t.Errorf("rehome %s", got)
+	}
+}

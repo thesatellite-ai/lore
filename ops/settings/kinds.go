@@ -275,7 +275,7 @@ var nameErrors = append(slices.Clone(layerErrors), errs.ResourceName)
 var layerErrors = append(slices.Clone(writeErrors), errs.KindConflict, errs.ResourceStale)
 
 func (o ops) kindOps() []op.Entry {
-	return []op.Entry{
+	return append([]op.Entry{
 		op.Define(op.Spec{Name: OpKindAdd, Summary: "Add a resource kind (a kinds settings row)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "add a kind", CLI: `lore resource kind add host --description "a server"`, Want: "knd_"}}}, o.kindAdd),
@@ -296,7 +296,7 @@ func (o ops) kindOps() []op.Entry {
 			Errors: nameErrors}, o.fieldRename),
 		op.Define(op.Spec{Name: OpFieldRemove, Summary: "Remove a field from a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: layerErrors}, o.fieldRemove),
-	}
+	}, o.layerOps()...)
 }
 
 // kindByName finds a live kind by name or id in every attached store.
