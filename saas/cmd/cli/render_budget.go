@@ -250,6 +250,8 @@ type renderInput struct {
 	Hotfixes []pinnedHotfix
 	Topics   []topicLine
 	Skips    pinSkips
+	// Dirs are the folder files (6.2.5): one root index line each.
+	Dirs []dirGroup
 }
 
 // reportEntry is one entry not shown in full, with its reason.
@@ -280,6 +282,10 @@ type renderReport struct {
 	Lines        []reportEntry `json:"line_forms,omitempty"`
 	Canary       string        `json:"-"`
 	WarnExceeded bool          `json:"over_warn_level"`
+	// Dirs are the folder files' rows (6.2.6); DirsOff when
+	// context.dir_files is off.
+	Dirs    []dirReport `json:"dirs,omitempty"`
+	DirsOff bool        `json:"dir_files_off,omitempty"`
 }
 
 // buildBudgetedFile renders LORE.md within the budget and its report.
@@ -329,7 +335,8 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 			Always: r.Activation == schema.RuleActivationAlways, HasSummary: r.Summary != "", Updated: r.Updated})
 	}
 	contextfit.Rank(entries)
-	idx, idxShort := indexText(in.Topics), indexCollapsedText(in.Topics)
+	dirIdx := dirIndexText(in.Dirs)
+	idx, idxShort := indexText(in.Topics)+dirIdx, indexCollapsedText(in.Topics)+dirIdx
 	// The footer's counts depend on the result; measure it with the worst
 	// case (all lines) so the fit never under-counts.
 	footerMax := notInFile(len(entries) + len(high))
@@ -456,6 +463,7 @@ func (r renderReport) reportText() string {
 	if r.Over {
 		b.WriteString("  budget_exceeded: every must rule and critical/high hotfix is still written; shorten or supersede rules, or add summaries\n")
 	}
+	b.WriteString(dirReportText(r.Dirs, r.DirsOff))
 	return b.String()
 }
 

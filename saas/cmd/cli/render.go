@@ -175,7 +175,12 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	if err != nil {
 		return err
 	}
-	in := renderInput{Settings: loadContextSettings(ctx, profiles), Rules: rules, Hotfixes: hotfixes, Topics: topics, Skips: skips}
+	// 6.2: folder-scoped rows go to <dir>/LORE.md (render_scopes.go); the
+	// full file still holds every scope (CQ2).
+	allRules, allHotfixes := rules, hotfixes
+	rules, hotfixes, dirs := planDirs(ctx, root, rules, hotfixes)
+	in := renderInput{Settings: loadContextSettings(ctx, profiles), Rules: rules, Hotfixes: hotfixes, Topics: topics, Skips: skips, Dirs: dirs.Groups}
+	dirBodies, dirReps := buildDirFiles(dirs, in.Settings.EntryMax)
 
 	// Build the rendered text. The canary is content-derived (sha256 of the
 	// body BEFORE the canary line is added) so that two renders of the
@@ -186,8 +191,9 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	contentForCanary, _ := buildBudgetedFile("PLACEHOLDER", in)
 	canary := ids.PrefixRenderHistory + "_" + sha256Hex16(contentForCanary)
 	body, report := buildBudgetedFile(canary, in)
-	full := buildFullFile(rules, hotfixes)
+	full := buildFullFile(allRules, allHotfixes)
 	report.File, report.Before = f.outPath, len(full)
+	report.Dirs, report.DirsOff = dirReps, !dirs.Settings.On && len(dirs.All) > 0
 
 	if f.report {
 		// 6.11: --report writes nothing.
@@ -273,6 +279,10 @@ func runRender(ctx context.Context, f *renderFlags) error {
 				return err
 			}
 		}
+	}
+	// 6.2.5: folder files and each target's folder file; stale ones go.
+	if err := writeDirs(root, dirs, dirBodies, pick.targets, len(body), f.quiet); err != nil {
+		return errcodes.New(errcodes.Internal, "folder files").WithCause(err)
 	}
 
 	if err := persistRenderHistory(ctx, client, projectID, repoID, resolvedOut, body, renderResult{

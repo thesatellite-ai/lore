@@ -137,7 +137,16 @@ func ForEdit(ctx context.Context, env kn.Env, n kn.Noun, id, raw, overrides stri
 	if t.ClearScope && kn.Field(it.Row, schema.FieldScope) != "" {
 		nulls = append(nulls, schema.FieldScope)
 	}
+	var extra []kn.Warning
 	switch {
+	case o == "" && t.Given() && kn.Field(it.Row, schema.FieldOverrides) != "":
+		// 6.2.2: a row that moves to a scope no longer narrower than the row
+		// it overrides loses the link (it could no longer apply), said aloud.
+		wid := kn.Field(it.Row, schema.FieldOverrides)
+		if _, err := scope.CheckOverrides(ctx, env, n.Name, n.Table, n.Prefix, wid, t.Place(scope.PlaceOf(ctx, env, it.Row)), it.Row.ID.String()); err != nil {
+			nulls = append(nulls, schema.FieldOverrides)
+			extra = append(extra, kn.Warning{Code: "W_SCOPE_OVERRIDES", Field: schema.FieldOverrides, Message: "--overrides " + wid + " cleared: the new scope is not narrower than that " + n.Name + "'s"})
+		}
 	case o == ClearOverrides:
 		nulls = append(nulls, schema.FieldOverrides)
 	case o != "":
@@ -148,7 +157,7 @@ func ForEdit(ctx context.Context, env kn.Env, n kn.Noun, id, raw, overrides stri
 		}
 		e.Texts[schema.FieldOverrides] = oid
 	}
-	p := Plan{Warnings: warnings(t)}
+	p := Plan{Warnings: append(warnings(t), extra...)}
 	if len(nulls) > 0 {
 		p.After = func(ctx context.Context) error {
 			for _, f := range nulls {

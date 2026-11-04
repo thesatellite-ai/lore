@@ -77,6 +77,10 @@ type pinnedRule struct {
 	Globs      string
 	Updated    time.Time
 	TagIDs     []string
+	// ScopeID / OverridesID: the folder scope and the wider rule this one
+	// replaces there (6.2, render_scopes.go); repo-store rows only.
+	ScopeID     string
+	OverridesID string
 }
 
 // pinnedHotfix is one hotfix as the render prints it.
@@ -87,6 +91,8 @@ type pinnedHotfix struct {
 	Body     string
 	Summary  string
 	TagIDs   []string
+	// ScopeID is the folder scope (repo-store rows only, 6.2).
+	ScopeID string
 }
 
 // pinSkips counts rows that would have been pinned before 0.1.18 but are
@@ -207,7 +213,7 @@ func loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]
 			TrustScore: renderTrust(r.Row), Body: renderField(r.Row, renderFieldBody),
 			Summary: renderField(r.Row, schema.FieldSummary), Activation: act,
 			Globs: renderField(r.Row, renderFieldGlobs), Updated: renderUpdated(r.Row),
-			TagIDs: renderTagIDs(r.Row),
+			TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope), OverridesID: repoScope(r, schema.FieldOverrides),
 		})
 	}
 	return out, nil
@@ -256,8 +262,17 @@ func loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) 
 		out = append(out, pinnedHotfix{
 			ID: r.ID.String(), Severity: sev,
 			Title: renderField(r.Row, renderFieldTitle), Body: renderField(r.Row, renderFieldBody),
-			Summary: renderField(r.Row, schema.FieldSummary), TagIDs: renderTagIDs(r.Row),
+			Summary: renderField(r.Row, schema.FieldSummary), TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope),
 		})
 	}
 	return out, nil
+}
+
+// repoScope is a scope field of a repo-store row ("" for other stores:
+// folder files hold the repo's own rows, CFG6).
+func repoScope(r renderRow, field string) string {
+	if r.source != store.SourceRepo {
+		return ""
+	}
+	return renderField(r.Row, field)
 }
