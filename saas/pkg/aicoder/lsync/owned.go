@@ -190,14 +190,6 @@ const keyDeletedVsEditedTombstoneKept = "(deleted on one side, edited on the oth
 // would write a v1 document over the core's file).
 func (e *engine) syncCoreOwned(ctx context.Context, k rowKey, t *Table, fc fileChange, fileChanged bool) error {
 	rel := k.rel()
-	if !fileChanged {
-		cols := liveColumns(t, e.present)
-		dbDoc, err := readRowDoc(ctx, e.tx, t, cols, k.id)
-		if err != nil {
-			return err
-		}
-		return e.exportDoc(ctx, k, t, dbDoc) // guarded: warns, writes nothing
-	}
 	var baseDoc map[string]any
 	if _, hasBase := e.bases[rel]; hasBase {
 		raw, err := e.baseBytes(ctx, rel)
@@ -207,6 +199,23 @@ func (e *engine) syncCoreOwned(ctx context.Context, k rowKey, t *Table, fc fileC
 		if d, err := decodeDoc(raw); err == nil {
 			baseDoc = d
 		}
+	}
+	if !fileChanged {
+		cols := liveColumns(t, e.present)
+		dbDoc, err := readRowDoc(ctx, e.tx, t, cols, k.id)
+		if err != nil {
+			return err
+		}
+		// A lore.db-only change to a core-owned row is never exported, but
+		// it is still audited (as DBChangeKind: an external write in the
+		// catch-up pass) BEFORE exportDoc clears its dirty mark. Without
+		// this, a sqlite3 edit lost its dirty mark unrecorded and the next
+		// `lore audit verify` reported the tampered DB as intact (v0.1.17
+		// recorded every such change as <table>.external-write).
+		if err := e.observe(ctx, k, t, e.dbChangeKind(), baseDoc); err != nil {
+			return err
+		}
+		return e.exportDoc(ctx, k, t, dbDoc) // guarded: warns, writes nothing
 	}
 	var fileDoc map[string]any
 	if !fc.deleted {

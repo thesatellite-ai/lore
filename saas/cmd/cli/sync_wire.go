@@ -70,6 +70,10 @@ type syncSession struct {
 	// wroteFiles is set when a pass of this command exported or removed
 	// row files; only then is the "not committed" reminder worth a git call.
 	wroteFiles bool
+	// coreFullFinish is set when a core command ran in this project
+	// (core_sync.go): the end pass is a full one, importing the row files
+	// the core wrote, instead of dirty-only.
+	coreFullFinish bool
 }
 
 // syncSessions is per-process state: the CLI handles one command per
@@ -142,12 +146,21 @@ func finishSyncSessions(ctx context.Context) error {
 		// Dirty-only: the start-of-command pass already walked the files;
 		// this one just exports what the command wrote.
 		o := syncOptions(db, s.root, s.dataDir, lsync.ChangeLocal)
-		o.DirtyOnly = true
+		if s.coreFullFinish {
+			o = coreFinishOptions(o)
+		} else {
+			o.DirtyOnly = true
+		}
 		rep, err := lsync.Reconcile(ctx, o)
 		if err != nil {
 			_ = db.Close() // the pass error is the one to report
 			fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+err.Error()))
 			continue
+		}
+		if s.coreFullFinish {
+			// The files this pass imported are the core command's own
+			// writes (it printed them): not news from teammates.
+			rep.Imported = nil
 		}
 		printSyncReport(rep)
 		s.wroteFiles = s.wroteFiles || len(rep.Exported)+len(rep.Removed) > 0
