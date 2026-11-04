@@ -60,12 +60,18 @@ func (a *App) resolveAlias(ctx context.Context, e op.Entry, d op.Decoder) (op.De
 			to = tv.Text
 		}
 	}
-	if to != attach.ReservedTeam && to != attach.ReservedCompany {
-		return d, nil
+	if to == "" || strings.Contains(to, targetSep) {
+		return d, nil // `<store>/<folder>` and `<store>/.` name their place explicitly
 	}
 	top, err := a.repoTop(ctx)
 	if err != nil {
 		top = ""
+	}
+	if linked, ok := linkedFolderName(ctx, a.opts, top, to); ok {
+		return aliasDecoder{inner: d, from: to, to: string(linked)}, nil
+	}
+	if to != attach.ReservedTeam && to != attach.ReservedCompany {
+		return d, nil
 	}
 	name, ok := orgAliases(ctx, a.opts, top)[to]
 	if !ok {
@@ -73,6 +79,30 @@ func (a *App) resolveAlias(ctx context.Context, e op.Entry, d op.Decoder) (op.De
 			WithHint("link the repo to an org (`lore org link <org> --project <folder>`), or name the store: --to <store>/<folder>")
 	}
 	return aliasDecoder{inner: d, from: to, to: string(name)}, nil
+}
+
+// linkedFolderName maps `--to <org>` to the name the org's linked-folder
+// entry is attached under when that is not the bare org name.
+//
+// Why: CONFIG_GUIDE says a write to a store goes to its root, or to its
+// folder when one is attached; for the org store of a linked repo the
+// attached folder is the repo's linked folder (v0.1.17 wrote
+// `--to northwind` into northwind/acme). When stores.yaml also attaches the
+// bare name at the store root (`lore store init northwind` in this repo),
+// renameOrgClashes attaches the linked folder as "<org>/<folder>" and the
+// bare name would reach the root instead; this rewrite keeps the v0.1.17
+// place. `--to <org>/.` stays the explicit root and `--to company` the org
+// folder (both untouched here). ok is false when to is not the org's bare
+// name or no rename happened.
+func linkedFolderName(ctx context.Context, opts Options, top, to string) (store.Source, bool) {
+	raw := rawOrgStores(ctx, opts)
+	named := renameOrgClashes(raw, top)
+	for i, s := range raw {
+		if string(s.Name) == to && named[i].Name != s.Name {
+			return named[i].Name, true
+		}
+	}
+	return "", false
 }
 
 // aliasWhat says which org folder a shortcut needs, for its refusal.
