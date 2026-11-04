@@ -191,8 +191,8 @@ func (o ops) secretOps() []op.Entry {
 	}
 }
 
-func ruleOf(l located) Rule {
-	r := Rule{ID: l.Row.ID.String(), RuleID: text(l.Row, sRuleID), State: text(l.Row, sState), Level: string(levelOf(l.Src)),
+func ruleOf(env Env, l located) Rule {
+	r := Rule{ID: l.Row.ID.String(), RuleID: text(l.Row, sRuleID), State: text(l.Row, sState), Level: string(storeLevel(env, l.Src)),
 		Store: string(l.Src), Regex: text(l.Row, sRegex), Keywords: texts(l.Row, sKeywords), Description: text(l.Row, sDescription),
 		Reason: text(l.Row, sReason)}
 	if v, ok := l.Row.Fields[sEntropy]; ok {
@@ -208,7 +208,7 @@ func (o ops) rules(ctx context.Context, _ RulesIn) (RulesOut, error) {
 	}
 	out := RulesOut{Data: []Rule{}}
 	for _, l := range rows {
-		out.Data = append(out.Data, ruleOf(l))
+		out.Data = append(out.Data, ruleOf(o.env, l))
 	}
 	out.Count = len(out.Data)
 	return out, nil

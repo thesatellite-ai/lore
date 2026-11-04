@@ -45,10 +45,31 @@ type located struct {
 	Row row.Row
 }
 
-// levelOf is the settings level a store's rows count at, read from its
+// Leveler is an optional Env upgrade: the settings level the engine gave
+// an attached store (Attached.Level, set by wire from the store's folder).
+// ok=false for a store it does not know. An org-attached store's name does
+// not tell its level (`--to team` attaches the linked folder under a plain
+// name), so the engine's answer wins whenever the Env has one.
+type Leveler interface {
+	StoreLevel(src store.Source) (policy.Level, bool)
+}
+
+// storeLevel is src's settings level: the Env's own answer (Leveler),
+// else the name rule (levelByName).
+func storeLevel(env Env, src store.Source) policy.Level {
+	if l, ok := env.(Leveler); ok {
+		if lv, known := l.StoreLevel(src); known && lv != "" {
+			return lv
+		}
+	}
+	return levelByName(src)
+}
+
+// levelByName is the settings level a store's rows count at, read from its
 // name the way wire attaches it (engine.levelOf for stores without an
-// explicit level): repo, me, <store>/org, <store>/<folder>, <store>.
-func levelOf(src store.Source) policy.Level {
+// explicit level): repo, me, <store>/org, <store>/<folder>, <store>. Only
+// the fallback when the Env cannot say (storeLevel).
+func levelByName(src store.Source) policy.Level {
 	s := string(src)
 	switch {
 	case src == store.SourceRepo:

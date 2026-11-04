@@ -113,7 +113,7 @@ func (o ops) policyEntries(ctx context.Context) ([]policy.Entry, map[ids.AnyID]s
 	where := map[ids.AnyID]store.Source{}
 	out := make([]policy.Entry, 0, len(rows))
 	for _, l := range rows {
-		e, eerr := policy.EntryFromRow(levelOf(l.Src), l.Row)
+		e, eerr := policy.EntryFromRow(storeLevel(o.env, l.Src), l.Row)
 		if eerr != nil {
 			return nil, nil, eerr
 		}
@@ -173,7 +173,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	level := levelOf(target)
+	level := storeLevel(o.env, target)
 	if _, err := policy.Resolve([]policy.Entry{{Level: level, Key: d.Key, Value: v}}); err != nil {
 		return RowOut{}, errs.Wrap(errs.InvalidInput, "policy set "+in.Key+": "+quote(in.Value)+" is not a valid value", err)
 	}
