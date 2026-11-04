@@ -66,7 +66,20 @@ func TestUC_MiscRepoAddDuplicateAndInvalid(t *testing.T) {
 		OriginURL string `json:"origin_url"`
 	}
 	decodeData(t, c.lore("repo", "list", "--json").stdout, &repos)
-	if len(repos) != 1 || repos[0].MountName != "api" || repos[0].OriginURL != "git@example.com:acme/api.git" {
+	// PROV1: lore init gives the checkout its permanent repo id and its own
+	// repos row (mount = the folder name), so the list holds that row plus
+	// exactly one "api" row with its origin (the duplicate and the invalid
+	// name above wrote nothing).
+	apis := 0
+	for _, r := range repos {
+		if r.MountName == "api" {
+			apis++
+			if r.OriginURL != "git@example.com:acme/api.git" {
+				t.Fatalf("api origin: %+v", repos)
+			}
+		}
+	}
+	if len(repos) != 2 || apis != 1 {
 		t.Fatalf("repos: %+v", repos)
 	}
 }

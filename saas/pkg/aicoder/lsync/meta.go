@@ -60,6 +60,18 @@ func MetaExists(dataDir string) bool {
 	return err == nil
 }
 
+// EnsureProjectMeta writes _meta.json's _v and project_id now (keeping any
+// other key), so `lore init` can give the checkout its permanent repo id
+// beside project_id before the post-run bootstrap (PROV1, PROVENANCE_DESIGN
+// 10.1). The bootstrap's later write keeps the repo identity keys, since
+// lsync owns only _v and project_id.
+func EnsureProjectMeta(dataDir, projectID string) error {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return err
+	}
+	return writeProjectMeta(dataDir, ProjectMeta{ProjectID: projectID})
+}
+
 // writeProjectMeta sets _v and project_id in _meta.json and keeps every
 // other key the file already holds (a store project's links and global
 // flag, F11): lsync owns only these two keys.

@@ -210,6 +210,18 @@ func runInit(ctx context.Context, projectRoot string) error {
 	if err := coreSeedProject(ctx, projectRoot, proj.ID, proj.Name, originURL); err != nil {
 		return errcodes.New(errcodes.Internal, "write the project row through the core").WithCause(err)
 	}
+	// PROV1: lore init writes the permanent repo_id beside project_id (design
+	// 10.1). A failure is not fatal: the next lore sync mints it, so say so.
+	if coreApp != nil {
+		dataDir := filepath.Join(projectRoot, projresolve.MarkerDir, lsync.DataDirName)
+		rerr := lsync.EnsureProjectMeta(dataDir, proj.ID)
+		if rerr == nil {
+			_, _, rerr = coreApp.EnsureRepoIdentity(ctx)
+		}
+		if rerr != nil {
+			fmt.Fprintln(os.Stderr, style.Warn("WARN: the repo id was not written yet ("+rerr.Error()+"); `lore sync` writes it"))
+		}
+	}
 
 	// 8. Auto-update .gitignore
 	if err := ensureGitignore(ctx, projectRoot); err != nil {

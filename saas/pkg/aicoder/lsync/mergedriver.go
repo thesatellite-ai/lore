@@ -90,6 +90,9 @@ func MergeFiles(ctx context.Context, basePath, oursPath, theirsPath, repoPath st
 	strategy := func(string) merge3.Strategy { return merge3.StrategyConflict }
 	if path.Base(filepath.ToSlash(repoPath)) == MetaFileName {
 		strategy = metaStrategy
+		// Q-R3-5 (PROV1): the repo identity keys (repo_id, urls,
+		// forked_from) never conflict; a fork merge keeps ours (%A).
+		ResolveRepoIdentity(bDoc, oDoc, tDoc)
 	} else if tbl, _ := oDoc[keyTable].(string); CoreOwned(tbl) {
 		// A core-owned row at an unexpected path: still the core's merge.
 		return mergeCoreOwned(ctx, basePath, oursPath, theirsPath)
