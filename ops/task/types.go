@@ -1,6 +1,7 @@
 package task
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/tasktree"
@@ -24,6 +25,8 @@ const (
 
 // AddIn is the input of task.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
 	// Title is v0.1.17's positional <title> (quote a title of several
 	// words: an op argument is one value).
 	Title      string `json:"title" arg:"0" rest:"true" desc:"the task title (several words are joined)"`
@@ -279,6 +282,8 @@ type ShowOut struct {
 // EditIn is the input of task.edit. An empty flag leaves its field as it
 // is; the --clear-* flags remove one.
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
 	ID            string        `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	Title         string        `json:"title,omitempty" flag:"title" desc:"new title"`
 	Body          string        `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
