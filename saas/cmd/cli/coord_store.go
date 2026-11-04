@@ -766,11 +766,6 @@ func (r *clientRows) Stage(ctx context.Context, rows ...coord.RowWrite) ([]signa
 	return out, nil
 }
 
-// projectedKeyPrefix + <actor id> is the stable_key of an actor projection
-// in a client repo: the column is required and unique, and the projection
-// must not reveal the person's real key (F18: {id, display name, kind}).
-const projectedKeyPrefix = "projected:"
-
 // ownerProjection is the projection of the person an agent works for (the
 // org identity of this machine) into the client repo, so the client copy
 // names the owner, never the agent (Q11).
@@ -786,31 +781,37 @@ func (r *clientRows) ownerProjection() (coord.RowWrite, bool) {
 	if name == "" {
 		name = r.w.Org.Name
 	}
-	now := r.w.Clock.Now()
-	d := coord.Doc{"_table": tableActors, "id": id, "kind": "human", "display_name": name, "stable_key": projectedKeyPrefix + id, "active": true}
-	d["_v"] = json.Number(strconv.Itoa(lsync.FormatVersion))
-	d.SetTime("created_at", now)
-	d.SetTime("updated_at", now)
-	d.SetTime("last_seen_at", now)
-	return coord.RowWrite{Table: tableActors, ID: id, Doc: d}, true
+	return r.clientActorRow(id, identityKindHuman, name), true
 }
 
 // agentProjection is the agent's actor row for the client repo when the org
-// shares agent details (agent_details: client): the projection {id, display
-// name, kind} plus its label, so the client sees who did the work (§7.6).
+// shares agent details (agent_details: client): {id, display name, kind},
+// its label as the display name, so the client sees who did the work (§7.6).
 func (r *clientRows) agentProjection() (coord.RowWrite, bool) {
 	if !r.w.IsAgent() {
 		return coord.RowWrite{}, false
 	}
-	label := strings.TrimPrefix(r.w.Ident.StableKey, "agent:")
+	label := strings.TrimPrefix(r.w.Ident.StableKey, agentKeyPrefix)
+	return r.clientActorRow(r.w.ActorID, identityKindAgent, label), true
+}
+
+// clientActorRow is the actor row a client repo gets for an actor a client
+// row names.
+//
+// FLAG6 (owner A): only the minimal row {id, display_name, kind}
+// (stores.ClientActorProjection), never stable_key, handle, label or email
+// (BATCH2 #15: only an explicit self-register keeps a handle, and that
+// goes to the org store, never here); coreWrite writes it into the repo
+// store and the live companion rule (holdActorCompanions) puts it in the
+// same commit as the row.
+func (r *clientRows) clientActorRow(id, kind, name string) coord.RowWrite {
 	now := r.w.Clock.Now()
-	d := coord.Doc{"_table": tableActors, "id": r.w.ActorID, "kind": "agent", "display_name": label, "label": label,
-		"stable_key": r.w.Ident.StableKey, "active": true}
-	d["_v"] = json.Number(strconv.Itoa(lsync.FormatVersion))
-	d.SetTime("created_at", now)
-	d.SetTime("updated_at", now)
-	d.SetTime("last_seen_at", now)
-	return coord.RowWrite{Table: tableActors, ID: r.w.ActorID, Doc: d}, true
+	full := coord.Doc{"_table": tableActors, "id": id, "kind": kind, "display_name": name}
+	full["_v"] = json.Number(strconv.Itoa(lsync.FormatVersion))
+	full.SetTime("created_at", now)
+	full.SetTime("updated_at", now)
+	d := coord.Doc(stores.ClientActorProjection(full, nil, "", true))
+	return coord.RowWrite{Table: tableActors, ID: id, Doc: d}
 }
 
 // clientActor is who the client copy names as writer for an agent's write:

@@ -134,6 +134,15 @@ func isLiveKind(s *liveSession, table row.Table) bool {
 	return ok
 }
 
+// liveReadable reports whether rows of table are read from the live ref
+// too: the live kinds, and actors, whose new rows ride live as companions
+// of the rows naming them (FLAG6, holdActorCompanions) and land on main
+// with them. Without it another clone saw the row name an act_ id while
+// its actor row waited on the live ref or on a fetched, unpulled main.
+func liveReadable(s *liveSession, table row.Table) bool {
+	return isLiveKind(s, table) || string(table) == tableActors
+}
+
 // liveFiles is the live folder of the local live ref: its commit ("" when
 // the ref does not exist yet) and its rows. A row that cannot be decoded is
 // an error, never "absent": an absent task looks free to `task next`.
@@ -204,7 +213,12 @@ func newer(liveRow, branchRow store.Row) store.Row {
 // Get implements store.Backend.
 func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store.Row, error) {
 	s := b.session(ctx)
-	if s == nil || !isLiveKind(s, table) {
+	if s != nil {
+		if ch, held := s.actorCompanions[live.RowKey{Table: string(table), ID: id.String()}]; held {
+			return ch.Row, nil
+		}
+	}
+	if s == nil || !liveReadable(s, table) {
 		return b.inner.Get(ctx, table, id)
 	}
 	_, files, err := b.liveFiles(ctx, s)
@@ -303,7 +317,7 @@ func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[s
 		}
 		table := path.Base(path.Dir(p))
 		id, isRow := strings.CutSuffix(path.Base(p), storeRowFileExt)
-		if !isRow || !isLiveKind(s, row.Table(table)) {
+		if !isRow || !liveReadable(s, row.Table(table)) {
 			continue
 		}
 		raw, found, err := s.repo.ReadFile(ctx, remote, p)
@@ -355,7 +369,7 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 	}
 	lives := map[store.Key]store.Row{}
 	for k, f := range files {
-		if !isLiveKind(s, row.Table(k.Table)) {
+		if !liveReadable(s, row.Table(k.Table)) {
 			continue
 		}
 		lr, err := liveStoreRow(k, f)
@@ -405,16 +419,21 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	}
 	req := rowroute.Request{Defaults: liveKinds(s)}
 	col := liveCollectorFrom(ctx)
+	if changes, err = b.holdActorCompanions(ctx, s, col, files, changes); err != nil || len(changes) == 0 {
+		return err
+	}
 	var branch []store.Change
 	liveRows := map[live.RowKey]live.File{}
 	now := s.clk.Now()
 	for _, ch := range changes {
-		if !isLiveKind(s, ch.Row.Table) {
+		k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
+		prev, inLive := files[k]
+		// An actor row riding live as a companion (FLAG6) is edited
+		// where it is, live (rule 1: a live row stays live).
+		if !isLiveKind(s, ch.Row.Table) && (!inLive || !liveReadable(s, ch.Row.Table)) {
 			branch = append(branch, ch)
 			continue
 		}
-		k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
-		prev, inLive := files[k]
 		if col != nil {
 			if f, staged := col.rows[k]; staged {
 				prev, inLive = f, true
@@ -469,9 +488,23 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		}
 		liveRows[k] = f
 	}
+	// FLAG6: held actor rows follow the batch's content rows: into the
+	// same live commit when any row goes live (they land on main with it),
+	// else into the same branch write.
+	var companions map[live.RowKey]bool
+	if len(liveRows) > 0 {
+		if companions, err = s.companionFiles(ctx, now, liveRows); err != nil {
+			return err
+		}
+	} else if len(s.actorCompanions) > 0 {
+		branch, companions = s.companionChanges(branch)
+	}
 	if len(branch) > 0 {
 		if err = b.inner.Write(ctx, branch); err != nil {
 			return err
+		}
+		if len(liveRows) == 0 {
+			s.dropCompanions(companions)
 		}
 	}
 	if len(liveRows) == 0 {
@@ -483,6 +516,9 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	if col != nil {
 		col.s, col.folder = s, b.folder
 		maps.Copy(col.rows, liveRows)
+		// Kept held until the staged commit is applied (Finalize): a
+		// Prepare re-run after a lost race stages them again.
+		col.companions = companions
 		return nil
 	}
 	res, err := s.ref.Write(ctx, live.WriteRequest{Folder: b.folder, Rows: liveRows, BinaryVersion: version})
@@ -492,7 +528,133 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		}
 		return errs.Wrap(errs.Internal, "live: write the local live ref", err)
 	}
+	s.dropCompanions(companions)
 	s.wrote += len(res.Written)
+	return nil
+}
+
+// ---------------------------------------------------------------- actor companions (FLAG6)
+
+// holdActorCompanions takes every NEW actors row out of changes and holds
+// it on the session (liveSession.actorCompanions) until the command's next
+// content write, which carries it (Write; flushActorCompanions at the end
+// of the command writes what no content row took).
+//
+// FLAG6 (owner A): when a client-visible row names an actor, that actor's
+// minimal row (id, display_name, kind) reaches the client repo in the SAME
+// commit as the row. The core writes the actor row first, in its own
+// engine write (wire's ensureActor, a coordination owner/agent
+// projection), and actors are no live kind, so on its own it went to the
+// work tree's .lore/data, never committed, while the row it supports went
+// live and landed on main without it: every other clone then showed a bare
+// act_ id. Holding it is v0.1.17's companion rule (rowroute.DecideAll: a
+// new supporting row goes live with the command's live rows, F2) applied
+// across the core's separate engine writes. An edit of a held row replaces
+// the held version; an actor row already in the branch or live is
+// written as before.
+func (b *liveBackend) holdActorCompanions(ctx context.Context, s *liveSession, col *liveCollector, files map[live.RowKey]live.File, changes []store.Change) ([]store.Change, error) {
+	kept := changes[:0:0]
+	for _, ch := range changes {
+		if string(ch.Row.Table) != tableActors || ch.Row.Deleted {
+			kept = append(kept, ch)
+			continue
+		}
+		k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
+		if prev, held := s.actorCompanions[k]; held {
+			ch.Expect = prev.Expect // the held row has no file yet: still a create
+			s.actorCompanions[k] = ch
+			if col != nil && col.companions[k] {
+				// already staged in this fenced write: restage the edit
+				f, err := companionFile(ctx, ch.Row, s.clk.Now())
+				if err != nil {
+					return nil, err
+				}
+				col.rows[k] = f
+			}
+			continue
+		}
+		if _, inLive := files[k]; inLive {
+			kept = append(kept, ch)
+			continue
+		}
+		if _, err := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID); err == nil {
+			kept = append(kept, ch)
+			continue
+		} else if !errors.Is(err, store.ErrNotFound) {
+			return nil, err
+		}
+		if s.actorCompanions == nil {
+			s.actorCompanions = map[live.RowKey]store.Change{}
+		}
+		s.actorCompanions[k] = ch
+		s.companionInner = b.inner
+	}
+	return kept, nil
+}
+
+// companionFile is the live file of a held actor row: a first version
+// marked Companion, so it lands only together with a content row (F2,
+// withoutLoneSupporting).
+func companionFile(ctx context.Context, r store.Row, now time.Time) (live.File, error) {
+	f, err := liveFileFor(ctx, r, nil, now)
+	if err != nil {
+		return live.File{}, err
+	}
+	f.Block.Companion = true
+	return f, nil
+}
+
+// companionFiles adds every held actor row to rows (a live write) and
+// returns their keys.
+func (s *liveSession) companionFiles(ctx context.Context, now time.Time, rows map[live.RowKey]live.File) (map[live.RowKey]bool, error) {
+	if len(s.actorCompanions) == 0 {
+		return nil, nil
+	}
+	keys := map[live.RowKey]bool{}
+	for k, ch := range s.actorCompanions {
+		if _, own := rows[k]; own {
+			continue
+		}
+		f, err := companionFile(ctx, ch.Row, now)
+		if err != nil {
+			return nil, err
+		}
+		rows[k] = f
+		keys[k] = true
+	}
+	return keys, nil
+}
+
+// companionChanges appends every held actor row to a branch write and
+// returns their keys.
+func (s *liveSession) companionChanges(branch []store.Change) ([]store.Change, map[live.RowKey]bool) {
+	keys := map[live.RowKey]bool{}
+	for k, ch := range s.actorCompanions {
+		branch = append(branch, ch)
+		keys[k] = true
+	}
+	return branch, keys
+}
+
+// dropCompanions forgets held rows that were written.
+func (s *liveSession) dropCompanions(keys map[live.RowKey]bool) {
+	for k := range keys {
+		delete(s.actorCompanions, k)
+	}
+}
+
+// flushActorCompanions writes the held actor rows no content row carried
+// (the command wrote only them, or its content write failed) where they
+// went before FLAG6: the branch's .lore/data.
+func (s *liveSession) flushActorCompanions(ctx context.Context) error {
+	if len(s.actorCompanions) == 0 || s.companionInner == nil {
+		return nil
+	}
+	branch, keys := s.companionChanges(nil)
+	if err := s.companionInner.Write(ctx, branch); err != nil {
+		return err
+	}
+	s.dropCompanions(keys)
 	return nil
 }
 
@@ -590,6 +752,9 @@ type liveCollector struct {
 	s      *liveSession
 	folder string
 	rows   map[live.RowKey]live.File
+	// companions are the held actor rows (FLAG6) staged in rows; the
+	// session forgets them once the staged commit is applied.
+	companions map[live.RowKey]bool
 }
 
 // liveCollectorKey carries a *liveCollector in a context.

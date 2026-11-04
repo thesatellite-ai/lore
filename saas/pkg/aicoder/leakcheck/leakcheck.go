@@ -183,17 +183,18 @@ type Finding struct {
 	Warn bool
 }
 
-// StableKeyBlocks decides whether a person's stable_key in a client repo's
-// actor file blocks a commit. The client copy is {id, display name, kind}
-// (F18), and the export writes exactly that projection in client repos
-// (cmd/cli client_actor_export.go), so anything more blocks: fail closed
-// (coordinator ruling 18:40, BUG-D2). Kept as a named switch so the one
-// place the rule's strength is decided stays visible.
+// StableKeyBlocks records that a person's stable_key, handle or email in a
+// client repo's actor file blocks a commit; it never only warns.
+//
+// BATCH2 #14 (owner): the commit check blocks client-repo actor files
+// carrying stable_key, handle or email, because the client copy of an
+// actor is {id, display_name, kind} (F18, FLAG6) and anything more
+// publishes a teammate's identity to the client; fail closed (coordinator
+// ruling 18:40, BUG-D2). The finding names the file, the actor id and the
+// keys (PRINCIPLE EXACT ERRORS). A correct flow never trips it: an
+// explicit self-register (which keeps a handle, BATCH2 #15) writes to the
+// org store's org/ folder, never to the client repo.
 const StableKeyBlocks = true
-
-// warnOnlyActorKeys are the actor columns that only warn while
-// StableKeyBlocks is false.
-var warnOnlyActorKeys = map[string]bool{"stable_key": true, "handle": true}
 
 // Blocking returns the findings that block (Warn unset).
 func Blocking(fs []Finding) []Finding {
@@ -332,6 +333,15 @@ func originIsRepo(o any) bool {
 	return m[originStoreKey] == repoStoreSource
 }
 
+// actorFileName is the file an actor finding names: the item's path, or
+// where it was found when it has none.
+func actorFileName(it Item) string {
+	if it.Path != "" {
+		return it.Path
+	}
+	return it.Where
+}
+
 // actorExtraKeys lists the keys of an actor row document that a client
 // repo's copy may not hold: anything outside allowedActorKeys that is not
 // empty and not an allowed envelope key. Sorted, nil when the copy is clean.
@@ -412,14 +422,11 @@ func checkRowFile(it Item, table, id string, idx *Index, o Options) []Finding {
 			return out
 		}
 		if extra := actorExtraKeys(doc); len(extra) > 0 {
-			warn := !StableKeyBlocks
-			for _, k := range extra {
-				if !warnOnlyActorKeys[k] {
-					warn = false
-				}
-			}
-			out = append(out, Finding{Rule: RuleActor, Where: it.Where, RowID: id, Warn: warn,
-				Detail: "an actor copy in a client repo may hold only {id, display name, kind}; also has " + strings.Join(extra, ", ")})
+			// BATCH2 #14: every extra key blocks (StableKeyBlocks), and the
+			// reason names the file, the actor id and the keys.
+			out = append(out, Finding{Rule: RuleActor, Where: it.Where, RowID: id, Path: it.Path, Warn: !StableKeyBlocks,
+				Detail: "actor " + id + " in client-repo file " + actorFileName(it) + " carries " + strings.Join(extra, ", ") +
+					": a client repo may hold only {id, display name, kind} of an actor (privacy rule); remove those keys from the file"})
 		}
 		return out
 	}
@@ -618,8 +625,10 @@ func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
 		}
 		where := table + " row file"
 		if table == tableActors {
-			if len(actorExtraKeys(doc)) > 0 {
-				out = append(out, CIFinding{Where: where, Detail: "an actor copy holds more than {id, display name, kind}"})
+			// BATCH2 #14: name the keys (exact reason); the id stays
+			// withheld as for every CI finding.
+			if extra := actorExtraKeys(doc); len(extra) > 0 {
+				out = append(out, CIFinding{Where: where, Detail: "an actor copy holds more than {id, display name, kind}: " + strings.Join(extra, ", ")})
 			}
 			continue
 		}

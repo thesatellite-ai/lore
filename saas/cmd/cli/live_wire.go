@@ -41,6 +41,8 @@ import (
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/rowroute"
 	"saas/pkg/aicoder/style"
+
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Environment variables of live rows (§1 "Environment variables").
@@ -112,6 +114,11 @@ type liveSession struct {
 	// notes are merge decisions to print once.
 	notes []live.MergeNote
 	lock  *processlock.Lock
+	// actorCompanions are new actor rows held until a content row of the
+	// command carries them (FLAG6, live_core.go holdActorCompanions);
+	// companionInner is the branch backend that writes any left over.
+	actorCompanions map[live.RowKey]store.Change
+	companionInner  store.Backend
 }
 
 // liveSessions are per-process (one command per process), keyed by git top
@@ -855,6 +862,9 @@ func (s *liveSession) finish(ctx context.Context, folder string) {
 		return
 	}
 	s.finished = true
+	if err := s.flushActorCompanions(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+"actor rows were not written: "+err.Error()))
+	}
 	if !s.push(ctx, true) {
 		return
 	}

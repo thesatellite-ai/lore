@@ -294,7 +294,15 @@ func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool)
 	if err != nil {
 		return errcodes.New(errcodes.InvalidID, id+" is not an id").WithCause(err)
 	}
-	src, curRow, found, err := coreLocate(ctx, table, id)
+	if table == tableActors {
+		// FLAG6: a staged actor row is the client projection of an actor a
+		// client row names (clientRows.clientActorRow); it belongs in the
+		// repo store only. coreLocate would answer from the org roster
+		// when the repo has no copy yet, and a whole write there would
+		// clear the roster's stable_key and handle.
+		whole = false
+	}
+	src, curRow, found, err := coreLocateActorAware(ctx, table, id)
 	if err != nil {
 		return err
 	}
@@ -341,7 +349,11 @@ func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool)
 				delete(patch, fieldCreatedByActor)
 			}
 		}
-		_, err = coreApp.CreateWithID(ctx, newRowTarget(ctx, doc), row.Table(table), aid, patch)
+		target := newRowTarget(ctx, doc)
+		if table == tableActors {
+			target = store.SourceRepo
+		}
+		_, err = coreApp.CreateWithID(ctx, target, row.Table(table), aid, patch)
 		return coreErr(err)
 	}
 	if len(patch) == 0 {
@@ -349,6 +361,27 @@ func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool)
 	}
 	_, err = coreApp.Update(ctx, engine.Ref{Table: row.Table(table), ID: aid, Store: src}, patch)
 	return coreErr(err)
+}
+
+// coreLocateActorAware is coreLocate, except that an actors row is looked
+// up in the repo store only (FLAG6: the staged actor row is the repo's
+// client projection; a roster copy in another store is not its row).
+func coreLocateActorAware(ctx context.Context, table, id string) (store.Source, row.Row, bool, error) {
+	if table != tableActors {
+		return coreLocate(ctx, table, id)
+	}
+	aid, err := ids.ParseAny(id)
+	if err != nil {
+		return "", row.Row{}, false, nil
+	}
+	src, r, err := coreApp.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: row.Table(table), ID: aid})
+	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+		return "", row.Row{}, false, nil
+	}
+	if err != nil {
+		return "", row.Row{}, false, coreErr(err)
+	}
+	return src, r, true, nil
 }
 
 // normDoc makes two decoded JSON values comparable (json.Number vs float).
@@ -387,6 +420,9 @@ type coreLiveCompanion struct {
 	refresh func(ctx context.Context) error
 	staged  live.Staged
 	s       *liveSession
+	// companions are the held actor rows (FLAG6) the staged commit
+	// carries; Finalize forgets them on the session.
+	companions map[live.RowKey]bool
 }
 
 var _ signals.Companion = (*coreLiveCompanion)(nil)
@@ -409,7 +445,7 @@ func (c *coreLiveCompanion) Prepare(ctx context.Context) (gitremote.RefUpdate, e
 			return gitremote.RefUpdate{}, err
 		}
 	}
-	c.staged, c.s = live.Staged{}, col.s
+	c.staged, c.s, c.companions = live.Staged{}, col.s, col.companions
 	if col.s == nil || len(col.rows) == 0 {
 		return gitremote.RefUpdate{}, nil
 	}
@@ -433,6 +469,7 @@ func (c *coreLiveCompanion) Finalize(ctx context.Context) error {
 	if err := c.s.ref.CommitStaged(ctx, c.staged); err != nil {
 		return fmt.Errorf("move %s: %w", c.s.ref.Name, err)
 	}
+	c.s.dropCompanions(c.companions)
 	c.s.wrote += len(c.staged.Written)
 	return nil
 }
