@@ -31,9 +31,10 @@ import (
 	"time"
 
 	"dbent/gen/ent"
-	entDecision "dbent/gen/ent/decision"
+	"saas/pkg/aicoder/errcodes"
 
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -48,7 +49,7 @@ type supersedeNode struct {
 	createdAt    time.Time
 	// decisionStatus is set for decisions only (the status a repair may
 	// move to superseded).
-	decisionStatus entDecision.Status
+	decisionStatus string
 }
 
 // supersedeFix is one reversed link to repair: oldID gets superseded_by_id
@@ -150,61 +151,49 @@ func planSupersedeRepair(kind supersedeKind, nodes []supersedeNode) supersedePla
 	return plan
 }
 
-// loadSupersedeNodes reads the chain columns of every row of kind.
-func loadSupersedeNodes(ctx context.Context, db *ent.Client, kind supersedeKind) ([]supersedeNode, error) {
-	str := func(p *string) string {
-		if p == nil {
+// loadSupersedeNodes reads the chain columns of every live row of kind in
+// every attached store, through the core (these tables are core-owned, so
+// lore.db is never asked). db is kept for the callers' shape.
+func loadSupersedeNodes(ctx context.Context, _ *ent.Client, kind supersedeKind) ([]supersedeNode, error) {
+	t, ok := supersedeTables[kind]
+	if !ok {
+		return nil, fmt.Errorf("supersede: unknown kind %q", kind)
+	}
+	if coreApp == nil {
+		return nil, errcodes.New(errcodes.Internal, "the core is not mounted")
+	}
+	if _, err := coreApp.Engine(ctx); err != nil { // open it: Stores is empty before
+		return nil, coreErr(err)
+	}
+	text := func(r row.Row, f string) string {
+		v, ok := r.Fields[f]
+		if !ok || v == nil || v.Kind() == value.KindNull {
 			return ""
 		}
-		return *p
+		return v.String()
 	}
 	var out []supersedeNode
-	switch kind {
-	case supersedeRule:
-		rows, err := db.Rule.Query().All(ctx)
+	for _, src := range coreApp.Stores() {
+		rows, err := coreApp.List(ctx, src, t)
 		if err != nil {
-			return nil, err
+			return nil, coreErr(err)
 		}
 		for _, r := range rows {
-			out = append(out, supersedeNode{id: r.ID, projectID: str(r.ProjectID), supersededBy: str(r.SupersededByID), createdAt: r.CreatedAt})
+			if r.Deleted {
+				continue
+			}
+			n := supersedeNode{id: r.ID.String(), projectID: text(r, supersedeFieldProject), supersededBy: text(r, supersedeFieldNext), createdAt: r.CreatedAt}
+			if kind == supersedeDecision {
+				n.decisionStatus = text(r, supersedeFieldStatus)
+			}
+			out = append(out, n)
 		}
-	case supersedeMemory:
-		rows, err := db.Memory.Query().All(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			out = append(out, supersedeNode{id: r.ID, projectID: r.ProjectID, supersededBy: str(r.SupersededByID), createdAt: r.CreatedAt})
-		}
-	case supersedeDecision:
-		rows, err := db.Decision.Query().All(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			out = append(out, supersedeNode{id: r.ID, projectID: r.ProjectID, supersededBy: str(r.SupersededByID), createdAt: r.CreatedAt, decisionStatus: r.Status})
-		}
-	case supersedeHotfix:
-		rows, err := db.Hotfix.Query().All(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			out = append(out, supersedeNode{id: r.ID, projectID: r.ProjectID, supersededBy: str(r.SupersededByID), createdAt: r.CreatedAt})
-		}
-	case supersedePattern:
-		rows, err := db.Pattern.Query().All(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			out = append(out, supersedeNode{id: r.ID, projectID: r.ProjectID, supersededBy: str(r.SupersededByID), createdAt: r.CreatedAt})
-		}
-	default:
-		return nil, fmt.Errorf("supersede: unknown kind %q", kind)
 	}
 	return out, nil
 }
+
+// supersedeFieldStatus is a decision's lifecycle field.
+const supersedeFieldStatus = "status"
 
 // clearSupersededBy removes a row's successor link (through the core).
 func clearSupersededBy(ctx context.Context, _ *ent.Client, kind supersedeKind, id string) error {
@@ -217,7 +206,7 @@ func clearSupersededBy(ctx context.Context, _ *ent.Client, kind supersedeKind, i
 // is kept.
 func repairSetSupersededBy(ctx context.Context, _ *ent.Client, kind supersedeKind, old supersedeNode, newID string) error {
 	status := ""
-	if kind == supersedeDecision && (old.decisionStatus == entDecision.StatusProposed || old.decisionStatus == entDecision.StatusAccepted) {
+	if kind == supersedeDecision && (old.decisionStatus == schema.DecisionStatusProposed || old.decisionStatus == schema.DecisionStatusAccepted) {
 		status = schema.DecisionStatusSuperseded
 	}
 	return setSuccessorCore(kind, func(t row.Table) error { return coreSetSuccessor(ctx, t, old.id, newID, status) })
