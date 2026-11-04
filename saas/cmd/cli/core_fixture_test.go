@@ -105,17 +105,18 @@ func (f *coreFixture) addID(args ...string) string {
 	return out.ID
 }
 
-// mount points coreApp at a core over the fixture repo for the rest of the
+// mount points coreApp at a core over the fixture repo (the same
+// wire.Options as mountCore, repo and home aside: keep the two in step) for the rest of the
 // test (HOME and the working directory follow, since the core's hooks read
 // both). Call it after the binary's writes: the core opens its cache on
 // first use. The previous coreApp is put back by t.Cleanup.
-func (f *coreFixture) mount() *wire.App {
+func (f *coreFixture) mount() {
 	f.t.Helper()
 	f.t.Setenv("HOME", f.home)
 	f.t.Chdir(f.dir)
 	app, err := wire.New(wire.Options{RepoDir: f.dir, Home: filepath.Join(f.home, ".lore"), Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
 		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{},
-		ModeB: modeBExporter{}, Notice: coreNotice})
+		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -127,7 +128,6 @@ func (f *coreFixture) mount() *wire.App {
 			f.t.Error(err)
 		}
 	})
-	return app
 }
 
 // projectID is the core's project id of the fixture repo (mount first).
@@ -140,9 +140,28 @@ func (f *coreFixture) projectID() string {
 	return pid.String()
 }
 
-// taskFile is the repo-store row file of a task (.lore/data/tasks/<id>.json).
-func (f *coreFixture) taskFile(id string) string {
-	return filepath.Join(f.dir, ".lore", "data", tableTasks, id+".json")
+// taskRow returns a task's row file: from the work tree
+// (.lore/data/tasks/<id>.json) or, when the task lives on the repo's live
+// ref (refs/lore/live/*), from there.
+func (f *coreFixture) taskRow(id string) []byte {
+	f.t.Helper()
+	b, err := os.ReadFile(filepath.Join(f.dir, ".lore", "data", tableTasks, id+".json"))
+	if err == nil {
+		return b
+	}
+	if !os.IsNotExist(err) {
+		f.t.Fatal(err)
+	}
+	refs := f.run("git", "for-each-ref", "--format=%(refname)", "refs/lore/live")
+	for _, ref := range strings.Fields(refs.stdout) {
+		for _, path := range strings.Split(f.run("git", "ls-tree", "-r", "--name-only", ref).stdout, "\n") {
+			if strings.HasSuffix(path, "/"+id+".json") {
+				return []byte(f.run("git", "show", ref+":"+path).stdout)
+			}
+		}
+	}
+	f.t.Fatalf("task %s: no row file in the work tree or on refs/lore/live", id)
+	return nil
 }
 
 // copyTo makes a second clone of the fixture: the same checkout (git and
@@ -155,8 +174,8 @@ func (f *coreFixture) copyTo(t *testing.T) *coreFixture {
 	if err := os.MkdirAll(g.home, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("cp", "-a", f.dir, g.dir).CombinedOutput(); err != nil {
-		t.Fatalf("copy the checkout: %v %s", err, out)
+	if err := os.CopyFS(g.dir, os.DirFS(f.dir)); err != nil {
+		t.Fatalf("copy the checkout: %v", err)
 	}
 	g.env = append([]string(nil), f.env...)
 	for i, kv := range g.env {

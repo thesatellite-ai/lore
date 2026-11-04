@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -61,10 +60,7 @@ func TestRecordMergedBranch_TwoClonesWriteTheSameRow(t *testing.T) {
 	a.lore("task", "done", id)
 	a.git("add", "-A")
 	a.git("commit", "-q", "-m", "done")
-	base, err := os.ReadFile(a.taskFile(id))
-	if err != nil {
-		t.Fatal(err)
-	}
+	base := a.taskRow(id)
 	// The second clone: the same commit in another checkout, another HOME.
 	b := a.copyTo(t)
 	f := mergewatch.Finding{Method: mergewatch.MethodAncestry, Commit: "f0fd74c", At: time.Date(2026, 11, 3, 10, 15, 0, 0, time.UTC)}
@@ -79,11 +75,7 @@ func TestRecordMergedBranch_TwoClonesWriteTheSameRow(t *testing.T) {
 		if got := d.Time(keyMergedAtDoc); !got.Equal(f.At) {
 			t.Fatalf("merged_at must be the merge commit's date %v: %v", f.At, got)
 		}
-		raw, err := os.ReadFile(cf.taskFile(id))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return raw
+		return cf.taskRow(id)
 	}
 	ra := stamp(a)
 	time.Sleep(2 * time.Millisecond) // the two clones run at different instants

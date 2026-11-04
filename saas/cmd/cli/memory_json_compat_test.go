@@ -69,8 +69,8 @@ func TestMemoryJSONByteCompat(t *testing.T) {
 		}
 		all = append(all, m)
 	}
-	// list --all-repos --archived: every row, in v0.1.17's order (newest
-	// first, as its list query ordered by created_at desc).
+	// list --all-repos --archived: every row, in v0.1.17's order (oldest
+	// first by created_at, checked against the v0.1.17 binary).
 	got := strings.TrimSuffix(c.lore("memory", "list", "--all-repos", "--archived", "--json").stdout, "\n")
 	var listed struct {
 		Data []struct {
@@ -92,8 +92,8 @@ func TestMemoryJSONByteCompat(t *testing.T) {
 		t.Fatalf("list --all-repos --archived printed %d rows, want %d", len(ordered), len(all))
 	}
 	for i := 1; i < len(ordered); i++ {
-		if ordered[i].CreatedAt.After(ordered[i-1].CreatedAt) {
-			t.Fatalf("list order is not newest first at %d: %v after %v", i, ordered[i].CreatedAt, ordered[i-1].CreatedAt)
+		if ordered[i].CreatedAt.Before(ordered[i-1].CreatedAt) {
+			t.Fatalf("list order is not oldest first at %d: %v before %v", i, ordered[i].CreatedAt, ordered[i-1].CreatedAt)
 		}
 	}
 	if want := v017("memory.list", ordered, len(ordered)); got != want {
