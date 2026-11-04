@@ -105,8 +105,8 @@ type Row struct {
 	// provenance logic, so the envelope keeps it as validated canonical JSON.
 	// Zero means absent.
 	Origin value.JSON
-	// Deleted marks a tombstone: kept forever so an old copy can never bring
-	// the row back. A tombstone has no Fields, Meta or Origin.
+	// Deleted marks a tombstone: kept forever (DQ4) so an old copy can never
+	// bring the row back. A tombstone has no Fields, Meta or Origin.
 	Deleted bool
 	// Meta is "meta": metadata values keyed by meta key id. Each value is the
 	// JSON object of METADATA_DESIGN ({name, scope, v, and optional strict,

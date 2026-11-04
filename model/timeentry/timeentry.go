@@ -13,7 +13,8 @@
 //     (logic/merge StrategyListByID): same id on both sides, the newer
 //     UpdatedAt wins for the whole entry.
 //   - An entry is never physically removed: removal sets DeletedAt (a
-//     tombstone), and a tombstoned entry never counts toward a total.
+//     tombstone), and a tombstoned entry never counts toward a total
+//     (TQ4: no time-entry prune, removed entries stay tombstones for good).
 //   - Seconds is stored, not recomputed, so every reader agrees.
 package timeentry
 

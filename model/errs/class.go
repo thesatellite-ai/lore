@@ -23,6 +23,8 @@ type Class string
 // exit number in CLI_REFERENCE 1.5 and a row in classTable.
 const (
 	// ClassGeneric holds only E_INTERNAL: a real internal failure (500).
+	// DOCS O3 + O7-O9: E_INTERNAL is the only generic code, so no input or
+	// state error can ever answer HTTP 500 or exit 1.
 	ClassGeneric           Class = "generic"
 	ClassCoordination      Class = "coordination"
 	ClassGuard             Class = "guard"
@@ -52,7 +54,8 @@ func Classes() []Class {
 
 // Exit statuses per class (CLI_REFERENCE 1.5). Coordination codes carry their
 // own number inside [ExitCoordinationMin, ExitCoordinationMax]; every other
-// class has exactly one number.
+// class has exactly one number. RES-OQ5 + BATCH 7: not_found has its own
+// exit, 27 (the next free number), distinct from "not visible here" (22).
 const (
 	ExitGeneric           = 1
 	ExitCoordinationMin   = 10

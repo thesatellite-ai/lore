@@ -17,8 +17,10 @@ type Code string
 // (exit 27) like every other noun.
 //
 // Reclassified in 0.1.18 (DOCS O3): every v0.1.17 code that exited 1 is now
-// bad_input (20) or refused (23) by meaning; only E_INTERNAL stays generic,
-// so no input or state error can ever answer HTTP 500.
+// bad_input (20) or refused (23) by meaning; only E_INTERNAL stays generic
+// (O7-O9: it marks real bugs only), so no input or state error can ever
+// answer HTTP 500. E_NOT_FOUND is class not_found, exit 27 (RES-OQ5,
+// BATCH 7).
 const (
 	DBLocked              Code = "E_DB_LOCKED"
 	DBCorrupt             Code = "E_DB_CORRUPT"
