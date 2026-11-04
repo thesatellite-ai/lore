@@ -445,12 +445,9 @@ alice (work/app)$ lore sync fix-projects --dry-run
 2 project row(s); 1 would be merged
 alice (work/app)$ lore sync fix-projects
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
+lore sync: re-pointed 1 row file(s) from local project prj_3b6283bc4392c556bbae5f094246e913 to shared project prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 ✓ kept prj_4c590afb2a0cc7ae1b97b7e4e62d6c38, merged prj_3b6283bc4392c556bbae5f094246e913
 alice (work/app)$ lore project list
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 prj_4c590afb2a0cc7ae1b97b7e4e62d6c38  app  https://github.com/client2/app
-prj_3b6283bc4392c556bbae5f094246e913  app  https://github.com/client2/app
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 alice (work/app)$ git add -A && git commit -qm 'lore: one project' && git push -q origin main
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`

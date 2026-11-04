@@ -174,15 +174,12 @@ $ lore sync fix-projects --dry-run
 2 project row(s); 1 would be merged
 $ lore sync fix-projects
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
+lore sync: re-pointed 1 row file(s) from local project prj_3b62…e913 to shared project prj_4c59…6c38
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 ✓ kept prj_4c59…6c38, merged prj_3b62…e913
 $ lore project list
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 prj_4c59…6c38  app  https://github.com/client2/app
-prj_3b62…e913  app  https://github.com/client2/app
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 $ git add -A && git commit -qm 'lore: one project' && git push -q origin main
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 ```
 <!-- /example -->
 
