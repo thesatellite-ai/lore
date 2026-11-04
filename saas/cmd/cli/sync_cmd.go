@@ -346,6 +346,10 @@ func newSyncResolveCommand() *cobra.Command {
 				return err
 			}
 			if err := lsync.ResolveConflict(cmd.Context(), t.db, id, choice); err != nil {
+				if errors.Is(err, lsync.ErrCoreOwned) {
+					// a63c6f8: the message names the way that works for a core row.
+					return errcodes.New(errcodes.InvalidInput, err.Error())
+				}
 				if errors.Is(err, lsync.ErrNotFound) {
 					return errcodes.New(errcodes.NotFound, err.Error()).WithHint("see `lore sync conflicts`")
 				}
@@ -420,6 +424,10 @@ restored row is exported again like any edit.`,
 				return err
 			}
 			if err := lsync.RestoreTrash(cmd.Context(), t.db, id); err != nil {
+				if errors.Is(err, lsync.ErrCoreOwned) {
+					// a63c6f8: the message names the way that works for a core row.
+					return errcodes.New(errcodes.InvalidInput, err.Error())
+				}
 				if errors.Is(err, lsync.ErrNotFound) {
 					return errcodes.New(errcodes.NotFound, err.Error()).WithHint("see `lore sync trash`")
 				}
@@ -1082,6 +1090,10 @@ func newSyncMergeRowsCommand() *cobra.Command {
 				return err
 			}
 			if err := lsync.MergeRows(cmd.Context(), t.db, args[0], keep, drop); err != nil {
+				if errors.Is(err, lsync.ErrCoreOwned) {
+					// a63c6f8: the message names the way that works for a core row.
+					return errcodes.New(errcodes.InvalidInput, err.Error())
+				}
 				if errors.Is(err, lsync.ErrNotFound) {
 					return errcodes.New(errcodes.NotFound, err.Error())
 				}
