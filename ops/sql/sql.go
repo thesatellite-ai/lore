@@ -12,7 +12,8 @@
 // its connection is query_only over files attached mode=ro.
 //
 // Sensitive kind fields print as ••• (RQ1) unless --show-sensitive, which
-// asks first (--yes / REST "yes"), exactly like `lore resource show`.
+// asks first (--yes / REST "yes"), exactly like `lore resource show`
+// (XQ3: without a terminal it needs --yes, else E_NEEDS_CONFIRM).
 // Internal fields need no masking here: they are never written into a
 // client repo (the leak guard), and a client repo's lens holds nothing else.
 package sql

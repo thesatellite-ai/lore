@@ -2,7 +2,8 @@
 // CLI_REFERENCE 1.4, 1.5): cobra commands built at startup from an
 // op.Registry, one `lore <noun> <verb>` command per operation.
 //
-// Why it exists: the CLI is a thin translation of the registry. Positional
+// Why it exists: the CLI is a thin translation of the registry (ONE
+// OPERATION SPEC: every surface comes from one definition so they match). Positional
 // arguments come from `arg:"N"` tags, flags from `flag:` tags (typed by the
 // Go field), --help from the Summary, field descriptions and Examples, and
 // every command runs through the injected op.Runner, so the scanner, policy,

@@ -26,7 +26,8 @@ const (
 	// DefaultPort is `lore api`'s port when --port is not given.
 	DefaultPort = 7461
 	// BindHost is the only address the server listens on in 0.1.18: there
-	// is no flag for another one.
+	// is no flag for another one (SERVER SCOPE: 0.1.18 is the local
+	// foundation; `lore serve` and remote access come in a later release).
 	BindHost = "127.0.0.1"
 	// MaxBodyBytes caps a request body (MaxFileSize, 4 MiB).
 	MaxBodyBytes = 4 << 20
@@ -77,7 +78,8 @@ type Kind struct {
 // Options configures a Server.
 type Options struct {
 	// Token is the bearer token every request must carry. Required: New
-	// refuses an empty token, so the API can never start open.
+	// refuses an empty token, so the API can never start open (SERVER
+	// SCOPE: local API is closed by default even on 127.0.0.1).
 	Token string
 	// Actor is the machine's person: every request runs as them (spec 9.7).
 	Actor ids.ID[ids.Actor]

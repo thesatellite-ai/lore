@@ -2,7 +2,9 @@
 // (STORE_SERVER_SPEC 9). The CLI commands and the REST routes are built from
 // these specs at startup, the CLI reference and the OpenAPI file are written
 // from them, and every surface calls a Runner, so all surfaces take the same
-// inputs, give the same errors and apply the same checks.
+// inputs, give the same errors and apply the same checks (ONE OPERATION
+// SPEC: an operation is defined once so surfaces can never drift; fixed
+// operations are built at startup, no code generation).
 //
 // Type safety: an operation is Define[In, Out](spec, run) with real structs.
 // Surfaces only ever hold the type-erased Entry, and they never hold an

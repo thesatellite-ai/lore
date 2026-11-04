@@ -201,6 +201,7 @@ func (o ops) resourceOps() []op.Entry {
 		op.Define(op.Spec{Name: OpResEdit, Summary: "Edit a resource's values (stamps last_checked)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid), Confirm: op.ConfirmRule{MayAsk: true}}, o.resEdit),
 		op.Define(op.Spec{Name: OpResShow, Summary: "Show one resource", Permission: op.PermRead, Access: op.AccessRead,
+			// XQ3: --show-sensitive always confirms; without a terminal it needs --yes.
 			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resShow),
 		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resList),
