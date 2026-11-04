@@ -671,7 +671,7 @@ func TestPurgeArchived(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.reconcile()
-	got, err := PurgeArchived(ctx, e.db, e.data, time.Now().Add(-24*time.Hour))
+	got, err := PurgeArchived(ctx, e.db, e.data, time.Now().Add(-24*time.Hour), withCoreOwned(legacyNoCoreOwned))
 	if err != nil || len(got) != 1 || got[0] != "memories/"+old {
 		t.Fatalf("purge = %v err %v", got, err)
 	}
@@ -686,7 +686,7 @@ func TestPurgeArchived(t *testing.T) {
 	if err != nil || !purged[old] {
 		t.Fatalf("_purged.json = %v err %v", purged, err)
 	}
-	if again, err := PurgeArchived(ctx, e.db, e.data, time.Now()); err != nil || len(again) != 0 {
+	if again, err := PurgeArchived(ctx, e.db, e.data, time.Now(), withCoreOwned(legacyNoCoreOwned)); err != nil || len(again) != 0 {
 		t.Fatalf("second purge = %v %v", again, err)
 	}
 }

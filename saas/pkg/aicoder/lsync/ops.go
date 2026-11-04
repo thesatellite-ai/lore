@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -138,18 +139,22 @@ func withCoreOwned(set map[string]bool) dbOnlyOpt {
 	return func(c *dbOnlyCfg) { c.coreOwned = set }
 }
 
-// refuseCoreOwned returns ErrCoreOwned for table with how, the command that
-// does the job on the files, or nil when table is not core-owned.
-func refuseCoreOwned(opts []dbOnlyOpt, table, what, how string) error {
+// ownedBy resolves opts to the core-owned test of one call.
+func ownedBy(opts []dbOnlyOpt) func(table string) bool {
 	var cfg dbOnlyCfg
 	for _, o := range opts {
 		o(&cfg)
 	}
-	owned := CoreOwned(table)
 	if cfg.coreOwned != nil {
-		owned = cfg.coreOwned[table]
+		return func(table string) bool { return cfg.coreOwned[table] }
 	}
-	if !owned {
+	return CoreOwned
+}
+
+// refuseCoreOwned returns ErrCoreOwned for table with how, the command that
+// does the job on the files, or nil when table is not core-owned.
+func refuseCoreOwned(opts []dbOnlyOpt, table, what, how string) error {
+	if !ownedBy(opts)(table) {
 		return nil
 	}
 	return fmt.Errorf("%w: %s %s is not done in lore.db (the row files are the truth): %s", ErrCoreOwned, what, table, how)
@@ -374,7 +379,7 @@ const archivedAtColumn = "archived_at"
 // to the trash, its id is appended to _purged.json (so an old clone's ADOPT
 // never resurrects it, E47), and the next Reconcile removes its file.
 // Returns the purged "table/id" keys.
-func PurgeArchived(ctx context.Context, db *sql.DB, dataDir string, cutoff time.Time) ([]string, error) {
+func PurgeArchived(ctx context.Context, db *sql.DB, dataDir string, cutoff time.Time, opts ...dbOnlyOpt) ([]string, error) {
 	reg, _ := NewRegistry()
 	if err := EnsureInfra(ctx, db, reg); err != nil {
 		return nil, err
@@ -393,7 +398,7 @@ func PurgeArchived(ctx context.Context, db *sql.DB, dataDir string, cutoff time.
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after Commit
 	e := &engine{reg: reg, present: present, tx: tx, now: time.Now().UTC(), rep: &Report{}, blocked: map[string]bool{}, deferred: map[rowKey]bool{}}
-	keys, err := archivedBefore(ctx, tx, reg, present, cutoff)
+	keys, err := archivedBefore(ctx, tx, reg, present, cutoff, notOwned(ownedBy(opts)))
 	if err != nil {
 		return nil, err
 	}
@@ -420,23 +425,55 @@ func PurgeArchived(ctx context.Context, db *sql.DB, dataDir string, cutoff time.
 	return out, writePurged(dataDir, purged)
 }
 
-// CountArchivedBefore is the dry-run of PurgeArchived.
-func CountArchivedBefore(ctx context.Context, db *sql.DB, cutoff time.Time) (int, error) {
+// CountArchivedBefore is the dry-run of PurgeArchived: the same rows
+// (core-owned tables excluded).
+func CountArchivedBefore(ctx context.Context, db *sql.DB, cutoff time.Time, opts ...dbOnlyOpt) (int, error) {
 	reg, _ := NewRegistry()
 	present, err := existingColumns(ctx, db)
 	if err != nil {
 		return 0, err
 	}
-	keys, err := archivedBefore(ctx, db, reg, present, cutoff)
+	keys, err := archivedBefore(ctx, db, reg, present, cutoff, notOwned(ownedBy(opts)))
 	return len(keys), err
 }
 
-// archivedBefore lists synced rows whose archived_at is before cutoff.
-func archivedBefore(ctx context.Context, q execer, reg *Registry, present map[string]map[string]bool, cutoff time.Time) ([]rowKey, error) {
+// ArchivedCoreOwnedBefore lists ("table/id", sorted) the
+// archived rows before cutoff that PurgeArchived leaves alone because their
+// table is core-owned: lsync cannot remove those files (the core is their
+// one writer), and trashing only the lore.db copy reported "purged" while
+// the file, and so the row, stayed (docs run). The caller removes them
+// through the core (a delete writes the tombstone that keeps old copies
+// from returning) or tells the person to.
+func ArchivedCoreOwnedBefore(ctx context.Context, db *sql.DB, cutoff time.Time, opts ...dbOnlyOpt) ([]string, error) {
+	reg, _ := NewRegistry()
+	present, err := existingColumns(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	keys, err := archivedBefore(ctx, db, reg, present, cutoff, ownedBy(opts))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k.table+"/"+k.id)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// notOwned inverts a core-owned test.
+func notOwned(owned func(string) bool) func(string) bool {
+	return func(table string) bool { return !owned(table) }
+}
+
+// archivedBefore lists synced rows of the tables keep accepts whose
+// archived_at is before cutoff.
+func archivedBefore(ctx context.Context, q execer, reg *Registry, present map[string]map[string]bool, cutoff time.Time, keep func(table string) bool) ([]rowKey, error) {
 	var out []rowKey
 	for _, name := range reg.Names() {
 		t, _ := reg.Table(name)
-		if !present[name][archivedAtColumn] {
+		if !present[name][archivedAtColumn] || !keep(name) {
 			continue
 		}
 		idsList, err := listRowIDs(ctx, q, t)

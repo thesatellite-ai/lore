@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"os"
+	"saas/pkg/aicoder/canonjson"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The three lore.db-only commands (trash restore, resolve --take other,
@@ -135,4 +137,72 @@ func TestOwned_ResolveTakeOtherRefused(t *testing.T) {
 	if err := ResolveConflict(ctx, e.db, cs[0].ID, TakeKept); err != nil {
 		t.Fatalf("take kept: %v", err)
 	}
+}
+
+// TestOwned_PurgeLeavesCoreRowsToTheCore: `lore sync purge` printed
+// "purged 1 row(s)" for an archived memory while its file, and so the row,
+// stayed. With the real set, purge and its dry run skip core-owned rows
+// (no trash entry, no _purged.json id, file untouched) and
+// ArchivedCoreOwnedBefore names them for the caller, over a cutoff matrix.
+func TestOwned_PurgeLeavesCoreRowsToTheCore(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	ctx := context.Background()
+	e.reconcile(realOwned)
+	archived := "mem_01a10237c9e87e4c843d8045973a65e1"
+	live := "mem_01a10237c9e87e4c843d8045973a65e2"
+	at := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	doc := e.readDocBytes(e.coreMemoryDoc(archived, "old"))
+	doc["archived_at"] = at.Format(time.RFC3339Nano)
+	b, err := canonjson.Encode(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.writeRaw("memories", archived, b)
+	e.writeRaw("memories", live, e.coreMemoryDoc(live, "live"))
+	e.reconcile(realOwned)
+	before := e.fileBytes("memories", archived)
+	for _, c := range []struct {
+		name   string
+		cutoff time.Time
+		listed int
+	}{
+		{"before the archive", at.Add(-time.Hour), 0},
+		{"at the archive", at, 0},
+		{"after the archive", at.Add(time.Hour), 1},
+		{"far future", at.AddDate(10, 0, 0), 1},
+	} {
+		n, err := CountArchivedBefore(ctx, e.db, c.cutoff)
+		if err != nil || n != 0 {
+			t.Errorf("%s: dry run counts %d core rows (err %v), want 0", c.name, n, err)
+		}
+		got, err := ArchivedCoreOwnedBefore(ctx, e.db, c.cutoff)
+		if err != nil || len(got) != c.listed || (c.listed == 1 && got[0] != "memories/"+archived) {
+			t.Errorf("%s: core rows listed %v (err %v), want %d", c.name, got, err, c.listed)
+		}
+		purged, err := PurgeArchived(ctx, e.db, e.data, c.cutoff)
+		if err != nil || len(purged) != 0 {
+			t.Errorf("%s: purge removed %v (err %v), want nothing", c.name, purged, err)
+		}
+	}
+	e.reconcile(realOwned)
+	if !e.memoryExists(archived) || !bytes.Equal(e.fileBytes("memories", archived), before) {
+		t.Fatal("purge touched the core row")
+	}
+	if trash, _ := ListTrash(ctx, e.db); len(trash) != 0 {
+		t.Fatalf("purge trashed a core row: %+v", trash)
+	}
+	if p, err := readPurged(e.data); err != nil || p[archived] {
+		t.Fatalf("_purged.json lists a row whose file stays: %v %v", p, err)
+	}
+}
+
+// readDocBytes decodes a row file's bytes.
+func (e *env) readDocBytes(b []byte) map[string]any {
+	e.t.Helper()
+	d, err := decodeDoc(b)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return d
 }

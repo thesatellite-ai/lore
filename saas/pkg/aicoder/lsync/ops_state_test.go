@@ -81,7 +81,7 @@ func TestCountArchivedBefore(t *testing.T) {
 		{now.AddDate(0, -1, 0), 1},
 		{now, 2},
 	} {
-		if n, err := CountArchivedBefore(ctx, e.db, tc.cutoff); err != nil || n != tc.want {
+		if n, err := CountArchivedBefore(ctx, e.db, tc.cutoff, withCoreOwned(legacyNoCoreOwned)); err != nil || n != tc.want {
 			t.Fatalf("cutoff %s: %d %v, want %d", tc.cutoff.Format(time.DateOnly), n, err, tc.want)
 		}
 	}
