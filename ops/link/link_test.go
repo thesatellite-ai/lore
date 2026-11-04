@@ -30,16 +30,17 @@ func TestLikelySHA(t *testing.T) {
 }
 
 // Moved from saas/cmd/cli/usecases_misc_test.go: v0.1.17's prefix → table
-// map, kept for the tables not on the core yet.
+// map, kept for the tables not on the core yet, with the five keys v0.1.17
+// had wrong (ann, ckr, sgg, tpr, rem) corrected to the real id prefixes.
 func TestLegacyTables(t *testing.T) {
 	t.Parallel()
 	want := map[ids.Prefix]row.Table{
 		"tsk": "tasks", "mem": "memories", "msn": "missions", "tlt": "task_lists",
 		"pln": "plans", "dec": "decisions", "rul": "rules", "hfx": "hotfixes",
-		"pat": "patterns", "pbk": "playbooks", "prm": "prompts", "ann": "architecture_notes",
-		"bhv": "behaviours", "ckr": "cookbook_recipes", "inc": "incidents", "sgg": "suggestions",
-		"tpr": "taste_prefs", "snp": "snapshots", "wfl": "workflows", "wsp": "workspaces",
-		"hnd": "handoffs", "rem": "reminders", "run": "runs", "tdc": "tech_docs", "cmt": "comments",
+		"pat": "patterns", "pbk": "playbooks", "prm": "prompts", "anr": "architecture_notes",
+		"bhv": "behaviours", "cbr": "cookbook_recipes", "inc": "incidents", "sug": "suggestions",
+		"tst": "taste_prefs", "snp": "snapshots", "wfl": "workflows", "wsp": "workspaces",
+		"hnd": "handoffs", "rmd": "reminders", "run": "runs", "tdc": "tech_docs", "cmt": "comments",
 	}
 	for p, tbl := range want {
 		if legacyTables[p] != tbl {

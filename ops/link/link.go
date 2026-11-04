@@ -400,12 +400,14 @@ func LegacyTables() map[ids.Prefix]row.Table { return maps.Clone(legacyTables) }
 
 // legacyTables is v0.1.17's prefix → table map (tableForOpaqueID) for the
 // tables not on the core yet; a table on the core is found in the schema.
+// Keys are the real id prefixes (saas/pkg/aicoder/ids/registry.go):
+// v0.1.17's map had ann/ckr/sgg/tpr/rem, which no id ever carried.
 var legacyTables = map[ids.Prefix]row.Table{
 	"tsk": "tasks", "mem": "memories", "msn": "missions", "tlt": "task_lists", "pln": "plans",
 	"dec": "decisions", "rul": "rules", "hfx": "hotfixes", "pat": "patterns", "pbk": "playbooks",
-	"prm": "prompts", "ann": "architecture_notes", "bhv": "behaviours", "ckr": "cookbook_recipes",
-	"inc": "incidents", "sgg": "suggestions", "tpr": "taste_prefs", "snp": "snapshots",
-	"wfl": "workflows", "wsp": "workspaces", "hnd": "handoffs", "rem": "reminders", "run": "runs",
+	"prm": "prompts", "anr": "architecture_notes", "bhv": "behaviours", "cbr": "cookbook_recipes",
+	"inc": "incidents", "sug": "suggestions", "tst": "taste_prefs", "snp": "snapshots",
+	"wfl": "workflows", "wsp": "workspaces", "hnd": "handoffs", "rmd": "reminders", "run": "runs",
 	"tdc": "tech_docs", "cmt": "comments",
 }
 
