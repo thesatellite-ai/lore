@@ -116,6 +116,9 @@ func (o ShowOut) Text() string {
 	for _, r := range t.Refs {
 		b.WriteString("  ref:      " + r.Table + "/" + r.ID + "\n")
 	}
+	if t.TimeLine != "" {
+		b.WriteString("  time:     " + t.TimeLine + "\n")
+	}
 	if t.Body != "" {
 		b.WriteString("\n" + t.Body + "\n")
 	}

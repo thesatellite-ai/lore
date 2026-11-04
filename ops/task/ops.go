@@ -636,6 +636,8 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 		return ShowOut{}, err
 	}
 	full := fullOf(src, r)
+	full.TimeEntries = TimeEntries(r)
+	full.TimeLine = TimeLine(full.TimeEntries)
 	if by := work.Field(r, fieldDoneBy); by != "" {
 		full.DoneBy = o.actorName(ctx, by)
 	}

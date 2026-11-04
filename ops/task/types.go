@@ -1,6 +1,10 @@
 package task
 
-import "time"
+import (
+	"time"
+
+	"github.com/thesatellite-ai/lore/model/timeentry"
+)
 
 // Input and output structs of the task operations. Struct tags are the op
 // contract (op/fields.go): `json` is the REST and --json name, `arg`/`flag`
@@ -109,6 +113,11 @@ type Full struct {
 	// Refs are the task's --ref pointers (new in the show output; v0.1.17
 	// wrote them but never printed them).
 	Refs []RefOut `json:"refs,omitempty"`
+	// TimeEntries is the task's closed time spans (model/timeentry), shown
+	// by --json; absent when none.
+	TimeEntries []timeentry.Entry `json:"time_entries,omitempty"`
+	// TimeLine is the human "time:" line (TimeLine); "" when none.
+	TimeLine string `json:"-"`
 	// DoneBy / Detail feed the human show only.
 	DoneBy string `json:"-"`
 }
