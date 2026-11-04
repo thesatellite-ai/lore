@@ -237,6 +237,40 @@ func (_u *AuditLogUpdate) ClearReason() *AuditLogUpdate {
 	return _u
 }
 
+// SetSessionID sets the "session_id" field.
+func (_u *AuditLogUpdate) SetSessionID(v string) *AuditLogUpdate {
+	_u.mutation.SetSessionID(v)
+	return _u
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_u *AuditLogUpdate) SetNillableSessionID(v *string) *AuditLogUpdate {
+	if v != nil {
+		_u.SetSessionID(*v)
+	}
+	return _u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (_u *AuditLogUpdate) ClearSessionID() *AuditLogUpdate {
+	_u.mutation.ClearSessionID()
+	return _u
+}
+
+// SetConfirmed sets the "confirmed" field.
+func (_u *AuditLogUpdate) SetConfirmed(v bool) *AuditLogUpdate {
+	_u.mutation.SetConfirmed(v)
+	return _u
+}
+
+// SetNillableConfirmed sets the "confirmed" field if the given value is not nil.
+func (_u *AuditLogUpdate) SetNillableConfirmed(v *bool) *AuditLogUpdate {
+	if v != nil {
+		_u.SetConfirmed(*v)
+	}
+	return _u
+}
+
 // Mutation returns the AuditLogMutation object of the builder.
 func (_u *AuditLogUpdate) Mutation() *AuditLogMutation {
 	return _u.mutation
@@ -375,6 +409,15 @@ func (_u *AuditLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ReasonCleared() {
 		_spec.ClearField(auditlog.FieldReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.SessionID(); ok {
+		_spec.SetField(auditlog.FieldSessionID, field.TypeString, value)
+	}
+	if _u.mutation.SessionIDCleared() {
+		_spec.ClearField(auditlog.FieldSessionID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Confirmed(); ok {
+		_spec.SetField(auditlog.FieldConfirmed, field.TypeBool, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -606,6 +649,40 @@ func (_u *AuditLogUpdateOne) ClearReason() *AuditLogUpdateOne {
 	return _u
 }
 
+// SetSessionID sets the "session_id" field.
+func (_u *AuditLogUpdateOne) SetSessionID(v string) *AuditLogUpdateOne {
+	_u.mutation.SetSessionID(v)
+	return _u
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_u *AuditLogUpdateOne) SetNillableSessionID(v *string) *AuditLogUpdateOne {
+	if v != nil {
+		_u.SetSessionID(*v)
+	}
+	return _u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (_u *AuditLogUpdateOne) ClearSessionID() *AuditLogUpdateOne {
+	_u.mutation.ClearSessionID()
+	return _u
+}
+
+// SetConfirmed sets the "confirmed" field.
+func (_u *AuditLogUpdateOne) SetConfirmed(v bool) *AuditLogUpdateOne {
+	_u.mutation.SetConfirmed(v)
+	return _u
+}
+
+// SetNillableConfirmed sets the "confirmed" field if the given value is not nil.
+func (_u *AuditLogUpdateOne) SetNillableConfirmed(v *bool) *AuditLogUpdateOne {
+	if v != nil {
+		_u.SetConfirmed(*v)
+	}
+	return _u
+}
+
 // Mutation returns the AuditLogMutation object of the builder.
 func (_u *AuditLogUpdateOne) Mutation() *AuditLogMutation {
 	return _u.mutation
@@ -774,6 +851,15 @@ func (_u *AuditLogUpdateOne) sqlSave(ctx context.Context) (_node *AuditLog, err 
 	}
 	if _u.mutation.ReasonCleared() {
 		_spec.ClearField(auditlog.FieldReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.SessionID(); ok {
+		_spec.SetField(auditlog.FieldSessionID, field.TypeString, value)
+	}
+	if _u.mutation.SessionIDCleared() {
+		_spec.ClearField(auditlog.FieldSessionID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Confirmed(); ok {
+		_spec.SetField(auditlog.FieldConfirmed, field.TypeBool, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &AuditLog{config: _u.config}

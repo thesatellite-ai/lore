@@ -74,6 +74,19 @@ type auditLine struct {
 	// Batch and BatchKind name the bulk action the write belongs to (XQ1).
 	Batch     string `json:"batch,omitempty"`
 	BatchKind string `json:"batch_kind,omitempty"`
+	// Session is lore's ses_ id (6.6); Confirmed marks a --yes write.
+	// Both machine-local: the audit files never leave this machine.
+	Session   string `json:"session_id,omitempty"`
+	Confirmed bool   `json:"confirmed,omitempty"`
+}
+
+// SessionSource is an optional capability of the repo audit sink
+// (Options.Audit): it knows this process's session row (the old binary's
+// lore.db sessions table, machine-local per Q-LOCAL). routedAudit asks it
+// once per event that lacks a session, so the attached-store trail and
+// the batch log carry the same ses_ id as the repo chain.
+type SessionSource interface {
+	Session(ctx context.Context) (string, error)
 }
 
 // fileAudit is the engine.AuditSink writing AuditFile.
@@ -108,7 +121,7 @@ func encodeAuditLine(ev engine.Event) ([]byte, error) {
 		Op: ev.Op, Action: string(ev.Action), Store: string(ev.Store), Table: ev.Table.String(), ID: ev.ID.String(),
 		HLC: ev.HLC.String(), Actor: ev.Actor.String(), Merged: ev.Merged,
 		Accepted: len(ev.SecretsAccepted), Redacted: len(ev.SecretsRedacted), Cascade: ev.Cascade.String(),
-		Batch: ev.Batch.ID.String(), BatchKind: ev.Batch.Kind,
+		Batch: ev.Batch.ID.String(), BatchKind: ev.Batch.Kind, Session: ev.Session, Confirmed: ev.Confirmed,
 	})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "wire: encode an audit event", err)
@@ -177,6 +190,16 @@ func (r *routedAudit) stem(name store.Source) string {
 
 // Record implements engine.AuditSink.
 func (r *routedAudit) Record(ctx context.Context, ev engine.Event) error {
+	// 6.6: the session link and the --yes mark, filled once here so every
+	// sink below records the same values.
+	ev.Confirmed = ev.Confirmed || engine.Confirmed(ctx)
+	if src, ok := r.repo.(SessionSource); ok && ev.Session == "" {
+		ses, err := src.Session(ctx)
+		if err != nil {
+			return err
+		}
+		ev.Session = ses
+	}
 	// XQ1: every event of a bulk action, of every store, also goes to the
 	// one machine-local batch log `lore batch list|show` read (Q-R3-8:
 	// batches are visible on the machine that ran them in 0.1.18).

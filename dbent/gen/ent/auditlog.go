@@ -42,7 +42,11 @@ type AuditLog struct {
 	// PrevLogHash holds the value of the "prev_log_hash" field.
 	PrevLogHash *string `json:"prev_log_hash,omitempty"`
 	// Reason holds the value of the "reason" field.
-	Reason       *string `json:"reason,omitempty"`
+	Reason *string `json:"reason,omitempty"`
+	// SessionID holds the value of the "session_id" field.
+	SessionID *string `json:"session_id,omitempty"`
+	// Confirmed holds the value of the "confirmed" field.
+	Confirmed    bool `json:"confirmed,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -51,9 +55,9 @@ func (*AuditLog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case auditlog.FieldOverride:
+		case auditlog.FieldOverride, auditlog.FieldConfirmed:
 			values[i] = new(sql.NullBool)
-		case auditlog.FieldID, auditlog.FieldActingProjectID, auditlog.FieldTargetProjectID, auditlog.FieldActorID, auditlog.FieldAction, auditlog.FieldTargetTable, auditlog.FieldTargetID, auditlog.FieldBeforeHash, auditlog.FieldAfterHash, auditlog.FieldPrevLogHash, auditlog.FieldReason:
+		case auditlog.FieldID, auditlog.FieldActingProjectID, auditlog.FieldTargetProjectID, auditlog.FieldActorID, auditlog.FieldAction, auditlog.FieldTargetTable, auditlog.FieldTargetID, auditlog.FieldBeforeHash, auditlog.FieldAfterHash, auditlog.FieldPrevLogHash, auditlog.FieldReason, auditlog.FieldSessionID:
 			values[i] = new(sql.NullString)
 		case auditlog.FieldCreatedAt, auditlog.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -164,6 +168,19 @@ func (_m *AuditLog) assignValues(columns []string, values []any) error {
 				_m.Reason = new(string)
 				*_m.Reason = value.String
 			}
+		case auditlog.FieldSessionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field session_id", values[i])
+			} else if value.Valid {
+				_m.SessionID = new(string)
+				*_m.SessionID = value.String
+			}
+		case auditlog.FieldConfirmed:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field confirmed", values[i])
+			} else if value.Valid {
+				_m.Confirmed = value.Bool
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -254,6 +271,14 @@ func (_m *AuditLog) String() string {
 		builder.WriteString("reason=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	if v := _m.SessionID; v != nil {
+		builder.WriteString("session_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("confirmed=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Confirmed))
 	builder.WriteByte(')')
 	return builder.String()
 }

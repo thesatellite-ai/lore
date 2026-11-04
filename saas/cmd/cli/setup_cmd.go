@@ -76,7 +76,7 @@ func warnIfSetupStale(ctx context.Context, db *sql.DB) {
 
 func newSetupCommand() *cobra.Command {
 	var f commonFlags
-	var schemaOnly bool
+	var schemaOnly, agentHooks, hooksRemove, hooksDry, hooksYes bool
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Run one-time migrations after install/upgrade (FTS index + future migrations)",
@@ -88,8 +88,19 @@ Re-run any time after editing search-related schema (changing Registry
 column lists, weights, SchemaVersion). Idempotent
 
 Fresh installs: ` + "`lore init`" + ` calls setup automatically; you don't
-need to run this manually unless upgrading.`,
+need to run this manually unless upgrading.
+
+--agent-hooks installs (or with --remove takes out) the optional session-hook
+snippet of each tool set up here that has a confirmed hook, so lore records
+the model the tool reports (` + "`lore agent start --tool …`" + `). It asks first.`,
+		Example: `  lore setup
+  lore setup --agent-hooks --dry-run
+  lore setup --agent-hooks --yes
+  lore setup --agent-hooks --remove`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if agentHooks {
+				return runAgentHooksSetup(hooksRemove, hooksDry, hooksYes) // 6.4
+			}
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -115,6 +126,10 @@ need to run this manually unless upgrading.`,
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().BoolVar(&schemaOnly, "schema-only", false, "update only the local database schema (used by `lore upgrade` after the swap)")
+	cmd.Flags().BoolVar(&agentHooks, flagAgentHooks, false, "install the session-hook snippets for the tools set up here")
+	cmd.Flags().BoolVar(&hooksRemove, flagHooksRm, false, "with --agent-hooks: take the snippets out again")
+	cmd.Flags().BoolVar(&hooksDry, flagHooksDry, false, "with --agent-hooks: only show the changes")
+	cmd.Flags().BoolVar(&hooksYes, flagHooksYes, false, "with --agent-hooks: write without asking")
 	return cmd
 }
 

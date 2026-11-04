@@ -290,6 +290,10 @@ func init() {
 	auditlogDescOverride := auditlogFields[6].Descriptor()
 	// auditlog.DefaultOverride holds the default value on creation for the override field.
 	auditlog.DefaultOverride = auditlogDescOverride.Default.(bool)
+	// auditlogDescConfirmed is the schema descriptor for confirmed field.
+	auditlogDescConfirmed := auditlogFields[12].Descriptor()
+	// auditlog.DefaultConfirmed holds the default value on creation for the confirmed field.
+	auditlog.DefaultConfirmed = auditlogDescConfirmed.Default.(bool)
 	// auditlogDescID is the schema descriptor for id field.
 	auditlogDescID := auditlogMixinFields0[0].Descriptor()
 	// auditlog.DefaultID holds the default value on creation for the id field.
@@ -2223,6 +2227,62 @@ func init() {
 	sessionDescAgentKind := sessionFields[4].Descriptor()
 	// session.AgentKindValidator is a validator for the "agent_kind" field. It is called by the builders before save.
 	session.AgentKindValidator = sessionDescAgentKind.Validators[0].(func(string) error)
+	// sessionDescTool is the schema descriptor for tool field.
+	sessionDescTool := sessionFields[5].Descriptor()
+	// session.DefaultTool holds the default value on creation for the tool field.
+	session.DefaultTool = sessionDescTool.Default.(string)
+	// sessionDescToolSessionID is the schema descriptor for tool_session_id field.
+	sessionDescToolSessionID := sessionFields[6].Descriptor()
+	// session.DefaultToolSessionID holds the default value on creation for the tool_session_id field.
+	session.DefaultToolSessionID = sessionDescToolSessionID.Default.(string)
+	// sessionDescToolVersion is the schema descriptor for tool_version field.
+	sessionDescToolVersion := sessionFields[7].Descriptor()
+	// session.DefaultToolVersion holds the default value on creation for the tool_version field.
+	session.DefaultToolVersion = sessionDescToolVersion.Default.(string)
+	// sessionDescModel is the schema descriptor for model field.
+	sessionDescModel := sessionFields[8].Descriptor()
+	// session.DefaultModel holds the default value on creation for the model field.
+	session.DefaultModel = sessionDescModel.Default.(string)
+	// sessionDescMachineID is the schema descriptor for machine_id field.
+	sessionDescMachineID := sessionFields[9].Descriptor()
+	// session.DefaultMachineID holds the default value on creation for the machine_id field.
+	session.DefaultMachineID = sessionDescMachineID.Default.(string)
+	// sessionDescRunID is the schema descriptor for run_id field.
+	sessionDescRunID := sessionFields[10].Descriptor()
+	// session.DefaultRunID holds the default value on creation for the run_id field.
+	session.DefaultRunID = sessionDescRunID.Default.(string)
+	// sessionDescRepo is the schema descriptor for repo field.
+	sessionDescRepo := sessionFields[11].Descriptor()
+	// session.DefaultRepo holds the default value on creation for the repo field.
+	session.DefaultRepo = sessionDescRepo.Default.(string)
+	// sessionDescBranch is the schema descriptor for branch field.
+	sessionDescBranch := sessionFields[12].Descriptor()
+	// session.DefaultBranch holds the default value on creation for the branch field.
+	session.DefaultBranch = sessionDescBranch.Default.(string)
+	// sessionDescCwd is the schema descriptor for cwd field.
+	sessionDescCwd := sessionFields[13].Descriptor()
+	// session.DefaultCwd holds the default value on creation for the cwd field.
+	session.DefaultCwd = sessionDescCwd.Default.(string)
+	// sessionDescTerminal is the schema descriptor for terminal field.
+	sessionDescTerminal := sessionFields[14].Descriptor()
+	// session.DefaultTerminal holds the default value on creation for the terminal field.
+	session.DefaultTerminal = sessionDescTerminal.Default.(string)
+	// sessionDescCi is the schema descriptor for ci field.
+	sessionDescCi := sessionFields[15].Descriptor()
+	// session.DefaultCi holds the default value on creation for the ci field.
+	session.DefaultCi = sessionDescCi.Default.(string)
+	// sessionDescParentSessionID is the schema descriptor for parent_session_id field.
+	sessionDescParentSessionID := sessionFields[16].Descriptor()
+	// session.DefaultParentSessionID holds the default value on creation for the parent_session_id field.
+	session.DefaultParentSessionID = sessionDescParentSessionID.Default.(string)
+	// sessionDescSignal is the schema descriptor for signal field.
+	sessionDescSignal := sessionFields[17].Descriptor()
+	// session.DefaultSignal holds the default value on creation for the signal field.
+	session.DefaultSignal = sessionDescSignal.Default.(string)
+	// sessionDescDeclaredHuman is the schema descriptor for declared_human field.
+	sessionDescDeclaredHuman := sessionFields[20].Descriptor()
+	// session.DefaultDeclaredHuman holds the default value on creation for the declared_human field.
+	session.DefaultDeclaredHuman = sessionDescDeclaredHuman.Default.(bool)
 	// sessionDescID is the schema descriptor for id field.
 	sessionDescID := sessionMixinFields0[0].Descriptor()
 	// session.DefaultID holds the default value on creation for the id field.

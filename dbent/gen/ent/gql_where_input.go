@@ -2798,6 +2798,27 @@ type AuditLogWhereInput struct {
 	ReasonNotNil       bool     `json:"reasonNotNil,omitempty"`
 	ReasonEqualFold    *string  `json:"reasonEqualFold,omitempty"`
 	ReasonContainsFold *string  `json:"reasonContainsFold,omitempty"`
+
+	// "session_id" field predicates.
+	SessionID             *string  `json:"sessionID,omitempty"`
+	SessionIDNEQ          *string  `json:"sessionIDNEQ,omitempty"`
+	SessionIDIn           []string `json:"sessionIDIn,omitempty"`
+	SessionIDNotIn        []string `json:"sessionIDNotIn,omitempty"`
+	SessionIDGT           *string  `json:"sessionIDGT,omitempty"`
+	SessionIDGTE          *string  `json:"sessionIDGTE,omitempty"`
+	SessionIDLT           *string  `json:"sessionIDLT,omitempty"`
+	SessionIDLTE          *string  `json:"sessionIDLTE,omitempty"`
+	SessionIDContains     *string  `json:"sessionIDContains,omitempty"`
+	SessionIDHasPrefix    *string  `json:"sessionIDHasPrefix,omitempty"`
+	SessionIDHasSuffix    *string  `json:"sessionIDHasSuffix,omitempty"`
+	SessionIDIsNil        bool     `json:"sessionIDIsNil,omitempty"`
+	SessionIDNotNil       bool     `json:"sessionIDNotNil,omitempty"`
+	SessionIDEqualFold    *string  `json:"sessionIDEqualFold,omitempty"`
+	SessionIDContainsFold *string  `json:"sessionIDContainsFold,omitempty"`
+
+	// "confirmed" field predicates.
+	Confirmed    *bool `json:"confirmed,omitempty"`
+	ConfirmedNEQ *bool `json:"confirmedNEQ,omitempty"`
 }
 
 // AddPredicates adds custom predicates to the where input to be used during the filtering phase.
@@ -3392,6 +3413,57 @@ func (i *AuditLogWhereInput) P() (predicate.AuditLog, error) {
 	}
 	if i.ReasonContainsFold != nil {
 		predicates = append(predicates, auditlog.ReasonContainsFold(*i.ReasonContainsFold))
+	}
+	if i.SessionID != nil {
+		predicates = append(predicates, auditlog.SessionIDEQ(*i.SessionID))
+	}
+	if i.SessionIDNEQ != nil {
+		predicates = append(predicates, auditlog.SessionIDNEQ(*i.SessionIDNEQ))
+	}
+	if len(i.SessionIDIn) > 0 {
+		predicates = append(predicates, auditlog.SessionIDIn(i.SessionIDIn...))
+	}
+	if len(i.SessionIDNotIn) > 0 {
+		predicates = append(predicates, auditlog.SessionIDNotIn(i.SessionIDNotIn...))
+	}
+	if i.SessionIDGT != nil {
+		predicates = append(predicates, auditlog.SessionIDGT(*i.SessionIDGT))
+	}
+	if i.SessionIDGTE != nil {
+		predicates = append(predicates, auditlog.SessionIDGTE(*i.SessionIDGTE))
+	}
+	if i.SessionIDLT != nil {
+		predicates = append(predicates, auditlog.SessionIDLT(*i.SessionIDLT))
+	}
+	if i.SessionIDLTE != nil {
+		predicates = append(predicates, auditlog.SessionIDLTE(*i.SessionIDLTE))
+	}
+	if i.SessionIDContains != nil {
+		predicates = append(predicates, auditlog.SessionIDContains(*i.SessionIDContains))
+	}
+	if i.SessionIDHasPrefix != nil {
+		predicates = append(predicates, auditlog.SessionIDHasPrefix(*i.SessionIDHasPrefix))
+	}
+	if i.SessionIDHasSuffix != nil {
+		predicates = append(predicates, auditlog.SessionIDHasSuffix(*i.SessionIDHasSuffix))
+	}
+	if i.SessionIDIsNil {
+		predicates = append(predicates, auditlog.SessionIDIsNil())
+	}
+	if i.SessionIDNotNil {
+		predicates = append(predicates, auditlog.SessionIDNotNil())
+	}
+	if i.SessionIDEqualFold != nil {
+		predicates = append(predicates, auditlog.SessionIDEqualFold(*i.SessionIDEqualFold))
+	}
+	if i.SessionIDContainsFold != nil {
+		predicates = append(predicates, auditlog.SessionIDContainsFold(*i.SessionIDContainsFold))
+	}
+	if i.Confirmed != nil {
+		predicates = append(predicates, auditlog.ConfirmedEQ(*i.Confirmed))
+	}
+	if i.ConfirmedNEQ != nil {
+		predicates = append(predicates, auditlog.ConfirmedNEQ(*i.ConfirmedNEQ))
 	}
 
 	switch len(predicates) {
@@ -29461,6 +29533,205 @@ type SessionWhereInput struct {
 	AgentKindNotNil       bool     `json:"agentKindNotNil,omitempty"`
 	AgentKindEqualFold    *string  `json:"agentKindEqualFold,omitempty"`
 	AgentKindContainsFold *string  `json:"agentKindContainsFold,omitempty"`
+
+	// "tool" field predicates.
+	Tool             *string  `json:"tool,omitempty"`
+	ToolNEQ          *string  `json:"toolNEQ,omitempty"`
+	ToolIn           []string `json:"toolIn,omitempty"`
+	ToolNotIn        []string `json:"toolNotIn,omitempty"`
+	ToolGT           *string  `json:"toolGT,omitempty"`
+	ToolGTE          *string  `json:"toolGTE,omitempty"`
+	ToolLT           *string  `json:"toolLT,omitempty"`
+	ToolLTE          *string  `json:"toolLTE,omitempty"`
+	ToolContains     *string  `json:"toolContains,omitempty"`
+	ToolHasPrefix    *string  `json:"toolHasPrefix,omitempty"`
+	ToolHasSuffix    *string  `json:"toolHasSuffix,omitempty"`
+	ToolEqualFold    *string  `json:"toolEqualFold,omitempty"`
+	ToolContainsFold *string  `json:"toolContainsFold,omitempty"`
+
+	// "tool_session_id" field predicates.
+	ToolSessionID             *string  `json:"toolSessionID,omitempty"`
+	ToolSessionIDNEQ          *string  `json:"toolSessionIDNEQ,omitempty"`
+	ToolSessionIDIn           []string `json:"toolSessionIDIn,omitempty"`
+	ToolSessionIDNotIn        []string `json:"toolSessionIDNotIn,omitempty"`
+	ToolSessionIDGT           *string  `json:"toolSessionIDGT,omitempty"`
+	ToolSessionIDGTE          *string  `json:"toolSessionIDGTE,omitempty"`
+	ToolSessionIDLT           *string  `json:"toolSessionIDLT,omitempty"`
+	ToolSessionIDLTE          *string  `json:"toolSessionIDLTE,omitempty"`
+	ToolSessionIDContains     *string  `json:"toolSessionIDContains,omitempty"`
+	ToolSessionIDHasPrefix    *string  `json:"toolSessionIDHasPrefix,omitempty"`
+	ToolSessionIDHasSuffix    *string  `json:"toolSessionIDHasSuffix,omitempty"`
+	ToolSessionIDEqualFold    *string  `json:"toolSessionIDEqualFold,omitempty"`
+	ToolSessionIDContainsFold *string  `json:"toolSessionIDContainsFold,omitempty"`
+
+	// "tool_version" field predicates.
+	ToolVersion             *string  `json:"toolVersion,omitempty"`
+	ToolVersionNEQ          *string  `json:"toolVersionNEQ,omitempty"`
+	ToolVersionIn           []string `json:"toolVersionIn,omitempty"`
+	ToolVersionNotIn        []string `json:"toolVersionNotIn,omitempty"`
+	ToolVersionGT           *string  `json:"toolVersionGT,omitempty"`
+	ToolVersionGTE          *string  `json:"toolVersionGTE,omitempty"`
+	ToolVersionLT           *string  `json:"toolVersionLT,omitempty"`
+	ToolVersionLTE          *string  `json:"toolVersionLTE,omitempty"`
+	ToolVersionContains     *string  `json:"toolVersionContains,omitempty"`
+	ToolVersionHasPrefix    *string  `json:"toolVersionHasPrefix,omitempty"`
+	ToolVersionHasSuffix    *string  `json:"toolVersionHasSuffix,omitempty"`
+	ToolVersionEqualFold    *string  `json:"toolVersionEqualFold,omitempty"`
+	ToolVersionContainsFold *string  `json:"toolVersionContainsFold,omitempty"`
+
+	// "model" field predicates.
+	Model             *string  `json:"model,omitempty"`
+	ModelNEQ          *string  `json:"modelNEQ,omitempty"`
+	ModelIn           []string `json:"modelIn,omitempty"`
+	ModelNotIn        []string `json:"modelNotIn,omitempty"`
+	ModelGT           *string  `json:"modelGT,omitempty"`
+	ModelGTE          *string  `json:"modelGTE,omitempty"`
+	ModelLT           *string  `json:"modelLT,omitempty"`
+	ModelLTE          *string  `json:"modelLTE,omitempty"`
+	ModelContains     *string  `json:"modelContains,omitempty"`
+	ModelHasPrefix    *string  `json:"modelHasPrefix,omitempty"`
+	ModelHasSuffix    *string  `json:"modelHasSuffix,omitempty"`
+	ModelEqualFold    *string  `json:"modelEqualFold,omitempty"`
+	ModelContainsFold *string  `json:"modelContainsFold,omitempty"`
+
+	// "machine_id" field predicates.
+	MachineID             *string  `json:"machineID,omitempty"`
+	MachineIDNEQ          *string  `json:"machineIDNEQ,omitempty"`
+	MachineIDIn           []string `json:"machineIDIn,omitempty"`
+	MachineIDNotIn        []string `json:"machineIDNotIn,omitempty"`
+	MachineIDGT           *string  `json:"machineIDGT,omitempty"`
+	MachineIDGTE          *string  `json:"machineIDGTE,omitempty"`
+	MachineIDLT           *string  `json:"machineIDLT,omitempty"`
+	MachineIDLTE          *string  `json:"machineIDLTE,omitempty"`
+	MachineIDContains     *string  `json:"machineIDContains,omitempty"`
+	MachineIDHasPrefix    *string  `json:"machineIDHasPrefix,omitempty"`
+	MachineIDHasSuffix    *string  `json:"machineIDHasSuffix,omitempty"`
+	MachineIDEqualFold    *string  `json:"machineIDEqualFold,omitempty"`
+	MachineIDContainsFold *string  `json:"machineIDContainsFold,omitempty"`
+
+	// "run_id" field predicates.
+	RunID             *string  `json:"runID,omitempty"`
+	RunIDNEQ          *string  `json:"runIDNEQ,omitempty"`
+	RunIDIn           []string `json:"runIDIn,omitempty"`
+	RunIDNotIn        []string `json:"runIDNotIn,omitempty"`
+	RunIDGT           *string  `json:"runIDGT,omitempty"`
+	RunIDGTE          *string  `json:"runIDGTE,omitempty"`
+	RunIDLT           *string  `json:"runIDLT,omitempty"`
+	RunIDLTE          *string  `json:"runIDLTE,omitempty"`
+	RunIDContains     *string  `json:"runIDContains,omitempty"`
+	RunIDHasPrefix    *string  `json:"runIDHasPrefix,omitempty"`
+	RunIDHasSuffix    *string  `json:"runIDHasSuffix,omitempty"`
+	RunIDEqualFold    *string  `json:"runIDEqualFold,omitempty"`
+	RunIDContainsFold *string  `json:"runIDContainsFold,omitempty"`
+
+	// "repo" field predicates.
+	Repo             *string  `json:"repo,omitempty"`
+	RepoNEQ          *string  `json:"repoNEQ,omitempty"`
+	RepoIn           []string `json:"repoIn,omitempty"`
+	RepoNotIn        []string `json:"repoNotIn,omitempty"`
+	RepoGT           *string  `json:"repoGT,omitempty"`
+	RepoGTE          *string  `json:"repoGTE,omitempty"`
+	RepoLT           *string  `json:"repoLT,omitempty"`
+	RepoLTE          *string  `json:"repoLTE,omitempty"`
+	RepoContains     *string  `json:"repoContains,omitempty"`
+	RepoHasPrefix    *string  `json:"repoHasPrefix,omitempty"`
+	RepoHasSuffix    *string  `json:"repoHasSuffix,omitempty"`
+	RepoEqualFold    *string  `json:"repoEqualFold,omitempty"`
+	RepoContainsFold *string  `json:"repoContainsFold,omitempty"`
+
+	// "branch" field predicates.
+	Branch             *string  `json:"branch,omitempty"`
+	BranchNEQ          *string  `json:"branchNEQ,omitempty"`
+	BranchIn           []string `json:"branchIn,omitempty"`
+	BranchNotIn        []string `json:"branchNotIn,omitempty"`
+	BranchGT           *string  `json:"branchGT,omitempty"`
+	BranchGTE          *string  `json:"branchGTE,omitempty"`
+	BranchLT           *string  `json:"branchLT,omitempty"`
+	BranchLTE          *string  `json:"branchLTE,omitempty"`
+	BranchContains     *string  `json:"branchContains,omitempty"`
+	BranchHasPrefix    *string  `json:"branchHasPrefix,omitempty"`
+	BranchHasSuffix    *string  `json:"branchHasSuffix,omitempty"`
+	BranchEqualFold    *string  `json:"branchEqualFold,omitempty"`
+	BranchContainsFold *string  `json:"branchContainsFold,omitempty"`
+
+	// "cwd" field predicates.
+	Cwd             *string  `json:"cwd,omitempty"`
+	CwdNEQ          *string  `json:"cwdNEQ,omitempty"`
+	CwdIn           []string `json:"cwdIn,omitempty"`
+	CwdNotIn        []string `json:"cwdNotIn,omitempty"`
+	CwdGT           *string  `json:"cwdGT,omitempty"`
+	CwdGTE          *string  `json:"cwdGTE,omitempty"`
+	CwdLT           *string  `json:"cwdLT,omitempty"`
+	CwdLTE          *string  `json:"cwdLTE,omitempty"`
+	CwdContains     *string  `json:"cwdContains,omitempty"`
+	CwdHasPrefix    *string  `json:"cwdHasPrefix,omitempty"`
+	CwdHasSuffix    *string  `json:"cwdHasSuffix,omitempty"`
+	CwdEqualFold    *string  `json:"cwdEqualFold,omitempty"`
+	CwdContainsFold *string  `json:"cwdContainsFold,omitempty"`
+
+	// "terminal" field predicates.
+	Terminal             *string  `json:"terminal,omitempty"`
+	TerminalNEQ          *string  `json:"terminalNEQ,omitempty"`
+	TerminalIn           []string `json:"terminalIn,omitempty"`
+	TerminalNotIn        []string `json:"terminalNotIn,omitempty"`
+	TerminalGT           *string  `json:"terminalGT,omitempty"`
+	TerminalGTE          *string  `json:"terminalGTE,omitempty"`
+	TerminalLT           *string  `json:"terminalLT,omitempty"`
+	TerminalLTE          *string  `json:"terminalLTE,omitempty"`
+	TerminalContains     *string  `json:"terminalContains,omitempty"`
+	TerminalHasPrefix    *string  `json:"terminalHasPrefix,omitempty"`
+	TerminalHasSuffix    *string  `json:"terminalHasSuffix,omitempty"`
+	TerminalEqualFold    *string  `json:"terminalEqualFold,omitempty"`
+	TerminalContainsFold *string  `json:"terminalContainsFold,omitempty"`
+
+	// "ci" field predicates.
+	Ci             *string  `json:"ci,omitempty"`
+	CiNEQ          *string  `json:"ciNEQ,omitempty"`
+	CiIn           []string `json:"ciIn,omitempty"`
+	CiNotIn        []string `json:"ciNotIn,omitempty"`
+	CiGT           *string  `json:"ciGT,omitempty"`
+	CiGTE          *string  `json:"ciGTE,omitempty"`
+	CiLT           *string  `json:"ciLT,omitempty"`
+	CiLTE          *string  `json:"ciLTE,omitempty"`
+	CiContains     *string  `json:"ciContains,omitempty"`
+	CiHasPrefix    *string  `json:"ciHasPrefix,omitempty"`
+	CiHasSuffix    *string  `json:"ciHasSuffix,omitempty"`
+	CiEqualFold    *string  `json:"ciEqualFold,omitempty"`
+	CiContainsFold *string  `json:"ciContainsFold,omitempty"`
+
+	// "parent_session_id" field predicates.
+	ParentSessionID             *string  `json:"parentSessionID,omitempty"`
+	ParentSessionIDNEQ          *string  `json:"parentSessionIDNEQ,omitempty"`
+	ParentSessionIDIn           []string `json:"parentSessionIDIn,omitempty"`
+	ParentSessionIDNotIn        []string `json:"parentSessionIDNotIn,omitempty"`
+	ParentSessionIDGT           *string  `json:"parentSessionIDGT,omitempty"`
+	ParentSessionIDGTE          *string  `json:"parentSessionIDGTE,omitempty"`
+	ParentSessionIDLT           *string  `json:"parentSessionIDLT,omitempty"`
+	ParentSessionIDLTE          *string  `json:"parentSessionIDLTE,omitempty"`
+	ParentSessionIDContains     *string  `json:"parentSessionIDContains,omitempty"`
+	ParentSessionIDHasPrefix    *string  `json:"parentSessionIDHasPrefix,omitempty"`
+	ParentSessionIDHasSuffix    *string  `json:"parentSessionIDHasSuffix,omitempty"`
+	ParentSessionIDEqualFold    *string  `json:"parentSessionIDEqualFold,omitempty"`
+	ParentSessionIDContainsFold *string  `json:"parentSessionIDContainsFold,omitempty"`
+
+	// "signal" field predicates.
+	Signal             *string  `json:"signal,omitempty"`
+	SignalNEQ          *string  `json:"signalNEQ,omitempty"`
+	SignalIn           []string `json:"signalIn,omitempty"`
+	SignalNotIn        []string `json:"signalNotIn,omitempty"`
+	SignalGT           *string  `json:"signalGT,omitempty"`
+	SignalGTE          *string  `json:"signalGTE,omitempty"`
+	SignalLT           *string  `json:"signalLT,omitempty"`
+	SignalLTE          *string  `json:"signalLTE,omitempty"`
+	SignalContains     *string  `json:"signalContains,omitempty"`
+	SignalHasPrefix    *string  `json:"signalHasPrefix,omitempty"`
+	SignalHasSuffix    *string  `json:"signalHasSuffix,omitempty"`
+	SignalEqualFold    *string  `json:"signalEqualFold,omitempty"`
+	SignalContainsFold *string  `json:"signalContainsFold,omitempty"`
+
+	// "declared_human" field predicates.
+	DeclaredHuman    *bool `json:"declaredHuman,omitempty"`
+	DeclaredHumanNEQ *bool `json:"declaredHumanNEQ,omitempty"`
 }
 
 // AddPredicates adds custom predicates to the where input to be used during the filtering phase.
@@ -29794,6 +30065,519 @@ func (i *SessionWhereInput) P() (predicate.Session, error) {
 	}
 	if i.AgentKindContainsFold != nil {
 		predicates = append(predicates, session.AgentKindContainsFold(*i.AgentKindContainsFold))
+	}
+	if i.Tool != nil {
+		predicates = append(predicates, session.ToolEQ(*i.Tool))
+	}
+	if i.ToolNEQ != nil {
+		predicates = append(predicates, session.ToolNEQ(*i.ToolNEQ))
+	}
+	if len(i.ToolIn) > 0 {
+		predicates = append(predicates, session.ToolIn(i.ToolIn...))
+	}
+	if len(i.ToolNotIn) > 0 {
+		predicates = append(predicates, session.ToolNotIn(i.ToolNotIn...))
+	}
+	if i.ToolGT != nil {
+		predicates = append(predicates, session.ToolGT(*i.ToolGT))
+	}
+	if i.ToolGTE != nil {
+		predicates = append(predicates, session.ToolGTE(*i.ToolGTE))
+	}
+	if i.ToolLT != nil {
+		predicates = append(predicates, session.ToolLT(*i.ToolLT))
+	}
+	if i.ToolLTE != nil {
+		predicates = append(predicates, session.ToolLTE(*i.ToolLTE))
+	}
+	if i.ToolContains != nil {
+		predicates = append(predicates, session.ToolContains(*i.ToolContains))
+	}
+	if i.ToolHasPrefix != nil {
+		predicates = append(predicates, session.ToolHasPrefix(*i.ToolHasPrefix))
+	}
+	if i.ToolHasSuffix != nil {
+		predicates = append(predicates, session.ToolHasSuffix(*i.ToolHasSuffix))
+	}
+	if i.ToolEqualFold != nil {
+		predicates = append(predicates, session.ToolEqualFold(*i.ToolEqualFold))
+	}
+	if i.ToolContainsFold != nil {
+		predicates = append(predicates, session.ToolContainsFold(*i.ToolContainsFold))
+	}
+	if i.ToolSessionID != nil {
+		predicates = append(predicates, session.ToolSessionIDEQ(*i.ToolSessionID))
+	}
+	if i.ToolSessionIDNEQ != nil {
+		predicates = append(predicates, session.ToolSessionIDNEQ(*i.ToolSessionIDNEQ))
+	}
+	if len(i.ToolSessionIDIn) > 0 {
+		predicates = append(predicates, session.ToolSessionIDIn(i.ToolSessionIDIn...))
+	}
+	if len(i.ToolSessionIDNotIn) > 0 {
+		predicates = append(predicates, session.ToolSessionIDNotIn(i.ToolSessionIDNotIn...))
+	}
+	if i.ToolSessionIDGT != nil {
+		predicates = append(predicates, session.ToolSessionIDGT(*i.ToolSessionIDGT))
+	}
+	if i.ToolSessionIDGTE != nil {
+		predicates = append(predicates, session.ToolSessionIDGTE(*i.ToolSessionIDGTE))
+	}
+	if i.ToolSessionIDLT != nil {
+		predicates = append(predicates, session.ToolSessionIDLT(*i.ToolSessionIDLT))
+	}
+	if i.ToolSessionIDLTE != nil {
+		predicates = append(predicates, session.ToolSessionIDLTE(*i.ToolSessionIDLTE))
+	}
+	if i.ToolSessionIDContains != nil {
+		predicates = append(predicates, session.ToolSessionIDContains(*i.ToolSessionIDContains))
+	}
+	if i.ToolSessionIDHasPrefix != nil {
+		predicates = append(predicates, session.ToolSessionIDHasPrefix(*i.ToolSessionIDHasPrefix))
+	}
+	if i.ToolSessionIDHasSuffix != nil {
+		predicates = append(predicates, session.ToolSessionIDHasSuffix(*i.ToolSessionIDHasSuffix))
+	}
+	if i.ToolSessionIDEqualFold != nil {
+		predicates = append(predicates, session.ToolSessionIDEqualFold(*i.ToolSessionIDEqualFold))
+	}
+	if i.ToolSessionIDContainsFold != nil {
+		predicates = append(predicates, session.ToolSessionIDContainsFold(*i.ToolSessionIDContainsFold))
+	}
+	if i.ToolVersion != nil {
+		predicates = append(predicates, session.ToolVersionEQ(*i.ToolVersion))
+	}
+	if i.ToolVersionNEQ != nil {
+		predicates = append(predicates, session.ToolVersionNEQ(*i.ToolVersionNEQ))
+	}
+	if len(i.ToolVersionIn) > 0 {
+		predicates = append(predicates, session.ToolVersionIn(i.ToolVersionIn...))
+	}
+	if len(i.ToolVersionNotIn) > 0 {
+		predicates = append(predicates, session.ToolVersionNotIn(i.ToolVersionNotIn...))
+	}
+	if i.ToolVersionGT != nil {
+		predicates = append(predicates, session.ToolVersionGT(*i.ToolVersionGT))
+	}
+	if i.ToolVersionGTE != nil {
+		predicates = append(predicates, session.ToolVersionGTE(*i.ToolVersionGTE))
+	}
+	if i.ToolVersionLT != nil {
+		predicates = append(predicates, session.ToolVersionLT(*i.ToolVersionLT))
+	}
+	if i.ToolVersionLTE != nil {
+		predicates = append(predicates, session.ToolVersionLTE(*i.ToolVersionLTE))
+	}
+	if i.ToolVersionContains != nil {
+		predicates = append(predicates, session.ToolVersionContains(*i.ToolVersionContains))
+	}
+	if i.ToolVersionHasPrefix != nil {
+		predicates = append(predicates, session.ToolVersionHasPrefix(*i.ToolVersionHasPrefix))
+	}
+	if i.ToolVersionHasSuffix != nil {
+		predicates = append(predicates, session.ToolVersionHasSuffix(*i.ToolVersionHasSuffix))
+	}
+	if i.ToolVersionEqualFold != nil {
+		predicates = append(predicates, session.ToolVersionEqualFold(*i.ToolVersionEqualFold))
+	}
+	if i.ToolVersionContainsFold != nil {
+		predicates = append(predicates, session.ToolVersionContainsFold(*i.ToolVersionContainsFold))
+	}
+	if i.Model != nil {
+		predicates = append(predicates, session.ModelEQ(*i.Model))
+	}
+	if i.ModelNEQ != nil {
+		predicates = append(predicates, session.ModelNEQ(*i.ModelNEQ))
+	}
+	if len(i.ModelIn) > 0 {
+		predicates = append(predicates, session.ModelIn(i.ModelIn...))
+	}
+	if len(i.ModelNotIn) > 0 {
+		predicates = append(predicates, session.ModelNotIn(i.ModelNotIn...))
+	}
+	if i.ModelGT != nil {
+		predicates = append(predicates, session.ModelGT(*i.ModelGT))
+	}
+	if i.ModelGTE != nil {
+		predicates = append(predicates, session.ModelGTE(*i.ModelGTE))
+	}
+	if i.ModelLT != nil {
+		predicates = append(predicates, session.ModelLT(*i.ModelLT))
+	}
+	if i.ModelLTE != nil {
+		predicates = append(predicates, session.ModelLTE(*i.ModelLTE))
+	}
+	if i.ModelContains != nil {
+		predicates = append(predicates, session.ModelContains(*i.ModelContains))
+	}
+	if i.ModelHasPrefix != nil {
+		predicates = append(predicates, session.ModelHasPrefix(*i.ModelHasPrefix))
+	}
+	if i.ModelHasSuffix != nil {
+		predicates = append(predicates, session.ModelHasSuffix(*i.ModelHasSuffix))
+	}
+	if i.ModelEqualFold != nil {
+		predicates = append(predicates, session.ModelEqualFold(*i.ModelEqualFold))
+	}
+	if i.ModelContainsFold != nil {
+		predicates = append(predicates, session.ModelContainsFold(*i.ModelContainsFold))
+	}
+	if i.MachineID != nil {
+		predicates = append(predicates, session.MachineIDEQ(*i.MachineID))
+	}
+	if i.MachineIDNEQ != nil {
+		predicates = append(predicates, session.MachineIDNEQ(*i.MachineIDNEQ))
+	}
+	if len(i.MachineIDIn) > 0 {
+		predicates = append(predicates, session.MachineIDIn(i.MachineIDIn...))
+	}
+	if len(i.MachineIDNotIn) > 0 {
+		predicates = append(predicates, session.MachineIDNotIn(i.MachineIDNotIn...))
+	}
+	if i.MachineIDGT != nil {
+		predicates = append(predicates, session.MachineIDGT(*i.MachineIDGT))
+	}
+	if i.MachineIDGTE != nil {
+		predicates = append(predicates, session.MachineIDGTE(*i.MachineIDGTE))
+	}
+	if i.MachineIDLT != nil {
+		predicates = append(predicates, session.MachineIDLT(*i.MachineIDLT))
+	}
+	if i.MachineIDLTE != nil {
+		predicates = append(predicates, session.MachineIDLTE(*i.MachineIDLTE))
+	}
+	if i.MachineIDContains != nil {
+		predicates = append(predicates, session.MachineIDContains(*i.MachineIDContains))
+	}
+	if i.MachineIDHasPrefix != nil {
+		predicates = append(predicates, session.MachineIDHasPrefix(*i.MachineIDHasPrefix))
+	}
+	if i.MachineIDHasSuffix != nil {
+		predicates = append(predicates, session.MachineIDHasSuffix(*i.MachineIDHasSuffix))
+	}
+	if i.MachineIDEqualFold != nil {
+		predicates = append(predicates, session.MachineIDEqualFold(*i.MachineIDEqualFold))
+	}
+	if i.MachineIDContainsFold != nil {
+		predicates = append(predicates, session.MachineIDContainsFold(*i.MachineIDContainsFold))
+	}
+	if i.RunID != nil {
+		predicates = append(predicates, session.RunIDEQ(*i.RunID))
+	}
+	if i.RunIDNEQ != nil {
+		predicates = append(predicates, session.RunIDNEQ(*i.RunIDNEQ))
+	}
+	if len(i.RunIDIn) > 0 {
+		predicates = append(predicates, session.RunIDIn(i.RunIDIn...))
+	}
+	if len(i.RunIDNotIn) > 0 {
+		predicates = append(predicates, session.RunIDNotIn(i.RunIDNotIn...))
+	}
+	if i.RunIDGT != nil {
+		predicates = append(predicates, session.RunIDGT(*i.RunIDGT))
+	}
+	if i.RunIDGTE != nil {
+		predicates = append(predicates, session.RunIDGTE(*i.RunIDGTE))
+	}
+	if i.RunIDLT != nil {
+		predicates = append(predicates, session.RunIDLT(*i.RunIDLT))
+	}
+	if i.RunIDLTE != nil {
+		predicates = append(predicates, session.RunIDLTE(*i.RunIDLTE))
+	}
+	if i.RunIDContains != nil {
+		predicates = append(predicates, session.RunIDContains(*i.RunIDContains))
+	}
+	if i.RunIDHasPrefix != nil {
+		predicates = append(predicates, session.RunIDHasPrefix(*i.RunIDHasPrefix))
+	}
+	if i.RunIDHasSuffix != nil {
+		predicates = append(predicates, session.RunIDHasSuffix(*i.RunIDHasSuffix))
+	}
+	if i.RunIDEqualFold != nil {
+		predicates = append(predicates, session.RunIDEqualFold(*i.RunIDEqualFold))
+	}
+	if i.RunIDContainsFold != nil {
+		predicates = append(predicates, session.RunIDContainsFold(*i.RunIDContainsFold))
+	}
+	if i.Repo != nil {
+		predicates = append(predicates, session.RepoEQ(*i.Repo))
+	}
+	if i.RepoNEQ != nil {
+		predicates = append(predicates, session.RepoNEQ(*i.RepoNEQ))
+	}
+	if len(i.RepoIn) > 0 {
+		predicates = append(predicates, session.RepoIn(i.RepoIn...))
+	}
+	if len(i.RepoNotIn) > 0 {
+		predicates = append(predicates, session.RepoNotIn(i.RepoNotIn...))
+	}
+	if i.RepoGT != nil {
+		predicates = append(predicates, session.RepoGT(*i.RepoGT))
+	}
+	if i.RepoGTE != nil {
+		predicates = append(predicates, session.RepoGTE(*i.RepoGTE))
+	}
+	if i.RepoLT != nil {
+		predicates = append(predicates, session.RepoLT(*i.RepoLT))
+	}
+	if i.RepoLTE != nil {
+		predicates = append(predicates, session.RepoLTE(*i.RepoLTE))
+	}
+	if i.RepoContains != nil {
+		predicates = append(predicates, session.RepoContains(*i.RepoContains))
+	}
+	if i.RepoHasPrefix != nil {
+		predicates = append(predicates, session.RepoHasPrefix(*i.RepoHasPrefix))
+	}
+	if i.RepoHasSuffix != nil {
+		predicates = append(predicates, session.RepoHasSuffix(*i.RepoHasSuffix))
+	}
+	if i.RepoEqualFold != nil {
+		predicates = append(predicates, session.RepoEqualFold(*i.RepoEqualFold))
+	}
+	if i.RepoContainsFold != nil {
+		predicates = append(predicates, session.RepoContainsFold(*i.RepoContainsFold))
+	}
+	if i.Branch != nil {
+		predicates = append(predicates, session.BranchEQ(*i.Branch))
+	}
+	if i.BranchNEQ != nil {
+		predicates = append(predicates, session.BranchNEQ(*i.BranchNEQ))
+	}
+	if len(i.BranchIn) > 0 {
+		predicates = append(predicates, session.BranchIn(i.BranchIn...))
+	}
+	if len(i.BranchNotIn) > 0 {
+		predicates = append(predicates, session.BranchNotIn(i.BranchNotIn...))
+	}
+	if i.BranchGT != nil {
+		predicates = append(predicates, session.BranchGT(*i.BranchGT))
+	}
+	if i.BranchGTE != nil {
+		predicates = append(predicates, session.BranchGTE(*i.BranchGTE))
+	}
+	if i.BranchLT != nil {
+		predicates = append(predicates, session.BranchLT(*i.BranchLT))
+	}
+	if i.BranchLTE != nil {
+		predicates = append(predicates, session.BranchLTE(*i.BranchLTE))
+	}
+	if i.BranchContains != nil {
+		predicates = append(predicates, session.BranchContains(*i.BranchContains))
+	}
+	if i.BranchHasPrefix != nil {
+		predicates = append(predicates, session.BranchHasPrefix(*i.BranchHasPrefix))
+	}
+	if i.BranchHasSuffix != nil {
+		predicates = append(predicates, session.BranchHasSuffix(*i.BranchHasSuffix))
+	}
+	if i.BranchEqualFold != nil {
+		predicates = append(predicates, session.BranchEqualFold(*i.BranchEqualFold))
+	}
+	if i.BranchContainsFold != nil {
+		predicates = append(predicates, session.BranchContainsFold(*i.BranchContainsFold))
+	}
+	if i.Cwd != nil {
+		predicates = append(predicates, session.CwdEQ(*i.Cwd))
+	}
+	if i.CwdNEQ != nil {
+		predicates = append(predicates, session.CwdNEQ(*i.CwdNEQ))
+	}
+	if len(i.CwdIn) > 0 {
+		predicates = append(predicates, session.CwdIn(i.CwdIn...))
+	}
+	if len(i.CwdNotIn) > 0 {
+		predicates = append(predicates, session.CwdNotIn(i.CwdNotIn...))
+	}
+	if i.CwdGT != nil {
+		predicates = append(predicates, session.CwdGT(*i.CwdGT))
+	}
+	if i.CwdGTE != nil {
+		predicates = append(predicates, session.CwdGTE(*i.CwdGTE))
+	}
+	if i.CwdLT != nil {
+		predicates = append(predicates, session.CwdLT(*i.CwdLT))
+	}
+	if i.CwdLTE != nil {
+		predicates = append(predicates, session.CwdLTE(*i.CwdLTE))
+	}
+	if i.CwdContains != nil {
+		predicates = append(predicates, session.CwdContains(*i.CwdContains))
+	}
+	if i.CwdHasPrefix != nil {
+		predicates = append(predicates, session.CwdHasPrefix(*i.CwdHasPrefix))
+	}
+	if i.CwdHasSuffix != nil {
+		predicates = append(predicates, session.CwdHasSuffix(*i.CwdHasSuffix))
+	}
+	if i.CwdEqualFold != nil {
+		predicates = append(predicates, session.CwdEqualFold(*i.CwdEqualFold))
+	}
+	if i.CwdContainsFold != nil {
+		predicates = append(predicates, session.CwdContainsFold(*i.CwdContainsFold))
+	}
+	if i.Terminal != nil {
+		predicates = append(predicates, session.TerminalEQ(*i.Terminal))
+	}
+	if i.TerminalNEQ != nil {
+		predicates = append(predicates, session.TerminalNEQ(*i.TerminalNEQ))
+	}
+	if len(i.TerminalIn) > 0 {
+		predicates = append(predicates, session.TerminalIn(i.TerminalIn...))
+	}
+	if len(i.TerminalNotIn) > 0 {
+		predicates = append(predicates, session.TerminalNotIn(i.TerminalNotIn...))
+	}
+	if i.TerminalGT != nil {
+		predicates = append(predicates, session.TerminalGT(*i.TerminalGT))
+	}
+	if i.TerminalGTE != nil {
+		predicates = append(predicates, session.TerminalGTE(*i.TerminalGTE))
+	}
+	if i.TerminalLT != nil {
+		predicates = append(predicates, session.TerminalLT(*i.TerminalLT))
+	}
+	if i.TerminalLTE != nil {
+		predicates = append(predicates, session.TerminalLTE(*i.TerminalLTE))
+	}
+	if i.TerminalContains != nil {
+		predicates = append(predicates, session.TerminalContains(*i.TerminalContains))
+	}
+	if i.TerminalHasPrefix != nil {
+		predicates = append(predicates, session.TerminalHasPrefix(*i.TerminalHasPrefix))
+	}
+	if i.TerminalHasSuffix != nil {
+		predicates = append(predicates, session.TerminalHasSuffix(*i.TerminalHasSuffix))
+	}
+	if i.TerminalEqualFold != nil {
+		predicates = append(predicates, session.TerminalEqualFold(*i.TerminalEqualFold))
+	}
+	if i.TerminalContainsFold != nil {
+		predicates = append(predicates, session.TerminalContainsFold(*i.TerminalContainsFold))
+	}
+	if i.Ci != nil {
+		predicates = append(predicates, session.CiEQ(*i.Ci))
+	}
+	if i.CiNEQ != nil {
+		predicates = append(predicates, session.CiNEQ(*i.CiNEQ))
+	}
+	if len(i.CiIn) > 0 {
+		predicates = append(predicates, session.CiIn(i.CiIn...))
+	}
+	if len(i.CiNotIn) > 0 {
+		predicates = append(predicates, session.CiNotIn(i.CiNotIn...))
+	}
+	if i.CiGT != nil {
+		predicates = append(predicates, session.CiGT(*i.CiGT))
+	}
+	if i.CiGTE != nil {
+		predicates = append(predicates, session.CiGTE(*i.CiGTE))
+	}
+	if i.CiLT != nil {
+		predicates = append(predicates, session.CiLT(*i.CiLT))
+	}
+	if i.CiLTE != nil {
+		predicates = append(predicates, session.CiLTE(*i.CiLTE))
+	}
+	if i.CiContains != nil {
+		predicates = append(predicates, session.CiContains(*i.CiContains))
+	}
+	if i.CiHasPrefix != nil {
+		predicates = append(predicates, session.CiHasPrefix(*i.CiHasPrefix))
+	}
+	if i.CiHasSuffix != nil {
+		predicates = append(predicates, session.CiHasSuffix(*i.CiHasSuffix))
+	}
+	if i.CiEqualFold != nil {
+		predicates = append(predicates, session.CiEqualFold(*i.CiEqualFold))
+	}
+	if i.CiContainsFold != nil {
+		predicates = append(predicates, session.CiContainsFold(*i.CiContainsFold))
+	}
+	if i.ParentSessionID != nil {
+		predicates = append(predicates, session.ParentSessionIDEQ(*i.ParentSessionID))
+	}
+	if i.ParentSessionIDNEQ != nil {
+		predicates = append(predicates, session.ParentSessionIDNEQ(*i.ParentSessionIDNEQ))
+	}
+	if len(i.ParentSessionIDIn) > 0 {
+		predicates = append(predicates, session.ParentSessionIDIn(i.ParentSessionIDIn...))
+	}
+	if len(i.ParentSessionIDNotIn) > 0 {
+		predicates = append(predicates, session.ParentSessionIDNotIn(i.ParentSessionIDNotIn...))
+	}
+	if i.ParentSessionIDGT != nil {
+		predicates = append(predicates, session.ParentSessionIDGT(*i.ParentSessionIDGT))
+	}
+	if i.ParentSessionIDGTE != nil {
+		predicates = append(predicates, session.ParentSessionIDGTE(*i.ParentSessionIDGTE))
+	}
+	if i.ParentSessionIDLT != nil {
+		predicates = append(predicates, session.ParentSessionIDLT(*i.ParentSessionIDLT))
+	}
+	if i.ParentSessionIDLTE != nil {
+		predicates = append(predicates, session.ParentSessionIDLTE(*i.ParentSessionIDLTE))
+	}
+	if i.ParentSessionIDContains != nil {
+		predicates = append(predicates, session.ParentSessionIDContains(*i.ParentSessionIDContains))
+	}
+	if i.ParentSessionIDHasPrefix != nil {
+		predicates = append(predicates, session.ParentSessionIDHasPrefix(*i.ParentSessionIDHasPrefix))
+	}
+	if i.ParentSessionIDHasSuffix != nil {
+		predicates = append(predicates, session.ParentSessionIDHasSuffix(*i.ParentSessionIDHasSuffix))
+	}
+	if i.ParentSessionIDEqualFold != nil {
+		predicates = append(predicates, session.ParentSessionIDEqualFold(*i.ParentSessionIDEqualFold))
+	}
+	if i.ParentSessionIDContainsFold != nil {
+		predicates = append(predicates, session.ParentSessionIDContainsFold(*i.ParentSessionIDContainsFold))
+	}
+	if i.Signal != nil {
+		predicates = append(predicates, session.SignalEQ(*i.Signal))
+	}
+	if i.SignalNEQ != nil {
+		predicates = append(predicates, session.SignalNEQ(*i.SignalNEQ))
+	}
+	if len(i.SignalIn) > 0 {
+		predicates = append(predicates, session.SignalIn(i.SignalIn...))
+	}
+	if len(i.SignalNotIn) > 0 {
+		predicates = append(predicates, session.SignalNotIn(i.SignalNotIn...))
+	}
+	if i.SignalGT != nil {
+		predicates = append(predicates, session.SignalGT(*i.SignalGT))
+	}
+	if i.SignalGTE != nil {
+		predicates = append(predicates, session.SignalGTE(*i.SignalGTE))
+	}
+	if i.SignalLT != nil {
+		predicates = append(predicates, session.SignalLT(*i.SignalLT))
+	}
+	if i.SignalLTE != nil {
+		predicates = append(predicates, session.SignalLTE(*i.SignalLTE))
+	}
+	if i.SignalContains != nil {
+		predicates = append(predicates, session.SignalContains(*i.SignalContains))
+	}
+	if i.SignalHasPrefix != nil {
+		predicates = append(predicates, session.SignalHasPrefix(*i.SignalHasPrefix))
+	}
+	if i.SignalHasSuffix != nil {
+		predicates = append(predicates, session.SignalHasSuffix(*i.SignalHasSuffix))
+	}
+	if i.SignalEqualFold != nil {
+		predicates = append(predicates, session.SignalEqualFold(*i.SignalEqualFold))
+	}
+	if i.SignalContainsFold != nil {
+		predicates = append(predicates, session.SignalContainsFold(*i.SignalContainsFold))
+	}
+	if i.DeclaredHuman != nil {
+		predicates = append(predicates, session.DeclaredHumanEQ(*i.DeclaredHuman))
+	}
+	if i.DeclaredHumanNEQ != nil {
+		predicates = append(predicates, session.DeclaredHumanNEQ(*i.DeclaredHumanNEQ))
 	}
 
 	switch len(predicates) {

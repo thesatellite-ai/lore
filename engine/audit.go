@@ -45,6 +45,13 @@ type Event struct {
 	// Batch is the bulk action this write belongs to (XQ1: one bat_ id per
 	// bulk action, read back by `lore batch list|show`); zero otherwise.
 	Batch Batch
+	// Session is lore's ses_ id of the agent session that made the write
+	// (AGENT_IDENTITY_DESIGN 6.6; never the tool's own id). Machine-local:
+	// sinks keep it in local logs only (OQ14). "" outside a session; the
+	// sink fills it when the engine does not know it.
+	Session string
+	// Confirmed is true when the write followed --yes (8.1, 6.6).
+	Confirmed bool
 }
 
 // AuditSink stores audit events (the audit table, phase 2). Record is

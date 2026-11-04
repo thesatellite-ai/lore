@@ -52,6 +52,10 @@ const (
 	RuleText   Rule = "text"
 	RuleSecret Rule = "secret"
 	RuleActor  Rule = "actor-projection"
+	// RuleSession: a raw tool session id known on this machine appears in
+	// text bound for git (AGENT_IDENTITY_DESIGN section 9, OQ14: session
+	// ids are machine-local and never shared).
+	RuleSession Rule = "session-id"
 )
 
 // Item is one thing to check.
@@ -225,6 +229,11 @@ type Options struct {
 	// project id is an id-rule finding even when the index does not know
 	// that id (copied from an unloaded store).
 	RepoProjectID string
+	// SessionIDs are the raw tool session ids known on this machine
+	// (lore.db sessions, saas/pkg/aicoder/sessions.KnownToolSessionIDs).
+	// Any of them in an item blocks it (RuleSession); the finding never
+	// prints the id.
+	SessionIDs []string
 }
 
 // idRe finds lore row ids in any text (prefix_ + 32 hex, ids.go).
@@ -419,6 +428,7 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 		if idx != nil {
 			out = append(out, textHits(it, content, idx, allowedRows(it, idx))...)
 		}
+		out = append(out, sessionHits(it, content, o.SessionIDs)...)
 		if scanner != nil {
 			for _, s := range scanner.Scan(content) {
 				out = append(out, Finding{Rule: RuleSecret, Where: it.Where, Line: lineOf(content, s.Offset),
@@ -430,6 +440,23 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 		}
 	}
 	sortFindings(out)
+	return out
+}
+
+// sessionHits finds every known tool session id in content (section 9).
+// The detail names the rule, never the id: the finding itself may be
+// printed into a CI log.
+func sessionHits(it Item, content string, sessionIDs []string) []Finding {
+	var out []Finding
+	for _, id := range sessionIDs {
+		if id == "" {
+			continue
+		}
+		if off := strings.Index(content, id); off >= 0 {
+			out = append(out, Finding{Rule: RuleSession, Where: it.Where, Line: lineOf(content, off),
+				Detail: "an agent's tool session id (machine-local, never shared; remove it from the text)"})
+		}
+	}
 	return out
 }
 

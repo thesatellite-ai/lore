@@ -38,6 +38,11 @@ type coreAuditSink struct {
 	once sync.Once
 	db   *sql.DB
 	err  error
+	// session is this process's ses_ row (6.2), found or created once on
+	// the first event that asks (Session).
+	sesOnce sync.Once
+	ses     string
+	sesErr  error
 }
 
 var _ engine.AuditSink = (*coreAuditSink)(nil)
@@ -69,6 +74,13 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 		reason += " (cascade of " + ev.Cascade.String() + ")"
 	}
 	table := ev.Table.String()
+	ses := ev.Session
+	if ses == "" {
+		var serr error
+		if ses, serr = s.Session(ctx); serr != nil {
+			return serr
+		}
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "audit: begin").WithCause(err)
@@ -76,6 +88,7 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 	if err = audit.Append(ctx, tx, audit.Entry{
 		ActorID: ev.Actor.String(), Action: table + "." + kind,
 		TargetTable: table, TargetID: ev.ID.String(), Reason: reason,
+		SessionID: ses, Confirmed: ev.Confirmed || engine.Confirmed(ctx), // 6.6, hashed only when set (OQ10)
 	}); err != nil {
 		return errcodes.New(errcodes.Internal, "audit: append a core write").WithCause(errors.Join(err, tx.Rollback()))
 	}
@@ -83,6 +96,20 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 		return errcodes.New(errcodes.Internal, "audit: commit").WithCause(err)
 	}
 	return nil
+}
+
+// Session implements wire.SessionSource: this process's ses_ id in the
+// repo's lore.db (machine-local, OQ14), "" when no session applies or
+// there is no lore.db here. Found or created once per process.
+func (s *coreAuditSink) Session(ctx context.Context) (string, error) {
+	s.sesOnce.Do(func() {
+		s.once.Do(func() { s.db, s.err = openCoreAuditDB(ctx) })
+		if s.err != nil {
+			return // no repo lore.db (attached-store-only run): no session link
+		}
+		s.ses, s.sesErr = currentSession(ctx, s.db)
+	})
+	return s.ses, s.sesErr
 }
 
 // openCoreAuditDB opens the project's lore.db for the chain, building it

@@ -179,3 +179,17 @@ func TestNeedsIndex(t *testing.T) {
 		}
 	}
 }
+
+// TestSessionIDRule pins section 9: a known tool session id in text bound
+// for git blocks, and the finding never prints the id.
+func TestSessionIDRule(t *testing.T) {
+	const sid = "019a7c2e-5d1b-7f00-9c3a-0e4b1f2a3c4d"
+	items := []Item{{Where: "this memory", Content: []byte("resume with\n" + sid + " later")}}
+	fs := Check(items, nil, Options{SessionIDs: []string{sid}})
+	if len(fs) != 1 || fs[0].Rule != RuleSession || fs[0].Line != 2 || strings.Contains(fs[0].Detail, sid) {
+		t.Fatalf("session id not blocked or printed: %+v", fs)
+	}
+	if fs := Check([]Item{{Where: "x", Content: []byte("nothing here")}}, nil, Options{SessionIDs: []string{sid}}); len(fs) != 0 {
+		t.Fatalf("false hit: %+v", fs)
+	}
+}

@@ -105,6 +105,220 @@ func (_c *SessionCreate) SetNillableAgentKind(v *string) *SessionCreate {
 	return _c
 }
 
+// SetTool sets the "tool" field.
+func (_c *SessionCreate) SetTool(v string) *SessionCreate {
+	_c.mutation.SetTool(v)
+	return _c
+}
+
+// SetNillableTool sets the "tool" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableTool(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetTool(*v)
+	}
+	return _c
+}
+
+// SetToolSessionID sets the "tool_session_id" field.
+func (_c *SessionCreate) SetToolSessionID(v string) *SessionCreate {
+	_c.mutation.SetToolSessionID(v)
+	return _c
+}
+
+// SetNillableToolSessionID sets the "tool_session_id" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableToolSessionID(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetToolSessionID(*v)
+	}
+	return _c
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (_c *SessionCreate) SetToolVersion(v string) *SessionCreate {
+	_c.mutation.SetToolVersion(v)
+	return _c
+}
+
+// SetNillableToolVersion sets the "tool_version" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableToolVersion(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetToolVersion(*v)
+	}
+	return _c
+}
+
+// SetModel sets the "model" field.
+func (_c *SessionCreate) SetModel(v string) *SessionCreate {
+	_c.mutation.SetModel(v)
+	return _c
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableModel(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetModel(*v)
+	}
+	return _c
+}
+
+// SetMachineID sets the "machine_id" field.
+func (_c *SessionCreate) SetMachineID(v string) *SessionCreate {
+	_c.mutation.SetMachineID(v)
+	return _c
+}
+
+// SetNillableMachineID sets the "machine_id" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableMachineID(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetMachineID(*v)
+	}
+	return _c
+}
+
+// SetRunID sets the "run_id" field.
+func (_c *SessionCreate) SetRunID(v string) *SessionCreate {
+	_c.mutation.SetRunID(v)
+	return _c
+}
+
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableRunID(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetRunID(*v)
+	}
+	return _c
+}
+
+// SetRepo sets the "repo" field.
+func (_c *SessionCreate) SetRepo(v string) *SessionCreate {
+	_c.mutation.SetRepo(v)
+	return _c
+}
+
+// SetNillableRepo sets the "repo" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableRepo(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetRepo(*v)
+	}
+	return _c
+}
+
+// SetBranch sets the "branch" field.
+func (_c *SessionCreate) SetBranch(v string) *SessionCreate {
+	_c.mutation.SetBranch(v)
+	return _c
+}
+
+// SetNillableBranch sets the "branch" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableBranch(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetBranch(*v)
+	}
+	return _c
+}
+
+// SetCwd sets the "cwd" field.
+func (_c *SessionCreate) SetCwd(v string) *SessionCreate {
+	_c.mutation.SetCwd(v)
+	return _c
+}
+
+// SetNillableCwd sets the "cwd" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableCwd(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetCwd(*v)
+	}
+	return _c
+}
+
+// SetTerminal sets the "terminal" field.
+func (_c *SessionCreate) SetTerminal(v string) *SessionCreate {
+	_c.mutation.SetTerminal(v)
+	return _c
+}
+
+// SetNillableTerminal sets the "terminal" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableTerminal(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetTerminal(*v)
+	}
+	return _c
+}
+
+// SetCi sets the "ci" field.
+func (_c *SessionCreate) SetCi(v string) *SessionCreate {
+	_c.mutation.SetCi(v)
+	return _c
+}
+
+// SetNillableCi sets the "ci" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableCi(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetCi(*v)
+	}
+	return _c
+}
+
+// SetParentSessionID sets the "parent_session_id" field.
+func (_c *SessionCreate) SetParentSessionID(v string) *SessionCreate {
+	_c.mutation.SetParentSessionID(v)
+	return _c
+}
+
+// SetNillableParentSessionID sets the "parent_session_id" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableParentSessionID(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetParentSessionID(*v)
+	}
+	return _c
+}
+
+// SetSignal sets the "signal" field.
+func (_c *SessionCreate) SetSignal(v string) *SessionCreate {
+	_c.mutation.SetSignal(v)
+	return _c
+}
+
+// SetNillableSignal sets the "signal" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableSignal(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetSignal(*v)
+	}
+	return _c
+}
+
+// SetSources sets the "sources" field.
+func (_c *SessionCreate) SetSources(v map[string]string) *SessionCreate {
+	_c.mutation.SetSources(v)
+	return _c
+}
+
+// SetOuterTools sets the "outer_tools" field.
+func (_c *SessionCreate) SetOuterTools(v []string) *SessionCreate {
+	_c.mutation.SetOuterTools(v)
+	return _c
+}
+
+// SetDeclaredHuman sets the "declared_human" field.
+func (_c *SessionCreate) SetDeclaredHuman(v bool) *SessionCreate {
+	_c.mutation.SetDeclaredHuman(v)
+	return _c
+}
+
+// SetNillableDeclaredHuman sets the "declared_human" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableDeclaredHuman(v *bool) *SessionCreate {
+	if v != nil {
+		_c.SetDeclaredHuman(*v)
+	}
+	return _c
+}
+
+// SetFlags sets the "flags" field.
+func (_c *SessionCreate) SetFlags(v []string) *SessionCreate {
+	_c.mutation.SetFlags(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *SessionCreate) SetID(v string) *SessionCreate {
 	_c.mutation.SetID(v)
@@ -162,6 +376,62 @@ func (_c *SessionCreate) defaults() {
 		v := session.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.Tool(); !ok {
+		v := session.DefaultTool
+		_c.mutation.SetTool(v)
+	}
+	if _, ok := _c.mutation.ToolSessionID(); !ok {
+		v := session.DefaultToolSessionID
+		_c.mutation.SetToolSessionID(v)
+	}
+	if _, ok := _c.mutation.ToolVersion(); !ok {
+		v := session.DefaultToolVersion
+		_c.mutation.SetToolVersion(v)
+	}
+	if _, ok := _c.mutation.Model(); !ok {
+		v := session.DefaultModel
+		_c.mutation.SetModel(v)
+	}
+	if _, ok := _c.mutation.MachineID(); !ok {
+		v := session.DefaultMachineID
+		_c.mutation.SetMachineID(v)
+	}
+	if _, ok := _c.mutation.RunID(); !ok {
+		v := session.DefaultRunID
+		_c.mutation.SetRunID(v)
+	}
+	if _, ok := _c.mutation.Repo(); !ok {
+		v := session.DefaultRepo
+		_c.mutation.SetRepo(v)
+	}
+	if _, ok := _c.mutation.Branch(); !ok {
+		v := session.DefaultBranch
+		_c.mutation.SetBranch(v)
+	}
+	if _, ok := _c.mutation.Cwd(); !ok {
+		v := session.DefaultCwd
+		_c.mutation.SetCwd(v)
+	}
+	if _, ok := _c.mutation.Terminal(); !ok {
+		v := session.DefaultTerminal
+		_c.mutation.SetTerminal(v)
+	}
+	if _, ok := _c.mutation.Ci(); !ok {
+		v := session.DefaultCi
+		_c.mutation.SetCi(v)
+	}
+	if _, ok := _c.mutation.ParentSessionID(); !ok {
+		v := session.DefaultParentSessionID
+		_c.mutation.SetParentSessionID(v)
+	}
+	if _, ok := _c.mutation.Signal(); !ok {
+		v := session.DefaultSignal
+		_c.mutation.SetSignal(v)
+	}
+	if _, ok := _c.mutation.DeclaredHuman(); !ok {
+		v := session.DefaultDeclaredHuman
+		_c.mutation.SetDeclaredHuman(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := session.DefaultID()
 		_c.mutation.SetID(v)
@@ -196,6 +466,48 @@ func (_c *SessionCreate) check() error {
 		if err := session.AgentKindValidator(v); err != nil {
 			return &ValidationError{Name: "agent_kind", err: fmt.Errorf(`ent: validator failed for field "Session.agent_kind": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.Tool(); !ok {
+		return &ValidationError{Name: "tool", err: errors.New(`ent: missing required field "Session.tool"`)}
+	}
+	if _, ok := _c.mutation.ToolSessionID(); !ok {
+		return &ValidationError{Name: "tool_session_id", err: errors.New(`ent: missing required field "Session.tool_session_id"`)}
+	}
+	if _, ok := _c.mutation.ToolVersion(); !ok {
+		return &ValidationError{Name: "tool_version", err: errors.New(`ent: missing required field "Session.tool_version"`)}
+	}
+	if _, ok := _c.mutation.Model(); !ok {
+		return &ValidationError{Name: "model", err: errors.New(`ent: missing required field "Session.model"`)}
+	}
+	if _, ok := _c.mutation.MachineID(); !ok {
+		return &ValidationError{Name: "machine_id", err: errors.New(`ent: missing required field "Session.machine_id"`)}
+	}
+	if _, ok := _c.mutation.RunID(); !ok {
+		return &ValidationError{Name: "run_id", err: errors.New(`ent: missing required field "Session.run_id"`)}
+	}
+	if _, ok := _c.mutation.Repo(); !ok {
+		return &ValidationError{Name: "repo", err: errors.New(`ent: missing required field "Session.repo"`)}
+	}
+	if _, ok := _c.mutation.Branch(); !ok {
+		return &ValidationError{Name: "branch", err: errors.New(`ent: missing required field "Session.branch"`)}
+	}
+	if _, ok := _c.mutation.Cwd(); !ok {
+		return &ValidationError{Name: "cwd", err: errors.New(`ent: missing required field "Session.cwd"`)}
+	}
+	if _, ok := _c.mutation.Terminal(); !ok {
+		return &ValidationError{Name: "terminal", err: errors.New(`ent: missing required field "Session.terminal"`)}
+	}
+	if _, ok := _c.mutation.Ci(); !ok {
+		return &ValidationError{Name: "ci", err: errors.New(`ent: missing required field "Session.ci"`)}
+	}
+	if _, ok := _c.mutation.ParentSessionID(); !ok {
+		return &ValidationError{Name: "parent_session_id", err: errors.New(`ent: missing required field "Session.parent_session_id"`)}
+	}
+	if _, ok := _c.mutation.Signal(); !ok {
+		return &ValidationError{Name: "signal", err: errors.New(`ent: missing required field "Session.signal"`)}
+	}
+	if _, ok := _c.mutation.DeclaredHuman(); !ok {
+		return &ValidationError{Name: "declared_human", err: errors.New(`ent: missing required field "Session.declared_human"`)}
 	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := session.IDValidator(v); err != nil {
@@ -265,6 +577,74 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AgentKind(); ok {
 		_spec.SetField(session.FieldAgentKind, field.TypeString, value)
 		_node.AgentKind = &value
+	}
+	if value, ok := _c.mutation.Tool(); ok {
+		_spec.SetField(session.FieldTool, field.TypeString, value)
+		_node.Tool = value
+	}
+	if value, ok := _c.mutation.ToolSessionID(); ok {
+		_spec.SetField(session.FieldToolSessionID, field.TypeString, value)
+		_node.ToolSessionID = value
+	}
+	if value, ok := _c.mutation.ToolVersion(); ok {
+		_spec.SetField(session.FieldToolVersion, field.TypeString, value)
+		_node.ToolVersion = value
+	}
+	if value, ok := _c.mutation.Model(); ok {
+		_spec.SetField(session.FieldModel, field.TypeString, value)
+		_node.Model = value
+	}
+	if value, ok := _c.mutation.MachineID(); ok {
+		_spec.SetField(session.FieldMachineID, field.TypeString, value)
+		_node.MachineID = value
+	}
+	if value, ok := _c.mutation.RunID(); ok {
+		_spec.SetField(session.FieldRunID, field.TypeString, value)
+		_node.RunID = value
+	}
+	if value, ok := _c.mutation.Repo(); ok {
+		_spec.SetField(session.FieldRepo, field.TypeString, value)
+		_node.Repo = value
+	}
+	if value, ok := _c.mutation.Branch(); ok {
+		_spec.SetField(session.FieldBranch, field.TypeString, value)
+		_node.Branch = value
+	}
+	if value, ok := _c.mutation.Cwd(); ok {
+		_spec.SetField(session.FieldCwd, field.TypeString, value)
+		_node.Cwd = value
+	}
+	if value, ok := _c.mutation.Terminal(); ok {
+		_spec.SetField(session.FieldTerminal, field.TypeString, value)
+		_node.Terminal = value
+	}
+	if value, ok := _c.mutation.Ci(); ok {
+		_spec.SetField(session.FieldCi, field.TypeString, value)
+		_node.Ci = value
+	}
+	if value, ok := _c.mutation.ParentSessionID(); ok {
+		_spec.SetField(session.FieldParentSessionID, field.TypeString, value)
+		_node.ParentSessionID = value
+	}
+	if value, ok := _c.mutation.Signal(); ok {
+		_spec.SetField(session.FieldSignal, field.TypeString, value)
+		_node.Signal = value
+	}
+	if value, ok := _c.mutation.Sources(); ok {
+		_spec.SetField(session.FieldSources, field.TypeJSON, value)
+		_node.Sources = value
+	}
+	if value, ok := _c.mutation.OuterTools(); ok {
+		_spec.SetField(session.FieldOuterTools, field.TypeJSON, value)
+		_node.OuterTools = value
+	}
+	if value, ok := _c.mutation.DeclaredHuman(); ok {
+		_spec.SetField(session.FieldDeclaredHuman, field.TypeBool, value)
+		_node.DeclaredHuman = value
+	}
+	if value, ok := _c.mutation.Flags(); ok {
+		_spec.SetField(session.FieldFlags, field.TypeJSON, value)
+		_node.Flags = value
 	}
 	return _node, _spec
 }
@@ -393,6 +773,228 @@ func (u *SessionUpsert) UpdateAgentKind() *SessionUpsert {
 // ClearAgentKind clears the value of the "agent_kind" field.
 func (u *SessionUpsert) ClearAgentKind() *SessionUpsert {
 	u.SetNull(session.FieldAgentKind)
+	return u
+}
+
+// SetTool sets the "tool" field.
+func (u *SessionUpsert) SetTool(v string) *SessionUpsert {
+	u.Set(session.FieldTool, v)
+	return u
+}
+
+// UpdateTool sets the "tool" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateTool() *SessionUpsert {
+	u.SetExcluded(session.FieldTool)
+	return u
+}
+
+// SetToolSessionID sets the "tool_session_id" field.
+func (u *SessionUpsert) SetToolSessionID(v string) *SessionUpsert {
+	u.Set(session.FieldToolSessionID, v)
+	return u
+}
+
+// UpdateToolSessionID sets the "tool_session_id" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateToolSessionID() *SessionUpsert {
+	u.SetExcluded(session.FieldToolSessionID)
+	return u
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (u *SessionUpsert) SetToolVersion(v string) *SessionUpsert {
+	u.Set(session.FieldToolVersion, v)
+	return u
+}
+
+// UpdateToolVersion sets the "tool_version" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateToolVersion() *SessionUpsert {
+	u.SetExcluded(session.FieldToolVersion)
+	return u
+}
+
+// SetModel sets the "model" field.
+func (u *SessionUpsert) SetModel(v string) *SessionUpsert {
+	u.Set(session.FieldModel, v)
+	return u
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateModel() *SessionUpsert {
+	u.SetExcluded(session.FieldModel)
+	return u
+}
+
+// SetMachineID sets the "machine_id" field.
+func (u *SessionUpsert) SetMachineID(v string) *SessionUpsert {
+	u.Set(session.FieldMachineID, v)
+	return u
+}
+
+// UpdateMachineID sets the "machine_id" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateMachineID() *SessionUpsert {
+	u.SetExcluded(session.FieldMachineID)
+	return u
+}
+
+// SetRunID sets the "run_id" field.
+func (u *SessionUpsert) SetRunID(v string) *SessionUpsert {
+	u.Set(session.FieldRunID, v)
+	return u
+}
+
+// UpdateRunID sets the "run_id" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateRunID() *SessionUpsert {
+	u.SetExcluded(session.FieldRunID)
+	return u
+}
+
+// SetRepo sets the "repo" field.
+func (u *SessionUpsert) SetRepo(v string) *SessionUpsert {
+	u.Set(session.FieldRepo, v)
+	return u
+}
+
+// UpdateRepo sets the "repo" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateRepo() *SessionUpsert {
+	u.SetExcluded(session.FieldRepo)
+	return u
+}
+
+// SetBranch sets the "branch" field.
+func (u *SessionUpsert) SetBranch(v string) *SessionUpsert {
+	u.Set(session.FieldBranch, v)
+	return u
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateBranch() *SessionUpsert {
+	u.SetExcluded(session.FieldBranch)
+	return u
+}
+
+// SetCwd sets the "cwd" field.
+func (u *SessionUpsert) SetCwd(v string) *SessionUpsert {
+	u.Set(session.FieldCwd, v)
+	return u
+}
+
+// UpdateCwd sets the "cwd" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateCwd() *SessionUpsert {
+	u.SetExcluded(session.FieldCwd)
+	return u
+}
+
+// SetTerminal sets the "terminal" field.
+func (u *SessionUpsert) SetTerminal(v string) *SessionUpsert {
+	u.Set(session.FieldTerminal, v)
+	return u
+}
+
+// UpdateTerminal sets the "terminal" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateTerminal() *SessionUpsert {
+	u.SetExcluded(session.FieldTerminal)
+	return u
+}
+
+// SetCi sets the "ci" field.
+func (u *SessionUpsert) SetCi(v string) *SessionUpsert {
+	u.Set(session.FieldCi, v)
+	return u
+}
+
+// UpdateCi sets the "ci" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateCi() *SessionUpsert {
+	u.SetExcluded(session.FieldCi)
+	return u
+}
+
+// SetParentSessionID sets the "parent_session_id" field.
+func (u *SessionUpsert) SetParentSessionID(v string) *SessionUpsert {
+	u.Set(session.FieldParentSessionID, v)
+	return u
+}
+
+// UpdateParentSessionID sets the "parent_session_id" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateParentSessionID() *SessionUpsert {
+	u.SetExcluded(session.FieldParentSessionID)
+	return u
+}
+
+// SetSignal sets the "signal" field.
+func (u *SessionUpsert) SetSignal(v string) *SessionUpsert {
+	u.Set(session.FieldSignal, v)
+	return u
+}
+
+// UpdateSignal sets the "signal" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateSignal() *SessionUpsert {
+	u.SetExcluded(session.FieldSignal)
+	return u
+}
+
+// SetSources sets the "sources" field.
+func (u *SessionUpsert) SetSources(v map[string]string) *SessionUpsert {
+	u.Set(session.FieldSources, v)
+	return u
+}
+
+// UpdateSources sets the "sources" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateSources() *SessionUpsert {
+	u.SetExcluded(session.FieldSources)
+	return u
+}
+
+// ClearSources clears the value of the "sources" field.
+func (u *SessionUpsert) ClearSources() *SessionUpsert {
+	u.SetNull(session.FieldSources)
+	return u
+}
+
+// SetOuterTools sets the "outer_tools" field.
+func (u *SessionUpsert) SetOuterTools(v []string) *SessionUpsert {
+	u.Set(session.FieldOuterTools, v)
+	return u
+}
+
+// UpdateOuterTools sets the "outer_tools" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateOuterTools() *SessionUpsert {
+	u.SetExcluded(session.FieldOuterTools)
+	return u
+}
+
+// ClearOuterTools clears the value of the "outer_tools" field.
+func (u *SessionUpsert) ClearOuterTools() *SessionUpsert {
+	u.SetNull(session.FieldOuterTools)
+	return u
+}
+
+// SetDeclaredHuman sets the "declared_human" field.
+func (u *SessionUpsert) SetDeclaredHuman(v bool) *SessionUpsert {
+	u.Set(session.FieldDeclaredHuman, v)
+	return u
+}
+
+// UpdateDeclaredHuman sets the "declared_human" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateDeclaredHuman() *SessionUpsert {
+	u.SetExcluded(session.FieldDeclaredHuman)
+	return u
+}
+
+// SetFlags sets the "flags" field.
+func (u *SessionUpsert) SetFlags(v []string) *SessionUpsert {
+	u.Set(session.FieldFlags, v)
+	return u
+}
+
+// UpdateFlags sets the "flags" field to the value that was provided on create.
+func (u *SessionUpsert) UpdateFlags() *SessionUpsert {
+	u.SetExcluded(session.FieldFlags)
+	return u
+}
+
+// ClearFlags clears the value of the "flags" field.
+func (u *SessionUpsert) ClearFlags() *SessionUpsert {
+	u.SetNull(session.FieldFlags)
 	return u
 }
 
@@ -538,6 +1140,265 @@ func (u *SessionUpsertOne) UpdateAgentKind() *SessionUpsertOne {
 func (u *SessionUpsertOne) ClearAgentKind() *SessionUpsertOne {
 	return u.Update(func(s *SessionUpsert) {
 		s.ClearAgentKind()
+	})
+}
+
+// SetTool sets the "tool" field.
+func (u *SessionUpsertOne) SetTool(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetTool(v)
+	})
+}
+
+// UpdateTool sets the "tool" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateTool() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateTool()
+	})
+}
+
+// SetToolSessionID sets the "tool_session_id" field.
+func (u *SessionUpsertOne) SetToolSessionID(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetToolSessionID(v)
+	})
+}
+
+// UpdateToolSessionID sets the "tool_session_id" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateToolSessionID() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateToolSessionID()
+	})
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (u *SessionUpsertOne) SetToolVersion(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetToolVersion(v)
+	})
+}
+
+// UpdateToolVersion sets the "tool_version" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateToolVersion() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateToolVersion()
+	})
+}
+
+// SetModel sets the "model" field.
+func (u *SessionUpsertOne) SetModel(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetModel(v)
+	})
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateModel() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateModel()
+	})
+}
+
+// SetMachineID sets the "machine_id" field.
+func (u *SessionUpsertOne) SetMachineID(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetMachineID(v)
+	})
+}
+
+// UpdateMachineID sets the "machine_id" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateMachineID() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateMachineID()
+	})
+}
+
+// SetRunID sets the "run_id" field.
+func (u *SessionUpsertOne) SetRunID(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetRunID(v)
+	})
+}
+
+// UpdateRunID sets the "run_id" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateRunID() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateRunID()
+	})
+}
+
+// SetRepo sets the "repo" field.
+func (u *SessionUpsertOne) SetRepo(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetRepo(v)
+	})
+}
+
+// UpdateRepo sets the "repo" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateRepo() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateRepo()
+	})
+}
+
+// SetBranch sets the "branch" field.
+func (u *SessionUpsertOne) SetBranch(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetBranch(v)
+	})
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateBranch() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateBranch()
+	})
+}
+
+// SetCwd sets the "cwd" field.
+func (u *SessionUpsertOne) SetCwd(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetCwd(v)
+	})
+}
+
+// UpdateCwd sets the "cwd" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateCwd() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateCwd()
+	})
+}
+
+// SetTerminal sets the "terminal" field.
+func (u *SessionUpsertOne) SetTerminal(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetTerminal(v)
+	})
+}
+
+// UpdateTerminal sets the "terminal" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateTerminal() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateTerminal()
+	})
+}
+
+// SetCi sets the "ci" field.
+func (u *SessionUpsertOne) SetCi(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetCi(v)
+	})
+}
+
+// UpdateCi sets the "ci" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateCi() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateCi()
+	})
+}
+
+// SetParentSessionID sets the "parent_session_id" field.
+func (u *SessionUpsertOne) SetParentSessionID(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetParentSessionID(v)
+	})
+}
+
+// UpdateParentSessionID sets the "parent_session_id" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateParentSessionID() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateParentSessionID()
+	})
+}
+
+// SetSignal sets the "signal" field.
+func (u *SessionUpsertOne) SetSignal(v string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetSignal(v)
+	})
+}
+
+// UpdateSignal sets the "signal" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateSignal() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateSignal()
+	})
+}
+
+// SetSources sets the "sources" field.
+func (u *SessionUpsertOne) SetSources(v map[string]string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetSources(v)
+	})
+}
+
+// UpdateSources sets the "sources" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateSources() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateSources()
+	})
+}
+
+// ClearSources clears the value of the "sources" field.
+func (u *SessionUpsertOne) ClearSources() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearSources()
+	})
+}
+
+// SetOuterTools sets the "outer_tools" field.
+func (u *SessionUpsertOne) SetOuterTools(v []string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetOuterTools(v)
+	})
+}
+
+// UpdateOuterTools sets the "outer_tools" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateOuterTools() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateOuterTools()
+	})
+}
+
+// ClearOuterTools clears the value of the "outer_tools" field.
+func (u *SessionUpsertOne) ClearOuterTools() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearOuterTools()
+	})
+}
+
+// SetDeclaredHuman sets the "declared_human" field.
+func (u *SessionUpsertOne) SetDeclaredHuman(v bool) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetDeclaredHuman(v)
+	})
+}
+
+// UpdateDeclaredHuman sets the "declared_human" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateDeclaredHuman() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateDeclaredHuman()
+	})
+}
+
+// SetFlags sets the "flags" field.
+func (u *SessionUpsertOne) SetFlags(v []string) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetFlags(v)
+	})
+}
+
+// UpdateFlags sets the "flags" field to the value that was provided on create.
+func (u *SessionUpsertOne) UpdateFlags() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateFlags()
+	})
+}
+
+// ClearFlags clears the value of the "flags" field.
+func (u *SessionUpsertOne) ClearFlags() *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearFlags()
 	})
 }
 
@@ -850,6 +1711,265 @@ func (u *SessionUpsertBulk) UpdateAgentKind() *SessionUpsertBulk {
 func (u *SessionUpsertBulk) ClearAgentKind() *SessionUpsertBulk {
 	return u.Update(func(s *SessionUpsert) {
 		s.ClearAgentKind()
+	})
+}
+
+// SetTool sets the "tool" field.
+func (u *SessionUpsertBulk) SetTool(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetTool(v)
+	})
+}
+
+// UpdateTool sets the "tool" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateTool() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateTool()
+	})
+}
+
+// SetToolSessionID sets the "tool_session_id" field.
+func (u *SessionUpsertBulk) SetToolSessionID(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetToolSessionID(v)
+	})
+}
+
+// UpdateToolSessionID sets the "tool_session_id" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateToolSessionID() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateToolSessionID()
+	})
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (u *SessionUpsertBulk) SetToolVersion(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetToolVersion(v)
+	})
+}
+
+// UpdateToolVersion sets the "tool_version" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateToolVersion() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateToolVersion()
+	})
+}
+
+// SetModel sets the "model" field.
+func (u *SessionUpsertBulk) SetModel(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetModel(v)
+	})
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateModel() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateModel()
+	})
+}
+
+// SetMachineID sets the "machine_id" field.
+func (u *SessionUpsertBulk) SetMachineID(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetMachineID(v)
+	})
+}
+
+// UpdateMachineID sets the "machine_id" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateMachineID() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateMachineID()
+	})
+}
+
+// SetRunID sets the "run_id" field.
+func (u *SessionUpsertBulk) SetRunID(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetRunID(v)
+	})
+}
+
+// UpdateRunID sets the "run_id" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateRunID() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateRunID()
+	})
+}
+
+// SetRepo sets the "repo" field.
+func (u *SessionUpsertBulk) SetRepo(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetRepo(v)
+	})
+}
+
+// UpdateRepo sets the "repo" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateRepo() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateRepo()
+	})
+}
+
+// SetBranch sets the "branch" field.
+func (u *SessionUpsertBulk) SetBranch(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetBranch(v)
+	})
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateBranch() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateBranch()
+	})
+}
+
+// SetCwd sets the "cwd" field.
+func (u *SessionUpsertBulk) SetCwd(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetCwd(v)
+	})
+}
+
+// UpdateCwd sets the "cwd" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateCwd() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateCwd()
+	})
+}
+
+// SetTerminal sets the "terminal" field.
+func (u *SessionUpsertBulk) SetTerminal(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetTerminal(v)
+	})
+}
+
+// UpdateTerminal sets the "terminal" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateTerminal() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateTerminal()
+	})
+}
+
+// SetCi sets the "ci" field.
+func (u *SessionUpsertBulk) SetCi(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetCi(v)
+	})
+}
+
+// UpdateCi sets the "ci" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateCi() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateCi()
+	})
+}
+
+// SetParentSessionID sets the "parent_session_id" field.
+func (u *SessionUpsertBulk) SetParentSessionID(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetParentSessionID(v)
+	})
+}
+
+// UpdateParentSessionID sets the "parent_session_id" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateParentSessionID() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateParentSessionID()
+	})
+}
+
+// SetSignal sets the "signal" field.
+func (u *SessionUpsertBulk) SetSignal(v string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetSignal(v)
+	})
+}
+
+// UpdateSignal sets the "signal" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateSignal() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateSignal()
+	})
+}
+
+// SetSources sets the "sources" field.
+func (u *SessionUpsertBulk) SetSources(v map[string]string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetSources(v)
+	})
+}
+
+// UpdateSources sets the "sources" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateSources() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateSources()
+	})
+}
+
+// ClearSources clears the value of the "sources" field.
+func (u *SessionUpsertBulk) ClearSources() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearSources()
+	})
+}
+
+// SetOuterTools sets the "outer_tools" field.
+func (u *SessionUpsertBulk) SetOuterTools(v []string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetOuterTools(v)
+	})
+}
+
+// UpdateOuterTools sets the "outer_tools" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateOuterTools() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateOuterTools()
+	})
+}
+
+// ClearOuterTools clears the value of the "outer_tools" field.
+func (u *SessionUpsertBulk) ClearOuterTools() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearOuterTools()
+	})
+}
+
+// SetDeclaredHuman sets the "declared_human" field.
+func (u *SessionUpsertBulk) SetDeclaredHuman(v bool) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetDeclaredHuman(v)
+	})
+}
+
+// UpdateDeclaredHuman sets the "declared_human" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateDeclaredHuman() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateDeclaredHuman()
+	})
+}
+
+// SetFlags sets the "flags" field.
+func (u *SessionUpsertBulk) SetFlags(v []string) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.SetFlags(v)
+	})
+}
+
+// UpdateFlags sets the "flags" field to the value that was provided on create.
+func (u *SessionUpsertBulk) UpdateFlags() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.UpdateFlags()
+	})
+}
+
+// ClearFlags clears the value of the "flags" field.
+func (u *SessionUpsertBulk) ClearFlags() *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.ClearFlags()
 	})
 }
 

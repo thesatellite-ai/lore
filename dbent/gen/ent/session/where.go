@@ -99,6 +99,76 @@ func AgentKind(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldAgentKind, v))
 }
 
+// Tool applies equality check predicate on the "tool" field. It's identical to ToolEQ.
+func Tool(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldTool, v))
+}
+
+// ToolSessionID applies equality check predicate on the "tool_session_id" field. It's identical to ToolSessionIDEQ.
+func ToolSessionID(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldToolSessionID, v))
+}
+
+// ToolVersion applies equality check predicate on the "tool_version" field. It's identical to ToolVersionEQ.
+func ToolVersion(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldToolVersion, v))
+}
+
+// Model applies equality check predicate on the "model" field. It's identical to ModelEQ.
+func Model(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldModel, v))
+}
+
+// MachineID applies equality check predicate on the "machine_id" field. It's identical to MachineIDEQ.
+func MachineID(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldMachineID, v))
+}
+
+// RunID applies equality check predicate on the "run_id" field. It's identical to RunIDEQ.
+func RunID(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldRunID, v))
+}
+
+// Repo applies equality check predicate on the "repo" field. It's identical to RepoEQ.
+func Repo(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldRepo, v))
+}
+
+// Branch applies equality check predicate on the "branch" field. It's identical to BranchEQ.
+func Branch(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldBranch, v))
+}
+
+// Cwd applies equality check predicate on the "cwd" field. It's identical to CwdEQ.
+func Cwd(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCwd, v))
+}
+
+// Terminal applies equality check predicate on the "terminal" field. It's identical to TerminalEQ.
+func Terminal(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldTerminal, v))
+}
+
+// Ci applies equality check predicate on the "ci" field. It's identical to CiEQ.
+func Ci(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCi, v))
+}
+
+// ParentSessionID applies equality check predicate on the "parent_session_id" field. It's identical to ParentSessionIDEQ.
+func ParentSessionID(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldParentSessionID, v))
+}
+
+// Signal applies equality check predicate on the "signal" field. It's identical to SignalEQ.
+func Signal(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldSignal, v))
+}
+
+// DeclaredHuman applies equality check predicate on the "declared_human" field. It's identical to DeclaredHumanEQ.
+func DeclaredHuman(v bool) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldDeclaredHuman, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldCreatedAt, v))
@@ -482,6 +552,891 @@ func AgentKindEqualFold(v string) predicate.Session {
 // AgentKindContainsFold applies the ContainsFold predicate on the "agent_kind" field.
 func AgentKindContainsFold(v string) predicate.Session {
 	return predicate.Session(sql.FieldContainsFold(FieldAgentKind, v))
+}
+
+// ToolEQ applies the EQ predicate on the "tool" field.
+func ToolEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldTool, v))
+}
+
+// ToolNEQ applies the NEQ predicate on the "tool" field.
+func ToolNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldTool, v))
+}
+
+// ToolIn applies the In predicate on the "tool" field.
+func ToolIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldTool, vs...))
+}
+
+// ToolNotIn applies the NotIn predicate on the "tool" field.
+func ToolNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldTool, vs...))
+}
+
+// ToolGT applies the GT predicate on the "tool" field.
+func ToolGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldTool, v))
+}
+
+// ToolGTE applies the GTE predicate on the "tool" field.
+func ToolGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldTool, v))
+}
+
+// ToolLT applies the LT predicate on the "tool" field.
+func ToolLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldTool, v))
+}
+
+// ToolLTE applies the LTE predicate on the "tool" field.
+func ToolLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldTool, v))
+}
+
+// ToolContains applies the Contains predicate on the "tool" field.
+func ToolContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldTool, v))
+}
+
+// ToolHasPrefix applies the HasPrefix predicate on the "tool" field.
+func ToolHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldTool, v))
+}
+
+// ToolHasSuffix applies the HasSuffix predicate on the "tool" field.
+func ToolHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldTool, v))
+}
+
+// ToolEqualFold applies the EqualFold predicate on the "tool" field.
+func ToolEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldTool, v))
+}
+
+// ToolContainsFold applies the ContainsFold predicate on the "tool" field.
+func ToolContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldTool, v))
+}
+
+// ToolSessionIDEQ applies the EQ predicate on the "tool_session_id" field.
+func ToolSessionIDEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldToolSessionID, v))
+}
+
+// ToolSessionIDNEQ applies the NEQ predicate on the "tool_session_id" field.
+func ToolSessionIDNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldToolSessionID, v))
+}
+
+// ToolSessionIDIn applies the In predicate on the "tool_session_id" field.
+func ToolSessionIDIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldToolSessionID, vs...))
+}
+
+// ToolSessionIDNotIn applies the NotIn predicate on the "tool_session_id" field.
+func ToolSessionIDNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldToolSessionID, vs...))
+}
+
+// ToolSessionIDGT applies the GT predicate on the "tool_session_id" field.
+func ToolSessionIDGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldToolSessionID, v))
+}
+
+// ToolSessionIDGTE applies the GTE predicate on the "tool_session_id" field.
+func ToolSessionIDGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldToolSessionID, v))
+}
+
+// ToolSessionIDLT applies the LT predicate on the "tool_session_id" field.
+func ToolSessionIDLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldToolSessionID, v))
+}
+
+// ToolSessionIDLTE applies the LTE predicate on the "tool_session_id" field.
+func ToolSessionIDLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldToolSessionID, v))
+}
+
+// ToolSessionIDContains applies the Contains predicate on the "tool_session_id" field.
+func ToolSessionIDContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldToolSessionID, v))
+}
+
+// ToolSessionIDHasPrefix applies the HasPrefix predicate on the "tool_session_id" field.
+func ToolSessionIDHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldToolSessionID, v))
+}
+
+// ToolSessionIDHasSuffix applies the HasSuffix predicate on the "tool_session_id" field.
+func ToolSessionIDHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldToolSessionID, v))
+}
+
+// ToolSessionIDEqualFold applies the EqualFold predicate on the "tool_session_id" field.
+func ToolSessionIDEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldToolSessionID, v))
+}
+
+// ToolSessionIDContainsFold applies the ContainsFold predicate on the "tool_session_id" field.
+func ToolSessionIDContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldToolSessionID, v))
+}
+
+// ToolVersionEQ applies the EQ predicate on the "tool_version" field.
+func ToolVersionEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldToolVersion, v))
+}
+
+// ToolVersionNEQ applies the NEQ predicate on the "tool_version" field.
+func ToolVersionNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldToolVersion, v))
+}
+
+// ToolVersionIn applies the In predicate on the "tool_version" field.
+func ToolVersionIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldToolVersion, vs...))
+}
+
+// ToolVersionNotIn applies the NotIn predicate on the "tool_version" field.
+func ToolVersionNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldToolVersion, vs...))
+}
+
+// ToolVersionGT applies the GT predicate on the "tool_version" field.
+func ToolVersionGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldToolVersion, v))
+}
+
+// ToolVersionGTE applies the GTE predicate on the "tool_version" field.
+func ToolVersionGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldToolVersion, v))
+}
+
+// ToolVersionLT applies the LT predicate on the "tool_version" field.
+func ToolVersionLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldToolVersion, v))
+}
+
+// ToolVersionLTE applies the LTE predicate on the "tool_version" field.
+func ToolVersionLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldToolVersion, v))
+}
+
+// ToolVersionContains applies the Contains predicate on the "tool_version" field.
+func ToolVersionContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldToolVersion, v))
+}
+
+// ToolVersionHasPrefix applies the HasPrefix predicate on the "tool_version" field.
+func ToolVersionHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldToolVersion, v))
+}
+
+// ToolVersionHasSuffix applies the HasSuffix predicate on the "tool_version" field.
+func ToolVersionHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldToolVersion, v))
+}
+
+// ToolVersionEqualFold applies the EqualFold predicate on the "tool_version" field.
+func ToolVersionEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldToolVersion, v))
+}
+
+// ToolVersionContainsFold applies the ContainsFold predicate on the "tool_version" field.
+func ToolVersionContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldToolVersion, v))
+}
+
+// ModelEQ applies the EQ predicate on the "model" field.
+func ModelEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldModel, v))
+}
+
+// ModelNEQ applies the NEQ predicate on the "model" field.
+func ModelNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldModel, v))
+}
+
+// ModelIn applies the In predicate on the "model" field.
+func ModelIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldModel, vs...))
+}
+
+// ModelNotIn applies the NotIn predicate on the "model" field.
+func ModelNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldModel, vs...))
+}
+
+// ModelGT applies the GT predicate on the "model" field.
+func ModelGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldModel, v))
+}
+
+// ModelGTE applies the GTE predicate on the "model" field.
+func ModelGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldModel, v))
+}
+
+// ModelLT applies the LT predicate on the "model" field.
+func ModelLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldModel, v))
+}
+
+// ModelLTE applies the LTE predicate on the "model" field.
+func ModelLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldModel, v))
+}
+
+// ModelContains applies the Contains predicate on the "model" field.
+func ModelContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldModel, v))
+}
+
+// ModelHasPrefix applies the HasPrefix predicate on the "model" field.
+func ModelHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldModel, v))
+}
+
+// ModelHasSuffix applies the HasSuffix predicate on the "model" field.
+func ModelHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldModel, v))
+}
+
+// ModelEqualFold applies the EqualFold predicate on the "model" field.
+func ModelEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldModel, v))
+}
+
+// ModelContainsFold applies the ContainsFold predicate on the "model" field.
+func ModelContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldModel, v))
+}
+
+// MachineIDEQ applies the EQ predicate on the "machine_id" field.
+func MachineIDEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldMachineID, v))
+}
+
+// MachineIDNEQ applies the NEQ predicate on the "machine_id" field.
+func MachineIDNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldMachineID, v))
+}
+
+// MachineIDIn applies the In predicate on the "machine_id" field.
+func MachineIDIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldMachineID, vs...))
+}
+
+// MachineIDNotIn applies the NotIn predicate on the "machine_id" field.
+func MachineIDNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldMachineID, vs...))
+}
+
+// MachineIDGT applies the GT predicate on the "machine_id" field.
+func MachineIDGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldMachineID, v))
+}
+
+// MachineIDGTE applies the GTE predicate on the "machine_id" field.
+func MachineIDGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldMachineID, v))
+}
+
+// MachineIDLT applies the LT predicate on the "machine_id" field.
+func MachineIDLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldMachineID, v))
+}
+
+// MachineIDLTE applies the LTE predicate on the "machine_id" field.
+func MachineIDLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldMachineID, v))
+}
+
+// MachineIDContains applies the Contains predicate on the "machine_id" field.
+func MachineIDContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldMachineID, v))
+}
+
+// MachineIDHasPrefix applies the HasPrefix predicate on the "machine_id" field.
+func MachineIDHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldMachineID, v))
+}
+
+// MachineIDHasSuffix applies the HasSuffix predicate on the "machine_id" field.
+func MachineIDHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldMachineID, v))
+}
+
+// MachineIDEqualFold applies the EqualFold predicate on the "machine_id" field.
+func MachineIDEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldMachineID, v))
+}
+
+// MachineIDContainsFold applies the ContainsFold predicate on the "machine_id" field.
+func MachineIDContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldMachineID, v))
+}
+
+// RunIDEQ applies the EQ predicate on the "run_id" field.
+func RunIDEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldRunID, v))
+}
+
+// RunIDNEQ applies the NEQ predicate on the "run_id" field.
+func RunIDNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldRunID, v))
+}
+
+// RunIDIn applies the In predicate on the "run_id" field.
+func RunIDIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldRunID, vs...))
+}
+
+// RunIDNotIn applies the NotIn predicate on the "run_id" field.
+func RunIDNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldRunID, vs...))
+}
+
+// RunIDGT applies the GT predicate on the "run_id" field.
+func RunIDGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldRunID, v))
+}
+
+// RunIDGTE applies the GTE predicate on the "run_id" field.
+func RunIDGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldRunID, v))
+}
+
+// RunIDLT applies the LT predicate on the "run_id" field.
+func RunIDLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldRunID, v))
+}
+
+// RunIDLTE applies the LTE predicate on the "run_id" field.
+func RunIDLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldRunID, v))
+}
+
+// RunIDContains applies the Contains predicate on the "run_id" field.
+func RunIDContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldRunID, v))
+}
+
+// RunIDHasPrefix applies the HasPrefix predicate on the "run_id" field.
+func RunIDHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldRunID, v))
+}
+
+// RunIDHasSuffix applies the HasSuffix predicate on the "run_id" field.
+func RunIDHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldRunID, v))
+}
+
+// RunIDEqualFold applies the EqualFold predicate on the "run_id" field.
+func RunIDEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldRunID, v))
+}
+
+// RunIDContainsFold applies the ContainsFold predicate on the "run_id" field.
+func RunIDContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldRunID, v))
+}
+
+// RepoEQ applies the EQ predicate on the "repo" field.
+func RepoEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldRepo, v))
+}
+
+// RepoNEQ applies the NEQ predicate on the "repo" field.
+func RepoNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldRepo, v))
+}
+
+// RepoIn applies the In predicate on the "repo" field.
+func RepoIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldRepo, vs...))
+}
+
+// RepoNotIn applies the NotIn predicate on the "repo" field.
+func RepoNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldRepo, vs...))
+}
+
+// RepoGT applies the GT predicate on the "repo" field.
+func RepoGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldRepo, v))
+}
+
+// RepoGTE applies the GTE predicate on the "repo" field.
+func RepoGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldRepo, v))
+}
+
+// RepoLT applies the LT predicate on the "repo" field.
+func RepoLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldRepo, v))
+}
+
+// RepoLTE applies the LTE predicate on the "repo" field.
+func RepoLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldRepo, v))
+}
+
+// RepoContains applies the Contains predicate on the "repo" field.
+func RepoContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldRepo, v))
+}
+
+// RepoHasPrefix applies the HasPrefix predicate on the "repo" field.
+func RepoHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldRepo, v))
+}
+
+// RepoHasSuffix applies the HasSuffix predicate on the "repo" field.
+func RepoHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldRepo, v))
+}
+
+// RepoEqualFold applies the EqualFold predicate on the "repo" field.
+func RepoEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldRepo, v))
+}
+
+// RepoContainsFold applies the ContainsFold predicate on the "repo" field.
+func RepoContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldRepo, v))
+}
+
+// BranchEQ applies the EQ predicate on the "branch" field.
+func BranchEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldBranch, v))
+}
+
+// BranchNEQ applies the NEQ predicate on the "branch" field.
+func BranchNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldBranch, v))
+}
+
+// BranchIn applies the In predicate on the "branch" field.
+func BranchIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldBranch, vs...))
+}
+
+// BranchNotIn applies the NotIn predicate on the "branch" field.
+func BranchNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldBranch, vs...))
+}
+
+// BranchGT applies the GT predicate on the "branch" field.
+func BranchGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldBranch, v))
+}
+
+// BranchGTE applies the GTE predicate on the "branch" field.
+func BranchGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldBranch, v))
+}
+
+// BranchLT applies the LT predicate on the "branch" field.
+func BranchLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldBranch, v))
+}
+
+// BranchLTE applies the LTE predicate on the "branch" field.
+func BranchLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldBranch, v))
+}
+
+// BranchContains applies the Contains predicate on the "branch" field.
+func BranchContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldBranch, v))
+}
+
+// BranchHasPrefix applies the HasPrefix predicate on the "branch" field.
+func BranchHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldBranch, v))
+}
+
+// BranchHasSuffix applies the HasSuffix predicate on the "branch" field.
+func BranchHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldBranch, v))
+}
+
+// BranchEqualFold applies the EqualFold predicate on the "branch" field.
+func BranchEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldBranch, v))
+}
+
+// BranchContainsFold applies the ContainsFold predicate on the "branch" field.
+func BranchContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldBranch, v))
+}
+
+// CwdEQ applies the EQ predicate on the "cwd" field.
+func CwdEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCwd, v))
+}
+
+// CwdNEQ applies the NEQ predicate on the "cwd" field.
+func CwdNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldCwd, v))
+}
+
+// CwdIn applies the In predicate on the "cwd" field.
+func CwdIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldCwd, vs...))
+}
+
+// CwdNotIn applies the NotIn predicate on the "cwd" field.
+func CwdNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldCwd, vs...))
+}
+
+// CwdGT applies the GT predicate on the "cwd" field.
+func CwdGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldCwd, v))
+}
+
+// CwdGTE applies the GTE predicate on the "cwd" field.
+func CwdGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldCwd, v))
+}
+
+// CwdLT applies the LT predicate on the "cwd" field.
+func CwdLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldCwd, v))
+}
+
+// CwdLTE applies the LTE predicate on the "cwd" field.
+func CwdLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldCwd, v))
+}
+
+// CwdContains applies the Contains predicate on the "cwd" field.
+func CwdContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldCwd, v))
+}
+
+// CwdHasPrefix applies the HasPrefix predicate on the "cwd" field.
+func CwdHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldCwd, v))
+}
+
+// CwdHasSuffix applies the HasSuffix predicate on the "cwd" field.
+func CwdHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldCwd, v))
+}
+
+// CwdEqualFold applies the EqualFold predicate on the "cwd" field.
+func CwdEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldCwd, v))
+}
+
+// CwdContainsFold applies the ContainsFold predicate on the "cwd" field.
+func CwdContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldCwd, v))
+}
+
+// TerminalEQ applies the EQ predicate on the "terminal" field.
+func TerminalEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldTerminal, v))
+}
+
+// TerminalNEQ applies the NEQ predicate on the "terminal" field.
+func TerminalNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldTerminal, v))
+}
+
+// TerminalIn applies the In predicate on the "terminal" field.
+func TerminalIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldTerminal, vs...))
+}
+
+// TerminalNotIn applies the NotIn predicate on the "terminal" field.
+func TerminalNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldTerminal, vs...))
+}
+
+// TerminalGT applies the GT predicate on the "terminal" field.
+func TerminalGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldTerminal, v))
+}
+
+// TerminalGTE applies the GTE predicate on the "terminal" field.
+func TerminalGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldTerminal, v))
+}
+
+// TerminalLT applies the LT predicate on the "terminal" field.
+func TerminalLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldTerminal, v))
+}
+
+// TerminalLTE applies the LTE predicate on the "terminal" field.
+func TerminalLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldTerminal, v))
+}
+
+// TerminalContains applies the Contains predicate on the "terminal" field.
+func TerminalContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldTerminal, v))
+}
+
+// TerminalHasPrefix applies the HasPrefix predicate on the "terminal" field.
+func TerminalHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldTerminal, v))
+}
+
+// TerminalHasSuffix applies the HasSuffix predicate on the "terminal" field.
+func TerminalHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldTerminal, v))
+}
+
+// TerminalEqualFold applies the EqualFold predicate on the "terminal" field.
+func TerminalEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldTerminal, v))
+}
+
+// TerminalContainsFold applies the ContainsFold predicate on the "terminal" field.
+func TerminalContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldTerminal, v))
+}
+
+// CiEQ applies the EQ predicate on the "ci" field.
+func CiEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCi, v))
+}
+
+// CiNEQ applies the NEQ predicate on the "ci" field.
+func CiNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldCi, v))
+}
+
+// CiIn applies the In predicate on the "ci" field.
+func CiIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldCi, vs...))
+}
+
+// CiNotIn applies the NotIn predicate on the "ci" field.
+func CiNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldCi, vs...))
+}
+
+// CiGT applies the GT predicate on the "ci" field.
+func CiGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldCi, v))
+}
+
+// CiGTE applies the GTE predicate on the "ci" field.
+func CiGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldCi, v))
+}
+
+// CiLT applies the LT predicate on the "ci" field.
+func CiLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldCi, v))
+}
+
+// CiLTE applies the LTE predicate on the "ci" field.
+func CiLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldCi, v))
+}
+
+// CiContains applies the Contains predicate on the "ci" field.
+func CiContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldCi, v))
+}
+
+// CiHasPrefix applies the HasPrefix predicate on the "ci" field.
+func CiHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldCi, v))
+}
+
+// CiHasSuffix applies the HasSuffix predicate on the "ci" field.
+func CiHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldCi, v))
+}
+
+// CiEqualFold applies the EqualFold predicate on the "ci" field.
+func CiEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldCi, v))
+}
+
+// CiContainsFold applies the ContainsFold predicate on the "ci" field.
+func CiContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldCi, v))
+}
+
+// ParentSessionIDEQ applies the EQ predicate on the "parent_session_id" field.
+func ParentSessionIDEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldParentSessionID, v))
+}
+
+// ParentSessionIDNEQ applies the NEQ predicate on the "parent_session_id" field.
+func ParentSessionIDNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldParentSessionID, v))
+}
+
+// ParentSessionIDIn applies the In predicate on the "parent_session_id" field.
+func ParentSessionIDIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldParentSessionID, vs...))
+}
+
+// ParentSessionIDNotIn applies the NotIn predicate on the "parent_session_id" field.
+func ParentSessionIDNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldParentSessionID, vs...))
+}
+
+// ParentSessionIDGT applies the GT predicate on the "parent_session_id" field.
+func ParentSessionIDGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldParentSessionID, v))
+}
+
+// ParentSessionIDGTE applies the GTE predicate on the "parent_session_id" field.
+func ParentSessionIDGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldParentSessionID, v))
+}
+
+// ParentSessionIDLT applies the LT predicate on the "parent_session_id" field.
+func ParentSessionIDLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldParentSessionID, v))
+}
+
+// ParentSessionIDLTE applies the LTE predicate on the "parent_session_id" field.
+func ParentSessionIDLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldParentSessionID, v))
+}
+
+// ParentSessionIDContains applies the Contains predicate on the "parent_session_id" field.
+func ParentSessionIDContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldParentSessionID, v))
+}
+
+// ParentSessionIDHasPrefix applies the HasPrefix predicate on the "parent_session_id" field.
+func ParentSessionIDHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldParentSessionID, v))
+}
+
+// ParentSessionIDHasSuffix applies the HasSuffix predicate on the "parent_session_id" field.
+func ParentSessionIDHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldParentSessionID, v))
+}
+
+// ParentSessionIDEqualFold applies the EqualFold predicate on the "parent_session_id" field.
+func ParentSessionIDEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldParentSessionID, v))
+}
+
+// ParentSessionIDContainsFold applies the ContainsFold predicate on the "parent_session_id" field.
+func ParentSessionIDContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldParentSessionID, v))
+}
+
+// SignalEQ applies the EQ predicate on the "signal" field.
+func SignalEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldSignal, v))
+}
+
+// SignalNEQ applies the NEQ predicate on the "signal" field.
+func SignalNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldSignal, v))
+}
+
+// SignalIn applies the In predicate on the "signal" field.
+func SignalIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldSignal, vs...))
+}
+
+// SignalNotIn applies the NotIn predicate on the "signal" field.
+func SignalNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldSignal, vs...))
+}
+
+// SignalGT applies the GT predicate on the "signal" field.
+func SignalGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldSignal, v))
+}
+
+// SignalGTE applies the GTE predicate on the "signal" field.
+func SignalGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldSignal, v))
+}
+
+// SignalLT applies the LT predicate on the "signal" field.
+func SignalLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldSignal, v))
+}
+
+// SignalLTE applies the LTE predicate on the "signal" field.
+func SignalLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldSignal, v))
+}
+
+// SignalContains applies the Contains predicate on the "signal" field.
+func SignalContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldSignal, v))
+}
+
+// SignalHasPrefix applies the HasPrefix predicate on the "signal" field.
+func SignalHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldSignal, v))
+}
+
+// SignalHasSuffix applies the HasSuffix predicate on the "signal" field.
+func SignalHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldSignal, v))
+}
+
+// SignalEqualFold applies the EqualFold predicate on the "signal" field.
+func SignalEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldSignal, v))
+}
+
+// SignalContainsFold applies the ContainsFold predicate on the "signal" field.
+func SignalContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldSignal, v))
+}
+
+// SourcesIsNil applies the IsNil predicate on the "sources" field.
+func SourcesIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldSources))
+}
+
+// SourcesNotNil applies the NotNil predicate on the "sources" field.
+func SourcesNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldSources))
+}
+
+// OuterToolsIsNil applies the IsNil predicate on the "outer_tools" field.
+func OuterToolsIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldOuterTools))
+}
+
+// OuterToolsNotNil applies the NotNil predicate on the "outer_tools" field.
+func OuterToolsNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldOuterTools))
+}
+
+// DeclaredHumanEQ applies the EQ predicate on the "declared_human" field.
+func DeclaredHumanEQ(v bool) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldDeclaredHuman, v))
+}
+
+// DeclaredHumanNEQ applies the NEQ predicate on the "declared_human" field.
+func DeclaredHumanNEQ(v bool) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldDeclaredHuman, v))
+}
+
+// FlagsIsNil applies the IsNil predicate on the "flags" field.
+func FlagsIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldFlags))
+}
+
+// FlagsNotNil applies the NotNil predicate on the "flags" field.
+func FlagsNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldFlags))
 }
 
 // And groups predicates with the AND operator between them.

@@ -189,6 +189,34 @@ func (_c *AuditLogCreate) SetNillableReason(v *string) *AuditLogCreate {
 	return _c
 }
 
+// SetSessionID sets the "session_id" field.
+func (_c *AuditLogCreate) SetSessionID(v string) *AuditLogCreate {
+	_c.mutation.SetSessionID(v)
+	return _c
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_c *AuditLogCreate) SetNillableSessionID(v *string) *AuditLogCreate {
+	if v != nil {
+		_c.SetSessionID(*v)
+	}
+	return _c
+}
+
+// SetConfirmed sets the "confirmed" field.
+func (_c *AuditLogCreate) SetConfirmed(v bool) *AuditLogCreate {
+	_c.mutation.SetConfirmed(v)
+	return _c
+}
+
+// SetNillableConfirmed sets the "confirmed" field if the given value is not nil.
+func (_c *AuditLogCreate) SetNillableConfirmed(v *bool) *AuditLogCreate {
+	if v != nil {
+		_c.SetConfirmed(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AuditLogCreate) SetID(v string) *AuditLogCreate {
 	_c.mutation.SetID(v)
@@ -250,6 +278,10 @@ func (_c *AuditLogCreate) defaults() {
 		v := auditlog.DefaultOverride
 		_c.mutation.SetOverride(v)
 	}
+	if _, ok := _c.mutation.Confirmed(); !ok {
+		v := auditlog.DefaultConfirmed
+		_c.mutation.SetConfirmed(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := auditlog.DefaultID()
 		_c.mutation.SetID(v)
@@ -287,6 +319,9 @@ func (_c *AuditLogCreate) check() error {
 	}
 	if _, ok := _c.mutation.Override(); !ok {
 		return &ValidationError{Name: "override", err: errors.New(`ent: missing required field "AuditLog.override"`)}
+	}
+	if _, ok := _c.mutation.Confirmed(); !ok {
+		return &ValidationError{Name: "confirmed", err: errors.New(`ent: missing required field "AuditLog.confirmed"`)}
 	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := auditlog.IDValidator(v); err != nil {
@@ -380,6 +415,14 @@ func (_c *AuditLogCreate) createSpec() (*AuditLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Reason(); ok {
 		_spec.SetField(auditlog.FieldReason, field.TypeString, value)
 		_node.Reason = &value
+	}
+	if value, ok := _c.mutation.SessionID(); ok {
+		_spec.SetField(auditlog.FieldSessionID, field.TypeString, value)
+		_node.SessionID = &value
+	}
+	if value, ok := _c.mutation.Confirmed(); ok {
+		_spec.SetField(auditlog.FieldConfirmed, field.TypeBool, value)
+		_node.Confirmed = value
 	}
 	return _node, _spec
 }
@@ -622,6 +665,36 @@ func (u *AuditLogUpsert) UpdateReason() *AuditLogUpsert {
 // ClearReason clears the value of the "reason" field.
 func (u *AuditLogUpsert) ClearReason() *AuditLogUpsert {
 	u.SetNull(auditlog.FieldReason)
+	return u
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *AuditLogUpsert) SetSessionID(v string) *AuditLogUpsert {
+	u.Set(auditlog.FieldSessionID, v)
+	return u
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *AuditLogUpsert) UpdateSessionID() *AuditLogUpsert {
+	u.SetExcluded(auditlog.FieldSessionID)
+	return u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *AuditLogUpsert) ClearSessionID() *AuditLogUpsert {
+	u.SetNull(auditlog.FieldSessionID)
+	return u
+}
+
+// SetConfirmed sets the "confirmed" field.
+func (u *AuditLogUpsert) SetConfirmed(v bool) *AuditLogUpsert {
+	u.Set(auditlog.FieldConfirmed, v)
+	return u
+}
+
+// UpdateConfirmed sets the "confirmed" field to the value that was provided on create.
+func (u *AuditLogUpsert) UpdateConfirmed() *AuditLogUpsert {
+	u.SetExcluded(auditlog.FieldConfirmed)
 	return u
 }
 
@@ -897,6 +970,41 @@ func (u *AuditLogUpsertOne) UpdateReason() *AuditLogUpsertOne {
 func (u *AuditLogUpsertOne) ClearReason() *AuditLogUpsertOne {
 	return u.Update(func(s *AuditLogUpsert) {
 		s.ClearReason()
+	})
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *AuditLogUpsertOne) SetSessionID(v string) *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetSessionID(v)
+	})
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *AuditLogUpsertOne) UpdateSessionID() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateSessionID()
+	})
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *AuditLogUpsertOne) ClearSessionID() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearSessionID()
+	})
+}
+
+// SetConfirmed sets the "confirmed" field.
+func (u *AuditLogUpsertOne) SetConfirmed(v bool) *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetConfirmed(v)
+	})
+}
+
+// UpdateConfirmed sets the "confirmed" field to the value that was provided on create.
+func (u *AuditLogUpsertOne) UpdateConfirmed() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateConfirmed()
 	})
 }
 
@@ -1339,6 +1447,41 @@ func (u *AuditLogUpsertBulk) UpdateReason() *AuditLogUpsertBulk {
 func (u *AuditLogUpsertBulk) ClearReason() *AuditLogUpsertBulk {
 	return u.Update(func(s *AuditLogUpsert) {
 		s.ClearReason()
+	})
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *AuditLogUpsertBulk) SetSessionID(v string) *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetSessionID(v)
+	})
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *AuditLogUpsertBulk) UpdateSessionID() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateSessionID()
+	})
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *AuditLogUpsertBulk) ClearSessionID() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearSessionID()
+	})
+}
+
+// SetConfirmed sets the "confirmed" field.
+func (u *AuditLogUpsertBulk) SetConfirmed(v bool) *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetConfirmed(v)
+	})
+}
+
+// UpdateConfirmed sets the "confirmed" field to the value that was provided on create.
+func (u *AuditLogUpsertBulk) UpdateConfirmed() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateConfirmed()
 	})
 }
 

@@ -147,6 +147,8 @@ var (
 		{Name: "after_hash", Type: field.TypeString, Nullable: true},
 		{Name: "prev_log_hash", Type: field.TypeString, Nullable: true},
 		{Name: "reason", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "session_id", Type: field.TypeString, Nullable: true},
+		{Name: "confirmed", Type: field.TypeBool, Default: false},
 	}
 	// AuditLogsTable holds the schema information for the "audit_logs" table.
 	AuditLogsTable = &schema.Table{
@@ -1438,12 +1440,36 @@ var (
 		{Name: "ended_at", Type: field.TypeTime, Nullable: true},
 		{Name: "actor_id", Type: field.TypeString, Nullable: true},
 		{Name: "agent_kind", Type: field.TypeString, Nullable: true},
+		{Name: "tool", Type: field.TypeString, Default: ""},
+		{Name: "tool_session_id", Type: field.TypeString, Default: ""},
+		{Name: "tool_version", Type: field.TypeString, Default: ""},
+		{Name: "model", Type: field.TypeString, Default: ""},
+		{Name: "machine_id", Type: field.TypeString, Default: ""},
+		{Name: "run_id", Type: field.TypeString, Default: ""},
+		{Name: "repo", Type: field.TypeString, Default: ""},
+		{Name: "branch", Type: field.TypeString, Default: ""},
+		{Name: "cwd", Type: field.TypeString, Default: ""},
+		{Name: "terminal", Type: field.TypeString, Default: ""},
+		{Name: "ci", Type: field.TypeString, Default: ""},
+		{Name: "parent_session_id", Type: field.TypeString, Default: ""},
+		{Name: "signal", Type: field.TypeString, Default: ""},
+		{Name: "sources", Type: field.TypeJSON, Nullable: true},
+		{Name: "outer_tools", Type: field.TypeJSON, Nullable: true},
+		{Name: "declared_human", Type: field.TypeBool, Default: false},
+		{Name: "flags", Type: field.TypeJSON, Nullable: true},
 	}
 	// SessionsTable holds the schema information for the "sessions" table.
 	SessionsTable = &schema.Table{
 		Name:       "sessions",
 		Columns:    SessionsColumns,
 		PrimaryKey: []*schema.Column{SessionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "session_actor_id_tool_tool_session_id",
+				Unique:  false,
+				Columns: []*schema.Column{SessionsColumns[6], SessionsColumns[8], SessionsColumns[9]},
+			},
+		},
 	}
 	// SnapshotsColumns holds the columns for the "snapshots" table.
 	SnapshotsColumns = []*schema.Column{

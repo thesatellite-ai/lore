@@ -4257,6 +4257,8 @@ type AuditLogMutation struct {
 	after_hash        *string
 	prev_log_hash     *string
 	reason            *string
+	session_id        *string
+	confirmed         *bool
 	clearedFields     map[string]struct{}
 	done              bool
 	oldValue          func(context.Context) (*AuditLog, error)
@@ -4939,6 +4941,91 @@ func (m *AuditLogMutation) ResetReason() {
 	delete(m.clearedFields, auditlog.FieldReason)
 }
 
+// SetSessionID sets the "session_id" field.
+func (m *AuditLogMutation) SetSessionID(s string) {
+	m.session_id = &s
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *AuditLogMutation) SessionID() (r string, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the AuditLog entity.
+// If the AuditLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditLogMutation) OldSessionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (m *AuditLogMutation) ClearSessionID() {
+	m.session_id = nil
+	m.clearedFields[auditlog.FieldSessionID] = struct{}{}
+}
+
+// SessionIDCleared returns if the "session_id" field was cleared in this mutation.
+func (m *AuditLogMutation) SessionIDCleared() bool {
+	_, ok := m.clearedFields[auditlog.FieldSessionID]
+	return ok
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *AuditLogMutation) ResetSessionID() {
+	m.session_id = nil
+	delete(m.clearedFields, auditlog.FieldSessionID)
+}
+
+// SetConfirmed sets the "confirmed" field.
+func (m *AuditLogMutation) SetConfirmed(b bool) {
+	m.confirmed = &b
+}
+
+// Confirmed returns the value of the "confirmed" field in the mutation.
+func (m *AuditLogMutation) Confirmed() (r bool, exists bool) {
+	v := m.confirmed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfirmed returns the old "confirmed" field's value of the AuditLog entity.
+// If the AuditLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditLogMutation) OldConfirmed(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfirmed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfirmed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfirmed: %w", err)
+	}
+	return oldValue.Confirmed, nil
+}
+
+// ResetConfirmed resets all changes to the "confirmed" field.
+func (m *AuditLogMutation) ResetConfirmed() {
+	m.confirmed = nil
+}
+
 // Where appends a list predicates to the AuditLogMutation builder.
 func (m *AuditLogMutation) Where(ps ...predicate.AuditLog) {
 	m.predicates = append(m.predicates, ps...)
@@ -4973,7 +5060,7 @@ func (m *AuditLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditLogMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 15)
 	if m.created_at != nil {
 		fields = append(fields, auditlog.FieldCreatedAt)
 	}
@@ -5013,6 +5100,12 @@ func (m *AuditLogMutation) Fields() []string {
 	if m.reason != nil {
 		fields = append(fields, auditlog.FieldReason)
 	}
+	if m.session_id != nil {
+		fields = append(fields, auditlog.FieldSessionID)
+	}
+	if m.confirmed != nil {
+		fields = append(fields, auditlog.FieldConfirmed)
+	}
 	return fields
 }
 
@@ -5047,6 +5140,10 @@ func (m *AuditLogMutation) Field(name string) (ent.Value, bool) {
 		return m.PrevLogHash()
 	case auditlog.FieldReason:
 		return m.Reason()
+	case auditlog.FieldSessionID:
+		return m.SessionID()
+	case auditlog.FieldConfirmed:
+		return m.Confirmed()
 	}
 	return nil, false
 }
@@ -5082,6 +5179,10 @@ func (m *AuditLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldPrevLogHash(ctx)
 	case auditlog.FieldReason:
 		return m.OldReason(ctx)
+	case auditlog.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case auditlog.FieldConfirmed:
+		return m.OldConfirmed(ctx)
 	}
 	return nil, fmt.Errorf("unknown AuditLog field %s", name)
 }
@@ -5182,6 +5283,20 @@ func (m *AuditLogMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetReason(v)
 		return nil
+	case auditlog.FieldSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case auditlog.FieldConfirmed:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfirmed(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AuditLog field %s", name)
 }
@@ -5236,6 +5351,9 @@ func (m *AuditLogMutation) ClearedFields() []string {
 	if m.FieldCleared(auditlog.FieldReason) {
 		fields = append(fields, auditlog.FieldReason)
 	}
+	if m.FieldCleared(auditlog.FieldSessionID) {
+		fields = append(fields, auditlog.FieldSessionID)
+	}
 	return fields
 }
 
@@ -5273,6 +5391,9 @@ func (m *AuditLogMutation) ClearField(name string) error {
 		return nil
 	case auditlog.FieldReason:
 		m.ClearReason()
+		return nil
+	case auditlog.FieldSessionID:
+		m.ClearSessionID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditLog nullable field %s", name)
@@ -5320,6 +5441,12 @@ func (m *AuditLogMutation) ResetField(name string) error {
 		return nil
 	case auditlog.FieldReason:
 		m.ResetReason()
+		return nil
+	case auditlog.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case auditlog.FieldConfirmed:
+		m.ResetConfirmed()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditLog field %s", name)
@@ -46648,20 +46775,39 @@ func (m *SchemaMigrationMutation) ResetEdge(name string) error {
 // SessionMutation represents an operation that mutates the Session nodes in the graph.
 type SessionMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *string
-	created_at    *time.Time
-	updated_at    *time.Time
-	project_id    *string
-	started_at    *time.Time
-	ended_at      *time.Time
-	actor_id      *string
-	agent_kind    *string
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*Session, error)
-	predicates    []predicate.Session
+	op                Op
+	typ               string
+	id                *string
+	created_at        *time.Time
+	updated_at        *time.Time
+	project_id        *string
+	started_at        *time.Time
+	ended_at          *time.Time
+	actor_id          *string
+	agent_kind        *string
+	tool              *string
+	tool_session_id   *string
+	tool_version      *string
+	model             *string
+	machine_id        *string
+	run_id            *string
+	repo              *string
+	branch            *string
+	cwd               *string
+	terminal          *string
+	ci                *string
+	parent_session_id *string
+	signal            *string
+	sources           *map[string]string
+	outer_tools       *[]string
+	appendouter_tools []string
+	declared_human    *bool
+	flags             *[]string
+	appendflags       []string
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*Session, error)
+	predicates        []predicate.Session
 }
 
 var _ ent.Mutation = (*SessionMutation)(nil)
@@ -47059,6 +47205,689 @@ func (m *SessionMutation) ResetAgentKind() {
 	delete(m.clearedFields, session.FieldAgentKind)
 }
 
+// SetTool sets the "tool" field.
+func (m *SessionMutation) SetTool(s string) {
+	m.tool = &s
+}
+
+// Tool returns the value of the "tool" field in the mutation.
+func (m *SessionMutation) Tool() (r string, exists bool) {
+	v := m.tool
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTool returns the old "tool" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldTool(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTool is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTool requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTool: %w", err)
+	}
+	return oldValue.Tool, nil
+}
+
+// ResetTool resets all changes to the "tool" field.
+func (m *SessionMutation) ResetTool() {
+	m.tool = nil
+}
+
+// SetToolSessionID sets the "tool_session_id" field.
+func (m *SessionMutation) SetToolSessionID(s string) {
+	m.tool_session_id = &s
+}
+
+// ToolSessionID returns the value of the "tool_session_id" field in the mutation.
+func (m *SessionMutation) ToolSessionID() (r string, exists bool) {
+	v := m.tool_session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolSessionID returns the old "tool_session_id" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldToolSessionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolSessionID: %w", err)
+	}
+	return oldValue.ToolSessionID, nil
+}
+
+// ResetToolSessionID resets all changes to the "tool_session_id" field.
+func (m *SessionMutation) ResetToolSessionID() {
+	m.tool_session_id = nil
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (m *SessionMutation) SetToolVersion(s string) {
+	m.tool_version = &s
+}
+
+// ToolVersion returns the value of the "tool_version" field in the mutation.
+func (m *SessionMutation) ToolVersion() (r string, exists bool) {
+	v := m.tool_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolVersion returns the old "tool_version" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldToolVersion(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolVersion: %w", err)
+	}
+	return oldValue.ToolVersion, nil
+}
+
+// ResetToolVersion resets all changes to the "tool_version" field.
+func (m *SessionMutation) ResetToolVersion() {
+	m.tool_version = nil
+}
+
+// SetModel sets the "model" field.
+func (m *SessionMutation) SetModel(s string) {
+	m.model = &s
+}
+
+// Model returns the value of the "model" field in the mutation.
+func (m *SessionMutation) Model() (r string, exists bool) {
+	v := m.model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModel returns the old "model" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModel: %w", err)
+	}
+	return oldValue.Model, nil
+}
+
+// ResetModel resets all changes to the "model" field.
+func (m *SessionMutation) ResetModel() {
+	m.model = nil
+}
+
+// SetMachineID sets the "machine_id" field.
+func (m *SessionMutation) SetMachineID(s string) {
+	m.machine_id = &s
+}
+
+// MachineID returns the value of the "machine_id" field in the mutation.
+func (m *SessionMutation) MachineID() (r string, exists bool) {
+	v := m.machine_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMachineID returns the old "machine_id" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldMachineID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMachineID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMachineID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMachineID: %w", err)
+	}
+	return oldValue.MachineID, nil
+}
+
+// ResetMachineID resets all changes to the "machine_id" field.
+func (m *SessionMutation) ResetMachineID() {
+	m.machine_id = nil
+}
+
+// SetRunID sets the "run_id" field.
+func (m *SessionMutation) SetRunID(s string) {
+	m.run_id = &s
+}
+
+// RunID returns the value of the "run_id" field in the mutation.
+func (m *SessionMutation) RunID() (r string, exists bool) {
+	v := m.run_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunID returns the old "run_id" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldRunID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunID: %w", err)
+	}
+	return oldValue.RunID, nil
+}
+
+// ResetRunID resets all changes to the "run_id" field.
+func (m *SessionMutation) ResetRunID() {
+	m.run_id = nil
+}
+
+// SetRepo sets the "repo" field.
+func (m *SessionMutation) SetRepo(s string) {
+	m.repo = &s
+}
+
+// Repo returns the value of the "repo" field in the mutation.
+func (m *SessionMutation) Repo() (r string, exists bool) {
+	v := m.repo
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRepo returns the old "repo" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldRepo(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRepo is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRepo requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRepo: %w", err)
+	}
+	return oldValue.Repo, nil
+}
+
+// ResetRepo resets all changes to the "repo" field.
+func (m *SessionMutation) ResetRepo() {
+	m.repo = nil
+}
+
+// SetBranch sets the "branch" field.
+func (m *SessionMutation) SetBranch(s string) {
+	m.branch = &s
+}
+
+// Branch returns the value of the "branch" field in the mutation.
+func (m *SessionMutation) Branch() (r string, exists bool) {
+	v := m.branch
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBranch returns the old "branch" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldBranch(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBranch is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBranch requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBranch: %w", err)
+	}
+	return oldValue.Branch, nil
+}
+
+// ResetBranch resets all changes to the "branch" field.
+func (m *SessionMutation) ResetBranch() {
+	m.branch = nil
+}
+
+// SetCwd sets the "cwd" field.
+func (m *SessionMutation) SetCwd(s string) {
+	m.cwd = &s
+}
+
+// Cwd returns the value of the "cwd" field in the mutation.
+func (m *SessionMutation) Cwd() (r string, exists bool) {
+	v := m.cwd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCwd returns the old "cwd" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldCwd(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCwd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCwd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCwd: %w", err)
+	}
+	return oldValue.Cwd, nil
+}
+
+// ResetCwd resets all changes to the "cwd" field.
+func (m *SessionMutation) ResetCwd() {
+	m.cwd = nil
+}
+
+// SetTerminal sets the "terminal" field.
+func (m *SessionMutation) SetTerminal(s string) {
+	m.terminal = &s
+}
+
+// Terminal returns the value of the "terminal" field in the mutation.
+func (m *SessionMutation) Terminal() (r string, exists bool) {
+	v := m.terminal
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTerminal returns the old "terminal" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldTerminal(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTerminal is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTerminal requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTerminal: %w", err)
+	}
+	return oldValue.Terminal, nil
+}
+
+// ResetTerminal resets all changes to the "terminal" field.
+func (m *SessionMutation) ResetTerminal() {
+	m.terminal = nil
+}
+
+// SetCi sets the "ci" field.
+func (m *SessionMutation) SetCi(s string) {
+	m.ci = &s
+}
+
+// Ci returns the value of the "ci" field in the mutation.
+func (m *SessionMutation) Ci() (r string, exists bool) {
+	v := m.ci
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCi returns the old "ci" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldCi(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCi is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCi requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCi: %w", err)
+	}
+	return oldValue.Ci, nil
+}
+
+// ResetCi resets all changes to the "ci" field.
+func (m *SessionMutation) ResetCi() {
+	m.ci = nil
+}
+
+// SetParentSessionID sets the "parent_session_id" field.
+func (m *SessionMutation) SetParentSessionID(s string) {
+	m.parent_session_id = &s
+}
+
+// ParentSessionID returns the value of the "parent_session_id" field in the mutation.
+func (m *SessionMutation) ParentSessionID() (r string, exists bool) {
+	v := m.parent_session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentSessionID returns the old "parent_session_id" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldParentSessionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentSessionID: %w", err)
+	}
+	return oldValue.ParentSessionID, nil
+}
+
+// ResetParentSessionID resets all changes to the "parent_session_id" field.
+func (m *SessionMutation) ResetParentSessionID() {
+	m.parent_session_id = nil
+}
+
+// SetSignal sets the "signal" field.
+func (m *SessionMutation) SetSignal(s string) {
+	m.signal = &s
+}
+
+// Signal returns the value of the "signal" field in the mutation.
+func (m *SessionMutation) Signal() (r string, exists bool) {
+	v := m.signal
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSignal returns the old "signal" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldSignal(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSignal is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSignal requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSignal: %w", err)
+	}
+	return oldValue.Signal, nil
+}
+
+// ResetSignal resets all changes to the "signal" field.
+func (m *SessionMutation) ResetSignal() {
+	m.signal = nil
+}
+
+// SetSources sets the "sources" field.
+func (m *SessionMutation) SetSources(value map[string]string) {
+	m.sources = &value
+}
+
+// Sources returns the value of the "sources" field in the mutation.
+func (m *SessionMutation) Sources() (r map[string]string, exists bool) {
+	v := m.sources
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSources returns the old "sources" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldSources(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSources is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSources requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSources: %w", err)
+	}
+	return oldValue.Sources, nil
+}
+
+// ClearSources clears the value of the "sources" field.
+func (m *SessionMutation) ClearSources() {
+	m.sources = nil
+	m.clearedFields[session.FieldSources] = struct{}{}
+}
+
+// SourcesCleared returns if the "sources" field was cleared in this mutation.
+func (m *SessionMutation) SourcesCleared() bool {
+	_, ok := m.clearedFields[session.FieldSources]
+	return ok
+}
+
+// ResetSources resets all changes to the "sources" field.
+func (m *SessionMutation) ResetSources() {
+	m.sources = nil
+	delete(m.clearedFields, session.FieldSources)
+}
+
+// SetOuterTools sets the "outer_tools" field.
+func (m *SessionMutation) SetOuterTools(s []string) {
+	m.outer_tools = &s
+	m.appendouter_tools = nil
+}
+
+// OuterTools returns the value of the "outer_tools" field in the mutation.
+func (m *SessionMutation) OuterTools() (r []string, exists bool) {
+	v := m.outer_tools
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOuterTools returns the old "outer_tools" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldOuterTools(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOuterTools is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOuterTools requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOuterTools: %w", err)
+	}
+	return oldValue.OuterTools, nil
+}
+
+// AppendOuterTools adds s to the "outer_tools" field.
+func (m *SessionMutation) AppendOuterTools(s []string) {
+	m.appendouter_tools = append(m.appendouter_tools, s...)
+}
+
+// AppendedOuterTools returns the list of values that were appended to the "outer_tools" field in this mutation.
+func (m *SessionMutation) AppendedOuterTools() ([]string, bool) {
+	if len(m.appendouter_tools) == 0 {
+		return nil, false
+	}
+	return m.appendouter_tools, true
+}
+
+// ClearOuterTools clears the value of the "outer_tools" field.
+func (m *SessionMutation) ClearOuterTools() {
+	m.outer_tools = nil
+	m.appendouter_tools = nil
+	m.clearedFields[session.FieldOuterTools] = struct{}{}
+}
+
+// OuterToolsCleared returns if the "outer_tools" field was cleared in this mutation.
+func (m *SessionMutation) OuterToolsCleared() bool {
+	_, ok := m.clearedFields[session.FieldOuterTools]
+	return ok
+}
+
+// ResetOuterTools resets all changes to the "outer_tools" field.
+func (m *SessionMutation) ResetOuterTools() {
+	m.outer_tools = nil
+	m.appendouter_tools = nil
+	delete(m.clearedFields, session.FieldOuterTools)
+}
+
+// SetDeclaredHuman sets the "declared_human" field.
+func (m *SessionMutation) SetDeclaredHuman(b bool) {
+	m.declared_human = &b
+}
+
+// DeclaredHuman returns the value of the "declared_human" field in the mutation.
+func (m *SessionMutation) DeclaredHuman() (r bool, exists bool) {
+	v := m.declared_human
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeclaredHuman returns the old "declared_human" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldDeclaredHuman(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeclaredHuman is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeclaredHuman requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeclaredHuman: %w", err)
+	}
+	return oldValue.DeclaredHuman, nil
+}
+
+// ResetDeclaredHuman resets all changes to the "declared_human" field.
+func (m *SessionMutation) ResetDeclaredHuman() {
+	m.declared_human = nil
+}
+
+// SetFlags sets the "flags" field.
+func (m *SessionMutation) SetFlags(s []string) {
+	m.flags = &s
+	m.appendflags = nil
+}
+
+// Flags returns the value of the "flags" field in the mutation.
+func (m *SessionMutation) Flags() (r []string, exists bool) {
+	v := m.flags
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFlags returns the old "flags" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldFlags(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFlags is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFlags requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFlags: %w", err)
+	}
+	return oldValue.Flags, nil
+}
+
+// AppendFlags adds s to the "flags" field.
+func (m *SessionMutation) AppendFlags(s []string) {
+	m.appendflags = append(m.appendflags, s...)
+}
+
+// AppendedFlags returns the list of values that were appended to the "flags" field in this mutation.
+func (m *SessionMutation) AppendedFlags() ([]string, bool) {
+	if len(m.appendflags) == 0 {
+		return nil, false
+	}
+	return m.appendflags, true
+}
+
+// ClearFlags clears the value of the "flags" field.
+func (m *SessionMutation) ClearFlags() {
+	m.flags = nil
+	m.appendflags = nil
+	m.clearedFields[session.FieldFlags] = struct{}{}
+}
+
+// FlagsCleared returns if the "flags" field was cleared in this mutation.
+func (m *SessionMutation) FlagsCleared() bool {
+	_, ok := m.clearedFields[session.FieldFlags]
+	return ok
+}
+
+// ResetFlags resets all changes to the "flags" field.
+func (m *SessionMutation) ResetFlags() {
+	m.flags = nil
+	m.appendflags = nil
+	delete(m.clearedFields, session.FieldFlags)
+}
+
 // Where appends a list predicates to the SessionMutation builder.
 func (m *SessionMutation) Where(ps ...predicate.Session) {
 	m.predicates = append(m.predicates, ps...)
@@ -47093,7 +47922,7 @@ func (m *SessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SessionMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, session.FieldCreatedAt)
 	}
@@ -47114,6 +47943,57 @@ func (m *SessionMutation) Fields() []string {
 	}
 	if m.agent_kind != nil {
 		fields = append(fields, session.FieldAgentKind)
+	}
+	if m.tool != nil {
+		fields = append(fields, session.FieldTool)
+	}
+	if m.tool_session_id != nil {
+		fields = append(fields, session.FieldToolSessionID)
+	}
+	if m.tool_version != nil {
+		fields = append(fields, session.FieldToolVersion)
+	}
+	if m.model != nil {
+		fields = append(fields, session.FieldModel)
+	}
+	if m.machine_id != nil {
+		fields = append(fields, session.FieldMachineID)
+	}
+	if m.run_id != nil {
+		fields = append(fields, session.FieldRunID)
+	}
+	if m.repo != nil {
+		fields = append(fields, session.FieldRepo)
+	}
+	if m.branch != nil {
+		fields = append(fields, session.FieldBranch)
+	}
+	if m.cwd != nil {
+		fields = append(fields, session.FieldCwd)
+	}
+	if m.terminal != nil {
+		fields = append(fields, session.FieldTerminal)
+	}
+	if m.ci != nil {
+		fields = append(fields, session.FieldCi)
+	}
+	if m.parent_session_id != nil {
+		fields = append(fields, session.FieldParentSessionID)
+	}
+	if m.signal != nil {
+		fields = append(fields, session.FieldSignal)
+	}
+	if m.sources != nil {
+		fields = append(fields, session.FieldSources)
+	}
+	if m.outer_tools != nil {
+		fields = append(fields, session.FieldOuterTools)
+	}
+	if m.declared_human != nil {
+		fields = append(fields, session.FieldDeclaredHuman)
+	}
+	if m.flags != nil {
+		fields = append(fields, session.FieldFlags)
 	}
 	return fields
 }
@@ -47137,6 +48017,40 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 		return m.ActorID()
 	case session.FieldAgentKind:
 		return m.AgentKind()
+	case session.FieldTool:
+		return m.Tool()
+	case session.FieldToolSessionID:
+		return m.ToolSessionID()
+	case session.FieldToolVersion:
+		return m.ToolVersion()
+	case session.FieldModel:
+		return m.Model()
+	case session.FieldMachineID:
+		return m.MachineID()
+	case session.FieldRunID:
+		return m.RunID()
+	case session.FieldRepo:
+		return m.Repo()
+	case session.FieldBranch:
+		return m.Branch()
+	case session.FieldCwd:
+		return m.Cwd()
+	case session.FieldTerminal:
+		return m.Terminal()
+	case session.FieldCi:
+		return m.Ci()
+	case session.FieldParentSessionID:
+		return m.ParentSessionID()
+	case session.FieldSignal:
+		return m.Signal()
+	case session.FieldSources:
+		return m.Sources()
+	case session.FieldOuterTools:
+		return m.OuterTools()
+	case session.FieldDeclaredHuman:
+		return m.DeclaredHuman()
+	case session.FieldFlags:
+		return m.Flags()
 	}
 	return nil, false
 }
@@ -47160,6 +48074,40 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldActorID(ctx)
 	case session.FieldAgentKind:
 		return m.OldAgentKind(ctx)
+	case session.FieldTool:
+		return m.OldTool(ctx)
+	case session.FieldToolSessionID:
+		return m.OldToolSessionID(ctx)
+	case session.FieldToolVersion:
+		return m.OldToolVersion(ctx)
+	case session.FieldModel:
+		return m.OldModel(ctx)
+	case session.FieldMachineID:
+		return m.OldMachineID(ctx)
+	case session.FieldRunID:
+		return m.OldRunID(ctx)
+	case session.FieldRepo:
+		return m.OldRepo(ctx)
+	case session.FieldBranch:
+		return m.OldBranch(ctx)
+	case session.FieldCwd:
+		return m.OldCwd(ctx)
+	case session.FieldTerminal:
+		return m.OldTerminal(ctx)
+	case session.FieldCi:
+		return m.OldCi(ctx)
+	case session.FieldParentSessionID:
+		return m.OldParentSessionID(ctx)
+	case session.FieldSignal:
+		return m.OldSignal(ctx)
+	case session.FieldSources:
+		return m.OldSources(ctx)
+	case session.FieldOuterTools:
+		return m.OldOuterTools(ctx)
+	case session.FieldDeclaredHuman:
+		return m.OldDeclaredHuman(ctx)
+	case session.FieldFlags:
+		return m.OldFlags(ctx)
 	}
 	return nil, fmt.Errorf("unknown Session field %s", name)
 }
@@ -47218,6 +48166,125 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAgentKind(v)
 		return nil
+	case session.FieldTool:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTool(v)
+		return nil
+	case session.FieldToolSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolSessionID(v)
+		return nil
+	case session.FieldToolVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolVersion(v)
+		return nil
+	case session.FieldModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModel(v)
+		return nil
+	case session.FieldMachineID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMachineID(v)
+		return nil
+	case session.FieldRunID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunID(v)
+		return nil
+	case session.FieldRepo:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRepo(v)
+		return nil
+	case session.FieldBranch:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBranch(v)
+		return nil
+	case session.FieldCwd:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCwd(v)
+		return nil
+	case session.FieldTerminal:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTerminal(v)
+		return nil
+	case session.FieldCi:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCi(v)
+		return nil
+	case session.FieldParentSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentSessionID(v)
+		return nil
+	case session.FieldSignal:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSignal(v)
+		return nil
+	case session.FieldSources:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSources(v)
+		return nil
+	case session.FieldOuterTools:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOuterTools(v)
+		return nil
+	case session.FieldDeclaredHuman:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeclaredHuman(v)
+		return nil
+	case session.FieldFlags:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFlags(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Session field %s", name)
 }
@@ -47257,6 +48324,15 @@ func (m *SessionMutation) ClearedFields() []string {
 	if m.FieldCleared(session.FieldAgentKind) {
 		fields = append(fields, session.FieldAgentKind)
 	}
+	if m.FieldCleared(session.FieldSources) {
+		fields = append(fields, session.FieldSources)
+	}
+	if m.FieldCleared(session.FieldOuterTools) {
+		fields = append(fields, session.FieldOuterTools)
+	}
+	if m.FieldCleared(session.FieldFlags) {
+		fields = append(fields, session.FieldFlags)
+	}
 	return fields
 }
 
@@ -47279,6 +48355,15 @@ func (m *SessionMutation) ClearField(name string) error {
 		return nil
 	case session.FieldAgentKind:
 		m.ClearAgentKind()
+		return nil
+	case session.FieldSources:
+		m.ClearSources()
+		return nil
+	case session.FieldOuterTools:
+		m.ClearOuterTools()
+		return nil
+	case session.FieldFlags:
+		m.ClearFlags()
 		return nil
 	}
 	return fmt.Errorf("unknown Session nullable field %s", name)
@@ -47308,6 +48393,57 @@ func (m *SessionMutation) ResetField(name string) error {
 		return nil
 	case session.FieldAgentKind:
 		m.ResetAgentKind()
+		return nil
+	case session.FieldTool:
+		m.ResetTool()
+		return nil
+	case session.FieldToolSessionID:
+		m.ResetToolSessionID()
+		return nil
+	case session.FieldToolVersion:
+		m.ResetToolVersion()
+		return nil
+	case session.FieldModel:
+		m.ResetModel()
+		return nil
+	case session.FieldMachineID:
+		m.ResetMachineID()
+		return nil
+	case session.FieldRunID:
+		m.ResetRunID()
+		return nil
+	case session.FieldRepo:
+		m.ResetRepo()
+		return nil
+	case session.FieldBranch:
+		m.ResetBranch()
+		return nil
+	case session.FieldCwd:
+		m.ResetCwd()
+		return nil
+	case session.FieldTerminal:
+		m.ResetTerminal()
+		return nil
+	case session.FieldCi:
+		m.ResetCi()
+		return nil
+	case session.FieldParentSessionID:
+		m.ResetParentSessionID()
+		return nil
+	case session.FieldSignal:
+		m.ResetSignal()
+		return nil
+	case session.FieldSources:
+		m.ResetSources()
+		return nil
+	case session.FieldOuterTools:
+		m.ResetOuterTools()
+		return nil
+	case session.FieldDeclaredHuman:
+		m.ResetDeclaredHuman()
+		return nil
+	case session.FieldFlags:
+		m.ResetFlags()
 		return nil
 	}
 	return fmt.Errorf("unknown Session field %s", name)

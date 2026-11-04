@@ -12,6 +12,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 )
 
@@ -106,6 +107,250 @@ func (_u *SessionUpdate) SetNillableAgentKind(v *string) *SessionUpdate {
 // ClearAgentKind clears the value of the "agent_kind" field.
 func (_u *SessionUpdate) ClearAgentKind() *SessionUpdate {
 	_u.mutation.ClearAgentKind()
+	return _u
+}
+
+// SetTool sets the "tool" field.
+func (_u *SessionUpdate) SetTool(v string) *SessionUpdate {
+	_u.mutation.SetTool(v)
+	return _u
+}
+
+// SetNillableTool sets the "tool" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableTool(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetTool(*v)
+	}
+	return _u
+}
+
+// SetToolSessionID sets the "tool_session_id" field.
+func (_u *SessionUpdate) SetToolSessionID(v string) *SessionUpdate {
+	_u.mutation.SetToolSessionID(v)
+	return _u
+}
+
+// SetNillableToolSessionID sets the "tool_session_id" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableToolSessionID(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetToolSessionID(*v)
+	}
+	return _u
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (_u *SessionUpdate) SetToolVersion(v string) *SessionUpdate {
+	_u.mutation.SetToolVersion(v)
+	return _u
+}
+
+// SetNillableToolVersion sets the "tool_version" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableToolVersion(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetToolVersion(*v)
+	}
+	return _u
+}
+
+// SetModel sets the "model" field.
+func (_u *SessionUpdate) SetModel(v string) *SessionUpdate {
+	_u.mutation.SetModel(v)
+	return _u
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableModel(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetModel(*v)
+	}
+	return _u
+}
+
+// SetMachineID sets the "machine_id" field.
+func (_u *SessionUpdate) SetMachineID(v string) *SessionUpdate {
+	_u.mutation.SetMachineID(v)
+	return _u
+}
+
+// SetNillableMachineID sets the "machine_id" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableMachineID(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetMachineID(*v)
+	}
+	return _u
+}
+
+// SetRunID sets the "run_id" field.
+func (_u *SessionUpdate) SetRunID(v string) *SessionUpdate {
+	_u.mutation.SetRunID(v)
+	return _u
+}
+
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableRunID(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetRunID(*v)
+	}
+	return _u
+}
+
+// SetRepo sets the "repo" field.
+func (_u *SessionUpdate) SetRepo(v string) *SessionUpdate {
+	_u.mutation.SetRepo(v)
+	return _u
+}
+
+// SetNillableRepo sets the "repo" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableRepo(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetRepo(*v)
+	}
+	return _u
+}
+
+// SetBranch sets the "branch" field.
+func (_u *SessionUpdate) SetBranch(v string) *SessionUpdate {
+	_u.mutation.SetBranch(v)
+	return _u
+}
+
+// SetNillableBranch sets the "branch" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableBranch(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetBranch(*v)
+	}
+	return _u
+}
+
+// SetCwd sets the "cwd" field.
+func (_u *SessionUpdate) SetCwd(v string) *SessionUpdate {
+	_u.mutation.SetCwd(v)
+	return _u
+}
+
+// SetNillableCwd sets the "cwd" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableCwd(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetCwd(*v)
+	}
+	return _u
+}
+
+// SetTerminal sets the "terminal" field.
+func (_u *SessionUpdate) SetTerminal(v string) *SessionUpdate {
+	_u.mutation.SetTerminal(v)
+	return _u
+}
+
+// SetNillableTerminal sets the "terminal" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableTerminal(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetTerminal(*v)
+	}
+	return _u
+}
+
+// SetCi sets the "ci" field.
+func (_u *SessionUpdate) SetCi(v string) *SessionUpdate {
+	_u.mutation.SetCi(v)
+	return _u
+}
+
+// SetNillableCi sets the "ci" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableCi(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetCi(*v)
+	}
+	return _u
+}
+
+// SetParentSessionID sets the "parent_session_id" field.
+func (_u *SessionUpdate) SetParentSessionID(v string) *SessionUpdate {
+	_u.mutation.SetParentSessionID(v)
+	return _u
+}
+
+// SetNillableParentSessionID sets the "parent_session_id" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableParentSessionID(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetParentSessionID(*v)
+	}
+	return _u
+}
+
+// SetSignal sets the "signal" field.
+func (_u *SessionUpdate) SetSignal(v string) *SessionUpdate {
+	_u.mutation.SetSignal(v)
+	return _u
+}
+
+// SetNillableSignal sets the "signal" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableSignal(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetSignal(*v)
+	}
+	return _u
+}
+
+// SetSources sets the "sources" field.
+func (_u *SessionUpdate) SetSources(v map[string]string) *SessionUpdate {
+	_u.mutation.SetSources(v)
+	return _u
+}
+
+// ClearSources clears the value of the "sources" field.
+func (_u *SessionUpdate) ClearSources() *SessionUpdate {
+	_u.mutation.ClearSources()
+	return _u
+}
+
+// SetOuterTools sets the "outer_tools" field.
+func (_u *SessionUpdate) SetOuterTools(v []string) *SessionUpdate {
+	_u.mutation.SetOuterTools(v)
+	return _u
+}
+
+// AppendOuterTools appends value to the "outer_tools" field.
+func (_u *SessionUpdate) AppendOuterTools(v []string) *SessionUpdate {
+	_u.mutation.AppendOuterTools(v)
+	return _u
+}
+
+// ClearOuterTools clears the value of the "outer_tools" field.
+func (_u *SessionUpdate) ClearOuterTools() *SessionUpdate {
+	_u.mutation.ClearOuterTools()
+	return _u
+}
+
+// SetDeclaredHuman sets the "declared_human" field.
+func (_u *SessionUpdate) SetDeclaredHuman(v bool) *SessionUpdate {
+	_u.mutation.SetDeclaredHuman(v)
+	return _u
+}
+
+// SetNillableDeclaredHuman sets the "declared_human" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableDeclaredHuman(v *bool) *SessionUpdate {
+	if v != nil {
+		_u.SetDeclaredHuman(*v)
+	}
+	return _u
+}
+
+// SetFlags sets the "flags" field.
+func (_u *SessionUpdate) SetFlags(v []string) *SessionUpdate {
+	_u.mutation.SetFlags(v)
+	return _u
+}
+
+// AppendFlags appends value to the "flags" field.
+func (_u *SessionUpdate) AppendFlags(v []string) *SessionUpdate {
+	_u.mutation.AppendFlags(v)
+	return _u
+}
+
+// ClearFlags clears the value of the "flags" field.
+func (_u *SessionUpdate) ClearFlags() *SessionUpdate {
+	_u.mutation.ClearFlags()
 	return _u
 }
 
@@ -207,6 +452,76 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.AgentKindCleared() {
 		_spec.ClearField(session.FieldAgentKind, field.TypeString)
 	}
+	if value, ok := _u.mutation.Tool(); ok {
+		_spec.SetField(session.FieldTool, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ToolSessionID(); ok {
+		_spec.SetField(session.FieldToolSessionID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ToolVersion(); ok {
+		_spec.SetField(session.FieldToolVersion, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Model(); ok {
+		_spec.SetField(session.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.MachineID(); ok {
+		_spec.SetField(session.FieldMachineID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RunID(); ok {
+		_spec.SetField(session.FieldRunID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Repo(); ok {
+		_spec.SetField(session.FieldRepo, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Branch(); ok {
+		_spec.SetField(session.FieldBranch, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Cwd(); ok {
+		_spec.SetField(session.FieldCwd, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Terminal(); ok {
+		_spec.SetField(session.FieldTerminal, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Ci(); ok {
+		_spec.SetField(session.FieldCi, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ParentSessionID(); ok {
+		_spec.SetField(session.FieldParentSessionID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Signal(); ok {
+		_spec.SetField(session.FieldSignal, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Sources(); ok {
+		_spec.SetField(session.FieldSources, field.TypeJSON, value)
+	}
+	if _u.mutation.SourcesCleared() {
+		_spec.ClearField(session.FieldSources, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.OuterTools(); ok {
+		_spec.SetField(session.FieldOuterTools, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedOuterTools(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, session.FieldOuterTools, value)
+		})
+	}
+	if _u.mutation.OuterToolsCleared() {
+		_spec.ClearField(session.FieldOuterTools, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.DeclaredHuman(); ok {
+		_spec.SetField(session.FieldDeclaredHuman, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Flags(); ok {
+		_spec.SetField(session.FieldFlags, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedFlags(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, session.FieldFlags, value)
+		})
+	}
+	if _u.mutation.FlagsCleared() {
+		_spec.ClearField(session.FieldFlags, field.TypeJSON)
+	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -306,6 +621,250 @@ func (_u *SessionUpdateOne) SetNillableAgentKind(v *string) *SessionUpdateOne {
 // ClearAgentKind clears the value of the "agent_kind" field.
 func (_u *SessionUpdateOne) ClearAgentKind() *SessionUpdateOne {
 	_u.mutation.ClearAgentKind()
+	return _u
+}
+
+// SetTool sets the "tool" field.
+func (_u *SessionUpdateOne) SetTool(v string) *SessionUpdateOne {
+	_u.mutation.SetTool(v)
+	return _u
+}
+
+// SetNillableTool sets the "tool" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableTool(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetTool(*v)
+	}
+	return _u
+}
+
+// SetToolSessionID sets the "tool_session_id" field.
+func (_u *SessionUpdateOne) SetToolSessionID(v string) *SessionUpdateOne {
+	_u.mutation.SetToolSessionID(v)
+	return _u
+}
+
+// SetNillableToolSessionID sets the "tool_session_id" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableToolSessionID(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetToolSessionID(*v)
+	}
+	return _u
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (_u *SessionUpdateOne) SetToolVersion(v string) *SessionUpdateOne {
+	_u.mutation.SetToolVersion(v)
+	return _u
+}
+
+// SetNillableToolVersion sets the "tool_version" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableToolVersion(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetToolVersion(*v)
+	}
+	return _u
+}
+
+// SetModel sets the "model" field.
+func (_u *SessionUpdateOne) SetModel(v string) *SessionUpdateOne {
+	_u.mutation.SetModel(v)
+	return _u
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableModel(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetModel(*v)
+	}
+	return _u
+}
+
+// SetMachineID sets the "machine_id" field.
+func (_u *SessionUpdateOne) SetMachineID(v string) *SessionUpdateOne {
+	_u.mutation.SetMachineID(v)
+	return _u
+}
+
+// SetNillableMachineID sets the "machine_id" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableMachineID(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetMachineID(*v)
+	}
+	return _u
+}
+
+// SetRunID sets the "run_id" field.
+func (_u *SessionUpdateOne) SetRunID(v string) *SessionUpdateOne {
+	_u.mutation.SetRunID(v)
+	return _u
+}
+
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableRunID(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetRunID(*v)
+	}
+	return _u
+}
+
+// SetRepo sets the "repo" field.
+func (_u *SessionUpdateOne) SetRepo(v string) *SessionUpdateOne {
+	_u.mutation.SetRepo(v)
+	return _u
+}
+
+// SetNillableRepo sets the "repo" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableRepo(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetRepo(*v)
+	}
+	return _u
+}
+
+// SetBranch sets the "branch" field.
+func (_u *SessionUpdateOne) SetBranch(v string) *SessionUpdateOne {
+	_u.mutation.SetBranch(v)
+	return _u
+}
+
+// SetNillableBranch sets the "branch" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableBranch(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetBranch(*v)
+	}
+	return _u
+}
+
+// SetCwd sets the "cwd" field.
+func (_u *SessionUpdateOne) SetCwd(v string) *SessionUpdateOne {
+	_u.mutation.SetCwd(v)
+	return _u
+}
+
+// SetNillableCwd sets the "cwd" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableCwd(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetCwd(*v)
+	}
+	return _u
+}
+
+// SetTerminal sets the "terminal" field.
+func (_u *SessionUpdateOne) SetTerminal(v string) *SessionUpdateOne {
+	_u.mutation.SetTerminal(v)
+	return _u
+}
+
+// SetNillableTerminal sets the "terminal" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableTerminal(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetTerminal(*v)
+	}
+	return _u
+}
+
+// SetCi sets the "ci" field.
+func (_u *SessionUpdateOne) SetCi(v string) *SessionUpdateOne {
+	_u.mutation.SetCi(v)
+	return _u
+}
+
+// SetNillableCi sets the "ci" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableCi(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetCi(*v)
+	}
+	return _u
+}
+
+// SetParentSessionID sets the "parent_session_id" field.
+func (_u *SessionUpdateOne) SetParentSessionID(v string) *SessionUpdateOne {
+	_u.mutation.SetParentSessionID(v)
+	return _u
+}
+
+// SetNillableParentSessionID sets the "parent_session_id" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableParentSessionID(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetParentSessionID(*v)
+	}
+	return _u
+}
+
+// SetSignal sets the "signal" field.
+func (_u *SessionUpdateOne) SetSignal(v string) *SessionUpdateOne {
+	_u.mutation.SetSignal(v)
+	return _u
+}
+
+// SetNillableSignal sets the "signal" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableSignal(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetSignal(*v)
+	}
+	return _u
+}
+
+// SetSources sets the "sources" field.
+func (_u *SessionUpdateOne) SetSources(v map[string]string) *SessionUpdateOne {
+	_u.mutation.SetSources(v)
+	return _u
+}
+
+// ClearSources clears the value of the "sources" field.
+func (_u *SessionUpdateOne) ClearSources() *SessionUpdateOne {
+	_u.mutation.ClearSources()
+	return _u
+}
+
+// SetOuterTools sets the "outer_tools" field.
+func (_u *SessionUpdateOne) SetOuterTools(v []string) *SessionUpdateOne {
+	_u.mutation.SetOuterTools(v)
+	return _u
+}
+
+// AppendOuterTools appends value to the "outer_tools" field.
+func (_u *SessionUpdateOne) AppendOuterTools(v []string) *SessionUpdateOne {
+	_u.mutation.AppendOuterTools(v)
+	return _u
+}
+
+// ClearOuterTools clears the value of the "outer_tools" field.
+func (_u *SessionUpdateOne) ClearOuterTools() *SessionUpdateOne {
+	_u.mutation.ClearOuterTools()
+	return _u
+}
+
+// SetDeclaredHuman sets the "declared_human" field.
+func (_u *SessionUpdateOne) SetDeclaredHuman(v bool) *SessionUpdateOne {
+	_u.mutation.SetDeclaredHuman(v)
+	return _u
+}
+
+// SetNillableDeclaredHuman sets the "declared_human" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableDeclaredHuman(v *bool) *SessionUpdateOne {
+	if v != nil {
+		_u.SetDeclaredHuman(*v)
+	}
+	return _u
+}
+
+// SetFlags sets the "flags" field.
+func (_u *SessionUpdateOne) SetFlags(v []string) *SessionUpdateOne {
+	_u.mutation.SetFlags(v)
+	return _u
+}
+
+// AppendFlags appends value to the "flags" field.
+func (_u *SessionUpdateOne) AppendFlags(v []string) *SessionUpdateOne {
+	_u.mutation.AppendFlags(v)
+	return _u
+}
+
+// ClearFlags clears the value of the "flags" field.
+func (_u *SessionUpdateOne) ClearFlags() *SessionUpdateOne {
+	_u.mutation.ClearFlags()
 	return _u
 }
 
@@ -436,6 +995,76 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if _u.mutation.AgentKindCleared() {
 		_spec.ClearField(session.FieldAgentKind, field.TypeString)
+	}
+	if value, ok := _u.mutation.Tool(); ok {
+		_spec.SetField(session.FieldTool, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ToolSessionID(); ok {
+		_spec.SetField(session.FieldToolSessionID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ToolVersion(); ok {
+		_spec.SetField(session.FieldToolVersion, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Model(); ok {
+		_spec.SetField(session.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.MachineID(); ok {
+		_spec.SetField(session.FieldMachineID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RunID(); ok {
+		_spec.SetField(session.FieldRunID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Repo(); ok {
+		_spec.SetField(session.FieldRepo, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Branch(); ok {
+		_spec.SetField(session.FieldBranch, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Cwd(); ok {
+		_spec.SetField(session.FieldCwd, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Terminal(); ok {
+		_spec.SetField(session.FieldTerminal, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Ci(); ok {
+		_spec.SetField(session.FieldCi, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ParentSessionID(); ok {
+		_spec.SetField(session.FieldParentSessionID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Signal(); ok {
+		_spec.SetField(session.FieldSignal, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Sources(); ok {
+		_spec.SetField(session.FieldSources, field.TypeJSON, value)
+	}
+	if _u.mutation.SourcesCleared() {
+		_spec.ClearField(session.FieldSources, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.OuterTools(); ok {
+		_spec.SetField(session.FieldOuterTools, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedOuterTools(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, session.FieldOuterTools, value)
+		})
+	}
+	if _u.mutation.OuterToolsCleared() {
+		_spec.ClearField(session.FieldOuterTools, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.DeclaredHuman(); ok {
+		_spec.SetField(session.FieldDeclaredHuman, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Flags(); ok {
+		_spec.SetField(session.FieldFlags, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedFlags(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, session.FieldFlags, value)
+		})
+	}
+	if _u.mutation.FlagsCleared() {
+		_spec.ClearField(session.FieldFlags, field.TypeJSON)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &Session{config: _u.config}

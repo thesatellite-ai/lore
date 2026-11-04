@@ -10,7 +10,6 @@ import (
 	entQueryLog "dbent/gen/ent/querylog"
 	entRenderHistory "dbent/gen/ent/renderhistory"
 	entRun "dbent/gen/ent/run"
-	entSession "dbent/gen/ent/session"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
 
@@ -63,50 +62,7 @@ func newRunListCommand() *cobra.Command {
 	return cmd
 }
 
-func newSessionGroup() *cobra.Command {
-	cmd := &cobra.Command{Use: "session", Short: "Inspect sessions"}
-	cmd.AddCommand(newSessionListCommand())
-	return cmd
-}
-
-func newSessionListCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List sessions",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rctx, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			_ = rctx
-			rows, err := client.Session.Query().
-				Order(ent.Desc(entSession.FieldID)).
-				Limit(50).
-				All(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "list sessions").WithCause(err)
-			}
-			if jsonOut {
-				printJSON(constants.KindSessionList, rows, len(rows))
-				return nil
-			}
-			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no sessions)"))
-				return nil
-			}
-			for _, r := range rows {
-				fmt.Printf("%s\n", style.Code(r.ID))
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
+// newSessionGroup lives in session_list.go (AGENT_IDENTITY_DESIGN 6.2 columns).
 
 func newQueryLogGroup() *cobra.Command {
 	cmd := &cobra.Command{Use: "querylog", Short: "Inspect querylogs"}

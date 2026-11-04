@@ -4,6 +4,7 @@ package ent
 
 import (
 	"dbent/gen/ent/session"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -30,7 +31,41 @@ type Session struct {
 	// ActorID holds the value of the "actor_id" field.
 	ActorID *string `json:"actor_id,omitempty"`
 	// AgentKind holds the value of the "agent_kind" field.
-	AgentKind    *string `json:"agent_kind,omitempty"`
+	AgentKind *string `json:"agent_kind,omitempty"`
+	// Tool holds the value of the "tool" field.
+	Tool string `json:"tool,omitempty"`
+	// ToolSessionID holds the value of the "tool_session_id" field.
+	ToolSessionID string `json:"tool_session_id,omitempty"`
+	// ToolVersion holds the value of the "tool_version" field.
+	ToolVersion string `json:"tool_version,omitempty"`
+	// Model holds the value of the "model" field.
+	Model string `json:"model,omitempty"`
+	// MachineID holds the value of the "machine_id" field.
+	MachineID string `json:"machine_id,omitempty"`
+	// RunID holds the value of the "run_id" field.
+	RunID string `json:"run_id,omitempty"`
+	// Repo holds the value of the "repo" field.
+	Repo string `json:"repo,omitempty"`
+	// Branch holds the value of the "branch" field.
+	Branch string `json:"branch,omitempty"`
+	// Cwd holds the value of the "cwd" field.
+	Cwd string `json:"cwd,omitempty"`
+	// Terminal holds the value of the "terminal" field.
+	Terminal string `json:"terminal,omitempty"`
+	// Ci holds the value of the "ci" field.
+	Ci string `json:"ci,omitempty"`
+	// ParentSessionID holds the value of the "parent_session_id" field.
+	ParentSessionID string `json:"parent_session_id,omitempty"`
+	// Signal holds the value of the "signal" field.
+	Signal string `json:"signal,omitempty"`
+	// Sources holds the value of the "sources" field.
+	Sources map[string]string `json:"sources,omitempty"`
+	// OuterTools holds the value of the "outer_tools" field.
+	OuterTools []string `json:"outer_tools,omitempty"`
+	// DeclaredHuman holds the value of the "declared_human" field.
+	DeclaredHuman bool `json:"declared_human,omitempty"`
+	// Flags holds the value of the "flags" field.
+	Flags        []string `json:"flags,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -39,7 +74,11 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case session.FieldID, session.FieldProjectID, session.FieldActorID, session.FieldAgentKind:
+		case session.FieldSources, session.FieldOuterTools, session.FieldFlags:
+			values[i] = new([]byte)
+		case session.FieldDeclaredHuman:
+			values[i] = new(sql.NullBool)
+		case session.FieldID, session.FieldProjectID, session.FieldActorID, session.FieldAgentKind, session.FieldTool, session.FieldToolSessionID, session.FieldToolVersion, session.FieldModel, session.FieldMachineID, session.FieldRunID, session.FieldRepo, session.FieldBranch, session.FieldCwd, session.FieldTerminal, session.FieldCi, session.FieldParentSessionID, session.FieldSignal:
 			values[i] = new(sql.NullString)
 		case session.FieldCreatedAt, session.FieldUpdatedAt, session.FieldStartedAt, session.FieldEndedAt:
 			values[i] = new(sql.NullTime)
@@ -109,6 +148,114 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 				_m.AgentKind = new(string)
 				*_m.AgentKind = value.String
 			}
+		case session.FieldTool:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tool", values[i])
+			} else if value.Valid {
+				_m.Tool = value.String
+			}
+		case session.FieldToolSessionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tool_session_id", values[i])
+			} else if value.Valid {
+				_m.ToolSessionID = value.String
+			}
+		case session.FieldToolVersion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tool_version", values[i])
+			} else if value.Valid {
+				_m.ToolVersion = value.String
+			}
+		case session.FieldModel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field model", values[i])
+			} else if value.Valid {
+				_m.Model = value.String
+			}
+		case session.FieldMachineID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field machine_id", values[i])
+			} else if value.Valid {
+				_m.MachineID = value.String
+			}
+		case session.FieldRunID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field run_id", values[i])
+			} else if value.Valid {
+				_m.RunID = value.String
+			}
+		case session.FieldRepo:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field repo", values[i])
+			} else if value.Valid {
+				_m.Repo = value.String
+			}
+		case session.FieldBranch:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field branch", values[i])
+			} else if value.Valid {
+				_m.Branch = value.String
+			}
+		case session.FieldCwd:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field cwd", values[i])
+			} else if value.Valid {
+				_m.Cwd = value.String
+			}
+		case session.FieldTerminal:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field terminal", values[i])
+			} else if value.Valid {
+				_m.Terminal = value.String
+			}
+		case session.FieldCi:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field ci", values[i])
+			} else if value.Valid {
+				_m.Ci = value.String
+			}
+		case session.FieldParentSessionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field parent_session_id", values[i])
+			} else if value.Valid {
+				_m.ParentSessionID = value.String
+			}
+		case session.FieldSignal:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field signal", values[i])
+			} else if value.Valid {
+				_m.Signal = value.String
+			}
+		case session.FieldSources:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field sources", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Sources); err != nil {
+					return fmt.Errorf("unmarshal field sources: %w", err)
+				}
+			}
+		case session.FieldOuterTools:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field outer_tools", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.OuterTools); err != nil {
+					return fmt.Errorf("unmarshal field outer_tools: %w", err)
+				}
+			}
+		case session.FieldDeclaredHuman:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field declared_human", values[i])
+			} else if value.Valid {
+				_m.DeclaredHuman = value.Bool
+			}
+		case session.FieldFlags:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field flags", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Flags); err != nil {
+					return fmt.Errorf("unmarshal field flags: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -171,6 +318,57 @@ func (_m *Session) String() string {
 		builder.WriteString("agent_kind=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("tool=")
+	builder.WriteString(_m.Tool)
+	builder.WriteString(", ")
+	builder.WriteString("tool_session_id=")
+	builder.WriteString(_m.ToolSessionID)
+	builder.WriteString(", ")
+	builder.WriteString("tool_version=")
+	builder.WriteString(_m.ToolVersion)
+	builder.WriteString(", ")
+	builder.WriteString("model=")
+	builder.WriteString(_m.Model)
+	builder.WriteString(", ")
+	builder.WriteString("machine_id=")
+	builder.WriteString(_m.MachineID)
+	builder.WriteString(", ")
+	builder.WriteString("run_id=")
+	builder.WriteString(_m.RunID)
+	builder.WriteString(", ")
+	builder.WriteString("repo=")
+	builder.WriteString(_m.Repo)
+	builder.WriteString(", ")
+	builder.WriteString("branch=")
+	builder.WriteString(_m.Branch)
+	builder.WriteString(", ")
+	builder.WriteString("cwd=")
+	builder.WriteString(_m.Cwd)
+	builder.WriteString(", ")
+	builder.WriteString("terminal=")
+	builder.WriteString(_m.Terminal)
+	builder.WriteString(", ")
+	builder.WriteString("ci=")
+	builder.WriteString(_m.Ci)
+	builder.WriteString(", ")
+	builder.WriteString("parent_session_id=")
+	builder.WriteString(_m.ParentSessionID)
+	builder.WriteString(", ")
+	builder.WriteString("signal=")
+	builder.WriteString(_m.Signal)
+	builder.WriteString(", ")
+	builder.WriteString("sources=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Sources))
+	builder.WriteString(", ")
+	builder.WriteString("outer_tools=")
+	builder.WriteString(fmt.Sprintf("%v", _m.OuterTools))
+	builder.WriteString(", ")
+	builder.WriteString("declared_human=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DeclaredHuman))
+	builder.WriteString(", ")
+	builder.WriteString("flags=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Flags))
 	builder.WriteByte(')')
 	return builder.String()
 }

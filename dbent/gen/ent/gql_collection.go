@@ -824,6 +824,16 @@ func (_q *AuditLogQuery) collectField(ctx context.Context, oneNode bool, opCtx *
 				selectedFields = append(selectedFields, auditlog.FieldReason)
 				fieldSeen[auditlog.FieldReason] = struct{}{}
 			}
+		case "sessionID":
+			if _, ok := fieldSeen[auditlog.FieldSessionID]; !ok {
+				selectedFields = append(selectedFields, auditlog.FieldSessionID)
+				fieldSeen[auditlog.FieldSessionID] = struct{}{}
+			}
+		case "confirmed":
+			if _, ok := fieldSeen[auditlog.FieldConfirmed]; !ok {
+				selectedFields = append(selectedFields, auditlog.FieldConfirmed)
+				fieldSeen[auditlog.FieldConfirmed] = struct{}{}
+			}
 		case "id":
 		case "__typename":
 		default:
@@ -7035,6 +7045,76 @@ func (_q *SessionQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 			if _, ok := fieldSeen[session.FieldAgentKind]; !ok {
 				selectedFields = append(selectedFields, session.FieldAgentKind)
 				fieldSeen[session.FieldAgentKind] = struct{}{}
+			}
+		case "tool":
+			if _, ok := fieldSeen[session.FieldTool]; !ok {
+				selectedFields = append(selectedFields, session.FieldTool)
+				fieldSeen[session.FieldTool] = struct{}{}
+			}
+		case "toolSessionID":
+			if _, ok := fieldSeen[session.FieldToolSessionID]; !ok {
+				selectedFields = append(selectedFields, session.FieldToolSessionID)
+				fieldSeen[session.FieldToolSessionID] = struct{}{}
+			}
+		case "toolVersion":
+			if _, ok := fieldSeen[session.FieldToolVersion]; !ok {
+				selectedFields = append(selectedFields, session.FieldToolVersion)
+				fieldSeen[session.FieldToolVersion] = struct{}{}
+			}
+		case "model":
+			if _, ok := fieldSeen[session.FieldModel]; !ok {
+				selectedFields = append(selectedFields, session.FieldModel)
+				fieldSeen[session.FieldModel] = struct{}{}
+			}
+		case "machineID":
+			if _, ok := fieldSeen[session.FieldMachineID]; !ok {
+				selectedFields = append(selectedFields, session.FieldMachineID)
+				fieldSeen[session.FieldMachineID] = struct{}{}
+			}
+		case "runID":
+			if _, ok := fieldSeen[session.FieldRunID]; !ok {
+				selectedFields = append(selectedFields, session.FieldRunID)
+				fieldSeen[session.FieldRunID] = struct{}{}
+			}
+		case "repo":
+			if _, ok := fieldSeen[session.FieldRepo]; !ok {
+				selectedFields = append(selectedFields, session.FieldRepo)
+				fieldSeen[session.FieldRepo] = struct{}{}
+			}
+		case "branch":
+			if _, ok := fieldSeen[session.FieldBranch]; !ok {
+				selectedFields = append(selectedFields, session.FieldBranch)
+				fieldSeen[session.FieldBranch] = struct{}{}
+			}
+		case "cwd":
+			if _, ok := fieldSeen[session.FieldCwd]; !ok {
+				selectedFields = append(selectedFields, session.FieldCwd)
+				fieldSeen[session.FieldCwd] = struct{}{}
+			}
+		case "terminal":
+			if _, ok := fieldSeen[session.FieldTerminal]; !ok {
+				selectedFields = append(selectedFields, session.FieldTerminal)
+				fieldSeen[session.FieldTerminal] = struct{}{}
+			}
+		case "ci":
+			if _, ok := fieldSeen[session.FieldCi]; !ok {
+				selectedFields = append(selectedFields, session.FieldCi)
+				fieldSeen[session.FieldCi] = struct{}{}
+			}
+		case "parentSessionID":
+			if _, ok := fieldSeen[session.FieldParentSessionID]; !ok {
+				selectedFields = append(selectedFields, session.FieldParentSessionID)
+				fieldSeen[session.FieldParentSessionID] = struct{}{}
+			}
+		case "signal":
+			if _, ok := fieldSeen[session.FieldSignal]; !ok {
+				selectedFields = append(selectedFields, session.FieldSignal)
+				fieldSeen[session.FieldSignal] = struct{}{}
+			}
+		case "declaredHuman":
+			if _, ok := fieldSeen[session.FieldDeclaredHuman]; !ok {
+				selectedFields = append(selectedFields, session.FieldDeclaredHuman)
+				fieldSeen[session.FieldDeclaredHuman] = struct{}{}
 			}
 		case "id":
 		case "__typename":

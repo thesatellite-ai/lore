@@ -41,7 +41,8 @@ const (
 
 func newAgentCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "agent", Short: "Agent sessions (one actor per session label)"}
-	var label, owner string
+	var label, owner, tool, toolSession, model string
+	var hookStdin bool
 	start := &cobra.Command{
 		Use:   "start",
 		Short: "Register an agent actor for this session and print its environment",
@@ -49,10 +50,24 @@ func newAgentCommand() *cobra.Command {
 org roster and prints LORE_ACTOR and LORE_SESSION for the agent's shell. Every
 claim, heartbeat and done by the agent then carries that actor and session (F18).
 
+With --tool it is the optional session hook instead (6.4): it records this
+tool session's details (session id, model) on the machine-local session row
+of the detected agent, registers nothing, prints nothing on success and
+always exits 0. Install the snippets with ` + "`lore setup --agent-hooks`" + `.
+
 Example:
-  eval "$(lore agent start --label agent-frontend --owner @alice | tail -1)"`,
+  eval "$(lore agent start --label agent-frontend --owner @alice | tail -1)"
+  lore agent start --tool claude_code --hook-stdin          # from the tool's SessionStart hook
+  lore agent start --tool codex --session "$ID" --model "$MODEL"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if cmd.Flags().Changed(flagTool) {
+				runAgentHook(cmd.Context(), tool, toolSession, model, hookStdin) // never fails (6.4)
+				return nil
+			}
+			if label == "" {
+				return errcodes.New(errcodes.InvalidInput, "--label is required (or --tool for the session hook)")
+			}
 			if err := validateAgentLabel(label); err != nil {
 				return errcodes.New(errcodes.InvalidInput, err.Error())
 			}
@@ -93,7 +108,10 @@ Example:
 	}
 	start.Flags().StringVar(&label, flagLabel, "", "the agent's label (one actor per label), e.g. agent-frontend")
 	start.Flags().StringVar(&owner, flagOwner, "", "the owning person (@handle); default: you")
-	_ = start.MarkFlagRequired(flagLabel)
+	start.Flags().StringVar(&tool, flagTool, "", "session hook: the tool's slug (claude_code, codex, …); records details only")
+	start.Flags().StringVar(&toolSession, flagSession, "", "session hook: the tool's own session id")
+	start.Flags().StringVar(&model, flagModel, "", "session hook: the model the tool reports (never guessed)")
+	start.Flags().BoolVar(&hookStdin, flagHookStdin, false, "session hook: read the tool's hook JSON from stdin")
 	cmd.AddCommand(start)
 	return cmd
 }

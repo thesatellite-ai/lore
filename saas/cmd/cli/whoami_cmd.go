@@ -52,14 +52,15 @@ type whoamiJSON struct {
 	// CFG11); "" when it cannot be read.
 	Machine string `json:"machine,omitempty"`
 	// Agent is what agent detection saw (R11): tool, version, model and
-	// the deciding signal. The tool session id is left out on purpose
-	// (internal-only, OQ14; redaction is a later batch).
+	// the deciding signal. The tool session id is "<redacted>" unless
+	// stdout is a terminal and CI is unset (section 9, OQ14).
 	Agent *whoamiAgentJSON `json:"agent,omitempty"`
 }
 
 // whoamiAgentJSON is the agent block of `lore whoami --json`.
 type whoamiAgentJSON struct {
 	Tool          string            `json:"tool,omitempty"`
+	ToolSession   string            `json:"tool_session_id,omitempty"`
 	Version       string            `json:"tool_version,omitempty"`
 	Model         string            `json:"model,omitempty"`
 	Signal        string            `json:"signal,omitempty"`
@@ -77,7 +78,7 @@ func whoamiAgent() *whoamiAgentJSON {
 	if err != nil {
 		return nil
 	}
-	a := &whoamiAgentJSON{Tool: det.Tool, Version: det.Version, Model: det.Model, Signal: det.Signal, Outer: det.Outer,
+	a := &whoamiAgentJSON{Tool: det.Tool, ToolSession: redactToolSession(det.SessionID), Version: det.Version, Model: det.Model, Signal: det.Signal, Outer: det.Outer,
 		Flags: det.Flags, Sources: det.Sources, DeclaredHuman: os.Getenv(coreidentity.EnvHuman) == "1"}
 	if det.CI != nil {
 		a.CI = det.CI.ActorKey()
@@ -434,6 +435,9 @@ func printWhoamiAgent(a *whoamiAgentJSON) {
 		v += "  " + style.Muted("LORE_HUMAN=1: writes stay yours")
 	}
 	printWhoamiRow("agent", v)
+	if a.ToolSession != "" {
+		printWhoamiRow("session", a.ToolSession) // section 9: "<redacted>" without a terminal or in CI
+	}
 	if a.Version != "" {
 		printWhoamiRow("tool version", a.Version+"  "+style.Muted("(from: "+a.Sources["tool_version"]+")"))
 	}

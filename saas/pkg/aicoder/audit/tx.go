@@ -44,6 +44,13 @@ type Entry struct {
 	BeforeHash      string `json:"before_hash,omitempty"`       // content hash before; "" = row did not exist
 	AfterHash       string `json:"after_hash,omitempty"`        // content hash after; "" = row was deleted
 	Reason          string `json:"reason,omitempty"`            // optional note
+	// SessionID is lore's sessions.id (never the tool's own id) of the
+	// session that made the change; "" outside a session. Machine-local
+	// (AGENT_IDENTITY_DESIGN 6.6). Hashed only when set (OQ10).
+	SessionID string `json:"session_id,omitempty"`
+	// Confirmed is true when the write followed --yes (8.1). Hashed only
+	// when true, so every older entry keeps its fingerprint.
+	Confirmed bool `json:"confirmed,omitempty"`
 }
 
 // Record is a persisted entry.
@@ -62,12 +69,49 @@ const selectCols = `id, actor_id, action, COALESCE(acting_project_id, ''), COALE
 	COALESCE(target_table, ''), COALESCE(target_id, ''), override, COALESCE(before_hash, ''),
 	COALESCE(after_hash, ''), COALESCE(prev_log_hash, ''), COALESCE(reason, ''), created_at`
 
+// sessionCols are the two 0.1.18 columns (6.6). A lore.db built by
+// v0.1.17 and not yet migrated (`lore setup`) lacks them; the log then
+// reads them as empty and never writes them, so an old database keeps
+// working (and verifying) unchanged.
+const sessionCols = `, COALESCE(session_id, ''), confirmed`
+
+// sessionColNames are the column names sessionCols reads.
+var sessionColNames = [...]string{"session_id", "confirmed"}
+
+// hasSessionCols reports whether audit_logs carries both sessionColNames.
+func hasSessionCols(ctx context.Context, q Querier) (bool, error) {
+	var n int
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('`+auditTable+`') WHERE name IN (?, ?)`,
+		sessionColNames[0], sessionColNames[1]).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("audit: read the columns: %w", err)
+	}
+	return n == len(sessionColNames), nil
+}
+
+// cols is the select list for this database.
+func cols(withSession bool) string {
+	if withSession {
+		return selectCols + sessionCols
+	}
+	return selectCols
+}
+
 // Append adds e at the end of the chain. Call it inside the transaction
 // that makes the change (immediate transactions serialise appenders, so two
 // processes cannot fork the chain).
 func Append(ctx context.Context, q Querier, e Entry) error {
+	withSession, err := hasSessionCols(ctx, q)
+	if err != nil {
+		return err
+	}
+	if !withSession && (e.SessionID != "" || e.Confirmed) {
+		// An un-migrated lore.db cannot hold the link; the change itself is
+		// still logged (the fields are machine-local details, 6.6).
+		e.SessionID, e.Confirmed = "", false
+	}
 	prev := ""
-	head, err := scanOne(q.QueryRowContext(ctx, `SELECT `+selectCols+` FROM `+auditTable+` ORDER BY rowid DESC LIMIT 1`))
+	head, err := scanOne(q.QueryRowContext(ctx, `SELECT `+cols(withSession)+` FROM `+auditTable+` ORDER BY rowid DESC LIMIT 1`), withSession)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 	case err != nil:
@@ -80,12 +124,18 @@ func Append(ctx context.Context, q Querier, e Entry) error {
 		return err
 	}
 	now := time.Now().UTC()
-	if _, err := q.ExecContext(ctx, `INSERT INTO `+auditTable+`(id, created_at, updated_at, acting_project_id, target_project_id,
-		actor_id, action, target_table, target_id, override, before_hash, after_hash, prev_log_hash, reason)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, now, now, nullable(e.ActingProjectID), nullable(e.TargetProjectID), e.ActorID, e.Action,
+	insert := `INSERT INTO ` + auditTable + `(id, created_at, updated_at, acting_project_id, target_project_id,
+		actor_id, action, target_table, target_id, override, before_hash, after_hash, prev_log_hash, reason`
+	args := []any{id, now, now, nullable(e.ActingProjectID), nullable(e.TargetProjectID), e.ActorID, e.Action,
 		nullable(e.TargetTable), nullable(e.TargetID), e.Override, nullable(e.BeforeHash), nullable(e.AfterHash),
-		nullable(prev), nullable(e.Reason)); err != nil {
+		nullable(prev), nullable(e.Reason)}
+	values := `?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?`
+	if withSession {
+		insert += `, session_id, confirmed`
+		values += `, ?, ?`
+		args = append(args, nullable(e.SessionID), e.Confirmed)
+	}
+	if _, err := q.ExecContext(ctx, insert+`) VALUES (`+values+`)`, args...); err != nil {
 		return fmt.Errorf("audit: append: %w", err)
 	}
 	return nil
@@ -94,14 +144,18 @@ func Append(ctx context.Context, q Querier, e Entry) error {
 // Verify walks the chain in insertion order and returns the id of the first
 // entry whose prev_log_hash does not match its predecessor ("" = intact).
 func Verify(ctx context.Context, q Querier) (string, int, error) {
-	rows, err := q.QueryContext(ctx, `SELECT `+selectCols+` FROM `+auditTable+` ORDER BY rowid`)
+	withSession, err := hasSessionCols(ctx, q)
+	if err != nil {
+		return "", 0, err
+	}
+	rows, err := q.QueryContext(ctx, `SELECT `+cols(withSession)+` FROM `+auditTable+` ORDER BY rowid`)
 	if err != nil {
 		return "", 0, fmt.Errorf("audit: verify: %w", err)
 	}
 	defer rows.Close()
 	prev, n := "", 0
 	for rows.Next() {
-		r, err := scanRows(rows)
+		r, err := scanRows(rows, withSession)
 		if err != nil {
 			return "", n, err
 		}
@@ -116,7 +170,11 @@ func Verify(ctx context.Context, q Querier) (string, int, error) {
 
 // List returns the newest entries first (limit <= 0 means all).
 func List(ctx context.Context, q Querier, limit int) ([]Record, error) {
-	query := `SELECT ` + selectCols + ` FROM ` + auditTable + ` ORDER BY rowid DESC`
+	withSession, err := hasSessionCols(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	query := `SELECT ` + cols(withSession) + ` FROM ` + auditTable + ` ORDER BY rowid DESC`
 	var args []any
 	if limit > 0 {
 		query += ` LIMIT ?`
@@ -129,7 +187,7 @@ func List(ctx context.Context, q Querier, limit int) ([]Record, error) {
 	defer rows.Close()
 	var out []Record
 	for rows.Next() {
-		r, err := scanRows(rows)
+		r, err := scanRows(rows, withSession)
 		if err != nil {
 			return nil, err
 		}
@@ -145,21 +203,33 @@ func hashRecord(r Record) string {
 		"id=%s|actor=%s|action=%s|acting=%s|target=%s|table=%s|tid=%s|override=%t|before=%s|after=%s|reason=%s",
 		r.ID, r.ActorID, r.Action, r.ActingProjectID, r.TargetProjectID,
 		r.TargetTable, r.TargetID, r.Override, r.BeforeHash, r.AfterHash, r.Reason)
+	// OQ10: the 0.1.18 fields join the payload only when set, so an entry
+	// without them hashes byte for byte as v0.1.17 did.
+	if r.SessionID != "" {
+		payload += "|session=" + r.SessionID
+	}
+	if r.Confirmed {
+		payload += "|confirmed=true"
+	}
 	sum := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(sum[:])
 }
 
 type scanner interface{ Scan(dest ...any) error }
 
-func scanOne(row *sql.Row) (Record, error) { return scanInto(row) }
+func scanOne(row *sql.Row, withSession bool) (Record, error) { return scanInto(row, withSession) }
 
-func scanRows(rows *sql.Rows) (Record, error) { return scanInto(rows) }
+func scanRows(rows *sql.Rows, withSession bool) (Record, error) { return scanInto(rows, withSession) }
 
-func scanInto(s scanner) (Record, error) {
+func scanInto(s scanner, withSession bool) (Record, error) {
 	var r Record
 	var created any
-	err := s.Scan(&r.ID, &r.ActorID, &r.Action, &r.ActingProjectID, &r.TargetProjectID, &r.TargetTable,
-		&r.TargetID, &r.Override, &r.BeforeHash, &r.AfterHash, &r.PrevLogHash, &r.Reason, &created)
+	dest := []any{&r.ID, &r.ActorID, &r.Action, &r.ActingProjectID, &r.TargetProjectID, &r.TargetTable,
+		&r.TargetID, &r.Override, &r.BeforeHash, &r.AfterHash, &r.PrevLogHash, &r.Reason, &created}
+	if withSession {
+		dest = append(dest, &r.SessionID, &r.Confirmed)
+	}
+	err := s.Scan(dest...)
 	switch v := created.(type) {
 	case time.Time:
 		r.CreatedAt = v.UTC().Format(time.RFC3339)

@@ -27,6 +27,40 @@ const (
 	FieldActorID = "actor_id"
 	// FieldAgentKind holds the string denoting the agent_kind field in the database.
 	FieldAgentKind = "agent_kind"
+	// FieldTool holds the string denoting the tool field in the database.
+	FieldTool = "tool"
+	// FieldToolSessionID holds the string denoting the tool_session_id field in the database.
+	FieldToolSessionID = "tool_session_id"
+	// FieldToolVersion holds the string denoting the tool_version field in the database.
+	FieldToolVersion = "tool_version"
+	// FieldModel holds the string denoting the model field in the database.
+	FieldModel = "model"
+	// FieldMachineID holds the string denoting the machine_id field in the database.
+	FieldMachineID = "machine_id"
+	// FieldRunID holds the string denoting the run_id field in the database.
+	FieldRunID = "run_id"
+	// FieldRepo holds the string denoting the repo field in the database.
+	FieldRepo = "repo"
+	// FieldBranch holds the string denoting the branch field in the database.
+	FieldBranch = "branch"
+	// FieldCwd holds the string denoting the cwd field in the database.
+	FieldCwd = "cwd"
+	// FieldTerminal holds the string denoting the terminal field in the database.
+	FieldTerminal = "terminal"
+	// FieldCi holds the string denoting the ci field in the database.
+	FieldCi = "ci"
+	// FieldParentSessionID holds the string denoting the parent_session_id field in the database.
+	FieldParentSessionID = "parent_session_id"
+	// FieldSignal holds the string denoting the signal field in the database.
+	FieldSignal = "signal"
+	// FieldSources holds the string denoting the sources field in the database.
+	FieldSources = "sources"
+	// FieldOuterTools holds the string denoting the outer_tools field in the database.
+	FieldOuterTools = "outer_tools"
+	// FieldDeclaredHuman holds the string denoting the declared_human field in the database.
+	FieldDeclaredHuman = "declared_human"
+	// FieldFlags holds the string denoting the flags field in the database.
+	FieldFlags = "flags"
 	// Table holds the table name of the session in the database.
 	Table = "sessions"
 )
@@ -41,6 +75,23 @@ var Columns = []string{
 	FieldEndedAt,
 	FieldActorID,
 	FieldAgentKind,
+	FieldTool,
+	FieldToolSessionID,
+	FieldToolVersion,
+	FieldModel,
+	FieldMachineID,
+	FieldRunID,
+	FieldRepo,
+	FieldBranch,
+	FieldCwd,
+	FieldTerminal,
+	FieldCi,
+	FieldParentSessionID,
+	FieldSignal,
+	FieldSources,
+	FieldOuterTools,
+	FieldDeclaredHuman,
+	FieldFlags,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -66,6 +117,34 @@ var (
 	ActorIDValidator func(string) error
 	// AgentKindValidator is a validator for the "agent_kind" field. It is called by the builders before save.
 	AgentKindValidator func(string) error
+	// DefaultTool holds the default value on creation for the "tool" field.
+	DefaultTool string
+	// DefaultToolSessionID holds the default value on creation for the "tool_session_id" field.
+	DefaultToolSessionID string
+	// DefaultToolVersion holds the default value on creation for the "tool_version" field.
+	DefaultToolVersion string
+	// DefaultModel holds the default value on creation for the "model" field.
+	DefaultModel string
+	// DefaultMachineID holds the default value on creation for the "machine_id" field.
+	DefaultMachineID string
+	// DefaultRunID holds the default value on creation for the "run_id" field.
+	DefaultRunID string
+	// DefaultRepo holds the default value on creation for the "repo" field.
+	DefaultRepo string
+	// DefaultBranch holds the default value on creation for the "branch" field.
+	DefaultBranch string
+	// DefaultCwd holds the default value on creation for the "cwd" field.
+	DefaultCwd string
+	// DefaultTerminal holds the default value on creation for the "terminal" field.
+	DefaultTerminal string
+	// DefaultCi holds the default value on creation for the "ci" field.
+	DefaultCi string
+	// DefaultParentSessionID holds the default value on creation for the "parent_session_id" field.
+	DefaultParentSessionID string
+	// DefaultSignal holds the default value on creation for the "signal" field.
+	DefaultSignal string
+	// DefaultDeclaredHuman holds the default value on creation for the "declared_human" field.
+	DefaultDeclaredHuman bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -113,4 +192,74 @@ func ByActorID(opts ...sql.OrderTermOption) OrderOption {
 // ByAgentKind orders the results by the agent_kind field.
 func ByAgentKind(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAgentKind, opts...).ToFunc()
+}
+
+// ByTool orders the results by the tool field.
+func ByTool(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTool, opts...).ToFunc()
+}
+
+// ByToolSessionID orders the results by the tool_session_id field.
+func ByToolSessionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldToolSessionID, opts...).ToFunc()
+}
+
+// ByToolVersion orders the results by the tool_version field.
+func ByToolVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldToolVersion, opts...).ToFunc()
+}
+
+// ByModel orders the results by the model field.
+func ByModel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldModel, opts...).ToFunc()
+}
+
+// ByMachineID orders the results by the machine_id field.
+func ByMachineID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMachineID, opts...).ToFunc()
+}
+
+// ByRunID orders the results by the run_id field.
+func ByRunID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRunID, opts...).ToFunc()
+}
+
+// ByRepo orders the results by the repo field.
+func ByRepo(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRepo, opts...).ToFunc()
+}
+
+// ByBranch orders the results by the branch field.
+func ByBranch(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBranch, opts...).ToFunc()
+}
+
+// ByCwd orders the results by the cwd field.
+func ByCwd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCwd, opts...).ToFunc()
+}
+
+// ByTerminal orders the results by the terminal field.
+func ByTerminal(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTerminal, opts...).ToFunc()
+}
+
+// ByCi orders the results by the ci field.
+func ByCi(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCi, opts...).ToFunc()
+}
+
+// ByParentSessionID orders the results by the parent_session_id field.
+func ByParentSessionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentSessionID, opts...).ToFunc()
+}
+
+// BySignal orders the results by the signal field.
+func BySignal(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSignal, opts...).ToFunc()
+}
+
+// ByDeclaredHuman orders the results by the declared_human field.
+func ByDeclaredHuman(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeclaredHuman, opts...).ToFunc()
 }

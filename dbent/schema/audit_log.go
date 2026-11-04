@@ -62,6 +62,15 @@ func (AuditLog) Fields() []ent.Field {
 
 		// Optional human reason via `--reason="..."` on commands that support it.
 		field.Text("reason").Optional().Nillable(),
+
+		// session_id is lore's sessions.id (never the tool's id) of the
+		// session that made the change (AGENT_IDENTITY_DESIGN 6.6).
+		// Machine-local like the whole table. The hash chain covers it only
+		// when set (OQ10), so every older entry keeps its fingerprint.
+		field.String("session_id").Optional().Nillable(),
+		// confirmed is true when the write followed --yes (8.1); hashed
+		// only when true, for the same reason as session_id.
+		field.Bool("confirmed").Default(false),
 	}
 }
 

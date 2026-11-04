@@ -20,26 +20,31 @@ import (
 	"saas/pkg/constants"
 	"time"
 
+	"dbent"
+	"dbent/gen/ent"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/identity"
+	"saas/pkg/aicoder/sessions"
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
 )
 
 type supportBundle struct {
-	SchemaVersion  int            `json:"schema_version"`
-	GeneratedAt    string         `json:"generated_at"`
-	BinaryVersion  string         `json:"binary_version"`
-	GoVersion      string         `json:"go_version"`
-	OS             string         `json:"os"`
-	Arch           string         `json:"arch"`
-	Identity       map[string]any `json:"identity"`
-	Doctor         any            `json:"doctor"`
-	Counts         map[string]int `json:"counts"`
-	Note           string         `json:"note"`
-	Sanitized      bool           `json:"sanitized"`
-	IncludeContent bool           `json:"include_content"`
+	SchemaVersion int            `json:"schema_version"`
+	GeneratedAt   string         `json:"generated_at"`
+	BinaryVersion string         `json:"binary_version"`
+	GoVersion     string         `json:"go_version"`
+	OS            string         `json:"os"`
+	Arch          string         `json:"arch"`
+	Identity      map[string]any `json:"identity"`
+	Doctor        any            `json:"doctor"`
+	Counts        map[string]int `json:"counts"`
+	// Sessions are the newest agent sessions, stripped (section 9).
+	Sessions       []supportSession `json:"sessions"`
+	Note           string           `json:"note"`
+	Sanitized      bool             `json:"sanitized"`
+	IncludeContent bool             `json:"include_content"`
 }
 
 func newSupportBundleCommand() *cobra.Command {
@@ -69,8 +74,9 @@ By default, NO memory/decision/rule content is included. Pass
 					"source":   r.Step.String(),
 					"stable":   r.Step.Stable(),
 				},
-				Doctor: report,
-				Counts: gatherCounts(cmd.Context(), &f),
+				Doctor:   report,
+				Counts:   gatherCounts(cmd.Context(), &f),
+				Sessions: supportSessions(cmd.Context(), &f),
 				Note: "Sanitized: no memory/decision/rule body content included. " +
 					"Use --include-content to include if needed for bug repro.",
 				Sanitized:      !includeContent,
@@ -170,4 +176,54 @@ func coreRowCount(ctx context.Context, table string) (int, bool) {
 		return 0, false
 	}
 	return len(docs), true
+}
+
+// supportSessionLimit is how many sessions a bundle describes.
+const supportSessionLimit = 10
+
+// supportSession is one session row in a bundle. AGENT_IDENTITY_DESIGN
+// section 9: tool_session_id, model, cwd and ci are stripped, keeping only
+// whether they were present; the tool, its version and the deciding
+// signal stay (they are not secrets and explain detection bugs).
+type supportSession struct {
+	Tool             string   `json:"tool,omitempty"`
+	ToolVersion      string   `json:"tool_version,omitempty"`
+	Signal           string   `json:"signal,omitempty"`
+	Flags            []string `json:"flags,omitempty"`
+	DeclaredHuman    bool     `json:"declared_human,omitempty"`
+	HasToolSessionID bool     `json:"has_tool_session_id"`
+	HasModel         bool     `json:"has_model"`
+	HasCwd           bool     `json:"has_cwd"`
+	HasCI            bool     `json:"has_ci"`
+}
+
+// supportSessions reads the newest sessions from lore.db, stripped; empty
+// when there is no lore.db or it predates the 0.1.18 columns.
+func supportSessions(ctx context.Context, f *doctorFlags) []supportSession {
+	out := []supportSession{}
+	rctx, client, err := resolveContext(&f.commonFlags)
+	if err != nil {
+		return out
+	}
+	defer client.Close()
+	db := dbent.InitDB(rctx.DBPath)
+	defer func() { _ = db.Close() }() // read-only use
+	if ok, rerr := sessions.Ready(ctx, db); rerr != nil || !ok {
+		return out
+	}
+	rows, err := sessions.List(ctx, client, supportSessionLimit)
+	if err != nil {
+		return out
+	}
+	for _, r := range rows {
+		out = append(out, stripSession(r))
+	}
+	return out
+}
+
+// stripSession is r without the four private fields (section 9).
+func stripSession(r *ent.Session) supportSession {
+	return supportSession{Tool: r.Tool, ToolVersion: r.ToolVersion, Signal: r.Signal, Flags: r.Flags,
+		DeclaredHuman: r.DeclaredHuman, HasToolSessionID: r.ToolSessionID != "", HasModel: r.Model != "",
+		HasCwd: r.Cwd != "", HasCI: r.Ci != ""}
 }

@@ -39,6 +39,10 @@ const (
 	FieldPrevLogHash = "prev_log_hash"
 	// FieldReason holds the string denoting the reason field in the database.
 	FieldReason = "reason"
+	// FieldSessionID holds the string denoting the session_id field in the database.
+	FieldSessionID = "session_id"
+	// FieldConfirmed holds the string denoting the confirmed field in the database.
+	FieldConfirmed = "confirmed"
 	// Table holds the table name of the auditlog in the database.
 	Table = "audit_logs"
 )
@@ -59,6 +63,8 @@ var Columns = []string{
 	FieldAfterHash,
 	FieldPrevLogHash,
 	FieldReason,
+	FieldSessionID,
+	FieldConfirmed,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -86,6 +92,8 @@ var (
 	TargetIDValidator func(string) error
 	// DefaultOverride holds the default value on creation for the "override" field.
 	DefaultOverride bool
+	// DefaultConfirmed holds the default value on creation for the "confirmed" field.
+	DefaultConfirmed bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -163,4 +171,14 @@ func ByPrevLogHash(opts ...sql.OrderTermOption) OrderOption {
 // ByReason orders the results by the reason field.
 func ByReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldReason, opts...).ToFunc()
+}
+
+// BySessionID orders the results by the session_id field.
+func BySessionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSessionID, opts...).ToFunc()
+}
+
+// ByConfirmed orders the results by the confirmed field.
+func ByConfirmed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConfirmed, opts...).ToFunc()
 }
