@@ -41,6 +41,8 @@ var coreOwned = map[string]bool{
 	"policies":           true,
 	"meta_keys":          true,
 	"meta_values":        true,
+	"machines":           true, // MACHINE PROFILE (OV3): written only by the core
+	"task_templates":     true, // TASK 11 (OV15c): written only by the core
 	"secret_rules":       true,
 	"secret_allows":      true,
 	"tasks":              true,

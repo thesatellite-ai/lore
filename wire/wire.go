@@ -453,7 +453,7 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// agents.person_only fires on the CLI too, not only for REST callers
 	// that send X-Lore-Agent. A surface that already set an agent or an
 	// explicit actor keeps it.
-	if c.Agent == "" && c.Actor.IsZero() {
+	if !c.AgentFixed && c.Agent == "" && c.Actor.IsZero() {
 		c.Agent = a.CallerAgent(ctx)
 	}
 	if name := e.Spec().Name; name != opsmigrate.OpRun && !opsstores.IsStoreOp(name) {

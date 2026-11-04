@@ -109,6 +109,10 @@ type Caller struct {
 	// Agent is the agent's name when an agent runs the command (detected
 	// on the CLI, X-Lore-Agent on REST); empty for a person.
 	Agent string
+	// AgentFixed: the surface decided Agent itself (REST: X-Lore-Agent or
+	// none), so Run never fills it from the process's own detection (the
+	// `lore api` server's environment is not the HTTP client's).
+	AgentFixed bool
 	// Interactive: a person can answer a question now (a terminal). A
 	// non-interactive caller without Yes gets E_NEEDS_CONFIRM.
 	Interactive bool
