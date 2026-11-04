@@ -239,6 +239,114 @@ var allowedActorKeys = map[string]bool{
 	"created_at": true, "updated_at": true, "archived_at": true, "active": true,
 }
 
+// Row-envelope keys every 0.1.18 row file carries (model/row, STORE_SERVER_SPEC
+// 4.1). They hold bookkeeping, not content, so a client actor copy may carry
+// them, but only in the shape that names nothing internal:
+//   - "_hlc": the edit stamp (time/counter/writer act_ id); always allowed.
+//   - "created_by", "updated_by": an act_ id (the writer; actor ids are
+//     already public in a client repo, every row's created_by_actor_id is one).
+//   - "_o": the provenance block (engine originOf), allowed only as
+//     {"store": "repo", "cmd": <text>}: an actor row the core wrote into the
+//     client repo itself. Any other store name, a "moves" list or another key
+//     would tell the client about an internal store, so it blocks.
+const (
+	envHLC       = "_hlc"
+	envCreatedBy = "created_by"
+	envUpdatedBy = "updated_by"
+	envOrigin    = "_o"
+	// originStoreKey / originCmdKey are the _o members (engine/write.go).
+	originStoreKey = "store"
+	originCmdKey   = "cmd"
+	// repoStoreSource is the repo store's source name (store.Source "repo"):
+	// the only origin a client actor copy may name.
+	repoStoreSource = "repo"
+)
+
+// actorIDRe is a bare actor id (ids.go: act_ + 32 hex).
+var actorIDRe = regexp.MustCompile(`^act_[0-9a-f]{32}$`)
+
+// envelopeKeyAllowed reports whether envelope key k with value v may sit in
+// a client actor copy (see the key list above). Fails closed: an unknown
+// key or an unexpected shape is not allowed.
+func envelopeKeyAllowed(k string, v any) bool {
+	switch k {
+	case envHLC:
+		_, ok := v.(string)
+		return ok
+	case envCreatedBy, envUpdatedBy:
+		s, ok := v.(string)
+		return ok && actorIDRe.MatchString(s)
+	case envOrigin:
+		o, ok := v.(map[string]any)
+		if !ok {
+			return false
+		}
+		for ok2, ov := range o {
+			switch ok2 {
+			case originStoreKey:
+				if ov != repoStoreSource {
+					return false
+				}
+			case originCmdKey:
+				if _, isText := ov.(string); !isText {
+					return false
+				}
+			default:
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// originMovesKey / moveToKey are the move entries of _o (engine/move.go).
+const (
+	originMovesKey = "moves"
+	moveToKey      = "moved_to"
+)
+
+// originIsRepo reports whether a 0.1.18 row's provenance block (its "_o"
+// value, nil when absent) says the row belongs in the repo it sits in: it
+// was created in the repo store, or its last move put it there (`lore
+// move … --to repo`, a deliberate choice). A row with no _o (v0.1.17, or
+// written before provenance existed) is judged by the other rules only.
+//
+// Why: a 0.1.18 store row carries no project_id when it has no project (a
+// global memory), so CI mode's project rule cannot see it; the provenance
+// says where it was written. A copy of a store's row file committed into a
+// client repo names that store in _o.store, so it is caught without any
+// store access, and the finding names no store.
+func originIsRepo(o any) bool {
+	if o == nil {
+		return true
+	}
+	m, ok := o.(map[string]any)
+	if !ok {
+		return false
+	}
+	if moves, ok := m[originMovesKey].([]any); ok && len(moves) > 0 {
+		last, ok := moves[len(moves)-1].(map[string]any)
+		return ok && last[moveToKey] == repoStoreSource
+	}
+	return m[originStoreKey] == repoStoreSource
+}
+
+// actorExtraKeys lists the keys of an actor row document that a client
+// repo's copy may not hold: anything outside allowedActorKeys that is not
+// empty and not an allowed envelope key. Sorted, nil when the copy is clean.
+func actorExtraKeys(doc map[string]any) []string {
+	var extra []string
+	for k, v := range doc {
+		if allowedActorKeys[k] || emptyValue(v) || envelopeKeyAllowed(k, v) {
+			continue
+		}
+		extra = append(extra, k)
+	}
+	sort.Strings(extra)
+	return extra
+}
+
 // Check runs the id, text and secret rules over items against idx. idx may
 // be nil only when the caller decided there is nothing internal loaded
 // (then only the secret and project-id rules run).
@@ -303,14 +411,7 @@ func checkRowFile(it Item, table, id string, idx *Index, o Options) []Finding {
 		if !o.ClientRepo {
 			return out
 		}
-		var extra []string
-		for k, v := range doc {
-			if !allowedActorKeys[k] && !emptyValue(v) {
-				extra = append(extra, k)
-			}
-		}
-		if len(extra) > 0 {
-			sort.Strings(extra)
+		if extra := actorExtraKeys(doc); len(extra) > 0 {
 			warn := !StableKeyBlocks
 			for _, k := range extra {
 				if !warnOnlyActorKeys[k] {
@@ -321,6 +422,9 @@ func checkRowFile(it Item, table, id string, idx *Index, o Options) []Finding {
 				Detail: "an actor copy in a client repo may hold only {id, display name, kind}; also has " + strings.Join(extra, ", ")})
 		}
 		return out
+	}
+	if o.ClientRepo && !originIsRepo(doc[envOrigin]) {
+		out = append(out, Finding{Rule: RuleID, Where: it.Where, RowID: id, Detail: "row written in another store (its provenance is not this repo's)"})
 	}
 	if pid, ok := doc["project_id"].(string); ok && o.RepoProjectID != "" && pid != "" && pid != o.RepoProjectID && (o.DataPrefix == "" || strings.HasPrefix(it.Path, o.DataPrefix)) {
 		label := ""
@@ -514,16 +618,16 @@ func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
 		}
 		where := table + " row file"
 		if table == tableActors {
-			for k, v := range doc {
-				if !allowedActorKeys[k] && !emptyValue(v) {
-					out = append(out, CIFinding{Where: where, Detail: "an actor copy holds more than {id, display name, kind}"})
-					break
-				}
+			if len(actorExtraKeys(doc)) > 0 {
+				out = append(out, CIFinding{Where: where, Detail: "an actor copy holds more than {id, display name, kind}"})
 			}
 			continue
 		}
 		if pid, ok := doc["project_id"].(string); ok && pid != "" && pid != repoProjectID {
 			out = append(out, CIFinding{Where: where, Detail: "belongs to another project (its project id is not this repo's)"})
+		}
+		if !originIsRepo(doc[envOrigin]) {
+			out = append(out, CIFinding{Where: where, Detail: "was written in another store (its provenance is not this repo's)"})
 		}
 		for _, k := range projectRefKeys {
 			if s, ok := doc[k].(string); ok && s != "" && s != repoProjectID {
