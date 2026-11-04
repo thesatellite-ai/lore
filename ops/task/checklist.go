@@ -63,15 +63,19 @@ type ChecklistAddIn struct {
 
 // ChecklistItemIn names one item of a task (tick, untick, rm).
 type ChecklistItemIn struct {
-	ID   string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
-	Item string `json:"item" arg:"1" desc:"the item: its position (1, 2, …) or its chk_ id"`
+	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+	// Item is checked by the handler after the task lookup (omitempty), so
+	// a bad task id answers E_NOT_FOUND first (ops/internal/lookup).
+	Item string `json:"item,omitempty" arg:"1" desc:"the item: its position (1, 2, …) or its chk_ id"`
 }
 
 // ChecklistEditIn is the input of task.checklist.edit.
 type ChecklistEditIn struct {
-	ID   string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
-	Item string `json:"item" arg:"1" desc:"the item: its position (1, 2, …) or its chk_ id"`
-	Text string `json:"text" arg:"2" rest:"true" desc:"the new text"`
+	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+	// Item and Text are checked by the handler after the task lookup
+	// (omitempty), so a bad task id answers E_NOT_FOUND first.
+	Item string `json:"item,omitempty" arg:"1" desc:"the item: its position (1, 2, …) or its chk_ id"`
+	Text string `json:"text,omitempty" arg:"2" rest:"true" desc:"the new text"`
 }
 
 // ChecklistImportIn is the input of task.checklist.import.
@@ -341,6 +345,16 @@ func (o ops) checklistTick(ctx context.Context, in ChecklistItemIn, done bool) (
 	return o.saveChecklist(ctx, h, []string{it.ID.String()}, human)
 }
 
+// requireField is the op layer's "missing required field" refusal, run
+// by a handler AFTER its id lookup for a field tagged omitempty only so
+// the lookup answers first (the one lookup rule, ops/internal/lookup).
+func requireField(name, v string) error {
+	if strings.TrimSpace(v) == "" {
+		return errs.New(errs.InvalidInput, "missing required field "+name)
+	}
+	return nil
+}
+
 // liveIndex resolves ref and refuses a removed item.
 func liveIndex(list []checklist.Item, ref string) (int, error) {
 	i, err := checklist.Resolve(list, ref)
@@ -355,11 +369,17 @@ func liveIndex(list []checklist.Item, ref string) (int, error) {
 
 // checklistEdit changes an item's text.
 func (o ops) checklistEdit(ctx context.Context, in ChecklistEditIn) (ChecklistOut, error) {
-	text, err := checklist.CleanText(in.Text)
+	h, err := o.getChecklist(ctx, in.ID)
 	if err != nil {
 		return ChecklistOut{}, err
 	}
-	h, err := o.getChecklist(ctx, in.ID)
+	if err := requireField("item", in.Item); err != nil {
+		return ChecklistOut{}, err
+	}
+	if err := requireField("text", in.Text); err != nil {
+		return ChecklistOut{}, err
+	}
+	text, err := checklist.CleanText(in.Text)
 	if err != nil {
 		return ChecklistOut{}, err
 	}
@@ -376,6 +396,9 @@ func (o ops) checklistEdit(ctx context.Context, in ChecklistEditIn) (ChecklistOu
 func (o ops) checklistRm(ctx context.Context, in ChecklistItemIn) (ChecklistOut, error) {
 	h, err := o.getChecklist(ctx, in.ID)
 	if err != nil {
+		return ChecklistOut{}, err
+	}
+	if err := requireField("item", in.Item); err != nil {
 		return ChecklistOut{}, err
 	}
 	i, err := liveIndex(h.list, in.Item)

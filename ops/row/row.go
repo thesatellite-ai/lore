@@ -3,6 +3,7 @@ package row
 import (
 	"context"
 	"encoding/json"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"maps"
 	"slices"
 	"strings"
@@ -217,7 +218,7 @@ type ops struct{ env Env }
 func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil {
-		return ShowOut{}, errs.Wrap(errs.InvalidID, strings.TrimSpace(in.ID)+" is not a row id", err)
+		return ShowOut{}, lookup.BadID(strings.TrimSpace(in.ID)+" is not a row id", err)
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{ID: id})
 	if err != nil {
@@ -501,7 +502,7 @@ func actorText(a Actor) string {
 func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil {
-		return MoveOut{}, errs.Wrap(errs.InvalidID, strings.TrimSpace(in.ID)+" is not a row id", err)
+		return MoveOut{}, lookup.BadID(strings.TrimSpace(in.ID)+" is not a row id", err)
 	}
 	to := strings.TrimSpace(in.To)
 	if to == "" {

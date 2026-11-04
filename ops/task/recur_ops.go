@@ -26,8 +26,10 @@ import (
 
 // RecurEditIn is the input of task.recur.edit.
 type RecurEditIn struct {
-	ID   string `json:"id" arg:"0" desc:"an instance of the series (tsk_…)"`
-	Rule string `json:"rule" arg:"1" rest:"true" desc:"the new rule, e.g. \"every! 30 days\" (this and later instances)"`
+	ID string `json:"id" arg:"0" desc:"an instance of the series (tsk_…)"`
+	// Rule is checked by the handler after the instance lookup (omitempty),
+	// so a bad id answers E_NOT_FOUND first (ops/internal/lookup).
+	Rule string `json:"rule,omitempty" arg:"1" rest:"true" desc:"the new rule, e.g. \"every! 30 days\" (this and later instances)"`
 }
 
 // RecurOut is the output of the recur operations.
@@ -127,6 +129,9 @@ func (o ops) editRecur(ctx context.Context, src store.Source, cur row.Row, patch
 func (o ops) recurEdit(ctx context.Context, in RecurEditIn) (RecurOut, error) {
 	src, cur, _, err := o.recurring(ctx, in.ID)
 	if err != nil {
+		return RecurOut{}, err
+	}
+	if err := requireField("rule", in.Rule); err != nil {
 		return RecurOut{}, err
 	}
 	patch := map[string]value.Value{}
