@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -351,6 +352,18 @@ func TestSearch(t *testing.T) {
 		if _, err := call[SearchOut](t, env, OpSearch, bad); !errs.Has(err, errs.InvalidInput) {
 			t.Fatalf("%s: %v", bad, err)
 		}
+	}
+}
+
+// TestItemBodyIsCutOnRunes: a list body over listBodyMax bytes is cut to
+// at most listBodyMax bytes ending in the ellipsis (v0.1.17's rule), never
+// inside a multi-byte character.
+func TestItemBodyIsCutOnRunes(t *testing.T) {
+	long := strings.Repeat("é", listBodyMax+5)
+	got := strings.TrimSuffix(ListOut{Data: []Record{{ID: "mem_x", Kind: "fact", Body: long}}}.Text(), "\n")
+	body := strings.TrimPrefix(got, "mem_x [fact] ")
+	if !utf8.ValidString(got) || len(body) > listBodyMax || len(body) < listBodyMax-utf8.UTFMax || !strings.HasSuffix(body, ellipsis) {
+		t.Fatalf("cut to %d bytes: %q", len(body), body)
 	}
 }
 

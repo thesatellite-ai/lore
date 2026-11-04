@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Human (op.Texter) forms of the memory outputs: v0.1.17's lines from
@@ -13,6 +14,21 @@ import (
 // listBodyCut is how many bytes of a too-long body v0.1.17's list kept
 // before the ellipsis (listBodyMax minus its length).
 const listBodyCut = listBodyMax - len(ellipsis)
+
+// cutBody is v0.1.17's list cut (a body over listBodyMax bytes keeps
+// listBodyCut bytes plus the ellipsis), moved back to the last rune
+// boundary so a multi-byte character is never split (v0.1.17 could emit
+// invalid UTF-8 there; that was a bug, not parity).
+func cutBody(body string) string {
+	if len(body) <= listBodyMax {
+		return body
+	}
+	n := listBodyCut
+	for n > 0 && !utf8.RuneStart(body[n]) {
+		n--
+	}
+	return body[:n] + ellipsis
+}
 
 // Text is the line(s) the op set in Human ("✓ <id> <verb>", and for add
 // the scope line).
@@ -28,9 +44,7 @@ func (o ListOut) Text() string {
 	var b strings.Builder
 	for _, m := range o.Data {
 		body := m.Body
-		if len(body) > listBodyMax {
-			body = body[:listBodyCut] + ellipsis
-		}
+		body = cutBody(body)
 		badge := ""
 		if !m.ArchivedAt.IsZero() {
 			badge = " [archived]"
