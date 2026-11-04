@@ -115,8 +115,8 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	}
 	got, err := e.put(ctx, st, r, hlc.HLC{})
 	if natural && errors.Is(err, store.ErrStale) {
-		return Written{}, errs.Wrap(errs.InvalidInput, "engine: a "+string(table)+" row with this "+strings.Join(keyFields, ", ")+" already exists ("+id.String()+")", err).
-			WithHint("use the existing row (a deleted one cannot come back)")
+		got, err = e.recreateNatural(ctx, st, def, keyFields, r, err)
+		id = got.row.ID
 	}
 	if err != nil {
 		return Written{}, err
@@ -124,6 +124,54 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	ev := Event{Op: cl.op, Action: ActionCreate, Store: target, Table: table, ID: id, HLC: stamp, Actor: actor,
 		SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
 	return Written{Row: got.row, Warnings: sc.warnings}, e.finish(ctx, target, []store.Row{got.doc}, ev)
+}
+
+// recreateNatural handles a natural-id create whose id is taken (stale is
+// the put's ErrStale). Tombstones are kept forever (DQ), so a deleted
+// tag, commit link, var, policy or kind could otherwise never be added
+// again: when the row at the natural id is a tombstone and no LIVE row of
+// the table in that store holds the same key (an earlier re-create got a
+// random id), the row is written under a fresh random id instead. A live
+// row with the key stays "already exists". Two machines re-creating the
+// same key offline get two rows (spec-deltas; a merge by key is later
+// work).
+func (e *Engine) recreateNatural(ctx context.Context, st Attached, def schema.TableDef, keyFields []string, r row.Row, stale error) (stored, error) {
+	exists := func(id ids.AnyID) error {
+		return errs.Wrap(errs.InvalidInput, "engine: a "+string(def.Name)+" row with this "+strings.Join(keyFields, ", ")+" already exists ("+id.String()+")", stale).
+			WithHint("use the existing row")
+	}
+	_, cur, err := e.locate(ctx, Ref{Store: st.Name, Table: def.Name, ID: r.ID})
+	if err != nil {
+		return stored{}, err
+	}
+	if !cur.Deleted {
+		return stored{}, exists(r.ID)
+	}
+	live, err := e.List(ctx, st.Name, def.Name)
+	if err != nil {
+		return stored{}, err
+	}
+	for _, l := range live {
+		if sameKey(l.Fields, r.Fields, keyFields) {
+			return stored{}, exists(l.ID)
+		}
+	}
+	if r.ID, err = e.ids.NewID(def.Prefix); err != nil {
+		return stored{}, err
+	}
+	return e.put(ctx, st, r, hlc.HLC{})
+}
+
+// sameKey reports whether a and b hold equal values in every key field.
+func sameKey(a, b map[string]value.Value, keyFields []string) bool {
+	for _, f := range keyFields {
+		x, okx := a[f]
+		y, oky := b[f]
+		if !okx || !oky || x.String() != y.String() {
+			return false
+		}
+	}
+	return true
 }
 
 // Update applies patch to a live row: a value sets a field, value.Null
