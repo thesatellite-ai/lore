@@ -156,7 +156,7 @@ func coreDefs() []TableDef {
 			// the normalised url (PROVENANCE_DESIGN 10.2); an entry is closed
 			// with `to`, never deleted. forked_from / split_from name the
 			// upstream repo of a repo made by `lore repo fork [--split]`.
-			JSON("urls"),
+			JSON("urls", MergeBy(MergeURLSet)),
 			Ref("forked_from", TableRepos),
 			Ref("split_from", TableRepos),
 			UniqueOn("project_id", "mount_name"),
@@ -297,7 +297,9 @@ func coreDefs() []TableDef {
 			DateTime("last_checked"),
 			// checked_by is who stamped last_checked: manual | edit | verifier:<plugin> (RQ8); the actor is the audit event's.
 			Text("checked_by"),
-			JSON("fields"),
+			// fields: {fld_…: {name, v, strict?, sensitive?}}, merged entry by
+			// entry (RESOURCES 3.13, R4, RQ5).
+			JSON("fields", MergeBy(MergeEntriesByID)),
 			IndexOn(fieldKind, fieldName),
 			BelongsToRel("kind_def", fieldKind, TableKinds, Restrict),
 		),

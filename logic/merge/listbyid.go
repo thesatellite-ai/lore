@@ -125,12 +125,22 @@ func memberText(obj []byte, key string) string {
 
 // strategyMerge applies the field strategy s to a field both sides changed
 // differently; ok is false for MergeDefault (the row rule applies).
-func strategyMerge(s schema.MergeStrategy, ours, theirs value.Value) (v value.Value, ok bool, err error) {
+// conflicts lists entry ids a person must settle (MergeEntriesByID only).
+func strategyMerge(s schema.MergeStrategy, base, ours, theirs value.Value, newer side) (v value.Value, conflicts []string, ok bool, err error) {
 	switch s {
 	case schema.MergeListByID:
 		v, err = StrategyListByID(ours, theirs)
-		return v, true, err
+		return v, nil, true, err
+	case schema.MergeSetUnion:
+		v, err = StrategySetUnion(base, ours, theirs, newer)
+		return v, nil, true, err
+	case schema.MergeURLSet:
+		v, err = StrategyURLSet(base, ours, theirs, newer)
+		return v, nil, true, err
+	case schema.MergeEntriesByID:
+		v, conflicts, err = StrategyEntriesByID(base, ours, theirs, newer)
+		return v, conflicts, true, err
 	case schema.MergeDefault:
 	}
-	return nil, false, nil
+	return nil, nil, false, nil
 }

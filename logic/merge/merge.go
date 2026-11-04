@@ -13,6 +13,14 @@
 // back; it is reported instead (spec 11 rule 3, DQ4: tombstones are kept
 // forever so no old copy can resurrect a row).
 //
+// Flow:
+//
+//	Rows ─ order (HLC, then bytes) ─ tombstone rules ─ fields:
+//	  each field: pick (3-way) ─ clash? ─ strategyMerge (schema.FieldDef.Merge)
+//	                                       list_by_id │ set_union │ url_set │ entries_by_id
+//	                                     └ else: text → Mark, other → newer side
+//	  meta (3-way, newer), reserved, _o (mergeOrigin: write-once + moves union)
+//
 // Invariants:
 //   - Rows is deterministic, and for every field that is not free text its
 //     outcome does not depend on which side is called "ours" (the fuzz test
@@ -130,7 +138,7 @@ func Rows(p Policy, base, ours, theirs row.Row) (Result, error) {
 	if !base.ID.IsZero() && (base.Table != ours.Table || base.ID != ours.ID) {
 		return Result{}, errs.New(errs.InvalidInput, "merge: the base is a different row")
 	}
-	newer, older := order(ours, theirs)
+	newer, older, oursNewer := order(ours, theirs)
 	switch {
 	case newer.Deleted && older.Deleted:
 		return Result{Row: newer}, nil
@@ -145,29 +153,33 @@ func Rows(p Policy, base, ours, theirs row.Row) (Result, error) {
 	if base.Deleted {
 		base = Absent // both sides revived a tombstone: no usable ancestor
 	}
-	return fields(p, base, ours, theirs, newer, older), nil
+	ns := newerTheirs
+	if oursNewer {
+		ns = newerOurs
+	}
+	return fields(p, base, ours, theirs, newer, older, ns), nil
 }
 
 // order returns (newer, older) by HLC; equal HLCs (which only one edit can
 // produce) fall back to the document bytes so the choice never depends on
 // the argument order.
-func order(a, b row.Row) (newer, older row.Row) {
+func order(a, b row.Row) (newer, older row.Row, aNewer bool) {
 	switch c := a.HLC.Compare(b.HLC); {
 	case c > 0:
-		return a, b
+		return a, b, true
 	case c < 0:
-		return b, a
+		return b, a, false
 	}
 	ab, aerr := row.Encode(a)
 	bb, berr := row.Encode(b)
 	if aerr == nil && berr == nil && bytes.Compare(ab, bb) < 0 {
-		return b, a
+		return b, a, false
 	}
-	return a, b
+	return a, b, true
 }
 
 // fields merges two live rows field by field.
-func fields(p Policy, base, ours, theirs, newer, older row.Row) Result {
+func fields(p Policy, base, ours, theirs, newer, older row.Row, newerSide side) Result {
 	isText := p.IsText
 	if isText == nil {
 		isText = func(string) bool { return false }
@@ -182,12 +194,31 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row) Result {
 	merged := map[string]value.Value{}
 	for _, k := range keys(base.Fields, ours.Fields, theirs.Fields) {
 		v, how := pick(base.Fields, ours.Fields, theirs.Fields, newer.Fields, k)
-		if how == pickedNewer && p.Strategy != nil {
+		if how == pickedNewer {
+			st := schema.MergeDefault
+			if p.Strategy != nil {
+				st = p.Strategy(k)
+			}
+			if st == schema.MergeDefault && k == fieldSharedAs {
+				// shared_as is a v0.1.17 bookkeeping list on any table,
+				// declared by none: always a union (PROVENANCE_DESIGN 5.4, 7).
+				st = schema.MergeSetUnion
+			}
 			// A per-field strategy settles the clash. Should it refuse the
 			// values (a corrupt list), the row rule below still applies, so
-			// the merge never fails on one bad field.
-			if sv, ok, err := strategyMerge(p.Strategy(k), ours.Fields[k], theirs.Fields[k]); ok && err == nil {
+			// the merge never fails on one bad field; a corrupt entries
+			// object is one conflict on the whole field instead (R10).
+			sv, entryConflicts, ok, err := strategyMerge(st, base.Fields[k], ours.Fields[k], theirs.Fields[k], newerSide)
+			switch {
+			case ok && err == nil:
 				merged[k] = sv
+				for _, id := range entryConflicts {
+					res.Conflicts = append(res.Conflicts, FieldConflict{Field: k + "." + id, Newer: newer.Fields[k], Older: older.Fields[k]})
+				}
+				continue
+			case ok && st == schema.MergeEntriesByID:
+				merged[k] = newer.Fields[k]
+				res.Conflicts = append(res.Conflicts, FieldConflict{Field: k, Newer: newer.Fields[k], Older: older.Fields[k]})
 				continue
 			}
 		}
@@ -241,10 +272,7 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row) Result {
 		out.Reserved = reserved
 	}
 
-	origin, _ := pick(originView(base), originView(ours), originView(theirs), originView(newer), row.KeyOrigin)
-	if j, ok := origin.(value.JSON); ok {
-		out.Origin = j
-	}
+	out.Origin = mergeOrigin(base, ours, theirs)
 
 	slices.SortFunc(res.Conflicts, func(a, b FieldConflict) int { return strings.Compare(a.Field, b.Field) })
 	slices.Sort(res.NewerWins)
@@ -317,14 +345,6 @@ func metaView(m map[ids.ID[ids.MetaKey]]value.JSON) map[string]value.Value {
 		out[k.String()] = v
 	}
 	return out
-}
-
-// originView exposes _o as a one-key map so it merges by the same rule.
-func originView(r row.Row) map[string]value.Value {
-	if r.Origin.IsZero() {
-		return nil
-	}
-	return map[string]value.Value{row.KeyOrigin: r.Origin}
 }
 
 // isTextValue reports a present text value.

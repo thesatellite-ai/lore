@@ -66,6 +66,18 @@ const (
 	// either side is kept, the same id on both sides takes the newer
 	// "updated_at" (TIME_TRACKING_DESIGN 7.2). Used by tasks.time_entries.
 	MergeListByID MergeStrategy = "list_by_id"
+	// MergeSetUnion is the three-way set merge of a list by normalised
+	// value: adds from both sides kept, a removal kept unless the other
+	// side added it anew (RQ5). Used by tasks.assignees, tasks.watchers,
+	// tasks.blocked_by.
+	MergeSetUnion MergeStrategy = "set_union"
+	// MergeURLSet is MergeSetUnion keyed by the normalised url of each
+	// entry (PROVENANCE_DESIGN 7, 10.2). Used by repos.urls.
+	MergeURLSet MergeStrategy = "url_set"
+	// MergeEntriesByID merges an object keyed by a permanent id entry by
+	// entry ({name, v, strict, sensitive}): lists as sets, strict clashes go
+	// to a person (RESOURCES 3.13, R4, RQ5). Used by resources.fields.
+	MergeEntriesByID MergeStrategy = "entries_by_id"
 )
 
 // FieldDef is one column of a table.
