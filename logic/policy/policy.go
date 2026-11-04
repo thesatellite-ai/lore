@@ -1,5 +1,6 @@
-// Package policy resolves the settings rows of every level a write can see
-// into the one effective answer (spec 4.3 rules, DECISIONS_LOG 6 OQ24, DOCS
+// Package policy resolves the settings rows (SETTINGS ARE DATA: every
+// setting is a row changed by commands, never a hand-edited file) of every
+// level a write can see into the one effective answer (spec 4.3 rules, DECISIONS_LOG 6 OQ24, DOCS
 // O1):
 //
 //   - definitions (variables, and any other named thing) resolve nearest

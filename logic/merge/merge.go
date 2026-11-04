@@ -10,7 +10,8 @@
 // markers) and saas/pkg/aicoder/lsync/mergedriver.go (row-level settling),
 // with two deliberate changes: every row is ordered by its _hlc (never by
 // updated_at), and an edit newer than a tombstone no longer brings the row
-// back; it is reported instead (spec 11 rule 3).
+// back; it is reported instead (spec 11 rule 3, DQ4: tombstones are kept
+// forever so no old copy can resurrect a row).
 //
 // Invariants:
 //   - Rows is deterministic, and for every field that is not free text its
@@ -106,7 +107,7 @@ type Result struct {
 	// where the newer side was taken, sorted. Reported, never a conflict.
 	NewerWins []string
 	// EditAfterDelete is set when one side is a tombstone and the other
-	// side holds an edit with a higher HLC: the tombstone is kept (rows are
+	// side holds an edit with a higher HLC: the tombstone is kept (DQ4: rows are
 	// never resurrected) and the edit's HLC is reported here for lore doctor
 	// (spec 11 rule 3). Zero when nothing was overruled.
 	EditAfterDelete hlc.HLC
@@ -137,7 +138,8 @@ func Rows(p Policy, base, ours, theirs row.Row) (Result, error) {
 		// The tombstone is newer than the edit: it wins (rule 3).
 		return Result{Row: newer}, nil
 	case older.Deleted:
-		// The edit is newer than the tombstone, but rows never come back.
+		// The edit is newer than the tombstone, but rows never come back
+		// (DQ4: an old branch must not revive a deleted row).
 		return Result{Row: older, EditAfterDelete: newer.HLC}, nil
 	}
 	if base.Deleted {
