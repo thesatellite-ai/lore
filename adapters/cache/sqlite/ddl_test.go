@@ -163,7 +163,7 @@ func TestAffinityEveryKind(t *testing.T) {
 func TestCheckReadOnly(t *testing.T) {
 	ok := []string{
 		"SELECT 1", "select 1;", "  -- lead\n SELECT 1 ; -- trail", "/* c */ WITH x AS (SELECT 1) SELECT * FROM x",
-		"VALUES (1)", "SELECT ';DROP'", `SELECT "a;b" FROM t`, "SELECT `a;b`", "SELECT [a;b]", "SELECT 'it''s; fine'",
+		"VALUES (1)", "EXPLAIN SELECT 1", "explain query plan WITH x AS (SELECT 1) SELECT * FROM x", "SELECT ';DROP'", `SELECT "a;b" FROM t`, "SELECT `a;b`", "SELECT [a;b]", "SELECT 'it''s; fine'",
 	}
 	for _, q := range ok {
 		if err := checkReadOnly(q); err != nil {
@@ -172,7 +172,7 @@ func TestCheckReadOnly(t *testing.T) {
 	}
 	bad := []string{
 		"", ";", "INSERT INTO t VALUES (1)", "ATTACH 'x' AS y", "PRAGMA query_only=0", "SELECT 1; SELECT 2",
-		"SELECT 1;;", "selectx 1", "/* SELECT */ DELETE FROM t", "SELECT 'a'; DROP TABLE t", "EXPLAIN SELECT 1", "DETACH s_0",
+		"SELECT 1;;", "selectx 1", "/* SELECT */ DELETE FROM t", "SELECT 'a'; DROP TABLE t", "EXPLAIN DELETE FROM t", "EXPLAIN QUERY DELETE FROM t", "EXPLAIN SELECT 1; DROP TABLE t", "DETACH s_0",
 	}
 	for _, q := range bad {
 		if err := checkReadOnly(q); !errs.Has(err, errs.ReadOnly) {

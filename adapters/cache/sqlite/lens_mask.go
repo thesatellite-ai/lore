@@ -36,13 +36,18 @@ const dbPageTable = "sqlite_dbpage"
 type mask struct {
 	cols     map[string][]string
 	fieldIDs []string
+	// on is a masked lens; metaKeyIDs are the meta keys any source's
+	// meta_keys marks sensitive. row_meta value columns are masked for
+	// those keys and for every entry that says sensitive itself (3.20).
+	on         bool
+	metaKeyIDs []string
 }
 
 // sensitive reads every source's sensitive kind fields. A source that has
 // kinds and kind_fields but cannot be read fails the open (fail closed:
 // never show a lens whose masking is unknown).
 func (l *Lens) sensitive(ctx context.Context, tables map[string][]srcTable) (mask, error) {
-	m := mask{cols: map[string][]string{}}
+	m := mask{cols: map[string][]string{}, on: true}
 	has := func(table string, src int) bool {
 		return slices.ContainsFunc(tables[table], func(st srcTable) bool { return st.src == src })
 	}
@@ -76,7 +81,59 @@ func (l *Lens) sensitive(ctx context.Context, tables map[string][]srcTable) (mas
 		}
 	}
 	slices.Sort(m.fieldIDs)
+	for i := range l.sources {
+		if !has(schema.TableMetaKeys, i) {
+			continue
+		}
+		keys, err := l.sensitiveMetaKeys(ctx, i)
+		if err != nil {
+			return mask{}, err
+		}
+		for _, k := range keys {
+			if !slices.Contains(m.metaKeyIDs, k) {
+				m.metaKeyIDs = append(m.metaKeyIDs, k)
+			}
+		}
+	}
+	slices.Sort(m.metaKeyIDs)
 	return m, nil
+}
+
+// sensitiveMetaKeys reads source i's sensitive meta key ids (fail closed:
+// an unreadable registry fails the open).
+func (l *Lens) sensitiveMetaKeys(ctx context.Context, i int) ([]string, error) {
+	rs, err := l.conn.QueryContext(ctx, l.sql[i].metaSensitive)
+	if err != nil {
+		return nil, dbErr("read sensitive meta keys of "+quoteText(l.sources[i].Name), err)
+	}
+	var out []string
+	for rs.Next() {
+		var id string
+		if scanErr := rs.Scan(&id); scanErr != nil {
+			_ = rs.Close()
+			return nil, dbErr("read sensitive meta keys", scanErr)
+		}
+		out = append(out, id)
+	}
+	err = rs.Err()
+	_ = rs.Close()
+	if err != nil {
+		return nil, dbErr("read sensitive meta keys", err)
+	}
+	return out, nil
+}
+
+// metaExpr masks one row_meta value column (cq) of a sensitive entry.
+func (m mask) metaExpr(cq string) string {
+	cond := `"sensitive" = 1`
+	if len(m.metaKeyIDs) > 0 {
+		idList := make([]string, len(m.metaKeyIDs))
+		for i, id := range m.metaKeyIDs {
+			idList[i] = literal(id)
+		}
+		cond += ` OR "key_id" IN (` + strings.Join(idList, ", ") + `)`
+	}
+	return "CASE WHEN " + cq + " IS NULL THEN NULL WHEN " + cond + " THEN " + literal(MaskedValue) + " ELSE " + cq + " END"
 }
 
 // columns is the select list of one source's copy of table: every column
@@ -93,6 +150,8 @@ func (m mask) columns(table string, all, have []string) (string, error) {
 		switch {
 		case !slices.Contains(have, c):
 			sel = append(sel, "NULL AS "+cq)
+		case m.on && table == ViewRowMeta && slices.Contains(rowMetaValueCols, c):
+			sel = append(sel, m.metaExpr(cq)+" AS "+cq)
 		case slices.Contains(m.cols[table], c):
 			sel = append(sel, "CASE WHEN "+cq+" IS NULL THEN NULL ELSE "+literal(MaskedValue)+" END AS "+cq)
 		case table == schema.TableResources && c == fieldResVals && len(m.fieldIDs) > 0:

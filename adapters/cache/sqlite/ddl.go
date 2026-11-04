@@ -156,6 +156,7 @@ func planFor(def schema.TableDef, view string) (plan, error) {
 	if def.Name == schema.TableResources && len(def.FTS) == 0 {
 		def = resourceFTSDef(def)
 	}
+	def = metaFTSDef(def)
 	p := plan{def: def, view: view}
 	tq, err := ident(def.Name.String())
 	if err != nil {
@@ -410,5 +411,22 @@ const (
 func resourceFTSDef(def schema.TableDef) schema.TableDef {
 	def.FTS = []string{fieldName, ftsResKind, ftsResValues}
 	def.FTSWeights = map[string]float64{ftsResValues: ftsWeightResValues}
+	return def
+}
+
+// metaFTSDef is def with the meta column (METADATA 3.17 step 1) added to
+// its full-text fields, weight 2; a def without full text is unchanged.
+// The slices and map are copied: def is shared with the registry.
+func metaFTSDef(def schema.TableDef) schema.TableDef {
+	if len(def.FTS) == 0 || slices.Contains(def.FTS, ftsMeta) {
+		return def
+	}
+	def.FTS = append(slices.Clone(def.FTS), ftsMeta)
+	w := make(map[string]float64, len(def.FTSWeights)+1)
+	for k, v := range def.FTSWeights {
+		w[k] = v
+	}
+	w[ftsMeta] = ftsWeightMeta
+	def.FTSWeights = w
 	return def
 }

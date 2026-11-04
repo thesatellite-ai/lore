@@ -110,6 +110,8 @@ type sourceSQL struct {
 	// sensitive lists (kind id, kind name, field id, field name) of every
 	// sensitive kind field (lens_mask.go).
 	sensitive string
+	// metaSensitive lists the meta key ids its meta_keys marks sensitive.
+	metaSensitive string
 }
 
 // sqlForSource builds the statements of the i-th source.
@@ -124,6 +126,7 @@ func sqlForSource(i int) (sourceSQL, error) {
 		resolve: "SELECT source, tbl FROM " + sq + `."` + tblRows + `" WHERE id = ? AND deleted = 0 ORDER BY source, tbl`,
 		sensitive: `SELECT k.id, k."` + fieldName + `", f.id, f."` + fieldName + `" FROM ` + sq + `."` + schema.TableKindFields + `" f JOIN ` +
 			sq + `."` + schema.TableKinds + `" k ON k.id = f."` + fieldKindID + `" WHERE f."` + fieldSensitive + `" = 1`,
+		metaSensitive: `SELECT DISTINCT id FROM ` + sq + `."` + schema.TableMetaKeys + `" WHERE "` + fieldSensitive + `" = 1`,
 	}, nil
 }
 
@@ -358,7 +361,7 @@ func (l *Lens) publicTables(ctx context.Context, i int) ([]string, error) {
 		return nil, errs.Wrap(errs.NotAStore, "not a lore cache file", err)
 	}
 	defer func() { _ = rs.Close() }()
-	out := append([]string{tblRefs, tblExpanded}, ProvenanceViews()...) // PROVENANCE 9.2: the provenance views are readable in lore sql
+	out := append([]string{tblRefs, tblExpanded, ViewRowMeta}, ProvenanceViews()...) // PROVENANCE 9.2: the provenance views are readable in lore sql; METADATA 3.16: row_meta
 	for rs.Next() {
 		var objs string
 		if err := rs.Scan(&objs); err != nil {

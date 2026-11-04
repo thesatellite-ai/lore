@@ -87,6 +87,16 @@
 // with OpenLensCombined, whose `source` column is each row's _source
 // (CFG3 fallback, O10).
 //
+// # Metadata
+//
+// rowmeta.go (METADATA 3.16, 3.17, 4): the view row_meta over `_rows`
+// lists every metadata value of every live, untrashed row (a presence row
+// item_idx -1 with the whole value, then one row per scalar, list element
+// and object field). Each FTS table gets a column f_meta (weight 2) with
+// the row's non-sensitive values; a meta_keys row applied re-indexes the
+// rows using that key. A masked lens shows row_meta value columns of a
+// sensitive entry or key as MaskedValue.
+//
 // # Time spent
 //
 // The lens also builds TEMP TABLE task_time_spans and TEMP VIEW time_spent

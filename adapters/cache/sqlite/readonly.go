@@ -12,14 +12,29 @@ import (
 // reaches SQLite; a WITH that hides a write is stopped by query_only.
 var readKeywords = []string{"select", "with", "values"}
 
-// checkReadOnly refuses anything but one SELECT / WITH / VALUES statement.
-// It lexes enough SQL to skip comments, string literals and quoted
-// identifiers, so a ';' inside them does not count as a second statement.
+// explainKeyword may lead a read statement (OV39): EXPLAIN [QUERY PLAN]
+// only compiles the statement after it, which must itself be a read.
+const explainKeyword = "explain"
+
+// checkReadOnly refuses anything but one SELECT / WITH / VALUES statement,
+// optionally after EXPLAIN or EXPLAIN QUERY PLAN. It lexes enough SQL to
+// skip comments, string literals and quoted identifiers, so a ';' inside
+// them does not count as a second statement.
 func checkReadOnly(q string) error {
 	lx := lexer{s: q}
-	first := lx.word()
-	if !slices.Contains(readKeywords, strings.ToLower(first)) {
-		return errs.New(errs.ReadOnly, "sqlite lens: only one SELECT, WITH or VALUES statement is allowed")
+	first := strings.ToLower(lx.word())
+	if first == explainKeyword {
+		first = strings.ToLower(lx.word())
+		if first == "query" {
+			if strings.ToLower(lx.word()) != "plan" {
+				first = ""
+			} else {
+				first = strings.ToLower(lx.word())
+			}
+		}
+	}
+	if !slices.Contains(readKeywords, first) {
+		return errs.New(errs.ReadOnly, "sqlite lens: only one SELECT, WITH or VALUES statement (optionally after EXPLAIN [QUERY PLAN]) is allowed")
 	}
 	if !lx.toEnd() {
 		return errs.New(errs.ReadOnly, "sqlite lens: one statement at a time")

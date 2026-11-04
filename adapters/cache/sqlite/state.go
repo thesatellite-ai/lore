@@ -174,6 +174,7 @@ func (c *Cache) syncTables(ctx context.Context, tx *sql.Tx, st state) error {
 			return err
 		}
 	}
+	refilled := false
 	for _, name := range st.names() {
 		p := st.plans[name]
 		rec, ok := have[name.String()]
@@ -188,8 +189,14 @@ func (c *Cache) syncTables(ctx context.Context, tx *sql.Tx, st state) error {
 		if err := c.createAndFill(ctx, tx, st, p); err != nil {
 			return err
 		}
+		refilled = refilled || p.fts != "" || name == schema.TableMetaKeys
 	}
-	return nil
+	if !refilled {
+		return nil
+	}
+	// A refill indexes rows in table order, some before meta_keys is
+	// filled: re-index the rows of every sensitive key now (METADATA 3.20).
+	return c.reindexSensitiveKeys(ctx, tx, st)
 }
 
 // readRecorded reads `_tables`.
