@@ -157,6 +157,7 @@ func mountCore(root *cobra.Command) {
 			}
 		}
 	}
+	markCorePrinted(root)
 	mountSQLShortcut(root)
 	// The coordination verbs and mission status stay on the v0.1.17 signals
 	// machinery, mounted under the core nouns (after the compat loop: they
@@ -847,6 +848,24 @@ func newSpecCommand() *cobra.Command {
 		&cobra.Command{Use: "openapi", Short: "Write " + specOpenAPIFile, Args: cobra.NoArgs, RunE: write(specOpenAPIFile)},
 	)
 	return cmd
+}
+
+// markCorePrinted makes every generated command outside the compat nouns
+// (store, migrate, …) mark its error as printed by surface/cli, so main
+// never prints it a second time: an E_INTERNAL (exit 1, the same code as a
+// usage error) was printed twice, once with and once without its cause.
+func markCorePrinted(c *cobra.Command) {
+	for _, sub := range c.Commands() {
+		markCorePrinted(sub)
+	}
+	if !cli.Generated(c) || c.RunE == nil {
+		return
+	}
+	inner := c.RunE
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		defer func() { corePrinted = true }()
+		return inner(cmd, args)
+	}
 }
 
 // corePrinted is set when a mounted memory command ran (or cobra refused
