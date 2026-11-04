@@ -185,8 +185,14 @@ func (o ops) urgencyOrder(ctx context.Context, f forest, now time.Time, dir int,
 
 // board lists like task list and groups the result.
 func (o ops) board(ctx context.Context, in BoardIn) (BoardOut, error) {
-	by := cmp.Or(in.GroupBy, GroupStatus)
-	if err := work.OneOf(Noun, "group-by", by, GroupBys()); err != nil {
+	// TASK 16.2: the view's group_by unless --group-by is given.
+	lin, spec, err := o.applyView(ctx, in.ListIn)
+	if err != nil {
+		return BoardOut{}, err
+	}
+	in.ListIn = lin
+	by := cmp.Or(in.GroupBy, spec.GroupBy, GroupStatus)
+	if err = work.OneOf(Noun, "group-by", by, GroupBys()); err != nil {
 		return BoardOut{}, err
 	}
 	rows := map[string]row.Row{}

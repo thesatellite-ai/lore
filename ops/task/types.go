@@ -267,6 +267,9 @@ type ListIn struct {
 	// --sort above is shared, and its meta.<key> entry feeds the filter.
 	Meta  []string `json:"meta_where,omitempty" flag:"meta" desc:"filter by metadata: key=value, key!=value, key~=text, key>n, key?, key!? (repeatable, all must match)"`
 	Place string   `json:"place,omitempty" flag:"place" desc:"narrow --meta names to one place: repo, project, org or a scope label (project:acme-hub)"`
+	// View applies a saved view (TASK 16.2): its where ANDs with --where,
+	// its sort is used unless --sort is given.
+	View string `json:"view,omitempty" flag:"view" desc:"apply a saved task view (name or tvw_ id; lore task view list)"`
 }
 
 // ViewIn is the input of the triage, someday and deferred views.

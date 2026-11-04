@@ -321,6 +321,9 @@ task_templates.args json
 task_templates.description text
 task_templates.name text required
 task_templates.task json required
+task_views.filter_json text
+task_views.name text required
+task_views.project_id ref required
 tasks.approved_at datetime
 tasks.approved_by text
 tasks.approved_hash text

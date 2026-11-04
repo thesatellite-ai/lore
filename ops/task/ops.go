@@ -181,7 +181,7 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpDeferred, Summary: "Show deferred tasks (snoozed; deferred_until in the future)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.deferred),
-	}, slices.Concat(timeOps(o), recurOps(o), templateOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o), historyOps(o), exportOps(o), viewOps(o))...)
+	}, slices.Concat(timeOps(o), recurOps(o), templateOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o), historyOps(o), exportOps(o), viewOps(o), taskViewOps(o))...)
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
@@ -684,6 +684,11 @@ func deferred(r row.Row, now time.Time) bool {
 // list returns the tasks of every attached store passing v0.1.17's
 // filters (default: open, accepted, not deferred).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	// TASK 16.2: a saved view folds into the flags first.
+	in, _, err := o.applyView(ctx, in)
+	if err != nil {
+		return ListOut{}, err
+	}
 	team, err := o.teamList(ctx, in)
 	if err != nil {
 		return ListOut{}, err

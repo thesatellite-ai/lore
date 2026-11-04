@@ -14,6 +14,15 @@ const (
 	TableTasklists = "task_lists"
 	TableMissions  = "missions"
 	TablePlans     = "plans"
+	// TableTaskViews is the saved task views (TASK 16.2): a snake_case name
+	// and filter_json {where, sort, group_by}, read by list/board --view.
+	TableTaskViews = "task_views"
+)
+
+// Task view fields (TASK 16.2).
+const (
+	FieldTaskViewName   = "name"
+	FieldTaskViewFilter = "filter_json"
 )
 
 // Cache-only join tables filled from the work tables' tag_ids (O11):
@@ -240,6 +249,16 @@ func workDefs() []TableDef {
 			BelongsToRel("assigned_to", "assigned_to_actor_id", TableActors, TombstoneOnly),
 			tagIDs(),
 			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinTaskTags, Cascade),
+		),
+		// TASK 16.2: v0.1.17's machine-local task_views becomes a synced row so a
+		// team shares its views; filter_json keeps the text expression (the
+		// parser can improve without rewriting rows).
+		Table(TableTaskViews, ids.PrefixTaskView, Synced(), Description("a saved task list filter"),
+			Ref("project_id", TableProjects, Required()),
+			Text(FieldTaskViewName, Required(), Describe("snake_case view name, unique per project")),
+			Text(FieldTaskViewFilter, Describe(`{"where": "...", "sort": "...", "group_by": "..."}`)),
+			IndexOn("project_id", FieldTaskViewName),
+			BelongsToRel("project", "project_id", TableProjects, Restrict),
 		),
 		Table(TableTasklists, ids.PrefixTaskList, Synced(), FTS("title", "body", "status_str"), Description("a list that groups tasks"),
 			Ref("project_id", TableProjects, Required()),
