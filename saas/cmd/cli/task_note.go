@@ -169,6 +169,11 @@ func pushCompanion(ctx context.Context, c signals.Companion) error {
 	switch v := c.(type) {
 	case *remoteStagedRows:
 		rc = v
+	case *coreCompanion:
+		// A 0.1.18 store's rows (storeRows.Stage) and a client repo's
+		// core-owned rows: PushSelf writes them through the core, which
+		// pushes the store branch itself; there is no ref to prepare.
+		rc = v
 	case *stagedLiveRows:
 		rc = &remoteStagedRows{*v}
 	default:
