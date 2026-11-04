@@ -48,6 +48,7 @@ const (
 	rFields      = "fields"
 	rArchivedAt  = "archived_at"
 	rLastChecked = "last_checked"
+	rReplacedBy  = "replaced_by"
 )
 
 // Limits and words of the resource ops.
@@ -153,6 +154,9 @@ type Resource struct {
 	ArchivedAt  string            `json:"archived_at,omitempty"`
 	LastChecked string            `json:"last_checked,omitempty"`
 	CheckedBy   string            `json:"checked_by,omitempty"`
+	// ReplacedBy is "<kind> <name> (<res_ id>)" of the resource repoint put
+	// in this one's place (RESOURCES 3.20); "" when none.
+	ReplacedBy string `json:"replaced_by,omitempty"`
 	// Conflicts are the fields a merge left for a person (by field name).
 	Conflicts []Conflict `json:"conflicts,omitempty"`
 }
@@ -183,6 +187,9 @@ func (o ResOut) Text() string {
 	}
 	if r.ArchivedAt != "" {
 		fmt.Fprintf(&b, "  archived %s\n", r.ArchivedAt)
+	}
+	if r.ReplacedBy != "" {
+		fmt.Fprintf(&b, "  replaced by  %s\n", r.ReplacedBy)
 	}
 	return b.String()
 }
@@ -731,7 +738,26 @@ func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
 	vals := stored.vals
 	return Resource{ID: r.Row.ID.String(), Kind: d.name(), Name: text(r.Row, rName), Store: string(r.Src),
 		Values: o.named(ctx, d, vals, show), ArchivedAt: text(r.Row, rArchivedAt), LastChecked: text(r.Row, rLastChecked),
-		CheckedBy: text(r.Row, rCheckedBy), Conflicts: o.conflictsView(d, stored, show)}, nil
+		CheckedBy: text(r.Row, rCheckedBy), Conflicts: o.conflictsView(d, stored, show), ReplacedBy: o.successor(ctx, r)}, nil
+}
+
+// successor is "<kind> <name> (<id>)" of r's replaced_by, the bare id when
+// that row is not visible here, "" when unset (RESOURCES 3.20).
+func (o ops) successor(ctx context.Context, r located) string {
+	id := text(r.Row, rReplacedBy)
+	if id == "" {
+		return ""
+	}
+	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	if err != nil {
+		return id
+	}
+	for _, s := range rows {
+		if s.Row.ID.String() == id {
+			return o.kindName(ctx, text(s.Row, rKind)) + " " + text(s.Row, rName) + " (" + id + ")"
+		}
+	}
+	return id
 }
 
 func (o ops) resShow(ctx context.Context, in ResRef) (ResOut, error) {

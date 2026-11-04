@@ -69,7 +69,7 @@ func TestResourceImportExportRepointClone(t *testing.T) {
 	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"api"}`)); !strings.Contains(s, "runs_on = h2") {
 		t.Fatalf("after repoint %q", s)
 	}
-	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"h1"}`)); !strings.Contains(s, "archived") {
+	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"h1"}`)); !strings.Contains(s, "archived") || !strings.Contains(s, "replaced by  host h2 (res_") {
 		t.Fatalf("old not archived %q", s)
 	}
 	h.MustYes(settings.OpResClone, `{"from":"api","name":"api2","set":["port=1"]}`)

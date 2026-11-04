@@ -377,3 +377,33 @@ func TestConfirmedFindingBecomesAnAllowEntry(t *testing.T) {
 		t.Fatalf("a refused edit must add no allow row: %d", len(n))
 	}
 }
+
+// TestEnforceMovePlace: a move of a resource obeys resources.allowed_in of
+// the target, by the target's place class; other tables never (RQ2).
+func TestEnforceMovePlace(t *testing.T) {
+	storeOnly, err := policy.Resolve([]policy.Entry{{Level: policy.LevelOrg, Key: policy.KeyResourcesAllowedIn, Value: list(t, policy.PlaceStore)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := schema.TableDef{Name: schema.TableResources}
+	for _, c := range []struct {
+		name   string
+		pol    policy.Set
+		def    schema.TableDef
+		to     store.Source
+		client bool
+		refuse bool
+	}{
+		{"default allows a client repo", policy.Defaults(), res, "acme_app", true, false},
+		{"store only: repo refused", storeOnly, res, store.SourceRepo, false, true},
+		{"store only: client refused", storeOnly, res, "acme_app", true, true},
+		{"store only: a store passes", storeOnly, res, "agency", false, false},
+		{"me always refused", policy.Defaults(), res, storeMe, false, true},
+		{"another table is not checked", storeOnly, schema.TableDef{Name: schema.TableMemories}, store.SourceRepo, false, false},
+	} {
+		err := enforceMovePlace(c.pol, c.def, c.to, c.client)
+		if got := errs.Has(err, errs.ResourcePlace); got != c.refuse {
+			t.Errorf("%s: refused=%v want %v (%v)", c.name, got, c.refuse, err)
+		}
+	}
+}

@@ -310,6 +310,9 @@ func coreDefs() []TableDef {
 			DateTime("last_checked"),
 			// checked_by is who stamped last_checked: manual | edit | verifier:<plugin> (RQ8); the actor is the audit event's.
 			Text("checked_by"),
+			// replaced_by is the resource that took this one's place: `resource
+			// repoint` archives the old row with it (RESOURCES 3.20); show prints it.
+			Ref("replaced_by", TableResources),
 			// fields: {fld_…: {name, v, strict?, sensitive?}}, merged entry by
 			// entry (RESOURCES 3.13, R4, RQ5).
 			JSON("fields", MergeBy(MergeEntriesByID)),

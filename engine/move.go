@@ -161,6 +161,10 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		if sc, err = e.screen(ctx, cl, to, cur.ID, typed, names); err != nil {
 			return Written{}, err
 		}
+		// RQ2: resources.allowed_in of the target applies to a move too.
+		if err = enforceMovePlace(sc.pol, def, to, dst.Client); err != nil {
+			return Written{}, err
+		}
 		moved = cur
 		moved.Fields = sc.fields
 		moved.HLC = e.clock.Now(cur.HLC)

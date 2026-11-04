@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -644,10 +645,16 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 			return ResRepointOut{}, errors.Join(perr, errs.New(errs.ResourceInvalid, "resource repoint: stopped; the rows written are in batch "+out.Batch))
 		}
 	}
-	if _, err = o.resArchive(bctx, ResNameIn{Name: oldR.Row.ID.String()}); err != nil {
+	// RESOURCES 3.20: the old row is archived with replaced_by <new id>, so
+	// show --archived names its successor.
+	succ, err := ref(newR.Row.ID)
+	if err != nil {
 		return ResRepointOut{}, err
 	}
-	out.Human = b.String() + "archived " + text(oldR.Row, rName) + "; batch " + out.Batch + "\n"
+	if _, err = o.patchRow(bctx, oldR, map[string]value.Value{rArchivedAt: value.DateTimeFrom(opclock.Now(o.env)), rReplacedBy: succ}, "archived "+text(oldR.Row, rName)); err != nil {
+		return ResRepointOut{}, err
+	}
+	out.Human = b.String() + "archived " + text(oldR.Row, rName) + " (replaced_by " + text(newR.Row, rName) + "); batch " + out.Batch + "\n"
 	return out, nil
 }
 

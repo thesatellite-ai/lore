@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // The POLICY step of spec 9.2 (validate → resolve target → permission →
@@ -131,4 +132,41 @@ func valuesSize(fields map[string]value.Value) (int, error) {
 		return 0, errs.Wrap(errs.Internal, "engine: measure the row", err)
 	}
 	return len(obj), nil
+}
+
+// storeMe is the personal store's name (`--to me`): resources are team
+// facts, never personal ones (RESOURCES 3.7; ops/settings refuses the same).
+const storeMe store.Source = "me"
+
+// enforceMovePlace applies resources.allowed_in to a move of a resource
+// (RQ2, RESOURCES 3.7/3.9): the target's place class (client repo, our own
+// repo, any other store) must be one the target's effective policy lists, the
+// same rule resource add/import/clone apply in ops/settings checkPlace, so
+// `lore move` cannot carry a resource where it could not be written. pol is
+// the TARGET's policy; client is the target's F15 class.
+func enforceMovePlace(pol policy.Set, def schema.TableDef, to store.Source, client bool) error {
+	if def.Name != schema.TableResources {
+		return nil
+	}
+	if to == storeMe {
+		return errs.New(errs.ResourcePlace, "engine: --to me: resources are team facts, not personal ones").WithHint("--to repo or --to <store>[/<folder>]")
+	}
+	place := policy.PlaceStore
+	switch {
+	case client:
+		place = policy.PlaceClient
+	case to == store.SourceRepo:
+		place = policy.PlaceRepo
+	}
+	allowed := pol.Strings(policy.KeyResourcesAllowedIn)
+	if slices.Contains(allowed, place) {
+		return nil
+	}
+	where := ""
+	if eff, ok := pol.Get(policy.KeyResourcesAllowedIn); ok && !eff.IsDefault {
+		where = "; set at level " + string(eff.Level) + " (" + eff.Source.String() + ")"
+	}
+	return errs.New(errs.ResourcePlace, "engine: resources are not allowed in "+place+" places ("+string(to)+"; "+
+		string(policy.KeyResourcesAllowedIn)+": "+strings.Join(allowed, ", ")+where+"); nothing moved").
+		WithHint("move it to an allowed place; lore policy show resources")
 }
