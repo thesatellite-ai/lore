@@ -32,6 +32,9 @@ type TableDef struct {
 	Synced bool
 	// FTS names the text fields the cache indexes for full-text search.
 	FTS []string
+	// FTSWeights overrides the bm25 weight of an FTS field (FTSWeightOf
+	// gives the default); nil when no field is overridden.
+	FTSWeights map[string]float64
 	// Kind is set only for a definition built from kind rows: its rows live
 	// in the `resources` table with `kind` = this id, and Name is the typed
 	// cache table "res_<kind name>" built from them (spec 4.4).
@@ -175,4 +178,28 @@ type Relation struct {
 	// default, makes the engine refuse a write whose target is missing (fail
 	// closed); lore lint still reports dangling refs either way.
 	AllowDangling bool
+}
+
+// FTS bm25 weights by field role: v0.1.17's search registry convention
+// (saas/pkg/aicoder/fts5 Registry: title or name 4, body or description 3,
+// any other column 1), kept so `lore search` ranks hits as v0.1.17 did.
+const (
+	ftsWeightTitle = 4
+	ftsWeightBody  = 3
+	ftsWeightOther = 1
+)
+
+// FTSWeightOf is the bm25 weight of FTS field name: FTSWeights[name] when
+// set, else the role convention above.
+func (t TableDef) FTSWeightOf(name string) float64 {
+	if w, ok := t.FTSWeights[name]; ok {
+		return w
+	}
+	switch name {
+	case "title", "name":
+		return ftsWeightTitle
+	case "body", "description":
+		return ftsWeightBody
+	}
+	return ftsWeightOther
 }

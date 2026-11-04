@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -9,10 +10,32 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 )
 
+// SearchHit is one full-text match: the row id, its bm25 score (lower is
+// better, weighted per field by schema.TableDef.FTSWeightOf) and a snippet
+// of the matched text (matches in <b>…</b>).
+type SearchHit struct {
+	ID      ids.AnyID
+	Score   float64
+	Snippet string
+}
+
 // Search runs an FTS5 MATCH over table's full-text fields and returns the
-// matching row ids, best first (FTS5 rank), at most limit. Columns in a
-// column filter are named "f_<field>" (see the package doc).
+// matching row ids, best first (weighted bm25), at most limit. Columns in
+// a column filter are named "f_<field>" (see the package doc).
 func (c *Cache) Search(ctx context.Context, table row.Table, match string, limit int) ([]ids.AnyID, error) {
+	hits, err := c.SearchHits(ctx, table, match, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ids.AnyID, len(hits))
+	for i, h := range hits {
+		out[i] = h.ID
+	}
+	return out, nil
+}
+
+// SearchHits is Search with each hit's score and snippet.
+func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, limit int) ([]SearchHit, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.usable(); err != nil {
@@ -33,17 +56,20 @@ func (c *Cache) Search(ctx context.Context, table row.Table, match string, limit
 		return nil, errs.Wrap(errs.InvalidInput, "sqlite cache: search", err)
 	}
 	defer func() { _ = rs.Close() }()
-	var out []ids.AnyID
+	var out []SearchHit
 	for rs.Next() {
 		var s string
-		if err := rs.Scan(&s); err != nil {
+		var h SearchHit
+		var snip sql.NullString
+		if err := rs.Scan(&s, &h.Score, &snip); err != nil {
 			return nil, dbErr("search", err)
 		}
 		id, err := ids.ParseAny(s)
 		if err != nil {
 			return nil, errs.Wrap(errs.DBCorrupt, "sqlite cache: bad id in search index", err)
 		}
-		out = append(out, id)
+		h.ID, h.Snippet = id, snip.String
+		out = append(out, h)
 	}
 	if err := rs.Err(); err != nil {
 		return nil, dbErr("search", err)

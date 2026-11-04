@@ -21,7 +21,7 @@ func TestBuiltinRegistryValid(t *testing.T) {
 		}
 	}
 	mem, _ := r.Table(TableMemories)
-	if mem.Prefix != ids.PrefixMemory || !mem.Synced || len(mem.FTS) != 1 {
+	if mem.Prefix != ids.PrefixMemory || !mem.Synced || len(mem.FTS) != 4 { // body, source_ref, kind, source_kind (v0.1.17 FTS columns)
 		t.Fatalf("memories %+v", mem)
 	}
 	if d, ok := r.ByPrefix(ids.PrefixVar); !ok || d.Name != TableVars {

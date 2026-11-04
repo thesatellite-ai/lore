@@ -89,7 +89,7 @@ func lifecycle() []Item {
 // recurring warning.
 func knowledgeDefs() []TableDef {
 	rule := []Item{
-		Synced(), FTS("body"), Description("hard constraints: must / should / may"),
+		Synced(), FTS("body", "severity", "activation", "source_kind"), Description("hard constraints: must / should / may"),
 		// project_id is optional: v0.1.17's NULL project is a global rule.
 		Ref("project_id", TableProjects),
 		Ref("repo_id", TableRepos),
@@ -111,7 +111,7 @@ func knowledgeDefs() []TableDef {
 		ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinRuleTags, Cascade),
 	}
 	decision := []Item{
-		Synced(), FTS("title", "body"), Description("architectural decision records"),
+		Synced(), FTS("title", "body", "status", "source_kind"), Description("architectural decision records"),
 		Ref("project_id", TableProjects, Required()),
 		Ref("repo_id", TableRepos),
 		Text("title", Required()),
@@ -130,7 +130,7 @@ func knowledgeDefs() []TableDef {
 		ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinDecisionTags, Cascade),
 	}
 	hotfix := []Item{
-		Synced(), FTS("title", "body"), Description("loud recurring warnings, pinned in render"),
+		Synced(), FTS("title", "body", "severity"), Description("loud recurring warnings, pinned in render"),
 		Ref("project_id", TableProjects, Required()),
 		Ref("repo_id", TableRepos),
 		Text("title", Required()),

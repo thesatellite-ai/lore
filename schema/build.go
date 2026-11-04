@@ -121,6 +121,17 @@ func FTS(fields ...string) Item {
 	return itemFunc(func(t *TableDef) { t.FTS = append(t.FTS, fields...) })
 }
 
+// FTSWeight sets the bm25 weight of one FTS field (see
+// TableDef.FTSWeightOf for the default).
+func FTSWeight(field string, w float64) Item {
+	return itemFunc(func(t *TableDef) {
+		if t.FTSWeights == nil {
+			t.FTSWeights = map[string]float64{}
+		}
+		t.FTSWeights[field] = w
+	})
+}
+
 // IndexOn adds a non-unique cache index.
 func IndexOn(fields ...string) Item {
 	return itemFunc(func(t *TableDef) { t.Indexes = append(t.Indexes, Index{Fields: fields}) })

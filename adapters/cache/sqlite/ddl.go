@@ -285,6 +285,18 @@ func indexStatements(def schema.TableDef) ([]string, error) {
 	return out, nil
 }
 
+// FTS settings, v0.1.17 parity (saas/pkg/aicoder/fts5): porter stemming
+// over unicode61 with diacritics folded ("running" finds "run", "cafe"
+// finds "café"), and the snippet v0.1.17 printed: matches in <b>…</b>,
+// "..." where text is cut, about 32 tokens.
+const (
+	ftsTokenizer    = "porter unicode61 remove_diacritics 2"
+	snippetOpen     = "<b>"
+	snippetClose    = "</b>"
+	snippetEllipsis = "..."
+	snippetTokens   = 32
+)
+
 // addFTS adds the FTS5 table of p's FTS fields.
 func (p *plan) addFTS() error {
 	if len(p.def.FTS) == 0 {
@@ -297,7 +309,11 @@ func (p *plan) addFTS() error {
 	}
 	cols := []string{`"` + colID + `" UNINDEXED`, `"` + colSource + `" UNINDEXED`}
 	names := []string{`"` + colID + `"`, `"` + colSource + `"`}
+	// bm25 takes one weight per column, the UNINDEXED id and _source too
+	// (they never match, so 0).
+	weights := []string{"0", "0"}
 	for _, f := range p.def.FTS {
+		weights = append(weights, strconv.FormatFloat(p.def.FTSWeightOf(f), 'g', -1, 64))
 		cq, err := ident(ftsColPrefix + f)
 		if err != nil {
 			return err
@@ -305,10 +321,12 @@ func (p *plan) addFTS() error {
 		cols = append(cols, cq)
 		names = append(names, cq)
 	}
-	p.create = append(p.create, "CREATE VIRTUAL TABLE "+fq+" USING fts5("+strings.Join(cols, ", ")+")")
+	p.create = append(p.create, "CREATE VIRTUAL TABLE "+fq+" USING fts5("+strings.Join(cols, ", ")+", tokenize='"+ftsTokenizer+"')")
 	p.sql.ftsDeleteID = "DELETE FROM " + fq + ` WHERE "` + colSource + `" = ? AND "` + colID + `" = ?`
 	p.sql.ftsClearSource = "DELETE FROM " + fq + ` WHERE "` + colSource + `" = ?`
-	p.sql.search = `SELECT "` + colID + `" FROM ` + fq + " WHERE " + fq + " MATCH ? ORDER BY rank LIMIT ?"
+	rank := "bm25(" + fq + ", " + strings.Join(weights, ", ") + ")"
+	p.sql.search = `SELECT "` + colID + `", ` + rank + ", snippet(" + fq + ", -1, '" + snippetOpen + "', '" + snippetClose + "', '" + snippetEllipsis + "', " + strconv.Itoa(snippetTokens) + ") FROM " + fq +
+		" WHERE " + fq + " MATCH ? ORDER BY " + rank + " LIMIT ?"
 	p.sql.ftsInsert = "INSERT INTO " + fq + " (" + strings.Join(names, ", ") + ") VALUES (" + extractList(len(names)) + ")"
 	p.objects = append(p.objects, dbObject{Type: objFTS, Name: p.fts})
 	return nil

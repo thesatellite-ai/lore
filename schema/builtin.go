@@ -149,7 +149,7 @@ func coreDefs() []TableDef {
 			tagIDs(),
 			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinRepoTags, Cascade),
 		),
-		Table(TableMemories, ids.PrefixMemory, Synced(), FTS("body"), Description("free-form learned notes"),
+		Table(TableMemories, ids.PrefixMemory, Synced(), FTS("body", "source_ref", fieldKind, "source_kind"), Description("free-form learned notes"),
 			Ref("project_id", TableProjects, Required()),
 			Ref("repo_id", TableRepos),
 			Text(fieldKind, Required(), OneOf(MemoryKinds()...)),
