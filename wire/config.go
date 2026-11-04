@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -246,4 +248,30 @@ func agentDetailsOf(home, org string) (string, error) {
 			WithHint("fix it in ~/.lore/" + ConfigFile)
 	}
 	return AgentDetailsInternal, nil
+}
+
+// ToolProfiles implements settings.ToolProfiler: the user's own tool
+// profiles from config.yaml (context.profiles). Q-R2-3: context.targets is
+// checked against the registry the user really has, built-ins plus these.
+// It decodes only `context:` on its own, so a malformed context.profiles
+// fails this check alone, never the identity/personal reads every command
+// needs (readMachineConfig).
+func (a *App) ToolProfiles(context.Context) ([]toolprofile.Profile, error) {
+	b, err := os.ReadFile(filepath.Clean(configPath(a.opts.Home)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "wire: read "+ConfigFile, err)
+	}
+	var c struct {
+		Context struct {
+			Profiles []toolprofile.Profile `yaml:"profiles,omitempty"`
+		} `yaml:"context,omitempty"`
+	}
+	if err := yaml.Unmarshal(b, &c); err != nil {
+		return nil, errs.New(errs.ConfigInvalid, "wire: "+ConfigFile+" context.profiles: "+err.Error()).
+			WithHint("check it with `lore config check`")
+	}
+	return c.Context.Profiles, nil
 }
