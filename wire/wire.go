@@ -74,6 +74,7 @@ import (
 	opstasklist "github.com/thesatellite-ai/lore/ops/tasklist"
 	opstastepref "github.com/thesatellite-ai/lore/ops/tastepref"
 	opstechdoc "github.com/thesatellite-ai/lore/ops/techdoc"
+	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	opsworkflow "github.com/thesatellite-ai/lore/ops/workflow"
 	opsworkspace "github.com/thesatellite-ai/lore/ops/workspace"
 	"github.com/thesatellite-ai/lore/schema"
@@ -338,6 +339,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opstask.ImportOps(a)...)
 	// XQ1: lore batch list|show over the machine-local batch log (Q-R3-8).
 	entries = append(entries, opsbatch.Ops(a)...)
+	// DELETION 2.2-2.6: lore trash list|show|restore|purge (DQ1-DQ4).
+	entries = append(entries, opstrash.Ops(a)...)
 	entries = append(entries, opstasklist.Ops(a)...)
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
