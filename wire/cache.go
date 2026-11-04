@@ -18,8 +18,9 @@ import (
 )
 
 // caches is the engine's store.Cache: one SQLite cache file per attached
-// store (spec 7.4: a cache is per store folder, so deleting one store's
-// cache never touches another's), routed by source.
+// store (spec 7.4, CFG3 refined: a cache is per store folder, shared by
+// every repo using it, so deleting one store's cache never touches
+// another's), routed by source.
 //
 // Why a router and not one file: the engine's cache port names the source
 // on every call, and per-store files let `lore` drop or rebuild one store's

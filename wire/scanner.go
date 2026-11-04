@@ -27,8 +27,9 @@ const (
 
 // liveScanner is the App's scanner: the gitleaks defaults plus the live
 // secret_rules rows of every attached store (spec 4.3), rebuilt when those
-// rows change. Why: rules are settings rows, and a long-lived App (`lore
-// api`) must apply a rule added while it runs to the next write; a scanner
+// rows change. Why: rules are settings rows (SETTINGS ARE DATA; D2/D9:
+// users fully control secret rules), and a long-lived App (`lore api`)
+// must apply a rule added while it runs to the next write; a scanner
 // built once at open would keep scanning with the old set. Refresh (called
 // by the engine before each write's scan, engine.RefreshingScanner) reads
 // the rule rows and rebuilds only when their ids or HLCs differ, so an

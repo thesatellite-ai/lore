@@ -539,7 +539,9 @@ type markerOf interface{ Marker() rowfs.Marker }
 // branchOf is implemented by the git backend.
 type branchOf interface{ Branch() string }
 
-// cachePath is <home>/cache/stores/<store id>/<branch>/<folder>.db. A
+// cachePath is <home>/cache/stores/<store id>/<branch>/<folder>.db (CFG3
+// refined + CFG fixups: named by permanent ids so every repo that attaches
+// the same store folder shares one file, whatever it calls the store). A
 // v0.1.17 marker has no store id; the store's name stands in, so the path
 // is still stable for this repo.
 func cachePath(home string, o attach.Opened) (string, error) {

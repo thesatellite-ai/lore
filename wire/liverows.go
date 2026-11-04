@@ -202,7 +202,7 @@ func decodeLiveRow(b []byte) (row.Row, error) {
 // mergeRow merges two copies of one row with no common base: the newer
 // side wins per field (per-field strategies such as list-by-id still
 // apply), a field only one side holds is kept, and a tombstone is never
-// undone (merge.Rows).
+// undone (merge.Rows; DQ4).
 //
 // Why no conflict markers here, unlike a git merge: the copies are
 // versions of one row along one v0.1.17 history (the live ref held the
