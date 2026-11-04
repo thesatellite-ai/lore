@@ -97,6 +97,10 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 	if err != nil {
 		return Written{}, err
 	}
+	// DELETION 475: policy delete.require_reason refuses a delete without one.
+	if reason == "" && e.requireReason(src) {
+		return Written{}, errs.New(errs.ReasonRequired, "delete "+cur.ID.String()+": policy delete.require_reason needs a --reason").WithHint("rerun with --reason \"<why>\"")
+	}
 	plan, err := e.planTrash(ctx, src, cur)
 	if err != nil {
 		return Written{}, err
@@ -623,4 +627,17 @@ func (e *Engine) PurgeOlder(ctx context.Context, cutoff time.Time, expired bool,
 		return res, nil
 	}
 	return e.purgeRows(ctx, res)
+}
+
+// requireReason reports policy delete.require_reason for src (DELETION 475).
+func (e *Engine) requireReason(src store.Source) bool {
+	set, _, err := e.settings.Policy(src)
+	if err != nil {
+		return true // fail closed: a policy that cannot be read cannot waive the requirement
+	}
+	if v, ok := set.Get(policy.KeyDeleteRequireReason); ok && v.Value != nil {
+		b, isBool := v.Value.(value.Bool)
+		return isBool && b.Bool()
+	}
+	return false
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -78,5 +79,26 @@ func TestTrashRoundTrip(t *testing.T) {
 	}
 	if _, rerr := f.eng.Restore(ctx, key.Row.ID.String()); !errs.Has(rerr, errs.Purged) {
 		t.Fatalf("restore after purge: %v, want E_PURGED", rerr)
+	}
+}
+
+// TestDeleteRequireReason: policy delete.require_reason refuses a delete
+// without --reason (DELETION 475) and lets one with a reason through.
+func TestDeleteRequireReason(t *testing.T) {
+	on, err := policy.Resolve([]policy.Entry{{Level: policy.LevelRepo, Key: policy.KeyDeleteRequireReason, Value: value.BoolOf(true)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := setup(t, WithSettings(fixedSettings{set: on}))
+	ctx := context.Background()
+	w, err := f.eng.Create(ctx, "", schema.TableMemories, f.memFields("kept"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, derr := f.eng.Delete(ctx, Ref{ID: w.Row.ID}); !errs.Has(derr, errs.ReasonRequired) {
+		t.Fatalf("err = %v, want E_REASON_REQUIRED", derr)
+	}
+	if _, derr := f.eng.Delete(WithDeleteReason(ctx, "duplicate"), Ref{ID: w.Row.ID}); derr != nil {
+		t.Fatalf("delete with a reason: %v", derr)
 	}
 }
