@@ -40,8 +40,15 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	opscontent "github.com/thesatellite-ai/lore/ops/content"
+	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
+	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
+	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
+	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
+	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -160,6 +167,12 @@ func Registry(a *App) (*op.Registry, error) {
 	entries := opsmemory.Ops(a)
 	entries = append(entries, opsmigrate.Ops(a)...)
 	entries = append(entries, opsstores.Ops(a)...)
+	entries = append(entries, opspattern.Ops(a)...)
+	entries = append(entries, opsplaybook.Ops(a)...)
+	entries = append(entries, opsprompt.Ops(a)...)
+	entries = append(entries, opsrule.Ops(a)...)
+	entries = append(entries, opsdecision.Ops(a)...)
+	entries = append(entries, opshotfix.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 
@@ -274,6 +287,7 @@ var (
 	_ opsmemory.Env    = (*App)(nil)
 	_ opsmemory.Mover  = (*App)(nil)
 	_ opsstores.Syncer = (*App)(nil)
+	_ opscontent.Env   = (*App)(nil)
 )
 
 // SyncStores is the 0.1.18 half of `lore sync` (O12b: sync is one

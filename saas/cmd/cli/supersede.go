@@ -23,8 +23,10 @@ import (
 	"fmt"
 
 	"dbent/gen/ent"
-	entDecision "dbent/gen/ent/decision"
 	"saas/pkg/aicoder/errcodes"
+
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // supersedeKind names a kind whose rows carry superseded_by_id. A closed set:
@@ -127,22 +129,32 @@ func loadSupersedeRow(ctx context.Context, db *ent.Client, kind supersedeKind, i
 	return supersedeRow{}, fmt.Errorf("supersede: unknown kind %q", kind)
 }
 
-// setSupersededBy writes the old row's successor (and a decision's status).
-func setSupersededBy(ctx context.Context, db *ent.Client, kind supersedeKind, oldID, newID string) error {
-	switch kind {
-	case supersedeRule:
-		return db.Rule.UpdateOneID(oldID).SetSupersededByID(newID).Exec(ctx)
-	case supersedeMemory:
-		return coreSetMemorySuccessor(ctx, oldID, newID)
-	case supersedeDecision:
-		return db.Decision.UpdateOneID(oldID).
-			SetSupersededByID(newID).
-			SetStatus(entDecision.StatusSuperseded).
-			Exec(ctx)
-	case supersedeHotfix:
-		return db.Hotfix.UpdateOneID(oldID).SetSupersededByID(newID).Exec(ctx)
-	case supersedePattern:
-		return db.Pattern.UpdateOneID(oldID).SetSupersededByID(newID).Exec(ctx)
+// supersedeTables maps each kind to its core table: every kind with a
+// replacement chain is core-owned, so its successor is written through the
+// core (never lore.db, whose changes the lsync import would not export).
+var supersedeTables = map[supersedeKind]row.Table{
+	supersedeRule:     schema.TableRules,
+	supersedeMemory:   schema.TableMemories,
+	supersedeDecision: schema.TableDecisions,
+	supersedeHotfix:   schema.TableHotfixes,
+	supersedePattern:  schema.TablePatterns,
+}
+
+// setSupersededBy writes the old row's successor (and a decision's status)
+// through the core. db is kept for the callers' shape; it is not written.
+func setSupersededBy(ctx context.Context, _ *ent.Client, kind supersedeKind, oldID, newID string) error {
+	status := ""
+	if kind == supersedeDecision {
+		status = schema.DecisionStatusSuperseded
 	}
-	return fmt.Errorf("supersede: unknown kind %q", kind)
+	return setSuccessorCore(kind, func(t row.Table) error { return coreSetSuccessor(ctx, t, oldID, newID, status) })
+}
+
+// setSuccessorCore runs write on kind's core table.
+func setSuccessorCore(kind supersedeKind, write func(row.Table) error) error {
+	t, ok := supersedeTables[kind]
+	if !ok {
+		return fmt.Errorf("supersede: unknown kind %q", kind)
+	}
+	return write(t)
 }

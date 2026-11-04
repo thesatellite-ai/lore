@@ -21,16 +21,10 @@ import (
 	entBehaviour "dbent/gen/ent/behaviour"
 	entComment "dbent/gen/ent/comment"
 	entCookbookRecipe "dbent/gen/ent/cookbookrecipe"
-	entDecision "dbent/gen/ent/decision"
 	entHandoff "dbent/gen/ent/handoff"
-	entHotfix "dbent/gen/ent/hotfix"
 	entIncident "dbent/gen/ent/incident"
 	entMission "dbent/gen/ent/mission"
-	entPattern "dbent/gen/ent/pattern"
 	entPlan "dbent/gen/ent/plan"
-	entPlaybook "dbent/gen/ent/playbook"
-	entPrompt "dbent/gen/ent/prompt"
-	entRule "dbent/gen/ent/rule"
 	entSnapshot "dbent/gen/ent/snapshot"
 	entSuggestion "dbent/gen/ent/suggestion"
 	entTaskList "dbent/gen/ent/tasklist"
@@ -107,203 +101,15 @@ func trunc(s string, n int) string {
 
 // ── rule ─────────────────────────────────────────────────────────────────
 
-func newRuleSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across rule body + severity + activation + source_kind",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityRule.FTSEntity(), constants.EntityRule.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Rule.Query().Where(entRule.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch rule").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{
-								"body": r.Body, "severity": string(r.Severity),
-								"activation": string(r.Activation), "source_kind": r.SourceKind,
-							},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s [%s] %s", h.ID, row["severity"], trunc(row["body"].(string), 80))
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
-
 // ── decision ─────────────────────────────────────────────────────────────
-
-func newDecisionSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across decision title + body + status",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityDecision.FTSEntity(), constants.EntityDecision.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Decision.Query().Where(entDecision.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch decision").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{
-								"title": r.Title, "body": r.Body,
-								"status": string(r.Status), "source_kind": r.SourceKind,
-							},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s [%s] %s", h.ID, row["status"], row["title"])
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
 
 // ── hotfix ───────────────────────────────────────────────────────────────
 
-func newHotfixSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across hotfix title + body + severity",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityHotfix.FTSEntity(), constants.EntityHotfix.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Hotfix.Query().Where(entHotfix.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch hotfix").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{
-								"title": r.Title, "body": r.Body, "severity": string(r.Severity),
-							},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s [%s] %s", h.ID, row["severity"], row["title"])
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
-
 // ── pattern ──────────────────────────────────────────────────────────────
-
-func newPatternSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across pattern title + body",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityPattern.FTSEntity(), constants.EntityPattern.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Pattern.Query().Where(entPattern.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch pattern").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{"title": r.Title, "body": r.Body},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s %s", h.ID, row["title"])
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
 
 // ── playbook ─────────────────────────────────────────────────────────────
 
-func newPlaybookSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across playbook name + body",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityPlaybook.FTSEntity(), constants.EntityPlaybook.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Playbook.Query().Where(entPlaybook.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch playbook").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{"name": r.Name, "body": r.Body},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s %s", h.ID, row["name"])
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
-
 // ── prompt ───────────────────────────────────────────────────────────────
-
-func newPromptSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across prompt name + body",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityPrompt.FTSEntity(), constants.EntityPrompt.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Prompt.Query().Where(entPrompt.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch prompt").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{"name": r.Name, "body": r.Body},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s %s", h.ID, row["name"])
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
 
 // ── architecturenote ─────────────────────────────────────────────────────
 

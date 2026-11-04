@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"saas/pkg/constants"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -33,7 +34,13 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
+	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
+	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
+	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
+	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
+	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/surface/cli"
@@ -87,12 +94,23 @@ func mountCore(root *cobra.Command) {
 	); err != nil {
 		panic(err)
 	}
-	if mem, _, ferr := root.Find([]string{opsmemory.Noun}); ferr == nil && mem.Name() == opsmemory.Noun {
-		for _, c := range mem.Commands() {
-			addCompatFlags(c, runner)
+	for _, noun := range coreNouns {
+		if g, _, ferr := root.Find([]string{noun}); ferr == nil && g.Name() == noun {
+			for _, c := range g.Commands() {
+				addCompatFlags(c, runner)
+			}
 		}
 	}
 	root.AddCommand(newAPICommand(), newSpecCommand())
+}
+
+// coreNouns are the command groups mounted from the core that keep
+// v0.1.17's common flags (addCompatFlags). One list: a migrated noun adds
+// its name here.
+var coreNouns = []string{
+	opsmemory.Noun,
+	opspattern.Noun, opsplaybook.Noun, opsprompt.Noun,
+	opsrule.Noun, opsdecision.Noun, opshotfix.Noun,
 }
 
 // v0.1.17 flags every `lore memory …` command still accepts on the core
@@ -139,12 +157,12 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 	var db, project string
 	var readOnly, confirm bool
 	if c.Flags().Lookup(constants.FlagDB) == nil {
-		c.Flags().StringVar(&db, constants.FlagDB, "", "v0.1.17 lore.db path: not used by memory commands (refused)")
+		c.Flags().StringVar(&db, constants.FlagDB, "", "v0.1.17 lore.db path: not used by this command (refused)")
 	}
 	if c.Flags().Lookup(constants.FlagProject) == nil {
 		// show/edit/delete/… address a memory by its id, which is unique
 		// across projects: --project is accepted and has nothing to do.
-		c.Flags().StringVar(&project, constants.FlagProject, "", "accepted for v0.1.17 scripts; a memory id already names its project")
+		c.Flags().StringVar(&project, constants.FlagProject, "", "accepted for v0.1.17 scripts; a row id already names its project")
 	}
 	if c.Flags().Lookup(constants.FlagReadOnly) == nil {
 		c.Flags().BoolVar(&readOnly, constants.FlagReadOnly, false, "refuse writes (also LORE_READ_ONLY=1)")
@@ -167,7 +185,7 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 			r.pending = errs.New(errs.InvalidInput, "--confirm was renamed: confirm with --yes").
 				WithHint("rerun with --yes instead of --confirm")
 		case cmd.Flags().Changed(constants.FlagDB):
-			r.pending = errs.New(errs.Unsupported, "--db is not supported by memory commands: memories are row files read from the repository, not lore.db").
+			r.pending = errs.New(errs.Unsupported, "--db is not supported by this command: its rows are row files read from the repository, not lore.db").
 				WithHint("run the command inside the repository (or name a store with --store / --to)")
 		}
 		asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON)
@@ -224,7 +242,11 @@ var gitignoreChecked bool
 
 // coreRouteKinds maps a core table to the kind name v0.1.17's routing
 // rules (defaults.client_repos, F14) use for it.
-var coreRouteKinds = map[row.Table]string{schema.TableMemories: "memory"}
+var coreRouteKinds = map[row.Table]string{
+	schema.TableMemories:  "memory",
+	schema.TableRules:     "rule",
+	schema.TableDecisions: "decision",
+}
 
 // guardCoreRepoWrite keeps v0.1.17's write routing in force for the rows
 // the core writes into the repo store: in a repo whose org config sends
@@ -424,12 +446,14 @@ func coreExitCode(err error) (int, bool) {
 	return code, code != cli.ExitUsage || (err != nil && corePrinted)
 }
 
-// coreMoveMemory is `lore move mem_… --to <store>` on the core: v0.1.17's
-// guard 4 flow (show the text, ask; agents can never confirm with --yes),
-// then memory.move, which keeps the id (PROV5) and tombstones the old
-// copy. A move into this repo while it is a client repo is refused when
-// the memory holds secret references (BATCH 5), before anything is asked.
-func coreMoveMemory(ctx context.Context, id, to string, yes bool) error {
+// coreMoveRow is `lore move <id> --to <store>` for a row of a core-owned
+// table: v0.1.17's guard 4 flow (show the text, ask; agents can never
+// confirm with --yes), then the move, which keeps the id (PROV5) and
+// tombstones the old copy (memory.move for a memory, the App's Move for the
+// other core tables). A move into this repo while it is a client repo is
+// refused when the row holds secret references (BATCH 5), before anything
+// is asked.
+func coreMoveRow(ctx context.Context, table row.Table, id, to string, yes bool) error {
 	if coreApp == nil {
 		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
 	}
@@ -444,17 +468,20 @@ func coreMoveMemory(ctx context.Context, id, to string, yes bool) error {
 		return errcodes.New(errcodes.InvalidInput, "agents cannot confirm a move with --yes; a person must run it (§6.4)").
 			WithHint("ask the owner to run `lore move " + id + " --to " + to + "`")
 	}
-	mid, err := ids.Parse[ids.Memory](id)
+	rid, err := ids.ParseAny(id)
 	if err != nil {
-		return errs.Wrap(errs.InvalidID, id+" is not a memory id", err)
+		return errs.Wrap(errs.InvalidID, id+" is not an id", err)
 	}
-	_, r, err := coreApp.Get(ctx, engine.Ref{Table: schema.TableMemories, ID: mid.Any()})
+	ref := engine.Ref{Table: table, ID: rid}
+	_, r, err := coreApp.Get(ctx, ref)
 	if err != nil {
 		return err
 	}
 	body := ""
-	if t, ok := r.Fields["body"].(value.Text); ok {
-		body = t.String()
+	for _, f := range []string{fieldBody, fieldTitle} {
+		if t, ok := r.Fields[f].(value.Text); ok && body == "" {
+			body = t.String()
+		}
 	}
 	if store.Source(to) == store.SourceRepo {
 		if cwd, werr := os.Getwd(); werr == nil && repoIsClient(ctx, cwd) {
@@ -466,7 +493,7 @@ func coreMoveMemory(ctx context.Context, id, to string, yes bool) error {
 			}
 			if len(found) > 0 {
 				return errs.New(errs.Unsupported, id+" holds secret references and cannot move into a client repo: "+strings.Join(found, ", ")).
-					WithHint("remove the references from the memory first (BATCH 5)")
+					WithHint("remove the references from the row first (BATCH 5)")
 			}
 		}
 	}
@@ -480,6 +507,16 @@ func coreMoveMemory(ctx context.Context, id, to string, yes bool) error {
 			return nil
 		}
 	}
+	if err := ensureCoreGitignore(ctx); err != nil {
+		return coreErr(err)
+	}
+	if table != schema.TableMemories {
+		if _, err := coreApp.Move(ctx, ref, store.Source(to)); err != nil {
+			return err
+		}
+		fmt.Printf("✓ %s moved to store %s (same id; the old copy is tombstoned)\n", id, to)
+		return nil
+	}
 	e, ok := coreApp.Registry().Lookup(opsmemory.OpMove)
 	if !ok {
 		return errcodes.New(errcodes.Internal, "memory.move is not registered")
@@ -488,9 +525,6 @@ func coreMoveMemory(ctx context.Context, id, to string, yes bool) error {
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "encode the move").WithCause(err)
 	}
-	if err := ensureCoreGitignore(ctx); err != nil {
-		return coreErr(err)
-	}
 	if _, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY(), Yes: true}); err != nil {
 		return err
 	}
@@ -498,17 +532,18 @@ func coreMoveMemory(ctx context.Context, id, to string, yes bool) error {
 	return nil
 }
 
-// coreSetMemorySuccessor sets (next != "") or clears (next == "") a
-// memory's superseded_by_id through the core's write path: the supersede
-// repair of `lore doctor --fix` uses it, since memories are never written
-// through lore.db.
-func coreSetMemorySuccessor(ctx context.Context, id, next string) error {
+// coreSetSuccessor sets (next != "") or clears (next == "") the
+// superseded_by_id of row id in table through the core's write path, and
+// sets status too when it is not "" (a superseded decision). The
+// --supersedes chain and the supersede repair of `lore doctor --fix` use
+// it, since the core-owned tables are never written through lore.db.
+func coreSetSuccessor(ctx context.Context, table row.Table, id, next, status string) error {
 	if coreApp == nil {
 		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
 	}
-	mid, err := ids.Parse[ids.Memory](id)
+	rid, err := ids.ParseAny(id)
 	if err != nil {
-		return errs.Wrap(errs.InvalidID, id+" is not a memory id", err)
+		return errs.Wrap(errs.InvalidID, id+" is not an id", err)
 	}
 	var v value.Value = value.Null{}
 	if next != "" {
@@ -520,6 +555,37 @@ func coreSetMemorySuccessor(ctx context.Context, id, next string) error {
 			return err
 		}
 	}
-	_, err = coreApp.Update(ctx, engine.Ref{Table: schema.TableMemories, ID: mid.Any()}, map[string]value.Value{"superseded_by_id": v})
+	patch := map[string]value.Value{fieldSupersededBy: v}
+	if status != "" {
+		t, terr := value.TextOf(status)
+		if terr != nil {
+			return terr
+		}
+		patch[fieldStatus] = t
+	}
+	_, err = coreApp.Update(ctx, engine.Ref{Table: table, ID: rid}, patch)
 	return err
 }
+
+// coreTableOf returns the core-owned table whose ids carry id's prefix
+// (wire.CoreTables), false for any other id.
+func coreTableOf(id string) (row.Table, bool) {
+	p, _, ok := strings.Cut(id, "_")
+	if !ok {
+		return "", false
+	}
+	for _, d := range schema.Builtin() {
+		if string(d.Prefix) == p && slices.Contains(wire.CoreTables(), d.Name) {
+			return d.Name, true
+		}
+	}
+	return "", false
+}
+
+// Core field names the helpers here read and write (schema/builtin_*.go).
+const (
+	fieldBody         = "body"
+	fieldTitle        = "title"
+	fieldSupersededBy = "superseded_by_id"
+	fieldStatus       = "status"
+)

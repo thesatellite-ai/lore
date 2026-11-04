@@ -91,9 +91,6 @@ var flagColor string
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "auto", "color output: auto | always | never")
 	rootCmd.AddCommand(newInitCommand())
-	rootCmd.AddCommand(newRuleCommand())
-	rootCmd.AddCommand(newDecisionCommand())
-	rootCmd.AddCommand(newHotfixCommand())
 	rootCmd.AddCommand(newRenderCommand())
 	rootCmd.AddCommand(newDoctorCommand())
 	rootCmd.AddCommand(newTablesCommand())

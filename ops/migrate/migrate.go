@@ -6,8 +6,8 @@
 // rewritten as `_v: 2` can no longer be read by a teammate still on
 // v0.1.17; running this command is the team's "we have all upgraded".
 //
-// Scope: the memories table is rewritten in the repo store and
-// every attached store (the migrated nouns); other tables keep `_v: 1`
+// Scope: every table of a migrated noun (Rewriter.MigratedTables) is
+// rewritten in the repo store and every attached store; other tables keep `_v: 1`
 // until their noun migrates. It also converts the v0.1.17 settings the core
 // owns (STORE_SERVER_SPEC 13): ~/.lore/identity.yaml into `identity:` of
 // ~/.lore/config.yaml (CFG9) and v1 lore-store.yaml markers into v2 (a
@@ -21,7 +21,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
-	"github.com/thesatellite-ai/lore/schema"
 )
 
 // OpRun is the operation name: `lore migrate run`, POST /v1/migrate/run.
@@ -31,14 +30,15 @@ const OpRun = "migrate.run"
 // is a verb-like command, its default plural reads wrong.
 const restNoun = "migrate"
 
-// Tables lists the tables migrate.run rewrites in this phase.
-func Tables() []row.Table { return []row.Table{schema.TableMemories} }
-
 // Rewriter rewrites the v1 rows of one table in the repo store. The
 // composition root implements it with the store backend: a rewrite changes
 // only the format (_v, _hlc), so it must NOT go through the engine's Update,
 // which would stamp a new HLC and updated_at and so change the row.
 type Rewriter interface {
+	// MigratedTables lists the tables the core owns (the migrated nouns),
+	// in the order migrate.run rewrites them. The composition root keeps
+	// the one list, so a new noun needs no line here.
+	MigratedTables() []row.Table
 	// RewriteV1 returns the ids of the rows of table still in `_v: 1`, and
 	// rewrites them as `_v: 2` unless dryRun. A row changed concurrently
 	// is not overwritten (the backend's Expect check): the call fails with
@@ -71,7 +71,7 @@ type RunOut struct {
 func Ops(rw Rewriter) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpRun, Summary: "Rewrite v0.1.17 row files (_v: 1) as _v: 2 (memories in this release)",
+			Name: OpRun, Summary: "Rewrite v0.1.17 row files (_v: 1) as _v: 2 (the migrated nouns)",
 			Permission: op.PermAdmin, Access: op.AccessWrite, RESTNoun: restNoun,
 			Errors: []errs.Code{errs.Stale, errs.StoreLocked, errs.StoreReadOnly, errs.InvalidInput, errs.OldLore, errs.MigrateLocked, errs.ConfigInvalid, errs.Internal},
 			Examples: []op.Example{
@@ -90,7 +90,7 @@ func Ops(rw Rewriter) []op.Entry {
 				return RunOut{}, err
 			}
 			out.Steps = append(out.Steps, steps...)
-			for _, t := range Tables() {
+			for _, t := range rw.MigratedTables() {
 				got, err := rw.RewriteV1(ctx, t, in.DryRun)
 				if err != nil {
 					return RunOut{}, err

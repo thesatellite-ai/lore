@@ -28,6 +28,20 @@ import (
 
 var _ opsmigrate.Rewriter = (*App)(nil)
 
+// MigratedTables implements opsmigrate.Rewriter: the core-owned tables.
+func (a *App) MigratedTables() []row.Table { return CoreTables() }
+
+// CoreTables is THE list of tables whose nouns run on the new core (their
+// operations are in Registry). migrate.run rewrites exactly these; the
+// v0.1.17 binary's lsync coreOwned set must name the same tables.
+func CoreTables() []row.Table {
+	return []row.Table{
+		schema.TableMemories,
+		schema.TablePatterns, schema.TablePlaybooks, schema.TablePrompts,
+		schema.TableRules, schema.TableDecisions, schema.TableHotfixes,
+	}
+}
+
 // MigrateLockFile is the migration lock, relative to the repo top
 // (git-ignored .lore/state). It is a local lock: two `lore migrate run` on
 // one machine never interleave. The team-wide lock on the signals ref of
@@ -146,12 +160,17 @@ type v1TagLink struct {
 	TagID       string `json:"tag_id"`
 }
 
-// migrateTags turns the repo store's v0.1.17 entity_tags rows into each
-// memory's tag_ids (O11, ops/memory.MigrateTags), written through the
-// engine (refs checked: a tag that does not exist is refused, fail closed).
-// The entity_tags files stay for the v0.1.17 readers of other nouns.
+// migrateTags turns the repo store's v0.1.17 entity_tags rows into the
+// tag_ids of every row they tag (O11), for every table whose definition
+// carries tag_ids (one pass, not per noun), written through the engine
+// (refs checked: a tag that does not exist is refused, fail closed). The
+// entity_tags files stay for the v0.1.17 readers of the other nouns.
 func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, error) {
 	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reg, err := builtinRegistry()
 	if err != nil {
 		return nil, err
 	}
@@ -173,39 +192,30 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, error) {
 	if len(links) == 0 {
 		return nil, nil
 	}
-	existing := map[string][]string{}
-	for _, l := range links {
-		if l.EntityTable != string(schema.TableMemories) {
-			continue
-		}
-		id, perr := ids.ParseAny(l.EntityID)
-		if perr != nil {
-			continue
-		}
-		if _, r, gerr := st.eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: schema.TableMemories, ID: id}); gerr == nil {
+	merged, skipped := mergeTagLinks(reg, links, func(t row.Table, id ids.AnyID) []string {
+		var out []string
+		if _, r, gerr := st.eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: t, ID: id}); gerr == nil {
 			if list, ok := r.Fields[schema.FieldTagIDs].(value.List); ok {
 				for _, it := range list.Items() {
-					existing[l.EntityID] = append(existing[l.EntityID], it.String())
+					out = append(out, it.String())
 				}
 			}
 		}
-	}
-	merged, skipped := opsmemory.MigrateTags(links, existing)
+		return out
+	})
 	var steps []string
 	for _, l := range skipped {
-		steps = append(steps, "tags: skipped entity_tags link "+l.EntityTable+"/"+l.EntityID+" → "+l.TagID+" (not a valid mem_/tag_ pair)")
+		steps = append(steps, "tags: skipped entity_tags link "+l.EntityTable+"/"+l.EntityID+" → "+l.TagID+" (not a tagged row id and a tag_ id)")
 	}
-	for _, mem := range slices.Sorted(maps.Keys(merged)) {
-		steps = append(steps, "tags: "+mem+".tag_ids = "+strings.Join(merged[mem], ","))
+	keys := slices.SortedFunc(maps.Keys(merged), func(x, y taggedRow) int { return strings.Compare(x.id.String(), y.id.String()) })
+	for _, key := range keys {
+		m := merged[key]
+		steps = append(steps, "tags: "+key.id.String()+".tag_ids = "+strings.Join(m, ","))
 		if dryRun {
 			continue
 		}
-		id, err := ids.ParseAny(mem)
-		if err != nil {
-			return nil, err
-		}
-		items := make([]value.Value, 0, len(merged[mem]))
-		for _, t := range merged[mem] {
+		items := make([]value.Value, 0, len(m))
+		for _, t := range m {
 			tid, err := ids.ParseAny(t)
 			if err != nil {
 				return nil, err
@@ -220,12 +230,57 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		ref := engine.Ref{Store: store.SourceRepo, Table: schema.TableMemories, ID: id}
+		ref := engine.Ref{Store: store.SourceRepo, Table: key.table, ID: key.id}
 		if _, err := st.eng.Update(ctx, ref, map[string]value.Value{schema.FieldTagIDs: list}); err != nil {
-			return nil, errs.Wrap(errs.CodeOf(err), "migrate: tags of "+mem, err)
+			return nil, errs.Wrap(errs.CodeOf(err), "migrate: tags of "+key.id.String(), err)
 		}
 	}
 	return steps, nil
+}
+
+// taggedRow names one row migrateTags writes tag_ids on.
+type taggedRow struct {
+	table row.Table
+	id    ids.AnyID
+}
+
+// mergeTagLinks groups v0.1.17 tag links per tagged row: a link counts when
+// its entity table is a registered table whose definition has tag_ids, the
+// entity id carries that table's prefix and the tag id is a tag_ id; every
+// other link is returned in skipped (reported, never dropped silently).
+// existing returns the tag ids a row already lists; the result per row is
+// sorted and de-duplicated.
+func mergeTagLinks(reg *schema.Registry, links []opsmemory.TagLink, existing func(row.Table, ids.AnyID) []string) (map[taggedRow][]string, []opsmemory.TagLink) {
+	merged := map[taggedRow][]string{}
+	var skipped []opsmemory.TagLink
+	for _, l := range links {
+		def, ok := reg.Table(row.Table(l.EntityTable))
+		if !ok {
+			continue // a table the core does not own yet: its v0.1.17 readers keep entity_tags
+		}
+		if _, has := def.Field(schema.FieldTagIDs); !has {
+			continue
+		}
+		id, err := ids.ParseAny(l.EntityID)
+		if err != nil || id.Prefix() != def.Prefix {
+			skipped = append(skipped, l)
+			continue
+		}
+		if t, err := ids.ParseAny(l.TagID); err != nil || t.Prefix() != ids.PrefixTag {
+			skipped = append(skipped, l)
+			continue
+		}
+		k := taggedRow{table: def.Name, id: id}
+		if _, seen := merged[k]; !seen {
+			merged[k] = existing(def.Name, id)
+		}
+		merged[k] = append(merged[k], l.TagID)
+	}
+	for k, list := range merged {
+		slices.Sort(list)
+		merged[k] = slices.Compact(list)
+	}
+	return merged, skipped
 }
 
 // RewriteV1 implements opsmigrate.Rewriter on every attached store. Each

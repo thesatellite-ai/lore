@@ -32,6 +32,9 @@ import (
 
 	"dbent/gen/ent"
 	entDecision "dbent/gen/ent/decision"
+
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // supersedeKinds is every kind with a replacement chain, in report order.
@@ -203,36 +206,21 @@ func loadSupersedeNodes(ctx context.Context, db *ent.Client, kind supersedeKind)
 	return out, nil
 }
 
-// clearSupersededBy removes a row's successor link.
-func clearSupersededBy(ctx context.Context, db *ent.Client, kind supersedeKind, id string) error {
-	switch kind {
-	case supersedeRule:
-		return db.Rule.UpdateOneID(id).ClearSupersededByID().Exec(ctx)
-	case supersedeMemory:
-		return coreSetMemorySuccessor(ctx, id, "")
-	case supersedeDecision:
-		return db.Decision.UpdateOneID(id).ClearSupersededByID().Exec(ctx)
-	case supersedeHotfix:
-		return db.Hotfix.UpdateOneID(id).ClearSupersededByID().Exec(ctx)
-	case supersedePattern:
-		return db.Pattern.UpdateOneID(id).ClearSupersededByID().Exec(ctx)
-	}
-	return fmt.Errorf("supersede: unknown kind %q", kind)
+// clearSupersededBy removes a row's successor link (through the core).
+func clearSupersededBy(ctx context.Context, _ *ent.Client, kind supersedeKind, id string) error {
+	return setSuccessorCore(kind, func(t row.Table) error { return coreSetSuccessor(ctx, t, id, "", "") })
 }
 
 // repairSetSupersededBy points an old row at its replacement. Unlike a new
 // --supersedes, an old decision's status moves to superseded only while it
 // is still proposed or accepted: a status a person set since (deprecated)
 // is kept.
-func repairSetSupersededBy(ctx context.Context, db *ent.Client, kind supersedeKind, old supersedeNode, newID string) error {
-	if kind == supersedeDecision {
-		u := db.Decision.UpdateOneID(old.id).SetSupersededByID(newID)
-		if old.decisionStatus == entDecision.StatusProposed || old.decisionStatus == entDecision.StatusAccepted {
-			u.SetStatus(entDecision.StatusSuperseded)
-		}
-		return u.Exec(ctx)
+func repairSetSupersededBy(ctx context.Context, _ *ent.Client, kind supersedeKind, old supersedeNode, newID string) error {
+	status := ""
+	if kind == supersedeDecision && (old.decisionStatus == entDecision.StatusProposed || old.decisionStatus == entDecision.StatusAccepted) {
+		status = schema.DecisionStatusSuperseded
 	}
-	return setSupersededBy(ctx, db, kind, old.id, newID)
+	return setSuccessorCore(kind, func(t row.Table) error { return coreSetSuccessor(ctx, t, old.id, newID, status) })
 }
 
 // supersedeRepairResult is the outcome over every kind.

@@ -24,7 +24,13 @@ import (
 // CoreOwned and nothing else, so extending this set is the whole migration
 // of a noun's file side. The coordinator adds one line per migrated noun.
 var coreOwned = map[string]bool{
-	"memories": true,
+	"memories":  true,
+	"patterns":  true,
+	"playbooks": true,
+	"prompts":   true,
+	"rules":     true,
+	"decisions": true,
+	"hotfixes":  true,
 }
 
 // CoreOwned reports whether the new core owns table's row files.
