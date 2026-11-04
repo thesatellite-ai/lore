@@ -91,7 +91,10 @@ func (a *App) LockMigration(ctx context.Context) (func() error, error) {
 // MigrateSettings implements opsmigrate.Rewriter: CFG9 identity and the
 // v1 store markers of every attached store.
 func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error) {
-	var steps []string
+	steps, err := a.MigrateModeB(ctx, dryRun)
+	if err != nil {
+		return nil, err
+	}
 	legacy, ok, err := identity.ReadLegacy(a.opts.Home)
 	if err != nil {
 		return nil, err

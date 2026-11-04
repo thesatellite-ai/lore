@@ -109,6 +109,10 @@ type Options struct {
 	// must not receive internal knowledge: F10 E_LINK_UNKNOWN, the F16
 	// leak check) until the store noun migrates. Nil allows every write.
 	GuardRepoWrite func(ctx context.Context, table row.Table, text string, explicit bool) error
+	// ModeB reads a retired v0.1.17 Mode B project (shared lore.db) for
+	// `lore migrate run` (wire/migrate_modeb.go); nil = such a repo is
+	// refused but cannot be converted.
+	ModeB ModeBExporter
 	// Audit, when set, receives every core write's audit event in place of
 	// AuditFile (the old binary passes a sink that appends the v0.1.17
 	// audit_logs hash chain, so `lore audit log|verify` see core writes).
@@ -284,6 +288,11 @@ func (a *App) repoTop(ctx context.Context) (string, error) {
 // The store operations run on the repo-only engine (configState); a
 // `--to <store>/<folder>` target is attached first (prepareTarget).
 func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+	if name := e.Spec().Name; name != opsmigrate.OpRun && !opsstores.IsStoreOp(name) {
+		if err := a.RefuseRetiredModeB(ctx); err != nil {
+			return op.Result{}, err
+		}
+	}
 	if opsstores.IsStoreOp(e.Spec().Name) {
 		st, err := a.configState(ctx)
 		if err != nil {
