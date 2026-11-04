@@ -169,6 +169,10 @@ const (
 	// list (TIME_TRACKING_DESIGN 6.2); entries are not rows, the id is the
 	// merge key of the list.
 	PrefixTimeEntry Prefix = "tme"
+	// PrefixChecklistItem marks one checklist item on a task row's
+	// checklist list (TASK_SYSTEM_DESIGN 7.2); items are not rows, the id
+	// is the merge key of the list (StrategyListByID).
+	PrefixChecklistItem Prefix = "chk"
 	// PrefixBatch marks one bulk action (a bulk delete, an import). XQ1:
 	// every bulk action of every noun uses this one prefix, and `lore
 	// batch show` reports the kind (task, meta, resource, delete, import),
@@ -260,6 +264,7 @@ var allPrefixes = [...]Prefix{
 	PrefixSecretAllow,
 	PrefixResource,
 	PrefixTimeEntry,
+	PrefixChecklistItem,
 	PrefixBatch,
 }
 

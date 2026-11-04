@@ -27,7 +27,7 @@ func allConstants() []Code {
 		Unauthorized, ResourceInvalid, SchemaOld, NeedsConfirm, PolicyDenied, KindUnknown,
 		MetaType, MetaAmbiguous, MigrateLocked, URLUserinfo,
 		ResourceInUse, KindConflict, NameTaken, MetaTaken, Purged, Refused,
-		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth,
+		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth, OpenItems,
 		DurationBad, TimeTooLong, UpgradePermission, UpgradeChecksum, UpgradePinned,
 		RefSyntax, RefScheme, RefCycle, RefDepth, RefLimit, RefDangling, RefRequired,
 		InTrash, ParentDeleted, ParentPurged, ReasonRequired, MigrateRollbackLoses,

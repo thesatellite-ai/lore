@@ -100,6 +100,7 @@ const (
 	ParentMission Code = "E_PARENT_MISSION"
 	ParentProject Code = "E_PARENT_PROJECT"
 	TreeDepth     Code = "E_TREE_DEPTH"
+	OpenItems     Code = "E_OPEN_ITEMS"
 	OldLore       Code = "E_OLD_LORE"
 	ConfigInvalid Code = "E_CONFIG_INVALID"
 	// Time tracking input errors (TIME_TRACKING_DESIGN, CLI_REFERENCE 5: exit 20).
@@ -240,6 +241,7 @@ var table = map[Code]entry{
 	ParentMission:         {class: ClassRefused, desc: "a sub-task's mission differs from its parent's"},
 	ParentProject:         {class: ClassRefused, desc: "the parent task is in another project"},
 	TreeDepth:             {class: ClassRefused, desc: "the sub-task tree would be deeper than tasks.max_depth"},
+	OpenItems:             {class: ClassRefused, desc: "done of a task with unticked checklist items without --tick-all or --force (TSQ14)"},
 	DurationBad:           {class: ClassBadInput, desc: "a duration lore does not accept (0, negative, a day unit); give e.g. 45m, 1h30m, 1.5h"},
 	TimeTooLong:           {class: ClassBadInput, desc: "a manual time entry over time.max_entry (default 24h); split it into one entry per day"},
 	UpgradePermission:     {class: ClassUpgrade, desc: "the folder of the lore binary is not writable; run `sudo lore upgrade`"},

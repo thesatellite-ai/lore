@@ -26,6 +26,12 @@ const (
 	// KeyTasksParentAutoclose is what happens when a parent's last open
 	// sub-task closes (TSQ2): off | suggest (default) | on.
 	KeyTasksParentAutoclose Key = "tasks.parent_autoclose"
+	// KeyTasksEstimateUnit is the unit of tasks.estimate (TSQ4):
+	// points (default) | hours | days.
+	KeyTasksEstimateUnit Key = "tasks.estimate_unit"
+	// KeyTasksAutoWatch: creators and assignees watch a task by default
+	// (TASK 14.4); false turns that off.
+	KeyTasksAutoWatch Key = "tasks.auto_watch"
 	// Time tracking keys (TIME_TRACKING_DESIGN 14), in minutes: a limit,
 	// the smaller is stricter (flags more, merges less, allows less).
 	// OV7-1: integers in minutes, the policy layer has no duration shape.
@@ -140,6 +146,12 @@ func Keys() []KeyDef {
 		// command, on closes the parent in the same write.
 		{Key: KeyTasksParentAutoclose, Shape: ShapeRank, Choices: []string{"off", "suggest", "on"}, Default: mustText("suggest"),
 			Doc: "when a parent's last open sub-task closes: off, suggest (print the close command) or on (close it in the same write) (TSQ2)"},
+		// TSQ4: a unit has no "stricter"; a declared order (points, hours, days) so levels join.
+		{Key: KeyTasksEstimateUnit, Shape: ShapeRank, Choices: []string{"points", "hours", "days"}, Default: mustText("points"),
+			Doc: "unit of a task's estimate: points, hours or days (TSQ4)"},
+		// OV12-2: auto watching is the flag's strict value (more people told).
+		{Key: KeyTasksAutoWatch, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(true),
+			Doc: "creators and assignees watch a task by default (TASK 14.4)"},
 		{Key: KeyTimeLongSpan, Shape: ShapeLimit, Default: value.Int(defaultTimeLongSpanMin), Doc: "minutes after which a closed auto time span is flagged long_span; never capped (TQ2)"},
 		{Key: KeyTimeCoalesceGap, Shape: ShapeLimit, Default: value.Int(defaultTimeCoalesceGapMin), Doc: "minutes: auto spans of one worker closer than this are coalesced at write (TQ4)"},
 		{Key: KeyTimeMaxEntry, Shape: ShapeLimit, Ceiling: defaultTimeMaxEntryMin, Default: value.Int(defaultTimeMaxEntryMin), Doc: "minutes: the longest manual time entry (D13, max 24h)"},
