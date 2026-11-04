@@ -127,3 +127,12 @@ func ValidName(name string) bool {
 	_, ok := parts(name)
 	return ok
 }
+
+// Texter is the optional human form of an operation's output. When an Out
+// type implements it, the CLI prints Text() instead of the generic
+// `name: value` dump, so a migrated command keeps its v0.1.17 human output
+// line for line (the --json and REST forms are unaffected). Text must end
+// with a newline when it prints anything, and never contain a secret.
+type Texter interface {
+	Text() string
+}

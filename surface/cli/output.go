@@ -52,6 +52,14 @@ func printHuman(w io.Writer, r op.Result) error {
 	if !v.IsValid() {
 		return nil
 	}
+	// An output with its own human form (op.Texter) prints exactly that.
+	// Interface() is the reflect boundary; it is narrowed at once.
+	if v.CanInterface() {
+		if t, ok := v.Interface().(op.Texter); ok {
+			_, err := io.WriteString(w, t.Text())
+			return err
+		}
+	}
 	var b strings.Builder
 	if err := writeObject(&b, v, r.Fields(), ""); err != nil {
 		return err
