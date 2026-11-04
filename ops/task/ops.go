@@ -568,6 +568,13 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
+	if in.Status != "" {
+		// FLAG2: an unknown --status is an invalid argument (exit 20), not an
+		// empty list.
+		if err = work.OneOf(Noun, "status", in.Status, schema.TaskStatuses()); err != nil {
+			return ListOut{}, err
+		}
+	}
 	if in.Commitment != "" {
 		if err = work.OneOf(Noun, "commitment", in.Commitment, schema.TaskCommitments()); err != nil {
 			return ListOut{}, err
