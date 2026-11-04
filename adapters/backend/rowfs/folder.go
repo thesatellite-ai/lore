@@ -422,13 +422,6 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 	return a, nil
 }
 
-// Keys of the _meta.json a folder gets on its first write (spec 6.1: "a
-// project folder (prj_ id in its _meta.json)"; v0.1.17 stores package
-// metaKeyProjectID / metaKeyVersion, which read and keep it).
-const (
-	metaKeyProjectID = "project_id"
-	metaKeyVersion   = "_v"
-)
 
 // ensureMeta gives a non-root folder its _meta.json with a new prj_ id
 // when the batch is the folder's first write (the file is missing), as
@@ -453,7 +446,7 @@ func (f *Folder) ensureMeta(a *Applied) error {
 	if err != nil {
 		return errs.Wrap(errs.Internal, "rowfs: new project id", err)
 	}
-	raw, err := json.Marshal(map[string]any{metaKeyProjectID: id.String(), metaKeyVersion: row.FormatVersion})
+	raw, err := json.Marshal(folderMeta{ProjectID: id.String(), Version: row.FormatVersion})
 	if err != nil {
 		return errs.Wrap(errs.Internal, "rowfs: encode "+MetaFileName, err)
 	}
@@ -467,6 +460,16 @@ func (f *Folder) ensureMeta(a *Applied) error {
 	a.undo = append(a.undo, undoStep{full: full})
 	a.Paths = append(a.Paths, f.rel+"/"+MetaFileName)
 	return nil
+}
+
+// folderMeta is the _meta.json a folder's first write creates (spec 6.1: "a
+// project folder (prj_ id in its _meta.json)"). Its json tags `project_id`
+// and `_v` are the keys v0.1.17's stores package reads and keeps, so they
+// must not change. A typed struct instead of a map keeps the file's shape
+// closed (no `any`); canon.Document sorts the keys either way.
+type folderMeta struct {
+	ProjectID string `json:"project_id"`
+	Version   int    `json:"_v"`
 }
 
 // sortedKeys returns m's keys in order, so reads are deterministic.
