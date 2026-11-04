@@ -6,6 +6,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/row"
+	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -116,7 +117,9 @@ func (o ListOut) rowsText() string {
 
 // Text prints v0.1.17's task show: id, the fields, a blank line and the
 // body.
-func (o ShowOut) Text() string {
+func (o ShowOut) Text() string { return o.baseText() + rowexpand.Text(o.Expanded, o.ExpandedRefs) }
+
+func (o ShowOut) baseText() string {
 	t := o.Data
 	var b strings.Builder
 	b.WriteString(t.ID + "\n")

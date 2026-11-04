@@ -29,6 +29,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
@@ -976,7 +977,16 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			}
 		}
 	}
-	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: full}, nil
+	out := ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: full}
+	if in.Expand { // SECRETS 2.7, 12: the row as read (--from too), stored text unchanged
+		ex, _ := o.env.(rowexpand.Env)
+		blk, xerr := rowexpand.Row(ctx, ex, r)
+		if xerr != nil {
+			return ShowOut{}, xerr
+		}
+		out.Expanded, out.ExpandedRefs = blk.Expanded, blk.Refs
+	}
+	return out, nil
 }
 
 // fromRepo is the --from value naming the repo's own store.

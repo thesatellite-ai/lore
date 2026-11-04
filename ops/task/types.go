@@ -1,9 +1,12 @@
 package task
 
 import (
-	"github.com/thesatellite-ai/lore/engine"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
+	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
+
+	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/store"
@@ -316,6 +319,7 @@ type ShowIn struct {
 	Why       bool `json:"why,omitempty" flag:"why" desc:"explain the urgency score term by term"`
 	Who       bool `json:"who,omitempty" flag:"who" desc:"who created and last changed it (and, on the writing machine, with which session)"`
 	Relations bool `json:"relations,omitempty" flag:"relations" desc:"show every relation, both directions"`
+	rowexpand.Flag
 }
 
 // ShowOut is the output of task.show.
@@ -323,6 +327,10 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Full   `json:"data"`
+	// Expanded / ExpandedRefs are --expand's additions (SECRETS 12); the
+	// key is expanded_refs because data.refs already lists the task's refs.
+	Expanded     map[string]string `json:"expanded,omitempty"`
+	ExpandedRefs []refpoint.Used   `json:"expanded_refs,omitempty"`
 }
 
 // EditIn is the input of task.edit. An empty flag leaves its field as it
