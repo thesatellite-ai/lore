@@ -8,14 +8,22 @@ package contextfit
 //	        Out ends with "more: <command>" (never a cut mid-entry)
 
 import (
+	"encoding/json"
 	"path"
 	"strings"
 	"unicode"
 )
 
-// SplitGlobs splits a rule's globs field (comma, semicolon, space or line
-// separated) into patterns.
+// SplitGlobs splits a rule's globs field into patterns: a JSON array of
+// strings (what `lore rule add --globs` documents), else a comma,
+// semicolon, space or line separated list (v0.1.17 rows typed by hand).
 func SplitGlobs(s string) []string {
+	if t := strings.TrimSpace(s); strings.HasPrefix(t, "[") {
+		var arr []string
+		if json.Unmarshal([]byte(t), &arr) == nil {
+			return arr
+		}
+	}
 	return strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || unicode.IsSpace(r) })
 }
 

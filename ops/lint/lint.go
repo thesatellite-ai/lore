@@ -72,6 +72,8 @@ type Env = work.Env
 // RunIn is the input of lint.run.
 type RunIn struct {
 	Code []string `json:"code,omitempty" flag:"code" desc:"only these finding codes (repeatable)"`
+	// Context runs only the LORE.md clean-up checks (CONTEXT_BUDGET 6.12).
+	Context bool `json:"context,omitempty" flag:"context" desc:"only the context checks: superseded but pinned, no summary, too long, code path without globs, untagged, near duplicates"`
 }
 
 // Finding is one problem lint found.
@@ -119,7 +121,8 @@ func Ops(env Env) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpRun, Summary: "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, unknown metadata keys)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: []errs.Code{errs.InvalidInput, errs.Internal},
-			Examples: []op.Example{{Title: "every finding as JSON", CLI: "lore lint --json", Want: `"findings"`}}}, o.run),
+			Examples: []op.Example{{Title: "every finding as JSON", CLI: "lore lint --json", Want: `"findings"`},
+				{Title: "LORE.md clean-up suggestions", CLI: "lore lint --context", Want: "finding"}}}, o.run),
 	}
 }
 
@@ -135,7 +138,7 @@ type sourced struct {
 func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	want := map[Code]bool{}
 	for _, c := range in.Code {
-		if !slices.Contains(Codes(), Code(c)) {
+		if !slices.Contains(Codes(), Code(c)) && !slices.Contains(ContextCodes(), Code(c)) {
 			return RunOut{}, errs.New(errs.InvalidInput, "lint: unknown code "+strconv.Quote(c))
 		}
 		want[Code(c)] = true
@@ -143,6 +146,17 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	all, err := o.rows(ctx)
 	if err != nil {
 		return RunOut{}, err
+	}
+	if in.Context {
+		// 6.12: the context checks alone, read-only, each with its command.
+		out := contextFindings(all)
+		if len(want) > 0 {
+			out = slices.DeleteFunc(out, func(f Finding) bool { return !want[f.Code] })
+		}
+		if out == nil {
+			out = []Finding{}
+		}
+		return RunOut{Findings: out, Count: len(out)}, nil
 	}
 	var out []Finding
 	out = append(out, refFindings(all)...)
@@ -360,6 +374,19 @@ func metaFindings(all map[row.Table][]sourced) []Finding {
 				}
 			}
 		}
+	}
+	return out
+}
+
+// listItems is a list field's items as text (nil when absent).
+func listItems(r row.Row, f string) []string {
+	l, ok := r.Fields[f].(value.List)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(l.Items()))
+	for _, it := range l.Items() {
+		out = append(out, it.String())
 	}
 	return out
 }

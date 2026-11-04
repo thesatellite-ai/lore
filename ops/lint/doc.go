@@ -14,6 +14,11 @@
 //	        └─ meta        ─► meta_unknown_key (an entry whose key id no
 //	                          attached registry defines, METADATA 3.21)
 //
+//	lore lint --context                              (lint.run, Context)
+//	    └► contextFindings (context.go): superseded_pinned, no_summary,
+//	       entry_too_long, path_no_globs, untagged, near_duplicate
+//	       (CONTEXT_BUDGET 6.12)
+//
 // Nothing is changed: no lint finding has a --fix defined in the design
 // (`lore meta lint --fix` and `lore resource lint --fix` belong to their
 // nouns); each finding names the command that fixes it.

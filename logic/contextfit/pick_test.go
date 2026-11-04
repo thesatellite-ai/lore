@@ -22,6 +22,9 @@ func TestMatchGlob(t *testing.T) {
 			t.Errorf("MatchGlob(%q, %q) = %v, want %v", c.pat, c.p, got, c.want)
 		}
 	}
+	if g := SplitGlobs(`["services/billing/**","db/*.sql"]`); len(g) != 2 || g[0] != "services/billing/**" {
+		t.Errorf("SplitGlobs JSON = %v", g)
+	}
 	if g := SplitGlobs("a/**, b/*.go;c\nd"); len(g) != 4 {
 		t.Errorf("SplitGlobs = %v", g)
 	}
