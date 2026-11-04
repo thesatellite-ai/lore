@@ -564,7 +564,8 @@ func (c *clone) addMemory(body string) string {
 func TestUC_MiscRepairTier3(t *testing.T) {
 	_, c := initProject(t)
 	c.addRow("kept in the broken copy")
-	// rules are core-owned (0.1.18): lore.db holds the bridge copy only
+	c.addMemory("kept in the broken copy")
+	// rules and memories are core-owned (0.1.18): lore.db holds the bridge copy only
 	// after an old command's sync pass imports the row file.
 	c.lore("sync")
 	dbPath := filepath.Join(c.dir, ".lore", "lore.db")
@@ -582,8 +583,10 @@ func TestUC_MiscRepairTier3(t *testing.T) {
 	if err != nil || len(broken) != 1 {
 		t.Fatalf("broken copy: %v %v", broken, err)
 	}
-	if n := countRows(t, broken[0], `SELECT COUNT(*) FROM rules WHERE body = 'kept in the broken copy'`); n != 1 {
-		t.Fatalf("the previous DB must be kept intact: %d", n)
+	for _, table := range []string{"rules", "memories"} {
+		if n := countRows(t, broken[0], `SELECT COUNT(*) FROM `+table+` WHERE body = 'kept in the broken copy'`); n != 1 {
+			t.Fatalf("the previous DB must be kept intact (%s): %d", table, n)
+		}
 	}
 	if n := countRows(t, dbPath, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'`); n != 0 {
 		t.Fatalf("tier 3 must leave an empty DB: %d tables", n)

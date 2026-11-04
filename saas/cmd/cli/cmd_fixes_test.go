@@ -281,24 +281,29 @@ func TestFix_IdentitySetRefusesABareName(t *testing.T) {
 func TestFix_DoctorForgetsTheSecretOfADeletedRow(t *testing.T) {
 	_, c := initProject(t)
 	const secretBody = "Deploy key for staging: AKIAIOSFODNN7EXAMPLE"
-	// 0.1.18 (O12a): rules are written by the core, which scans at write
-	// time; --allow-secrets is gone. Without --yes the add is refused
-	// (E_NEEDS_CONFIRM) and nothing is written.
-	before := strings.Count(c.lore("rule", "list", "--json").stdout, `"id"`)
-	if r := c.loreAny("rule", "add", "--body", secretBody); r.code == 0 || !strings.Contains(r.stderr, "E_NEEDS_CONFIRM") {
-		t.Fatalf("a secret-looking body must ask first: %d %s", r.code, r.stderr)
-	}
-	if after := strings.Count(c.lore("rule", "list", "--json").stdout, `"id"`); after != before {
-		t.Fatalf("a refused add wrote a row (%d -> %d)", before, after)
-	}
-	// --yes stores it as not a secret: doctor has nothing to report while
-	// the row exists, and nothing after it is deleted.
-	id := idOf(t, c.lore("rule", "add", "--yes", "--body", secretBody).stdout, "rul")
-	if out := c.loreAny("doctor").stdout; strings.Contains(out, "credential pattern") {
-		t.Fatalf("doctor warns about a row marked not a secret:\n%s", out)
-	}
-	c.lore("rule", "delete", id, "--yes")
-	if out := c.loreAny("doctor").stdout; strings.Contains(out, id) || strings.Contains(out, "credential pattern") {
-		t.Fatalf("doctor still warns about the deleted row:\n%s", out)
+	// 0.1.18 (O12a): memories and rules are written by the core, which
+	// scans at write time; --allow-secrets is gone. Without --yes the add
+	// is refused (E_NEEDS_CONFIRM) and nothing is written.
+	for _, kind := range []string{"memory", "rule"} {
+		before := strings.Count(c.lore(kind, "list", "--json").stdout, `"id"`)
+		if r := c.loreAny(kind, "add", "--body", secretBody); r.code == 0 || !strings.Contains(r.stderr, "E_NEEDS_CONFIRM") {
+			t.Fatalf("%s: a secret-looking body must ask first: %d %s", kind, r.code, r.stderr)
+		}
+		if after := strings.Count(c.lore(kind, "list", "--json").stdout, `"id"`); after != before {
+			t.Fatalf("%s: a refused add wrote a row (%d -> %d)", kind, before, after)
+		}
+		// --yes stores it as not a secret: doctor has nothing to report
+		// while the row exists, and nothing after it is deleted.
+		id := idPattern.FindString(c.lore(kind, "add", "--yes", "--body", secretBody).stdout)
+		if id == "" {
+			t.Fatalf("%s add --yes printed no id", kind)
+		}
+		if out := c.loreAny("doctor").stdout; strings.Contains(out, "credential pattern") {
+			t.Fatalf("%s: doctor warns about a row marked not a secret:\n%s", kind, out)
+		}
+		c.lore(kind, "delete", id, "--yes")
+		if out := c.loreAny("doctor").stdout; strings.Contains(out, id) || strings.Contains(out, "credential pattern") {
+			t.Fatalf("%s: doctor still warns about the deleted row:\n%s", kind, out)
+		}
 	}
 }

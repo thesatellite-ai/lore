@@ -477,12 +477,13 @@ func TestUC_Tasks_MissionLifecycle(t *testing.T) {
 func TestUC_Tasks_ArchiveUnarchive(t *testing.T) {
 	c := ucProject(t)
 	ids := map[string]string{
+		"memories":  ucID(t, c, "memory", "add", "--body", "keep me"),
 		"rules":     ucID(t, c, "rule", "add", "--severity=must", "--body", "always x"),
 		"decisions": ucID(t, c, "decision", "add", "--title=pick", "--body", "chose y"),
 		"hotfixes":  ucID(t, c, "hotfix", "add", "--title=careful", "--body", "beware z"),
 		"patterns":  ucID(t, c, "pattern", "add", "--title=opt", "--body", "options"),
 	}
-	kinds := map[string]string{"rules": "rule", "decisions": "decision", "hotfixes": "hotfix", "patterns": "pattern"}
+	kinds := map[string]string{"memories": "memory", "rules": "rule", "decisions": "decision", "hotfixes": "hotfix", "patterns": "pattern"}
 	for table, id := range ids {
 		kind := kinds[table]
 		if out := c.lore(kind, "archive", id).stdout; !strings.Contains(out, id+" archived") {
@@ -498,43 +499,52 @@ func TestUC_Tasks_ArchiveUnarchive(t *testing.T) {
 			t.Fatalf("%s unarchive left archived_at", kind)
 		}
 	}
-	// The old archive helpers (--db, --read-only) on a v0.1.17 kind;
-	// memories moved to the 0.1.18 core (ops/memory).
-	mem := ids["rules"]
-	c.lore("rule", "archive", mem)
+	// The archive helpers (--db, --read-only, unknown ids) for memory (the
+	// v0.1.17 kind these checks were written for) and rule.
+	for _, kc := range []struct{ table, kind, prefix string }{{"memories", "memory", "mem"}, {"rules", "rule", "rul"}} {
+		archiveHelpers(t, c, kc.table, kc.kind, kc.prefix, ids[kc.table])
+	}
+}
+
+// archiveHelpers checks archive/unarchive's flags on one kind: list hides
+// an archived row and --archived shows it, --db is refused (0.1.18: row
+// files, never lore.db), --read-only refuses, unknown ids are E_NOT_FOUND.
+func archiveHelpers(t *testing.T, c *clone, table, kind, prefix, mem string) {
+	t.Helper()
+	c.lore(kind, "archive", mem)
 	var list []struct {
 		ID string `json:"id"`
 	}
-	ucJSON(t, c.lore("rule", "list", "--json"), &list)
+	ucJSON(t, c.lore(kind, "list", "--json"), &list)
 	if len(list) != 0 {
-		t.Fatalf("archived rule listed: %+v", list)
+		t.Fatalf("archived %s listed: %+v", kind, list)
 	}
-	ucJSON(t, c.lore("rule", "list", "--json", "--archived"), &list)
+	ucJSON(t, c.lore(kind, "list", "--json", "--archived"), &list)
 	if len(list) != 1 || list[0].ID != mem {
-		t.Fatalf("--archived must show it: %+v", list)
+		t.Fatalf("%s --archived must show it: %+v", kind, list)
 	}
-	// 0.1.18: rules are row files, never lore.db, so --db is refused with
+	// 0.1.18: these rows are row files, never lore.db, so --db is refused with
 	// E_UNSUPPORTED (spec-deltas memparity: "--db → E_UNSUPPORTED, the core
 	// never opens lore.db", CODE ORG 1A) and changes nothing; v0.1.17
 	// honoured it from anywhere. --read-only refuses.
 	elsewhere := t.TempDir()
 	db := filepath.Join(c.dir, ".lore", "lore.db")
-	if r := c.w.run(elsewhere, nil, e2eBin, "rule", "unarchive", mem, "--db", db); r.code == 0 || !strings.Contains(r.stderr, "E_UNSUPPORTED") {
+	if r := c.w.run(elsewhere, nil, e2eBin, kind, "unarchive", mem, "--db", db); r.code == 0 || !strings.Contains(r.stderr, "E_UNSUPPORTED") {
 		t.Fatalf("--db from another directory: want E_UNSUPPORTED, got %d %s", r.code, r.stderr)
 	}
-	if ucRowField(t, c, "rules", mem, "archived_at") == "" {
+	if ucRowField(t, c, table, mem, "archived_at") == "" {
 		t.Fatal("a refused --db unarchive changed the row")
 	}
-	if r := c.loreAny("rule", "archive", mem, "--read-only"); r.code == 0 || !strings.Contains(r.stderr, "E_READ_ONLY") {
+	if r := c.loreAny(kind, "archive", mem, "--read-only"); r.code == 0 || !strings.Contains(r.stderr, "E_READ_ONLY") {
 		t.Fatalf("archive --read-only: %d %s", r.code, r.stderr)
 	}
-	if r := c.loreAny("rule", "unarchive", mem, "--read-only"); r.code == 0 || !strings.Contains(r.stderr, "E_READ_ONLY") {
+	if r := c.loreAny(kind, "unarchive", mem, "--read-only"); r.code == 0 || !strings.Contains(r.stderr, "E_READ_ONLY") {
 		t.Fatalf("unarchive --read-only: %d %s", r.code, r.stderr)
 	}
-	for _, bad := range []string{"rul_00000000000070008000000000000000", "not-an-id"} {
+	for _, bad := range []string{prefix + "_00000000000070008000000000000000", "not-an-id"} {
 		for _, verb := range []string{"archive", "unarchive"} {
-			if r := c.loreAny("rule", verb, bad); r.code == 0 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
-				t.Fatalf("rule %s %s: %d %s", verb, bad, r.code, r.stderr)
+			if r := c.loreAny(kind, verb, bad); r.code == 0 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
+				t.Fatalf("%s %s %s: %d %s", kind, verb, bad, r.code, r.stderr)
 			}
 		}
 	}
