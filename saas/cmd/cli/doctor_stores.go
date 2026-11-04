@@ -9,7 +9,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/wire"
 
 	"saas/pkg/aicoder/lorecfg"
 )
@@ -50,6 +53,12 @@ func doctorStores(ctx context.Context, r *doctorReport) {
 			}
 		}
 	}
+	if coreApp != nil {
+		if list, err := coreApp.ListStores(ctx); err == nil && len(list) > wire.MaxStoreCaches {
+			r.Notes = append(r.Notes, strconv.Itoa(len(list))+" stores attached (more than "+strconv.Itoa(wire.MaxStoreCaches)+
+				"): this repo uses one combined store cache (CFG3) instead of one cache file per store")
+		}
+	}
 	if root, err := os.Getwd(); err == nil {
 		local := filepath.Join(root, claudeLocalFile)
 		if fi, err := os.Lstat(local); err == nil {
@@ -76,5 +85,6 @@ func hasStores(cfg *lorecfg.Config) bool {
 			return true
 		}
 	}
-	return cfg.Personal.Store != "" && cfg.Personal.Store != lorecfg.PersonalStoreLocal
+	ps := personalStoreV017(cfg)
+	return ps != "" && ps != lorecfg.PersonalStoreLocal
 }

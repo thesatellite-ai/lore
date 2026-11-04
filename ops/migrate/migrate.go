@@ -6,8 +6,12 @@
 // rewritten as `_v: 2` can no longer be read by a teammate still on
 // v0.1.17; running this command is the team's "we have all upgraded".
 //
-// Phase 2 scope: only the memories table is rewritten (the only migrated
-// noun); other tables keep `_v: 1` until their noun migrates.
+// Scope: the memories table is rewritten in the repo store and
+// every attached store (the migrated nouns); other tables keep `_v: 1`
+// until their noun migrates. It also converts the v0.1.17 settings the core
+// owns (STORE_SERVER_SPEC 13): ~/.lore/identity.yaml into `identity:` of
+// ~/.lore/config.yaml (CFG9) and v1 lore-store.yaml markers into v2 (a
+// permanent sto_ id). The run holds the migration lock (E_MIGRATE_LOCKED).
 package migrate
 
 import (
@@ -40,6 +44,13 @@ type Rewriter interface {
 	// is not overwritten (the backend's Expect check): the call fails with
 	// E_STALE and can be rerun.
 	RewriteV1(ctx context.Context, table row.Table, dryRun bool) ([]ids.AnyID, error)
+	// MigrateSettings converts the v0.1.17 settings files (identity.yaml,
+	// v1 store markers) and returns one line per change (made, or that
+	// would be made under dryRun).
+	MigrateSettings(ctx context.Context, dryRun bool) ([]string, error)
+	// LockMigration takes the migration lock (E_MIGRATE_LOCKED when held);
+	// the returned func releases it.
+	LockMigration(ctx context.Context) (func() error, error)
 }
 
 // RunIn is the input of migrate.run.
@@ -52,6 +63,8 @@ type RunOut struct {
 	DryRun bool     `json:"dry_run,omitempty"`
 	Count  int      `json:"count"`
 	Rows   []string `json:"rows"`
+	// Steps are the settings changes (identity, store markers).
+	Steps []string `json:"steps"`
 }
 
 // Ops returns the migration operations bound to rw.
@@ -60,13 +73,23 @@ func Ops(rw Rewriter) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRun, Summary: "Rewrite v0.1.17 row files (_v: 1) as _v: 2 (memories in this release)",
 			Permission: op.PermAdmin, Access: op.AccessWrite, RESTNoun: restNoun,
-			Errors: []errs.Code{errs.Stale, errs.StoreLocked, errs.StoreReadOnly, errs.InvalidInput, errs.OldLore, errs.Internal},
+			Errors: []errs.Code{errs.Stale, errs.StoreLocked, errs.StoreReadOnly, errs.InvalidInput, errs.OldLore, errs.MigrateLocked, errs.ConfigInvalid, errs.Internal},
 			Examples: []op.Example{
 				{Title: "see what would change", CLI: "lore migrate run --dry-run", Want: "count:"},
 				{Title: "rewrite once the whole team runs 0.1.18", CLI: "lore migrate run", Want: "count:"},
 			},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) {
-			out := RunOut{DryRun: in.DryRun, Rows: []string{}}
+			out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}}
+			unlock, err := rw.LockMigration(ctx)
+			if err != nil {
+				return RunOut{}, err
+			}
+			defer func() { _ = unlock() }() // a failed release leaves a lock file `lore migrate run` reports next time
+			steps, err := rw.MigrateSettings(ctx, in.DryRun)
+			if err != nil {
+				return RunOut{}, err
+			}
+			out.Steps = append(out.Steps, steps...)
 			for _, t := range Tables() {
 				got, err := rw.RewriteV1(ctx, t, in.DryRun)
 				if err != nil {

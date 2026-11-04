@@ -3,6 +3,8 @@ package lorecfg
 import (
 	"errors"
 	"fmt"
+	"net/url"
+	"path"
 	"regexp"
 	"strings"
 
@@ -50,7 +52,7 @@ func (c *Config) Validate() error {
 	var errs []error
 	add := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
 
-	if s := c.Personal.Store; s != "" && s != PersonalStoreLocal {
+	if s := c.Personal.Store; s != "" && s != PersonalStoreLocal && !isFolderStoreURL(s) {
 		if _, err := repourl.Normalize(s); err != nil {
 			add("personal.store %q: not %q and not a git URL: %v", s, PersonalStoreLocal, err)
 		}
@@ -344,4 +346,19 @@ func prefixAll(where string, errs []error) []error {
 		out = append(out, fmt.Errorf("%s: %w", where, e))
 	}
 	return out
+}
+
+// isFolderStoreURL accepts a 0.1.18 folder-store url as personal.store
+// (`lore store init me` writes file://<home>/.lore/stores/me): scheme file,
+// no host (or localhost), an absolute clean path, and no query, fragment
+// or userinfo. Anything else keeps the git-url check.
+func isFolderStoreURL(s string) bool {
+	u, err := url.Parse(s)
+	if err != nil || u.Scheme != "file" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return false
+	}
+	if u.Host != "" && u.Host != "localhost" {
+		return false
+	}
+	return path.IsAbs(u.Path) && path.Clean(u.Path) == u.Path
 }

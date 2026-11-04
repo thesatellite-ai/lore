@@ -24,6 +24,17 @@ type caches struct {
 	mu    sync.Mutex
 	order []store.Source
 	by    map[store.Source]*sqlite.Cache
+	// combined is the one file shared by every attached store past
+	// MaxStoreCaches (CFG3 fallback), nil otherwise.
+	combined *sqlite.Cache
+}
+
+// Combined reports whether this repo uses the CFG3 combined cache (for
+// `lore doctor`: "more than 9 store folders: one combined cache").
+func (a *App) Combined() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.st != nil && a.st.caches.combined != nil
 }
 
 var _ store.Cache = (*caches)(nil)
@@ -41,6 +52,24 @@ func (c *caches) open(ctx context.Context, source store.Source, path string, reg
 	defer c.mu.Unlock()
 	c.by[source] = f
 	c.order = append(c.order, source)
+	return nil
+}
+
+// openCombined opens ONE cache file at path for every source in names
+// (the CFG3 fallback): each source's rows are applied under its own name,
+// so the file's `_source` column tells them apart.
+func (c *caches) openCombined(ctx context.Context, names []store.Source, path string, reg *schema.Registry, exp sqlite.Expander) error {
+	f, err := cacheOpen(ctx, path, reg, exp)
+	if err != nil {
+		return errs.Wrap(errs.CodeOf(err), "wire: open the combined store cache", err)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, n := range names {
+		c.by[n] = f
+		c.order = append(c.order, n)
+	}
+	c.combined = f
 	return nil
 }
 
@@ -87,11 +116,16 @@ func (c *caches) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var all []error
+	closed := map[*sqlite.Cache]bool{}
 	for _, s := range c.order {
-		all = append(all, c.by[s].Close())
+		if f := c.by[s]; !closed[f] {
+			closed[f] = true
+			all = append(all, f.Close())
+		}
 	}
 	c.by = map[store.Source]*sqlite.Cache{}
 	c.order = nil
+	c.combined = nil
 	return errors.Join(all...)
 }
 
@@ -101,8 +135,10 @@ func (c *caches) Close() error {
 func (c *caches) search(ctx context.Context, table row.Table, match string, limit int) ([]opsmemory.Hit, error) {
 	c.mu.Lock()
 	order := append([]store.Source(nil), c.order...)
+	combined := c.combined
 	c.mu.Unlock()
 	var out []opsmemory.Hit
+	searched := false
 	for _, s := range order {
 		if len(out) >= limit {
 			break
@@ -110,6 +146,24 @@ func (c *caches) search(ctx context.Context, table row.Table, match string, limi
 		f, err := c.of(s)
 		if err != nil {
 			return nil, err
+		}
+		if f == combined {
+			if searched {
+				continue
+			}
+			searched = true
+			got, err := f.Search(ctx, table, match, limit-len(out))
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range got {
+				hit, err := f.ResolveID(ctx, id)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, opsmemory.Hit{Source: store.Source(hit.Source), ID: id})
+			}
+			continue
 		}
 		got, err := f.Search(ctx, table, match, limit-len(out))
 		if err != nil {

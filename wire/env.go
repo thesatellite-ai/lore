@@ -31,6 +31,9 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 			return engine.Written{}, gerr
 		}
 	}
+	if aerr := a.ensureActor(ctx, st, target); aerr != nil {
+		return engine.Written{}, aerr
+	}
 	w, err := st.eng.Create(ctx, target, table, fields)
 	a.wrote(err)
 	return w, err
@@ -42,6 +45,9 @@ func (a *App) Update(ctx context.Context, ref engine.Ref, patch map[string]value
 	if err != nil {
 		return engine.Written{}, err
 	}
+	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
+		return engine.Written{}, aerr
+	}
 	w, err := st.eng.Update(ctx, ref, patch)
 	a.wrote(err)
 	return w, err
@@ -52,6 +58,9 @@ func (a *App) Delete(ctx context.Context, ref engine.Ref) (engine.Written, error
 	st, err := a.writeState(ctx)
 	if err != nil {
 		return engine.Written{}, err
+	}
+	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
+		return engine.Written{}, aerr
 	}
 	w, err := st.eng.Delete(ctx, ref)
 	a.wrote(err)
@@ -194,4 +203,33 @@ func (a *App) wrote(err error) {
 	if a.st != nil {
 		a.st.format.written = true
 	}
+}
+
+// ensureActorFor writes the actor row into the store holding ref's row.
+func (a *App) ensureActorFor(ctx context.Context, st *state, ref engine.Ref) error {
+	src := ref.Store
+	if src == "" {
+		s, _, err := st.eng.Get(ctx, ref)
+		if err != nil {
+			return nil // the write itself reports the missing row
+		}
+		src = s
+	}
+	return a.ensureActor(ctx, st, src)
+}
+
+// Move implements opsmemory.Mover: the engine's Move (the row keeps its id,
+// the old copy is tombstoned), after the O6 format check, with the actor
+// row written into the destination first.
+func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine.Written, error) {
+	st, err := a.writeState(ctx)
+	if err != nil {
+		return engine.Written{}, err
+	}
+	if aerr := a.ensureActor(ctx, st, to); aerr != nil {
+		return engine.Written{}, aerr
+	}
+	w, err := st.eng.Move(ctx, ref, to)
+	a.wrote(err)
+	return w, err
 }

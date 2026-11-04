@@ -33,7 +33,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -54,11 +56,19 @@ type Options struct {
 	// Required.
 	Home string
 	// Actor stamps every write. When zero, ResolveActor is called once at
-	// open; one of the two is required.
+	// open, else the identity chain of adapters/identity runs (config.yaml
+	// identity, git email, …; CONFIG_GUIDE 5.1).
 	Actor ids.ID[ids.Actor]
-	// ResolveActor finds the actor lazily (the old binary resolves the
-	// v0.1.17 identity only when a migrated command actually runs).
+	// ResolveActor, when set, overrides the identity chain (tests, an
+	// embedder with its own login). No actor row is written for it.
 	ResolveActor func(ctx context.Context) (ids.ID[ids.Actor], error)
+	// FlagActor is the --actor value, when the surface offers one.
+	FlagActor string
+	// Org resolves the org entry of this repo (CONFIG_GUIDE 5.2) for the
+	// identity chain; nil means no org. Org resolution is still v0.1.17's
+	// (LORE_ORG, repo_orgs, links, own:/repos: patterns), so the old binary
+	// supplies it until the org noun migrates.
+	Org func(ctx context.Context) (*identity.Org, error)
 	// Wall is the wall clock (default time.Now).
 	Wall func() time.Time
 	// GuardRepoWrite, when set, is asked before every create that lands
@@ -81,6 +91,16 @@ type App struct {
 	opened bool
 	err    error
 	st     *state
+	// extra are the `--to <store>/<folder>` targets this App attaches
+	// beside stores.yaml (STORE TARGETS); adding one reopens the state.
+	extra []attach.Store
+
+	// cfg is the repo-only state the store operations run on, so a store
+	// that cannot be opened never blocks `lore store remove` (cfgOpened,
+	// cfgErr as for st).
+	cfgOpened bool
+	cfgErr    error
+	cfg       *state
 }
 
 // state is everything Open built; nil until the first use.
@@ -94,6 +114,13 @@ type state struct {
 	// 0.1.18 write must ask (see format.go). Guarded by App.mu.
 	format formatState
 	audit  *fileAudit
+	// who is the resolved identity (zero when Options set the actor).
+	who identity.Resolved
+	// defaultTarget is the engine's default write target.
+	defaultTarget store.Source
+	// actorMu / actorDone: the actor row is written once per store.
+	actorMu   sync.Mutex
+	actorDone map[store.Source]bool
 }
 
 // New validates opts and builds the registry of every migrated operation,
@@ -101,9 +128,6 @@ type state struct {
 func New(opts Options) (*App, error) {
 	if opts.RepoDir == "" || opts.Home == "" {
 		return nil, errs.New(errs.ConfigInvalid, "wire: RepoDir and Home are required")
-	}
-	if opts.Actor.IsZero() && opts.ResolveActor == nil {
-		return nil, errs.New(errs.ConfigInvalid, "wire: an Actor or a ResolveActor is required")
 	}
 	if opts.Wall == nil {
 		opts.Wall = time.Now
@@ -168,13 +192,45 @@ func (a *App) state(ctx context.Context) (*state, error) {
 	defer a.mu.Unlock()
 	if !a.opened {
 		a.opened = true
-		a.st, a.err = open(ctx, a.opts)
+		a.st, a.err = open(ctx, a.opts, a.extra, false)
 	}
 	return a.st, a.err
 }
 
+// configState opens the repo-only state once (see App.cfg).
+func (a *App) configState(ctx context.Context) (*state, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.cfgOpened {
+		a.cfgOpened = true
+		a.cfg, a.cfgErr = open(ctx, a.opts, nil, true)
+	}
+	return a.cfg, a.cfgErr
+}
+
+// repoTop is the code repository's top folder.
+func (a *App) repoTop(ctx context.Context) (string, error) {
+	st, err := a.configState(ctx)
+	if err != nil {
+		return "", err
+	}
+	return st.repoTop, nil
+}
+
 // Run implements op.Runner: open on first use, then the engine's Run path.
+// The store operations run on the repo-only engine (configState); a
+// `--to <store>/<folder>` target is attached first (prepareTarget).
 func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+	if opsstores.IsStoreOp(e.Spec().Name) {
+		st, err := a.configState(ctx)
+		if err != nil {
+			return op.Result{}, err
+		}
+		return st.eng.Run(ctx, e, d, c)
+	}
+	if err := a.prepareTarget(ctx, e, d, c); err != nil {
+		return op.Result{}, err
+	}
 	eng, err := a.Engine(ctx)
 	if err != nil {
 		return op.Result{}, err
@@ -187,13 +243,18 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 func (a *App) Close() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.st == nil {
-		return nil
+	var all []error
+	if a.cfg != nil {
+		all = append(all, a.cfg.close())
+		a.cfg = nil
+		a.cfgErr = errs.New(errs.Internal, "wire: the app is closed")
 	}
-	st := a.st
-	a.st = nil
-	a.err = errs.New(errs.Internal, "wire: the app is closed")
-	return st.close()
+	if a.st != nil {
+		all = append(all, a.st.close())
+		a.st = nil
+		a.err = errs.New(errs.Internal, "wire: the app is closed")
+	}
+	return errors.Join(all...)
 }
 
 // close releases what open built.
@@ -211,8 +272,19 @@ func (s *state) close() error {
 var (
 	_ op.Runner        = (*App)(nil)
 	_ opsmemory.Env    = (*App)(nil)
+	_ opsmemory.Mover  = (*App)(nil)
 	_ opsstores.Syncer = (*App)(nil)
 )
+
+// SyncStores is the 0.1.18 half of `lore sync` (O12b: sync is one
+// command, not a store verb): every attached store except the repo store,
+// or only the one named.
+func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, error) {
+	if _, err := a.Engine(ctx); err != nil {
+		return opsstores.SyncOut{}, err
+	}
+	return opsstores.SyncAll(ctx, a, only)
+}
 
 // builtinRegistry is the schema every App validates against: the built-in
 // tables (kinds join from the caches at run time).

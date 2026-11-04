@@ -198,7 +198,7 @@ func (p *externalPlan) addPersonalSources(ctx context.Context, s *orgSituation) 
 	if org := s.Result.OrgName(); org != "" {
 		folders = []string{org, lorecfg.PersonalEverywhere}
 	}
-	store := s.Config.Personal.Store
+	store := personalStoreV017(s.Config)
 	if store == "" || store == lorecfg.PersonalStoreLocal {
 		home, err := loreHome()
 		if err != nil {

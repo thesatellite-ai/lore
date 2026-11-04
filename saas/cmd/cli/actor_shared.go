@@ -13,7 +13,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+
+	coreidentity "github.com/thesatellite-ai/lore/adapters/identity"
 
 	"dbent/gen/ent"
 	entActor "dbent/gen/ent/actor"
@@ -199,4 +202,28 @@ func actorByKey(ctx context.Context, client *ent.Client, stableKey string, adopt
 		return nil, fmt.Errorf("adopt projected actor %s: %w", id, err)
 	}
 	return client.Actor.Get(ctx, id)
+}
+
+// coreOrg is wire.Options.Org for the 0.1.18 core: the org entry v0.1.17's
+// org resolution picks for the working directory (LORE_ORG, repo_orgs,
+// links, own:/repos: patterns), as the identity adapter's input. The core
+// then resolves the actor itself (adapters/identity) and writes the actor
+// row on its first write to a store. nil when no org resolves.
+func coreOrg(ctx context.Context) (*coreidentity.Org, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return nil, errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+	}
+	s, err := gatherOrgSituation(ctx, dir)
+	if err != nil {
+		return nil, coreErr(err)
+	}
+	if s.ResolveErr != nil {
+		return nil, coreErr(orgResolveCLIError(s.ResolveErr))
+	}
+	o := s.Result.Org
+	if o == nil {
+		return nil, nil
+	}
+	return &coreidentity.Org{Name: o.Name, Identity: coreidentity.Entry{Key: o.Identity.Key, Name: o.Identity.Name, Handle: o.Identity.Handle}}, nil
 }

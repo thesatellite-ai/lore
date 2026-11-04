@@ -233,7 +233,7 @@ const personalLocalDir = "personal"
 // store (personal.store: <url>), handled exactly like an org store on its
 // default branch.
 func openPersonalProject(ctx context.Context, cfg *lorecfg.Config, folder string) (*externalProject, error) {
-	store := cfg.Personal.Store
+	store := personalStoreV017(cfg)
 	if store == "" || store == lorecfg.PersonalStoreLocal {
 		home, err := loreHome()
 		if err != nil {

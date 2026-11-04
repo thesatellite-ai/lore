@@ -1,7 +1,9 @@
-// store_cmd.go — `lore store init|show|open|forget|doctor` (LORE_TEAM_SPEC
-// §1 Commands, F12, §5.3). A store is a lore-only repo; these commands make
-// one, show what this machine knows about each configured store, open an
-// optional browsing worktree, drop a clone, and check a clone's health.
+// store_cmd.go — the v0.1.17 `lore store show|open|forget|doctor`
+// (LORE_TEAM_SPEC §1 Commands, F12, §5.3): what this machine knows about
+// each configured v0.1.17 store, an optional browsing worktree, dropping a
+// clone, a clone's health. `lore store init|add|remove|list` are the 0.1.18
+// core's (ops/stores, mounted from the registry into this same group);
+// v0.1.17's `store init <url>` was removed for `lore store init <name> [url]`.
 package main
 
 import (
@@ -44,66 +46,7 @@ func newStoreCommand() *cobra.Command {
 per project. Lore keeps one bare clone per store URL under ~/.lore/clones and
 reads and writes it without a checkout.`,
 	}
-	cmd.AddCommand(newStoreInitCommand(), newStoreShowCommand(), newStoreOpenCommand(), newStoreForgetCommand(), newStoreDoctorCommand())
-	return cmd
-}
-
-func newStoreInitCommand() *cobra.Command {
-	var branch, orgFolder string
-	cmd := &cobra.Command{
-		Use:   "init <url>",
-		Short: "Make an empty repo a lore store (writes lore-store.yaml and pushes)",
-		Example: `  lore store init git@github.com:agency/notes
-  lore store init git@github.com:agency/notes --branch staging`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			url := args[0]
-			cfg, err := loadTeamConfig(ctx)
-			if err != nil {
-				return err
-			}
-			org, sc := orgForStoreURL(cfg, url)
-			if branch == "" {
-				branch = lorecfg.DefaultStoreBranch
-				if sc != nil && !cmd.Flags().Changed(flagStoreBranch) {
-					branch = sc.EffectiveBranch()
-				}
-			}
-			if err := stores.ValidateBranch(branch); err != nil {
-				return errcodes.New(errcodes.InvalidInput, err.Error())
-			}
-			if orgFolder == "" {
-				orgFolder = defaultMarkerOrgFolder
-				if sc != nil && sc.OrgFolder != "" {
-					orgFolder = sc.OrgFolder
-				}
-			}
-			m, err := newStoreManager(cfg, org)
-			if err != nil {
-				return err
-			}
-			st, err := m.Open(ctx, url)
-			if err != nil {
-				return storeCLIError(err, "open the store clone")
-			}
-			res, err := st.Init(ctx, branch, stores.NewMarker(cliClock().Now(), orgFolder), storeSignature(org))
-			if err != nil {
-				return storeCLIError(err, "init the store")
-			}
-			switch {
-			case res.Already:
-				fmt.Printf("✓ %s (branch %s) is already a lore store; nothing changed\n", st.Norm, branch)
-			case res.Created:
-				fmt.Printf("✓ wrote %s to %s (new branch %s, first commit) and pushed\n", stores.MarkerFile, st.Norm, branch)
-			default:
-				fmt.Printf("✓ wrote %s to %s (branch %s) and pushed\n", stores.MarkerFile, st.Norm, branch)
-			}
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&branch, flagStoreBranch, "", "the store branch to make a lore (default: the entry's branch, else main); may not contain /")
-	cmd.Flags().StringVar(&orgFolder, flagStoreOrgFolder, "", "org folder recorded in lore-store.yaml (default: the entry's org_folder, else org)")
+	cmd.AddCommand(newStoreShowCommand(), newStoreOpenCommand(), newStoreForgetCommand(), newStoreDoctorCommand())
 	return cmd
 }
 

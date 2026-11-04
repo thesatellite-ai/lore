@@ -201,7 +201,7 @@ func (p *pushingLinkSource) Links(ctx context.Context, projectID string, remotes
 func pushPendingStores(ctx context.Context, cfg *lorecfg.Config, m *stores.Manager) {
 	seen := map[string]bool{}
 	orgs := cfg.Orgs
-	if ps := cfg.Personal.Store; ps != "" && ps != lorecfg.PersonalStoreLocal {
+	if ps := personalStoreV017(cfg); ps != "" && ps != lorecfg.PersonalStoreLocal {
 		// The personal store is pushed like an org store; its commits are
 		// signed with the fallback identity (no org entry owns it).
 		orgs = append(append([]lorecfg.Org{}, orgs...), lorecfg.Org{Name: personalStoreEntry, Stores: []lorecfg.Store{{URL: ps}}})
@@ -412,4 +412,19 @@ func refreshLinkIndex(ctx context.Context, cfg *lorecfg.Config, m *stores.Manage
 	if _, err := ls.Links(ctx, "", nil); err != nil {
 		fmt.Fprintln(os.Stderr, "lore: refresh the store link index: "+redactIfQuiet(err.Error()))
 	}
+}
+
+// fileURLPrefix starts a 0.1.18 folder-store url (file:///abs/path).
+const fileURLPrefix = "file://"
+
+// personalStoreV017 is personal.store as the v0.1.17 code may use it: a
+// 0.1.18 folder store (`lore store init me` writes file://~/.lore/stores/me)
+// belongs to the new core (`--to me` through the engine), so the v0.1.17
+// paths see "" (their local personal store) instead of opening it as a git
+// store and writing `_v: 1` files into it.
+func personalStoreV017(cfg *lorecfg.Config) string {
+	if cfg == nil || strings.HasPrefix(cfg.Personal.Store, fileURLPrefix) {
+		return ""
+	}
+	return cfg.Personal.Store
 }
