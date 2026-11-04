@@ -117,7 +117,13 @@ func learnDefs() []TableDef {
 				Name: "dst", Kind: Polymorphic, TypeField: "dst_table", Field: "dst_id",
 				OnDelete: TombstoneOnly, AllowDangling: true,
 			}),
-			BelongsToRel("dst_project", "dst_project_id", TableProjects, TombstoneOnly),
+			// AllowDangling: the destination's project usually lives in
+			// another store this checkout may not attach (v0.1.17 accepted
+			// any cross-project ref; F15 shows it "not available here").
+			relation(Relation{
+				Name: "dst_project", Kind: BelongsTo, Field: "dst_project_id", Target: TableProjects,
+				OnDelete: TombstoneOnly, AllowDangling: true,
+			}),
 		),
 		Table(TableRuleVerifierRefs, ids.PrefixRuleVerifierRef, Synced(), Description("a verifier wired to a rule"),
 			Ref("rule_id", TableRules, Required()),

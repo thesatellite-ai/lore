@@ -235,3 +235,28 @@ func TestDefaultUI(t *testing.T) {
 		}
 	}
 }
+
+// TestKnowledgeRefsDanglingProject: knowledge_refs' dst_project may point
+// at a project no attached store holds (a cross-project ref, v0.1.17
+// accepted it); src and dst stay dangling-allowed too.
+func TestKnowledgeRefsDanglingProject(t *testing.T) {
+	t.Parallel()
+	r, err := NewRegistry(Builtin()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	def, ok := r.Table(TableKnowledgeRefs)
+	if !ok {
+		t.Fatal("no knowledge_refs")
+	}
+	want := map[string]bool{"src": true, "dst": true, "dst_project": true}
+	for _, rel := range def.Relations {
+		if want[rel.Name] && !rel.AllowDangling {
+			t.Errorf("%s does not allow a dangling target", rel.Name)
+		}
+		delete(want, rel.Name)
+	}
+	if len(want) != 0 {
+		t.Errorf("relations missing: %v", want)
+	}
+}
