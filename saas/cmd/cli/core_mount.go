@@ -114,7 +114,7 @@ const (
 func coreOptions(repoDir, home string) wire.Options {
 	return wire.Options{RepoDir: repoDir, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
 		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{},
-		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn}
+		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
 }
 
 // mountCore builds the core and mounts its commands under root. A failure
