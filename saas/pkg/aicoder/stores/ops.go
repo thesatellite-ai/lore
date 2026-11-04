@@ -189,7 +189,16 @@ func (s *Store) WriteLink(ctx context.Context, ch LinkChange) (LinkResult, error
 				if err != nil {
 					return gitref.Changes{}, err
 				}
-				if len(existing) > 0 {
+				newFormat, err := newFormatStore(ctx, base)
+				if err != nil {
+					return gitref.Changes{}, err
+				}
+				// A 0.1.18 store's folders hold only `_v: 2` row files and
+				// the 0.1.18 core makes a folder without a _meta.json (its
+				// `--to <store>/<folder> --yes`), so there a folder with
+				// rows and no _meta.json is adopted: the link only adds
+				// the _meta.json.
+				if len(existing) > 0 && !newFormat {
 					return gitref.Changes{}, fmt.Errorf("%w: %s", ErrNotAProject, ch.Folder)
 				}
 				if ch.NewProject == nil {
@@ -200,6 +209,12 @@ func (s *Store) WriteLink(ctx context.Context, ch LinkChange) (LinkResult, error
 					return gitref.Changes{}, err
 				}
 				for rel, b := range files {
+					// Only the _meta.json in a 0.1.18 store: the template's
+					// other files are v0.1.17 (`_v: 1`) rows the core
+					// would not read.
+					if newFormat && rel != metaFileName {
+						continue
+					}
 					put[DataPrefix(ch.Folder)+rel] = b
 				}
 				nb, ok := files[metaFileName]
@@ -232,6 +247,27 @@ func (s *Store) WriteLink(ctx context.Context, ch LinkChange) (LinkResult, error
 	res.Write = wr
 	return res, err
 }
+
+// newFormatStore reports whether the snapshot's lore-store.yaml is a
+// 0.1.18 marker (lore_store 2 or later, written by the core's `lore store
+// init`). A missing or unreadable marker is not (checkSnapshot refuses
+// such a store before this is asked).
+func newFormatStore(ctx context.Context, base Snapshot) (bool, error) {
+	b, ok, err := base.ReadFile(ctx, MarkerFile)
+	if err != nil || !ok {
+		return false, err
+	}
+	m, err := ParseMarker(b)
+	if err != nil {
+		return false, nil
+	}
+	return m.LoreStore >= NewFormatMarkerVersion, nil
+}
+
+// NewFormatMarkerVersion is the first lore-store.yaml version the 0.1.18
+// core writes (adapters/backend/rowfs MarkerVersion); this package still
+// writes MarkerVersion 1.
+const NewFormatMarkerVersion = 2
 
 // folderTreePrefix is everything belonging to a folder ("" for the root
 // project would be the whole store, so the root project's prefix is .lore/).

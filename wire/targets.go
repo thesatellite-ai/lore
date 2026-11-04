@@ -57,7 +57,12 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 	if err != nil || recorded {
 		return err // a recorded target is attached from stores.yaml
 	}
-	src, found, err := a.baseStore(ctx, base)
+	for _, s := range orgStores(ctx, a.opts) {
+		if s.Name == name {
+			return nil // the org brings it (the company folder): attached at open
+		}
+	}
+	src, found, fromOrg, err := a.baseStore(ctx, base)
 	if err != nil || !found {
 		return err // not found: the engine answers "no store named … is attached"
 	}
@@ -71,7 +76,10 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 			WithHint("rerun with --yes to create it with this write")
 	}
 	target := attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly}
-	persist := base != attach.ReservedMe
+	// `me/<folder>` and an org store's folder are not recorded: the
+	// personal url is machine-local, and an org store reached through the
+	// org link must never have its url written into the repo (CFG7).
+	persist := base != attach.ReservedMe && !fromOrg
 	if persist {
 		// A confirmed folder target is recorded in stores.yaml (spec 7.1
 		// `folder:` key, entry named "<store>/<folder>"), so later reads
@@ -102,30 +110,37 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 	return nil
 }
 
-// baseStore finds the stores.yaml entry (or `me`) a folder target names.
-func (a *App) baseStore(ctx context.Context, name string) (attach.Store, bool, error) {
+// baseStore finds the stores.yaml entry (or `me`, or a store the repo's
+// org brings: Options.OrgStores) a folder target names; fromOrg marks the
+// last kind, whose url must never be written into the repo.
+func (a *App) baseStore(ctx context.Context, name string) (src attach.Store, found, fromOrg bool, err error) {
 	if name == attach.ReservedMe {
 		mc, err := readMachineConfig(a.opts.Home)
 		if err != nil {
-			return attach.Store{}, false, err
+			return attach.Store{}, false, false, err
 		}
 		p := mc.personalURL()
-		return attach.Store{Name: store.Source(name), URL: p}, p != "", nil
+		return attach.Store{Name: store.Source(name), URL: p}, p != "", false, nil
 	}
 	top, err := a.repoTop(ctx)
 	if err != nil {
-		return attach.Store{}, false, err
+		return attach.Store{}, false, false, err
 	}
 	cfg, err := readStoresFile(top)
 	if err != nil {
-		return attach.Store{}, false, err
+		return attach.Store{}, false, false, err
 	}
 	for _, s := range cfg.Stores {
 		if string(s.Name) == name {
-			return s, true, nil
+			return s, true, false, nil
 		}
 	}
-	return attach.Store{}, false, nil
+	for _, s := range orgStores(ctx, a.opts) {
+		if string(s.Name) == name {
+			return s, true, true, nil
+		}
+	}
+	return attach.Store{}, false, false, nil
 }
 
 // recordedTarget reports whether stores.yaml already lists the folder

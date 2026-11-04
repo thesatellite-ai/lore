@@ -128,6 +128,17 @@ type Options struct {
 	// org-store noun migrates. Nil, or an error, makes the repo a client
 	// repo (fail closed); the reason is kept for RepoClassNote.
 	RepoIsClient func(ctx context.Context) (bool, error)
+	// OrgStores lists the store folders the repo's org brings (CONFIG_GUIDE
+	// section 4 step 5b: the org's stores plus the folder this repo is
+	// linked to), attached for this process beside stores.yaml and never
+	// written to any file of the repo: in a client repo the org link, kept
+	// only in the store, is how internal stores are reached without their
+	// url in a file the client reads (CFG7). Typical entries: the org name
+	// at the linked folder (`--to agency`) and "<org>/<org folder>" at the
+	// company folder (`--to agency/org`). An entry whose name stores.yaml
+	// already uses is skipped (the committed file wins). Nil, or an error,
+	// attaches nothing (fail closed: an internal store is never guessed).
+	OrgStores func(ctx context.Context) ([]attach.Store, error)
 }
 
 // App is one opened (or openable) core: the registry every surface mounts,
@@ -308,6 +319,9 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		}
 	}
 	if opsstores.IsStoreOp(e.Spec().Name) {
+		if err := a.confirmClientStoresFile(ctx, e, d, c); err != nil {
+			return op.Result{}, err
+		}
 		st, err := a.configState(ctx)
 		if err != nil {
 			return op.Result{}, err
@@ -323,6 +337,37 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	}
 	return eng.Run(ctx, e, d, c)
 }
+
+// confirmClientStoresFile is CFG7: `lore store init|add <name>` in a client
+// repo writes the store url into the committed stores.yaml, which the
+// client reads, so it answers E_NEEDS_CONFIRM until the caller says yes
+// (the org link is the recommended way). `me` is never written there. A
+// failed client check asks too (fail closed); with no RepoIsClient hook
+// the embedder has no org concept and nothing is asked.
+func (a *App) confirmClientStoresFile(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) error {
+	if !opsstores.WritesStoresFile(e.Spec().Name) || c.Yes || a.opts.RepoIsClient == nil {
+		return nil
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return nil // the engine's Run reports the decode error itself
+	}
+	for _, tv := range in.Texts() {
+		if tv.Field == storeNameField && tv.Text == opsstores.PersonalName {
+			return nil
+		}
+	}
+	if client, err := a.opts.RepoIsClient(ctx); err == nil && !client {
+		return nil
+	}
+	return errs.New(errs.NeedsConfirm, "this is a client repo: the client can read .lore/stores.yaml and will see the store url").
+		WithQuestion("write the store url into this client repo's .lore/stores.yaml?").
+		WithHint("link the repo instead (`lore org link <org> --project <folder>`: the link is kept only in the store), or rerun with --yes")
+}
+
+// storeNameField is the input field of store.init/store.add naming the
+// store (ops/stores InitIn.Name, AddIn.Name json tag).
+const storeNameField = "name"
 
 // Close releases every backend and cache file. Safe to call on an App that
 // never opened, and more than once.

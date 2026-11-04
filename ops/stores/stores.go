@@ -133,7 +133,7 @@ func quote(s string) string { return "`" + s + "`" }
 
 // storeErrors are the codes the store operations return.
 var storeErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInvalid, errs.StoreScheme, errs.URLUserinfo,
-	errs.NotAStore, errs.StoreUnreachable, errs.OldLore, errs.Internal}
+	errs.NotAStore, errs.StoreUnreachable, errs.OldLore, errs.NeedsConfirm, errs.Internal}
 
 // Ops returns the store operations bound to m.
 func Ops(m Manager) []op.Entry {
@@ -141,6 +141,9 @@ func Ops(m Manager) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpInit, Summary: "Make a git repo or folder a lore store and attach it (me = your personal store)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
+			// CFG7: attaching in a client repo writes the url into a file
+			// the client reads, so it asks first (the composition root).
+			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
 				{Title: "your personal store, a local folder", CLI: "lore store init me", Want: "id:"},
 				{Title: "a team store on git", CLI: "lore store init agency git@github.com:agency/notes", Want: "id:"},
@@ -160,6 +163,7 @@ func Ops(m Manager) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Attach an existing lore store to this repo (.lore/stores.yaml)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
+			Confirm: op.ConfirmRule{MayAsk: true}, // CFG7, as for init
 			Examples: []op.Example{
 				{Title: "attach a store", CLI: "lore store add golang git@github.com:mira/lore-golang", Want: "name:"},
 				{Title: "attach one folder, read-only", CLI: "lore store add tips git@github.com:agency/notes --folder tips --read-only", Want: "name:"},
@@ -269,6 +273,12 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	}
 	return out, nil
 }
+
+// WritesStoresFile reports whether the operation name records a store in
+// the repo's committed stores.yaml (init of a store other than `me`, add):
+// in a client repo that puts the store url in a file the client reads, so
+// the composition root asks first (CFG7).
+func WritesStoresFile(name string) bool { return name == OpInit || name == OpAdd }
 
 // IsStoreOp reports whether name is one of the store operations: they edit
 // configuration files, not rows, so the composition root runs them without

@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -69,6 +70,7 @@ import (
 	"github.com/thesatellite-ai/lore/wire"
 
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/projresolve"
 	oldstores "saas/pkg/aicoder/stores"
@@ -104,7 +106,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, RepoIsClient: coreRepoIsClient, Audit: &coreAuditSink{}, ModeB: modeBExporter{}})
+	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}})
 	if err != nil {
 		panic(err)
 	}
@@ -365,8 +367,16 @@ func guardCoreRepoWrite(ctx context.Context, table row.Table, text string, expli
 		return coreErr(targetCLIError(err))
 	}
 	if wt.Personal != nil || !dec.Repo {
-		return errs.New(errs.Unsupported, "this repository's lore routing sends a "+kind+" to a store ("+dec.Rule+"), and the 0.1.18 core cannot write to a v0.1.17 store yet").
-			WithHint("write it to a store listed in .lore/stores.yaml with --to <name>, or choose this repo with --to repo")
+		// The org store is attached to the core under the org's name at
+		// the linked folder (coreOrgStores), so the explicit target is
+		// named; the core does not pick a non-repo default by itself yet.
+		hint := "write it to a store listed in .lore/stores.yaml with --to <name>, or choose this repo with --to repo"
+		if wt.Personal == nil && wt.Situation != nil && wt.Situation.Result.Org != nil {
+			org := wt.Situation.Result.Org.Name
+			hint = "write it to " + org + "'s store with --to " + org + " (the linked folder " + dec.Folder + "/), or choose this repo with --to repo"
+		}
+		return errs.New(errs.Unsupported, "this repository's lore routing sends a "+kind+" to a store ("+dec.Rule+"); name the target with --to").
+			WithHint(hint)
 	}
 	return coreErr(leakCheckRouteWrite(ctx, writeRoute{Repo: true, Rule: dec.Rule, Situation: wt.Situation}, kind, text))
 }
@@ -425,6 +435,95 @@ func repoIsClientNow(ctx context.Context) (bool, error) {
 	}
 	return false, nil
 }
+
+// coreOrgStores is wire.Options.OrgStores for this binary (CONFIG_GUIDE
+// section 4 step 5b): when an org resolves for the working directory, its
+// store is attached under the org entry's name at the folder this repo is
+// linked to (the default link, else the first; else the committed
+// .lore/org.yaml project; else the store root), and the org folder store
+// under "<org>/<org folder>" at its org folder (`--to agency/org`). Nothing
+// is written to the repo: in a client repo this is how the internal store
+// is reached without its url in a file the client reads (CFG7).
+//
+// Fail closed: an org refusal or links that cannot be read is an error
+// (wire then attaches nothing). A store entry pinned to a non-default
+// branch (a staging entry) is not attached: the core's git backend follows
+// the store's default branch, so attaching it would read and write the
+// wrong branch.
+func coreOrgStores(ctx context.Context) ([]attach.Store, error) {
+	s, err := coreSituationOnce(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if s.ResolveErr != nil {
+		return nil, s.ResolveErr
+	}
+	org := s.Result.Org
+	if org == nil || len(org.Stores) == 0 {
+		return nil, nil
+	}
+	if s.Result.LinkUnknown {
+		return nil, errors.New("the store links of this repo cannot be read: " + s.Result.LinkDetail)
+	}
+	attachable := func(sc *lorecfg.Store) bool { return sc != nil && sc.EffectiveBranch() == lorecfg.DefaultStoreBranch }
+	var out []attach.Store
+	var linked *orgresolve.Link
+	for i := range s.Result.Links {
+		l := &s.Result.Links[i]
+		if l.Entry != org.Name {
+			continue
+		}
+		if linked == nil || (l.Default && !linked.Default) {
+			linked = l
+		}
+	}
+	switch {
+	case linked != nil:
+		if sc := oldstores.StoreFor(org, linked.StoreURL); attachable(sc) {
+			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: linked.Folder})
+		}
+	case s.Committed != nil && s.Committed.Org == org.Name && s.Committed.Project != "":
+		if sc := &org.Stores[0]; attachable(sc) {
+			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: s.Committed.Project})
+		}
+	default:
+		if sc := &org.Stores[0]; attachable(sc) {
+			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL})
+		}
+	}
+	for i := range org.Stores {
+		sc := &org.Stores[i]
+		if sc.OrgFolder == "" || sc.OrgFolder == oldstores.RootFolder || !attachable(sc) {
+			continue
+		}
+		out = append(out, attach.Store{Name: store.Source(org.Name + "/" + sc.OrgFolder), URL: sc.URL, Folder: sc.OrgFolder})
+		break // one org folder per entry (F13)
+	}
+	return out, nil
+}
+
+// coreSituationOnce is gatherOrgSituation for the working directory,
+// computed once per process (the core asks for it at open; it may fetch
+// the org stores).
+func coreSituationOnce(ctx context.Context) (*orgSituation, error) {
+	if !coreSituationDone {
+		coreSituationDone = true
+		dir, err := os.Getwd()
+		if err != nil {
+			coreSituationErr = err
+		} else {
+			coreSituation, coreSituationErr = gatherOrgSituation(ctx, dir)
+		}
+	}
+	return coreSituation, coreSituationErr
+}
+
+// Cache of coreSituationOnce (one command per process, like rootCmd).
+var (
+	coreSituationDone bool
+	coreSituation     *orgSituation
+	coreSituationErr  error
+)
 
 // coreErr turns a v0.1.17 error (errcodes.CLIError) returned into a core
 // command into the core's error type, keeping its code, message and hint:

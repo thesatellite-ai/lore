@@ -45,7 +45,7 @@ func newOrgCommand() *cobra.Command {
 to at most one org; run ` + "`lore whoami --explain`" + ` to see why.`,
 	}
 	// No store-side link writer exists yet; the stores work passes one here.
-	cmd.AddCommand(newOrgUseCommand(), newOrgSetCommand(), newOrgLinkCommand(storeLinkWriter{}))
+	cmd.AddCommand(newOrgUseCommand(), newOrgSetCommand(), newOrgLinkCommand(storeLinkWriter{}), newOrgCreateCommand())
 	return cmd
 }
 

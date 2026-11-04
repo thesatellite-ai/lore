@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
@@ -94,7 +95,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 
 	var attached []attach.Opened
 	if !repoOnly {
-		if attached, err = openAttached(ctx, st.repoTop, opts.Home, reg, extra); err != nil {
+		if attached, err = openAttached(ctx, st.repoTop, opts.Home, reg, slices.Concat(extra, orgStores(ctx, opts))); err != nil {
 			return fail(err)
 		}
 	}
@@ -193,6 +194,20 @@ func repoIsClient(ctx context.Context, opts Options) (client bool, note string) 
 	return client, ""
 }
 
+// orgStores asks opts.OrgStores for the folders the repo's org brings; no
+// hook or an error gives none (fail closed: nothing internal is attached on
+// a guess, and a write naming the org store then answers "no store named").
+func orgStores(ctx context.Context, opts Options) []attach.Store {
+	if opts.OrgStores == nil {
+		return nil
+	}
+	got, err := opts.OrgStores(ctx)
+	if err != nil {
+		return nil
+	}
+	return got
+}
+
 // openAttached reads <repo>/.lore/stores.yaml (absent = no stores), adds
 // the `--to <store>/<folder>` targets and the personal store `me` (last,
 // BATCH 15; skipped when stores.yaml already attaches the same url's root,
@@ -202,7 +217,13 @@ func openAttached(ctx context.Context, repoTop, home string, reg *schema.Registr
 	if err != nil {
 		return nil, err
 	}
-	cfg.Stores = append(cfg.Stores, extra...)
+	for _, x := range extra {
+		// The committed file wins a name clash (an org store the repo
+		// also attaches by hand, or a recorded folder target).
+		if !slices.ContainsFunc(cfg.Stores, func(s attach.Store) bool { return s.Name == x.Name }) {
+			cfg.Stores = append(cfg.Stores, x)
+		}
+	}
 	mc, err := readMachineConfig(home)
 	if err != nil {
 		return nil, err
