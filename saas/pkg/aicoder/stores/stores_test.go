@@ -142,7 +142,10 @@ func TestLayoutOneClonePerURL(t *testing.T) {
 		mustOK(t, err)
 		dirs = append(dirs, d)
 	}
-	if dirs[0] != "/h/.lore/clones/github.com/northwind/lore.git" || dirs[1] != dirs[0] || dirs[2] != dirs[0] {
+	// clones-v017: the v0.1.17 store code keeps its own clones beside the
+	// core's <home>/clones (commit 9c85131), so the two never share a
+	// worktree; one clone per URL still holds.
+	if dirs[0] != "/h/.lore/clones-v017/github.com/northwind/lore.git" || dirs[1] != dirs[0] || dirs[2] != dirs[0] {
 		t.Fatalf("one clone per URL: %v", dirs)
 	}
 	for _, bad := range []string{"", "/local/path", "file:///x/y"} {

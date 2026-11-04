@@ -155,7 +155,7 @@ func doctorCheckStore(ctx context.Context, m *stores.Manager, v *storeView) {
 			continue
 		}
 		if !ok {
-			v.Problems = append(v.Problems, fmt.Sprintf("branch %s does not exist (`lore store init <url> --branch %s`)", b, b))
+			v.Problems = append(v.Problems, fmt.Sprintf("branch %s does not exist (make a store with `lore store init <name> <url>`; attach an existing branch with `lore store add <name> <url> --branch %s`)", b, b))
 			continue
 		}
 		if err := st.Check(ctx, b); err != nil {
