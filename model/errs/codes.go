@@ -127,6 +127,7 @@ const (
 	Unauthorized      Code = "E_UNAUTHORIZED"
 	ResourceInvalid   Code = "E_RESOURCE_INVALID"
 	ResourcePlace     Code = "E_RESOURCE_PLACE"
+	ResourceName      Code = "E_RESOURCE_NAME"
 	SchemaOld         Code = "E_SCHEMA_OLD"
 	NeedsConfirm      Code = "E_NEEDS_CONFIRM"
 	PolicyDenied      Code = "E_POLICY_DENIED"
@@ -288,6 +289,7 @@ var table = map[Code]entry{
 	Unauthorized:         {class: ClassUnauthorized, desc: "the request has no valid token"},
 	ResourceInvalid:      {class: ClassBadInput, desc: "a value or field does not fit the kind"},
 	ResourcePlace:        {class: ClassRefused, desc: "the place is not allowed by resources.allowed_in, or --to me (RQ2)"},
+	ResourceName:         {class: ClassBadInput, desc: "a kind, field or resource name breaks its format, is reserved, or looks like a credential (RES 3.1)"},
 	SchemaOld:            {class: ClassUpgrade, desc: "the local database is older than this binary"},
 	NeedsConfirm:         {class: ClassNeedsConfirmation, desc: "the command asks first and ran with no terminal and no --yes"},
 	PolicyDenied:         {class: ClassRefused, desc: "a team policy refuses this"},

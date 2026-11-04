@@ -24,7 +24,7 @@ func allConstants() []Code {
 		OrgAmbiguous, OrgDisagrees, LinkUnknown, NotAStore, LeakBlocked, Cycle, OldLore,
 		ConfigInvalid,
 		Stale, StoreScheme, StoreBackend, StoreUnreachable, StoreReadOnly, StoreLocked,
-		Unauthorized, ResourceInvalid, ResourcePlace, SchemaOld, NeedsConfirm, PolicyDenied, KindUnknown,
+		Unauthorized, ResourceInvalid, ResourcePlace, ResourceName, SchemaOld, NeedsConfirm, PolicyDenied, KindUnknown,
 		MetaType, MetaAmbiguous, MigrateLocked, URLUserinfo,
 		MetaKey, MetaReserved, MetaValue, MetaShape, MetaSize, MetaDepth, MetaOp, MetaTable, MetaRequired,
 		MetaUnknown, MetaUnregistered, MetaStale, MetaInUse, MetaConflict, MetaRetired, MetaQuarantined,
