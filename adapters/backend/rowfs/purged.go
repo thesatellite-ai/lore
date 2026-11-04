@@ -3,7 +3,8 @@ package rowfs
 // A folder's _purged.json (STORE_SERVER_SPEC 6.1: "ids purged on
 // purpose"): the ids a purge removed for good, so neither an old clone
 // (v0.1.17 honours the list on ADOPT) nor the core (engine refuses to
-// write a live row under a listed id) ever brings one back. Format, shared
+// write a live row under a listed id) ever brings one back (DQ4: a purge
+// leaves a mark kept forever so old branches cannot resurrect). Format, shared
 // with v0.1.17 (lsync meta.go encodePurged): a canonical JSON object
 // {"_v": 1, "ids": [sorted ids]}; other keys a newer writer added are
 // kept. Git merges it as a set union (MergeFolderFile).

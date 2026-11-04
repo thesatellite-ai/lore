@@ -19,6 +19,8 @@ type RuleRow struct {
 	Regex    string
 	Keywords []string
 	Entropy  float64
+	// D2/D9: users fully control rules, lore's and gitleaks' defaults
+	// included, so "off" may remove any rule by id.
 	// State is one of schema.SecretRuleStates(): "on" adds a new rule (or
 	// keeps a default), "off" removes a rule, "changed" replaces a rule's
 	// regex/keywords/entropy (or adds one when the id is new).

@@ -13,7 +13,8 @@ const KindTablePrefix = "res_"
 
 // KindDefFromRows builds the TableDef of a resource kind from its `kinds`
 // row and its `kind_fields` rows, the run-time twin of Table(...): the cache,
-// the validator and the surfaces treat the result exactly like a built-in.
+// the validator and the surfaces treat the result exactly like a built-in
+// (SETTINGS ARE DATA: kinds are rows; fixed ops, dynamic kinds at run time).
 //
 // Every kind table starts with the implicit required text field "name"
 // (resources.name). Tombstoned field rows are skipped; field rows of another
