@@ -17,13 +17,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Operation names (`lore reminder …`, REST /v1/reminders).
@@ -234,6 +237,9 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 		return work.WriteOut{}, err
 	}
 	fields[schema.FieldReminderDueAt] = value.DateTimeFrom(due)
+	if err := o.checkTarget(ctx, store.Source(in.To), in.OnID); err != nil {
+		return work.WriteOut{}, err
+	}
 	project, err := o.env.Project(ctx)
 	if err != nil {
 		return work.WriteOut{}, err
@@ -369,4 +375,25 @@ func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
 		return work.WriteOut{}, err
 	}
 	return work.Delete(ctx, o.env, Noun, table, id, work.Success+" "+id.String()+" deleted\n")
+}
+
+// checkTarget applies F15 (ops/internal/pointer) to --on-id: target_id is
+// free text (a v0.1.17 value need not be an id, so it is not a schema
+// ref the engine checks), but when it holds an id of a core table it is a
+// pointer like any other, so a client reminder may not name an internal
+// or personal row. A value that is not such an id is left as v0.1.17 left it.
+func (o ops) checkTarget(ctx context.Context, to store.Source, raw string) error {
+	id, err := ids.ParseAny(strings.TrimSpace(raw))
+	if err != nil {
+		return nil
+	}
+	reg, err := schema.NewRegistry(schema.Builtin()...)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "reminder: built-in schema", err)
+	}
+	def, ok := reg.ByPrefix(id.Prefix())
+	if !ok {
+		return nil
+	}
+	return pointer.Check(ctx, o.env, to, engine.Ref{Table: def.Name, ID: id})
 }

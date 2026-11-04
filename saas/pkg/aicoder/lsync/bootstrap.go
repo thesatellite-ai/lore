@@ -9,7 +9,8 @@ import (
 )
 
 // bootstrap is the first pass on a DB whose project has no .lore/data yet
-// (§12.3): back up lore.db, export every synced row, and pin the project
+// (§12.3): back up lore.db, export every synced row of a table the core
+// does not own (owned.go), and pin the project
 // identity in _meta.json. It never modifies DB rows.
 func (e *engine) bootstrap(ctx context.Context) error {
 	if err := e.backup(ctx); err != nil {
@@ -27,6 +28,18 @@ func (e *engine) bootstrap(ctx context.Context) error {
 		idsList, err := listRowIDs(ctx, e.tx, t)
 		if err != nil {
 			return err
+		}
+		if e.isCoreOwned(name) {
+			// the 0.1.18 core writes this table's files (owned.go): the
+			// export would write nothing and warn "lore.db change not
+			// written" once per row, so only its dirty marks are cleared,
+			// as exportDoc's guard does.
+			for _, id := range idsList {
+				if err := e.clearDirty(ctx, rowKey{name, id}); err != nil {
+					return err
+				}
+			}
+			continue
 		}
 		cols := liveColumns(t, e.present)
 		for _, id := range idsList {
@@ -139,6 +152,18 @@ func (e *engine) adopt(ctx context.Context) error {
 		idsList, err := listRowIDs(ctx, e.tx, t)
 		if err != nil {
 			return err
+		}
+		if e.isCoreOwned(name) {
+			// the 0.1.18 core writes this table's files (owned.go): the
+			// export would write nothing and warn "lore.db change not
+			// written" once per row, so only its dirty marks are cleared,
+			// as exportDoc's guard does.
+			for _, id := range idsList {
+				if err := e.clearDirty(ctx, rowKey{name, id}); err != nil {
+					return err
+				}
+			}
+			continue
 		}
 		for _, id := range idsList {
 			keys[rowKey{name, id}] = true

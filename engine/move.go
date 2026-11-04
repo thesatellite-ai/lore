@@ -86,7 +86,7 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 			}
 		}
 		names := slices.Sorted(maps.Keys(cur.Fields))
-		if err = e.checkRefs(ctx, def, cur.Fields, names); err != nil {
+		if err = e.checkRefs(ctx, to, def, cur.Fields, names); err != nil {
 			return Written{}, err
 		}
 		sc, err := e.screen(ctx, cl, to, cur.ID, cur.Fields, names)

@@ -80,7 +80,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err = refuseMarkers(typed, names); err != nil {
 		return Written{}, err
 	}
-	if err = e.checkRefs(ctx, def, typed, names); err != nil {
+	if err = e.checkRefs(ctx, target, def, typed, names); err != nil {
 		return Written{}, err
 	}
 	if !pin.IsZero() && pin.Prefix() != def.Prefix {
@@ -212,7 +212,7 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	if err != nil {
 		return Written{}, err
 	}
-	if err = e.checkRefs(ctx, def, whole, names); err != nil {
+	if err = e.checkRefs(ctx, src, def, whole, names); err != nil {
 		return Written{}, err
 	}
 	sc, err := e.screen(ctx, cl, src, cur.ID, whole, names)

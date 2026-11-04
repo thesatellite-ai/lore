@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/validate"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -22,7 +23,16 @@ const kindField = "kind"
 // else E_NOT_FOUND (fail closed), unless its relation allows dangling.
 // Only the named fields are checked, so an untouched old ref that dangles
 // does not block an unrelated edit (lore lint reports it).
-func (e *Engine) checkRefs(ctx context.Context, def schema.TableDef, fields map[string]value.Value, names []string) error {
+//
+// It also enforces LORE_TEAM_SPEC F15's direction rule (logic/direction)
+// on every one of those references, for every table and every ref or
+// list-of-ref field (tag_ids, mission_id, tasklist_id, plan_id,
+// superseded_by_id, polymorphic targets, ...): a row written to store from
+// may not point at a row only a store of a hidden class holds (client →
+// internal or personal, shared → personal), else E_LEAK_BLOCKED. This is
+// the one place every schema ref is checked; ops/internal/pointer applies
+// the same rule to pointers held outside schema refs (task knowledge_refs).
+func (e *Engine) checkRefs(ctx context.Context, from store.Source, def schema.TableDef, fields map[string]value.Value, names []string) error {
 	only := make(map[string]value.Value, len(names))
 	for _, n := range names {
 		if v, ok := fields[n]; ok {
@@ -39,15 +49,18 @@ func (e *Engine) checkRefs(ctx context.Context, def schema.TableDef, fields map[
 	}
 	var missing []string
 	for _, t := range validate.Targets(def, only) {
-		if t.AllowDangling {
-			continue
-		}
-		ok, err := e.exists(ctx, t)
+		holders, err := e.holders(ctx, t)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			missing = append(missing, t.Field+" → "+t.ID.String())
+		if len(holders) == 0 {
+			if !t.AllowDangling {
+				missing = append(missing, t.Field+" → "+t.ID.String())
+			}
+			continue
+		}
+		if err := e.checkDirection(from, t, holders); err != nil {
+			return err
 		}
 	}
 	if len(missing) > 0 {
@@ -57,40 +70,90 @@ func (e *Engine) checkRefs(ctx context.Context, def schema.TableDef, fields map[
 	return nil
 }
 
-// exists reports whether a reference target is a live row in any attached
-// store (and, for a kind ref, a resource of that kind).
-func (e *Engine) exists(ctx context.Context, t validate.Target) (bool, error) {
-	table := t.Table
-	if table == "" {
-		def, ok := e.reg.ByPrefix(t.ID.Prefix())
-		if !ok {
-			return false, nil
-		}
-		table = def.Name
+// rosterTables are not pointers into hidden content: a client row may name
+// a person or a team (the client copy of an actor is the F18 projection),
+// as v0.1.17's checkReferences exempted them.
+var rosterTables = map[row.Table]bool{schema.TableActors: true, schema.TableTeams: true}
+
+// checkDirection applies F15 to one reference written to store from whose
+// target lives in holders (at least one). The target's id is visible to
+// readers of from either way, so the pointer is allowed when any holder's
+// class may be named from from's class; otherwise the first refusal is
+// returned (fail closed), naming the field and the target.
+func (e *Engine) checkDirection(from store.Source, t validate.Target, holders []store.Source) error {
+	if rosterTables[e.targetTable(t)] {
+		return nil
 	}
+	fc := e.classOf(from)
+	var first error
+	for _, h := range holders {
+		err := direction.Check(fc, e.classOf(h))
+		if err == nil {
+			return nil
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	var ce *errs.Error
+	if errors.As(first, &ce) {
+		named := *ce
+		named.Message = "engine: " + t.Field + " → " + t.ID.String() + ": " + ce.Message
+		return &named
+	}
+	return first
+}
+
+// classOf places an attached store in its F15 class: the repo store is
+// client-class (fail closed), `me` and `me/<folder>` personal, a store the
+// engine flags client is client, any other internal.
+func (e *Engine) classOf(name store.Source) direction.Class {
+	return direction.ClassOf(string(name), e.stores[name].Client)
+}
+
+// targetTable is t's table, from its id prefix when the field names none.
+func (e *Engine) targetTable(t validate.Target) row.Table {
+	if t.Table != "" {
+		return t.Table
+	}
+	if def, ok := e.reg.ByPrefix(t.ID.Prefix()); ok {
+		return def.Name
+	}
+	return ""
+}
+
+// holders lists the attached stores (precedence order) where a reference
+// target is a live row (and, for a kind ref, a resource of that kind).
+func (e *Engine) holders(ctx context.Context, t validate.Target) ([]store.Source, error) {
+	table := e.targetTable(t)
+	if table == "" {
+		return nil, nil
+	}
+	var out []store.Source
 	for _, name := range e.order {
 		got, err := e.stores[name].Backend.Get(ctx, table, t.ID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		}
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if got.Deleted {
 			continue
 		}
 		if t.Kind.IsZero() {
-			return true, nil
+			out = append(out, name)
+			continue
 		}
 		r, err := got.Decode()
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if k, ok := r.Fields[kindField]; ok && k.String() == t.Kind.String() {
-			return true, nil
+			out = append(out, name)
 		}
 	}
-	return false, nil
+	return out, nil
 }
 
 // dependentRule is one way rows of table point at a row being deleted.
