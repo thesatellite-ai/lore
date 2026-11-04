@@ -13779,7 +13779,7 @@
                 "properties": {
                   "approvers": {
                     "type": "array",
-                    "description": "only these people (act_… ids) may approve the mission's gates",
+                    "description": "only these people (@handle or act_…, comma separated) may approve the mission's gates",
                     "items": {
                       "type": "string"
                     }
@@ -33580,20 +33580,20 @@
             "name": "mine",
             "in": "query",
             "required": false,
-            "description": "assigned to me (not on the new core yet)",
+            "description": "assigned to me or my team, and unclaimed or claimed by me",
             "schema": {
               "type": "boolean",
-              "description": "assigned to me (not on the new core yet)"
+              "description": "assigned to me or my team, and unclaimed or claimed by me"
             }
           },
           {
             "name": "claimed_by",
             "in": "query",
             "required": false,
-            "description": "only tasks claimed by @handle (not on the new core yet)",
+            "description": "only tasks claimed right now by @handle (or actor id)",
             "schema": {
               "type": "string",
-              "description": "only tasks claimed by @handle (not on the new core yet)"
+              "description": "only tasks claimed right now by @handle (or actor id)"
             }
           }
         ],
@@ -33760,7 +33760,7 @@
                   },
                   "assign": {
                     "type": "string",
-                    "description": "assign to @handle (not on the new core yet; use --assigned-to act_…)"
+                    "description": "assign to @handle (a person sets the assignee, a team the assigned team)"
                   },
                   "assigned_to": {
                     "type": "string",
@@ -35398,7 +35398,7 @@
                   },
                   "assign": {
                     "type": "string",
-                    "description": "assign to @handle (not on the new core yet; use --assigned-to act_…)"
+                    "description": "assign to @handle (a person sets the assignee, a team the assigned team)"
                   },
                   "assigned_to": {
                     "type": "string",
