@@ -15,3 +15,14 @@ func TestCIRunTrailer(t *testing.T) {
 		t.Fatal("a trailer outside CI")
 	}
 }
+
+func TestLoreVersionTrailer(t *testing.T) {
+	none := func(string) string { return "" }
+	msg := AppendTrailers("lore: sync", OwnCommitTrailers("0.1.18", none)...)
+	if msg != "lore: sync\n\nLore-Version: 0.1.18" {
+		t.Fatalf("got %q", msg)
+	}
+	if got := AppendTrailers("x", OwnCommitTrailers("", none)...); got != "x" {
+		t.Fatalf("empty version added a trailer: %q", got)
+	}
+}

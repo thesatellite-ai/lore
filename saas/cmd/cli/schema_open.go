@@ -69,7 +69,7 @@ func ensureDBSchema(ctx context.Context, dbPath string) error {
 	if err != nil || state == migrationlog.Current {
 		return err
 	}
-	if err := refuseNewerSchema(stamped); err != nil {
+	if err = refuseNewerSchema(stamped); err != nil {
 		return err
 	}
 	if !schemaAutoUpdate || os.Getenv("LORE_READ_ONLY") == envValueOn {

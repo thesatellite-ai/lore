@@ -38,3 +38,25 @@ func AppendTrailers(msg string, trailers ...string) string {
 	}
 	return strings.TrimRight(msg, "\n") + "\n\n" + strings.Join(keep, "\n")
 }
+
+// TrailerLoreVersion is the trailer on every commit lore makes itself
+// (live, store, signals, migrate), for people reading `git log`; never on
+// a person's commit (FQ7: lore never edits people's commits; teammates'
+// versions come from the `_w` stamps, OQ7).
+const TrailerLoreVersion = "Lore-Version"
+
+// LoreVersionTrailer is "Lore-Version: <v>" ("" for an empty version, so
+// AppendTrailers drops it).
+func LoreVersionTrailer(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	return TrailerLoreVersion + ": " + v
+}
+
+// OwnCommitTrailers are the trailers of one commit lore makes itself:
+// Lore-Version always, Lore-CI-Run in CI.
+func OwnCommitTrailers(version string, getenv func(string) string) []string {
+	return []string{LoreVersionTrailer(version), CIRunTrailer(getenv)}
+}
