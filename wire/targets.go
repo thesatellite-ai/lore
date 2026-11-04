@@ -49,7 +49,7 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 	if err != nil || recorded {
 		return err // a recorded target is attached from stores.yaml
 	}
-	for _, s := range orgStores(ctx, a.opts) {
+	for _, s := range a.orgStoresHere(ctx) {
 		if s.Name == name {
 			return nil // the org brings it (the company folder): attached at open
 		}
@@ -127,7 +127,7 @@ func (a *App) baseStore(ctx context.Context, name string) (src attach.Store, fou
 			return s, true, false, nil
 		}
 	}
-	for _, s := range orgStores(ctx, a.opts) {
+	for _, s := range a.orgStoresHere(ctx) {
 		if string(s.Name) == name {
 			return s, true, true, nil
 		}
@@ -152,4 +152,14 @@ func (a *App) recordedTarget(ctx context.Context, name store.Source) (bool, erro
 		}
 	}
 	return false, nil
+}
+
+// orgStoresHere is orgStores for this App's repo (an unknown top renames
+// nothing).
+func (a *App) orgStoresHere(ctx context.Context) []attach.Store {
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		top = ""
+	}
+	return orgStores(ctx, a.opts, top)
 }

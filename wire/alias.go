@@ -25,17 +25,21 @@ import (
 // orgAliases maps team and company to the names Options.OrgStores attached
 // for this repo. A shortcut with no org folder behind it is absent; the
 // caller refuses it.
-func orgAliases(ctx context.Context, opts Options) map[string]store.Source {
+func orgAliases(ctx context.Context, opts Options, top string) map[string]store.Source {
 	out := map[string]store.Source{}
-	for _, s := range orgStores(ctx, opts) {
+	// Classify by the name Options.OrgStores gave (company = "<org>/<org
+	// folder>", team = the bare org name at the linked folder), then use
+	// the name the entry is attached under (renameOrgClashes may have
+	// made the team entry "<org>/<folder>").
+	raw := rawOrgStores(ctx, opts)
+	named := renameOrgClashes(raw, top)
+	for i, s := range raw {
+		alias := attach.ReservedTeam
 		if strings.Contains(string(s.Name), targetSep) {
-			if _, done := out[attach.ReservedCompany]; !done {
-				out[attach.ReservedCompany] = s.Name
-			}
-			continue
+			alias = attach.ReservedCompany
 		}
-		if _, done := out[attach.ReservedTeam]; !done {
-			out[attach.ReservedTeam] = s.Name
+		if _, done := out[alias]; !done {
+			out[alias] = named[i].Name
 		}
 	}
 	return out
@@ -59,7 +63,11 @@ func (a *App) resolveAlias(ctx context.Context, e op.Entry, d op.Decoder) (op.De
 	if to != attach.ReservedTeam && to != attach.ReservedCompany {
 		return d, nil
 	}
-	name, ok := orgAliases(ctx, a.opts)[to]
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		top = ""
+	}
+	name, ok := orgAliases(ctx, a.opts, top)[to]
 	if !ok {
 		return nil, errs.New(errs.NotFound, "--to "+to+": this repository has no org store "+aliasWhat[to]).
 			WithHint("link the repo to an org (`lore org link <org> --project <folder>`), or name the store: --to <store>/<folder>")

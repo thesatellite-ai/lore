@@ -60,9 +60,9 @@ func (f formatState) checkStore(name store.Source) error {
 // readStoreFormats computes the O6 state of every attached org store
 // (Options.OrgStores) still marked v0.1.17 (lore-store.yaml version 1);
 // a 0.1.18 store, or one whose rows only the caller wrote, never asks.
-func readStoreFormats(ctx context.Context, opts Options, byName map[store.Source]store.Backend, caller ids.ID[ids.Actor]) (map[store.Source]formatState, error) {
+func readStoreFormats(ctx context.Context, opts Options, top string, byName map[store.Source]store.Backend, caller ids.ID[ids.Actor]) (map[store.Source]formatState, error) {
 	out := map[store.Source]formatState{}
-	for _, s := range orgStores(ctx, opts) {
+	for _, s := range orgStores(ctx, opts, top) {
 		b, ok := byName[s.Name]
 		if !ok {
 			continue

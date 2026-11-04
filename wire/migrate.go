@@ -327,7 +327,7 @@ type orgDefaultsProbe struct {
 // reported, never dropped. seen lists store folders whose marker was
 // already handled. Commits wait in the store clone for `lore sync`.
 func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool) ([]string, error) {
-	org := orgStores(ctx, a.opts)
+	org := a.orgStoresHere(ctx)
 	if len(org) == 0 {
 		return nil, nil
 	}

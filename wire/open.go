@@ -95,7 +95,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 
 	var attached []attach.Opened
 	if !repoOnly {
-		if attached, err = openAttached(ctx, st.repoTop, opts.Home, reg, slices.Concat(extra, orgStores(ctx, opts))); err != nil {
+		if attached, err = openAttached(ctx, st.repoTop, opts.Home, reg, slices.Concat(extra, orgStores(ctx, opts, st.repoTop))); err != nil {
 			return fail(err)
 		}
 	}
@@ -179,7 +179,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if st.format, err = readFormat(ctx, repo, actor); err != nil {
 		return fail(err)
 	}
-	if st.storeFormat, err = readStoreFormats(ctx, opts, st.byName, actor); err != nil {
+	if st.storeFormat, err = readStoreFormats(ctx, opts, st.repoTop, st.byName, actor); err != nil {
 		return fail(err)
 	}
 	return st, nil
@@ -203,7 +203,12 @@ func repoIsClient(ctx context.Context, opts Options) (client bool, note string) 
 // orgStores asks opts.OrgStores for the folders the repo's org brings; no
 // hook or an error gives none (fail closed: nothing internal is attached on
 // a guess, and a write naming the org store then answers "no store named").
-func orgStores(ctx context.Context, opts Options) []attach.Store {
+func orgStores(ctx context.Context, opts Options, top string) []attach.Store {
+	return renameOrgClashes(rawOrgStores(ctx, opts), top)
+}
+
+// rawOrgStores is Options.OrgStores as given (nil on error: fail closed).
+func rawOrgStores(ctx context.Context, opts Options) []attach.Store {
 	if opts.OrgStores == nil {
 		return nil
 	}
@@ -212,6 +217,44 @@ func orgStores(ctx context.Context, opts Options) []attach.Store {
 		return nil
 	}
 	return got
+}
+
+// renameOrgClashes gives the org's linked-folder entry (bare org name, a
+// folder) the name "<org>/<folder>" when the repo's stores.yaml already
+// uses the bare name for another place (typically the store root, made by
+// `lore store init <org> …` in this repo). Without it the committed entry
+// wins the clash, the linked folder is never attached, and `--to team` or
+// `--to <org>` would write into the store root instead (r4 repro: policies
+// landing at store_root). An entry naming the same url and folder as the
+// committed one is left as is (it is the same place; the committed entry
+// attaches it). top is the repo top; an unreadable stores.yaml renames
+// nothing.
+func renameOrgClashes(org []attach.Store, top string) []attach.Store {
+	if len(org) == 0 || top == "" {
+		return org
+	}
+	cfg, err := readStoresFile(top)
+	if err != nil {
+		return org
+	}
+	out := slices.Clone(org)
+	for i, s := range out {
+		f := strings.Trim(s.Folder, "/")
+		if strings.Contains(string(s.Name), targetSep) || f == "" || f == rowfs.FolderRoot {
+			continue
+		}
+		for _, c := range cfg.Stores {
+			if c.Name != s.Name {
+				continue
+			}
+			if strings.Trim(c.Folder, "/") == f && sameURL(c, s) {
+				break
+			}
+			out[i].Name = store.Source(string(s.Name) + targetSep + f)
+			break
+		}
+	}
+	return out
 }
 
 // openAttached reads <repo>/.lore/stores.yaml (absent = no stores), adds
@@ -402,4 +445,15 @@ func keyNamespace(a engine.Attached) string {
 		ns += "/" + folder
 	}
 	return ns
+}
+
+// sameURL reports whether two store entries name the same store url and
+// branch (canonical forms; an unparsable url is never the same).
+func sameURL(a, b attach.Store) bool {
+	ca, err := canonical(attach.Store{URL: a.URL, Branch: a.Branch})
+	if err != nil {
+		return false
+	}
+	cb, err := canonical(attach.Store{URL: b.URL, Branch: b.Branch})
+	return err == nil && ca == cb
 }
