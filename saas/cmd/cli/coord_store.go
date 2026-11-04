@@ -862,7 +862,26 @@ func redactClientCopy(d coord.Doc, byAgent bool, owner string) coord.Doc {
 }
 
 // ownerOf is an agent actor's owning human on the roster ("" = none known).
+//
+// A roster kept by the core (a 0.1.18 org store, roster_core.go) is read
+// through the core; a v0.1.17 org store's roster stays on its lore.db
+// mirror, where the old code is still the actors' one writer (lsync
+// repoOwned: store mirrors keep actors on the old path).
 func ownerOf(ctx context.Context, agentID string) string {
+	if cr, err := openCoreRoster(ctx); err != nil {
+		return ""
+	} else if cr != nil {
+		actors, err := cr.app.RosterActors(ctx, cr.target)
+		if err != nil {
+			return ""
+		}
+		for _, a := range actors {
+			if a.ID == agentID {
+				return a.OwnerID
+			}
+		}
+		return ""
+	}
 	r, err := openRoster(ctx, &commonFlags{})
 	if err != nil {
 		return ""

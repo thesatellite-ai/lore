@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"saas/pkg/aicoder/signals/coord"
+
 	"dbent/gen/ent"
 	entDecision "dbent/gen/ent/decision"
 	entHotfix "dbent/gen/ent/hotfix"
@@ -46,6 +48,11 @@ func timeNow() time.Time { return time.Now() }
 // lookupRuleBody resolves "R-7" or "rul_<hex>" → (body, opaque_id)
 // Returns ("", "") if not found (caller treats as no-link)
 func lookupRuleBody(ctx context.Context, client *ent.Client, projectID, ref string) (string, string) {
+	if d, ok := coreBenchRow(ctx, "rules", projectID, ref); ok {
+		return d.Str("body"), ref
+	} else if coreApp != nil {
+		return "", ""
+	}
 	q := client.Rule.Query().Where(entRule.ProjectID(projectID))
 	q = q.Where(entRule.ID(ref))
 	r, err := q.Only(ctx)
@@ -56,6 +63,11 @@ func lookupRuleBody(ctx context.Context, client *ent.Client, projectID, ref stri
 }
 
 func lookupHotfixBody(ctx context.Context, client *ent.Client, projectID, ref string) (string, string) {
+	if d, ok := coreBenchRow(ctx, "hotfixes", projectID, ref); ok {
+		return d.Str("body"), ref
+	} else if coreApp != nil {
+		return "", ""
+	}
 	q := client.Hotfix.Query().Where(entHotfix.ProjectID(projectID))
 	q = q.Where(entHotfix.ID(ref))
 	r, err := q.Only(ctx)
@@ -66,6 +78,15 @@ func lookupHotfixBody(ctx context.Context, client *ent.Client, projectID, ref st
 }
 
 func lookupDecisionBody(ctx context.Context, client *ent.Client, projectID, ref string) (string, string) {
+	if d, ok := coreBenchRow(ctx, "decisions", projectID, ref); ok {
+		body := d.Str("title")
+		if b := d.Str("body"); b != "" {
+			body = body + "\n\n" + b
+		}
+		return body, ref
+	} else if coreApp != nil {
+		return "", ""
+	}
 	q := client.Decision.Query().Where(entDecision.ProjectID(projectID))
 	q = q.Where(entDecision.ID(ref))
 	r, err := q.Only(ctx)
@@ -80,6 +101,11 @@ func lookupDecisionBody(ctx context.Context, client *ent.Client, projectID, ref 
 }
 
 func lookupMemoryBody(ctx context.Context, client *ent.Client, projectID, ref string) (string, string) {
+	if d, ok := coreBenchRow(ctx, "memories", projectID, ref); ok {
+		return d.Str("body"), ref
+	} else if coreApp != nil {
+		return "", ""
+	}
 	q := client.Memory.Query().Where(entMemory.ProjectID(projectID))
 	q = q.Where(entMemory.ID(ref))
 	r, err := q.Only(ctx)
@@ -87,6 +113,25 @@ func lookupMemoryBody(ctx context.Context, client *ent.Client, projectID, ref st
 		return "", ""
 	}
 	return r.Body, r.ID
+}
+
+// coreBenchRow reads a knowledge row a bench task links to through the
+// core (rules, hotfixes, decisions and memories are core-owned, so lore.db
+// only holds a bridge copy). A row of another project is not found, as in
+// v0.1.17. With no core mounted (unit tests that build lore.db fixtures)
+// ok is false and the callers read lore.db.
+func coreBenchRow(ctx context.Context, table, projectID, ref string) (coord.Doc, bool) {
+	if coreApp == nil {
+		return nil, false
+	}
+	d, ok, err := coreDoc(ctx, table, ref)
+	if err != nil || !ok {
+		return nil, false
+	}
+	if pid := d.Str("project_id"); pid != "" && projectID != "" && pid != projectID {
+		return nil, false
+	}
+	return d, true
 }
 
 // hardcoded fail-on-call so the linker doesn't drop unused imports

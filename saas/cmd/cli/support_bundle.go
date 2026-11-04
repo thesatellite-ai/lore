@@ -113,21 +113,32 @@ func gatherCounts(ctx context.Context, f *doctorFlags) map[string]int {
 	}
 	defer client.Close()
 
-	if n, err := client.Memory.Query().Count(ctx); err == nil {
-		counts["memories"] = n
+	// Core-owned tables are counted through the core (live rows of every
+	// attached store); lore.db only holds a bridge copy of them. Without a
+	// core (unit tests) lore.db answers as before.
+	for _, table := range supportCoreTables {
+		if n, ok := coreRowCount(ctx, table); ok {
+			counts[table] = n
+		}
 	}
-	if n, err := client.Rule.Query().Count(ctx); err == nil {
-		counts["rules"] = n
+	if coreApp == nil {
+		if n, err := client.Memory.Query().Count(ctx); err == nil {
+			counts["memories"] = n
+		}
+		if n, err := client.Rule.Query().Count(ctx); err == nil {
+			counts["rules"] = n
+		}
+		if n, err := client.Hotfix.Query().Count(ctx); err == nil {
+			counts["hotfixes"] = n
+		}
+		if n, err := client.Decision.Query().Count(ctx); err == nil {
+			counts["decisions"] = n
+		}
+		if n, err := client.Snapshot.Query().Count(ctx); err == nil {
+			counts["snapshots"] = n
+		}
 	}
-	if n, err := client.Hotfix.Query().Count(ctx); err == nil {
-		counts["hotfixes"] = n
-	}
-	if n, err := client.Decision.Query().Count(ctx); err == nil {
-		counts["decisions"] = n
-	}
-	if n, err := client.Snapshot.Query().Count(ctx); err == nil {
-		counts["snapshots"] = n
-	}
+	// Machine-local tables stay on lore.db.
 	if n, err := client.LearnCandidate.Query().Count(ctx); err == nil {
 		counts["learn_candidates"] = n
 	}
@@ -138,4 +149,24 @@ func gatherCounts(ctx context.Context, f *doctorFlags) map[string]int {
 		counts["render_history_rows"] = n
 	}
 	return counts
+}
+
+// supportCoreTables are the core-owned tables whose counts a support
+// bundle reports (the v0.1.17 bundle's set).
+var supportCoreTables = []string{"memories", "rules", "hotfixes", "decisions", "snapshots"}
+
+// coreRowCount counts table's live rows in every attached store through
+// the core; ok=false with no core mounted or when a store cannot be read.
+func coreRowCount(ctx context.Context, table string) (int, bool) {
+	if coreApp == nil {
+		return 0, false
+	}
+	if _, err := coreApp.Engine(ctx); err != nil { // opens the App: Stores() is empty before
+		return 0, false
+	}
+	docs, err := coreDocs(ctx, table)
+	if err != nil {
+		return 0, false
+	}
+	return len(docs), true
 }
