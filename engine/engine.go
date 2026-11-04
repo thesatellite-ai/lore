@@ -99,8 +99,12 @@ func WithStore(a Attached) Option {
 	}
 }
 
-// validStoreName accepts an attached store name `<snake>` or
-// `<snake>/<folder>` (STORE TARGETS: `--to agency/org` is the company
+// storeRootFolder is the folder name of a store's root (rowfs.FolderRoot):
+// `<store>/.` is the root of a store attached elsewhere at a folder.
+const storeRootFolder = "."
+
+// validStoreName accepts an attached store name `<snake>`, `<snake>/.`
+// (the store root) or `<snake>/<folder>` (STORE TARGETS: `--to agency/org` is the company
 // folder of store agency). A folder target is attached under exactly the
 // name the person types, so --to needs no second parser. Folder segments
 // must be non-empty, never "." or "..", and use only lower-case letters,
@@ -110,7 +114,7 @@ func validStoreName(n string) bool {
 	if !row.ValidName(base) {
 		return false
 	}
-	if !hasFolder {
+	if !hasFolder || rest == storeRootFolder {
 		return true
 	}
 	for seg := range strings.SplitSeq(rest, "/") {

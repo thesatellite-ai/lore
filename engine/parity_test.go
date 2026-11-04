@@ -180,7 +180,7 @@ func TestCreateWithID(t *testing.T) {
 func TestValidStoreName(t *testing.T) {
 	for n, want := range map[string]bool{
 		"repo": true, "agency": true, "agency/org": true, "agency/acme-hub": true, "me/notes_1": true, "a/b/c": true,
-		"": false, "Agency": false, "agency/": false, "agency//x": false, "agency/..": false, "agency/.": false,
+		"": false, "Agency": false, "agency/": false, "agency//x": false, "agency/..": false, "agency/.": true, "agency/./x": false, "agency/x/.": false, "./x": false,
 		"../x": false, "agency/../me": false, `agency\x`: false, `agency/a\b`: false, "agency/Org": false,
 		"agency/a b": false, "agency/ünï": false, "/agency": false, "agency/a.b": false,
 	} {

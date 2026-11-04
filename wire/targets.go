@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -21,10 +22,30 @@ const targetSep = "/"
 // does not have yet is created only after a yes (E_NEEDS_CONFIRM).
 // `team` and `company` were already rewritten to the org store names
 // (resolveAlias).
-func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) error {
+//
+// `<store>/.` names the store root (rowfs.FolderRoot), which always exists
+// (it holds the store marker), so it never asks. When <store> itself is
+// attached at its root, `<store>/.` is that same place and the input is
+// rewritten to plain `<store>` (the returned decoder), so one data folder
+// keeps one name and nothing new is recorded in stores.yaml.
+func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Decoder, error) {
+	from, root, err := a.attachFolderTarget(ctx, e, d, c)
+	if err != nil {
+		return d, err
+	}
+	if root != "" {
+		return aliasDecoder{inner: d, from: from, to: root}, nil
+	}
+	return d, nil
+}
+
+// attachFolderTarget is prepareTarget's attach step (see there). A
+// non-empty root means the input's to (from) is `<root>/.` and store root
+// is attached at its root: the caller rewrites from to root.
+func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (from, root string, err error) {
 	in, err := e.Decode(d)
 	if err != nil {
-		return nil // the engine's Run reports the decode error itself
+		return "", "", nil // the engine's Run reports the decode error itself
 	}
 	to := ""
 	for _, tv := range in.Texts() {
@@ -34,36 +55,42 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 	}
 	base, folderName, ok := strings.Cut(to, targetSep)
 	if !ok || base == "" || folderName == "" {
-		return nil
+		return "", "", nil
 	}
 	name := store.Source(to)
 	a.mu.Lock()
 	for _, x := range a.extra {
 		if x.Name == name {
 			a.mu.Unlock()
-			return nil
+			return "", "", nil
 		}
 	}
 	a.mu.Unlock()
 	recorded, err := a.recordedTarget(ctx, name)
 	if err != nil || recorded {
-		return err // a recorded target is attached from stores.yaml
+		return "", "", err // a recorded target is attached from stores.yaml
 	}
 	for _, s := range a.orgStoresHere(ctx) {
 		if s.Name == name {
-			return nil // the org brings it (the company folder): attached at open
+			return "", "", nil // the org brings it (the company folder): attached at open
 		}
 	}
 	src, found, fromOrg, err := a.baseStore(ctx, base)
 	if err != nil || !found {
-		return err // not found: the engine answers "no store named … is attached"
+		return "", "", err // not found: the engine answers "no store named … is attached"
 	}
-	exists, err := a.folderExists(ctx, src, folderName)
-	if err != nil {
-		return err
+	isRoot := folderName == rowfs.FolderRoot
+	if isRoot && (src.Folder == "" || src.Folder == rowfs.FolderRoot) {
+		return to, base, nil
+	}
+	exists := isRoot // the root holds the marker: it always exists
+	if !exists {
+		if exists, err = a.folderExists(ctx, src, folderName); err != nil {
+			return "", "", err
+		}
 	}
 	if !exists && !c.Yes {
-		return errs.New(errs.NeedsConfirm, "store "+base+" has no folder "+folderName+" yet").
+		return "", "", errs.New(errs.NeedsConfirm, "store "+base+" has no folder "+folderName+" yet").
 			WithQuestion("create the folder " + folderName + " in store " + base + "?").
 			WithHint("rerun with --yes to create it with this write")
 	}
@@ -79,10 +106,10 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 		// store's url is machine-local and stores.yaml is shared.
 		top, terr := a.repoTop(ctx)
 		if terr != nil {
-			return terr
+			return "", "", terr
 		}
 		if err := addStoresEntry(top, target); err != nil {
-			return err
+			return "", "", err
 		}
 	}
 	a.mu.Lock()
@@ -94,12 +121,12 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 		cerr := a.st.close()
 		a.st, a.opened, a.err = nil, false, nil
 		if cerr != nil {
-			return cerr
+			return "", "", cerr
 		}
 	} else if a.opened {
 		a.opened, a.err = false, nil
 	}
-	return nil
+	return "", "", nil
 }
 
 // baseStore finds the stores.yaml entry (or `me`, or a store the repo's
