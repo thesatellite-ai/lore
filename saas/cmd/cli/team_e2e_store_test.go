@@ -129,7 +129,18 @@ func TestF12_StoreAllowedFiles(t *testing.T) {
 	}
 }
 
-// §5.3: org entries on one URL share one bare clone; nothing is checked out.
+// §5.3: org entries on one URL share one bare clone. Ported to STORE_SERVER_SPEC
+// 6.1 "Store clones": a store is ONE bare clone <repo>.git plus the folder
+// <repo>/ lore owns beside it, holding only `work` (a linked worktree of
+// that same bare clone) and `lock`; a pinned branch uses <repo>@<branch> in
+// all three paths, so two branches never share a worktree. v0.1.17 had no
+// worktree folder, so the old assertion "only lore.git" changed with 6.1.
+// storeCloneFolderFiles are the files lore keeps in a store's <repo>/ folder
+// beside the bare clone: the worktree and the lock (spec 6.1), and the
+// fetch stamp of the push-at-once wrapper (store_push_core.go: its state
+// folder is the clone's base folder, live.fetch_ttl).
+var storeCloneFolderFiles = map[string]bool{"work": true, "lock": true, "fetch-stamp": true}
+
 func TestF12_EntriesOnOneURLShareOneBareClone(t *testing.T) {
 	a := newAgency(t)
 	a.aliceApp.With(th.EnvLoreOrg + "=" + orgStaging).Lore("whoami")
@@ -138,11 +149,56 @@ func TestF12_EntriesOnOneURLShareOneBareClone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store clone dir: %v", err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "lore.git" {
+	// stems are the clone names found: "lore", and "lore@staging" if the
+	// staging entry opened its pinned branch.
+	bare, folders := map[string]bool{}, map[string]bool{}
+	for _, e := range entries {
+		name := e.Name()
+		stem := strings.TrimSuffix(name, ".git")
+		if stem != "lore" && stem != "lore@"+stagingBranch {
+			t.Fatalf("only the northwind/lore store may be cloned here, found %s in %v", name, entries)
+		}
+		if strings.HasSuffix(name, ".git") {
+			bare[stem] = true
+		} else {
+			folders[stem] = true
+		}
+	}
+	if !bare["lore"] {
 		t.Fatalf("one bare clone per URL expected, got %v", entries)
 	}
-	if out := a.w.Git(filepath.Join(base, "lore.git"), "rev-parse", "--is-bare-repository"); out != "true" {
-		t.Fatal("store clones are bare")
+	for stem := range folders {
+		if !bare[stem] {
+			t.Fatalf("worktree folder %s without its bare clone %s.git", stem, stem)
+		}
+	}
+	for stem := range bare {
+		clone := filepath.Join(base, stem+".git")
+		if out := a.w.Git(clone, "rev-parse", "--is-bare-repository"); out != "true" {
+			t.Fatalf("store clones are bare: %s", clone)
+		}
+		if !folders[stem] {
+			continue
+		}
+		dir := filepath.Join(base, stem)
+		inner, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range inner {
+			if !storeCloneFolderFiles[e.Name()] {
+				t.Fatalf("%s may hold only lore's own files %v, found %s", dir, storeCloneFolderFiles, e.Name())
+			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, "work")); err != nil {
+			continue // the worktree is made on first write
+		}
+		common := a.w.Git(filepath.Join(dir, "work"), "rev-parse", "--path-format=absolute", "--git-common-dir")
+		want, _ := filepath.EvalSymlinks(clone)
+		got, _ := filepath.EvalSymlinks(common)
+		if got != want {
+			t.Fatalf("the worktree must belong to the same bare clone: %s vs %s", common, clone)
+		}
 	}
 }
 
