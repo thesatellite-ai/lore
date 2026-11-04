@@ -100,14 +100,24 @@ func TestRecipe15_NoteOnATaskNotHeldGoesToTheStore(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ac.Lore("task", "note", tc.id, tc.note).OK(t).Says(t, "note", tc.id)
+			// The note is a comment row of the store project acme/. A v0.1.17
+			// store kept it on the live ref under acme/comments/; a 0.1.18
+			// store keeps its rows on the store branch under
+			// acme/.lore/data/comments/ (STORE_SERVER_SPEC 6.1, DECISIONS_LOG
+			// 18 STORE TARGETS), so both refs and both layouts count.
 			found := false
-			for _, f := range a.store.FilesMatching(storeLive(storeBranch), folderAcme+"/"+tblComments+"/") {
-				if b, _ := a.store.Read(storeLive(storeBranch), f); strings.Contains(b, tc.note) {
-					found = true
+			for _, ref := range []string{storeLive(storeBranch), refMain} {
+				for _, f := range a.store.Files(ref) {
+					if !strings.HasPrefix(f, folderAcme+"/") || !strings.Contains(f, "/"+tblComments+"/") {
+						continue
+					}
+					if b, _ := a.store.Read(ref, f); strings.Contains(b, tc.note) {
+						found = true
+					}
 				}
 			}
 			if !found {
-				t.Fatalf("the note must be on the store's live ref under %s/: %v", folderAcme, a.store.Files(storeLive(storeBranch)))
+				t.Fatalf("the note must be a comment row of the store project %s/: live %v main %v", folderAcme, a.store.Files(storeLive(storeBranch)), a.store.Files(refMain))
 			}
 			if f := a.clientSees(t, tc.note); len(f) != 0 {
 				t.Fatalf("a work note must never reach the client repo: %v", f)
