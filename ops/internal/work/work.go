@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -83,10 +84,7 @@ const maxQuotedID = 48
 
 // Quote renders a user-given value for an error, truncated.
 func Quote(s string) string {
-	if len(s) > maxQuotedID {
-		s = s[:maxQuotedID] + "..."
-	}
-	return `"` + s + `"`
+	return `"` + textcut.Cut(s, maxQuotedID, maxQuotedID) + `"`
 }
 
 // ParseID parses an id argument of prefix p (E_INVALID_ID naming noun
@@ -464,11 +462,13 @@ type SearchHit struct {
 
 // Relations is the task search hit's eager-loaded references; each is
 // JSON null when the task does not point at one, as v0.1.17 printed it
-// (op.Null: op output fields hold no pointers).
+// (op.Null: op output fields hold no pointers). The fields are in key
+// order: v0.1.17 marshalled a map, so its bytes list mission, plan,
+// tasklist, and --json byte compat keeps that order.
 type Relations struct {
-	Tasklist op.Null[Brief] `json:"tasklist"`
 	Mission  op.Null[Brief] `json:"mission"`
 	Plan     op.Null[Brief] `json:"plan"`
+	Tasklist op.Null[Brief] `json:"tasklist"`
 }
 
 // Brief is a referenced row's id and title (and status for a mission).
