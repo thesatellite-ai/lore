@@ -97,7 +97,10 @@ const (
 	FlagByModel          = "by-model"
 	FlagExpectedBaseline = "expected-baseline"
 	FlagExpectedWith     = "expected-with"
-	FlagClaudeMd         = "claude-md"
+	// FlagClaudeMd is `lore bench run`'s synthesized context file. TOOL
+	// NEUTRAL leaves it as is: bench measures one model's behaviour, so it
+	// is model-specific by design (out of scope of the decision).
+	FlagClaudeMd = "claude-md"
 
 	// Bootstrap / project
 	FlagNonInteractive = "non-interactive"

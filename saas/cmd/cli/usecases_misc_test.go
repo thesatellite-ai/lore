@@ -351,10 +351,15 @@ func TestUC_MiscDirectiveInstallRemove(t *testing.T) {
 		t.Fatalf("directive show: %q", block)
 	}
 
-	// Default target CLAUDE.md: created, then idempotent.
+	// Default target (TOOL NEUTRAL): a folder with no AI tool file gets
+	// AGENTS.md, the cross-tool file, never CLAUDE.md. v0.1.17 defaulted
+	// to CLAUDE.md.
 	run("directive", "install")
-	if read("CLAUDE.md") != block {
-		t.Fatal("new CLAUDE.md must hold exactly the block")
+	if read("AGENTS.md") != block {
+		t.Fatal("new AGENTS.md must hold exactly the block")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); !os.IsNotExist(err) {
+		t.Fatal("TOOL NEUTRAL: the default install must not create CLAUDE.md")
 	}
 
 	// AGENTS.md with hand content: block prepended, content kept; a stale
@@ -408,7 +413,9 @@ func TestUC_MiscDirectiveReinstallIsIdempotent(t *testing.T) {
 	if !strings.Contains(block, "$RID") {
 		t.Skip("the directive no longer contains $RID")
 	}
-	path := filepath.Join(dir, "CLAUDE.md")
+	// TOOL NEUTRAL: the default target of an empty folder is AGENTS.md
+	// (v0.1.17: CLAUDE.md); the second install finds it as the repo's tool.
+	path := filepath.Join(dir, "AGENTS.md")
 	run("directive", "install")
 	if r := run("directive", "install"); !strings.Contains(r.stdout, "(no change)") {
 		t.Errorf("re-install changed the file: %s", r.stdout)

@@ -2,8 +2,9 @@
 //
 // Bootstrap mini's knowledge from existing markdown:
 //
-//	lore learn-from docs           default sources: CLAUDE.md, AGENTS.md,
-//	                                  README.md, .ai/**/*.md
+//	lore learn-from docs           default sources: every AI tool file of the
+//	                                  tool profile registry (CLAUDE.md, AGENTS.md,
+//	                                  GEMINI.md, …), README.md, .ai/**/*.md
 //	lore learn-from docs --paths=foo.md,bar.md
 //
 // Each source file becomes one snapshot row + multiple learn_candidate rows
@@ -36,6 +37,7 @@ import (
 	"saas/pkg/aicoder/textnorm"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
 
 func newLearnCommand() *cobra.Command {
@@ -68,7 +70,8 @@ func newLearnFromCommand() *cobra.Command {
 		Long: `Imports existing markdown into staging (learn_candidates)
 
 Subkinds:
-  docs   import .md files (default: CLAUDE.md, AGENTS.md, README.md, .ai/**/*.md)
+  docs   import .md files (default: AI tool files such as CLAUDE.md,
+         AGENTS.md, GEMINI.md, plus README.md and .ai/**/*.md)
 
 Each source file becomes one snapshot. Each H2/H3 section becomes one
 learn_candidate. Review and promote with:
@@ -87,7 +90,7 @@ learn_candidate. Review and promote with:
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringSliceVar(&paths, constants.FlagPaths, nil,
-		"explicit paths (default: CLAUDE.md, AGENTS.md, README.md, .ai/**/*.md)")
+		"explicit paths (default: AI tool files, README.md, .ai/**/*.md)")
 	return cmd
 }
 
@@ -129,7 +132,22 @@ func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []strin
 	} else {
 		// Default v0.1 sources per Round 38 / Tier 2 #8
 		// ds:def id=learn-from-default-paths-9c6aqzqm owner=@khanakia stability=stable desc="lore learn-from docs default sources"
-		for _, name := range []string{"CLAUDE.md", "AGENTS.md", "README.md"} {
+		// TOOL NEUTRAL: the tool files come from the profile registry
+		// (built-ins + the user's own), so every tool's file is read, not
+		// one tool's; the registry order keeps v0.1.17's CLAUDE.md,
+		// AGENTS.md order first.
+		reg, err := loadToolRegistry(ctx)
+		if err != nil {
+			return err
+		}
+		var names []string
+		for _, p := range reg.Profiles() {
+			if p.HasPointerFile() {
+				names = append(names, filepath.FromSlash(p.PointerFile))
+			}
+		}
+		names = append(names, "README.md")
+		for _, name := range names {
 			p := filepath.Join(rctx.ProjectRoot, name)
 			if _, err := os.Stat(p); err == nil {
 				sources = append(sources, p)
@@ -153,7 +171,7 @@ func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []strin
 	if len(sources) == 0 {
 		return errcodes.New(errcodes.NotFound,
 			"no source files found").
-			WithHint("expected CLAUDE.md, AGENTS.md, README.md, or .ai/**/*.md")
+			WithHint("expected an AI tool file (" + strings.Join(toolPointerFiles(ctx), ", ") + "), README.md, or .ai/**/*.md")
 	}
 
 	jobID := ids.MustNew(ids.PrefixLearnCandidate)
@@ -472,4 +490,20 @@ func learnStatus(s string) entLearnCandidate.Status {
 func init() {
 	_ = sha256.New
 	_ = hex.EncodeToString
+}
+
+// toolPointerFiles lists the registry's tool files for a hint; the built-ins
+// when the user's config cannot be read (the hint must not fail).
+func toolPointerFiles(ctx context.Context) []string {
+	reg, err := loadToolRegistry(ctx)
+	if err != nil {
+		reg, _ = toolprofile.New(nil) // built-ins only: always valid
+	}
+	var out []string
+	for _, p := range reg.Profiles() {
+		if p.HasPointerFile() {
+			out = append(out, p.PointerFile)
+		}
+	}
+	return out
 }

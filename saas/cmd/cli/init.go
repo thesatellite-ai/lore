@@ -8,6 +8,7 @@
 //   - Auto-adds .lore/lore.db to .gitignore
 //   - INSERTs initial Project row
 //   - Resolves identity via 8-step chain and creates initial Actor
+//   - Wires the repo's AI tool files to .lore/LORE.md (TOOL NEUTRAL)
 //
 // Catches: R21 #61 (first-run wizard), R22 #21-23, R23 #34, R26 ship-gate item
 package main
@@ -39,11 +40,15 @@ import (
 	"saas/pkg/aicoder/textnorm"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
 
 var (
 	initFlagName           string
 	initFlagNonInteractive bool
+	// initFlagTargets are --target values (tool profiles or files); empty
+	// means the tools detected in the repo, else AGENTS.md.
+	initFlagTargets []string
 )
 
 func newInitCommand() *cobra.Command {
@@ -58,6 +63,10 @@ It will:
   • auto-add .lore/lore.db to your .gitignore
   • register the initial Project row using the auto-detected name from
     your git remote (or the directory basename if no remote)
+  • point the AI tools the repo already uses at .lore/LORE.md: a pointer
+    block in each tool file found (CLAUDE.md, AGENTS.md, GEMINI.md,
+    .cursor/rules/lore.mdc, .github/copilot-instructions.md, or your own
+    profiles); with none found, AGENTS.md. Pick others with --target
 
 Refuses if a project already exists (.lore/lore.db or .lore/lore.yaml).`,
 		Args: cobra.MaximumNArgs(1),
@@ -75,6 +84,8 @@ Refuses if a project already exists (.lore/lore.db or .lore/lore.yaml).`,
 	}
 	cmd.Flags().StringVar(&initFlagName, constants.FlagName, "", "explicit project name (default: from git remote OR dir basename)")
 	cmd.Flags().BoolVar(&initFlagNonInteractive, constants.FlagNonInteractive, false, "skip prompts and use auto-detected defaults")
+	cmd.Flags().StringSliceVar(&initFlagTargets, constants.FlagTarget, nil,
+		"AI tool profile(s) or file(s) to point at .lore/LORE.md (default: tool files found in the repo, else AGENTS.md)")
 	return cmd
 }
 
@@ -203,7 +214,16 @@ func runInit(ctx context.Context, projectRoot string) error {
 	fmt.Printf("    db:         %s\n", dbPath)
 	fmt.Printf("    identity:   %s (%s)\n", actor.StableKey, resolved.Step)
 	fmt.Println()
+
+	// 9b. TOOL NEUTRAL: wire the AI tools this repo already uses (their
+	// files exist), else AGENTS.md, the cross-tool file — never CLAUDE.md
+	// by default. A repo that has a CLAUDE.md keeps it as a target. Only a
+	// pointer block is written; `lore render` writes LORE.md itself.
+	if err := wireToolFiles(ctx, projectRoot, initFlagTargets); err != nil {
+		fmt.Fprintln(os.Stderr, style.Warn("WARN: could not wire AI tool files: "+err.Error()))
+	}
 	fmt.Println(style.Hint("  next: lore learn-from docs   to bootstrap from existing markdown"))
+	fmt.Println(style.Hint("        lore render            to write .lore/LORE.md for those tools"))
 
 	// 10. First sync pass: writes .lore/data (the git-tracked copy of the
 	// project + actor rows) so the very first commit already carries it.
@@ -215,6 +235,23 @@ func runInit(ctx context.Context, projectRoot string) error {
 			printSyncReport(rep)
 		}
 		syncSessions[dbPath] = &syncSession{root: projectRoot, dbPath: dbPath, dataDir: filepath.Join(markerDir, lsync.DataDirName)}
+	}
+	return nil
+}
+
+// wireToolFiles stitches the lore pointer block into each context target of
+// the repo at projectRoot (values from --target, else toolprofile.Resolve),
+// pointing at the canonical .lore/LORE.md.
+func wireToolFiles(ctx context.Context, projectRoot string, values []string) error {
+	targets, err := resolveContextTargets(ctx, projectRoot, values, false)
+	if err != nil {
+		return err
+	}
+	out := filepath.Join(projectRoot, filepath.FromSlash(toolprofile.CanonicalOutput))
+	for _, t := range targets {
+		if err := stitchPointer(projectRoot, t, out); err != nil {
+			return err
+		}
 	}
 	return nil
 }

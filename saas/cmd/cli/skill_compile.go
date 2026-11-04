@@ -269,6 +269,9 @@ func buildSkillCompressPrompt(files map[string]string, budgetBytes int) string {
 // compressionRules is the heart of the compiler — it's the editorial
 // brief the model follows. Tuned against the hand-authored SKILL-mini.md
 // that scored 100% on the 3-eval bench at qwen3-coder + qwen2.5-coder:1.5b
+//
+// TOOL NEUTRAL: the brief's examples name the generated LORE.md and real
+// commands (`lore learn-from docs`), never one AI tool's file.
 func compressionRules(budgetBytes int) string {
 	return fmt.Sprintf(`# TASK
 
@@ -298,7 +301,7 @@ suitable for small-context (32K) and weak-instruction-following models
 5. **Collapse playbooks to command sequences.** Each P1..P20 becomes:
         P1 bootstrap:
           lore init --non-interactive
-          lore import --from-claude-md
+          lore learn-from docs
           lore render
    Drop the "when" / "why" prose around each step
 
@@ -374,7 +377,7 @@ suitable for small-context (32K) and weak-instruction-following models
         lore render
 
 17. **FEW-SHOTS section must include:**
-    - A render-flags combo example: `+"`lore render --budget=4000 --dry-run`"+` for "budget-trimmed CLAUDE.md, preview only"
+    - A render-flags combo example: `+"`lore render --budget=4000 --dry-run`"+` for "budget-trimmed LORE.md, preview only"
     - An error-recovery example for E_DB_LOCKED showing retry-with-backoff in prose+bash (NOT a capture command)
     - A conflict-resolution example using the `+"`$(…)`"+` atomic-script form (rule 16)
     - An FTS5 boolean example showing `+"`(auth OR session) NOT logging`"+` and the explicit note "do NOT post-filter with jq when FTS5 can do it natively" — models tend to default to `+"`jq | select(... | not)`"+` instead of the in-query NOT operator

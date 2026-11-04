@@ -425,8 +425,9 @@ func rerenderIfDue(ctx context.Context, db *sql.DB, root string) {
 
 // rerenderLoreMD refreshes .lore/LORE.md after teammates' knowledge was
 // imported, so the agent context file matches the merged data. Only when
-// the project already renders (the file exists); quiet, never stitches
-// CLAUDE.md (that is `lore render`'s explicit job).
+// the project already renders (the file exists); quiet, never stitches a
+// tool file's pointer (TOOL NEUTRAL: wiring CLAUDE.md, AGENTS.md or any
+// other tool file is `lore render`'s explicit job).
 //
 // Returns true when the file is current afterwards (rendered, or the project
 // does not render at all), false when it should be retried later.

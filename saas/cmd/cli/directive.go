@@ -1,7 +1,8 @@
 // directive.go — `lore directive install|remove` (per-project guard block)
 //
-// Drops a fenced markdown block at the top of CLAUDE.md / AGENTS.md / any
-// agent-loaded markdown so a coding agent is told, in instruction-shaped
+// Drops a fenced markdown block at the top of the file each AI tool reads
+// (AGENTS.md, CLAUDE.md, GEMINI.md, … — TOOL NEUTRAL, see logic/toolprofile)
+// or any agent-loaded markdown so a coding agent is told, in instruction-shaped
 // language, to use lore for persistence instead of inline-editing
 // the file or creating sibling NOTES.md scratchpads
 //
@@ -11,15 +12,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"saas/pkg/constants"
 	"strings"
 
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
+
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
 
 	"github.com/spf13/cobra"
 )
@@ -32,6 +35,9 @@ const (
 // directiveBody is the block content between the markers. Worded as
 // instructions (not hints) per Round 35 / user feedback that softer
 // language is ignored. Loud, prescriptive, names the skill explicitly
+//
+// TOOL NEUTRAL: it names the generated .lore/LORE.md, never one tool's file
+// (it used to say "surfaces in CLAUDE.md").
 const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 > **AGENT DIRECTIVE — read BEFORE responding. This is instruction, not reference data. Non-negotiable.**
@@ -115,7 +121,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 >    **Even when the task is already marked done**, still open a run for verification work — the run captures what you did to confirm the state, not just net-new code. If you do truly nothing (the task is done and there's nothing to check), say so to the user explicitly instead of silently skipping
 >
-> 4. **Did the user give feedback / a correction / a "we always do X" statement?** Capture via ` + "`lore rule add`" + ` or ` + "`memory add`" + ` — never via your coding agent's built-in auto-memory. **Then run ` + "`lore render`" + `** so the new rule surfaces in CLAUDE.md for the next session
+> 4. **Did the user give feedback / a correction / a "we always do X" statement?** Capture via ` + "`lore rule add`" + ` or ` + "`memory add`" + ` — never via your coding agent's built-in auto-memory. **Then run ` + "`lore render`" + `** so the new rule surfaces in ` + "`.lore/LORE.md`" + ` (the file your AI tool loads) for the next session
 >
 > 5. **Before substantive responses, search for relevant captured knowledge.** One call covers all 23 entities:
 >
@@ -167,16 +173,14 @@ func directiveBlock() string {
 }
 
 // directiveRegex matches an existing block (across newlines, non-greedy)
-var directiveRegex = regexp.MustCompile(
-	`(?s)` + regexp.QuoteMeta(directiveStartMarker) + `.*?` + regexp.QuoteMeta(directiveEndMarker) + `\n?`,
-)
+var directiveRegex = toolprofile.MarkerRegexp(directiveStartMarker, directiveEndMarker)
 
 func newDirectiveCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "directive",
 		Short: "Install/remove the lore agent-directive block in agent-loaded markdown",
-		Long: `Installs a fenced block at the top of CLAUDE.md / AGENTS.md (or any --target
-file) telling the coding agent to persist knowledge via lore commands
+		Long: `Installs a fenced block at the top of each AI tool file of the repo (or any
+--target profile or file) telling the coding agent to persist knowledge via lore commands
 instead of inline-editing the file or creating sibling NOTES.md scratchpads
 
 Idempotent: re-running install replaces the block in place. Remove strips it.`,
@@ -193,11 +197,22 @@ func newDirectiveInstallCommand() *cobra.Command {
 		Use:   "install",
 		Short: "Install (or refresh) the directive block at the top of one or more files",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(targets) == 0 {
-				targets = []string{"CLAUDE.md"}
+			root, err := os.Getwd()
+			if err != nil {
+				return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
 			}
-			for _, t := range targets {
-				if err := installDirective(t); err != nil {
+			// TOOL NEUTRAL: no default tool file; with no --target the
+			// block goes into the repo's own tool files (the same targets
+			// `lore render` wires; AGENTS.md when the repo has none).
+			resolved, err := resolveContextTargets(cmd.Context(), root, targets, false)
+			if err != nil {
+				return err
+			}
+			for _, t := range resolved {
+				if !t.profile.HasPointerFile() {
+					continue
+				}
+				if err := installDirective(root, t); err != nil {
 					return err
 				}
 			}
@@ -205,7 +220,7 @@ func newDirectiveInstallCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringSliceVar(&targets, constants.FlagTarget, nil,
-		"target file(s) — repeatable or comma-separated (default: CLAUDE.md at cwd)")
+		"tool profile(s) or file(s) — repeatable or comma-separated (default: the repo's tool files, else AGENTS.md)")
 	return cmd
 }
 
@@ -215,11 +230,24 @@ func newDirectiveRemoveCommand() *cobra.Command {
 		Use:   "remove",
 		Short: "Strip the directive block from one or more files",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(targets) == 0 {
-				targets = []string{"CLAUDE.md"}
+			root, err := os.Getwd()
+			if err != nil {
+				return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
 			}
-			for _, t := range targets {
-				if err := removeDirective(t); err != nil {
+			if len(targets) == 0 {
+				// TOOL NEUTRAL: with no --target, strip the block from
+				// every known tool file that carries it, whichever tool.
+				return removeDirectiveEverywhere(cmd.Context(), root)
+			}
+			resolved, err := resolveContextTargets(cmd.Context(), root, targets, false)
+			if err != nil {
+				return err
+			}
+			for _, t := range resolved {
+				if !t.profile.HasPointerFile() {
+					continue
+				}
+				if err := removeDirective(targetPath(root, t)); err != nil {
 					return err
 				}
 			}
@@ -227,7 +255,7 @@ func newDirectiveRemoveCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringSliceVar(&targets, constants.FlagTarget, nil,
-		"target file(s) — repeatable or comma-separated (default: CLAUDE.md at cwd)")
+		"tool profile(s) or file(s) — repeatable or comma-separated (default: every tool file that has the block)")
 	return cmd
 }
 
@@ -241,7 +269,44 @@ func newDirectiveShowCommand() *cobra.Command {
 	}
 }
 
-func installDirective(target string) error {
+// targetPath is t's file as a path: absolute as given, else under root.
+func targetPath(root string, t contextTarget) string {
+	if filepath.IsAbs(t.file) {
+		return t.file
+	}
+	return filepath.Join(root, filepath.FromSlash(t.file))
+}
+
+// removeDirectiveEverywhere strips the block from every tool file of the
+// registry that carries it.
+func removeDirectiveEverywhere(ctx context.Context, root string) error {
+	reg, err := loadToolRegistry(ctx)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, p := range reg.Profiles() {
+		if !p.HasPointerFile() {
+			continue
+		}
+		path := filepath.Join(root, filepath.FromSlash(p.PointerFile))
+		data, err := os.ReadFile(filepath.Clean(path))
+		if err != nil || !directiveRegex.Match(data) {
+			continue
+		}
+		found = true
+		if err := removeDirective(path); err != nil {
+			return err
+		}
+	}
+	if !found {
+		fmt.Printf("%s no tool file carries the directive block\n", style.Muted("="))
+	}
+	return nil
+}
+
+func installDirective(root string, t contextTarget) error {
+	target := targetPath(root, t)
 	abs, err := filepath.Abs(target)
 	if err != nil {
 		return errcodes.New(errcodes.BadPath, "resolve "+target).WithCause(err)
@@ -254,22 +319,11 @@ func installDirective(target string) error {
 		return errcodes.New(errcodes.Internal, "read "+abs).WithCause(err)
 	}
 
-	block := directiveBlock()
-	var out string
-	switch {
-	case directiveRegex.MatchString(existing):
-		// Replace existing block in place
-		// Literal: the block's shell examples contain "$RID", which
-		// ReplaceAllString would expand as a (missing) capture group,
-		// silently blanking it on every re-install.
-		out = directiveRegex.ReplaceAllLiteralString(existing, block)
-	case existing == "":
-		// New file
-		out = block
-	default:
-		// Prepend with a separating blank line
-		out = block + "\n" + existing
-	}
+	// Place replaces an existing block in place (literally: the block's
+	// shell examples contain "$RID", which ReplaceAllString would expand as
+	// a missing capture group), or puts it at the top with a blank line —
+	// after a Cursor rule file's frontmatter, which must stay first.
+	out := t.profile.Place(existing, directiveBlock(), directiveRegex)
 
 	if out == existing {
 		fmt.Printf("%s %s (no change)\n", style.Muted("="), abs)

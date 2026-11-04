@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
 
 // Team config file (~/.lore/config.yaml, LORE_TEAM_SPEC §5.2). Born YAML:
@@ -126,6 +128,19 @@ type Config struct {
 	MergeCheck     MergeCheck         `yaml:"merge_check,omitempty"`
 	LinkIndex      LinkIndex          `yaml:"link_index,omitempty"`
 	UntrustedHosts []string           `yaml:"untrusted_hosts,omitempty"`
+	Context        Context            `yaml:"context,omitempty"`
+}
+
+// Context is the `context:` block: how `lore render` wires the generated
+// .lore/LORE.md into AI tools.
+type Context struct {
+	// Profiles are the user's own tool profiles, added after the built-ins.
+	// TOOL NEUTRAL: the built-ins (claude_code, codex, cursor, gemini_cli,
+	// copilot, generic) are plain entries of the same registry, so a tool
+	// lore does not ship is one entry here, never a code change. Which
+	// profiles a repo uses is read from the repo's committed pointer files
+	// (toolprofile.Resolve), not from this machine-local file.
+	Profiles []toolprofile.Profile `yaml:"profiles,omitempty"`
 }
 
 // Personal is the personal store setting (§5.2).

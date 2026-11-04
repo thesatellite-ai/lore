@@ -10,6 +10,8 @@ import (
 
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/repourl"
+
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
 
 // Validation shapes. Named so the error messages and the checks agree.
@@ -80,6 +82,12 @@ func (c *Config) Validate() error {
 	for i, h := range c.UntrustedHosts {
 		if strings.TrimSpace(h) == "" {
 			add("untrusted_hosts[%d]: empty pattern", i)
+		}
+	}
+
+	if len(c.Context.Profiles) > 0 {
+		if _, err := toolprofile.New(c.Context.Profiles); err != nil {
+			add("context.profiles: %v", err)
 		}
 	}
 

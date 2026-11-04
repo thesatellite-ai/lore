@@ -1,6 +1,6 @@
 // render.go — `lore render` (S2.4)
 //
-// # Pulls scoped knowledge from the DB and writes CLAUDE.md atomically
+// # Pulls scoped knowledge from the DB and writes .lore/LORE.md atomically
 //
 // Determinism (R16 #5, R34.4): ORDER BY id, created_at — same DB state
 // produces byte-identical output
@@ -14,8 +14,11 @@
 //
 // render_history table (R22 #14) is populated for `lore why-context`
 //
-// v0.1: only CLAUDE.md target. Multi-target (AGENTS.md, .cursor/rules/*.mdc)
-// deferred to v0.2
+// TOOL NEUTRAL: the generated file is always .lore/LORE.md; each AI tool the
+// repo uses (claude_code → CLAUDE.md, codex → AGENTS.md, cursor →
+// .cursor/rules/lore.mdc, …) gets only a pointer block in its own file. The
+// tools come from one registry (logic/toolprofile) plus the user's profiles
+// in ~/.lore/config.yaml; no tool is the default.
 package main
 
 import (
@@ -26,7 +29,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"saas/pkg/constants"
 	"strings"
 
@@ -35,15 +37,19 @@ import (
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/style"
 
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
+
 	"github.com/spf13/cobra"
 )
 
 type renderFlags struct {
 	commonFlags
-	outPath    string
-	targetPath string
-	noPointer  bool
-	dryRun     bool
+	outPath string
+	// targets are --target values: profile names or pointer files. Empty
+	// means the repo's context targets (toolprofile.Resolve).
+	targets   []string
+	noPointer bool
+	dryRun    bool
 	// quiet suppresses the per-file stdout lines. Not a CLI flag: set by the
 	// post-command sync step that re-renders LORE.md after importing
 	// teammates' changes, where stdout belongs to the user's command (and
@@ -51,36 +57,21 @@ type renderFlags struct {
 	quiet bool
 }
 
-const (
-	pointerStartMarker = "<!-- lore:pointer:start -->"
-	pointerEndMarker   = "<!-- lore:pointer:end -->"
-)
-
-// pointerRegex matches an existing pointer block (across newlines, non-greedy)
-var pointerRegex = regexp.MustCompile(
-	`(?s)` + regexp.QuoteMeta(pointerStartMarker) + `.*?` + regexp.QuoteMeta(pointerEndMarker) + `\n?`,
-)
-
-// pointerBlock is the idempotent stitch dropped at the top of the agent file
-// (CLAUDE.md). relOut is the generated file's path RELATIVE to the agent
-// file's directory — the coding agent resolves `@path` imports relative to the
-// importing file. The prose fallback covers agents without @import support
-func pointerBlock(relOut string) string {
-	return pointerStartMarker + "\n" +
-		"@" + relOut + "\n" +
-		"<!-- if your agent does not support @import, read " + relOut + " now -->\n" +
-		pointerEndMarker + "\n"
-}
-
 func newRenderCommand() *cobra.Command {
 	f := &renderFlags{}
 	cmd := &cobra.Command{
 		Use:   "render",
-		Short: "Render CLAUDE.md from scoped knowledge",
+		Short: "Render .lore/LORE.md from scoped knowledge and point your AI tools at it",
 		Long: `render assembles the project's knowledge into a generated file
-(default .lore/LORE.md) and stitches an idempotent @import pointer into the
-agent file (default CLAUDE.md) so hand-written CLAUDE.md content is never
-clobbered
+(default .lore/LORE.md) and stitches an idempotent pointer block into the
+file each AI tool reads, so hand-written content there is never clobbered
+
+Tools are profiles: claude_code (CLAUDE.md), codex (AGENTS.md), cursor
+(.cursor/rules/lore.mdc), gemini_cli (GEMINI.md), copilot
+(.github/copilot-instructions.md), generic (no pointer file), plus your own
+under context.profiles in ~/.lore/config.yaml. Without --target, render uses
+the tool files that already carry lore's pointer; if none does, the tool
+files present in the repo; if there are none, AGENTS.md
 
 Output is deterministic (same DB state produces byte-identical output)
 Atomic-write safe: the generated file is replaced via rename only after the
@@ -98,7 +89,11 @@ replaced in place on re-run. Pass --no-pointer to skip stitching, or
 	}
 	bindCommonFlags(cmd, &f.commonFlags)
 	cmd.Flags().StringVar(&f.outPath, constants.FlagOut, ".lore/LORE.md", "generated knowledge file path")
-	cmd.Flags().StringVar(&f.targetPath, constants.FlagTarget, "CLAUDE.md", "agent file to stitch the @import pointer into")
+	// TOOL NEUTRAL: no default tool file; an empty --target resolves the
+	// repo's own targets (wired pointer files, else detected tools, else
+	// AGENTS.md), so an existing CLAUDE.md repo keeps rendering as before.
+	cmd.Flags().StringSliceVar(&f.targets, constants.FlagTarget, nil,
+		"tool profile name or pointer file to wire (repeatable; default: the repo's tool files, else AGENTS.md)")
 	cmd.Flags().BoolVar(&f.noPointer, constants.FlagNoPointer, false, "do not stitch the pointer into the agent file")
 	cmd.Flags().BoolVar(&f.dryRun, constants.FlagDryRun, false, "print to stdout instead of writing file")
 	return cmd
@@ -129,7 +124,7 @@ func runRender(ctx context.Context, f *renderFlags) error {
 
 	// ds:def id=render-pins-ez0g6hen owner=@khanakia stability=stable desc="what render pins into the context file (must rules, critical/high hotfixes, directive)"
 	// Hybrid: pin only severity=must rules + critical/high hotfixes +
-	// directive into CLAUDE.md. Everything else (should/may rules,
+	// directive into LORE.md. Everything else (should/may rules,
 	// memories, decisions, patterns, …) is fetched via `lore search`
 	// on demand per the directive's pre-response checklist
 	rules, err := loadPinnedRules(ctx, projectID)
@@ -161,9 +156,10 @@ func runRender(ctx context.Context, f *renderFlags) error {
 		return renderPrivate(ctx, root, true, f.quiet)
 	}
 
-	// Generated content goes to the out file (default .lore/LORE.md), NOT
-	// CLAUDE.md — so hand-written CLAUDE.md is never clobbered. CLAUDE.md
-	// only receives an idempotent @import pointer (stitchPointer below)
+	// Generated content goes to the out file (default .lore/LORE.md), never
+	// into a tool's own file — so hand-written content there is never
+	// clobbered. Each tool file only receives an idempotent pointer block
+	// (stitchPointer below)
 
 	// Resolve symlinks (R27 #19): if the out file is a symlink, write to target
 	resolvedOut, err := resolveSymlinkTarget(f.outPath)
@@ -172,7 +168,7 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	}
 
 	// Skip rename if content unchanged (R29 #53) — but still re-stitch the
-	// pointer: CLAUDE.md may have lost it even when the body is identical
+	// pointer: a tool file may have lost it even when the body is identical
 	unchanged := false
 	if existing, err := os.ReadFile(resolvedOut); err == nil {
 		unchanged = sha256Hex(existing) == sha256Hex([]byte(body))
@@ -194,8 +190,18 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	}
 
 	if !f.noPointer {
-		if err := stitchPointer(f.targetPath, resolvedOut); err != nil {
+		root, err := os.Getwd()
+		if err != nil {
+			return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+		}
+		targets, err := resolveContextTargets(ctx, root, f.targets, f.quiet)
+		if err != nil {
 			return err
+		}
+		for _, t := range targets {
+			if err := stitchPointer(root, t, resolvedOut); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -224,12 +230,142 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	return nil
 }
 
-// stitchPointer ensures agentFile (CLAUDE.md) carries the lore pointer block
-// at its top, bounded by sentinel markers. Idempotent: an existing block is
-// replaced in place; a missing one is prepended; if nothing changes the file
-// is left untouched. The @import path is computed RELATIVE to agentFile's
-// directory so the coding agent resolves it correctly regardless of cwd
-func stitchPointer(agentFile, outFile string) error {
+// contextTarget is one tool file render wires: its profile and the file's
+// path (relative to the repo root, or absolute when --target gave one).
+type contextTarget struct {
+	profile toolprofile.Profile
+	file    string
+}
+
+// loadToolRegistry is the built-in tool profiles plus the user's own from
+// ~/.lore/config.yaml (context.profiles). TOOL NEUTRAL + no-hardwire: a
+// tool lore does not ship is a config entry, resolved by the same code.
+func loadToolRegistry(ctx context.Context) (*toolprofile.Registry, error) {
+	cfg, err := loadTeamConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reg, err := toolprofile.New(cfg.Context.Profiles)
+	if err != nil {
+		return nil, errcodes.New(errcodes.ConfigInvalid, "context.profiles in ~/.lore/config.yaml").
+			WithCause(err).WithHint("run `lore config check` for every problem with its location")
+	}
+	return reg, nil
+}
+
+// rootProbe reads pointer files under a repo root for toolprofile.Resolve.
+type rootProbe struct{ root string }
+
+// State implements toolprofile.Probe.
+func (p rootProbe) State(rel string) toolprofile.FileState {
+	data, err := os.ReadFile(filepath.Join(p.root, filepath.FromSlash(rel)))
+	switch {
+	case err != nil:
+		return toolprofile.FileMissing
+	case toolprofile.HasPointer(string(data)):
+		return toolprofile.FileWired
+	default:
+		return toolprofile.FilePresent
+	}
+}
+
+// resolveContextTargets turns --target values into tool files, or, with
+// none, resolves the repo's own targets (toolprofile.Resolve). A value is a
+// profile name, a known profile's pointer file, or any other file, wired
+// with an @import pointer as v0.1.17's --target was. TOOL NEUTRAL: no tool
+// file is assumed; the first wiring of a repo says which tools it chose and
+// why, so the choice is never a surprise.
+func resolveContextTargets(ctx context.Context, root string, values []string, quiet bool) ([]contextTarget, error) {
+	reg, err := loadToolRegistry(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []contextTarget
+	if len(values) == 0 {
+		sel := reg.Resolve(rootProbe{root: root})
+		for _, p := range sel.Profiles {
+			out = append(out, contextTarget{profile: p, file: p.PointerFile})
+		}
+		if !quiet && sel.Reason != toolprofile.ReasonWired {
+			fmt.Printf("%s context targets: %s (%s)\n", style.Muted("·"), describeTargets(out), describeReason(sel.Reason))
+		}
+		// TOOL NEUTRAL, no surprises: a tool file added after lore was
+		// wired (say CLAUDE.md in an AGENTS.md repo) is not wired behind
+		// the user's back; render names it and the command that adds it.
+		if !quiet {
+			for _, p := range sel.Unwired {
+				fmt.Printf("%s %s found but not wired to lore; add it with: lore render --target %s\n", style.Muted("·"), p.PointerFile, p.Name)
+			}
+		}
+		return out, nil
+	}
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if p, ok := reg.Lookup(v); ok {
+			out = append(out, contextTarget{profile: p, file: p.PointerFile})
+			continue
+		}
+		rel := v
+		if filepath.IsAbs(v) {
+			if r, rerr := filepath.Rel(root, v); rerr == nil && !strings.HasPrefix(r, "..") {
+				rel = r
+			}
+		}
+		if p, ok := reg.ByPointerFile(filepath.ToSlash(rel)); ok {
+			out = append(out, contextTarget{profile: p, file: p.PointerFile})
+			continue
+		}
+		out = append(out, contextTarget{
+			profile: toolprofile.Profile{Name: v, PointerFile: filepath.ToSlash(v), Import: toolprofile.ImportAt},
+			file:    v,
+		})
+	}
+	return out, nil
+}
+
+// describeTargets is "codex (AGENTS.md), generic" for one output line.
+func describeTargets(ts []contextTarget) string {
+	parts := make([]string, 0, len(ts))
+	for _, t := range ts {
+		if t.profile.HasPointerFile() {
+			parts = append(parts, t.profile.Name+" ("+t.file+")")
+		} else {
+			parts = append(parts, t.profile.Name)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// describeReason says in words why these targets were chosen.
+func describeReason(r toolprofile.Reason) string {
+	switch r {
+	case toolprofile.ReasonDetected:
+		return "detected in this repo; change with --target <profile>"
+	case toolprofile.ReasonFallback:
+		return "no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>"
+	case toolprofile.ReasonWired:
+	}
+	return "already wired"
+}
+
+// stitchPointer ensures t's tool file carries the lore pointer block,
+// bounded by sentinel markers. Idempotent: an existing block is replaced in
+// place; a missing one is placed at the top (after a Cursor rule's
+// frontmatter); if nothing changes the file is left untouched. An @import
+// path is computed RELATIVE to the tool file's directory so the tool
+// resolves it regardless of cwd. A profile without a pointer file
+// (generic) has nothing to stitch.
+func stitchPointer(root string, t contextTarget, outFile string) error {
+	if !t.profile.HasPointerFile() {
+		return nil
+	}
+	agentFile := t.file
+	if !filepath.IsAbs(agentFile) {
+		agentFile = filepath.Join(root, filepath.FromSlash(agentFile))
+	}
 	absAgent, err := filepath.Abs(agentFile)
 	if err != nil {
 		return errcodes.New(errcodes.BadPath, "resolve "+agentFile).WithCause(err)
@@ -238,12 +374,7 @@ func stitchPointer(agentFile, outFile string) error {
 	if err != nil {
 		return errcodes.New(errcodes.BadPath, "resolve "+outFile).WithCause(err)
 	}
-	relOut, err := filepath.Rel(filepath.Dir(absAgent), absOut)
-	if err != nil {
-		// Different volumes / unrelatable — fall back to the path as given
-		relOut = outFile
-	}
-	relOut = filepath.ToSlash(relOut)
+	link := toolprofile.Link{FromPointer: relSlash(filepath.Dir(absAgent), absOut, outFile), FromRoot: relSlash(root, absOut, outFile)}
 
 	existing := ""
 	if data, err := os.ReadFile(absAgent); err == nil {
@@ -252,19 +383,7 @@ func stitchPointer(agentFile, outFile string) error {
 		return errcodes.New(errcodes.Internal, "read "+absAgent).WithCause(err)
 	}
 
-	block := pointerBlock(relOut)
-	var out string
-	switch {
-	case pointerRegex.MatchString(existing):
-		// Literal, like the directive block: a "$" in the block must never be
-		// read as a regexp capture reference.
-		out = pointerRegex.ReplaceAllLiteralString(existing, block)
-	case existing == "":
-		out = block
-	default:
-		out = block + "\n" + existing
-	}
-
+	out := t.profile.StitchPointer(existing, link)
 	if out == existing {
 		fmt.Printf("%s %s (pointer present)\n", style.Muted("="), absAgent)
 		return nil
@@ -275,11 +394,22 @@ func stitchPointer(agentFile, outFile string) error {
 	if err := os.WriteFile(absAgent, []byte(out), 0o644); err != nil {
 		return errcodes.New(errcodes.Internal, "write "+absAgent).WithCause(err)
 	}
-	fmt.Printf("%s %s (pointer → %s)\n", style.Success("✓"), absAgent, relOut)
+	fmt.Printf("%s %s (pointer → %s)\n", style.Success("✓"), absAgent, link.FromPointer)
 	return nil
 }
 
-// buildClaudeMd assembles the canonical CLAUDE.md text
+// relSlash is target relative to base with slashes; fallback (the path as
+// given) when the two cannot be related (different volumes).
+func relSlash(base, target, fallback string) string {
+	r, err := filepath.Rel(base, target)
+	if err != nil {
+		r = fallback
+	}
+	return filepath.ToSlash(r)
+}
+
+// buildClaudeMd assembles the canonical LORE.md text (the name predates
+// TOOL NEUTRAL; the text names no tool)
 //
 // Format (stable per R25 #13):
 //
@@ -333,7 +463,8 @@ func buildClaudeMd(canary string, rules []pinnedRule, hotfixes []pinnedHotfix) s
 	// Footer telling agents where the non-rendered content lives
 	b.WriteString("\n---\n\n")
 	b.WriteString("## What's NOT pinned here (fetch via `lore search`)\n\n")
-	b.WriteString("This CLAUDE.md pins only the **non-skippable subset**:\n\n")
+	// TOOL NEUTRAL: the body names the generated file, never one tool's.
+	b.WriteString("This file pins only the **non-skippable subset**:\n\n")
 	b.WriteString("- directive block\n")
 	b.WriteString("- rules where `severity=must`\n")
 	b.WriteString("- hotfixes where `severity=critical` or `high`\n\n")
