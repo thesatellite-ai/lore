@@ -211,7 +211,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 		if err = optTexts(fields, map[string]string{pKey: in.Key, pScope: scopeOf(target)}); err != nil {
 			return RowOut{}, err
 		}
-		w, err = create(ctx, o.env, target, schema.TablePolicies, map[string]string{pKey: in.Key}, fields, freshID[ids.Policy]())
+		w, err = create(ctx, o.env, target, schema.TablePolicies, map[string]string{pKey: in.Key}, fields)
 	}
 	if err != nil {
 		return RowOut{}, err

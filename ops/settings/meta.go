@@ -225,7 +225,7 @@ func (o ops) addValue(ctx context.Context, k located, name, label string) (engin
 		return engine.Written{}, err
 	}
 	fields[mvKeyID] = kid
-	return create(ctx, o.env, k.Src, schema.TableMetaValues, map[string]string{mvKeyID: k.Row.ID.String(), mName: name}, fields, freshID[ids.MetaValue]())
+	return create(ctx, o.env, k.Src, schema.TableMetaValues, map[string]string{mvKeyID: k.Row.ID.String(), mName: name}, fields)
 }
 
 func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
@@ -253,7 +253,7 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 	if err := optTexts(fields, map[string]string{mName: in.Name, mScope: scope, mType: in.Type, mDescription: in.Description}); err != nil {
 		return RowOut{}, err
 	}
-	w, err := create(ctx, o.env, target, schema.TableMetaKeys, map[string]string{mName: in.Name, mScope: scope}, fields, freshID[ids.MetaKey]())
+	w, err := create(ctx, o.env, target, schema.TableMetaKeys, map[string]string{mName: in.Name, mScope: scope}, fields)
 	if err != nil {
 		return RowOut{}, err
 	}

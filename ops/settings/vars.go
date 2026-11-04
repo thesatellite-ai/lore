@@ -8,7 +8,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
@@ -250,7 +249,7 @@ func (o ops) varsSet(ctx context.Context, in VarsSetIn) (RowOut, error) {
 		return RowOut{ID: w.Row.ID.String(), Store: string(target),
 			Human: fmt.Sprintf("Changed %s %s = %s (%s) %s.\n", short(w.Row.ID), in.Name, in.Value, typ, varWhere(target, in.Shareable))}, nil
 	}
-	w, err := create(ctx, o.env, target, schema.TableVars, map[string]string{vName: in.Name}, fields, freshID[ids.Var]())
+	w, err := create(ctx, o.env, target, schema.TableVars, map[string]string{vName: in.Name}, fields)
 	if err != nil {
 		return RowOut{}, err
 	}

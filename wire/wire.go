@@ -300,16 +300,15 @@ func (s *state) close() error {
 }
 
 var (
-	_ op.Runner             = (*App)(nil)
-	_ opsmemory.Env         = (*App)(nil)
-	_ opsmemory.Mover       = (*App)(nil)
-	_ opsstores.Syncer      = (*App)(nil)
-	_ opscontent.Env        = (*App)(nil)
-	_ opstag.Env            = (*App)(nil)
-	_ opscomment.Env        = (*App)(nil)
-	_ opslink.Env           = (*App)(nil)
-	_ opssettings.Env       = (*App)(nil)
-	_ opssettings.IDCreator = (*App)(nil)
+	_ op.Runner        = (*App)(nil)
+	_ opsmemory.Env    = (*App)(nil)
+	_ opsmemory.Mover  = (*App)(nil)
+	_ opsstores.Syncer = (*App)(nil)
+	_ opscontent.Env   = (*App)(nil)
+	_ opstag.Env       = (*App)(nil)
+	_ opscomment.Env   = (*App)(nil)
+	_ opslink.Env      = (*App)(nil)
+	_ opssettings.Env  = (*App)(nil)
 )
 
 // SyncStores is the 0.1.18 half of `lore sync` (O12b: sync is one

@@ -273,7 +273,7 @@ func (o ops) putRule(ctx context.Context, target store.Source, id string, fields
 		if fields[sRuleID], err = txt(id); err != nil {
 			return RowOut{}, err
 		}
-		w, err = create(ctx, o.env, target, schema.TableSecretRules, map[string]string{sRuleID: id}, fields, freshID[ids.SecretRule]())
+		w, err = create(ctx, o.env, target, schema.TableSecretRules, map[string]string{sRuleID: id}, fields)
 	}
 	if err != nil {
 		return RowOut{}, err

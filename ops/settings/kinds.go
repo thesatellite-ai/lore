@@ -8,7 +8,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
@@ -335,7 +334,7 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	target := targetOf(in.To)
-	w, err := create(ctx, o.env, target, schema.TableKinds, map[string]string{kName: in.Kind}, fields, freshID[ids.Kind]())
+	w, err := create(ctx, o.env, target, schema.TableKinds, map[string]string{kName: in.Kind}, fields)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -490,7 +489,7 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 		}
 	}
 	// The field row lives beside its kind, so the definition travels as one.
-	w, err := create(ctx, o.env, k.Src, schema.TableKindFields, map[string]string{fKindID: k.Row.ID.String(), kName: in.Field}, fields, freshID[ids.KindField]())
+	w, err := create(ctx, o.env, k.Src, schema.TableKindFields, map[string]string{fKindID: k.Row.ID.String(), kName: in.Field}, fields)
 	if err != nil {
 		return RowOut{}, err
 	}

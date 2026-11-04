@@ -18,7 +18,6 @@ import (
 	"context"
 
 	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
@@ -34,13 +33,4 @@ type Env interface {
 	List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error)
 	// Stores lists the attached stores in precedence order.
 	Stores() []store.Source
-}
-
-// IDCreator is the optional Env upgrade (engine.CreateWithID) that lets a
-// natural-key settings row (a policy key, a var name, a kind name) be set
-// again after a soft delete: its natural id is held by the tombstone, so
-// the new row gets a fresh random id. Without it such a re-create answers
-// with the engine's "already exists" error and a hint.
-type IDCreator interface {
-	CreateWithID(ctx context.Context, target store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) (engine.Written, error)
 }

@@ -153,12 +153,10 @@ func byNameOrID(ctx context.Context, env Env, srcs []store.Source, table row.Tab
 }
 
 // create writes a new settings row, refusing first when a LIVE row with the
-// same natural key (match) exists in target. When the natural id is held by
-// a tombstone (the row was deleted before) and the Env can pin ids, the
-// row gets a fresh random id; two machines doing that offline can make two
-// rows with one key (spec-deltas.md), which is why a live clash is refused
-// here first.
-func create(ctx context.Context, env Env, target store.Source, table row.Table, match map[string]string, fields map[string]value.Value, fresh func() (ids.AnyID, error)) (engine.Written, error) {
+// same natural key (match) exists in target (a clearer message than the
+// engine's). A natural id held by a tombstone (the row was deleted before)
+// is re-created under a fresh random id by engine.Create itself.
+func create(ctx context.Context, env Env, target store.Source, table row.Table, match map[string]string, fields map[string]value.Value) (engine.Written, error) {
 	if len(match) > 0 {
 		rows, err := liveRows(ctx, env, []store.Source{target}, table)
 		if err != nil {
@@ -169,27 +167,7 @@ func create(ctx context.Context, env Env, target store.Source, table row.Table, 
 				WithHint("edit the existing row instead")
 		}
 	}
-	w, err := env.Create(ctx, target, table, fields)
-	if err == nil || !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "already exists") {
-		return w, err
-	}
-	pin, ok := env.(IDCreator)
-	if !ok || fresh == nil {
-		return w, err
-	}
-	id, ierr := fresh()
-	if ierr != nil {
-		return engine.Written{}, errs.Wrap(errs.Internal, "settings: make a row id", ierr)
-	}
-	return pin.CreateWithID(ctx, target, table, id, fields)
-}
-
-// freshID returns a fresh random id maker of T's table.
-func freshID[T ids.Tag]() func() (ids.AnyID, error) {
-	return func() (ids.AnyID, error) {
-		id, err := ids.New[T]()
-		return id.Any(), err
-	}
+	return env.Create(ctx, target, table, fields)
 }
 
 func describeMatch(m map[string]string) string {
