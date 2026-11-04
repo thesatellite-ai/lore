@@ -336,6 +336,12 @@ func resolveGlobalSearchScope(ctx context.Context, f *commonFlags) (globalSearch
 	if coreApp == nil {
 		return globalSearchScope{}, errcodes.New(errcodes.Internal, "the core is not available in this process")
 	}
+	// A fresh clone (.lore/data, no lore.db yet) is a project too: build the
+	// read copy first, as resolveContext does for every v0.1.17 command,
+	// or a clone whose first command is search is "not a lore project".
+	if err := maybeMaterialize(ctx, f); err != nil {
+		return globalSearchScope{}, materializeError(err)
+	}
 	rctx, err := projresolve.Resolve(projresolve.Inputs{FlagDB: f.flagDB, FlagProject: f.flagProject, FlagRepo: f.flagRepo})
 	if err != nil {
 		return globalSearchScope{}, mapResolveError(err)
