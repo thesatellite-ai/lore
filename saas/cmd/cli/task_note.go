@@ -86,7 +86,7 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 	if err != nil {
 		return coordError(err)
 	}
-	if !(cs.mine || cs.hadClaim) {
+	if !cs.mine && !cs.hadClaim {
 		return unheldNote(ctx, w, t, id, body)
 	}
 	branch := currentWorkBranch(ctx, w.Repo)
