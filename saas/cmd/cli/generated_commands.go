@@ -71,8 +71,6 @@ func registerExtraCommands(root *cobra.Command) {
 	root.AddCommand(newIncidentGroup())
 	root.AddCommand(newSuggestionGroup())
 	root.AddCommand(newTastePrefGroup())
-	root.AddCommand(newPlanGroup())
-	root.AddCommand(newTaskListGroup())
 	root.AddCommand(newWorkflowGroup())
 	root.AddCommand(newWorkspaceGroup())
 	root.AddCommand(newHandoffGroup())

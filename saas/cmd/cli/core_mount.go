@@ -39,11 +39,15 @@ import (
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
+	opsmission "github.com/thesatellite-ai/lore/ops/mission"
 	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
+	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
+	opstasklist "github.com/thesatellite-ai/lore/ops/tasklist"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/surface/cli"
@@ -104,6 +108,15 @@ func mountCore(root *cobra.Command) {
 			}
 		}
 	}
+	// The coordination verbs and mission status stay on the v0.1.17 signals
+	// machinery, mounted under the core nouns (after the compat loop: they
+	// carry their own v0.1.17 flags).
+	if t, _, ferr := root.Find([]string{opstask.Noun}); ferr == nil && t.Name() == opstask.Noun {
+		t.AddCommand(taskCoordCommands()...)
+	}
+	if m, _, ferr := root.Find([]string{opsmission.Noun}); ferr == nil && m.Name() == opsmission.Noun {
+		m.AddCommand(newMissionStatusCommand())
+	}
 	if alias := newCommitShowAlias(root); alias != nil {
 		root.AddCommand(alias)
 	}
@@ -150,6 +163,7 @@ var coreNouns = []string{
 	opspattern.Noun, opsplaybook.Noun, opsprompt.Noun,
 	opsrule.Noun, opsdecision.Noun, opshotfix.Noun,
 	opstag.Noun, opscomment.Noun, opslink.Noun, opslink.CommitNoun,
+	opstask.Noun, opstasklist.Noun, opsmission.Noun, opsplan.Noun,
 }
 
 // v0.1.17 flags every `lore memory …` command still accepts on the core
@@ -286,6 +300,8 @@ var coreRouteKinds = map[row.Table]string{
 	schema.TableRules:     "rule",
 	schema.TableDecisions: "decision",
 	schema.TableComments:  "comment",
+	schema.TableTasks:     "task",
+	schema.TableMissions:  "mission",
 }
 
 // guardCoreRepoWrite keeps v0.1.17's write routing in force for the rows

@@ -48,13 +48,17 @@ import (
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	opsmission "github.com/thesatellite-ai/lore/ops/mission"
 	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
+	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
+	opstasklist "github.com/thesatellite-ai/lore/ops/tasklist"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -182,6 +186,10 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opscomment.Ops(a)...)
 	entries = append(entries, opslink.Ops(a, gitcommit.Resolver{})...)
 	entries = append(entries, opssettings.Ops(a)...)
+	entries = append(entries, opstask.Ops(a)...)
+	entries = append(entries, opstasklist.Ops(a)...)
+	entries = append(entries, opsmission.Ops(a)...)
+	entries = append(entries, opsplan.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 

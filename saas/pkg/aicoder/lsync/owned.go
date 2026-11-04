@@ -43,6 +43,10 @@ var coreOwned = map[string]bool{
 	"meta_values":   true,
 	"secret_rules":  true,
 	"secret_allows": true,
+	"tasks":         true,
+	"task_lists":    true,
+	"missions":      true,
+	"plans":         true,
 }
 
 // CoreOwned reports whether the new core owns table's row files.

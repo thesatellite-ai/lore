@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -43,6 +44,7 @@ func CoreTables() []row.Table {
 		schema.TableKinds, schema.TableKindFields, schema.TableResources,
 		schema.TableVars, schema.TablePolicies, schema.TableMetaKeys,
 		schema.TableMetaValues, schema.TableSecretRules, schema.TableSecretAllows,
+		schema.TableTasks, schema.TableTasklists, schema.TableMissions, schema.TablePlans,
 	}
 }
 
@@ -321,6 +323,36 @@ func (a *App) RewriteV1(ctx context.Context, table row.Table, dryRun bool) ([]id
 	return found, nil
 }
 
+// formatSteps are the per-table field changes a `_v: 1` → `_v: 2` rewrite
+// makes beyond the envelope, keyed by table. Each returns the new fields
+// (it may change the map it is given).
+var formatSteps = map[row.Table]func(map[string]value.Value) map[string]value.Value{
+	schema.TablePlans: upcastPlanStatus,
+}
+
+// upcastPlanStatus is TSQ9's plans step: an empty status takes the closed
+// value of v0.1.17's free-text status_str (ops/plan.UpcastStatus), and
+// status_str is dropped. A status_str that cannot be encoded as text is
+// left as it is (validation reports it).
+func upcastPlanStatus(f map[string]value.Value) map[string]value.Value {
+	if cur, ok := f[planStatusField].(value.Text); !ok || cur.String() == "" {
+		old := ""
+		if t, ok := f[schema.FieldPlanStatusStr].(value.Text); ok {
+			old = t.String()
+		}
+		t, err := value.TextOf(opsplan.UpcastStatus(old))
+		if err != nil {
+			return f
+		}
+		f[planStatusField] = t
+	}
+	delete(f, schema.FieldPlanStatusStr)
+	return f
+}
+
+// planStatusField is plans.status (schema/builtin_work.go).
+const planStatusField = "status"
+
 // rewriteStore rewrites table's v1 rows in one backend.
 func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun bool) ([]ids.AnyID, error) {
 	rows, _, err := b.Read(ctx, "")
@@ -341,6 +373,9 @@ func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun 
 			continue
 		}
 		found = append(found, r.ID)
+		if step, ok := formatSteps[table]; ok {
+			r.Fields = step(r.Fields)
+		}
 		up, err := store.FromRow(r)
 		if err != nil {
 			return nil, err

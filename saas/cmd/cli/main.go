@@ -112,8 +112,6 @@ func init() {
 	rootCmd.AddCommand(newMoveCommand())
 	rootCmd.AddCommand(newContextCommand())
 	rootCmd.AddCommand(newSupportBundleCommand())
-	rootCmd.AddCommand(newTaskCommand())
-	rootCmd.AddCommand(newMissionCommand())
 	rootCmd.AddCommand(newProjectCommand())
 	rootCmd.AddCommand(newRepoCommand())
 	rootCmd.AddCommand(newBenchCommand())
