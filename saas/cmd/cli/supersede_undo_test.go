@@ -22,10 +22,10 @@ import (
 // errInjectedMark is the failure the hook puts into the mark step.
 var errInjectedMark = errors.New("injected: mark step failed")
 
-// failMemoryUpdates makes every single-row memory update fail (the mark
-// step of a memory --supersedes); creates and deletes still work.
-func failMemoryUpdates(c *ent.Client) {
-	c.Memory.Use(func(next ent.Mutator) ent.Mutator {
+// failRuleUpdates makes every single-row rule update fail (the mark
+// step of a rule --supersedes; memories are written by the 0.1.18 core, which has no --supersedes); creates and deletes still work.
+func failRuleUpdates(c *ent.Client) {
+	c.Rule.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
 			if m.Op().Is(entgo.OpUpdateOne) {
 				return nil, errInjectedMark
@@ -35,11 +35,11 @@ func failMemoryUpdates(c *ent.Client) {
 	})
 }
 
-// memoryState is every memory row's id and link, the state a failed
+// ruleState is every rule row's id and link, the state a failed
 // --supersedes must leave untouched.
-func memoryState(t *testing.T, c *ent.Client) map[string]string {
+func ruleState(t *testing.T, c *ent.Client) map[string]string {
 	t.Helper()
-	rows, err := c.Memory.Query().All(context.Background())
+	rows, err := c.Rule.Query().All(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,30 +64,30 @@ func TestFinishSupersedesUndoAfterFailedMark(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
 			c := openTestClient(t)
-			old, err := c.Memory.Create().SetProjectID(project).SetBody("the printer is downstairs").SetSourceKind("manual").Save(ctx)
+			old, err := c.Rule.Create().SetProjectID(project).SetBody("the printer is downstairs").SetSourceKind("manual").Save(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := checkSupersedes(ctx, c, supersedeMemory, project, old.ID); err != nil {
+			if err := checkSupersedes(ctx, c, supersedeRule, project, old.ID); err != nil {
 				t.Fatal(err)
 			}
-			before := memoryState(t, c)
+			before := ruleState(t, c)
 
 			// The add saves the new row, then the mark step fails.
-			repl, err := c.Memory.Create().SetProjectID(project).SetBody("the printer is upstairs").SetSourceKind("manual").Save(ctx)
+			repl, err := c.Rule.Create().SetProjectID(project).SetBody("the printer is upstairs").SetSourceKind("manual").Save(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
-			failMemoryUpdates(c)
+			failRuleUpdates(c)
 			undoCalls := 0
 			undo := func(ctx context.Context) error {
 				undoCalls++
 				if tc.undoFail {
 					return errors.New("injected: undo failed")
 				}
-				return c.Memory.DeleteOneID(repl.ID).Exec(ctx)
+				return c.Rule.DeleteOneID(repl.ID).Exec(ctx)
 			}
-			err = finishSupersedes(ctx, c, supersedeMemory, old.ID, repl.ID, undo)
+			err = finishSupersedes(ctx, c, supersedeRule, old.ID, repl.ID, undo)
 
 			var ce *errcodes.CLIError
 			if !errors.As(err, &ce) || ce.Code != errcodes.Internal || !errors.Is(err, errInjectedMark) {
@@ -96,9 +96,9 @@ func TestFinishSupersedesUndoAfterFailedMark(t *testing.T) {
 			if undoCalls != 1 {
 				t.Fatalf("undo ran %d times, want 1", undoCalls)
 			}
-			after := memoryState(t, c)
+			after := ruleState(t, c)
 			if tc.undoFail {
-				if !strings.Contains(ce.Hint, "lore memory delete "+repl.ID) {
+				if !strings.Contains(ce.Hint, "lore rule delete "+repl.ID) {
 					t.Fatalf("hint must name the leftover row: %q", ce.Hint)
 				}
 				if _, left := after[repl.ID]; !left || after[old.ID] != before[old.ID] {

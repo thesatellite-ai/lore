@@ -52,7 +52,7 @@ That row now lives only in `.lore/lore.db` and in your backups. When you no long
 <!-- example: ops#allow-secrets only=3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_d431…313a --confirm
+$ lore memory delete mem_d431…313a --yes
 lore sync: secret-detected memories/mem_d431…313a.json: credential pattern aws_access_key found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
 ✓ mem_d431…313a deleted (hard)
 ```

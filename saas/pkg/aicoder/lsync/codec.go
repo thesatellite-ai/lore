@@ -29,6 +29,24 @@ const (
 	keyTable   = "_table"
 )
 
+// Reading the 0.1.18 row format (`_v: 2`, model/row in the root module).
+// This binary still WRITES FormatVersion 1 for the tables it owns; it only
+// reads v2 files, which the 0.1.18 core writes for the migrated nouns
+// (memories), so the old readers (render, search, TUI) keep seeing them
+// through the import into lore.db. Nothing here ever writes a v2 file.
+const (
+	// formatV2 is the newest version this binary reads.
+	formatV2 = 2
+	// keyDeleted marks a v2 tombstone ("_deleted": true).
+	keyDeleted = "_deleted"
+	// keyFromV2 is an in-memory marker set by upcast on a document read
+	// from a v2 file and consumed by argsFromDoc; encodeDoc strips it, so
+	// it never reaches a file. Why: v2 omits null fields, so a column the
+	// file does not carry must be imported as NULL (a field the core
+	// cleared), where a v1 file's absent column means "keep the default".
+	keyFromV2 = "_lsync_from_v2"
+)
+
 // timeLayout is the canonical timestamp form in files: UTC, fixed nine
 // fractional digits. Fixed width matters — merge3.StrategyMax compares
 // timestamps as strings, which is only correct when every value has the same
@@ -197,8 +215,9 @@ func argsFromDoc(t *Table, doc map[string]any) (rowArgs, error) {
 	for _, c := range t.Columns {
 		known[c.Name] = c
 	}
+	fromV2 := doc[keyFromV2] == true
 	for k, v := range doc {
-		if k == keyVersion || k == keyTable {
+		if k == keyVersion || k == keyTable || k == keyFromV2 {
 			continue
 		}
 		c, ok := known[k]
@@ -218,6 +237,17 @@ func argsFromDoc(t *Table, doc map[string]any) (rowArgs, error) {
 	id, ok := ra.values[idColumn].(string)
 	if !ok || id == "" {
 		return rowArgs{}, fmt.Errorf("%s: document has no string id", t.Name)
+	}
+	if fromV2 {
+		for _, c := range t.Columns {
+			if _, present := ra.values[c.Name]; present || !c.Nullable {
+				continue
+			}
+			if _, vol := volatileColumns[c.Name]; vol {
+				continue
+			}
+			ra.values[c.Name] = nil // cleared by the core: v2 omits nulls
+		}
 	}
 	return ra, nil
 }
@@ -294,6 +324,10 @@ func toSQLValue(c Column, v any) (any, error) {
 
 // encodeDoc renders a document (plus preserved extras) canonically.
 func encodeDoc(doc map[string]any, extra map[string]any) ([]byte, error) {
+	if _, marked := doc[keyFromV2]; marked {
+		doc = maps.Clone(doc)
+		delete(doc, keyFromV2)
+	}
 	if len(extra) == 0 {
 		return canonjson.Encode(doc)
 	}
@@ -320,8 +354,8 @@ func decodeDoc(b []byte) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("lsync: bad %s: %w", keyVersion, err)
 	}
-	if n > FormatVersion {
-		return nil, fmt.Errorf("%w (file _v=%d, this lore understands %d): upgrade lore", errNewerFormat, n, FormatVersion)
+	if n > formatV2 {
+		return nil, fmt.Errorf("%w (file _v=%d, this lore understands %d): upgrade lore", errNewerFormat, n, formatV2)
 	}
 	if n < 1 {
 		return nil, fmt.Errorf("lsync: bad %s %d", keyVersion, n)
@@ -329,12 +363,33 @@ func decodeDoc(b []byte) (map[string]any, error) {
 	return upcast(doc, n)
 }
 
-// upcast converts older file versions to FormatVersion in memory. There is
-// only version 1 today; this is the single place future migrations hook in
-// (E25), so branches still carrying old-format files keep importing.
+// upcast converts a file's version to FormatVersion in memory; this is the
+// single place format changes hook in (E25).
+//
+// A v2 document (the 0.1.18 core's) reads as v1: its underscore envelope
+// keys (_hlc, _o and any unknown "_" key) are dropped, since lore.db has no
+// column for them and the core keeps them in the file; a tombstone
+// ("_deleted": true) reads as a nil document, which the import treats like
+// a deleted file (the row leaves lore.db). The document is marked
+// keyFromV2 so argsFromDoc imports absent nullable columns as NULL.
 func upcast(doc map[string]any, from int64) (map[string]any, error) {
-	if from == FormatVersion {
+	switch from {
+	case FormatVersion:
 		return doc, nil
+	case formatV2:
+		if doc[keyDeleted] == true {
+			return nil, nil
+		}
+		out := make(map[string]any, len(doc))
+		for k, v := range doc {
+			if strings.HasPrefix(k, "_") && k != keyTable {
+				continue
+			}
+			out[k] = v
+		}
+		out[keyVersion] = json.Number("1")
+		out[keyFromV2] = true
+		return out, nil
 	}
 	return nil, fmt.Errorf("lsync: no upcaster from _v=%d", from)
 }

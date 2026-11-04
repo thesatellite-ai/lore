@@ -62,7 +62,7 @@ $ lore memory add --body 'The client replies faster on WhatsApp than email'
   scope: [master]
 lore sync: exported 1
 lore sync: 4 file(s) in .lore/data not committed — commit them with your change
-$ lore memory add --body 'The staging site is reset every Monday morning' --tag staging
+$ lore memory add --body 'The staging site is reset every Monday morning'
 ✓ mem_05e9…4603 
   scope: [master]
 lore sync: exported 1
@@ -192,7 +192,7 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 <!-- example: knowledge#delete only=2,3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_b4f4…a5b0 --confirm
+$ lore memory delete mem_b4f4…a5b0 --yes
 ✓ mem_b4f4…a5b0 deleted (hard)
 lore sync: removed files 1
 lore sync: 8 file(s) in .lore/data not committed — commit them with your change
@@ -219,7 +219,7 @@ $ lore memory add --body 'The staging password is password=example-only' --allow
 lore sync: secret-detected memories/mem_28f8…03df.json: credential pattern password_pair found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
 $ ls .lore/data/memories | grep -c mem_28f8…03df || true
 0
-$ lore memory delete mem_28f8…03df --confirm
+$ lore memory delete mem_28f8…03df --yes
 lore sync: secret-detected memories/mem_28f8…03df.json: credential pattern password_pair found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
 ✓ mem_28f8…03df deleted (hard)
 ```

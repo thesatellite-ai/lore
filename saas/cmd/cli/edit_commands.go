@@ -15,7 +15,6 @@ import (
 	"dbent/gen/ent"
 	entDecision "dbent/gen/ent/decision"
 	entHotfix "dbent/gen/ent/hotfix"
-	entMemory "dbent/gen/ent/memory"
 	entRule "dbent/gen/ent/rule"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
@@ -723,80 +722,6 @@ func newPatternEditCommand() *cobra.Command {
 	bindScopeRebindFlags(cmd, &rebindRepo, &rebindMaster)
 	cmd.Flags().StringVar(&title, constants.FlagTitle, "", "new title")
 	cmd.Flags().StringVar(&body, constants.FlagBody, "", "new body")
-	return cmd
-}
-
-// ── memory ───────────────────────────────────────────────────────────────
-
-func newMemoryEditCommand() *cobra.Command {
-	var f commonFlags
-	var body, kind, source, sourceRef, rebindRepo string
-	var rebindMaster bool
-	cmd := &cobra.Command{
-		Use:   "edit <id>",
-		Short: "Edit memory fields (use `--supersedes` on add for audited body changes)",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := openForEdit(cmd, &f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			_prettyID, perr := resolvePrettyID(cmd.Context(), client, args[0])
-
-			if perr != nil {
-				return errcodes.New(errcodes.NotFound, perr.Error())
-			}
-
-			row, err := client.Memory.Get(cmd.Context(), _prettyID)
-			if err != nil {
-				return errcodes.New(errcodes.NotFound, fmt.Sprintf("memory %q not found", args[0]))
-			}
-			upd := client.Memory.UpdateOne(row)
-			ch := cmd.Flags().Changed
-			if ch(constants.FlagBody) {
-				v, err := editText("body", body)
-				if err != nil {
-					return err
-				}
-				upd.SetBody(v)
-			}
-			if ch(constants.FlagKind) {
-				k := entMemory.Kind(kind)
-				if entMemory.KindValidator(k) != nil {
-					return errcodes.New(errcodes.InvalidInput, "bad --kind "+kind)
-				}
-				upd.SetKind(k)
-			}
-			if ch(constants.FlagSource) {
-				upd.SetSourceKind(source)
-			}
-			if ch(constants.FlagSourceRef) {
-				upd.SetSourceRef(sourceRef)
-			}
-			reb, err := resolveScopeRebind(cmd, cmd.Context(), client, row.ProjectID, rebindRepo, rebindMaster)
-			if err != nil {
-				return err
-			}
-			if reb.set {
-				upd.SetRepoID(reb.repoID)
-			}
-			if reb.clear {
-				upd.ClearRepoID()
-			}
-			if _, err := upd.Save(cmd.Context()); err != nil {
-				return errcodes.New(errcodes.Internal, "update memory").WithCause(err)
-			}
-			fmt.Printf("%s %s updated\n", style.Success("✓"), row.ID)
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	bindScopeRebindFlags(cmd, &rebindRepo, &rebindMaster)
-	cmd.Flags().StringVar(&body, constants.FlagBody, "", "new body")
-	cmd.Flags().StringVar(&kind, constants.FlagKind, "", "core | retrieved | episodic | procedural | archival")
-	cmd.Flags().StringVar(&source, constants.FlagSource, "", "new source_kind")
-	cmd.Flags().StringVar(&sourceRef, constants.FlagSourceRef, "", "new source-ref")
 	return cmd
 }
 

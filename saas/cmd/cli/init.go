@@ -322,6 +322,12 @@ func ensureGitignore(ctx context.Context, projectRoot string) error {
 		".lore/lore.db.broken.*",
 		".lore/state/",
 		".lore/backups/",
+		// The 0.1.18 core's local files: the repo store's cache (never
+		// .lore/lore.db) and its lock, both rebuilt or recreated at will.
+		".lore/lore-cache.db",
+		".lore/lore-cache.db-shm",
+		".lore/lore-cache.db-wal",
+		".lore/lock",
 	}
 
 	existing := ""

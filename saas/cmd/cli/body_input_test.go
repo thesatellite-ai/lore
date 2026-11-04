@@ -23,7 +23,6 @@ func TestE2E_PositionalBodyIsRefused(t *testing.T) {
 	alice := w.newClone("alice")
 	alice.lore("init", "--non-interactive", "--name=app")
 	for _, args := range [][]string{
-		{"memory", "add", "use JWT"},
 		{"rule", "add", "--severity=must", "never force-push main"},
 		{"pattern", "add", "--title=t", "body text"},
 	} {
@@ -32,7 +31,13 @@ func TestE2E_PositionalBodyIsRefused(t *testing.T) {
 			t.Fatalf("lore %v: exit %d\n%s", args, r.code, r.stderr)
 		}
 	}
-	if r := alice.lore("memory", "add", "--body=use JWT"); !strings.Contains(r.stdout, "mem_") {
+	if r := alice.lore("rule", "add", "--body=use JWT"); !strings.Contains(r.stdout, "rul_") {
 		t.Fatalf("--body must work: %s", r.stdout)
+	}
+	// `lore memory add` is the 0.1.18 core's: it takes the text either way.
+	for _, args := range [][]string{{"memory", "add", "use JWT"}, {"memory", "add", "--body=use pgx"}} {
+		if r := alice.lore(args...); !strings.Contains(r.stdout, "mem_") {
+			t.Fatalf("lore %v: %s", args, r.stdout)
+		}
 	}
 }

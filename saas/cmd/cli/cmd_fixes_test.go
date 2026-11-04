@@ -168,7 +168,7 @@ func TestFix_SupersedesMarksTheOldRow(t *testing.T) {
 	cases := []kindCase{
 		{"decision", "dec", add("decision", "dec", "--title", "Payments", "--body", "Stripe.")},
 		{"rule", "rul", add("rule", "rul", "--body", "Run the tests")},
-		{"memory", "mem", add("memory", "mem", "--body", "The printer is upstairs")},
+		// memories are written by the 0.1.18 core, which has no --supersedes.
 		{"hotfix", "hfx", add("hotfix", "hfx", "--title", "Pin the driver", "--body", "v1.2 crashes")},
 		{"pattern", "pat", add("pattern", "pat", "--title", "Retry", "--body", "Back off")},
 	}
@@ -280,11 +280,14 @@ func TestFix_IdentitySetRefusesABareName(t *testing.T) {
 func TestFix_DoctorForgetsTheSecretOfADeletedRow(t *testing.T) {
 	_, c := initProject(t)
 	const secretBody = "Deploy key for staging: AKIAIOSFODNN7EXAMPLE"
-	id := idOf(t, c.lore("memory", "add", "--allow-secrets", "--body", secretBody).stdout, "mem")
-	if out := c.loreAny("doctor").stdout; !strings.Contains(out, "memories/"+id+".json") {
+	// A rule: the export refusal lives in the old lore.db → .lore/data path;
+	// memories are written by the 0.1.18 core, which never stores a
+	// refused secret in the first place.
+	id := idOf(t, c.lore("rule", "add", "--allow-secrets", "--body", secretBody).stdout, "rul")
+	if out := c.loreAny("doctor").stdout; !strings.Contains(out, "rules/"+id+".json") {
 		t.Fatalf("doctor must report the refused export while the row exists:\n%s", out)
 	}
-	c.lore("memory", "delete", id, "--confirm")
+	c.lore("rule", "delete", id, "--confirm")
 	if out := c.loreAny("doctor").stdout; strings.Contains(out, id) || strings.Contains(out, "credential pattern") {
 		t.Fatalf("doctor still warns about the deleted row:\n%s", out)
 	}

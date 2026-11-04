@@ -280,35 +280,21 @@ func addLinkedMemory(ctx context.Context, c *commonFlags, text, sourceKind, sour
 	if err := refuseSecrets(body); err != nil {
 		return "", err
 	}
-	// The memory lives where the task or mission it points at lives (a
-	// finding "inherits the mission's project", §7.2): never in a client
-	// repo for work coordinated in the store (D8).
+	// The memory is written by the 0.1.18 core (memory.add) into the repo
+	// store. v0.1.17 routed it to the store holding the task or mission
+	// (D8); old-store routing has no 0.1.18 home yet (phase 2 gap), so a
+	// lesson on a store task is refused rather than written to the wrong
+	// place.
 	to, err := rowHomeTo(ctx, sourceRef)
 	if err != nil {
 		return "", err
 	}
-	if _, err := routeWrite(ctx, c, to, kindMemory, body); err != nil {
-		return "", err
+	if to.To != "" {
+		return "", errcodes.New(errcodes.Unsupported, "a lesson or finding on a task that lives in a store cannot be saved yet").
+			WithHint("save it in the store's repo with `lore memory add --to <store>`")
 	}
-	rctx, client, err := resolveContext(c)
-	if err != nil {
-		return "", err
-	}
-	defer client.Close()
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
-	if err != nil {
-		return "", err
-	}
-	by, err := resolveCurrentActorID(ctx, client)
-	if err != nil {
-		return "", err
-	}
-	m, err := client.Memory.Create().SetProjectID(projectID).SetBody(body).SetKind(memoryKind("")).
-		SetSourceKind(sourceKind).SetSourceRef(sourceRef).SetCreatedByActorID(by).Save(ctx)
-	if err != nil {
-		return "", errcodes.New(errcodes.Internal, "create memory").WithCause(err)
-	}
-	return m.ID, nil
+	_ = c // the scope flags no longer apply: the core writes to the repo store
+	return coreAddMemory(ctx, body, sourceKind, sourceRef)
 }
 
 func newTaskCancelCommand() *cobra.Command {
@@ -364,9 +350,6 @@ func newTaskCancelCommand() *cobra.Command {
 	bindFromFlag(cmd, &from)
 	return cmd
 }
-
-// kindMemory is the routeWrite kind of lessons and findings.
-const kindMemory = "memory"
 
 // rowHomeTo is the --to that addresses the project holding row id: this
 // repo when the row is one of its own (live or branch data), else the

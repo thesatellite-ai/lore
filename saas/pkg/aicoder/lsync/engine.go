@@ -898,6 +898,9 @@ func validateRowFile(b []byte, table, id string) (string, string) {
 		}
 		return kind, err.Error()
 	}
+	if doc == nil {
+		return "", "" // a v2 tombstone (codec.go upcast): imported as a delete
+	}
 	if tbl, _ := doc[keyTable].(string); tbl != table {
 		return ErrKindInvalid, fmt.Sprintf("file says _table %q but lives in %s/", tbl, table)
 	}

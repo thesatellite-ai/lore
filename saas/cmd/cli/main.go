@@ -91,7 +91,6 @@ var flagColor string
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "auto", "color output: auto | always | never")
 	rootCmd.AddCommand(newInitCommand())
-	rootCmd.AddCommand(newMemoryCommand())
 	rootCmd.AddCommand(newRuleCommand())
 	rootCmd.AddCommand(newDecisionCommand())
 	rootCmd.AddCommand(newHotfixCommand())
@@ -149,6 +148,10 @@ func init() {
 	// Live rows (LORE_TEAM_SPEC F1–F8): --live/--no-live, land, live, and the
 	// pre-run hook. Last, so it sees every command registered above.
 	wireLive(rootCmd)
+	// The 0.1.18 core's nouns (memory, migrate) plus `lore api` and `lore
+	// spec`: after wireLive, which must not wrap the core's commands (they
+	// never touch lore.db).
+	mountCore(rootCmd)
 }
 
 func main() {
@@ -165,6 +168,9 @@ func main() {
 	// (LORE_TEAM_SPEC §3.2: committed and pushed at once).
 	if ferr := flushExternalProjects(context.Background()); ferr != nil && err == nil {
 		err = ferr
+	}
+	if code, printed := coreExitCode(err); printed {
+		os.Exit(code) // a core command already printed its error
 	}
 	if err != nil {
 		err = explainStorageError(err)

@@ -97,7 +97,8 @@ func Open(ctx context.Context, path string, reg *schema.Registry, exp Expander) 
 	return c, nil
 }
 
-// fileDSN builds the modernc DSN of a cache file (WAL, busy timeout). The
+// fileDSN builds the modernc DSN of a cache file (WAL, busy timeout,
+// immediate transactions). The
 // path is made absolute and URI-escaped, so a '?' or '#' in a folder name
 // cannot be read as DSN options.
 func fileDSN(path string) (string, error) {
@@ -110,6 +111,13 @@ func fileDSN(path string) (string, error) {
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "synchronous(NORMAL)")
 	q.Add("_pragma", "busy_timeout("+strconv.Itoa(busyTimeoutMS)+")")
+	// Every transaction here writes. A deferred one that reads first and
+	// then writes fails at once with SQLITE_BUSY_SNAPSHOT (517) when another
+	// process committed in between, and busy_timeout does not apply to
+	// that; BEGIN IMMEDIATE takes the write lock up front, so concurrent
+	// lore processes wait their turn instead (found by the old binary's
+	// concurrent-writers end-to-end test).
+	q.Add("_txlock", "immediate")
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }

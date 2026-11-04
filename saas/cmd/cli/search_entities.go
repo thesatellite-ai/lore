@@ -25,7 +25,6 @@ import (
 	entHandoff "dbent/gen/ent/handoff"
 	entHotfix "dbent/gen/ent/hotfix"
 	entIncident "dbent/gen/ent/incident"
-	entMemory "dbent/gen/ent/memory"
 	entMission "dbent/gen/ent/mission"
 	entPattern "dbent/gen/ent/pattern"
 	entPlan "dbent/gen/ent/plan"
@@ -104,40 +103,6 @@ func trunc(s string, n int) string {
 		return s
 	}
 	return s[:n-3] + "..."
-}
-
-// ── memory ───────────────────────────────────────────────────────────────
-
-func newMemorySearchFTSCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across memory body + source_ref + kind + source_kind",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityMemory.FTSEntity(), constants.EntityMemory.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Memory.Query().Where(entMemory.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch memory").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, m := range rows {
-						out = append(out, entitySearchHit{
-							ID: m.ID, Row: map[string]any{
-								"body": m.Body, "kind": string(m.Kind),
-								"source_kind": m.SourceKind, "trust_score": m.TrustScore,
-							},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					return fmt.Sprintf("%s %s", h.ID, trunc(h.Row.(map[string]any)["body"].(string), 80))
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
 }
 
 // ── rule ─────────────────────────────────────────────────────────────────

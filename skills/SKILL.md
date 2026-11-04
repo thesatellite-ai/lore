@@ -464,8 +464,8 @@ lore render
 | "archive mem_<id>" / "stop showing mem_<id>" | `lore memory archive mem_<id>` (works for every entity: rule, decision, hotfix, pattern, playbook, prompt, project, repo) |
 | "unarchive mem_<id>" | `lore memory unarchive mem_<id>` |
 | "mem_<id> is no longer true as of today" (bitemporal — keep history) | `lore memory invalidate mem_<id>` (sets `valid_until=now`; preferred over archive when you want to remember WHEN it became wrong) |
-| "supersede mem_<id> with new memory X" | `lore memory add --body="X" --supersedes=mem_<id>` (preserves chain) |
-| "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit mem_<id> --body="..."` (no chain — use `--supersedes` instead if audit trail matters) |
+| "supersede mem_<id> with new memory X" | `lore memory add --body="X"` then `lore memory archive mem_<id>` (memories have no `--supersedes` chain in 0.1.18; rules, decisions, hotfixes and patterns still do) |
+| "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit mem_<id> --body="..."` (every edit is kept in git history and the audit log) |
 | "archive project PRJ-X" / "retire repo REP-Y" | `lore project archive PRJ-X` / `lore repo archive REP-Y` |
 
 ### Directive (lock the file against agent drift)

@@ -95,6 +95,13 @@ var liveSkipPrefixes = []string{
 	BinaryName + " identity",
 	BinaryName + " whoami",
 	BinaryName + " org",
+	// The 0.1.18 core's commands (core_mount.go): they write row files
+	// through the new engine, never lore.db or the live ref.
+	BinaryName + " memory",
+	BinaryName + " migrate",
+	BinaryName + " api",
+	BinaryName + " spec",
+	BinaryName + " stores",
 }
 
 // liveReadVerbs never write rows, so they run even when the live ref is

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"dbent/gen/ent"
-	entMemory "dbent/gen/ent/memory"
 	entMission "dbent/gen/ent/mission"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
@@ -209,26 +208,6 @@ func newDeleteCommand(t archiveTarget) *cobra.Command {
 
 // ── per-entity targets ──────────────────────────────────────────────────
 
-var memoryArchiveTarget = archiveTarget{
-	label: "memory",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.Memory.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.ID, nil
-	},
-	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
-		return c.Memory.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
-	},
-	unArch: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Memory.UpdateOneID(id).ClearArchivedAt().Exec(ctx)
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Memory.DeleteOneID(id).Exec(ctx)
-	},
-}
-
 var ruleArchiveTarget = archiveTarget{
 	label: "rule",
 	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
@@ -387,155 +366,6 @@ var repoArchiveTarget = archiveTarget{
 	del: func(ctx context.Context, c *ent.Client, id string) error {
 		return c.Repo.DeleteOneID(id).Exec(ctx)
 	},
-}
-
-// ── memory list / show / invalidate (A + G) ────────────────────────────
-
-func newMemoryListCommand() *cobra.Command {
-	var f commonFlags
-	var scope repoScopeFlags
-	var jsonOut, includeArchived bool
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List memories (active by default; pass --archived to include)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rctx, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
-			if err != nil {
-				return err
-			}
-			repoID, err := resolveRepoID(cmd.Context(), client, projectID, rctx.RepoMount)
-			if err != nil {
-				return err
-			}
-			q := client.Memory.Query().Where(entMemory.ProjectID(projectID))
-			switch resolveRepoScope(scope, repoID) {
-			case scopeAll:
-			case scopeMasterOnly:
-				q = q.Where(entMemory.RepoIDIsNil())
-			case scopeRepoOnly:
-				q = q.Where(entMemory.RepoID(repoID))
-			case scopeInherit:
-				q = q.Where(entMemory.Or(entMemory.RepoID(repoID), entMemory.RepoIDIsNil()))
-			}
-			if !includeArchived {
-				q = q.Where(entMemory.ArchivedAtIsNil())
-			}
-			rows, err := q.Order(ent.Asc(entMemory.FieldID)).All(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "list memories").WithCause(err)
-			}
-			// Store, global and personal rows (F20) follow the repo's own,
-			// each with its source label.
-			if jsonOut {
-				data := withExternalJSON(cmd.Context(), rows, tblMemoriesName)
-				printJSON(constants.KindMemoryList, data, len(data))
-				return nil
-			}
-			if len(rows) == 0 {
-				if printExternalHere(cmd.Context(), tblMemoriesName) == 0 {
-					fmt.Println(style.Muted("(no memories)"))
-				}
-				return nil
-			}
-			defer printExternalHere(cmd.Context(), tblMemoriesName)
-			for _, m := range rows {
-				body := m.Body
-				if len(body) > 80 {
-					body = body[:77] + "..."
-				}
-				badge := ""
-				if m.ArchivedAt != nil {
-					badge = style.Muted(" [archived]")
-				}
-				fmt.Printf("%s [%s] %s%s\n", m.ID, m.Kind, body, badge)
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	bindRepoScopeFlags(cmd, &scope)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	cmd.Flags().BoolVar(&includeArchived, constants.FlagArchived, false, "include archived memories")
-	return cmd
-}
-
-func newMemoryShowCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use:   "show <id>",
-		Short: "Show memory details",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			r, err := client.Memory.Get(cmd.Context(), args[0])
-			if err != nil {
-				return errcodes.New(errcodes.NotFound, fmt.Sprintf("memory %q not found", args[0]))
-			}
-			if jsonOut {
-				printJSON(constants.KindMemoryShow, r, 0)
-				return nil
-			}
-			fmt.Printf("%s\n", style.Code(r.ID))
-			fmt.Printf("  kind:   %s\n", r.Kind)
-			fmt.Printf("  trust:  %.2f\n", r.TrustScore)
-			fmt.Printf("  source: %s\n", r.SourceKind)
-			if r.SupersededByID != nil {
-				fmt.Printf("  superseded-by: %s\n", *r.SupersededByID)
-			}
-			if r.ArchivedAt != nil {
-				fmt.Printf("  archived-at: %s\n", r.ArchivedAt.Format(time.RFC3339))
-			}
-			if r.ValidUntil != nil && !r.ValidUntil.IsZero() {
-				fmt.Printf("  valid-until: %s\n", r.ValidUntil.Format(time.RFC3339))
-			}
-			fmt.Println()
-			fmt.Println(r.Body)
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
-
-func newMemoryInvalidateCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use:   "invalidate <id>",
-		Short: "Mark a memory invalid as of now (bitemporal: sets valid_until)",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
-			}
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			r, err := client.Memory.Get(cmd.Context(), args[0])
-			if err != nil {
-				return errcodes.New(errcodes.NotFound, fmt.Sprintf("memory %q not found", args[0]))
-			}
-			if err := client.Memory.UpdateOneID(r.ID).SetValidUntil(cliClock().Now()).Exec(cmd.Context()); err != nil {
-				return errcodes.New(errcodes.Internal, "invalidate memory").WithCause(err)
-			}
-			fmt.Printf("%s %s invalidated (valid_until=now)\n", style.Success("✓"), r.ID)
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	return cmd
 }
 
 // ── mission pause / resume (E) ──────────────────────────────────────────

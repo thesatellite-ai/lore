@@ -127,13 +127,14 @@ func TestRepairSupersedesOldShapeRowsTwice(t *testing.T) {
 	const project = "prj_01a10237c9a279ee94a32b8450dfb6f9"
 	t0 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
 
-	// Old shape, as an older `memory add --supersedes` wrote it: the NEW
-	// memory carries the link to the old one; the old one has none.
-	oldMem, err := c.Memory.Create().SetProjectID(project).SetBody("the printer is downstairs").SetSourceKind("manual").SetCreatedAt(t0).Save(ctx)
+	// Old shape (rules stand in for memories, which the 0.1.18 core now
+	// writes), as an older `rule add --supersedes` wrote it: the NEW
+	// rule carries the link to the old one; the old one has none.
+	oldMem, err := c.Rule.Create().SetProjectID(project).SetBody("the printer is downstairs").SetSourceKind("manual").SetCreatedAt(t0).Save(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	newMem, err := c.Memory.Create().SetProjectID(project).SetBody("the printer is upstairs").SetSourceKind("manual").SetCreatedAt(t0.Add(time.Hour)).SetSupersededByID(oldMem.ID).Save(ctx)
+	newMem, err := c.Rule.Create().SetProjectID(project).SetBody("the printer is upstairs").SetSourceKind("manual").SetCreatedAt(t0.Add(time.Hour)).SetSupersededByID(oldMem.ID).Save(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -598,11 +598,23 @@ func TestUC_MiscLearnStatus(t *testing.T) {
 	}
 }
 
+// addMemory adds a memory through the 0.1.18 core (`lore memory add`,
+// ops/memory) and returns its id; old commands see it in lore.db after the
+// lsync import of the row file.
+func (c *clone) addMemory(body string) string {
+	c.w.t.Helper()
+	id := idPattern.FindString(c.lore("memory", "add", "--body", body).stdout)
+	if id == "" {
+		c.w.t.Fatal("memory add printed no id")
+	}
+	return id
+}
+
 // ── tier-3 repair ───────────────────────────────────────────────────────
 
 func TestUC_MiscRepairTier3(t *testing.T) {
 	_, c := initProject(t)
-	c.addMemory("kept in the broken copy")
+	c.addRow("kept in the broken copy")
 	dbPath := filepath.Join(c.dir, ".lore", "lore.db")
 	if r := c.loreAny("repair", "--tier=3"); r.code == 0 || !strings.Contains(r.stderr, "--confirm") {
 		t.Fatalf("repair without --confirm must refuse: %d %s", r.code, r.stderr)
@@ -618,7 +630,7 @@ func TestUC_MiscRepairTier3(t *testing.T) {
 	if err != nil || len(broken) != 1 {
 		t.Fatalf("broken copy: %v %v", broken, err)
 	}
-	if n := countRows(t, broken[0], `SELECT COUNT(*) FROM memories WHERE body = 'kept in the broken copy'`); n != 1 {
+	if n := countRows(t, broken[0], `SELECT COUNT(*) FROM rules WHERE body = 'kept in the broken copy'`); n != 1 {
 		t.Fatalf("the previous DB must be kept intact: %d", n)
 	}
 	if n := countRows(t, dbPath, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'`); n != 0 {
@@ -736,16 +748,16 @@ func TestUC_MiscRunStepSequence(t *testing.T) {
 // `lore sync conflicts` prints each saved version indented under its row.
 func TestUC_MiscSyncConflictsTextIndents(t *testing.T) {
 	_, c := initProject(t)
-	mem := c.addMemory("v1")
+	mem := c.addRow("v1")
 	backup := filepath.Join(t.TempDir(), "before.sqlite")
 	c.lore("backup", "--out", backup)
-	c.lore("memory", "edit", mem, "--body", "v2 after backup")
+	c.lore("rule", "edit", mem, "--body", "v2 after backup")
 	c.lore("restore", backup, "--confirm", "--prefer", "newest")
 	// The adopt pass that records the clash runs as part of the next
 	// ordinary command (`sync conflicts` itself only lists).
-	c.lore("memory", "list")
+	c.lore("rule", "list")
 	out := c.lore("sync", "conflicts").stdout
-	if !strings.Contains(out, "memories/"+mem) {
+	if !strings.Contains(out, "rules/"+mem) {
 		t.Fatalf("expected a saved version for %s:\n%s", mem, out)
 	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")

@@ -31,8 +31,7 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Attach task to mission | `lore task add "<t>" --tasklist=<tlt_id> --mission=<msn_id>` |
 | Attach task to plan | `lore task add "<t>" --tasklist=<tlt_id> --plan=<pln_id>` |
 | Assign task to an actor | `lore task add "<t>" --tasklist=<tlt_id> --assigned-to=<act_id>` |
-| Supersede a memory/rule/decision/hotfix/pattern | `lore <kind> add ... --supersedes=<old_id>` |
-| Mark a memory as validated by an actor | `lore memory add ... --validated-by=<act_id>` |
+| Supersede a rule/decision/hotfix/pattern | `lore <kind> add ... --supersedes=<old_id>` (a memory: add the new one, archive the old) |
 | Authored-by override (any entity) | `--created-by=<act_id>` (defaults to current identity) |
 | Move task to another tasklist | `lore task edit <id> --tasklist=<tlt_id>` |
 | Reassign task | `lore task edit <id> --assigned-to=<act_id>` |

@@ -39,6 +39,12 @@ tasks:
       - CGO_ENABLED=0 go build -trimpath -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.LORE_BIN}} ./saas/cmd/cli
       - echo "Built {{.LORE_BIN}} ({{.VERSION}})"
 
+  spec:
+    desc: "Regenerate docs/reference/cli-commands.md and openapi.json from the 0.1.18 operation registry (the wire drift test fails until this is run). Runs the binary from a temp folder so it never touches this repo's hooks"
+    deps: [build]
+    cmds:
+      - cd "$(mktemp -d)" && {{.LORE_BIN}} spec docs --out {{.ROOT_DIR}}/docs/reference && {{.LORE_BIN}} spec openapi --out {{.ROOT_DIR}}/docs/reference
+
   build:debug:
     desc: "Build aicoder with debug symbols"
     cmds:

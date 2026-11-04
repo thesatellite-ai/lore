@@ -372,11 +372,9 @@ func newLearnPromoteCommand() *cobra.Command {
 
 			switch tk {
 			case "memories":
-				_, err = client.Memory.Create().
-					SetProjectID(projectID).
-					SetBody(candidate.ProposedBody).
-					SetSourceKind(candidate.SourceKind.String()).
-					Save(cmd.Context())
+				// Written by the 0.1.18 core (memory.add): memories are
+				// row files of the new engine, never lore.db rows.
+				_, err = coreAddMemory(cmd.Context(), candidate.ProposedBody, candidate.SourceKind.String(), "")
 			default:
 				return errcodes.New(errcodes.NotImplemented,
 					fmt.Sprintf("promote target %q not yet supported in v0.1", tk)).

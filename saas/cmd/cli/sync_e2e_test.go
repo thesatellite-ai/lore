@@ -200,10 +200,13 @@ func (c *clone) commitAll(msg string) {
 
 var idPattern = regexp.MustCompile(`[a-z]{3}_[0-9a-f]{32}`)
 
-// addMemory creates a memory and returns its id.
-func (c *clone) addMemory(body string) string {
+// addRow creates a row of the old lore.db path (a rule) and returns its
+// id. These tests exercise the v0.1.17 sync engine (lore.db ↔ .lore/data);
+// memories moved to the 0.1.18 core in phase 2 and no longer pass through
+// lore.db's write path, so rules are the vehicle row now.
+func (c *clone) addRow(body string) string {
 	c.w.t.Helper()
-	r := c.lore("memory", "add", "--body", body)
+	r := c.lore("rule", "add", "--body", body)
 	id := idPattern.FindString(r.stdout)
 	if id == "" {
 		c.w.t.Fatalf("no id in %q", r.stdout)
@@ -221,9 +224,10 @@ func (c *clone) addRule(body string) string {
 	return id
 }
 
-func (c *clone) memories() string {
+// rows lists the vehicle rows (see addRow).
+func (c *clone) rows() string {
 	c.w.t.Helper()
-	return c.lore("memory", "list").stdout
+	return c.lore("rule", "list").stdout
 }
 
 func (c *clone) dataFile(table, id string) string {
@@ -267,7 +271,7 @@ func TestE2E_InitBootstrapFreshCloneAdopt(t *testing.T) {
 	if !strings.Contains(r.stderr, "exported") {
 		t.Fatalf("init did not bootstrap: %s", r.stderr)
 	}
-	mem := alice.addMemory("use JWT for auth")
+	mem := alice.addRow("use JWT for auth")
 	for _, p := range []string{".lore/data/_meta.json", ".gitattributes"} {
 		if _, err := os.Stat(filepath.Join(alice.dir, p)); err != nil {
 			t.Fatalf("%s missing: %v", p, err)
@@ -286,10 +290,10 @@ func TestE2E_InitBootstrapFreshCloneAdopt(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(bob.dir, ".lore", "lore.db")); err == nil {
 		t.Fatal("clone must not ship a lore.db")
 	}
-	if out := bob.memories(); !strings.Contains(out, "use JWT for auth") {
+	if out := bob.rows(); !strings.Contains(out, "use JWT for auth") {
 		t.Fatalf("fresh clone did not import: %s", out)
 	}
-	if bob.readDoc("memories", mem)["body"] != "use JWT for auth" {
+	if bob.readDoc("rules", mem)["body"] != "use JWT for auth" {
 		t.Fatal("file content changed by the fresh clone")
 	}
 	if out, _ := bob.tryGit("status", "--porcelain", "--", ".lore/data"); out != "" {
@@ -305,22 +309,22 @@ func TestE2E_BranchesFollowAndMerge(t *testing.T) {
 	alice.commitAll("lore")
 	alice.git("push", "-q")
 	bob := w.newClone("bob")
-	bob.memories()
+	bob.rows()
 
 	bob.git("checkout", "-q", "-b", "feature/b")
-	bob.addMemory("bob knowledge")
+	bob.addRow("bob knowledge")
 	bob.commitAll("bob")
-	alice.addMemory("alice knowledge")
+	alice.addRow("alice knowledge")
 	alice.commitAll("alice")
 	alice.git("push", "-q")
 
 	bob.git("checkout", "-q", "main")
-	if strings.Contains(bob.memories(), "bob knowledge") {
+	if strings.Contains(bob.rows(), "bob knowledge") {
 		t.Fatal("feature knowledge visible on main before merge")
 	}
 	bob.git("pull", "-q")
 	bob.git("merge", "-q", "--no-edit", "feature/b")
-	out := bob.memories()
+	out := bob.rows()
 	if !strings.Contains(out, "bob knowledge") || !strings.Contains(out, "alice knowledge") {
 		t.Fatalf("merge lost knowledge: %s", out)
 	}
@@ -396,15 +400,15 @@ func TestE2E_NoDriverIsVisibleTextConflict(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	mem := c.addMemory("base")
+	mem := c.addRow("base")
 	c.commitAll("base")
 	c.git("checkout", "-q", "-b", "feat")
-	c.writeDocField("memories", mem, "body", "theirs")
+	c.writeDocField("rules", mem, "body", "theirs")
 	c.lore("sync")
 	c.commitAll("t")
 	c.git("checkout", "-q", "main")
 	c.lore("sync")
-	c.writeDocField("memories", mem, "body", "ours")
+	c.writeDocField("rules", mem, "body", "ours")
 	c.lore("sync")
 	c.commitAll("o")
 	c.git("config", "--remove-section", "merge.lore") // GitHub knows no custom drivers
@@ -414,7 +418,7 @@ func TestE2E_NoDriverIsVisibleTextConflict(t *testing.T) {
 	c.git("checkout", "--theirs", "--", ".lore/data")
 	c.git("add", "-A")
 	c.git("commit", "-qm", "take theirs")
-	if !strings.Contains(c.memories(), "theirs") {
+	if !strings.Contains(c.rows(), "theirs") {
 		t.Fatal("taken side not imported")
 	}
 	if v := c.git("config", "--get", "merge.lore.driver"); v == "" {
@@ -429,11 +433,11 @@ func TestE2E_RevertTrashRestore(t *testing.T) {
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
 	c.commitAll("base")
-	mem := c.addMemory("temporary")
+	mem := c.addRow("temporary")
 	c.commitAll("add")
 	c.git("revert", "--no-edit", "HEAD")
 	r := c.lore("sync")
-	if !strings.Contains(r.stderr, "trashed rows 1") || strings.Contains(c.memories(), "temporary") {
+	if !strings.Contains(r.stderr, "trashed rows 1") || strings.Contains(c.rows(), "temporary") {
 		t.Fatalf("revert not applied: %s", r.stderr)
 	}
 	trash := c.lore("sync", "trash", "--json").stdout
@@ -441,10 +445,10 @@ func TestE2E_RevertTrashRestore(t *testing.T) {
 		t.Fatalf("trash missing row: %s", trash)
 	}
 	c.lore("sync", "trash", "restore", "1")
-	if !strings.Contains(c.memories(), "temporary") {
+	if !strings.Contains(c.rows(), "temporary") {
 		t.Fatal("restore failed")
 	}
-	if _, err := os.Stat(c.dataFile("memories", mem)); err != nil {
+	if _, err := os.Stat(c.dataFile("rules", mem)); err != nil {
 		t.Fatal("restored row not exported")
 	}
 }
@@ -487,7 +491,7 @@ func TestE2E_SyncDisabled(t *testing.T) {
 	c := w.newClone("solo")
 	c.env = []string{"LORE_SYNC=0"}
 	c.lore("init", "--non-interactive", "--name=app")
-	c.addMemory("x")
+	c.addRow("x")
 	if _, err := os.Stat(filepath.Join(c.dir, ".lore", "data")); !os.IsNotExist(err) {
 		t.Fatal("LORE_SYNC=0 must not create .lore/data")
 	}
@@ -503,7 +507,7 @@ func TestE2E_ExistingDBsRollout(t *testing.T) {
 	alice := w.newClone("alice")
 	alice.env = []string{"LORE_SYNC=0"}
 	alice.lore("init", "--non-interactive", "--name=app")
-	alice.addMemory("alice old knowledge")
+	alice.addRow("alice old knowledge")
 	alice.git("add", "-A")
 	alice.git("commit", "-qm", "gitignore")
 	alice.git("push", "-q")
@@ -511,10 +515,10 @@ func TestE2E_ExistingDBsRollout(t *testing.T) {
 	bob := w.newClone("bob")
 	bob.env = []string{"LORE_SYNC=0"}
 	bob.lore("init", "--non-interactive", "--name=app")
-	bobOld := bob.addMemory("bob old knowledge")
+	bobOld := bob.addRow("bob old knowledge")
 
 	alice.env = nil // upgrade: sync on
-	r := alice.lore("memory", "list")
+	r := alice.lore("rule", "list")
 	if !strings.Contains(r.stderr, "exported") {
 		t.Fatalf("alice did not bootstrap: %s", r.stderr)
 	}
@@ -523,12 +527,12 @@ func TestE2E_ExistingDBsRollout(t *testing.T) {
 
 	bob.env = nil
 	bob.git("pull", "-q")
-	r = bob.lore("memory", "list")
+	r = bob.lore("rule", "list")
 	if !strings.Contains(r.stderr, "adopted") || !strings.Contains(r.stdout, "alice old knowledge") || !strings.Contains(r.stdout, "bob old knowledge") {
 		t.Fatalf("bob adopt failed:\nstdout %s\nstderr %s", r.stdout, r.stderr)
 	}
-	aliceProject := alice.readDoc("memories", idPattern.FindString(alice.lore("memory", "list").stdout))["project_id"]
-	if bob.readDoc("memories", bobOld)["project_id"] != aliceProject {
+	aliceProject := alice.readDoc("rules", idPattern.FindString(alice.lore("rule", "list").stdout))["project_id"]
+	if bob.readDoc("rules", bobOld)["project_id"] != aliceProject {
 		t.Fatal("bob's rows not re-pointed to the shared project")
 	}
 	if !strings.Contains(r.stderr, "pre-sync.sqlite") {
@@ -541,14 +545,14 @@ func TestE2E_RestorePreferDB(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	mem := c.addMemory("before backup")
+	mem := c.addRow("before backup")
 	backup := filepath.Join(c.dir, "snap.sqlite")
 	c.lore("backup", "--out", backup)
-	c.writeDocField("memories", mem, "body", "after backup")
+	c.writeDocField("rules", mem, "body", "after backup")
 	c.lore("sync")
 	c.lore("restore", backup, "--confirm", "--prefer", "db")
 	c.lore("sync")
-	if c.readDoc("memories", mem)["body"] != "before backup" {
+	if c.readDoc("rules", mem)["body"] != "before backup" {
 		t.Fatal("restore --prefer db did not win")
 	}
 }
@@ -575,9 +579,9 @@ func TestE2E_SecretNotExported(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	r := c.lore("memory", "add", "--allow-secrets", "--body", "aws key AKIAIOSFODNN7EXAMPLE")
+	r := c.lore("rule", "add", "--allow-secrets", "--body", "aws key AKIAIOSFODNN7EXAMPLE")
 	id := idPattern.FindString(r.stdout)
-	if _, err := os.Stat(c.dataFile("memories", id)); !os.IsNotExist(err) {
+	if _, err := os.Stat(c.dataFile("rules", id)); !os.IsNotExist(err) {
 		t.Fatal("secret exported to a git-tracked file")
 	}
 	if !strings.Contains(r.stderr, "secret-detected") {
@@ -597,13 +601,13 @@ func TestE2E_PostMergeHookImports(t *testing.T) {
 	alice.commitAll("lore")
 	alice.git("push", "-q")
 	bob := w.newClone("bob")
-	bob.memories()
-	alice.addMemory("pulled by hook")
+	bob.rows()
+	alice.addRow("pulled by hook")
 	alice.commitAll("m")
 	alice.git("push", "-q")
 	bob.git("pull", "-q")
 	bob.env = []string{"LORE_SYNC=0"} // read the cache without a sync pass
-	if !strings.Contains(bob.memories(), "pulled by hook") {
+	if !strings.Contains(bob.rows(), "pulled by hook") {
 		t.Fatal("post-merge hook did not import")
 	}
 }
@@ -613,7 +617,7 @@ func TestE2E_DoctorAndStatus(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	c.addMemory("x")
+	c.addRow("x")
 	r := c.loreAny("doctor", "--json")
 	var rep struct {
 		Status string `json:"status"`
@@ -635,12 +639,12 @@ func TestE2E_DoctorAndStatus(t *testing.T) {
 		t.Fatalf("fresh project must be healthy: %s %d %v", rep.Status, r.code, rep.Warnings)
 	}
 	// A broken file degrades.
-	mem := idPattern.FindString(c.lore("memory", "list").stdout)
-	if err := os.WriteFile(c.dataFile("memories", mem), []byte("{broken"), 0o644); err != nil {
+	mem := idPattern.FindString(c.lore("rule", "list").stdout)
+	if err := os.WriteFile(c.dataFile("rules", mem), []byte("{broken"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	r2 := c.loreAny("doctor", "--json")
-	if r2.code != 1 || !strings.Contains(r2.stdout, "lore file memories/") {
+	if r2.code != 1 || !strings.Contains(r2.stdout, "lore file rules/") {
 		t.Fatalf("broken file must degrade doctor: %d %s", r2.code, r2.stdout)
 	}
 	// The [sync] file-error list is exactly what the warnings report.
@@ -652,7 +656,7 @@ func TestE2E_DoctorAndStatus(t *testing.T) {
 		} `json:"sync"`
 	}
 	if err := json.Unmarshal([]byte(r2.stdout), &broken); err != nil || len(broken.Sync.FileErrors) != 1 ||
-		broken.Sync.FileErrors[0].Path != "memories/"+mem+".json" {
+		broken.Sync.FileErrors[0].Path != "rules/"+mem+".json" {
 		t.Fatalf("file_errors = %+v (%v)", broken.Sync.FileErrors, err)
 	}
 	st := c.lore("sync", "status", "--json").stdout
@@ -666,13 +670,13 @@ func TestE2E_ReadOnly(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	mem := c.addMemory("x")
-	c.writeDocField("memories", mem, "body", "edited in file")
+	mem := c.addRow("x")
+	c.writeDocField("rules", mem, "body", "edited in file")
 	c.env = []string{"LORE_READ_ONLY=1"}
-	if !strings.Contains(c.memories(), "edited in file") {
+	if !strings.Contains(c.rows(), "edited in file") {
 		t.Fatal("read-only must still import")
 	}
-	if r := c.loreAny("memory", "add", "--body", "nope"); r.code == 0 {
+	if r := c.loreAny("rule", "add", "--body", "nope"); r.code == 0 {
 		t.Fatal("read-only must refuse writes")
 	}
 }
@@ -684,13 +688,13 @@ func TestE2E_PeekOtherBranch(t *testing.T) {
 	c.lore("init", "--non-interactive", "--name=app")
 	c.commitAll("base")
 	c.git("checkout", "-q", "-b", "feature/x")
-	mem := c.addMemory("feature-only fact")
+	mem := c.addRow("feature-only fact")
 	c.commitAll("feature")
 	c.git("checkout", "-q", "main")
-	if strings.Contains(c.memories(), "feature-only fact") {
+	if strings.Contains(c.rows(), "feature-only fact") {
 		t.Fatal("feature row visible on main")
 	}
-	out := c.lore("sync", "peek", "feature/x", "memories").stdout
+	out := c.lore("sync", "peek", "feature/x", "rules").stdout
 	if !strings.Contains(out, mem) || !strings.Contains(out, "feature-only fact") {
 		t.Fatalf("peek: %s", out)
 	}
@@ -701,7 +705,7 @@ func TestE2E_PeekOtherBranch(t *testing.T) {
 	if r := c.loreAny("sync", "peek", "no-such-ref"); r.code == 0 {
 		t.Fatal("bad ref must fail")
 	}
-	if strings.Contains(c.memories(), "feature-only fact") {
+	if strings.Contains(c.rows(), "feature-only fact") {
 		t.Fatal("peek must not import")
 	}
 }
@@ -739,14 +743,14 @@ func TestE2E_DupesAndMergeRows(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	a := c.addMemory("Same Fact")
-	b := c.addMemory("same   fact")
+	a := c.addRow("Same Fact")
+	b := c.addRow("same   fact")
 	out := c.lore("sync", "dupes").stdout
 	if !strings.Contains(out, a) || !strings.Contains(out, b) {
 		t.Fatalf("dupes: %s", out)
 	}
-	c.lore("sync", "merge-rows", "memories", "--keep", a, "--drop", b)
-	if strings.Contains(c.memories(), b) {
+	c.lore("sync", "merge-rows", "rules", "--keep", a, "--drop", b)
+	if strings.Contains(c.rows(), b) {
 		t.Fatal("dropped row still listed")
 	}
 	if out := c.lore("sync", "dupes").stdout; !strings.Contains(out, "no duplicates") {
@@ -759,16 +763,16 @@ func TestE2E_Worktree(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	c.addMemory("in main worktree")
+	c.addRow("in main worktree")
 	c.commitAll("base")
 	wt := filepath.Join(filepath.Dir(c.dir), "wt")
 	c.git("worktree", "add", "-q", "-b", "wt-branch", wt)
 	other := &clone{w: w, dir: wt}
-	if !strings.Contains(other.memories(), "in main worktree") {
+	if !strings.Contains(other.rows(), "in main worktree") {
 		t.Fatal("worktree did not build its cache")
 	}
-	other.addMemory("only in worktree")
-	if strings.Contains(c.memories(), "only in worktree") {
+	other.addRow("only in worktree")
+	if strings.Contains(c.rows(), "only in worktree") {
 		t.Fatal("worktrees must not share an uncommitted cache")
 	}
 }
@@ -779,13 +783,13 @@ func TestE2E_StashRoundTrip(t *testing.T) {
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
 	c.commitAll("base")
-	c.addMemory("work in progress")
+	c.addRow("work in progress")
 	c.git("stash", "-u", "-q")
-	if strings.Contains(c.memories(), "work in progress") {
+	if strings.Contains(c.rows(), "work in progress") {
 		t.Fatal("stashed row still visible")
 	}
 	c.git("stash", "pop", "-q")
-	if !strings.Contains(c.memories(), "work in progress") {
+	if !strings.Contains(c.rows(), "work in progress") {
 		t.Fatal("popped row not back")
 	}
 }
@@ -795,11 +799,11 @@ func TestE2E_DeletedDBRebuilt(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	c.addMemory("survives")
+	c.addRow("survives")
 	for _, f := range []string{"lore.db", "lore.db-wal", "lore.db-shm"} {
 		_ = os.Remove(filepath.Join(c.dir, ".lore", f)) // sidecars may not exist
 	}
-	r := c.lore("memory", "list")
+	r := c.lore("rule", "list")
 	if !strings.Contains(r.stdout, "survives") || !strings.Contains(r.stderr, "built .lore/lore.db") {
 		t.Fatalf("not rebuilt: %s %s", r.stdout, r.stderr)
 	}
@@ -810,9 +814,9 @@ func TestE2E_PreCommitBlocksHandAddedSecret(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	mem := c.addMemory("clean")
+	mem := c.addRow("clean")
 	c.commitAll("base")
-	c.writeDocField("memories", mem, "body", "key AKIAIOSFODNN7EXAMPLE")
+	c.writeDocField("rules", mem, "body", "key AKIAIOSFODNN7EXAMPLE")
 	c.git("add", "-A")
 	if _, code := c.tryGit("commit", "-qm", "leak"); code == 0 {
 		t.Fatal("secret committed")
@@ -828,14 +832,14 @@ func TestE2E_LoreMDRerenderedAfterPull(t *testing.T) {
 	alice.commitAll("lore")
 	alice.git("push", "-q")
 	bob := w.newClone("bob")
-	bob.memories()
+	bob.rows()
 	// Alice commits the rule's DATA but not a re-rendered LORE.md: only
 	// bob's automatic re-render can put the rule into his LORE.md.
 	alice.addRule("must rule from alice")
 	alice.commitAll("rule")
 	alice.git("push", "-q")
 	bob.git("pull", "-q")
-	bob.memories()
+	bob.rows()
 	b, err := os.ReadFile(filepath.Join(bob.dir, ".lore", "LORE.md"))
 	if err != nil || !strings.Contains(string(b), "must rule from alice") {
 		t.Fatalf("LORE.md not re-rendered after import: %v\n%s", err, b)
@@ -862,7 +866,7 @@ func TestE2E_ConcurrentWriters(t *testing.T) {
 	for _, prefix := range []string{"A", "B"} {
 		go func(p string) {
 			for i := range perWriter {
-				if r := c.loreAny("memory", "add", "--body", fmt.Sprintf("%s-%d", p, i)); r.code != 0 {
+				if r := c.loreAny("rule", "add", "--body", fmt.Sprintf("%s-%d", p, i)); r.code != 0 {
 					errs <- r.stderr
 				}
 			}
@@ -876,7 +880,7 @@ func TestE2E_ConcurrentWriters(t *testing.T) {
 		t.Errorf("concurrent write failed: %s", e)
 	}
 	c.lore("sync")
-	entries, err := os.ReadDir(filepath.Join(c.dir, ".lore", "data", "memories"))
+	entries, err := os.ReadDir(filepath.Join(c.dir, ".lore", "data", "rules"))
 	if err != nil || len(entries) != 2*perWriter {
 		t.Fatalf("want %d row files, got %d (%v)", 2*perWriter, len(entries), err)
 	}
@@ -890,8 +894,8 @@ func TestE2E_SharedInitSearchAndNoSync(t *testing.T) {
 	c := w.newClone("solo")
 	shared := filepath.Join(filepath.Dir(c.dir), "shared.db")
 	c.lore("project", "shared-init", "--db="+shared, "--name=alpha")
-	c.lore("memory", "add", "--body", "alpha round-trip memory")
-	if out := c.lore("memory", "search", "round-trip").stdout; !strings.Contains(out, "alpha round-trip memory") {
+	c.lore("rule", "add", "--body", "alpha round-trip memory")
+	if out := c.lore("rule", "search", "round-trip").stdout; !strings.Contains(out, "alpha round-trip memory") {
 		t.Fatalf("search in a shared project: %s", out)
 	}
 	if _, err := os.Stat(filepath.Join(c.dir, ".lore", "data")); !os.IsNotExist(err) {
@@ -912,10 +916,10 @@ func TestE2E_PreCommitGuardsUnstagedFileInSubdirProject(t *testing.T) {
 	}
 	c := &clone{w: w, dir: svc}
 	c.lore("init", "--non-interactive", "--name=svc")
-	mem := c.addMemory("clean")
+	mem := c.addRow("clean")
 	repo.commitAll("base")
 	// The lore file gets a secret but stays UNSTAGED; only README is staged.
-	c.writeDocField("memories", mem, "body", "key AKIAIOSFODNN7EXAMPLE")
+	c.writeDocField("rules", mem, "body", "key AKIAIOSFODNN7EXAMPLE")
 	if err := os.WriteFile(filepath.Join(repo.dir, "README.md"), []byte("# changed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -933,7 +937,7 @@ func TestE2E_RestoreRejectsBadPreferBeforeTouchingDB(t *testing.T) {
 	c.lore("init", "--non-interactive", "--name=app")
 	backup := filepath.Join(c.dir, "snap.sqlite")
 	c.lore("backup", "--out", backup)
-	c.addMemory("after backup")
+	c.addRow("after backup")
 	before, err := os.ReadFile(filepath.Join(c.dir, ".lore", "lore.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -959,7 +963,7 @@ func TestE2E_TwoProjectsShareHooks(t *testing.T) {
 		}
 		(&clone{w: w, dir: dir}).lore("init", "--non-interactive", "--name="+name)
 	}
-	(&clone{w: w, dir: filepath.Join(repo.dir, "a")}).lore("memory", "list")
+	(&clone{w: w, dir: filepath.Join(repo.dir, "a")}).lore("rule", "list")
 	b, err := os.ReadFile(filepath.Join(repo.dir, ".git", "hooks", "pre-commit"))
 	if err != nil {
 		t.Fatal(err)
@@ -978,10 +982,10 @@ func TestE2E_AuditVerifyAndLog(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	mem := c.addMemory("audited")
+	mem := c.addRow("audited")
 	c.lore("audit", "verify")
 	log := c.lore("audit", "log", "--json").stdout
-	if !strings.Contains(log, `"memories.write"`) || !strings.Contains(log, mem) {
+	if !strings.Contains(log, `"rules.write"`) || !strings.Contains(log, mem) {
 		t.Fatalf("write not logged: %s", log)
 	}
 	db := filepath.Join(c.dir, ".lore", "lore.db")
@@ -993,12 +997,12 @@ func TestE2E_AuditVerifyAndLog(t *testing.T) {
 			t.Fatalf("tamper: %s", r.stderr)
 		}
 	}
-	tamper("UPDATE memories SET body = 'HACKED' WHERE id = '" + mem + "'")
+	tamper("UPDATE rules SET body = 'HACKED' WHERE id = '" + mem + "'")
 	if r := c.loreAny("audit", "verify"); r.code == 0 || !strings.Contains(r.stdout+r.stderr, "hash mismatch") {
 		t.Fatalf("tamper not detected: %d %s %s", r.code, r.stdout, r.stderr)
 	}
-	c.lore("memory", "list") // any command adopts the change, as an external write
-	if log := c.lore("audit", "log", "--json").stdout; !strings.Contains(log, `"memories.external-write"`) {
+	c.lore("rule", "list") // any command adopts the change, as an external write
+	if log := c.lore("audit", "log", "--json").stdout; !strings.Contains(log, `"rules.external-write"`) {
 		t.Fatalf("external write not recorded: %s", log)
 	}
 	if out := c.lore("audit", "verify").stdout; !strings.Contains(out, "outside lore and later recorded") {
@@ -1052,7 +1056,7 @@ func TestE2E_RepoIgnoreRuleCannotHideData(t *testing.T) {
 	if !strings.Contains(r.stderr, "re-included .lore/data") {
 		t.Fatalf("re-include not reported: %s", r.stderr)
 	}
-	alice.addMemory("survives a broad ignore rule")
+	alice.addRow("survives a broad ignore rule")
 	alice.commitAll("lore")
 	if out := alice.git("ls-files", ".lore/data/_meta.json"); out == "" {
 		t.Fatal("_meta.json was not committed")
@@ -1060,7 +1064,7 @@ func TestE2E_RepoIgnoreRuleCannotHideData(t *testing.T) {
 	alice.git("push", "-q")
 
 	bob := w.newClone("bob")
-	if out := bob.memories(); !strings.Contains(out, "survives a broad ignore rule") {
+	if out := bob.rows(); !strings.Contains(out, "survives a broad ignore rule") {
 		t.Fatalf("fresh clone did not import: %s", out)
 	}
 	if r := bob.lore("sync", "install-git"); !strings.Contains(r.stdout, "gitignore:   changed=false") {
@@ -1085,7 +1089,7 @@ func TestE2E_IgnoredLoreFolderIsReported(t *testing.T) {
 	if got, err := os.ReadFile(filepath.Join(alice.dir, ".gitignore")); err != nil || string(got) != ".lore/\n" {
 		t.Fatalf("a re-include that cannot help must not be written: %q %v", got, err)
 	}
-	if r := alice.lore("memory", "list"); strings.Contains(r.stderr, "git ignores lore data") {
+	if r := alice.lore("rule", "list"); strings.Contains(r.stderr, "git ignores lore data") {
 		t.Fatalf("warning must not repeat while nothing changed: %s", r.stderr)
 	}
 	r = alice.loreAny("sync", "install-git")
@@ -1096,13 +1100,13 @@ func TestE2E_IgnoredLoreFolderIsReported(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/\n# still private\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if r := alice.lore("memory", "list"); !strings.Contains(r.stderr, "git ignores lore data") {
+	if r := alice.lore("rule", "list"); !strings.Contains(r.stderr, "git ignores lore data") {
 		t.Fatalf("an edited .gitignore must be re-checked: %s", r.stderr)
 	}
 	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/lore.db\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if r := alice.lore("memory", "list"); strings.Contains(r.stderr, "git ignores lore data") {
+	if r := alice.lore("rule", "list"); strings.Contains(r.stderr, "git ignores lore data") {
 		t.Fatalf("still warning after the fix: %s", r.stderr)
 	}
 	if r := alice.lore("sync", "install-git"); r.code != 0 {
@@ -1117,8 +1121,10 @@ func TestE2E_ShowCommandsWithOptionalTimesUnset(t *testing.T) {
 	w := newWorld(t)
 	alice := w.newClone("alice")
 	alice.lore("init", "--non-interactive", "--name=app")
-	mem := alice.addMemory("no valid-until on this one")
-	if r := alice.lore("memory", "show", mem); !strings.Contains(r.stdout, "no valid-until on this one") || strings.Contains(r.stdout, "valid-until:") {
+	// memory show is the 0.1.18 core's now: an unset valid_until is
+	// simply not printed.
+	mem := idPattern.FindString(alice.lore("memory", "add", "--body", "no valid-until on this one").stdout)
+	if r := alice.lore("memory", "show", mem); !strings.Contains(r.stdout, "no valid-until on this one") || strings.Contains(r.stdout, "valid_until:") {
 		t.Fatalf("memory show: %s", r.stdout)
 	}
 	run := idPattern.FindString(alice.lore("run", "start", "--goal", "check").stdout)
@@ -1147,11 +1153,11 @@ func ciMergeWorld(t *testing.T) (*world, *clone, *clone, string) {
 	w := newWorld(t)
 	alice := w.newClone("alice")
 	alice.lore("init", "--non-interactive", "--name=app")
-	mem := alice.addMemory("v1")
+	mem := alice.addRow("v1")
 	alice.commitAll("lore")
 	alice.git("push", "-q")
 	bob := w.newClone("bob")
-	bob.memories()
+	bob.rows()
 	bob.git("checkout", "-q", "-b", "feature")
 	return w, alice, bob, mem
 }
@@ -1172,10 +1178,10 @@ func (c *clone) ciMerge(base string) ciMergeResult {
 // ci-merge settles it with lore's driver and commits a merge.
 func TestE2E_CIMergeSettlesLoreConflict(t *testing.T) {
 	_, alice, bob, mem := ciMergeWorld(t)
-	bob.lore("memory", "edit", mem, "--kind", "procedural")
+	bob.lore("rule", "edit", mem, "--severity", "should")
 	bob.commitAll("bob: kind")
 	bob.git("push", "-q", "-u", "origin", "feature")
-	alice.lore("memory", "edit", mem, "--body", "v2 from main")
+	alice.lore("rule", "edit", mem, "--body", "v2 from main")
 	alice.commitAll("alice: body")
 	alice.git("push", "-q")
 
@@ -1185,9 +1191,9 @@ func TestE2E_CIMergeSettlesLoreConflict(t *testing.T) {
 	if res.Outcome != ciMergeMerged || res.Commit == "" || len(res.Merged) == 0 {
 		t.Fatalf("result = %+v", res)
 	}
-	doc := bob.readDoc("memories", mem)
-	if doc["body"] != "v2 from main" || doc["kind"] != "procedural" {
-		t.Fatalf("both edits must survive: body=%v kind=%v", doc["body"], doc["kind"])
+	doc := bob.readDoc("rules", mem)
+	if doc["body"] != "v2 from main" || doc["severity"] != "should" {
+		t.Fatalf("both edits must survive: body=%v severity=%v", doc["body"], doc["severity"])
 	}
 	if parents := strings.Fields(bob.git("log", "-1", "--format=%P")); len(parents) != 2 || parents[0] != head {
 		t.Fatalf("not a merge on top of the branch: %v", parents)
@@ -1205,9 +1211,9 @@ func TestE2E_CIMergeSettlesLoreConflict(t *testing.T) {
 func TestE2E_CIMergeLeavesHumanConflictsAlone(t *testing.T) {
 	t.Run("same text", func(t *testing.T) {
 		_, alice, bob, mem := ciMergeWorld(t)
-		bob.lore("memory", "edit", mem, "--body", "bob's text")
+		bob.lore("rule", "edit", mem, "--body", "bob's text")
 		bob.commitAll("bob")
-		alice.lore("memory", "edit", mem, "--body", "alice's text")
+		alice.lore("rule", "edit", mem, "--body", "alice's text")
 		alice.commitAll("alice")
 		alice.git("push", "-q")
 		bob.git("fetch", "-q")
@@ -1244,9 +1250,9 @@ func TestE2E_CIMergeLeavesHumanConflictsAlone(t *testing.T) {
 
 func TestE2E_CIMergeCleanAndGuards(t *testing.T) {
 	_, alice, bob, _ := ciMergeWorld(t)
-	bob.addMemory("only on feature")
+	bob.addRow("only on feature")
 	bob.commitAll("bob")
-	alice.addMemory("only on main")
+	alice.addRow("only on main")
 	alice.commitAll("alice")
 	alice.git("push", "-q")
 	bob.git("fetch", "-q")
@@ -1271,10 +1277,10 @@ func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 		t.Skip("jq not installed (GitHub runners have it)")
 	}
 	w, alice, bob, mem := ciMergeWorld(t)
-	bob.lore("memory", "edit", mem, "--kind", "procedural")
+	bob.lore("rule", "edit", mem, "--severity", "should")
 	bob.commitAll("bob")
 	bob.git("push", "-q", "-u", "origin", "feature")
-	alice.lore("memory", "edit", mem, "--body", "v2 from main")
+	alice.lore("rule", "edit", mem, "--body", "v2 from main")
 	alice.commitAll("alice")
 	alice.git("push", "-q")
 
@@ -1321,7 +1327,7 @@ func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 	if res := bob.ciMerge("origin/main"); res.Outcome != ciMergeUpToDate {
 		t.Fatalf("pushed branch not up to date with main: %+v", res)
 	}
-	if doc := bob.readDoc("memories", mem); doc["body"] != "v2 from main" || doc["kind"] != "procedural" {
+	if doc := bob.readDoc("rules", mem); doc["body"] != "v2 from main" || doc["severity"] != "should" {
 		t.Fatalf("pushed merge lost an edit: %v", doc)
 	}
 }
@@ -1413,7 +1419,7 @@ func TestE2E_WorkflowPinFollowsLoreUpgrade(t *testing.T) {
 	if err := os.Remove(filepath.Join(alice.dir, ".gitattributes")); err != nil {
 		t.Fatal(err)
 	}
-	r := w.run(alice.dir, nil, release, "memory", "list", "--read-only")
+	r := w.run(alice.dir, nil, release, "rule", "list", "--read-only")
 	if r.code != 0 {
 		t.Fatalf("read-only list: %s", r.stderr)
 	}
@@ -1424,7 +1430,7 @@ func TestE2E_WorkflowPinFollowsLoreUpgrade(t *testing.T) {
 		t.Fatal("a read-only command refreshed the workflow")
 	}
 
-	r = w.run(alice.dir, nil, release, "memory", "list")
+	r = w.run(alice.dir, nil, release, "rule", "list")
 	if r.code != 0 || !strings.Contains(r.stderr, "to lore v0.1.99") || !strings.Contains(r.stderr, "commit it") {
 		t.Fatalf("upgrade not reported: %d %s", r.code, r.stderr)
 	}
@@ -1433,7 +1439,7 @@ func TestE2E_WorkflowPinFollowsLoreUpgrade(t *testing.T) {
 		t.Fatalf("workflow after upgrade: %+v %v", s, err)
 	}
 	// The development build (older by definition here) never downgrades.
-	alice.lore("memory", "list")
+	alice.lore("rule", "list")
 	if s, _ := parseSyncAction(readFileE2E(t, file)); s.version != "v0.1.99" {
 		t.Fatalf("downgraded to %s", s.version)
 	}

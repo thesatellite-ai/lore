@@ -28,6 +28,10 @@ var ranks = map[string]int{
 	"ops":      50,
 	"surface":  60,
 	"cmd":      70,
+	// wire is the composition root (L7 beside cmd): the only package that
+	// picks concrete adapters; nothing may import it but cmd and the old
+	// binary.
+	"wire": 70,
 }
 
 // internalDir holds test-only helpers (this package); nothing imports it.

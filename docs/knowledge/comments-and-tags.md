@@ -55,8 +55,6 @@ lore sync: 23 file(s) in .lore/data not committed — commit them with your chan
 
 `(1 uses)` counts the rows that carry the tag. `lore tag detach` takes the label off again; the tag itself stays, ready to be used again.
 
-`lore memory add --tag staging` is something else: it stores the word `staging` on that memory only. It does not create a `lore tag`, and `lore tag list` does not count it.
-
 ## Try it: read the comments on a row
 
 `lore comment list` with `--on-table` and `--on-id` shows the comments on one row; with no flags it lists every comment in the project.

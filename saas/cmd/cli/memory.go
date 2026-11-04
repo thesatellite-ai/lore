@@ -1,10 +1,10 @@
-// memory.go — implements `lore memory add` (S2.2 partial)
+// memory.go — the shared scope flags and project/repo resolution every old
+// command uses (resolveContext and friends).
 //
-// Resolves project + repo via the universal flag chain (R20), runs
-// secret-scrubbing + content normalization, then INSERTs a memory row
-//
-// Future commands (search, list, show, archive, supersede) follow the same
-// shape — share resolveContext + openDB helpers
+// The `lore memory …` commands themselves moved to the 0.1.18 core
+// (ops/memory, mounted by core_mount.go): memories are written only through
+// the new engine as `_v: 2` row files, and the old readers see them through
+// the lsync import into .lore/lore.db.
 package main
 
 import (
@@ -17,15 +17,12 @@ import (
 
 	"dbent"
 	"dbent/gen/ent"
-	entMemory "dbent/gen/ent/memory"
 	entProject "dbent/gen/ent/project"
 	entRepo "dbent/gen/ent/repo"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/fts5"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/style"
-	"saas/pkg/aicoder/textnorm"
 
 	"github.com/spf13/cobra"
 )
@@ -234,185 +231,4 @@ func resolveRepoID(ctx context.Context, client *ent.Client, projectID, repoFlag 
 			fmt.Sprintf("no repo with mount_name %q in current project", repoFlag))
 	}
 	return r.ID, nil
-}
-
-// memoryAddFlags are the per-command flags for `memory add`
-type memoryAddFlags struct {
-	commonFlags
-	body         string
-	kind         string
-	tag          []string
-	allowSecrets bool
-	source       string
-	sourceRef    string
-	supersedes   string
-	createdBy    string
-	validatedBy  string
-	to           toFlags
-}
-
-func newMemoryCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "memory",
-		Short: "Manage memories (free-form learned knowledge)",
-	}
-	cmd.AddCommand(newMemoryAddCommand())
-	cmd.AddCommand(newMemoryEditCommand())
-	cmd.AddCommand(newMemoryListCommand())
-	cmd.AddCommand(newMemoryShowCommand())
-	cmd.AddCommand(newMemoryInvalidateCommand())
-	memArch, memUn := archiveCmdPair(memoryArchiveTarget)
-	cmd.AddCommand(memArch)
-	cmd.AddCommand(memUn)
-	cmd.AddCommand(newDeleteCommand(memoryArchiveTarget))
-	cmd.AddCommand(newMemorySearchFTSCommand())
-	return cmd
-}
-
-func newMemoryAddCommand() *cobra.Command {
-	f := &memoryAddFlags{}
-	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add a new memory",
-		Long: `Add a new memory to the project's knowledge base
-
-Body is passed via --body=<text> or piped via stdin:
-
-  lore memory add --body="use Tailwind v4"
-  echo "use Tailwind v4" | lore memory add
-
-Scope defaults to current repo (if --repo set) or project-master.`,
-		Args: bodyOnlyArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			body, err := resolveBodyInput(args, f.body)
-			if err != nil {
-				return err
-			}
-			return runMemoryAdd(cmd.Context(), f, body)
-		},
-	}
-	bindCommonFlags(cmd, &f.commonFlags)
-	cmd.Flags().StringVar(&f.body, constants.FlagBody, "", "body (required; --body=<v> or pipe via stdin)")
-	cmd.Flags().StringVar(&f.kind, constants.FlagKind, "retrieved",
-		"memory kind: core | retrieved | episodic | procedural | archival")
-	cmd.Flags().StringSliceVar(&f.tag, "tag", nil, "tags (repeatable)")
-	cmd.Flags().BoolVar(&f.allowSecrets, constants.FlagAllowSecrets, false,
-		"override secret-pattern refusal (logged loud)")
-	cmd.Flags().StringVar(&f.source, constants.FlagSource, "manual",
-		"source_kind: manual | learn-from | agent-proposal | plugin | imported")
-	cmd.Flags().StringVar(&f.sourceRef, constants.FlagSourceRef, "", "free-form provenance pointer")
-	cmd.Flags().StringVar(&f.supersedes, constants.FlagSupersedes, "", "memory_id (mem_*) this entry replaces")
-	cmd.Flags().StringVar(&f.createdBy, constants.FlagCreatedBy, "", "actor_id (act_*); defaults to current identity")
-	cmd.Flags().StringVar(&f.validatedBy, constants.FlagValidatedBy, "", "actor_id (act_*) that validated this memory")
-	bindToFlags(cmd, &f.to, true)
-	bindCreateFlag(cmd, &f.to)
-	return cmd
-}
-
-func runMemoryAdd(ctx context.Context, f *memoryAddFlags, rawBody string) error {
-	if err := refuseIfReadOnly(&f.commonFlags); err != nil {
-		return err
-	}
-	// 1. Normalize body
-	body, err := textnorm.Normalize(rawBody)
-	if err != nil {
-		return errcodes.New(errcodes.EmptyBody, err.Error()).
-			WithHint("body must be non-empty after stripping whitespace and BOM/bidi chars")
-	}
-
-	// 2. Secret scrub. Refuse unless --allow-secrets
-	scanner, err := secretScanner()
-	if err != nil {
-		return err
-	}
-	if matches := scanner.Scan(body); len(matches) > 0 && !f.allowSecrets {
-		preview := matches[0].Preview
-		return errcodes.New(errcodes.SecretDetected,
-			fmt.Sprintf("body contains a secret (credential pattern %s, preview %s)",
-				matches[0].PatternName, preview)).
-			WithHint("use --allow-secrets to override (logged loud); see also ~/.lore/pii-patterns.txt")
-	}
-
-	// F10 / F14: decide which project the row goes to (this repo, a store
-	// project, the personal store) and open it; refusals fail closed.
-	route, err := routeWrite(ctx, &f.commonFlags, f.to, "memory", body)
-	if err != nil {
-		return err
-	}
-
-	// 3. Resolve project + repo
-	rctx, client, err := resolveContext(&f.commonFlags)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
-	if err != nil {
-		return err
-	}
-	repoID, err := resolveRepoID(ctx, client, projectID, rctx.RepoMount)
-	if err != nil {
-		return err
-	}
-
-	create := client.Memory.Create().
-		SetProjectID(projectID).
-		SetBody(body).
-		SetKind(memoryKind(f.kind)).
-		SetSourceKind(f.source)
-	if repoID != "" {
-		create.SetRepoID(repoID)
-	}
-	if f.sourceRef != "" {
-		create.SetSourceRef(f.sourceRef)
-	}
-	if err := checkSupersedes(ctx, client, supersedeMemory, projectID, f.supersedes); err != nil {
-		return err
-	}
-	createdBy, aerr := resolveActorIDFlag(ctx, client, f.createdBy)
-	if aerr != nil {
-		return aerr
-	}
-	if createdBy == "" {
-		createdBy, aerr = resolveCurrentActorID(ctx, client)
-		if aerr != nil {
-			return aerr
-		}
-	}
-	create.SetCreatedByActorID(createdBy)
-	if validatedBy, verr := resolveActorIDFlag(ctx, client, f.validatedBy); verr != nil {
-		return verr
-	} else if validatedBy != "" {
-		create.SetValidatedByActorID(validatedBy)
-	}
-	mem, err := create.Save(ctx)
-	if err != nil {
-		return errcodes.New(errcodes.Internal, "create memory").WithCause(err)
-	}
-	if err := finishSupersedes(ctx, client, supersedeMemory, f.supersedes, mem.ID, func(ctx context.Context) error {
-		return client.Memory.DeleteOneID(mem.ID).Exec(ctx)
-	}); err != nil {
-		return err
-	}
-
-	// 6. Output success
-	fmt.Printf("%s %s %s\n", style.Success("✓"), style.Code(mem.ID), route.Label)
-	printRoute(route)
-	if repoID != "" {
-		fmt.Printf("  scope: %s\n", style.ScopeBadge("repo:"+rctx.RepoMount))
-	} else {
-		fmt.Printf("  scope: %s\n", style.ScopeBadge("master"))
-	}
-	return nil
-}
-
-// memoryKind parses a flag value via ent's generated validator
-// No hand-written switch — direct cast + validator call
-func memoryKind(s string) entMemory.Kind {
-	k := entMemory.Kind(s)
-	if err := entMemory.KindValidator(k); err != nil {
-		return entMemory.KindRetrieved
-	}
-	return k
 }

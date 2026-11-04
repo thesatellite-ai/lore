@@ -3,6 +3,7 @@ package lsync
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -167,7 +168,8 @@ func TestArgsFromDoc_ExtrasAndVolatile(t *testing.T) {
 
 func TestDecodeDoc_Envelope(t *testing.T) {
 	t.Parallel()
-	if _, err := decodeDoc([]byte(`{"_v": 2}`)); !errors.Is(err, errNewerFormat) {
+	// _v 2 (the 0.1.18 core's format) is read since 0.1.18; 3 is newer.
+	if _, err := decodeDoc([]byte(`{"_v": 3}`)); !errors.Is(err, errNewerFormat) {
 		t.Fatalf("newer _v: %v", err)
 	}
 	for _, bad := range []string{`{}`, `{"_v": "1"}`, `{"_v": 0}`, `{"_v": 1.5}`} {
@@ -177,6 +179,49 @@ func TestDecodeDoc_Envelope(t *testing.T) {
 	}
 	if _, err := decodeDoc([]byte(`{"_v": 1, "id": "x"}`)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestDecodeDoc_V2 pins how a 0.1.18 row file (_v 2) reads: the envelope
+// keys lore.db has no column for are dropped (never kept as extras that an
+// export would write back), a tombstone reads as no document (the row
+// leaves lore.db), and a nullable column the file omits imports as NULL
+// (v2 omits cleared fields), while the marker never reaches a file.
+func TestDecodeDoc_V2(t *testing.T) {
+	t.Parallel()
+	const id = "mem_01a10237c9e87e4c843d8045973a65a1"
+	doc, err := decodeDoc([]byte(`{"_v": 2, "_table": "memories", "id": "` + id + `", "_hlc": "x", "_o": {"cmd": "memory add"}, "_w": 1,` +
+		` "body": "b", "kind": "retrieved", "source_kind": "manual", "project_id": "prj_01a10237c9e87e4c843d8045973a65a2", "created_by": "act_9a2a5805459c73998a43b50c959507da"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"_hlc", "_o", "_w"} {
+		if _, has := doc[k]; has {
+			t.Fatalf("%s must be dropped", k)
+		}
+	}
+	reg, _ := NewRegistry()
+	tbl, _ := reg.Table("memories")
+	ra, err := argsFromDoc(tbl, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, has := ra.values["archived_at"]; !has || v != nil {
+		t.Fatalf("an omitted nullable column must import as NULL, got %v %v", v, has)
+	}
+	if ra.values["body"] != "b" {
+		t.Fatalf("body = %v", ra.values["body"])
+	}
+	if _, has := ra.extra[keyFromV2]; has {
+		t.Fatal("the v2 marker must not be kept as an extra")
+	}
+	b, err := encodeDoc(doc, nil)
+	if err != nil || strings.Contains(string(b), keyFromV2) {
+		t.Fatalf("the v2 marker reached a file: %s %v", b, err)
+	}
+	tomb, err := decodeDoc([]byte(`{"_v": 2, "_table": "memories", "id": "` + id + `", "_hlc": "x", "_deleted": true}`))
+	if err != nil || tomb != nil {
+		t.Fatalf("a v2 tombstone must read as no document: %v %v", tomb, err)
 	}
 }
 
