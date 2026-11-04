@@ -43,6 +43,8 @@ var coreOwned = map[string]bool{
 	"meta_values":        true,
 	"machines":           true, // MACHINE PROFILE (OV3): written only by the core
 	"task_templates":     true, // TASK 11 (OV15c): written only by the core
+	"task_views":         true, // TASK 16.2 (OV22): saved views, written only by the core
+	"scopes":             true, // directory scopes (OV25, CONTEXT_BUDGET 6.2): written only by the core
 	"secret_rules":       true,
 	"secret_allows":      true,
 	"tasks":              true,

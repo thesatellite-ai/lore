@@ -25,7 +25,6 @@ import (
 	"dbent/gen/ent"
 	entMountAlias "dbent/gen/ent/mountalias"
 	entPIIPattern "dbent/gen/ent/piipattern"
-	entTaskView "dbent/gen/ent/taskview"
 	entTrustedPlugin "dbent/gen/ent/trustedplugin"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
@@ -293,115 +292,8 @@ func newPIIPatternEnableCommand(enable bool) *cobra.Command {
 	}
 }
 
-// ── task-view ────────────────────────────────────────────────────────────
-
-func newTaskViewCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "task-view", Short: "Manage saved task-list filter views"}
-	cmd.AddCommand(newTaskViewAddCommand())
-	cmd.AddCommand(newTaskViewListCommand())
-	cmd.AddCommand(newTaskViewDeleteCommand())
-	return cmd
-}
-
-func newTaskViewAddCommand() *cobra.Command {
-	var f commonFlags
-	var name, filter string
-	cmd := &cobra.Command{
-		Use: "add", Short: "Save a task filter as a named view",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
-			}
-			rctx, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
-			if err != nil {
-				return err
-			}
-			create := client.TaskView.Create().SetProjectID(projectID).SetName(name)
-			if filter != "" {
-				create.SetFilterJSON(filter)
-			}
-			r, err := create.Save(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "create task-view").WithCause(err)
-			}
-			fmt.Printf("%s task-view %s saved\n", style.Success("✓"), r.Name)
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().StringVar(&name, constants.FlagName, "", "view name (required)")
-	cmd.Flags().StringVar(&filter, constants.FlagFilter, "", "JSON filter spec")
-	_ = cmd.MarkFlagRequired(constants.FlagName)
-	return cmd
-}
-
-func newTaskViewListCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use: "list", Short: "List saved task views",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rctx, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
-			if err != nil {
-				return err
-			}
-			rows, err := client.TaskView.Query().Where(entTaskView.ProjectID(projectID)).All(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "list task-views").WithCause(err)
-			}
-			if jsonOut {
-				printJSON(constants.KindTaskViewList, rows, len(rows))
-				return nil
-			}
-			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no task-views)"))
-				return nil
-			}
-			for _, v := range rows {
-				fmt.Printf("%s %s\n", style.Code(v.ID), v.Name)
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
-
-func newTaskViewDeleteCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use: "delete <id>", Short: "Delete a saved task view",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
-			}
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			if err := client.TaskView.DeleteOneID(args[0]).Exec(cmd.Context()); err != nil {
-				return errcodes.New(errcodes.Internal, "delete task-view").WithCause(err)
-			}
-			fmt.Printf("%s task-view %s deleted\n", style.Success("✓"), args[0])
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	return cmd
-}
+// task-view moved to the core: `lore task view add|list|show|edit|delete`
+// (TASK 16.2, OV22-VIEWNAME / OV22-VIEWSYNC).
 
 // ── external-source ──────────────────────────────────────────────────────
 

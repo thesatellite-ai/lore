@@ -126,7 +126,6 @@ func init() {
 	rootCmd.AddCommand(newActorCommand())
 	rootCmd.AddCommand(newPluginCommand())
 	rootCmd.AddCommand(newPIIPatternCommand())
-	rootCmd.AddCommand(newTaskViewCommand())
 	rootCmd.AddCommand(newMountAliasCommand())
 	rootCmd.AddCommand(newConfigCommand())
 	rootCmd.AddCommand(newSearchAdminCommand())
