@@ -22,6 +22,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -185,10 +187,17 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	return out, nil
 }
 
+// maxQuotedID caps how much of a bad id an error repeats (the same cap
+// ops/content uses), so a huge value never floods the message.
+const maxQuotedID = 48
+
 func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	id, err := ids.Parse[ids.Batch](strings.TrimSpace(in.ID))
 	if err != nil {
-		return ShowOut{}, err
+		// The one lookup rule (ops/internal/lookup): a value that cannot be
+		// a bat_ id names no batch, so it answers E_NOT_FOUND like an
+		// unknown batch, never E_INVALID_ID (that stays for new rows).
+		return ShowOut{}, lookup.BadID("batch: \""+textcut.Cut(strings.TrimSpace(in.ID), maxQuotedID, maxQuotedID)+"\" is not a batch id (bat_…)", err)
 	}
 	evs, err := o.env.BatchEvents(ctx)
 	if err != nil {

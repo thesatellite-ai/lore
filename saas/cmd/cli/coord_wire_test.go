@@ -33,8 +33,9 @@ func TestCoordErrorExitCodes(t *testing.T) {
 		{"no work", &coord.NoWorkError{Waiting: []queue.Waiting{{Task: queue.Task{ID: "tsk_2"}, Reason: "waits for tsk_1 to be merged"}}}, errcodes.NoWork, 10, "waits for tsk_1"},
 		{"contended", coord.ErrContended, errcodes.Contended, 11, ""},
 		{"bare not held", fmt.Errorf("x: %w", signals.ErrNotHeld), errcodes.LostClaim, 12, ""},
-		{"mission held", &signals.HeldError{By: held}, errcodes.InvalidInput, 1, "coordinated by coord-1"},
-		{"same actor", &signals.HeldError{By: held, SameActor: true}, errcodes.InvalidInput, 1, "LORE_ACTOR"},
+		// Q-R2-5 / FLAG2: E_INVALID_INPUT exits 20 on old commands too (was 1).
+		{"mission held", &signals.HeldError{By: held}, errcodes.InvalidInput, 20, "coordinated by coord-1"},
+		{"same actor", &signals.HeldError{By: held, SameActor: true}, errcodes.InvalidInput, 20, "LORE_ACTOR"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
