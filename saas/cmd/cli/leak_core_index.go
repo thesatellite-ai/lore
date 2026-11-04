@@ -19,8 +19,10 @@
 // The repo store and client-class stores are never in the index: they are
 // what the client may read.
 //
-// Fails closed: a store that cannot be listed makes the check refuse
-// (E_LEAK_BLOCKED, "cannot check"), like an unreadable v0.1.17 store.
+// Fails closed: a store that cannot be listed, or an org store the link
+// names that is not attached (left out at open as unreachable), makes the
+// check refuse (E_LEAK_BLOCKED, "cannot check"), like an unreadable
+// v0.1.17 store.
 package main
 
 import (
@@ -53,7 +55,18 @@ func coreLeakRows(ctx context.Context, client bool) ([]leakcheck.IndexRow, error
 	if coreApp == nil {
 		return nil, nil
 	}
-	return leakRowsFrom(ctx, coreApp, client)
+	// The org's stores this repo must see (the link). One that is not
+	// attached was left out at open as unreachable (no local copy,
+	// offline): its rows are unknown, so the check cannot decide.
+	expected, err := coreOrgStores(ctx)
+	if err != nil {
+		return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()).WithCause(err)
+	}
+	names := make([]store.Source, 0, len(expected))
+	for _, e := range expected {
+		names = append(names, e.Name)
+	}
+	return leakRowsFrom(ctx, coreApp, client, names...)
 }
 
 // leakStores is the part of the core the leak index reads: which stores are
@@ -69,10 +82,21 @@ type leakStores interface {
 // leakRowsFrom is coreLeakRows over any leakStores. Every error (the store
 // list, a class, a table listing) refuses with E_LEAK_BLOCKED "cannot
 // check": an internal store that cannot be read must never count as empty.
-func leakRowsFrom(ctx context.Context, app leakStores, client bool) ([]leakcheck.IndexRow, error) {
+// expected are stores that must be attached (the org's, from the link); a
+// missing one refuses the same way.
+func leakRowsFrom(ctx context.Context, app leakStores, client bool, expected ...store.Source) ([]leakcheck.IndexRow, error) {
 	idents, err := app.StoreIdentities(ctx)
 	if err != nil {
 		return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()).WithCause(err)
+	}
+	attached := make(map[store.Source]bool, len(idents))
+	for _, si := range idents {
+		attached[si.Name] = true
+	}
+	for _, name := range expected {
+		if !attached[name] {
+			return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()+" (store "+string(name)+")")
+		}
 	}
 	var out []leakcheck.IndexRow
 	for _, si := range idents {

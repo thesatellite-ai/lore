@@ -211,25 +211,29 @@ func TestLeakRowsFrom_StoreChoice(t *testing.T) {
 func TestLeakRowsFrom_FailsClosed(t *testing.T) {
 	boom := errors.New("disk on fire")
 	cases := []struct {
-		name    string
-		client  bool
-		mutate  func(*fakeLeakStores)
-		refused bool
+		name     string
+		client   bool
+		mutate   func(*fakeLeakStores)
+		refused  bool
+		expected []store.Source
 	}{
-		{"store list fails", true, func(f *fakeLeakStores) { f.identsErr = boom }, true},
-		{"store list fails, own repo", false, func(f *fakeLeakStores) { f.identsErr = boom }, true},
-		{"internal class unreadable", true, func(f *fakeLeakStores) { f.classErr = map[store.Source]error{"agency": boom} }, true},
-		{"internal table unlistable", true, func(f *fakeLeakStores) { f.listErr = map[store.Source]error{"agency": boom} }, true},
-		{"personal table unlistable", false, func(f *fakeLeakStores) { f.listErr = map[store.Source]error{"me": boom} }, true},
-		{"internal unlistable, own repo (not indexed)", false, func(f *fakeLeakStores) { f.listErr = map[store.Source]error{"agency": boom} }, false},
-		{"client store unlistable (not indexed)", true, func(f *fakeLeakStores) { f.listErr = map[store.Source]error{"acme": boom} }, false},
-		{"shareable store's class unreadable (skipped first)", true, func(f *fakeLeakStores) { f.classErr = map[store.Source]error{"handbook": boom} }, false},
+		{"store list fails", true, func(f *fakeLeakStores) { f.identsErr = boom }, true, nil},
+		{"store list fails, own repo", false, func(f *fakeLeakStores) { f.identsErr = boom }, true, nil},
+		{"internal class unreadable", true, func(f *fakeLeakStores) { f.classErr = map[store.Source]error{"agency": boom} }, true, nil},
+		{"internal table unlistable", true, func(f *fakeLeakStores) { f.listErr = map[store.Source]error{"agency": boom} }, true, nil},
+		{"personal table unlistable", false, func(f *fakeLeakStores) { f.listErr = map[store.Source]error{"me": boom} }, true, nil},
+		{"internal unlistable, own repo (not indexed)", false, func(f *fakeLeakStores) { f.listErr = map[store.Source]error{"agency": boom} }, false, nil},
+		{"client store unlistable (not indexed)", true, func(f *fakeLeakStores) { f.listErr = map[store.Source]error{"acme": boom} }, false, nil},
+		{"shareable store's class unreadable (skipped first)", true, func(f *fakeLeakStores) { f.classErr = map[store.Source]error{"handbook": boom} }, false, nil},
+		{"linked org store not attached (unreachable at open)", true, func(*fakeLeakStores) {}, true, []store.Source{"agency", "northwind"}},
+		{"linked org store not attached, own repo", false, func(*fakeLeakStores) {}, true, []store.Source{"northwind"}},
+		{"every linked org store attached", true, func(*fakeLeakStores) {}, false, []store.Source{"agency", "日記"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := leakWorld(t)
 			tc.mutate(f)
-			got, err := leakRowsFrom(context.Background(), f, tc.client)
+			got, err := leakRowsFrom(context.Background(), f, tc.client, tc.expected...)
 			if !tc.refused {
 				if err != nil {
 					t.Fatalf("want no refusal, got %v", err)
