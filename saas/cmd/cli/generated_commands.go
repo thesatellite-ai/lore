@@ -25,7 +25,6 @@ import (
 	entIncident "dbent/gen/ent/incident"
 	entPlan "dbent/gen/ent/plan"
 	entQueryLog "dbent/gen/ent/querylog"
-	entReminder "dbent/gen/ent/reminder"
 	entRenderHistory "dbent/gen/ent/renderhistory"
 	entRun "dbent/gen/ent/run"
 	entSession "dbent/gen/ent/session"
@@ -49,7 +48,6 @@ var _ = entHandoff.FieldID
 var _ = entIncident.FieldID
 var _ = entPlan.FieldID
 var _ = entQueryLog.FieldID
-var _ = entReminder.FieldID
 var _ = entRenderHistory.FieldID
 var _ = entRun.FieldID
 var _ = entSession.FieldID
@@ -77,7 +75,6 @@ func registerExtraCommands(root *cobra.Command) {
 	root.AddCommand(newSessionGroup())
 	root.AddCommand(newQueryLogGroup())
 	root.AddCommand(newRenderHistoryGroup())
-	root.AddCommand(newReminderGroup())
 }
 
 // newArchitectureNoteGroup returns the cobra group for architecturenote (add/list/show)
