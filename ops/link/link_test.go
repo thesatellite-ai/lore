@@ -6,6 +6,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Moved from saas/cmd/cli/usecases_misc_test.go with link_cmds.go.
@@ -47,5 +48,26 @@ func TestLegacyTables(t *testing.T) {
 	}
 	if len(legacyTables) != len(want) {
 		t.Fatalf("legacyTables has %d entries, want %d", len(legacyTables), len(want))
+	}
+}
+
+// v0.1.17's refusals (TestUC_MiscTableForOpaqueID): an id whose prefix no
+// table uses, or text with no prefix, is "unknown ID prefix".
+func TestTableForIDRefusesUnknownPrefix(t *testing.T) {
+	t.Parallel()
+	reg, err := schema.NewRegistry(schema.Builtin()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"xyz_0123", "noprefix", "_abc"} {
+		if _, _, _, err := tableForID(reg, bad); err == nil || !strings.Contains(err.Error(), "unknown ID prefix") {
+			t.Fatalf("%q must be rejected: %v", bad, err)
+		}
+	}
+	for p, want := range map[ids.Prefix]row.Table{"mem": "memories", "tsk": "tasks", "cmt": "comments", "inc": "incidents"} {
+		got, _, _, err := tableForID(reg, string(p)+"_01a1a5ee14c6775f91d655148a6193f3")
+		if err != nil || got != want {
+			t.Fatalf("%s → %q %v, want %s", p, got, err, want)
+		}
 	}
 }

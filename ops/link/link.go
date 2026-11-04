@@ -11,6 +11,7 @@ package link
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -345,31 +346,54 @@ func (o ops) resolve(ctx context.Context, arg, dir string) (sha, msg, author, wh
 // the core must hold the id as a live row; a table not on the core yet is
 // accepted, as v0.1.17 accepted it.
 func (o ops) entity(ctx context.Context, raw string) (row.Table, ids.AnyID, error) {
-	id, err := ids.ParseAny(strings.TrimSpace(raw))
-	if err != nil {
-		return "", ids.AnyID{}, errs.New(errs.NotFound, "entity "+quote(raw)+" not found").
-			WithHint("use the opaque id (tsk_…, mem_…); `lore <kind> list` shows them")
-	}
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
 		return "", ids.AnyID{}, errs.Wrap(errs.Internal, "link: built-in schema", err)
 	}
-	if def, ok := reg.ByPrefix(id.Prefix()); ok {
-		_, r, gerr := o.env.Get(ctx, engine.Ref{Table: def.Name, ID: id})
+	name, id, core, err := tableForID(reg, raw)
+	if err != nil {
+		return "", ids.AnyID{}, err
+	}
+	if core {
+		_, r, gerr := o.env.Get(ctx, engine.Ref{Table: name, ID: id})
 		if gerr == nil && r.Deleted {
 			gerr = errs.New(errs.NotFound, "entity "+id.String()+" is deleted")
 		}
 		if gerr != nil {
 			return "", ids.AnyID{}, gerr
 		}
-		return def.Name, id, nil
-	}
-	name, ok := legacyTables[id.Prefix()]
-	if !ok {
-		return "", ids.AnyID{}, errs.New(errs.InvalidInput, fmt.Sprintf("unknown ID prefix %q — cannot derive entity table", id.Prefix()))
 	}
 	return name, id, nil
 }
+
+// tableForID is v0.1.17's tableForOpaqueID over the core: the table an
+// opaque id's prefix names (core is true when the table is in reg, so the
+// row can be checked). A prefix no table uses is E_INVALID_INPUT "unknown
+// ID prefix" (v0.1.17's refusal, also for text with no prefix at all); a
+// known prefix with a malformed id is E_NOT_FOUND.
+func tableForID(reg *schema.Registry, raw string) (row.Table, ids.AnyID, bool, error) {
+	raw = strings.TrimSpace(raw)
+	p, _, _ := strings.Cut(raw, "_")
+	def, core := reg.ByPrefix(ids.Prefix(p))
+	name := def.Name
+	if !core {
+		var ok bool
+		if name, ok = legacyTables[ids.Prefix(p)]; !ok {
+			return "", ids.AnyID{}, false, errs.New(errs.InvalidInput, fmt.Sprintf("unknown ID prefix %q — cannot derive entity table", p))
+		}
+	}
+	id, err := ids.ParseAny(raw)
+	if err != nil {
+		return "", ids.AnyID{}, false, errs.New(errs.NotFound, "entity "+quote(raw)+" not found").
+			WithHint("use the opaque id (tsk_…, mem_…); `lore <kind> list` shows them")
+	}
+	return name, id, core, nil
+}
+
+// LegacyTables returns a copy of v0.1.17's prefix → table map for the
+// tables not on the core yet (the v0.1.17 binary's test checks every one
+// is a real lore.db table).
+func LegacyTables() map[ids.Prefix]row.Table { return maps.Clone(legacyTables) }
 
 // legacyTables is v0.1.17's prefix → table map (tableForOpaqueID) for the
 // tables not on the core yet; a table on the core is found in the schema.
