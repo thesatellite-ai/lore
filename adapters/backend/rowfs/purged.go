@@ -58,12 +58,15 @@ func (f *Folder) readPurged() (object, map[string]bool, error) {
 	if !has {
 		return o, set, nil
 	}
-	var list []any
+	var list []json.RawMessage
 	if err := json.Unmarshal(raw, &list); err != nil {
 		return nil, nil, errs.Wrap(errs.InvalidInput, "rowfs: "+rel+": \"ids\" is not a list of ids", err)
 	}
-	for _, v := range list {
-		if s, ok := v.(string); ok {
+	for _, item := range list {
+		// Non-string entries are skipped, as before: only an id string
+		// names a purged row.
+		var s string
+		if json.Unmarshal(item, &s) == nil {
 			set[s] = true
 		}
 	}

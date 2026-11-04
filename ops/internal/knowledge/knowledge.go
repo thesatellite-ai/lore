@@ -437,7 +437,7 @@ func Stamp(ctx context.Context, env Env, n Noun, raw, field string, v value.Valu
 }
 
 // Now is the archive stamp, on env's clock (opclock).
-func Now(env any) value.Value { return value.DateTimeFrom(opclock.Now(env)) }
+func Now[E any](env E) value.Value { return value.DateTimeFrom(opclock.Now(env)) }
 
 // Delete writes the row's tombstone.
 func Delete(ctx context.Context, env Env, n Noun, raw string) (engine.Written, error) {

@@ -156,7 +156,7 @@ func Date(flag, s string) (value.Value, error) {
 
 // Now is the current time as a datetime value, on env's clock
 // (opclock: the engine's wall clock when env offers it).
-func Now(env any) value.Value { return value.DateTimeFrom(opclock.Now(env)) }
+func Now[E any](env E) value.Value { return value.DateTimeFrom(opclock.Now(env)) }
 
 // Field returns the text form of a row field ("" when absent or null).
 func Field(r row.Row, name string) string {

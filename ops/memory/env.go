@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -87,7 +89,7 @@ type Labeler interface {
 // then falls back to the store name). Generic so every noun's own Env
 // interface (memory, content, comment, tag, link) can pass itself.
 func LabelerOf[E any](env E) Labeler {
-	l, _ := any(env).(Labeler)
+	l, _ := upgrade.As[Labeler](env)
 	return l
 }
 

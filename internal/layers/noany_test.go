@@ -20,6 +20,10 @@ var anyAllowlist = map[string]bool{
 	// (*sql.Rows).Scan takes ...any and a query's column count is known only
 	// at run time; every cell is narrowed to value.Value in the same loop.
 	"adapters/cache/sqlite/scan.go#scanAll": true,
+	// The one optional-upgrade check (opclock.Clocker, opsmemory.Labeler …):
+	// a type assertion needs an interface operand and the ops packages each
+	// have their own Env interface type; narrowed to T on the same line.
+	"ops/internal/upgrade/upgrade.go#As": true,
 }
 
 // enclosingFunc names the top-level function (or method, as Type.Method)

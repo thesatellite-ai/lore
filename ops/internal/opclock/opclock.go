@@ -10,7 +10,11 @@
 // forced to grow a method it has no use for.
 package opclock
 
-import "time"
+import (
+	"time"
+
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+)
 
 // Clocker is the optional Env upgrade that supplies the wall clock.
 type Clocker interface {
@@ -21,8 +25,8 @@ type Clocker interface {
 // Now returns env's clock when env is a Clocker, else time.Now. A nil
 // Clocker value (a typed nil pointer) is the caller's bug and panics as
 // any nil method call would; it is never silently replaced.
-func Now(env any) time.Time {
-	if c, ok := env.(Clocker); ok {
+func Now[E any](env E) time.Time {
+	if c, ok := upgrade.As[Clocker](env); ok {
 		return c.Now()
 	}
 	return time.Now()
