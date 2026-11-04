@@ -416,8 +416,33 @@ func newStoreForgetCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// The 0.1.18 core's clone of the same url: unpushed work there
+			// blocks the forget too (side effect 20).
+			home, err := loreHome()
+			if err != nil {
+				return errcodes.New(errcodes.Internal, "resolve the lore home").WithCause(err)
+			}
+			cores, err := coreClonesOf(home, url)
+			if err != nil {
+				return err
+			}
+			var corePending []string
+			for _, c := range cores {
+				corePending = append(corePending, coreCloneUnpushed(ctx, c)...)
+			}
+			if len(corePending) > 0 {
+				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("the clone holds unpushed work (%s); forgetting it would lose it", strings.Join(corePending, ", "))).
+					WithHint("run `lore sync` when the store is reachable, then forget it")
+			}
 			st, err := m.Lookup(ctx, url)
 			if errors.Is(err, stores.ErrNoClone) {
+				if len(cores) > 0 {
+					if rerr := removeCoreClones(cores); rerr != nil {
+						return rerr
+					}
+					fmt.Printf("✓ forgot %s (removed %s; the next command that needs it clones it again)\n", redactIfQuiet(url), cores[0].base)
+					return nil
+				}
 				fmt.Println(style.Muted("no clone of " + redactIfQuiet(url) + " on this machine; nothing to forget"))
 				return nil
 			}
@@ -451,6 +476,9 @@ func newStoreForgetCommand() *cobra.Command {
 			}
 			if err := os.RemoveAll(st.Dir); err != nil {
 				return errcodes.New(errcodes.Internal, "remove the clone").WithCause(err)
+			}
+			if rerr := removeCoreClones(cores); rerr != nil {
+				return rerr
 			}
 			fmt.Printf("✓ forgot %s (removed %s; the next command that needs it clones it again)\n", redactIfQuiet(st.Norm), st.Dir)
 			return nil
