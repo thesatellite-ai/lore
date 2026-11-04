@@ -197,7 +197,10 @@ type state struct {
 	caches   *caches
 	backends []store.Backend
 	// byName maps every attached store (the repo included) to its backend.
-	byName  map[store.Source]store.Backend
+	byName map[store.Source]store.Backend
+	// folders is each attached store's folder ("" or "." = the store root);
+	// the repo store has none.
+	folders map[store.Source]string
 	repoTop string
 	// format is the DOCS O6 answer computed at open: whether the first
 	// 0.1.18 write must ask (see format.go). Guarded by App.mu.

@@ -140,8 +140,10 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 
 	backends := map[store.Source]store.Backend{store.SourceRepo: repo}
+	st.folders = map[store.Source]string{}
 	for _, o := range attached {
 		backends[o.Name] = o.Backend
+		st.folders[o.Name] = o.Folder
 	}
 	st.byName = backends
 	scanner, err := newScanner(ctx, backends)

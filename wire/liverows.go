@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -77,18 +79,18 @@ func liveRefExists(ctx context.Context, top, ref string) bool {
 	return cmd.Run() == nil
 }
 
-// readLiveRows returns the live rows of the tables in want, from the local
-// live ref and its tracking copy. A row on both refs is merged (logic/merge,
-// no common base: the newer side wins per field), so a clone that fetched
-// but never integrated still sees the remote's newer edit. No live ref (a
-// repo v0.1.17 never shared work in, or not a git repo) is no rows.
-func readLiveRows(ctx context.Context, top string, want map[row.Table]bool) ([]liveRow, error) {
+// readLiveRows returns the live rows of the tables in want from refs (in
+// git dir dir), keeping only rows under folder when folder is not "". A
+// row on several refs is merged (logic/merge, no common base: the newer
+// side wins per field), so a clone that fetched but never integrated still
+// sees the remote's newer edit. A ref that does not exist adds nothing.
+func readLiveRows(ctx context.Context, dir string, refs []string, folder string, want map[row.Table]bool) ([]liveRow, error) {
 	byKey := map[store.Key]liveRow{}
-	for _, ref := range []string{liveRefLocal, liveRefTracking} {
-		if !liveRefExists(ctx, top, ref) {
+	for _, ref := range refs {
+		if !liveRefExists(ctx, dir, ref) {
 			continue
 		}
-		got, err := readLiveRef(ctx, top, ref, want)
+		got, err := readLiveRef(ctx, dir, ref, folder, want)
 		if err != nil {
 			return nil, err
 		}
@@ -121,7 +123,7 @@ func readLiveRows(ctx context.Context, top string, want map[row.Table]bool) ([]l
 }
 
 // readLiveRef lists one ref's rows of the wanted tables.
-func readLiveRef(ctx context.Context, top, ref string, want map[row.Table]bool) ([]liveRow, error) {
+func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Table]bool) ([]liveRow, error) {
 	listing, err := liveGit(ctx, top, "ls-tree", "-r", "-z", "--full-tree", ref)
 	if err != nil {
 		return nil, err
@@ -137,7 +139,7 @@ func readLiveRef(ctx context.Context, top, ref string, want map[row.Table]bool) 
 			continue
 		}
 		table, ok := liveRowTable(path)
-		if !ok || !want[table] {
+		if !ok || !want[table] || (folder != "" && liveRowFolder(path) != folder) {
 			continue
 		}
 		b, err := liveGit(ctx, top, "cat-file", "blob", fields[2])
@@ -167,6 +169,16 @@ func liveRowTable(path string) (row.Table, bool) {
 		return "", false
 	}
 	return row.Table(parts[len(parts)-2]), true
+}
+
+// liveRowFolder is the project folder of a live-tree row path (everything
+// before <table>/<id>.json).
+func liveRowFolder(path string) string {
+	parts := strings.Split(path, "/")
+	if len(parts) < liveRowParts {
+		return ""
+	}
+	return strings.Join(parts[:len(parts)-2], "/")
 }
 
 // decodeLiveRow turns a live document into a row: the `_live` block's hlc
@@ -223,41 +235,105 @@ func liveTables() map[row.Table]bool {
 // pendingLive is a live row the repo store does not hold yet, or holds an
 // older copy of (cur is that copy; zero ID when absent).
 type pendingLive struct {
-	live liveRow
-	cur  row.Row
-	has  bool
+	source store.Source
+	live   liveRow
+	cur    row.Row
+	has    bool
 }
 
-// pendingLiveRows lists the live rows of core-owned tables that the repo
-// store is missing or holds older (by HLC). A repo-store tombstone is never
-// undone by a live row (rows are never resurrected).
-func pendingLiveRows(ctx context.Context, st *state) ([]pendingLive, error) {
-	rows, err := readLiveRows(ctx, st.repoTop, liveTables())
-	if err != nil || len(rows) == 0 {
-		return nil, err
+// liveSource is one place v0.1.17 kept live rows for an attached store:
+// the code repo's own live ref (repo store), or a v0.1.17 store's
+// per-branch live ref inside the store's lore clone, limited to the
+// attached folder's rows.
+type liveSource struct {
+	name   store.Source
+	dir    string   // where git runs (the repo top, the store worktree)
+	refs   []string // local ref and tracking copy
+	folder string   // "" = every folder (the repo store)
+	branch string   // store branch ("" for the repo store)
+	v017   bool     // the store's marker is still v0.1.17 (lore-store.yaml v1)
+}
+
+// gitStoreBackend is a git store backend: its worktree and branch.
+type gitStoreBackend interface {
+	Dir() string
+	Branch() string
+}
+
+// liveSources lists the live refs of the repo and of every attached git
+// store. A store attached at its root reads v0.1.17's `_root` folder.
+func liveSources(st *state) []liveSource {
+	out := []liveSource{{name: store.SourceRepo, dir: st.repoTop, refs: []string{liveRefLocal, liveRefTracking}}}
+	for _, name := range st.eng.Stores() {
+		if name == store.SourceRepo {
+			continue
+		}
+		gb, ok := st.byName[name].(gitStoreBackend)
+		if !ok || gb.Branch() == "" {
+			continue
+		}
+		f := strings.Trim(st.folders[name], "/")
+		if f == "" || f == "." {
+			f = liveRootFolder
+		}
+		v017 := false
+		if m, ok := st.byName[name].(markerOf); ok {
+			v017 = m.Marker().Version < rowfs.MarkerVersion
+		}
+		b := gb.Branch()
+		out = append(out, liveSource{name: name, dir: gb.Dir(), folder: f, branch: b, v017: v017,
+			refs: []string{liveRefLocal + "/" + b, liveTrackingPrefix + b}})
 	}
-	repo := st.byName[store.SourceRepo]
-	if repo == nil {
-		return nil, nil
-	}
+	return out
+}
+
+// liveTrackingPrefix + <branch> is where fetchStoreLive copies a store
+// branch's live ref inside the store clone.
+const liveTrackingPrefix = "refs/lore-remote/" + git.RemoteName + "/live/"
+
+// fetchStoreLive copies the store's live ref of src.branch from its remote
+// into the store clone (liveTrackingPrefix). Best effort: offline, or a
+// store with no live ref, leaves what is there.
+func fetchStoreLive(ctx context.Context, src liveSource) {
+	ref := liveRefLocal + "/" + src.branch
+	_, _ = liveGit(ctx, src.dir, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--", git.RemoteName, "+"+ref+":"+liveTrackingPrefix+src.branch)
+}
+
+// pendingLiveRows lists the live rows of core-owned tables that their
+// store is missing or holds older (by HLC). A store's tombstone is never
+// undone by a live row (rows are never resurrected). fetch: refresh each
+// store's live ref from its remote first (fetchAll: every git store;
+// otherwise only stores still marked v0.1.17, so a migrated setup pays
+// nothing).
+func pendingLiveRows(ctx context.Context, st *state, fetchAll bool) ([]pendingLive, error) {
 	var out []pendingLive
-	for _, lr := range rows {
-		sr, err := repo.Get(ctx, lr.row.Table, lr.row.ID)
-		if errors.Is(err, store.ErrNotFound) {
-			out = append(out, pendingLive{live: lr})
-			continue
+	for _, src := range liveSources(st) {
+		if src.branch != "" && (fetchAll || src.v017) {
+			fetchStoreLive(ctx, src)
 		}
+		rows, err := readLiveRows(ctx, src.dir, src.refs, src.folder, liveTables())
 		if err != nil {
 			return nil, err
 		}
-		if sr.Deleted || sr.HLC.Compare(lr.row.HLC) >= 0 {
-			continue
+		b := st.byName[src.name]
+		for _, lr := range rows {
+			sr, err := b.Get(ctx, lr.row.Table, lr.row.ID)
+			if errors.Is(err, store.ErrNotFound) {
+				out = append(out, pendingLive{source: src.name, live: lr})
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if sr.Deleted || sr.HLC.Compare(lr.row.HLC) >= 0 {
+				continue
+			}
+			cur, err := sr.Decode()
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, pendingLive{source: src.name, live: lr, cur: cur, has: true})
 		}
-		cur, err := sr.Decode()
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, pendingLive{live: lr, cur: cur, has: true})
 	}
 	return out, nil
 }
@@ -278,7 +354,7 @@ func (a *App) LiveNote(ctx context.Context) string {
 // liveNote is LiveNote for an opened state (App.state calls it while it
 // holds the App's lock, so it must not call back into the App).
 func liveNote(ctx context.Context, st *state) string {
-	p, err := pendingLiveRows(ctx, st)
+	p, err := pendingLiveRows(ctx, st, false)
 	if err != nil || len(p) == 0 {
 		return ""
 	}
@@ -299,27 +375,36 @@ func liveNote(ctx context.Context, st *state) string {
 }
 
 // MigrateLive implements opsmigrate.Rewriter: every live-ref row of a
-// core-owned table the repo store is missing (or holds older) is written
-// into the repo store as a `_v: 2` row with the same id and the live row's
+// core-owned table that its store is missing (or holds older) is written
+// into that store as a `_v: 2` row with the same id and the live row's
 // HLC, merged with the store's copy when there is one (logic/merge, newer
-// side wins per field). Written straight to the backend with Expect, like
-// RewriteV1: this is a format move, not an edit, so it must not stamp a
-// new HLC. Returns "table/id" per row (made, or that would be under dryRun).
-// The live ref itself is left as it is (read-only here); once its rows are
-// in, the repo store's copy is at least as new and LiveNote stays quiet.
+// side wins per field). Sources: the code repo's live ref (repo store) and
+// each attached git store's branch live ref, fetched first (only the
+// attached folder's rows; a folder no repo here attaches is migrated from
+// a repo that does). Written straight to the backend with Expect, like
+// RewriteV1: a format move, not an edit, so no new HLC. A store's batch is
+// one commit, pushed at once (Sync). Returns "table/id" per row, with
+// " (<store>)" for a store row (made, or that would be under dryRun). The
+// live refs themselves are left as they are; once their rows are in, the
+// store copy is at least as new and LiveNote stays quiet.
 func (a *App) MigrateLive(ctx context.Context, dryRun bool) ([]string, error) {
 	st, err := a.state(ctx)
 	if err != nil {
 		return nil, err
 	}
-	p, err := pendingLiveRows(ctx, st)
+	p, err := pendingLiveRows(ctx, st, true)
 	if err != nil || len(p) == 0 {
 		return nil, err
 	}
 	out := make([]string, 0, len(p))
-	changes := make([]store.Change, 0, len(p))
+	bySource := map[store.Source][]store.Change{}
+	var order []store.Source
 	for _, x := range p {
-		out = append(out, x.live.row.Table.String()+"/"+x.live.row.ID.String())
+		line := x.live.row.Table.String() + "/" + x.live.row.ID.String()
+		if x.source != store.SourceRepo {
+			line += " (" + string(x.source) + ")"
+		}
+		out = append(out, line)
 		r := x.live.row
 		var expect hlc.HLC
 		if x.has {
@@ -332,17 +417,28 @@ func (a *App) MigrateLive(ctx context.Context, dryRun bool) ([]string, error) {
 		if err != nil {
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: live row "+x.live.path, err)
 		}
-		changes = append(changes, store.Change{Row: sr, Expect: expect})
+		if _, seen := bySource[x.source]; !seen {
+			order = append(order, x.source)
+		}
+		bySource[x.source] = append(bySource[x.source], store.Change{Row: sr, Expect: expect})
 	}
 	if dryRun {
 		return out, nil
 	}
-	if err := st.byName[store.SourceRepo].Write(ctx, changes); err != nil {
-		return nil, err
-	}
-	a.wrote(nil)
-	if _, err := st.eng.Refresh(ctx, store.SourceRepo); err != nil {
-		return nil, err
+	for _, name := range order {
+		if err := st.byName[name].Write(ctx, bySource[name]); err != nil {
+			return nil, errs.Wrap(errs.CodeOf(err), "migrate: live rows into "+string(name), err)
+		}
+		if name == store.SourceRepo {
+			a.wrote(nil)
+			if _, err := st.eng.Refresh(ctx, name); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if _, err := st.eng.Sync(ctx, name); err != nil {
+			return nil, errs.Wrap(errs.CodeOf(err), "migrate: push the live rows of "+string(name), err)
+		}
 	}
 	return out, nil
 }
