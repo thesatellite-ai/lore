@@ -304,8 +304,8 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		out.Warnings = append(out.Warnings, Warning{Code: string(x.Code), Field: x.Field, Message: x.Message})
 	}
 	label := ""
-	if src != "" && src != store.SourceRepo {
-		label = " → " + string(src)
+	if l := work.Label(work.LabelerOf(o.env), src); l != "" {
+		label = " → " + l // v0.1.17 task add: " → " + route.Label ("[northwind/acme]")
 	}
 	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + " [" + priority + "]" + label + "\n"
 	return out, nil

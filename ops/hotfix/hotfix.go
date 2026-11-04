@@ -114,11 +114,14 @@ type AddOut struct {
 	Title    string       `json:"title"`
 	Severity string       `json:"severity"`
 	Warnings []kn.Warning `json:"warnings,omitempty"`
+	// label is the store's `_label` for the add line (kn.Label; "" for
+	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
+	label string
 }
 
 // Text prints v0.1.17's add line.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("⚠ %s — %s [%s]%s\n", o.ID, o.Title, o.Severity, kn.StoreLabel(o.Store))
+	return fmt.Sprintf("⚠ %s — %s [%s]%s\n", o.ID, o.Title, o.Severity, kn.LabelSuffix(o.label))
 }
 
 // WriteOut is the output of edit, archive, unarchive and delete.
@@ -297,7 +300,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), Title: in.Title, Severity: severity, Warnings: kn.Warnings(w)}, nil
+	return AddOut{ID: w.Row.ID.String(), Store: string(src), Title: in.Title, Severity: severity, Warnings: kn.Warnings(w), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // list returns the hotfixes in scope (archived included, as v0.1.17).

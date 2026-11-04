@@ -333,6 +333,12 @@ func LabelerOf(env Env) Labeler { return opsmemory.LabelerOf(env) }
 // "[<label>]" (opsmemory.Label; l nil = the store name).
 func Label(l Labeler, src store.Source) string { return opsmemory.Label(l, src) }
 
+// ExternalLine is v0.1.17's human line of a row from another store
+// (opsmemory.ExternalLine: "<id>  <text><status>  <label>").
+func ExternalLine(id, title, body, status, label string) string {
+	return opsmemory.ExternalLine(id, title, body, status, label)
+}
+
 // LabelSuffix is the " [<label>]" end of a human list line, from a
 // record's `_label` ("" for a repo row): v0.1.17 printed the label, so a
 // store attached at a linked folder shows [northwind/acme], not the bare

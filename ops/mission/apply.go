@@ -128,8 +128,8 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		verb = "found"
 	}
 	where := ""
-	if src != "" && src != store.SourceRepo {
-		where = " → " + string(src)
+	if l := work.Label(work.LabelerOf(o.env), src); l != "" {
+		where = " → " + l // v0.1.17 plan_apply: " → " + route.Label
 	}
 	var b strings.Builder
 	b.WriteString(work.Success + " " + m.ID.String() + " " + work.Field(m, work.FieldTitle) + " (" + verb + ")" + where + "\n")

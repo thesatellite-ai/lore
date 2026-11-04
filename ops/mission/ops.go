@@ -163,8 +163,8 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 	}
 	out, err := o.showOf(ctx, src, w.Row)
 	label := ""
-	if src != "" && src != store.SourceRepo {
-		label = " → " + string(src)
+	if l := work.Label(work.LabelerOf(o.env), src); l != "" {
+		label = " → " + l // v0.1.17: " → " + route.Label ("[northwind/acme]")
 	}
 	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + label + "\n"
 	return out, err

@@ -236,7 +236,9 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	if in.Repo != "" {
 		scope = "repo:" + in.Repo
 	}
-	out.Human = mark + " " + out.ID + " \n  scope: [" + scope + "]\n"
+	// v0.1.17: "✓ <id> <label>" ("" in the repo, keeping its space), then
+	// the scope line.
+	out.Human = mark + " " + out.ID + " " + Label(LabelerOf(o.env), src) + "\n  scope: [" + scope + "]\n"
 	return out, nil
 }
 

@@ -95,6 +95,9 @@ type AddOut struct {
 	OnTable  string    `json:"on_table"`
 	OnID     string    `json:"on_id"`
 	Warnings []Warning `json:"warnings,omitempty"`
+	// label is the store's `_label` ("" for the repo): v0.1.17 printed
+	// route.Label at the end of the add line.
+	label string
 }
 
 // Warning is one engine warning copied into an output (W_SCAN_DEGRADED).
@@ -104,9 +107,10 @@ type Warning struct {
 	Message string `json:"message"`
 }
 
-// Text is v0.1.17's line: "✓ comment <id> on <table>/<id>".
+// Text is v0.1.17's line: "✓ comment <id> on <table>/<id> <label>"; the
+// label is empty for a repo comment and v0.1.17 kept the space before it.
 func (o AddOut) Text() string {
-	return "✓ comment " + o.ID + " on " + o.OnTable + "/" + o.OnID + "\n"
+	return "✓ comment " + o.ID + " on " + o.OnTable + "/" + o.OnID + " " + o.label + "\n"
 }
 
 // ListIn is the input of comment.list.
@@ -288,7 +292,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	out := AddOut{ID: w.Row.ID.String(), Store: o.storeOf(ctx, w.Row.ID, store.Source(in.To)), OnTable: string(tbl), OnID: id.String()}
+	src := o.storeOf(ctx, w.Row.ID, store.Source(in.To))
+	out := AddOut{ID: w.Row.ID.String(), Store: src, OnTable: string(tbl), OnID: id.String()}
+	out.label = opsmemory.Label(opsmemory.LabelerOf(o.env), store.Source(src))
 	for _, x := range w.Warnings {
 		out.Warnings = append(out.Warnings, Warning{Code: string(x.Code), Field: x.Field, Message: x.Message})
 	}

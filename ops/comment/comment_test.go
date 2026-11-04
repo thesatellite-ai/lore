@@ -19,7 +19,10 @@ func TestCommentLifecycle(t *testing.T) {
 	task := h.Seed(schema.TableTasks, nil)
 	add := h.Must("comment.add", `{"on_table":"tasks","on_id":"`+task+`","body":"looks good to me"}`)
 	id := h.ID(add)
-	if got, want := opstest.Text(add), "✓ comment "+id+" on tasks/"+task+"\n"; got != want {
+	// v0.1.17 printed "%s comment %s on %s/%s %s\n" with route.Label empty
+	// for a repo comment, so the line ends in a space (checked against
+	// /home/khanakia/.local/bin/lore 0.1.17, 2026-11-04).
+	if got, want := opstest.Text(add), "✓ comment "+id+" on tasks/"+task+" \n"; got != want {
 		t.Fatalf("add %q, want %q", got, want)
 	}
 	long := strings.Repeat("x", 70)
@@ -106,7 +109,7 @@ func TestCommentTargets(t *testing.T) {
 		h.Fails("comment.add", `{"on_table":`+opstest.Quote(c.table)+`,"on_id":`+opstest.Quote(c.id)+`,"body":"hi"}`, c.code)
 	}
 	run := "run_01a1a67b1b617dc7acc5f1af36e0e979"
-	if got := opstest.Text(h.Must("comment.add", `{"on_table":"runs","on_id":"`+run+`","body":"hi"}`)); !strings.HasSuffix(got, " on runs/"+run+"\n") {
+	if got := opstest.Text(h.Must("comment.add", `{"on_table":"runs","on_id":"`+run+`","body":"hi"}`)); !strings.HasSuffix(got, " on runs/"+run+" \n") {
 		t.Fatalf("non-core target: %q", got)
 	}
 	h.MustYes("task.delete", `{"id":"`+task+`"}`)

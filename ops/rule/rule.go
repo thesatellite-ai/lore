@@ -122,13 +122,16 @@ type AddOut struct {
 	Scope    string       `json:"scope"`
 	Severity string       `json:"severity"`
 	Warnings []kn.Warning `json:"warnings,omitempty"`
+	// label is the store's `_label` for the add line (kn.Label; "" for
+	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
+	label string
 }
 
 // Text prints v0.1.17's add lines. v0.1.17 printed "✓ <id> <label>" with
 // an empty label for the repo, so the first line keeps that trailing space
-// (kn.AddLabel).
+// (o.label empty).
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s %s\n  scope: [%s] severity: %s\n", o.ID, kn.AddLabel(o.Store), o.Scope, o.Severity)
+	return fmt.Sprintf("✓ %s %s\n  scope: [%s] severity: %s\n", o.ID, o.label, o.Scope, o.Severity)
 }
 
 // WriteOut is the output of edit, archive, unarchive and delete.
@@ -168,15 +171,21 @@ func (o ListOut) Text() string {
 	if len(o.Data) == 0 {
 		return "(no rules)\n"
 	}
-	var b strings.Builder
+	// v0.1.17 printed the repo's rules first, then each rule of another
+	// store as an external row (stores_reads.go: id, body, label).
+	var b, ext strings.Builder
 	for _, r := range o.Data {
+		if r.Label != "" {
+			ext.WriteString(kn.ExternalLine(r.ID, "", r.Body, "", r.Label))
+			continue
+		}
 		badge := ""
 		if !r.ArchivedAt.IsZero() {
 			badge = " [archived]"
 		}
-		fmt.Fprintf(&b, "%s [%s/%s] %s%s%s\n", r.ID, r.Severity, r.Activation, kn.Cut(r.Body, kn.ListCut), badge, kn.LabelSuffix(r.Label))
+		fmt.Fprintf(&b, "%s [%s/%s] %s%s\n", r.ID, r.Severity, r.Activation, kn.Cut(r.Body, kn.ListCut), badge)
 	}
-	return b.String()
+	return b.String() + ext.String()
 }
 
 // Record is one rule in v0.1.17's --json form (ent Rule JSON: same keys,
@@ -319,7 +328,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), Scope: kn.ScopeLabel(in.Repo), Severity: sev, Warnings: kn.Warnings(w)}, nil
+	return AddOut{ID: w.Row.ID.String(), Store: string(src), Scope: kn.ScopeLabel(in.Repo), Severity: sev, Warnings: kn.Warnings(w), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // list returns the rules in scope.

@@ -28,15 +28,39 @@ func cutBody(body string) string {
 // the scope line).
 func (o WriteOut) Text() string { return o.Human }
 
-// Text prints one "<id> [<kind>] <body>" line per memory, the body cut at
-// 80 bytes and " [archived]" after an archived one; "(no memories)" when
-// there is none.
+// ExternalLine is v0.1.17's human line of a row from outside the checkout
+// (stores_reads.go printExternalRows): "<id>  <text><status>  <label>",
+// where text is the title, the title + " — " + body when both differ, or
+// the body alone, folded onto one line (whitespace runs become one space,
+// never cut), status is "  <status>" when the row has one, and label is
+// its `_label` ("[northwind/acme]", "[me]").
+func ExternalLine(id, title, body, status, label string) string {
+	t := title
+	if t == "" {
+		t = body
+	} else if body != "" && body != title {
+		t += " — " + body
+	}
+	if status != "" {
+		status = "  " + status
+	}
+	return id + "  " + strings.Join(strings.Fields(t), " ") + status + "  " + label + "\n"
+}
+
+// Text prints one "<id> [<kind>] <body>" line per repo memory, the body
+// cut at 80 bytes and " [archived]" after an archived one, then each
+// memory of another store as v0.1.17 printed it after the repo's own
+// (ExternalLine, with its label); "(no memories)" when there is none.
 func (o ListOut) Text() string {
 	if len(o.Data) == 0 {
 		return "(no memories)\n"
 	}
-	var b strings.Builder
+	var b, ext strings.Builder
 	for _, m := range o.Data {
+		if m.Label != "" {
+			ext.WriteString(ExternalLine(m.ID, "", m.Body, "", m.Label))
+			continue
+		}
 		body := m.Body
 		body = cutBody(body)
 		badge := ""
@@ -45,7 +69,7 @@ func (o ListOut) Text() string {
 		}
 		fmt.Fprintf(&b, "%s [%s] %s%s\n", m.ID, m.Kind, body, badge)
 	}
-	return b.String()
+	return b.String() + ext.String()
 }
 
 // Text prints the id, kind/trust/source (plus superseded-by, archived-at

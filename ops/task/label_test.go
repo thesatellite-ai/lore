@@ -19,8 +19,12 @@ import (
 type labelCase struct {
 	add, input, list string
 	// human: the noun's human list line shows the store label (v0.1.17's
-	// task / rule / decision / hotfix lines did; the others show none).
+	// task / memory / rule / decision / hotfix lines did; the others show
+	// none).
 	human bool
+	// addLine is the first human line of the add for the new id and the
+	// store label (v0.1.17 printed route.Label there); nil = not checked.
+	addLine func(id, label string) string
 }
 
 // labelCases covers each output family: task (work + its own text),
@@ -30,16 +34,21 @@ type labelCase struct {
 func labelCases(to string) []labelCase {
 	q := `"to":"` + to + `"`
 	return []labelCase{
-		{"task.add", `{"title":"labelled task",` + q + `}`, "task.list", true},
-		{"tasklist.add", `{"title":"labelled list","body":"b",` + q + `}`, "tasklist.list", false},
-		{"plan.add", `{"title":"labelled plan","body":"steps",` + q + `}`, "plan.list", false},
-		{"mission.add", `{"title":"labelled mission",` + q + `}`, "mission.list", false},
-		{"memory.add", `{"body":"labelled memory",` + q + `}`, "memory.list", false},
-		{"rule.add", `{"body":"labelled rule",` + q + `}`, "rule.list", true},
-		{"decision.add", `{"title":"labelled decision","body":"why",` + q + `}`, "decision.list", true},
-		{"hotfix.add", `{"title":"labelled hotfix","body":"fix",` + q + `}`, "hotfix.list", true},
-		{"pattern.add", `{"title":"labelled pattern","body":"p",` + q + `}`, "pattern.list", false},
-		{"playbook.add", `{"title":"labelled playbook","body":"p",` + q + `}`, "playbook.list", false},
+		{"task.add", `{"title":"labelled task",` + q + `}`, "task.list", true,
+			func(id, l string) string { return "✓ " + id + " — labelled task [medium] → " + l }},
+		{"tasklist.add", `{"title":"labelled list","body":"b",` + q + `}`, "tasklist.list", false, nil},
+		{"plan.add", `{"title":"labelled plan","body":"steps",` + q + `}`, "plan.list", false, nil},
+		{"mission.add", `{"title":"labelled mission",` + q + `}`, "mission.list", false,
+			func(id, l string) string { return "✓ " + id + " — labelled mission → " + l }},
+		{"memory.add", `{"body":"labelled memory",` + q + `}`, "memory.list", true,
+			func(id, l string) string { return "✓ " + id + " " + l }},
+		{"rule.add", `{"body":"labelled rule",` + q + `}`, "rule.list", true,
+			func(id, l string) string { return "✓ " + id + " " + l }},
+		{"decision.add", `{"title":"labelled decision","body":"why",` + q + `}`, "decision.list", true,
+			func(id, l string) string { return "✓ " + id + " — labelled decision " + l }},
+		{"hotfix.add", `{"title":"labelled hotfix","body":"fix",` + q + `}`, "hotfix.list", true, nil},
+		{"pattern.add", `{"title":"labelled pattern","body":"p",` + q + `}`, "pattern.list", false, nil},
+		{"playbook.add", `{"title":"labelled playbook","body":"p",` + q + `}`, "playbook.list", false, nil},
 	}
 }
 
@@ -78,8 +87,15 @@ func TestStoreLabelInOutputs(t *testing.T) {
 		}
 		for _, c := range labelCases(to) {
 			t.Run(s.name+"/"+c.list, func(t *testing.T) {
-				if _, err := s.h.RunYes(c.add, c.input); err != nil {
+				added, err := s.h.RunYes(c.add, c.input)
+				if err != nil {
 					t.Fatalf("%s %s: %v", c.add, c.input, err)
+				}
+				if c.addLine != nil {
+					first, _, _ := strings.Cut(opstest.Text(added), "\n")
+					if want := c.addLine(s.h.ID(added), s.label); first != want {
+						t.Errorf("%s line\n got %q\nwant %q", c.add, first, want)
+					}
 				}
 				res := s.h.Must(c.list, `{}`)
 				js := s.h.JSON(res)
@@ -109,5 +125,48 @@ func TestStoreLabelInOutputs(t *testing.T) {
 		if !strings.Contains(js, `"_source":"northwind","_label":"[northwind/acme]"`) {
 			t.Errorf("%s hit lacks the label: %s", op, js)
 		}
+	}
+}
+
+// TestExternalRowLines: memory and rule lists print the repo's rows first in
+// their own form, then each row of another store as v0.1.17's external row
+// "<id>  <text>  <label>" (stores_reads.go printExternalRows: text folded
+// onto one line, never cut); the add lines of memory, rule and comment end
+// in the label, and in the repo in v0.1.17's trailing space.
+func TestExternalRowLines(t *testing.T) {
+	h0 := opstest.WithStores(t, []string{"northwind"})
+	b, err := os.ReadFile(filepath.Join(h0.Repo, ".lore", "stores.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := regexp.MustCompile(`url: (\S+)`).FindStringSubmatch(string(b))[1]
+	h := opstest.New(t, func(o *wire.Options) {
+		o.OrgStores = func(context.Context) ([]attach.Store, error) {
+			return []attach.Store{{Name: "northwind", URL: url, Folder: "acme"}}, nil
+		}
+		o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
+	})
+	const lab = "[northwind/acme]"
+	long := strings.Repeat("w ", 60) // over v0.1.17's 80-byte repo cut: external rows are not cut
+	ext := h.ID(h.MustYes("memory.add", `{"body":"multi\n  line\tbody `+long+`","to":"northwind"}`))
+	repoAdd := h.MustYes("memory.add", `{"body":"repo memory"}`)
+	repo := h.ID(repoAdd)
+	if got, want := opstest.Text(repoAdd), "✓ "+repo+" \n  scope: [master]\n"; got != want {
+		t.Errorf("repo memory add %q, want %q", got, want)
+	}
+	wantList := repo + " [retrieved] repo memory\n" +
+		ext + "  multi line body " + strings.TrimSpace(long) + "  " + lab + "\n"
+	if got := opstest.Text(h.Must("memory.list", `{}`)); got != wantList {
+		t.Errorf("memory list\n got %q\nwant %q", got, wantList)
+	}
+	rext := h.ID(h.MustYes("rule.add", `{"body":"store rule","to":"northwind"}`))
+	rrepo := h.ID(h.MustYes("rule.add", `{"body":"repo rule"}`))
+	rl := opstest.Text(h.Must("rule.list", `{}`))
+	if !strings.HasSuffix(rl, rext+"  store rule  "+lab+"\n") || !strings.HasPrefix(rl, rrepo+" [") {
+		t.Errorf("rule list: repo rows first, then %q:\n%s", rext+"  store rule  "+lab, rl)
+	}
+	c := opstest.Text(h.MustYes("comment.add", `{"on_table":"memories","on_id":"`+ext+`","body":"hi","to":"northwind"}`))
+	if !strings.HasSuffix(c, " on memories/"+ext+" "+lab+"\n") {
+		t.Errorf("store comment add %q", c)
 	}
 }
