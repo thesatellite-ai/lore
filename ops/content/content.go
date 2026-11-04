@@ -426,12 +426,11 @@ func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(row.Row) bool) 
 	return out, nil
 }
 
-// ProjectFilter resolves a --project value to the project id a read keeps
-// ("" = every project, as memory reads do).
+// ProjectFilter resolves a --project value to the project id a read keeps.
+// Without --project it is the repo's own project: v0.1.17 listed and
+// searched these nouns in the current project only (Where ProjectID), so
+// rows another repo wrote into a shared store stay out unless named.
 func (o Ops) ProjectFilter(ctx context.Context, flag string) (string, error) {
-	if flag == "" {
-		return "", nil
-	}
 	p, err := o.ProjectOf(ctx, flag)
 	if err != nil {
 		return "", err
@@ -439,8 +438,8 @@ func (o Ops) ProjectFilter(ctx context.Context, flag string) (string, error) {
 	return p.String(), nil
 }
 
-// ProjectOf resolves --project (prj_ id or name among the repo store's
-// projects); "" is the repo's one project.
+// ProjectOf resolves --project (a name among the repo store's projects, or
+// any prj_ id); "" is the repo's one project.
 func (o Ops) ProjectOf(ctx context.Context, flag string) (ids.ID[ids.Project], error) {
 	if flag == "" {
 		return o.Env.Project(ctx)
@@ -457,6 +456,11 @@ func (o Ops) ProjectOf(ctx context.Context, flag string) (ids.ID[ids.Project], e
 	}
 	switch len(hits) {
 	case 0:
+		// A prj_ id of another repo's project (its rows in a shared store)
+		// is taken as given: `list --project prj_…` reads that project.
+		if id, perr := ids.Parse[ids.Project](flag); perr == nil {
+			return id, nil
+		}
 		return ids.ID[ids.Project]{}, errs.New(errs.NotFound, o.Noun+": no project "+QuoteID(flag)).
 			WithHint("run `lore project list` to see the projects")
 	case 1:
