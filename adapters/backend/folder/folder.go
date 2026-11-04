@@ -209,6 +209,32 @@ func (b *Backend) Write(ctx context.Context, changes []store.Change) error {
 	return joinRelease(err, lock)
 }
 
+// WritePurge writes changes like Write and, in the same batch, adds purged
+// to the folder's _purged.json (rowfs.Folder.ApplyPurge): the engine's
+// purge path (engine.Purger).
+func (b *Backend) WritePurge(ctx context.Context, changes []store.Change, purged []ids.AnyID) error {
+	if err := b.usable(ctx); err != nil {
+		return err
+	}
+	if b.readOnly {
+		return store.ErrReadOnly
+	}
+	lock, err := b.root.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = b.folder.ApplyPurge(ctx, changes, purged)
+	return joinRelease(err, lock)
+}
+
+// Purged returns the ids the folder's _purged.json lists (engine.Purger).
+func (b *Backend) Purged(ctx context.Context) (map[string]bool, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, err
+	}
+	return b.folder.Purged()
+}
+
 // joinRelease releases lock and keeps the first error.
 func joinRelease(err error, lock *rowfs.Lock) error {
 	if rerr := lock.Release(); rerr != nil && err == nil {

@@ -18,6 +18,7 @@ const (
 	ActionCreate Action = "create"
 	ActionUpdate Action = "update"
 	ActionDelete Action = "delete" // a tombstone was written
+	ActionPurge  Action = "purge"  // a tombstone was written and its id listed in _purged.json
 )
 
 // Event is one audit record. It never carries a field value: only names,

@@ -208,6 +208,43 @@ func (b *Backend) WriteBatch(ctx context.Context, batch Batch, changes []store.C
 	return releaseKeep(err, lock)
 }
 
+// WritePurge writes changes like Write and, in the same batch and the same
+// commit, adds purged to the folder's _purged.json (rowfs.Folder.ApplyPurge;
+// engine.Purger). Repo mode writes files only, as Write does.
+func (b *Backend) WritePurge(ctx context.Context, changes []store.Change, purged []ids.AnyID) error {
+	if err := b.usable(ctx); err != nil {
+		return err
+	}
+	if b.readOnly {
+		return store.ErrReadOnly
+	}
+	lock, err := b.root.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	applied, err := b.folder.ApplyPurge(ctx, changes, purged)
+	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {
+		subj := changes
+		if len(subj) == 0 {
+			// only the list changed: name the first purged id in the subject
+			subj = []store.Change{{Row: store.Row{ID: purged[0]}}}
+		}
+		err = b.commitBatch(ctx, Batch{Op: purgeOp}, subj, applied)
+	}
+	return releaseKeep(err, lock)
+}
+
+// purgeOp is the batch operation of a purge commit ("lore: purge <id>").
+const purgeOp = "purge"
+
+// Purged returns the ids the folder's _purged.json lists (engine.Purger).
+func (b *Backend) Purged(ctx context.Context) (map[string]bool, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, err
+	}
+	return b.folder.Purged()
+}
+
 // releaseKeep releases lock and keeps the first error.
 func releaseKeep(err error, lock *rowfs.Lock) error {
 	if rerr := lock.Release(); rerr != nil && err == nil {

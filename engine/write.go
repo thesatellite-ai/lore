@@ -121,12 +121,13 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 		return Written{}, err
 	}
 	got, err := e.put(ctx, st, r, hlc.HLC{}, allows...)
-	if natural && errors.Is(err, store.ErrStale) {
+	if natural && (errors.Is(err, store.ErrStale) || errors.Is(err, errPurgedID)) {
+		taken := err // why the id is taken (kept: allowRows below reuses err)
 		// the re-created row gets a fresh id: its allow entries follow it
 		if allows, err = e.allowRows(cl, sc.accepted, ids.AnyID{}, actor, stamp); err != nil {
 			return Written{}, err
 		}
-		got, err = e.recreateNatural(ctx, st, def, keyFields, r, err, allows)
+		got, err = e.recreateNatural(ctx, st, def, keyFields, r, taken, allows)
 		id = got.row.ID
 	}
 	if err != nil {
@@ -152,10 +153,12 @@ func (e *Engine) recreateNatural(ctx context.Context, st Attached, def schema.Ta
 			WithHint("use the existing row")
 	}
 	_, cur, err := e.locate(ctx, Ref{Store: st.Name, Table: def.Name, ID: r.ID})
-	if err != nil {
+	switch {
+	case errs.Has(err, errs.NotFound) && errors.Is(stale, errPurgedID):
+		// purged and its tombstone file gone: the id is still taken for good
+	case err != nil:
 		return stored{}, err
-	}
-	if !cur.Deleted {
+	case !cur.Deleted:
 		return stored{}, exists(r.ID)
 	}
 	live, err := e.List(ctx, st.Name, def.Name)
@@ -391,7 +394,6 @@ func (e *Engine) shown(field string, v value.Value) string {
 // it (E_HAS_DEPENDENTS), cascade tombstones them too, set_null clears their
 // field, tombstone_only leaves them. Tombstones are kept forever.
 func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
-	cl := e.callOf(ctx)
 	src, cur, err := e.locate(ctx, ref)
 	if err != nil {
 		return Written{}, err
@@ -402,13 +404,25 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 	if cur.Deleted {
 		return Written{}, errs.New(errs.NotFound, "engine: "+cur.ID.String()+" is already deleted")
 	}
+	return e.remove(ctx, src, cur, false)
+}
+
+// remove is Delete's write for the live row cur of store src. With purge
+// every store the plan tombstones in must be a Purger, and each tombstoned
+// id is also added to that folder's _purged.json in the same batch.
+func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purge bool) (Written, error) {
+	cl := e.callOf(ctx)
 	plan, err := e.planDelete(ctx, src, cur)
 	if err != nil {
 		return Written{}, err
 	}
 	for name := range plan.byStore {
-		if _, err := e.writable(name); err != nil { // check every store before writing any
+		st, err := e.writable(name) // check every store before writing any
+		if err != nil {
 			return Written{}, err
+		}
+		if _, ok := st.Backend.(Purger); purge && !ok {
+			return Written{}, errs.New(errs.Unsupported, "engine: store "+string(name)+" cannot record purged ids")
 		}
 	}
 	actor := e.actorOf(cl)
@@ -425,8 +439,13 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 		changes := make([]store.Change, 0, len(steps))
 		rows := make([]store.Row, 0, len(steps))
 		events := make([]Event, 0, len(steps))
+		var purged []ids.AnyID
 		for _, s := range steps {
 			next, action := e.applyStep(s, actor)
+			if purge && next.Deleted {
+				purged = append(purged, next.ID)
+				action = ActionPurge
+			}
 			next = stampAs(st, next)
 			sr, err := store.FromRow(next)
 			if err != nil {
@@ -443,7 +462,13 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 			}
 			events = append(events, ev)
 		}
-		if err := st.Backend.Write(ctx, changes); err != nil {
+		var werr error
+		if p, ok := st.Backend.(Purger); purge && ok && len(purged) > 0 {
+			werr = p.WritePurge(ctx, changes, purged)
+		} else {
+			werr = st.Backend.Write(ctx, changes)
+		}
+		if err := werr; err != nil {
 			if errors.Is(err, store.ErrStale) {
 				return Written{}, errs.Wrap(errs.Stale, "engine: a row changed while "+cur.ID.String()+" was deleted", err).WithHint("rerun the command")
 			}
@@ -704,6 +729,9 @@ func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, er
 // secret_allows entries a confirmed write records (SQ2). They expect no
 // row (fresh ids).
 func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC, extra ...row.Row) (stored, error) {
+	if err := refusePurged(ctx, st, r.ID, r.Deleted); err != nil {
+		return stored{}, err // every live write (create, update, merge, move) passes here
+	}
 	r = stampAs(st, r)
 	sr, err := store.FromRow(r)
 	if err != nil {
