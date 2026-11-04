@@ -575,21 +575,38 @@ func TestE2E_InitOnCloneAdopts(t *testing.T) {
 }
 
 // E33: a credential never reaches a git-tracked file.
+// D12 / O12a (owner): --allow-secrets is removed with no alias; a flagged
+// value is written only on the confirm path (a terminal yes, or --yes
+// from a person), which records the accepted match in secret_allows (SQ2).
+// Before D12 this pinned v0.1.17's "row kept in lore.db, never exported,
+// listed by sync status". Now: without a confirmation nothing is written
+// anywhere (no row file, so nothing can reach git); --yes writes the row
+// file and its secret_allows entry; the old flag is an unknown flag.
 func TestE2E_SecretNotExported(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	r := c.lore("rule", "add", "--allow-secrets", "--body", "aws key AKIAIOSFODNN7EXAMPLE")
-	id := idPattern.FindString(r.stdout)
-	if _, err := os.Stat(c.dataFile("rules", id)); !os.IsNotExist(err) {
-		t.Fatal("secret exported to a git-tracked file")
+	key := "AKIA" + strings.Repeat("Q", 16) // built at runtime: no key-shaped literal in source
+	body := "aws key " + key
+	r := c.w.run(c.dir, c.env, e2eBin, "rule", "add", "--body", body)
+	if r.code == 0 || (!strings.Contains(r.stderr, "E_SECRET_DETECTED") && !strings.Contains(r.stderr, "E_NEEDS_CONFIRM")) {
+		t.Fatalf("an unconfirmed secret must be refused: %+v", r)
 	}
-	if !strings.Contains(r.stderr, "secret-detected") {
-		t.Fatalf("secret refusal not reported: %s", r.stderr)
+	if m, _ := filepath.Glob(filepath.Join(c.dir, ".lore", "data", "rules", "*.json")); len(m) != 0 {
+		t.Fatalf("a refused secret wrote a row file: %v", m)
 	}
-	st := c.lore("sync", "status", "--json").stdout
-	if !strings.Contains(st, "secret-detected") {
-		t.Fatalf("status must list it: %s", st)
+	if r := c.w.run(c.dir, c.env, e2eBin, "rule", "add", "--allow-secrets", "--body", body); r.code == 0 || !strings.Contains(r.stderr, "unknown flag: --allow-secrets") {
+		t.Fatalf("--allow-secrets is removed with no alias: %+v", r)
+	}
+	ok := c.lore("rule", "add", "--yes", "--body", body)
+	id := idPattern.FindString(ok.stdout)
+	b, err := os.ReadFile(c.dataFile("rules", id))
+	if err != nil || !strings.Contains(string(b), key) {
+		t.Fatalf("a confirmed value is written: %v %s", err, b)
+	}
+	allows, _ := filepath.Glob(filepath.Join(c.dir, ".lore", "data", "secret_allows", "*.json"))
+	if len(allows) == 0 {
+		t.Fatal("the confirmation is recorded in secret_allows")
 	}
 }
 
