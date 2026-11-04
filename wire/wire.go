@@ -148,6 +148,10 @@ type Options struct {
 	// already uses is skipped (the committed file wins). Nil, or an error,
 	// attaches nothing (fail closed: an internal store is never guessed).
 	OrgStores func(ctx context.Context) ([]attach.Store, error)
+	// Notice receives one-line notices for the person, once per open (a
+	// CLI prints them on stderr; nil drops them). Today: LiveNote, when the
+	// v0.1.17 live ref holds rows the core cannot see yet.
+	Notice func(msg string)
 }
 
 // WriteQuery is what the write hooks (Options.GuardRepoWrite,
@@ -314,6 +318,11 @@ func (a *App) state(ctx context.Context) (*state, error) {
 	if !a.opened {
 		a.opened = true
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
+		if a.err == nil && a.opts.Notice != nil {
+			if n := liveNote(ctx, a.st); n != "" {
+				a.opts.Notice(n)
+			}
+		}
 	}
 	return a.st, a.err
 }

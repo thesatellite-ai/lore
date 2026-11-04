@@ -107,7 +107,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}})
+	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}, Notice: coreNotice})
 	if err != nil {
 		panic(err)
 	}
@@ -906,3 +906,7 @@ const (
 	fieldSupersededBy = "superseded_by_id"
 	fieldStatus       = "status"
 )
+
+// coreNotice prints a core notice (wire.Options.Notice) on stderr, so
+// stdout (--json, piped output) stays the command's own.
+func coreNotice(msg string) { fmt.Fprintln(os.Stderr, msg) }

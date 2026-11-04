@@ -48,6 +48,11 @@ type Rewriter interface {
 	// v1 store markers) and returns one line per change (made, or that
 	// would be made under dryRun).
 	MigrateSettings(ctx context.Context, dryRun bool) ([]string, error)
+	// MigrateLive brings the v0.1.17 live ref's rows of core-owned tables
+	// (open tasks and the like, never landed in .lore/data) into the repo
+	// store as `_v: 2` rows with the same id and stamp, and returns
+	// "table/id" per row (made, or that would be made under dryRun).
+	MigrateLive(ctx context.Context, dryRun bool) ([]string, error)
 	// LockMigration takes the migration lock (E_MIGRATE_LOCKED when held);
 	// the returned func releases it.
 	LockMigration(ctx context.Context) (func() error, error)
@@ -90,6 +95,11 @@ func Ops(rw Rewriter) []op.Entry {
 				return RunOut{}, err
 			}
 			out.Steps = append(out.Steps, steps...)
+			live, err := rw.MigrateLive(ctx, in.DryRun)
+			if err != nil {
+				return RunOut{}, err
+			}
+			out.Rows = append(out.Rows, live...)
 			for _, t := range rw.MigratedTables() {
 				got, err := rw.RewriteV1(ctx, t, in.DryRun)
 				if err != nil {
