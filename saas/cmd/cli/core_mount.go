@@ -310,6 +310,7 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 			r.pending = errs.New(errs.Unsupported, "--db is not supported by this command: its rows are row files read from the repository, not lore.db").
 				WithHint("run the command inside the repository (or name a store with --store / --to)")
 		}
+		applyEnvDefaults(cmd)
 		asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON)
 		if !asJSON {
 			// Buffered so v0.1.17's "filed:" line (printRoute: where a
@@ -334,6 +335,28 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 		err := inner(cmd, args)
 		cmd.SetOut(out)
 		return errors.Join(err, writeIndented(out, buf.Bytes()))
+	}
+}
+
+// envFlagDefaults are v0.1.17's environment fallbacks for a row command's
+// scope flags (projresolve: flag > env): LORE_PROJECT_ID for --project,
+// LORE_REPO for --repo. LORE_DB is not one: --db is refused on core
+// commands, and so is its variable (memparity).
+var envFlagDefaults = [][2]string{
+	{constants.FlagProject, projresolve.EnvProjectID},
+	{constants.FlagRepo, projresolve.EnvRepo},
+}
+
+// applyEnvDefaults sets each scope flag the command has, and the caller did
+// not give, from its environment variable when that is set.
+func applyEnvDefaults(cmd *cobra.Command) {
+	for _, fe := range envFlagDefaults {
+		fl := cmd.Flags().Lookup(fe[0])
+		v := os.Getenv(fe[1])
+		if fl == nil || fl.Changed || v == "" {
+			continue
+		}
+		_ = cmd.Flags().Set(fe[0], v) // a string flag accepts any value; the op validates it
 	}
 }
 
