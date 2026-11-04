@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // wantAttached is the attach limit spec 7.4 asks for.
@@ -33,9 +34,25 @@ const MaxLensSources = 10
 
 // LensSource is one cache file in a lens. Name becomes the `source` column
 // (the store's name in stores.yaml, or store.SourceRepo).
+//
+// Combined marks a combined cache file (CFG3, O10) holding several
+// sources: its rows take `source` from their own _source column and
+// ResolveID reports each row's own source, so Name is only a label there.
+// A lens may mix plain files and combined ones (the repo's own cache plus
+// the combined file of its stores).
 type LensSource struct {
-	Name string
-	Path string
+	Name     string
+	Path     string
+	Combined bool
+}
+
+// LensOptions changes what a lens exposes.
+type LensOptions struct {
+	// MaskSensitive replaces every value of a sensitive kind field with
+	// MaskedValue in the lens views (RQ1: sensitive values are hidden from
+	// sql output unless asked for) and refuses any query that could read
+	// past the views (see lens_mask.go).
+	MaskSensitive bool
 }
 
 // LensHit is where ResolveID found an id.
@@ -65,11 +82,11 @@ type Lens struct {
 	sources []LensSource
 	sql     []sourceSQL // per source, same order
 	views   []string
-	// combined marks a lens over one combined cache file: the `source`
-	// column and ResolveID read each row's own _source instead of the
-	// LensSource name.
-	combined bool
-	closed   bool
+	// masked is LensOptions.MaskSensitive: the views mask sensitive values
+	// and Query refuses the names that would bypass them (hidden).
+	masked bool
+	hidden []string
+	closed bool
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -82,6 +99,9 @@ type sourceSQL struct {
 	attach  string // takes the file URI
 	objects string // the `_tables` records
 	resolve string // takes an id: (source, table) of every live row with that id
+	// sensitive lists (kind id, kind name, field id, field name) of every
+	// sensitive kind field (lens_mask.go).
+	sensitive string
 }
 
 // sqlForSource builds the statements of the i-th source.
@@ -94,6 +114,8 @@ func sqlForSource(i int) (sourceSQL, error) {
 		attach:  "ATTACH DATABASE ? AS " + sq,
 		objects: "SELECT objects FROM " + sq + `."` + tblTables + `" ORDER BY name`,
 		resolve: "SELECT source, tbl FROM " + sq + `."` + tblRows + `" WHERE id = ? AND deleted = 0 ORDER BY source, tbl`,
+		sensitive: `SELECT k.id, k."` + fieldName + `", f.id, f."` + fieldName + `" FROM ` + sq + `."` + schema.TableKindFields + `" f JOIN ` +
+			sq + `."` + schema.TableKinds + `" k ON k.id = f."` + fieldKindID + `" WHERE f."` + fieldSensitive + `" = 1`,
 	}, nil
 }
 
@@ -103,6 +125,11 @@ func sqlForSource(i int) (sourceSQL, error) {
 // versions, two shapes of one kind) are unioned by column name, NULL where
 // a source lacks a column.
 func OpenLens(ctx context.Context, sources []LensSource) (*Lens, error) {
+	return OpenLensWith(ctx, sources, LensOptions{})
+}
+
+// OpenLensWith is OpenLens with options (masking of sensitive values).
+func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Lens, error) {
 	if err := checkSources(sources); err != nil {
 		return nil, err
 	}
@@ -115,7 +142,7 @@ func OpenLens(ctx context.Context, sources []LensSource) (*Lens, error) {
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources)}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -139,20 +166,7 @@ func OpenLensCombined(ctx context.Context, path string) (*Lens, error) {
 	if path == "" {
 		return nil, errs.New(errs.InvalidInput, "sqlite lens: a combined lens needs a path")
 	}
-	db, err := sql.Open(driverName, "file::memory:")
-	if err != nil {
-		return nil, dbErr("open lens", err)
-	}
-	db.SetMaxOpenConns(1)
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return nil, errors.Join(dbErr("open lens", err), db.Close())
-	}
-	l := &Lens{db: db, conn: conn, sources: []LensSource{{Name: combinedSourceName, Path: path}}, combined: true}
-	if err := l.setup(ctx); err != nil {
-		return nil, errors.Join(err, l.Close())
-	}
-	return l, nil
+	return OpenLens(ctx, []LensSource{{Name: combinedSourceName, Path: path, Combined: true}})
 }
 
 // checkSources validates the source list.
@@ -199,10 +213,6 @@ func (l *Lens) setup(ctx context.Context) error {
 	if limit < len(l.sources) {
 		return errs.New(errs.Unsupported, "sqlite lens: attach limit is "+strconv.Itoa(limit))
 	}
-	type srcTable struct {
-		src  int
-		cols []string
-	}
 	tables := map[string][]srcTable{}
 	for i, s := range l.sources {
 		abs, err := filepath.Abs(s.Path)
@@ -230,58 +240,89 @@ func (l *Lens) setup(ctx context.Context) error {
 			tables[n] = append(tables[n], srcTable{src: i, cols: cols})
 		}
 	}
+	var m mask
+	if l.masked {
+		var maskErr error
+		if m, maskErr = l.sensitive(ctx, tables); maskErr != nil {
+			return maskErr
+		}
+		l.hidden = l.hiddenNames()
+	}
 	names := make([]string, 0, len(tables))
 	for n := range tables {
 		names = append(names, n)
 	}
 	slices.Sort(names)
 	for _, n := range names {
-		var all []string
-		for _, st := range tables[n] {
-			for _, c := range st.cols {
-				if !slices.Contains(all, c) {
-					all = append(all, c)
-				}
-			}
-		}
-		tq, err := ident(n)
-		if err != nil {
+		if err := l.createViews(ctx, n, tables[n], m); err != nil {
 			return err
 		}
-		var parts []string
-		for _, st := range tables[n] {
-			src := literal(l.sources[st.src].Name)
-			if l.combined {
-				src = "NULL"
-				if slices.Contains(st.cols, colSource) {
-					src = `"` + colSource + `"`
-				}
-			}
-			sel := []string{src + ` AS "source"`}
-			for _, c := range all {
-				cq, colErr := ident(c)
-				if colErr != nil {
-					return colErr
-				}
-				if slices.Contains(st.cols, c) {
-					sel = append(sel, cq)
-				} else {
-					sel = append(sel, "NULL AS "+cq)
-				}
-			}
-			parts = append(parts, "SELECT "+strings.Join(sel, ", ")+` FROM "`+attachedName(st.src)+`".`+tq)
-		}
-		vq, err := ident(n + lensViewSuffix)
-		if err != nil {
-			return err
-		}
-		if _, err := l.conn.ExecContext(ctx, "CREATE TEMP VIEW "+vq+" AS "+strings.Join(parts, " UNION ALL ")); err != nil {
-			return dbErr("create view "+n+lensViewSuffix, err)
-		}
-		l.views = append(l.views, n+lensViewSuffix)
 	}
 	if _, err := l.conn.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
 		return dbErr("lock lens", err)
+	}
+	return nil
+}
+
+// srcTable is one source's copy of a table: the source index and its
+// columns in table order.
+type srcTable struct {
+	src  int
+	cols []string
+}
+
+// createViews creates "<n>_all" over every source that has table n (by
+// column name, NULL where a source lacks a column) and, on a masked lens,
+// the plain TEMP VIEW "<n>" over the first source that has it: TEMP shadows
+// the attached files for an unqualified name, so `SELECT ip FROM
+// res_server` reads the masked copy exactly where SQLite would otherwise
+// have read the file (attach order).
+func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mask) error {
+	var all []string
+	for _, st := range srcs {
+		for _, c := range st.cols {
+			if !slices.Contains(all, c) {
+				all = append(all, c)
+			}
+		}
+	}
+	tq, err := ident(n)
+	if err != nil {
+		return err
+	}
+	var parts []string
+	for _, st := range srcs {
+		src := literal(l.sources[st.src].Name)
+		if l.sources[st.src].Combined {
+			src = "NULL"
+			if slices.Contains(st.cols, colSource) {
+				src = `"` + colSource + `"`
+			}
+		}
+		sel, selErr := m.columns(n, all, st.cols)
+		if selErr != nil {
+			return selErr
+		}
+		parts = append(parts, "SELECT "+src+` AS "source", `+sel+` FROM "`+attachedName(st.src)+`".`+tq)
+	}
+	vq, err := ident(n + lensViewSuffix)
+	if err != nil {
+		return err
+	}
+	if _, execErr := l.conn.ExecContext(ctx, "CREATE TEMP VIEW "+vq+" AS "+strings.Join(parts, " UNION ALL ")); execErr != nil {
+		return dbErr("create view "+n+lensViewSuffix, execErr)
+	}
+	l.views = append(l.views, n+lensViewSuffix)
+	if !l.masked {
+		return nil
+	}
+	first := srcs[0]
+	sel, err := m.columns(n, first.cols, first.cols)
+	if err != nil {
+		return err
+	}
+	if _, err := l.conn.ExecContext(ctx, "CREATE TEMP VIEW "+tq+" AS SELECT "+sel+` FROM "`+attachedName(first.src)+`".`+tq); err != nil {
+		return dbErr("create view "+n, err)
 	}
 	return nil
 }
@@ -362,13 +403,13 @@ func (l *Lens) ResolveID(ctx context.Context, id ids.AnyID) (LensHit, error) {
 			return LensHit{}, err
 		}
 		for _, h := range found {
-			if !l.combined {
+			if !s.Combined {
 				h.Source = s.Name
 			}
 			if !slices.Contains(hits, h) {
 				hits = append(hits, h)
 			}
-			if !l.combined {
+			if !s.Combined {
 				break // one hit per attached file: its rows share one source name
 			}
 		}
@@ -427,6 +468,11 @@ func (l *Lens) Query(ctx context.Context, query string) (Result, error) {
 	if err := checkReadOnly(query); err != nil {
 		return Result{}, err
 	}
+	if l.masked {
+		if err := checkHidden(query, l.hidden); err != nil {
+			return Result{}, err
+		}
+	}
 	rs, err := l.conn.QueryContext(ctx, query)
 	if err != nil {
 		return Result{}, queryErr(err)
@@ -451,7 +497,26 @@ func queryErr(err error) error {
 	if errors.As(err, &se) && se.Code()&primaryCodeMask == sqlite3.SQLITE_READONLY {
 		return errs.Wrap(errs.ReadOnly, "sqlite lens: the lens is read-only", err)
 	}
+	// A compile error of the caller's own SQL (SQLITE_ERROR: "no such
+	// column: ipp", a syntax error) is the caller's whole answer, and
+	// surfaces print only the message, so its text goes into the message.
+	// It names only what the query named, never a path (spec 9.4 keeps
+	// driver text out of messages otherwise): any other driver error keeps
+	// the generic message with the text in Cause.
+	if errors.As(err, &se) && se.Code()&primaryCodeMask == sqlite3.SQLITE_ERROR {
+		return errs.Wrap(errs.InvalidInput, "sqlite lens: "+sqliteErrText(se), err)
+	}
 	return errs.Wrap(errs.InvalidInput, "sqlite lens: query", err)
+}
+
+// sqliteErrText is the message of a driver error without its trailing
+// " (<code>)" (modernc appends the extended result code).
+func sqliteErrText(se *modernc.Error) string {
+	msg := se.Error()
+	if i := strings.LastIndex(msg, " ("); i > 0 && strings.HasSuffix(msg, ")") {
+		msg = msg[:i]
+	}
+	return msg
 }
 
 // primaryCodeMask keeps the primary result code of an extended one.

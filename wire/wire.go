@@ -65,6 +65,7 @@ import (
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
+	opssql "github.com/thesatellite-ai/lore/ops/sql"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssuggestion "github.com/thesatellite-ai/lore/ops/suggestion"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
@@ -325,6 +326,7 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opstechdoc.Ops(a)...)
 	entries = append(entries, opsexternalsource.Ops(a)...)
 	entries = append(entries, opsreminder.Ops(a)...)
+	entries = append(entries, opssql.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 
