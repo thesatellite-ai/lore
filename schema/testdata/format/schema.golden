@@ -308,6 +308,10 @@ task_lists.project_id ref required
 task_lists.status_str text required
 task_lists.tag_ids list[ref]
 task_lists.title text required
+task_templates.args json
+task_templates.description text
+task_templates.name text required
+task_templates.task json required
 tasks.approved_at datetime
 tasks.approved_by text
 tasks.approved_hash text
@@ -339,6 +343,7 @@ tasks.plan_id ref
 tasks.priority text required
 tasks.project_id ref required
 tasks.rank text
+tasks.recur json
 tasks.repo_id ref
 tasks.role text
 tasks.started_at datetime

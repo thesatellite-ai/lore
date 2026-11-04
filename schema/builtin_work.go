@@ -76,11 +76,14 @@ const (
 	TaskCloseObsolete  = "obsolete"
 	TaskCloseStale     = "stale"
 	TaskCloseCancelled = "cancelled"
+	// TaskCloseSkipped is `lore task recur skip` (TASK 10.3): this
+	// instance was not done, the series goes on.
+	TaskCloseSkipped = "skipped"
 )
 
 // TaskCloseReasons lists the close reasons (8.3 order).
 func TaskCloseReasons() []string {
-	return []string{TaskCloseCompleted, TaskCloseDuplicate, TaskCloseWontDo, TaskCloseObsolete, TaskCloseStale, TaskCloseCancelled}
+	return []string{TaskCloseCompleted, TaskCloseDuplicate, TaskCloseWontDo, TaskCloseObsolete, TaskCloseStale, TaskCloseCancelled, TaskCloseSkipped}
 }
 
 // Task tree fields (TASK_SYSTEM_DESIGN 6.2, DQ5): a row with either is part
@@ -89,6 +92,10 @@ const (
 	FieldTaskParent      = "parent_id"
 	FieldTaskRank        = "rank"
 	FieldTaskCloseReason = "close_reason"
+	// FieldTaskRecur is the recurrence of a task (TASK 10.3, option C): one
+	// JSON object {rule, series, index, until, stopped}, copied forward to
+	// each next instance. Absent on a task that does not recur.
+	FieldTaskRecur = "recur"
 )
 
 // Checklist, estimate and people fields (TASK_SYSTEM_DESIGN 7, 9, 14).
@@ -205,6 +212,7 @@ func workDefs() []TableDef {
 			Text(FieldTaskCloseReason, OneOf(TaskCloseReasons()...), Describe("why a closed task closed (TASK 8.3)")),
 			JSON(FieldTaskChecklist, MergeBy(MergeListByID),
 				Describe("checklist items [{id, text, done, done_at, done_by, rank, …}] (TASK 7.2)")),
+			JSON(FieldTaskRecur, Describe("recurrence {rule, series (rcs_…), index, until, stopped} (TASK 10.3)")),
 			Text(FieldTaskEstimate, Describe("estimate, a decimal >= 0 in the tasks.estimate_unit unit (TASK 9)")),
 			List(FieldTaskAssignees, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids responsible, the lead (assigned_to_actor_id) included (TASK 14.2)")),
 			List(FieldTaskWatchers, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids told about changes (TASK 14)")),

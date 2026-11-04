@@ -15,7 +15,7 @@ rule_verifier_refs.verifier_kind regex,shell,go-fn,custom
 rules.activation always,glob,semantic,manual
 rules.severity must,should,may
 secret_rules.state on,off,changed
-tasks.close_reason completed,duplicate,wont_do,obsolete,stale,cancelled
+tasks.close_reason completed,duplicate,wont_do,obsolete,stale,cancelled,skipped
 tasks.commitment accepted,proposed,someday
 tasks.gate required,requested,approved
 tasks.priority low,medium,high,urgent

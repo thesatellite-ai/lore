@@ -18,7 +18,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
-	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -135,7 +134,7 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return ShowOut{}, err
 	}
-	notes, err := o.setDates(fields, in.Target, in.StartsAt)
+	notes, err := o.setDates(ctx, store.Source(in.To), fields, in.Target, in.StartsAt)
 	if err != nil {
 		return ShowOut{}, err
 	}
@@ -171,14 +170,15 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 }
 
 // setDates sets target_date and starts_at from TASK 12 date phrases
-// (ops/task DateValue); notes say what each phrase stored (R12).
-func (o ops) setDates(fields map[string]value.Value, target, starts string) ([]string, error) {
+// (ops/task DateValueFor: tasks.week_end of the target store, TASK 12.1);
+// notes say what each phrase stored (R12).
+func (o ops) setDates(ctx context.Context, to store.Source, fields map[string]value.Value, target, starts string) ([]string, error) {
 	var notes []string
 	for _, d := range []struct{ field, flag, raw string }{{fieldTarget, "target", target}, {fieldStartsAt, "starts-at", starts}} {
 		if strings.TrimSpace(d.raw) == "" {
 			continue
 		}
-		v, note, err := opstask.DateValue(opclock.Now(o.env), d.flag, d.raw)
+		v, note, err := opstask.DateValueFor(ctx, o.env, to, d.flag, d.raw)
 		if err != nil {
 			return nil, err
 		}
@@ -334,7 +334,12 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Summary{}}
+	// METADATA 3.7: --meta / --place / --sort meta.<key> narrow the rows.
+	all, notes, err := work.Narrow(ctx, o.env, all, in.MetaFlags)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Summary{}, Notes: notes}
 	for _, s := range all {
 		st := work.Field(s.Row, work.FieldStatus)
 		switch {
@@ -358,7 +363,10 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 }
 
 // Text prints "<id> [<status>] <title>   (<n> tasks)" per mission.
-func (o ListOut) Text() string {
+func (o ListOut) Text() string { return o.rowsText() + work.NotesText(o.Notes) }
+
+// rowsText is the list lines.
+func (o ListOut) rowsText() string {
 	if len(o.Data) == 0 {
 		return "(no missions)\n"
 	}
@@ -397,7 +405,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	notes, err := o.setDates(patch, in.Target, in.StartsAt)
+	notes, err := o.setDates(ctx, "", patch, in.Target, in.StartsAt)
 	if err != nil {
 		return work.WriteOut{}, err
 	}

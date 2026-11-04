@@ -181,7 +181,7 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpDeferred, Summary: "Show deferred tasks (snoozed; deferred_until in the future)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.deferred),
-	}, slices.Concat(timeOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o))...)
+	}, slices.Concat(timeOps(o), recurOps(o), templateOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o))...)
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
@@ -192,6 +192,8 @@ var treeAddErrors = []errs.Code{errs.Cycle, errs.ParentClosed, errs.ParentMissio
 type ops struct {
 	env  work.Env
 	deco func(*Brief, row.Row)
+	// meta is list's metadata filter (METADATA 3.7), set per call.
+	meta work.MetaFlags
 }
 
 // notYet refuses a v0.1.17 team flag on a surface that supplies no
@@ -205,6 +207,12 @@ func taskID(s string) (ids.AnyID, error) { return work.ParseID(Noun, ids.PrefixT
 
 // add creates one task in the target store (--to, else the default).
 func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
+	if in.Template != "" {
+		return o.addTemplate(ctx, in) // TASK 11.3
+	}
+	if len(in.Args) > 0 || in.DryRun {
+		return AddOut{}, errs.New(errs.InvalidInput, "task add: --arg and --dry-run go with --template")
+	}
 	// --assign resolves before anything is written (v0.1.17: the default
 	// task list is not created for a handle on no roster).
 	assign, err := o.resolveAssigns(ctx, in.Assign)
@@ -255,6 +263,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		} else if ok {
 			out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(work.LabelerOf(o.env), s.Source, s.Row), Store: string(s.Source)}
 			out.Human = work.Success + " " + s.Row.ID.String() + " — " + work.Field(s.Row, work.FieldTitle) + " (already added with --key " + in.Key + ")\n"
+			out.existed = true
 			return out, nil
 		}
 	}
@@ -286,6 +295,14 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	dateNotes, err := o.setDates(ctx, store.Source(in.To), fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due})
 	if err != nil {
 		return AddOut{}, err
+	}
+	if strings.TrimSpace(in.Recur) != "" {
+		// TASK 10.2: a recurring task starts a series; print what lore read.
+		line, rerr := o.setRecur(ctx, store.Source(in.To), fields, Recur{}, work.Time(row.Row{Fields: fields}, fieldDue), in.Recur)
+		if rerr != nil {
+			return AddOut{}, rerr
+		}
+		dateNotes = append(dateNotes, line)
 	}
 	if par != nil {
 		if repoID == "" && par.repo != nil {
@@ -714,8 +731,20 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
+	// METADATA 3.7: a meta.<key> --sort goes to the metadata filter and
+	// replaces the field sort; --meta / --place narrow the rows.
+	fieldSort := in.Sort
+	o.meta = work.MetaFlags{Meta: in.Meta, Place: in.Place}
+	for _, s := range in.Sort {
+		if strings.HasPrefix(s, "meta.") {
+			if o.meta.Sort != "" {
+				return ListOut{}, errs.New(errs.InvalidInput, "task list: give one --sort meta.<key>")
+			}
+			o.meta.Sort, fieldSort = s, nil
+		}
+	}
 	// XQ10: --sort key[:asc|:desc]; ties keep the default order (stable).
-	specs, err := listSort(in.Sort, keys)
+	specs, err := listSort(fieldSort, keys)
 	if err != nil {
 		return ListOut{}, err
 	}
@@ -751,6 +780,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			in.Mission != "" && work.Field(r, work.FieldMission) != in.Mission,
 			in.Assignee != "" && !assignedTo(r, in.Assignee),
 			in.Lead != "" && !leadIs(r, in.Lead),
+			in.Series != "" && !inSeries(r, in.Series),
 			team.keep != nil && !team.keep(r):
 			return false
 		case in.All:
@@ -780,7 +810,12 @@ func (o ops) viewWith(ctx context.Context, only, project string, state func(row.
 	if order != nil {
 		slices.SortStableFunc(all, func(a, b work.Sourced) int { return order(a.Row, b.Row) })
 	}
-	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Brief{}}
+	// METADATA 3.7: list's --meta / --place / --sort meta.<key>.
+	all, notes, err := work.Narrow(ctx, o.env, all, o.meta)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Brief{}, Notes: notes}
 	for _, s := range all {
 		if (project != "" && work.Field(s.Row, work.FieldProject) != project) || !keep(s.Row) {
 			continue
@@ -1039,6 +1074,14 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
+	if strings.TrimSpace(in.Recur) != "" {
+		// TASK 10.3: the rule changes for this and later instances.
+		line, rerr := o.editRecur(ctx, curSrc, cur, patch, in.Recur)
+		if rerr != nil {
+			return work.WriteOut{}, rerr
+		}
+		dateNotes = append(dateNotes, line)
+	}
 	if err = setRefs(patch, []refFlag{
 		{work.FieldMission, "mission", ids.PrefixMission, in.Mission},
 		{work.FieldTasklist, "tasklist", ids.PrefixTaskList, in.Tasklist},
@@ -1221,6 +1264,12 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 		return DoneOut{}, err
 	}
 	out.Human += parentLine
+	// TASK 10.4: a recurring instance creates the next one.
+	nextLine := ""
+	if out.Recur, nextLine, err = o.spawnNext(ctx, f, dsrc, dcur, opclock.Now(o.env)); err != nil {
+		return DoneOut{}, err
+	}
+	out.Human += nextLine
 	switch {
 	case strings.TrimSpace(in.Lesson) != "":
 		mem, lerr := o.lesson(ctx, store.Source(w.Store), id, in.Lesson)
@@ -1317,6 +1366,9 @@ func (o ops) cancel(ctx context.Context, in CancelIn) (DoneOut, error) {
 		return DoneOut{}, err
 	}
 	out.Human += parentLine
+	if _, recurs := RecurOf(ccur); recurs {
+		out.Human += "  no next instance: cancel ends the series (`lore task recur skip` skips one)\n"
+	}
 	return out, nil
 }
 

@@ -97,3 +97,18 @@ func TestZoneFree(t *testing.T) {
 		}
 	}
 }
+
+// TestCanonical: the until phrase is stored as its resolved day.
+func TestCanonical(t *testing.T) {
+	r, err := Parse("Every  month on last until 2027-03-31 for 4", untilISO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Canonical(); got != "every month on last until 2027-03-31 for 4" {
+		t.Fatalf("canonical %q", got)
+	}
+	again, err := Parse(r.Canonical(), untilISO)
+	if err != nil || !again.Until.Equal(r.Until) || again.For != 4 || !again.LastDay {
+		t.Fatalf("round trip %+v %v", again, err)
+	}
+}

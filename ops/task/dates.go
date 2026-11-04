@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -109,4 +110,15 @@ func noteLines(notes []string) string {
 // --starts-at) with the same table, clock now in the local zone.
 func DateValue(now time.Time, flag, raw string) (value.Value, string, error) {
 	return dateValue(dates.Clock{Now: now, Loc: time.Local, WeekEnd: defaultWeekEnd}, flag, raw)
+}
+
+// DateValueFor is DateValue with tasks.week_end read from env's policy at
+// target, the clock task flags use (mission --target / --starts-at read
+// `eow` the same way, TASK 12.1).
+func DateValueFor(ctx context.Context, env work.Env, target store.Source, flag, raw string) (value.Value, string, error) {
+	c, err := ops{env: env}.clock(ctx, target)
+	if err != nil {
+		return nil, "", err
+	}
+	return dateValue(c, flag, raw)
 }

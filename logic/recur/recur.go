@@ -254,3 +254,27 @@ func addMonths(t time.Time, n int) time.Time {
 	first := time.Date(t.Year(), t.Month()+time.Month(n), 1, 0, 0, 0, 0, time.UTC)
 	return clampDay(first, t.Day())
 }
+
+// Canonical is the rule as it is stored: the step part of Raw, then
+// "until YYYY-MM-DD" (the phrase already resolved, so "until fri" read
+// next month still means the same day) and "for N". Parse(Canonical())
+// gives the same rule on every machine.
+func (r Rule) Canonical() string {
+	in := r.Raw
+	if m := reFor.FindStringSubmatch(in); m != nil {
+		in = m[1]
+	}
+	if m := reUntil.FindStringSubmatch(in); m != nil {
+		in = m[1]
+	}
+	if !r.Until.IsZero() {
+		in += " until " + r.Until.Format(dayLayout)
+	}
+	if r.For > 0 {
+		in += " for " + strconv.Itoa(r.For)
+	}
+	return in
+}
+
+// dayLayout is the stored calendar-day form.
+const dayLayout = "2006-01-02"

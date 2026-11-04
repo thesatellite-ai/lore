@@ -29,7 +29,7 @@ type AddIn struct {
 	engine.MetaFlags
 	// Title is v0.1.17's positional <title> (quote a title of several
 	// words: an op argument is one value).
-	Title      string `json:"title" arg:"0" rest:"true" desc:"the task title (several words are joined)"`
+	Title      string `json:"title,omitempty" arg:"0" rest:"true" desc:"the task title (several words are joined; omitted with --template)"`
 	Body       string `json:"body,omitempty" flag:"body" desc:"longer description" ui:"widget=markdown"`
 	Priority   string `json:"priority,omitempty" flag:"priority" desc:"low | medium | high | urgent (default medium)"`
 	Commitment string `json:"commitment,omitempty" flag:"commitment" desc:"accepted | proposed | someday (default accepted)"`
@@ -66,6 +66,13 @@ type AddIn struct {
 	// unless those flags are given (6.5).
 	Parent       string `json:"parent,omitempty" flag:"parent" desc:"the parent task (tsk_…): add as a sub-task, inheriting mission, tasklist, plan, repo, commitment, priority"`
 	ReopenParent bool   `json:"reopen_parent,omitempty" flag:"reopen-parent" desc:"the parent is done or cancelled: reopen it to in_progress in the same write"`
+	// Recur makes the task recurring (TASK 10.2); finishing it creates
+	// the next instance.
+	Recur string `json:"recur,omitempty" flag:"recur" desc:"recurrence: every day|weekday|week|month|quarter|year, every N days|weeks|months, every mon[,thu], every month on N|last, every! N days|weeks (from completion); optional until <date> | for N"`
+	// Template applies a task template (TASK 11.3) with --arg values.
+	Template string   `json:"template,omitempty" flag:"template" desc:"apply this task template (its name or ttp_ id); the title comes from the template"`
+	Args     []string `json:"args,omitempty" flag:"arg" desc:"a template argument name=value (repeatable)"`
+	DryRun   bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --template: show the tasks that would be added, write nothing"`
 }
 
 // Inherited is what a new sub-task copied from its parent (6.5: the output
@@ -91,8 +98,12 @@ type AddOut struct {
 	// Parent and Inherited are set for a sub-task (6.3).
 	Parent    string    `json:"parent_id,omitempty"`
 	Inherited Inherited `json:"inherited,omitzero"`
+	// Template lists the tasks a --template --dry-run would add.
+	Template []TemplateAdded `json:"template,omitempty"`
 	// Human is the v0.1.17 human line.
 	Human string `json:"-"`
+	// existed: --key found the task already there (template apply).
+	existed bool
 }
 
 // Warning is one engine warning copied into an output (W_SCAN_DEGRADED).
@@ -248,6 +259,12 @@ type ListIn struct {
 	Leaves bool   `json:"leaves,omitempty" flag:"leaves" desc:"only tasks with no open sub-tasks (what can be worked on)"`
 	// Lead filters by the one lead (14.3); --assignee matches any assignee.
 	Lead string `json:"lead,omitempty" flag:"lead" desc:"only tasks led by this actor (@me, act_ id, stable key or name)"`
+	// Series lists one recurrence series (TASK 10.3).
+	Series string `json:"series,omitempty" flag:"series" desc:"only the instances of this recurrence series (rcs_…); add --all for closed ones"`
+	// Meta and Place are work.MetaFlags without its sort (METADATA 3.7):
+	// --sort above is shared, and its meta.<key> entry feeds the filter.
+	Meta  []string `json:"meta_where,omitempty" flag:"meta" desc:"filter by metadata: key=value, key!=value, key~=text, key>n, key?, key!? (repeatable, all must match)"`
+	Place string   `json:"place,omitempty" flag:"place" desc:"narrow --meta names to one place: repo, project, org or a scope label (project:acme-hub)"`
 }
 
 // ViewIn is the input of the triage, someday and deferred views.
@@ -262,6 +279,8 @@ type ListOut struct {
 	Kind          string  `json:"kind"`
 	Count         int     `json:"count,omitempty"`
 	Data          []Brief `json:"data"`
+	// Notes are the metadata filter's lines (METADATA 3.7, 3.13).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // IDIn is the input of the operations that take one task id.
@@ -336,6 +355,8 @@ type EditIn struct {
 	First        bool   `json:"first,omitempty" flag:"first" desc:"place first among its siblings"`
 	Last         bool   `json:"last,omitempty" flag:"last" desc:"place last among its siblings"`
 	ReopenParent bool   `json:"reopen_parent,omitempty" flag:"reopen-parent" desc:"the parent is closed: reopen it to in_progress in the same write"`
+	// Recur sets or changes the rule (TASK 10.3: this and later instances).
+	Recur string `json:"recur,omitempty" flag:"recur" desc:"set or change the recurrence rule (applies to this and later instances)"`
 }
 
 // DoneIn is the input of task.done.
@@ -399,8 +420,10 @@ type DoneOut struct {
 	Next   Next       `json:"next,omitzero"`
 	// OpenItemsAtClose is how many checklist items were unticked when
 	// --force closed the task (TSQ14).
-	OpenItemsAtClose int    `json:"open_items_at_close,omitempty"`
-	Human            string `json:"-"`
+	OpenItemsAtClose int `json:"open_items_at_close,omitempty"`
+	// Recur is the next instance of a recurring task (TASK 10.3).
+	Recur RecurNext `json:"recur,omitzero"`
+	Human string    `json:"-"`
 }
 
 // SearchIn is the input of task.search.

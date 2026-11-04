@@ -2,6 +2,7 @@ package mission
 
 import (
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"time"
 
 	opstask "github.com/thesatellite-ai/lore/ops/task"
@@ -46,6 +47,8 @@ type ListIn struct {
 	All     bool   `json:"all,omitempty" flag:"all" desc:"include done + cancelled missions (default: hide them)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"only missions of this project (prj_ id or name)"`
 	Store   string `json:"store,omitempty" flag:"store" desc:"only missions of this store (default every attached store)"`
+	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
+	work.MetaFlags
 }
 
 // ListOut is the output of mission.list.
@@ -54,6 +57,8 @@ type ListOut struct {
 	Kind          string    `json:"kind"`
 	Count         int       `json:"count,omitempty"`
 	Data          []Summary `json:"data"`
+	// Notes are the metadata filter's lines (METADATA 3.7, 3.13).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Summary is v0.1.17's missionWithTasks.
