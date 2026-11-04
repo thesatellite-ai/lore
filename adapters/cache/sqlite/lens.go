@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"net/url"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	modernc "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -53,6 +55,11 @@ type LensOptions struct {
 	// sql output unless asked for) and refuses any query that could read
 	// past the views (see lens_mask.go).
 	MaskSensitive bool
+	// Expand backs the SQL function lore_expand(text) (SECRETS_AND_REFERENCES
+	// 12.1, SQ4): var, res and row references filled in, never env or a
+	// secret (SQ15, BATCH 10), never a sensitive value. nil leaves the text
+	// as stored.
+	Expand Expander
 }
 
 // LensHit is where ResolveID found an id.
@@ -87,6 +94,7 @@ type Lens struct {
 	masked bool
 	hidden []string
 	closed bool
+	expand Expander
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -142,7 +150,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -258,6 +266,11 @@ func (l *Lens) setup(ctx context.Context) error {
 			return err
 		}
 	}
+	// TIME 9 (timespans.go): task_time_spans + the time_spent view, built
+	// from the rows before the lens locks (open spans end now).
+	if err := l.createTimeSpent(ctx, tables, time.Now()); err != nil {
+		return err
+	}
 	if _, err := l.conn.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
 		return dbErr("lock lens", err)
 	}
@@ -340,7 +353,7 @@ func (l *Lens) publicTables(ctx context.Context, i int) ([]string, error) {
 		return nil, errs.Wrap(errs.NotAStore, "not a lore cache file", err)
 	}
 	defer func() { _ = rs.Close() }()
-	out := []string{tblRefs, tblExpanded}
+	out := append([]string{tblRefs, tblExpanded}, ProvenanceViews()...) // PROVENANCE 9.2: the provenance views are readable in lore sql
 	for rs.Next() {
 		var objs string
 		if err := rs.Scan(&objs); err != nil {
@@ -473,6 +486,7 @@ func (l *Lens) Query(ctx context.Context, query string) (Result, error) {
 			return Result{}, err
 		}
 	}
+	defer useExpander(l.expand)()
 	rs, err := l.conn.QueryContext(ctx, query)
 	if err != nil {
 		return Result{}, queryErr(err)
@@ -531,4 +545,58 @@ func (l *Lens) Close() error {
 	}
 	l.closed = true
 	return errors.Join(l.conn.Close(), l.db.Close())
+}
+
+// lore_expand (SECRETS_AND_REFERENCES 12.1, SQ4, SQ15):
+//
+//	Lens.Query ─▶ useExpander(l.expand) ─▶ SQLite calls lore_expand(text)
+//	           ─▶ activeExpand.Expand(text) ─▶ text with var/res/row filled
+//
+// modernc.org/sqlite registers SQL functions process-wide only (no
+// per-connection API), so the function is registered once at init and
+// reads the expander of the lens query running now. expandMu is held for
+// the whole query, so two lenses never see each other's expander; the
+// variable is set only inside that window (no state outlives a query).
+const loreExpandFunc = "lore_expand"
+
+var (
+	expandMu     sync.Mutex
+	activeExpand Expander
+)
+
+func init() {
+	modernc.MustRegisterFunction(loreExpandFunc, &modernc.FunctionImpl{NArgs: 1, Scalar: loreExpand})
+}
+
+// useExpander makes e the expander of lore_expand until the returned func
+// runs.
+func useExpander(e Expander) func() {
+	expandMu.Lock()
+	activeExpand = e
+	return func() {
+		activeExpand = nil
+		expandMu.Unlock()
+	}
+}
+
+// loreExpand is lore_expand(text): NULL stays NULL, a non-text argument is
+// returned as is (driver boundary: SQLite hands any of its value types).
+func loreExpand(_ *modernc.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var text string
+	switch v := args[0].(type) {
+	case string:
+		text = v
+	case []byte:
+		text = string(v)
+	default:
+		return v, nil
+	}
+	if activeExpand == nil {
+		return text, nil
+	}
+	out, _, err := activeExpand.Expand(text)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }

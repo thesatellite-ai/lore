@@ -3,10 +3,13 @@ package settings
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
@@ -60,11 +63,17 @@ type VarsShowIn struct {
 // VarsSetIn is the input of vars.set.
 type VarsSetIn struct {
 	Name        string `json:"name" arg:"0" desc:"the variable name (snake_case)"`
-	Value       string `json:"value" arg:"1" desc:"the value"`
+	Value       string `json:"value,omitempty" arg:"1" desc:"the value (or --set-stdin)"`
 	To          string `json:"to,omitempty" flag:"to" desc:"where the variable lives (repo, me, <store>, <store>/<folder>; default repo)"`
 	Shareable   bool   `json:"shareable,omitempty" flag:"shareable" desc:"resolves for everyone who reads this repo"`
 	Type        string `json:"type,omitempty" flag:"type" desc:"text | number | url | dns | ip | cidr | email | date | datetime | duration | secret_ref (default text)"`
 	Description string `json:"description,omitempty" flag:"description" desc:"what the variable is"`
+	// SetStdin reads the value from stdin (a long value, or one that should
+	// not sit in shell history; SECRETS_AND_REFERENCES 11.1).
+	SetStdin bool `json:"set_stdin,omitempty" flag:"set-stdin" desc:"read the value from stdin (one trailing newline dropped)"`
+	// AllowDangling keeps a value whose ${var:…} names no variable yet
+	// (2.8: E_REF_DANGLING otherwise).
+	AllowDangling bool `json:"allow_dangling,omitempty" flag:"allow-dangling" desc:"accept a ${var:…} reference to a variable that does not exist yet"`
 }
 
 // VarsRenameIn is the input of vars.rename.
@@ -207,9 +216,33 @@ func (o ops) varsShow(ctx context.Context, in VarsShowIn) (VarOut, error) {
 	return VarOut{Data: varOf(l)}, nil
 }
 
+// varsSet adds or changes a variable:
+//
+//	name check ─▶ value (arg or --set-stdin) ─▶ references valid (E_REF_SYNTAX,
+//	5.1/8.1) ─▶ every ${var:…} defined somewhere seen (E_REF_DANGLING unless
+//	--allow-dangling, 2.8) ─▶ type parse ─▶ write; the cache then refreshes
+//	every row citing it (SQ3, wire/resolver.go).
 func (o ops) varsSet(ctx context.Context, in VarsSetIn) (RowOut, error) {
 	if !snakeName.MatchString(in.Name) {
 		return RowOut{}, errs.New(errs.InvalidInput, "variable name "+quote(in.Name)+" is not snake_case")
+	}
+	if in.SetStdin {
+		if in.Value != "" {
+			return RowOut{}, errs.New(errs.InvalidInput, "give the value as an argument or with --set-stdin, not both")
+		}
+		v, err := readStdinValue()
+		if err != nil {
+			return RowOut{}, err
+		}
+		in.Value = v
+	}
+	if err := refs.Validate(in.Value); err != nil {
+		return RowOut{}, err
+	}
+	if !in.AllowDangling {
+		if err := o.checkVarRefs(ctx, in.Name, in.Value); err != nil {
+			return RowOut{}, err
+		}
 	}
 	target := targetOf(in.To)
 	rows, err := liveRows(ctx, o.env, sources(o.env, string(target)), schema.TableVars)
@@ -239,7 +272,9 @@ func (o ops) varsSet(ctx context.Context, in VarsSetIn) (RowOut, error) {
 		return RowOut{}, errs.New(errs.InvalidInput, "--type "+quote(typ)+" is not one of "+strings.Join(varTypes(), ", "))
 	}
 	kind := value.Kind(typ)
-	if typ == varTypeSecretRef {
+	if typ == varTypeSecretRef || len(refs.References(in.Value)) > 0 {
+		// a value holding references is checked as its type after
+		// expansion (11.5), by lore lint; here it is stored as typed text.
 		kind = value.KindText
 	}
 	v, err := parseAs(kind, in.Value)
@@ -340,4 +375,49 @@ func (o ops) varsWhere(ctx context.Context, in VarsShowIn) (VarsOut, error) {
 	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// maxStdinValue caps a --set-stdin value (the expanded-text cap, D17).
+const maxStdinValue = refs.MaxExpanded
+
+// readStdinValue reads a variable value from stdin, dropping one trailing
+// newline (what `echo` and a heredoc add).
+func readStdinValue() (string, error) {
+	b, err := io.ReadAll(io.LimitReader(os.Stdin, maxStdinValue+1))
+	if err != nil {
+		return "", errs.Wrap(errs.InvalidInput, "vars set: read stdin", err)
+	}
+	if len(b) > maxStdinValue {
+		return "", errs.New(errs.InvalidInput, "vars set: the stdin value is over 64 KB")
+	}
+	s := strings.TrimSuffix(string(b), "\n")
+	return strings.TrimSuffix(s, "\r"), nil
+}
+
+// checkVarRefs refuses a value citing a variable no store this repo sees
+// defines (2.8). A variable citing itself is a cycle, refused the same way.
+func (o ops) checkVarRefs(ctx context.Context, self, val string) error {
+	var names []string
+	for _, r := range refs.References(val) {
+		if r.Scheme == refs.SchemeVar && r.Modifier == refs.ModNone {
+			names = append(names, r.Target)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableVars)
+	if err != nil {
+		return err
+	}
+	for _, n := range names {
+		found := n != self && slices.ContainsFunc(rows, func(l located) bool {
+			return text(l.Row, vName) == n || l.Row.ID.String() == n || slices.Contains(texts(l.Row, vAliases), n)
+		})
+		if !found {
+			return errs.New(errs.RefDangling, self+" refers to ${var:"+n+"}, which is not defined in this repo or any store it sees").
+				WithHint("lore vars set " + n + " <value> first, or pass --allow-dangling")
+		}
+	}
+	return nil
 }

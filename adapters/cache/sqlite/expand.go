@@ -27,6 +27,12 @@ type Expander interface {
 // variable or resource that changed), found through ix_row_refs_ref; no
 // other row is read or written. It returns how many fields were refreshed.
 func (c *Cache) Reexpand(ctx context.Context, refID string) (int, error) {
+	return c.ReexpandIDs(ctx, []string{refID})
+}
+
+// ReexpandIDs is Reexpand for several ids in one transaction (the rows a
+// refresh applied).
+func (c *Cache) ReexpandIDs(ctx context.Context, refIDs []string) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.usable(); err != nil {
@@ -34,9 +40,13 @@ func (c *Cache) Reexpand(ctx context.Context, refID string) (int, error) {
 	}
 	n := 0
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
-		targets, err := referrers(ctx, tx, refID)
-		if err != nil {
-			return err
+		var targets []refTarget
+		for _, refID := range refIDs {
+			got, err := referrers(ctx, tx, refID)
+			if err != nil {
+				return err
+			}
+			targets = append(targets, got...)
 		}
 		for _, t := range targets {
 			p, ok := c.st.plans[t.table]
@@ -99,4 +109,79 @@ func referrers(ctx context.Context, tx *sql.Tx, refID string) ([]refTarget, erro
 		return nil, errs.Wrap(errs.Internal, "sqlite cache: find referencing rows", err)
 	}
 	return out, nil
+}
+
+// ReexpandMatching refreshes row_expanded for every text field that holds
+// one of needles (e.g. "${var:db_host", the start of a reference to a name
+// that just came into being or was renamed). Unresolved references have no
+// row_refs line (SECRETS_AND_REFERENCES 8.7), so a variable or resource
+// that is added later is found from the text instead; adds are rare, so
+// the scan is cheap. It returns how many fields were refreshed.
+func (c *Cache) ReexpandMatching(ctx context.Context, needles []string) (int, error) {
+	if len(needles) == 0 {
+		return 0, nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.usable(); err != nil {
+		return 0, err
+	}
+	n := 0
+	err := c.inTx(ctx, func(tx *sql.Tx) error {
+		for _, p := range c.st.plans {
+			tq, err := ident(p.def.Name.String())
+			if err != nil {
+				return err
+			}
+			for _, f := range textFields(p) {
+				fq, err := ident(f)
+				if err != nil {
+					return err
+				}
+				for _, needle := range needles {
+					got, err := c.reexpandWhere(ctx, tx, p, f,
+						`SELECT "`+colID+`", `+fq+` FROM `+tq+` WHERE instr(`+fq+`, ?) > 0`, needle)
+					if err != nil {
+						return err
+					}
+					n += got
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// reexpandWhere re-expands field f of the rows query (taking arg) returns
+// as (id, text).
+func (c *Cache) reexpandWhere(ctx context.Context, tx *sql.Tx, p plan, f, query, arg string) (int, error) {
+	rs, err := tx.QueryContext(ctx, query, arg)
+	if err != nil {
+		return 0, dbErr("find referencing text", err)
+	}
+	type hit struct{ id, text string }
+	var hits []hit
+	for rs.Next() {
+		var h hit
+		var t sql.NullString
+		if err := rs.Scan(&h.id, &t); err != nil {
+			_ = rs.Close()
+			return 0, dbErr("find referencing text", err)
+		}
+		h.text = t.String
+		hits = append(hits, h)
+	}
+	if err := errors.Join(rs.Err(), rs.Close()); err != nil {
+		return 0, dbErr("find referencing text", err)
+	}
+	for _, h := range hits {
+		if err := c.expandField(ctx, tx, p.def.Name, h.id, f, h.text); err != nil {
+			return 0, err
+		}
+	}
+	return len(hits), nil
 }

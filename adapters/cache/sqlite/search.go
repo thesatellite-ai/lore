@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -54,6 +55,25 @@ func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, l
 	if limit <= 0 {
 		return nil, errs.New(errs.InvalidInput, "sqlite cache: search limit must be positive")
 	}
+	out, ftsErr := c.ftsHits(ctx, p, match, limit)
+	// Second column (SECRETS_AND_REFERENCES 9, 8.7): the filled-in text of
+	// row_expanded, so `db.hub.acme.example` finds a row that says
+	// ${var:db_host}. Its hits rank after every full-text hit (score 0).
+	more, expErr := c.expandedHits(ctx, table, match, limit-len(out), out)
+	if ftsErr != nil {
+		if len(more) == 0 {
+			return nil, ftsErr
+		}
+		return more, nil
+	}
+	if expErr != nil {
+		return nil, expErr
+	}
+	return append(out, more...), nil
+}
+
+// ftsHits is the FTS5 MATCH of p.
+func (c *Cache) ftsHits(ctx context.Context, p plan, match string, limit int) ([]SearchHit, error) {
 	rs, err := c.db.QueryContext(ctx, p.sql.search, match, limit)
 	if err != nil {
 		return nil, errs.Wrap(errs.InvalidInput, "sqlite cache: search", err)
@@ -80,6 +100,87 @@ func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, l
 		return nil, dbErr("search", err)
 	}
 	return out, nil
+}
+
+// expandedHits finds rows of table whose row_expanded text holds every
+// plain term of match (case-insensitive for ASCII), skipping
+// ids already in have. A match using FTS syntax (column filters, groups,
+// NEAR) gets no second-column hits: its meaning has no substring form.
+func (c *Cache) expandedHits(ctx context.Context, table row.Table, match string, limit int, have []SearchHit) ([]SearchHit, error) {
+	terms, ok := plainTerms(match)
+	if !ok || limit <= 0 {
+		return nil, nil
+	}
+	termsJSON, err := json.Marshal(terms)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "sqlite cache: encode search terms", err)
+	}
+	// every term must occur (lower() folds ASCII, as LIKE would)
+	q := `SELECT entity_id, text FROM "` + tblExpanded + `" WHERE entity_table = ? AND NOT EXISTS ` +
+		`(SELECT 1 FROM json_each(?) t WHERE instr(lower(text), lower(t.value)) = 0) ORDER BY entity_id`
+	rs, err := c.db.QueryContext(ctx, q, table.String(), string(termsJSON))
+	if err != nil {
+		return nil, dbErr("search expanded text", err)
+	}
+	defer func() { _ = rs.Close() }()
+	seen := map[string]bool{}
+	for _, h := range have {
+		seen[h.ID.String()] = true
+	}
+	var out []SearchHit
+	for rs.Next() && len(out) < limit {
+		var s, text string
+		if err := rs.Scan(&s, &text); err != nil {
+			return nil, dbErr("search expanded text", err)
+		}
+		if seen[s] {
+			continue
+		}
+		seen[s] = true
+		id, err := ids.ParseAny(s)
+		if err != nil {
+			return nil, errs.Wrap(errs.DBCorrupt, "sqlite cache: bad id in row_expanded", err)
+		}
+		out = append(out, SearchHit{ID: id, Snippet: snippetOf(text, terms[0])})
+	}
+	if err := rs.Err(); err != nil {
+		return nil, dbErr("search expanded text", err)
+	}
+	return out, nil
+}
+
+// plainTerms splits a match into its words when it uses no FTS syntax
+// beyond quotes, a trailing * and AND; false otherwise.
+func plainTerms(match string) ([]string, bool) {
+	if strings.ContainsAny(match, "{}():^") {
+		return nil, false
+	}
+	var out []string
+	for _, w := range strings.Fields(match) {
+		switch w {
+		case "AND":
+			continue
+		case "OR", "NOT", "NEAR":
+			return nil, false
+		}
+		w = strings.TrimSuffix(strings.Trim(w, `"`), "*")
+		if w != "" {
+			out = append(out, w)
+		}
+	}
+	return out, len(out) > 0
+}
+
+// snippetOf is up to 40 bytes either side of the first match of term,
+// with the match in <b>…</b> like the FTS snippets.
+func snippetOf(text, term string) string {
+	const side = 40
+	i := strings.Index(strings.ToLower(text), strings.ToLower(term))
+	if i < 0 {
+		return text[:min(len(text), 2*side)]
+	}
+	lo, hi := max(0, i-side), min(len(text), i+len(term)+side)
+	return text[lo:i] + "<b>" + text[i:i+len(term)] + "</b>" + text[i+len(term):hi]
 }
 
 // ColumnMatch restricts match to the full-text fields named in fields: the

@@ -126,7 +126,10 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 
 	st.caches = newCaches()
-	exp := refs.Expander{} // no resolver yet: vars/resources are not migrated, references stay as written
+	// SQ3 / VARS ARE DATA: var, res and row references resolve from the row
+	// files (wire/resolver.go); st.eng is read lazily, set below.
+	rv := newResolver(st)
+	exp := refs.Expander{Resolver: rv}
 	repoCache := filepath.Join(st.repoTop, filepath.FromSlash(RepoCacheFile))
 	if mkErr := os.MkdirAll(filepath.Dir(repoCache), cacheDirMode); mkErr != nil {
 		return fail(errs.Wrap(errs.Internal, "wire: create the .lore folder", mkErr))
@@ -192,6 +195,13 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		st.folders[o.Name] = o.Folder
 	}
 	st.byName = backends
+	// AGENT_IDENTITY 6.1 / OQ9: a detected agent whose 6-hex key another
+	// owner already holds uses 10 hex; settled now that the stores are
+	// open, before the engine stamps anything with the actor.
+	if err = st.settleAgentKey(ctx, backends); err != nil {
+		return fail(err)
+	}
+	actor = st.actor
 	scanner, err := newScanner(ctx, backends, withRepoGitleaks(st.repoTop))
 	if err != nil {
 		return fail(err)
@@ -206,13 +216,14 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	st.repoClassNote = note
 	engOpts := []engine.Option{
 		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient, ActorAs: st.clientActorAs(repoClient)}),
-		engine.WithCache(st.caches), engine.WithRegistry(reg), engine.WithScanner(scanner),
+		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(newProvenance(opts, st.repoTop)), // _o place facts and the _w stamp (PROV4, PROV6, PROV8, OQ7)
 	}
 	for _, o := range attached {
 		a := o.Attached
 		a.KeyNamespace = keyNamespace(a)
+		a.Place = keyNamespace(a) // FQ4: sto_ id (+ "/<folder>") of a marked store; "" keeps the attached name
 		engOpts = append(engOpts, engine.WithStore(a))
 	}
 	st.defaultTarget = store.SourceRepo

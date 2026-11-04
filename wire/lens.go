@@ -7,6 +7,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
 	"github.com/thesatellite-ai/lore/store"
@@ -35,6 +36,11 @@ func (a *App) Lens(ctx context.Context, o sqlite.LensOptions) (*sqlite.Lens, err
 	srcs, err := a.lensSources(st)
 	if err != nil {
 		return nil, err
+	}
+	if o.Expand == nil {
+		// lore_expand(text): var/res/row filled from the row files, never env,
+		// secrets or sensitive values (SQ4, SQ15); client repos see only their own (MQ6).
+		o.Expand = refs.Expander{Resolver: newResolver(st)}
 	}
 	return sqlite.OpenLensWith(ctx, srcs, o)
 }

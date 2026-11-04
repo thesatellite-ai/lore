@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/model/ids"
 )
 
 // Scheme is the word before the first colon of a reference.
@@ -63,11 +62,32 @@ const (
 const Unstored = open + string(SchemeSecret) + schemeSep + "unstored" + closer
 
 // Ref is one parsed reference.
+//
+// Body is the raw text after the first colon; the other fields are its URI
+// reading (SECRETS_AND_REFERENCES 8.1), filled by Parse:
+//
+//	${var:api_host:-x?y}       Target "api_host", Modifier ModFallback, Fallback "x?y"
+//	${res:hub_prod/ssh?kind=host}  Target "hub_prod/ssh", Options [{kind host}]
+//	${secret:gopass://a/b?holder=mch_…&label=m | env://K}  Alternates (≤3, SQ5)
+//
+// Problem is non-empty when the body is not a valid reference of its
+// scheme (Validate turns it into E_REF_SYNTAX / E_REF_SCHEME); Parse itself
+// never fails.
 type Ref struct {
 	Scheme Scheme
 	// Body is everything after the first colon ("db_host",
 	// "gopass://acme/hub/db?holder=…").
 	Body string
+
+	Target     string
+	Options    []Option
+	Modifier   Modifier
+	Fallback   string
+	Alternates []SecretTarget
+	Problem    string
+	// ProblemCode is the error code Problem maps to (E_REF_SYNTAX or
+	// E_REF_SCHEME).
+	ProblemCode errs.Code
 }
 
 // String renders the reference as written.
@@ -133,8 +153,10 @@ func Parse(text string) []Part {
 }
 
 // parseRef reads "${scheme:body}" at the start of s; n is its length.
+// Braces nest: a "${" inside the body opens a level, so a fallback may hold
+// references (${var:a:-${var:b}}, SECRETS_AND_REFERENCES 8.3).
 func parseRef(s string) (Ref, int, bool) {
-	end := strings.Index(s, closer)
+	end := closingBrace(s)
 	if end < 0 {
 		return Ref{}, 0, false
 	}
@@ -143,7 +165,27 @@ func parseRef(s string) (Ref, int, bool) {
 	if !ok || !validScheme(scheme) {
 		return Ref{}, 0, false
 	}
-	return Ref{Scheme: Scheme(scheme), Body: body}, end + len(closer), true
+	r := Ref{Scheme: Scheme(scheme), Body: body}
+	readURI(&r)
+	return r, end + len(closer), true
+}
+
+// closingBrace is the index of the "}" that closes the "${" at s[0], or -1.
+func closingBrace(s string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch {
+		case strings.HasPrefix(s[i:], open):
+			depth++
+			i++
+		case s[i] == '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // validScheme: a lowercase word, letters, digits and dashes, starting with
@@ -171,80 +213,4 @@ func References(text string) []Ref {
 		}
 	}
 	return out
-}
-
-// Resolved is what a Resolver found for one reference.
-type Resolved struct {
-	// Text replaces the reference in the expanded text.
-	Text string
-	// ID is the row the value came from (var_, res_, mky_ or the row id),
-	// recorded in row_refs so a change to that row refreshes this one.
-	ID ids.AnyID
-}
-
-// Resolver fills in one expandable reference. It returns an error matching
-// ErrUnresolved (errors.Is) when the target does not exist: the reference
-// then stays as written. Any other error stops the expansion.
-type Resolver interface {
-	Resolve(ref Ref) (Resolved, error)
-}
-
-// ErrUnresolved is the Resolver's "no such target" answer (E_NOT_FOUND).
-var ErrUnresolved error = errs.New(errs.NotFound, "refs: reference target not found")
-
-// Expander fills in the expandable references of a text through Resolver.
-// It satisfies the SQLite cache's Expander port (Expand(text) (expanded,
-// refIDs, err)) structurally.
-type Expander struct {
-	Resolver Resolver
-}
-
-// Expand returns text with every expandable reference filled in, escapes
-// turned into their literal "${…}", and the sorted, distinct ids of the
-// rows the filled-in values came from. Secrets, env and unknown schemes
-// stay exactly as written; an unresolved reference stays as written and
-// adds no id.
-func (e Expander) Expand(text string) (expanded string, refIDs []string, err error) {
-	var b strings.Builder
-	seen := map[string]bool{}
-	for _, p := range Parse(text) {
-		switch p.Kind {
-		case PartText:
-			b.WriteString(p.Raw)
-		case PartEscaped:
-			b.WriteString(p.Raw[1:]) // "$${x}" → "${x}"
-		case PartRef:
-			got, ok, rerr := e.resolve(p.Ref)
-			if rerr != nil {
-				return "", nil, rerr
-			}
-			if !ok {
-				b.WriteString(p.Raw)
-				continue
-			}
-			b.WriteString(got.Text)
-			if !got.ID.IsZero() && !seen[got.ID.String()] {
-				seen[got.ID.String()] = true
-				refIDs = append(refIDs, got.ID.String())
-			}
-		}
-	}
-	slices.Sort(refIDs)
-	return b.String(), refIDs, nil
-}
-
-// resolve asks the Resolver for an expandable reference; ok is false when
-// the reference must stay as written.
-func (e Expander) resolve(r Ref) (Resolved, bool, error) {
-	if !r.Scheme.Expandable() || e.Resolver == nil {
-		return Resolved{}, false, nil
-	}
-	got, err := e.Resolver.Resolve(r)
-	switch {
-	case errs.Has(err, errs.NotFound):
-		return Resolved{}, false, nil
-	case err != nil:
-		return Resolved{}, false, err
-	}
-	return got, true, nil
 }

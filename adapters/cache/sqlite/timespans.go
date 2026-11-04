@@ -138,7 +138,10 @@ func (l *Lens) actorOwners(ctx context.Context, tables map[string][]srcTable) (m
 		}
 		out[id] = own
 	}
-	return out, dbErr("time_spent: read actors", rs.Err())
+	if err := rs.Err(); err != nil {
+		return nil, dbErr("time_spent: read actors", err)
+	}
+	return out, nil
 }
 
 // readSpans decodes every task's time entries (live ones) and open spans.
@@ -189,7 +192,10 @@ func (l *Lens) readSpans(ctx context.Context, owners map[string]string, now time
 				ownerID: ownerOf(a), start: st, end: now, day: st.Local().Format(timeentry.DayLayout), seconds: secs, open: true})
 		}
 	}
-	return out, dbErr("time_spent: read tasks", rs.Err())
+	if err := rs.Err(); err != nil {
+		return nil, dbErr("time_spent: read tasks", err)
+	}
+	return out, nil
 }
 
 // countSpans fills counted_seconds (per worker: actor + session) and
