@@ -12,6 +12,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/thesatellite-ai/lore/wire"
 	"os"
 	"saas/pkg/constants"
 
@@ -80,6 +81,15 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 	})
 	if err != nil {
 		return nil, nil, mapResolveError(err)
+	}
+	// Mode B (a .lore/lore.yaml or lore.toml pointer at a shared lore.db) is
+	// retired (Q-MODEB): refuse rather than open the shared file.
+	if ctx.Mode == projresolve.ModeB {
+		p, ok := wire.FindModeBPointer(ctx.ProjectRoot)
+		if !ok {
+			p = projresolve.ModeBFile
+		}
+		return nil, nil, retiredModeBError(p)
 	}
 
 	if err := checkNetworkFS(ctx.DBPath); err != nil {

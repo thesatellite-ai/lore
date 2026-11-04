@@ -886,23 +886,6 @@ func TestE2E_ConcurrentWriters(t *testing.T) {
 	}
 }
 
-// Mode B (`project shared-init`) builds the same search index as `lore init`;
-// before, every search in a shared project failed with
-// "no such table: memory_fts". Mode B never syncs through .lore/data.
-func TestE2E_SharedInitSearchAndNoSync(t *testing.T) {
-	w := newWorld(t)
-	c := w.newClone("solo")
-	shared := filepath.Join(filepath.Dir(c.dir), "shared.db")
-	c.lore("project", "shared-init", "--db="+shared, "--name=alpha")
-	c.lore("rule", "add", "--body", "alpha round-trip memory")
-	if out := c.lore("rule", "search", "round-trip").stdout; !strings.Contains(out, "alpha round-trip memory") {
-		t.Fatalf("search in a shared project: %s", out)
-	}
-	if _, err := os.Stat(filepath.Join(c.dir, ".lore", "data")); !os.IsNotExist(err) {
-		t.Fatal("Mode B must not create .lore/data")
-	}
-}
-
 // Review findings 1+2: the pre-commit guard must inspect UNSTAGED lore
 // files (it stages them) and must find them when the lore project lives in
 // a subdirectory of the repo. Before the fix both cases skipped the file as

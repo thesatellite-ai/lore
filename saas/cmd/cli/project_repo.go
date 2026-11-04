@@ -3,9 +3,9 @@
 // list/show/archive/unarchive/delete of projects and add/list/archive/
 // unarchive/delete of repos are served by the 0.1.18 core (ops/infra,
 // mounted into these groups by core_mount.go: cli.Mount reuses a pure
-// group). What stays here is the v0.1.17 Mode B pair (project
-// shared-init|shared-list), which works on a shared lore.db, not on row
-// files.
+// group). What stays here is the retired v0.1.17 Mode B pair (project
+// shared-init|shared-list), which now only refuses (Q-MODEB,
+// project_shared.go).
 package main
 
 import (

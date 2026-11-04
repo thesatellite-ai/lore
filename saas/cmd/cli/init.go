@@ -16,6 +16,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/thesatellite-ai/lore/wire"
 	"os"
 	"path/filepath"
 	"saas/pkg/constants"
@@ -101,6 +102,9 @@ func runInit(ctx context.Context, projectRoot string) error {
 	// Refuse when a project already exists here. A .lore/ holding only
 	// leftovers (an empty state/ dir from a lock, backups) is not a project
 	// and must not block init.
+	if p, ok := wire.FindModeBPointer(projectRoot); ok {
+		return retiredModeBError(p) // Q-MODEB: convert it, never init over it
+	}
 	for _, f := range projresolve.ProjectMarkerFiles() {
 		if _, err := os.Lstat(filepath.Join(markerDir, f)); err == nil {
 			return errcodes.New(errcodes.AlreadyInitialized,
