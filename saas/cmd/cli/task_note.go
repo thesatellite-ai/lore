@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/lorecfg"
@@ -91,40 +90,13 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 		return unheldNote(ctx, w, t, id, body)
 	}
 	branch := currentWorkBranch(ctx, w.Repo)
-	var cid string
-	var doc coord.Doc
-	var rows *liveRows
-	switch r := t.Rows.(type) {
-	case *liveRows:
-		if coreRowTable(tableComments) {
-			// The core owns comments: the note is written through it with
-			// the claim (task_corerows.go), never into lore.db first.
-			if cid, doc, err = newCommentDoc(id, body, w.ActorID, w.Clock.Now()); err != nil {
-				return err
-			}
-			break
-		}
-		rows = r
-		if cid, doc, err = createComment(ctx, rows, id, body, w.ActorID); err != nil {
-			return err
-		}
-	case *clientRows:
-		if r.internalNote() {
-			// Never touches the client checkout's lore.db: the note goes
-			// only to the store project, staged with the claim (D8).
-			if cid, doc, err = newCommentDoc(id, body, w.ActorID, w.Clock.Now()); err != nil {
-				return err
-			}
-		} else {
-			rows = r.inner
-			if cid, doc, err = createComment(ctx, rows, id, body, w.ActorID); err != nil {
-				return err
-			}
-		}
-	default:
-		if cid, doc, err = newCommentDoc(id, body, w.ActorID, w.Clock.Now()); err != nil {
-			return err
-		}
+	// Comments are core-owned (lsync.CoreOwned): the note is a document
+	// staged with the claim; liveRows/clientRows.Stage write it through the
+	// core (or, for an internal note, to the store project's live ref), and
+	// nothing is ever written into lore.db first.
+	cid, doc, err := newCommentDoc(id, body, w.ActorID, w.Clock.Now())
+	if err != nil {
+		return err
 	}
 	_, err = coord.HolderWrite(ctx, w.env(t), id, false, func(d coord.Doc, _ time.Time) ([]coord.RowWrite, error) {
 		if branch != "" {
@@ -133,11 +105,8 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 		return []coord.RowWrite{{Table: tableComments, ID: cid, Doc: doc}}, nil
 	})
 	if err != nil {
-		// Fenced out or offline: the note must never be exported later.
-		if rows != nil {
-			_ = rows.client.Comment.DeleteOneID(cid).Exec(ctx)
-			_ = lsync.ClearDirty(ctx, rows.db, []lsync.RowRef{{Table: tableComments, ID: cid}})
-		}
+		// Fenced out or offline: nothing was written (the core companion
+		// runs only after the signals push).
 		return coordError(err)
 	}
 	pushed := pushWorkBranch(ctx, w)
@@ -232,25 +201,6 @@ func newCommentDoc(taskID, body, actorID string, now time.Time) (string, coord.D
 	return id, d, nil
 }
 
-// createComment adds the comment to lore.db and returns its canonical doc.
-func createComment(ctx context.Context, rows *liveRows, taskID, body, actorID string) (string, coord.Doc, error) {
-	c, err := rows.client.Comment.Create().SetEntityTable(tableTasks).SetEntityID(taskID).SetBody(body).
-		SetCreatedByActorID(actorID).Save(ctx)
-	if err != nil {
-		return "", nil, errcodes.New(errcodes.Internal, "create note").WithCause(err)
-	}
-	b, ok, err := lsync.RowDoc(ctx, rows.db, tableComments, c.ID)
-	if err != nil || !ok {
-		_ = rows.client.Comment.DeleteOneID(c.ID).Exec(ctx)
-		return "", nil, errcodes.New(errcodes.Internal, "read the note back").WithCause(err)
-	}
-	d, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
-	if err != nil {
-		return "", nil, errcodes.New(errcodes.Internal, "decode the note").WithCause(err)
-	}
-	return c.ID, coord.Doc(d), nil
-}
-
 // sharedNote writes one note where --to says (a deliberate share, §7.6:
 // `--to repo` puts this note in the client repo). Not fenced: sharing is a
 // person's or an agent's explicit choice about one text, not claim work.
@@ -297,23 +247,8 @@ func agentSharedNote(ctx context.Context, id, body, owner string) error {
 	if err != nil {
 		return err
 	}
-	if coreRowTable(tableComments) {
-		if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
-			return err
-		}
-		fmt.Printf("%s note %s on %s (shared with the client repo)\n", style.Success("✓"), cid, id)
-		return nil
-	}
-	sp := rows.spot()
-	sp.actor = owner
-	st := &remoteStagedRows{stagedLiveRows{spot: sp, rows: []coord.RowWrite{{Table: tableComments, ID: cid, Doc: doc}}}}
-	if _, err := st.Prepare(ctx); err != nil {
-		return err
-	}
-	if err := st.PushSelf(ctx); err != nil {
-		return coordError(&signals.OfflineError{Reason: "client live ref push failed", Err: err})
-	}
-	if err := st.Finalize(ctx); err != nil {
+	// Comments are core-owned: the row file is written through the core.
+	if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
 		return err
 	}
 	fmt.Printf("%s note %s on %s (shared with the client repo)\n", style.Success("✓"), cid, id)
@@ -355,21 +290,13 @@ func plainNoteIn(ctx context.Context, f *commonFlags, id, body string) error {
 			return err
 		}
 	}
-	if coreRowTable(tableComments) {
-		cid, doc, derr := newCommentDoc(id, body, by, cliClock().Now())
-		if derr != nil {
-			return derr
-		}
-		if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
-			return err
-		}
-		fmt.Printf("%s note %s on %s\n", style.Success("✓"), cid, id)
-		return nil
-	}
-	c, err := client.Comment.Create().SetEntityTable(tableTasks).SetEntityID(id).SetBody(body).SetCreatedByActorID(by).Save(ctx)
+	cid, doc, err := newCommentDoc(id, body, by, cliClock().Now())
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "create note").WithCause(err)
+		return err
 	}
-	fmt.Printf("%s note %s on %s\n", style.Success("✓"), c.ID, id)
+	if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
+		return err
+	}
+	fmt.Printf("%s note %s on %s\n", style.Success("✓"), cid, id)
 	return nil
 }

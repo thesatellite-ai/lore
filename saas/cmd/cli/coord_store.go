@@ -741,6 +741,22 @@ func (r *clientRows) Stage(ctx context.Context, rows ...coord.RowWrite) ([]signa
 	if len(internal) > 0 {
 		out = append(out, &stagedLiveRows{spot: liveSpot{ref: r.store.ref, folder: r.store.folder, clk: r.w.Clock, actor: r.w.ActorID, wrote: r.store.wrote}, rows: internal})
 	}
+	// Client-side rows of a core-owned table (tasks, comments, actors…)
+	// go through the core after the signals push, as liveRows.Stage does:
+	// a live-ref-only copy is never exported to a row file.
+	var clientCore []coord.RowWrite
+	clientLive := client[:0:0]
+	for _, w := range client {
+		if coreRowTable(coreTableFor(w)) {
+			clientCore = append(clientCore, w)
+		} else {
+			clientLive = append(clientLive, w)
+		}
+	}
+	client = clientLive
+	if len(clientCore) > 0 {
+		out = append(out, &coreCompanion{rows: clientCore})
+	}
 	if len(client) > 0 {
 		sp := r.inner.spot()
 		if r.internalNote() && r.w.IsAgent() {
