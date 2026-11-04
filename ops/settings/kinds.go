@@ -138,7 +138,12 @@ type FieldRemoveIn struct {
 type RowOut struct {
 	ID    string `json:"id"`
 	Store string `json:"store"`
-	Human string `json:"-"`
+	// Batch, DryRun and IDs are set by the bulk forms (resource edit|check
+	// --where, RESOURCES 3.20): the bat_ id and every matched row.
+	Batch  string   `json:"batch,omitempty"`
+	DryRun bool     `json:"dry_run,omitempty"`
+	IDs    []string `json:"ids,omitempty"`
+	Human  string   `json:"-"`
 }
 
 // Text implements op.Texter.

@@ -82,9 +82,11 @@ type resValueFlags struct {
 
 // ResEditIn is the input of resource.edit.
 type ResEditIn struct {
-	Name  string   `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
+	Name  string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
 	Set   []string `json:"set,omitempty" flag:"set" desc:"field=value (repeatable)"`
 	Unset []string `json:"unset,omitempty" flag:"unset" desc:"field to remove (repeatable)"`
+	bulkWhere
+	Archive bool `json:"archive,omitempty" flag:"archive" desc:"bulk: archive every matching resource"`
 	resValueFlags
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
@@ -258,7 +260,8 @@ func (o ops) resourceOps() []op.Entry {
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown, errs.ResourcePlace), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "add a host", CLI: "lore resource add host hub_prod --set provider=hetzner", Want: "res_"}}}, o.resAdd),
 		op.Define(op.Spec{Name: OpResEdit, Summary: "Edit a resource's values (stamps last_checked)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid), Confirm: op.ConfirmRule{MayAsk: true}}, o.resEdit),
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true},
+			Examples: []op.Example{{Title: "bulk edit", CLI: "lore resource edit --kind service --where runs_on=hub_prod --set runs_on=hub_prod_2 --yes", Want: "batch bat_"}}}, o.resEdit),
 		op.Define(op.Spec{Name: OpResShow, Summary: "Show one resource", Permission: op.PermRead, Access: op.AccessRead,
 			// XQ3: --show-sensitive always confirms; without a terminal it needs --yes.
 			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resShow),
@@ -273,7 +276,7 @@ func (o ops) resourceOps() []op.Entry {
 		op.Define(op.Spec{Name: OpResArchive, Summary: "Archive a resource (refs stay; new refs are refused)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.resArchive),
 		op.Define(op.Spec{Name: OpResCheck, Summary: "Stamp last_checked: a person or agent looked and the facts are right", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors}, o.resCheck),
+			Errors: append(slices.Clone(writeErrors), errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true}}, o.resCheck),
 		op.Define(op.Spec{Name: OpResStale, Summary: "Resources whose last_checked is older than --days, or never set", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.resStale),
 	}, o.resourceIOOps()...) // import, export, repoint, clone (resources_io.go)
@@ -657,6 +660,12 @@ func (o ops) named(ctx context.Context, d kindDef, vals map[string]json.RawMessa
 }
 
 func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
+	if in.bulk() || in.Archive {
+		if in.Name != "" {
+			return RowOut{}, errs.New(errs.InvalidInput, "resource edit: name one resource or use --kind with --where, not both")
+		}
+		return o.resEditWhere(ctx, in)
+	}
 	r, err := o.resourceByName(ctx, in.Name, "")
 	if err != nil {
 		return RowOut{}, err
@@ -1060,7 +1069,13 @@ func (o ops) resArchive(ctx context.Context, in ResNameIn) (RowOut, error) {
 	return o.patchRow(ctx, r, map[string]value.Value{rArchivedAt: value.DateTimeFrom(opclock.Now(o.env))}, "archived "+text(r.Row, rName))
 }
 
-func (o ops) resCheck(ctx context.Context, in ResNameIn) (RowOut, error) {
+func (o ops) resCheck(ctx context.Context, in ResCheckIn) (RowOut, error) {
+	if in.bulk() {
+		if in.Name != "" {
+			return RowOut{}, errs.New(errs.InvalidInput, "resource check: name one resource or use --kind with --where, not both")
+		}
+		return o.resCheckWhere(ctx, in)
+	}
 	r, err := o.resourceByName(ctx, in.Name, "")
 	if err != nil {
 		return RowOut{}, err
