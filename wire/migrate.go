@@ -100,6 +100,11 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error
 	if err != nil {
 		return nil, err
 	}
+	personal, err := a.migrateLocalPersonal(ctx, dryRun)
+	if err != nil {
+		return nil, err
+	}
+	steps = append(steps, personal...)
 	legacy, ok, err := identity.ReadLegacy(a.opts.Home)
 	if err != nil {
 		return nil, err

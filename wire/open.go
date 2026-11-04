@@ -95,7 +95,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 
 	var attached []attach.Opened
 	if !repoOnly {
-		if attached, err = openAttached(ctx, st.repoTop, opts.Home, reg, slices.Concat(extra, orgStores(ctx, opts, st.repoTop))); err != nil {
+		personal, perr := localPersonalStores(ctx, opts)
+		if perr != nil {
+			return fail(perr)
+		}
+		if attached, err = openAttached(ctx, st.repoTop, opts.Home, reg, slices.Concat(extra, orgStores(ctx, opts, st.repoTop), personal)); err != nil {
 			return fail(err)
 		}
 	}
@@ -315,7 +319,7 @@ func openAttached(ctx context.Context, repoTop, home string, reg *schema.Registr
 // the store root.
 func levelOf(o attach.Opened) policy.Level {
 	switch {
-	case o.Name == store.Source(attach.ReservedMe):
+	case o.Name == store.Source(attach.ReservedMe) || strings.HasPrefix(string(o.Name), attach.ReservedMe+targetSep):
 		return policy.LevelPersonal
 	case o.Folder == defaultOrgFolder:
 		return policy.LevelOrg
