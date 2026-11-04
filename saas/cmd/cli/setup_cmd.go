@@ -24,6 +24,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"saas/pkg/aicoder/migrationlog"
 
@@ -75,6 +76,7 @@ func warnIfSetupStale(ctx context.Context, db *sql.DB) {
 
 func newSetupCommand() *cobra.Command {
 	var f commonFlags
+	var schemaOnly bool
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Run one-time migrations after install/upgrade (FTS index + future migrations)",
@@ -100,11 +102,35 @@ need to run this manually unless upgrading.`,
 			}
 			dbPath := rctx.DBPath
 			client.Close()
-			return runSetup(cmd.Context(), dbPath)
+			// --schema-only: only the database schema update, terse, the step
+			// `lore upgrade` runs with the new binary right after the swap
+			// (FORMAT_EVOLUTION 8.11 part 2). resolveContext above already ran
+			// the automatic update on open; runSetup then finds the log current
+			// and only re-stamps, so the flag is cheap and idempotent.
+			if schemaOnly {
+				return runSetup(cmd.Context(), dbPath, setupOptions{out: cmd.ErrOrStderr(), quiet: true})
+			}
+			return runSetup(cmd.Context(), dbPath, setupOptions{out: cmd.OutOrStdout()})
 		},
 	}
 	bindCommonFlags(cmd, &f)
+	cmd.Flags().BoolVar(&schemaOnly, "schema-only", false, "update only the local database schema (used by `lore upgrade` after the swap)")
 	return cmd
+}
+
+// setupOptions says where runSetup reports and how much.
+type setupOptions struct {
+	out io.Writer
+	// quiet drops the step lines and the closing banner (the automatic
+	// update on open and --schema-only print their own one-line summary).
+	quiet bool
+}
+
+// say prints a step line unless quiet.
+func (o setupOptions) say(line string) {
+	if !o.quiet {
+		fmt.Fprintln(o.out, line)
+	}
 }
 
 // runSetup runs the heavy schema work against a DB path (not a live client),
@@ -117,12 +143,12 @@ need to run this manually unless upgrading.`,
 //  2. FTS5 base schema (memory_fts legacy table). Fresh conn
 //  3. FTS5 per-entity registry (23 <kind>_fts tables + triggers + backfill)
 //  4. Stamp the registry fingerprint so per-command warnings stop
-func runSetup(ctx context.Context, dbPath string) error {
+func runSetup(ctx context.Context, dbPath string, o setupOptions) error {
 	// 1. ent migration. Open + immediately hand to Migrate (which closes)
-	fmt.Println(style.Hint("→ running ent schema migration..."))
+	o.say(style.Hint("→ running ent schema migration..."))
 	// Record the migration as in_progress first: if it is killed half-way
 	// the replay log shows it (doctor: E_MIGRATION_INCOMPLETE).
-	version := 0
+	logVersion := 0
 	{
 		pre := dbent.InitDB(dbPath)
 		v, err := migrationlog.Begin(ctx, pre)
@@ -130,7 +156,7 @@ func runSetup(ctx context.Context, dbPath string) error {
 		if err != nil {
 			return errcodes.New(errcodes.Internal, "record schema migration").WithCause(err)
 		}
-		version = v
+		logVersion = v
 	}
 	{
 		db := dbent.InitDB(dbPath)
@@ -147,14 +173,20 @@ func runSetup(ctx context.Context, dbPath string) error {
 		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
 	}
 	var err error
-	if version != 0 {
-		err = migrationlog.Complete(ctx, db, version)
+	if logVersion != 0 {
+		err = migrationlog.Complete(ctx, db, logVersion)
 	} else {
 		// No log row yet (DB created before the log existed): record one.
 		err = migrationlog.Record(ctx, db)
 	}
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "record schema migration").WithCause(err)
+	}
+	// The binary that set the schema up (8.11 part 1: the stamp names the
+	// lore_version next to the definition hash, so a newer database is
+	// never touched by an older binary).
+	if err := stampSchemaVersion(ctx, db); err != nil {
+		return err
 	}
 	if !fts5.Available(ctx, db) {
 		fmt.Fprintln(os.Stderr, style.Warn(
@@ -163,7 +195,7 @@ func runSetup(ctx context.Context, dbPath string) error {
 			"  rebuild with `task lore:build` (pure-Go SQLite with FTS5 built in)"))
 		return nil
 	}
-	fmt.Println(style.Hint("→ building FTS5 search index..."))
+	o.say(style.Hint("→ building FTS5 search index..."))
 	if err := fts5.EnsureSchema(ctx, db); err != nil {
 		return errcodes.New(errcodes.Internal, "fts5 schema").WithCause(err)
 	}
@@ -178,6 +210,8 @@ func runSetup(ctx context.Context, dbPath string) error {
 	`, setupFingerprintKey, fp); err != nil {
 		return errcodes.New(errcodes.Internal, "stamp fingerprint").WithCause(err)
 	}
-	fmt.Printf("%s setup complete (registry fingerprint: %s)\n", style.Success("✓"), fp)
+	if !o.quiet {
+		fmt.Fprintf(o.out, "%s setup complete (registry fingerprint: %s)\n", style.Success("✓"), fp)
+	}
 	return nil
 }

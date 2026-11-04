@@ -118,6 +118,22 @@ func Begin(ctx context.Context, db *sql.DB) (int, error) {
 		return 0, err
 	}
 	def := DefinitionHash()
+	// An interrupted migration is resumed, not stacked: the newest
+	// in_progress row is re-pointed at this definition and returned, and
+	// Complete closes it together with any older interrupted row. Without
+	// this the open-time check (NeedsUpdate) would see the old row forever
+	// and update the schema on every command (FORMAT_EVOLUTION 8.11).
+	var pending sql.NullInt64
+	if err := db.QueryRowContext(ctx, `SELECT MAX(version) FROM `+table+` WHERE status = ?`, StatusInProgress).Scan(&pending); err != nil {
+		return 0, fmt.Errorf("migrationlog: in_progress: %w", err)
+	}
+	if pending.Valid {
+		v := int(pending.Int64)
+		if _, err := db.ExecContext(ctx, `UPDATE `+table+` SET migration_sha256 = ?, updated_at = ? WHERE version = ?`, def, time.Now().UTC(), v); err != nil {
+			return 0, fmt.Errorf("migrationlog: resume v%d: %w", v, err)
+		}
+		return v, nil
+	}
 	if latest != nil && latest.migrationHash == def {
 		return 0, nil
 	}
@@ -141,8 +157,9 @@ func Complete(ctx context.Context, db *sql.DB, version int) error {
 	if err != nil {
 		return err
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE `+table+` SET status = ?, schema_sha256 = ?, updated_at = ? WHERE version = ?`,
-		StatusApplied, schemaHash, time.Now().UTC(), version); err != nil {
+	// version <= closes older interrupted rows too (Begin resumed them).
+	if _, err := db.ExecContext(ctx, `UPDATE `+table+` SET status = ?, schema_sha256 = ?, updated_at = ? WHERE version <= ? AND (version = ? OR status = ?)`,
+		StatusApplied, schemaHash, time.Now().UTC(), version, version, StatusInProgress); err != nil {
 		return fmt.Errorf("migrationlog: complete v%d: %w", version, err)
 	}
 	return nil
@@ -255,4 +272,109 @@ func tableExists(ctx context.Context, db *sql.DB) (bool, error) {
 		return false, fmt.Errorf("migrationlog: probe: %w", err)
 	}
 	return n == 1, nil
+}
+
+// State is what NeedsUpdate found (FORMAT_EVOLUTION 8.11 part 1).
+type State int
+
+const (
+	// Current means the latest applied row matches this binary's definition and
+	// no migration is in progress; nothing to do on open.
+	Current State = iota
+	// Behind means no log, no applied row, or an applied row for an older
+	// definition; the schema is updated on open (backup first).
+	Behind
+	// Incomplete means a migration is in_progress (interrupted); the update is
+	// re-run on open, which finishes it.
+	Incomplete
+)
+
+// NeedsUpdate is the per-open check: one probe of sqlite_master plus two
+// indexed reads of the log. It never writes.
+func NeedsUpdate(ctx context.Context, db *sql.DB) (State, error) {
+	ok, err := tableExists(ctx, db)
+	if err != nil {
+		return Current, err
+	}
+	if !ok {
+		return Behind, nil
+	}
+	var n int
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table+` WHERE status = ?`, StatusInProgress).Scan(&n); err != nil {
+		return Current, fmt.Errorf("migrationlog: in_progress: %w", err)
+	}
+	if n > 0 {
+		return Incomplete, nil
+	}
+	latest, err := latestApplied(ctx, db)
+	if err != nil {
+		return Current, err
+	}
+	if latest == nil || latest.migrationHash != DefinitionHash() {
+		return Behind, nil
+	}
+	return Current, nil
+}
+
+// Missing is one table or column this binary expects that the DB lacks.
+// Column is "" for a missing table.
+type Missing struct {
+	Table  string
+	Column string
+}
+
+// String is "table" or "table.column", the form doctor and E_SCHEMA_OLD print.
+func (m Missing) String() string {
+	if m.Column == "" {
+		return m.Table
+	}
+	return m.Table + "." + m.Column
+}
+
+// Drift compares the real columns (PRAGMA table_info per table) with the
+// schema this binary expects (toTables) and lists what is missing, in table
+// order (FORMAT_EVOLUTION 8.11 part 3: doctor reads the real shape, never
+// only the log). Extra tables and columns are not drift: a newer lore or a
+// plugin may add them.
+func Drift(ctx context.Context, db *sql.DB) ([]Missing, error) {
+	tables := append([]*schemaTable(nil), toTables()...)
+	sort.Slice(tables, func(i, j int) bool { return tables[i].name < tables[j].name })
+	var out []Missing
+	for _, t := range tables {
+		have, err := columnsOf(ctx, db, t.name)
+		if err != nil {
+			return nil, err
+		}
+		if len(have) == 0 {
+			out = append(out, Missing{Table: t.name})
+			continue
+		}
+		for _, c := range t.cols {
+			name, _, _ := strings.Cut(c, " ")
+			if !have[name] {
+				out = append(out, Missing{Table: t.name, Column: name})
+			}
+		}
+	}
+	return out, nil
+}
+
+// columnsOf is the column set of table (empty when it does not exist).
+// The name comes from the compiled schema, never from input;
+// pragma_table_info takes it as a bound parameter.
+func columnsOf(ctx context.Context, db *sql.DB, name string) (map[string]bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT name FROM pragma_table_info(?)`, name)
+	if err != nil {
+		return nil, fmt.Errorf("migrationlog: table_info %s: %w", name, err)
+	}
+	defer rows.Close()
+	have := map[string]bool{}
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
+		have[c] = true
+	}
+	return have, rows.Err()
 }

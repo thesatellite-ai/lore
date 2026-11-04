@@ -107,6 +107,12 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 			WithHint("delete the symlink and re-init, or restore from a backup")
 	}
 
+	// An older lore.db is updated before anything reads it (FORMAT_EVOLUTION
+	// 8.11 part 1; reads take the same path, a missing column fails them too).
+	if err := ensureDBSchema(context.Background(), ctx.DBPath); err != nil {
+		return nil, nil, err
+	}
+
 	db := dbent.InitDB(ctx.DBPath)
 	if err := dbent.ApplyPragmas(db); err != nil {
 		db.Close()
