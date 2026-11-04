@@ -21,6 +21,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/sortspec"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -596,11 +597,28 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if in.IncludeSomeday {
 		allowed = append(allowed, schema.TaskCommitmentSomeday)
 	}
+	// XQ7: --where is the one filter grammar; its terms AND with the flags.
+	keys := taskKeys()
+	m, err := listMatcher(in.Where, keys)
+	if err != nil {
+		return ListOut{}, err
+	}
+	// XQ10: --sort key[:asc|:desc]; ties keep the default order (stable).
+	specs, err := listSort(in.Sort, keys)
+	if err != nil {
+		return ListOut{}, err
+	}
+	var order func(a, b row.Row) int
+	if len(specs) > 0 {
+		order = func(a, b row.Row) int { return sortspec.Compare(specs, sortValue(keys, a), sortValue(keys, b)) }
+	}
+	get := rowGetter(keys)
 	now := opclock.Now(o.env)
-	return o.viewWith(ctx, in.Store, project, team.state, func(r row.Row) bool {
+	return o.viewWith(ctx, in.Store, project, team.state, order, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
 		switch {
-		case in.Commitment != "" && commit != in.Commitment,
+		case !m.Match(get(r)),
+			in.Commitment != "" && commit != in.Commitment,
 			in.Status != "" && status != in.Status,
 			in.Mission != "" && work.Field(r, work.FieldMission) != in.Mission,
 			in.Assignee != "" && work.Field(r, fieldAssigned) != in.Assignee,
@@ -619,15 +637,19 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 
 // view lists the tasks keep accepts, in v0.1.17's envelope.
 func (o ops) view(ctx context.Context, only, project string, keep func(row.Row) bool) (ListOut, error) {
-	return o.viewWith(ctx, only, project, nil, keep)
+	return o.viewWith(ctx, only, project, nil, nil, keep)
 }
 
 // viewWith is view whose human lines carry state(row) when it says
-// something (task list's STATE column; nil = none).
-func (o ops) viewWith(ctx context.Context, only, project string, state func(row.Row) string, keep func(row.Row) bool) (ListOut, error) {
+// something (task list's STATE column; nil = none), in order when set
+// (task list --sort; nil keeps the stores' order).
+func (o ops) viewWith(ctx context.Context, only, project string, state func(row.Row) string, order func(a, b row.Row) int, keep func(row.Row) bool) (ListOut, error) {
 	all, err := work.ListAll(ctx, o.env, table, only)
 	if err != nil {
 		return ListOut{}, err
+	}
+	if order != nil {
+		slices.SortStableFunc(all, func(a, b work.Sourced) int { return order(a.Row, b.Row) })
 	}
 	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Brief{}}
 	for _, s := range all {

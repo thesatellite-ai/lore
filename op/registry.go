@@ -19,8 +19,9 @@ type Registry struct {
 
 // NewRegistry validates entries together and returns every problem at once:
 // duplicate names, unknown error codes, a closed-set field holding a value
-// outside its set, a Confirm.When that names no bool input, and two
-// operations on one REST route.
+// outside its set, a Confirm.When that names no bool input, two
+// operations on one REST route, and the word rules of checkWords (XQ8 --by
+// is an actor, XQ9 no root-level import/export).
 func NewRegistry(entries ...Entry) (*Registry, error) {
 	r := &Registry{byName: make(map[string]Entry, len(entries))}
 	var problems []error
@@ -34,6 +35,7 @@ func NewRegistry(entries ...Entry) (*Registry, error) {
 		r.byName[s.Name] = e
 		r.names = append(r.names, s.Name)
 		problems = append(problems, checkSpec(e)...)
+		problems = append(problems, checkWords(e)...)
 		if rt, ok := RouteOf(s, e.InputFields()); ok {
 			key := rt.Method + " " + rt.Path
 			if other, clash := routes[key]; clash {

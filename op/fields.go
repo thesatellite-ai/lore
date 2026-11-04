@@ -60,6 +60,10 @@ type FieldInfo struct {
 	// Nullable marks an op.Null output field: printed as JSON null when
 	// unset (Type and Fields describe the value when set).
 	Nullable bool
+	// Actor marks an input field of Go type op.ActorRef: its value names an
+	// actor (@handle, stable key or act_ id). XQ8: a flag named `by` must be
+	// one (CheckFlagWords).
+	Actor bool
 
 	index []int
 }
@@ -100,6 +104,7 @@ var (
 	textUnmarshaler = reflect.TypeFor[encoding.TextUnmarshaler]()
 	textMarshaler   = reflect.TypeFor[encoding.TextMarshaler]()
 	durationType    = reflect.TypeFor[time.Duration]()
+	actorRefType    = reflect.TypeFor[ActorRef]()
 )
 
 // tagError is the panic value of a struct-tag mistake. Define panics on
@@ -177,6 +182,7 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		ft, f.Nullable = n.nullElem(), true
 	}
 	f.Type, f.Fields = typeOf(op, where, ft, dir)
+	f.Actor = ft == actorRefType
 	f.Required = !strings.Contains(opts, "omitempty") && f.Type != TypeBool
 	if a, ok := sf.Tag.Lookup(tagArg); ok {
 		n, err := strconv.Atoi(a)

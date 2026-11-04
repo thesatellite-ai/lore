@@ -154,6 +154,11 @@ type ListIn struct {
 	// host's work.Team (team.go).
 	Mine      bool   `json:"mine,omitempty" flag:"mine" desc:"assigned to me or my team, and unclaimed or claimed by me"`
 	ClaimedBy string `json:"claimed_by,omitempty" flag:"claimed-by" desc:"only tasks claimed right now by @handle (or actor id)"`
+	// Where is the one filter grammar (XQ7, logic/filter): its terms AND
+	// with every flag above, and --all/--include-* still pick the base set.
+	Where []string `json:"where,omitempty" flag:"where" desc:"filter on a task field: status:todo,in_progress priority>=high due_at<2026-12-01 (= != ~= > >= < <= ? !?; repeatable, all must match)"`
+	// Sort is the one sort grammar (XQ10, logic/sortspec).
+	Sort []string `json:"sort,omitempty" flag:"sort" desc:"sort by a task field: <key>, <key>:asc or <key>:desc (repeatable; ties keep the default order)"`
 }
 
 // ViewIn is the input of the triage, someday and deferred views.
