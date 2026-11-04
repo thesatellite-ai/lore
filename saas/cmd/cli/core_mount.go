@@ -157,6 +157,7 @@ func mountCore(root *cobra.Command) {
 			}
 		}
 	}
+	mountSQLShortcut(root)
 	// The coordination verbs and mission status stay on the v0.1.17 signals
 	// machinery, mounted under the core nouns (after the compat loop: they
 	// carry their own v0.1.17 flags).
