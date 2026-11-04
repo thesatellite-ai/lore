@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -10,7 +11,9 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/store"
 
@@ -933,4 +936,188 @@ func (f forkNamed) RepoDirName(context.Context) (string, error) { return f.name,
 func mustKey(clean string) string {
 	k, _ := repourl.Normalize(clean)
 	return k
+}
+
+// OpRepoMergeIDs is `lore repo merge-ids` (PROVENANCE_DESIGN 11.9).
+const OpRepoMergeIDs = "repo.merge_ids"
+
+// mergeIDsShown bounds how many rows the confirmation question names.
+const mergeIDsShown = 20
+
+// RepoMergeIDsIn is the input of `lore repo merge-ids`.
+type RepoMergeIDsIn struct {
+	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"list the rows that would be rewritten; write nothing"`
+}
+
+// MergedRow is one row whose _o.repo was (or would be) rewritten.
+type MergedRow struct {
+	Store string `json:"store"`
+	Table string `json:"table"`
+	ID    string `json:"id"`
+	From  string `json:"from"`
+}
+
+// RepoMergeIDsOut is the result of `lore repo merge-ids`.
+type RepoMergeIDsOut struct {
+	RepoID  string      `json:"repo_id"`
+	Aliases []string    `json:"aliases"`
+	Rows    []MergedRow `json:"rows"`
+	DryRun  bool        `json:"dry_run,omitempty"`
+	human   string
+}
+
+// Text implements op.Texter.
+func (o RepoMergeIDsOut) Text() string { return o.human }
+
+// OriginRewriter is the one write that may change a row's `_o` after
+// creation (engine.RewriteOrigin behind the App's write path).
+type OriginRewriter interface {
+	RewriteOrigin(ctx context.Context, ref engine.Ref, fn func(value.JSON) (value.JSON, bool, error)) (engine.Written, error)
+}
+
+// repoMergeIDs settles the race of 11.9 for good: every live row whose
+// `_o.repo` is one of _meta.json's repo_id_aliases gets the winning id, and
+// the aliases are cleared. It is the only command that rewrites `_o`
+// (5.3); the audit log records the op, the rows record nothing new.
+//
+// Flow: identity → scan every store's synced tables for alias-stamped rows
+// → --dry-run: list → ask (E_NEEDS_CONFIRM unless --yes) → RewriteOrigin
+// each → clear aliases in _meta.json.
+func repoMergeIDs(ctx context.Context, env Env, files RepoFiles, rw OriginRewriter, in RepoMergeIDsIn) (RepoMergeIDsOut, error) {
+	id, _, err := EnsureIdentity(ctx, env, files)
+	if err != nil {
+		return RepoMergeIDsOut{}, err
+	}
+	out := RepoMergeIDsOut{RepoID: id.Meta.RepoID, Aliases: slices.Clone(id.Meta.Aliases), Rows: []MergedRow{}, DryRun: in.DryRun}
+	if out.Aliases == nil {
+		out.Aliases = []string{}
+	}
+	if len(out.Aliases) == 0 {
+		out.human = work.Success + " " + out.RepoID + " has no alias ids; nothing to merge\n"
+		return out, nil
+	}
+	alias := map[string]bool{}
+	for _, a := range out.Aliases {
+		alias[a] = true
+	}
+	for _, src := range env.Stores() {
+		for _, def := range schema.Builtin() {
+			if !def.Synced {
+				continue
+			}
+			rows, lerr := env.List(ctx, src, def.Name)
+			if lerr != nil {
+				return RepoMergeIDsOut{}, lerr
+			}
+			for _, r := range rows {
+				if from := originRepo(r.Origin); alias[from] {
+					out.Rows = append(out.Rows, MergedRow{Store: string(src), Table: r.Table.String(), ID: r.ID.String(), From: from})
+				}
+			}
+		}
+	}
+	if in.DryRun {
+		out.human = mergeIDsText(out, "would rewrite")
+		return out, nil
+	}
+	if !engine.Confirmed(ctx) {
+		return RepoMergeIDsOut{}, errs.New(errs.NeedsConfirm, mergeIDsQuestion(out)).
+			WithHint("check the rows (lore repo merge-ids --dry-run), then rerun with --yes")
+	}
+	winner := canon.String(out.RepoID)
+	for _, m := range out.Rows {
+		rid, perr := ids.ParseAny(m.ID)
+		if perr != nil {
+			return RepoMergeIDsOut{}, errs.Wrap(errs.Internal, "infra: a listed row id does not parse", perr)
+		}
+		ref := engine.Ref{Store: store.Source(m.Store), Table: row.Table(m.Table), ID: rid}
+		if _, werr := rw.RewriteOrigin(ctx, ref, func(o value.JSON) (value.JSON, bool, error) {
+			return replaceOriginRepo(o, alias, winner)
+		}); werr != nil {
+			return RepoMergeIDsOut{}, werr
+		}
+	}
+	meta := id.Meta
+	meta.Aliases = nil
+	if err := files.WriteRepoMeta(ctx, meta); err != nil {
+		return RepoMergeIDsOut{}, err
+	}
+	out.human = mergeIDsText(out, "rewrote")
+	return out, nil
+}
+
+// originRepo is `_o.repo` of a row ("" when absent).
+func originRepo(o value.JSON) string {
+	if o.IsZero() {
+		return ""
+	}
+	ms, err := canon.Members(o.Raw())
+	if err != nil {
+		return ""
+	}
+	for _, m := range ms {
+		if m.Key == origin.KeyRepo {
+			var s string
+			if json.Unmarshal(m.Raw, &s) == nil {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// replaceOriginRepo sets `_o.repo` to winner when it is an alias, keeping
+// every other key byte for byte.
+func replaceOriginRepo(o value.JSON, alias map[string]bool, winner []byte) (value.JSON, bool, error) {
+	if !alias[originRepo(o)] {
+		return o, false, nil
+	}
+	ms, err := canon.Members(o.Raw())
+	if err != nil {
+		return value.JSON{}, false, errs.Wrap(errs.InvalidInput, "infra: _o is not an object", err)
+	}
+	for i := range ms {
+		if ms[i].Key == origin.KeyRepo {
+			ms[i].Raw = winner
+		}
+	}
+	obj, err := canon.Object(ms)
+	if err != nil {
+		return value.JSON{}, false, errs.Wrap(errs.Internal, "infra: build _o", err)
+	}
+	j, err := value.JSONOf(obj)
+	return j, err == nil, err
+}
+
+// mergeIDsQuestion is the E_NEEDS_CONFIRM message: what changes, the first
+// rows by id.
+func mergeIDsQuestion(o RepoMergeIDsOut) string {
+	parts := make([]string, 0, mergeIDsShown)
+	for i, r := range o.Rows {
+		if i == mergeIDsShown {
+			parts = append(parts, "and "+strconv.Itoa(len(o.Rows)-mergeIDsShown)+" more")
+			break
+		}
+		parts = append(parts, r.ID)
+	}
+	msg := "repo merge-ids rewrites _o.repo of " + strconv.Itoa(len(o.Rows)) + " rows from " + strings.Join(o.Aliases, ", ") + " to " + o.RepoID + " and clears the aliases"
+	if len(parts) > 0 {
+		msg += ": " + strings.Join(parts, ", ")
+	}
+	return msg
+}
+
+// mergeIDsText is the human output (verb: "would rewrite" or "rewrote").
+func mergeIDsText(o RepoMergeIDsOut, verb string) string {
+	var b strings.Builder
+	for _, r := range o.Rows {
+		b.WriteString("  " + r.Store + " " + r.Table + " " + r.ID + "  " + r.From + " → " + o.RepoID + "\n")
+	}
+	b.WriteString(work.Success + " " + verb + " _o.repo of " + strconv.Itoa(len(o.Rows)) + " rows to " + o.RepoID)
+	if o.DryRun {
+		b.WriteString("; nothing written\n")
+		return b.String()
+	}
+	b.WriteString("; aliases " + strings.Join(o.Aliases, ", ") + " cleared from .lore/data/_meta.json (commit it with your next push)\n")
+	return b.String()
 }

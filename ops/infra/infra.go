@@ -137,6 +137,15 @@ func Ops(env Env) []op.Entry {
 				Errors: writeErrors},
 				func(ctx context.Context, in RepoForkIn) (RepoForkOut, error) { return repoFork(ctx, env, files, in) }),
 		)
+		if rw, ok := upgrade.As[OriginRewriter](env); ok {
+			entries = append(entries, op.Define(op.Spec{Name: OpRepoMergeIDs, Summary: "Rewrite _o.repo of rows stamped with an alias repo id to the winning id, then clear the aliases (PROVENANCE 11.9)",
+				Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{MayAsk: true},
+				Errors:   append([]errs.Code{errs.NeedsConfirm}, writeErrors...),
+				Examples: []op.Example{{Title: "see what would change", CLI: "lore repo merge-ids --dry-run", Want: "_o.repo"}}},
+				func(ctx context.Context, in RepoMergeIDsIn) (RepoMergeIDsOut, error) {
+					return repoMergeIDs(ctx, env, files, rw, in)
+				}))
+		}
 	}
 	return entries
 }
