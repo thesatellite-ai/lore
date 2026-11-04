@@ -3,6 +3,7 @@ package policy
 import (
 	"cmp"
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/model/value"
 )
@@ -22,7 +23,20 @@ const (
 	KeyTrashRetentionDays Key = "trash.retention_days"
 	KeyAgentsPersonOnly   Key = "agents.person_only"
 	KeyTasksMaxDepth      Key = "tasks.max_depth"
+	// KeyClientRoutes is v0.1.17's lore-org.yaml `defaults.client_repos`
+	// (CFG8: team rules are policies rows of the org folder): where a row
+	// of each kind goes in a client repo when the write names no --to.
+	// Each item is "<kind>=<target>", target "repo", "<org>" or
+	// "<org>/<folder>" (ClientRoutes reads it).
+	KeyClientRoutes Key = "routing.client_repos"
 )
+
+// ClientRouteRepo is the KeyClientRoutes target that keeps a kind in the
+// client repo itself (v0.1.17 stores.DefaultRepo).
+const ClientRouteRepo = "repo"
+
+// clientRouteSep splits one KeyClientRoutes item into kind and target.
+const clientRouteSep = "="
 
 // Numeric defaults of the keys above.
 const (
@@ -101,6 +115,12 @@ func Keys() []KeyDef {
 		{Key: KeyTasksMaxDepth, Shape: ShapeLimit, Ceiling: ceilingTasksMaxDepth, Default: value.Int(defaultTasksMaxDepth),
 			Doc: "deepest sub-task nesting"},
 		{Key: KeyAgentsPersonOnly, Shape: ShapeSet, Default: mustList(), Doc: "operations only a person may run"},
+		// A set: every level's items join (union), and ClientRoutes then
+		// takes, per kind, a store target over "repo" (a store is
+		// stricter: the row stays out of the customer's repository), the
+		// first in sorted order between two stores.
+		{Key: KeyClientRoutes, Shape: ShapeSet, Default: mustList(),
+			Doc: "where each kind goes in a client repo without --to: items <kind>=repo|<org>|<org>/<folder>; a store beats repo"},
 	}
 	slices.SortFunc(defs, func(a, b KeyDef) int { return cmp.Compare(a.Key, b.Key) })
 	return defs
@@ -141,3 +161,28 @@ func mustList() value.Value {
 	}
 	return l
 }
+
+// ClientRoutes reads the effective KeyClientRoutes items into kind →
+// target. Per kind the stricter target wins: any store target over
+// ClientRouteRepo (v0.1.17 effectiveDefault: "may only make a default
+// stricter"); between two store targets the first in sorted order, so the
+// answer never depends on row order. Items without "=" or with an empty
+// side are skipped (policy set validates the shape it writes).
+func (s Set) ClientRoutes() map[string]string {
+	out := map[string]string{}
+	for _, it := range s.Strings(KeyClientRoutes) { // sorted
+		kind, target, ok := strings.Cut(it, clientRouteSep)
+		kind, target = strings.TrimSpace(kind), strings.TrimSpace(target)
+		if !ok || kind == "" || target == "" {
+			continue
+		}
+		cur, seen := out[kind]
+		if !seen || (cur == ClientRouteRepo && target != ClientRouteRepo) {
+			out[kind] = target
+		}
+	}
+	return out
+}
+
+// ClientRouteItem is one KeyClientRoutes item ("memory=agency").
+func ClientRouteItem(kind, target string) string { return kind + clientRouteSep + target }

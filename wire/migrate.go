@@ -17,6 +17,8 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -177,9 +179,134 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error
 var rosterTables = []row.Table{schema.TableActors, schema.TableTeams}
 
 // orgDefaultsFile is <org folder>/.lore/lore-org.yaml (v0.1.17 stores
-// package OrgDefaultsFile), read here only to report defaults that have no
-// 0.1.18 home yet.
+// package OrgDefaultsFile), whose `defaults` the org_defaults_to_policy
+// step moves into policies rows (CFG8).
 const orgDefaultsFile = "lore-org.yaml"
+
+// migratedSuffix ends the untouched copy of a config file a migration step
+// rewrote (owner rule Q-MODEB: never delete user config).
+const migratedSuffix = ".migrated"
+
+// StepOrgDefaultsToPolicy names the step that moves lore-org.yaml
+// `defaults.client_repos` into a policy.KeyClientRoutes row of the org
+// folder (spec 12, CFG8).
+const StepOrgDefaultsToPolicy = "org_defaults_to_policy"
+
+// orgDefaultsKey is the lore-org.yaml mapping key the step removes.
+const orgDefaultsKey = "defaults"
+
+// orgDefaultsToPolicy is the org_defaults_to_policy step for one attached
+// org folder s (dir is its store's local folder): lore-org.yaml's
+// defaults.client_repos becomes one routing.client_repos policies row in
+// that folder, written through the engine (scanned, stamped, audited,
+// committed); the file keeps its structure without `defaults`, and its
+// old text is kept beside it as lore-org.yaml.migrated. A folder that
+// already holds the policy row only gets the file rewrite (run twice =
+// no second row). The routing reads the row from then on
+// (policy.Set.ClientRoutes).
+func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store, dir string, dryRun bool) ([]string, error) {
+	rel := filepath.Join(filepath.FromSlash(s.Folder), rowfs.LoreDir, orgDefaultsFile)
+	path := filepath.Join(dir, rel)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil // no lore-org.yaml in this folder: nothing to move
+	}
+	var p orgDefaultsProbe
+	if yaml.Unmarshal(b, &p) != nil || len(p.Defaults.ClientRepos) == 0 {
+		return nil, nil
+	}
+	items := make([]string, 0, len(p.Defaults.ClientRepos))
+	for _, k := range slices.Sorted(maps.Keys(p.Defaults.ClientRepos)) {
+		items = append(items, policy.ClientRouteItem(k, p.Defaults.ClientRepos[k]))
+	}
+	step := StepOrgDefaultsToPolicy + ": org store " + string(s.Name) + ": " + orgDefaultsFile + " defaults.client_repos → policy " +
+		string(policy.KeyClientRoutes) + " = " + strings.Join(items, ",") + " (file kept as " + orgDefaultsFile + migratedSuffix + ")"
+	if dryRun {
+		return []string{step}, nil
+	}
+	if _, ok := st.byName[s.Name]; !ok {
+		return []string{StepOrgDefaultsToPolicy + ": org store " + string(s.Name) + " is not attached; " + orgDefaultsFile + " left as it is"}, nil
+	}
+	rows, err := st.eng.List(ctx, s.Name, schema.TablePolicies)
+	if err != nil {
+		return nil, err
+	}
+	has := slices.ContainsFunc(rows, func(r row.Row) bool {
+		k, ok := r.Fields[policyFieldKey].(value.Text)
+		return !r.Deleted && ok && k.String() == string(policy.KeyClientRoutes)
+	})
+	if !has {
+		list := make([]value.Value, len(items))
+		for i, it := range items {
+			if list[i], err = value.TextOf(it); err != nil {
+				return nil, errs.Wrap(errs.InvalidInput, "migrate: "+orgDefaultsFile+" holds a default that is not valid text", err)
+			}
+		}
+		lv, err := value.ListOf(value.KindText, list...)
+		if err != nil {
+			return nil, errs.Wrap(errs.Internal, "migrate: build the routing list", err)
+		}
+		raw, err := lv.MarshalJSON()
+		if err != nil {
+			return nil, errs.Wrap(errs.Internal, "migrate: encode the routing list", err)
+		}
+		jv, err := value.JSONOf(raw)
+		if err != nil {
+			return nil, errs.Wrap(errs.Internal, "migrate: encode the routing list", err)
+		}
+		key, kerr := value.TextOf(string(policy.KeyClientRoutes))
+		scope, serr := value.TextOf(s.Folder)
+		if err := errors.Join(kerr, serr); err != nil {
+			return nil, errs.Wrap(errs.Internal, "migrate: policy key", err)
+		}
+		fields := map[string]value.Value{policyFieldKey: key, policyFieldValue: jv, policyFieldScope: scope}
+		if _, err := st.eng.Create(ctx, s.Name, schema.TablePolicies, fields); err != nil {
+			return nil, errs.Wrap(errs.CodeOf(err), "migrate: write the routing policy into "+string(s.Name), err)
+		}
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(b, &doc); err != nil || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, errs.New(errs.ConfigInvalid, "migrate: "+orgDefaultsFile+" of "+string(s.Name)+" is not a mapping")
+	}
+	m := doc.Content[0]
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == orgDefaultsKey {
+			m.Content = slices.Delete(m.Content, i, i+2)
+			break
+		}
+	}
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "migrate: encode "+orgDefaultsFile, err)
+	}
+	if err := os.WriteFile(path+migratedSuffix, b, orgFileMode); err != nil {
+		return nil, errs.Wrap(errs.Internal, "migrate: keep "+orgDefaultsFile+migratedSuffix, err)
+	}
+	if err := os.WriteFile(path, out, orgFileMode); err != nil {
+		return nil, errs.Wrap(errs.Internal, "migrate: rewrite "+orgDefaultsFile, err)
+	}
+	if !strings.HasPrefix(s.URL, folder.Scheme+"://") {
+		slash := filepath.ToSlash(rel)
+		if err := gitCommitFiles(ctx, dir, a.opts.Wall(), migrateOrgSubject, slash, slash+migratedSuffix); err != nil {
+			return nil, err
+		}
+	}
+	return []string{step}, nil
+}
+
+// Policies row fields the migration writes (schema.Builtin policies).
+const (
+	policyFieldKey   = "key"
+	policyFieldValue = "value"
+	policyFieldScope = "scope"
+)
+
+// orgFileMode is the mode of the lore-org.yaml files the step writes
+// (store files are owner-only, spec 6.1).
+const orgFileMode = 0o600
+
+// migrateOrgSubject is the commit subject of the org file rewrite.
+const migrateOrgSubject = "lore: migrate org defaults to policies"
 
 // orgDefaultsProbe is the part of lore-org.yaml migrateOrg looks at.
 type orgDefaultsProbe struct {
@@ -228,12 +355,11 @@ func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool)
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
 		}
 		if s.Folder != "" {
-			if b, rerr := os.ReadFile(filepath.Join(dir, filepath.FromSlash(s.Folder), ".lore", orgDefaultsFile)); rerr == nil {
-				var p orgDefaultsProbe
-				if yaml.Unmarshal(b, &p) == nil && len(p.Defaults.ClientRepos) > 0 {
-					steps = append(steps, "org store "+string(s.Name)+": "+orgDefaultsFile+" defaults.client_repos kept as it is (still read by the routing; no 0.1.18 policy key holds it yet)")
-				}
+			got, err := a.orgDefaultsToPolicy(ctx, st, s, dir, dryRun)
+			if err != nil {
+				return nil, err
 			}
+			steps = append(steps, got...)
 		}
 		m, err := rowfs.ReadMarker(dir)
 		if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {

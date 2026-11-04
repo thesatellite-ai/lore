@@ -148,20 +148,26 @@ func (a *App) makeStore(ctx context.Context, canon string, m rowfs.Marker) (rowf
 // (the git adapter has no "commit a control file" call; this is the one
 // non-row commit lore makes, so it lives here beside the marker logic).
 func gitCommitMarker(ctx context.Context, dir string, now time.Time) error {
+	return gitCommitFiles(ctx, dir, now, initSubject, rowfs.MarkerFile)
+}
+
+// gitCommitFiles commits paths (slash-separated, relative to dir) of a git
+// store's worktree as lore's own author, hooks off, signing off.
+func gitCommitFiles(ctx context.Context, dir string, now time.Time, subject string, paths ...string) error {
 	env := append(os.Environ(),
 		"GIT_AUTHOR_NAME="+git.DefaultAuthor.Name, "GIT_AUTHOR_EMAIL="+git.DefaultAuthor.Email,
 		"GIT_COMMITTER_NAME="+git.DefaultAuthor.Name, "GIT_COMMITTER_EMAIL="+git.DefaultAuthor.Email,
 		"GIT_AUTHOR_DATE="+now.UTC().Format(time.RFC3339), "GIT_COMMITTER_DATE="+now.UTC().Format(time.RFC3339))
 	for _, args := range [][]string{
-		{"add", "--", rowfs.MarkerFile},
-		{"-c", "commit.gpgsign=false", "commit", "--quiet", "--no-verify", "-m", initSubject, "--", rowfs.MarkerFile},
+		append([]string{"add", "--"}, paths...),
+		append([]string{"-c", "commit.gpgsign=false", "commit", "--quiet", "--no-verify", "-m", subject, "--"}, paths...),
 	} {
 		cmd := exec.CommandContext(ctx, git.DefaultBinary, args...)
 		cmd.Dir, cmd.Env = dir, env
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
-			return errs.Wrap(errs.Internal, "store init: git "+args[0]+" the marker: "+strings.TrimSpace(stderr.String()), err)
+			return errs.Wrap(errs.Internal, "wire: git "+args[0]+" "+strings.Join(paths, " ")+": "+strings.TrimSpace(stderr.String()), err)
 		}
 	}
 	return nil
