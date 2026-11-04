@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/wire"
@@ -137,4 +138,31 @@ func (f *coreFixture) projectID() string {
 		f.t.Fatal(err)
 	}
 	return pid.String()
+}
+
+// taskFile is the repo-store row file of a task (.lore/data/tasks/<id>.json).
+func (f *coreFixture) taskFile(id string) string {
+	return filepath.Join(f.dir, ".lore", "data", tableTasks, id+".json")
+}
+
+// copyTo makes a second clone of the fixture: the same checkout (git and
+// .lore/data copied) in another directory, with its own fresh HOME, as a
+// teammate's machine would hold it after a pull.
+func (f *coreFixture) copyTo(t *testing.T) *coreFixture {
+	t.Helper()
+	root := t.TempDir()
+	g := &coreFixture{t: t, dir: filepath.Join(root, "repo"), home: filepath.Join(root, "home")}
+	if err := os.MkdirAll(g.home, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("cp", "-a", f.dir, g.dir).CombinedOutput(); err != nil {
+		t.Fatalf("copy the checkout: %v %s", err, out)
+	}
+	g.env = append([]string(nil), f.env...)
+	for i, kv := range g.env {
+		if strings.HasPrefix(kv, "HOME=") {
+			g.env[i] = "HOME=" + g.home
+		}
+	}
+	return g
 }

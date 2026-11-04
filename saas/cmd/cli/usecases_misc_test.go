@@ -21,6 +21,7 @@ import (
 
 	"dbent"
 	"dbent/pkg/dbtemplate"
+	"saas/pkg/aicoder/lsync"
 )
 
 // decodeData unmarshals the "data" field of a lore --json envelope.
@@ -563,6 +564,9 @@ func (c *clone) addMemory(body string) string {
 func TestUC_MiscRepairTier3(t *testing.T) {
 	_, c := initProject(t)
 	c.addRow("kept in the broken copy")
+	// rules are core-owned (0.1.18): lore.db holds the bridge copy only
+	// after an old command's sync pass imports the row file.
+	c.lore("sync")
 	dbPath := filepath.Join(c.dir, ".lore", "lore.db")
 	if r := c.loreAny("repair", "--tier=3"); r.code == 0 || !strings.Contains(r.stderr, "--confirm") {
 		t.Fatalf("repair without --confirm must refuse: %d %s", r.code, r.stderr)
@@ -697,13 +701,13 @@ func TestUC_MiscRunStepSequence(t *testing.T) {
 func TestUC_MiscSyncConflictsTextIndents(t *testing.T) {
 	_, c := initProject(t)
 	mem := c.addRow("v1")
-	backup := filepath.Join(t.TempDir(), "before.sqlite")
-	c.lore("backup", "--out", backup)
-	c.lore("rule", "edit", mem, "--body", "v2 after backup")
-	c.lore("restore", backup, "--confirm", "--prefer", "newest")
-	// The adopt pass that records the clash runs as part of the next
-	// ordinary command (`sync conflicts` itself only lists).
-	c.lore("rule", "list")
+	// A restore no longer saves a conflict copy for a rule: rules are
+	// core-owned in 0.1.18 and their row file always wins an adopt
+	// (lsync owned.go, TestOwned_RestoreEveryPreferKeepsCoreFiles), so the
+	// saved version a v0.1.17 restore left is written here as that adopt
+	// wrote it, and the listing format is what is checked.
+	seedConflictCopy(t, filepath.Join(c.dir, ".lore", "lore.db"), "rules", mem,
+		"{\n  \"body\": \"v2 after backup\",\n  \"id\": \""+mem+"\"\n}")
 	out := c.lore("sync", "conflicts").stdout
 	if !strings.Contains(out, "rules/"+mem) {
 		t.Fatalf("expected a saved version for %s:\n%s", mem, out)
@@ -713,6 +717,25 @@ func TestUC_MiscSyncConflictsTextIndents(t *testing.T) {
 		if !strings.HasPrefix(l, "    ") && !strings.HasPrefix(l, "#") {
 			t.Fatalf("saved document must be indented by four spaces:\n%s", out)
 		}
+	}
+}
+
+// seedConflictCopy saves one open conflict copy in lore.db the way an adopt
+// pass does (lsync ListConflicts creates the bookkeeping table first).
+func seedConflictCopy(t *testing.T, dbPath, table, id, otherDoc string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }() // test fixture; a close error has nothing to undo
+	ctx := context.Background()
+	if _, err := lsync.ListConflicts(ctx, db, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO _lore_sync_conflicts (table_name, row_id, kept, other_doc, at) VALUES (?, ?, ?, ?, ?)`,
+		table, id, string(lsync.KeptFile), otherDoc, "2026-11-04T10:00:00Z"); err != nil {
+		t.Fatal(err)
 	}
 }
 

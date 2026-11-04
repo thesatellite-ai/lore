@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"dbent/gen/ent"
-	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/mergewatch"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
+
+	"github.com/thesatellite-ai/lore/logic/merge"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // TestMergedUpdatedAt pins the branch-row stamp's updated_at: the later of
@@ -39,43 +43,61 @@ func TestMergedUpdatedAt(t *testing.T) {
 }
 
 // TestRecordMergedBranch_TwoClonesWriteTheSameRow: a checkout without live
-// rows records the stamp in its branch data. Two clones holding the same
-// done row that find the same merge at different wall-clock times must end
-// with the same merged_at and updated_at (the same bytes), or their copies
-// would conflict on the next pull (trial finding F5).
+// rows records the stamp in its branch data, through the core (tasks are
+// core-owned in 0.1.18). Two clones holding the same done row that find the
+// same merge at different wall-clock times must end with the same
+// merged_at, the merge commit's date, and their two copies must merge on
+// the next pull without a conflict (trial finding F5). In v0.1.17 that
+// needed the same bytes (updated_at was the merge time); the core orders
+// copies by _hlc, so the check is the core's own merge of the two files.
 func TestRecordMergedBranch_TwoClonesWriteTheSameRow(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
-	doneAt := time.Date(2026, 11, 3, 10, 10, 0, 0, time.UTC)
-	f := mergewatch.Finding{Method: mergewatch.MethodAncestry, Commit: "f0fd74c", At: doneAt.Add(5 * time.Minute)}
-	stamp := func() *ent.Task {
-		c := openTestClient(t)
-		p, err := c.Project.Create().SetName("app").Save(ctx)
+	a := newCoreFixture(t)
+	id := idPattern.FindString(a.lore("task", "add", "fix totals", "--commitment=accepted").stdout)
+	if id == "" {
+		t.Fatal("no task id")
+	}
+	a.lore("task", "start", id)
+	a.lore("task", "done", id)
+	a.git("add", "-A")
+	a.git("commit", "-q", "-m", "done")
+	base, err := os.ReadFile(a.taskFile(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The second clone: the same commit in another checkout, another HOME.
+	b := a.copyTo(t)
+	f := mergewatch.Finding{Method: mergewatch.MethodAncestry, Commit: "f0fd74c", At: time.Date(2026, 11, 3, 10, 15, 0, 0, time.UTC)}
+	stamp := func(cf *coreFixture) []byte {
+		t.Helper()
+		cf.mount()
+		recordMergedBranch(ctx, nil, []foundMerge{{task: &ent.Task{ID: id}, finding: f}})
+		d, ok, err := coreDoc(ctx, tableTasks, id)
+		if err != nil || !ok {
+			t.Fatalf("read %s: %v %v", id, ok, err)
+		}
+		if got := d.Time(keyMergedAtDoc); !got.Equal(f.At) {
+			t.Fatalf("merged_at must be the merge commit's date %v: %v", f.At, got)
+		}
+		raw, err := os.ReadFile(cf.taskFile(id))
 		if err != nil {
 			t.Fatal(err)
 		}
-		tk, err := c.Task.Create().SetID("tsk_01a1a0e282f774e09e3b28074ca19dd3").SetProjectID(p.ID).SetTitle("fix totals").
-			SetStatus(entTask.StatusDone).SetUpdatedAt(doneAt).Save(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(2 * time.Millisecond) // the two clones run at different instants
-		recordMergedBranch(ctx, c, []foundMerge{{task: tk, finding: f}})
-		got, err := c.Task.Get(ctx, tk.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return got
+		return raw
 	}
-	a, b := stamp(), stamp()
-	if a.MergedAt == nil || b.MergedAt == nil || !a.MergedAt.Equal(f.At) || !b.MergedAt.Equal(f.At) {
-		t.Fatalf("merged_at must be the merge commit's date %v: %v / %v", f.At, a.MergedAt, b.MergedAt)
+	ra := stamp(a)
+	time.Sleep(2 * time.Millisecond) // the two clones run at different instants
+	rb := stamp(b)
+	reg, err := schema.NewRegistry(schema.Builtin()...)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !a.UpdatedAt.Equal(b.UpdatedAt) {
-		t.Fatalf("two clones stamping the same merge must write the same updated_at: %v vs %v", a.UpdatedAt, b.UpdatedAt)
+	merged, conflict, err := merge.Driver{Registry: reg}.Merge(base, ra, rb)
+	if err != nil || conflict {
+		t.Fatalf("the two stamped copies must merge cleanly: conflict=%v err=%v\n%s", conflict, err, merged)
 	}
-	if !a.UpdatedAt.Equal(f.At) {
-		t.Fatalf("updated_at = %v, want the merge time %v", a.UpdatedAt, f.At)
+	if !strings.Contains(string(merged), `"merged_at"`) || !strings.Contains(string(merged), f.At.Format("2006-01-02T15:04:05")) {
+		t.Fatalf("merged copy lost merged_at: %s", merged)
 	}
 }
 

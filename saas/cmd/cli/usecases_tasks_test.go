@@ -6,12 +6,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"dbent"
 	"dbent/gen/ent"
 	entTask "dbent/gen/ent/task"
 )
@@ -58,19 +59,50 @@ func ucTasklist(t *testing.T, c *clone) string {
 	return tl.ID
 }
 
-// ucScalar reads one value from the project's DB.
-func ucScalar(t *testing.T, c *clone, query string, args ...any) string {
+// ucRowField reads one field of a row file in the repo store
+// (.lore/data/<table>/<id>.json): the core owns these tables in 0.1.18, so
+// lore.db is only a mirror refreshed by the next old command. "" when the
+// field is absent (the core omits cleared fields). The creator is the
+// envelope's created_by; a table whose rows also carry
+// created_by_actor_id (tasks) gives the same id either way.
+func ucRowField(t *testing.T, c *clone, table, id, field string) string {
 	t.Helper()
-	db := dbent.InitDB(filepath.Join(c.dir, ".lore", "lore.db"))
-	defer func() { _ = db.Close() }() // read-only probe
-	var v *string
-	if err := db.QueryRow(query, args...).Scan(&v); err != nil {
-		t.Fatalf("%s: %v", query, err)
+	b, err := os.ReadFile(filepath.Join(c.dir, ".lore", "data", table, id+".json"))
+	if err != nil {
+		t.Fatalf("read %s/%s: %v", table, id, err)
 	}
-	if v == nil {
+	var doc map[string]any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("decode %s/%s: %v", table, id, err)
+	}
+	v, ok := doc[field]
+	if !ok && field == ucFieldCreatorColumn {
+		v, ok = doc[ucFieldCreator]
+	}
+	if !ok || v == nil {
 		return ""
 	}
-	return *v
+	return fmt.Sprint(v)
+}
+
+// Creator fields: the old column name the tests ask for, and the core
+// envelope key that holds it on every core row.
+const (
+	ucFieldCreatorColumn = "created_by_actor_id"
+	ucFieldCreator       = "created_by"
+)
+
+// ucCountFiles counts the row files of table in the repo store.
+func ucCountFiles(t *testing.T, c *clone, table string) int {
+	t.Helper()
+	es, err := os.ReadDir(filepath.Join(c.dir, ".lore", "data", table))
+	if os.IsNotExist(err) {
+		return 0
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(es)
 }
 
 type ucBrief struct {
@@ -172,7 +204,7 @@ func TestUC_Tasks_ListAssignee(t *testing.T) {
 	c := ucProject(t)
 	tl := ucTasklist(t, c)
 	createdBy := func(id string) string {
-		return ucScalar(t, c, "SELECT created_by_actor_id FROM tasks WHERE id = ?", id)
+		return ucRowField(t, c, "tasks", id, ucFieldCreatorColumn)
 	}
 	// asActor runs one task add under another identity and returns that
 	// identity's actor id (taken from the row's created_by). Agent callers
@@ -254,14 +286,15 @@ func TestUC_Tasks_ListAssignee(t *testing.T) {
 
 	// @me for an identity that has never written: not found, and no actor row
 	// is created by the lookup.
+	actorsBefore := ucCountFiles(t, c, "actors")
 	c.env = []string{"LORE_ACTOR=agent:never-wrote"}
 	r = c.loreAny("task", "list", "--assignee=@me")
 	c.env = nil
 	if r.code == 0 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
 		t.Fatalf("@me for an unseen identity must be E_NOT_FOUND: %d %s", r.code, r.stderr)
 	}
-	if n := ucScalar(t, c, "SELECT COUNT(*) FROM actors WHERE stable_key = ?", "agent:never-wrote"); n != "0" {
-		t.Fatalf("--assignee=@me must not create an actor row, found %s", n)
+	if n := ucCountFiles(t, c, "actors"); n != actorsBefore {
+		t.Fatalf("--assignee=@me must not create an actor row: %d actor files, was %d", n, actorsBefore)
 	}
 }
 
@@ -455,13 +488,13 @@ func TestUC_Tasks_ArchiveUnarchive(t *testing.T) {
 		if out := c.lore(kind, "archive", id).stdout; !strings.Contains(out, id+" archived") {
 			t.Fatalf("%s archive: %q", kind, out)
 		}
-		if ucScalar(t, c, "SELECT CAST(archived_at AS TEXT) FROM "+table+" WHERE id = ?", id) == "" {
+		if ucRowField(t, c, table, id, "archived_at") == "" {
 			t.Fatalf("%s archive did not set archived_at", kind)
 		}
 		if out := c.lore(kind, "unarchive", id).stdout; !strings.Contains(out, id+" unarchived") {
 			t.Fatalf("%s unarchive: %q", kind, out)
 		}
-		if ucScalar(t, c, "SELECT CAST(archived_at AS TEXT) FROM "+table+" WHERE id = ?", id) != "" {
+		if ucRowField(t, c, table, id, "archived_at") != "" {
 			t.Fatalf("%s unarchive left archived_at", kind)
 		}
 	}
@@ -480,11 +513,17 @@ func TestUC_Tasks_ArchiveUnarchive(t *testing.T) {
 	if len(list) != 1 || list[0].ID != mem {
 		t.Fatalf("--archived must show it: %+v", list)
 	}
-	// --db is honoured from anywhere (extractCommon); --read-only refuses.
+	// 0.1.18: rules are row files, never lore.db, so --db is refused with
+	// E_UNSUPPORTED (spec-deltas memparity: "--db → E_UNSUPPORTED, the core
+	// never opens lore.db", CODE ORG 1A) and changes nothing; v0.1.17
+	// honoured it from anywhere. --read-only refuses.
 	elsewhere := t.TempDir()
 	db := filepath.Join(c.dir, ".lore", "lore.db")
-	if r := c.w.run(elsewhere, nil, e2eBin, "rule", "unarchive", mem, "--db", db); r.code != 0 {
-		t.Fatalf("--db from another directory: %s", r.stderr)
+	if r := c.w.run(elsewhere, nil, e2eBin, "rule", "unarchive", mem, "--db", db); r.code == 0 || !strings.Contains(r.stderr, "E_UNSUPPORTED") {
+		t.Fatalf("--db from another directory: want E_UNSUPPORTED, got %d %s", r.code, r.stderr)
+	}
+	if ucRowField(t, c, "rules", mem, "archived_at") == "" {
+		t.Fatal("a refused --db unarchive changed the row")
 	}
 	if r := c.loreAny("rule", "archive", mem, "--read-only"); r.code == 0 || !strings.Contains(r.stderr, "E_READ_ONLY") {
 		t.Fatalf("archive --read-only: %d %s", r.code, r.stderr)
@@ -506,19 +545,33 @@ func TestUC_Tasks_ArchiveUnarchive(t *testing.T) {
 // (resolveCreatedBy).
 func TestUC_Tasks_DecisionHotfixAndCreatedBy(t *testing.T) {
 	c := ucProject(t)
-	for status, want := range map[string]string{"proposed": "proposed", "deprecated": "deprecated", "not-a-status": "accepted"} {
+	// 0.1.18 (phase 4 g1): a value outside the closed set is refused and
+	// nothing is written; v0.1.17 silently stored accepted / high.
+	for kind, args := range map[string][]string{
+		"decision": {"--status=not-a-status"},
+		"hotfix":   {"--severity=loud"},
+	} {
+		before := strings.Count(c.lore(kind, "list", "--json").stdout, `"id"`)
+		if r := c.loreAny(append([]string{kind, "add", "--title=bad", "--body", "b"}, args...)...); r.code == 0 || !strings.Contains(r.stderr, "E_INVALID_INPUT") {
+			t.Fatalf("%s add %v: want E_INVALID_INPUT, got %d %s", kind, args, r.code, r.stderr)
+		}
+		if after := strings.Count(c.lore(kind, "list", "--json").stdout, `"id"`); after != before {
+			t.Fatalf("%s: a refused add wrote a row", kind)
+		}
+	}
+	for status, want := range map[string]string{"proposed": "proposed", "deprecated": "deprecated", "superseded": "superseded", "accepted": "accepted", "": "accepted"} {
 		id := ucID(t, c, "decision", "add", "--title=t "+status, "--status="+status, "--source-ref=pr#1", "--body", "because")
-		if got := ucScalar(t, c, "SELECT status FROM decisions WHERE id = ?", id); got != want {
+		if got := ucRowField(t, c, "decisions", id, "status"); got != want {
 			t.Fatalf("decision --status=%s stored %q, want %q", status, got, want)
 		}
-		if ucScalar(t, c, "SELECT source_ref FROM decisions WHERE id = ?", id) != "pr#1" {
+		if ucRowField(t, c, "decisions", id, "source_ref") != "pr#1" {
 			t.Fatal("decision --source-ref lost")
 		}
 	}
-	for sev, want := range map[string]string{"low": "low", "critical": "critical", "loud": "high"} {
+	for sev, want := range map[string]string{"low": "low", "critical": "critical", "medium": "medium", "high": "high", "": "high"} {
 		r := c.lore("hotfix", "add", "--title=h "+sev, "--severity="+sev, "--body", "watch out")
 		id := idPattern.FindString(r.stdout)
-		if got := ucScalar(t, c, "SELECT severity FROM hotfixes WHERE id = ?", id); got != want {
+		if got := ucRowField(t, c, "hotfixes", id, "severity"); got != want {
 			t.Fatalf("hotfix --severity=%s stored %q, want %q", sev, got, want)
 		}
 	}
@@ -535,20 +588,20 @@ func TestUC_Tasks_DecisionHotfixAndCreatedBy(t *testing.T) {
 	}
 	// Generated add commands: default actor, explicit actor, unknown actor.
 	p := ucID(t, c, "pattern", "add", "--title=p1", "--body", "x")
-	actor := ucScalar(t, c, "SELECT created_by_actor_id FROM patterns WHERE id = ?", p)
+	actor := ucRowField(t, c, "patterns", p, ucFieldCreatorColumn)
 	if !strings.HasPrefix(actor, "act_") {
 		t.Fatalf("default created_by must be the current actor: %q", actor)
 	}
 	// A second actor (another identity), then attribute a row to it while
 	// running as the first.
 	c.env = []string{"LORE_ACTOR=reviewer-bot"}
-	other := ucScalar(t, c, "SELECT created_by_actor_id FROM patterns WHERE id = ?", ucID(t, c, "pattern", "add", "--title=by other", "--body", "o"))
+	other := ucRowField(t, c, "patterns", ucID(t, c, "pattern", "add", "--title=by other", "--body", "o"), ucFieldCreatorColumn)
 	c.env = nil
 	if other == actor || !strings.HasPrefix(other, "act_") {
 		t.Fatalf("LORE_ACTOR must yield a distinct actor: %q vs %q", other, actor)
 	}
 	p2 := ucID(t, c, "pattern", "add", "--title=p2", "--body", "y", "--created-by="+other)
-	if got := ucScalar(t, c, "SELECT created_by_actor_id FROM patterns WHERE id = ?", p2); got != other {
+	if got := ucRowField(t, c, "patterns", p2, ucFieldCreatorColumn); got != other {
 		t.Fatalf("explicit --created-by stored %q, want %q", got, other)
 	}
 	if r := c.loreAny("pattern", "add", "--title=p3", "--body", "z", "--created-by=act_00000000000070008000000000000000"); r.code == 0 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
