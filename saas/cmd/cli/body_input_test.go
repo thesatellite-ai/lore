@@ -18,26 +18,33 @@ func TestBodyOnlyArgs(t *testing.T) {
 	}
 }
 
+// Phase 4 g1/g2 spec deltas (CLI_REFERENCE rule, decision, hotfix and
+// pattern, playbook, prompt): on the core these nouns take the body
+// either way, "body also positional" like memory. Before them this test
+// pinned v0.1.17's refusal of positional text; it now pins that both
+// spellings write the same body, and bodyOnlyArgs (TestBodyOnlyArgs) still
+// guards the v0.1.17 commands that keep --body only.
 func TestE2E_PositionalBodyIsRefused(t *testing.T) {
 	w := newWorld(t)
 	alice := w.newClone("alice")
 	alice.lore("init", "--non-interactive", "--name=app")
-	for _, args := range [][]string{
-		{"rule", "add", "--severity=must", "never force-push main"},
-		{"pattern", "add", "--title=t", "body text"},
+	for _, c := range []struct {
+		args   []string
+		prefix string
+	}{
+		{[]string{"rule", "add", "--severity=must", "never force-push main"}, "rul_"},
+		{[]string{"rule", "add", "--body=use JWT"}, "rul_"},
+		{[]string{"pattern", "add", "--title=t", "body text"}, "pat_"},
+		{[]string{"memory", "add", "use JWT"}, "mem_"},
+		{[]string{"memory", "add", "--body=use pgx"}, "mem_"},
 	} {
-		r := alice.loreAny(args...)
-		if r.code == 0 || !strings.Contains(r.stderr, "E_INVALID_INPUT") || !strings.Contains(r.stderr, "--body") {
-			t.Fatalf("lore %v: exit %d\n%s", args, r.code, r.stderr)
+		if r := alice.lore(c.args...); !strings.Contains(r.stdout, c.prefix) {
+			t.Fatalf("lore %v: %s", c.args, r.stdout)
 		}
 	}
-	if r := alice.lore("rule", "add", "--body=use JWT"); !strings.Contains(r.stdout, "rul_") {
-		t.Fatalf("--body must work: %s", r.stdout)
-	}
-	// `lore memory add` is the 0.1.18 core's: it takes the text either way.
-	for _, args := range [][]string{{"memory", "add", "use JWT"}, {"memory", "add", "--body=use pgx"}} {
-		if r := alice.lore(args...); !strings.Contains(r.stdout, "mem_") {
-			t.Fatalf("lore %v: %s", args, r.stdout)
+	for _, want := range []string{"never force-push main", "use JWT"} {
+		if out := alice.lore("rule", "list").stdout; !strings.Contains(out, want) {
+			t.Fatalf("rule list lacks %q: %s", want, out)
 		}
 	}
 }
