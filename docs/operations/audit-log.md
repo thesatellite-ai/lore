@@ -29,14 +29,16 @@ Alice (an agency developer) adds a rule, then reads the log. Each line is: time,
 $ lore rule add --body 'Never put passwords in the code'
 ✓ rul_7a67…9504 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ lore audit log
 2026-11-02T10:00:00Z  rules.write                  rules/rul_7a67…9504  by act_2ad3…f891
 2026-11-02T10:00:00Z  memories.write               memories/mem_162d…9666  by act_2ad3…f891
 2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe…28f2  by act_2ad3…f891
+2026-11-02T10:00:00Z  projects.import              projects/prj_05e9…4603  by act_2ad3…f891
+2026-11-02T10:00:00Z  actors.import                actors/act_2ad3…f891  by act_2ad3…f891
+2026-11-02T10:00:00Z  projects.write               projects/prj_05e9…4603  by act_2ad3…f891
+2026-11-02T10:00:00Z  actors.write                 actors/act_2ad3…f891  by act_2ad3…f891
 $ lore audit verify
-✓ audit chain intact (3 entries)
+✓ audit chain intact (7 entries)
 ```
 <!-- /example -->
 
@@ -50,7 +52,7 @@ Now someone changes the first rule's text straight in the database file, without
 ```console
 # alice, in website
 $ lore audit verify
-✓ audit chain intact (3 entries)
+✓ audit chain intact (7 entries)
 ✗ hash mismatch: rules/rul_54fe…28f2 changed outside lore
 ERROR: [E_AUDIT_CHAIN_BROKEN] hash mismatch: 1 row(s) changed outside lore
   hint: inspect them (`lore <kind> show <id>`); the next lore command records them as external writes
@@ -64,16 +66,14 @@ Run `verify` **first** when you investigate. Any other lore command notices the 
 ```console
 # alice, in website
 $ lore rule list
-lore sync: exported 1
-rul_54fe…28f2 [must/always] Pushing without tests is fine
+lore sync: rules/rul_54fe…28f2.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+$ lore sync
+· already in sync
 $ lore audit log --limit 2
 2026-11-02T10:00:00Z  rules.external-write         rules/rul_54fe…28f2  by act_2ad3…f891
 2026-11-02T10:00:00Z  rules.write                  rules/rul_7a67…9504  by act_2ad3…f891
-$ lore audit verify
-✓ audit chain intact (4 entries)
-! 1 change(s) were made outside lore and later recorded (action *.external-write; see `lore audit log`)
 ```
 <!-- /example -->
 
@@ -87,7 +87,7 @@ Run `lore audit verify` in any repo with lore. Exit 0 means the log is whole and
 ```console
 # alice, in website
 $ lore audit verify
-✓ audit chain intact (3 entries)
+✓ audit chain intact (7 entries)
 ```
 <!-- /example -->
 

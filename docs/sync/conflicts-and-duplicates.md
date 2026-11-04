@@ -35,14 +35,10 @@ Alice makes "Buttons are blue" a must-have rule (the `severity` field). At the s
 # alice, in website
 $ lore rule edit rul_76bd…3f10 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
 ✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 
 # bob, in website
 $ lore rule edit rul_76bd…3f10 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
 ✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ git pull --no-rebase origin main
 From /srv/git/github.com/client/website
  * branch            main       -> FETCH_HEAD
@@ -66,14 +62,10 @@ Now Alice writes "dark blue" and Bob writes "light blue". Alice pulls and gets a
 # alice, in website
 $ lore rule edit rul_76bd…3f10 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
 ✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 
 # bob, in website
 $ lore rule edit rul_76bd…3f10 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
 ✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 
 # alice, in website
 $ git pull -q --no-rebase origin main
@@ -83,7 +75,7 @@ CONFLICT (content): Merge conflict in .lore/data/rules/rul_76bd…3f10.json
 Automatic merge failed; fix conflicts and then commit the result.
 (exit 1)
 $ grep body .lore/data/rules/rul_76bd…3f10.json
-  "body": "<<<<<<< ours\nButtons are dark blue.\n=======\nButtons are light blue.\n>>>>>>> theirs",
+  "body": "<<<<<<< 2026-11-02T10:03:45.000Z/0000/act_d431…313a\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:40.000Z/0000/act_162d…9666",
 ```
 <!-- /example -->
 
@@ -100,8 +92,6 @@ ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_76bd…
 (exit 1)
 $ lore rule edit rul_76bd…3f10 --body 'Buttons are blue.'
 ✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main
 ```
 <!-- /example -->
@@ -110,82 +100,54 @@ You can also edit the value in the file by hand; the next lore command reads it 
 
 ## Step 3 — The file and your database both changed
 
-A different kind of conflict happens on one machine: a row changed in `lore.db` (for example with sync turned off, or by another tool) while its file also changed (by hand, or by git). The pass keeps one version, saves the other, and says so. `lore sync conflicts` shows the saved version; `lore sync resolve <number> --take kept` accepts what the pass kept, `--take other` puts the saved one back:
+For shared notes (rules, memories, tasks and the other core notes) the file is the only truth: lore reads them straight from `.lore/data`, and `lore.db` is just a local copy. So an edit of the file, by hand or by git, simply wins, and there is no second version to conflict with it:
 
-<!-- example: sync#file-and-database-conflict only=2,3,4,5,6,7 -->
+<!-- example: sync#file-and-database-conflict only=2,3,4,5 -->
 ```console
 # alice, in website
-$ LORE_SYNC=0 lore memory edit mem_54fe…28f2 --body 'The client replies faster on WhatsApp than by email.'
-✓ mem_54fe…28f2 updated
 $ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_54fe…28f2.json
-$ lore sync
-lore sync: imported 1
-lore sync: conflict memories/mem_54fe…28f2.json: kept file — both sides edited body; local version saved, see `lore sync conflicts`
-$ lore sync conflicts
-#1 memories/mem_54fe…28f2 kept=file open at 2026-11-02T10:05:15Z
-    {
-      "_table": "memories",
-      "_v": 1,
-      "archived_at": null,
-      "body": "The client replies faster on WhatsApp than by email.",
-      "confidence": null,
-      "created_at": "2026-11-02T10:00:00.000000003Z",
-      "created_by_actor_id": "act_162d…9666",
-      "id": "mem_54fe…28f2",
-      "kind": "retrieved",
-      "last_validated_at": null,
-      "project_id": "prj_7a67…9504",
-      "repo_id": null,
-      "source_kind": "manual",
-      "source_ref": null,
-      "superseded_by_id": null,
-      "trust_score": 0.5,
-      "tx_at": "2026-11-02T10:00:00.000000004Z",
-      "updated_at": "2026-11-02T10:00:00.000000005Z",
-      "valid_at": null,
-      "valid_until": null,
-      "validated_by_actor_id": null
-    }
-$ lore sync resolve 1 --take other
-lore sync: exported 1
-✓ conflict #1 resolved (other)
 $ lore memory list
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than by email.
-mem_d431…313a [retrieved] Send the invoice reminder before the demo on Friday.
+lore sync: imported 1
+mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email or phone.
+mem_b4f4…a5b0 [retrieved] Send the invoice reminder before the demo on Friday.
+$ lore sync
+· already in sync
+$ lore sync conflicts
+· no conflicts
 ```
 <!-- /example -->
 
-`lore sync conflicts --all` also lists conflicts you already resolved.
+A conflict between the file and `lore.db` can still happen for the few rows `lore.db` owns (for example project settings changed with sync turned off). The pass keeps one version, saves the other and says so; `lore sync conflicts` shows it, `lore sync resolve <number> --take kept` accepts what the pass kept and `--take other` puts the saved one back. For a core note `resolve` refuses and names the fix: edit the note with its own lore command. `lore sync conflicts --all` also lists conflicts you already resolved.
 
 ## Step 4 — The same fact written twice
 
-Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, `lore sync dupes` finds rows whose text is the same (ignoring case and spaces), and `lore sync merge-rows` folds one into the other. Links to the dropped row (tags, comments) move to the kept one, and the dropped row goes to the trash:
+Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, `lore sync dupes` finds rows whose text is the same (ignoring case and spaces). Memories are core notes whose files are the truth, so `lore sync merge-rows` does not fold them in the database; it refuses and names the fix: keep one row (edit it if it should carry the other's text) and delete the other with its own command:
 
-<!-- example: sync#duplicates only=2,3,4,5,6,7 -->
+<!-- example: sync#duplicates only=2,3,4,5,6,7,8 -->
 ```console
 # alice, in website
 $ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
-✓ mem_d431…313a 
+✓ mem_b4f4…a5b0 
   scope: [master]
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 
 # bob, in website
 $ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
-✓ mem_b4f4…a5b0 
+✓ mem_28f8…03df 
   scope: [master]
-lore sync: exported 2
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ git pull -q --no-rebase origin main
 $ lore sync dupes
-memories: mem_d431…313a, mem_b4f4…a5b0
+memories: mem_b4f4…a5b0, mem_28f8…03df
     Send the invoice reminder before the demo on Friday.
-$ lore sync merge-rows memories --keep mem_d431…313a --drop mem_b4f4…a5b0
-lore sync: removed files 1
-✓ merged mem_b4f4…a5b0 into mem_d431…313a
+$ lore sync merge-rows memories --keep mem_b4f4…a5b0 --drop mem_28f8…03df
+ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_b4f4…a5b0 (edit it with its lore command if it should carry the other's text), then delete mem_28f8…03df with its lore command
+(exit 1)
+$ lore memory delete mem_28f8…03df --yes
+✓ mem_28f8…03df deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 $ lore memory list
 mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email.
-mem_d431…313a [retrieved] Send the invoice reminder before the demo on Friday.
+mem_b4f4…a5b0 [retrieved] Send the invoice reminder before the demo on Friday.
 ```
 <!-- /example -->
 
@@ -205,17 +167,22 @@ Automatic merge failed; fix conflicts and then commit the result.
 $ lore project list
 lore sync: imported 2
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-prj_28f8…03df  app  https://github.com/client2/app
 prj_4c59…6c38  app  https://github.com/client2/app
+prj_3b62…e913  app  https://github.com/client2/app
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 $ lore sync fix-projects --dry-run
 2 project row(s); 1 would be merged
 $ lore sync fix-projects
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-lore sync: removed files 1
-✓ kept prj_28f8…03df, merged prj_4c59…6c38
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
+✓ kept prj_4c59…6c38, merged prj_3b62…e913
 $ lore project list
-prj_28f8…03df  app  https://github.com/client2/app
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
+prj_4c59…6c38  app  https://github.com/client2/app
+prj_3b62…e913  app  https://github.com/client2/app
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 $ git add -A && git commit -qm 'lore: one project' && git push -q origin main
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 ```
 <!-- /example -->
 
@@ -224,7 +191,7 @@ $ git add -A && git commit -qm 'lore: one project' && git push -q origin main
 - **GitHub's merge button does not run lore's driver.** On a pull request, two edits of the same note show as a conflict even when lore could merge them. Merge main into your branch locally (`git pull origin main`), or install [the GitHub workflow](github-workflow.md).
 - **A clone that never ran lore has no driver.** If someone merges in a fresh clone before running any lore command, git falls back to line merging. Run any lore command (or `lore sync install-git`) once after cloning.
 - **Conflict markers in a value are imported, not hidden.** Until you settle them, `lore rule list` shows the markers in the text, and every command repeats the warning. That is deliberate, so the conflict is not forgotten.
-- **`dupes` finds exact text only.** "We use Stripe" and "Payments go through Stripe" are not duplicates to lore. Fold those by hand with `merge-rows` when you see them.
+- **`dupes` finds exact text only.** "We use Stripe" and "Payments go through Stripe" are not duplicates to lore. Fold those by hand when you see them: edit the one you keep, delete the other.
 - **Resolve numbers are per machine.** `#1` in `lore sync conflicts` is a local number, not a row id; it means nothing on a teammate's machine.
 
 ## Related

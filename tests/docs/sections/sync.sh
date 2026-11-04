@@ -94,18 +94,21 @@ on bob work/website "lore sync dupes"
 local m_a m_b
 m_a=$(grep -o 'mem_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 1p)
 m_b=$(grep -o 'mem_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 2p)
-on bob work/website "lore sync merge-rows memories --keep $m_a --drop $m_b"
+# Memories are core-owned rows (their files are the truth), so merge-rows refuses and
+# names the fix: keep one row, delete the other with its own command (a63c6f8).
+on! bob work/website "lore sync merge-rows memories --keep $m_a --drop $m_b"
+on bob work/website "lore memory delete $m_b --yes"
 on bob work/website "lore memory list"
 on bob work/website "git add -A && git commit -qm 'lore: fold duplicate memory' && git push -q origin main"
 
 note "file and database conflict"
 on alice work/website "git pull -q --no-rebase origin main"
-on alice work/website "LORE_SYNC=0 lore memory edit $m_whatsapp --body 'The client replies faster on WhatsApp than by email.'"
+# A memory's file is the truth (core-owned row): a hand edit of the file wins, and
+# there is no database copy to conflict with it.
 on alice work/website "sed -i 's/than email/than email or phone/' .lore/data/memories/$m_whatsapp.json"
+on alice work/website "lore memory list"
 on alice work/website "lore sync"
 on alice work/website "lore sync conflicts"
-on alice work/website "lore sync resolve 1 --take other"
-on alice work/website "lore memory list"
 on alice work/website "git add -A && git commit -qm 'lore: whatsapp wording' && git push -q origin main"
 
 # --- docs/sync/trash-and-purge.md -------------------------------------------------------
@@ -114,14 +117,19 @@ on alice work/website "git rm -q .lore/data/memories/$m_whatsapp.json"
 on alice work/website "lore memory list"
 on alice work/website "lore sync trash"
 local t_no; t_no=$(grep -o '^#[0-9]*' <<<"$LAST_OUT" | head -1 | tr -d '#')
-on alice work/website "lore sync trash restore $t_no"
+# Core-owned rows come back from git, not from the trash: restore refuses and names
+# the git command (a63c6f8).
+on! alice work/website "lore sync trash restore $t_no"
+on alice work/website "git checkout HEAD -- .lore/data/memories/$m_whatsapp.json"
 on alice work/website "lore memory list"
 on alice work/website "git add -A && git status --short"
 
 note "export"
 on alice work/website "rm -rf .lore/data && lore sync status"
+# export --all writes the rows lore.db owns; core-owned rows (rules, memories, …) are
+# skipped because their files are the truth, so they come back from git (cf0f486).
 on alice work/website "lore sync export --all"
-on alice work/website "git status --short"
+on alice work/website "git checkout -q HEAD -- .lore/data && git status --short"
 
 note "purge"
 on alice work/website "lore memory archive $m_whatsapp && git commit -qam 'lore: archive whatsapp memory'"
@@ -135,7 +143,8 @@ on alice work/website "git add -A && git status --short && git commit -qm 'lore:
 note "hooks"
 on alice work/website "lore sync install-git"
 on alice work/website "ls .git/hooks | grep -v sample"
-on alice work/website "git config --get-regexp '^merge\\.lore'"
+# The driver line names the lore binary by its full path; shortened here.
+on alice work/website "git config --get-regexp '^merge\\.lore' | sed \"s|'/[^']*'|/path/to/lore|\""
 on alice work/website "cat .git/hooks/pre-commit"
 
 note "commit refused"

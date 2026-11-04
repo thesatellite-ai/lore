@@ -68,6 +68,8 @@ ERROR: [E_NEEDS_CONFIRM] engine: run reminder delete?
 (exit 26)
 $ lore reminder delete rmd_0aae…a61f --yes
 ✓ rmd_0aae…a61f deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 ```
 <!-- /example -->
 

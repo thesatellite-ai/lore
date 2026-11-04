@@ -55,6 +55,7 @@ $ lore learn-from docs --paths .ai/notes.md
 ```console
 # alice, in website
 $ lore learn list
+lore sync: imported 1
 [pending] lcd_78c8…5b6c → memories   # Team notes  
 [pending] lcd_d7c7…7fe6 → memories    Run the tests before you push.  
 [pending] lcd_06b1…3d1c → memories    We use Stripe for payments. 

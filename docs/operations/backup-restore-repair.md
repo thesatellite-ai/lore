@@ -44,14 +44,12 @@ Alice adds a rule, then decides to go back to the copy she made before. `lore re
 ```console
 # alice, in website
 $ lore rule add --body 'Buttons are blue'
-✓ rul_05e9…4603 
+✓ rul_c0f3…b5b8 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-rul_05e9…4603 [must/always] Buttons are blue
+rul_c0f3…b5b8 [must/always] Buttons are blue
 $ lore restore .lore/backups/before-buttons.sqlite
 ERROR: [E_INVALID_INPUT] refusing to overwrite DB without --confirm
 (exit 1)
@@ -72,14 +70,12 @@ The restored database and the files in `.lore/data` may now disagree. The first 
 ```console
 # alice, in website
 $ lore rule list
-lore sync: conflict actors/act_2ad3…f891.json: kept db — restore preferred the DB
-lore sync: conflict rules/rul_05e9…4603.json: kept db — not in the restored DB; file removed
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+rul_c0f3…b5b8 [must/always] Buttons are blue
 $ git status --short
- M .lore/data/rules/rul_54fe…28f2.json
 ?? .lore/data/rules/rul_7a67…9504.json
+?? .lore/data/rules/rul_c0f3…b5b8.json
 ```
 <!-- /example -->
 
@@ -93,7 +89,7 @@ $ git status --short
 
 ## Step 4 — Repair a damaged database
 
-If the database file gets damaged (a disk problem, a copy that stopped halfway), `lore doctor` says BROKEN and other commands fail:
+If the database file gets damaged (a disk problem, a copy that stopped halfway), `lore doctor` says BROKEN. Your shared notes are safe: commands such as `lore rule list` read them from the files in `.lore/data`, so they still work:
 
 <!-- example: ops#repair only=1,2 -->
 ```console
@@ -112,8 +108,9 @@ Errors:
   - E_DB_CORRUPT: DB file is corrupt (pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)); recover with `lore repair --tier=2 --confirm` (latest backup) — shared rows also rebuild from .lore/data
 (exit 2)
 $ lore rule list
-ERROR: [E_INTERNAL] apply pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)
-(exit 1)
+rul_54fe…28f2 [must/always] Run the tests before you push
+rul_7a67…9504 [must/always] Never put passwords in the code
+rul_c0f3…b5b8 [must/always] Buttons are blue
 ```
 <!-- /example -->
 
@@ -135,9 +132,9 @@ $ lore repair --tier=2 --confirm
 ✓ restored from ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
   previous (broken) DB at: ~/work/website/.lore/lore.db.broken.20261102-100001
 $ lore rule list
-lore sync: conflict actors/act_2ad3…f891.json: kept db — restore preferred the DB
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
+rul_c0f3…b5b8 [must/always] Buttons are blue
 ```
 <!-- /example -->
 
@@ -155,7 +152,7 @@ ERROR: [E_NOT_IMPLEMENTED] repair tier 1 not implemented in v0.1
 
 ## Step 5 — Rebuild from the files in git
 
-When there is no backup you trust, move the database out of the way. The next lore command sees there is no database, builds a new one and fills it from `.lore/data`. It is like reprinting a notebook from the photocopies you filed:
+When there is no backup you trust, move the database out of the way. Shared notes still list straight from `.lore/data`; the next `lore sync` builds a new database and fills it from those files. It is like reprinting a notebook from the photocopies you filed:
 
 <!-- example: ops#rebuild-from-data -->
 ```console
@@ -164,6 +161,9 @@ $ mv .lore/lore.db .lore/lore.db.old && rm -f .lore/lore.db-wal .lore/lore.db-sh
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
+rul_c0f3…b5b8 [must/always] Buttons are blue
+$ lore sync
+· already in sync
 $ lore doctor | head -1
 Status: HEALTHY
 ```
@@ -173,17 +173,11 @@ Only shared notes come back this way. Things lore keeps on your machine only are
 
 ## Step 6 — Check the result
 
-Run `lore doctor` again. After a restore or repair it often says DEGRADED because one row was kept aside as a conflict (here: Alice's own identity row, where the database and the file differed). Look at it, accept what lore kept, and check again:
+Run `lore doctor` again, and `lore sync conflicts` to see whether anything was kept aside. Shared notes such as rules and memories are always taken from the files, so they never conflict here; if another row does, `lore sync resolve <n> --take kept` accepts what lore kept:
 
-<!-- example: ops#after-repair only=2,3,4 lines=8 -->
+<!-- example: ops#after-repair lines=8 -->
 ```console
 # alice, in website
-$ lore sync conflicts | head -3
-#1 actors/act_2ad3…f891 kept=db open at 2026-11-02T10:01:55Z
-    {
-      "_table": "actors",
-$ lore sync resolve 1 --take kept
-✓ conflict #1 resolved (kept)
 $ lore doctor
 Status: HEALTHY
 Binary: 0.1.0-dev
@@ -194,6 +188,8 @@ Binary: 0.1.0-dev
   baselined:        true
   pending exports:  0
 …
+$ lore sync conflicts | head -3
+· no conflicts
 ```
 <!-- /example -->
 

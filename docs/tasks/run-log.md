@@ -45,7 +45,6 @@ lore live: (live, pushed)
 ```console
 # alice, in website
 $ lore run start --task tsk_7a67…9504 --agent manual --goal 'Find and fix the wrong price'
-lore sync: imported 1
 ✓ run_2ad3…f891 started
 run_2ad3…f891
 ```

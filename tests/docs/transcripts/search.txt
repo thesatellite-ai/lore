@@ -47,7 +47,6 @@ Found 1 hit for "payments" across 1 entity type:
 
 ### status
 alice (work/website)$ lore search status
-lore sync: imported 6
 ENTITY                 FTS_TABLE                   FTS   SOURCE STATUS
 architecturenote       architecturenote_fts          0        0 ✓ ok
 behaviour              behaviour_fts                 0        0 ✓ ok
@@ -123,7 +122,6 @@ Found 1 hit for "client Fridays" across 1 entity type:
 
 ### querylog
 alice (work/website)$ lore querylog list
-lore sync: imported 3
 (no querylogs)
 
 ### no results

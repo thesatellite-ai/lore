@@ -43,15 +43,14 @@ quiet alice work/website "rm -f .lore/lore.db.broken.* && printf 'this is not a 
 
 note "repair"
 on! alice work/website "lore doctor"
-on! alice work/website "lore rule list"
+# Shared notes are read from .lore/data, so they still list while lore.db is broken.
+on alice work/website "lore rule list"
 on alice work/website "lore repair --tier=2 --confirm"
 on alice work/website "lore rule list"
 
 note "after repair"
-on! alice work/website "lore doctor"
-on alice work/website "lore sync conflicts | head -3"
-on alice work/website "lore sync resolve 1 --take kept"
 on alice work/website "lore doctor"
+on alice work/website "lore sync conflicts | head -3"
 quiet alice work/website "rm -f .lore/lore.db.broken.*"
 
 note "repair tier 1"
@@ -60,6 +59,7 @@ on! alice work/website "lore repair --tier=1 --confirm"
 note "rebuild from data"
 on alice work/website "mv .lore/lore.db .lore/lore.db.old && rm -f .lore/lore.db-wal .lore/lore.db-shm"
 on alice work/website "lore rule list"
+on alice work/website "lore sync"
 on alice work/website "lore doctor | head -1"
 quiet alice work/website "rm -f .lore/lore.db.old"
 
@@ -81,10 +81,15 @@ on alice work/website "lore plugin list"
 quiet alice work/website "rm -f hello.sh"
 
 note "db config"
-on alice work/website "lore config get schema_version"
-on alice work/website "lore config set team.note 'Ask Bob before changing the build'"
-on alice work/website "lore config get team.note"
+on alice work/website "lore config set default_branch main"
+on alice work/website "lore config get default_branch"
+on alice work/website "lore config list"
+on! alice work/website "lore config set team.note 'Ask Bob before changing the build'"
 on! alice work/website "lore config get color"
+
+note "team policy"
+on alice work/website "lore policy set trash.retention_days 365 --yes"
+on alice work/website "lore policy show trash"
 
 note "errors list"
 on alice work/website "lore errors list | head -5"
@@ -97,13 +102,13 @@ EXTRA_ENV="LORE_READ_ONLY=1" on alice work/website "lore rule list"
 on! alice work/website "lore rule add --read-only --body 'Buttons are blue'"
 
 # Make the search index look out of date (what an upgrade without `lore setup` leaves).
-quiet alice work/website "lore config set fts_registry_fingerprint 0000000000000000"
+quiet alice work/website "python3 -c \"import sqlite3; c=sqlite3.connect('.lore/lore.db'); c.execute(\\\"update config set value='0000000000000000' where key='fts_registry_fingerprint'\\\"); c.commit()\""
 
 note "stale warning"
-on alice work/website "lore rule list"
-EXTRA_ENV="LORE_NO_STALE_WARN=1" on alice work/website "lore rule list"
+on alice work/website "lore plugin list"
+EXTRA_ENV="LORE_NO_STALE_WARN=1" on alice work/website "lore plugin list"
 on alice work/website "lore setup"
-on alice work/website "lore rule list"
+on alice work/website "lore plugin list"
 
 # What CI sees: a fresh clone of the pushed repo, with only .lore/data in it.
 quiet alice work/website "git add -A && git commit -qm 'lore: notes' && git push -q origin main"

@@ -21,8 +21,9 @@ Both point at a row by its *table* (the kind of row, in the plural: `rules`, `me
 ```console
 # alice, in website
 $ lore comment add --on-table decisions --on-id dec_76bd…3f10 --body 'The client confirmed this on the call.'
-✓ comment cmt_8567…366f on decisions/dec_76bd…3f10
+✓ comment cmt_8567…366f on decisions/dec_76bd…3f10 
 lore live: (live, pushed)
+lore live: landed on main (601d285); leaves live once main is fetched
 ```
 <!-- /example -->
 

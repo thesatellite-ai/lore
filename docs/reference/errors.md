@@ -10,9 +10,8 @@ The first line starts with `ERROR:` and the code. The line under it, starting wi
 ```console
 # alice, in ~
 $ lore rule list
-ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
-  hint: run `lore init` here, or cd into a project root
-(exit 1)
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
+(exit 19)
 ```
 <!-- /example -->
 
@@ -199,9 +198,9 @@ ERROR: [E_NO_WORK] nothing ready: no open task matches
 ```console
 # alice, in website
 $ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
-ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
-  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
-(exit 17)
+ERROR: [E_LINK_UNKNOWN] cannot tell where this write belongs: org store freelance, freelance/org has no local copy and cannot be reached
+  hint: go online once (the store is then kept locally), or name the target: --to repo or --to <store>
+(exit 18)
 ```
 <!-- /example -->
 
@@ -217,7 +216,7 @@ This table is made from `lore errors list` and the exit table in the code, so it
 | `E_DB_NOT_FOUND` | 1 | DB file does not exist at the configured path |
 | `E_SCHEMA_VERSION_MISMATCH` | 1 | DB was migrated by a newer lore; upgrade or use a different DB |
 | `E_MIGRATION_INCOMPLETE` | 1 | a schema migration did not finish; run `lore setup` |
-| `E_NETWORK_FS` | 1 | DB path is on a network/cloud-sync filesystem (silent corruption risk); set LORE_ALLOW_NETWORK_FS=1 to override |
+| `E_NETWORK_FS` | 1 | DB path or store is on a network/cloud-sync filesystem (silent corruption risk); set LORE_ALLOW_NETWORK_FS=1 to override |
 | `E_INODE_MISMATCH` | 1 | DB file inode changed since last open; verify external mutation |
 | `E_DISK_FULL` | 1 | no space left on device for write or backup |
 | `E_READ_ONLY_FS` | 1 | DB path is on a read-only filesystem |
@@ -236,7 +235,7 @@ This table is made from `lore errors list` and the exit table in the code, so it
 | `E_INVALID_UTF8` | 1 | input is not valid UTF-8 |
 | `E_BODY_TOO_LARGE` | 1 | body exceeds maximum allowed size |
 | `E_INVALID_IDENTIFIER` | 1 | identifier contains disallowed character |
-| `E_SECRET_DETECTED` | 1 | input contains a credential pattern; refusing to store. Use --allow-secrets to override (logged) |
+| `E_SECRET_DETECTED` | 1 | input contains a credential pattern; refusing to store. When secrets.on_detect is ask, rerun with --yes once a person confirms it is not a secret (recorded in secret_allows) |
 | `E_ROOT_REFUSED` | 1 | lore refuses to run as root; set LORE_ALLOW_ROOT=1 to override |
 | `E_SYMLINK_DB` | 1 | DB path is a symlink; refusing for safety. Delete the symlink and re-init, or restore lore.db from a backup |
 | `E_SYMLINK_LOOP` | 1 | filesystem walk encountered a symlink loop |
@@ -276,13 +275,22 @@ This table is made from `lore errors list` and the exit table in the code, so it
 ```console
 # alice, in ~
 $ lore rule list --json
-ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
-  hint: run `lore init` here, or cd into a project root
-(exit 1)
+{
+  "error": {
+    "code": "E_NOT_A_STORE",
+    "message": "git: the folder is not inside a git work tree",
+    "exit": 19,
+    "class": "guard",
+    "retryable": false,
+    "needs_person": false
+  }
+}
+(exit 19)
 
 # alice, in website
 $ lore rule list --colour never
-ERROR: unknown flag: --colour
+Error: unknown flag: --colour
+Run 'lore rule list --help' for usage.
 (exit 1)
 ```
 <!-- /example -->

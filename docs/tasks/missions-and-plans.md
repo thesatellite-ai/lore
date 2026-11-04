@@ -74,7 +74,6 @@ Tasks:
 ```console
 # alice, in website
 $ lore mission status msn_7a67…9504
-lore sync: imported 1
 msn_7a67…9504 Open the online shop   3 tasks · 0 done · 0 claimed · 2 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_54fe…28f2  Send the invoice reminder                 
   ready     tsk_2ad3…f891  Take the product photos                   
@@ -112,6 +111,7 @@ $ lore task list --mission msn_7a67…9504
 $ lore mission edit msn_7a67…9504 --target 2026-12-07 --title 'Open the online shop before Christmas'
 ✓ msn_7a67…9504 updated
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 $ lore mission search christmas
 msn_7a67…9504 [active] Open the online shop before Christmas
 ```
@@ -126,7 +126,7 @@ $ lore mission pause msn_7a67…9504
 ✓ msn_7a67…9504 paused
 lore live: (live, pushed)
 $ lore mission list
-msn_7a67…9504 [paused] Open the online shop before Christmas   (3 tasks)
+msn_7a67…9504 [paused] Open the online shop before Christmas   (2 tasks)
 $ lore mission resume msn_7a67…9504
 ✓ msn_7a67…9504 resumed
 lore live: (live, pushed)
@@ -141,10 +141,11 @@ lore live: (live, pushed)
 $ lore mission done msn_7a67…9504
 ✓ msn_7a67…9504 completed
 lore live: (live, pushed)
+lore live: landed on main (86dbae4); leaves live once main is fetched
 $ lore mission list
 (no missions)
 $ lore mission list --all
-msn_7a67…9504 [done] Open the online shop before Christmas   (3 tasks)
+msn_7a67…9504 [done] Open the online shop before Christmas   (2 tasks)
 ```
 <!-- /example -->
 
@@ -156,6 +157,7 @@ Delete is for mistakes only. lore asks first; without a terminal it stops with `
 $ lore mission add 'Test mission, please ignore'
 ✓ msn_05e9…4603 — Test mission, please ignore
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 $ lore mission delete msn_05e9…4603
 ERROR: [E_NEEDS_CONFIRM] engine: run mission delete?
   hint: ask the person, then rerun with --yes
@@ -163,6 +165,7 @@ ERROR: [E_NEEDS_CONFIRM] engine: run mission delete?
 $ lore mission delete msn_05e9…4603 --yes
 ✓ msn_05e9…4603 deleted
 lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -214,7 +217,6 @@ $ lore mission apply newsletter.yaml
   tsk_28f8…03df Send the first newsletter     after first
 lore live: (live, pushed)
 $ lore mission status msn_76bd…3f10
-lore sync: imported 1
 msn_76bd…3f10 Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_d431…313a  Add the sign-up form to the home page              0s (timebox 1h30m)
   waiting   tsk_28f8…03df  Send the first newsletter                 waits for tsk_b4f4…a5b0 to be done (todo)
@@ -270,13 +272,13 @@ lore already knew Alice from `lore init`, so it says `already registered (refres
 ```console
 # alice, in website
 $ lore task add 'Write the about page'
+lore sync: imported 1
 ✓ tsk_3b62…e913 — Write the about page [medium]
 lore live: (live, pushed)
 $ lore handoff add --for @alice --task tsk_3b62…e913 'Two of the three sections are written; the team photo is still missing'
 ✓ handoff hnd_f147…5139 for @alice
 lore live: (live, pushed)
 $ lore inbox
-lore sync: imported 1
 -  handoff  @alice       tsk_3b62…e913  Two of the three sections are written; the team photo is still missing
 ```
 <!-- /example -->
@@ -310,7 +312,6 @@ $ lore mission apply newsletter.yaml
   tsk_28f8…03df Send the first newsletter     after first
 lore live: (live, pushed)
 $ lore mission status msn_76bd…3f10
-lore sync: imported 1
 msn_76bd…3f10 Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_d431…313a  Add the sign-up form to the home page              0s (timebox 1h30m)
   waiting   tsk_28f8…03df  Send the first newsletter                 waits for tsk_b4f4…a5b0 to be done (todo)

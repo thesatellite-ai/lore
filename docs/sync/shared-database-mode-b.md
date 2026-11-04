@@ -38,7 +38,7 @@ url: file://~/stores/client2
 # alice, in app
 $ lore store list
 stores:
-  NAME     URL                                                                                                FOLDER  READ_ONLY  BRANCH  PERSONAL
+  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL
   client2  file://~/stores/client2          false              false
 count: 1
 ```
@@ -54,11 +54,13 @@ The attachment is recorded in the repo's `.lore/stores.yaml`.
 ```console
 # alice, in app
 $ lore rule add --to client2 --body 'Every screen works on a phone.'
+lore sync: imported 2
 ✓ rul_76bd…3f10 [client2]
   scope: [master] severity: must
 
 # alice, in api
 $ lore rule add --to client2 --body 'Every change comes with a test.'
+lore sync: imported 2
 ✓ rul_d431…313a [client2]
   scope: [master] severity: must
 $ lore rule add --body 'The API answers in JSON only.'
@@ -66,13 +68,13 @@ $ lore rule add --body 'The API answers in JSON only.'
   scope: [master] severity: must
 $ lore rule list
 rul_b4f4…a5b0 [must/always] The API answers in JSON only.
-rul_76bd…3f10 [must/always] Every screen works on a phone. [client2]
-rul_d431…313a [must/always] Every change comes with a test. [client2]
+rul_76bd…3f10  Every screen works on a phone.  [client2]
+rul_d431…313a  Every change comes with a test.  [client2]
 
 # alice, in app
 $ lore rule list
-rul_76bd…3f10 [must/always] Every screen works on a phone. [client2]
-rul_d431…313a [must/always] Every change comes with a test. [client2]
+rul_76bd…3f10  Every screen works on a phone.  [client2]
+rul_d431…313a  Every change comes with a test.  [client2]
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -90,6 +92,7 @@ $ git status --short
 ```console
 # alice, in scratch
 $ lore project list
+lore sync: imported 2
 prj_28f8…03df  scratch  https://github.com/client2/scratch
 $ lore project archive prj_28f8…03df
 ✓ scratch archived
@@ -103,6 +106,8 @@ ERROR: [E_NEEDS_CONFIRM] engine: run project delete?
 (exit 26)
 $ lore project delete prj_28f8…03df --yes
 ✓ scratch deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 $ lore project list
 (no projects)
 ```
@@ -124,11 +129,11 @@ ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lo
 (exit 23)
 $ lore migrate run --dry-run
 dry_run: true
-count: 0
+count: 2
 rows: 
 steps: mode-b: memories/mem_3b62…e913 → store shared (~/.lore/stores/infra), mode-b: rules/rul_f147…5139 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore migrate run
-count: 0
+count: 2
 rows: 
 steps: mode-b: memories/mem_3b62…e913 → store shared (~/.lore/stores/infra), mode-b: rules/rul_f147…5139 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ ls .lore; cat .lore/stores.yaml
@@ -142,8 +147,8 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 $ lore rule list; lore memory list
-rul_f147…5139 [must/always] Terraform changes need a plan in the pull request. [shared]
-mem_3b62…e913 [retrieved] The staging cluster sleeps at night.
+rul_f147…5139  Terraform changes need a plan in the pull request.  [shared]
+mem_3b62…e913  The staging cluster sleeps at night.  [shared]
 ```
 <!-- /example -->
 

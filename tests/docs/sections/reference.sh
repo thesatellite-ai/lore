@@ -2,7 +2,8 @@
 # Alice (an agency developer) works in the client's website repo. She lists the
 # error codes, sees how one error looks and which exit status it gives, checks
 # her ~/.lore/config.yaml with `lore config check` (first a good file, then one
-# with mistakes), and points one command at another database with --db / LORE_DB.
+# with mistakes), and sees that --db is refused (rows are read from the repo's files)
+# while LORE_REPO / LORE_PROJECT_ID still pick the repo and project.
 
 lore_repo alice client/website
 
@@ -108,19 +109,22 @@ live:
 Y
 on! alice work/website "lore config check"
 
+# A config lore cannot read blocks reads too (fail closed, CFG): lore cannot tell which
+# stores a row may come from.
 note "invalid config stops writes"
-on alice work/website "lore rule list"
+on! alice work/website "lore rule list"
 on! alice work/website "lore rule add --body 'Run the tests before you push'"
 quiet alice . "rm .lore/config.yaml"
 
 note "db flag"
 quiet alice work/website "lore rule add --body 'Run the tests before you push'"
-on alice . "lore rule list --db work/website/.lore/lore.db"
-EXTRA_ENV="LORE_DB=work/website/.lore/lore.db" on alice . "lore rule list"
+on! alice . "lore rule list --db work/website/.lore/lore.db"
+on! alice . "lore rule list"
+on alice . "cd work/website && lore rule list"
 
 note "db config"
 on alice work/website "lore config list"
-on alice work/website "lore config get schema_version"
+on alice work/website "lore config get default_branch || echo 'not set'"
 
 # --- default_branch (docs/reference/config.md) -------------------------------------------
 note "default branch"
@@ -163,16 +167,20 @@ orgs:
     repos: [github.com/client/*]
 Y
 on alice . "cat .lore/config.yaml"
-on alice . "lore store init git@github.com:agency/notes"
-on alice . "lore store init git@github.com:other/notes"
-on alice . "git clone -q https://github.com/agency/notes notes-checkout && cat notes-checkout/lore-store.yaml"
+# 0.1.18: a store is attached to the repo by name (`lore store init <name> <url>`).
+# GDOCS-1: on the fake GitHub this stops with E_STORE_UNREACHABLE before any clone.
+on_known GDOCS-1 alice work/website "LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes"
+on_known GDOCS-1 alice work/website "LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes"
+on_known GDOCS-1 alice work/website "cat .lore/stores.yaml"
 
 note "org use"
 on! alice work/website "lore whoami"
 on alice work/website "lore org use agency"
 on alice . "grep -A3 repo_orgs ~/.lore/config.yaml"
-on alice work/website "lore org link agency --project client --yes"
+on_known GDOCS-1 alice work/website "lore org link agency --project client --yes"
 
 note "force org"
 on! alice work/website "LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'"
-on alice work/website "LORE_ORG=freelance lore memory add --force-org --to freelance/client --create --body 'The client pays invoices in 30 days'"
+# --force-org is gone: name the store the note goes to with --to.
+on! alice work/website "lore memory add --force-org --body 'The client pays invoices in 30 days'"
+on_known GDOCS-1 alice work/website "lore memory add --to freelance --body 'The client pays invoices in 30 days'"

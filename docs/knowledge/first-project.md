@@ -88,7 +88,6 @@ rul_2ad3…f891 [must/always] Run the tests before you push
 ```console
 # alice, in website
 $ lore render
-lore sync: imported 1
 ✓ .lore/LORE.md (12293 bytes; 1R + 0HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 $ cat CLAUDE.md

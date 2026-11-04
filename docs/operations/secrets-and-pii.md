@@ -53,6 +53,8 @@ Delete the row (or edit the key out) before you commit:
 # alice, in website
 $ lore memory delete mem_d431…313a --yes
 ✓ mem_d431…313a deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 ```
 <!-- /example -->
 
@@ -65,14 +67,15 @@ If a note that is meant to be shared trips the check by mistake, edit its text s
 <!-- example: ops#pii-pattern -->
 ```console
 # alice, in website
-$ lore pii-pattern add --name invoice-number --regex 'INV-[0-9]{6}'
-✓ pii-pattern invoice-number added (disabled — run `pii-pattern enable pip_c0f3…b5b8`)
-$ lore pii-pattern list
-[off] invoice-number  (user)
-$ lore pii-pattern enable pip_c0f3…b5b8
-✓ pii-pattern pip_c0f3…b5b8 enabled
-$ lore pii-pattern list
-[on] invoice-number  (user)
+$ lore secrets rule add invoice-number --regex 'INV-[0-9]{6}' --description 'our invoice numbers' --yes
+✓ invoice-number added in this repo (srl_…0f72)
+$ lore secrets rules
+RULE	STATE	LEVEL	WHERE	NOTE
+invoice-number	on	repo	this repo	our invoice numbers
+$ lore memory add --body 'Invoice INV-123456 is still open'
+ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (invoice-number) at line 1: IN…: store it anyway as not a secret?
+  hint: store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret
+(exit 26)
 ```
 <!-- /example -->
 
@@ -99,9 +102,9 @@ A repo in a `Dropbox` folder, refused and then let through for one command:
 ```console
 # alice, in Dropbox/website
 $ lore rule list
-ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website is inside a "dropbox" folder
-  hint: SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set LORE_ALLOW_NETWORK_FS=1
-(exit 1)
+ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
+  hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
+(exit 23)
 $ LORE_ALLOW_NETWORK_FS=1 lore rule list
 (no rules)
 ```
@@ -112,15 +115,18 @@ A pointer file whose `db_path` climbs out with `..`, refused and then let throug
 <!-- example: environment#db-path-outside -->
 ```console
 # alice, in blog
-$ printf 'db_path: ../client.db\nproject_id: %s\n' $(grep project_id .lore/lore.yaml | cut -d' ' -f2) > .lore/lore.yaml.new && mv .lore/lore.yaml.new .lore/lore.yaml && cat .lore/lore.yaml
+$ cat .lore/lore.yaml
 db_path: ../client.db
 project_id: prj_d431…313a
-$ lore rule list
-ERROR: [E_BAD_PATH] db_path "../client.db" has a `..` part: projresolve: path contains traversal sequence or refers outside allowed roots
-  hint: write db_path in .lore/lore.yaml without a `..` part, or set LORE_ALLOW_DB_PATH_OUTSIDE=1 for one command if the path really is meant to leave the project
+$ lore migrate run --dry-run
+ERROR: [E_INTERNAL] internal error
 (exit 1)
-$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list
-rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays
+$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
+count: 1
+rows: 
+steps: mode-b: rules/rul_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+$ lore rule list
+rul_b4f4…a5b0  Posts go out on Tuesdays  [shared]
 ```
 <!-- /example -->
 

@@ -157,7 +157,6 @@ rul_7a67…9504 [must/always] Run the tests before you push [archived]
 rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_162d…9666 [should/always] Keep pull requests under 400 lines
 $ lore render >/dev/null && grep -c 'Run the tests before you push' .lore/LORE.md || true
-lore sync: imported 9
 0
 $ lore rule unarchive rul_7a67…9504
 ✓ rul_7a67…9504 unarchived
@@ -175,6 +174,8 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 # alice, in website
 $ lore memory delete mem_28f8…03df --yes
 ✓ mem_28f8…03df deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 $ lore memory show mem_28f8…03df || true
 ERROR: [E_NOT_FOUND] memory mem_28f8…03df is deleted
   hint: it may have landed on main while this branch is older: `lore sync peek origin/main memories`
@@ -199,6 +200,8 @@ $ ls .lore/data/memories | grep -c mem_4c59…6c38 || true
 1
 $ lore memory delete mem_4c59…6c38 --yes
 ✓ mem_4c59…6c38 deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 ```
 <!-- /example -->
 

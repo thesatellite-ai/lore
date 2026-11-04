@@ -27,13 +27,9 @@ $ git checkout -q -b feature/payments
 $ lore memory add --body 'We use Stripe for payments.'
 ✓ mem_05e9…4603 
   scope: [master]
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ lore rule add --body 'Never put passwords in the code.'
 ✓ rul_c0f3…b5b8 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ git add -A && git commit -qm 'lore: payment notes' && git push -q -u origin feature/payments
 $ git checkout -q main && lore memory list
 mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email.

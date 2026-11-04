@@ -6,11 +6,11 @@ Set one for a single command by writing it in front (`LORE_SYNC_QUIET=1 lore syn
 
 ## Which database, project and repo
 
-A command picks its database, project and repo in this order, and the first one found wins: the flag (`--db`, `--project`, `--repo`), then the variable below, then `.lore/lore.yaml` in the current folder, then `.lore/lore.db` in the current folder. lore never looks in parent folders.
+A row command reads its rows from the repository it runs in. It picks its project and repo in this order, and the first one found wins: the flag (`--project`, `--repo`), then the variable below, then `.lore/lore.yaml` in the current folder, then `.lore/lore.db` in the current folder. lore never looks in parent folders.
 
 | Variable | What it does |
 |---|---|
-| `LORE_DB` | use this database file instead of `.lore/lore.db`; lets you run a command from outside the project folder |
+| `LORE_DB` | refused on row commands with `E_UNSUPPORTED`, like `--db`: rows are files read from the repository, so run the command inside it |
 | `LORE_PROJECT_ID` | use this project id instead of looking it up |
 | `LORE_REPO` | work in this repo of a multi-repo project (its mount name or `rep_` id) instead of the whole project |
 | `LORE_HOME` | the value of `${LORE_HOME}` inside `db_path` of an old shared-database pointer (`.lore/lore.yaml`), read when `lore migrate run` converts it (default `~/.lore`). It does **not** move lore's own folder: config, identity and caches always stay in `~/.lore` |
@@ -20,8 +20,13 @@ A command picks its database, project and repo in this order, and the first one 
 ```console
 # alice, in ~
 $ lore rule list --db work/website/.lore/lore.db
-rul_162d…9666 [must/always] Run the tests before you push
+ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row files read from the repository, not lore.db
+  hint: run the command inside the repository (or name a store with --store / --to)
+(exit 23)
 $ lore rule list
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
+(exit 19)
+$ cd work/website && lore rule list
 rul_162d…9666 [must/always] Run the tests before you push
 ```
 <!-- /example -->
@@ -36,14 +41,13 @@ db_path: ${LORE_HOME}/client-docs.db
 project_id: prj_d431…313a
 $ lore migrate run --dry-run
 ERROR: [E_INTERNAL] internal error
-ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there: stat ~/.lore/client-docs.db: no such file or directory
 (exit 1)
 $ LORE_HOME=~/shared-dbs lore migrate run
-count: 0
+count: 1
 rows: 
 steps: mode-b: rules/rul_b4f4…a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore rule list
-rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays [shared]
+rul_b4f4…a5b0  Posts go out on Tuesdays  [shared]
 
 # alice, in ~
 $ ls ~/shared-dbs ~/shared-dbs/stores
@@ -65,15 +69,13 @@ db_path: ../client.db
 project_id: prj_d431…313a
 $ lore migrate run --dry-run
 ERROR: [E_INTERNAL] internal error
-ERROR: [E_BAD_PATH] db_path "../client.db" has a `..` part: projresolve: path contains traversal sequence or refers outside allowed roots
-  hint: write db_path in .lore/lore.yaml without a `..` part, or set LORE_ALLOW_DB_PATH_OUTSIDE=1 for one command if the path really is meant to leave the project
 (exit 1)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
-count: 0
+count: 1
 rows: 
 steps: mode-b: rules/rul_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore rule list
-rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays [shared]
+rul_b4f4…a5b0  Posts go out on Tuesdays  [shared]
 ```
 <!-- /example -->
 
@@ -92,7 +94,7 @@ rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays [shared]
 $ lore rule add --body 'Never put passwords in the code'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
-(exit 1)
+(exit 23)
 ```
 <!-- /example -->
 
@@ -103,7 +105,7 @@ A repo inside a folder a sync app owns (here `Dropbox`) is refused with `E_NETWO
 # alice, in Dropbox/website
 $ lore rule list
 ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
-  hint: move the store to a local folder
+  hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
 $ LORE_ALLOW_NETWORK_FS=1 lore rule list
 (no rules)
@@ -169,7 +171,6 @@ pending   1 write(s) not confirmed by the remote
   _root/tasks/tsk_162d…9666.json
 lore live: pushed waiting live writes
 $ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_162d…9666
-lore sync: imported 2
 ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
   hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
 (exit 15)

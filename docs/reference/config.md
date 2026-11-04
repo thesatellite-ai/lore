@@ -23,7 +23,7 @@ A **store** is a separate repo that holds only lore notes, so private notes neve
 - **Format.** Every file is YAML. Older lore versions wrote TOML (`config.toml`, `identity.toml`, `lore.toml`). When lore finds only the `.toml` file, it converts it to `.yaml` once, keeps the old file as `<name>.toml.migrated`, and prints one line. When both exist, the `.yaml` file wins and lore warns that the `.toml` file is ignored.
 - **Durations** (how long something lasts) are written like `60s`, `20m`, `1h30m` or a whole number of days such as `7d`. A plain number means seconds. A mix of days and another unit, such as `1d12h`, is refused: write `36h` instead. Negative values are refused.
 - **Org settings win over top-level settings.** The blocks `live`, `lease`, `agents` and `merge_check` can be set at the top of the file and again inside one `orgs:` entry. The org entry's value wins for repos of that org; anything it does not set comes from the top level, then from the built-in default.
-- **A bad file stops writes.** When `~/.lore/config.yaml` has a mistake, commands that read notes still work, but writing a note stops with `E_CONFIG_INVALID` until you fix the file.
+- **A bad file stops reads and writes.** When `~/.lore/config.yaml` has a mistake, lore cannot tell which stores a note may come from, so it fails closed: reading and writing notes both stop with `E_CONFIG_INVALID` until you fix the file.
 
 ## `~/.lore/config.yaml`
 
@@ -115,7 +115,7 @@ When two org entries match a repo, `lore org use` records this machine's choice 
 $ lore whoami
 org        refused  (the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance))
 identity   (not resolved: the org is refused above)
-project    prj_c0f3…b5b8
+project    prj_05e9…4603
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   local: everywhere/
@@ -123,21 +123,21 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore org use agency
-✓ prj_c0f3…b5b8 uses org agency on this machine
+✓ prj_05e9…4603 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 
 # alice, in ~
 $ grep -A3 repo_orgs ~/.lore/config.yaml
 repo_orgs:
-  prj_c0f3…b5b8: {org: agency, remotes: [github.com/client/website]}
+  prj_05e9…4603: {org: agency, remotes: [github.com/client/website]}
 
 # alice, in website
 $ lore org link agency --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_c0f3…b5b8 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_c0f3…b5b8, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
-  nothing was written to this repo
+  link: project prj_05e9…4603 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+ERROR: [E_INVALID_INPUT] stores: store branch does not exist: github.com/agency/notes has no branch main (0.1.18 makes a store with `lore store init <name> <url>`; v0.1.17 stores branches are no longer created)
+  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: `lore migrate run`)
 ```
 <!-- /example -->
 
@@ -151,15 +151,15 @@ default_branch: develop
 
 # alice, in website
 $ lore task add 'Fix the footer links'
-✓ tsk_05e9…4603 — Fix the footer links [medium]
+✓ tsk_54fe…28f2 — Fix the footer links [medium]
 lore live: (live, pushed)
-$ lore task done tsk_05e9…4603
-✓ tsk_05e9…4603 done
+$ lore task done tsk_54fe…28f2
+✓ tsk_54fe…28f2 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: landed on develop (601d285); leaves live once develop is fetched
 $ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
-601d285 lore: land 2 rows (_root)
+601d285 lore: land 1 row (_root)
 86dbae4 lore: init
 86dbae4 lore: init
 ```
@@ -298,17 +298,16 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 | `created` | written by `lore store init` | the day the store was made, `YYYY-MM-DD` |
 | `org_folder` | none | the folder suggested for the roster and company rules; only a hint, the org entry's `org_folder` decides |
 
-`lore store init` writes the marker as the store's first commit:
+`lore store init <name> <url>`, run inside a repo, writes the marker as the store's first commit and attaches the store to the repo under that name (in `.lore/stores.yaml`):
 
 <!-- example: reference#store-marker only=2,4 -->
 ```console
-# alice, in ~
-$ lore store init git@github.com:agency/notes
-✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
-$ git clone -q https://github.com/agency/notes notes-checkout && cat notes-checkout/lore-store.yaml
-lore_store: 1
-created: "2026-11-02"
-org_folder: org
+# alice, in website
+$ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
+ERROR: [E_STORE_UNREACHABLE] git: the store has no local copy yet and cannot be reached
+  hint: go online once; afterwards the local copy is used
+$ cat .lore/stores.yaml
+cat: .lore/stores.yaml: No such file or directory
 ```
 <!-- /example -->
 
@@ -332,32 +331,22 @@ v0.1.17 could point a project at a database somewhere else, shared by several pr
 | `db_path` | required | where the shared database is. You may write `${HOME}`, `${LORE_HOME}` (the value of `LORE_HOME`, else `~/.lore`) and `${PROJECT_ROOT}` (this project's folder). A `..` part is refused unless `LORE_ALLOW_DB_PATH_OUTSIDE=1` |
 | `project_id` | required | which project inside that database this folder is |
 
-## Database settings (`lore config`)
+## Your settings (`lore config`)
 
-`lore config get`, `set` and `list` read and write small settings stored inside the database, not in a file. lore writes and reads these keys itself; `lore config set` stores any other key you give it, but lore does not act on keys it does not know.
+`lore config get`, `set` and `list` read and write the keys of this file, `~/.lore/config.yaml`, as dotted paths (`default_branch`, `live.autopush`). A key lore does not read is refused and nothing is written. lore's own bookkeeping inside `lore.db` is no longer read or set with `lore config`; team rules are set with `lore policy set`.
 
 <!-- example: reference#db-config -->
 ```console
 # alice, in website
 $ lore config list
-db_created_at=2026-11-02T10:00:00.000000001Z
-db_uuid=cfg_54fe…28f2
-fts_registry_fingerprint=a98a26bd082406f5
-last_checkpoint_at=
-last_vacuum_at=
-schema_version=1
-$ lore config get schema_version
-1
+(no config keys)
+$ lore config get default_branch || echo 'not set'
+ERROR: [E_NOT_FOUND] config key "default_branch" not found
+  hint: it may have landed on main while this branch is older: `lore sync peek origin/main`
+not set
 ```
 <!-- /example -->
 
-| Key | What it is |
-|---|---|
-| `schema_version` | the database layout version |
-| `db_uuid` | this database's own id |
-| `db_created_at` | when `lore init` made the database |
-| `fts_registry_fingerprint` | which search index layout was last built; `lore setup` warns when it is out of date |
-| `last_checkpoint_at`, `last_vacuum_at` | when lore last tidied the database file |
 
 ## Pitfalls
 

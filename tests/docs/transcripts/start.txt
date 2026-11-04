@@ -37,7 +37,6 @@ rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push
 
 ### render
 alice (work/website)$ lore render
-lore sync: imported 1
 ✓ .lore/LORE.md (12293 bytes; 1R + 0HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 alice (work/website)$ cat CLAUDE.md
@@ -94,7 +93,7 @@ actors                1
 architecture_notes    0
 assemble_citations    0
 assemble_runs         0
-audit_logs            6
+audit_logs            5
 behaviours            0
 bench_evals           0
 bench_results         0
@@ -132,7 +131,7 @@ projects              1
 prompts               0
 query_logs            0
 reminders             0
-render_histories      2
+render_histories      1
 repos                 0
 rule_verifier_refs    0
 rules                 1
@@ -154,7 +153,7 @@ trusted_plugins       0
 users                 0
 workflows             0
 workspaces            0
-73 tables, 30 total records
+73 tables, 28 total records
 
 ### completion
 alice (work/website)$ lore completion bash | head -3

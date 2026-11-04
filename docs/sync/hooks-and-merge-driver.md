@@ -38,16 +38,16 @@ post-merge
 post-rewrite
 pre-commit
 pre-push
-$ git config --get-regexp '^merge\.lore'
+$ git config --get-regexp '^merge\.lore' | sed "s|'/[^']*'|/path/to/lore|"
 merge.lore.name lore field-level row merge
-merge.lore.driver lore merge-driver %O %A %B %P
+merge.lore.driver /path/to/lore merge-driver %O %A %B %P
 merge.lore-keep-ours.name lore: keep ours, re-render after merge
-merge.lore-keep-ours.driver lore merge-driver --keep-ours %O %A %B %P
+merge.lore-keep-ours.driver /path/to/lore merge-driver --keep-ours %O %A %B %P
 ```
 <!-- /example -->
 
 <!-- ds:block id=sync-mergedriver-config-bur8yta8 -->
-There are two drivers. `lore` merges row files field by field. `lore-keep-ours` is for `.lore/LORE.md`, a summary file lore generates: on a merge it keeps your side, and the next lore command writes the file again from the merged notes.
+There are two drivers; each names the lore binary by its full path (shortened to `/path/to/lore` above), so git finds it even when `lore` is not on the PATH of the program running the merge. `lore` merges row files field by field. `lore-keep-ours` is for `.lore/LORE.md`, a summary file lore generates: on a merge it keeps your side, and the next lore command writes the file again from the merged notes.
 
 <!-- ds:block id=sync-gitattributes-xzr8sqyk -->
 The `.gitattributes` lines (shown in [How notes travel with git](how-notes-travel-with-git.md#step-1--set-up-lore-and-commit-what-it-wrote)) tell git which files use which driver. They also force plain `LF` line endings (the invisible end-of-line character) for note files, so Windows and macOS machines write the same bytes, and mark the files as generated, so GitHub folds them in pull request diffs.
@@ -62,7 +62,7 @@ Each hook gets one block between `>>> lore-sync >>>` and `<<< lore-sync <<<` mar
 $ cat .git/hooks/pre-commit
 #!/bin/sh
 # >>> lore-sync >>>
-( if command -v lore >/dev/null 2>&1; then if lore sync hook --help >/dev/null 2>&1; then lore sync hook pre-commit; else echo "lore: installed lore cannot check .lore/data (no 'sync hook'); upgrade it" >&2; fi; fi ) || exit $?
+( if command -v lore >/dev/null 2>&1; then if ! lore migrate --help >/dev/null 2>&1 && grep -rqsE '"_v": *2' .lore/data; then echo "lore: .lore/data holds lore 0.1.18 rows but the lore on PATH is older; install lore 0.1.18 or newer to commit" >&2; exit 1; elif lore sync hook --help >/dev/null 2>&1; then lore sync hook pre-commit; else echo "lore: installed lore cannot check .lore/data (no 'sync hook'); upgrade it" >&2; fi; fi ) || exit $?
 # <<< lore-sync <<<
 ```
 <!-- /example -->

@@ -34,7 +34,7 @@ $ lore init --non-interactive --name=website
     db:         ~/work/website/.lore/lore.db
     identity:   human:alice@agency.example (git config)
   next: lore learn-from docs   to bootstrap from existing markdown
-lore sync: exported 2 rows to .lore/data — review and commit it
+lore sync: exported 0 rows to .lore/data — review and commit it
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -43,7 +43,13 @@ $ ls .lore .lore/data
 .lore:
 backups
 data
+lock
+lore-cache.db
+lore-cache.db-shm
+lore-cache.db-wal
 lore.db
+lore.db-shm
+lore.db-wal
 state
 .lore/data:
 _meta.json
@@ -56,6 +62,7 @@ $ cat .gitattributes
 .lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
 # <<< lore-sync <<<
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
+lore sync: imported 2
 ```
 <!-- /example -->
 
@@ -72,32 +79,28 @@ Add a rule. lore writes the row file at once and reminds you that it is not comm
 $ lore rule add --body 'Run the tests before you push.'
 ✓ rul_2ad3…f891 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ git status --short
 ?? .lore/data/rules/
 $ cat .lore/data/rules/rul_2ad3…f891.json
 {
+  "_hlc": "2026-11-02T10:00:30.000Z/0000/act_162d…9666",
+  "_o": {
+    "cmd": "rule add",
+    "store": "repo"
+  },
   "_table": "rules",
-  "_v": 1,
+  "_v": 2,
   "activation": "always",
-  "applies_to_description": null,
-  "archived_at": null,
   "body": "Run the tests before you push.",
-  "confidence": null,
   "created_at": "2026-11-02T10:00:00.000000001Z",
-  "created_by_actor_id": "act_162d…9666",
-  "globs": null,
+  "created_by": "act_162d…9666",
   "id": "rul_2ad3…f891",
-  "last_validated_at": null,
   "project_id": "prj_7a67…9504",
-  "repo_id": null,
   "severity": "must",
   "source_kind": "manual",
-  "source_ref": null,
-  "superseded_by_id": null,
   "trust_score": 0.5,
-  "updated_at": "2026-11-02T10:00:00.000000002Z"
+  "updated_at": "2026-11-02T10:00:00.000000001Z",
+  "updated_by": "act_162d…9666"
 }
 $ lore sync status
 baselined:        true
@@ -174,8 +177,9 @@ $ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than
 ✓ mem_54fe…28f2 
   scope: [master]
 $ git status --short
+?? .lore/data/memories/
 $ lore sync
-lore sync: exported 1
+lore sync: imported 1
 $ git status --short
 ?? .lore/data/memories/
 $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin main
@@ -241,7 +245,7 @@ $ lore memory add --yes --body 'The staging password is password=example-only'
 $ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
 1
 $ LORE_SYNC_ALLOW_SECRETS=1 lore sync
-lore sync: imported 3
+· already in sync
 $ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
 1
 ```

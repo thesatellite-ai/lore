@@ -121,18 +121,15 @@ Errors:
 ```
 <!-- /example -->
 
-After a repair, a conflict kept aside makes it DEGRADED (exit 1) until you look at it:
+After a repair, doctor reports HEALTHY again. When a sync conflict is kept aside it says DEGRADED (exit 1) instead and names `lore sync conflicts`:
 
 <!-- example: ops#after-repair only=1 keep=Status|open|Warnings|conflict -->
 ```console
 # alice, in website
 $ lore doctor
-Status: DEGRADED
+Status: HEALTHY
   …
-  open conflicts:   1
-  …
-Warnings:
-  - 1 sync conflict(s) kept aside; see `lore sync conflicts`
+  open conflicts:   0
   …
 ```
 <!-- /example -->
@@ -183,7 +180,7 @@ $ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
     "status": "healthy",
     "binary_version": "0.1.0-dev",
     "memories": 1,
-    "rules": 2,
+    "rules": 3,
   "sanitized": true,
 ```
 <!-- /example -->

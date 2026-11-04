@@ -45,7 +45,6 @@ The line `lore live: (live, pushed)` means lore shared the task at once: it put 
 ```console
 # alice, in website
 $ lore task list
-lore sync: imported 1
 ○ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
 ○ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
 ○ tsk_162d…9666 Update the footer year [medium]
@@ -117,7 +116,6 @@ $ lore task done tsk_7a67…9504 --lesson 'The client pays faster when the remin
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
 $ lore task list
-lore sync: imported 1
 ▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
 ○ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
 $ lore task list --all
@@ -172,6 +170,7 @@ Delete only removes a task for good, with no undo. lore asks first (without a te
 $ lore task add 'Test task, please ignore'
 ✓ tsk_05e9…4603 — Test task, please ignore [medium]
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 $ lore task delete tsk_05e9…4603
 ERROR: [E_NEEDS_CONFIRM] engine: run task delete?
   hint: ask the person, then rerun with --yes
@@ -179,6 +178,7 @@ ERROR: [E_NEEDS_CONFIRM] engine: run task delete?
 $ lore task delete tsk_05e9…4603 --yes
 ✓ tsk_05e9…4603 deleted
 lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -256,7 +256,6 @@ $ lore tasklist edit tlt_d431…313a --status closed
 ```console
 # alice, in website
 $ lore task-view add --name urgent --filter '{"priority":"urgent"}'
-lore sync: imported 1
 ✓ task-view urgent saved
 $ lore task-view list
 tvw_4c59…6c38 urgent
@@ -294,7 +293,6 @@ The commands and their output are written to `tests/docs/transcripts/tasks.txt`.
 ```console
 # alice, in website
 $ git commit -qm 'Fix the Pro plan price on the pricing page'
-lore sync: imported 1
 $ git push -q origin main
 To /srv/git/github.com/client/website
  ! [rejected]        main -> main (non-fast-forward)

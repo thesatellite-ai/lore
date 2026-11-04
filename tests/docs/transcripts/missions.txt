@@ -34,7 +34,6 @@ Tasks:
 
 ### mission status
 alice (work/website)$ lore mission status msn_7a670ae8548ed05bf57ad29ad0759504
-lore sync: imported 1
 msn_7a670ae8548ed05bf57ad29ad0759504 Open the online shop   3 tasks · 0 done · 0 claimed · 2 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_54fe984c9b495744c0217776765a28f2  Send the invoice reminder                 
   ready     tsk_2ad3618e878ebbf527d34d446ef4f891  Take the product photos                   
@@ -58,6 +57,7 @@ alice (work/website)$ lore task list --mission msn_7a670ae8548ed05bf57ad29ad0759
 alice (work/website)$ lore mission edit msn_7a670ae8548ed05bf57ad29ad0759504 --target 2026-12-07 --title 'Open the online shop before Christmas'
 ✓ msn_7a670ae8548ed05bf57ad29ad0759504 updated
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore mission search christmas
 msn_7a670ae8548ed05bf57ad29ad0759504 [active] Open the online shop before Christmas
 
@@ -66,7 +66,7 @@ alice (work/website)$ lore mission pause msn_7a670ae8548ed05bf57ad29ad0759504
 ✓ msn_7a670ae8548ed05bf57ad29ad0759504 paused
 lore live: (live, pushed)
 alice (work/website)$ lore mission list
-msn_7a670ae8548ed05bf57ad29ad0759504 [paused] Open the online shop before Christmas   (3 tasks)
+msn_7a670ae8548ed05bf57ad29ad0759504 [paused] Open the online shop before Christmas   (2 tasks)
 alice (work/website)$ lore mission resume msn_7a670ae8548ed05bf57ad29ad0759504
 ✓ msn_7a670ae8548ed05bf57ad29ad0759504 resumed
 lore live: (live, pushed)
@@ -75,15 +75,17 @@ lore live: (live, pushed)
 alice (work/website)$ lore mission done msn_7a670ae8548ed05bf57ad29ad0759504
 ✓ msn_7a670ae8548ed05bf57ad29ad0759504 completed
 lore live: (live, pushed)
+lore live: landed on main (86dbae4); leaves live once main is fetched
 alice (work/website)$ lore mission list
 (no missions)
 alice (work/website)$ lore mission list --all
-msn_7a670ae8548ed05bf57ad29ad0759504 [done] Open the online shop before Christmas   (3 tasks)
+msn_7a670ae8548ed05bf57ad29ad0759504 [done] Open the online shop before Christmas   (2 tasks)
 
 ### mission delete
 alice (work/website)$ lore mission add 'Test mission, please ignore'
 ✓ msn_05e99e22e9e86e96fe4daa7777994603 — Test mission, please ignore
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore mission delete msn_05e99e22e9e86e96fe4daa7777994603
 ERROR: [E_NEEDS_CONFIRM] engine: run mission delete?
   hint: ask the person, then rerun with --yes
@@ -91,6 +93,7 @@ ERROR: [E_NEEDS_CONFIRM] engine: run mission delete?
 alice (work/website)$ lore mission delete msn_05e99e22e9e86e96fe4daa7777994603 --yes
 ✓ msn_05e99e22e9e86e96fe4daa7777994603 deleted
 lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 
 ### plan add
 alice (work/website)$ lore plan add --title 'Newsletter plan' --body 'Collect emails on the home page first, then send one newsletter a month.'
@@ -118,7 +121,6 @@ alice (work/website)$ lore mission apply newsletter.yaml
   tsk_28f8d32584b2db54ffb146bede5b03df Send the first newsletter     after first
 lore live: (live, pushed)
 alice (work/website)$ lore mission status msn_76bd560aff0771fab8457dbfa9823f10
-lore sync: imported 1
 msn_76bd560aff0771fab8457dbfa9823f10 Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_d4314eba822f1bf5908b2b8ded5f313a  Add the sign-up form to the home page              0s (timebox 1h30m)
   waiting   tsk_28f8d32584b2db54ffb146bede5b03df  Send the first newsletter                 waits for tsk_b4f4765e593d51fd1352985e8af3a5b0 to be done (todo)
@@ -148,13 +150,13 @@ alice (work/website)$ lore actor register
 
 ### handoff
 alice (work/website)$ lore task add 'Write the about page'
+lore sync: imported 1
 ✓ tsk_3b6283bc4392c556bbae5f094246e913 — Write the about page [medium]
 lore live: (live, pushed)
 alice (work/website)$ lore handoff add --for @alice --task tsk_3b6283bc4392c556bbae5f094246e913 'Two of the three sections are written; the team photo is still missing'
 ✓ handoff hnd_f147dd95f1aaf742dd4f5214843a5139 for @alice
 lore live: (live, pushed)
 alice (work/website)$ lore inbox
-lore sync: imported 1
 -  handoff  @alice       tsk_3b6283bc4392c556bbae5f094246e913  Two of the three sections are written; the team photo is still missing
 
 ### handoff ack

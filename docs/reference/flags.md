@@ -17,7 +17,7 @@ Nearly every command that opens the notes database takes these four. A flag wins
 
 | Flag | What it does |
 |---|---|
-| `--db <path>` | use this database file instead of `.lore/lore.db` in the current folder; lets you run a command from anywhere (same as `LORE_DB`) |
+| `--db <path>` | refused on row commands with `E_UNSUPPORTED`: their rows are files read from the repository, not from `lore.db`, so run the command inside the repository instead (`LORE_DB` is refused the same way) |
 | `--project <id or name>` | use this project of the database (same as `LORE_PROJECT_ID`) |
 | `--repo <name or id>` | work in one repo of a multi-repo project, by its mount name or `rep_` id (same as `LORE_REPO`) |
 | `--read-only` | refuse every write with `E_READ_ONLY` and take no lock (same as `LORE_READ_ONLY=1`) |
@@ -26,8 +26,13 @@ Nearly every command that opens the notes database takes these four. A flag wins
 ```console
 # alice, in ~
 $ lore rule list --db work/website/.lore/lore.db
-rul_162d…9666 [must/always] Run the tests before you push
+ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row files read from the repository, not lore.db
+  hint: run the command inside the repository (or name a store with --store / --to)
+(exit 23)
 $ lore rule list
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
+(exit 19)
+$ cd work/website && lore rule list
 rul_162d…9666 [must/always] Run the tests before you push
 ```
 <!-- /example -->
@@ -64,7 +69,6 @@ These matter when you work for an org in client repos. A **store** is a separate
 | `--to repo\|<org>\|<org>/<folder>\|me\|me/<org>` | where the row is written: this repo, the org's linked internal project, one folder of the org's store, or your personal store | `rule add`, `memory add`, `decision add`, `comment add`, `mission add`, `task add`, `task note`; required by `move` and `share` |
 | `--create` | with `--to <org>/<folder>`: make that store folder if it does not exist yet (otherwise an unknown folder is refused) | `rule add`, `memory add`, `decision add`, `comment add` |
 | `--everywhere` | with `--to me`: file the note under `everywhere/`, so it loads in every repo | the same commands as `--to` except `move` and `share` |
-| `--force-org` | write even though `LORE_ORG` or `lore org use` names another org than the store's link for this repo (otherwise `E_ORG_DISAGREES`) | the same commands as `--everywhere` |
 | `--from repo\|<org>\|<org>/<folder>` | which place an id belongs to, when it could be in more than one | `task show`, `edit`, `done`, `cancel`, `merged`, `note`, `claim`, `release`, `revoke`, `reassign`, `gate request`, `gate approve` |
 | `--live` | share this row with everyone at once on the live list, before any commit | the `add` and `edit` commands of most row kinds |
 | `--no-live` | keep this row with the code: it travels with this branch's next commit | the same commands as `--live` |
@@ -91,25 +95,25 @@ These matter when you work for an org in client repos. A **store** is a separate
 
 ## Pitfalls
 
-- `lore <command> --help` shows `--force-org lore org use`: the words `lore org use` there are part of the help text, not a value. `--force-org` takes no value.
 - `--json` is not on every command; when a command does not take it, lore stops with `unknown flag: --json`.
 - `--color` is spelled the American way; `--colour` is an unknown flag.
-- `--repo` only scopes a command inside a multi-repo project. To run a command on another checkout, use `--db`.
+- `--repo` only scopes a command inside a multi-repo project. To run a command on another checkout, run it inside that checkout.
 
-Here `LORE_ORG` names `freelance`, but the repo is linked to the `agency` store, so the write is refused until `--force-org` is passed:
+Here `LORE_ORG` names `freelance`, but the repo is linked to the `agency` store, so the write is refused. `--force-org` no longer exists; name the store the note goes to with `--to` instead:
 
 <!-- example: reference#force-org -->
 ```console
 # alice, in website
 $ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
-ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
-  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
-(exit 17)
-$ LORE_ORG=freelance lore memory add --force-org --to freelance/client --create --body 'The client pays invoices in 30 days'
-✓ mem_76bd…3f10 [freelance/client]
-  filed: --to freelance/client
-  scope: [master]
-lore: [freelance/client] 4 file(s) pushed
+ERROR: [E_LINK_UNKNOWN] cannot tell where this write belongs: org store freelance, freelance/org has no local copy and cannot be reached
+  hint: go online once (the store is then kept locally), or name the target: --to repo or --to <store>
+(exit 18)
+$ lore memory add --force-org --body 'The client pays invoices in 30 days'
+Error: unknown flag: --force-org
+Run 'lore memory add --help' for usage.
+(exit 1)
+$ lore memory add --to freelance --body 'The client pays invoices in 30 days'
+ERROR: [E_NOT_FOUND] engine: no store named freelance is attached
 ```
 <!-- /example -->
 

@@ -83,7 +83,7 @@ A snapshot is stamped with today's date, which `lore snapshot list` shows. `--so
 $ lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'
 ✓ snp_0aae…a61f — Week 44
 $ lore snapshot list
-snp_0aae…a61f Week 44   (2026-11-04)
+snp_0aae…a61f Week 44   (2026-11-02)
 ```
 <!-- /example -->
 

@@ -12,7 +12,6 @@ lore live: (live, pushed)
 
 ### list
 alice (work/website)$ lore task list
-lore sync: imported 1
 ○ tsk_7a670ae8548ed05bf57ad29ad0759504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
 ○ tsk_2ad3618e878ebbf527d34d446ef4f891 Fix the typo on the pricing page [medium]
 ○ tsk_162df51b7f78b785c97c26b41ea89666 Update the footer year [medium]
@@ -53,7 +52,6 @@ alice (work/website)$ lore task done tsk_7a670ae8548ed05bf57ad29ad0759504 --less
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
 alice (work/website)$ lore task list
-lore sync: imported 1
 ▶ tsk_2ad3618e878ebbf527d34d446ef4f891 Fix the typo on the pricing page [medium]
 ○ tsk_162df51b7f78b785c97c26b41ea89666 Update the footer year to 2027 [low] due:2026-11-20
 alice (work/website)$ lore task list --all
@@ -82,6 +80,7 @@ alice (work/website)$ lore task list --status cancelled
 alice (work/website)$ lore task add 'Test task, please ignore'
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 — Test task, please ignore [medium]
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore task delete tsk_05e99e22e9e86e96fe4daa7777994603
 ERROR: [E_NEEDS_CONFIRM] engine: run task delete?
   hint: ask the person, then rerun with --yes
@@ -89,6 +88,7 @@ ERROR: [E_NEEDS_CONFIRM] engine: run task delete?
 alice (work/website)$ lore task delete tsk_05e99e22e9e86e96fe4daa7777994603 --yes
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 deleted
 lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 
 ### after
 alice (work/website)$ lore task add 'Write the welcome email'
@@ -129,7 +129,6 @@ alice (work/website)$ lore tasklist edit tlt_d4314eba822f1bf5908b2b8ded5f313a --
 
 ### task view
 alice (work/website)$ lore task-view add --name urgent --filter '{"priority":"urgent"}'
-lore sync: imported 1
 ✓ task-view urgent saved
 alice (work/website)$ lore task-view list
 tvw_4c590afb2a0cc7ae1b97b7e4e62d6c38 urgent
@@ -211,10 +210,11 @@ ERROR: [E_NEEDS_CONFIRM] engine: run reminder delete?
 (exit 26)
 alice (work/website)$ lore reminder delete rmd_0aaebe6aca5bb46cc521869f5ba2a61f --yes
 ✓ rmd_0aaebe6aca5bb46cc521869f5ba2a61f deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 
 ### push after done
 alice (work/website)$ git commit -qm 'Fix the Pro plan price on the pricing page'
-lore sync: imported 1
 alice (work/website)$ git push -q origin main
 To /srv/git/github.com/client/website
  ! [rejected]        main -> main (non-fast-forward)
@@ -228,25 +228,23 @@ alice (work/website)$ git pull -q --rebase origin main && git push -q origin mai
 
 ### link
 alice (work/website)$ lore link add --entity tsk_2ad3618e878ebbf527d34d446ef4f891 --commit HEAD
-✓ linked 9b40ce71 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891  (cml_6a866bb99ce08addfe04ea845052ed8c)
+✓ linked 05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891  (cml_6a866bb99ce08addfe04ea845052ed8c)
   message: Fix the Pro plan price on the pricing page
 alice (work/website)$ lore link list --entity tsk_2ad3618e878ebbf527d34d446ef4f891
-cml_6a866bb99ce08addfe04ea845052ed8c  9b40ce71 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
+cml_6a866bb99ce08addfe04ea845052ed8c  05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
 
 ### commit show
 alice (work/website)$ lore commit-show $(git rev-parse HEAD)
-Commit 9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91 — 1 linked entities:
+Commit 05513aa29b7881f12bc94eb06be8acf0d03eaed2 — 1 linked entities:
   tasks/tsk_2ad3618e878ebbf527d34d446ef4f891
 alice (work/website)$ lore commit-show HEAD
 (no entities linked to this commit)
 
 ### done with commit
 alice (work/website)$ lore task done tsk_2ad3618e878ebbf527d34d446ef4f891 --commit $(git rev-parse HEAD) --no-lesson
-lore sync: imported 1
-✓ tsk_2ad3618e878ebbf527d34d446ef4f891 done (commit 9b40ce7); waiting for merge
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 done (commit 05513aa); waiting for merge
 lore live: (live, pushed)
-lore live: landed on main (05513aa); leaves live once main is fetched
-lore live: 1 row(s) left live (main holds them)
+lore live: landed on main (dfd8dc8); leaves live once main is fetched
 alice (work/website)$ lore sync
 · already in sync
 lore live: 1 row(s) left live (main holds them)
@@ -260,17 +258,19 @@ lore live: (live, pushed)
 alice (work/website)$ lore task done tsk_4f89f5fcb1d81152bdf3f52979ebb64b --no-lesson
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b done
 lore live: (live, pushed)
-lore live: landed on main (dfd8dc8); leaves live once main is fetched
+lore live: landed on main (cf563f3); leaves live once main is fetched
 alice (work/website)$ lore task merged tsk_4f89f5fcb1d81152bdf3f52979ebb64b
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b merged (marked by hand, 10:05)
-lore live: landed on main (cf563f3); leaves live once main is fetched
+lore live: landed on main (df3a55c); leaves live once main is fetched
 
 ### link remove
 alice (work/website)$ lore link list
-cml_6a866bb99ce08addfe04ea845052ed8c  9b40ce71 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
+cml_6a866bb99ce08addfe04ea845052ed8c  05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
 alice (work/website)$ lore link remove cml_6a866bb99ce08addfe04ea845052ed8c
 ERROR: [E_NEEDS_CONFIRM] engine: run link remove?
   hint: ask the person, then rerun with --yes
 (exit 26)
 alice (work/website)$ lore link remove cml_6a866bb99ce08addfe04ea845052ed8c --yes
 ✓ link cml_6a866bb99ce08addfe04ea845052ed8c removed
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)

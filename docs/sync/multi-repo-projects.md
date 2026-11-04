@@ -28,7 +28,7 @@ $ lore project show website
 Project: prj_7a67…9504
   name:    website
   origin:  https://github.com/client/website
-  created: 2026-11-04 13:11:29Z
+  created: 2026-11-02 10:00:00Z
 ```
 <!-- /example -->
 
@@ -99,7 +99,6 @@ rep_162d…9666  help [archived]
 $ lore repo unarchive rep_162d…9666
 ✓ help unarchived
 $ lore mount-alias list
-lore sync: imported 4
 (no mount aliases)
 $ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 ```
@@ -115,7 +114,6 @@ When a repo's mount name changes, lore keeps the old name working for a while as
 ```console
 # alice, in website
 $ lore mount-alias list
-lore sync: imported 4
 (no mount aliases)
 ```
 <!-- /example -->

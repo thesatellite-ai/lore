@@ -24,7 +24,6 @@ pending   1 write(s) not confirmed by the remote
   _root/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
 lore live: pushed waiting live writes
 alice (work/website)$ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_162df51b7f78b785c97c26b41ea89666
-lore sync: imported 2
 ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
   hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
 (exit 15)
@@ -99,14 +98,15 @@ alice (work/website)$ lore memory add --yes --body 'The staging password is pass
 alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
 1
 alice (work/website)$ LORE_SYNC_ALLOW_SECRETS=1 lore sync
-lore sync: imported 3
+· already in sync
 alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
 1
 
 ### network drive
 alice (work/Dropbox/website)$ lore rule list
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/Dropbox/website/.git/hooks)
 ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
-  hint: move the store to a local folder
+  hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
 alice (work/Dropbox/website)$ LORE_ALLOW_NETWORK_FS=1 lore rule list
 (no rules)
@@ -116,17 +116,15 @@ alice (work/blog)$ cat .lore/lore.yaml
 db_path: ../client.db
 project_id: prj_d4314eba822f1bf5908b2b8ded5f313a
 alice (work/blog)$ lore migrate run --dry-run
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/blog/.git/hooks)
 ERROR: [E_INTERNAL] internal error
-ERROR: [E_BAD_PATH] db_path "../client.db" has a `..` part: projresolve: path contains traversal sequence or refers outside allowed roots
-  hint: write db_path in .lore/lore.yaml without a `..` part, or set LORE_ALLOW_DB_PATH_OUTSIDE=1 for one command if the path really is meant to leave the project
 (exit 1)
 alice (work/blog)$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/blog/.git/hooks)
-count: 0
+count: 1
 rows: 
 steps: mode-b: rules/rul_b4f4765e593d51fd1352985e8af3a5b0 → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 alice (work/blog)$ lore rule list
-rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] Posts go out on Tuesdays [shared]
+rul_b4f4765e593d51fd1352985e8af3a5b0  Posts go out on Tuesdays  [shared]
 
 ### lore home
 alice (work/docs)$ cat .lore/lore.yaml
@@ -135,14 +133,13 @@ project_id: prj_d4314eba822f1bf5908b2b8ded5f313a
 alice (work/docs)$ lore migrate run --dry-run
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/docs/.git/hooks)
 ERROR: [E_INTERNAL] internal error
-ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there: stat ~/.lore/client-docs.db: no such file or directory
 (exit 1)
 alice (work/docs)$ LORE_HOME=~/shared-dbs lore migrate run
-count: 0
+count: 1
 rows: 
 steps: mode-b: rules/rul_b4f4765e593d51fd1352985e8af3a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 alice (work/docs)$ lore rule list
-rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] Posts go out on Tuesdays [shared]
+rul_b4f4765e593d51fd1352985e8af3a5b0  Posts go out on Tuesdays  [shared]
 alice$ ls ~/shared-dbs ~/shared-dbs/stores
 ~/shared-dbs:
 client-docs.db

@@ -153,12 +153,12 @@ Found 1 hit for "client Fridays" across 1 entity type:
 ```console
 # alice, in website
 $ lore search status
-lore sync: imported 6
 ENTITY                 FTS_TABLE                   FTS   SOURCE STATUS
 architecturenote       architecturenote_fts          0        0 ✓ ok
 behaviour              behaviour_fts                 0        0 ✓ ok
 comment                comment_fts                   0        0 ✓ ok
 cookbookrecipe         cookbookrecipe_fts            0        0 ✓ ok
+decision               decision_fts                  1        1 ✓ ok
 …
 ```
 <!-- /example -->
@@ -185,7 +185,6 @@ $ lore search rebuild --kind memory
 ```console
 # alice, in website
 $ lore querylog list
-lore sync: imported 3
 (no querylogs)
 ```
 <!-- /example -->

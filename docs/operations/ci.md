@@ -25,14 +25,15 @@ With `LORE_READ_ONLY=1` set, reading works and writing stops with `E_READ_ONLY`.
 $ lore rule add --body 'Buttons are blue'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
-(exit 1)
+(exit 23)
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
+rul_c0f3…b5b8 [must/always] Buttons are blue
 $ lore rule add --read-only --body 'Buttons are blue'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
-(exit 1)
+(exit 23)
 ```
 <!-- /example -->
 
@@ -40,28 +41,25 @@ Set the variable once for the whole job (in most CI systems: an `env:` entry at 
 
 ## Step 2 — Quiet the setup hint
 
-After an upgrade, lore warns on every command until someone runs `lore setup` to rebuild the search index. In CI that line is noise. `LORE_NO_STALE_WARN=1` hides it; `lore setup` fixes the cause:
+After an upgrade, lore warns on every command that opens its local database (`lore.db`) until someone runs `lore setup` to rebuild the search index; commands that only read the shared files, such as `lore rule list`, stay quiet. In CI that line is noise. `LORE_NO_STALE_WARN=1` hides it; `lore setup` fixes the cause:
 
 <!-- example: ops#stale-warning -->
 ```console
 # alice, in website
-$ lore rule list
+$ lore plugin list
 ⚠ search index is out of date
   run `lore setup` to rebuild
-rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
-$ lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+tpg_76bd…3f10 hello  sha256:bfdeaeb08cff
+$ lore plugin list
+tpg_76bd…3f10 hello  sha256:bfdeaeb08cff
 $ lore setup
 ⚠ search index is out of date
   run `lore setup` to rebuild
 → running ent schema migration...
 → building FTS5 search index...
 ✓ setup complete (registry fingerprint: 601d2850ffd047c2)
-$ lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+$ lore plugin list
+tpg_76bd…3f10 hello  sha256:bfdeaeb08cff
 ```
 <!-- /example -->
 
@@ -75,15 +73,11 @@ A CI clone has the `.lore/data` files but not the database, and not lore's git s
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
+rul_c0f3…b5b8 [must/always] Buttons are blue
 $ lore doctor
-Status: DEGRADED
+Status: BROKEN
   …
-  merge driver:     false
-  …
-  - live: tracking refspec installed, not forced into refs/lore/*
-  …
-  - lore merge driver not configured in this clone (any lore command or `lore sync install-git` installs it)
-  - live: git hook block missing in post-commit, pre-push (rows cannot ride along on a protected main); run `lore sync install-git`
+  - resolve: projresolve: cwd is not an aicoder project root (no .lore/lore.db or lore.yaml)
   …
 $ lore sync install-git
 ✓ git wired for lore data
