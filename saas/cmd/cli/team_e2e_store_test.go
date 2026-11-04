@@ -8,9 +8,11 @@ package main
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -412,14 +414,18 @@ func TestF14_StoreDefaultBeatsLooserPersonalDefault(t *testing.T) {
 // seen by Northwind, never by Acme; a client row pointing at an internal
 // row is refused.
 func TestF15_PointersOnlyFlowInward(t *testing.T) {
-	a := newAgency(t, th.Flag("to", "comment", "add"), th.Flag("to", "task", "add"))
+	a := newAgency(t, th.Flag("to", "comment", "add"), th.Flag("to", "task", "add"), th.Flag("ref", "task", "add"))
 	clientTask := mustID(t, a.acmeApp.MustLore("task", "add", "migrate checkout to the new API", "--tasklist", a.tl), "tsk")
 	a.acmeApp.MustLore("sync")
 	a.aliceApp.MustLore("comment", "add", "--on-table", tblTasks, "--on-id", clientTask, "--body", "client is slow to test, push them", "--to", orgNorthwind)
 	a.dev1App.MustLore("task", "show", clientTask).Says(t, "client is slow to test", "["+orgNorthwind+"/"+folderAcme+"]")
 	a.acmeApp.MustLore("task", "show", clientTask).Never(t, "client is slow to test")
 	internalTask := mustID(t, a.aliceApp.MustLore("task", "add", "internal follow-up", "--to", orgNorthwind), "tsk")
-	a.aliceApp.Lore("comment", "add", "--on-table", tblTasks, "--on-id", internalTask, "--body", "visible pointer", "--to", "repo").Refused(t)
+	// FLAG5: the refusal names the row and the rule (E_LEAK_BLOCKED, F15),
+	// never a not-found that hides why.
+	a.aliceApp.Lore("comment", "add", "--on-table", tblTasks, "--on-id", internalTask, "--body", "visible pointer", "--to", "repo").Refused(t, "E_LEAK_BLOCKED", internalTask)
+	a.aliceApp.Lore("task", "add", "follow the internal one", "--to", "repo", "--ref", internalTask).Refused(t, "E_LEAK_BLOCKED", internalTask)
+	a.aliceApp.Lore("task", "edit", clientTask, "--ref", internalTask).Refused(t, "E_LEAK_BLOCKED", internalTask)
 	if f := a.clientSees(t, internalTask, "internal follow-up"); len(f) != 0 {
 		t.Fatalf("a pointer alone reveals the hidden row: %v", f)
 	}
@@ -914,36 +920,105 @@ func TestSideEffect36_DoctorDetectsAReaddedPurgedID(t *testing.T) {
 	}
 }
 
-// Side effect 40: `lore cache prune` removes per-project caches and renders
-// of projects not used for 90 days.
+// Side effect 40, FLAG3 (owner decision, round 2): `lore cache prune`
+// removes the cache files of stores no repo on this machine attaches any
+// more (0.1.18 layout ~/.lore/cache/stores/<store id>/<branch>/<folder>.db,
+// replacing v0.1.17's 90-day idle rule for ~/.lore/cache/<project-id>.db),
+// lists them and asks first: --dry-run only lists, no terminal and no --yes
+// is E_NEEDS_CONFIRM, --yes deletes. It never deletes anything outside the
+// cache folder (the store's clone and alice's render folder stay).
 func TestSideEffect40_CachePruneRemovesOldProjects(t *testing.T) {
 	a := newAgency(t, th.Cmd("cache", "prune"))
 	a.aliceApp.MustLore("render")
-	pid := projectID(t, a.aliceApp)
-	cache := a.alice.LorePath("cache", pid+".db")
-	if _, err := os.Stat(cache); err != nil {
-		t.Fatalf("the internal cache must live at %s: %v", cache, err)
+	caches := storeCacheFiles(t, a.alice)
+	if len(caches) == 0 {
+		t.Fatalf("alice's acme/app attaches the northwind store: its cache must live under %s", a.alice.LorePath("cache", "stores"))
 	}
-	a.alice.SetNow(t0)
-	a.alice.Lore("", "cache", "prune").OK(t)
-	if _, err := os.Stat(cache); err != nil {
-		t.Fatal("a recently used cache must stay")
+	a.alice.Lore("", "cache", "prune", "--yes").OK(t)
+	for _, f := range caches {
+		if _, err := os.Stat(f); err != nil {
+			t.Fatalf("a cache a repo here still attaches must stay: %s: %v", f, err)
+		}
 	}
-	a.alice.SetNow(time.Now().Add(91 * 24 * time.Hour))
-	a.alice.Lore("", "cache", "prune").OK(t)
-	if _, err := os.Stat(cache); !os.IsNotExist(err) {
-		t.Fatal("a cache unused for 90 days must be pruned")
+	// alice's checkout goes away: no repo on this machine attaches the
+	// store any more.
+	if err := os.RemoveAll(a.aliceApp.Dir); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(a.alice.LorePath("render", pid+".md")); !os.IsNotExist(err) {
-		t.Fatal("its render file goes with it")
+	listed := prunedListing(a.alice.Lore("", "cache", "prune", "--dry-run").OK(t).Stdout, a.alice.LorePath("cache"))
+	if len(listed) == 0 {
+		t.Fatal("--dry-run must list the caches of the stores only alice's removed checkout attached")
+	}
+	// The old binary's commands exit 1 for every class but bad_input
+	// (FLAG2, main.go exitStatus), so the refusal is pinned by its code.
+	a.alice.Lore("", "cache", "prune").Fails(t, th.ExitError, "E_NEEDS_CONFIRM", "--yes")
+	for _, f := range caches {
+		if _, err := os.Stat(f); err != nil {
+			t.Fatalf("--dry-run and an unconfirmed prune delete nothing: %s: %v", f, err)
+		}
+	}
+	a.alice.Lore("", "cache", "prune", "--yes").OK(t)
+	gone := map[string]bool{}
+	for _, f := range listed {
+		gone[f] = true
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Fatalf("a cache no repo here attaches must be pruned: %s", f)
+		}
+	}
+	for _, f := range caches {
+		if _, err := os.Stat(f); err != nil && !gone[f] {
+			t.Fatalf("a cache prune did not list must stay (another repo here attaches it): %s", f)
+		}
+	}
+	a.alice.Lore("", "cache", "prune", "--dry-run").OK(t).Says(t, "nothing to prune")
+	if _, err := os.Stat(a.alice.LorePath("render")); err != nil {
+		t.Fatalf("prune deletes only inside ~/.lore/cache; the render folder stays: %v", err)
 	}
 }
 
+// prunedListing is the cache file paths a `lore cache prune` listing names
+// (one indented "<path>  <size>" line each, every path under cacheDir).
+func prunedListing(out, cacheDir string) []string {
+	var paths []string
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) > 0 && strings.HasPrefix(f[0], cacheDir+string(filepath.Separator)) {
+			paths = append(paths, f[0])
+		}
+	}
+	return paths
+}
+
+// storeCacheFiles lists actor's 0.1.18 store cache files
+// (~/.lore/cache/stores/**/*.db), sorted.
+func storeCacheFiles(t *testing.T, actor *th.Actor) []string {
+	t.Helper()
+	var out []string
+	root := actor.LorePath("cache", "stores")
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) && p == root {
+				return fs.SkipDir
+			}
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(p, ".db") {
+			out = append(out, p)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Open bugs pinned by a regression test before lore-stores' fix lands
-// (coordinator 18:40). Set Open to false when the fix is merged.
+// (coordinator 18:40). Open is false once the fix is merged, so a regression fails.
 var (
-	bugD1ShareToRepoRefused = th.Bug{ID: "BUG-D1", Owner: "lore-stores", Open: true}
-	bugD2ActorCopyStableKey = th.Bug{ID: "BUG-D2", Owner: "lore-stores", Open: true}
+	bugD1ShareToRepoRefused = th.Bug{ID: "BUG-D1", Owner: "lore-stores"} // fixed in lore-stores 5013e22; passes with LORE_TEAM_STRICT=1 on lore-core
+	bugD2ActorCopyStableKey = th.Bug{ID: "BUG-D2", Owner: "lore-stores"} // fixed in lore-stores 5013e22; passes with LORE_TEAM_STRICT=1 on lore-core
 )
 
 // clientActorFields is all a client repo's actor file may hold (F18 client
