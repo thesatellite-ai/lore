@@ -1,6 +1,7 @@
 // coord_cmd.go — the new top-level coordination commands of lore for teams
-// (LORE_TEAM_SPEC §1 "Commands", §7): `lore agent start`, `lore resource
-// claim|release` and more. addCoordCommands is ONE line in main.go, so
+// (LORE_TEAM_SPEC §1 "Commands", §7): `lore agent start`, `lore hold
+// claim|release` (v0.1.17's `lore resource claim|release`, renamed for good
+// by RQ11; `lore resource` now names resource kinds) and more. addCoordCommands is ONE line in main.go, so
 // adding a P4 command never touches the shared root file again.
 package main
 
@@ -24,7 +25,7 @@ import (
 // and `apply` under the existing `plan` group. It runs after the generated
 // entity groups are registered, so the group exists.
 func addCoordCommands(root *cobra.Command) {
-	root.AddCommand(newAgentCommand(), newResourceCommand(), newGateCommand(), newFindingCommand(), newInboxCommand())
+	root.AddCommand(newAgentCommand(), newHoldCommand(), newGateCommand(), newFindingCommand(), newInboxCommand())
 	attachToGroup(root, planGroupName, "Plans and mission plan files", newPlanApplyCommand())
 	attachToGroup(root, handoffGroupName, "Hand work to another actor", newHandoffForCommand())
 }
@@ -148,21 +149,23 @@ func registerAgent(cmd *cobra.Command, _ *coordWorld, a agentSpec) (string, erro
 	return where, nil
 }
 
-// ---------------------------------------------------------------- resource
+// ---------------------------------------------------------------- hold
 
-// Resource hold scopes (§7.2).
+// Hold places (§7.2; CLI_REFERENCE 3.3 --on).
 const (
 	scopeProject = "project"
 	scopeMachine = "machine"
 	flagTTL      = "ttl"
-	flagScope    = "scope"
-	// defaultHoldTTL is a resource hold's length when --ttl is not given:
+	flagOn       = "on"
+	// defaultHoldTTL is a hold's length when --ttl is not given:
 	// the claim lease, so one heartbeat interval keeps both alive.
 	defaultHoldTTL = 0
 )
 
-func newResourceCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "resource", Short: "Hold a shared resource (a test suite, a staging slot) with a lease"}
+// newHoldCommand is `lore hold claim|release` (RQ11: no alias; `--scope` is
+// an unknown flag here, `--on` replaces it, XQ6).
+func newHoldCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "hold", Short: "Hold a shared resource (a test suite, a staging slot) with a lease"}
 	var ttl time.Duration
 	var scope string
 	claim := &cobra.Command{
@@ -173,11 +176,11 @@ passes or you release it; running claim again renews your hold. Fails closed (ex
 15, E_OFFLINE) when the push cannot be confirmed.
 
 Example:
-  lore resource claim full-suite --ttl 30m && task test && lore resource release full-suite`,
+  lore hold claim full-suite --ttl 30m && task test && lore hold release full-suite`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if scope == scopeMachine {
-				return errcodes.New(errcodes.NotImplemented, "--scope machine defers to a machine-wide lock; run the command under your machine's own lock tool (for example flock) instead")
+				return errcodes.New(errcodes.NotImplemented, "--on machine defers to a machine-wide lock; run the command under your machine's own lock tool (for example flock) instead")
 			}
 			ctx := cmd.Context()
 			w, err := openCoordWorld(ctx)
@@ -216,7 +219,7 @@ Example:
 		},
 	}
 	claim.Flags().DurationVar(&ttl, flagTTL, 0, "how long the hold lasts (default: lease.ttl)")
-	claim.Flags().StringVar(&scope, flagScope, scopeProject, "project (the project's signals ref) or machine")
+	claim.Flags().StringVar(&scope, flagOn, scopeProject, "project (the project's signals ref) or machine")
 	release := &cobra.Command{
 		Use:   "release <name>",
 		Short: "Release a resource you hold",
