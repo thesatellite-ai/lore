@@ -104,9 +104,10 @@ func (e *Engine) checkDirection(from store.Source, t validate.Target, holders []
 	return first
 }
 
-// classOf places an attached store in its F15 class: the repo store is
-// client-class (fail closed), `me` and `me/<folder>` personal, a store the
-// engine flags client is client, any other internal.
+// classOf places an attached store in its F15 class: a store flagged
+// Attached.Client is client (wire flags the repo store in a client repo,
+// and when that cannot be checked), `me` and `me/<folder>` personal, any
+// other internal.
 func (e *Engine) classOf(name store.Source) direction.Class {
 	return direction.ClassOf(string(name), e.stores[name].Client)
 }

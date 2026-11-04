@@ -151,8 +151,10 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		st.audit = &fileAudit{path: filepath.Join(st.repoTop, filepath.FromSlash(AuditFile))}
 	}
 
+	repoClient, note := repoIsClient(ctx, opts)
+	st.repoClassNote = note
 	engOpts := []engine.Option{
-		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repo}),
+		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repo, Client: repoClient}),
 		engine.WithCache(st.caches), engine.WithRegistry(reg), engine.WithScanner(scanner),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 	}
@@ -174,6 +176,21 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	return st, nil
+}
+
+// repoIsClient asks opts.RepoIsClient whether the repo store is a client
+// repo. No hook, or an error, answers client (fail closed: an internal
+// row must never be pointed at, nor a teammate's email written, from a
+// customer's repository), with the reason as note.
+func repoIsClient(ctx context.Context, opts Options) (client bool, note string) {
+	if opts.RepoIsClient == nil {
+		return true, "the repo is treated as a client repo: no client-repo check is wired"
+	}
+	client, err := opts.RepoIsClient(ctx)
+	if err != nil {
+		return true, "the repo is treated as a client repo: whether it is one could not be checked (" + err.Error() + ")"
+	}
+	return client, ""
 }
 
 // openAttached reads <repo>/.lore/stores.yaml (absent = no stores), adds

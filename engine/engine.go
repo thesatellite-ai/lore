@@ -44,7 +44,9 @@ type Attached struct {
 	Level policy.Level
 	// Client marks a client repo (v0.1.17 routing: internal knowledge must
 	// never land in it): Move refuses rows holding secret references into
-	// it (BATCH 5) and writes no `moves` entry there.
+	// it (BATCH 5), writes no `moves` entry there, projects actor rows (F18)
+	// and makes it client-class for F15 (logic/direction). wire sets it for
+	// the repo store from Options.RepoIsClient (true when unknown).
 	Client bool
 	// KeyNamespace is hashed into the natural id of every row created in
 	// this store (the store's sto_ id, plus "/<folder>" for a folder

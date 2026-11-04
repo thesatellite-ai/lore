@@ -12,10 +12,12 @@
 // Layer L1: pure. The caller classifies the two stores (ClassOf) and asks
 // Check before writing anything.
 //
-// Invariant: fail closed. A store this package cannot place is a client
-// store (the widest audience), and the repo store counts as client-class
-// until wire can tell an org's own repo from a customer's (Attached.Client
-// is unset for the repo store), so "client → internal" is refused there.
+// Invariant: fail closed. A store this package cannot place (an empty
+// name) is a client store (the widest audience). The repo store is
+// client-class exactly when the caller flags it client: wire sets the
+// engine's Attached.Client for it from the org-store link (and to true when
+// that link cannot be read), so an org's own repo is internal and may point
+// at the definitions and rows of the org's stores, a client repo may not.
 package direction
 
 import (
@@ -41,19 +43,18 @@ const (
 // Store names ClassOf knows (engine/attach reserved names; repeated here
 // so this layer imports nothing above model).
 const (
-	repoStore     = "repo"
 	personalStore = "me"
 	folderSep     = "/"
 )
 
 // ClassOf places a store by its attached name. client is the engine's
-// Attached.Client flag for that store. The repo store is client-class
-// whatever the flag says (fail closed, see the package doc); the personal
-// store and its folders are personal; any other attached store is internal
-// unless flagged client.
+// Attached.Client flag for that store (for the repo store: whether it is a
+// client repo, true when unknown). An empty name is client-class (fail
+// closed); the personal store and its folders are personal; any other
+// store, the repo store included, is internal unless flagged client.
 func ClassOf(name string, client bool) Class {
 	switch {
-	case name == "" || name == repoStore:
+	case name == "":
 		return Client
 	case name == personalStore || strings.HasPrefix(name, personalStore+folderSep):
 		return Personal

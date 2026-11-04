@@ -23,8 +23,9 @@ type Getter interface {
 
 // Classifier places an attached store (empty: the default write target)
 // in its F15 class; *wire.App implements it. An Env without it is placed
-// by name only (direction.ClassOf with no client flag), which still keeps
-// the repo store client-class.
+// by name only, with the repo store (and the default target) flagged
+// client: without wire's link answer it cannot be told from a client repo
+// (fail closed).
 type Classifier interface {
 	StoreClass(ctx context.Context, name store.Source) (direction.Class, error)
 }
@@ -73,5 +74,5 @@ func classOf(ctx context.Context, env Getter, name store.Source) (direction.Clas
 	if c, ok := env.(Classifier); ok {
 		return c.StoreClass(ctx, name)
 	}
-	return direction.ClassOf(string(name), false), nil
+	return direction.ClassOf(string(name), name == "" || name == store.SourceRepo), nil
 }

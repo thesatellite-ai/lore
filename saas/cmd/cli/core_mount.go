@@ -69,6 +69,7 @@ import (
 	"github.com/thesatellite-ai/lore/wire"
 
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/projresolve"
 	oldstores "saas/pkg/aicoder/stores"
 )
@@ -103,7 +104,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: &coreAuditSink{}, ModeB: modeBExporter{}})
+	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, RepoIsClient: coreRepoIsClient, Audit: &coreAuditSink{}, ModeB: modeBExporter{}})
 	if err != nil {
 		panic(err)
 	}
@@ -368,6 +369,61 @@ func guardCoreRepoWrite(ctx context.Context, table row.Table, text string, expli
 			WithHint("write it to a store listed in .lore/stores.yaml with --to <name>, or choose this repo with --to repo")
 	}
 	return coreErr(leakCheckRouteWrite(ctx, writeRoute{Repo: true, Rule: dec.Rule, Situation: wt.Situation}, kind, text))
+}
+
+// coreRepoIsClient is wire.Options.RepoIsClient for this binary: the repo
+// is a client repo when org resolution (F10, gatherOrgSituation) says its
+// role is client (a non-own link in an attached org store, a repos:
+// pattern, or an org chosen on purpose that nobody declared own), or when
+// a staging entry's own store branch links it that way (entryLinks, read
+// by gatherOrgSituation). Links
+// that cannot be read, an org resolution refusal or any error answer
+// client (fail closed). No org at all, or the org's own repo, is internal.
+// The answer is computed once per process: it runs on every core command
+// and may read the org stores.
+func coreRepoIsClient(ctx context.Context) (bool, error) {
+	if !repoClientChecked {
+		repoClientChecked = true
+		repoClientAnswer, repoClientErr = repoIsClientNow(ctx)
+	}
+	return repoClientAnswer, repoClientErr
+}
+
+// Cache of coreRepoIsClient (one command per process, like rootCmd).
+var (
+	repoClientChecked bool
+	repoClientAnswer  bool
+	repoClientErr     error
+)
+
+// repoIsClientNow computes coreRepoIsClient's answer.
+func repoIsClientNow(ctx context.Context) (bool, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return true, err
+	}
+	s, err := gatherOrgSituation(ctx, dir)
+	if err != nil {
+		return true, err
+	}
+	if s.ResolveErr != nil {
+		return true, s.ResolveErr
+	}
+	r := s.Result
+	if r.LinkUnknown {
+		return true, errors.New("the store links of this repo cannot be read: " + r.LinkDetail)
+	}
+	if r.Role == orgresolve.RoleClient {
+		return true, nil
+	}
+	// A staging entry chosen on purpose: gatherOrgSituation replaced the
+	// links with that entry's own (entryLinks) after the role was decided.
+	for _, l := range r.Links {
+		if !l.Own {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // coreErr turns a v0.1.17 error (errcodes.CLIError) returned into a core

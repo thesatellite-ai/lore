@@ -118,6 +118,16 @@ type Options struct {
 	// audit_logs hash chain, so `lore audit log|verify` see core writes).
 	// Nil keeps the append-only AuditFile.
 	Audit engine.AuditSink
+	// RepoIsClient reports whether this code repository is a client repo
+	// (a customer org's repository: CONFIG_GUIDE "a client repo is tied to
+	// the store by a link kept only in the store"). Wire sets the engine's
+	// Attached.Client for the repo store from it, which decides the actor
+	// projection (F18), the F15 direction rule and the secret-ref move
+	// refusal. It is injected because the link logic (org resolution, the
+	// links kept in the org stores) still lives in the old binary until the
+	// org-store noun migrates. Nil, or an error, makes the repo a client
+	// repo (fail closed); the reason is kept for RepoClassNote.
+	RepoIsClient func(ctx context.Context) (bool, error)
 }
 
 // App is one opened (or openable) core: the registry every surface mounts,
@@ -160,6 +170,10 @@ type state struct {
 	// actorMu / actorDone: the actor row is written once per store.
 	actorMu   sync.Mutex
 	actorDone map[store.Source]bool
+	// repoClassNote says why the repo store is client-class without a
+	// positive answer (no RepoIsClient hook, or its error); empty when the
+	// hook answered.
+	repoClassNote string
 }
 
 // New validates opts and builds the registry of every migrated operation,
