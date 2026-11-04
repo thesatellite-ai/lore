@@ -228,7 +228,7 @@ func livePreRun(cmd *cobra.Command) error {
 	if err := s.ref.CheckFloor(ctx, version); err != nil {
 		if errors.Is(err, live.ErrBelowFloor) {
 			return errcodes.New(errcodes.OldLore, "this lore is too old to write live rows here (read-only)").
-				WithCause(err).WithHint("upgrade lore; reading still works")
+				WithCause(err).WithHint("run `" + BinaryName + " upgrade`; reading still works") // FORMAT_EVOLUTION 8.5
 		}
 	}
 	return nil

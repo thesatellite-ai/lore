@@ -102,26 +102,33 @@ const (
 	TreeDepth     Code = "E_TREE_DEPTH"
 	OldLore       Code = "E_OLD_LORE"
 	ConfigInvalid Code = "E_CONFIG_INVALID"
+	// Time tracking input errors (TIME_TRACKING_DESIGN, CLI_REFERENCE 5: exit 20).
+	DurationBad Code = "E_DURATION_BAD"
+	TimeTooLong Code = "E_TIME_TOO_LONG"
 )
 
 // New codes of 0.1.18 (STORE_SERVER_SPEC 5.4 and 9.5, CLI_REFERENCE 5).
 const (
-	Stale            Code = "E_STALE"
-	StoreScheme      Code = "E_STORE_SCHEME"
-	StoreBackend     Code = "E_STORE_BACKEND"
-	StoreUnreachable Code = "E_STORE_UNREACHABLE"
-	StoreReadOnly    Code = "E_STORE_READ_ONLY"
-	StoreLocked      Code = "E_STORE_LOCKED"
-	Unauthorized     Code = "E_UNAUTHORIZED"
-	ResourceInvalid  Code = "E_RESOURCE_INVALID"
-	SchemaOld        Code = "E_SCHEMA_OLD"
-	NeedsConfirm     Code = "E_NEEDS_CONFIRM"
-	PolicyDenied     Code = "E_POLICY_DENIED"
-	KindUnknown      Code = "E_KIND_UNKNOWN"
-	MetaType         Code = "E_META_TYPE"
-	MetaAmbiguous    Code = "E_META_AMBIGUOUS"
-	MigrateLocked    Code = "E_MIGRATE_LOCKED"
-	URLUserinfo      Code = "E_URL_CREDENTIALS"
+	// lore upgrade refusals (FORMAT_EVOLUTION 8.10).
+	UpgradePermission Code = "E_UPGRADE_PERMISSION"
+	UpgradeChecksum   Code = "E_UPGRADE_CHECKSUM"
+	UpgradePinned     Code = "E_UPGRADE_PINNED"
+	Stale             Code = "E_STALE"
+	StoreScheme       Code = "E_STORE_SCHEME"
+	StoreBackend      Code = "E_STORE_BACKEND"
+	StoreUnreachable  Code = "E_STORE_UNREACHABLE"
+	StoreReadOnly     Code = "E_STORE_READ_ONLY"
+	StoreLocked       Code = "E_STORE_LOCKED"
+	Unauthorized      Code = "E_UNAUTHORIZED"
+	ResourceInvalid   Code = "E_RESOURCE_INVALID"
+	SchemaOld         Code = "E_SCHEMA_OLD"
+	NeedsConfirm      Code = "E_NEEDS_CONFIRM"
+	PolicyDenied      Code = "E_POLICY_DENIED"
+	KindUnknown       Code = "E_KIND_UNKNOWN"
+	MetaType          Code = "E_META_TYPE"
+	MetaAmbiguous     Code = "E_META_AMBIGUOUS"
+	MigrateLocked     Code = "E_MIGRATE_LOCKED"
+	URLUserinfo       Code = "E_URL_CREDENTIALS"
 	// Purged refuses any write that would bring a purged id back as a live
 	// row (update, create with the id, move, merge, restore): purged rows
 	// never come back (DELETION_DESIGN 3.5, DQ4; CLI_REFERENCE 5.5).
@@ -131,6 +138,14 @@ const (
 	// delete` answers it naming `lore actor deactivate`, because actors are
 	// never deleted (DELETION 4.1: every *_by field points at them).
 	Refused Code = "E_REFUSED"
+	// Reference errors (SECRETS_AND_REFERENCES 5.1, 8.1-8.6).
+	RefSyntax   Code = "E_REF_SYNTAX"
+	RefScheme   Code = "E_REF_SCHEME"
+	RefCycle    Code = "E_REF_CYCLE"
+	RefDepth    Code = "E_REF_DEPTH"
+	RefLimit    Code = "E_REF_LIMIT"
+	RefDangling Code = "E_REF_DANGLING"
+	RefRequired Code = "E_REF_REQUIRED"
 )
 
 // Def is the registry entry of one code: everything a surface needs to print
@@ -218,7 +233,12 @@ var table = map[Code]entry{
 	ParentMission:         {class: ClassRefused, desc: "a sub-task's mission differs from its parent's"},
 	ParentProject:         {class: ClassRefused, desc: "the parent task is in another project"},
 	TreeDepth:             {class: ClassRefused, desc: "the sub-task tree would be deeper than tasks.max_depth"},
-	OldLore:               {class: ClassGuard, desc: "this lore binary is below the project's min_lore_version or does not know one of its features; upgrade lore (reads still work)"},
+	DurationBad:           {class: ClassBadInput, desc: "a duration lore does not accept (0, negative, a day unit); give e.g. 45m, 1h30m, 1.5h"},
+	TimeTooLong:           {class: ClassBadInput, desc: "a manual time entry over time.max_entry (default 24h); split it into one entry per day"},
+	UpgradePermission:     {class: ClassUpgrade, desc: "the folder of the lore binary is not writable; run `sudo lore upgrade`"},
+	UpgradeChecksum:       {class: ClassUpgrade, desc: "the downloaded release is short or its sha256 does not match checksums.txt; run `lore upgrade` again"},
+	UpgradePinned:         {class: ClassUpgrade, desc: "CI without a pin, or --version against the team pin without --ignore-pin; set LORE_VERSION_PIN, lore_version_pin or pass --version"},
+	OldLore:               {class: ClassGuard, desc: "this lore binary is below the project's min_lore_version or does not know one of its features; run lore upgrade (reads still work)"},
 	ConfigInvalid:         {class: ClassBadInput, desc: "a config file failed validation"},
 
 	Stale:            {class: ClassRefused, desc: "the row changed between read and write and could not be merged automatically"},
@@ -239,6 +259,13 @@ var table = map[Code]entry{
 	URLUserinfo:      {class: ClassBadInput, desc: "a URL value holds credentials"},
 	Purged:           {class: ClassRefused, desc: "the row was purged; only a tombstone is left"},
 	Refused:          {class: ClassRefused, desc: "a fixed lore rule refuses this; the message names the rule and what to do instead"},
+	RefSyntax:        {class: ClassBadInput, desc: "a reference is malformed: an unknown option, a reference inside a path, or more than 3 secret alternates"},
+	RefScheme:        {class: ClassBadInput, desc: "a secret reference names a manager scheme lore does not know"},
+	RefCycle:         {class: ClassBadInput, desc: "references refer to each other in a loop; the message prints the chain"},
+	RefDepth:         {class: ClassBadInput, desc: "references nest deeper than 8"},
+	RefLimit:         {class: ClassBadInput, desc: "expanding a text took more than 256 references or 64 KB of output"},
+	RefDangling:      {class: ClassBadInput, desc: "the value refers to something that is not defined here; define it first or pass --allow-dangling"},
+	RefRequired:      {class: ClassBadInput, desc: "a ${scheme:name:?message} reference did not resolve"},
 }
 
 // Lookup returns the registry entry of c. An unregistered code is reported

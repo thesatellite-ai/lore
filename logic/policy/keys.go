@@ -26,6 +26,12 @@ const (
 	// KeyTasksParentAutoclose is what happens when a parent's last open
 	// sub-task closes (TSQ2): off | suggest (default) | on.
 	KeyTasksParentAutoclose Key = "tasks.parent_autoclose"
+	// Time tracking keys (TIME_TRACKING_DESIGN 14), in minutes: a limit,
+	// the smaller is stricter (flags more, merges less, allows less).
+	// OV7-1: integers in minutes, the policy layer has no duration shape.
+	KeyTimeLongSpan    Key = "time.long_span"
+	KeyTimeCoalesceGap Key = "time.coalesce_gap"
+	KeyTimeMaxEntry    Key = "time.max_entry"
 	// KeyClientRoutes is v0.1.17's lore-org.yaml `defaults.client_repos`
 	// (CFG8: team rules are policies rows of the org folder): where a row
 	// of each kind goes in a client repo when the write names no --to.
@@ -52,10 +58,13 @@ const clientRouteSep = "="
 
 // Numeric defaults of the keys above.
 const (
-	defaultMaxBytes      int64 = 16 * 1024 // MQ3, RQ4, CFG10
-	defaultTasksMaxDepth int64 = 4         // TSQ1
-	ceilingTasksMaxDepth int64 = 8         // TSQ1: "default 4, up to 8"
-	defaultPreviewRows   int64 = 20        // XQ2
+	defaultMaxBytes           int64 = 16 * 1024 // MQ3, RQ4, CFG10
+	defaultTasksMaxDepth      int64 = 4         // TSQ1
+	ceilingTasksMaxDepth      int64 = 8         // TSQ1: "default 4, up to 8"
+	defaultPreviewRows        int64 = 20        // XQ2
+	defaultTimeLongSpanMin    int64 = 600       // TQ2: 10h
+	defaultTimeCoalesceGapMin int64 = 2         // TQ4: 2m
+	defaultTimeMaxEntryMin    int64 = 1440      // D13: 24h, also the ceiling
 )
 
 // OnDetect is the value of secrets.on_detect.
@@ -131,6 +140,9 @@ func Keys() []KeyDef {
 		// command, on closes the parent in the same write.
 		{Key: KeyTasksParentAutoclose, Shape: ShapeRank, Choices: []string{"off", "suggest", "on"}, Default: mustText("suggest"),
 			Doc: "when a parent's last open sub-task closes: off, suggest (print the close command) or on (close it in the same write) (TSQ2)"},
+		{Key: KeyTimeLongSpan, Shape: ShapeLimit, Default: value.Int(defaultTimeLongSpanMin), Doc: "minutes after which a closed auto time span is flagged long_span; never capped (TQ2)"},
+		{Key: KeyTimeCoalesceGap, Shape: ShapeLimit, Default: value.Int(defaultTimeCoalesceGapMin), Doc: "minutes: auto spans of one worker closer than this are coalesced at write (TQ4)"},
+		{Key: KeyTimeMaxEntry, Shape: ShapeLimit, Ceiling: defaultTimeMaxEntryMin, Default: value.Int(defaultTimeMaxEntryMin), Doc: "minutes: the longest manual time entry (D13, max 24h)"},
 		// XQ2: a limit, the smaller is stricter: a lower preview count makes
 		// more bulk actions stop and ask, so a level may only lower it.
 		{Key: KeyBatchPreviewRows, Shape: ShapeLimit, Default: value.Int(defaultPreviewRows),

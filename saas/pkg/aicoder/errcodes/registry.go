@@ -242,7 +242,7 @@ func Description(c Code) string {
 		NotAStore:             "the repo is not a lore store (no lore-store.yaml marker, or it holds non-lore files)",
 		LeakBlocked:           "the write would put internal content where the client can read it; see `lore check leaks --explain`",
 		Cycle:                 "the dependency would create a cycle between tasks",
-		OldLore:               "this lore binary is below the live ref's min_lore_version; upgrade lore (reads still work)",
+		OldLore:               "this lore binary is below the live ref's min_lore_version; run lore upgrade (reads still work)",
 		ConfigInvalid:         "~/.lore/config.yaml failed validation; run `lore config check`",
 		Refused:               "a fixed lore rule refuses this; the message names the rule and what to do instead",
 	}

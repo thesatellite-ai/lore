@@ -28,6 +28,8 @@ func allConstants() []Code {
 		MetaType, MetaAmbiguous, MigrateLocked, URLUserinfo,
 		ResourceInUse, KindConflict, NameTaken, MetaTaken, Purged, Refused,
 		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth,
+		DurationBad, TimeTooLong, UpgradePermission, UpgradeChecksum, UpgradePinned,
+		RefSyntax, RefScheme, RefCycle, RefDepth, RefLimit, RefDangling, RefRequired,
 	}
 }
 

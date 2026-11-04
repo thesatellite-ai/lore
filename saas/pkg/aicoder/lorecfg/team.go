@@ -129,6 +129,10 @@ type Config struct {
 	LinkIndex      LinkIndex          `yaml:"link_index,omitempty"`
 	UntrustedHosts []string           `yaml:"untrusted_hosts,omitempty"`
 	Context        Context            `yaml:"context,omitempty"`
+	// UpgradeNotice false turns off the once-a-day new-release notice (FORMAT_EVOLUTION 8.6); nil = on.
+	UpgradeNotice *bool `yaml:"upgrade_notice,omitempty"`
+	// AutoUpgrade true turns the daily notice into an upgrade (FORMAT_EVOLUTION 8.7); default off.
+	AutoUpgrade *bool `yaml:"auto_upgrade,omitempty"`
 }
 
 // Context is the `context:` block: how `lore render` wires the generated
