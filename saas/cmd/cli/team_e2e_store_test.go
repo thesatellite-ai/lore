@@ -715,23 +715,26 @@ func TestRecipe08_ClientDevelopersSeeOnlyClientRows(t *testing.T) {
 // Cookbook 10: a note grows private → team → company; each share asks, gets
 // a new id, and nothing points from a wider audience back to a narrower one.
 func TestRecipe10_ShareChainMintsNewIds(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"), th.Flag("to", "memory", "add"), th.Flag("yes", "share"))
-	mine := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", "prune the pnpm store before the Docker build", "--to", "me"), "mem")
-	a.aliceApp.Lore("share", mine, "--to", orgNorthwind).Refused(t)
-	team := mustID(t, a.aliceApp.MustLore("share", mine, "--to", orgNorthwind, "--yes"), "mem")
-	company := mustID(t, a.aliceApp.MustLore("share", team, "--to", orgNorthwind+"/"+folderOrg, "--yes"), "mem")
-	if mine == team || team == company {
-		t.Fatal("every audience gets its own id")
+	// BATCH 2 (owner): share is removed; widening a note's audience is a
+	// move, which keeps the id (one home), so the chain no longer mints ids.
+	// Pinned: share refused naming the move; an unconfirmed move without a
+	// terminal writes nothing; each confirmed move lands the row in the next
+	// audience's folder under the same id and leaves only a tombstone behind.
+	a := newAgency(t, th.Cmd("share"), th.Cmd("move"), th.Flag("to", "memory", "add"))
+	const text = "prune the pnpm store before the Docker build"
+	mine := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", text, "--to", "me"), "mem")
+	a.aliceApp.Lore("share", mine, "--to", orgNorthwind, "--yes").Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+mine)
+	a.aliceApp.Lore("move", mine, "--to", orgNorthwind).Refused(t)
+	if a.storeHas(t, folderAcme, text) {
+		t.Fatal("a refused move writes nothing")
 	}
-	if !a.storeHas(t, folderAcme, team) || !a.storeHas(t, folderOrg, "prune the pnpm store") {
-		t.Fatal("each copy lives in its audience's project")
+	a.aliceApp.MustLore("move", mine, "--to", orgNorthwind, "--yes")
+	if !a.storeHas(t, folderAcme, text) || !a.storeHas(t, folderAcme, mine) {
+		t.Fatal("the team move lands the row, same id, in the linked project")
 	}
-	for _, f := range a.store.Files(refMain) {
-		if strings.HasPrefix(f, folderOrg+"/") {
-			if body, _ := a.store.Read(refMain, f); strings.Contains(body, team) || strings.Contains(body, mine) {
-				t.Fatalf("the wider copy must not point back at the narrower one: %s", f)
-			}
-		}
+	a.aliceApp.MustLore("move", mine, "--to", orgNorthwind+"/"+folderOrg, "--yes")
+	if !a.storeHas(t, folderOrg, text) || a.storeHas(t, folderAcme, text) {
+		t.Fatal("the company move lands it in the org folder and leaves no live copy in acme/")
 	}
 }
 
@@ -969,40 +972,35 @@ func (a *agency) clientRepoRow(t *testing.T, table, id string) (string, bool) {
 	return a.app.Read(refLive, liveRowPath(rootFolder, table, id))
 }
 
-// BUG-D1 / §6.4: a confirmed `lore share <internal memory> --to repo` in a
-// linked client repo succeeds, writes a copy with a NEW id into the client
-// repo, and the copy carries no origin field or pointer back to the internal
-// row; the provenance lives only in the internal row.
+// BUG-D1 / §6.4, after BATCH 2 (owner: `lore share` is removed; a row has
+// one home and `lore move` hands it over keeping its id). Before BATCH 2
+// this pinned share's new-id copy; it now pins the refusal naming the move,
+// and the move: the row lands in the client repo's .lore/data under the
+// same id with its text and no origin field, and the store keeps only a
+// tombstone (no second live copy anywhere).
 func TestLeak_ShareInternalMemoryToClientRepoMintsAPointerFreeCopy(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"), th.Flag("yes", "share"))
+	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
 	const text = "checkout must support INR and USD"
 	internal := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", text), "mem")
 	if !a.storeHas(t, folderAcme, internal) {
 		t.Fatal("the memory must start in the store's acme/ project")
 	}
-	r := a.aliceApp.Lore("share", internal, "--to", "repo", "--yes")
-	bugD1ShareToRepoRefused.PendingOn(t, r, "E_LEAK_BLOCKED", "pointers flow inward only")
-	copyID := mustID(t, r.OK(t), "mem")
-	if copyID == internal {
-		t.Fatal("the client copy gets a new id")
+	a.aliceApp.Lore("share", internal, "--to", "repo", "--yes").Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+internal)
+	a.aliceApp.MustLore("move", internal, "--to", "repo", "--yes")
+	body, ok := a.clientRepoRow(t, tblMemories, internal)
+	if !ok || !strings.Contains(body, text) {
+		t.Fatalf("the moved row keeps its id and text in the client repo: %v %s", ok, body)
 	}
-	body, ok := a.clientRepoRow(t, tblMemories, copyID)
-	if !ok {
-		t.Fatalf("the copy %s must be in the client repo's .lore/data", copyID)
-	}
-	if !strings.Contains(body, text) {
-		t.Fatalf("the copy must hold the shared text: %s", body)
-	}
-	if strings.Contains(body, internal) {
-		t.Fatalf("the copy must not point back at the internal row: %s", body)
-	}
-	for _, field := range []string{"origin_id", "source_ref", "supersedes", "superseded_by"} {
+	for _, field := range []string{"origin_id", "source_ref", "supersedes", "superseded_by", "shared_as"} {
 		if strings.Contains(body, `"`+field+`"`) {
-			t.Fatalf("the copy must carry no origin field %q: %s", field, body)
+			t.Fatalf("the moved row carries no origin field %q: %s", field, body)
 		}
 	}
-	if !a.storeHas(t, folderAcme, copyID) {
-		t.Fatal("the internal row keeps the provenance (the copy's id)")
+	if a.storeHas(t, folderAcme, text) {
+		t.Fatal("the store keeps no live copy of the moved row (one home)")
+	}
+	if !a.storeHas(t, folderAcme, `"_deleted": true`) {
+		t.Fatal("the store keeps the moved row's tombstone")
 	}
 }
 
