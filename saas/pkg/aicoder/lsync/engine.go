@@ -1075,6 +1075,9 @@ func (e *engine) exportDoc(ctx context.Context, k rowKey, t *Table, dbDoc map[st
 		}
 		return e.clearDirty(ctx, k)
 	}
+	if e.skipBridgeExport(k.table, full, dbDoc) {
+		return e.clearDirty(ctx, k) // the tag bridge's mirror rows (tagbridge.go)
+	}
 	if e.o.ReadOnly {
 		e.deferred[k] = true
 		return nil // stays dirty; exported by the next writable pass

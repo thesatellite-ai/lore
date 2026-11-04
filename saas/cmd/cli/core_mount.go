@@ -113,6 +113,7 @@ func mountCore(root *cobra.Command) {
 	// carry their own v0.1.17 flags).
 	if t, _, ferr := root.Find([]string{opstask.Noun}); ferr == nil && t.Name() == opstask.Noun {
 		t.AddCommand(taskCoordCommands()...)
+		guardTaskCoreCommands(root)
 	}
 	if m, _, ferr := root.Find([]string{opsmission.Noun}); ferr == nil && m.Name() == opsmission.Noun {
 		m.AddCommand(newMissionStatusCommand())

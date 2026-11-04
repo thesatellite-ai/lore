@@ -176,5 +176,8 @@ func (e *engine) syncCoreOwned(ctx context.Context, k rowKey, t *Table, fc fileC
 	if err := e.applyFile(ctx, k, t, fileDoc, fc); err != nil {
 		return err
 	}
+	if err := e.bridgeTags(ctx, k.table, k.id, fileDoc); err != nil {
+		return err
+	}
 	return e.observe(ctx, k, t, ChangeImport, baseDoc)
 }

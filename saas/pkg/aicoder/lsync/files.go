@@ -153,7 +153,11 @@ func scanDataDir(dataDir string, reg *Registry, now time.Time) (scanResult, erro
 			continue
 		}
 		if _, ok := reg.Table(name); !ok {
-			res.skipped[name] = "unknown table (written by a newer lore?)"
+			if !CoreOwned(name) {
+				// A core-owned table with no lore.db table (the settings
+				// nouns) is expected: the core reads it, lore.db never does.
+				res.skipped[name] = "unknown table (written by a newer lore?)"
+			}
 			continue
 		}
 		sub := filepath.Join(dataDir, name)
