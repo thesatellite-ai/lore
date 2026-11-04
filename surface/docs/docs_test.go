@@ -327,6 +327,39 @@ func TestCheckStale(t *testing.T) {
 	}
 }
 
+// TestStaleCheckError: `lore spec docs --check` is Stale + CheckError:
+// fresh files give no drift and a nil error; a changed Summary gives one
+// Drift per file (line and both versions) and an E_CONFIG_INVALID naming
+// every stale path and the regenerate command; a missing file is an
+// error, never "current".
+func TestStaleCheckError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	md := filepath.Join(dir, "cli-commands.md")
+	if err := os.WriteFile(md, []byte("<!-- lore:spec:begin commands -->\n<!-- lore:spec:end commands -->\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reg := registry(t, "Add a memory", false)
+	if err := Update(reg, md); err != nil {
+		t.Fatal(err)
+	}
+	drift, err := Stale(reg, md)
+	if err != nil || len(drift) != 0 || CheckError(drift) != nil {
+		t.Fatalf("fresh: drift %v err %v", drift, err)
+	}
+	drift, err = Stale(registry(t, "Add one memory", false), md)
+	if err != nil || len(drift) != 1 || drift[0].Line == 0 || drift[0].Committed == drift[0].Generated {
+		t.Fatalf("changed: drift %+v err %v", drift, err)
+	}
+	cerr := CheckError(drift)
+	if !errs.Has(cerr, errs.ConfigInvalid) || !strings.Contains(cerr.Error(), md) {
+		t.Fatalf("CheckError = %v", cerr)
+	}
+	if _, err := Stale(reg, filepath.Join(dir, "missing.md")); err == nil {
+		t.Fatal("a missing file read as current")
+	}
+}
+
 // TestRenderRefuses: unknown extension, no block, unknown block, missing
 // end marker.
 func TestRenderRefuses(t *testing.T) {

@@ -147,28 +147,72 @@ func readFile(p string) ([]byte, fs.FileMode, error) {
 	return b, st.Mode().Perm(), nil
 }
 
-// CheckStale fails t (Errorf, the test goes on) for every path whose
-// committed bytes differ from what Render produces from reg, naming the
-// first differing line and the command that refreshes it. Phase 2 calls it
-// from a test with the real registry and the real CLI_REFERENCE.md and
-// openapi.json, so a changed Summary, flag or error code fails CI until the
-// files are regenerated (spec 9.6).
-func CheckStale(t testing.TB, reg *op.Registry, paths ...string) {
-	t.Helper()
+// Drift is one committed file that differs from what the registry writes:
+// the first differing line (1-based) and both versions of it.
+type Drift struct {
+	Path      string
+	Line      int
+	Committed string
+	Generated string
+}
+
+// String is the one-line report of d, naming the command that refreshes it.
+func (d Drift) String() string {
+	return d.Path + " is stale at line " + strconv.Itoa(d.Line) + ":\n  committed: " + d.Committed + "\n  generated: " + d.Generated
+}
+
+// Stale returns every path whose committed bytes differ from what Render
+// produces from reg (`lore spec docs --check`, the drift test). A file
+// that cannot be read or rendered is an error, never "current".
+func Stale(reg *op.Registry, paths ...string) ([]Drift, error) {
+	var out []Drift
 	for _, p := range paths {
 		current, err := os.ReadFile(filepath.Clean(p))
 		if err != nil {
-			t.Errorf("docs: %s: %v", p, err)
-			continue
+			return out, errs.Wrap(errs.NotFound, "docs: read "+p, err)
 		}
 		want, err := Render(reg, p, current)
+		if err != nil {
+			return out, err
+		}
+		if !bytes.Equal(current, want) {
+			line, got, exp := firstDiff(current, want)
+			out = append(out, Drift{Path: p, Line: line, Committed: got, Generated: exp})
+		}
+	}
+	return out, nil
+}
+
+// CheckError is the refusal of `lore spec docs --check` for drift: one
+// E_CONFIG_INVALID (exit non-zero) listing every stale file, with the
+// regenerate command as its hint; nil when nothing drifted.
+func CheckError(drift []Drift) error {
+	if len(drift) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, len(drift))
+	for _, d := range drift {
+		lines = append(lines, d.String())
+	}
+	return errs.New(errs.ConfigInvalid, "docs: the committed reference is stale: "+strings.Join(lines, "; ")).
+		WithHint("run: " + RegenerateCommand + ", then commit the files")
+}
+
+// CheckStale fails t (Errorf, the test goes on) for every path whose
+// committed bytes differ from what Render produces from reg, naming the
+// first differing line and the command that refreshes it. The drift test
+// calls it with the real registry and the committed files, so a changed
+// Summary, flag or error code fails CI until they are regenerated (9.6).
+func CheckStale(t testing.TB, reg *op.Registry, paths ...string) {
+	t.Helper()
+	for _, p := range paths {
+		drift, err := Stale(reg, p)
 		if err != nil {
 			t.Errorf("docs: %s: %v", p, err)
 			continue
 		}
-		if !bytes.Equal(current, want) {
-			line, got, exp := firstDiff(current, want)
-			t.Errorf("docs: %s is stale at line %d:\n  committed: %s\n  generated: %s\nrun: %s", p, line, got, exp, RegenerateCommand)
+		for _, d := range drift {
+			t.Errorf("docs: %s\nrun: %s", d, RegenerateCommand)
 		}
 	}
 }

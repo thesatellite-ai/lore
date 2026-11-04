@@ -563,3 +563,179 @@ func cleanFileURL(raw string) (string, error) {
 	u.Path = filepath.ToSlash(filepath.Clean(p))
 	return u.String(), nil
 }
+
+// Commit subjects of the store control-file commits below.
+const (
+	visibilitySubject = "lore: store visibility "
+	folderAddSubject  = "lore: store folder add "
+)
+
+// findStore is the store a store.visibility / store.folder.add names: a
+// stores.yaml entry, `me`, a store the repo's org brings, or `team` (the
+// org store of the linked folder). Unknown is E_NOT_FOUND; a read-only
+// attachment is E_STORE_READ_ONLY (both commands write the store).
+func (a *App) findStore(ctx context.Context, verb, name string) (attach.Store, error) {
+	look := name
+	if name == attach.ReservedTeam {
+		top, err := a.repoTop(ctx)
+		if err != nil {
+			return attach.Store{}, err
+		}
+		alias, ok := orgAliases(ctx, a.opts, top)[name]
+		if !ok {
+			return attach.Store{}, errs.New(errs.NotFound, verb+": this repository has no team store").
+				WithHint("link the repo to an org (`lore org link <org> --project <folder>`), or name the store")
+		}
+		look = string(alias)
+	}
+	src, found, _, err := a.baseStore(ctx, look)
+	if err != nil {
+		return attach.Store{}, err
+	}
+	if !found {
+		return attach.Store{}, errs.New(errs.NotFound, verb+": no store named "+name+" is attached").
+			WithHint("run `lore store list`")
+	}
+	if src.ReadOnly {
+		return attach.Store{}, errs.New(errs.StoreReadOnly, verb+": store "+name+" is attached read-only")
+	}
+	return src, nil
+}
+
+// withStoreDir runs edit on the local folder of src's store and saves
+// what it wrote: a file:// store is the folder itself (nothing more to
+// do); a git store's edit runs in the lore-owned worktree, and the paths
+// it returns are committed (gitCommitFilesAs: org identity or FLAG4) and
+// pushed in one sync. edit returning no paths commits nothing.
+func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string, edit func(dir string) ([]string, error)) error {
+	canon, err := canonical(attach.Store{URL: src.URL, Branch: src.Branch})
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(canon)
+	if err != nil {
+		return errs.New(errs.StoreScheme, "wire: the store url does not parse")
+	}
+	if u.Scheme == folder.Scheme {
+		_, err = edit(filepath.FromSlash(u.Path))
+		return err
+	}
+	b, err := a.openStore(ctx, canon, src.URL)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = b.Close() }() // the commit below already landed
+	gb, ok := b.(*git.Backend)
+	if !ok {
+		return errs.New(errs.StoreScheme, "wire: the store has no local folder")
+	}
+	paths, err := edit(gb.Dir())
+	if err != nil || len(paths) == 0 {
+		return err
+	}
+	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), subject, paths...); err != nil {
+		return err
+	}
+	rep, err := gb.Sync(ctx)
+	if err != nil {
+		return err
+	}
+	if len(rep.Refused) > 0 {
+		return errs.New(errs.PolicyDenied, subject+": the remote refused the commit: "+rep.Refused[0].Reason)
+	}
+	return nil
+}
+
+// StoreVisibility implements opsstores.Manager (CFG4).
+func (a *App) StoreVisibility(ctx context.Context, name string) (opsstores.VisibilityOut, error) {
+	src, err := a.findStore(ctx, "store visibility", name)
+	if err != nil {
+		return opsstores.VisibilityOut{}, err
+	}
+	dir, err := a.storeDir(ctx, src)
+	if err != nil {
+		return opsstores.VisibilityOut{}, err
+	}
+	m, err := rowfs.ReadMarker(dir)
+	if err != nil {
+		return opsstores.VisibilityOut{}, err
+	}
+	return opsstores.VisibilityOut{Name: name, Visibility: string(m.Visibility), Previous: string(m.Visibility)}, nil
+}
+
+// SetVisibility implements opsstores.Manager: it rewrites the store's
+// lore-store.yaml with the new visibility (a store setting: every repo
+// that uses the store sees it, CFG4). A v0.1.17 marker without an id is
+// refused: `lore migrate run` gives the store its sto_ id first.
+func (a *App) SetVisibility(ctx context.Context, in opsstores.VisibilityIn) (opsstores.VisibilityOut, error) {
+	src, err := a.findStore(ctx, "store visibility", in.Name)
+	if err != nil {
+		return opsstores.VisibilityOut{}, err
+	}
+	out := opsstores.VisibilityOut{Name: in.Name, Visibility: in.Visibility}
+	err = a.withStoreDir(ctx, src, visibilitySubject+in.Visibility, func(dir string) ([]string, error) {
+		m, rerr := rowfs.ReadMarker(dir)
+		if rerr != nil {
+			return nil, rerr
+		}
+		out.Previous = string(m.Visibility)
+		if m.Visibility == rowfs.Visibility(in.Visibility) {
+			return nil, nil
+		}
+		if m.ID.IsZero() {
+			return nil, errs.New(errs.OldLore, "store visibility: "+in.Name+" still has a v0.1.17 "+rowfs.MarkerFile+" (no store id)").
+				WithHint("run `lore migrate run` first")
+		}
+		m.Visibility = rowfs.Visibility(in.Visibility)
+		if werr := rowfs.WriteMarker(dir, m); werr != nil {
+			return nil, werr
+		}
+		out.Changed = true
+		return []string{rowfs.MarkerFile}, nil
+	})
+	if err != nil {
+		return opsstores.VisibilityOut{}, err
+	}
+	return out, nil
+}
+
+// AddFolder implements opsstores.Manager (STORE TARGETS): the folder's
+// _meta.json is written as its first row write would write it (natural
+// prj_ id from the store id and the folder name, so two clones agree),
+// under the store lock, then committed and pushed.
+func (a *App) AddFolder(ctx context.Context, in opsstores.FolderAddIn) (opsstores.FolderAddOut, error) {
+	src, err := a.findStore(ctx, "store folder add", in.Store)
+	if err != nil {
+		return opsstores.FolderAddOut{}, err
+	}
+	out := opsstores.FolderAddOut{Store: in.Store, Folder: in.Folder}
+	err = a.withStoreDir(ctx, src, folderAddSubject+in.Folder, func(dir string) (paths []string, ferr error) {
+		root, oerr := rowfs.Open(dir, a.opts.rowfsOptions()...)
+		if oerr != nil {
+			return nil, oerr
+		}
+		f, oerr := root.Folder(in.Folder)
+		if oerr != nil {
+			return nil, oerr
+		}
+		lock, oerr := root.Lock(ctx)
+		if oerr != nil {
+			return nil, oerr
+		}
+		defer func() { ferr = errors.Join(ferr, lock.Release()) }()
+		if paths, ferr = f.Create(ctx); ferr != nil {
+			return nil, ferr
+		}
+		out.Already = len(paths) == 0
+		id, ierr := f.ProjectID(ctx)
+		if ierr != nil {
+			return nil, ierr
+		}
+		out.ProjectID = id.String()
+		return paths, nil
+	})
+	if err != nil {
+		return opsstores.FolderAddOut{}, err
+	}
+	return out, nil
+}

@@ -21,6 +21,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -34,6 +36,10 @@ const (
 	OpAdd    = "store.add"
 	OpRemove = "store.remove"
 	OpList   = "store.list"
+	// OpVisibility changes the visibility a store declares (CFG4).
+	OpVisibility = "store.visibility"
+	// OpFolderAdd creates a folder in a store on purpose (STORE TARGETS).
+	OpFolderAdd = "store.folder.add"
 )
 
 // PersonalName is the reserved name of the personal store (`--to me`).
@@ -59,6 +65,15 @@ type Manager interface {
 	// ListStores lists the stores this repo sees, in precedence order
 	// (stores.yaml order, the personal store last; BATCH 15).
 	ListStores(ctx context.Context) ([]Entry, error)
+	// StoreVisibility reads the visibility the store name declares in its
+	// lore-store.yaml (CFG4); it refuses a read-only attachment.
+	StoreVisibility(ctx context.Context, name string) (VisibilityOut, error)
+	// SetVisibility writes in.Visibility into the store's lore-store.yaml
+	// (a git store gets one commit, pushed). The op has already asked.
+	SetVisibility(ctx context.Context, in VisibilityIn) (VisibilityOut, error)
+	// AddFolder creates <folder>/.lore/data/_meta.json in the store (a git
+	// store gets one commit, pushed); an existing folder is left as it is.
+	AddFolder(ctx context.Context, in FolderAddIn) (FolderAddOut, error)
 }
 
 // Entry is one store as this repo sees it. Url never carries credentials
@@ -114,6 +129,54 @@ type ListOut struct {
 	Count  int     `json:"count"`
 }
 
+// VisibilityIn is the input of store.visibility.
+type VisibilityIn struct {
+	Name       string `json:"name" arg:"0" desc:"the store (a stores.yaml name or me)"`
+	Visibility string `json:"visibility" arg:"1" desc:"internal or shareable (CFG4)"`
+}
+
+// VisibilityOut is the output of store.visibility.
+type VisibilityOut struct {
+	Name       string `json:"name"`
+	Visibility string `json:"visibility"`
+	// Previous is the visibility before the change.
+	Previous string `json:"previous"`
+	// Changed is false when the store already declared it.
+	Changed bool `json:"changed"`
+}
+
+// FolderAddIn is the input of store.folder.add.
+type FolderAddIn struct {
+	Store  string `json:"store" arg:"0" desc:"the store (a stores.yaml name, me or team)"`
+	Folder string `json:"folder" arg:"1" desc:"the new folder's name (snake_case; not org)"`
+}
+
+// FolderAddOut is the output of store.folder.add.
+type FolderAddOut struct {
+	Store  string `json:"store"`
+	Folder string `json:"folder"`
+	// ProjectID is the folder's permanent prj_ id (its _meta.json).
+	ProjectID string `json:"project_id"`
+	// Already is true when the store already had the folder.
+	Already bool `json:"already,omitempty"`
+}
+
+// CheckFolderName refuses a folder name store.folder.add cannot create:
+// not snake_case, or `org`, the org folder's name (CLI_REFERENCE 3.21).
+func CheckFolderName(name string) error {
+	if !row.ValidName(name) {
+		return errs.New(errs.InvalidInput, "store folder add: the folder name "+quote(name)+" must be snake_case")
+	}
+	if name == rowfs.FolderOrg {
+		return errs.New(errs.InvalidInput, "store folder add: "+quote(name)+" is the org folder's name").
+			WithHint("write to the company folder with --to company (or --to <store>/org)")
+	}
+	return nil
+}
+
+// shareableQuestion is what store.visibility asks before `shareable`.
+const shareableQuestion = "rows of this store will render into committed files and show in client repos; make it shareable?"
+
 // CheckName refuses a store name that is not snake_case or is reserved
 // (CFG2 as narrowed by STORE TARGETS), with E_INVALID_INPUT. allowMe lets
 // `me` through (store init me).
@@ -133,6 +196,10 @@ func CheckName(name string, allowMe bool) error {
 
 // quote wraps s in backticks for messages.
 func quote(s string) string { return "`" + s + "`" }
+
+// visibilityErrors are the codes of store.visibility and store.folder.add.
+var visibilityErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInvalid, errs.StoreReadOnly,
+	errs.NotAStore, errs.StoreUnreachable, errs.StoreScheme, errs.OldLore, errs.NeedsConfirm, errs.Cancelled, errs.Internal}
 
 // storeErrors are the codes the store operations return.
 var storeErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInvalid, errs.StoreScheme, errs.URLUserinfo,
@@ -217,6 +284,55 @@ func Ops(m Manager) []op.Entry {
 			}
 			return ListOut{Stores: got, Count: len(got)}, nil
 		}),
+		// Flow (CFG4): validate → read the current visibility → same: done
+		// → shareable and not yet confirmed: E_NEEDS_CONFIRM (going back
+		// to internal never asks) → Manager writes and pushes the marker.
+		op.Define(op.Spec{
+			Name: OpVisibility, Summary: "Set whether a store's rows may reach client repos and committed files (internal or shareable)",
+			Permission: op.PermAdmin, Access: op.AccessRead, Errors: visibilityErrors,
+			Confirm:  op.ConfirmRule{MayAsk: true},
+			Examples: []op.Example{{Title: "make a store shareable", CLI: "lore store visibility docs_kit shareable --yes", Want: "visibility:"}},
+		}, func(ctx context.Context, in VisibilityIn) (VisibilityOut, error) {
+			if err := CheckName(in.Name, true); err != nil {
+				return VisibilityOut{}, err
+			}
+			if in.Visibility != VisibilityInternal && in.Visibility != VisibilityShareable {
+				return VisibilityOut{}, errs.New(errs.InvalidInput, "store visibility: the visibility must be internal or shareable, not "+quote(in.Visibility))
+			}
+			cur, err := m.StoreVisibility(ctx, in.Name)
+			if err != nil {
+				return VisibilityOut{}, err
+			}
+			if cur.Visibility == in.Visibility {
+				return VisibilityOut{Name: in.Name, Visibility: in.Visibility, Previous: cur.Visibility}, nil
+			}
+			// CFG4: shareable asks first; internal (the safe way) never does.
+			if in.Visibility == VisibilityShareable && !engine.Confirmed(ctx) {
+				return VisibilityOut{}, errs.New(errs.NeedsConfirm, "store visibility "+in.Name+": "+shareableQuestion).
+					WithQuestion("make store " + in.Name + " shareable? " + shareableQuestion).
+					WithHint("ask the person, then rerun with --yes")
+			}
+			return m.SetVisibility(ctx, in)
+		}),
+		// Flow (STORE TARGETS): validate names → Manager finds the store
+		// (stores.yaml, me, team), refuses read-only, writes the folder's
+		// _meta.json (natural prj_ id) and pushes. On purpose only, so it
+		// does not ask; a first `--to <store>/<folder>` write does.
+		op.Define(op.Spec{
+			Name: OpFolderAdd, Summary: "Create a folder in a store (shown only in repos that attach it)",
+			Permission: op.PermAdmin, Access: op.AccessRead, Errors: visibilityErrors,
+			Examples: []op.Example{{Title: "a folder for one topic", CLI: "lore store folder add golang concurrency", Want: "folder:"}},
+		}, func(ctx context.Context, in FolderAddIn) (FolderAddOut, error) {
+			if in.Store != attach.ReservedTeam {
+				if err := CheckName(in.Store, true); err != nil {
+					return FolderAddOut{}, err
+				}
+			}
+			if err := CheckFolderName(in.Folder); err != nil {
+				return FolderAddOut{}, err
+			}
+			return m.AddFolder(ctx, in)
+		}),
 	}
 }
 
@@ -297,5 +413,5 @@ func WritesStoresFile(name string) bool { return name == OpInit || name == OpAdd
 // opening the attached stores (one unreachable store must not block
 // `lore store remove`).
 func IsStoreOp(name string) bool {
-	return slices.Contains([]string{OpInit, OpAdd, OpRemove, OpList}, name)
+	return slices.Contains([]string{OpInit, OpAdd, OpRemove, OpList, OpVisibility, OpFolderAdd}, name)
 }

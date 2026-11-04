@@ -10,6 +10,12 @@
 // model/errs, and CheckStale lets a test fail when a committed copy
 // differs.
 //
+// Flow:
+//
+//	lore spec docs|openapi  → Update(reg, path)  → Render → write if changed
+//	lore spec docs --check  → Stale(reg, paths)  → CheckError (non-zero exit)
+//	wire/docs_test.go       → CheckStale(t, …)   → Stale → t.Errorf per file
+//
 // The REST surface serves the same OpenAPI document at /openapi.json, plus
 // one schema per dynamic kind of the attached stores.
 package docs
