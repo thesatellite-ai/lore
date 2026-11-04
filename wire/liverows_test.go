@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -34,10 +33,7 @@ const (
 // gitIn runs git in dir with extra environment and returns trimmed stdout.
 func gitIn(t *testing.T, dir string, env []string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), env...)
-	out, err := cmd.Output()
+	out, err := gitRun{dir: dir, env: append(os.Environ(), env...), args: args}.output(background())
 	if err != nil {
 		t.Fatalf("git %v: %v", args, err)
 	}
