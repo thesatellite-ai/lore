@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -42,4 +43,25 @@ func (a *App) StoreLevel(name store.Source) (policy.Level, bool) {
 		return "", false
 	}
 	return a.st.eng.Level(name), true
+}
+
+// StoreLabel is how a row's store is shown beside it ("[label]"): the
+// attached name, with "/<folder>" added when the store is attached at a
+// non-root folder and its name does not already say so. v0.1.17 showed
+// the org store's linked folder this way (`[northwind/acme]`), while the
+// core attaches that folder under the bare org name so `--to northwind`
+// keeps working. The repo store, a store attached at its root, a
+// `<store>/<folder>` name, and a name this App does not know (or an App
+// not opened yet) are returned unchanged.
+func (a *App) StoreLabel(name store.Source) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.st == nil || strings.Contains(string(name), targetSep) {
+		return string(name)
+	}
+	f := strings.Trim(a.st.folders[name], "/")
+	if f == "" || f == rowfs.FolderRoot {
+		return string(name)
+	}
+	return string(name) + targetSep + f
 }
