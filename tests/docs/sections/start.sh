@@ -1,6 +1,7 @@
 # start: first project for one person, no team (docs/knowledge/first-project.md).
 # Alice (an agency developer) sets lore up in the client's website repo, writes one rule,
-# renders CLAUDE.md and reads it.
+# renders .lore/LORE.md and reads the AGENTS.md pointer init wrote (TOOL NEUTRAL: with no
+# AI tool file in the repo, init wires AGENTS.md, never CLAUDE.md by default).
 
 solo_repo alice client/website
 
@@ -20,7 +21,7 @@ on alice work/website "lore rule list"
 
 note "render"
 on alice work/website "lore render"
-on alice work/website "cat CLAUDE.md"
+on alice work/website "cat AGENTS.md"
 
 note "commit"
 on alice work/website "git add -A && git commit -qm 'lore: first rule' && git log --oneline"

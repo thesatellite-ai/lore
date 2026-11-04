@@ -13,7 +13,7 @@ The list below is written by `tests/docs/commands_index.py` from `lore --help` a
 Three hidden commands are left out on purpose: `lore merge-driver`, `lore sync hook` and `lore task hook commit-msg`. Git runs them from the hooks and the merge setting that lore installs; you never run them by hand.
 
 <!-- commands -->
-467 commands, 387 of them leaf commands (the ones you run; a command marked … only groups others).
+468 commands, 388 of them leaf commands (the ones you run; a command marked … only groups others).
 
 Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [architecturenote](#lore-architecturenote) · [audit](#lore-audit) · [backup](#lore-backup) · [behaviour](#lore-behaviour) · [bench](#lore-bench) · [cache](#lore-cache) · [check](#lore-check) · [comment](#lore-comment) · [commit](#lore-commit) · [completion](#lore-completion) · [config](#lore-config) · [context](#lore-context) · [cookbookrecipe](#lore-cookbookrecipe) · [decision](#lore-decision) · [directive](#lore-directive) · [doctor](#lore-doctor) · [errors](#lore-errors) · [explain](#lore-explain) · [external-source](#lore-external-source) · [finding](#lore-finding) · [gate](#lore-gate) · [handoff](#lore-handoff) · [hold](#lore-hold) · [hotfix](#lore-hotfix) · [identity](#lore-identity) · [inbox](#lore-inbox) · [incident](#lore-incident) · [init](#lore-init) · [land](#lore-land) · [learn](#lore-learn) · [learn-from](#lore-learn-from) · [link](#lore-link) · [live](#lore-live) · [memory](#lore-memory) · [meta](#lore-meta) · [migrate](#lore-migrate) · [mission](#lore-mission) · [mount-alias](#lore-mount-alias) · [move](#lore-move) · [org](#lore-org) · [pattern](#lore-pattern) · [pii-pattern](#lore-pii-pattern) · [plan](#lore-plan) · [playbook](#lore-playbook) · [plugin](#lore-plugin) · [policy](#lore-policy) · [project](#lore-project) · [prompt](#lore-prompt) · [querylog](#lore-querylog) · [reminder](#lore-reminder) · [render](#lore-render) · [renderhistory](#lore-renderhistory) · [repair](#lore-repair) · [repo](#lore-repo) · [resource](#lore-resource) · [restore](#lore-restore) · [rule](#lore-rule) · [run](#lore-run) · [search](#lore-search) · [secrets](#lore-secrets) · [session](#lore-session) · [setup](#lore-setup) · [share](#lore-share) · [skill](#lore-skill) · [snapshot](#lore-snapshot) · [spec](#lore-spec) · [sql](#lore-sql) · [store](#lore-store) · [suggestion](#lore-suggestion) · [support-bundle](#lore-support-bundle) · [sync](#lore-sync) · [tables](#lore-tables) · [tag](#lore-tag) · [task](#lore-task) · [task-view](#lore-task-view) · [tasklist](#lore-tasklist) · [tastepref](#lore-tastepref) · [team](#lore-team) · [techdoc](#lore-techdoc) · [tui](#lore-tui) · [vars](#lore-vars) · [version](#lore-version) · [whoami](#lore-whoami) · [why-context](#lore-why-context) · [workflow](#lore-workflow) · [workspace](#lore-workspace)
 
@@ -23,6 +23,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 |---|---|---|
 | `lore actor` … | Inspect actors (humans, agents, hooks, plugins) | [team/commands › lore actor register](../../docs/team/commands.md#lore-actor-register) |
 | `lore actor deactivate` | Mark someone as gone (active=false, left_at); actors are never deleted | [team/commands › lore actor register](../../docs/team/commands.md#lore-actor-register) |
+| `lore actor delete` | Refused: actors are never deleted (use `lore actor deactivate`) | [team/commands › lore actor register](../../docs/team/commands.md#lore-actor-register) |
 | `lore actor list` | List actors | [team/commands › lore actor register](../../docs/team/commands.md#lore-actor-register) |
 | `lore actor register` | Put yourself (or, with --kind agent, an agent you own) on the org roster | [team/commands › lore actor register](../../docs/team/commands.md#lore-actor-register) |
 | `lore actor show` | Show actor details | [team/commands › lore actor register](../../docs/team/commands.md#lore-actor-register) |
@@ -560,7 +561,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore render` | Render CLAUDE.md from scoped knowledge | [knowledge/render-and-agent-files › Step 4 — Point a different agent file](../../docs/knowledge/render-and-agent-files.md#step-4--point-a-different-agent-file) |
+| `lore render` | Render .lore/LORE.md from scoped knowledge and point your AI tools at it | [knowledge/render-and-agent-files › Step 5 — Point another tool](../../docs/knowledge/render-and-agent-files.md#step-5--point-another-tool) |
 
 ### lore renderhistory
 
