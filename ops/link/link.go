@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -275,8 +276,8 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, err
 	}
 	if core {
-		if err := pointer.Check(ctx, o.env, store.Source(in.To), engine.Ref{Table: tbl, ID: id}); err != nil {
-			return AddOut{}, err
+		if perr := pointer.Check(ctx, o.env, store.Source(in.To), engine.Ref{Table: tbl, ID: id}); perr != nil {
+			return AddOut{}, perr
 		}
 	}
 	sha, msg, author, when, err := o.resolve(ctx, in.Commit, in.RepoPath)
@@ -537,10 +538,14 @@ func short(sha string) string {
 
 // excerpt cuts a message for display (v0.1.17: 60, cut at 57 + "...").
 func excerpt(m string) string {
-	if len(m) > msgMax {
-		return m[:msgCut] + ellipsis
+	if len(m) <= msgMax {
+		return m
 	}
-	return m
+	cut := msgCut
+	for cut > 0 && !utf8.RuneStart(m[cut]) {
+		cut-- // never split a UTF-8 character (v0.1.17 printed half of one)
+	}
+	return m[:cut] + ellipsis
 }
 
 // orElse returns a, or b when a is empty.
