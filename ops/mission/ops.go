@@ -1,0 +1,395 @@
+// Package mission defines the `mission` noun's operations on the new core:
+// add, list, show, edit, done, pause, resume, delete and search, with
+// v0.1.17's flags and output. `mission status` (claims, gates, the ready
+// queue) reads the signals ref and stays on the old binary for now; the
+// YAML import `mission apply` (TSQ9, formerly `plan apply`) is not on the
+// core yet.
+package mission
+
+import (
+	"context"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/work"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// Operation names (op/route.go: mission.add → `lore mission add`, POST
+// /v1/missions).
+const (
+	// Noun is the CLI noun of every mission operation.
+	Noun     = "mission"
+	OpAdd    = "mission.add"
+	OpList   = "mission.list"
+	OpShow   = "mission.show"
+	OpEdit   = "mission.edit"
+	OpDone   = "mission.done"
+	OpPause  = "mission.pause"
+	OpResume = "mission.resume"
+	OpDelete = "mission.delete"
+	OpSearch = "mission.search"
+)
+
+// Mission field names (schema.TableMissions).
+const (
+	fieldTarget    = "target_date"
+	fieldApprovers = "approvers"
+)
+
+// table is the missions table.
+const table row.Table = schema.TableMissions
+
+// Ops returns every mission operation bound to env.
+func Ops(env work.Env) []op.Entry {
+	o := ops{env: env}
+	status := func(name, summary, to, label string) op.Entry {
+		return op.Define(op.Spec{Name: name, Summary: summary, Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors},
+			func(ctx context.Context, in IDIn) (work.WriteOut, error) { return o.setStatus(ctx, in.ID, to, label) })
+	}
+	return []op.Entry{
+		op.Define(op.Spec{
+			Name: OpAdd, Summary: "Add a new mission",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.Unsupported),
+			Confirm:  op.ConfirmRule{MayAsk: true},
+			Examples: []op.Example{{Title: "add a mission", CLI: `lore mission add "Ship the invite flow" --target 2026-12-31`, Want: "msn_"}},
+		}, o.add),
+		op.Define(op.Spec{
+			Name: OpList, Summary: "List missions (with attached tasks in --json mode)",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
+		}, o.list),
+		op.Define(op.Spec{
+			Name: OpShow, Summary: "Show mission details + attached tasks",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
+		}, o.show),
+		op.Define(op.Spec{
+			Name: OpEdit, Summary: "Edit mission fields (only flags you pass are applied)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
+			Confirm: op.ConfirmRule{MayAsk: true},
+		}, o.edit),
+		op.Define(op.Spec{
+			Name: OpDone, Summary: "Mark mission as done",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
+		}, o.done),
+		status(OpPause, "Mark mission as paused", schema.MissionStatusPaused, "paused"),
+		status(OpResume, "Mark mission as active (resume from paused)", schema.MissionStatusActive, "resumed"),
+		op.Define(op.Spec{
+			Name: OpDelete, Summary: "Delete a mission (its tasks are detached; a tombstone is kept)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
+			Confirm: op.ConfirmRule{Always: true},
+		}, o.delete),
+		applyOp(o),
+		op.Define(op.Spec{
+			Name: OpSearch, Summary: "Full-text search across mission title + body + status",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: work.SearchErrors,
+		}, o.search),
+	}
+}
+
+// ops binds the run functions to one Env.
+type ops struct{ env work.Env }
+
+// missionID parses a mission id argument.
+func missionID(s string) (ids.AnyID, error) { return work.ParseID(Noun, ids.PrefixMission, s) }
+
+// add creates one mission (or, with --key, finds the one already added).
+func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
+		return ShowOut{}, errs.New(errs.InvalidInput, "mission add: the title is empty").WithHint(`lore mission add "<title>"`)
+	}
+	project, err := work.Project(ctx, o.env, Noun, in.Project)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	if in.Key != "" {
+		all, lerr := work.ListAll(ctx, o.env, table, "")
+		if lerr != nil {
+			return ShowOut{}, lerr
+		}
+		for _, s := range all {
+			if work.Field(s.Row, work.FieldKey) == in.Key && work.Field(s.Row, work.FieldProject) == project.String() {
+				out, serr := o.showOf(ctx, s.Source, s.Row)
+				out.Human = work.Success + " " + s.Row.ID.String() + " — " + work.Field(s.Row, work.FieldTitle) + " (already added with --key " + in.Key + ")\n"
+				return out, serr
+			}
+		}
+	}
+	fields, err := work.Texts(Noun, map[string]string{
+		work.FieldTitle: title, work.FieldBody: in.Body, work.FieldStatus: schema.MissionStatusActive, work.FieldKey: in.Key,
+	})
+	if err != nil {
+		return ShowOut{}, err
+	}
+	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
+		return ShowOut{}, err
+	}
+	if in.Target != "" {
+		if fields[fieldTarget], err = work.Date("target", in.Target); err != nil {
+			return ShowOut{}, err
+		}
+	}
+	for _, rf := range []struct {
+		field, flag string
+		p           ids.Prefix
+		raw         string
+	}{{work.FieldCreatedBy, "created-by", ids.PrefixActor, in.CreatedBy}, {work.FieldPlan, "plan", ids.PrefixPlan, in.Plan}} {
+		v, rerr := work.RefTo(Noun, rf.flag, rf.p, rf.raw)
+		if rerr != nil {
+			return ShowOut{}, rerr
+		}
+		if v != nil {
+			fields[rf.field] = v
+		}
+	}
+	if len(in.Approvers) > 0 {
+		if fields[fieldApprovers], err = approvers(in.Approvers); err != nil {
+			return ShowOut{}, err
+		}
+	}
+	src, w, err := work.Create(ctx, o.env, in.To, table, fields)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	out, err := o.showOf(ctx, src, w.Row)
+	label := ""
+	if src != "" && src != store.SourceRepo {
+		label = " → " + string(src)
+	}
+	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + label + "\n"
+	return out, err
+}
+
+// approvers is the approvers list of act_ ids (comma separated or
+// repeated). @handles need the team roster: refused for now.
+func approvers(raw []string) (value.Value, error) {
+	var items []value.Value
+	for _, r := range raw {
+		for _, a := range strings.Split(r, ",") {
+			a = strings.TrimSpace(a)
+			if a == "" {
+				continue
+			}
+			if strings.HasPrefix(a, "@") {
+				return nil, errs.New(errs.Unsupported, "mission: --approvers "+a+": @handles are not on the new core yet").
+					WithHint("name the approver by actor id (act_…)")
+			}
+			if _, err := ids.Parse[ids.Actor](a); err != nil {
+				return nil, errs.Wrap(errs.InvalidID, "mission: --approvers "+work.Quote(a)+" is not an actor id (act_…)", err)
+			}
+			t, err := value.TextOf(a)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, t)
+		}
+	}
+	if len(items) == 0 {
+		return value.Null{}, nil
+	}
+	return value.ListOf(value.KindText, items...)
+}
+
+// tasksOf are the live tasks of mission id, in id order, as briefs.
+func (o ops) tasksOf(ctx context.Context, id string) ([]opstask.Brief, error) {
+	all, err := work.ListAll(ctx, o.env, schema.TableTasks, "")
+	if err != nil {
+		return nil, err
+	}
+	out := []opstask.Brief{}
+	for _, s := range all {
+		if work.Field(s.Row, work.FieldMission) == id {
+			out = append(out, opstask.BriefOf(s.Source, s.Row))
+		}
+	}
+	return out, nil
+}
+
+// showOf is the show envelope of one mission row.
+func (o ops) showOf(ctx context.Context, src store.Source, r row.Row) (ShowOut, error) {
+	tasks, err := o.tasksOf(ctx, r.ID.String())
+	if err != nil {
+		return ShowOut{}, err
+	}
+	rec := Record{
+		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, ProjectID: work.Field(r, work.FieldProject),
+		Title: work.Field(r, work.FieldTitle), Body: work.Field(r, work.FieldBody), Status: work.Field(r, work.FieldStatus),
+		TargetDate: work.Time(r, fieldTarget), CompletedAt: work.Time(r, work.FieldCompleted),
+		CreatedByActorID: work.Field(r, work.FieldCreatedBy), Approvers: work.List(r, fieldApprovers),
+		IdempotencyKey: work.Field(r, work.FieldKey), PlanID: work.Field(r, work.FieldPlan), TagIDs: work.TagIDs(r),
+		Tasks: tasks, Store: work.SourceName(src),
+	}
+	if rec.CreatedByActorID == "" && !r.CreatedBy.IsZero() {
+		rec.CreatedByActorID = r.CreatedBy.String()
+	}
+	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Count: len(tasks), Data: rec}, nil
+}
+
+// Text implements op.Texter: the add line, or v0.1.17's mission show.
+func (o ShowOut) Text() string {
+	if o.Human != "" {
+		return o.Human
+	}
+	m := o.Data
+	var b strings.Builder
+	b.WriteString(m.ID + "\n  title:  " + m.Title + "\n  status: " + m.Status + "\n")
+	if !m.TargetDate.IsZero() {
+		b.WriteString("  target: " + m.TargetDate.UTC().Format(work.DateLayout) + "\n")
+	}
+	if m.Body != "" {
+		b.WriteString("\n" + m.Body + "\n")
+	}
+	if len(m.Tasks) > 0 {
+		b.WriteString("\nTasks:\n")
+		for _, t := range m.Tasks {
+			b.WriteString("  " + t.ID + " [" + t.Status + "] " + t.Title + "\n")
+		}
+	}
+	return b.String()
+}
+
+// list returns the missions of every attached store (open by default).
+func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
+	if err != nil {
+		return ListOut{}, err
+	}
+	all, err := work.ListAll(ctx, o.env, table, in.Store)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Summary{}}
+	for _, s := range all {
+		st := work.Field(s.Row, work.FieldStatus)
+		switch {
+		case project != "" && work.Field(s.Row, work.FieldProject) != project,
+			in.Status != "" && st != in.Status,
+			in.Status == "" && !in.All && (st == schema.MissionStatusDone || st == schema.MissionStatusCancelled):
+			continue
+		}
+		tasks, terr := o.tasksOf(ctx, s.Row.ID.String())
+		if terr != nil {
+			return ListOut{}, terr
+		}
+		out.Data = append(out.Data, Summary{
+			ID: s.Row.ID.String(), Title: work.Field(s.Row, work.FieldTitle), Body: work.Field(s.Row, work.FieldBody), Status: st,
+			TargetDate: work.TimeText(s.Row, fieldTarget), CompletedAt: work.TimeText(s.Row, work.FieldCompleted),
+			CreatedAt: s.Row.CreatedAt.UTC().Format(work.TimeLayout), Tasks: tasks, Store: work.SourceName(s.Source),
+		})
+	}
+	out.Count = len(out.Data)
+	return out, nil
+}
+
+// Text prints "<id> [<status>] <title>   (<n> tasks)" per mission.
+func (o ListOut) Text() string {
+	if len(o.Data) == 0 {
+		return "(no missions)\n"
+	}
+	var b strings.Builder
+	for _, m := range o.Data {
+		b.WriteString(m.ID + " [" + m.Status + "] " + m.Title + "   (" + strconv.Itoa(len(m.Tasks)) + " tasks)\n")
+	}
+	return b.String()
+}
+
+// show returns one mission and its tasks.
+func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
+	id, err := missionID(in.ID)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	src, r, err := work.Get(ctx, o.env, Noun, table, id)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	return o.showOf(ctx, src, r)
+}
+
+// edit patches the fields whose flags were given.
+func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
+	id, err := missionID(in.ID)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if in.Status != "" {
+		if err := work.OneOf(Noun, "status", in.Status, schema.MissionStatuses()); err != nil {
+			return work.WriteOut{}, err
+		}
+	}
+	patch, err := work.Texts(Noun, map[string]string{work.FieldTitle: strings.TrimSpace(in.Title), work.FieldBody: in.Body, work.FieldStatus: in.Status})
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if in.Target != "" {
+		if patch[fieldTarget], err = work.Date("target", in.Target); err != nil {
+			return work.WriteOut{}, err
+		}
+	}
+	if in.ClearTarget {
+		patch[fieldTarget] = value.Null{}
+	}
+	if v, rerr := work.RefTo(Noun, "plan", ids.PrefixPlan, in.Plan); rerr != nil {
+		return work.WriteOut{}, rerr
+	} else if v != nil {
+		patch[work.FieldPlan] = v
+	}
+	if in.ClearPlan {
+		patch[work.FieldPlan] = value.Null{}
+	}
+	if len(patch) == 0 {
+		return work.WriteOut{}, errs.New(errs.InvalidInput, "mission edit: nothing to change").
+			WithHint("give at least one of --title, --body, --status, --target, --clear-target, --plan, --clear-plan")
+	}
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n")
+}
+
+// done marks the mission done now.
+func (o ops) done(ctx context.Context, in IDIn) (work.WriteOut, error) {
+	id, err := missionID(in.ID)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	patch, err := work.Texts(Noun, map[string]string{work.FieldStatus: schema.MissionStatusDone})
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	patch[work.FieldCompleted] = value.DateTimeFrom(time.Now())
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" completed\n")
+}
+
+// setStatus sets the mission's status (pause / resume).
+func (o ops) setStatus(ctx context.Context, raw, status, label string) (work.WriteOut, error) {
+	id, err := missionID(raw)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	patch, err := work.Texts(Noun, map[string]string{work.FieldStatus: status})
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" "+label+"\n")
+}
+
+// delete tombstones the mission; its tasks' mission_id is cleared.
+func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
+	id, err := missionID(in.ID)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	return work.Delete(ctx, o.env, Noun, table, id, work.Success+" "+id.String()+" deleted\n")
+}
+
+// search matches missions by title, body and status.
+func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, error) {
+	return work.SearchTable(ctx, o.env, table, KindSearch, in.Query, in.Limit, in.Project, true, work.FieldTitle, work.FieldBody, work.FieldStatus)
+}

@@ -11,7 +11,7 @@ import (
 // envelope fields.
 const (
 	TableTasks     = "tasks"
-	TableTasklists = "tasklists"
+	TableTasklists = "task_lists"
 	TableMissions  = "missions"
 	TablePlans     = "plans"
 )
