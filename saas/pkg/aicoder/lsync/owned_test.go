@@ -240,3 +240,22 @@ func hasWarning(rep Report, sub string) bool {
 	}
 	return false
 }
+
+// The core keeps a row's creator in the envelope's created_by; lore.db's
+// bridge copy must carry it in created_by_actor_id (what v0.1.17's show,
+// render and TUI read), and a file's own created_by_actor_id wins.
+func TestOwned_V2CreatorReachesTheBridgeCopy(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	id := e.addMemory("m")
+	e.reconcile(realOwned)
+	e.writeRaw("memories", id, e.coreMemoryDoc(id, "from the core"))
+	e.reconcile(realOwned)
+	var got string
+	if err := e.db.QueryRow(`SELECT COALESCE(created_by_actor_id, '') FROM memories WHERE id = ?`, id).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != e.actor {
+		t.Fatalf("created_by_actor_id = %q, want the envelope's created_by %q", got, e.actor)
+	}
+}

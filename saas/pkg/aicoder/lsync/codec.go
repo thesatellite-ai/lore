@@ -45,6 +45,10 @@ const (
 	// file does not carry must be imported as NULL (a field the core
 	// cleared), where a v1 file's absent column means "keep the default".
 	keyFromV2 = "_lsync_from_v2"
+	// v2CreatorEnvelope is the 0.1.18 row envelope's creator key and
+	// v2CreatorColumn the lore.db column argsFromDoc copies it into.
+	v2CreatorEnvelope = "created_by"
+	v2CreatorColumn   = "created_by_actor_id"
 )
 
 // timeLayout is the canonical timestamp form in files: UTC, fixed nine
@@ -239,6 +243,22 @@ func argsFromDoc(t *Table, doc map[string]any) (rowArgs, error) {
 		return rowArgs{}, fmt.Errorf("%s: document has no string id", t.Name)
 	}
 	if fromV2 {
+		// The core keeps a row's creator in the envelope's created_by
+		// (tasks also repeat it as created_by_actor_id). lore.db's bridge
+		// copy keeps it in created_by_actor_id, the column v0.1.17's
+		// readers (render, search, show, the TUI) use, so it is filled
+		// from the envelope when the file has no column value of its own.
+		if c, ok := known[v2CreatorColumn]; ok {
+			if _, present := ra.values[v2CreatorColumn]; !present {
+				if by, isStr := doc[v2CreatorEnvelope].(string); isStr && by != "" {
+					sv, err := toSQLValue(c, by)
+					if err != nil {
+						return rowArgs{}, fmt.Errorf("%s.%s: %w", t.Name, v2CreatorEnvelope, err)
+					}
+					ra.values[v2CreatorColumn] = sv
+				}
+			}
+		}
 		for _, c := range t.Columns {
 			if _, present := ra.values[c.Name]; present || !c.Nullable {
 				continue
