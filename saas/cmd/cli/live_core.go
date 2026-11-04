@@ -40,6 +40,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -239,29 +240,93 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 // origin/<default> and left live is found before this checkout pulls it.
 // Other branches keep "not found" (with live_flags.go's peek hint).
 func (b *liveBackend) landedOnDefault(ctx context.Context, s *liveSession, k live.RowKey) (store.Row, bool) {
-	branch := s.defaultBranch(ctx)
-	head, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "HEAD"}})
-	if err != nil || strings.TrimSpace(string(head)) != branch {
+	branch, ok := onDefaultBranch(ctx, s)
+	if !ok {
 		return store.Row{}, false
 	}
-	path := mainDataPath(b.folder, k.Table+"/"+k.ID+storeRowFileExt)
+	file := mainDataPath(b.folder, k.Table+"/"+k.ID+storeRowFileExt)
 	// A row this checkout's own commit holds was deleted here on purpose
 	// (git rm, or the file removed): it did not "land and wait to be
 	// pulled", so it is not read through (fixbatch A1: an edit of it then
 	// failed with E_STALE instead of E_NOT_FOUND).
-	if _, inHead, herr := s.repo.ReadFile(ctx, "HEAD", path); herr != nil || inHead {
+	if _, inHead, herr := s.repo.ReadFile(ctx, "HEAD", file); herr != nil || inHead {
 		return store.Row{}, false
 	}
-	raw, ok, err := s.repo.ReadFile(ctx, "refs/remotes/"+s.ref.RemoteName+"/"+branch, path)
+	raw, ok, err := s.repo.ReadFile(ctx, "refs/remotes/"+s.ref.RemoteName+"/"+branch, file)
 	if err != nil || !ok {
 		return store.Row{}, false
 	}
+	return decodeLanded(raw)
+}
+
+// onDefaultBranch is the default branch's name and whether HEAD is on it:
+// the read-through applies there only.
+func onDefaultBranch(ctx context.Context, s *liveSession) (string, bool) {
+	branch := s.defaultBranch(ctx)
+	head, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "HEAD"}})
+	return branch, err == nil && strings.TrimSpace(string(head)) == branch
+}
+
+// decodeLanded decodes a row file read from origin/<default>; false when it
+// is not a row (a read-through is best effort: the row then stays unseen
+// until the checkout pulls, as it did before the read-through).
+func decodeLanded(raw []byte) (store.Row, bool) {
 	r, err := row.Decode(raw)
 	if err != nil {
 		return store.Row{}, false
 	}
 	sr, err := store.FromRow(r)
 	return sr, err == nil
+}
+
+// landedRows is landedOnDefault for a full Read: every row of a live kind
+// that landed on the fetched origin/<default>, is not in HEAD (not pulled
+// yet, and not deleted here on purpose) and is not in have (neither on the
+// branch nor live). Without it a done task that left live vanished from
+// every list (task list --status=done) between the fetch that showed it
+// landed and the pull that brings its file, while task show still found it
+// through Get. Two ls-trees, then one read per landed row.
+func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[store.Key]bool) []store.Row {
+	branch, ok := onDefaultBranch(ctx, s)
+	if !ok {
+		return nil
+	}
+	remote := "refs/remotes/" + s.ref.RemoteName + "/" + branch
+	inHead := map[string]bool{}
+	for _, p := range b.dataPaths(ctx, s, "HEAD") {
+		inHead[p] = true
+	}
+	var out []store.Row
+	for _, p := range b.dataPaths(ctx, s, remote) {
+		if inHead[p] {
+			continue
+		}
+		table := path.Base(path.Dir(p))
+		id, isRow := strings.CutSuffix(path.Base(p), storeRowFileExt)
+		if !isRow || !isLiveKind(s, row.Table(table)) {
+			continue
+		}
+		raw, found, err := s.repo.ReadFile(ctx, remote, p)
+		if err != nil || !found {
+			continue
+		}
+		r, decoded := decodeLanded(raw)
+		if !decoded || r.ID.String() != id || have[r.Key()] {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// dataPaths lists the row files under the store's .lore/data at rev (none
+// when rev does not exist, e.g. no fetched default branch yet).
+func (b *liveBackend) dataPaths(ctx context.Context, s *liveSession, rev string) []string {
+	raw, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-tree", "-r", "--name-only", rev, "--", mainDataPath(b.folder, "")}})
+	if err != nil {
+		return nil
+	}
+	return strings.FieldsFunc(string(raw), func(r rune) bool { return r == '\n' })
 }
 
 // Read implements store.Backend. While the live ref has not moved since
@@ -311,9 +376,15 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 	// While the live ref did not move, only live rows whose branch copy
 	// changed matter (merged above); the rest are what the cache holds.
 	if innerCur == "" {
+		have := make(map[store.Key]bool, len(out)+len(lives))
+		for _, r := range out {
+			have[r.Key()] = true
+		}
 		for _, lr := range lives {
 			out = append(out, lr)
+			have[lr.Key()] = true
 		}
+		out = append(out, b.landedRows(ctx, s, have)...)
 	}
 	return out, store.Cursor(liveCursorPrefix + oid + liveCursorSep + string(next)), nil
 }
