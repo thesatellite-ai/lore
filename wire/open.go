@@ -172,10 +172,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err != nil {
 		return fail(err)
 	}
-	st.audit = opts.Audit
-	if st.audit == nil {
-		st.audit = &fileAudit{path: filepath.Join(st.repoTop, filepath.FromSlash(AuditFile))}
+	repoAudit := opts.Audit
+	if repoAudit == nil {
+		repoAudit = &fileAudit{path: filepath.Join(st.repoTop, filepath.FromSlash(AuditFile))}
 	}
+	st.audit = newRoutedAudit(repoAudit, opts.Home, attached)
 
 	repoClient, note := repoIsClient(ctx, opts)
 	st.repoClassNote = note

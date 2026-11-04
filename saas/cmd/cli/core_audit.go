@@ -49,8 +49,9 @@ var _ engine.AuditSink = (*coreAuditSink)(nil)
 // checkout and holds ONLY the repo's rows (CONFIG_GUIDE, F20/E11). A write
 // to an attached store (a company store, the personal "me" store) names an
 // id that must never sit in a client folder, so it is not chained here;
-// the store's row file and its cache under ~/.lore/cache/stores/ are its
-// record.
+// its trail is the machine-local ~/.lore/state/audit/<sto id>.jsonl that
+// the core's wrapping sink (wire routedAudit, wire.StoreAuditDir) appends
+// before handing the event on to this sink.
 func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 	if ev.Store != store.SourceRepo {
 		return nil

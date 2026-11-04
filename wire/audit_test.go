@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -132,4 +133,105 @@ func actions(as []engine.Action) []string {
 		out[i] = string(x)
 	}
 	return out
+}
+
+// TestAttachedStoreAuditMachineLocal: a write to an attached folder store
+// leaves one line per event in <home>/StoreAuditDir/<sto id>.jsonl (file
+// 0600, folder 0700, no field value) and nothing in the checkout: no line
+// in AuditFile, no store id anywhere under .lore/state. The repo sink
+// (injected or fallback) never sees the attached event chained; a repo
+// write still reaches it as before.
+func TestAttachedStoreAuditMachineLocal(t *testing.T) {
+	for _, injected := range []bool{false, true} {
+		repo := gitRepo(t)
+		home := t.TempDir()
+		writeStoresYAML(t, repo, "stores:\n  - name: agency\n    url: "+folderStoreAt(t, folderStore, rowfs.VisibilityInternal)+"\n")
+		opts := Options{Home: home, RepoIsClient: func(context.Context) (bool, error) { return false, nil }}
+		sink := &sinkLog{}
+		if injected {
+			opts.Audit = sink
+		}
+		a := openWith(t, repo, opts)
+		ctx := background()
+		n, err := value.TextOf(auditProjectName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w, err := a.Create(ctx, "agency", schema.TableProjects, map[string]value.Value{"name": n})
+		if err != nil {
+			t.Fatal(err)
+		}
+		storeID := w.Row.ID.String()
+
+		dir := filepath.Join(home, filepath.FromSlash(StoreAuditDir))
+		path := filepath.Join(dir, folderStore+storeAuditExt)
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("injected=%v: no machine-local store audit file: %v", injected, err)
+		}
+		if fi.Mode().Perm() != auditFileMode {
+			t.Fatalf("store audit file mode %v", fi.Mode().Perm())
+		}
+		if di, derr := os.Stat(dir); derr != nil || di.Mode().Perm() != storeAuditDirMode {
+			t.Fatalf("store audit dir: %v %v", di, derr)
+		}
+		raw := string(mustRead(t, path))
+		if strings.Contains(raw, auditProjectName) {
+			t.Fatal("the store audit file carries a field value")
+		}
+		var l auditLine
+		for _, ln := range strings.Split(strings.TrimSpace(raw), "\n") {
+			var cand auditLine
+			if jerr := json.Unmarshal([]byte(ln), &cand); jerr != nil {
+				t.Fatalf("line %q: %v", ln, jerr)
+			}
+			if cand.ID == storeID {
+				l = cand
+			}
+		}
+		if l.ID != storeID || l.Store != "agency" || l.Action != string(engine.ActionCreate) || l.Actor == "" {
+			t.Fatalf("store audit line = %+v, want id %s", l, storeID)
+		}
+
+		// nothing of the store write inside the checkout
+		_ = filepath.Walk(filepath.Join(repo, ".lore", "state"), func(p string, info os.FileInfo, werr error) error {
+			if werr != nil || info.IsDir() {
+				return nil
+			}
+			if strings.Contains(string(mustRead(t, p)), storeID) {
+				t.Fatalf("injected=%v: store row id in checkout file %s", injected, p)
+			}
+			return nil
+		})
+
+		// a repo write still reaches the repo sink
+		rid := auditWrites(t, a)
+		if injected {
+			sink.mu.Lock()
+			var got bool
+			for _, ev := range sink.evs {
+				got = got || ev.ID == rid
+			}
+			sink.mu.Unlock()
+			if !got {
+				t.Fatal("repo write did not reach the injected sink")
+			}
+		} else if !strings.Contains(string(mustRead(t, filepath.Join(repo, filepath.FromSlash(AuditFile)))), rid.String()) {
+			t.Fatal("repo write missing from AuditFile")
+		}
+		if strings.Contains(string(mustRead(t, path)), rid.String()) {
+			t.Fatal("repo write landed in the store audit file")
+		}
+	}
+}
+
+// TestStoreAuditStem: a store without a sto_ id gets name-<sanitised name>
+// (render_private's stem), always one path element.
+func TestStoreAuditStem(t *testing.T) {
+	r := newRoutedAudit(&sinkLog{}, t.TempDir(), nil)
+	for in, want := range map[store.Source]string{"me": "name-me", "org/a b": "name-org_a_b", "../x": "name-.._x"} {
+		if got := r.stem(in); got != want {
+			t.Fatalf("stem(%q) = %q, want %q", in, got, want)
+		}
+	}
 }
