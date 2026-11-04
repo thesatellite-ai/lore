@@ -1,13 +1,11 @@
 package wire
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io/fs"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -63,7 +61,7 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 		return opsstores.InitOut{}, err
 	}
 	if in.Name != opsstores.PersonalName {
-		if err := a.checkUnused(ctx, in.Name); err != nil {
+		if err = a.checkUnused(ctx, in.Name); err != nil {
 			return opsstores.InitOut{}, err
 		}
 	}
@@ -129,10 +127,10 @@ func (a *App) makeStore(ctx context.Context, canon string, m rowfs.Marker) (rowf
 	if old := gb.Marker(); old.Version > 0 {
 		return old, true, nil
 	}
-	if err := rowfs.WriteMarker(gb.Dir(), m); err != nil {
+	if err = rowfs.WriteMarker(gb.Dir(), m); err != nil {
 		return rowfs.Marker{}, false, err
 	}
-	if err := gitCommitMarker(ctx, gb.Dir(), a.opts.Wall()); err != nil {
+	if err = gitCommitMarker(ctx, gb.Dir(), a.opts.Wall()); err != nil {
 		return rowfs.Marker{}, false, err
 	}
 	rep, err := gb.Sync(ctx)
@@ -163,12 +161,8 @@ func gitCommitFiles(ctx context.Context, dir string, now time.Time, subject stri
 		append([]string{"add", "--"}, paths...),
 		append([]string{"-c", "commit.gpgsign=false", "commit", "--quiet", "--no-verify", "-m", subject, "--"}, paths...),
 	} {
-		cmd := exec.CommandContext(ctx, git.DefaultBinary, args...)
-		cmd.Dir, cmd.Env = dir, env
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			return errs.Wrap(errs.Internal, "wire: git "+args[0]+" "+strings.Join(paths, " ")+": "+strings.TrimSpace(stderr.String()), err)
+		if _, err := (gitRun{dir: dir, env: env, args: args}).output(ctx); err != nil {
+			return errs.Wrap(errs.Internal, "wire: commit "+strings.Join(paths, " "), err)
 		}
 	}
 	return nil
@@ -213,9 +207,9 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 			WithHint("make it a store first: lore store init " + in.Name + " <url>")
 	}
 	if in.Folder != "" {
-		ok, err := a.folderExists(ctx, s, in.Folder)
-		if err != nil {
-			return opsstores.Entry{}, err
+		ok, ferr := a.folderExists(ctx, s, in.Folder)
+		if ferr != nil {
+			return opsstores.Entry{}, ferr
 		}
 		if !ok {
 			return opsstores.Entry{}, errs.New(errs.NotFound, "store add: the store has no folder "+in.Folder).
@@ -386,7 +380,7 @@ func editStoresFile(top string, edit func(list *yaml.Node) error) error {
 	case err != nil:
 		return errs.Wrap(errs.Internal, "wire: read "+attach.FileName, err)
 	default:
-		if err := yaml.Unmarshal(b, doc); err != nil {
+		if err = yaml.Unmarshal(b, doc); err != nil {
 			return errs.Wrap(errs.ConfigInvalid, "wire: "+attach.FileName+" is not valid YAML", err)
 		}
 	}
@@ -402,7 +396,7 @@ func editStoresFile(top string, edit func(list *yaml.Node) error) error {
 		list = &yaml.Node{Kind: yaml.SequenceNode}
 		mapSet(root, keyStores, list)
 	}
-	if err := edit(list); err != nil {
+	if err = edit(list); err != nil {
 		return err
 	}
 	list.Style = 0 // block style: one entry per line, as people write it (an emptied list was flow `[]`)

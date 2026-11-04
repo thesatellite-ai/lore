@@ -499,10 +499,10 @@ func concrete(b store.Backend) store.Backend {
 // (fail closed: E_CONFIG_INVALID), and nil is refused.
 func wrapBackend(ctx context.Context, opts Options, name store.Source, folder string, b store.Backend) (store.Backend, error) {
 	w := opts.WrapBackend(ctx, name, folder, b)
-	switch {
-	case w == nil:
+	switch w {
+	case nil:
 		return nil, errs.New(errs.ConfigInvalid, "wire: WrapBackend returned no backend for store "+string(name))
-	case w == b:
+	case b:
 		return b, nil
 	}
 	if _, ok := w.(Unwrapper); !ok {

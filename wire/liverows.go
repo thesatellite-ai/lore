@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -63,20 +62,13 @@ type liveRow struct {
 
 // liveGit runs one read-only git command in top.
 func liveGit(ctx context.Context, top string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", top}, args...)...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "wire: git "+args[0]+": "+strings.TrimSpace(stderr.String()), err)
-	}
-	return out, nil
+	return gitRun{args: append([]string{"-C", top}, args...)}.output(ctx)
 }
 
 // liveRefExists reports whether ref names a commit in top.
 func liveRefExists(ctx context.Context, top, ref string) bool {
-	cmd := exec.CommandContext(ctx, "git", "-C", top, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
-	return cmd.Run() == nil
+	_, err := liveGit(ctx, top, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	return err == nil
 }
 
 // readLiveRows returns the live rows of the tables in want from refs (in

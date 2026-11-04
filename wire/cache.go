@@ -152,14 +152,14 @@ func (c *caches) search(ctx context.Context, table row.Table, match string, limi
 				continue
 			}
 			searched = true
-			got, err := f.SearchHits(ctx, table, match, limit-len(out))
-			if err != nil {
-				return nil, err
+			got, serr := f.SearchHits(ctx, table, match, limit-len(out))
+			if serr != nil {
+				return nil, serr
 			}
 			for _, h := range got {
-				hit, err := f.ResolveID(ctx, h.ID)
-				if err != nil {
-					return nil, err
+				hit, rerr := f.ResolveID(ctx, h.ID)
+				if rerr != nil {
+					return nil, rerr
 				}
 				out = append(out, opsmemory.Hit{Source: store.Source(hit.Source), ID: h.ID, Score: h.Score, Snippet: h.Snippet})
 			}

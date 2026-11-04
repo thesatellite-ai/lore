@@ -26,6 +26,7 @@ import (
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 
@@ -74,7 +75,7 @@ func (a *App) LockMigration(ctx context.Context) (func() error, error) {
 		return nil, err
 	}
 	path := filepath.Join(top, filepath.FromSlash(MigrateLockFile))
-	if err := os.MkdirAll(filepath.Dir(path), cacheDirMode); err != nil {
+	if err = os.MkdirAll(filepath.Dir(path), cacheDirMode); err != nil {
 		return nil, errs.Wrap(errs.Internal, "wire: create .lore/state", err)
 	}
 	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_EXCL|os.O_WRONLY, lockFileMode)
@@ -110,9 +111,9 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error
 		return nil, err
 	}
 	if ok {
-		mc, err := readMachineConfig(a.opts.Home)
-		if err != nil {
-			return nil, err
+		mc, cerr := readMachineConfig(a.opts.Home)
+		if cerr != nil {
+			return nil, cerr
 		}
 		step := "identity: ~/.lore/" + identity.LegacyFile + " moved into ~/.lore/" + ConfigFile
 		if mc.Identity.Key != "" {
@@ -121,11 +122,11 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error
 		steps = append(steps, step)
 		if !dryRun {
 			if mc.Identity.Key == "" {
-				if err := setTopIdentity(a.opts.Home, legacy); err != nil {
+				if err = setTopIdentity(a.opts.Home, legacy); err != nil {
 					return nil, err
 				}
 			}
-			if err := os.Remove(filepath.Join(a.opts.Home, identity.LegacyFile)); err != nil {
+			if err = os.Remove(filepath.Join(a.opts.Home, identity.LegacyFile)); err != nil {
 				return nil, errs.Wrap(errs.Internal, "wire: remove "+identity.LegacyFile, err)
 			}
 		}
@@ -136,33 +137,12 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error
 	}
 	seen := map[string]bool{}
 	for _, e := range list {
-		dir, err := a.storeDir(ctx, attach.Store{URL: e.URL, Branch: e.Branch})
-		if err != nil {
-			return nil, errs.Wrap(errs.CodeOf(err), "migrate: store "+e.Name, err)
+		step, serr := a.migrateStoreMarker(ctx, e, seen, dryRun)
+		if serr != nil {
+			return nil, serr
 		}
-		m, err := rowfs.ReadMarker(dir)
-		if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {
-			continue // no marker (an empty git store) or already v2: nothing to convert
-		}
-		seen[dir] = true
-		if e.ReadOnly {
-			steps = append(steps, "store "+e.Name+": "+rowfs.MarkerFile+" is v1 but the store is read_only here; skipped (its owner runs lore migrate run)")
-			continue
-		}
-		steps = append(steps, "store "+e.Name+": "+rowfs.MarkerFile+" v1 → v2 (new sto_ id)")
-		if dryRun {
-			continue
-		}
-		if m.ID, err = ids.New[ids.Store](); err != nil {
-			return nil, errs.Wrap(errs.Internal, "wire: new store id", err)
-		}
-		if err := rowfs.WriteMarker(dir, m); err != nil {
-			return nil, err
-		}
-		if !strings.HasPrefix(e.URL, folder.Scheme+"://") {
-			if err := gitCommitMarker(ctx, dir, a.opts.Wall()); err != nil {
-				return nil, err
-			}
+		if step != "" {
+			steps = append(steps, step)
 		}
 	}
 	orgSteps, err := a.migrateOrg(ctx, dryRun, seen)
@@ -211,10 +191,17 @@ const orgDefaultsKey = "defaults"
 // (policy.Set.ClientRoutes).
 func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store, dir string, dryRun bool) ([]string, error) {
 	rel := filepath.Join(filepath.FromSlash(s.Folder), rowfs.LoreDir, orgDefaultsFile)
-	path := filepath.Join(dir, rel)
-	b, err := os.ReadFile(path)
+	// The folder comes from the org's link, so every file access goes
+	// through an os.Root on the store clone: a folder such as ../x can
+	// never read or write outside it.
+	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return nil, nil // no lore-org.yaml in this folder: nothing to move
+		return nil, errs.Wrap(errs.Internal, "migrate: open org store clone "+string(s.Name), err)
+	}
+	defer func() { _ = root.Close() }() // read-only handle on a directory: nothing to flush
+	b, err := root.ReadFile(rel)
+	if err != nil {
+		return nil, nil // no lore-org.yaml in this folder (or a folder outside the clone): nothing to move
 	}
 	var p orgDefaultsProbe
 	if yaml.Unmarshal(b, &p) != nil || len(p.Defaults.ClientRepos) == 0 {
@@ -241,36 +228,16 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 		return !r.Deleted && ok && k.String() == string(policy.KeyClientRoutes)
 	})
 	if !has {
-		list := make([]value.Value, len(items))
-		for i, it := range items {
-			if list[i], err = value.TextOf(it); err != nil {
-				return nil, errs.Wrap(errs.InvalidInput, "migrate: "+orgDefaultsFile+" holds a default that is not valid text", err)
-			}
+		fields, ferr := clientRoutesPolicy(items, s.Folder)
+		if ferr != nil {
+			return nil, ferr
 		}
-		lv, err := value.ListOf(value.KindText, list...)
-		if err != nil {
-			return nil, errs.Wrap(errs.Internal, "migrate: build the routing list", err)
-		}
-		raw, err := lv.MarshalJSON()
-		if err != nil {
-			return nil, errs.Wrap(errs.Internal, "migrate: encode the routing list", err)
-		}
-		jv, err := value.JSONOf(raw)
-		if err != nil {
-			return nil, errs.Wrap(errs.Internal, "migrate: encode the routing list", err)
-		}
-		key, kerr := value.TextOf(string(policy.KeyClientRoutes))
-		scope, serr := value.TextOf(s.Folder)
-		if err := errors.Join(kerr, serr); err != nil {
-			return nil, errs.Wrap(errs.Internal, "migrate: policy key", err)
-		}
-		fields := map[string]value.Value{policyFieldKey: key, policyFieldValue: jv, policyFieldScope: scope}
-		if _, err := st.eng.Create(ctx, s.Name, schema.TablePolicies, fields); err != nil {
+		if _, err = st.eng.Create(ctx, s.Name, schema.TablePolicies, fields); err != nil {
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: write the routing policy into "+string(s.Name), err)
 		}
 	}
 	var doc yaml.Node
-	if err := yaml.Unmarshal(b, &doc); err != nil || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+	if err = yaml.Unmarshal(b, &doc); err != nil || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
 		return nil, errs.New(errs.ConfigInvalid, "migrate: "+orgDefaultsFile+" of "+string(s.Name)+" is not a mapping")
 	}
 	m := doc.Content[0]
@@ -284,15 +251,15 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "migrate: encode "+orgDefaultsFile, err)
 	}
-	if err := os.WriteFile(path+migratedSuffix, b, orgFileMode); err != nil {
+	if err = root.WriteFile(rel+migratedSuffix, b, orgFileMode); err != nil {
 		return nil, errs.Wrap(errs.Internal, "migrate: keep "+orgDefaultsFile+migratedSuffix, err)
 	}
-	if err := os.WriteFile(path, out, orgFileMode); err != nil {
+	if err = root.WriteFile(rel, out, orgFileMode); err != nil {
 		return nil, errs.Wrap(errs.Internal, "migrate: rewrite "+orgDefaultsFile, err)
 	}
 	if !strings.HasPrefix(s.URL, folder.Scheme+"://") {
 		slash := filepath.ToSlash(rel)
-		if err := gitCommitFiles(ctx, dir, a.opts.Wall(), migrateOrgSubject, slash, slash+migratedSuffix); err != nil {
+		if err = gitCommitFiles(ctx, dir, a.opts.Wall(), migrateOrgSubject, slash, slash+migratedSuffix); err != nil {
 			return nil, err
 		}
 	}
@@ -326,10 +293,10 @@ type orgDefaultsProbe struct {
 // and the roster rows (actors, teams) of every org store folder become
 // `_v: 2`, which moves the roster onto the core. The links need no
 // conversion: they stay in each folder's _meta.json (CONFIG_GUIDE), which
-// the core leaves untouched. lore-org.yaml is left as it is: its
-// defaults.client_repos still steers v0.1.17 routing and no 0.1.18 policy
-// key holds it yet (step org_defaults_to_policy has no target), so it is
-// reported, never dropped. seen lists store folders whose marker was
+// the core leaves untouched. Each org folder's lore-org.yaml
+// defaults.client_repos becomes a routing.client_repos policy row (step
+// org_defaults_to_policy, orgDefaultsToPolicy; the original file is kept as
+// lore-org.yaml.migrated). seen lists store folders whose marker was
 // already handled. Commits wait in the store clone for `lore sync`.
 func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool) ([]string, error) {
 	org := a.orgStoresHere(ctx)
@@ -355,37 +322,11 @@ func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool)
 		}
 	}
 	for _, s := range org {
-		dir, err := a.storeDir(ctx, s)
-		if err != nil {
-			return nil, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
+		got, oerr := a.migrateOrgStore(ctx, st, s, seen, dryRun)
+		if oerr != nil {
+			return nil, oerr
 		}
-		if s.Folder != "" {
-			got, err := a.orgDefaultsToPolicy(ctx, st, s, dir, dryRun)
-			if err != nil {
-				return nil, err
-			}
-			steps = append(steps, got...)
-		}
-		m, err := rowfs.ReadMarker(dir)
-		if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {
-			continue
-		}
-		seen[dir] = true
-		steps = append(steps, "org store "+string(s.Name)+": "+rowfs.MarkerFile+" v1 → v2 (new sto_ id, visibility internal); its roster moves to the core")
-		if dryRun {
-			continue
-		}
-		if m.ID, err = ids.New[ids.Store](); err != nil {
-			return nil, errs.Wrap(errs.Internal, "wire: new store id", err)
-		}
-		if err := rowfs.WriteMarker(dir, m); err != nil {
-			return nil, err
-		}
-		if !strings.HasPrefix(s.URL, folder.Scheme+"://") {
-			if err := gitCommitMarker(ctx, dir, a.opts.Wall()); err != nil {
-				return nil, err
-			}
-		}
+		steps = append(steps, got...)
 	}
 	for _, s := range org {
 		b, ok := st.byName[s.Name]
@@ -640,4 +581,105 @@ func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun 
 		return found, nil
 	}
 	return found, b.Write(ctx, changes)
+}
+
+// migrateStoreMarker converts one stores.yaml entry's v1 marker to v2 and
+// returns its step line ("" when there is nothing to convert: no marker,
+// already v2, or a folder another entry already handled, listed in seen).
+// A read_only entry is reported and left alone: only its owner converts it.
+func (a *App) migrateStoreMarker(ctx context.Context, e opsstores.Entry, seen map[string]bool, dryRun bool) (string, error) {
+	dir, err := a.storeDir(ctx, attach.Store{URL: e.URL, Branch: e.Branch})
+	if err != nil {
+		return "", errs.Wrap(errs.CodeOf(err), "migrate: store "+e.Name, err)
+	}
+	m, err := rowfs.ReadMarker(dir)
+	if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {
+		return "", nil // no marker (an empty git store) or already v2: nothing to convert
+	}
+	seen[dir] = true
+	if e.ReadOnly {
+		return "store " + e.Name + ": " + rowfs.MarkerFile + " is v1 but the store is read_only here; skipped (its owner runs lore migrate run)", nil
+	}
+	step := "store " + e.Name + ": " + rowfs.MarkerFile + " v1 → v2 (new sto_ id)"
+	if dryRun {
+		return step, nil
+	}
+	return step, a.upgradeMarker(ctx, dir, e.URL, m)
+}
+
+// upgradeMarker writes m as a v2 marker with a fresh permanent sto_ id into
+// dir and, for a git store (any url that is not folder://), commits it in
+// the clone; the commit waits there for lore sync.
+func (a *App) upgradeMarker(ctx context.Context, dir, rawURL string, m rowfs.Marker) error {
+	id, err := ids.New[ids.Store]()
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: new store id", err)
+	}
+	m.ID = id
+	if err = rowfs.WriteMarker(dir, m); err != nil {
+		return err
+	}
+	if strings.HasPrefix(rawURL, folder.Scheme+"://") {
+		return nil
+	}
+	return gitCommitMarker(ctx, dir, a.opts.Wall())
+}
+
+// migrateOrgStore runs the per-store steps of migrateOrg for one org store:
+// its folder's lore-org.yaml defaults become a policy row
+// (org_defaults_to_policy), then its v1 marker becomes v2 unless seen
+// already lists the folder.
+func (a *App) migrateOrgStore(ctx context.Context, st *state, s attach.Store, seen map[string]bool, dryRun bool) ([]string, error) {
+	dir, err := a.storeDir(ctx, s)
+	if err != nil {
+		return nil, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
+	}
+	var steps []string
+	if s.Folder != "" {
+		if steps, err = a.orgDefaultsToPolicy(ctx, st, s, dir, dryRun); err != nil {
+			return nil, err
+		}
+	}
+	m, err := rowfs.ReadMarker(dir)
+	if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {
+		return steps, nil
+	}
+	seen[dir] = true
+	steps = append(steps, "org store "+string(s.Name)+": "+rowfs.MarkerFile+" v1 → v2 (new sto_ id, visibility internal); its roster moves to the core")
+	if dryRun {
+		return steps, nil
+	}
+	return steps, a.upgradeMarker(ctx, dir, s.URL, m)
+}
+
+// clientRoutesPolicy builds the fields of the routing.client_repos policy
+// row (key, scope = the org folder, value = a json list of the
+// policy.ClientRouteItem strings) that org_defaults_to_policy writes.
+func clientRoutesPolicy(items []string, folderScope string) (map[string]value.Value, error) {
+	list := make([]value.Value, len(items))
+	for i, it := range items {
+		t, err := value.TextOf(it)
+		if err != nil {
+			return nil, errs.Wrap(errs.InvalidInput, "migrate: "+orgDefaultsFile+" holds a default that is not valid text", err)
+		}
+		list[i] = t
+	}
+	lv, err := value.ListOf(value.KindText, list...)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "migrate: build the routing list", err)
+	}
+	raw, err := lv.MarshalJSON()
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "migrate: encode the routing list", err)
+	}
+	jv, err := value.JSONOf(raw)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "migrate: encode the routing list", err)
+	}
+	key, kerr := value.TextOf(string(policy.KeyClientRoutes))
+	scope, serr := value.TextOf(folderScope)
+	if err = errors.Join(kerr, serr); err != nil {
+		return nil, errs.Wrap(errs.Internal, "migrate: policy key", err)
+	}
+	return map[string]value.Value{policyFieldKey: key, policyFieldValue: jv, policyFieldScope: scope}, nil
 }

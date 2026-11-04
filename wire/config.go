@@ -83,7 +83,7 @@ func editMachineConfig(home string, edit func(root *yaml.Node) error) error {
 	case err != nil:
 		return errs.Wrap(errs.Internal, "wire: read "+ConfigFile, err)
 	default:
-		if err := yaml.Unmarshal(b, doc); err != nil {
+		if err = yaml.Unmarshal(b, doc); err != nil {
 			return errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
 		}
 	}
@@ -95,7 +95,7 @@ func editMachineConfig(home string, edit func(root *yaml.Node) error) error {
 	if root.Kind != yaml.MappingNode {
 		return errs.New(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not a mapping")
 	}
-	if err := edit(root); err != nil {
+	if err = edit(root); err != nil {
 		return err
 	}
 	out, err := yaml.Marshal(doc)

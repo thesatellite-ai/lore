@@ -107,9 +107,9 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 // last kind, whose url must never be written into the repo.
 func (a *App) baseStore(ctx context.Context, name string) (src attach.Store, found, fromOrg bool, err error) {
 	if name == attach.ReservedMe {
-		mc, err := readMachineConfig(a.opts.Home)
-		if err != nil {
-			return attach.Store{}, false, false, err
+		mc, cerr := readMachineConfig(a.opts.Home)
+		if cerr != nil {
+			return attach.Store{}, false, false, cerr
 		}
 		p := mc.personalURL()
 		return attach.Store{Name: store.Source(name), URL: p}, p != "", false, nil
