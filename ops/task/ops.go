@@ -191,7 +191,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	if err := o.refuseClientTeam(ctx, assign, store.Source(in.To)); err != nil {
+	if err = o.refuseClientTeam(ctx, assign, store.Source(in.To)); err != nil {
 		return AddOut{}, err
 	}
 	refs, err := o.parseRefs(ctx, in.Ref)
@@ -207,11 +207,11 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, err
 	}
 	priority := orDefault(in.Priority, DefaultPriority)
-	if err := work.OneOf(Noun, "priority", priority, schema.TaskPriorities()); err != nil {
+	if err = work.OneOf(Noun, "priority", priority, schema.TaskPriorities()); err != nil {
 		return AddOut{}, err
 	}
 	commitment := orDefault(in.Commitment, DefaultCommitment)
-	if err := work.OneOf(Noun, "commitment", commitment, schema.TaskCommitments()); err != nil {
+	if err = work.OneOf(Noun, "commitment", commitment, schema.TaskCommitments()); err != nil {
 		return AddOut{}, err
 	}
 	if in.Key != "" {
@@ -244,7 +244,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 			return AddOut{}, err
 		}
 	}
-	if err := setDates(fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
+	if err = setDates(fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
 		return AddOut{}, err
 	}
 	if in.Tasklist == "" {
@@ -252,7 +252,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 			return AddOut{}, err
 		}
 	}
-	if err := setRefs(fields, []refFlag{
+	if err = setRefs(fields, []refFlag{
 		{work.FieldMission, "mission", ids.PrefixMission, in.Mission},
 		{work.FieldTasklist, "tasklist", ids.PrefixTaskList, in.Tasklist},
 		{work.FieldPlan, "plan", ids.PrefixPlan, in.Plan},
@@ -261,7 +261,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}); err != nil {
 		return AddOut{}, err
 	}
-	if err := setAssign(fields, assign); err != nil {
+	if err = setAssign(fields, assign); err != nil {
 		return AddOut{}, err
 	}
 	if v, ok := fields[fieldTeam]; ok && v.Kind() == value.KindNull {
@@ -288,7 +288,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if in.Timebox > 0 {
 		fields[fieldTimebox] = value.Int(int64(in.Timebox / time.Second))
 	}
-	if err := o.checkRefs(ctx, store.Source(in.To), refs); err != nil {
+	if err = o.checkRefs(ctx, store.Source(in.To), refs); err != nil {
 		return AddOut{}, err
 	}
 	src, w, err := work.Create(ctx, o.env, in.To, table, fields)
@@ -470,13 +470,21 @@ func depsValue(deps []dep) (value.Value, error) {
 }
 
 // depsOf is a row's blocked_by edges (nil when absent or unreadable).
+// A row the engine just built holds the array as value.JSON, one decoded
+// from a row file as a generic list: both are read through their JSON
+// form (a type assertion on value.JSON alone saw no edges in any stored
+// row, so checkNoCycle never found a cycle).
 func depsOf(r row.Row) []dep {
-	j, ok := r.Fields[fieldBlockedBy].(value.JSON)
-	if !ok || j.IsZero() {
+	v := r.Fields[fieldBlockedBy]
+	if v == nil || v.Kind() == value.KindNull {
+		return nil
+	}
+	raw, err := v.MarshalJSON()
+	if err != nil {
 		return nil
 	}
 	var out []dep
-	if err := json.Unmarshal(j.Raw(), &out); err != nil {
+	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil
 	}
 	return out
@@ -552,7 +560,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		return ListOut{}, err
 	}
 	if in.Commitment != "" {
-		if err := work.OneOf(Noun, "commitment", in.Commitment, schema.TaskCommitments()); err != nil {
+		if err = work.OneOf(Noun, "commitment", in.Commitment, schema.TaskCommitments()); err != nil {
 			return ListOut{}, err
 		}
 	}
@@ -701,17 +709,17 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if err := o.refuseClientTeam(ctx, assign, curSrc); err != nil {
+	if err = o.refuseClientTeam(ctx, assign, curSrc); err != nil {
 		return work.WriteOut{}, err
 	}
 	refs, err := o.parseRefs(ctx, in.Ref)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if err := o.checkRefs(ctx, curSrc, refs); err != nil {
+	if err = o.checkRefs(ctx, curSrc, refs); err != nil {
 		return work.WriteOut{}, err
 	}
-	if err := o.saveRefs(ctx, curSrc, work.Field(cur, work.FieldProject), id, refs); err != nil {
+	if err = o.saveRefs(ctx, curSrc, work.Field(cur, work.FieldProject), id, refs); err != nil {
 		return work.WriteOut{}, err
 	}
 	for _, c := range []struct{ flag, v string }{{"priority", in.Priority}, {"status", in.Status}, {"commitment", in.Commitment}} {
@@ -719,7 +727,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 			continue
 		}
 		set := map[string][]string{"priority": schema.TaskPriorities(), "status": schema.TaskStatuses(), "commitment": schema.TaskCommitments()}[c.flag]
-		if err := work.OneOf(Noun, c.flag, c.v, set); err != nil {
+		if err = work.OneOf(Noun, c.flag, c.v, set); err != nil {
 			return work.WriteOut{}, err
 		}
 	}
@@ -730,10 +738,10 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if err := setDates(patch, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
+	if err = setDates(patch, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
 		return work.WriteOut{}, err
 	}
-	if err := setRefs(patch, []refFlag{
+	if err = setRefs(patch, []refFlag{
 		{work.FieldMission, "mission", ids.PrefixMission, in.Mission},
 		{work.FieldTasklist, "tasklist", ids.PrefixTaskList, in.Tasklist},
 		{work.FieldPlan, "plan", ids.PrefixPlan, in.Plan},
@@ -741,7 +749,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	}); err != nil {
 		return work.WriteOut{}, err
 	}
-	if err := setAssign(patch, assign); err != nil {
+	if err = setAssign(patch, assign); err != nil {
 		return work.WriteOut{}, err
 	}
 	clears := []struct {
@@ -761,7 +769,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		if derr != nil {
 			return work.WriteOut{}, derr
 		}
-		if err := o.checkNoCycle(ctx, id.String(), deps); err != nil {
+		if err = o.checkNoCycle(ctx, id.String(), deps); err != nil {
 			return work.WriteOut{}, err
 		}
 		if patch[fieldBlockedBy], err = depsValue(deps); err != nil {
