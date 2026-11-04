@@ -19,3 +19,16 @@ func TestCoreErrorPrintedOnce(t *testing.T) {
 		t.Fatalf("the error must be printed once, got %d:\n%s", n, r.stderr)
 	}
 }
+
+// TestCoreFlagErrorPrintedOnce: an unknown flag on a generated command
+// outside the compat nouns is printed once (cobra's usage error), as on
+// the compat nouns, never again by main.
+func TestCoreFlagErrorPrintedOnce(t *testing.T) {
+	f := newCoreFixture(t)
+	for _, args := range [][]string{{"migrate", "run", "--bogus"}, {"store", "init", "acme", "--url", "x"}} {
+		r := f.run(e2eBin, args...)
+		if r.code == 0 || strings.Count(r.stderr, "unknown flag") != 1 {
+			t.Fatalf("lore %v: the flag error must be printed once:\n%s", args, r.stderr)
+		}
+	}
+}

@@ -903,6 +903,13 @@ func markCorePrinted(c *cobra.Command) {
 	if !cli.Generated(c) || c.RunE == nil {
 		return
 	}
+	// A flag error happens before RunE: the surface prints cobra's usage
+	// error itself, so mark it printed there too (one line, not two).
+	flagErr := c.FlagErrorFunc()
+	c.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		corePrinted = true
+		return flagErr(cmd, err)
+	})
 	inner := c.RunE
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		defer func() { corePrinted = true }()
