@@ -134,11 +134,13 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "sync pass").WithCause(err)
 			}
+			core, coreErr := syncCoreStores(cmd.Context())
 			if asJSON {
-				printJSON(jsonKindSyncReport, rep, 0)
+				printJSON(jsonKindSyncReport, syncReportJSON{Report: rep, Stores: core.Stores}, 0)
 			} else {
 				printSyncReport(rep)
-				if !rep.Changed() && len(rep.Errors) == 0 && len(rep.Conflicts) == 0 {
+				printCoreSyncReport(core)
+				if !rep.Changed() && len(rep.Errors) == 0 && len(rep.Conflicts) == 0 && len(core.Stores) == 0 {
 					fmt.Println(style.Muted("· already in sync"))
 				}
 			}
@@ -146,7 +148,11 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
 				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%d file(s) could not be synced", len(rep.Errors))).
 					WithHint("fix the files listed above (see `lore sync status`)")
 			}
-			return nil
+			if coreErr != nil {
+				fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+coreErr.Error())
+				return coreErr
+			}
+			return coreSyncRefusal(core)
 		},
 	}
 	bindCommonFlags(cmd, &f)
