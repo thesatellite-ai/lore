@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
 	"os"
@@ -25,6 +26,8 @@ import (
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
+
+	"gopkg.in/yaml.v3"
 )
 
 var _ opsmigrate.Rewriter = (*App)(nil)
@@ -155,11 +158,128 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error
 			}
 		}
 	}
+	orgSteps, err := a.migrateOrg(ctx, dryRun, seen)
+	if err != nil {
+		return nil, err
+	}
+	steps = append(steps, orgSteps...)
 	tagSteps, err := a.migrateTags(ctx, dryRun)
 	if err != nil {
 		return nil, err
 	}
 	return append(steps, tagSteps...), nil
+}
+
+// rosterTables are the org roster's tables (LORE_TEAM_SPEC F18): not in
+// CoreTables (the v0.1.17 binary still owns the repo's own actors), but
+// rewritten as `_v: 2` in the org's stores, where the core keeps the
+// roster once the store is 0.1.18 (wire roster.go).
+var rosterTables = []row.Table{schema.TableActors, schema.TableTeams}
+
+// orgDefaultsFile is <org folder>/.lore/lore-org.yaml (v0.1.17 stores
+// package OrgDefaultsFile), read here only to report defaults that have no
+// 0.1.18 home yet.
+const orgDefaultsFile = "lore-org.yaml"
+
+// orgDefaultsProbe is the part of lore-org.yaml migrateOrg looks at.
+type orgDefaultsProbe struct {
+	Defaults struct {
+		ClientRepos map[string]string `yaml:"client_repos"`
+	} `yaml:"defaults"`
+}
+
+// migrateOrg converts the v0.1.17 org this repo resolves to (the stores
+// Options.OrgStores brings): each org store's v1 lore-store.yaml becomes v2
+// (a permanent sto_ id, visibility internal: CFG3, CFG4, step store_marker),
+// and the roster rows (actors, teams) of every org store folder become
+// `_v: 2`, which moves the roster onto the core. The links need no
+// conversion: they stay in each folder's _meta.json (CONFIG_GUIDE), which
+// the core leaves untouched. lore-org.yaml is left as it is: its
+// defaults.client_repos still steers v0.1.17 routing and no 0.1.18 policy
+// key holds it yet (step org_defaults_to_policy has no target), so it is
+// reported, never dropped. seen lists store folders whose marker was
+// already handled. Commits wait in the store clone for `lore sync`.
+func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool) ([]string, error) {
+	org := orgStores(ctx, a.opts)
+	if len(org) == 0 {
+		return nil, nil
+	}
+	var steps []string
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !dryRun {
+		// Convert what the team has, not a stale copy: bring each org
+		// store clone up to date first (this also pushes waiting commits,
+		// so it is skipped by --dry-run, which changes nothing).
+		for _, s := range org {
+			if _, ok := st.byName[s.Name]; !ok {
+				continue
+			}
+			if _, err := st.eng.Sync(ctx, s.Name); err != nil {
+				return nil, errs.Wrap(errs.CodeOf(err), "migrate: sync org store "+string(s.Name)+" first", err)
+			}
+		}
+	}
+	for _, s := range org {
+		dir, err := a.storeDir(ctx, s.URL)
+		if err != nil {
+			return nil, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
+		}
+		if s.Folder != "" {
+			if b, rerr := os.ReadFile(filepath.Join(dir, filepath.FromSlash(s.Folder), ".lore", orgDefaultsFile)); rerr == nil {
+				var p orgDefaultsProbe
+				if yaml.Unmarshal(b, &p) == nil && len(p.Defaults.ClientRepos) > 0 {
+					steps = append(steps, "org store "+string(s.Name)+": "+orgDefaultsFile+" defaults.client_repos kept as it is (still read by the routing; no 0.1.18 policy key holds it yet)")
+				}
+			}
+		}
+		m, err := rowfs.ReadMarker(dir)
+		if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		steps = append(steps, "org store "+string(s.Name)+": "+rowfs.MarkerFile+" v1 → v2 (new sto_ id, visibility internal); its roster moves to the core")
+		if dryRun {
+			continue
+		}
+		if m.ID, err = ids.New[ids.Store](); err != nil {
+			return nil, errs.Wrap(errs.Internal, "wire: new store id", err)
+		}
+		if err := rowfs.WriteMarker(dir, m); err != nil {
+			return nil, err
+		}
+		if !strings.HasPrefix(s.URL, folder.Scheme+"://") {
+			if err := gitCommitMarker(ctx, dir, a.opts.Wall()); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, s := range org {
+		b, ok := st.byName[s.Name]
+		if !ok {
+			continue
+		}
+		for _, t := range rosterTables {
+			got, err := rewriteStore(ctx, b, t, dryRun)
+			if err != nil {
+				return nil, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
+			}
+			if len(got) > 0 {
+				steps = append(steps, fmt.Sprintf("org store %s: %d %s row(s) _v: 1 → _v: 2", s.Name, len(got), t))
+			}
+		}
+		if !dryRun {
+			if _, err := st.eng.Refresh(ctx, s.Name); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if !dryRun && len(steps) > 0 {
+		steps = append(steps, "org: run `lore sync` to push the org store changes")
+	}
+	return steps, nil
 }
 
 // entityTagsTable is v0.1.17's join table of tags (dbent entity_tag.go).
