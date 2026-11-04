@@ -25,6 +25,17 @@ var cloudSyncMarkers = [][]string{
 	{"box sync"},
 }
 
+// AllowNetworkFSEnv is the user's override of the E_NETWORK_FS refusal
+// (v0.1.17's escape hatch; the CLI maps it to WithAllowNetworkFS). Named
+// here so both refusal hints name it as v0.1.17 did.
+const AllowNetworkFSEnv = "LORE_ALLOW_NETWORK_FS"
+
+// networkFSHint is the hint of both E_NETWORK_FS refusals: move the store
+// to a local place, or accept the risk with the override.
+func networkFSHint(place string) string {
+	return "move the store to a local " + place + ", or set " + AllowNetworkFSEnv + "=1 to accept the risk"
+}
+
 // CheckLocal refuses a path inside a cloud-sync folder or on a network file
 // system with E_NETWORK_FS (spec 6.2 "What it is not"): network locks are
 // not honoured and renames are not atomic there. The file system probe is
@@ -36,11 +47,11 @@ func CheckLocal(path string) error {
 	}
 	if marker := cloudSyncSegment(abs); marker != "" {
 		return errs.New(errs.NetworkFS, "rowfs: the store is inside a "+quote(marker)+" folder (cloud sync)").
-			WithHint("move the store to a local folder")
+			WithHint(networkFSHint("folder"))
 	}
 	if fs := networkFSType(existingAncestor(abs)); fs != "" {
 		return errs.New(errs.NetworkFS, "rowfs: the store is on a network file system ("+fs+")").
-			WithHint("move the store to a local disk")
+			WithHint(networkFSHint("disk"))
 	}
 	return nil
 }
