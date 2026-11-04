@@ -20,6 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
@@ -314,7 +315,7 @@ func (o Ops) Create(ctx context.Context, target string, fields map[string]value.
 
 // Archive sets archived_at to now ("✓ <id> archived").
 func (o Ops) Archive(ctx context.Context, raw string) (WriteOut, error) {
-	return o.Patch(ctx, raw, map[string]value.Value{FieldArchivedAt: value.DateTimeFrom(time.Now())},
+	return o.Patch(ctx, raw, map[string]value.Value{FieldArchivedAt: value.DateTimeFrom(opclock.Now(o.Env))},
 		func(id string) string { return Mark + " " + id + " archived\n" })
 }
 

@@ -420,7 +420,7 @@ func TestListOrderAndFilters(t *testing.T) {
 	b := add(t, env, Create{To: "team"})
 	c := add(t, env, Create{})
 	d := add(t, env, Create{})
-	if _, err := Stamp(ctx, env, rules, c, FieldArchivedAt, Now()); err != nil {
+	if _, err := Stamp(ctx, env, rules, c, FieldArchivedAt, Now(env)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Delete(ctx, env, rules, d); err != nil {
@@ -461,7 +461,7 @@ func TestSearchCutsAfterFilter(t *testing.T) {
 	env := newEnv(t)
 	for range 3 {
 		id := add(t, env, Create{Texts: map[string]string{FieldBody: "gateway"}})
-		if _, err := Stamp(ctx, env, rules, id, FieldArchivedAt, Now()); err != nil {
+		if _, err := Stamp(ctx, env, rules, id, FieldArchivedAt, Now(env)); err != nil {
 			t.Fatal(err)
 		}
 	}

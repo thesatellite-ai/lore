@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
@@ -307,7 +308,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, now: time.Now()}
+	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, now: opclock.Now(o.env)}
 	for _, s := range rows {
 		done := !work.Time(s.Row, schema.FieldReminderDoneAt).IsZero()
 		if done != in.Done {
@@ -362,7 +363,7 @@ func (o ops) done(ctx context.Context, in IDIn) (DoneOut, error) {
 		return doneOut(w, next.UTC().Format(work.DateLayout)), nil
 	}
 	human := work.Success + " reminder " + id.String() + " completed\n"
-	w, err := work.Patch(ctx, o.env, Noun, table, id, map[string]value.Value{schema.FieldReminderDoneAt: work.Now()}, human)
+	w, err := work.Patch(ctx, o.env, Noun, table, id, map[string]value.Value{schema.FieldReminderDoneAt: work.Now(o.env)}, human)
 	if err != nil {
 		return DoneOut{}, err
 	}

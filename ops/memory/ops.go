@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -13,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
@@ -213,7 +213,7 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	}
 	fields[fieldTrust] = trust
 	// tx_at is v0.1.17's transaction time; renderers sort by it.
-	fields[fieldTxAt] = value.DateTimeFrom(time.Now())
+	fields[fieldTxAt] = value.DateTimeFrom(opclock.Now(o.env))
 	var old ids.ID[ids.Memory]
 	var oldSrc store.Source
 	if in.Supersedes != "" {
@@ -528,7 +528,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 
 // archive sets archived_at to now.
 func (o ops) archive(ctx context.Context, in IDIn) (WriteOut, error) {
-	return withLine(o.stamp(ctx, in.ID, fieldArchivedAt, value.DateTimeFrom(time.Now())))("archived")
+	return withLine(o.stamp(ctx, in.ID, fieldArchivedAt, value.DateTimeFrom(opclock.Now(o.env))))("archived")
 }
 
 // unarchive clears archived_at.
@@ -538,7 +538,7 @@ func (o ops) unarchive(ctx context.Context, in IDIn) (WriteOut, error) {
 
 // invalidate sets valid_until to now (v0.1.17 bitemporal invalidation).
 func (o ops) invalidate(ctx context.Context, in IDIn) (WriteOut, error) {
-	return withLine(o.stamp(ctx, in.ID, fieldValidUntil, value.DateTimeFrom(time.Now())))("invalidated (valid_until=now)")
+	return withLine(o.stamp(ctx, in.ID, fieldValidUntil, value.DateTimeFrom(opclock.Now(o.env))))("invalidated (valid_until=now)")
 }
 
 // stamp sets one field of the memory whose id is raw.

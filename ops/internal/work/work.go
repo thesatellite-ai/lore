@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
@@ -153,8 +154,9 @@ func Date(flag, s string) (value.Value, error) {
 	return value.DateTimeFrom(t), nil
 }
 
-// Now is the current time as a datetime value.
-func Now() value.Value { return value.DateTimeFrom(time.Now()) }
+// Now is the current time as a datetime value, on env's clock
+// (opclock: the engine's wall clock when env offers it).
+func Now(env any) value.Value { return value.DateTimeFrom(opclock.Now(env)) }
 
 // Field returns the text form of a row field ("" when absent or null).
 func Field(r row.Row, name string) string {

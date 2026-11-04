@@ -26,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -581,7 +582,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if in.IncludeSomeday {
 		allowed = append(allowed, schema.TaskCommitmentSomeday)
 	}
-	now := time.Now()
+	now := opclock.Now(o.env)
 	return o.viewWith(ctx, in.Store, project, team.state, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
 		switch {
@@ -657,7 +658,7 @@ func (o ops) deferred(ctx context.Context, in ViewIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	now := time.Now()
+	now := opclock.Now(o.env)
 	return o.view(ctx, "", project, func(r row.Row) bool { return deferred(r, now) })
 }
 
@@ -797,7 +798,7 @@ func (o ops) start(ctx context.Context, in IDIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	patch, err := statusPatch(schema.TaskStatusInProgress, fieldStarted)
+	patch, err := o.statusPatch(schema.TaskStatusInProgress, fieldStarted)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
@@ -806,12 +807,12 @@ func (o ops) start(ctx context.Context, in IDIn) (work.WriteOut, error) {
 
 // statusPatch sets status, stamps the time field, accepts the task and
 // clears its deferral.
-func statusPatch(status, stamp string) (map[string]value.Value, error) {
+func (o ops) statusPatch(status, stamp string) (map[string]value.Value, error) {
 	patch, err := work.Texts(Noun, map[string]string{work.FieldStatus: status, fieldCommitment: schema.TaskCommitmentAccepted})
 	if err != nil {
 		return nil, err
 	}
-	patch[stamp] = work.Now()
+	patch[stamp] = work.Now(o.env)
 	patch[fieldDeferred] = value.Null{}
 	return patch, nil
 }
@@ -827,7 +828,7 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
-	patch, err := statusPatch(schema.TaskStatusDone, work.FieldCompleted)
+	patch, err := o.statusPatch(schema.TaskStatusDone, work.FieldCompleted)
 	if err != nil {
 		return DoneOut{}, err
 	}
@@ -916,7 +917,7 @@ func (o ops) lesson(ctx context.Context, src store.Source, task ids.AnyID, text 
 		return "", errs.Wrap(errs.Internal, "task done: trust score", err)
 	}
 	fields["trust_score"] = trust
-	fields["tx_at"] = work.Now()
+	fields["tx_at"] = work.Now(o.env)
 	w, err := o.env.Create(ctx, src, schema.TableMemories, fields)
 	if err != nil {
 		return "", err
@@ -985,7 +986,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 	if err != nil {
 		return work.SearchEnvelope{}, err
 	}
-	now := time.Now()
+	now := opclock.Now(o.env)
 	out := work.SearchEnvelope{SchemaVersion: work.SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, h := range hits {
 		if len(out.Data) == limit {

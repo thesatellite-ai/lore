@@ -9,7 +9,6 @@ import (
 	"context"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -18,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -130,7 +130,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	if fields[content.FieldTrust], err = content.Trust(); err != nil {
 		return content.WriteOut{}, err
 	}
-	fields[fieldTakenAt] = value.DateTimeFrom(time.Now())
+	fields[fieldTakenAt] = value.DateTimeFrom(opclock.Now(o.c.Env))
 	if a, ok := o.c.Env.(Actorer); ok {
 		if me, aerr := a.Actor(ctx); aerr == nil && !me.IsZero() {
 			if _, r, gerr := o.c.Env.Get(ctx, actorRef(me)); gerr == nil && !r.Deleted {

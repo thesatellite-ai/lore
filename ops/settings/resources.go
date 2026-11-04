@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -573,7 +574,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	patch[rLastChecked] = value.DateTimeFrom(time.Now())
+	patch[rLastChecked] = value.DateTimeFrom(opclock.Now(o.env))
 	return o.patchRow(ctx, r, patch, "edited "+d.name()+" "+name)
 }
 
@@ -700,7 +701,7 @@ func (o ops) resArchive(ctx context.Context, in ResNameIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	return o.patchRow(ctx, r, map[string]value.Value{rArchivedAt: value.DateTimeFrom(time.Now())}, "archived "+text(r.Row, rName))
+	return o.patchRow(ctx, r, map[string]value.Value{rArchivedAt: value.DateTimeFrom(opclock.Now(o.env))}, "archived "+text(r.Row, rName))
 }
 
 func (o ops) resCheck(ctx context.Context, in ResNameIn) (RowOut, error) {
@@ -708,7 +709,7 @@ func (o ops) resCheck(ctx context.Context, in ResNameIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	return o.patchRow(ctx, r, map[string]value.Value{rLastChecked: value.DateTimeFrom(time.Now())}, "checked "+text(r.Row, rName)+" now")
+	return o.patchRow(ctx, r, map[string]value.Value{rLastChecked: value.DateTimeFrom(opclock.Now(o.env))}, "checked "+text(r.Row, rName)+" now")
 }
 
 func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
@@ -716,7 +717,7 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 	if days <= 0 {
 		days = defaultStaleDays
 	}
-	cut := time.Now().Add(-time.Duration(days) * hoursPerDay * time.Hour)
+	cut := opclock.Now(o.env).Add(-time.Duration(days) * hoursPerDay * time.Hour)
 	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
 	if err != nil {
 		return ResListOut{}, err

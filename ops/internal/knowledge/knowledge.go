@@ -16,7 +16,6 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -24,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
@@ -436,8 +436,8 @@ func Stamp(ctx context.Context, env Env, n Noun, raw, field string, v value.Valu
 	return env.Update(ctx, engine.Ref{Store: it.Source, Table: n.Table, ID: it.Row.ID}, map[string]value.Value{field: v})
 }
 
-// Now is the archive stamp.
-func Now() value.Value { return value.DateTimeFrom(time.Now()) }
+// Now is the archive stamp, on env's clock (opclock).
+func Now(env any) value.Value { return value.DateTimeFrom(opclock.Now(env)) }
 
 // Delete writes the row's tombstone.
 func Delete(ctx context.Context, env Env, n Noun, raw string) (engine.Written, error) {

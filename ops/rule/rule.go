@@ -379,7 +379,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 
 // archive sets archived_at.
 func (o ops) archive(ctx context.Context, in IDIn) (WriteOut, error) {
-	return o.stamp(ctx, in.ID, kn.Now(), "archived")
+	return o.stamp(ctx, in.ID, kn.Now(o.env), "archived")
 }
 
 // unarchive clears archived_at.

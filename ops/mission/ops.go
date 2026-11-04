@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -373,7 +372,7 @@ func (o ops) done(ctx context.Context, in IDIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	patch[work.FieldCompleted] = value.DateTimeFrom(time.Now())
+	patch[work.FieldCompleted] = work.Now(o.env)
 	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" completed\n")
 }
 

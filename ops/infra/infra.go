@@ -145,7 +145,7 @@ func (o ops) stamp(ctx context.Context, noun string, p ids.Prefix, table row.Tab
 	var v value.Value = value.Null{}
 	verb := "unarchived"
 	if archive {
-		v, verb = work.Now(), "archived"
+		v, verb = work.Now(o.env), "archived"
 	}
 	return work.Patch(ctx, o.env, noun, table, id, map[string]value.Value{fieldArchivedAt: v},
 		work.Success+" "+label(r)+" "+verb+"\n")
