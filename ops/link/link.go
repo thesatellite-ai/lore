@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -24,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -59,7 +59,6 @@ const (
 	shortSHA  = 8
 	msgMax    = 60
 	msgCut    = 57
-	ellipsis  = "..."
 	minSHAHex = 7
 	maxSHAHex = 40
 	maxQuoted = 48
@@ -538,14 +537,7 @@ func short(sha string) string {
 
 // excerpt cuts a message for display (v0.1.17: 60, cut at 57 + "...").
 func excerpt(m string) string {
-	if len(m) <= msgMax {
-		return m
-	}
-	cut := msgCut
-	for cut > 0 && !utf8.RuneStart(m[cut]) {
-		cut-- // never split a UTF-8 character (v0.1.17 printed half of one)
-	}
-	return m[:cut] + ellipsis
+	return textcut.Cut(m, msgMax, msgCut)
 }
 
 // orElse returns a, or b when a is empty.
@@ -575,8 +567,5 @@ func timeText(t time.Time) string {
 
 // quote renders a user value for an error, truncated.
 func quote(s string) string {
-	if len(s) > maxQuoted {
-		s = s[:maxQuoted] + ellipsis
-	}
-	return `"` + s + `"`
+	return `"` + textcut.Cut(s, maxQuoted, maxQuoted) + `"`
 }

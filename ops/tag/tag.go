@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -300,9 +301,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}}
 	for _, src := range sources {
-		rows, err := o.env.List(ctx, src, schema.TableTags)
-		if err != nil {
-			return ListOut{}, err
+		rows, lerr := o.env.List(ctx, src, schema.TableTags)
+		if lerr != nil {
+			return ListOut{}, lerr
 		}
 		for _, r := range rows {
 			if r.Deleted || field(r, fieldProject) != project.String() {
@@ -532,10 +533,7 @@ const maxQuoted = 48
 
 // quote renders a user value for an error, truncated.
 func quote(s string) string {
-	if len(s) > maxQuoted {
-		s = s[:maxQuoted] + "..."
-	}
-	return `"` + s + `"`
+	return `"` + textcut.Cut(s, maxQuoted, maxQuoted) + `"`
 }
 
 // timeText renders an envelope time as v0.1.17's JSON did (RFC 3339 with

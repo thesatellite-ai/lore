@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -52,7 +53,6 @@ const (
 	searchBodyMax = 80
 	listBodyMax   = 60
 	listBodyCut   = 57
-	ellipsis      = "..."
 	// ftsColumnBody is the one full-text column of comments (--column).
 	ftsColumnBody = "body"
 )
@@ -130,10 +130,7 @@ func (o ListOut) Text() string {
 	}
 	var b strings.Builder
 	for _, c := range o.Data {
-		ex := c.Body
-		if len(ex) > listBodyMax {
-			ex = ex[:listBodyCut] + ellipsis
-		}
+		ex := textcut.Cut(c.Body, listBodyMax, listBodyCut)
 		fmt.Fprintf(&b, "%s on %s/%s  %s\n", c.ID, c.EntityTable, c.EntityID, ex)
 	}
 	return b.String()
@@ -182,10 +179,7 @@ func (o SearchOut) Text() string {
 	}
 	var b strings.Builder
 	for _, h := range o.Data {
-		body := h.Row.Body
-		if len(body) > searchBodyMax {
-			body = body[:searchBodyMax] + ellipsis
-		}
+		body := textcut.Cut(h.Row.Body, searchBodyMax, searchBodyMax)
 		fmt.Fprintf(&b, "%s [%s/%s] %s\n", h.ID, h.Row.EntityTable, h.Row.EntityID, body)
 	}
 	return b.String()
@@ -480,8 +474,5 @@ const maxQuoted = 48
 
 // quote renders a user value for an error, truncated.
 func quote(s string) string {
-	if len(s) > maxQuoted {
-		s = s[:maxQuoted] + ellipsis
-	}
-	return `"` + s + `"`
+	return `"` + textcut.Cut(s, maxQuoted, maxQuoted) + `"`
 }
