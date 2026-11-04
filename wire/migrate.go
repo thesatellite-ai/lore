@@ -45,6 +45,7 @@ func CoreTables() []row.Table {
 		schema.TableVars, schema.TablePolicies, schema.TableMetaKeys,
 		schema.TableMetaValues, schema.TableSecretRules, schema.TableSecretAllows,
 		schema.TableTasks, schema.TableTasklists, schema.TableMissions, schema.TablePlans,
+		schema.TableReminders, schema.TableKnowledgeRefs, schema.TableRuleVerifierRefs,
 	}
 }
 

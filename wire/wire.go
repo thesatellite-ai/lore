@@ -53,6 +53,7 @@ import (
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
+	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -195,6 +196,7 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opstasklist.Ops(a)...)
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
+	entries = append(entries, opsreminder.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 
@@ -305,15 +307,17 @@ func (s *state) close() error {
 }
 
 var (
-	_ op.Runner        = (*App)(nil)
-	_ opsmemory.Env    = (*App)(nil)
-	_ opsmemory.Mover  = (*App)(nil)
-	_ opsstores.Syncer = (*App)(nil)
-	_ opscontent.Env   = (*App)(nil)
-	_ opstag.Env       = (*App)(nil)
-	_ opscomment.Env   = (*App)(nil)
-	_ opslink.Env      = (*App)(nil)
-	_ opssettings.Env  = (*App)(nil)
+	_ op.Runner           = (*App)(nil)
+	_ opsmemory.Env       = (*App)(nil)
+	_ opsmemory.Mover     = (*App)(nil)
+	_ opsstores.Syncer    = (*App)(nil)
+	_ opscontent.Env      = (*App)(nil)
+	_ opstag.Env          = (*App)(nil)
+	_ opscomment.Env      = (*App)(nil)
+	_ opslink.Env         = (*App)(nil)
+	_ opssettings.Env     = (*App)(nil)
+	_ opsreminder.Env     = (*App)(nil)
+	_ opsreminder.Actorer = (*App)(nil)
 )
 
 // SyncStores is the 0.1.18 half of `lore sync` (O12b: sync is one

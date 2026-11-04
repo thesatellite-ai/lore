@@ -24,6 +24,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// flagRef is `task add|edit --ref` (pointers to rows or commits).
+const flagRef = "ref"
+
 // Flag names (§1 "Flags").
 const (
 	flagAfter   = "after"
