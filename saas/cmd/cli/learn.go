@@ -30,7 +30,6 @@ import (
 
 	"dbent/gen/ent"
 	entLearnCandidate "dbent/gen/ent/learncandidate"
-	entSnapshot "dbent/gen/ent/snapshot"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/style"
@@ -175,31 +174,16 @@ func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []strin
 		contentSha := sha256Hex([]byte(body))
 		sourceRef := relPath(rctx.ProjectRoot, path)
 
-		// Skip if we already imported this exact content
-		existing, err := client.Snapshot.Query().
-			Where(
-				entSnapshot.ProjectID(projectID),
-				entSnapshot.SourceRef(sourceRef+"@"+contentSha),
-			).
-			Limit(1).
-			All(ctx)
-		if err == nil && len(existing) > 0 {
-			fmt.Printf("%s %s (unchanged, skipped)\n", style.Muted("·"), sourceRef)
-			continue
-		}
-
-		// Snapshot row (full file)
-		title := filepath.Base(path)
-		_, err = client.Snapshot.Create().
-			SetProjectID(projectID).
-			SetTitle(title).
-			SetBody(body).
-			SetTakenAt(time.Now()).
-			SetSourceKind(constants.SourceLearnFrom.String()).
-			SetSourceRef(sourceRef + "@" + contentSha).
-			Save(ctx)
+		// Snapshot row (full file), through the core; the same content
+		// (path@sha) is imported once.
+		created, err := coreLearnSnapshot(ctx, projectID, filepath.Base(path), body,
+			constants.SourceLearnFrom.String(), sourceRef+"@"+contentSha, time.Now())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "snapshot %s: %v\n", path, err)
+			continue
+		}
+		if !created {
+			fmt.Printf("%s %s (unchanged, skipped)\n", style.Muted("·"), sourceRef)
 			continue
 		}
 		snapshots++
