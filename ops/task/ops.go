@@ -440,8 +440,15 @@ func (o ops) parseAfter(ctx context.Context, entries []string, repoID string) ([
 				return nil, err
 			}
 			_, up, err := work.Get(ctx, o.env, Noun, table, id)
-			if err != nil {
+			if errs.Has(err, errs.NotFound) {
 				return nil, errs.Wrap(errs.NotFound, "--after "+e+": no such task", err)
+			}
+			if err != nil {
+				// E_AMBIGUOUS_ID, a store that cannot be read and the like
+				// pass through unchanged, hint included: only a missing
+				// task is "no such task" (rewriting every error hid an
+				// ambiguous id).
+				return nil, err
 			}
 			if until == "" {
 				until = untilDone

@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -83,6 +84,14 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 	if isRoot && (src.Folder == "" || src.Folder == rowfs.FolderRoot) {
 		return to, base, nil
 	}
+	if same, ok, cerr := a.coveringAttachment(ctx, src, folderName); cerr != nil || ok {
+		// One store folder keeps one name: an org store attached at its
+		// linked folder ("northwind" at globex) is what
+		// `northwind/globex` names, so the input is rewritten to it and
+		// nothing is attached twice (a second name over the same folder
+		// made every row of it E_AMBIGUOUS_ID).
+		return to, string(same), cerr
+	}
 	exists := isRoot // the root holds the marker: it always exists
 	if !exists {
 		if exists, err = a.folderExists(ctx, src, folderName); err != nil {
@@ -127,6 +136,44 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 		a.opened, a.err = false, nil
 	}
 	return "", "", nil
+}
+
+// coveringAttachment finds an attachment that already covers folder
+// folderName of src's store (same canonical url and branch, same folder):
+// a stores.yaml entry, a store the org brings, or an earlier unrecorded
+// folder target. ok is false when none does.
+func (a *App) coveringAttachment(ctx context.Context, src attach.Store, folderName string) (store.Source, bool, error) {
+	want, err := attachLocation(src, folderName)
+	if err != nil {
+		return "", false, nil // an unparsable url covers nothing; the open reports it
+	}
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	cfg, err := readStoresFile(top)
+	if err != nil {
+		return "", false, err
+	}
+	a.mu.Lock()
+	extra := slices.Clone(a.extra)
+	a.mu.Unlock()
+	for _, s := range slices.Concat(cfg.Stores, a.orgStoresHere(ctx), extra) {
+		if got, lerr := attachLocation(s, s.Folder); lerr == nil && got == want {
+			return s.Name, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+// attachLocation is the engine.Attached.Location store s would have when
+// attached at folder f.
+func attachLocation(s attach.Store, f string) (string, error) {
+	u, err := canonical(attach.Store{URL: s.URL, Branch: s.Branch})
+	if err != nil {
+		return "", err
+	}
+	return location(u, f), nil
 }
 
 // baseStore finds the stores.yaml entry (or `me`, or a store the repo's

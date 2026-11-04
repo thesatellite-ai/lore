@@ -63,6 +63,15 @@ type Attached struct {
 	// (a mapped id maps to itself) because a row's created_by is mapped
 	// again on every later write.
 	ActorAs func(ids.ID[ids.Actor]) ids.ID[ids.Actor]
+	// Location names where this attachment's rows physically live: the
+	// canonical store url with its branch and folder (attach.Open sets it).
+	// Two names over one store folder (an org store attached at its linked
+	// folder as "northwind" and the same folder reached as
+	// "northwind/globex") share one Location, and a lookup by id counts a
+	// row found through both once (the first in stores.yaml order), so the
+	// same row is never "ambiguous" with itself. Empty: a place of its own
+	// (the repo store, a test backend).
+	Location string
 }
 
 // stampAs applies st.ActorAs to the audit fields and the HLC actor of r

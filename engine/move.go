@@ -150,9 +150,19 @@ func (e *Engine) locateExcept(ctx context.Context, ref Ref, skip store.Source) (
 	}
 	var found []store.Source
 	var got row.Row
+	seen := map[string]bool{} // Locations already looked in (see Attached.Location)
+	if loc := e.stores[skip].Location; loc != "" {
+		seen[loc] = true // another name of the skipped place is the same place
+	}
 	for _, name := range e.order {
 		if name == skip {
 			continue
+		}
+		if loc := e.stores[name].Location; loc != "" {
+			if seen[loc] {
+				continue
+			}
+			seen[loc] = true
 		}
 		src, r, err := e.locate(ctx, Ref{Store: name, Table: ref.Table, ID: ref.ID})
 		if errs.Has(err, errs.NotFound) {

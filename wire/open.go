@@ -373,10 +373,38 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		}
 		opened = append(opened, one...)
 	}
+	urls := make(map[store.Source]string, len(cfg.Stores))
+	for _, s := range cfg.Stores {
+		urls[s.Name] = s.URL
+	}
 	for i := range opened {
 		opened[i].Level = levelOf(opened[i])
+		opened[i].Location = location(urls[opened[i].Name], opened[i].Folder)
 	}
 	return opened, unreachable, nil
+}
+
+// location is engine.Attached.Location for a store opened from the
+// canonical url u (which may already carry its `?folder=`) attached at
+// folder: u with the folder set explicitly, the root spelled "." whether
+// it was written as "", "." or not at all, so every spelling of one store
+// folder gives one string. A url that does not parse is its own place.
+func location(u, folder string) string {
+	p, err := url.Parse(u)
+	if err != nil {
+		return u
+	}
+	q := p.Query()
+	f := q.Get(rowfs.FolderParam)
+	if folder != "" {
+		f = folder
+	}
+	if f == "" {
+		f = rowfs.FolderRoot
+	}
+	q.Set(rowfs.FolderParam, f)
+	p.RawQuery = q.Encode()
+	return p.String()
 }
 
 // levelOf is the settings level of one attached store folder (O1, spec

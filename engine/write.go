@@ -662,7 +662,14 @@ func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, er
 	}
 	var found []store.Source
 	var got row.Row
+	seen := map[string]bool{} // Locations already looked in: one place counts once
 	for _, name := range names {
+		if loc := e.stores[name].Location; loc != "" {
+			if seen[loc] {
+				continue
+			}
+			seen[loc] = true
+		}
 		sr, err := e.stores[name].Backend.Get(ctx, table, ref.ID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue
