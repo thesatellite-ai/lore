@@ -9,19 +9,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
-	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/signals"
-	"saas/pkg/aicoder/signals/coord"
-	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
-
-	"github.com/spf13/cobra"
 )
 
 // Flags of `task done` (§1 "Flags"); --commit is org_cmd.go's flagCommit.
@@ -37,43 +31,6 @@ const (
 	sourceKindLesson  = "lesson"
 	sourceKindFinding = "finding"
 )
-
-// taskDoneFlags are the flags of `task done`.
-type taskDoneFlags struct {
-	commonFlags
-	commit   string
-	pr       int
-	lesson   string
-	noLesson bool
-	from     string
-}
-
-func newTaskDoneCommand() *cobra.Command {
-	f := &taskDoneFlags{}
-	cmd := &cobra.Command{
-		Use:   "done <id>",
-		Short: "Mark a task done (with the code that finished it)",
-		Long: `Done finishes a task. On a task you hold, it is fenced: your claim token must still
-be on the signals ref (else exit 12/13/14) and the row change is pushed atomically
-with the claim's removal. --commit/--pr record the code so lore can tell when it
-merged (F9). Never prompts: --lesson saves a lesson, --no-lesson skips the reminder.
-
-Examples:
-  lore task done tsk_30 --pr 412 --lesson "invite tokens expire in 48h"
-  lore task done tsk_31 --commit 9c3e1f0 --no-lesson`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTaskDone(cmd.Context(), f, args[0])
-		},
-	}
-	bindCommonFlags(cmd, &f.commonFlags)
-	cmd.Flags().StringVar(&f.commit, flagCommit, "", "the commit that finished the task")
-	cmd.Flags().IntVar(&f.pr, flagPR, 0, "the pull request that finished the task")
-	cmd.Flags().StringVar(&f.lesson, flagLesson, "", "save a lesson learned (a memory pointing at the task)")
-	cmd.Flags().BoolVar(&f.noLesson, flagNoLesson, false, "skip the lesson reminder")
-	bindFromFlag(cmd, &f.from)
-	return cmd
-}
 
 // claimState is what the signals ref and this session know about one task.
 type claimState struct {
@@ -100,78 +57,6 @@ func readClaim(ctx context.Context, w *coordWorld, t coordTarget, id string) (cl
 	}
 	_, cs.hadClaim = w.held().Get(w.Session(), id)
 	return cs, nil
-}
-
-func runTaskDone(ctx context.Context, f *taskDoneFlags, id string) error {
-	if err := refuseIfReadOnly(&f.commonFlags); err != nil {
-		return err
-	}
-	if f.pr < 0 {
-		return errcodes.New(errcodes.InvalidInput, "--pr must be a positive number")
-	}
-	w, t, coordErr := openTaskCoord(ctx, id, f.from)
-	if coordErr == nil {
-		defer t.Close()
-		cs, err := readClaim(ctx, w, t, id)
-		if err != nil {
-			return coordError(err)
-		}
-		switch {
-		case cs.mine || (cs.hadClaim && !cs.mine):
-			// The holder's done (or a former holder's, which fencing refuses).
-			commit := f.commit
-			if commit == "" {
-				commit = workBranchHead(ctx, w.Repo)
-			}
-			if _, err := coord.HolderWrite(ctx, w.env(t), id, true, func(d coord.Doc, now time.Time) ([]coord.RowWrite, error) {
-				return nil, coord.MarkDone(w.ActorID, commit, f.pr)(d, now)
-			}); err != nil {
-				return coordError(err)
-			}
-			f.commit = commit // say which commit was recorded, also when it came from the work branch
-			return finishDone(ctx, f, id)
-		case cs.claimed && cs.active:
-			return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is held by %s until %s; only the holder can finish it",
-				id, holderLabel(cs.sig), cs.sig.Expires.UTC().Format(time.Kitchen))).
-				WithHint("a person can `lore task revoke " + id + "` first")
-		case cs.claimed:
-			// An expired claim: finishing it is a human override that
-			// fences the old holder out.
-			if err := requireHuman(w, "finishing a task someone else claimed"); err != nil {
-				return err
-			}
-			// OverrideChecked: a refused done mark fails the whole override
-			// (claim kept, nothing written), so it never reports done.
-			if _, err := coord.OverrideChecked(ctx, w.env(t), id, coord.OverrideRevoke,
-				coord.MarkDone(w.ActorID, f.commit, f.pr)); err != nil {
-				return coordError(err)
-			}
-			return finishDone(ctx, f, id)
-		}
-	}
-	// Unclaimed: a task of the store project is written there; one of this
-	// repo goes through lore.db like any row.
-	if coordErr == nil && isStoreTarget(t) {
-		if _, err := coord.Update(ctx, w.env(t), id, func(d coord.Doc, now time.Time) error {
-			return coord.MarkDone(w.ActorID, f.commit, f.pr)(d, now)
-		}); err != nil {
-			return coordError(err)
-		}
-		return finishDone(ctx, f, id)
-	}
-	// Coordination could not be opened: only a checkout without team
-	// coordination falls back to lore.db; any other failure stops here, so
-	// a store task or a linked client task is never finished behind the
-	// store's back (fixed rule 6).
-	if coordErr != nil {
-		if err := plainRowFallback(ctx, coordErr); err != nil {
-			return err
-		}
-	}
-	if err := plainDone(ctx, f, id); err != nil {
-		return err
-	}
-	return finishDone(ctx, f, id)
 }
 
 // workBranchHead is the commit a holder's work ends at when it runs done on
@@ -212,64 +97,6 @@ func isStoreTarget(t coordTarget) bool {
 	return ok
 }
 
-// plainDone marks an unclaimed task done through lore.db (it then travels
-// like any row write: live by default for tasks).
-func plainDone(ctx context.Context, f *taskDoneFlags, idArg string) error {
-	rctx, client, err := resolveContext(&f.commonFlags)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
-	if err != nil {
-		return err
-	}
-	t, err := lookupTask(ctx, client, projectID, idArg)
-	if err != nil {
-		return err
-	}
-	by, err := resolveCurrentActorID(ctx, client)
-	if err != nil {
-		return err
-	}
-	upd := client.Task.UpdateOne(t).SetStatus(entTask.StatusDone).SetCompletedAt(cliClock().Now()).
-		SetCommitment(entTask.CommitmentAccepted).ClearDeferredUntil().SetDoneBy(by)
-	if f.commit != "" {
-		upd.SetDoneCommit(f.commit)
-	}
-	if f.pr > 0 {
-		upd.SetDonePr(f.pr)
-	}
-	if _, err := upd.Save(ctx); err != nil {
-		return errcodes.New(errcodes.Internal, "update task").WithCause(err)
-	}
-	return nil
-}
-
-// finishDone prints the outcome and saves the lesson.
-func finishDone(ctx context.Context, f *taskDoneFlags, id string) error {
-	code := ""
-	switch {
-	case f.pr > 0:
-		code = fmt.Sprintf(" (pr #%d); waiting for merge", f.pr)
-	case f.commit != "":
-		code = fmt.Sprintf(" (commit %s); waiting for merge", shortSHA(f.commit))
-	}
-	fmt.Printf("%s %s done%s\n", style.Success("✓"), id, code)
-	if f.lesson != "" {
-		memID, err := addLinkedMemory(ctx, &f.commonFlags, f.lesson, sourceKindLesson, id)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("  %s → %s\n", sourceKindLesson, memID)
-		return nil
-	}
-	if !f.noLesson {
-		fmt.Println(style.Muted("  learned something? `lore memory add --body \"…\"` (or pass --lesson next time)"))
-	}
-	return nil
-}
-
 // addLinkedMemory saves a memory whose source points at a task or mission
 // (a lesson, a finding). The body is secret-scanned like `memory add`.
 func addLinkedMemory(ctx context.Context, c *commonFlags, text, sourceKind, sourceRef string) (string, error) {
@@ -295,60 +122,6 @@ func addLinkedMemory(ctx context.Context, c *commonFlags, text, sourceKind, sour
 	}
 	_ = c // the scope flags no longer apply: the core writes to the repo store
 	return coreAddMemory(ctx, body, sourceKind, sourceRef)
-}
-
-func newTaskCancelCommand() *cobra.Command {
-	var f commonFlags
-	var from string
-	cmd := &cobra.Command{
-		Use:   "cancel <id>",
-		Short: "Cancel a task (a held task's holder is fenced out: E_CANCELLED)",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			id := args[0]
-			w, t, coordErr := openTaskCoord(ctx, id, from)
-			if coordErr != nil {
-				// Same rule as `task done`: only a checkout without team
-				// coordination cancels through lore.db.
-				if err := plainRowFallback(ctx, coordErr); err != nil {
-					return err
-				}
-				return updateTaskStatus(ctx, &f, id, entTask.StatusCancelled, "cancelled")
-			}
-			defer t.Close()
-			cs, err := readClaim(ctx, w, t, id)
-			if err != nil {
-				return coordError(err)
-			}
-			if cs.claimed {
-				if err := requireHuman(w, "cancelling a claimed task"); err != nil {
-					return err
-				}
-				if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideCancel, func(d coord.Doc) {
-					d["status"] = string(entTask.StatusCancelled)
-				}); err != nil {
-					return coordError(err)
-				}
-				fmt.Printf("%s %s cancelled (claim by %s dropped)\n", style.Success("✓"), id, holderLabel(cs.sig))
-				return nil
-			}
-			if isStoreTarget(t) {
-				if _, err := coord.Update(ctx, w.env(t), id, func(d coord.Doc, _ time.Time) error {
-					d["status"] = string(entTask.StatusCancelled)
-					return nil
-				}); err != nil {
-					return coordError(err)
-				}
-				fmt.Printf("%s %s cancelled\n", style.Success("✓"), id)
-				return nil
-			}
-			return updateTaskStatus(ctx, &f, id, entTask.StatusCancelled, "cancelled")
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	bindFromFlag(cmd, &from)
-	return cmd
 }
 
 // rowHomeTo is the --to that addresses the project holding row id: this
