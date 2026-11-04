@@ -302,3 +302,19 @@ func TestLeak_TrialF7_PrePushFailsClosedWhenStoreUnreadable(t *testing.T) {
 		t.Fatal("a push lore could not check reached origin")
 	}
 }
+
+// F14 printRoute, v0.1.17's order: a routed create prints its success
+// line, then `  filed: <rule>`, then the op's detail lines (scope: …).
+func TestF14_FiledLineFollowsTheSuccessLine(t *testing.T) {
+	a := newAgency(t)
+	out := a.aliceApp.MustLore("memory", "add", "--body", "the build needs node 22 on ci").Stdout
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) < 2 || !strings.HasPrefix(lines[0], "✓ mem_") || !strings.HasPrefix(lines[1], "  filed: ") {
+		t.Fatalf("want the ✓ line, then filed:, then the rest: %q", out)
+	}
+	for _, l := range lines[2:] {
+		if strings.HasPrefix(l, "  filed: ") {
+			t.Fatalf("filed: printed twice: %q", out)
+		}
+	}
+}

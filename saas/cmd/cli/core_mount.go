@@ -311,15 +311,21 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 		}
 		asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON)
 		if !asJSON {
-			if err := inner(cmd, args); err != nil {
-				return err
+			// Buffered so v0.1.17's "filed:" line (printRoute: where a
+			// routed write went and why) goes right under the success line,
+			// before the op's own detail lines (scope: …). Prompts go to
+			// stderr, so nothing interactive waits behind the buffer.
+			var buf bytes.Buffer
+			out := cmd.OutOrStdout()
+			cmd.SetOut(&buf)
+			err := inner(cmd, args)
+			cmd.SetOut(out)
+			b := buf.Bytes()
+			if err == nil && coreRouted != "" {
+				b = insertAfterFirstLine(b, "  filed: "+coreRouted+"\n")
 			}
-			if coreRouted != "" {
-				// v0.1.17 printRoute: where a routed write went and why.
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "  filed: %s\n", coreRouted)
-				return err
-			}
-			return nil
+			_, werr := out.Write(b)
+			return errors.Join(err, werr)
 		}
 		var buf bytes.Buffer
 		out := cmd.OutOrStdout()
@@ -328,6 +334,22 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 		cmd.SetOut(out)
 		return errors.Join(err, writeIndented(out, buf.Bytes()))
 	}
+}
+
+// insertAfterFirstLine returns b with line inserted after its first line
+// (at the end when b has no newline; b itself when empty is just line).
+func insertAfterFirstLine(b []byte, line string) []byte {
+	i := bytes.IndexByte(b, '\n')
+	if i < 0 {
+		if len(b) > 0 {
+			return append(append(append([]byte{}, b...), '\n'), line...)
+		}
+		return []byte(line)
+	}
+	out := make([]byte, 0, len(b)+len(line))
+	out = append(out, b[:i+1]...)
+	out = append(out, line...)
+	return append(out, b[i+1:]...)
 }
 
 // writeIndented prints JSON the way v0.1.17's printJSON did
@@ -749,7 +771,7 @@ func newAPICommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			srv, err := rest.New(coreApp.Registry(), coreRunner, rest.Options{Token: tok, Actor: actor, LoreVersion: version})
+			srv, err := rest.New(coreApp.Registry(), &apiRunner{inner: coreRunner}, rest.Options{Token: tok, Actor: actor, LoreVersion: version})
 			if err != nil {
 				return err
 			}

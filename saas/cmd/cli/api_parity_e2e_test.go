@@ -134,10 +134,8 @@ func sameRefusal(t *testing.T, what string, cli th.Result, rest apiReply, code s
 	}
 }
 
-// The CLI runs come first and `lore api` starts after them: a running
-// `lore api` holds the repo's live lock for its whole life, so a CLI
-// command beside it waits for the lock (reported separately); the parity
-// asserted here is per input, not per moment.
+// `lore api` runs the whole time: the CLI commands run beside it (each REST
+// request ends its live session like a CLI command, api_runner.go).
 func TestAPIParity_SameRunPathAsCLI(t *testing.T) {
 	a := newAgency(t)
 	c := a.aliceApp
@@ -160,6 +158,8 @@ func TestAPIParity_SameRunPathAsCLI(t *testing.T) {
 		}
 	}
 
+	srv := startAPI(t, c)
+
 	// The CLI.
 	newFolder := c.Lore("memory", "add", "--body", "cli note into a new folder", "--to", "northwind/parity-cli")
 	c.Lore("memory", "add", "--body", "cli note into a new folder", "--to", "northwind/parity-cli", "--yes").OK(t)
@@ -170,7 +170,6 @@ func TestAPIParity_SameRunPathAsCLI(t *testing.T) {
 	modeB(false)
 
 	// The same inputs over REST.
-	srv := startAPI(t, c)
 	rNewFolder := srv.post(t, "/v1/memories", map[string]any{"body": "rest note into a new folder", "to": "northwind/parity-rest"})
 	rYes := srv.post(t, "/v1/memories", map[string]any{"body": "rest note into a new folder", "to": "northwind/parity-rest", "yes": true})
 	rLeak := srv.post(t, "/v1/memories", map[string]any{"body": leakNote, "to": "repo"})
@@ -195,5 +194,49 @@ func TestAPIParity_SameRunPathAsCLI(t *testing.T) {
 	sameRefusal(t, "Mode B", retired, rRetired, "E_UNSUPPORTED", 23, http.StatusConflict)
 	if !strings.Contains(retired.Out(), "retired shared-database mode") || !strings.Contains(rRetired.body, "retired shared-database mode") {
 		t.Errorf("Mode B: both name the retired mode: CLI %s / REST %s", retired.Out(), rRetired.body)
+	}
+}
+
+// A running `lore api` does not hold the repo's live lock between
+// requests: a CLI write beside it completes promptly with live rows on,
+// and CLI and REST writers at the same time lose nothing.
+func TestAPIParity_CLIBesideRunningAPI(t *testing.T) {
+	a := newAgency(t)
+	c := a.aliceApp
+	srv := startAPI(t, c)
+	if r := srv.post(t, "/v1/tasks", map[string]any{"title": "rest task before", "to": "repo", "commitment": "accepted"}); r.status/100 != 2 {
+		t.Fatalf("REST task add: %d %s", r.status, r.body)
+	}
+	start := time.Now()
+	r := c.MustLore("task", "add", "cli task beside the api", "--to", "repo", "--commitment", "accepted")
+	if took := time.Since(start); took > 15*time.Second {
+		t.Fatalf("a CLI write beside a running lore api took %v (waited for the live lock): %s", took, r.Out())
+	}
+	r.Never(t, "live lock", "processlock")
+
+	// Concurrent writers: three over REST, three over the CLI.
+	var ps []*th.Pending
+	for i := range 3 {
+		ps = append(ps, c.Prepare("task", "add", "cli parallel "+string(rune('a'+i)), "--to", "repo", "--commitment", "accepted"))
+	}
+	done := make(chan apiReply, 3)
+	for i := range 3 {
+		go func(i int) {
+			done <- srv.post(t, "/v1/tasks", map[string]any{"title": "rest parallel " + string(rune('a'+i)), "to": "repo", "commitment": "accepted"})
+		}(i)
+	}
+	for _, res := range a.w.Simultaneously(ps...) {
+		res.OK(t)
+	}
+	for range 3 {
+		if rr := <-done; rr.status/100 != 2 {
+			t.Errorf("REST parallel task add: %d %s", rr.status, rr.body)
+		}
+	}
+	out := c.MustLore("task", "list", "--all").Out()
+	for _, want := range []string{"rest task before", "cli task beside the api", "cli parallel a", "cli parallel b", "cli parallel c", "rest parallel a", "rest parallel b", "rest parallel c"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lost %q: %s", want, out)
+		}
 	}
 }
