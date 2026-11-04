@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -149,12 +150,10 @@ func ParseID(noun string, p ids.Prefix, s string) (ids.AnyID, error) {
 // maxQuotedID bounds how much of a bad id an error repeats.
 const maxQuotedID = 48
 
-// QuoteID renders a user-given value for an error, truncated.
+// QuoteID renders a user-given value for an error, truncated on a
+// character boundary (textcut; ASCII bytes as v0.1.17's s[:48]+"...").
 func QuoteID(s string) string {
-	if len(s) > maxQuotedID {
-		s = s[:maxQuotedID] + "..."
-	}
-	return `"` + s + `"`
+	return `"` + textcut.Cut(s, maxQuotedID, maxQuotedID) + `"`
 }
 
 // Field returns the text form of a row field ("" when absent or null).
