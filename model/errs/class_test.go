@@ -19,7 +19,7 @@ func allConstants() []Code {
 		InvalidID, InvalidInput, EmptyBody, InvalidUTF8, BodyTooLarge, InvalidIdentifier,
 		SecretDetected, RootRefused, SymlinkDB, SymlinkLoop, UIDMismatch,
 		LockHeld, ReadOnly, BusyTimeout, AuditChainBroken, SyncDataIgnored,
-		NotFound, Internal, NotImplemented, Unsupported,
+		NotFound, Internal, NotImplemented, Unsupported, HasDependents,
 		NoWork, Contended, LostClaim, Cancelled, Reassigned, Offline, AmbiguousID,
 		OrgAmbiguous, OrgDisagrees, LinkUnknown, NotAStore, LeakBlocked, Cycle, OldLore,
 		ConfigInvalid,
@@ -149,7 +149,7 @@ func TestEnvelopeJSON(t *testing.T) {
 	if jerr != nil {
 		t.Fatal(jerr)
 	}
-	want := `{"error":{"code":"E_NEEDS_CONFIRM","message":"asks first","hint":"re-run with --yes","exit":26,"class":"needs_confirmation"}}`
+	want := `{"error":{"code":"E_NEEDS_CONFIRM","message":"asks first","hint":"re-run with --yes","exit":26,"class":"needs_confirmation","retryable":true,"needs_person":true}}`
 	if string(b) != want {
 		t.Fatalf("got  %s\nwant %s", b, want)
 	}
@@ -157,7 +157,7 @@ func TestEnvelopeJSON(t *testing.T) {
 	if jerr != nil {
 		t.Fatal(jerr)
 	}
-	if string(b) != `{"error":{"code":"E_INTERNAL","message":"internal error","exit":1,"class":"generic"}}` {
+	if string(b) != `{"error":{"code":"E_INTERNAL","message":"internal error","exit":1,"class":"generic","retryable":false,"needs_person":false}}` {
 		t.Fatalf("foreign error envelope = %s", b)
 	}
 }

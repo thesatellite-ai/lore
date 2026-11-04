@@ -1,0 +1,249 @@
+// Package engine is lore's ONE read and write path (STORE_SERVER_SPEC 3,
+// 9.2, layer L4): every surface calls an operation through Run, and every
+// operation reads and writes rows through this package's API, which runs, in
+// order for each write: validate against the TableDef → reference check
+// (DOCS O2) → secret scan with the secrets.on_detect policy → confirm →
+// stamp id, HLC, audit fields and _o → store.Backend.Write with Expect →
+// on ErrStale re-read, merge field by field and retry once → Cache.Apply →
+// audit.
+//
+// Why one path: the scanner, the policy and the audit log can only be
+// trusted if nothing can write around them. Backends decide nothing (spec
+// 3); the cache is refreshed from the backend, never written first.
+//
+// No package-level state: everything is passed to New, so tests, the CLI
+// and a later server each build their own Engine.
+package engine
+
+import (
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/logic/scan"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/hlc"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// Attached is one store the engine may read and write.
+type Attached struct {
+	Name     store.Source
+	Backend  store.Backend
+	ReadOnly bool // read_only: true in stores.yaml (spec 7.1)
+}
+
+// IDSource issues permanent row ids. The default makes UUIDv7 ids (the
+// model/ids form); tests inject a fixed sequence.
+type IDSource interface {
+	NewID(p ids.Prefix) (ids.AnyID, error)
+}
+
+// Engine runs operations and their reads and writes. Safe for concurrent
+// use: it holds no mutable state of its own beyond the clock, which locks.
+type Engine struct {
+	stores    map[store.Source]Attached
+	order     []store.Source // stores.yaml order: precedence for lookups
+	target    store.Source   // default write target
+	cache     store.Cache
+	reg       *schema.Registry
+	scanner   scan.Scanner
+	settings  Settings
+	clock     *hlc.Clock
+	wall      func() time.Time
+	ids       IDSource
+	actor     ids.ID[ids.Actor]
+	audit     AuditSink
+	confirmer Confirmer
+}
+
+// Option configures New.
+type Option func(*Engine) error
+
+// WithStore attaches a store. Names must be snake_case and unique; the
+// repo's own store is store.SourceRepo.
+func WithStore(a Attached) Option {
+	return func(e *Engine) error {
+		if !row.ValidName(string(a.Name)) || a.Backend == nil {
+			return errs.New(errs.ConfigInvalid, "engine: a store needs a snake_case name and a backend")
+		}
+		if _, dup := e.stores[a.Name]; dup {
+			return errs.New(errs.ConfigInvalid, "engine: store "+string(a.Name)+" attached twice")
+		}
+		e.stores[a.Name] = a
+		e.order = append(e.order, a.Name)
+		return nil
+	}
+}
+
+// WithDefaultTarget names the store a write goes to when the operation names
+// none (CONFIG_GUIDE default target rules are applied by the caller). The
+// default is store.SourceRepo when attached, else the first store.
+func WithDefaultTarget(name store.Source) Option {
+	return func(e *Engine) error { e.target = name; return nil }
+}
+
+// WithCache sets the cache port (required).
+func WithCache(c store.Cache) Option { return func(e *Engine) error { e.cache = c; return nil } }
+
+// WithRegistry sets the table definitions (required).
+func WithRegistry(r *schema.Registry) Option { return func(e *Engine) error { e.reg = r; return nil } }
+
+// WithScanner sets the secret scanner (required). A scanner that also
+// implements scan.Reporter has its degraded scans turned into warnings.
+func WithScanner(s scan.Scanner) Option { return func(e *Engine) error { e.scanner = s; return nil } }
+
+// WithSettings sets where policy rows, secret rule states and allow entries
+// come from. Without it the built-in policy defaults apply
+// (secrets.on_detect: ask), no rule is off and nothing is allowed: the
+// strict reading, never a looser one.
+func WithSettings(s Settings) Option { return func(e *Engine) error { e.settings = s; return nil } }
+
+// WithActor sets the actor every write is stamped with (required).
+func WithActor(a ids.ID[ids.Actor]) Option { return func(e *Engine) error { e.actor = a; return nil } }
+
+// WithWall sets the wall clock (default time.Now); the HLC clock reads it.
+func WithWall(wall func() time.Time) Option {
+	return func(e *Engine) error { e.wall = wall; return nil }
+}
+
+// WithIDs sets the id source (default: fresh UUIDv7 ids).
+func WithIDs(s IDSource) Option { return func(e *Engine) error { e.ids = s; return nil } }
+
+// WithAudit sets the audit sink (required): every write is recorded.
+func WithAudit(s AuditSink) Option { return func(e *Engine) error { e.audit = s; return nil } }
+
+// WithConfirmer lets an interactive caller answer questions (a terminal
+// prompt). Without it every question is E_NEEDS_CONFIRM unless the caller
+// passed yes.
+func WithConfirmer(c Confirmer) Option { return func(e *Engine) error { e.confirmer = c; return nil } }
+
+// New builds an Engine. Cache, registry, scanner, actor, audit sink and at
+// least one store are required; a missing one is E_CONFIG_INVALID listing
+// them all, so a wiring mistake fails at startup.
+func New(opts ...Option) (*Engine, error) {
+	e := &Engine{stores: map[store.Source]Attached{}, wall: time.Now, ids: uuidIDs{}}
+	for _, o := range opts {
+		if err := o(e); err != nil {
+			return nil, err
+		}
+	}
+	var missing []string
+	for _, m := range []struct {
+		name string
+		ok   bool
+	}{
+		{"cache", e.cache != nil}, {"registry", e.reg != nil}, {"scanner", e.scanner != nil},
+		{"actor", !e.actor.IsZero()}, {"audit sink", e.audit != nil}, {"a store", len(e.stores) > 0},
+		{"wall clock", e.wall != nil}, {"id source", e.ids != nil},
+	} {
+		if !m.ok {
+			missing = append(missing, m.name)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, errs.New(errs.ConfigInvalid, "engine: missing "+strings.Join(missing, ", "))
+	}
+	if e.target == "" {
+		e.target = e.order[0]
+		if slices.Contains(e.order, store.SourceRepo) {
+			e.target = store.SourceRepo
+		}
+	}
+	if _, ok := e.stores[e.target]; !ok {
+		return nil, errs.New(errs.ConfigInvalid, "engine: default target "+string(e.target)+" is not attached")
+	}
+	if e.settings == nil {
+		e.settings = defaultSettings{}
+	}
+	e.clock = hlc.NewClock(e.actor, e.wall)
+	return e, nil
+}
+
+// Stores lists the attached store names in precedence order.
+func (e *Engine) Stores() []store.Source { return slices.Clone(e.order) }
+
+// Registry returns the table definitions the engine validates against.
+func (e *Engine) Registry() *schema.Registry { return e.reg }
+
+// Settings is where the engine reads the settings rows that govern a write
+// to one store, resolved over every level the repo sees (logic/policy).
+type Settings interface {
+	// Policy returns the effective policy and secret rule states for a
+	// write to target.
+	Policy(target store.Source) (policy.Set, policy.Rules, error)
+	// Allows returns the "not a secret" entries that apply to target.
+	Allows(target store.Source) ([]scan.Allow, error)
+}
+
+// defaultSettings is the strict reading when no settings source is wired.
+type defaultSettings struct{}
+
+// Policy implements Settings: the built-in defaults, no rule off.
+func (defaultSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
+	return policy.Defaults(), policy.Rules{}, nil
+}
+
+// Allows implements Settings: nothing is allowed.
+func (defaultSettings) Allows(store.Source) ([]scan.Allow, error) { return nil, nil }
+
+// uuidIDs is the default IDSource.
+type uuidIDs struct{}
+
+// idSep joins the prefix and the 32 hex digits of an id.
+const idSep = "_"
+
+// NewID implements IDSource.
+func (uuidIDs) NewID(p ids.Prefix) (ids.AnyID, error) {
+	u, err := uuid.NewV7()
+	if err != nil {
+		return ids.AnyID{}, errs.Wrap(errs.Internal, "engine: no random source for a new id", err)
+	}
+	return ids.ParseAny(string(p) + idSep + strings.ReplaceAll(u.String(), "-", ""))
+}
+
+// attached returns the named store.
+func (e *Engine) attached(name store.Source) (Attached, error) {
+	a, ok := e.stores[name]
+	if !ok {
+		return Attached{}, errs.New(errs.NotFound, "engine: no store named "+string(name)+" is attached")
+	}
+	return a, nil
+}
+
+// writable returns the named store when a write may go to it (spec 9.2
+// permission, 0.1.18: attached and not read_only).
+func (e *Engine) writable(name store.Source) (Attached, error) {
+	a, err := e.attached(name)
+	if err != nil {
+		return Attached{}, err
+	}
+	if a.ReadOnly {
+		return Attached{}, errs.Wrap(errs.StoreReadOnly, "engine: store "+string(name)+" is attached read-only", store.ErrReadOnly).
+			WithHint("write to another store with --to")
+	}
+	return a, nil
+}
+
+// tableDef returns the definition of a table rows may be written to.
+func (e *Engine) tableDef(t row.Table) (schema.TableDef, error) {
+	def, ok := e.reg.Table(t)
+	if !ok {
+		return schema.TableDef{}, errs.New(errs.NotFound, "engine: no table "+string(t))
+	}
+	if !def.Synced {
+		return schema.TableDef{}, errs.New(errs.InvalidInput, "engine: "+string(t)+" is a cache projection, not stored rows")
+	}
+	if !def.Kind.IsZero() {
+		// Kind rows live in `resources` with their fields in one json field;
+		// the resource noun (phase 2) maps them. Refused loudly until then.
+		return schema.TableDef{}, errs.New(errs.NotImplemented, "engine: write resources of kind "+string(t)+" through the resources table")
+	}
+	return def, nil
+}

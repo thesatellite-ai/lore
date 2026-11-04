@@ -63,6 +63,9 @@ const (
 	Internal       Code = "E_INTERNAL"
 	NotImplemented Code = "E_NOT_IMPLEMENTED"
 	Unsupported    Code = "E_UNSUPPORTED"
+	// HasDependents refuses a delete while a restrict relation still has
+	// live rows pointing at the target (the engine applies OnDelete, O2).
+	HasDependents Code = "E_HAS_DEPENDENTS"
 
 	NoWork        Code = "E_NO_WORK"
 	Contended     Code = "E_CONTENDED"
@@ -163,6 +166,7 @@ var table = map[Code]entry{
 	Internal:              {class: ClassGeneric, desc: "internal error; please file a bug report"},
 	NotImplemented:        {class: ClassRefused, desc: "feature not yet implemented"},
 	Unsupported:           {class: ClassRefused, desc: "operation not supported in current mode"},
+	HasDependents:         {class: ClassRefused, desc: "a delete refused while restrict relations still have live pointing rows"},
 	NoWork:                {class: ClassCoordination, exit: 10, desc: "no ready task"},
 	Contended:             {class: ClassCoordination, exit: 11, desc: "every claim attempt lost a race; retry after a short wait"},
 	LostClaim:             {class: ClassCoordination, exit: 12, desc: "your claim is no longer held; stop work on this task"},

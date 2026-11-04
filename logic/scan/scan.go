@@ -66,6 +66,23 @@ type Scanner interface {
 	Scan(field, text string) []Finding
 }
 
+// Report is a scan result that can also say the scan was degraded, e.g.
+// the SQ7 size gate skipped the gitleaks rules on a huge field. Degraded is
+// never silent: callers surface Note to the person.
+type Report struct {
+	Findings []Finding
+	Degraded bool
+	Note     string
+}
+
+// Reporter is the optional upgrade of Scanner for scanners that can run
+// degraded. Callers type-assert for it and fall back to Scan, so a scanner
+// that is never degraded is not forced to implement it.
+type Reporter interface {
+	Scanner
+	ScanReport(field, text string) Report
+}
+
 // Allow is one "not a secret" entry (a secret_allows row).
 type Allow struct {
 	RowID     ids.AnyID
@@ -145,7 +162,10 @@ func NewRegexScanner(rules []Rule) (*RegexScanner, error) {
 		}
 		re, err := regexp.Compile(r.Regex)
 		if err != nil {
-			return nil, errs.Wrap(errs.ConfigInvalid, "scan: rule "+r.ID+" regex", err)
+			// The regexp error quotes the expression, and a store rule's
+			// expression can embed a fragment of the secret it targets, so
+			// the error names the rule id only and drops err on purpose.
+			return nil, errs.New(errs.ConfigInvalid, "scan: rule "+r.ID+" has an invalid regex")
 		}
 		kw := make([]string, len(r.Keywords))
 		for i, k := range r.Keywords {

@@ -21,6 +21,31 @@ type Error struct {
 	// Cause is the wrapped lower-level error, kept for errors.Is/As chains;
 	// it is not part of the JSON shape (it may hold paths or driver text).
 	Cause error
+	// Retryable marks this failure as one that the same (or the Next)
+	// command can get past without a fix by a person. It is ORed with the
+	// class default (coordination and needs_confirmation are retryable), so
+	// a caller can only add retryability, never hide it.
+	Retryable bool
+	// NeedsPerson marks a failure a person should answer or act on; for an
+	// agent it means "ask your human", never "you are refused". ORed with
+	// the class default (needs_confirmation).
+	NeedsPerson bool
+	// Next is the command that moves things forward, ready to run; nil
+	// when there is none.
+	Next *Next
+	// Question is the exact question to put to the person; set only for
+	// E_NEEDS_CONFIRM.
+	Question string
+	// DocURL points at the page explaining the code; may be empty.
+	DocURL string
+}
+
+// Next is the `next` object of the --json error contract (CLI_REFERENCE
+// 1.4): a command plus its arguments, never a shell string, so an agent can
+// run it without quoting mistakes.
+type Next struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
 }
 
 // New builds an Error. It does not check that code is registered: DefOf
@@ -38,6 +63,21 @@ func Wrap(code Code, msg string, cause error) *Error {
 func (e *Error) WithHint(hint string) *Error {
 	c := *e
 	c.Hint = hint
+	return &c
+}
+
+// WithNext returns a copy of e with the next command set.
+func (e *Error) WithNext(command string, args ...string) *Error {
+	c := *e
+	c.Next = &Next{Command: command, Args: append([]string(nil), args...)}
+	return &c
+}
+
+// WithQuestion returns a copy of e with the question for the person set
+// (E_NEEDS_CONFIRM only, by convention; not enforced so a test can probe it).
+func (e *Error) WithQuestion(q string) *Error {
+	c := *e
+	c.Question = q
 	return &c
 }
 
@@ -94,13 +134,31 @@ type Envelope struct {
 }
 
 // Body is the inner object of Envelope.
+//
+// Field set and names follow CLI_REFERENCE 1.4 (decision OQ5): fields are
+// only ever added, never renamed or removed.
 type Body struct {
-	Code    Code   `json:"code"`
-	Message string `json:"message"`
-	Hint    string `json:"hint,omitempty"`
-	Exit    int    `json:"exit"`
-	Class   Class  `json:"class"`
+	Code        Code   `json:"code"`
+	Message     string `json:"message"`
+	Hint        string `json:"hint,omitempty"`
+	Exit        int    `json:"exit"`
+	Class       Class  `json:"class"`
+	Retryable   bool   `json:"retryable"`
+	NeedsPerson bool   `json:"needs_person"`
+	Next        *Next  `json:"next,omitempty"`
+	Question    string `json:"question,omitempty"`
+	DocURL      string `json:"doc_url,omitempty"`
 }
+
+// classRetryable is the retryable default per class: coordination failures
+// (contention, offline) and confirmations clear on a rerun without a fix.
+func classRetryable(c Class) bool {
+	return c == ClassCoordination || c == ClassNeedsConfirmation
+}
+
+// classNeedsPerson is the needs_person default per class: a confirmation
+// always needs a person's answer.
+func classNeedsPerson(c Class) bool { return c == ClassNeedsConfirmation }
 
 // EnvelopeOf builds the JSON shape for any error: an *Error in the chain
 // gives its own fields, anything else becomes E_INTERNAL with the error text.
@@ -110,5 +168,10 @@ func EnvelopeOf(err error) Envelope {
 		e = Wrap(Internal, "internal error", err)
 	}
 	d := e.Def()
-	return Envelope{Error: Body{Code: e.Code, Message: e.Message, Hint: e.Hint, Exit: d.Exit, Class: d.Class}}
+	return Envelope{Error: Body{
+		Code: e.Code, Message: e.Message, Hint: e.Hint, Exit: d.Exit, Class: d.Class,
+		Retryable:   e.Retryable || classRetryable(d.Class),
+		NeedsPerson: e.NeedsPerson || classNeedsPerson(d.Class),
+		Next:        e.Next, Question: e.Question, DocURL: e.DocURL,
+	}}
 }
