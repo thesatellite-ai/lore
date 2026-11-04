@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -18,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -80,11 +82,30 @@ type ResRef struct {
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
 }
 
-// ResDeleteIn is the input of resource.delete.
+// ResDeleteIn is the input of resource.delete: one resource by name, or
+// the bulk form --kind with --where (CLI_REFERENCE 3.2, XQ1, XQ2).
 type ResDeleteIn struct {
-	Name   string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
-	Reason string `json:"reason,omitempty" flag:"reason" desc:"why (recorded in the audit log)"`
+	Name   string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --kind --where"`
+	Reason string   `json:"reason,omitempty" flag:"reason" desc:"why (recorded in the audit log)"`
+	Kind   string   `json:"kind,omitempty" flag:"kind" desc:"bulk: delete every resource of this kind matching --where (one batch)"`
+	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk: filter on a field, as resource list --where (repeatable; all must match)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"bulk: list what would be deleted; write nothing"`
 }
+
+// ResDeleteOut is the output of resource.delete: the one row's id and
+// store (the single form, unchanged), or the batch and its rows (bulk).
+type ResDeleteOut struct {
+	ID     string   `json:"id,omitempty"`
+	Store  string   `json:"store,omitempty"`
+	Batch  string   `json:"batch,omitempty"`
+	DryRun bool     `json:"dry_run,omitempty"`
+	Count  int      `json:"count,omitempty"`
+	IDs    []string `json:"ids,omitempty"`
+	Human  string   `json:"-"`
+}
+
+// Text implements op.Texter.
+func (o ResDeleteOut) Text() string { return o.Human }
 
 // ResNameIn names one resource for archive and check.
 type ResNameIn struct {
@@ -209,8 +230,12 @@ func (o ops) resourceOps() []op.Entry {
 			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resShow),
 		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resList),
-		op.Define(op.Spec{Name: OpResDelete, Summary: "Delete a resource (a tombstone is kept)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.HasDependents), Confirm: op.ConfirmRule{Always: true}}, o.resDelete),
+		// XQ2: MayAsk, not Always: the bulk form must count its rows before
+		// it may ask (a preview above batch.preview_rows); the one-row form
+		// still always asks, in resDelete (bulk.Ask).
+		op.Define(op.Spec{Name: OpResDelete, Summary: "Delete a resource, or every resource of a kind matching --where (a tombstone is kept)", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true},
+			Examples: []op.Example{{Title: "bulk delete without a terminal", CLI: "lore resource delete --kind host --where provider=linode --yes", Want: "batch bat_"}}}, o.resDelete),
 		op.Define(op.Spec{Name: OpResArchive, Summary: "Archive a resource (refs stay; new refs are refused)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.resArchive),
 		op.Define(op.Spec{Name: OpResCheck, Summary: "Stamp last_checked: a person or agent looked and the facts are right", Permission: op.PermWrite, Access: op.AccessWrite,
@@ -785,23 +810,108 @@ func resourceSortValue(d kindDef, r located, stored resValues) func(string) sort
 	}
 }
 
-func (o ops) resDelete(ctx context.Context, in ResDeleteIn) (RowOut, error) {
+func (o ops) resDelete(ctx context.Context, in ResDeleteIn) (ResDeleteOut, error) {
+	bulkForm := in.Kind != "" || len(in.Where) > 0
+	switch {
+	case bulkForm && in.Name != "":
+		return ResDeleteOut{}, errs.New(errs.InvalidInput, "resource delete: name one resource or use --kind with --where, not both")
+	case bulkForm:
+		return o.resDeleteWhere(ctx, in)
+	case in.Name == "":
+		return ResDeleteOut{}, errs.New(errs.InvalidInput, "resource delete: name the resource, or use --kind <kind> --where <filter>")
+	case in.DryRun:
+		return ResDeleteOut{}, errs.New(errs.InvalidInput, "resource delete: --dry-run belongs to the bulk form --kind --where")
+	}
+	// A single delete always asks (CLI_REFERENCE 2.12), as before.
+	if err := bulk.Ask(ctx, "run resource delete?"); err != nil {
+		return ResDeleteOut{}, err
+	}
 	r, err := o.resourceByName(ctx, in.Name, "")
 	if err != nil {
-		return RowOut{}, err
+		return ResDeleteOut{}, err
 	}
 	referrers, err := o.referrers(ctx, r.Row.ID)
 	if err != nil {
-		return RowOut{}, err
+		return ResDeleteOut{}, err
 	}
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: r.Src, Table: schema.TableResources, ID: r.Row.ID}); err != nil {
-		return RowOut{}, err
+		return ResDeleteOut{}, err
 	}
 	human := fmt.Sprintf("✓ %s (%s) deleted\n", short(r.Row.ID), text(r.Row, rName))
 	if len(referrers) > 0 {
 		human += "  still pointing at it: " + strings.Join(referrers, ", ") + "; they show the old id until you repoint them\n"
 	}
-	return RowOut{ID: r.Row.ID.String(), Store: string(r.Src), Human: human}, nil
+	return ResDeleteOut{ID: r.Row.ID.String(), Store: string(r.Src), Human: human}, nil
+}
+
+// resDeleteWhere is the bulk form: every live resource of --kind matching
+// --where (the one grammar, XQ7) is deleted in ONE batch of kind delete
+// (XQ1: one bat_ id on every row's audit event), after a preview that asks
+// above batch.preview_rows (XQ2). Archived resources match too: a delete
+// by filter means every row the filter names.
+func (o ops) resDeleteWhere(ctx context.Context, in ResDeleteIn) (ResDeleteOut, error) {
+	if in.Kind == "" || len(in.Where) == 0 {
+		return ResDeleteOut{}, errs.New(errs.InvalidInput, "resource delete: the bulk form needs both --kind and --where").
+			WithHint("lore resource delete --kind <kind> --where <field>=<value>")
+	}
+	d, err := o.kindDef(ctx, in.Kind)
+	if err != nil {
+		return ResDeleteOut{}, err
+	}
+	m, err := resourceMatcher(d, in.Where)
+	if err != nil {
+		return ResDeleteOut{}, err
+	}
+	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	if err != nil {
+		return ResDeleteOut{}, err
+	}
+	var hits []located
+	for _, r := range where(rows, map[string]string{rKind: d.kind.Row.ID.String()}) {
+		stored, derr := decodeValues(r)
+		if derr != nil {
+			return ResDeleteOut{}, derr
+		}
+		if m.Match(o.resourceGetter(ctx, d, stored)) {
+			hits = append(hits, r)
+		}
+	}
+	slices.SortFunc(hits, func(a, b located) int { return strings.Compare(text(a.Row, rName), text(b.Row, rName)) })
+	out := ResDeleteOut{DryRun: in.DryRun, Count: len(hits), IDs: make([]string, 0, len(hits))}
+	items := make([]bulk.Item, 0, len(hits))
+	for _, r := range hits {
+		out.IDs = append(out.IDs, r.Row.ID.String())
+		items = append(items, bulk.Item{ID: r.Row.ID.String(), Label: text(r.Row, rName)})
+	}
+	if len(hits) == 0 {
+		out.Human = "no " + d.name() + " resources match; nothing deleted\n"
+		return out, nil
+	}
+	if in.DryRun {
+		var b strings.Builder
+		b.WriteString("would delete " + strconv.Itoa(len(hits)) + " " + d.name() + " resources (dry run, nothing written)\n")
+		for _, it := range items {
+			b.WriteString("  " + it.String() + "\n")
+		}
+		out.Human = b.String()
+		return out, nil
+	}
+	if err = bulk.Preview(ctx, o.env, hits[0].Src, "resource delete", items); err != nil {
+		return ResDeleteOut{}, err
+	}
+	bctx, bid, err := bulk.Begin(ctx, bulk.KindDelete)
+	if err != nil {
+		return ResDeleteOut{}, err
+	}
+	out.Batch = bid.String()
+	for i, r := range hits {
+		if _, derr := o.env.Delete(bctx, engine.Ref{Store: r.Src, Table: schema.TableResources, ID: r.Row.ID}); derr != nil {
+			return ResDeleteOut{}, errors.Join(derr, errs.New(errs.InvalidInput, "resource delete: stopped after "+strconv.Itoa(i)+
+				" of "+strconv.Itoa(len(hits))+" resources; the ones deleted are in batch "+out.Batch))
+		}
+	}
+	out.Human = fmt.Sprintf("✓ %d %s resources deleted (batch %s)\n", len(hits), d.name(), out.Batch)
+	return out, nil
 }
 
 // referrers names the live resources holding a ref to id.

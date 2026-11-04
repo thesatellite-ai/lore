@@ -160,8 +160,9 @@ func TestPolicySetUpdatesOneRow(t *testing.T) {
 // "(unset)", source), sorted by key, a prefix filter, and the empty case.
 func TestPolicyShowText(t *testing.T) {
 	h := multiStore(t)
-	// Q-R2-3 added context.targets (unset by default: detect from files).
-	want := "agents.person_only\t(unset)\tdefault\ncontext.targets\t(unset)\tdefault\nmeta.max_bytes\t16384\tdefault\nresources.max_bytes\t16384\tdefault\n" +
+	// Q-R2-3 added context.targets (unset by default: detect from files);
+	// XQ2 added batch.preview_rows (default 20).
+	want := "agents.person_only\t(unset)\tdefault\nbatch.preview_rows\t20\tdefault\ncontext.targets\t(unset)\tdefault\nmeta.max_bytes\t16384\tdefault\nresources.max_bytes\t16384\tdefault\n" +
 		"routing.client_repos\t(unset)\tdefault\nsecrets.agent_reveal\task\tdefault\nsecrets.on_detect\task\tdefault\n" +
 		"secrets.use_repo_gitleaks\ttrue\tdefault\ntasks.max_depth\t4\tdefault\ntrash.retention_days\t(unset)\tdefault\n"
 	if got := opstest.Text(h.Must(settings.OpPolicyShow, ``)); got != want {
