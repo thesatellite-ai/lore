@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -56,6 +57,7 @@ const (
 	OpRepoArchive      = "repo.archive"
 	OpRepoUnarchive    = "repo.unarchive"
 	OpRepoDelete       = "repo.delete"
+	// OpRepoSetURL and OpRepoFork are in repo.go (the identity verbs).
 )
 
 // Envelope values of v0.1.17's --json (constants.Kind*).
@@ -101,7 +103,7 @@ var (
 // Ops returns every infra operation bound to env.
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
-	return []op.Entry{
+	entries := []op.Entry{
 		op.Define(op.Spec{Name: OpActorList, Summary: "List actors", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
 			Examples: []op.Example{{Title: "list as JSON", CLI: "lore actor list --json", Want: `"data"`}}}, o.actorList),
 		op.Define(op.Spec{Name: OpActorShow, Summary: "Show actor details", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors}, o.actorShow),
@@ -121,6 +123,22 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: OpRepoDelete, Summary: "Delete a repo (a tombstone; archive is usually what you want)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: deleteErrors, Confirm: op.ConfirmRule{Always: true}}, o.repoDelete),
 	}
+	// PROV1/PROV2: the repo identity verbs need the checkout's files and
+	// remotes, an upgrade only a checkout-backed Env (wire.App) offers.
+	if files, ok := upgrade.As[RepoFiles](env); ok {
+		entries = append(entries,
+			op.Define(op.Spec{Name: OpRepoSetURL, Summary: "Confirm this repo's address: the primary (moved or renamed), a --mirror, or --remove one", Permission: op.PermWrite, Access: op.AccessWrite,
+				Errors:   append([]errs.Code{errs.URLUserinfo}, writeErrors...),
+				Examples: []op.Example{{Title: "the repo was renamed", CLI: "lore repo set-url git@github.com:agency/acme-hub-api.git", Want: "primary address is now"}}},
+				func(ctx context.Context, in RepoSetURLIn) (RepoSetURLOut, error) {
+					return repoSetURL(ctx, env, files, in)
+				}),
+			op.Define(op.Spec{Name: OpRepoFork, Summary: "This clone is a fork (or --split): give it its own permanent repo id", Permission: op.PermWrite, Access: op.AccessWrite,
+				Errors: writeErrors},
+				func(ctx context.Context, in RepoForkIn) (RepoForkOut, error) { return repoFork(ctx, env, files, in) }),
+		)
+	}
+	return entries
 }
 
 // ops binds the run functions to one Env.

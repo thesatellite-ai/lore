@@ -57,19 +57,20 @@ func Normalize(raw string) (string, error) {
 		}
 		host, path = u.Hostname(), u.Path
 	case isSCPLike(s):
-		at := strings.LastIndex(s[:strings.Index(s, ":")], "@")
-		rest := s[at+1:]
-		colon := strings.Index(rest, ":")
-		host, path = rest[:colon], rest[colon+1:]
+		userHost, rest, _ := strings.Cut(s, ":")
+		if at := strings.LastIndex(userHost, "@"); at >= 0 {
+			userHost = userHost[at+1:]
+		}
+		host, path = userHost, rest
 	default:
 		if strings.HasPrefix(s, "/") || strings.HasPrefix(s, ".") {
 			return "", fmt.Errorf("repourl: %q is a local path, not a remote", raw)
 		}
-		slash := strings.Index(s, "/")
-		if slash <= 0 {
+		var found bool
+		host, path, found = strings.Cut(s, "/")
+		if !found || host == "" {
 			return "", fmt.Errorf("repourl: %q has no path", redact(raw))
 		}
-		host, path = s[:slash], s[slash+1:]
 		if at := strings.LastIndex(host, "@"); at >= 0 {
 			host = host[at+1:]
 		}

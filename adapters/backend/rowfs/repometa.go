@@ -70,7 +70,7 @@ func ReadRepoMeta(top string) (m RepoMeta, exists bool, err error) {
 	if cerr := checkChain(top, RepoMetaPath); cerr != nil {
 		return RepoMeta{}, false, cerr
 	}
-	b, rerr := os.ReadFile(filepath.Join(top, filepath.FromSlash(RepoMetaPath)))
+	b, rerr := os.ReadFile(filepath.Clean(filepath.Join(top, LoreDir, DataDir, MetaFileName)))
 	if errors.Is(rerr, fs.ErrNotExist) {
 		return RepoMeta{}, false, nil
 	}
@@ -130,7 +130,7 @@ func WriteRepoMeta(top string, m RepoMeta) error {
 	if cerr := checkChain(top, RepoMetaPath); cerr != nil {
 		return cerr
 	}
-	full := filepath.Join(top, filepath.FromSlash(RepoMetaPath))
+	full := filepath.Clean(filepath.Join(top, LoreDir, DataDir, MetaFileName))
 	cur, err := os.ReadFile(full)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -143,8 +143,8 @@ func WriteRepoMeta(top string, m RepoMeta) error {
 	if err != nil {
 		return errs.Wrap(errs.InvalidInput, "rowfs: "+RepoMetaPath+" is not a JSON object", err)
 	}
-	if err := setRepoMeta(o, m); err != nil {
-		return err
+	if serr := setRepoMeta(o, m); serr != nil {
+		return serr
 	}
 	raw, err := json.Marshal(o)
 	if err != nil {

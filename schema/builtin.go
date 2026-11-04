@@ -144,8 +144,22 @@ func coreDefs() []TableDef {
 			Text("display_name"),
 			Text("origin_url"),
 			DateTime("archived_at"),
+			// PROV1/PROV2: urls is the repo's full address history, a JSON
+			// list of {url, kind (primary|mirror|unconfirmed), how
+			// (init|set-url|seen|migrate), from, to, by} entries keyed by
+			// the normalised url (PROVENANCE_DESIGN 10.2); an entry is closed
+			// with `to`, never deleted. forked_from / split_from name the
+			// upstream repo of a repo made by `lore repo fork [--split]`.
+			JSON("urls"),
+			Ref("forked_from", TableRepos),
+			Ref("split_from", TableRepos),
 			UniqueOn("project_id", "mount_name"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
+			// AllowDangling: the upstream's repos row lives in the upstream
+			// repo, which a fork's clone usually never had (PROV1: the id is
+			// still the truth about where it came from).
+			relation(Relation{Name: "forked_from", Kind: Self, Field: "forked_from", Target: TableRepos, OnDelete: TombstoneOnly, AllowDangling: true}),
+			relation(Relation{Name: "split_from", Kind: Self, Field: "split_from", Target: TableRepos, OnDelete: TombstoneOnly, AllowDangling: true}),
 			tagIDs(),
 			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinRepoTags, Cascade),
 		),
