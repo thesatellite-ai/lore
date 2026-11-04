@@ -122,6 +122,7 @@ const (
 	StoreLocked       Code = "E_STORE_LOCKED"
 	Unauthorized      Code = "E_UNAUTHORIZED"
 	ResourceInvalid   Code = "E_RESOURCE_INVALID"
+	ResourcePlace     Code = "E_RESOURCE_PLACE"
 	SchemaOld         Code = "E_SCHEMA_OLD"
 	NeedsConfirm      Code = "E_NEEDS_CONFIRM"
 	PolicyDenied      Code = "E_POLICY_DENIED"
@@ -278,6 +279,7 @@ var table = map[Code]entry{
 	StoreLocked:          {class: ClassRefused, desc: "the store lock stayed held past store.lock_timeout"},
 	Unauthorized:         {class: ClassUnauthorized, desc: "the request has no valid token"},
 	ResourceInvalid:      {class: ClassBadInput, desc: "a value or field does not fit the kind"},
+	ResourcePlace:        {class: ClassRefused, desc: "the place is not allowed by resources.allowed_in, or --to me (RQ2)"},
 	SchemaOld:            {class: ClassUpgrade, desc: "the local database is older than this binary"},
 	NeedsConfirm:         {class: ClassNeedsConfirmation, desc: "the command asks first and ran with no terminal and no --yes"},
 	PolicyDenied:         {class: ClassRefused, desc: "a team policy refuses this"},
