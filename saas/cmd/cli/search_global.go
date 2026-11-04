@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -221,12 +222,24 @@ you want to scope to one type. This is the cross-entity hammer.`,
 				return err
 			}
 
-			// field:value terms naming a resource field are typed conditions
-			// (RES 3.12); the rest is the full-text query.
-			conds, text, err := resourceFieldTerms(ctx, query)
+			// METADATA 3.17: key:value / key=value / key? on a visible meta
+			// key are exact conditions (row_meta); then field:value terms
+			// naming a resource field (RES 3.12); the rest is free text,
+			// phrase-quoted where FTS5 would read - . : as syntax.
+			mconds, rest, err := metaSearchTerms(ctx, query)
 			if err != nil {
 				return err
 			}
+			var conds []resourceCond
+			text := rest
+			if len(mconds) == 0 {
+				// OV39-META-FIRST: with meta conditions the resource field
+				// path is not taken (a name that is both is a meta key here)
+				if conds, text, err = resourceFieldTerms(ctx, rest); err != nil {
+					return err
+				}
+			}
+			ftsText := metaquery.FTS(metaquery.Parse(text, noMetaKeys))
 
 			// RRF merge. Per-table rank 0 is best; score = sum(1 / (k + rank)).
 			merged := make([]globalSearchHit, 0, limit)
@@ -235,14 +248,14 @@ you want to scope to one type. This is the cross-entity hammer.`,
 				var hits []globalSearchHit
 				var err error
 				switch {
+				case len(mconds) > 0:
+					hits, err = searchMetaTable(ctx, eng, t, mconds, ftsText, sc, perTableLimit)
 				case len(conds) > 0 && t.entity == searchEntityResource:
 					hits, err = searchResourceFields(ctx, eng, t, conds, text, sc, perTableLimit)
 				case len(conds) > 0 && text == "":
 					continue // only field conditions: nothing for other tables
-				case len(conds) > 0:
-					hits, err = searchCoreTable(ctx, eng, t, text, sc, perTableLimit)
 				default:
-					hits, err = searchCoreTable(ctx, eng, t, query, sc, perTableLimit)
+					hits, err = searchCoreTable(ctx, eng, t, ftsText, sc, perTableLimit)
 				}
 				if err != nil {
 					return err
@@ -600,6 +613,120 @@ func searchResourceFields(ctx context.Context, eng *engine.Engine, t globalSearc
 		}
 		h := globalHitOf(t, id, "", r)
 		h.Body = searchField(r, "name") + "  (field " + strings.Join(said, ", ") + ")"
+		out = append(out, h)
+	}
+	return out, nil
+}
+
+// noMetaKeys is the key test of a text that holds no meta terms.
+func noMetaKeys(string) bool { return false }
+
+// metaSearchTerms splits query into metadata conditions (METADATA 3.17:
+// key:value, key=value, key? whose key part is a metadata key name this
+// repo's lens can see, from the registry or from the rows' own entries)
+// and the remaining words. A query without ':', '=' or '?' is not looked
+// at (no lens query).
+func metaSearchTerms(ctx context.Context, query string) ([]metaquery.Term, string, error) {
+	if !strings.ContainsAny(query, ":=?") {
+		return nil, query, nil
+	}
+	known := map[string]bool{}
+	for _, q := range []string{
+		`SELECT DISTINCT key_name FROM row_meta_all WHERE item_idx = -1`,
+		`SELECT DISTINCT name FROM meta_keys_all`,
+	} {
+		res, err := coreApp.SQL(ctx, opssql.Request{Query: q, Timeout: opssql.DefaultTimeout})
+		if err != nil {
+			if errs.Has(err, errs.InvalidInput) {
+				continue // no such view in this cache yet
+			}
+			return nil, "", err
+		}
+		for _, r := range res.Rows {
+			if len(r) > 0 {
+				known[r[0].String()] = true
+			}
+		}
+	}
+	var conds []metaquery.Term
+	var words []string
+	for _, t := range metaquery.Parse(query, func(n string) bool { return known[n] }) {
+		if t.Kind == metaquery.Text {
+			words = append(words, t.Word)
+			continue
+		}
+		conds = append(conds, t)
+	}
+	return conds, strings.Join(words, " "), nil
+}
+
+// searchMetaTable is one table's entry when the query has metadata
+// conditions: rows of this repo matching every condition exactly through
+// row_meta (case-insensitive text equality; an allowed value by its name),
+// narrowed to the full-text hits of ftsText when it is not empty. In the
+// masked lens a sensitive value reads as the mask, so a condition on it
+// never matches (fail closed, like OV34-SENSCOND); key? still answers.
+func searchMetaTable(ctx context.Context, eng *engine.Engine, t globalSearchTarget, conds []metaquery.Term, ftsText string, sc globalSearchScope, perTable int) ([]globalSearchHit, error) {
+	q := `SELECT DISTINCT r.entity_id FROM row_meta_all r WHERE r.source = ` + sqlText(string(store.SourceRepo)) +
+		` AND r.entity_table = ` + sqlText(t.table.String()) + ` AND r.item_idx = -1`
+	var said []string
+	for _, c := range conds {
+		match := `x.item_idx = -1`
+		if c.Kind == metaquery.Cond {
+			match = `x.item_idx >= 0 AND lower(x.value_text) = lower(` + sqlText(c.Value) + `)`
+			said = append(said, c.Name()+": "+c.Value)
+		} else {
+			said = append(said, c.Name()+"?")
+		}
+		q += ` AND EXISTS (SELECT 1 FROM row_meta_all x WHERE x.source = r.source AND x.entity_table = r.entity_table` +
+			` AND x.entity_id = r.entity_id AND x.key_name = ` + sqlText(c.Name()) + ` AND ` + match + `)`
+	}
+	q += ` ORDER BY r.entity_id`
+	res, err := coreApp.SQL(ctx, opssql.Request{Query: q, Timeout: opssql.DefaultTimeout})
+	if err != nil {
+		if errs.Has(err, errs.InvalidInput) {
+			return nil, nil // no row_meta view in this cache yet
+		}
+		return nil, err
+	}
+	if len(res.Rows) == 0 {
+		return nil, nil
+	}
+	var only map[string]bool
+	if ftsText != "" {
+		ft, err := coreApp.Search(ctx, t.table, ftsText, searchFetch)
+		if err != nil {
+			return nil, err
+		}
+		only = map[string]bool{}
+		for _, h := range ft {
+			only[h.ID.String()] = true
+		}
+	}
+	list, err := eng.List(ctx, store.SourceRepo, t.table)
+	if err != nil {
+		return nil, err
+	}
+	rows := make(map[string]row.Row, len(list))
+	for _, r := range list {
+		rows[r.ID.String()] = r
+	}
+	out := make([]globalSearchHit, 0, perTable)
+	for _, cells := range res.Rows {
+		if len(out) == perTable || len(cells) == 0 {
+			break
+		}
+		id := cells[0].String()
+		r, ok := rows[id]
+		if !ok || !sc.keeps(t, r) || (only != nil && !only[id]) {
+			continue
+		}
+		h := globalHitOf(t, id, "", r)
+		label := h.Body
+		if label == "" {
+			label = h.fallback
+		}
+		h.Body = strings.TrimSpace(label + "  (" + strings.Join(said, ", ") + ")")
 		out = append(out, h)
 	}
 	return out, nil
