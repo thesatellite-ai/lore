@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	entTask "dbent/gen/ent/task"
 	"fmt"
 	"os"
 	"time"
@@ -22,6 +21,7 @@ import (
 	"saas/pkg/aicoder/textnorm"
 
 	"github.com/spf13/cobra"
+	coreschema "github.com/thesatellite-ai/lore/schema"
 )
 
 // Flags of `task done` (§1 "Flags"); --commit is org_cmd.go's flagCommit.
@@ -337,7 +337,7 @@ func guardTaskCancel(run func(*cobra.Command, []string) error) func(*cobra.Comma
 			return err
 		}
 		if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideCancel, func(d coord.Doc) {
-			d["status"] = string(entTask.StatusCancelled)
+			d["status"] = coreschema.TaskStatusCancelled
 		}); err != nil {
 			return coordError(err)
 		}

@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"dbent/gen/ent"
-	entTeam "dbent/gen/ent/team"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/identity"
@@ -541,6 +539,18 @@ func resolveHandleActor(ctx context.Context, handle string) (string, error) {
 	if strings.TrimPrefix(h, "@") == "" {
 		return "", errcodes.New(errcodes.InvalidInput, "empty handle")
 	}
+	// A 0.1.18 org keeps its roster in the core (roster_core.go).
+	cr, err := openCoreRoster(ctx)
+	if err != nil {
+		return "", err
+	}
+	if cr != nil {
+		a, err := cr.resolveHandle(ctx, h)
+		if err != nil {
+			return "", err
+		}
+		return a.ID, nil
+	}
 	r, err := openRoster(ctx, &commonFlags{})
 	if err != nil {
 		return "", err
@@ -553,56 +563,27 @@ func resolveHandleActor(ctx context.Context, handle string) (string, error) {
 	return a.ID, nil
 }
 
-// resolveHandleTeam returns the id of the active team @handle on the org
-// roster (the store's org folder, where `lore team add` writes it), or ""
-// when no such team exists. It is the roster read a linked client repo
-// needs: its own lore.db holds no teams (team names are internal), so a
-// lookup there alone could never see the team and the TEAM-030 refusal
-// would be unreachable. A roster that cannot be read is an error, never
-// "no team".
-func resolveHandleTeam(ctx context.Context, handle string) (string, error) {
-	h := strings.TrimPrefix(strings.TrimSpace(handle), handlePrefix)
-	if h == "" {
-		return "", errcodes.New(errcodes.InvalidInput, "empty handle")
-	}
-	r, err := openRoster(ctx, &commonFlags{})
-	if err != nil {
-		return "", err
-	}
-	defer r.client.Close()
-	tm, err := r.client.Team.Query().Where(entTeam.ProjectID(r.project), entTeam.Handle(h), entTeam.Active(true)).Only(ctx)
-	if ent.IsNotFound(err) {
-		return "", nil
-	}
-	if err != nil {
-		return "", errcodes.New(errcodes.Internal, "read the roster's teams").WithCause(err)
-	}
-	return tm.ID, nil
-}
-
-// openTasksAssignedTo lists open task ids assigned to actor in this project.
+// openTasksAssignedTo lists open task ids assigned to actor, read through
+// the core (tasks are core-owned; every attached store).
 func openTasksAssignedTo(ctx context.Context, actorID string) ([]string, error) {
-	var f commonFlags
-	_, client, err := resolveContext(&f)
+	ts, err := coreDocs(ctx, tableTasks)
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
-	ts, err := client.Task.Query().All(ctx)
-	if err != nil {
-		return nil, errcodes.New(errcodes.Internal, "list tasks").WithCause(err)
-	}
 	var out []string
 	for _, t := range ts {
-		if t.AssignedToActorID != nil && *t.AssignedToActorID == actorID && openStatus(t) {
-			out = append(out, t.ID)
+		if t.Str(fieldAssignedActor) == actorID && openStatus(t) {
+			out = append(out, t.Str(docKeyID))
 		}
 	}
 	return out, nil
 }
 
-func openStatus(t *ent.Task) bool {
-	s := string(t.Status)
+// fieldAssignedActor is the task's assignee column.
+const fieldAssignedActor = "assigned_to_actor_id"
+
+func openStatus(t coord.Doc) bool {
+	s := t.Status()
 	return s == string(queue.StatusTodo) || s == string(queue.StatusInProgress)
 }
 

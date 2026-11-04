@@ -16,9 +16,6 @@ import (
 	"time"
 
 	"dbent/gen/ent"
-	entHandoff "dbent/gen/ent/handoff"
-	entMemory "dbent/gen/ent/memory"
-	entMission "dbent/gen/ent/mission"
 	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/queue"
@@ -29,6 +26,7 @@ import (
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/model/row"
 )
 
 // Handoff states (handoffs.status_str): open until accepted or declined
@@ -43,6 +41,17 @@ const (
 	flagSince       = "since"
 	flagAck         = "ack"
 	tableMemories   = "memories"
+)
+
+// Row fields the inbox reads from core documents (handoffs, findings,
+// missions).
+const (
+	fieldToActor    = "to_actor_id"
+	fieldFromActor  = "from_actor_id"
+	fieldStatusStr  = "status_str"
+	fieldTaskID     = "task_id"
+	fieldSourceKind = "source_kind"
+	fieldSourceRef  = "source_ref"
 )
 
 // Row states of `lore mission status`: a closed set. The values are printed
@@ -159,7 +168,7 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 		done()
 		return nil, nil, err
 	}
-	cv := &coordView{client: client, project: projectID, w: nil, labels: &actorLabels{local: client}}
+	cv := &coordView{client: client, project: projectID, w: nil, labels: &actorLabels{}}
 	if werr == nil {
 		cv.w = w
 	}
@@ -175,22 +184,22 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 			cv.board, cv.hasBoard = v, true
 		}
 	} else if repoID, err := resolveRepoID(ctx, client, projectID, rctx.RepoMount); err == nil {
-		lazyMergedCheck(ctx, client, projectID, repoID)
+		lazyMergedCheck(ctx, projectID, repoID)
 	}
 	return cv, func() { cv.labels.close(); done() }, nil
 }
 
 // tasks returns the project's tasks with live rows winning.
 func (cv *coordView) tasks(ctx context.Context) ([]*ent.Task, error) {
+	var docs []coord.Doc
+	var err error
 	if cv.lister == nil {
-		ts, err := cv.client.Task.Query().Where(entTask.ProjectID(cv.project)).All(ctx)
+		// No live target: the project's tasks through the core.
+		docs, err = cv.projectDocs(ctx, tableTasks)
 		if err != nil {
-			return nil, errcodes.New(errcodes.Internal, "list tasks").WithCause(err)
+			return nil, err
 		}
-		return ts, nil
-	}
-	docs, err := cv.lister.List(ctx)
-	if err != nil {
+	} else if docs, err = cv.lister.List(ctx); err != nil {
 		return nil, coordError(err)
 	}
 	out := make([]*ent.Task, 0, len(docs))
@@ -206,16 +215,41 @@ func (cv *coordView) tasks(ctx context.Context) ([]*ent.Task, error) {
 
 // taskFromDoc decodes a canonical task document into the ORM struct (the
 // json tags are the column names, the same keys the document uses).
-func taskFromDoc(d coord.Doc) (*ent.Task, error) {
-	b, err := json.Marshal(map[string]any(d))
-	if err != nil {
-		return nil, err
+func taskFromDoc(d coord.Doc) (*ent.Task, error) { return docInto[ent.Task](d) }
+
+// projectDocs reads the live rows of a core-owned table that belong to the
+// view's project, through the core (every attached store). A row written
+// through the core names its author in the envelope (created_by) rather
+// than the v0.1.17 created_by_actor_id column; the document gets that
+// column from the envelope when it lacks it, so ownership reads the same.
+func (cv *coordView) projectDocs(ctx context.Context, table string) ([]coord.Doc, error) {
+	if coreApp == nil {
+		return nil, errcodes.New(errcodes.Internal, "the core is not mounted")
 	}
-	var t ent.Task
-	if err := json.Unmarshal(b, &t); err != nil {
-		return nil, err
+	var out []coord.Doc
+	for _, src := range coreApp.Stores() {
+		rows, err := coreApp.List(ctx, src, row.Table(table))
+		if err != nil {
+			return nil, coreErr(err)
+		}
+		for _, r := range rows {
+			if r.Deleted {
+				continue
+			}
+			d, err := coreDocOf(r)
+			if err != nil {
+				return nil, errcodes.New(errcodes.Internal, "read "+r.ID.String()).WithCause(err)
+			}
+			if d.Str(fieldProjectID) != cv.project {
+				continue
+			}
+			if d.Str(fieldCreatedByActor) == "" && !r.CreatedBy.IsZero() {
+				d[fieldCreatedByActor] = r.CreatedBy.String()
+			}
+			out = append(out, d)
+		}
 	}
-	return &t, nil
+	return out, nil
 }
 
 func (cv *coordView) claim(id string) (signals.Signal, bool, bool) {
@@ -394,18 +428,19 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	missions, err := cv.client.Mission.Query().Where(entMission.ProjectID(cv.project)).All(ctx)
+	missions, err := cv.projectDocs(ctx, tableMissions)
 	if err != nil {
-		return nil, errcodes.New(errcodes.Internal, "list missions").WithCause(err)
+		return nil, err
 	}
 	owned := map[string]bool{}
 	approverOf := map[string]bool{}
 	for _, m := range missions {
-		if m.CreatedByActorID != nil && *m.CreatedByActorID == me {
-			owned[m.ID] = true
+		id := m.Str(docKeyID)
+		if m.Str(fieldCreatedByActor) == me {
+			owned[id] = true
 		}
-		if len(m.Approvers) == 0 || slices.Contains(m.Approvers, me) {
-			approverOf[m.ID] = true
+		if ap := docStrs(m, fieldApprovers); len(ap) == 0 || slices.Contains(ap, me) {
+			approverOf[id] = true
 		}
 	}
 	involved := map[string]bool{}
@@ -443,20 +478,27 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 			out = append(out, inboxItem{Mission: mission, Kind: inboxOverdue, Who: holderLabel(sig), Text: fmt.Sprintf("%s over its time box (%s)", t.ID, time.Duration(*t.TimeboxSeconds)*time.Second)})
 		}
 	}
-	hs, err := cv.client.Handoff.Query().Where(entHandoff.ProjectID(cv.project), entHandoff.ToActorID(me), entHandoff.StatusStr(handoffOpen)).All(ctx)
+	hs, err := cv.projectDocs(ctx, tableHandoffs)
 	if err == nil {
 		for _, h := range hs {
-			out = append(out, inboxItem{Mission: deref(h.MissionID), Kind: inboxHandoff, Who: cv.actorLabel(ctx, deref(h.FromActorID)), Text: strings.TrimSpace(deref(h.TaskID) + "  " + h.Body), At: h.CreatedAt})
+			if h.Str(fieldToActor) != me || h.Str(fieldStatusStr) != handoffOpen {
+				continue
+			}
+			out = append(out, inboxItem{Mission: h.Str(fieldMissionID), Kind: inboxHandoff, Who: cv.actorLabel(ctx, h.Str(fieldFromActor)),
+				Text: strings.TrimSpace(h.Str(fieldTaskID) + "  " + h.Str(fieldBody)), At: h.Time(docKeyCreatedAt)})
 		}
 	}
-	fs, err := cv.client.Memory.Query().Where(entMemory.ProjectID(cv.project), entMemory.SourceKind(sourceKindFinding)).All(ctx)
+	fs, err := cv.projectDocs(ctx, tableMemories)
 	if err == nil {
 		for _, f := range fs {
-			m := deref(f.SourceRef)
+			if f.Str(fieldSourceKind) != sourceKindFinding {
+				continue
+			}
+			m := f.Str(fieldSourceRef)
 			if !involved[m] && !owned[m] && !cv.involvedHere(tasks, m) {
 				continue
 			}
-			out = append(out, inboxItem{Mission: m, Kind: inboxFinding, Who: cv.actorLabel(ctx, deref(f.CreatedByActorID)), Text: f.Body, At: f.CreatedAt})
+			out = append(out, inboxItem{Mission: m, Kind: inboxFinding, Who: cv.actorLabel(ctx, f.Str(fieldCreatedByActor)), Text: f.Str(fieldBody), At: f.Time(docKeyCreatedAt)})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Mission < out[j].Mission })
@@ -517,10 +559,14 @@ type missionRow struct {
 }
 
 func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool) error {
-	m, err := cv.client.Mission.Get(ctx, id)
+	m, ok, err := coreDoc(ctx, tableMissions, id)
 	if err != nil {
-		return errcodes.New(errcodes.NotFound, "no mission "+id).WithCause(err)
+		return err
 	}
+	if !ok {
+		return errcodes.New(errcodes.NotFound, "no mission "+id)
+	}
+	mID, mTitle := m.Str(docKeyID), m.Str(fieldTitle)
 	all, err := cv.tasks(ctx)
 	if err != nil {
 		return err
@@ -598,11 +644,11 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 		rows = append(rows, row)
 	}
 	if jsonOut {
-		printJSON(constants.KindTaskList, map[string]any{"mission": m.ID, "title": m.Title, "counts": counts, "tasks": rows}, len(rows))
+		printJSON(constants.KindTaskList, map[string]any{"mission": mID, "title": mTitle, "counts": counts, "tasks": rows}, len(rows))
 		return nil
 	}
 	fmt.Printf("%s %s   %d tasks · %d done · %d claimed · %d ready · %d waiting · %d gated · %d expired · %d blocked\n",
-		m.ID, m.Title, len(rows), counts[missionStateDone], counts[missionStateClaimed], counts[missionStateReady], counts[missionStateWaiting], counts[missionStateGated], counts[missionStateExpired], counts[missionStateBlocked])
+		mID, mTitle, len(rows), counts[missionStateDone], counts[missionStateClaimed], counts[missionStateReady], counts[missionStateWaiting], counts[missionStateGated], counts[missionStateExpired], counts[missionStateBlocked])
 	for _, r := range rows {
 		fmt.Printf("  %-9s %s  %-28s %-12s %s\n", r.State, r.ID, r.Title, r.Who, r.Detail)
 	}

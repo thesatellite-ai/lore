@@ -16,9 +16,6 @@ import (
 	"strings"
 	"time"
 
-	entDecision "dbent/gen/ent/decision"
-	entMission "dbent/gen/ent/mission"
-	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/live"
@@ -26,6 +23,7 @@ import (
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
+	coreschema "github.com/thesatellite-ai/lore/schema"
 )
 
 // statusField is the column holding a row's lifecycle state.
@@ -39,9 +37,9 @@ const statusField = "status"
 // decisions: the spec says superseded/rejected; the decision enum has no
 // "rejected", and "deprecated" is its closest state (dbent/schema/enums.go).
 var liveFinishedStatuses = map[string]map[string]bool{
-	tableTasks:     {string(entTask.StatusDone): true, string(entTask.StatusCancelled): true},
-	tableMissions:  {string(entMission.StatusDone): true, string(entMission.StatusCancelled): true},
-	tableDecisions: {string(entDecision.StatusSuperseded): true, string(entDecision.StatusDeprecated): true},
+	tableTasks:     {coreschema.TaskStatusDone: true, coreschema.TaskStatusCancelled: true},
+	tableMissions:  {coreschema.MissionStatusDone: true, coreschema.MissionStatusCancelled: true},
+	tableDecisions: {coreschema.DecisionStatusSuperseded: true, coreschema.DecisionStatusDeprecated: true},
 	tableHandoffs:  {handoffAccepted: true, handoffDeclined: true},
 }
 

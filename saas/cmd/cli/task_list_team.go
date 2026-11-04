@@ -7,30 +7,26 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
-	"encoding/json"
-
 	"dbent/gen/ent"
-	entComment "dbent/gen/ent/comment"
 	entTask "dbent/gen/ent/task"
-	entTeam "dbent/gen/ent/team"
-	"saas/pkg/aicoder/cachedb"
-	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
-	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 const (
 	flagClaimedBy = "claimed-by"
 	flagMine      = "mine"
 )
+
+// fieldActive is the roster rows' active flag.
+const fieldActive = "active"
 
 // taskListTeamFlags are the team filters of `task list`.
 type taskListTeamFlags struct {
@@ -45,27 +41,6 @@ func bindTaskListTeamFlags(cmd *cobra.Command, f *taskListTeamFlags) {
 	cmd.Flags().BoolVar(&f.allRepos, constants.FlagAllRepos, false, "every repo of the project (the default for team views)")
 }
 
-// applyTaskListTeam filters rows by the team flags and returns each task's
-// coordination state. Without a git repo or signals (offline: the last
-// fetched copy) it shows rows only.
-func applyTaskListTeam(ctx context.Context, client *ent.Client, f *taskListTeamFlags, rows []*ent.Task) ([]*ent.Task, map[string]string, error) {
-	w, err := openCoordWorld(ctx)
-	if err != nil {
-		if f.claimedBy != "" || f.mine {
-			return nil, nil, err
-		}
-		return rows, nil, nil
-	}
-	st, err := w.repoSignalsChecked()
-	if err != nil {
-		if f.claimedBy != "" || f.mine {
-			return nil, nil, err
-		}
-		return rows, nil, nil
-	}
-	return filterTeamRows(ctx, client, f, rows, st, w.Folder, w.ActorID)
-}
-
 // boardReader is the one signals read the team filters need: the last
 // fetched copy of the claims board (signals.Store.Local; a seam for tests).
 type boardReader interface {
@@ -77,7 +52,10 @@ type boardReader interface {
 // that cannot be read is an error whenever a filter is set (a filter it
 // cannot answer is never shown as every row matching); without filters
 // the rows are shown without coordination state.
-func filterTeamRows(ctx context.Context, client *ent.Client, f *taskListTeamFlags, rows []*ent.Task, rd boardReader, folder, actorID string) ([]*ent.Task, map[string]string, error) {
+//
+// The second parameter is unused (teams are read through the core); it
+// stays for the existing test seam.
+func filterTeamRows(ctx context.Context, _ *ent.Client, f *taskListTeamFlags, rows []*ent.Task, rd boardReader, folder, actorID string) ([]*ent.Task, map[string]string, error) {
 	// The command's own live fetch (F3) already brought refs/lore/* — the
 	// signals ref included — into the tracking refs: read that copy, no
 	// second round trip. It also records what this clone saw (expiry).
@@ -98,14 +76,17 @@ func filterTeamRows(ctx context.Context, client *ent.Client, f *taskListTeamFlag
 	}
 	myTeams := map[string]bool{}
 	if f.mine {
-		teams, err := client.Team.Query().Where(entTeam.Active(true)).All(ctx)
+		teams, err := coreDocs(ctx, tableTeams)
 		if err != nil {
-			return nil, nil, errcodes.New(errcodes.Internal, "read teams for --mine").WithCause(err)
+			return nil, nil, err
 		}
 		for _, tm := range teams {
-			for _, m := range tm.MemberActorIds {
+			if !docBool(tm, fieldActive) {
+				continue
+			}
+			for _, m := range docStrs(tm, schema.FieldTeamMembers) {
 				if m == actorID {
-					myTeams[tm.ID] = true
+					myTeams[tm.Str(docKeyID)] = true
 				}
 			}
 		}
@@ -164,68 +145,6 @@ func agoString(d time.Duration) string {
 	return fmt.Sprintf("%d h", int(d.Hours()))
 }
 
-// actorName names an actor for `task show`: handle, label, display name —
-// from lore.db, else from the fetched default branch (a projection that
-// landed after this checkout was last updated).
-func actorName(ctx context.Context, client *ent.Client, id string) string {
-	a, err := client.Actor.Get(ctx, id)
-	if err != nil {
-		if d, ok := defaultBranchDoc(ctx, tableActors, id); ok {
-			if l := d.Str("label"); l != "" {
-				return l
-			}
-			if n := d.Str("display_name"); n != "" {
-				return n
-			}
-		}
-		return id
-	}
-	switch {
-	case a.Handle != nil && *a.Handle != "":
-		return "@" + *a.Handle
-	case a.Label != nil && *a.Label != "":
-		return *a.Label
-	}
-	return a.DisplayName
-}
-
-// defaultBranchDoc reads a row of this project from the fetched default
-// branch (its durable home, fixed rule 1).
-func defaultBranchDoc(ctx context.Context, table, id string) (coord.Doc, bool) {
-	root := liveProjectRoot(mustGetwd())
-	s := liveFor(ctx, root)
-	if root == "" || s == nil {
-		return nil, false
-	}
-	target := "refs/remotes/" + s.ref.RemoteName + "/" + s.defaultBranch(ctx)
-	b, ok, err := s.ref.Repo.ReadFile(ctx, target, mainDataPath(s.folderFor(root), table+"/"+id+".json"))
-	if err != nil || !ok {
-		return nil, false
-	}
-	d, err := decodeDoc(b)
-	return d, err == nil
-}
-
-func mustGetwd() string {
-	d, _ := os.Getwd()
-	return d
-}
-
-// newerTask returns the default branch's copy of t when it is newer than
-// the local one (a landed row that left live while this checkout's branch
-// data is older; same rule as the coordination reads, tie → main).
-func newerTask(ctx context.Context, t *ent.Task) *ent.Task {
-	d, ok := defaultBranchDoc(ctx, tableTasks, t.ID)
-	if !ok {
-		return t
-	}
-	mt, err := taskFromDoc(d)
-	if err != nil || mt.UpdatedAt.Before(t.UpdatedAt) {
-		return t
-	}
-	return mt
-}
-
 // flagSignals is `task show --signals`.
 const flagSignals = "signals"
 
@@ -275,55 +194,4 @@ func printClaimOn(ctx context.Context, st *signals.Store, folder, id string) err
 		fmt.Printf("  owns:     %s\n", strings.Join(s.Owns, ", "))
 	}
 	return nil
-}
-
-// printTaskNotes lists the task's notes (comments), oldest first, so a
-// replacement agent reads where its predecessor stopped (§7.5 step 5) —
-// this repo's and, with their label, internal ones pointing at it from a
-// store (F15: pointers flow inward and are shown to the team).
-//
-// A read that fails is said on stderr (as list commands report external
-// rows they could not read), never shown as "no notes": an agent taking
-// over must know its predecessor's notes may be missing.
-func printTaskNotes(ctx context.Context, client *ent.Client, id string) {
-	cs, err := client.Comment.Query().Where(entComment.EntityTable(tableTasks), entComment.EntityID(id)).
-		Order(ent.Asc(entComment.FieldCreatedAt)).All(ctx)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, style.Muted("lore: could not read the notes of "+id+": "+err.Error()))
-	}
-	external := externalCommentsOn(ctx, id)
-	if len(cs) == 0 && len(external) == 0 {
-		return
-	}
-	fmt.Println()
-	fmt.Println("  notes:")
-	for _, c := range cs {
-		fmt.Printf("    %s  %s\n", c.CreatedAt.UTC().Format("2006-01-02 15:04"), c.Body)
-	}
-	for _, line := range external {
-		fmt.Println("    " + line)
-	}
-}
-
-// externalCommentsOn returns "body  [label]" for every store or personal
-// comment whose target is task id.
-// Problems reading the external rows are printed on stderr.
-func externalCommentsOn(ctx context.Context, id string) []string {
-	rows, notes := externalRowsHere(ctx, cachedb.Query{Table: tableComments})
-	for _, n := range notes {
-		fmt.Fprintln(os.Stderr, style.Muted("lore: "+n))
-	}
-	var out []string
-	for _, r := range rows {
-		var doc map[string]any
-		if err := json.Unmarshal(r.Doc, &doc); err != nil {
-			fmt.Fprintln(os.Stderr, style.Muted("lore: skipped an unreadable note "+r.ID+" "+r.Label+": "+err.Error()))
-			continue
-		}
-		if doc["entity_id"] != id {
-			continue
-		}
-		out = append(out, r.Body+"  "+r.Label)
-	}
-	return out
 }

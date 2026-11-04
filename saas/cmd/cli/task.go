@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/identity"
+	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
 )
 
@@ -62,40 +64,6 @@ func printTaskRowsWithState(rows []*ent.Task, states map[string]string) {
 	}
 }
 
-func updateTaskStatus(ctx context.Context, f *commonFlags, idArg string, target entTask.Status, label string) error {
-	rctx, client, err := resolveContext(f)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
-	if err != nil {
-		return err
-	}
-
-	t, err := lookupTask(ctx, client, projectID, idArg)
-	if err != nil {
-		return err
-	}
-	upd := client.Task.UpdateOne(t).SetStatus(target)
-	now := time.Now()
-	switch target {
-	case entTask.StatusInProgress:
-		upd.SetStartedAt(now)
-		// Auto-promote: starting work commits the task and un-defers it.
-		// Self-heals a task wrongly left proposed/someday/deferred
-		upd.SetCommitment(entTask.CommitmentAccepted).ClearDeferredUntil()
-	case entTask.StatusDone:
-		upd.SetCompletedAt(now)
-		upd.SetCommitment(entTask.CommitmentAccepted).ClearDeferredUntil()
-	}
-	if _, err := upd.Save(ctx); err != nil {
-		return errcodes.New(errcodes.Internal, "update task").WithCause(err)
-	}
-	fmt.Printf("%s %s %s\n", style.Success("✓"), t.ID, label)
-	return nil
-}
-
 // fullFromTask projects an ent.Task → taskFull JSON shape
 func fullFromTask(t *ent.Task) taskFull {
 	out := taskFull{
@@ -137,13 +105,55 @@ func fullFromTask(t *ent.Task) taskFull {
 	return out
 }
 
-func lookupTask(ctx context.Context, client *ent.Client, projectID, idArg string) (*ent.Task, error) {
-	q := client.Task.Query().Where(entTask.ProjectID(projectID), entTask.ID(idArg))
-	t, err := q.Only(ctx)
+// lookupTask reads task idArg through the core (any attached store; tasks
+// are core-owned, their row files are the truth). An unknown or deleted id
+// is E_NOT_FOUND with v0.1.17's message.
+func lookupTask(ctx context.Context, idArg string) (coord.Doc, error) {
+	d, ok, err := coreDoc(ctx, tableTasks, idArg)
 	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, errcodes.New(errcodes.NotFound, fmt.Sprintf("task %q not found", idArg))
 	}
-	return t, nil
+	return d, nil
+}
+
+// docStrs returns a list field of a core document as strings (refs and
+// text items); nil when absent or not a list.
+func docStrs(d coord.Doc, k string) []string {
+	items, ok := d[k].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		if s, ok := it.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// docBool returns a bool field of a core document (false when absent).
+func docBool(d coord.Doc, k string) bool {
+	b, ok := d[k].(bool)
+	return ok && b
+}
+
+// docInto decodes a core document into T, a struct whose json tags are the
+// column names (the v0.1.17 row structs coordination views still use as
+// plain data holders; nothing here queries lore.db).
+func docInto[T any](d coord.Doc) (*T, error) {
+	b, err := json.Marshal(map[string]any(d))
+	if err != nil {
+		return nil, err
+	}
+	var out T
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // taskStatus / taskPriority parse a flag value into the typed ent enum

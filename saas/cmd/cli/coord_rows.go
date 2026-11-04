@@ -39,6 +39,8 @@ import (
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/constants"
+
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Tables of the rows coordination writes.
@@ -183,7 +185,7 @@ type liveRows struct {
 
 // MergedCheck runs the lazy done → merged check (F9) for this repo.
 func (r *liveRows) MergedCheck(ctx context.Context) {
-	lazyMergedCheck(ctx, r.client, r.projectID, r.repoID)
+	lazyMergedCheck(ctx, r.projectID, r.repoID)
 }
 
 // refresh fetches and integrates the live ref (F3), ignoring the per-command
@@ -284,71 +286,20 @@ func newerDoc(branch coord.Doc, okBranch bool, main coord.Doc, okMain bool) (coo
 	return branch, okBranch
 }
 
-// List returns every task of the project: lore.db's rows overlaid with the
-// fresh live versions.
+// List returns every task of the project. Tasks are core-owned: their row
+// files, read through the core in every attached store, are the only copy
+// that counts (task_corerows.go).
 func (r *liveRows) List(ctx context.Context) ([]coord.Doc, error) {
-	if coreRowTable(tableTasks) {
-		return coreDocs(ctx, tableTasks)
-	}
-	_, tree, err := r.refresh(ctx)
-	if err != nil {
-		return nil, err
-	}
-	files, _ := tree.Rows(r.folder)
-	byID := map[string]coord.Doc{}
-	ts, err := r.client.Task.Query().IDs(ctx)
-	if err != nil {
-		return nil, errcodes.New(errcodes.Internal, "list tasks").WithCause(err)
-	}
-	for _, id := range ts {
-		b, ok, err := lsync.RowDoc(ctx, r.db, tableTasks, id)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
-		d, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
-		if err != nil {
-			return nil, err
-		}
-		main, okMain, err := r.mainDoc(ctx, tableTasks, id)
-		if err != nil {
-			return nil, err
-		}
-		byID[id], _ = newerDoc(coord.Doc(d), true, main, okMain)
-	}
-	for k, f := range files {
-		if k.Table != tableTasks {
-			continue
-		}
-		if f.Deleted() {
-			delete(byID, k.ID)
-			continue
-		}
-		d := coord.Doc(f.Body)
-		// merged_at is written once; a merged check earlier in this command
-		// recorded it in lore.db before its live write, so keep it.
-		if prev, ok := byID[k.ID]; ok && d[keyMergedAtDoc] == nil && prev[keyMergedAtDoc] != nil {
-			d = d.Clone()
-			d[keyMergedAtDoc] = prev[keyMergedAtDoc]
-		}
-		byID[k.ID] = d
-	}
-	out := make([]coord.Doc, 0, len(byID))
-	for _, d := range byID {
-		out = append(out, d)
-	}
-	return out, nil
+	return coreDocs(ctx, tableTasks)
 }
 
 // RepoName maps a repo id to its mount name (what --repo matches).
 func (r *liveRows) RepoName(repoID string) string {
-	rp, err := r.client.Repo.Get(context.Background(), repoID)
-	if err != nil {
+	d, ok, err := coreDoc(context.Background(), schema.TableRepos, repoID)
+	if err != nil || !ok || d.Str(fieldMountName) == "" {
 		return repoID
 	}
-	return rp.MountName
+	return d.Str(fieldMountName)
 }
 
 // Stage implements coord.Rows: one companion, one commit for all rows.

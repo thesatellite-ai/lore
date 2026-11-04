@@ -13,17 +13,23 @@ import (
 	"strings"
 	"time"
 
-	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // flagApprovers is `mission add --approvers`.
 const flagApprovers = "approvers"
+
+// Task / mission fields the gate reads.
+const (
+	fieldMissionID = "mission_id"
+	fieldApprovers = "approvers"
+)
 
 // gateHashShown is how much of approved_hash messages print.
 const gateHashShown = 8
@@ -100,29 +106,14 @@ func runGateRequest(ctx context.Context, id, from string) error {
 			return nil
 		}
 	}
-	var f commonFlags
-	rctx, client, err := resolveContext(&f)
-	if err != nil {
+	// The core owns tasks: the gate goes into the row file.
+	if _, err := lookupTask(ctx, id); err != nil {
 		return err
 	}
-	defer client.Close()
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
-	if err != nil {
+	if err := corePatchDoc(ctx, tableTasks, id, coord.Doc{
+		"gate": schema.TaskGateRequested, "approved_by": nil, "approved_at": nil, "approved_hash": nil,
+	}); err != nil {
 		return err
-	}
-	task, err := lookupTask(ctx, client, projectID, id)
-	if err != nil {
-		return err
-	}
-	if coreRowTable(tableTasks) {
-		// The core owns tasks: the gate goes into the row file.
-		if err := corePatchDoc(ctx, tableTasks, task.ID, coord.Doc{
-			"gate": string(entTask.GateRequested), "approved_by": nil, "approved_at": nil, "approved_hash": nil,
-		}); err != nil {
-			return err
-		}
-	} else if _, err := client.Task.UpdateOne(task).SetGate(entTask.GateRequested).ClearApprovedBy().ClearApprovedAt().ClearApprovedHash().Save(ctx); err != nil {
-		return errcodes.New(errcodes.Internal, "request gate").WithCause(err)
 	}
 	fmt.Printf("%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
 	return nil
@@ -155,23 +146,18 @@ func runGateApprove(ctx context.Context, id, from string) error {
 
 // checkApprover enforces the mission's approvers list, when it has one.
 func checkApprover(ctx context.Context, id, actorID string) error {
-	var f commonFlags
-	_, client, err := resolveContext(&f)
-	if err != nil {
-		return err
+	task, ok, err := coreDoc(ctx, tableTasks, id)
+	if err != nil || !ok || task.Str(fieldMissionID) == "" {
+		return nil // the task has no mission (or is unreadable here): no list to check
 	}
-	defer client.Close()
-	task, err := client.Task.Get(ctx, id)
-	if err != nil || task.MissionID == nil {
-		return nil // the row is only in live or has no mission: no list to check
-	}
-	m, err := client.Mission.Get(ctx, *task.MissionID)
-	if err != nil || len(m.Approvers) == 0 {
+	m, ok, err := coreDoc(ctx, tableMissions, task.Str(fieldMissionID))
+	approvers := docStrs(m, fieldApprovers)
+	if err != nil || !ok || len(approvers) == 0 {
 		return nil
 	}
-	if !slices.Contains(m.Approvers, actorID) {
-		return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("mission %s names its approvers; you are not one of them", m.ID)).
-			WithHint("ask one of: " + strings.Join(m.Approvers, ", "))
+	if !slices.Contains(approvers, actorID) {
+		return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("mission %s names its approvers; you are not one of them", m.Str(docKeyID))).
+			WithHint("ask one of: " + strings.Join(approvers, ", "))
 	}
 	return nil
 }

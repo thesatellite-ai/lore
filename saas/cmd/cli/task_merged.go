@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"dbent/gen/ent"
-	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/lorecfg"
@@ -20,6 +19,7 @@ import (
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // mergedTarget is the fetched default branch the check reads.
@@ -43,9 +43,9 @@ func mergedTarget(ctx context.Context, r *gitref.Repo, remote string) string {
 // Only a checkout without live rows (rows travel with the code) writes the
 // branch row, with a deterministic updated_at so two clones that find the
 // same merge write the same bytes.
-func lazyMergedCheck(ctx context.Context, client *ent.Client, projectID, repoID string) {
-	cands, err := client.Task.Query().Where(entTask.ProjectID(projectID), entTask.StatusEQ(entTask.StatusDone), entTask.MergedAtIsNil()).All(ctx)
-	if err != nil || len(cands) == 0 {
+func lazyMergedCheck(ctx context.Context, projectID, repoID string) {
+	cands := mergedCandidates(ctx, projectID)
+	if len(cands) == 0 {
 		return
 	}
 	dir, err := os.Getwd()
@@ -83,10 +83,32 @@ func lazyMergedCheck(ctx context.Context, client *ent.Client, projectID, repoID 
 		return
 	}
 	if liveFor(ctx, liveProjectRoot(dir)) == nil {
-		recordMergedBranch(ctx, client, found)
+		recordMergedBranch(ctx, nil, found)
 		return
 	}
 	recordMergedLive(ctx, found)
+}
+
+// mergedCandidates reads, through the core (tasks are core-owned), the done
+// tasks of projectID with no merged_at yet. An unreadable core is no
+// candidates: the check never fails the command.
+func mergedCandidates(ctx context.Context, projectID string) []*ent.Task {
+	docs, err := coreDocs(ctx, tableTasks)
+	if err != nil {
+		return nil
+	}
+	var out []*ent.Task
+	for _, d := range docs {
+		if d.Str(fieldProjectID) != projectID || d.Status() != schema.TaskStatusDone || d.Str(keyMergedAtDoc) != "" {
+			continue
+		}
+		t, err := docInto[ent.Task](d)
+		if err != nil {
+			continue // a row this binary cannot read is skipped, not fatal
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 // foundMerge is one done task whose merge the check found.
@@ -138,27 +160,19 @@ func recordMergedLive(ctx context.Context, found []foundMerge) {
 	}
 }
 
-// recordMergedBranch stamps merged_at through lore.db, for a checkout
-// without live rows: the row is this branch's data and travels with the
-// code. updated_at becomes the later of its old value and the merge time
-// (not "now"), so the bytes depend only on the row and the merge.
-func recordMergedBranch(ctx context.Context, client *ent.Client, found []foundMerge) {
+// recordMergedBranch stamps merged_at on the task's row file through the
+// core, for a checkout without live rows: the row is this branch's data and
+// travels with the code.
+//
+// client is unused: tasks are core-owned, so the stamp always goes into the
+// row file through the engine (kept for the existing test seam).
+func recordMergedBranch(ctx context.Context, _ *ent.Client, found []foundMerge) {
 	for _, m := range found {
-		if coreRowTable(tableTasks) {
-			// The core owns tasks: stamp the row file through the engine.
-			err := corePatchDoc(ctx, tableTasks, m.task.ID, coord.Doc{keyMergedAtDoc: m.finding.At.UTC().Format(time.RFC3339Nano)})
-			if err != nil {
-				err = fmt.Errorf("record %s: %w", m.task.ID, err)
-			}
-			reportMerged(os.Stderr, m.task.ID, m.finding, err)
-			continue
+		err := corePatchDoc(ctx, tableTasks, m.task.ID, coord.Doc{keyMergedAtDoc: m.finding.At.UTC().Format(time.RFC3339Nano)})
+		if err != nil {
+			err = fmt.Errorf("record %s: %w", m.task.ID, err)
 		}
-		upd := client.Task.UpdateOne(m.task).SetMergedAt(m.finding.At).SetUpdatedAt(mergedUpdatedAt(m.task.UpdatedAt, m.finding.At))
-		if _, err := upd.Save(ctx); err != nil {
-			reportMerged(os.Stderr, m.task.ID, m.finding, fmt.Errorf("record %s: %w", m.task.ID, err))
-			continue
-		}
-		reportMerged(os.Stderr, m.task.ID, m.finding, nil)
+		reportMerged(os.Stderr, m.task.ID, m.finding, err)
 	}
 }
 
@@ -208,7 +222,7 @@ Example:
 			// .lore/data change in this checkout (trial finding F5).
 			if w, t, err := openTaskCoord(ctx, args[0], from); err == nil {
 				defer t.Close()
-				if d, ok, gerr := t.Rows.Get(ctx, args[0]); gerr == nil && ok && d.Status() == string(entTask.StatusDone) {
+				if d, ok, gerr := t.Rows.Get(ctx, args[0]); gerr == nil && ok && d.Status() == schema.TaskStatusDone {
 					if prev := d.Time(keyMergedAtDoc); !prev.IsZero() {
 						fmt.Printf("%s %s was already merged at %s\n", style.Success("✓"), args[0], prev.UTC().Format("2006-01-02 15:04"))
 						return nil
@@ -216,7 +230,7 @@ Example:
 				}
 				at := w.Clock.Now().UTC()
 				if _, err := coord.Update(ctx, w.env(t), args[0], func(d coord.Doc, _ time.Time) error {
-					if d.Status() != string(entTask.StatusDone) {
+					if d.Status() != schema.TaskStatusDone {
 						return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", args[0], d.Status()))
 					}
 					if d.Str("merged_at") == "" {
@@ -229,35 +243,22 @@ Example:
 				fmt.Printf("%s %s merged (marked by hand, %s)\n", style.Success("✓"), args[0], at.Format("15:04"))
 				return nil
 			}
-			rctx, client, err := resolveContext(&f)
+			t, err := lookupTask(ctx, args[0])
 			if err != nil {
 				return err
 			}
-			defer client.Close()
-			projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
-			if err != nil {
-				return err
+			if t.Status() != schema.TaskStatusDone {
+				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", args[0], t.Status()))
 			}
-			t, err := lookupTask(ctx, client, projectID, args[0])
-			if err != nil {
-				return err
-			}
-			if t.Status != entTask.StatusDone {
-				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", t.ID, t.Status))
-			}
-			if t.MergedAt != nil {
-				fmt.Printf("%s %s was already merged at %s\n", style.Success("✓"), t.ID, t.MergedAt.UTC().Format("2006-01-02 15:04"))
+			if prev := t.Time(keyMergedAtDoc); !prev.IsZero() {
+				fmt.Printf("%s %s was already merged at %s\n", style.Success("✓"), args[0], prev.UTC().Format("2006-01-02 15:04"))
 				return nil
 			}
 			at := cliClock().Now().UTC()
-			if coreRowTable(tableTasks) {
-				if err := corePatchDoc(ctx, tableTasks, t.ID, coord.Doc{keyMergedAtDoc: at.Format(time.RFC3339Nano)}); err != nil {
-					return err
-				}
-			} else if _, err := client.Task.UpdateOne(t).SetMergedAt(at).Save(ctx); err != nil {
-				return errcodes.New(errcodes.Internal, "record merged_at").WithCause(err)
+			if err := corePatchDoc(ctx, tableTasks, args[0], coord.Doc{keyMergedAtDoc: at.Format(time.RFC3339Nano)}); err != nil {
+				return err
 			}
-			fmt.Printf("%s %s merged (marked by hand, %s)\n", style.Success("✓"), t.ID, at.Format("15:04"))
+			fmt.Printf("%s %s merged (marked by hand, %s)\n", style.Success("✓"), args[0], at.Format("15:04"))
 			return nil
 		},
 	}
