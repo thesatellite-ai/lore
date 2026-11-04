@@ -105,7 +105,17 @@ func (r *coreRoster) resolveHandle(ctx context.Context, h string) (wire.RosterAc
 		}
 	}
 	return wire.RosterActor{}, errcodes.New(errcodes.InvalidInput, "no one is @"+h+" on "+r.where+"'s roster").
-		WithHint(rosterMissHint)
+		WithHint(r.missHint())
+}
+
+// missHint is the hint for a handle missing from this roster: the repo's
+// own roster (no org) has no store copy to be stale, so the person has not
+// registered (roster_cmd.go's v0.1.17 wording).
+func (r *coreRoster) missHint() string {
+	if r.target == store.SourceRepo {
+		return repoRosterMissHint
+	}
+	return rosterMissHint
 }
 
 // byKey finds an active actor by stable key.

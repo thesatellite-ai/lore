@@ -24,6 +24,7 @@ import (
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Roster flags and values.
@@ -84,7 +85,7 @@ func openRoster(ctx context.Context, c *commonFlags) (*roster, error) {
 	if s.ResolveErr != nil {
 		return nil, orgResolveCLIError(s.ResolveErr)
 	}
-	r := &roster{org: s.Result.Org, where: "this repo"}
+	r := &roster{org: s.Result.Org, where: repoRosterWhere}
 	if org := s.Result.Org; org != nil {
 		sc := org.OrgFolderStore()
 		if sc == nil {
@@ -112,6 +113,37 @@ func openRoster(ctx context.Context, c *commonFlags) (*roster, error) {
 	r.client, r.project = client, pid
 	return r, nil
 }
+
+// openRosterOnCore is the roster the core keeps for the working
+// directory: the org's 0.1.18 roster (openCoreRoster), or, in a repo with
+// no org, the repo store's own actors and teams rows (coordinator answer
+// Q4). actors and teams are core-owned in a checkout, so a lore.db-only
+// write there is never exported (the handle would be lost). nil: the
+// v0.1.17 path (a v0.1.17 org store) or a client repo, whose roster is
+// never the repo itself.
+func openRosterOnCore(ctx context.Context) (*coreRoster, error) {
+	cr, err := openCoreRoster(ctx)
+	if cr != nil || err != nil || coreApp == nil {
+		return cr, err
+	}
+	s, err := coreSituationOnce(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if s.ResolveErr != nil {
+		return nil, orgResolveCLIError(s.ResolveErr)
+	}
+	if s.Result.Org != nil {
+		return nil, nil
+	}
+	if client, cerr := coreRepoIsClient(ctx); cerr != nil || client {
+		return nil, nil
+	}
+	return &coreRoster{app: coreApp, target: store.SourceRepo, where: repoRosterWhere}, nil
+}
+
+// repoRosterWhere names the repo's own roster in messages.
+const repoRosterWhere = "this repo"
 
 // handleTaken returns who holds handle on the roster, other than stableKey.
 func (r *roster) handleTaken(ctx context.Context, handle, stableKey string) (string, error) {
@@ -295,7 +327,7 @@ func newActorRegisterCommand() *cobra.Command {
 			default:
 				return errcodes.New(errcodes.InvalidInput, "--kind is human (default) or agent")
 			}
-			cr, err := openCoreRoster(ctx)
+			cr, err := openRosterOnCore(ctx)
 			if err != nil {
 				return err
 			}
@@ -344,7 +376,7 @@ func newActorDeactivateCommand() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cr, err := openCoreRoster(ctx)
+			cr, err := openRosterOnCore(ctx)
 			if err != nil {
 				return err
 			}
@@ -380,7 +412,7 @@ func rosterRegisterAgent(ctx context.Context, label, ownerHandle string) (string
 	if label == "" || strings.ContainsAny(label, " \t:/@") {
 		return "", "", errcodes.New(errcodes.InvalidInput, "an agent label is one word (no spaces, ':', '/', '@')")
 	}
-	cr, err := openCoreRoster(ctx)
+	cr, err := openRosterOnCore(ctx)
 	if err != nil {
 		return "", "", err
 	}
@@ -440,7 +472,7 @@ func newTeamAddCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			handle := strings.TrimPrefix(args[0], handlePrefix)
-			cr, err := openCoreRoster(ctx)
+			cr, err := openRosterOnCore(ctx)
 			if err != nil {
 				return err
 			}
@@ -504,7 +536,7 @@ func newTeamListCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
-			cr, err := openCoreRoster(ctx)
+			cr, err := openRosterOnCore(ctx)
 			if err != nil {
 				return err
 			}
