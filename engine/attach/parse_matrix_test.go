@@ -54,6 +54,15 @@ func TestParseMatrix(t *testing.T) {
 		"url a list":               {"stores:\n  - name: agency\n    url: [a]\n", false},
 		"read_only not a bool":     {"stores:\n" + entry("agency", "    read_only: maybe\n"), false},
 		"two problems at once":     {"stores:\n" + entry("Bad", "") + "  - name: also_bad\n", false},
+		// me is never in a committed file, in any form (spec 7.1, CFG2)
+		"me folder target":        {"stores:\n" + entry("me/notes", "    folder: notes\n"), false},
+		"me folder, no key":       {"stores:\n" + entry("me/notes", ""), false},
+		"me nested folder":        {"stores:\n" + entry("me/a/b", "    folder: a/b\n"), false},
+		"me empty folder":         {"stores:\n" + entry("me/", "    folder: \"\"\n"), false},
+		"me with a branch":        {"stores:\n" + entry("me", "    branch: main\n"), false},
+		"me_notes is a real name": {"stores:\n" + entry("me_notes", ""), true},
+		"meta is a real name":     {"stores:\n" + entry("meta", ""), true},
+		"team folder target":      {"stores:\n" + entry("team/acme", "    folder: acme\n"), true},
 	}
 	for _, r := range Reserved() {
 		cases["reserved "+r] = tc{"stores:\n" + entry(r, ""), false}
@@ -82,6 +91,9 @@ func TestParseMatrix(t *testing.T) {
 	if got, err := Parse([]byte("stores:\n" + entry("agency", "    branch: staging\n    folder: acme\n    read_only: true\n"))); err != nil ||
 		got.Stores[0].Branch != "staging" || got.Stores[0].Folder != "acme" || !got.Stores[0].ReadOnly {
 		t.Fatalf("keys not read: %+v %v", got, err)
+	}
+	if _, err := Parse([]byte("stores:\n" + entry("me/notes", "    folder: notes\n"))); err == nil || !strings.Contains(err.Error(), "personal store") {
+		t.Fatalf("me/<folder> must be refused as the personal store: %v", err)
 	}
 	two, err := Parse([]byte("stores:\n" + entry("Bad", "") + "  - name: also_bad\n"))
 	if err == nil || !strings.Contains(err.Error(), "store 1") || !strings.Contains(err.Error(), "store 2") {

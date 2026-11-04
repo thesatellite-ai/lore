@@ -81,6 +81,11 @@ func Parse(b []byte) (Config, error) {
 		at := "store " + strconv.Itoa(i+1) + " (" + string(s.Name) + ")"
 		base, folder, isFolder := strings.Cut(string(s.Name), "/")
 		switch {
+		case base == ReservedMe:
+			// `me` and every `me/<folder>` is the personal store, which
+			// lives only in the machine config: never in a committed file
+			// (spec 7.1, CFG2), so a teammate never attaches your store.
+			problems = append(problems, at+": "+ReservedMe+" is your personal store and is never named in "+FileName)
 		case isFolder && (!row.ValidName(base) || folder == "" || folder != s.Folder):
 			// A recorded `--to <store>/<folder>` target (wire): the name is
 			// "<store>/<folder>" and its folder key repeats the folder.

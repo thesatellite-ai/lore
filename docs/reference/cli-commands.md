@@ -304,6 +304,7 @@ This file is generated from the operation registry of the 0.1.18 core (the `op.D
 | `E_ORG_DISAGREES` | 17 | `coordination` | 409 | the selected org differs from the store link |
 | `E_POLICY_DENIED` | 23 | `refused` | 409 | a team policy refuses this |
 | `E_PROJECT_NAME_COLLISION` | 23 | `refused` | 409 | multiple projects share that name; specify by opaque ID |
+| `E_PURGED` | 23 | `refused` | 409 | the row was purged; only a tombstone is left |
 | `E_READ_ONLY` | 23 | `refused` | 409 | command requires write access but read-only mode is active |
 | `E_READ_ONLY_FS` | 23 | `refused` | 409 | DB path is on a read-only filesystem |
 | `E_REASSIGNED` | 14 | `coordination` | 409 | a person reassigned the task while you held it |
