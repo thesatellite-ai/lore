@@ -377,15 +377,36 @@ func ensureCoreGitignore(ctx context.Context) error {
 		return nil
 	}
 	gitignoreChecked = true
-	pctx, perr := projresolve.Resolve(projresolve.Inputs{})
-	if perr != nil || os.Getenv(envReadOnly) == envValueOn {
+	if os.Getenv(envReadOnly) == envValueOn {
 		return nil
 	}
-	if err := ensureGitignore(ctx, pctx.ProjectRoot); err != nil {
+	root := coreProjectRoot()
+	if root == "" {
+		return nil
+	}
+	if err := ensureGitignore(ctx, root); err != nil {
 		return errcodes.New(errcodes.Internal, "update .gitignore").WithCause(err)
 	}
-	ensureCoreGitSetup(ctx, pctx.ProjectRoot)
+	ensureCoreGitSetup(ctx, root)
 	return nil
+}
+
+// coreProjectRoot is the lore project the running command works in: the
+// v0.1.17 resolution (.lore/lore.db or lore.yaml), else the nearest .lore/
+// folder inside this git checkout. Why the fallback: lore.db is gitignored,
+// so a fresh clone where only core commands ran has .lore/data and no
+// lore.db, and the old resolution alone skipped its git wiring: no merge
+// driver, so the first pull of a row both sides wrote (an actor row on two
+// machines, F18) was a plain text conflict. "" = not in a lore project.
+func coreProjectRoot() string {
+	if pctx, err := projresolve.Resolve(projresolve.Inputs{}); err == nil {
+		return pctx.ProjectRoot
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return liveProjectRoot(cwd)
 }
 
 // ensureCoreGitSetup wires git for lore data (merge driver, .gitattributes,

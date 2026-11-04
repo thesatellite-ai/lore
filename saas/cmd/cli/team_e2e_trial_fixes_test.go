@@ -75,7 +75,9 @@ func TestF18_SamePersonOnSeveralMachinesKeepsOneRepoActor(t *testing.T) {
 	if !ok {
 		t.Fatalf("rule %s was not exported", rul)
 	}
-	if !strings.Contains(body, `"created_by_actor_id": "`+want+`"`) {
+	// Row envelope v2 names the creator in created_by (v0.1.17's
+	// created_by_actor_id column is the lore.db bridge's spelling, 9cb384c).
+	if !strings.Contains(body, `"created_by": "`+want+`"`) {
 		t.Fatalf("the rule must name alice's existing actor %s:\n%s", want, body)
 	}
 }

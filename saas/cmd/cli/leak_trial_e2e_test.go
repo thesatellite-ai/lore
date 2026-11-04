@@ -318,3 +318,23 @@ func TestF14_FiledLineFollowsTheSuccessLine(t *testing.T) {
 		}
 	}
 }
+
+// A fresh clone where only core commands run (lore.db is gitignored, so
+// it has .lore/data and no lore.db) is wired like v0.1.17's per-command
+// sync: the merge driver config and the hooks are installed by its first
+// write (F18's precondition: without the driver the first pull of an actor
+// row both machines wrote is a text conflict).
+func TestF18_FreshCloneCoreWriteWiresTheMergeDriver(t *testing.T) {
+	a := newAgency(t, th.Flag("to", "rule", "add"))
+	m := a.dev1.Clone(a.app, "app-fresh")
+	if r := m.TryGit("config", "--get", "merge.lore.driver"); r.Code == 0 {
+		t.Fatalf("precondition: a fresh clone has no merge driver: %s", r.Out())
+	}
+	m.MustLore("rule", "add", "--body", "keep migrations reversible", "--to", "repo")
+	if r := m.TryGit("config", "--get", "merge.lore.driver"); r.Code != 0 || !strings.Contains(r.Out(), "merge-driver") {
+		t.Fatalf("the first core write wires the merge driver: %s", r.Out())
+	}
+	if b, _ := os.ReadFile(filepath.Join(m.Dir, ".git", "hooks", "pre-commit")); !strings.Contains(string(b), "lore") {
+		t.Fatalf("and lore's hooks: %q", b)
+	}
+}
