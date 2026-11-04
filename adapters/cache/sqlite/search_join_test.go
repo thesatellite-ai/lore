@@ -44,7 +44,8 @@ func (f *fixture) decision(id ids.AnyID, title, body string, tags ...ids.AnyID) 
 
 // TestSearchHitsWeights: bm25 weights follow FTSWeightOf — the same word
 // in a title (weight 4) ranks above it in a body (3), which ranks above a
-// field of weight 1 (status); scores are ascending (lower is better).
+// field of weight 1 (status); scores are positive and descending (higher
+// is better, v0.1.17's sign).
 func TestSearchHitsWeights(t *testing.T) {
 	f := newFixture(t)
 	c := f.open("c.db")
@@ -72,9 +73,12 @@ func TestSearchHitsWeights(t *testing.T) {
 	if !slices.Equal(got, []ids.AnyID{inTitle, inBody, inStatus}) {
 		t.Fatalf("order %v, want title, body, status", got)
 	}
-	for i := 1; i < len(hits); i++ {
-		if hits[i-1].Score > hits[i].Score {
-			t.Errorf("scores not ascending: %v", hits)
+	for i, h := range hits {
+		if h.Score <= 0 {
+			t.Errorf("score %v not positive", h.Score)
+		}
+		if i > 0 && hits[i-1].Score < h.Score {
+			t.Errorf("scores not descending: %v", hits)
 		}
 	}
 }

@@ -10,9 +10,12 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 )
 
-// SearchHit is one full-text match: the row id, its bm25 score (lower is
-// better, weighted per field by schema.TableDef.FTSWeightOf) and a snippet
-// of the matched text (matches in <b>…</b>).
+// SearchHit is one full-text match: the row id, its score and a snippet of
+// the matched text (matches in <b>…</b>).
+//
+// Score is SQLite's weighted bm25 (per field by schema.TableDef.FTSWeightOf)
+// with the sign flipped, as v0.1.17's fts5 package printed it: higher is
+// better, a match is positive. Hits come best first either way.
 type SearchHit struct {
 	ID      ids.AnyID
 	Score   float64
@@ -68,7 +71,9 @@ func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, l
 		if err != nil {
 			return nil, errs.Wrap(errs.DBCorrupt, "sqlite cache: bad id in search index", err)
 		}
-		h.ID, h.Snippet = id, snip.String
+		// SQLite's bm25 is lower-is-better (negative for a match); flip it
+		// to v0.1.17's higher-is-better score.
+		h.ID, h.Snippet, h.Score = id, snip.String, -h.Score
 		out = append(out, h)
 	}
 	if err := rs.Err(); err != nil {
