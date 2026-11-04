@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -193,7 +194,7 @@ func approvers(ctx context.Context, raw []string) (value.Value, error) {
 				a = who.ActorID
 			}
 			if _, err := ids.Parse[ids.Actor](a); err != nil {
-				return nil, errs.Wrap(errs.InvalidID, "mission: --approvers "+work.Quote(a)+" is not an actor id (act_…)", err)
+				return nil, lookup.BadID("mission: --approvers "+work.Quote(a)+" is not an actor id (act_…)", err)
 			}
 			t, err := value.TextOf(a)
 			if err != nil {
@@ -331,8 +332,8 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		return work.WriteOut{}, err
 	}
 	if in.Status != "" {
-		if err := work.OneOf(Noun, "status", in.Status, schema.MissionStatuses()); err != nil {
-			return work.WriteOut{}, err
+		if serr := work.OneOf(Noun, "status", in.Status, schema.MissionStatuses()); serr != nil {
+			return work.WriteOut{}, serr
 		}
 	}
 	patch, err := work.Texts(Noun, map[string]string{work.FieldTitle: strings.TrimSpace(in.Title), work.FieldBody: in.Body, work.FieldStatus: in.Status})

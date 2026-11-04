@@ -107,11 +107,11 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		return ApplyOut{}, errs.Wrap(errs.InvalidInput, "read plan", err)
 	}
 	var p File
-	if err := yaml.Unmarshal(raw, &p); err != nil {
-		return ApplyOut{}, errs.Wrap(errs.InvalidInput, "plan is not valid YAML", err)
+	if yerr := yaml.Unmarshal(raw, &p); yerr != nil {
+		return ApplyOut{}, errs.Wrap(errs.InvalidInput, "plan is not valid YAML", yerr)
 	}
-	if err := checkFile(p); err != nil {
-		return ApplyOut{}, err
+	if cerr := checkFile(p); cerr != nil {
+		return ApplyOut{}, cerr
 	}
 	project, err := o.env.Project(ctx)
 	if err != nil {
@@ -191,10 +191,20 @@ func checkFile(p File) error {
 		if keys[t.Key] {
 			return errs.New(errs.InvalidInput, "plan: task key "+t.Key+" appears twice")
 		}
-		keys[t.Key] = true
 		if t.Gate != "" && t.Gate != schema.TaskGateRequired {
 			return errs.New(errs.InvalidInput, "plan: task "+t.Key+": gate must be required")
 		}
+		// after: is checked here, before anything is written, so a bad
+		// key never leaves a half-applied mission behind (planDeps would
+		// refuse it only after the mission and earlier tasks exist).
+		earlier := make(map[string]row.Row, len(keys))
+		for k := range keys {
+			earlier[k] = row.Row{}
+		}
+		if _, err := planDeps(t, earlier, ""); err != nil {
+			return err
+		}
+		keys[t.Key] = true
 	}
 	return nil
 }
@@ -307,30 +317,9 @@ func (o ops) planTask(ctx context.Context, src store.Source, project ids.ID[ids.
 			return row.Row{}, false, err
 		}
 	}
-	var deps []dep
-	seen := map[string]bool{}
-	for _, raw := range pt.After {
-		k, until := strings.TrimSpace(raw), ""
-		for _, mode := range []string{untilDone, untilMerged} {
-			if base, ok := strings.CutSuffix(k, ":"+mode); ok {
-				k, until = base, mode
-			}
-		}
-		up, ok := earlier[k]
-		if !ok {
-			return row.Row{}, false, errs.New(errs.InvalidInput, "plan: task "+pt.Key+" is after "+raw+", which is not an earlier task of the plan").
-				WithHint("after: takes keys of earlier tasks, optionally with :done or :merged (e.g. backend:merged)")
-		}
-		if until == "" {
-			until = untilDone
-			if work.Field(up, work.FieldRepo) != repoID {
-				until = untilMerged
-			}
-		}
-		if !seen[up.ID.String()] {
-			seen[up.ID.String()] = true
-			deps = append(deps, dep{TaskID: up.ID.String(), Until: until})
-		}
+	deps, err := planDeps(pt, earlier, repoID)
+	if err != nil {
+		return row.Row{}, false, err
 	}
 	if len(deps) > 0 {
 		j, jerr := json.Marshal(deps)
@@ -353,4 +342,39 @@ func (o ops) planTask(ctx context.Context, src store.Source, project ids.ID[ids.
 		return row.Row{}, false, err
 	}
 	return w.Row, true, nil
+}
+
+// planDeps turns a plan task's after: keys into blocked_by edges (v0.1.17
+// plan_apply.go planDeps): each key names an earlier task of the plan,
+// optionally with :done or :merged; without a suffix a task of the same
+// repo waits for done and one of another repo for merged (F9). A key named
+// twice is one edge (the first wins); a key that is not an earlier task,
+// or an unknown suffix, is E_INVALID_INPUT.
+func planDeps(pt FileTask, earlier map[string]row.Row, repoID string) ([]dep, error) {
+	var deps []dep
+	seen := map[string]bool{}
+	for _, raw := range pt.After {
+		k, until := strings.TrimSpace(raw), ""
+		for _, mode := range []string{untilDone, untilMerged} {
+			if base, ok := strings.CutSuffix(k, ":"+mode); ok {
+				k, until = base, mode
+			}
+		}
+		up, ok := earlier[k]
+		if !ok {
+			return nil, errs.New(errs.InvalidInput, "plan: task "+pt.Key+" is after "+raw+", which is not an earlier task of the plan").
+				WithHint("after: takes keys of earlier tasks, optionally with :done or :merged (e.g. backend:merged)")
+		}
+		if until == "" {
+			until = untilDone
+			if work.Field(up, work.FieldRepo) != repoID {
+				until = untilMerged
+			}
+		}
+		if !seen[up.ID.String()] {
+			seen[up.ID.String()] = true
+			deps = append(deps, dep{TaskID: up.ID.String(), Until: until})
+		}
+	}
+	return deps, nil
 }
