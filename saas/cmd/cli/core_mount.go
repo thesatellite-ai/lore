@@ -519,9 +519,8 @@ func repoIsClientNow(ctx context.Context) (bool, error) {
 //
 // Fail closed: an org refusal or links that cannot be read is an error
 // (wire then attaches nothing). A store entry pinned to a non-default
-// branch (a staging entry) is not attached: the core's git backend follows
-// the store's default branch, so attaching it would read and write the
-// wrong branch.
+// branch (a staging entry) is attached on that branch (attach.Store.Branch:
+// its own clone, its own cache path).
 func coreOrgStores(ctx context.Context) ([]attach.Store, error) {
 	s, err := coreSituationOnce(ctx)
 	if err != nil {
@@ -537,7 +536,14 @@ func coreOrgStores(ctx context.Context) ([]attach.Store, error) {
 	if s.Result.LinkUnknown {
 		return nil, errors.New("the store links of this repo cannot be read: " + s.Result.LinkDetail)
 	}
-	attachable := func(sc *lorecfg.Store) bool { return sc != nil && sc.EffectiveBranch() == lorecfg.DefaultStoreBranch }
+	attachable := func(sc *lorecfg.Store) bool { return sc != nil }
+	// branchOf is the attach branch of an entry store: "" for the default.
+	branchOf := func(sc *lorecfg.Store) string {
+		if b := sc.EffectiveBranch(); b != lorecfg.DefaultStoreBranch {
+			return b
+		}
+		return ""
+	}
 	var out []attach.Store
 	var linked *orgresolve.Link
 	for i := range s.Result.Links {
@@ -552,15 +558,15 @@ func coreOrgStores(ctx context.Context) ([]attach.Store, error) {
 	switch {
 	case linked != nil:
 		if sc := oldstores.StoreFor(org, linked.StoreURL); attachable(sc) {
-			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: linked.Folder})
+			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: linked.Folder, Branch: branchOf(sc)})
 		}
 	case s.Committed != nil && s.Committed.Org == org.Name && s.Committed.Project != "":
 		if sc := &org.Stores[0]; attachable(sc) {
-			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: s.Committed.Project})
+			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: s.Committed.Project, Branch: branchOf(sc)})
 		}
 	default:
 		if sc := &org.Stores[0]; attachable(sc) {
-			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL})
+			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Branch: branchOf(sc)})
 		}
 	}
 	for i := range org.Stores {
@@ -568,7 +574,7 @@ func coreOrgStores(ctx context.Context) ([]attach.Store, error) {
 		if sc.OrgFolder == "" || sc.OrgFolder == oldstores.RootFolder || !attachable(sc) {
 			continue
 		}
-		out = append(out, attach.Store{Name: store.Source(org.Name + "/" + sc.OrgFolder), URL: sc.URL, Folder: sc.OrgFolder})
+		out = append(out, attach.Store{Name: store.Source(org.Name + "/" + sc.OrgFolder), URL: sc.URL, Folder: sc.OrgFolder, Branch: branchOf(sc)})
 		break // one org folder per entry (F13)
 	}
 	return out, nil

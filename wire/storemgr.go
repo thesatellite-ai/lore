@@ -46,6 +46,7 @@ const (
 	keyURL      = "url"
 	keyFolder   = "folder"
 	keyReadOnly = "read_only"
+	keyBranch   = "branch"
 	// initSubject is the commit subject of a git store's marker commit.
 	initSubject = "lore: store init"
 )
@@ -196,7 +197,7 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 		return opsstores.Entry{}, err
 	}
 	in.URL = raw
-	s := attach.Store{Name: store.Source(in.Name), URL: in.URL, Folder: in.Folder, ReadOnly: in.ReadOnly}
+	s := attach.Store{Name: store.Source(in.Name), URL: in.URL, Folder: in.Folder, ReadOnly: in.ReadOnly, Branch: in.Branch}
 	canon, err := canonical(s)
 	if err != nil {
 		return opsstores.Entry{}, err
@@ -212,7 +213,7 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 			WithHint("make it a store first: lore store init " + in.Name + " <url>")
 	}
 	if in.Folder != "" {
-		ok, err := a.folderExists(ctx, s.URL, in.Folder)
+		ok, err := a.folderExists(ctx, s, in.Folder)
 		if err != nil {
 			return opsstores.Entry{}, err
 		}
@@ -228,7 +229,7 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 	if err := addStoresEntry(top, s); err != nil {
 		return opsstores.Entry{}, err
 	}
-	return opsstores.Entry{Name: in.Name, URL: in.URL, Folder: in.Folder, ReadOnly: in.ReadOnly}, nil
+	return opsstores.Entry{Name: in.Name, URL: in.URL, Folder: in.Folder, ReadOnly: in.ReadOnly, Branch: in.Branch}, nil
 }
 
 // RemoveStore implements opsstores.Manager.
@@ -254,7 +255,7 @@ func (a *App) RemoveStore(ctx context.Context, name string) (opsstores.Entry, er
 	if err != nil {
 		return opsstores.Entry{}, err
 	}
-	return opsstores.Entry{Name: name, URL: gone.URL, Folder: gone.Folder, ReadOnly: gone.ReadOnly}, nil
+	return opsstores.Entry{Name: name, URL: gone.URL, Folder: gone.Folder, ReadOnly: gone.ReadOnly, Branch: gone.Branch}, nil
 }
 
 // ListStores implements opsstores.Manager.
@@ -269,7 +270,7 @@ func (a *App) ListStores(ctx context.Context) ([]opsstores.Entry, error) {
 	}
 	var out []opsstores.Entry
 	for _, s := range cfg.Stores {
-		out = append(out, opsstores.Entry{Name: string(s.Name), URL: s.URL, Folder: s.Folder, ReadOnly: s.ReadOnly})
+		out = append(out, opsstores.Entry{Name: string(s.Name), URL: s.URL, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch})
 	}
 	mc, err := readMachineConfig(a.opts.Home)
 	if err != nil {
@@ -301,8 +302,8 @@ func (a *App) checkUnused(ctx context.Context, name string) error {
 }
 
 // folderExists reports whether the store at raw has the data folder f.
-func (a *App) folderExists(ctx context.Context, raw, f string) (bool, error) {
-	dir, err := a.storeDir(ctx, raw)
+func (a *App) folderExists(ctx context.Context, src attach.Store, f string) (bool, error) {
+	dir, err := a.storeDir(ctx, src)
 	if err != nil {
 		return false, err
 	}
@@ -315,9 +316,10 @@ func (a *App) folderExists(ctx context.Context, raw, f string) (bool, error) {
 }
 
 // storeDir is the local folder holding a store's files: the path of a
-// file:// store, the lore-owned worktree of a git store.
-func (a *App) storeDir(ctx context.Context, raw string) (string, error) {
-	canon, err := canonical(attach.Store{URL: raw})
+// file:// store, the lore-owned worktree of a git store (of src's pinned
+// branch, when it names one).
+func (a *App) storeDir(ctx context.Context, src attach.Store) (string, error) {
+	canon, err := canonical(attach.Store{URL: src.URL, Branch: src.Branch})
 	if err != nil {
 		return "", err
 	}
@@ -360,6 +362,9 @@ func addStoresEntry(top string, s attach.Store) error {
 		mapSet(n, keyURL, scalar(s.URL))
 		if s.Folder != "" {
 			mapSet(n, keyFolder, scalar(s.Folder))
+		}
+		if s.Branch != "" {
+			mapSet(n, keyBranch, scalar(s.Branch))
 		}
 		if s.ReadOnly {
 			mapSet(n, keyReadOnly, &yaml.Node{Kind: yaml.ScalarNode, Value: "true", Tag: "!!bool"})

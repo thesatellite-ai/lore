@@ -234,7 +234,7 @@ func openAttached(ctx context.Context, repoTop, home string, reg *schema.Registr
 		dup := false
 		if pc, perr := canonical(me); perr == nil {
 			for _, s := range cfg.Stores {
-				if c, cerr := canonical(attach.Store{URL: s.URL, Folder: s.Folder}); cerr == nil && c == pc {
+				if c, cerr := canonical(attach.Store{URL: s.URL, Folder: s.Folder, Branch: s.Branch}); cerr == nil && c == pc {
 					dup = true
 				}
 			}
@@ -281,7 +281,7 @@ func levelOf(o attach.Opened) policy.Level {
 // (git@host:owner/repo) becomes ssh:// through git.CanonicalURL (net/url
 // cannot parse it), a password is refused (attach.NormalizeURL, never
 // echoed), and the entry's folder becomes the `?folder=` the backends read
-// (rowfs.FolderParam).
+// (rowfs.FolderParam), its branch the `?branch=` (git.BranchParam).
 func canonical(s attach.Store) (string, error) {
 	raw, err := attach.NormalizeURL(s.URL)
 	if err != nil {
@@ -299,9 +299,14 @@ func canonical(s attach.Store) (string, error) {
 			return "", errs.New(errs.StoreScheme, "wire: the store url does not parse")
 		}
 	}
-	if s.Folder != "" {
+	if s.Folder != "" || s.Branch != "" {
 		q := u.Query()
-		q.Set(rowfs.FolderParam, s.Folder)
+		if s.Folder != "" {
+			q.Set(rowfs.FolderParam, s.Folder)
+		}
+		if s.Branch != "" {
+			q.Set(git.BranchParam, s.Branch) // a file:// store refuses it (E_STORE_SCHEME): no branches
+		}
 		u.RawQuery = q.Encode()
 	}
 	return u.String(), nil

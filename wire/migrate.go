@@ -131,7 +131,7 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error
 	}
 	seen := map[string]bool{}
 	for _, e := range list {
-		dir, err := a.storeDir(ctx, e.URL)
+		dir, err := a.storeDir(ctx, attach.Store{URL: e.URL, Branch: e.Branch})
 		if err != nil {
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: store "+e.Name, err)
 		}
@@ -350,7 +350,7 @@ func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool)
 		}
 	}
 	for _, s := range org {
-		dir, err := a.storeDir(ctx, s.URL)
+		dir, err := a.storeDir(ctx, s)
 		if err != nil {
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
 		}

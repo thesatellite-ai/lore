@@ -68,6 +68,8 @@ type Entry struct {
 	URL      string `json:"url"`
 	Folder   string `json:"folder,omitempty"`
 	ReadOnly bool   `json:"read_only,omitempty"`
+	// Branch is the pinned store branch (empty = the default branch).
+	Branch string `json:"branch,omitempty"`
 	// Personal marks `me` (from ~/.lore/config.yaml, not stores.yaml).
 	Personal bool `json:"personal,omitempty"`
 }
@@ -95,6 +97,7 @@ type AddIn struct {
 	URL      string `json:"url" arg:"1" desc:"git url (git@host:owner/repo, ssh://, https://) or file:// path"`
 	Folder   string `json:"folder,omitempty" flag:"folder" desc:"attach only this folder of the store"`
 	ReadOnly bool   `json:"read_only,omitempty" flag:"read-only" desc:"refuse every write to this store"`
+	Branch   string `json:"branch,omitempty" flag:"branch" desc:"attach this store branch (e.g. staging) instead of the default one"`
 }
 
 // RemoveIn is the input of store.remove.

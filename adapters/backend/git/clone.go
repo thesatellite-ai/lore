@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -52,13 +53,24 @@ func NewOpener(opts ...Option) store.Opener {
 		if err != nil {
 			return nil, err
 		}
-		folder, err := rowfs.FolderOf(u)
+		branch, rest, err := branchOf(u)
+		if err != nil {
+			return nil, err
+		}
+		folder, err := rowfs.FolderOf(rest)
 		if err != nil {
 			return nil, err
 		}
 		base, err := CloneBase(o.Home, r)
 		if err != nil {
 			return nil, err
+		}
+		if branch != "" {
+			// A pinned branch gets its own clone (bare + worktree + lock):
+			// a worktree holds one branch, and the default branch's clone
+			// may be open in another process.
+			base += branchCloneSep + filepath.FromSlash(branch)
+			opts = append(slices.Clone(opts), WithBranch(branch))
 		}
 		return OpenClone(ctx, r.URL, base, folder, o, opts...)
 	}
@@ -434,4 +446,34 @@ func (b *Backend) missingCommits(ctx context.Context, cursor store.Cursor) ([]st
 func exists(path string) bool {
 	_, err := os.Lstat(path)
 	return !errors.Is(err, fs.ErrNotExist)
+}
+
+// BranchParam is the url query parameter that pins the store branch a
+// clone checks out (`ssh://git@host/acme/notes?branch=staging`); absent
+// follows the remote's default branch. Wire builds it from the `branch:`
+// key of .lore/stores.yaml, as it builds rowfs.FolderParam.
+const BranchParam = "branch"
+
+// branchCloneSep joins the clone stem and a pinned branch:
+// <home>/clones/<host>/<owner>/<repo>@<branch>.git and …@<branch>/work.
+const branchCloneSep = "@"
+
+// branchOf takes BranchParam out of u: the branch (validated like
+// WithBranch) and a copy of u without it, for rowfs.FolderOf.
+func branchOf(u *url.URL) (string, *url.URL, error) {
+	q, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return "", nil, errs.New(errs.StoreScheme, "git: the store url query does not parse")
+	}
+	vals, ok := q[BranchParam]
+	if !ok {
+		return "", u, nil
+	}
+	if len(vals) != 1 || !branchPattern.MatchString(vals[0]) || strings.Contains(vals[0], "..") {
+		return "", nil, errs.New(errs.InvalidInput, "git: the branch name is not valid")
+	}
+	q.Del(BranchParam)
+	rest := *u
+	rest.RawQuery = q.Encode()
+	return vals[0], &rest, nil
 }

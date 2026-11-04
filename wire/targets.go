@@ -66,7 +66,7 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 	if err != nil || !found {
 		return err // not found: the engine answers "no store named … is attached"
 	}
-	exists, err := a.folderExists(ctx, src.URL, folderName)
+	exists, err := a.folderExists(ctx, src, folderName)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 			WithQuestion("create the folder " + folderName + " in store " + base + "?").
 			WithHint("rerun with --yes to create it with this write")
 	}
-	target := attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly}
+	target := attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly, Branch: src.Branch}
 	// `me/<folder>` and an org store's folder are not recorded: the
 	// personal url is machine-local, and an org store reached through the
 	// org link must never have its url written into the repo (CFG7).

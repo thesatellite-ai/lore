@@ -54,6 +54,10 @@ type Store struct {
 	// Folder is the optional project folder inside the store to link.
 	Folder   string `yaml:"folder,omitempty"`
 	ReadOnly bool   `yaml:"read_only,omitempty"`
+	// Branch pins the store branch (a staging branch, v0.1.17's org entry
+	// `branch:`); empty follows the store's default branch. Only a git
+	// store has branches (a file:// store with a branch is E_STORE_SCHEME).
+	Branch string `yaml:"branch,omitempty"`
 }
 
 // Config is the whole file. Order matters: it is the stores' precedence
