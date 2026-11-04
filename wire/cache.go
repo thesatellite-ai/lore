@@ -3,7 +3,11 @@ package wire
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -27,6 +31,10 @@ type caches struct {
 	// combined is the one file shared by every attached store past
 	// MaxStoreCaches (CFG3 fallback), nil otherwise.
 	combined *sqlite.Cache
+	// healed are the notices of damaged cache files moved aside and
+	// rebuilt during open (openHealing); the App hands them to
+	// Options.Notice once the open succeeds.
+	healed []string
 }
 
 // Combined reports whether this repo uses the CFG3 combined cache (for
@@ -44,7 +52,7 @@ func newCaches() *caches { return &caches{by: map[store.Source]*sqlite.Cache{}} 
 
 // open opens source's cache file at path.
 func (c *caches) open(ctx context.Context, source store.Source, path string, reg *schema.Registry, exp sqlite.Expander) error {
-	f, err := cacheOpen(ctx, path, reg, exp)
+	f, err := c.openHealing(ctx, path, reg, exp)
 	if err != nil {
 		return errs.Wrap(errs.CodeOf(err), "wire: open the cache of store "+string(source), err)
 	}
@@ -59,7 +67,7 @@ func (c *caches) open(ctx context.Context, source store.Source, path string, reg
 // (the CFG3 fallback): each source's rows are applied under its own name,
 // so the file's `_source` column tells them apart.
 func (c *caches) openCombined(ctx context.Context, names []store.Source, path string, reg *schema.Registry, exp sqlite.Expander) error {
-	f, err := cacheOpen(ctx, path, reg, exp)
+	f, err := c.openHealing(ctx, path, reg, exp)
 	if err != nil {
 		return errs.Wrap(errs.CodeOf(err), "wire: open the combined store cache", err)
 	}
@@ -71,6 +79,89 @@ func (c *caches) openCombined(ctx context.Context, names []store.Source, path st
 	}
 	c.combined = f
 	return nil
+}
+
+// corruptSuffix names a damaged cache file moved aside:
+// <file>.corrupt-<UTC timestamp>. It is kept, never deleted, so nothing a
+// person might want to inspect is lost silently.
+const corruptSuffix = ".corrupt-"
+
+// corruptStamp is the timestamp layout of a moved-aside file (sortable,
+// no characters a file system refuses).
+const corruptStamp = "20060102T150405Z"
+
+// cacheSidecars are the files SQLite keeps beside a cache in WAL mode;
+// they belong to the damaged file and move aside with it (a stale WAL
+// replayed onto a fresh file would corrupt it again).
+var cacheSidecars = []string{"-wal", "-shm"}
+
+// healCaches turns self-healing of damaged cache files on. It is a
+// variable only so a test can turn it off and watch the command fail
+// (break-verification); nothing else sets it.
+var healCaches = true
+
+// openHealing opens the cache file at path. When the open fails because
+// the FILE is damaged (sqlite.IsCorrupt; never a lock or permission
+// error), the file and its WAL sidecars are renamed to
+// <name>.corrupt-<time> and a fresh, empty cache is opened in its place:
+// a cache is rebuildable by design (spec 3), and the engine's refresh
+// refills it from the row files. One notice per healed file is kept in
+// c.healed for the person.
+func (c *caches) openHealing(ctx context.Context, path string, reg *schema.Registry, exp sqlite.Expander) (*sqlite.Cache, error) {
+	f, err := cacheOpen(ctx, path, reg, exp)
+	if err == nil || !healCaches || !sqlite.IsCorrupt(err) {
+		return f, err
+	}
+	base := asideBase(path)
+	aside := base + corruptSuffix + time.Now().UTC().Format(corruptStamp)
+	for n := 1; fileExists(aside); n++ { // never overwrite an earlier one
+		aside = base + corruptSuffix + time.Now().UTC().Format(corruptStamp) + "-" + strconv.Itoa(n)
+	}
+	if mvErr := os.Rename(path, aside); mvErr != nil {
+		return nil, errors.Join(err, errs.Wrap(errs.Internal, "wire: move the damaged cache aside", mvErr))
+	}
+	for _, s := range cacheSidecars {
+		if mvErr := os.Rename(path+s, aside+s); mvErr != nil && !os.IsNotExist(mvErr) {
+			return nil, errors.Join(err, errs.Wrap(errs.Internal, "wire: move the damaged cache aside", mvErr))
+		}
+	}
+	f, err = cacheOpen(ctx, path, reg, exp)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	c.healed = append(c.healed, "lore: the cache "+path+" was damaged; moved it to "+aside+" and rebuilt it from the row files (nothing lost)")
+	c.mu.Unlock()
+	return f, nil
+}
+
+// repoBackupsDir is the folder under .lore that every repo's .gitignore
+// already ignores (lore init writes ".lore/backups/").
+const repoBackupsDir = "backups"
+
+// repoMarkerDir is the folder the repo cache lives in (wire.RepoCacheFile).
+const repoMarkerDir = ".lore"
+
+// asideBase is where a damaged cache at path is moved: the repo cache
+// (.lore/lore-cache.db) goes to .lore/backups/, so the kept copy never
+// shows in git status; a cache under the lore home stays beside itself
+// (that folder is outside every repo).
+func asideBase(path string) string {
+	dir := filepath.Dir(path)
+	if filepath.Base(dir) != repoMarkerDir {
+		return path
+	}
+	bk := filepath.Join(dir, repoBackupsDir)
+	if err := os.MkdirAll(bk, cacheDirMode); err != nil {
+		return path
+	}
+	return filepath.Join(bk, filepath.Base(path))
+}
+
+// fileExists reports whether p names anything on disk.
+func fileExists(p string) bool {
+	_, err := os.Lstat(p)
+	return err == nil
 }
 
 // of returns source's cache file.

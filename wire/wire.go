@@ -361,6 +361,7 @@ func (a *App) state(ctx context.Context) (*state, error) {
 		a.opened = true
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
 		if a.err == nil && a.opts.Notice != nil {
+			a.healedNotices(a.st)
 			if n := liveNote(ctx, a.st); n != "" {
 				a.opts.Notice(n)
 			}
@@ -376,8 +377,23 @@ func (a *App) configState(ctx context.Context) (*state, error) {
 	if !a.cfgOpened {
 		a.cfgOpened = true
 		a.cfg, a.cfgErr = open(ctx, a.opts, nil, true)
+		if a.cfgErr == nil {
+			a.healedNotices(a.cfg)
+		}
 	}
 	return a.cfg, a.cfgErr
+}
+
+// healedNotices hands Options.Notice one line per damaged cache file the
+// open of st moved aside and rebuilt (caches.openHealing). Either open
+// (full or repo-only) may be the one that healed, so both call it.
+func (a *App) healedNotices(st *state) {
+	if a.opts.Notice == nil {
+		return
+	}
+	for _, n := range st.caches.healed {
+		a.opts.Notice(n)
+	}
 }
 
 // repoTop is the code repository's top folder.

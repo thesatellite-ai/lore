@@ -60,9 +60,6 @@ func doctorStores(ctx context.Context, r *doctorReport) {
 			r.Notes = append(r.Notes, strconv.Itoa(len(list))+" stores attached (more than "+strconv.Itoa(wire.MaxStoreCaches)+
 				"): this repo uses one combined store cache (CFG3) instead of one cache file per store")
 		}
-		for _, msg := range resurrectedFindings(ctx) {
-			warn(msg)
-		}
 	}
 	if root, err := os.Getwd(); err == nil {
 		local := filepath.Join(root, claudeLocalFile)
@@ -123,7 +120,7 @@ func resurrectedFindings(ctx context.Context) []string {
 	out := make([]string, 0, len(res))
 	for _, x := range res {
 		p := path.Join(folders[x.Store], doctorDataDir, rowfs.RowPath(x.Table, x.ID))
-		out = append(out, "store "+string(x.Store)+": "+p+" is a live copy of a purged row (an old clone brought it back); lore hides it from every read; delete the file")
+		out = append(out, "store "+string(x.Store)+": "+p+" is a live copy of a purged row (an old clone brought it back); lore hides it from every read; remove the file (git rm it and commit)")
 	}
 	return out
 }
