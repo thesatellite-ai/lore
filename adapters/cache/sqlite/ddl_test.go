@@ -27,7 +27,7 @@ var sqlWords = []string{
 func relDef() schema.TableDef {
 	items := []schema.Item{
 		schema.Synced(),
-		schema.Ref("parent_id", "rules"),
+		schema.Ref("parent_id", "odd_rules"),
 		schema.Text("target_type"),
 		schema.Ref("target_id", ""),
 		schema.Ref("memory_id", schema.TableMemories),
@@ -41,7 +41,7 @@ func relDef() schema.TableDef {
 		items = append(items, schema.Text(w))
 	}
 	items = append(items, schema.FTS("rank", "order", "select"), schema.UniqueOn("key"))
-	return schema.Table("rules", ids.PrefixRule, items...)
+	return schema.Table("odd_rules", ids.PrefixEntityTag, items...)
 }
 
 // TestRelationsAndOddNames: self, polymorphic, belongs-to and many-to-many
@@ -75,7 +75,7 @@ func TestRelationsAndOddNames(t *testing.T) {
 		return false
 	}
 	for _, cols := range [][]string{{"parent_id"}, {"target_id", "target_type"}, {"memory_id"}, {"target_id"}, {colSource}, {"key"}} {
-		if !indexed("rules", cols...) {
+		if !indexed("odd_rules", cols...) {
 			t.Errorf("rules: no index on %v", cols)
 		}
 	}
@@ -84,7 +84,7 @@ func TestRelationsAndOddNames(t *testing.T) {
 			t.Errorf("join table: no index on %s", col)
 		}
 	}
-	for _, tb := range []string{"rules", "rule_memories"} {
+	for _, tb := range []string{"odd_rules", "rule_memories"} {
 		if n := count(t, c, `SELECT COUNT(*) FROM pragma_foreign_key_list(?)`, tb); n != 0 {
 			t.Errorf("%s has foreign keys", tb)
 		}
@@ -98,11 +98,11 @@ func TestRelationsAndOddNames(t *testing.T) {
 	}
 	vals["rank"] = text(t, "zebra")
 	id := must(ids.New[ruleTag]()).Any()
-	f.apply(c, store.SourceRepo, "1", f.live("rules", id, vals))
-	if n := count(t, c, `SELECT COUNT(*) FROM "rules" WHERE "order" = ? AND "rank" = 'zebra'`, vals["order"].String()); n != 1 {
+	f.apply(c, store.SourceRepo, "1", f.live("odd_rules", id, vals))
+	if n := count(t, c, `SELECT COUNT(*) FROM "odd_rules" WHERE "order" = ? AND "rank" = 'zebra'`, vals["order"].String()); n != 1 {
 		t.Fatal("odd-named values did not round-trip")
 	}
-	if hits := must(c.Search(f.ctx, "rules", "zebra", 5)); len(hits) != 1 || hits[0] != id {
+	if hits := must(c.Search(f.ctx, "odd_rules", "zebra", 5)); len(hits) != 1 || hits[0] != id {
 		t.Fatalf("search over a field named rank = %v", hits)
 	}
 }

@@ -233,3 +233,22 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 	a.wrote(err)
 	return w, err
 }
+
+// CreateWithID is engine.CreateWithID behind the same write path as every
+// other App write (O6 format check, actor row first): the caller pins the
+// row's id. Settings ops use it to re-create a natural-key row (a policy
+// key+scope, a var name, a kind name) after a soft delete, because the
+// tombstone keeps the natural id forever (DQ) and a plain Create would
+// collide with it; they pass a fresh random id instead.
+func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) (engine.Written, error) {
+	st, err := a.writeState(ctx)
+	if err != nil {
+		return engine.Written{}, err
+	}
+	if aerr := a.ensureActor(ctx, st, target); aerr != nil {
+		return engine.Written{}, aerr
+	}
+	w, err := st.eng.CreateWithID(ctx, target, table, id, fields)
+	a.wrote(err)
+	return w, err
+}

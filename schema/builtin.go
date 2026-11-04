@@ -211,6 +211,9 @@ func coreDefs() []TableDef {
 		Table(TableKindFields, ids.PrefixKindField, Synced(), Description("one field of a resource kind"),
 			Ref("kind_id", TableKinds, Required()),
 			Text(fieldName, Required()),
+			// values is the closed set a field accepts (`field add --values`).
+			List("values", value.KindText),
+			Text("description"),
 			Text("type", Required(), OneOf(kindWords()...)),
 			Bool("required"),
 			Bool("sensitive"),
@@ -225,6 +228,7 @@ func coreDefs() []TableDef {
 		),
 		Table(TableVars, ids.PrefixVar, Synced(), Description("a variable referenced as ${var:name}"),
 			Text(fieldName, Required()),
+			Text("description"),
 			Text("type", Required(), OneOf(kindWords()...)),
 			JSON("value", Required()),
 			Bool("shareable"),
@@ -233,6 +237,10 @@ func coreDefs() []TableDef {
 		),
 		Table(TableSecretRules, ids.PrefixSecretRule, Synced(), Description("a secret scanner rule"),
 			Text("rule_id", Required()),
+			Text("description"),
+			// reason is why a rule was turned off (`secrets rule off --reason`),
+			// listed by lore doctor (D-ITEMS).
+			Text("reason"),
 			Text("regex"),
 			List("keywords", value.KindText),
 			Number("entropy"),
@@ -257,6 +265,10 @@ func coreDefs() []TableDef {
 		Table(TableResources, ids.PrefixResource, Synced(), Description("a resource; its fields follow its kind"),
 			Ref(fieldKind, TableKinds, Required()),
 			Text(fieldName, Required()),
+			DateTime("archived_at"),
+			// last_checked is when `lore resource check` last verified it
+			// (resource stale reads it).
+			DateTime("last_checked"),
 			JSON("fields"),
 			IndexOn(fieldKind, fieldName),
 			BelongsToRel("kind_def", fieldKind, TableKinds, Restrict),
