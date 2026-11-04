@@ -91,27 +91,27 @@ func TestAssignHandle(t *testing.T) {
 	ft := &fakeTeam{people: map[string]string{"@ann": ann}, teams: map[string]string{"@core": team}, board: &fakeBoard{}}
 	ctx := opstask.WithTeam(context.Background(), ft)
 
-	id := addID(h, mustCtx(h, ctx, opstask.OpAdd, `{"title":"t","assign":"@ann"}`))
+	id := addID(h, mustCtx(h, ctx, opstask.OpAdd, `{"title":"t","assign":["@ann"]}`))
 	_, r := get(h, schema.TableTasks, id)
 	if field(r, "assigned_to_actor_id") != ann || field(r, "assigned_team") != "" {
 		t.Errorf("person: %v", r.Fields)
 	}
-	mustCtx(h, ctx, opstask.OpEdit, `{"id":"`+id+`","assign":"@core"}`)
+	mustCtx(h, ctx, opstask.OpEdit, `{"id":"`+id+`","assign":["@core"]}`)
 	_, r = get(h, schema.TableTasks, id)
 	if field(r, "assigned_team") != team || field(r, "assigned_to_actor_id") != "" {
 		t.Errorf("team clears person: %v", r.Fields)
 	}
-	mustCtx(h, ctx, opstask.OpEdit, `{"id":"`+id+`","assign":"@ann"}`)
+	mustCtx(h, ctx, opstask.OpEdit, `{"id":"`+id+`","assign":["@ann"]}`)
 	_, r = get(h, schema.TableTasks, id)
 	if field(r, "assigned_to_actor_id") != ann || field(r, "assigned_team") != "" {
 		t.Errorf("person clears team: %v", r.Fields)
 	}
-	teamTask := addID(h, mustCtx(h, ctx, opstask.OpAdd, `{"title":"t2","assign":"@core"}`))
+	teamTask := addID(h, mustCtx(h, ctx, opstask.OpAdd, `{"title":"t2","assign":["@core"]}`))
 	if _, r = get(h, schema.TableTasks, teamTask); field(r, "assigned_team") != team || field(r, "assigned_to_actor_id") != "" {
 		t.Errorf("add team: %v", r.Fields)
 	}
 	before := h.JSON(h.Must("tasklist.list", ``))
-	_, err := runCtx(h, ctx, opstask.OpAdd, `{"title":"t3","assign":"@nobody"}`)
+	_, err := runCtx(h, ctx, opstask.OpAdd, `{"title":"t3","assign":["@nobody"]}`)
 	if !errs.Has(err, errs.NotFound) || hintOf(err) != "lore team list" {
 		t.Errorf("unknown handle: %v", err)
 	}
@@ -119,10 +119,10 @@ func TestAssignHandle(t *testing.T) {
 		t.Error("a refused --assign wrote a tasklist")
 	}
 	// Without a host Team the handle is refused, never guessed.
-	h.Fails(opstask.OpAdd, `{"title":"t4","assign":"@ann"}`, errs.Unsupported)
-	h.Fails(opstask.OpEdit, `{"id":"`+id+`","assign":"@ann"}`, errs.Unsupported)
+	h.Fails(opstask.OpAdd, `{"title":"t4","assign":["@ann"]}`, errs.Unsupported)
+	h.Fails(opstask.OpEdit, `{"id":"`+id+`","assign":["@ann"]}`, errs.Unsupported)
 	// A plain actor reference needs no host Team.
-	h.Must(opstask.OpEdit, `{"id":"`+id+`","assign":"Ann"}`)
+	h.Must(opstask.OpEdit, `{"id":"`+id+`","assign":["Ann"]}`)
 }
 
 // TestTeam030Matrix is TEAM-030: a team is never assigned on a task in a
@@ -162,15 +162,15 @@ func TestTeam030Matrix(t *testing.T) {
 			}
 			wantRefused := k.client && tg.repoSide
 			t.Run(k.name+"/"+tg.name, func(t *testing.T) {
-				_, err := runCtx(h, ctx, opstask.OpAdd, `{"title":"team task"`+to+`,"assign":"@core"}`)
+				_, err := runCtx(h, ctx, opstask.OpAdd, `{"title":"team task"`+to+`,"assign":["@core"]}`)
 				checkTeam030(t, "add", err, wantRefused)
 				plain := addID(h, mustCtx(h, ctx, opstask.OpAdd, `{"title":"plain"`+to+`}`))
-				_, err = runCtx(h, ctx, opstask.OpEdit, `{"id":"`+plain+`","assign":"@core"}`)
+				_, err = runCtx(h, ctx, opstask.OpEdit, `{"id":"`+plain+`","assign":["@core"]}`)
 				checkTeam030(t, "edit", err, wantRefused)
 				if _, r := get(h, schema.TableTasks, plain); wantRefused && field(r, "assigned_team") != "" {
 					t.Error("refused edit still wrote the team")
 				}
-				if _, err := runCtx(h, ctx, opstask.OpEdit, `{"id":"`+plain+`","assign":"@ann"}`); err != nil {
+				if _, err := runCtx(h, ctx, opstask.OpEdit, `{"id":"`+plain+`","assign":["@ann"]}`); err != nil {
 					t.Errorf("person refused: %v", err)
 				}
 			})
@@ -206,8 +206,8 @@ func TestMineAndClaimedBy(t *testing.T) {
 	mineClaimedByMe := add(h, "mine claimed by me", `"assigned_to":"`+me+`"`)
 	mineClaimedByBob := add(h, "mine claimed by bob", `"assigned_to":"`+me+`"`)
 	mineExpired := add(h, "mine expired", `"assigned_to":"`+me+`"`)
-	viaTeam := addID(h, mustCtx(h, opstask.WithTeam(context.Background(), &fakeTeam{teams: map[string]string{"@mine": myTeam}}), opstask.OpAdd, `{"title":"via team","assign":"@mine"}`))
-	otherTeamTask := addID(h, mustCtx(h, opstask.WithTeam(context.Background(), &fakeTeam{teams: map[string]string{"@other": otherTeam}}), opstask.OpAdd, `{"title":"other team","assign":"@other"}`))
+	viaTeam := addID(h, mustCtx(h, opstask.WithTeam(context.Background(), &fakeTeam{teams: map[string]string{"@mine": myTeam}}), opstask.OpAdd, `{"title":"via team","assign":["@mine"]}`))
+	otherTeamTask := addID(h, mustCtx(h, opstask.WithTeam(context.Background(), &fakeTeam{teams: map[string]string{"@other": otherTeam}}), opstask.OpAdd, `{"title":"other team","assign":["@other"]}`))
 	bobs := add(h, "bobs", `"assigned_to":"`+bob+`"`)
 	board := &fakeBoard{me: me, claims: map[string]claim{
 		mineClaimedByMe:  {me, true},

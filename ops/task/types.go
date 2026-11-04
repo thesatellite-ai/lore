@@ -48,11 +48,15 @@ type AddIn struct {
 	// Assign is v0.1.17's --assign @handle (a person sets the assignee, a
 	// team the assigned team; team.go). Ref pointers are refs.go.
 
-	Assign  string   `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (a person sets the assignee, a team the assigned team)"`
-	Ref     []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
-	To      string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
-	Repo    string   `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id)"`
-	Project string   `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
+	Assign []string `json:"assign,omitempty" flag:"assign" desc:"assign to @handle or an actor; repeatable: the assignees, the first is the lead (a team sets the assigned team)"`
+	// Lead names the one owner of the outcome (TSQ5); joins the assignees.
+	Lead string `json:"lead,omitempty" flag:"lead" desc:"the lead (@handle or actor); added to the assignees if missing"`
+	// Estimate is in the tasks.estimate_unit unit (TSQ4, 9.1).
+	Estimate string   `json:"estimate,omitempty" flag:"estimate" desc:"estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit); hours also take 90m, days 2d"`
+	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	To       string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	Repo     string   `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id)"`
+	Project  string   `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 	// Parent makes the task a sub-task (TASK 6.3); it inherits the
 	// parent's mission, tasklist, plan, repo, commitment, priority and team
 	// unless those flags are given (6.5).
@@ -109,6 +113,13 @@ type Brief struct {
 	// umbrella (6.6, absent for a task without sub-tasks).
 	ParentID string          `json:"parent_id,omitempty"`
 	Rollup   tasktree.Rollup `json:"rollup,omitzero"`
+	// Estimate and its subtree rollup (9.2, estimateInfo).
+	Estimate        string `json:"estimate,omitempty"`
+	EstimateUnit    string `json:"estimate_unit,omitempty"`
+	EstimateSubtree string `json:"estimate_subtree,omitempty"`
+	Unestimated     int    `json:"unestimated,omitempty"`
+	// Lead is the lead (assigned_to_actor_id, 14.2).
+	Lead string `json:"lead,omitempty"`
 	// Store is set for a task of a store other than the repo's own.
 	Store store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
@@ -141,6 +152,24 @@ type Full struct {
 	Rank        string          `json:"rank,omitempty"`
 	CloseReason string          `json:"close_reason,omitempty"`
 	Rollup      tasktree.Rollup `json:"rollup,omitzero"`
+	// Estimate, subtree rollup and tracked time (9.3, estimateInfo).
+	Estimate        string  `json:"estimate,omitempty"`
+	EstimateUnit    string  `json:"estimate_unit,omitempty"`
+	EstimateSubtree string  `json:"estimate_subtree,omitempty"`
+	EstimateDone    string  `json:"estimate_done,omitempty"`
+	EstimateOpen    string  `json:"estimate_open,omitempty"`
+	Unestimated     int     `json:"unestimated,omitempty"`
+	TrackedSeconds  int64   `json:"tracked_seconds,omitempty"`
+	Ratio           float64 `json:"ratio,omitempty"`
+	// People (14.3): "lead" equals assigned_to_actor_id.
+	Lead      string   `json:"lead,omitempty"`
+	Assignees []string `json:"assignees,omitempty"`
+	Watchers  []string `json:"watchers,omitempty"`
+	// Checklist is the live checklist (7.3).
+	Checklist []ChecklistItemOut `json:"checklist,omitempty"`
+	// PeopleLine / EstimateLine are the human show lines.
+	PeopleLine   string `json:"-"`
+	EstimateLine string `json:"-"`
 	// Tree is the subtree, depth first, for show --tree.
 	Tree []TreeLine `json:"tree,omitempty"`
 	// TreeWarnings are E_PARENT_CYCLE warnings of the merged tree (6.13).
@@ -208,6 +237,8 @@ type ListIn struct {
 	Under  string `json:"under,omitempty" flag:"under" desc:"only the whole subtree under this task (tsk_…)"`
 	Top    bool   `json:"top,omitempty" flag:"top" desc:"only top-level tasks"`
 	Leaves bool   `json:"leaves,omitempty" flag:"leaves" desc:"only tasks with no open sub-tasks (what can be worked on)"`
+	// Lead filters by the one lead (14.3); --assignee matches any assignee.
+	Lead string `json:"lead,omitempty" flag:"lead" desc:"only tasks led by this actor (@me, act_ id, stable key or name)"`
 }
 
 // ViewIn is the input of the triage, someday and deferred views.
@@ -268,8 +299,17 @@ type EditIn struct {
 	After         []string      `json:"after,omitempty" flag:"after" desc:"dependencies: <id>[:done|:merged][,…] (replaces the list)"`
 	Timebox       time.Duration `json:"timebox,omitempty" flag:"timebox" desc:"time box, e.g. 60m"`
 	Role          string        `json:"role,omitempty" flag:"role" desc:"plan role matched by task next --role (e.g. coordinator)"`
-	Assign        string        `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (a person sets the assignee, a team the assigned team)"`
-	Ref           []string      `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	Assign        []string      `json:"assign,omitempty" flag:"assign" desc:"set the assignees: @handle or actor, repeatable; the first is the lead (a team sets the assigned team)"`
+	// People (TASK 14.3, TSQ5).
+	Lead           string   `json:"lead,omitempty" flag:"lead" desc:"make this person the lead (added to the assignees if missing)"`
+	AddAssignee    []string `json:"add_assignee,omitempty" flag:"add-assignee" desc:"add an assignee (repeatable); the first one on a task with no lead leads"`
+	RemoveAssignee []string `json:"remove_assignee,omitempty" flag:"remove-assignee" desc:"remove an assignee (repeatable); removing the lead needs --lead"`
+	AddWatcher     []string `json:"add_watcher,omitempty" flag:"add-watcher" desc:"add a watcher (repeatable)"`
+	RemoveWatcher  []string `json:"remove_watcher,omitempty" flag:"remove-watcher" desc:"remove a watcher (repeatable)"`
+	// Estimate (TSQ4).
+	Estimate      string   `json:"estimate,omitempty" flag:"estimate" desc:"estimate in the project's unit (tasks.estimate_unit)"`
+	ClearEstimate bool     `json:"clear_estimate,omitempty" flag:"clear-estimate" desc:"remove the estimate"`
+	Ref           []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 	// Tree edits (TASK 6.3, 6.8): re-parent (with the subtree), detach,
 	// reorder among siblings. --after-sibling because --after is a
 	// dependency.
@@ -290,6 +330,9 @@ type DoneIn struct {
 	Lesson   string `json:"lesson,omitempty" flag:"lesson" desc:"save a lesson learned (a memory pointing at the task)"`
 	NoLesson bool   `json:"no_lesson,omitempty" flag:"no-lesson" desc:"skip the lesson reminder"`
 	Children string `json:"children,omitempty" flag:"children" desc:"open sub-tasks: done | cancel them in the same write (required when there are any)"`
+	// TSQ14: unticked checklist items refuse the close (E_OPEN_ITEMS).
+	TickAll bool `json:"tick_all,omitempty" flag:"tick-all" desc:"unticked checklist items: tick them in the same write"`
+	Force   bool `json:"force,omitempty" flag:"force" desc:"close even with unticked checklist items"`
 }
 
 // CancelIn is the input of task.cancel.
@@ -338,7 +381,10 @@ type DoneOut struct {
 	// Parent and Next are the parent auto-close answer (6.7, TSQ2).
 	Parent ParentNote `json:"parent,omitzero"`
 	Next   Next       `json:"next,omitzero"`
-	Human  string     `json:"-"`
+	// OpenItemsAtClose is how many checklist items were unticked when
+	// --force closed the task (TSQ14).
+	OpenItemsAtClose int    `json:"open_items_at_close,omitempty"`
+	Human            string `json:"-"`
 }
 
 // SearchIn is the input of task.search.

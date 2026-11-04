@@ -513,7 +513,7 @@ func (o ops) addParent(ctx context.Context, in *AddIn, project string) (*addPare
 	inherit(&in.Plan, work.FieldPlan, &p.inh.PlanID)
 	inherit(&in.Priority, fieldPriority, &p.inh.Priority)
 	inherit(&in.Commitment, fieldCommitment, &p.inh.Commitment)
-	if in.Assign == "" {
+	if len(in.Assign) == 0 {
 		p.inh.Team = work.Field(pr, fieldTeam)
 	}
 	if in.Repo == "" {

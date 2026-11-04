@@ -142,7 +142,7 @@ func Ops(env work.Env) []op.Entry {
 		}, o.start),
 		op.Define(op.Spec{
 			Name: OpDone, Summary: "Mark a task done (with the code that finished it)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren, errs.OpenItems),
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "done with a lesson", CLI: `lore task done tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"`, Want: "done"}},
 		}, o.done),
@@ -181,7 +181,7 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpDeferred, Summary: "Show deferred tasks (snoozed; deferred_until in the future)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.deferred),
-	}, timeOps(o)...)
+	}, slices.Concat(timeOps(o), checklistOps(o), watchOps(o))...)
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
@@ -207,11 +207,15 @@ func taskID(s string) (ids.AnyID, error) { return work.ParseID(Noun, ids.PrefixT
 func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	// --assign resolves before anything is written (v0.1.17: the default
 	// task list is not created for a handle on no roster).
-	assign, err := o.resolveAssign(ctx, in.Assign)
+	assign, err := o.resolveAssigns(ctx, in.Assign)
 	if err != nil {
 		return AddOut{}, err
 	}
-	if err = o.refuseClientTeam(ctx, assign, store.Source(in.To)); err != nil {
+	if err = o.refuseClientTeam(ctx, assign.first(), store.Source(in.To)); err != nil {
+		return AddOut{}, err
+	}
+	pe, err := o.peopleFlags(ctx, assign, in.Lead, in.AssignedTo, nil, nil, nil, nil)
+	if err != nil {
 		return AddOut{}, err
 	}
 	refs, err := o.parseRefs(ctx, in.Ref)
@@ -298,13 +302,26 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		{work.FieldMission, "mission", ids.PrefixMission, in.Mission},
 		{work.FieldTasklist, "tasklist", ids.PrefixTaskList, in.Tasklist},
 		{work.FieldPlan, "plan", ids.PrefixPlan, in.Plan},
-		{fieldAssigned, "assigned-to", ids.PrefixActor, in.AssignedTo},
 		{work.FieldCreatedBy, "created-by", ids.PrefixActor, in.CreatedBy},
 	}); err != nil {
 		return AddOut{}, err
 	}
-	if err = setAssign(fields, assign); err != nil {
+	// TSQ5/14.4: lead + assignees + watchers (creator and assignees watch
+	// unless tasks.auto_watch is false).
+	if pe.autoWatch, err = o.autoWatch(ctx, store.Source(in.To)); err != nil {
 		return AddOut{}, err
+	}
+	pe.creator = o.by(ctx)
+	if _, err = o.applyPeople(ctx, row.Row{}, pe, fields); err != nil {
+		return AddOut{}, err
+	}
+	if err = o.setEstimate(ctx, fields, store.Source(in.To), in.Estimate); err != nil {
+		return AddOut{}, err
+	}
+	for k, v := range fields {
+		if v.Kind() == value.KindNull && (k == fieldAssignees || k == fieldWatchers) {
+			delete(fields, k)
+		}
 	}
 	if v, ok := fields[fieldTeam]; ok && v.Kind() == value.KindNull {
 		delete(fields, fieldTeam) // a create clears nothing
@@ -657,6 +674,15 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			return ListOut{}, err
 		}
 	}
+	if in.Lead != "" {
+		if in.Lead, err = o.actorRef(ctx, in.Lead); err != nil {
+			return ListOut{}, err
+		}
+	}
+	unit, err := o.estimateUnit(ctx, "")
+	if err != nil {
+		return ListOut{}, err
+	}
 	allowed := []string{schema.TaskCommitmentAccepted}
 	if in.IncludeProposed {
 		allowed = append(allowed, schema.TaskCommitmentProposed)
@@ -690,7 +716,12 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	o.deco = func(b *Brief, r row.Row) { decorate(f, b, r) }
+	o.deco = func(b *Brief, r row.Row) {
+		decorate(f, b, r)
+		e := estimateInfo(f, r, unit)
+		b.Estimate, b.EstimateUnit, b.EstimateSubtree, b.Unestimated = e.Estimate, e.Unit, e.Subtree, e.Unestimated
+		b.Lead = work.Field(r, fieldAssigned)
+	}
 	return o.viewWith(ctx, in.Store, project, team.state, order, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
 		switch {
@@ -700,7 +731,8 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			in.Commitment != "" && commit != in.Commitment,
 			in.Status != "" && status != in.Status,
 			in.Mission != "" && work.Field(r, work.FieldMission) != in.Mission,
-			in.Assignee != "" && work.Field(r, fieldAssigned) != in.Assignee,
+			in.Assignee != "" && !assignedTo(r, in.Assignee),
+			in.Lead != "" && !leadIs(r, in.Lead),
 			team.keep != nil && !team.keep(r):
 			return false
 		case in.All:
@@ -802,6 +834,9 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	}
 	full.TimeEntries = TimeEntries(r)
 	full.TimeLine = TimeLine(full.TimeEntries)
+	if err = o.showMore(ctx, &full, src, r); err != nil {
+		return ShowOut{}, err
+	}
 	if by := work.Field(r, fieldDoneBy); by != "" {
 		full.DoneBy = o.actorName(ctx, by)
 	}
@@ -910,10 +945,15 @@ func (o ops) actorName(ctx context.Context, id string) string {
 
 // edit patches the fields whose flags were given.
 func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
-	assign, err := o.resolveAssign(ctx, in.Assign)
+	assign, err := o.resolveAssigns(ctx, in.Assign)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
+	pe, err := o.peopleFlags(ctx, assign, in.Lead, in.AssignedTo, in.AddAssignee, in.RemoveAssignee, in.AddWatcher, in.RemoveWatcher)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	pe.clear = in.ClearAssignee
 	id, err := taskID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err
@@ -922,7 +962,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if err = o.refuseClientTeam(ctx, assign, curSrc); err != nil {
+	if err = o.refuseClientTeam(ctx, assign.first(), curSrc); err != nil {
 		return work.WriteOut{}, err
 	}
 	refs, err := o.parseRefs(ctx, in.Ref)
@@ -965,11 +1005,20 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		{work.FieldMission, "mission", ids.PrefixMission, in.Mission},
 		{work.FieldTasklist, "tasklist", ids.PrefixTaskList, in.Tasklist},
 		{work.FieldPlan, "plan", ids.PrefixPlan, in.Plan},
-		{fieldAssigned, "assigned-to", ids.PrefixActor, in.AssignedTo},
 	}); err != nil {
 		return work.WriteOut{}, err
 	}
-	if err = setAssign(patch, assign); err != nil {
+	if pe.autoWatch, err = o.autoWatch(ctx, curSrc); err != nil {
+		return work.WriteOut{}, err
+	}
+	peopleLine, err := o.applyPeople(ctx, cur, pe, patch)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if peopleLine != "" {
+		timeHint += "  " + peopleLine + "\n"
+	}
+	if err = o.setEstimate(ctx, patch, curSrc, in.Estimate); err != nil {
 		return work.WriteOut{}, err
 	}
 	clears := []struct {
@@ -977,7 +1026,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		field string
 	}{
 		{in.ClearDefer, fieldDeferred}, {in.ClearDue, fieldDue}, {in.ClearMission, work.FieldMission},
-		{in.ClearPlan, work.FieldPlan}, {in.ClearAssignee, fieldAssigned},
+		{in.ClearPlan, work.FieldPlan}, {in.ClearEstimate, fieldEstimate},
 	}
 	for _, c := range clears {
 		if c.on {
@@ -1091,6 +1140,11 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
+	// TSQ14: unticked checklist items refuse unless --tick-all / --force.
+	forced, err := o.openItemsGuard(ctx, dcur, in, patch)
+	if err != nil {
+		return DoneOut{}, err
+	}
 	if in.Commit != "" {
 		if patch[fieldDoneCommit], err = value.TextOf(strings.TrimSpace(in.Commit)); err != nil {
 			return DoneOut{}, err
@@ -1117,7 +1171,10 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
-	out := DoneOut{ID: w.ID, Store: w.Store, Human: w.Human + childLines}
+	out := DoneOut{ID: w.ID, Store: w.Store, Human: w.Human + childLines, OpenItemsAtClose: forced}
+	if forced > 0 {
+		out.Human += "  closed with " + strconv.Itoa(forced) + " unticked checklist items (--force)\n"
+	}
 	for _, x := range w.Warnings {
 		out.Warnings = append(out.Warnings, Warning(x))
 	}

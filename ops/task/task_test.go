@@ -142,8 +142,8 @@ func TestAddValidation(t *testing.T) {
 		{"ref bad", `{"title":"x","ref":["nope"]}`, errs.NotFound},
 		{"ref commit empty", `{"title":"x","ref":["commit:"]}`, errs.InvalidInput},
 		{"ref missing row", `{"title":"x","ref":["mem_01a1a5aca7f57659be7320c5f4b70011"]}`, errs.NotFound},
-		{"assign no team host", `{"title":"x","assign":"@bob"}`, errs.Unsupported},
-		{"assign unknown actor", `{"title":"x","assign":"nobody"}`, errs.NotFound},
+		{"assign no team host", `{"title":"x","assign":["@bob"]}`, errs.Unsupported},
+		{"assign unknown actor", `{"title":"x","assign":["nobody"]}`, errs.NotFound},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { h.Fails(opstask.OpAdd, c.in, c.code) })

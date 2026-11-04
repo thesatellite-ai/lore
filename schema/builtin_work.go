@@ -91,6 +91,22 @@ const (
 	FieldTaskCloseReason = "close_reason"
 )
 
+// Checklist, estimate and people fields (TASK_SYSTEM_DESIGN 7, 9, 14).
+const (
+	// FieldTaskChecklist is the list of checklist items (model/checklist),
+	// merged by item id (7.2).
+	FieldTaskChecklist = "checklist"
+	// FieldTaskEstimate is the estimate as a decimal text literal, so 3,
+	// 3.0 and 3.00 round-trip as typed (TSQ4, 9.2); the unit is the
+	// tasks.estimate_unit policy.
+	FieldTaskEstimate = "estimate"
+	// FieldTaskAssignees is everyone responsible, the lead included; the
+	// lead stays in assigned_to_actor_id for old readers (TSQ5, 14.2).
+	FieldTaskAssignees = "assignees"
+	// FieldTaskWatchers is who gets told about changes (14).
+	FieldTaskWatchers = "watchers"
+)
+
 // Task gates (TaskGate, LORE_TEAM_SPEC 7.4): a human approval step.
 const (
 	TaskGateRequired  = "required"
@@ -186,6 +202,11 @@ func workDefs() []TableDef {
 			Ref(FieldTaskParent, TableTasks, Describe("the parent task (tsk_…); empty = top level")),
 			Text(FieldTaskRank, Describe("order among siblings (fractional index; ties by id)")),
 			Text(FieldTaskCloseReason, OneOf(TaskCloseReasons()...), Describe("why a closed task closed (TASK 8.3)")),
+			JSON(FieldTaskChecklist, MergeBy(MergeListByID),
+				Describe("checklist items [{id, text, done, done_at, done_by, rank, …}] (TASK 7.2)")),
+			Text(FieldTaskEstimate, Describe("estimate, a decimal >= 0 in the tasks.estimate_unit unit (TASK 9)")),
+			List(FieldTaskAssignees, value.KindText, Describe("actor ids responsible, the lead (assigned_to_actor_id) included (TASK 14.2)")),
+			List(FieldTaskWatchers, value.KindText, Describe("actor ids told about changes (TASK 14)")),
 			IndexOn("project_id", "status"),
 			IndexOn("project_id", FieldTaskParent),
 			IndexOn("project_id", "commitment"),

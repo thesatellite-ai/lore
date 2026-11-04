@@ -1,6 +1,7 @@
 package mission
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"time"
 
 	opstask "github.com/thesatellite-ai/lore/ops/task"
@@ -21,6 +22,9 @@ const (
 
 // AddIn is the input of mission.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Title     string `json:"title" arg:"0" rest:"true" desc:"the mission title (several words are joined)"`
 	Body      string `json:"body,omitempty" flag:"body" desc:"longer description" ui:"widget=markdown"`
 	Target    string `json:"target,omitempty" flag:"target" desc:"target completion date (YYYY-MM-DD)"`
@@ -84,7 +88,10 @@ type Record struct {
 	TagIDs           []string        `json:"tag_ids,omitempty"`
 	Edges            Edges           `json:"edges"`
 	Tasks            []opstask.Brief `json:"tasks"`
-	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
+	// Estimate is the rollup of the tasks' estimates and tracked time
+	// (TASK 9.2, 9.3).
+	Estimate opstask.MissionEstimate `json:"estimate_rollup,omitzero"`
+	Store    store.SourceRef         `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 }
@@ -109,6 +116,9 @@ type IDIn struct {
 
 // EditIn is the input of mission.edit (only the flags given change).
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID          string `json:"id" arg:"0" desc:"the mission id (msn_…)"`
 	Title       string `json:"title,omitempty" flag:"title" desc:"new title"`
 	Body        string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

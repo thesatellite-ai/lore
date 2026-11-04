@@ -17,7 +17,6 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/store"
 
-	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
@@ -60,30 +59,6 @@ func (o ops) resolveAssign(ctx context.Context, raw string) (work.Assignee, erro
 		return work.Assignee{}, err
 	}
 	return t.ResolveHandle(ctx, ref, true)
-}
-
-// setAssign writes an --assign result into fields: a person clears the
-// team and a team clears the person (v0.1.17 edit), so the row names one.
-func setAssign(fields map[string]value.Value, a work.Assignee) error {
-	switch {
-	case a.ActorID != "":
-		id, err := ids.ParseAny(a.ActorID)
-		if err != nil {
-			return err
-		}
-		v, err := value.RefOf(id)
-		if err != nil {
-			return err
-		}
-		fields[fieldAssigned], fields[fieldTeam] = v, value.Null{}
-	case a.TeamID != "":
-		v, err := value.TextOf(a.TeamID)
-		if err != nil {
-			return err
-		}
-		fields[fieldTeam], fields[fieldAssigned] = v, value.Null{}
-	}
-	return nil
 }
 
 // teamView is the team side of one `task list`: the --mine / --claimed-by

@@ -157,6 +157,24 @@ func (o ShowOut) Text() string {
 	if t.TimeLine != "" {
 		b.WriteString("  time:     " + t.TimeLine + "\n")
 	}
+	if t.EstimateLine != "" {
+		b.WriteString("  estimate: " + t.EstimateLine + "\n")
+	}
+	if t.PeopleLine != "" {
+		b.WriteString("  " + t.PeopleLine + "\n")
+	}
+	if len(t.Checklist) > 0 {
+		done := 0
+		for _, it := range t.Checklist {
+			if it.Done {
+				done++
+			}
+		}
+		fmt.Fprintf(&b, "  checklist: %d/%d\n", done, len(t.Checklist))
+		for _, it := range t.Checklist {
+			fmt.Fprintf(&b, "    %d. %s %s  %s\n", it.Position, box(it.Done), it.Text, it.ID)
+		}
+	}
 	for _, f := range t.Detail.Fields {
 		if f.Value != "" {
 			fmt.Fprintf(&b, "  %-9s %s\n", f.Name+":", f.Value)

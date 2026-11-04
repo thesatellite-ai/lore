@@ -223,9 +223,33 @@ func (o ops) tasksOf(ctx context.Context, id string) ([]opstask.Brief, error) {
 	return out, nil
 }
 
+// missionRows are the live task rows of mission id (the rollup input).
+func (o ops) missionRows(ctx context.Context, id string) ([]row.Row, error) {
+	all, err := work.ListAll(ctx, o.env, schema.TableTasks, "")
+	if err != nil {
+		return nil, err
+	}
+	var out []row.Row
+	for _, s := range all {
+		if !s.Row.Deleted && work.Field(s.Row, work.FieldMission) == id {
+			out = append(out, s.Row)
+		}
+	}
+	return out, nil
+}
+
 // showOf is the show envelope of one mission row.
 func (o ops) showOf(ctx context.Context, src store.Source, r row.Row) (ShowOut, error) {
 	tasks, err := o.tasksOf(ctx, r.ID.String())
+	if err != nil {
+		return ShowOut{}, err
+	}
+	// TASK 9.2/9.3: estimate rollup and tracked time over the mission's tasks.
+	rows, err := o.missionRows(ctx, r.ID.String())
+	if err != nil {
+		return ShowOut{}, err
+	}
+	est, err := opstask.MissionRollup(ctx, o.env, src, rows)
 	if err != nil {
 		return ShowOut{}, err
 	}
@@ -235,7 +259,7 @@ func (o ops) showOf(ctx context.Context, src store.Source, r row.Row) (ShowOut, 
 		TargetDate: work.Time(r, fieldTarget), CompletedAt: work.Time(r, work.FieldCompleted),
 		CreatedByActorID: work.Field(r, work.FieldCreatedBy), Approvers: work.List(r, fieldApprovers),
 		IdempotencyKey: work.Field(r, work.FieldKey), PlanID: work.Field(r, work.FieldPlan), TagIDs: work.TagIDs(r),
-		Tasks: tasks, Store: work.SourceOf(work.LabelerOf(o.env), src), Label: work.Label(work.LabelerOf(o.env), src),
+		Tasks: tasks, Estimate: est, Store: work.SourceOf(work.LabelerOf(o.env), src), Label: work.Label(work.LabelerOf(o.env), src),
 	}
 	if rec.CreatedByActorID == "" && !r.CreatedBy.IsZero() {
 		rec.CreatedByActorID = r.CreatedBy.String()
@@ -254,6 +278,7 @@ func (o ShowOut) Text() string {
 	if !m.TargetDate.IsZero() {
 		b.WriteString("  target: " + m.TargetDate.UTC().Format(work.DateLayout) + "\n")
 	}
+	b.WriteString(m.Estimate.Lines())
 	if m.Body != "" {
 		b.WriteString("\n" + m.Body + "\n")
 	}
