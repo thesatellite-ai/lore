@@ -102,6 +102,11 @@ type Signal struct {
 	Expires time.Time `json:"expires"`
 	// RenewedSeq counts renewals; expiry needs it unchanged (F7 expire).
 	RenewedSeq int `json:"renewed_seq"`
+	// RenewedAt is the last heartbeat: set on claim and every renew
+	// (TIME_TRACKING_DESIGN 4.2, D3). A claim span ends here, never later.
+	// Additive: a signal from an older binary has none, and readers use
+	// Expires − TTL (the entry is then flagged estimated_end).
+	RenewedAt time.Time `json:"renewed_at,omitzero"`
 	// WorkBranch is the code branch the holder works on, pushed by notes
 	// and the heartbeat daemon so a replacement can fetch it (§7.4).
 	WorkBranch string `json:"work_branch,omitempty"`
@@ -123,6 +128,9 @@ func normalizeTime(t time.Time) time.Time { return t.UTC().Truncate(time.Second)
 // Encode returns the canonical bytes of s (indented JSON, newline-ended).
 func Encode(s Signal) ([]byte, error) {
 	s.Since = normalizeTime(s.Since)
+	if !s.RenewedAt.IsZero() {
+		s.RenewedAt = normalizeTime(s.RenewedAt)
+	}
 	s.Expires = normalizeTime(s.Expires)
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -215,4 +223,18 @@ func ParsePath(p string) (Key, bool) {
 		return Key{Folder: folder, Kind: KindResource, Subject: subject}, true
 	}
 	return Key{}, false
+}
+
+// LastHeartbeat is when the holder was last seen (D3): RenewedAt, or for a
+// signal without it (an older binary) Expires − ttl with estimated true.
+// It never falls before Since.
+func (s Signal) LastHeartbeat(ttl time.Duration) (at time.Time, estimated bool) {
+	if !s.RenewedAt.IsZero() {
+		return s.RenewedAt, false
+	}
+	at = s.Expires.Add(-ttl)
+	if at.Before(s.Since) {
+		at = s.Since
+	}
+	return at, true
 }

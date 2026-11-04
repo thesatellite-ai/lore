@@ -240,6 +240,10 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		if plan.Reclaim && plan.Prev != nil {
 			entry.Event = schema.ClaimEventReclaim
 			entry.PrevActorID = plan.Prev.Holder
+			// D3: the previous holder's span ends at its last heartbeat.
+			if err = next.closeClaimSpan(*plan.Prev, now, v.Lease.TTL); err != nil {
+				return signals.Change{}, err
+			}
 		}
 		if err := next.AppendClaimLog(entry); err != nil {
 			return signals.Change{}, err
@@ -419,6 +423,9 @@ func Release(ctx context.Context, env Env, id string) error {
 			return signals.Change{}, errors.Join(err, errIf(!ok, fmt.Errorf("%w: %s", ErrUnknownTask, id)))
 		}
 		next := doc.Clone()
+		if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL); err != nil { // D4: same write
+			return signals.Change{}, err
+		}
 		if err := next.AppendClaimLog(schema.ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: schema.ClaimEventRelease,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: s.ClaimEpoch}); err != nil {
 			return signals.Change{}, err
@@ -461,10 +468,16 @@ func HolderWrite(ctx context.Context, env Env, id string, dropClaim bool, mutate
 		if !ok {
 			return signals.Change{}, fmt.Errorf("%w: %s", ErrUnknownTask, id)
 		}
-		if _, err := signals.CheckHolder(v, env.Caller, env.Folder, id, doc.Epoch()); err != nil {
+		held, err := signals.CheckHolder(v, env.Caller, env.Folder, id, doc.Epoch())
+		if err != nil {
 			return signals.Change{}, err
 		}
 		next := doc.Clone()
+		if dropClaim { // holder done: the claim span closes in the same write (D4)
+			if err = next.closeClaimSpan(held, v.Now, v.Lease.TTL); err != nil {
+				return signals.Change{}, err
+			}
+		}
 		extra, err := mutate(next, v.Now)
 		if err != nil {
 			return signals.Change{}, err
@@ -575,6 +588,11 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: epoch}
 		if removed != nil {
 			entry.PrevActorID = removed.Holder
+		}
+		if removed != nil { // revoke/reassign/cancel close the holder's span (D4)
+			if err = next.closeClaimSpan(*removed, v.Now, v.Lease.TTL); err != nil {
+				return signals.Change{}, err
+			}
 		}
 		if removed != nil || kind == OverrideRevoke {
 			if err := next.AppendClaimLog(entry); err != nil {

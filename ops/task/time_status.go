@@ -229,51 +229,9 @@ func (o ops) stopSpan(ctx context.Context, src store.Source, cur row.Row, actor 
 	return e, true, putOpen(patch, keep)
 }
 
-// closeInto appends a closed auto entry, flagging it long_span (TQ2) and
-// coalescing it into the worker's latest live auto entry when they are
-// closer than time.coalesce_gap (TQ4). A coalesced span is kept as a
-// tombstone flagged coalesced with the same id, so the union merge of
-// time_open never brings the open span back (OV7-4).
+// closeInto is timecalc.CloseInto with the store's policy.
 func closeInto(entries []timeentry.Entry, e timeentry.Entry, tp timePolicy) []timeentry.Entry {
-	if timecalc.LongSpan(e.Seconds, tp.longSpan) {
-		e = e.WithFlag(timeentry.FlagLongSpan)
-	}
-	for i := len(entries) - 1; i >= 0; i-- {
-		p := entries[i]
-		if p.Deleted() || p.Source == timeentry.SourceManual || p.ActorID != e.ActorID || p.SessionRef != e.SessionRef || p.Source != e.Source {
-			continue
-		}
-		if !timecalc.Coalesce(p.StartTime(), p.EndTime(), e.StartTime(), e.EndTime(), tp.coalesceGap) {
-			break
-		}
-		start, end := minTime(p.StartTime(), e.StartTime()), maxTime(p.EndTime(), e.EndTime())
-		p.Start, p.End = start.UTC().Format(timeentry.TimeLayout), end.UTC().Format(timeentry.TimeLayout)
-		p.Seconds = int64(end.Sub(start) / time.Second)
-		p.UpdatedAt, p.UpdatedBy = e.UpdatedAt, e.UpdatedBy
-		if timecalc.LongSpan(p.Seconds, tp.longSpan) {
-			p = p.WithFlag(timeentry.FlagLongSpan)
-		}
-		entries[i] = p
-		e = e.WithFlag(timeentry.FlagCoalesced)
-		e.Note = "coalesced into " + p.ID.String()
-		e.DeletedAt, e.DeletedBy = e.UpdatedAt, e.UpdatedBy
-		break
-	}
-	return append(entries, e)
-}
-
-func minTime(a, b time.Time) time.Time {
-	if b.Before(a) {
-		return b
-	}
-	return a
-}
-
-func maxTime(a, b time.Time) time.Time {
-	if b.After(a) {
-		return b
-	}
-	return a
+	return timecalc.CloseInto(entries, e, tp.longSpan, tp.coalesceGap)
 }
 
 // putEntries writes the time_entries patch value.

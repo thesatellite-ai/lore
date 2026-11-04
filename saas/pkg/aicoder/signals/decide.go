@@ -223,7 +223,7 @@ func DecideClaim(v View, req ClaimRequest) (ClaimPlan, error) {
 		Kind: KindClaim, Task: req.ID, Project: req.Folder,
 		Holder: req.Caller.ActorID, HolderLabel: req.Caller.Label, Session: req.Caller.Session,
 		ClaimToken: req.Token, ClaimEpoch: plan.Epoch,
-		Since: now, Expires: now.Add(v.Lease.TTL), RenewedSeq: 0,
+		Since: now, Expires: now.Add(v.Lease.TTL), RenewedSeq: 0, RenewedAt: now,
 		WorkBranch: req.WorkBranch, Owns: append([]string(nil), req.Owns...), Host: req.Caller.Host,
 	}
 	return plan, nil
@@ -271,6 +271,7 @@ func DecideRenew(v View, c Caller, folder, id string) (Signal, error) {
 	}
 	s.Expires = normalizeTime(v.Now).Add(v.Lease.TTL)
 	s.RenewedSeq++
+	s.RenewedAt = normalizeTime(v.Now) // D3: the last heartbeat
 	return s, nil
 }
 
