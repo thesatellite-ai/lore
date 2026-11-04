@@ -11,6 +11,8 @@ import (
 
 	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/ids"
+
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 )
 
 // Keys inside _meta.json and _purged.json.
@@ -130,4 +132,68 @@ func encodePurged(set map[string]bool) ([]byte, error) {
 		arr[i] = s
 	}
 	return canonjson.Encode(map[string]any{keyVersion: json.Number(fmt.Sprint(FormatVersion)), purgedKeyIDs: arr})
+}
+
+// ResolveRepoIdentity settles the repo identity keys (repo_id, urls,
+// forked_from, split_from, repo_id_aliases) of a checkout's _meta.json
+// before the merge driver's field merge, so they never become a conflict
+// and never take the generic "newer side" value. It sets the same resolved
+// identity on both sides (and on base, so the field merge sees no
+// three-way change against it); every other key is left to the driver.
+//
+// Q5 (PROV1): the rule is rowfs.ResolveRepoIdentity, the one the core's
+// store folder merge uses: keep ours (%A, the branch being merged into)
+// when a fork or split meets its upstream; the older UUIDv7 wins with the
+// other id in repo_id_aliases when two clones raced; the same id unions
+// the addresses. A side whose identity cannot be read is left untouched
+// (the driver then reports it as it would any clash).
+func ResolveRepoIdentity(base, ours, theirs map[string]any) {
+	om, ook := repoMetaOfDoc(ours)
+	tm, tok := repoMetaOfDoc(theirs)
+	if !ook || !tok || (om.RepoID == "" && tm.RepoID == "") {
+		return
+	}
+	resolved := rowfs.ResolveRepoIdentity(om, tm)
+	raw, err := json.Marshal(resolved)
+	if err != nil {
+		return
+	}
+	var sub map[string]any
+	if json.Unmarshal(raw, &sub) != nil {
+		return
+	}
+	for _, doc := range []map[string]any{base, ours, theirs} {
+		if doc == nil {
+			continue
+		}
+		for _, k := range repoIdentityKeys {
+			delete(doc, k)
+		}
+		for k, v := range sub {
+			doc[k] = v
+		}
+	}
+}
+
+// repoIdentityKeys are the _meta.json keys ResolveRepoIdentity owns.
+var repoIdentityKeys = []string{rowfs.MetaKeyRepoID, rowfs.MetaKeyURLs, rowfs.MetaKeyForkedFrom, rowfs.MetaKeySplitFrom, rowfs.MetaKeyAliases}
+
+// repoMetaOfDoc reads the identity keys of a decoded _meta.json; ok is
+// false when they do not have the expected shape.
+func repoMetaOfDoc(doc map[string]any) (rowfs.RepoMeta, bool) {
+	sub := map[string]any{}
+	for _, k := range repoIdentityKeys {
+		if v, ok := doc[k]; ok {
+			sub[k] = v
+		}
+	}
+	raw, err := json.Marshal(sub)
+	if err != nil {
+		return rowfs.RepoMeta{}, false
+	}
+	var m rowfs.RepoMeta
+	if json.Unmarshal(raw, &m) != nil {
+		return rowfs.RepoMeta{}, false
+	}
+	return m, true
 }

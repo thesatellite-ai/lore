@@ -29,6 +29,8 @@ import (
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/style"
 
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+
 	"github.com/spf13/cobra"
 )
 
@@ -54,6 +56,9 @@ type doctorReport struct {
 	BinaryVersion string             `json:"binary_version"`
 	// Sync is present only for Mode A projects that sync through git.
 	Sync *doctorSyncInfo `json:"sync,omitempty"`
+	// RepoAddresses is the "Repo addresses" check (PROV2, Q5); present
+	// once the checkout has a repo id.
+	RepoAddresses *opsinfra.AddressReport `json:"repo_addresses,omitempty"`
 }
 
 // doctorSyncInfo is the [sync] section of the doctor report.
@@ -251,6 +256,8 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	}
 	home, _ := loreHome()
 	doctorCaches(ctx, repoTop, home, r)
+	// 9. Repo addresses (PROV2, Q5).
+	doctorRepoAddresses(ctx, r)
 
 	r.OK = r.Status == doctorHealthy
 	return r, nil
@@ -505,3 +512,37 @@ func refusedRowStillExists(ctx context.Context, db *sql.DB, rel string) bool {
 // dataRowFileExt is the extension of one row's file in .lore/data
 // ("<table>/<id>.json").
 const dataRowFileExt = ".json"
+
+// doctorRepoAddresses is the "Repo addresses" check (PROVENANCE_DESIGN
+// 10.3; read only, it mints and records nothing). PROV2: an unconfirmed
+// address is listed as a note with the command that confirms it (it is
+// normal until someone answers, so it does not degrade health). Q5: a
+// clone whose repo_id disagrees with its remote (its remote is a confirmed
+// address of another repo, typically a fork rebased onto its upstream,
+// whose _meta.json then came from the upstream) is a warning: rows it
+// writes would carry the wrong repo id.
+func doctorRepoAddresses(ctx context.Context, r *doctorReport) {
+	if coreApp == nil {
+		return
+	}
+	rep, err := coreApp.RepoAddressStatus(ctx)
+	if err != nil || rep.RepoID == "" {
+		return
+	}
+	r.RepoAddresses = &rep
+	for _, n := range rep.Notices {
+		line := "repo address " + n.Key + " is unconfirmed (lore repo set-url " + n.Key + ", add --mirror for another address"
+		if !n.CaseOnly {
+			line += ", or lore repo fork in a fork"
+		}
+		r.Notes = append(r.Notes, line+")")
+	}
+	for _, w := range rep.Warnings {
+		r.Warnings = append(r.Warnings, "a credential is in git remote "+w.Remote+"; remove it: git remote set-url "+w.Remote+" "+w.Stored)
+		degrade(r)
+	}
+	if rep.Mismatch != "" {
+		r.Warnings = append(r.Warnings, rep.Mismatch+"; if this clone is the fork, restore the fork's .lore/data/_meta.json (git checkout <fork commit> -- .lore/data/_meta.json) or run `lore repo fork`")
+		degrade(r)
+	}
+}
