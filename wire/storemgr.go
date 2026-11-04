@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -149,19 +150,20 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 // gitCommitMarkerAs commits lore-store.yaml in a lore-owned store worktree
 // (the git adapter has no "commit a control file" call; this is the one
 // non-row commit lore makes, so it lives here beside the marker logic),
-// signed, when git has no identity, as who (storeIdentityFunc; nil =
-// git.DefaultAuthor).
-func gitCommitMarkerAs(ctx context.Context, dir string, now time.Time, who func(context.Context) git.Signature) error {
+// signed as gitCommitFilesAs says.
+func gitCommitMarkerAs(ctx context.Context, dir string, now time.Time, who storeSigner) error {
 	return gitCommitFilesAs(ctx, dir, now, who, initSubject, rowfs.MarkerFile)
 }
 
 // gitCommitFilesAs commits paths (slash-separated, relative to dir) of a
-// git store's worktree, hooks off, signing off, with the lore identity who
-// as the fallback signer. FLAG4: the person's git identity, when git has one,
-// signs the commit; only without it is who passed (as GIT_AUTHOR_* /
-// GIT_COMMITTER_* on these git calls, never into git config).
-func gitCommitFilesAs(ctx context.Context, dir string, now time.Time, who func(context.Context) git.Signature, subject string, paths ...string) error {
-	ident, err := git.IdentityEnv(ctx, dir, who)
+// git store's worktree, hooks off, signing off. Q-R2-1: when the clone's
+// origin is a store of an org with an identity, that org identity signs
+// it, whatever git knows. Otherwise FLAG4: the person's git identity, when
+// git has one, signs the commit; only without it is who's lore identity
+// passed (as GIT_AUTHOR_* / GIT_COMMITTER_* on these git calls, never into
+// git config).
+func gitCommitFilesAs(ctx context.Context, dir string, now time.Time, who storeSigner, subject string, paths ...string) error {
+	ident, err := who.envFor(ctx, dir)
 	if err != nil {
 		return err
 	}
@@ -179,26 +181,104 @@ func gitCommitFilesAs(ctx context.Context, dir string, now time.Time, who func(c
 	return nil
 }
 
-// storeIdentity is the git option that signs store commits and merges
-// with the lore identity (storeIdentityFunc).
-func storeIdentity(opts Options) git.Option { return git.WithIdentity(storeIdentityFunc(opts)) }
+// OrgSigner is one configured org that has an identity (Options.OrgSigners):
+// the urls of its stores, as ~/.lore/config.yaml spells them, and the
+// signature every commit to them carries (Q-R2-1, LORE_TEAM_SPEC 6.5).
+type OrgSigner struct {
+	// StoreURLs are the org's store urls; compared after canonicalising, so
+	// any spelling of the same remote matches.
+	StoreURLs []string
+	// Name and Email are the org identity's commit author.
+	Name  string
+	Email string
+}
 
-// storeIdentityFunc answers the lore identity (`lore whoami`: display name
-// + the identity key's e-mail) as a commit signature. FLAG4: it is used
-// only when git has no user.name/user.email for the clone, an existing git
+// storeSigner decides who signs a store commit lore makes: the org
+// identity for an org store (Q-R2-1), else the FLAG4 rule with the lore
+// identity as git's fallback.
+type storeSigner struct{ opts Options }
+
+// storeIdentityFunc is the signer of store commits for opts (storeSigner).
+func storeIdentityFunc(opts Options) storeSigner { return storeSigner{opts: opts} }
+
+// fallback answers the lore identity (`lore whoami`: display name + the
+// identity key's e-mail) as a commit signature. FLAG4: it is used only
+// when git has no user.name/user.email for the clone, an existing git
 // identity always wins, and git config is never changed (it is passed as
 // GIT_AUTHOR_*/GIT_COMMITTER_* on that one call). It resolves lazily, so a
 // machine where git knows the person never pays for the resolution; a
 // failed resolution leaves git.DefaultAuthor rather than failing the write.
-func storeIdentityFunc(opts Options) func(context.Context) git.Signature {
-	return func(ctx context.Context) git.Signature {
-		who, err := resolveIdentity(ctx, opts)
-		if err != nil {
-			return git.Signature{}
-		}
-		name, email := who.CommitSignature()
-		return git.Signature{Name: name, Email: email}
+func (s storeSigner) fallback(ctx context.Context) git.Signature {
+	who, err := resolveIdentity(ctx, s.opts)
+	if err != nil {
+		return git.Signature{}
 	}
+	name, email := who.CommitSignature()
+	return git.Signature{Name: name, Email: email}
+}
+
+// owner is the org identity that signs the store at raw (any spelling of
+// its url, folder and branch ignored), when raw is a store of an org with
+// an identity (Q-R2-1). A failing or absent Options.OrgSigners hook names
+// no owner: the FLAG4 rule then signs, because refusing every store write
+// over an unreadable config would be worse than the old behaviour.
+func (s storeSigner) owner(ctx context.Context, raw string) (git.Signature, bool) {
+	if s.opts.OrgSigners == nil {
+		return git.Signature{}, false
+	}
+	key, ok := storeKey(raw)
+	if !ok {
+		return git.Signature{}, false
+	}
+	orgs, err := s.opts.OrgSigners(ctx)
+	if err != nil {
+		return git.Signature{}, false
+	}
+	for _, o := range orgs {
+		for _, u := range o.StoreURLs {
+			if k, ok := storeKey(u); ok && k == key {
+				return git.Signature{Name: o.Name, Email: o.Email}, true
+			}
+		}
+	}
+	return git.Signature{}, false
+}
+
+// envFor is the identity environment of a commit lore makes in the store
+// worktree dir: the org identity when dir's origin is an org store
+// (Q-R2-1), else git.IdentityEnv's FLAG4 rule.
+func (s storeSigner) envFor(ctx context.Context, dir string) ([]string, error) {
+	if origin, err := (gitRun{dir: dir, args: []string{"config", "--get", "remote.origin.url"}}).output(ctx); err == nil {
+		if sig, ok := s.owner(ctx, strings.TrimSpace(string(origin))); ok {
+			if env, ok := git.SignerEnv(sig); ok {
+				return env, nil
+			}
+		}
+	}
+	return git.IdentityEnv(ctx, dir, s.fallback)
+}
+
+// storeKey is raw's canonical store url without its folder and branch
+// query, the key two spellings of one remote share.
+func storeKey(raw string) (string, bool) {
+	c, err := canonical(attach.Store{URL: raw})
+	if err != nil {
+		return "", false
+	}
+	u, err := url.Parse(c)
+	if err != nil {
+		return "", false
+	}
+	u.RawQuery, u.Fragment = "", ""
+	return u.String(), true
+}
+
+// storeOpeners is newOpeners with this App's commit signing: every git
+// clone falls back to the lore identity (FLAG4) and an org store is
+// signed by its org identity (Q-R2-1).
+func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options) (*store.Openers, error) {
+	who := storeIdentityFunc(opts)
+	return newOpeners(reg, origins, git.WithIdentity(who.fallback), who.owner)
 }
 
 // openStore opens the store at a canonical url with this App's backends.
@@ -209,7 +289,7 @@ func (a *App) openStore(ctx context.Context, canon, raw string) (store.Backend, 
 	if err != nil {
 		return nil, err
 	}
-	o, err := newOpeners(reg, originsOf(raw), storeIdentity(a.opts))
+	o, err := storeOpeners(reg, originsOf(raw), a.opts)
 	if err != nil {
 		return nil, err
 	}

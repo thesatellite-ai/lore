@@ -150,6 +150,10 @@ type Options struct {
 	// already uses is skipped (the committed file wins). Nil, or an error,
 	// attaches nothing (fail closed: an internal store is never guessed).
 	OrgStores func(ctx context.Context) ([]attach.Store, error)
+	// OrgSigners lists, for every configured org that has an identity, the
+	// org's store urls and the signature its commits carry (Q-R2-1). Nil
+	// means no store is an org store and FLAG4 signs everything.
+	OrgSigners func(ctx context.Context) ([]OrgSigner, error)
 	// WrapBackend, when set, wraps each store's backend before the
 	// engine, the scanner and the format readers' map see it (the CLI's
 	// live-ref overlay, v0.1.17 live mode: open rows of live tables go to

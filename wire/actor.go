@@ -63,6 +63,11 @@ func (a *App) EnsureActor(ctx context.Context, target store.Source) error {
 // F18 projection"), because the repo's files are committed and an email
 // there is published with the code. Every other store that is not
 // client-class (org stores, me) keeps the full row.
+//
+// Q-R2-2: auto-written actor rows keep stable_key and handle in an org's
+// own (non-client) repos, because the org's team needs them to resolve
+// assignees and created_by refs; only client repos get the minimal row,
+// because a client reads those files and must never see a person's email.
 func fullActorRow(st *state, target store.Source) bool {
 	if st.eng.IsClient(target) {
 		return false

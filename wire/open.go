@@ -368,7 +368,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		}
 		raws = append(raws, s.URL)
 	}
-	openers, err := newOpeners(reg, originsOf(raws...), storeIdentity(opts))
+	openers, err := storeOpeners(reg, originsOf(raws...), opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -517,13 +517,26 @@ func originsOf(raws ...string) map[string]string {
 // ssh, https and http with logic/merge as the row merger (spec 11 rule 5:
 // the same merge the engine runs). origins is originsOf the store urls as
 // written: each git clone's origin spelling. who is the lore identity a
-// git clone signs commits with when git has none (FLAG4, storeIdentity).
-func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option) (*store.Openers, error) {
+// git clone signs commits with when git has none (FLAG4, storeOpeners).
+// owner, when not nil, names the org identity that signs every commit of
+// a store url it answers for, whatever git knows (Q-R2-1).
+func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option, owner func(context.Context, string) (git.Signature, bool)) (*store.Openers, error) {
 	o := store.NewOpeners()
 	if err := o.Register(folder.Scheme, folder.NewOpener()); err != nil {
 		return nil, err
 	}
-	gitOpen := git.NewOpener(git.WithMerger(merge.Driver{Registry: reg}), git.WithOrigins(origins), who)
+	base := []git.Option{git.WithMerger(merge.Driver{Registry: reg}), git.WithOrigins(origins), who}
+	plain := git.NewOpener(base...)
+	gitOpen := func(ctx context.Context, u *url.URL, oo store.OpenOptions) (store.Backend, error) {
+		// Q-R2-1: a store of an org with an identity is always signed by
+		// that identity, never by the person's own git email (spec 6.5).
+		if owner != nil {
+			if sig, ok := owner(ctx, u.String()); ok {
+				return git.NewOpener(append(slices.Clone(base), git.WithSigner(sig))...)(ctx, u, oo)
+			}
+		}
+		return plain(ctx, u, oo)
+	}
 	for _, s := range git.Schemes {
 		if err := o.Register(s, gitOpen); err != nil {
 			return nil, err

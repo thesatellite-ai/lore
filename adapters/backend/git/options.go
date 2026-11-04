@@ -46,7 +46,10 @@ type config struct {
 	merger Merger
 	author Signature
 	// identity is the lazy lore identity (WithIdentity); nil uses author.
-	identity    func(context.Context) Signature
+	identity func(context.Context) Signature
+	// signer is the store owner's signature (WithSigner); when set it signs
+	// every commit and merge whatever git knows (Q-R2-1).
+	signer      Signature
 	now         func() time.Time
 	bin         string
 	branch      string

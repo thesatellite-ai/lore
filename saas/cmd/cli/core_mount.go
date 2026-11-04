@@ -74,6 +74,7 @@ import (
 	"dbent"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitsetup"
+	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/projresolve"
@@ -115,8 +116,37 @@ const (
 // test fixtures call it, so a hook added here reaches both.
 func coreOptions(repoDir, home string) wire.Options {
 	return wire.Options{RepoDir: repoDir, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
-		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{},
+		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, OrgSigners: coreOrgSigners, Audit: &coreAuditSink{},
 		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, ProjectHint: coreProjectHint, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
+}
+
+// coreOrgSigners lists every org entry of ~/.lore/config.yaml that has an
+// identity, with its store urls and storeSignature's author (Q-R2-1: the
+// org identity signs every commit to an org store, never the person's own
+// git email). An unreadable config lists none (the FLAG4 rule signs).
+func coreOrgSigners(ctx context.Context) ([]wire.OrgSigner, error) {
+	dir, err := identity.Dir()
+	if err != nil {
+		return nil, err
+	}
+	cfg, _, err := lorecfg.LoadTeam(ctx, dir, lorecfg.Options{})
+	if err != nil || cfg == nil {
+		return nil, err
+	}
+	var out []wire.OrgSigner
+	for i := range cfg.Orgs {
+		org := &cfg.Orgs[i]
+		if strings.TrimSpace(org.Identity.Key) == "" || len(org.Stores) == 0 {
+			continue
+		}
+		sig := storeSignature(org)
+		s := wire.OrgSigner{Name: sig.Name, Email: sig.Email}
+		for _, st := range org.Stores {
+			s.StoreURLs = append(s.StoreURLs, st.URL)
+		}
+		out = append(out, s)
+	}
+	return out, nil
 }
 
 // mountCore builds the core and mounts its commands under root. A failure

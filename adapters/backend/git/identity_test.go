@@ -93,3 +93,45 @@ func TestUnusableIdentityFallsBackToAuthor(t *testing.T) {
 		t.Fatalf("signed %q, want %q", got, want)
 	}
 }
+
+// Q-R2-1: a store with an owner signature (an org store) is signed by it
+// even when git has an identity, merges included; a store without one keeps
+// the FLAG4 rule (the git identity wins), and an unusable owner signature
+// is ignored.
+func TestOwnerSignerBeatsGitIdentity(t *testing.T) {
+	noGitIdentity(t)
+	org := Signature{Name: "Northwind", Email: "lore@northwind.invalid"}
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithSigner(org))
+	b := clone(t, remote, WithSigner(org))
+	plain := clone(t, remote)
+	unusable := clone(t, remote, WithSigner(Signature{Name: "No Email"}))
+	g := newGen(t)
+	for _, c := range []*Backend{a, b, plain, unusable} {
+		gitT(t, c.Dir(), "config", "user.name", "Git Person")
+		gitT(t, c.Dir(), "config", "user.email", "person@gmail.invalid")
+	}
+	write(t, a, store.Change{Row: g.row(newID(t), "a", hlc.HLC{})})
+	syncOK(t, a)
+	write(t, b, store.Change{Row: g.row(newID(t), "b", hlc.HLC{})})
+	syncOK(t, b) // merges a's commit
+	want := "Northwind|lore@northwind.invalid|Northwind|lore@northwind.invalid"
+	for _, rev := range []string{"HEAD", "HEAD^2"} {
+		if got := gitT(t, b.Dir(), "log", "-1", "--format=%an|%ae|%cn|%ce", rev); got != want {
+			t.Fatalf("org store %s signed %q, want %q", rev, got, want)
+		}
+	}
+	person := "Git Person|person@gmail.invalid"
+	for name, c := range map[string]*Backend{"plain": plain, "unusable signer": unusable} {
+		write(t, c, store.Change{Row: g.row(newID(t), name, hlc.HLC{})})
+		if got := gitT(t, c.Dir(), "log", "-1", "--format=%an|%ae"); got != person {
+			t.Fatalf("%s store signed %q, want the git identity %q (FLAG4)", name, got, person)
+		}
+	}
+	if env, ok := SignerEnv(org); !ok || len(env) != 4 {
+		t.Fatalf("SignerEnv(org) = %v, %v", env, ok)
+	}
+	if _, ok := SignerEnv(Signature{Name: "x", Email: "a<b"}); ok {
+		t.Fatal("SignerEnv must refuse a signature that breaks an ident line")
+	}
+}
