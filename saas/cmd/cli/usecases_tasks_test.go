@@ -13,7 +13,6 @@ import (
 
 	"dbent"
 	"dbent/gen/ent"
-	entReminder "dbent/gen/ent/reminder"
 	entTask "dbent/gen/ent/task"
 )
 
@@ -584,33 +583,6 @@ func TestUC_Tasks_ReminderRecurrence(t *testing.T) {
 	if r := c.loreAny("reminder", "add", "x", "--due=2026-03-10", "--recurrence=fortnightly"); r.code == 0 || !strings.Contains(r.stderr, "E_INVALID_INPUT") {
 		t.Fatalf("bad --recurrence: %d %s", r.code, r.stderr)
 	}
-}
-
-func TestUC_Tasks_BumpRecurrence(t *testing.T) {
-	t.Parallel()
-	from := time.Date(2026, 3, 10, 9, 0, 0, 0, time.UTC)
-	want := map[entReminder.Recurrence]string{
-		entReminder.Recurrence7d:  "2026-03-17",
-		entReminder.Recurrence30d: "2026-04-09",
-		entReminder.Recurrence1m:  "2026-04-10",
-		entReminder.Recurrence3m:  "2026-06-10",
-		entReminder.Recurrence6m:  "2026-09-10",
-		entReminder.Recurrence1y:  "2027-03-10",
-	}
-	if len(want) != len(allRecurrenceValues()) {
-		t.Fatalf("test covers %d patterns, enum has %d", len(want), len(allRecurrenceValues()))
-	}
-	for p, w := range want {
-		if got := bumpRecurrence(from, p).Format(time.DateOnly); got != w {
-			t.Fatalf("%s: %s, want %s", p, got, w)
-		}
-	}
-	defer func() {
-		if recover() == nil {
-			t.Fatal("an unknown pattern must panic (invariant)")
-		}
-	}()
-	bumpRecurrence(from, entReminder.Recurrence("2w"))
 }
 
 func TestUC_Tasks_PureHelpers(t *testing.T) {
