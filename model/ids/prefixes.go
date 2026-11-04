@@ -169,6 +169,13 @@ const (
 	// list (TIME_TRACKING_DESIGN 6.2); entries are not rows, the id is the
 	// merge key of the list.
 	PrefixTimeEntry Prefix = "tme"
+	// PrefixBatch marks one bulk action (a bulk delete, an import). XQ1:
+	// every bulk action of every noun uses this one prefix, and `lore
+	// batch show` reports the kind (task, meta, resource, delete, import),
+	// because per-kind prefixes (mbt_, rbt_, tbt_, dbt_) made one batch
+	// list impossible. A batch is not a row: the id lives on the audit
+	// events of the rows it wrote.
+	PrefixBatch Prefix = "bat"
 )
 
 // allPrefixes is the iteration list of every constant above. Read-only.
@@ -253,6 +260,7 @@ var allPrefixes = [...]Prefix{
 	PrefixSecretAllow,
 	PrefixResource,
 	PrefixTimeEntry,
+	PrefixBatch,
 }
 
 // Prefixes returns a fresh copy of every registered prefix, in declaration order.

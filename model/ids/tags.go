@@ -93,3 +93,10 @@ type Resource struct{}
 
 // Prefix implements Tag.
 func (Resource) Prefix() Prefix { return PrefixResource }
+
+// Batch tags ids of bulk actions (XQ1: one bat_ prefix for every bulk
+// action; the batch lives on the audit events it wrote, never as a row).
+type Batch struct{}
+
+// Prefix implements Tag.
+func (Batch) Prefix() Prefix { return PrefixBatch }

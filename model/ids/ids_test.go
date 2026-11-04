@@ -102,7 +102,7 @@ func TestPrefixesUniqueAndValid(t *testing.T) {
 		}
 		seen[p] = true
 	}
-	for _, tag := range []Tag{Memory{}, Actor{}, Store{}, Repo{}, Project{}, Machine{}, Policy{}, MetaKey{}, MetaValue{}, Kind{}, KindField{}, Var{}, SecretRule{}, SecretAllow{}, Resource{}} {
+	for _, tag := range []Tag{Memory{}, Actor{}, Store{}, Repo{}, Project{}, Machine{}, Policy{}, MetaKey{}, MetaValue{}, Kind{}, KindField{}, Var{}, SecretRule{}, SecretAllow{}, Resource{}, Batch{}} {
 		if !tag.Prefix().Registered() {
 			t.Errorf("tag prefix %q unregistered", tag.Prefix())
 		}
