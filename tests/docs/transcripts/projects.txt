@@ -111,18 +111,8 @@ ERROR: [E_NEEDS_CONFIRM] engine: run project delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
 alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38 --yes
-ERROR: [E_HAS_DEPENDENTS] engine: rep_3b6283bc4392c556bbae5f094246e913 (repos.project_id) still points at prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
-  hint: delete or move the pointing rows first
-(exit 23)
-alice (work/scratch)$ lore repo list
-rep_3b6283bc4392c556bbae5f094246e913  scratch  https://github.com/client2/scratch
-alice (work/scratch)$ lore repo delete rep_3b6283bc4392c556bbae5f094246e913 --yes
 ✓ scratch deleted
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
-alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38 --yes
-✓ scratch deleted
-lore sync: trashed rows 1
+lore sync: trashed rows 2
 lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 alice (work/scratch)$ lore project list
 (no projects)
@@ -130,7 +120,7 @@ alice (work/scratch)$ lore project list
 ### convert a shared database
 alice (work/infra)$ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
-project_id: prj_f147dd95f1aaf742dd4f5214843a5139
+project_id: prj_3b6283bc4392c556bbae5f094246e913
 alice (work/infra)$ lore rule list
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/infra/.git/hooks)
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`
@@ -140,11 +130,11 @@ alice (work/infra)$ lore migrate run --dry-run
 dry_run: true
 count: 3
 rows: 
-steps: mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aaebe6aca5bb46cc521869f5ba2a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: memories/mem_f147dd95f1aaf742dd4f5214843a5139 → store shared (~/.lore/stores/infra), mode-b: repos/rep_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: rules/rul_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 alice (work/infra)$ lore migrate run
 count: 3
 rows: 
-steps: mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aaebe6aca5bb46cc521869f5ba2a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: memories/mem_f147dd95f1aaf742dd4f5214843a5139 → store shared (~/.lore/stores/infra), mode-b: repos/rep_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: rules/rul_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 alice (work/infra)$ ls .lore; cat .lore/stores.yaml
 lore-cache.db
 lore-cache.db-shm
@@ -156,8 +146,8 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 alice (work/infra)$ lore rule list; lore memory list
-rul_0aaebe6aca5bb46cc521869f5ba2a61f  Terraform changes need a plan in the pull request.  [shared]
-mem_2537f9b2f7de77bfe5ca958860216bbb  The staging cluster sleeps at night.  [shared]
+rul_b69e8368dd4986838455061d5d9e5ed7  Terraform changes need a plan in the pull request.  [shared]
+mem_f147dd95f1aaf742dd4f5214843a5139  The staging cluster sleeps at night.  [shared]
 
 ### errors
 alice (work)$ lore rule list
