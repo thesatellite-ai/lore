@@ -57,6 +57,7 @@ type ArgsDecoder struct {
 func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 	used := map[string]bool{}
 	maxArg := NoArg
+	rest := false
 	for _, f := range fields {
 		var vals []string
 		switch {
@@ -66,6 +67,10 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 				continue
 			}
 			vals = d.Args[f.Arg : f.Arg+1]
+			if f.Rest {
+				rest = true
+				vals = []string{strings.Join(d.Args[f.Arg:], " ")}
+			}
 		case f.Flag != "":
 			v, ok := d.Flags[f.Flag]
 			if !ok {
@@ -80,7 +85,7 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 			return err
 		}
 	}
-	if len(d.Args) > maxArg+1 {
+	if !rest && len(d.Args) > maxArg+1 {
 		return errs.New(errs.InvalidInput, "too many arguments: want at most "+strconv.Itoa(maxArg+1))
 	}
 	for name := range d.Flags {

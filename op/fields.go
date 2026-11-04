@@ -43,6 +43,10 @@ type FieldInfo struct {
 	Type FieldType
 	// Arg is the positional CLI argument index, or NoArg.
 	Arg int
+	// Rest marks the last positional text argument that takes every
+	// remaining argument joined by single spaces (`rest:"true"`), as
+	// v0.1.17 joined `lore reminder add --due X hello world`.
+	Rest bool
 	// Flag is the CLI flag name ("" when the field is positional or has no
 	// flag).
 	Flag string
@@ -70,6 +74,7 @@ const (
 	tagFlag = "flag"
 	tagDesc = "desc"
 	tagUI   = "ui"
+	tagRest = "rest"
 )
 
 // ui tag keys.
@@ -141,6 +146,11 @@ func fieldsOf(op string, t reflect.Type, dir fieldDirection) []FieldInfo {
 			panic(tagError{fmt.Sprintf("op.Define(%s): positional args must be 0..%d with no gap", op, len(args)-1)})
 		}
 	}
+	for _, f := range out {
+		if f.Rest && f.Arg != len(args)-1 {
+			panic(tagError{fmt.Sprintf("op.Define(%s): rest argument %s must be the last positional", op, f.Name)})
+		}
+	}
 	return out
 }
 
@@ -174,6 +184,12 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 			panic(tagError{where + ": arg must be a non-negative index"})
 		}
 		f.Arg = n
+	}
+	if r, ok := sf.Tag.Lookup(tagRest); ok {
+		if r != "true" || f.Arg == NoArg || f.Type != TypeText {
+			panic(tagError{where + `: rest:"true" goes on a positional text argument`})
+		}
+		f.Rest = true
 	}
 	if fl, ok := sf.Tag.Lookup(tagFlag); ok {
 		if !flagName.MatchString(fl) {

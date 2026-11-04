@@ -338,10 +338,14 @@ func positional(fields []op.FieldInfo) []op.FieldInfo {
 func usage(verb string, fields []op.FieldInfo) string {
 	parts := []string{verb}
 	for _, f := range positional(fields) {
+		name := f.Name
+		if f.Rest {
+			name += "..."
+		}
 		if f.Required {
-			parts = append(parts, "<"+f.Name+">")
+			parts = append(parts, "<"+name+">")
 		} else {
-			parts = append(parts, "["+f.Name+"]")
+			parts = append(parts, "["+name+"]")
 		}
 	}
 	return strings.Join(parts, " ")
