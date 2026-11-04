@@ -30,6 +30,8 @@ import (
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // ds:def id=doctor-statuses-y6sro1m4 owner=@khanakia stability=stable desc="lore doctor statuses and their exit codes (healthy 0, degraded 1, broken 2)"
@@ -235,6 +237,9 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	// 6. Signals (F7 Debug): ref size, expired files, atomic push support
 	// (coord_doctor.go, lore-signals).
 	doctorSignals(ctx, r)
+	// 7. Resurrected rows: a live row file whose id its folder lists in
+	// _purged.json (an old clone or a hand copy brought it back).
+	doctorResurrected(ctx, r)
 
 	r.OK = r.Status == doctorHealthy
 	return r, nil
@@ -489,3 +494,37 @@ func refusedRowStillExists(ctx context.Context, db *sql.DB, rel string) bool {
 // dataRowFileExt is the extension of one row's file in .lore/data
 // ("<table>/<id>.json").
 const dataRowFileExt = ".json"
+
+// doctorResurrected warns about every resurrected row file (engine
+// Resurrected: reads already hide it) with where it is and the fix. No
+// core (not a lore project) is nothing to check; a store that cannot be
+// read for its purged list is a warning too, never a silent pass.
+func doctorResurrected(ctx context.Context, r *doctorReport) {
+	if coreApp == nil {
+		return
+	}
+	eng, err := coreApp.Engine(ctx)
+	if err != nil {
+		return // the project checks above report why the core cannot open
+	}
+	res, err := eng.Resurrected(ctx)
+	if err != nil {
+		r.Warnings = append(r.Warnings, "purged rows: cannot check: "+err.Error())
+		degrade(r)
+		return
+	}
+	for _, x := range res {
+		r.Warnings = append(r.Warnings, resurrectedLine(x))
+		degrade(r)
+	}
+}
+
+// resurrectedLine names one resurrected file and its fix.
+func resurrectedLine(x engine.Resurrected) string {
+	file := filepath.ToSlash(filepath.Join(string(x.Table), x.ID.String()+".json"))
+	where := ".lore/data/" + file
+	if x.Store != store.SourceRepo {
+		where = "store " + string(x.Store) + ": " + file
+	}
+	return "resurrected row " + where + ": its id is in _purged.json (an old clone brought it back); remove the file (git rm it and commit)"
+}
