@@ -81,16 +81,22 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 	var moved row.Row
 	if there.ID.IsZero() {
 		if dst.Client {
-			if err := refuseSecretRefs(cur); err != nil {
+			if err = refuseSecretRefs(cur); err != nil {
 				return Written{}, err
 			}
 		}
-		names := slices.Sorted(maps.Keys(cur.Fields))
-		if err = e.checkRefs(ctx, to, def, cur.Fields, names); err != nil {
+		// A row read back from a backend carries inferred values (a ref is
+		// Text), and validate.Targets only sees typed refs: re-type it
+		// first, or the reference and F15 checks see no refs at all. Not a
+		// whole-row validation: a row the source accepted (a v0.1.17 row
+		// with extra columns) still moves.
+		typed := retype(def, cur.Fields)
+		names := slices.Sorted(maps.Keys(typed))
+		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {
 			return Written{}, err
 		}
-		sc, err := e.screen(ctx, cl, to, cur.ID, cur.Fields, names)
-		if err != nil {
+		var sc screened
+		if sc, err = e.screen(ctx, cl, to, cur.ID, typed, names); err != nil {
 			return Written{}, err
 		}
 		moved = cur
@@ -102,13 +108,13 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 				return Written{}, err
 			}
 		}
-		got, err := e.put(ctx, dst, moved, hlc.HLC{})
-		if err != nil {
+		var got stored
+		if got, err = e.put(ctx, dst, moved, hlc.HLC{}); err != nil {
 			return Written{}, err
 		}
 		ev := Event{Op: cl.op, Action: ActionCreate, Store: to, Table: cur.Table, ID: cur.ID, HLC: moved.HLC, Actor: actor,
 			SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
-		if err := e.finish(ctx, to, []store.Row{got.doc}, ev); err != nil {
+		if err = e.finish(ctx, to, []store.Row{got.doc}, ev); err != nil {
 			return Written{}, err
 		}
 	} else if moved, err = there.Decode(); err != nil {

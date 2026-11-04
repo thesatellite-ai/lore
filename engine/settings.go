@@ -70,9 +70,9 @@ func (s storeSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
 	}
 	entries := make([]policy.Entry, 0, len(pols))
 	for _, p := range pols {
-		en, err := policy.EntryFromRow(p.Level, p.Value)
-		if err != nil {
-			return policy.Set{}, policy.Rules{}, err
+		en, perr := policy.EntryFromRow(p.Level, p.Value)
+		if perr != nil {
+			return policy.Set{}, policy.Rules{}, perr
 		}
 		entries = append(entries, en)
 	}
