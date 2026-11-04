@@ -67,7 +67,6 @@ $ lore init --non-interactive --name=website
   next: lore learn-from docs   to bootstrap from existing markdown
         lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
-lore live: actor rows were not written: [E_STALE] store: row changed since it was read
 ```
 <!-- /example -->
 

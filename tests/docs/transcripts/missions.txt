@@ -66,7 +66,7 @@ alice (work/website)$ lore mission pause msn_7a670ae8548ed05bf57ad29ad0759504
 ✓ msn_7a670ae8548ed05bf57ad29ad0759504 paused
 lore live: (live, pushed)
 alice (work/website)$ lore mission list
-msn_7a670ae8548ed05bf57ad29ad0759504 [paused] Open the online shop before Christmas   (2 tasks)
+msn_7a670ae8548ed05bf57ad29ad0759504 [paused] Open the online shop before Christmas   (3 tasks)
 alice (work/website)$ lore mission resume msn_7a670ae8548ed05bf57ad29ad0759504
 ✓ msn_7a670ae8548ed05bf57ad29ad0759504 resumed
 lore live: (live, pushed)
@@ -79,7 +79,7 @@ lore live: landed on main (86dbae4); leaves live once main is fetched
 alice (work/website)$ lore mission list
 (no missions)
 alice (work/website)$ lore mission list --all
-msn_7a670ae8548ed05bf57ad29ad0759504 [done] Open the online shop before Christmas   (2 tasks)
+msn_7a670ae8548ed05bf57ad29ad0759504 [done] Open the online shop before Christmas   (3 tasks)
 
 ### mission delete
 alice (work/website)$ lore mission add 'Test mission, please ignore'

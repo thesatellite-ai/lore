@@ -109,8 +109,8 @@ ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in ag
   hint: name the org the write goes to with --to <org>, or fix the choice with `lore org use` (or unset LORE_ORG)
 (exit 17)
 $ lore memory add --force-org --body 'The client pays invoices in 30 days'
-ERROR: unknown flag: --force-org
-(exit 1)
+ERROR: [E_INVALID_INPUT] unknown flag: --force-org
+(exit 20)
 $ lore memory add --to freelance --body 'The client pays invoices in 30 days'
 ✓ mem_d431…313a [freelance]
   scope: [master]

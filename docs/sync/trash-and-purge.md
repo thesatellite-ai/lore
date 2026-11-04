@@ -38,7 +38,7 @@ $ lore sync trash
 #1 memories/mem_05e9…4603  2026-11-02T10:02:00Z  (file deleted)
 $ lore sync trash restore 4
 ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: a trash restore of memories is not done in lore.db (the row files are the truth): restore the file from git (`git checkout HEAD -- .lore/data/memories/mem_54fe…28f2.json`, or from the commit before the one that deleted it: `git log --diff-filter=D -- .lore/data/memories/mem_54fe…28f2.json`)
-(exit 1)
+(exit 20)
 $ git checkout HEAD -- .lore/data/memories/mem_54fe…28f2.json
 $ lore memory list
 mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email or phone.
@@ -96,7 +96,7 @@ $ lore sync purge --archived-before 0d --dry-run
 would purge 1 archived row(s) archived before 2026-11-02T10:06:30Z
 $ lore sync purge --archived-before 0d
 ERROR: [E_INVALID_INPUT] purge is durable; pass --confirm (or --dry-run to preview)
-(exit 1)
+(exit 20)
 $ lore sync purge --archived-before 0d --confirm
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)

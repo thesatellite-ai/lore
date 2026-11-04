@@ -14,7 +14,6 @@ alice (work/website)$ lore init --non-interactive --name=website
         lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
 lore sync: backup of lore.db before bootstrap: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-lore live: actor rows were not written: [E_STALE] store: row changed since it was read
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 
 ### render

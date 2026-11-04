@@ -308,6 +308,7 @@ This file is generated from the operation registry of the 0.1.18 core (the `op.D
 | `E_READ_ONLY` | 23 | `refused` | 409 | command requires write access but read-only mode is active |
 | `E_READ_ONLY_FS` | 23 | `refused` | 409 | DB path is on a read-only filesystem |
 | `E_REASSIGNED` | 14 | `coordination` | 409 | a person reassigned the task while you held it |
+| `E_REFUSED` | 23 | `refused` | 409 | a fixed lore rule refuses this; the message names the rule and what to do instead |
 | `E_RESOURCE_INVALID` | 20 | `bad_input` | 400 | a value or field does not fit the kind |
 | `E_RESOURCE_IN_USE` | 23 | `refused` | 409 | a kind field or value is still used by resources |
 | `E_ROOT_REFUSED` | 23 | `refused` | 409 | lore refuses to run as root |

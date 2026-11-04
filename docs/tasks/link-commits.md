@@ -87,7 +87,9 @@ $ lore sync
 · already in sync
 lore live: 1 row(s) left live (main holds them)
 $ lore task list --status done
+lore: tsk_2ad3…f891 merged 10:04 (found by: ancestry, 05513aa) but it could not be recorded: write tsk_2ad3…f891: signals: prepare companion: [E_STALE] engine: tsk_2ad3…f891 kept changing while it was merged: [E_STALE] live row tasks/tsk_2ad3…f891 changed since it was read: [E_STALE] store: row changed since it was read; the next lore command retries
 ✓ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
+✓ tsk_2ad3…f891 Fix the typo on the pricing page [medium]  ✓ done · not merged yet
 ```
 <!-- /example -->
 

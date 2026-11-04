@@ -33,12 +33,16 @@ $ lore init --non-interactive --name=website
     origin:     https://github.com/client/website
     db:         ~/work/website/.lore/lore.db
     identity:   human:alice@agency.example (git config)
+· context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
+✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
   next: lore learn-from docs   to bootstrap from existing markdown
+        lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 $ ls .lore .lore/data
 .lore:
 backups
@@ -212,7 +216,10 @@ $ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
     origin:     https://github.com/client/shop
     db:         ~/work/shop/.lore/lore.db
     identity:   human:alice@agency.example (git config)
+· context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
+✓ ~/work/shop/AGENTS.md (pointer → .lore/LORE.md)
   next: lore learn-from docs   to bootstrap from existing markdown
+        lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
 $ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)

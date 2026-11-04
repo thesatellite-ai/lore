@@ -79,6 +79,7 @@ $ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 ```
 <!-- /example -->
 

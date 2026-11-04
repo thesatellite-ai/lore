@@ -126,7 +126,7 @@ $ lore mission pause msn_7a67…9504
 ✓ msn_7a67…9504 paused
 lore live: (live, pushed)
 $ lore mission list
-msn_7a67…9504 [paused] Open the online shop before Christmas   (2 tasks)
+msn_7a67…9504 [paused] Open the online shop before Christmas   (3 tasks)
 $ lore mission resume msn_7a67…9504
 ✓ msn_7a67…9504 resumed
 lore live: (live, pushed)
@@ -145,7 +145,7 @@ lore live: landed on main (86dbae4); leaves live once main is fetched
 $ lore mission list
 (no missions)
 $ lore mission list --all
-msn_7a67…9504 [done] Open the online shop before Christmas   (2 tasks)
+msn_7a67…9504 [done] Open the online shop before Christmas   (3 tasks)
 ```
 <!-- /example -->
 

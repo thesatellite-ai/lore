@@ -128,7 +128,7 @@ TESTS-001  rule-trigger       Write a three-step checklist for pushing a change.
 TESTS-002  rule-trigger       Write a short checklist for pushing a change. [archived]
 $ lore bench eval delete TESTS-002
 ERROR: [E_INVALID_INPUT] --confirm required to delete (consider `archive` for soft-delete)
-(exit 1)
+(exit 20)
 $ lore bench eval delete TESTS-002 --confirm
 ✓ TESTS-002 deleted
 ```

@@ -227,7 +227,7 @@ $ lore config check
   - orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
 ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
   hint: fix the problems listed above; nothing else in lore reads an invalid config
-(exit 1)
+(exit 20)
 ```
 <!-- /example -->
 
@@ -265,7 +265,7 @@ $ lore config check
   - lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
 ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
   hint: fix the problems listed above; nothing else in lore reads an invalid config
-(exit 1)
+(exit 20)
 ```
 <!-- /example -->
 

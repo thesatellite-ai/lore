@@ -150,11 +150,11 @@ E_DB_NOT_FOUND                   DB file does not exist at the configured path
 E_SCHEMA_VERSION_MISMATCH        DB was migrated by a newer lore; upgrade or use a different DB
 E_MIGRATION_INCOMPLETE           a schema migration did not finish; run `lore setup`
 $ lore errors list | wc -l
-53
+54
 $ lore errors list --json | head -9
 {
   "schema_version": 1,
-  "count": 53,
+  "count": 54,
   "errors": [
     {
       "code": "E_DB_LOCKED",

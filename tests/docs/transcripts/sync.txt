@@ -8,7 +8,10 @@ alice (work/website)$ lore init --non-interactive --name=website
     db:         ~/work/website/.lore/lore.db
     identity:   human:alice@agency.example (git config)
 
+· context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
+✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
   next: lore learn-from docs   to bootstrap from existing markdown
+        lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
 lore sync: backup of lore.db before bootstrap: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
@@ -16,6 +19,7 @@ alice (work/website)$ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 alice (work/website)$ ls .lore .lore/data
 .lore:
 backups
@@ -226,7 +230,7 @@ memories: mem_b4f4765e593d51fd1352985e8af3a5b0, mem_28f8d32584b2db54ffb146bede5b
     Send the invoice reminder before the demo on Friday.
 bob (work/website)$ lore sync merge-rows memories --keep mem_b4f4765e593d51fd1352985e8af3a5b0 --drop mem_28f8d32584b2db54ffb146bede5b03df
 ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_b4f4765e593d51fd1352985e8af3a5b0 (edit it with its lore command if it should carry the other's text), then delete mem_28f8d32584b2db54ffb146bede5b03df with its lore command
-(exit 1)
+(exit 20)
 bob (work/website)$ lore memory delete mem_28f8d32584b2db54ffb146bede5b03df --yes
 ✓ mem_28f8d32584b2db54ffb146bede5b03df deleted
 lore sync: trashed rows 1
@@ -262,7 +266,7 @@ alice (work/website)$ lore sync trash
 #1 memories/mem_05e99e22e9e86e96fe4daa7777994603  2026-11-02T10:02:00Z  (file deleted)
 alice (work/website)$ lore sync trash restore 4
 ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: a trash restore of memories is not done in lore.db (the row files are the truth): restore the file from git (`git checkout HEAD -- .lore/data/memories/mem_54fe984c9b495744c0217776765a28f2.json`, or from the commit before the one that deleted it: `git log --diff-filter=D -- .lore/data/memories/mem_54fe984c9b495744c0217776765a28f2.json`)
-(exit 1)
+(exit 20)
 alice (work/website)$ git checkout HEAD -- .lore/data/memories/mem_54fe984c9b495744c0217776765a28f2.json
 alice (work/website)$ lore memory list
 mem_54fe984c9b495744c0217776765a28f2 [retrieved] The client replies faster on WhatsApp than email or phone.
@@ -300,7 +304,7 @@ alice (work/website)$ lore sync purge --archived-before 0d --dry-run
 would purge 1 archived row(s) archived before 2026-11-02T10:06:30Z
 alice (work/website)$ lore sync purge --archived-before 0d
 ERROR: [E_INVALID_INPUT] purge is durable; pass --confirm (or --dry-run to preview)
-(exit 1)
+(exit 20)
 alice (work/website)$ lore sync purge --archived-before 0d --confirm
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)

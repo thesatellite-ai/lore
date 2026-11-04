@@ -52,7 +52,7 @@ rul_7a67…9504 [must/always] Never put passwords in the code
 rul_c0f3…b5b8 [must/always] Buttons are blue
 $ lore restore .lore/backups/before-buttons.sqlite
 ERROR: [E_INVALID_INPUT] refusing to overwrite DB without --confirm
-(exit 1)
+(exit 20)
 $ lore restore .lore/backups/before-buttons.sqlite --confirm
 ✓ restored from .lore/backups/before-buttons.sqlite
   previous DB preserved at: ~/work/website/.lore/lore.db.broken.20261102-100000

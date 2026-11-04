@@ -40,7 +40,7 @@ E_SCHEMA_VERSION_MISMATCH        DB was migrated by a newer lore; upgrade or use
 $ lore errors list --json | head -9
 {
   "schema_version": 1,
-  "count": 53,
+  "count": 54,
   "errors": [
     {
       "code": "E_DB_LOCKED",
@@ -264,6 +264,7 @@ This table is made from `lore errors list` and the exit table in the code, so it
 | `E_CYCLE` | 19 | the dependency would create a cycle between tasks |
 | `E_OLD_LORE` | 19 | this lore binary is below the live ref's min_lore_version; upgrade lore (reads still work) |
 | `E_CONFIG_INVALID` | 1 | ~/.lore/config.yaml failed validation; run `lore config check` |
+| `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule and what to do instead |
 <!-- /errors -->
 
 ## Pitfalls
@@ -289,8 +290,8 @@ $ lore rule list --json
 
 # alice, in website
 $ lore rule list --colour never
-ERROR: unknown flag: --colour
-(exit 1)
+ERROR: [E_INVALID_INPUT] unknown flag: --colour
+(exit 20)
 ```
 <!-- /example -->
 

@@ -8,7 +8,7 @@ E_SCHEMA_VERSION_MISMATCH        DB was migrated by a newer lore; upgrade or use
 alice (work/website)$ lore errors list --json | head -9
 {
   "schema_version": 1,
-  "count": 53,
+  "count": 54,
   "errors": [
     {
       "code": "E_DB_LOCKED",
@@ -35,8 +35,8 @@ alice (work)$ lore rule list --json
 }
 (exit 19)
 alice (work/website)$ lore rule list --colour never
-ERROR: unknown flag: --colour
-(exit 1)
+ERROR: [E_INVALID_INPUT] unknown flag: --colour
+(exit 20)
 
 ### read only
 alice (work/website)$ lore rule add --body 'Never put passwords in the code'
@@ -137,7 +137,7 @@ alice (work/website)$ lore config check
   - orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
 ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
   hint: fix the problems listed above; nothing else in lore reads an invalid config
-(exit 1)
+(exit 20)
 
 ### config check typo
 alice (work/website)$ lore config check
@@ -145,7 +145,7 @@ alice (work/website)$ lore config check
   - lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
 ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
   hint: fix the problems listed above; nothing else in lore reads an invalid config
-(exit 1)
+(exit 20)
 
 ### invalid config stops writes
 alice (work/website)$ lore rule list
@@ -266,8 +266,8 @@ ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in ag
   hint: name the org the write goes to with --to <org>, or fix the choice with `lore org use` (or unset LORE_ORG)
 (exit 17)
 alice (work/website)$ lore memory add --force-org --body 'The client pays invoices in 30 days'
-ERROR: unknown flag: --force-org
-(exit 1)
+ERROR: [E_INVALID_INPUT] unknown flag: --force-org
+(exit 20)
 alice (work/website)$ lore memory add --to freelance --body 'The client pays invoices in 30 days'
 ✓ mem_d4314eba822f1bf5908b2b8ded5f313a [freelance]
   scope: [master]

@@ -89,6 +89,7 @@ alice (work/app)$ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 
 ### archive a project
 alice (work/scratch)$ lore project list

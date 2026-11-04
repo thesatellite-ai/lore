@@ -53,7 +53,7 @@ default_branch=main
 $ lore config set team.note 'Ask Bob before changing the build'
 ERROR: [E_INVALID_INPUT] config key "team.note" is not a key lore reads (unknown key, ignored: line 2: field team not found in type lorecfg.Config)
   hint: nothing written; team rules are set with `lore policy set`
-(exit 1)
+(exit 20)
 $ lore config get color
 ERROR: [E_NOT_FOUND] config key "color" not found
   hint: it may have landed on main while this branch is older: `lore sync peek origin/main`

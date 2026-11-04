@@ -140,7 +140,7 @@ memories: mem_b4f4…a5b0, mem_28f8…03df
     Send the invoice reminder before the demo on Friday.
 $ lore sync merge-rows memories --keep mem_b4f4…a5b0 --drop mem_28f8…03df
 ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_b4f4…a5b0 (edit it with its lore command if it should carry the other's text), then delete mem_28f8…03df with its lore command
-(exit 1)
+(exit 20)
 $ lore memory delete mem_28f8…03df --yes
 ✓ mem_28f8…03df deleted
 lore sync: trashed rows 1
