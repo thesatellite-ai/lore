@@ -257,27 +257,42 @@ func explainLiveNotFound(ctx context.Context, cmd *cobra.Command, args []string,
 	if errors.As(err, &miss) {
 		return err // a roster miss, not a missing row: its own hint stands
 	}
-	id := args[0]
+	why, hint, ok := liveMissingExplain(ctx, cmd, args[0])
+	switch {
+	case !ok:
+		return err
+	case why != "":
+		return errcodes.New(errcodes.NotFound, why)
+	}
+	return cli.WithHint(hint)
+}
+
+// liveMissingExplain is the F1 answer for an id a command did not find:
+// why is set when live knows (tombstone, purged), else hint is the peek
+// hint naming the command group's table (also for a core-owned table:
+// peek reads the branch's row files). ok=false when the working directory
+// cannot be read.
+func liveMissingExplain(ctx context.Context, cmd *cobra.Command, id string) (why, hint string, ok bool) {
 	cwd, werr := os.Getwd()
 	if werr != nil {
-		return err
+		return "", "", false
 	}
 	root := liveProjectRoot(cwd)
 	s := liveFor(ctxOrBackground(ctx), root)
 	table := ""
 	if p := cmd.Parent(); p != nil {
-		table = liveTableForGroup(p.Name())
+		table = liveTableForGroupRaw(p.Name())
 	}
 	if s != nil {
 		if why := s.whyMissing(ctxOrBackground(ctx), s.folderFor(root), id); why != "" {
-			return errcodes.New(errcodes.NotFound, why)
+			return why, "", true
 		}
 	}
 	remote, branch := "origin", defaultBranchFallback
 	if s != nil {
 		remote, branch = s.ref.RemoteName, s.defaultBranch(ctxOrBackground(ctx))
 	}
-	return cli.WithHint(livePeekHint(remote, branch, table))
+	return "", livePeekHint(remote, branch, table), true
 }
 
 // livePeekHint points at `lore sync peek <remote>/<branch> [table]` for an id

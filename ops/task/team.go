@@ -11,6 +11,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/direction"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/ops/internal/pointer"
+	"github.com/thesatellite-ai/lore/store"
+
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -207,3 +212,29 @@ type (
 // WithTeam returns ctx carrying t for the task, mission and plan
 // operations run under it (work.WithTeam).
 func WithTeam(ctx context.Context, t Team) context.Context { return work.WithTeam(ctx, t) }
+
+// refuseClientTeam is TEAM-030 (LORE_TEAM_SPEC §7.2, ADR TEAM-030): a team
+// is never assigned on a task written into a linked client repo, because
+// team names are internal. target is the store the task is (or will be)
+// in ("" = the default target). An Env that cannot place stores counts the
+// repo store and the default target as client (fail closed, like
+// ops/internal/pointer). The message and hint are v0.1.17's.
+func (o ops) refuseClientTeam(ctx context.Context, a work.Assignee, target store.Source) error {
+	if a.TeamID == "" {
+		return nil
+	}
+	class := direction.Client
+	if c, ok := o.env.(pointer.Classifier); ok {
+		var err error
+		if class, err = c.StoreClass(ctx, target); err != nil {
+			return err
+		}
+	} else if target != "" && target != store.SourceRepo {
+		return nil
+	}
+	if class != direction.Client {
+		return nil
+	}
+	return errs.New(errs.InvalidInput, "a team cannot be assigned in a linked client repo: team names are internal (TEAM-030)").
+		WithHint("assign a person (--assign @handle), or keep the task internal with --to <org>")
+}

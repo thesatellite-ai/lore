@@ -126,6 +126,7 @@ func mountCore(root *cobra.Command) {
 				// its own errors, and a group has no RunE to wrap.
 				if cli.Generated(c) && c.RunE != nil {
 					addCompatFlags(c, runner)
+					wrapCoreNotFound(c, runner)
 				}
 			}
 		}
@@ -218,6 +219,10 @@ type compatRunner struct {
 	pending error
 	// readOnly is --read-only of the running command.
 	readOnly bool
+	// cmd and args are the running command (wrapCoreNotFound), for the
+	// F1 not-found explanation.
+	cmd  *cobra.Command
+	args []string
 }
 
 // Run implements op.Runner.
@@ -232,7 +237,11 @@ func (r *compatRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
 			WithHint("unset --read-only and LORE_READ_ONLY")
 	}
-	return r.app.Run(ctx, e, d, c)
+	res, err := r.app.Run(ctx, e, d, c)
+	if err != nil {
+		return res, r.explainNotFound(ctx, err)
+	}
+	return res, nil
 }
 
 // addCompatFlags gives one mounted memory command v0.1.17's common flags
@@ -910,3 +919,35 @@ const (
 // coreNotice prints a core notice (wire.Options.Notice) on stderr, so
 // stdout (--json, piped output) stays the command's own.
 func coreNotice(msg string) { fmt.Fprintln(os.Stderr, msg) }
+
+// wrapCoreNotFound records the running core command and its arguments on
+// the runner, so compatRunner.Run can give an E_NOT_FOUND for the id
+// argument v0.1.17's F1 explanation before the surface prints it.
+// wireLive wraps only the commands registered before the core is mounted.
+func wrapCoreNotFound(c *cobra.Command, r *compatRunner) {
+	run := c.RunE
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		r.cmd, r.args = cmd, args
+		return run(cmd, args)
+	}
+}
+
+// explainNotFound is v0.1.17's F1 answer (live_flags.go
+// liveMissingExplain) for an E_NOT_FOUND of the running command's id
+// argument: what live knows about the id, else the `lore sync peek
+// <remote>/<branch> <table>` hint. An error that already carries a hint,
+// or a command with no argument, is returned as it is.
+func (r *compatRunner) explainNotFound(ctx context.Context, err error) error {
+	var e *errs.Error
+	if r.cmd == nil || len(r.args) == 0 || !errors.As(err, &e) || e.Code != errs.NotFound || e.Hint != "" {
+		return err
+	}
+	why, hint, ok := liveMissingExplain(ctx, r.cmd, r.args[0])
+	switch {
+	case !ok:
+		return err
+	case why != "":
+		return errs.New(errs.NotFound, why)
+	}
+	return e.WithHint(hint)
+}

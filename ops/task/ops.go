@@ -191,6 +191,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	if err := o.refuseClientTeam(ctx, assign, store.Source(in.To)); err != nil {
+		return AddOut{}, err
+	}
 	refs, err := o.parseRefs(ctx, in.Ref)
 	if err != nil {
 		return AddOut{}, err
@@ -696,6 +699,9 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	}
 	curSrc, cur, err := work.Get(ctx, o.env, Noun, table, id)
 	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if err := o.refuseClientTeam(ctx, assign, curSrc); err != nil {
 		return work.WriteOut{}, err
 	}
 	refs, err := o.parseRefs(ctx, in.Ref)
