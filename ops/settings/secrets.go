@@ -88,7 +88,7 @@ type AllowIn struct {
 	Row       string `json:"row_id" arg:"0" desc:"the row id the finding is on"`
 	Rule      string `json:"rule" flag:"rule" desc:"the rule id of the finding"`
 	Reason    string `json:"reason" flag:"reason" desc:"why it is not a secret"`
-	Field     string `json:"field,omitempty" flag:"field" desc:"the field (default the row's one text field)"`
+	Field     string `json:"field,omitempty" flag:"field" desc:"the field (default the one text field holding --match)"`
 	Match     string `json:"match,omitempty" flag:"match" desc:"the matched text (only its hash is stored)"`
 	MatchHash uint32 `json:"match_hash,omitempty" flag:"match-hash" desc:"the finding's match hash, instead of --match"`
 }
@@ -384,10 +384,15 @@ func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 	}
 	field := in.Field
 	if field == "" {
+		// Default: the one text field (or, with --match, the one field
+		// whose text holds the match).
 		var textFields []string
 		for name, v := range r.Fields {
-			if _, ok := v.(value.Text); ok {
-				textFields = append(textFields, name)
+			switch v.(type) {
+			case value.Text, value.JSON:
+				if in.Match == "" || strings.Contains(v.String(), in.Match) {
+					textFields = append(textFields, name)
+				}
 			}
 		}
 		if len(textFields) != 1 {
@@ -401,7 +406,7 @@ func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 	case in.Match != "" && hash != 0:
 		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match or --match-hash, not both")
 	case in.Match != "":
-		if !strings.Contains(text(r, field), in.Match) {
+		if v, ok := r.Fields[field]; !ok || !strings.Contains(v.String(), in.Match) {
 			return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: the "+field+" of "+rowID.String()+" does not contain that text")
 		}
 		hash = scan.HashMatch(in.Match)
