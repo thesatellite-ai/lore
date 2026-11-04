@@ -191,8 +191,8 @@ func TestOpenerOriginSpelling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("open %s: %v", raw, err)
 		}
-		if err := sb.Close(); err != nil {
-			t.Fatal(err)
+		if cerr := sb.Close(); cerr != nil {
+			t.Fatal(cerr)
 		}
 		base, err := CloneBase(home, r)
 		if err != nil {

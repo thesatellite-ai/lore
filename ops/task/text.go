@@ -139,7 +139,7 @@ func (o ShowOut) Text() string {
 	}
 	for _, f := range t.Detail.Fields {
 		if f.Value != "" {
-			b.WriteString(fmt.Sprintf("  %-9s %s\n", f.Name+":", f.Value))
+			fmt.Fprintf(&b, "  %-9s %s\n", f.Name+":", f.Value)
 		}
 	}
 	if t.Body != "" {

@@ -256,11 +256,9 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 	if asksFirst {
 		c.Flags().BoolVar(yes, FlagYes, false, "answer yes to the confirmation without a terminal")
 	}
-	c.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
-		// A cobra flag parse error (unknown flag, unknown shorthand flag,
-		// missing value) is a usage error: exit 1 (CLI_REFERENCE 1.5).
-		return usageError(cmd, err)
-	})
+	// A cobra flag parse error (unknown flag, unknown shorthand flag,
+	// missing value) is a usage error: exit 1 (CLI_REFERENCE 1.5).
+	c.SetFlagErrorFunc(usageError)
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		flags := map[string][]string{}
 		for name, rf := range values {

@@ -35520,6 +35520,16 @@
               "type": "string",
               "description": "the task id (tsk_…)"
             }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "the source of the id: repo | \u003corg\u003e | \u003corg\u003e/\u003cfolder\u003e",
+            "schema": {
+              "type": "string",
+              "description": "the source of the id: repo | \u003corg\u003e | \u003corg\u003e/\u003cfolder\u003e"
+            }
           }
         ],
         "responses": {

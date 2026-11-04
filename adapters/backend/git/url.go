@@ -148,7 +148,8 @@ func OriginOf(raw string) (string, error) {
 		s, _, _ = strings.Cut(s, "?")
 		if user, _, ok := strings.Cut(s, "@"); ok && strings.Contains(user, ":") {
 			// user:password@host:path: keep only the login name.
-			s = user[:strings.Index(user, ":")] + s[len(user):]
+			login, _, _ := strings.Cut(user, ":")
+			s = login + s[len(user):]
 		}
 		return s, nil
 	}

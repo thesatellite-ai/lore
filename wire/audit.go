@@ -117,7 +117,9 @@ func appendAuditLine(path string, dirMode os.FileMode, line []byte) error {
 	if mkErr := os.MkdirAll(filepath.Dir(path), dirMode); mkErr != nil {
 		return errs.Wrap(errs.Internal, "wire: create the audit folder", mkErr)
 	}
-	fh, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, auditFileMode)
+	// path is built by the caller from the lore home and a store id, never
+	// from row data; Clean normalises it before the open.
+	fh, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_APPEND, auditFileMode)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "wire: open the audit file", err)
 	}
