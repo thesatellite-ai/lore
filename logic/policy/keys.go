@@ -54,6 +54,27 @@ const (
 	// repo's context is wired into: `lore init` writes the chosen ones and
 	// `lore policy set context.targets codex,cursor` changes them (Q-R2-3).
 	KeyContextTargets Key = "context.targets"
+	// Context budget keys (CONTEXT_BUDGET 6.1): limits in bytes, the smaller
+	// is stricter, so a lower level may only shrink a budget. One key per
+	// built-in tool profile (CQ1/CQ6); context.budget.default covers a user
+	// profile that states none.
+	KeyContextBudgetClaudeCode Key = "context.budget.claude_code"
+	KeyContextBudgetCodex      Key = "context.budget.codex"
+	KeyContextBudgetCursor     Key = "context.budget.cursor"
+	KeyContextBudgetGeminiCLI  Key = "context.budget.gemini_cli"
+	KeyContextBudgetCopilot    Key = "context.budget.copilot"
+	KeyContextBudgetGeneric    Key = "context.budget.generic"
+	KeyContextBudgetDefault    Key = "context.budget.default"
+	// KeyContextEntryMax: an entry longer than this many bytes always takes its line form.
+	KeyContextEntryMax Key = "context.entry_max"
+	// KeyContextWarnAt: percent of a budget above which doctor and render --check warn (design 0.8, stored as 80: the policy layer has no fraction shape).
+	KeyContextWarnAt Key = "context.warn_at"
+	// KeyContextHookCap: bytes of `lore context` output from a hook (under the 10,000-char hook cap).
+	KeyContextHookCap Key = "context.hook_cap"
+	// KeyContextPromptSearch: lore setup --agent-hooks also installs the per-prompt search hook (CQ5: off).
+	KeyContextPromptSearch Key = "context.hooks.prompt_search"
+	// KeyContextFullFile: render also writes .lore/LORE.full.md (CQ2).
+	KeyContextFullFile Key = "context.full_file"
 	// KeyBatchPreviewRows is how many rows a bulk action (a --where
 	// delete, an import) may change before it shows a preview and asks
 	// (XQ2: one key for every bulk action, replacing the per-noun
@@ -78,6 +99,12 @@ const (
 	defaultTimeLongSpanMin    int64 = 600       // TQ2: 10h
 	defaultTimeCoalesceGapMin int64 = 2         // TQ4: 2m
 	defaultTimeMaxEntryMin    int64 = 1440      // D13: 24h, also the ceiling
+	defaultContextBudgetLarge int64 = 32000     // CQ1: claude_code, gemini_cli
+	defaultContextBudget      int64 = 16000     // CQ1: codex, cursor, copilot, generic, default
+	defaultContextEntryMax    int64 = 1500
+	defaultContextWarnAtPct   int64 = 80
+	ceilingContextWarnAtPct   int64 = 100
+	defaultContextHookCap     int64 = 9000
 )
 
 // OnDetect is the value of secrets.on_detect.
@@ -178,6 +205,19 @@ func Keys() []KeyDef {
 		{Key: KeyTimeLongSpan, Shape: ShapeLimit, Default: value.Int(defaultTimeLongSpanMin), Doc: "minutes after which a closed auto time span is flagged long_span; never capped (TQ2)"},
 		{Key: KeyTimeCoalesceGap, Shape: ShapeLimit, Default: value.Int(defaultTimeCoalesceGapMin), Doc: "minutes: auto spans of one worker closer than this are coalesced at write (TQ4)"},
 		{Key: KeyTimeMaxEntry, Shape: ShapeLimit, Ceiling: defaultTimeMaxEntryMin, Default: value.Int(defaultTimeMaxEntryMin), Doc: "minutes: the longest manual time entry (D13, max 24h)"},
+		{Key: KeyContextBudgetClaudeCode, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetLarge), Doc: "bytes of .lore/LORE.md when the claude_code profile reads it (CQ1)"},
+		{Key: KeyContextBudgetCodex, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md when the codex profile reads it (CQ1)"},
+		{Key: KeyContextBudgetCursor, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md when the cursor profile reads it (CQ1)"},
+		{Key: KeyContextBudgetGeminiCLI, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetLarge), Doc: "bytes of .lore/LORE.md when the gemini_cli profile reads it (CQ1)"},
+		{Key: KeyContextBudgetCopilot, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md when the copilot profile reads it (CQ1)"},
+		{Key: KeyContextBudgetGeneric, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md for the generic profile (CQ1)"},
+		{Key: KeyContextBudgetDefault, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md for a user profile that states no budget (CQ1)"},
+		{Key: KeyContextEntryMax, Shape: ShapeLimit, Default: value.Int(defaultContextEntryMax), Doc: "an entry longer than this many bytes uses its one-line form in LORE.md"},
+		{Key: KeyContextWarnAt, Shape: ShapeLimit, Ceiling: ceilingContextWarnAtPct, Default: value.Int(defaultContextWarnAtPct), Doc: "percent of a context budget above which doctor and lore render --check warn"},
+		{Key: KeyContextHookCap, Shape: ShapeLimit, Default: value.Int(defaultContextHookCap), Doc: "bytes of lore context output answered to a tool hook"},
+		// CQ5: off by default; off is the strict value (no search on every prompt).
+		{Key: KeyContextPromptSearch, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(false), Doc: "lore setup --agent-hooks also installs the per-prompt search hook (CQ5)"},
+		{Key: KeyContextFullFile, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true), Doc: "lore render also writes .lore/LORE.full.md, every pinned entry in full (CQ2)"},
 		// XQ2: a limit, the smaller is stricter: a lower preview count makes
 		// more bulk actions stop and ask, so a level may only lower it.
 		{Key: KeyBatchPreviewRows, Shape: ShapeLimit, Default: value.Int(defaultPreviewRows),
