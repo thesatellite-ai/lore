@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+
 	"encoding/json"
 	"strconv"
 
@@ -383,7 +385,23 @@ func (r *storeRows) RepoName(repoID string) string {
 // Stage implements coord.Rows: one commit on the store's live ref, pushed
 // atomically with the store's signals ref (same remote).
 func (r *storeRows) Stage(_ context.Context, rows ...coord.RowWrite) ([]signals.Companion, error) {
+	if err := refuseNewFormatStore(r.sp.st.Dir); err != nil {
+		return nil, err
+	}
 	return []signals.Companion{&stagedLiveRows{spot: r.spot(), rows: rows}}, nil
+}
+
+// refuseNewFormatStore keeps this v0.1.17 live-ref path to stores that are
+// still in the v0.1.17 format: once `lore migrate run` made the store's
+// marker v2, its task rows belong to the 0.1.18 core (`_v: 2` files), and
+// a v1 document staged here would bypass the core's write path.
+func refuseNewFormatStore(dir string) error {
+	m, err := rowfs.ReadMarker(dir)
+	if err != nil || m.Version < rowfs.MarkerVersion {
+		return nil // no marker or a v1 one: the v0.1.17 store this path serves
+	}
+	return errcodes.New(errcodes.Unsupported, "this store is in the 0.1.18 format: its task rows are written by the core, not through the v0.1.17 store live ref").
+		WithHint("attach the store in .lore/stores.yaml and use --to <store>; a store still on v0.1.17 is converted with `lore migrate run`")
 }
 
 func (r *storeRows) spot() liveSpot {
