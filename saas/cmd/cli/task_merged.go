@@ -144,6 +144,15 @@ func recordMergedLive(ctx context.Context, found []foundMerge) {
 // (not "now"), so the bytes depend only on the row and the merge.
 func recordMergedBranch(ctx context.Context, client *ent.Client, found []foundMerge) {
 	for _, m := range found {
+		if coreRowTable(tableTasks) {
+			// The core owns tasks: stamp the row file through the engine.
+			err := corePatchDoc(ctx, tableTasks, m.task.ID, coord.Doc{keyMergedAtDoc: m.finding.At.UTC().Format(time.RFC3339Nano)})
+			if err != nil {
+				err = fmt.Errorf("record %s: %w", m.task.ID, err)
+			}
+			reportMerged(os.Stderr, m.task.ID, m.finding, err)
+			continue
+		}
 		upd := client.Task.UpdateOne(m.task).SetMergedAt(m.finding.At).SetUpdatedAt(mergedUpdatedAt(m.task.UpdatedAt, m.finding.At))
 		if _, err := upd.Save(ctx); err != nil {
 			reportMerged(os.Stderr, m.task.ID, m.finding, fmt.Errorf("record %s: %w", m.task.ID, err))
@@ -241,7 +250,11 @@ Example:
 				return nil
 			}
 			at := cliClock().Now().UTC()
-			if _, err := client.Task.UpdateOne(t).SetMergedAt(at).Save(ctx); err != nil {
+			if coreRowTable(tableTasks) {
+				if err := corePatchDoc(ctx, tableTasks, t.ID, coord.Doc{keyMergedAtDoc: at.Format(time.RFC3339Nano)}); err != nil {
+					return err
+				}
+			} else if _, err := client.Task.UpdateOne(t).SetMergedAt(at).Save(ctx); err != nil {
 				return errcodes.New(errcodes.Internal, "record merged_at").WithCause(err)
 			}
 			fmt.Printf("%s %s merged (marked by hand, %s)\n", style.Success("✓"), t.ID, at.Format("15:04"))

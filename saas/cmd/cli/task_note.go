@@ -96,6 +96,14 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 	var rows *liveRows
 	switch r := t.Rows.(type) {
 	case *liveRows:
+		if coreRowTable(tableComments) {
+			// The core owns comments: the note is written through it with
+			// the claim (task_corerows.go), never into lore.db first.
+			if cid, doc, err = newCommentDoc(id, body, w.ActorID, w.Clock.Now()); err != nil {
+				return err
+			}
+			break
+		}
 		rows = r
 		if cid, doc, err = createComment(ctx, rows, id, body, w.ActorID); err != nil {
 			return err
@@ -289,6 +297,13 @@ func agentSharedNote(ctx context.Context, id, body, owner string) error {
 	if err != nil {
 		return err
 	}
+	if coreRowTable(tableComments) {
+		if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
+			return err
+		}
+		fmt.Printf("%s note %s on %s (shared with the client repo)\n", style.Success("✓"), cid, id)
+		return nil
+	}
 	sp := rows.spot()
 	sp.actor = owner
 	st := &remoteStagedRows{stagedLiveRows{spot: sp, rows: []coord.RowWrite{{Table: tableComments, ID: cid, Doc: doc}}}}
@@ -339,6 +354,17 @@ func plainNoteIn(ctx context.Context, f *commonFlags, id, body string) error {
 		if by, err = resolveCurrentActorID(ctx, client); err != nil {
 			return err
 		}
+	}
+	if coreRowTable(tableComments) {
+		cid, doc, derr := newCommentDoc(id, body, by, cliClock().Now())
+		if derr != nil {
+			return derr
+		}
+		if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
+			return err
+		}
+		fmt.Printf("%s note %s on %s\n", style.Success("✓"), cid, id)
+		return nil
 	}
 	c, err := client.Comment.Create().SetEntityTable(tableTasks).SetEntityID(id).SetBody(body).SetCreatedByActorID(by).Save(ctx)
 	if err != nil {

@@ -114,7 +114,14 @@ func runGateRequest(ctx context.Context, id, from string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := client.Task.UpdateOne(task).SetGate(entTask.GateRequested).ClearApprovedBy().ClearApprovedAt().ClearApprovedHash().Save(ctx); err != nil {
+	if coreRowTable(tableTasks) {
+		// The core owns tasks: the gate goes into the row file.
+		if err := corePatchDoc(ctx, tableTasks, task.ID, coord.Doc{
+			"gate": string(entTask.GateRequested), "approved_by": nil, "approved_at": nil, "approved_hash": nil,
+		}); err != nil {
+			return err
+		}
+	} else if _, err := client.Task.UpdateOne(task).SetGate(entTask.GateRequested).ClearApprovedBy().ClearApprovedAt().ClearApprovedHash().Save(ctx); err != nil {
 		return errcodes.New(errcodes.Internal, "request gate").WithCause(err)
 	}
 	fmt.Printf("%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)

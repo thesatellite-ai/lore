@@ -7,15 +7,21 @@ package main
 
 import (
 	"context"
+	entTask "dbent/gen/ent/task"
 	"fmt"
 	"os"
+	"time"
 
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/signals"
+	"saas/pkg/aicoder/signals/coord"
+	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
+
+	"github.com/spf13/cobra"
 )
 
 // Flags of `task done` (§1 "Flags"); --commit is org_cmd.go's flagCommit.
@@ -245,4 +251,112 @@ func refuseSecrets(body string) error {
 			WithHint("remove the secret; lore never stores credentials in shared rows")
 	}
 	return nil
+}
+
+// guardTaskDone wraps the core's `lore task done` (ops/task) with v0.1.17's
+// claim rules (LORE_TEAM_SPEC F7): the holder's done is a fenced holder
+// write on the signals ref (its row change goes through the core,
+// task_corerows.go) and drops the claim; a task held by someone else is
+// refused; an expired claim needs a person, whose done fences the old
+// holder out. The core op then records the done fields, prints and saves
+// the lesson. Without team coordination (plainRowFallback) the core op
+// runs alone, as v0.1.17's plain path did.
+func guardTaskDone(run func(*cobra.Command, []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return run(cmd, args)
+		}
+		ctx, id := cmd.Context(), args[0]
+		commit, _ := cmd.Flags().GetString(flagCommit)
+		pr, _ := cmd.Flags().GetInt(flagPR)
+		w, t, coordErr := openTaskCoord(ctx, id, "")
+		if coordErr != nil {
+			if err := plainRowFallback(ctx, coordErr); err != nil {
+				return err
+			}
+			return run(cmd, args)
+		}
+		defer t.Close()
+		cs, err := readClaim(ctx, w, t, id)
+		if err != nil {
+			return coordError(err)
+		}
+		switch {
+		case cs.mine || (cs.hadClaim && !cs.mine):
+			if commit == "" {
+				if commit = workBranchHead(ctx, w.Repo); commit != "" {
+					_ = cmd.Flags().Set(flagCommit, commit) // say which commit was recorded
+				}
+			}
+			if _, err := coord.HolderWrite(ctx, w.env(t), id, true, func(d coord.Doc, now time.Time) ([]coord.RowWrite, error) {
+				return nil, coord.MarkDone(w.ActorID, commit, pr)(d, now)
+			}); err != nil {
+				return coordError(err)
+			}
+		case cs.claimed && cs.active:
+			return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is held by %s until %s; only the holder can finish it",
+				id, holderLabel(cs.sig), cs.sig.Expires.UTC().Format(time.Kitchen))).
+				WithHint("a person can `lore task revoke " + id + "` first")
+		case cs.claimed:
+			if err := requireHuman(w, "finishing a task someone else claimed"); err != nil {
+				return err
+			}
+			if _, err := coord.OverrideChecked(ctx, w.env(t), id, coord.OverrideRevoke, coord.MarkDone(w.ActorID, commit, pr)); err != nil {
+				return coordError(err)
+			}
+		}
+		return run(cmd, args)
+	}
+}
+
+// guardTaskCancel wraps the core's `lore task cancel` with v0.1.17's rule:
+// cancelling a claimed task is a human override that fences the holder out
+// (E_CANCELLED); an unclaimed task is cancelled by the core op alone.
+func guardTaskCancel(run func(*cobra.Command, []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return run(cmd, args)
+		}
+		ctx, id := cmd.Context(), args[0]
+		w, t, coordErr := openTaskCoord(ctx, id, "")
+		if coordErr != nil {
+			if err := plainRowFallback(ctx, coordErr); err != nil {
+				return err
+			}
+			return run(cmd, args)
+		}
+		defer t.Close()
+		cs, err := readClaim(ctx, w, t, id)
+		if err != nil {
+			return coordError(err)
+		}
+		if !cs.claimed {
+			return run(cmd, args)
+		}
+		if err := requireHuman(w, "cancelling a claimed task"); err != nil {
+			return err
+		}
+		if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideCancel, func(d coord.Doc) {
+			d["status"] = string(entTask.StatusCancelled)
+		}); err != nil {
+			return coordError(err)
+		}
+		fmt.Printf("%s %s cancelled (claim by %s dropped)\n", style.Success("✓"), id, holderLabel(cs.sig))
+		return nil
+	}
+}
+
+// guardTaskCoreCommands installs guardTaskDone / guardTaskCancel on the
+// core-mounted `lore task done|cancel` under root (core_mount.go calls it
+// after cli.Mount).
+func guardTaskCoreCommands(root *cobra.Command) {
+	for name, guard := range map[string]func(func(*cobra.Command, []string) error) func(*cobra.Command, []string) error{
+		"done": guardTaskDone, "cancel": guardTaskCancel,
+	} {
+		c, _, err := root.Find([]string{"task", name})
+		if err != nil || c.Name() != name || c.RunE == nil {
+			continue
+		}
+		c.RunE = guard(c.RunE)
+	}
 }

@@ -1,0 +1,279 @@
+// task_corerows.go — the row side of task coordination on the 0.1.18 core.
+//
+// tasks, missions (and comments, for task notes) are core-owned tables
+// (lsync.CoreOwned): their row files belong to the core engine, and a
+// lore.db-only or live-ref-only change is never exported. So the
+// coordination verbs (claim, next, heartbeat, release, revoke, reassign,
+// note, merged, gate, done/cancel of a held task) keep their lease
+// mechanics on the signals ref, but read and write the ROW through the core:
+//
+//   - reads: coreDoc / coreDocs turn a core row into the v0.1.17 document
+//     shape coord works on (same column names; id, created_at, updated_at
+//     from the envelope);
+//   - writes: coreCompanion is a signals.RemoteCompanion. The executor
+//     pushes the signals ref first (the lease fences the decision) and then
+//     calls PushSelf, which applies each staged row as an engine Update (or
+//     CreateWithID for a new row, e.g. a note). A failure there is reported
+//     as signals.ErrPartial: the same documented window as v0.1.17's
+//     ordered fallback and its other-remote companions (TEAM-036).
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"reflect"
+	"strings"
+	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+
+	"saas/pkg/aicoder/canonjson"
+	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/gitremote"
+	"saas/pkg/aicoder/lsync"
+	"saas/pkg/aicoder/signals"
+	"saas/pkg/aicoder/signals/coord"
+)
+
+// Envelope keys of a v0.1.17 row document (not row fields on the core).
+const (
+	docKeyID        = "id"
+	docKeyCreatedAt = "created_at"
+	docKeyUpdatedAt = "updated_at"
+	// fieldCreatedByActor is the author column of a coordination row.
+	fieldCreatedByActor = "created_by_actor_id"
+)
+
+// coreRowTable reports whether coordination must read and write table
+// through the core.
+func coreRowTable(table string) bool { return lsync.CoreOwned(table) }
+
+// coreTableDef is the core's definition of table.
+func coreTableDef(table string) (schema.TableDef, bool) {
+	for _, d := range schema.Builtin() {
+		if string(d.Name) == table {
+			return d, true
+		}
+	}
+	return schema.TableDef{}, false
+}
+
+// coreDocOf is the v0.1.17 document of a core row.
+func coreDocOf(r row.Row) (coord.Doc, error) {
+	m := map[string]json.RawMessage{}
+	for k, v := range r.Fields {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, fmt.Errorf("encode %s.%s: %w", r.ID, k, err)
+		}
+		m[k] = b
+	}
+	for k, s := range map[string]string{
+		docKeyID: r.ID.String(), docKeyCreatedAt: r.CreatedAt.UTC().Format(time.RFC3339Nano), docKeyUpdatedAt: r.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	} {
+		b, err := json.Marshal(s)
+		if err != nil {
+			return nil, err
+		}
+		m[k] = b
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	d, err := canonjson.Decode(raw, canonjson.DefaultMaxDepth)
+	if err != nil {
+		return nil, err
+	}
+	return coord.Doc(d), nil
+}
+
+// coreDoc reads one task, mission or comment row from the core (any
+// attached store). ok=false when the id is unknown or deleted.
+func coreDoc(ctx context.Context, table, id string) (coord.Doc, bool, error) {
+	if coreApp == nil {
+		return nil, false, errcodes.New(errcodes.Internal, "the core is not mounted")
+	}
+	aid, err := ids.ParseAny(id)
+	if err != nil {
+		return nil, false, nil
+	}
+	_, r, err := coreApp.Get(ctx, engine.Ref{Table: row.Table(table), ID: aid})
+	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, coreErr(err)
+	}
+	d, err := coreDocOf(r)
+	if err != nil {
+		return nil, false, errcodes.New(errcodes.Internal, "read "+id).WithCause(err)
+	}
+	return d, true, nil
+}
+
+// coreDocs lists the live rows of table in every attached store.
+func coreDocs(ctx context.Context, table string) ([]coord.Doc, error) {
+	if coreApp == nil {
+		return nil, errcodes.New(errcodes.Internal, "the core is not mounted")
+	}
+	var out []coord.Doc
+	for _, src := range coreApp.Stores() {
+		rows, err := coreApp.List(ctx, src, row.Table(table))
+		if err != nil {
+			return nil, coreErr(err)
+		}
+		for _, r := range rows {
+			if r.Deleted {
+				continue
+			}
+			d, err := coreDocOf(r)
+			if err != nil {
+				return nil, errcodes.New(errcodes.Internal, "read "+r.ID.String()).WithCause(err)
+			}
+			out = append(out, d)
+		}
+	}
+	return out, nil
+}
+
+// coreCompanion writes staged coordination rows through the core after the
+// signals push was confirmed.
+type coreCompanion struct {
+	rows []coord.RowWrite
+}
+
+var _ signals.RemoteCompanion = (*coreCompanion)(nil)
+
+// Prepare checks every row can be written (known table) before anything is
+// pushed; there is no ref to add to the signals push.
+func (c *coreCompanion) Prepare(context.Context) (gitremote.RefUpdate, error) {
+	for _, w := range c.rows {
+		if _, ok := coreTableDef(coreTableFor(w)); !ok {
+			return gitremote.RefUpdate{}, fmt.Errorf("core rows: unknown table %q", coreTableFor(w))
+		}
+	}
+	return gitremote.RefUpdate{}, nil
+}
+
+// PushSelf applies every row through the engine: an update of the fields
+// that changed, or a create with the row's id when the core has none yet.
+func (c *coreCompanion) PushSelf(ctx context.Context) error {
+	for _, w := range c.rows {
+		if err := coreWriteDoc(ctx, coreTableFor(w), w.ID, w.Doc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Finalize has nothing left to do: PushSelf already wrote the rows.
+func (c *coreCompanion) Finalize(context.Context) error { return nil }
+
+// coreTableFor is a staged row's table ("" = the id's kind).
+func coreTableFor(w coord.RowWrite) string {
+	if w.Table != "" {
+		return w.Table
+	}
+	return tableOf(w.ID)
+}
+
+// coreWriteDoc writes doc as the next version of table/id through the
+// engine: a field the document leaves out is cleared (a whole staged row).
+func coreWriteDoc(ctx context.Context, table, id string, doc coord.Doc) error {
+	return coreWrite(ctx, table, id, doc, true)
+}
+
+// corePatchDoc writes only the fields doc names (a partial stamp).
+func corePatchDoc(ctx context.Context, table, id string, doc coord.Doc) error {
+	return coreWrite(ctx, table, id, doc, false)
+}
+
+// coreWrite is coreWriteDoc (whole) or corePatchDoc.
+func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool) error {
+	def, ok := coreTableDef(table)
+	if !ok {
+		return errcodes.New(errcodes.Internal, "core rows: unknown table "+table)
+	}
+	aid, err := ids.ParseAny(id)
+	if err != nil {
+		return errcodes.New(errcodes.InvalidID, id+" is not an id").WithCause(err)
+	}
+	cur, found, err := coreDoc(ctx, table, id)
+	if err != nil {
+		return err
+	}
+	patch := map[string]value.Value{}
+	for _, f := range def.Fields {
+		nv, inNew := doc[f.Name]
+		ov, inOld := cur[f.Name]
+		if (!inNew && !inOld) || (!inNew && !whole) {
+			continue
+		}
+		if inNew && inOld && reflect.DeepEqual(normDoc(nv), normDoc(ov)) {
+			continue
+		}
+		if !inNew || nv == nil {
+			if found && inOld && ov != nil {
+				patch[f.Name] = value.Null{}
+			}
+			continue
+		}
+		v, perr := docValue(f, nv)
+		if perr != nil {
+			return errcodes.New(errcodes.InvalidInput, "core rows: "+table+"."+f.Name).WithCause(perr)
+		}
+		patch[f.Name] = v
+	}
+	if !found {
+		for k, v := range patch {
+			if v.Kind() == value.KindNull {
+				delete(patch, k)
+			}
+		}
+		// A new row (a note) names its author; when that actor has no row
+		// in the core yet (an agent that never wrote through it), the
+		// envelope's created_by records the writer instead of the write
+		// being refused after the signals push.
+		if a, ok := patch[fieldCreatedByActor].(value.Ref); ok {
+			if _, _, gerr := coreApp.Get(ctx, engine.Ref{Table: schema.TableActors, ID: a.ID()}); gerr != nil {
+				delete(patch, fieldCreatedByActor)
+			}
+		}
+		_, err = coreApp.CreateWithID(ctx, store.Source(""), row.Table(table), aid, patch)
+		return coreErr(err)
+	}
+	if len(patch) == 0 {
+		return nil
+	}
+	_, err = coreApp.Update(ctx, engine.Ref{Table: row.Table(table), ID: aid}, patch)
+	return coreErr(err)
+}
+
+// normDoc makes two decoded JSON values comparable (json.Number vs float).
+func normDoc(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprint(v)
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// docValue types one document value by its field definition.
+func docValue(f schema.FieldDef, v any) (value.Value, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	if f.Kind == value.KindList {
+		return value.ParseList(f.Elem, raw)
+	}
+	return value.Parse(f.Kind, raw)
+}

@@ -208,6 +208,11 @@ func (r *liveRows) refresh(ctx context.Context) (string, live.Tree, error) {
 // Get implements coord.Rows: the live file when there is one (a tombstone
 // means deleted), else the branch row from lore.db.
 func (r *liveRows) Get(ctx context.Context, id string) (coord.Doc, bool, error) {
+	if coreRowTable(tableOf(id)) {
+		// The core owns the row (task_corerows.go): its row file is the
+		// only copy that counts.
+		return coreDoc(ctx, tableOf(id), id)
+	}
 	_, tree, err := r.refresh(ctx)
 	if err != nil {
 		return nil, false, err
@@ -282,6 +287,9 @@ func newerDoc(branch coord.Doc, okBranch bool, main coord.Doc, okMain bool) (coo
 // List returns every task of the project: lore.db's rows overlaid with the
 // fresh live versions.
 func (r *liveRows) List(ctx context.Context) ([]coord.Doc, error) {
+	if coreRowTable(tableTasks) {
+		return coreDocs(ctx, tableTasks)
+	}
 	_, tree, err := r.refresh(ctx)
 	if err != nil {
 		return nil, err
@@ -344,8 +352,26 @@ func (r *liveRows) RepoName(repoID string) string {
 }
 
 // Stage implements coord.Rows: one companion, one commit for all rows.
+// Rows of a core-owned table (tasks, missions, comments) are written
+// through the core after the signals push (task_corerows.go); any other
+// row is staged on the live ref as before.
 func (r *liveRows) Stage(_ context.Context, rows ...coord.RowWrite) ([]signals.Companion, error) {
-	return []signals.Companion{&stagedLiveRows{spot: r.spot(), rows: rows}}, nil
+	var core, live []coord.RowWrite
+	for _, w := range rows {
+		if coreRowTable(coreTableFor(w)) {
+			core = append(core, w)
+		} else {
+			live = append(live, w)
+		}
+	}
+	var out []signals.Companion
+	if len(live) > 0 {
+		out = append(out, &stagedLiveRows{spot: r.spot(), rows: live})
+	}
+	if len(core) > 0 {
+		out = append(out, &coreCompanion{rows: core})
+	}
+	return out, nil
 }
 
 // spot is this repo's live ref and project folder for staging.
