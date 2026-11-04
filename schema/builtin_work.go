@@ -136,6 +136,10 @@ func workDefs() []TableDef {
 			Number("claim_epoch", Internal()),
 			Number("attempts", Internal()),
 			JSON("claim_log", Internal()),
+			// time_entries: closed spans of work (model/timeentry), union-merged
+			// by entry id; internal so client repos get no time data (TQ3).
+			JSON("time_entries", Internal(), MergeBy(MergeListByID),
+				Describe("closed time spans [{id, kind, source, actor_id, start, end, seconds, …}] (TIME_TRACKING_DESIGN 6.2)")),
 			Number("timebox_seconds"),
 			Text("gate", OneOf(TaskGates()...)),
 			Text("approved_by"),

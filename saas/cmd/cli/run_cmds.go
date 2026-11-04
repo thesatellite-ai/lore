@@ -33,6 +33,13 @@ import (
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/timeentry"
+	"github.com/thesatellite-ai/lore/model/value"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // runNotes is the JSON shape stored in runs.notes
@@ -331,6 +338,7 @@ func newRunEndCommand() *cobra.Command {
 			}
 			fmt.Printf("%s %s [%s] (%s)\n",
 				style.Success("✓"), run.ID, outcome, elapsed)
+			recordRunTime(cmd.Context(), run, notes.TaskID, completedAt)
 			return nil
 		},
 	}
@@ -396,20 +404,72 @@ func newRunCancelCommand() *cobra.Command {
 				notes.Summary = reason
 			}
 			notesJSON, _ := json.Marshal(notes)
+			completedAt := cliClock().Now()
 			if _, err := client.Run.UpdateOneID(run.ID).
 				SetStatusStr("cancelled").
-				SetCompletedAt(cliClock().Now()).
+				SetCompletedAt(completedAt).
 				SetNotes(string(notesJSON)).
 				Save(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "cancel run").WithCause(err)
 			}
 			fmt.Printf("%s %s cancelled\n", style.Success("✓"), run.ID)
+			recordRunTime(cmd.Context(), run, notes.TaskID, completedAt)
 			return nil
 		},
 	}
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().StringVar(&reason, "reason", "", "why cancelled")
 	return cmd
+}
+
+// recordRunTime writes the span of an ended or cancelled run as a time
+// entry (kind agent, source run) on its task, through the core engine
+// (Q-TIME). Runs stay in lore.db and never travel; the entry travels with
+// the task row, and the run id is kept only as its local_ref. A task in an
+// unreachable store (or any other failure) prints a warning naming the task
+// and leaves the run ended: the run is the record of truth on this machine.
+func recordRunTime(ctx context.Context, run *ent.Run, taskID string, end time.Time) {
+	if taskID == "" || run.StartedAt == nil {
+		return
+	}
+	if err := writeRunTime(ctx, run, taskID, end); err != nil {
+		fmt.Fprintf(os.Stderr, "%s run time not recorded on task %s: %v\n", style.Warn("!"), taskID, err)
+	}
+}
+
+// writeRunTime appends the run's entry to the task's time_entries.
+func writeRunTime(ctx context.Context, run *ent.Run, taskID string, end time.Time) error {
+	if coreApp == nil {
+		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
+	}
+	tid, err := ids.ParseAny(taskID)
+	if err != nil {
+		return err
+	}
+	var actor ids.ID[ids.Actor]
+	if run.ActorID != nil {
+		if actor, err = ids.Parse[ids.Actor](*run.ActorID); err != nil {
+			return err
+		}
+	}
+	entry, err := timeentry.NewSpan(timeentry.Span{
+		Kind: timeentry.KindAgent, Source: timeentry.SourceRun, Actor: actor,
+		Start: run.StartedAt.UTC(), End: end.UTC(), LocalRef: run.ID,
+	})
+	if err != nil {
+		return err
+	}
+	ref := engine.Ref{Table: schema.TableTasks, ID: tid}
+	_, cur, err := coreApp.Get(ctx, ref)
+	if err != nil {
+		return err
+	}
+	list, err := opstask.WithTimeEntry(cur, entry)
+	if err != nil {
+		return err
+	}
+	_, err = coreApp.Update(ctx, ref, map[string]value.Value{opstask.FieldTimeEntries: list})
+	return err
 }
 
 // ── run show ─────────────────────────────────────────────────────────────

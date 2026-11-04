@@ -165,6 +165,10 @@ const (
 	PrefixSecretAllow Prefix = "sal"
 	// PrefixResource marks a resource row (spec 4.4).
 	PrefixResource Prefix = "res"
+	// PrefixTimeEntry marks one time entry on a task row's time_entries
+	// list (TIME_TRACKING_DESIGN 6.2); entries are not rows, the id is the
+	// merge key of the list.
+	PrefixTimeEntry Prefix = "tme"
 )
 
 // allPrefixes is the iteration list of every constant above. Read-only.
@@ -248,6 +252,7 @@ var allPrefixes = [...]Prefix{
 	PrefixSecretRule,
 	PrefixSecretAllow,
 	PrefixResource,
+	PrefixTimeEntry,
 }
 
 // Prefixes returns a fresh copy of every registered prefix, in declaration order.

@@ -45,12 +45,16 @@ const (
 )
 
 // Policy says which fields are free text: a clash on a free-text field gets
-// conflict markers; a clash on any other field takes the newer side.
+// conflict markers; a clash on any other field takes the newer side, unless
+// Strategy names a per-field strategy (schema.FieldDef.Merge), which then
+// settles the clash instead (StrategyListByID).
 //
 // Invariant: IsText is never nil on a Policy built by PolicyFor or
-// UnknownTable; the zero Policy treats every field as non-text.
+// UnknownTable; the zero Policy treats every field as non-text. A nil
+// Strategy means every field uses the row rule.
 type Policy struct {
-	IsText func(field string) bool
+	IsText   func(field string) bool
+	Strategy func(field string) schema.MergeStrategy
 }
 
 // PolicyFor builds the policy of a known table: text fields with no closed
@@ -58,12 +62,19 @@ type Policy struct {
 // field takes the newer side, as v0.1.17 did (StrategyNewest).
 func PolicyFor(def schema.TableDef) Policy {
 	text := map[string]bool{}
+	strat := map[string]schema.MergeStrategy{}
 	for _, f := range def.Fields {
 		if f.Kind == value.KindText && len(f.Values) == 0 {
 			text[f.Name] = true
 		}
+		if f.Merge != schema.MergeDefault {
+			strat[f.Name] = f.Merge
+		}
 	}
-	return Policy{IsText: func(field string) bool { return text[field] }}
+	return Policy{
+		IsText:   func(field string) bool { return text[field] },
+		Strategy: func(field string) schema.MergeStrategy { return strat[field] },
+	}
 }
 
 // UnknownTable is the policy for a row whose table this binary does not
@@ -169,6 +180,15 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row) Result {
 	merged := map[string]value.Value{}
 	for _, k := range keys(base.Fields, ours.Fields, theirs.Fields) {
 		v, how := pick(base.Fields, ours.Fields, theirs.Fields, newer.Fields, k)
+		if how == pickedNewer && p.Strategy != nil {
+			// A per-field strategy settles the clash. Should it refuse the
+			// values (a corrupt list), the row rule below still applies, so
+			// the merge never fails on one bad field.
+			if sv, ok, err := strategyMerge(p.Strategy(k), ours.Fields[k], theirs.Fields[k]); ok && err == nil {
+				merged[k] = sv
+				continue
+			}
+		}
 		switch {
 		case how == pickedNewer && isText(k) && isTextValue(newer.Fields[k]) && isTextValue(older.Fields[k]):
 			n, o := newer.Fields[k], older.Fields[k]
