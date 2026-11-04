@@ -101,6 +101,8 @@ const (
 	// (XQ2: one key for every bulk action, replacing the per-noun
 	// meta/tasks/delete/resources.bulk_preview_rows).
 	KeyBatchPreviewRows Key = "batch.preview_rows"
+	// KeyDeleteRequireReason refuses a delete without --reason (DELETION 475, E_REASON_REQUIRED).
+	KeyDeleteRequireReason Key = "delete.require_reason"
 )
 
 // ClientRouteRepo is the KeyClientRoutes target that keeps a kind in the
@@ -262,6 +264,8 @@ func Keys() []KeyDef {
 		// more bulk actions stop and ask, so a level may only lower it.
 		{Key: KeyBatchPreviewRows, Shape: ShapeLimit, Default: value.Int(defaultPreviewRows),
 			Doc: "rows a bulk action (a --where delete, an import) changes before it previews and asks (XQ2)"},
+		// true is stricter: a level may require a reason, never drop a requirement above it.
+		{Key: KeyDeleteRequireReason, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(false), Doc: "refuse a delete without --reason (E_REASON_REQUIRED)"},
 		{Key: KeyAgentsPersonOnly, Shape: ShapeSet, Default: mustList(), Doc: "operations only a person may run"},
 		// A set: every level's items join (union), and ClientRoutes then
 		// takes, per kind, a store target over "repo" (a store is
