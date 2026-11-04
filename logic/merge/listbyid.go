@@ -130,6 +130,7 @@ func strategyMerge(s schema.MergeStrategy, ours, theirs value.Value) (v value.Va
 	case schema.MergeListByID:
 		v, err = StrategyListByID(ours, theirs)
 		return v, true, err
+	case schema.MergeDefault:
 	}
 	return nil, false, nil
 }

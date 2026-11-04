@@ -62,18 +62,18 @@ type Policy struct {
 // field takes the newer side, as v0.1.17 did (StrategyNewest).
 func PolicyFor(def schema.TableDef) Policy {
 	text := map[string]bool{}
-	strat := map[string]schema.MergeStrategy{}
+	strategies := map[string]schema.MergeStrategy{}
 	for _, f := range def.Fields {
 		if f.Kind == value.KindText && len(f.Values) == 0 {
 			text[f.Name] = true
 		}
 		if f.Merge != schema.MergeDefault {
-			strat[f.Name] = f.Merge
+			strategies[f.Name] = f.Merge
 		}
 	}
 	return Policy{
 		IsText:   func(field string) bool { return text[field] },
-		Strategy: func(field string) schema.MergeStrategy { return strat[field] },
+		Strategy: func(field string) schema.MergeStrategy { return strategies[field] },
 	}
 }
 
