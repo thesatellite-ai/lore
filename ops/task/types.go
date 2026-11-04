@@ -33,8 +33,8 @@ type AddIn struct {
 	Body       string `json:"body,omitempty" flag:"body" desc:"longer description" ui:"widget=markdown"`
 	Priority   string `json:"priority,omitempty" flag:"priority" desc:"low | medium | high | urgent (default medium)"`
 	Commitment string `json:"commitment,omitempty" flag:"commitment" desc:"accepted | proposed | someday (default accepted)"`
-	DeferUntil string `json:"defer_until,omitempty" flag:"defer-until" desc:"snooze until date (YYYY-MM-DD); hides from active list until then"`
-	Due        string `json:"due,omitempty" flag:"due" desc:"due date (YYYY-MM-DD)"`
+	DeferUntil string `json:"defer_until,omitempty" flag:"defer-until" desc:"snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM); hides from active list until then"`
+	Due        string `json:"due,omitempty" flag:"due" desc:"due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"`
 	Mission    string `json:"mission,omitempty" flag:"mission" desc:"mission_id (msn_*) to attach to"`
 	// Tasklist empty means the project's "default" list (created on
 	// demand, v0.1.17 coordinator answer Q1).
@@ -57,6 +57,7 @@ type AddIn struct {
 	// Estimate is in the tasks.estimate_unit unit (TSQ4, 9.1).
 	Estimate string   `json:"estimate,omitempty" flag:"estimate" desc:"estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit); hours also take 90m, days 2d"`
 	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
 	To       string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
 	Repo     string   `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id)"`
 	Project  string   `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
@@ -299,9 +300,9 @@ type EditIn struct {
 	Priority      string        `json:"priority,omitempty" flag:"priority" desc:"low | medium | high | urgent"`
 	Status        string        `json:"status,omitempty" flag:"status" desc:"todo | in_progress | done | cancelled | blocked"`
 	Commitment    string        `json:"commitment,omitempty" flag:"commitment" desc:"accepted | proposed | someday"`
-	DeferUntil    string        `json:"defer_until,omitempty" flag:"defer-until" desc:"snooze until date YYYY-MM-DD"`
+	DeferUntil    string        `json:"defer_until,omitempty" flag:"defer-until" desc:"snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"`
 	ClearDefer    bool          `json:"clear_defer,omitempty" flag:"clear-defer" desc:"un-defer (clear deferred_until)"`
-	Due           string        `json:"due,omitempty" flag:"due" desc:"due date YYYY-MM-DD"`
+	Due           string        `json:"due,omitempty" flag:"due" desc:"due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"`
 	ClearDue      bool          `json:"clear_due,omitempty" flag:"clear-due" desc:"remove due date"`
 	Tasklist      string        `json:"tasklist,omitempty" flag:"tasklist" desc:"move to tasklist_id (tlt_*)"`
 	Mission       string        `json:"mission,omitempty" flag:"mission" desc:"attach to mission_id (msn_*)"`
@@ -324,6 +325,7 @@ type EditIn struct {
 	Estimate      string   `json:"estimate,omitempty" flag:"estimate" desc:"estimate in the project's unit (tasks.estimate_unit)"`
 	ClearEstimate bool     `json:"clear_estimate,omitempty" flag:"clear-estimate" desc:"remove the estimate"`
 	Ref           []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	Relation      string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
 	// Tree edits (TASK 6.3, 6.8): re-parent (with the subtree), detach,
 	// reorder among siblings. --after-sibling because --after is a
 	// dependency.

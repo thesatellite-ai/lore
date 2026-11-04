@@ -1,5 +1,5 @@
 // Package incident defines the `incident` noun's operations on the 0.1.18
-// core: add, list, show, delete and search, with v0.1.17's flag spellings, --json envelopes and human
+// core: add, edit (new, CLI_REFERENCE F2), list, show, delete and search, with v0.1.17's flag spellings, --json envelopes and human
 // lines (saas/cmd/cli/generated_commands.go, edit_commands.go,
 // archive_commands.go and search_entities.go at 4e6ed1c). Delete asks
 // first and takes --yes (v0.1.17 --confirm is refused by the CLI mount
@@ -10,11 +10,14 @@ package incident
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
+	"github.com/thesatellite-ai/lore/ops/internal/rowref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -25,6 +28,7 @@ const (
 	OpAdd    = "incident.add"
 	OpList   = "incident.list"
 	OpShow   = "incident.show"
+	OpEdit   = "incident.edit"
 	OpDelete = "incident.delete"
 	OpSearch = "incident.search"
 )
@@ -51,6 +55,12 @@ func Ops(env content.Env) []op.Entry {
 				{Title: "add a incident", CLI: `lore incident add --title "First" --body "the body"`, Want: "inc_"},
 			},
 		}, o.add),
+		op.Define(op.Spec{
+			Name: OpEdit, Summary: "Edit incident fields or add --ref pointers (only the flags given change)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+			Confirm:  op.ConfirmRule{MayAsk: true},
+			Examples: []op.Example{{Title: "link an incident to a row", CLI: "lore incident edit inc_… --ref res_… --relation affects", Want: "updated"}},
+		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List incidents",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.ReadErrors(),
@@ -102,7 +112,67 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 			return content.WriteOut{}, err
 		}
 	}
-	return o.c.Create(ctx, in.To, fields)
+	// --ref: parsed and F15-checked before anything is written (RES 3.11).
+	rel, err := rowref.Relation(in.Relation, nil)
+	if err != nil {
+		return content.WriteOut{}, err
+	}
+	refs, err := rowref.Parse(ctx, o.c.Env, in.Ref)
+	if err != nil {
+		return content.WriteOut{}, err
+	}
+	if err = rowref.Check(ctx, o.c.Env, store.Source(in.To), refs); err != nil {
+		return content.WriteOut{}, err
+	}
+	out, err := o.c.Create(ctx, in.To, fields)
+	if err != nil {
+		return out, err
+	}
+	id, err := ids.ParseAny(out.ID)
+	if err != nil {
+		return out, err
+	}
+	return out, rowref.Save(ctx, o.c.Env, store.Source(out.Store), table, project.String(), id, rel, refs)
+}
+
+// edit patches the given fields of one incident and adds --ref pointers.
+// Flow: live row → refs parsed + F15-checked against its store → patch
+// (when any field flag) → refs saved. Nothing given: E_INVALID_INPUT.
+func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
+	id, src, cur, err := o.c.Live(ctx, in.ID)
+	if err != nil {
+		return content.WriteOut{}, err
+	}
+	rel, err := rowref.Relation(in.Relation, nil)
+	if err != nil {
+		return content.WriteOut{}, err
+	}
+	refs, err := rowref.Parse(ctx, o.c.Env, in.Ref)
+	if err != nil {
+		return content.WriteOut{}, err
+	}
+	if err = rowref.Check(ctx, o.c.Env, src, refs); err != nil {
+		return content.WriteOut{}, err
+	}
+	patch, err := content.Texts(Noun, map[string]string{fieldTitle: in.Title, content.FieldBody: in.Body, fieldSeverityStr: in.Severity})
+	if err != nil {
+		return content.WriteOut{}, err
+	}
+	hasMeta := len(in.Meta) > 0 || len(in.MetaJSON) > 0 || in.MetaStdin != ""
+	if len(patch) == 0 && len(refs) == 0 && !hasMeta {
+		return content.WriteOut{}, errs.New(errs.InvalidInput, "incident edit: nothing to change").
+			WithHint("give at least one of --title, --body, --severity, --ref, --meta")
+	}
+	line := content.Mark + " " + id.String() + " updated\n"
+	out := content.WriteOut{ID: id.String(), Store: string(src), Human: line}
+	if len(patch) > 0 || hasMeta {
+		w, uerr := o.c.Env.Update(ctx, engine.Ref{Store: src, Table: table, ID: id}, patch)
+		if uerr != nil {
+			return content.WriteOut{}, uerr
+		}
+		out = content.Written(src, w, line)
+	}
+	return out, rowref.Save(ctx, o.c.Env, src, table, content.Field(cur, content.FieldProject), id, rel, refs)
 }
 
 // list returns the live rows, every project unless --project.
@@ -131,7 +201,11 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: content.SchemaVersion, Kind: KindShow, Data: recordOf(o.c.Labeler(), src, r)}, nil
+	refs, err := rowref.List(ctx, o.c.Env, table, r.ID, nil)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	return ShowOut{SchemaVersion: content.SchemaVersion, Kind: KindShow, Data: recordOf(o.c.Labeler(), src, r), Refs: refs}, nil
 }
 
 // search matches the query in every attached store.

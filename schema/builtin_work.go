@@ -243,6 +243,9 @@ func workDefs() []TableDef {
 			Text("body", WithWidget(WidgetMarkdown)),
 			Text("status", Required(), OneOf(MissionStatuses()...)),
 			DateTime("target_date"),
+			// starts_at is new in 0.1.18 (TASK 15, option B: a mission is the
+			// "cycle" when it has dates); optional, so no migration.
+			DateTime("starts_at", Describe("when the mission's work starts (TASK 15)")),
 			DateTime("completed_at"),
 			Ref("created_by_actor_id", TableActors),
 			List("approvers", value.KindText),

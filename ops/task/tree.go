@@ -525,7 +525,9 @@ func (o ops) addParent(ctx context.Context, in *AddIn, project string) (*addPare
 		in.To = string(src)
 	}
 	// 6.5 warnings: never refusals.
-	if pd, cd := work.DateText(pr, fieldDue), in.Due; pd != "" && cd != "" && cd > pd {
+	// in.Due is a TASK 12 phrase; a bad one is refused later by setDates.
+	cd, _ := dayText(o.clock(), "due", in.Due)
+	if pd := work.DateText(pr, fieldDue); pd != "" && cd != "" && cd > pd {
 		p.notes = append(p.notes, "child due "+cd+" is after parent due "+pd)
 	}
 	if in.Commitment == schema.TaskCommitmentAccepted && work.Field(pr, fieldCommitment) == schema.TaskCommitmentSomeday {

@@ -161,6 +161,7 @@ missions.created_by_actor_id ref
 missions.idempotency_key text
 missions.plan_id ref
 missions.project_id ref required
+missions.starts_at datetime
 missions.status text required
 missions.tag_ids list[ref]
 missions.target_date datetime

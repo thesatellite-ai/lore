@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
+	"github.com/thesatellite-ai/lore/ops/internal/rowref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -110,6 +111,9 @@ type AddIn struct {
 	Repo       string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	Tags       []string `json:"tags,omitempty" flag:"tag" desc:"tag name (repeatable; the tag must exist)"`
+	// Ref / Relation: knowledge_refs pointers (RES 3.11, RQ7, OQ22).
+	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
 }
 
 // AddOut is the output of decision.add.
@@ -207,11 +211,16 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
+	// Refs are the decision's --ref pointers (0.1.18; absent when none).
+	Refs []rowref.Out `json:"refs,omitempty"`
 }
 
 // Text prints v0.1.17's show block.
 func (o ShowOut) Text() string {
 	s := fmt.Sprintf("%s\n  title:  %s\n  status: %s\n", o.Data.ID, o.Data.Title, o.Data.Status)
+	for _, r := range o.Refs {
+		s += "  " + r.Relation + " " + r.Where() + "\n"
+	}
 	if o.Data.Body != "" {
 		s += "\n" + o.Data.Body + "\n"
 	}
@@ -233,6 +242,9 @@ type EditIn struct {
 	Tags         []string `json:"tags,omitempty" flag:"tag" desc:"add this tag (repeatable; the tag must exist)"`
 	Untags       []string `json:"untags,omitempty" flag:"untag" desc:"remove this tag (repeatable)"`
 	Project      string   `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
+	// Ref / Relation: knowledge_refs pointers (RES 3.11, RQ7, OQ22).
+	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"add a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
 }
 
 // SearchIn is the input of decision.search.
@@ -309,6 +321,18 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	// --ref: parsed and F15-checked before anything is written (RES 3.11).
+	rel, err := rowref.Relation(in.Relation, nil)
+	if err != nil {
+		return AddOut{}, err
+	}
+	refs, err := rowref.Parse(ctx, o.env, in.Ref)
+	if err != nil {
+		return AddOut{}, err
+	}
+	if err = rowref.Check(ctx, o.env, store.Source(in.To), refs); err != nil {
+		return AddOut{}, err
+	}
 	src, w, err := kn.Add(ctx, o.env, noun, kn.Create{
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, CreatedBy: in.CreatedBy, Tags: in.Tags,
 		Texts: map[string]string{
@@ -320,7 +344,27 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	if err = rowref.Save(ctx, o.env, src, noun.Table, kn.Field(w.Row, kn.FieldProject), w.Row.ID, rel, refs); err != nil {
+		return AddOut{}, err
+	}
 	return AddOut{ID: w.Row.ID.String(), Store: string(src), Title: in.Title, Warnings: kn.Warnings(w), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+}
+
+// addRefs writes --ref pointers of an existing decision it (parse, F15
+// check against its store, save).
+func addRefs(ctx context.Context, env kn.Env, it kn.Item, raw []string, relation string) error {
+	rel, err := rowref.Relation(relation, nil)
+	if err != nil {
+		return err
+	}
+	refs, err := rowref.Parse(ctx, env, raw)
+	if err != nil {
+		return err
+	}
+	if err = rowref.Check(ctx, env, it.Source, refs); err != nil {
+		return err
+	}
+	return rowref.Save(ctx, env, it.Source, noun.Table, kn.Field(it.Row, kn.FieldProject), it.Row.ID, rel, refs)
 }
 
 // list returns the decisions in scope (archived included, as v0.1.17).
@@ -348,13 +392,32 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(kn.LabelerOf(o.env), it.Source, it.Row)}, nil
+	refs, err := rowref.List(ctx, o.env, noun.Table, it.Row.ID, nil)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(kn.LabelerOf(o.env), it.Source, it.Row), Refs: refs}, nil
 }
 
 // edit patches the given fields.
 func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	if err := kn.OneOf(noun, "status", in.Status, schema.DecisionStatuses()); err != nil {
 		return WriteOut{}, err
+	}
+	// --ref (RES 3.11): checked against the row's store, then written; an
+	// edit that only adds refs patches nothing else.
+	if len(in.Ref) > 0 {
+		it, err := kn.Show(ctx, o.env, noun, in.ID)
+		if err != nil {
+			return WriteOut{}, err
+		}
+		if err = addRefs(ctx, o.env, it, in.Ref, in.Relation); err != nil {
+			return WriteOut{}, err
+		}
+		if in.Title == "" && in.Body == "" && in.Status == "" && in.SourceRef == "" && in.RebindRepo == "" && !in.RebindMaster &&
+			len(in.Tags) == 0 && len(in.Untags) == 0 && len(in.Meta) == 0 && len(in.MetaJSON) == 0 && in.MetaStdin == "" {
+			return WriteOut{ID: it.Row.ID.String(), Store: string(it.Source), done: "updated"}, nil
+		}
 	}
 	src, w, err := kn.Apply(ctx, o.env, noun, in.ID, kn.Edit{
 		Texts: map[string]string{

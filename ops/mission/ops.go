@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -43,6 +44,7 @@ const (
 // Mission field names (schema.TableMissions).
 const (
 	fieldTarget    = "target_date"
+	fieldStartsAt  = "starts_at"
 	fieldApprovers = "approvers"
 )
 
@@ -133,10 +135,9 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return ShowOut{}, err
 	}
-	if in.Target != "" {
-		if fields[fieldTarget], err = work.Date("target", in.Target); err != nil {
-			return ShowOut{}, err
-		}
+	notes, err := o.setDates(fields, in.Target, in.StartsAt)
+	if err != nil {
+		return ShowOut{}, err
 	}
 	for _, rf := range []struct {
 		field, flag string
@@ -165,8 +166,37 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 	if l := work.Label(work.LabelerOf(o.env), src); l != "" {
 		label = " → " + l // v0.1.17: " → " + route.Label ("[northwind/acme]")
 	}
-	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + label + "\n"
+	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + label + "\n" + noteLines(notes)
 	return out, err
+}
+
+// setDates sets target_date and starts_at from TASK 12 date phrases
+// (ops/task DateValue); notes say what each phrase stored (R12).
+func (o ops) setDates(fields map[string]value.Value, target, starts string) ([]string, error) {
+	var notes []string
+	for _, d := range []struct{ field, flag, raw string }{{fieldTarget, "target", target}, {fieldStartsAt, "starts-at", starts}} {
+		if strings.TrimSpace(d.raw) == "" {
+			continue
+		}
+		v, note, err := opstask.DateValue(opclock.Now(o.env), d.flag, d.raw)
+		if err != nil {
+			return nil, err
+		}
+		fields[d.field] = v
+		if note != "" {
+			notes = append(notes, note)
+		}
+	}
+	return notes, nil
+}
+
+// noteLines prints the date notes, one indented line each.
+func noteLines(notes []string) string {
+	var b strings.Builder
+	for _, n := range notes {
+		b.WriteString("  " + n + "\n")
+	}
+	return b.String()
 }
 
 // approvers is the approvers list of act_ ids (comma separated or
@@ -256,7 +286,7 @@ func (o ops) showOf(ctx context.Context, src store.Source, r row.Row) (ShowOut, 
 	rec := Record{
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, ProjectID: work.Field(r, work.FieldProject),
 		Title: work.Field(r, work.FieldTitle), Body: work.Field(r, work.FieldBody), Status: work.Field(r, work.FieldStatus),
-		TargetDate: work.Time(r, fieldTarget), CompletedAt: work.Time(r, work.FieldCompleted),
+		TargetDate: work.Time(r, fieldTarget), StartsAt: work.Time(r, fieldStartsAt), CompletedAt: work.Time(r, work.FieldCompleted),
 		CreatedByActorID: work.Field(r, work.FieldCreatedBy), Approvers: work.List(r, fieldApprovers),
 		IdempotencyKey: work.Field(r, work.FieldKey), PlanID: work.Field(r, work.FieldPlan), TagIDs: work.TagIDs(r),
 		Tasks: tasks, Estimate: est, Store: work.SourceOf(work.LabelerOf(o.env), src), Label: work.Label(work.LabelerOf(o.env), src),
@@ -275,6 +305,9 @@ func (o ShowOut) Text() string {
 	m := o.Data
 	var b strings.Builder
 	b.WriteString(m.ID + "\n  title:  " + m.Title + "\n  status: " + m.Status + "\n")
+	if !m.StartsAt.IsZero() {
+		b.WriteString("  starts: " + m.StartsAt.UTC().Format(work.DateLayout) + "\n")
+	}
 	if !m.TargetDate.IsZero() {
 		b.WriteString("  target: " + m.TargetDate.UTC().Format(work.DateLayout) + "\n")
 	}
@@ -316,7 +349,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		}
 		out.Data = append(out.Data, Summary{
 			ID: s.Row.ID.String(), Title: work.Field(s.Row, work.FieldTitle), Body: work.Field(s.Row, work.FieldBody), Status: st,
-			TargetDate: work.TimeText(s.Row, fieldTarget), CompletedAt: work.TimeText(s.Row, work.FieldCompleted),
+			TargetDate: work.TimeText(s.Row, fieldTarget), StartsAt: work.TimeText(s.Row, fieldStartsAt), CompletedAt: work.TimeText(s.Row, work.FieldCompleted),
 			CreatedAt: s.Row.CreatedAt.UTC().Format(work.TimeLayout), Tasks: tasks, Store: work.SourceOf(work.LabelerOf(o.env), s.Source), Label: work.Label(work.LabelerOf(o.env), s.Source),
 		})
 	}
@@ -364,13 +397,15 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if in.Target != "" {
-		if patch[fieldTarget], err = work.Date("target", in.Target); err != nil {
-			return work.WriteOut{}, err
-		}
+	notes, err := o.setDates(patch, in.Target, in.StartsAt)
+	if err != nil {
+		return work.WriteOut{}, err
 	}
 	if in.ClearTarget {
 		patch[fieldTarget] = value.Null{}
+	}
+	if in.ClearStarts {
+		patch[fieldStartsAt] = value.Null{}
 	}
 	if v, rerr := work.RefTo(Noun, "plan", ids.PrefixPlan, in.Plan); rerr != nil {
 		return work.WriteOut{}, rerr
@@ -382,9 +417,9 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	}
 	if len(patch) == 0 {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "mission edit: nothing to change").
-			WithHint("give at least one of --title, --body, --status, --target, --clear-target, --plan, --clear-plan")
+			WithHint("give at least one of --title, --body, --status, --target, --clear-target, --starts-at, --clear-starts-at, --plan, --clear-plan")
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n")
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+noteLines(notes))
 }
 
 // done marks the mission done now.

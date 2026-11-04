@@ -55,8 +55,8 @@ type TimeShowIn struct {
 	Entries bool   `json:"entries,omitempty" flag:"entries" desc:"list every entry"`
 	Deleted bool   `json:"deleted,omitempty" flag:"deleted" desc:"with --entries, list removed entries too"`
 	GroupBy string `json:"group_by,omitempty" flag:"group-by" desc:"worker (default) | person | source | day"`
-	Since   string `json:"since,omitempty" flag:"since" desc:"only entries on or after this day (YYYY-MM-DD)"`
-	Until   string `json:"until,omitempty" flag:"until" desc:"only entries on or before this day (YYYY-MM-DD)"`
+	Since   string `json:"since,omitempty" flag:"since" desc:"only entries on or after this day (YYYY-MM-DD or a date phrase: today, mon, in 3d, …)"`
+	Until   string `json:"until,omitempty" flag:"until" desc:"only entries on or before this day (YYYY-MM-DD or a date phrase)"`
 	TZ      string `json:"tz,omitempty" flag:"tz" desc:"time zone for display (e.g. Europe/Prague; default local)"`
 }
 
@@ -186,8 +186,16 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		return TimeOut{}, err
 	}
 	now := opclock.Now(o.env).UTC()
+	since, err := dayText(o.clock(), "since", in.Since)
+	if err != nil {
+		return TimeOut{}, err
+	}
+	until, err := dayText(o.clock(), "until", in.Until)
+	if err != nil {
+		return TimeOut{}, err
+	}
 	inRange := func(day string) bool {
-		return (in.Since == "" || day >= in.Since) && (in.Until == "" || day <= in.Until)
+		return (since == "" || day >= since) && (until == "" || day <= until)
 	}
 	d := TimeData{TaskID: id.String(), Title: work.Field(r, work.FieldTitle), Status: work.Field(r, work.FieldStatus), GroupBy: group, showEntries: in.Entries, loc: loc}
 	owners := map[string]string{}

@@ -222,6 +222,10 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	rel, err := relationOf(in.Relation)
+	if err != nil {
+		return AddOut{}, err
+	}
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
 		return AddOut{}, errs.New(errs.InvalidInput, "task add: the title is empty").WithHint(`lore task add "<title>"`)
@@ -279,7 +283,8 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 			return AddOut{}, err
 		}
 	}
-	if err = setDates(fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
+	dateNotes, err := o.setDates(fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due})
+	if err != nil {
 		return AddOut{}, err
 	}
 	if par != nil {
@@ -378,7 +383,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	if err := o.saveRefs(ctx, src, project.String(), w.Row.ID, refs); err != nil {
+	if err := o.saveRefs(ctx, src, project.String(), w.Row.ID, rel, refs); err != nil {
 		return AddOut{}, err
 	}
 	out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(work.LabelerOf(o.env), src, w.Row), Store: string(src)}
@@ -389,7 +394,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if l := work.Label(work.LabelerOf(o.env), src); l != "" {
 		label = " → " + l // v0.1.17 task add: " → " + route.Label ("[northwind/acme]")
 	}
-	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + " [" + priority + "]" + label + "\n"
+	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + " [" + priority + "]" + label + "\n" + noteLines(dateNotes)
 	if par != nil {
 		out.Parent, out.Inherited = par.id, par.inh
 		out.Human += par.human()
@@ -430,9 +435,12 @@ func setRefs(fields map[string]value.Value, flags []refFlag) error {
 }
 
 // setDates sets each given YYYY-MM-DD flag's field.
-func setDates(fields map[string]value.Value, dates map[string]string) error {
+// Values are TASK 12 phrases (dates.go); notes say what each phrase
+// stored.
+func (o ops) setDates(fields map[string]value.Value, given map[string]string) ([]string, error) {
+	var notes []string
 	for _, name := range []string{fieldDeferred, fieldDue} {
-		raw := dates[name]
+		raw := given[name]
 		if raw == "" {
 			continue
 		}
@@ -440,13 +448,16 @@ func setDates(fields map[string]value.Value, dates map[string]string) error {
 		if name == fieldDeferred {
 			flag = "defer-until"
 		}
-		v, err := work.Date(flag, raw)
+		v, note, err := dateValue(o.clock(), flag, raw)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		fields[name] = v
+		if note != "" {
+			notes = append(notes, note)
+		}
 	}
-	return nil
+	return notes, nil
 }
 
 // byKey finds the live task added with --key in the same project and
@@ -984,10 +995,14 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
+	rel, err := relationOf(in.Relation)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
 	if err = o.checkRefs(ctx, curSrc, refs); err != nil {
 		return work.WriteOut{}, err
 	}
-	if err = o.saveRefs(ctx, curSrc, work.Field(cur, work.FieldProject), id, refs); err != nil {
+	if err = o.saveRefs(ctx, curSrc, work.Field(cur, work.FieldProject), id, rel, refs); err != nil {
 		return work.WriteOut{}, err
 	}
 	for _, c := range []struct{ flag, v string }{{"priority", in.Priority}, {"status", in.Status}, {"commitment", in.Commitment}} {
@@ -1013,7 +1028,8 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 			return work.WriteOut{}, err
 		}
 	}
-	if err = setDates(patch, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
+	dateNotes, err := o.setDates(patch, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due})
+	if err != nil {
 		return work.WriteOut{}, err
 	}
 	if err = setRefs(patch, []refFlag{
@@ -1089,7 +1105,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: nothing to change").
 			WithHint("give at least one flag, e.g. --title, --status, --priority, --due")
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+timeHint)
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+noteLines(dateNotes)+timeHint)
 }
 
 // start marks a task in_progress; starting work also commits it and

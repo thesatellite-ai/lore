@@ -46,6 +46,9 @@ type File struct {
 		Key   string `yaml:"key"`
 		Title string `yaml:"title"`
 		To    string `yaml:"to"`
+		// StartsAt is YYYY-MM-DD only: a file is applied again later, so
+		// a relative phrase ("next mon") would move (TASK 15.2).
+		StartsAt string `yaml:"starts_at"`
 	} `yaml:"mission"`
 	Approvers []string   `yaml:"approvers"`
 	Tasks     []FileTask `yaml:"tasks"`
@@ -67,15 +70,19 @@ type ApplyIn struct {
 	// File is a path on the machine running lore (the CLI's, or `lore
 	// api`'s for REST).
 	File string `json:"file" arg:"0" desc:"the YAML plan file"`
+	// DryRun lists what would be written and writes nothing (TASK 15.2).
+	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be written; write nothing"`
 }
 
 // ApplyOut is the output of mission.apply.
 type ApplyOut struct {
-	MissionID string        `json:"mission_id"`
-	Created   bool          `json:"created"`
-	Store     string        `json:"store"`
-	Tasks     []AppliedTask `json:"tasks"`
-	Human     string        `json:"-"`
+	MissionID string `json:"mission_id"`
+	Created   bool   `json:"created"`
+	// DryRun: nothing was written; ids of rows that would be created are "".
+	DryRun bool          `json:"dry_run,omitempty"`
+	Store  string        `json:"store"`
+	Tasks  []AppliedTask `json:"tasks"`
+	Human  string        `json:"-"`
 }
 
 // AppliedTask is one task of the plan as applied.
@@ -110,6 +117,11 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 	if yerr := yaml.Unmarshal(raw, &p); yerr != nil {
 		return ApplyOut{}, errs.Wrap(errs.InvalidInput, "plan is not valid YAML", yerr)
 	}
+	if s := strings.TrimSpace(p.Mission.StartsAt); s != "" {
+		if _, derr := time.Parse(work.DateLayout, s); derr != nil {
+			return ApplyOut{}, errs.Wrap(errs.InvalidInput, "plan: mission.starts_at must be YYYY-MM-DD", derr)
+		}
+	}
 	if cerr := checkFile(p); cerr != nil {
 		return ApplyOut{}, cerr
 	}
@@ -118,6 +130,9 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		return ApplyOut{}, err
 	}
 	to := strings.TrimSpace(p.Mission.To)
+	if in.DryRun {
+		return o.applyDry(ctx, to, project, p)
+	}
 	m, created, src, err := o.planMission(ctx, to, project, p)
 	if err != nil {
 		return ApplyOut{}, err
@@ -158,6 +173,65 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		title := work.Field(t, work.FieldTitle)
 		b.WriteString("  " + t.ID.String() + " " + title + strings.Repeat(" ", max(0, applyTitleWidth-len(title))) + extra + "\n")
 	}
+	out.Human = b.String()
+	return out, nil
+}
+
+// applyDry is apply --dry-run: the same lookups (mission by key or title,
+// each task by key in that mission), no write; an unwritten row's id is
+// "" and its line says "would add".
+func (o ops) applyDry(ctx context.Context, to string, project ids.ID[ids.Project], p File) (ApplyOut, error) {
+	src := store.Source(to)
+	if src == "" {
+		src = store.SourceRepo
+	}
+	missions, err := o.env.List(ctx, src, table)
+	if err != nil {
+		return ApplyOut{}, err
+	}
+	title := strings.TrimSpace(p.Mission.Title)
+	var found *row.Row
+	for i, r := range missions {
+		if r.Deleted || work.Field(r, work.FieldProject) != project.String() {
+			continue
+		}
+		if (p.Mission.Key != "" && work.Field(r, work.FieldKey) == p.Mission.Key) || (p.Mission.Key == "" && work.Field(r, work.FieldTitle) == title) {
+			found = &missions[i]
+			break
+		}
+	}
+	out := ApplyOut{Store: string(src), Tasks: []AppliedTask{}, DryRun: true, Created: found == nil}
+	var b strings.Builder
+	have := map[string]string{}
+	if found != nil {
+		out.MissionID = found.ID.String()
+		b.WriteString("mission " + found.ID.String() + " " + work.Field(*found, work.FieldTitle) + " exists\n")
+		tasks, lerr := o.env.List(ctx, src, schema.TableTasks)
+		if lerr != nil {
+			return ApplyOut{}, lerr
+		}
+		for _, r := range tasks {
+			if !r.Deleted && work.Field(r, work.FieldMission) == out.MissionID {
+				have[work.Field(r, work.FieldKey)] = r.ID.String()
+			}
+		}
+	} else {
+		b.WriteString("would add mission " + title + "\n")
+	}
+	for _, pt := range p.Tasks {
+		id, ok := have[pt.Key]
+		out.Tasks = append(out.Tasks, AppliedTask{Key: pt.Key, ID: id, Created: !ok})
+		if ok {
+			b.WriteString("  exists     " + id + " " + pt.Title + "\n")
+			continue
+		}
+		extra := ""
+		if len(pt.After) > 0 {
+			extra = "  after " + strings.Join(pt.After, ",")
+		}
+		b.WriteString("  would add  " + pt.Key + " " + pt.Title + extra + "\n")
+	}
+	b.WriteString("nothing written (--dry-run)\n")
 	out.Human = b.String()
 	return out, nil
 }
@@ -238,6 +312,11 @@ func (o ops) planMission(ctx context.Context, to string, project ids.ID[ids.Proj
 	}
 	if len(p.Approvers) > 0 {
 		if fields[fieldApprovers], err = approvers(ctx, p.Approvers); err != nil {
+			return row.Row{}, false, "", err
+		}
+	}
+	if s := strings.TrimSpace(p.Mission.StartsAt); s != "" {
+		if fields[fieldStartsAt], err = work.Date("starts_at", s); err != nil {
 			return row.Row{}, false, "", err
 		}
 	}

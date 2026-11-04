@@ -27,7 +27,8 @@ type AddIn struct {
 
 	Title     string `json:"title" arg:"0" rest:"true" desc:"the mission title (several words are joined)"`
 	Body      string `json:"body,omitempty" flag:"body" desc:"longer description" ui:"widget=markdown"`
-	Target    string `json:"target,omitempty" flag:"target" desc:"target completion date (YYYY-MM-DD)"`
+	Target    string `json:"target,omitempty" flag:"target" desc:"target completion date (YYYY-MM-DD or a date phrase: eom, next fri, in 2w, …)"`
+	StartsAt  string `json:"starts_at,omitempty" flag:"starts-at" desc:"when the mission's work starts (YYYY-MM-DD or a date phrase)"`
 	CreatedBy string `json:"created_by,omitempty" flag:"created-by" desc:"actor_id (act_*); default: the row's created_by is the current identity"`
 	// Approvers are actor ids (act_…) or v0.1.17's @handles (resolved
 	// through the host's roster, work.Team).
@@ -62,6 +63,7 @@ type Summary struct {
 	Body        string          `json:"body,omitempty"`
 	Status      string          `json:"status"`
 	TargetDate  string          `json:"target_date,omitempty"`
+	StartsAt    string          `json:"starts_at,omitempty"`
 	CompletedAt string          `json:"completed_at,omitempty"`
 	CreatedAt   string          `json:"created_at"`
 	Tasks       []opstask.Brief `json:"tasks,omitempty"`
@@ -80,6 +82,7 @@ type Record struct {
 	Body             string          `json:"body,omitempty"`
 	Status           string          `json:"status,omitempty"`
 	TargetDate       time.Time       `json:"target_date,omitempty,omitzero"`
+	StartsAt         time.Time       `json:"starts_at,omitempty,omitzero"`
 	CompletedAt      time.Time       `json:"completed_at,omitempty,omitzero"`
 	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
 	Approvers        []string        `json:"approvers,omitempty"`
@@ -123,8 +126,10 @@ type EditIn struct {
 	Title       string `json:"title,omitempty" flag:"title" desc:"new title"`
 	Body        string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
 	Status      string `json:"status,omitempty" flag:"status" desc:"active | paused | done | cancelled"`
-	Target      string `json:"target,omitempty" flag:"target" desc:"target completion date (YYYY-MM-DD)"`
+	Target      string `json:"target,omitempty" flag:"target" desc:"target completion date (YYYY-MM-DD or a date phrase)"`
 	ClearTarget bool   `json:"clear_target,omitempty" flag:"clear-target" desc:"remove target date"`
+	StartsAt    string `json:"starts_at,omitempty" flag:"starts-at" desc:"when the mission's work starts (YYYY-MM-DD or a date phrase)"`
+	ClearStarts bool   `json:"clear_starts,omitempty" flag:"clear-starts-at" desc:"remove the start date"`
 	Plan        string `json:"plan,omitempty" flag:"plan" desc:"link to plan_id (pln_*)"`
 	ClearPlan   bool   `json:"clear_plan,omitempty" flag:"clear-plan" desc:"unlink the plan"`
 }

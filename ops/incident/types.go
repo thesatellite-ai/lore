@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/ops/internal/rowref"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -35,6 +36,23 @@ type AddIn struct {
 	Project   string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 	CreatedBy string `json:"created_by,omitempty" flag:"created-by" desc:"actor_id; defaults to current identity"`
 	To        string `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	// Ref / Relation: knowledge_refs pointers (RES 3.11, RQ7, OQ22).
+	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
+}
+
+// EditIn is the input of incident.edit (new in 0.1.18, CLI_REFERENCE F2):
+// an empty flag leaves its field.
+type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
+	ID       string   `json:"id" arg:"0" desc:"the incident id (inc_…)"`
+	Title    string   `json:"title,omitempty" flag:"title" desc:"new title"`
+	Body     string   `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
+	Severity string   `json:"severity,omitempty" flag:"severity" desc:"new severity (free text, as severity_str)"`
+	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"add a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
 }
 
 // ListIn is the input of incident.list.
@@ -93,10 +111,18 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
+	// Refs are the incident's --ref pointers (0.1.18; absent when none).
+	Refs []rowref.Out `json:"refs,omitempty"`
 }
 
-// Text prints v0.1.17's "IN  <id>" line.
-func (o ShowOut) Text() string { return badge + "  " + o.Data.ID + "\n" }
+// Text prints v0.1.17's "IN  <id>" line, then one line per --ref pointer.
+func (o ShowOut) Text() string {
+	s := badge + "  " + o.Data.ID + "\n"
+	for _, r := range o.Refs {
+		s += "  " + r.Relation + " " + r.Where() + "\n"
+	}
+	return s
+}
 
 // SearchIn is the input of incident.search (v0.1.17 entitySearchFlags).
 type SearchIn struct {
