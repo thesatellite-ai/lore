@@ -128,7 +128,27 @@ const (
 	KindUnknown       Code = "E_KIND_UNKNOWN"
 	MetaType          Code = "E_META_TYPE"
 	MetaAmbiguous     Code = "E_META_AMBIGUOUS"
-	MigrateLocked     Code = "E_MIGRATE_LOCKED"
+	// The rest of the metadata set (METADATA_DESIGN 6, CLI_REFERENCE 5).
+	MetaKey             Code = "E_META_KEY"
+	MetaReserved        Code = "E_META_RESERVED"
+	MetaValue           Code = "E_META_VALUE"
+	MetaShape           Code = "E_META_SHAPE"
+	MetaSize            Code = "E_META_SIZE"
+	MetaDepth           Code = "E_META_DEPTH"
+	MetaOp              Code = "E_META_OP"
+	MetaTable           Code = "E_META_TABLE"
+	MetaRequired        Code = "E_META_REQUIRED"
+	MetaUnknown         Code = "E_META_UNKNOWN"
+	MetaUnregistered    Code = "E_META_UNREGISTERED"
+	MetaStale           Code = "E_META_STALE"
+	MetaInUse           Code = "E_META_IN_USE"
+	MetaConflict        Code = "E_META_CONFLICT"
+	MetaRetired         Code = "E_META_RETIRED"
+	MetaQuarantined     Code = "E_META_QUARANTINED"
+	MetaInternal        Code = "E_META_INTERNAL"
+	MetaForeignKey      Code = "E_META_FOREIGN_KEY"
+	MetaStoreUnreadable Code = "E_META_STORE_UNREADABLE"
+	MigrateLocked       Code = "E_MIGRATE_LOCKED"
 	// FORMAT_EVOLUTION rule 4, FQ5.
 	MigrateRollbackLoses Code = "E_MIGRATE_ROLLBACK_LOSES"
 	URLUserinfo          Code = "E_URL_CREDENTIALS"
@@ -264,6 +284,25 @@ var table = map[Code]entry{
 	KindUnknown:          {class: ClassDefinition, desc: "a kind not in this place's view"},
 	MetaType:             {class: ClassBadInput, desc: "a value does not parse as the key's type"},
 	MetaAmbiguous:        {class: ClassAmbiguous, desc: "a bare name matches definitions at two or more levels"},
+	MetaKey:              {class: ClassBadInput, desc: "a key or allowed-value name is not snake_case ASCII, too long or too deep"},
+	MetaReserved:         {class: ClassBadInput, desc: "a key name is a column, type word, level word, id, meta, _*, mky* or val*"},
+	MetaValue:            {class: ClassBadInput, desc: "an empty value, null, [] or {}, or a value outside a key's allowed values"},
+	MetaShape:            {class: ClassBadInput, desc: "a list of objects, a list of lists or a mixed list on a structured type"},
+	MetaSize:             {class: ClassBadInput, desc: "the row's metadata would pass meta.max_bytes"},
+	MetaDepth:            {class: ClassBadInput, desc: "a key has more dot segments than meta.max_depth"},
+	MetaOp:               {class: ClassBadInput, desc: "a metadata grammar or filter error"},
+	MetaTable:            {class: ClassBadInput, desc: "metadata on a table that does not accept it from the CLI"},
+	MetaRequired:         {class: ClassBadInput, desc: "a required metadata key is missing on add"},
+	MetaUnknown:          {class: ClassBadInput, desc: "unset of a key the row does not have, or an unknown key id"},
+	MetaUnregistered:     {class: ClassDefinition, desc: "a write to a key whose definition is not visible here"},
+	MetaStale:            {class: ClassDefinition, desc: "auto-registration while the store registries are missing or stale"},
+	MetaInUse:            {class: ClassRefused, desc: "a key or allowed value some row still uses"},
+	MetaConflict:         {class: ClassRefused, desc: "a write by a bare name while that name has an unsettled duplicate"},
+	MetaRetired:          {class: ClassRefused, desc: "--merge-into onto a retired key"},
+	MetaQuarantined:      {class: ClassRefused, desc: "the row's metadata is quarantined"},
+	MetaInternal:         {class: ClassGuard, desc: "an internal key name or value would reach a client repo"},
+	MetaForeignKey:       {class: ClassGuard, desc: "a client-repo row carries a key id or scope label from outside its registry"},
+	MetaStoreUnreadable:  {class: ClassGuard, desc: "a client-repo key registration while the store's key rows cannot be read"},
 	MigrateLocked:        {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
 	MigrateRollbackLoses: {class: ClassMigrate, desc: "rolling back the migration would lose changes made after it; nothing was changed"},
 	URLUserinfo:          {class: ClassBadInput, desc: "a URL value holds credentials"},
