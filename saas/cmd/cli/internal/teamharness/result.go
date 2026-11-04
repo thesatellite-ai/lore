@@ -23,6 +23,7 @@ const (
 	ExitOrg         = 17 // E_ORG_AMBIGUOUS, E_ORG_DISAGREES
 	ExitLinkUnknown = 18 // E_LINK_UNKNOWN
 	ExitGuard       = 19 // E_NOT_A_STORE, E_LEAK_BLOCKED, E_CYCLE, E_OLD_LORE
+	ExitNotFound    = 27 // E_NOT_FOUND (0.1.18, decision DOCS O4 / BATCH 7; v0.1.17 exited 1)
 )
 
 // Result is one finished process: what a user would see on the terminal.
