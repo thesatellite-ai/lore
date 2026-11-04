@@ -48,6 +48,20 @@ func (t TableDef) Field(name string) (FieldDef, bool) {
 	return FieldDef{}, false
 }
 
+// MergeStrategy is the closed set of per-field merge strategies logic/merge
+// applies when both sides of a three-way merge changed the field.
+type MergeStrategy string
+
+const (
+	// MergeDefault is the row rule: equal sides agree, otherwise the newer
+	// side by HLC (free text gets conflict markers).
+	MergeDefault MergeStrategy = ""
+	// MergeListByID unions a JSON list of objects keyed by "id": an entry on
+	// either side is kept, the same id on both sides takes the newer
+	// "updated_at" (TIME_TRACKING_DESIGN 7.2). Used by tasks.time_entries.
+	MergeListByID MergeStrategy = "list_by_id"
+)
+
 // FieldDef is one column of a table.
 type FieldDef struct {
 	Name string
@@ -62,10 +76,12 @@ type FieldDef struct {
 	RefKind ids.ID[ids.Kind]
 	// Values is the closed set of allowed text values (memories.kind), empty
 	// when the field is free. Drives validation and the select widget.
-	Values      []string
-	Required    bool
-	Sensitive   bool // hidden from agents and sql output
-	Internal    bool // never written into a client repo
+	Values    []string
+	Required  bool
+	Sensitive bool // hidden from agents and sql output
+	Internal  bool // never written into a client repo
+	// Merge is the field's merge strategy (MergeDefault when empty).
+	Merge       MergeStrategy
 	Description string
 	UI          UI
 }

@@ -85,6 +85,9 @@ func Sensitive() FieldOption { return func(f *FieldDef) { f.Sensitive = true } }
 // Internal keeps the field out of client repos.
 func Internal() FieldOption { return func(f *FieldDef) { f.Internal = true } }
 
+// MergeBy sets the field's merge strategy (logic/merge).
+func MergeBy(s MergeStrategy) FieldOption { return func(f *FieldDef) { f.Merge = s } }
+
 // OneOf closes the field to the given text values.
 func OneOf(vals ...string) FieldOption {
 	return func(f *FieldDef) { f.Values = append([]string(nil), vals...) }
