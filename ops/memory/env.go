@@ -19,11 +19,16 @@ package memory
 
 import (
 	"context"
+	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -60,6 +65,14 @@ type Mover interface {
 	Move(ctx context.Context, ref engine.Ref, to store.Source) (engine.Written, error)
 }
 
+// ColumnSearcher is the optional Env upgrade a `search --column` needs:
+// Search restricted to some of the table's full-text fields (field names,
+// as schema TableDef.FTS lists them; the cache maps them to its own FTS
+// columns). An Env without it answers --column with E_UNSUPPORTED.
+type ColumnSearcher interface {
+	SearchColumns(ctx context.Context, table row.Table, match string, fields []string, limit int) ([]Hit, error)
+}
+
 // Hit is one search result: the row id and the store whose cache holds it.
 type Hit struct {
 	Source store.Source
@@ -69,4 +82,38 @@ type Hit struct {
 	// none.
 	Score   float64
 	Snippet string
+}
+
+// SearchFields is env.Search, restricted to the named full-text fields of
+// table when fields is not empty (`search --column`, v0.1.17 named FTS5
+// columns by field name). A field the table does not index is
+// E_INVALID_INPUT; an Env without ColumnSearcher is E_UNSUPPORTED. noun
+// prefixes the messages.
+func SearchFields(ctx context.Context, env Env, noun string, table row.Table, match string, fields []string, limit int) ([]Hit, error) {
+	if len(fields) == 0 {
+		return env.Search(ctx, table, match, limit)
+	}
+	reg, err := schema.NewRegistry(schema.Builtin()...)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, noun+": built-in schema", err)
+	}
+	def, ok := reg.Table(table)
+	if !ok {
+		return nil, errs.New(errs.Internal, noun+": no table "+string(table))
+	}
+	var cols []string
+	for _, c := range fields {
+		c = strings.TrimSpace(c)
+		if !slices.Contains(def.FTS, c) {
+			return nil, errs.New(errs.InvalidInput, noun+" search: unknown --column "+strconv.Quote(c)+" ("+string(table)+" has: "+strings.Join(def.FTS, ", ")+")")
+		}
+		if !slices.Contains(cols, c) {
+			cols = append(cols, c)
+		}
+	}
+	cs, ok := env.(ColumnSearcher)
+	if !ok {
+		return nil, errs.New(errs.Unsupported, noun+" search: --column needs a column search this setup lacks")
+	}
+	return cs.SearchColumns(ctx, table, match, cols, limit)
 }

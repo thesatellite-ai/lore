@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -48,4 +49,18 @@ func (c *Cache) Search(ctx context.Context, table row.Table, match string, limit
 		return nil, dbErr("search", err)
 	}
 	return out, nil
+}
+
+// ColumnMatch restricts match to the full-text fields named in fields: the
+// FTS5 column filter `{f_a f_b} : (match)` over this cache's column names
+// (ftsColPrefix + field). match is returned unchanged when fields is empty.
+func ColumnMatch(fields []string, match string) string {
+	if len(fields) == 0 {
+		return match
+	}
+	cols := make([]string, len(fields))
+	for i, f := range fields {
+		cols[i] = ftsColPrefix + f
+	}
+	return "{" + strings.Join(cols, " ") + "} : (" + match + ")"
 }

@@ -106,7 +106,7 @@ type EditIn struct {
 // repo scope flags are accepted, a playbook is project-wide).
 type SearchIn struct {
 	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
-	Columns         []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)"`
+	Columns         []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable)"`
 	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
 	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"accepted for v0.1.17 scripts (playbooks are project-wide)"`

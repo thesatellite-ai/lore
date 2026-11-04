@@ -753,7 +753,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -1771,7 +1771,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -3619,7 +3619,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -4741,6 +4741,13 @@
                   "all_repos": {
                     "type": "boolean",
                     "description": "search across every repo (ignore --repo)"
+                  },
+                  "columns": {
+                    "type": "array",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "include_archived": {
                     "type": "boolean",
@@ -6831,7 +6838,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -7943,6 +7950,13 @@
                   "all_repos": {
                     "type": "boolean",
                     "description": "search across every repo (ignore --repo)"
+                  },
+                  "columns": {
+                    "type": "array",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "include_archived": {
                     "type": "boolean",
@@ -9361,7 +9375,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -10826,6 +10840,13 @@
                   "all_repos": {
                     "type": "boolean",
                     "description": "memories of every repo"
+                  },
+                  "columns": {
+                    "type": "array",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "include_archived": {
                     "type": "boolean",
@@ -15908,7 +15929,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -18400,7 +18421,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -20994,7 +21015,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -26688,6 +26709,13 @@
                     "type": "boolean",
                     "description": "search across every repo (ignore --repo)"
                   },
+                  "columns": {
+                    "type": "array",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "include_archived": {
                     "type": "boolean",
                     "description": "include archived rows"
@@ -29353,7 +29381,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -31036,7 +31064,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -36379,7 +36407,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -37388,7 +37416,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -39182,7 +39210,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }
@@ -40179,7 +40207,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)",
+                    "description": "restrict MATCH to these full-text fields (repeatable)",
                     "items": {
                       "type": "string"
                     }

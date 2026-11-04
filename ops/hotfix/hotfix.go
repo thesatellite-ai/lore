@@ -220,14 +220,15 @@ type EditIn struct {
 
 // SearchIn is the input of hotfix.search.
 type SearchIn struct {
-	Query           string `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
-	Repo            string `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
-	NoInherit       bool   `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope: --repo only, no master inheritance"`
-	MasterOnly      bool   `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`
-	AllRepos        bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"search across every repo (ignore --repo)"`
-	Project         string `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
-	Limit           int    `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
-	IncludeArchived bool   `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
+	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
+	Columns         []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable)"`
+	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
+	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope: --repo only, no master inheritance"`
+	MasterOnly      bool     `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`
+	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"search across every repo (ignore --repo)"`
+	Project         string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
 }
 
 // SearchOut is v0.1.17's search envelope.
@@ -371,7 +372,7 @@ func (o ops) delete(ctx context.Context, in IDIn) (WriteOut, error) {
 
 // search runs the full-text search.
 func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
-	found, err := kn.Search(ctx, o.env, noun, in.Query, in.Limit,
+	found, err := kn.Search(ctx, o.env, noun, in.Query, in.Columns, in.Limit,
 		kn.Scope{Repo: in.Repo, NoInherit: in.NoInherit, MasterOnly: in.MasterOnly, AllRepos: in.AllRepos, Project: in.Project}, in.IncludeArchived)
 	if err != nil {
 		return SearchOut{}, err

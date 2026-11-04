@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -114,6 +115,13 @@ func (a *App) Search(ctx context.Context, table row.Table, match string, limit i
 		return nil, err
 	}
 	return st.caches.search(ctx, table, match, limit)
+}
+
+// SearchColumns implements opsmemory.ColumnSearcher: Search with the
+// match restricted to the named full-text fields (the sqlite cache's FTS5
+// column filter).
+func (a *App) SearchColumns(ctx context.Context, table row.Table, match string, fields []string, limit int) ([]opsmemory.Hit, error) {
+	return a.Search(ctx, table, sqlite.ColumnMatch(fields, match), limit)
 }
 
 // Project implements opsmemory.Env: the repo store's one live project

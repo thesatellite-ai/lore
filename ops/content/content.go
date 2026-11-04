@@ -391,10 +391,6 @@ func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(row.Row) bool) 
 	if strings.TrimSpace(a.Query) == "" {
 		return nil, errs.New(errs.InvalidInput, o.Noun+" search: empty query")
 	}
-	if len(a.Columns) > 0 {
-		return nil, errs.New(errs.Unsupported, o.Noun+" search: --column is not supported on the 0.1.18 core yet").
-			WithHint("search without --column (every text column is searched)")
-	}
 	limit := a.Limit
 	switch {
 	case limit == 0:
@@ -402,7 +398,7 @@ func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(row.Row) bool) 
 	case limit < 0 || limit > MaxSearchLimit:
 		return nil, errs.New(errs.InvalidInput, o.Noun+" search: --limit must be between 1 and 1000")
 	}
-	hits, err := o.Env.Search(ctx, o.Table, a.Query, MaxSearchLimit)
+	hits, err := opsmemory.SearchFields(ctx, o.Env, o.Noun, o.Table, a.Query, a.Columns, MaxSearchLimit)
 	if err != nil {
 		return nil, err
 	}

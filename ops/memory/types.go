@@ -181,12 +181,13 @@ type SearchIn struct {
 	// Repo scope (v0.1.17 repo_scope.go; op structs cannot embed, so the
 	// four fields repeat on ListIn): no flag = project-wide memories
 	// only; --repo adds that repo's; --no-inherit keeps only that repo's.
-	Repo       string `json:"repo,omitempty" flag:"repo" desc:"include this repo's memories (mount name or rep_ id)"`
-	NoInherit  bool   `json:"no_inherit,omitempty" flag:"no-inherit" desc:"with --repo: only that repo's memories, not the project-wide ones"`
-	MasterOnly bool   `json:"master_only,omitempty" flag:"master-only" desc:"only project-wide memories"`
-	AllRepos   bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"memories of every repo"`
-	Project    string `json:"project,omitempty" flag:"project" desc:"only memories of this project (prj_ id or name; default the repo's one project)"`
-	Query      string `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
+	Repo       string   `json:"repo,omitempty" flag:"repo" desc:"include this repo's memories (mount name or rep_ id)"`
+	NoInherit  bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"with --repo: only that repo's memories, not the project-wide ones"`
+	MasterOnly bool     `json:"master_only,omitempty" flag:"master-only" desc:"only project-wide memories"`
+	AllRepos   bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"memories of every repo"`
+	Project    string   `json:"project,omitempty" flag:"project" desc:"only memories of this project (prj_ id or name; default the repo's one project)"`
+	Query      string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
+	Columns    []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable)"`
 	// Limit caps the hits AFTER the scope filter; 0 means
 	// DefaultSearchLimit.
 	Limit           int  `json:"limit,omitempty" flag:"limit" desc:"at most this many results (default 10)"`

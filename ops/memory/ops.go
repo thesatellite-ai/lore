@@ -489,7 +489,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	if err != nil {
 		return SearchOut{}, err
 	}
-	hits, err := o.env.Search(ctx, table, in.Query, searchFetch)
+	hits, err := SearchFields(ctx, o.env, Noun, table, in.Query, in.Columns, searchFetch)
 	if err != nil {
 		return SearchOut{}, err
 	}

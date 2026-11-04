@@ -450,7 +450,7 @@ type Found struct {
 // Search matches query against every attached store's cache, keeps live
 // hits in scope (archived only with withArchived), best first, cut at
 // limit after the filter (0 = DefaultSearchLimit).
-func Search(ctx context.Context, env Env, n Noun, query string, limit int, s Scope, withArchived bool) ([]Found, error) {
+func Search(ctx context.Context, env Env, n Noun, query string, columns []string, limit int, s Scope, withArchived bool) ([]Found, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, errs.New(errs.InvalidInput, n.Name+" search: empty query")
 	}
@@ -464,7 +464,7 @@ func Search(ctx context.Context, env Env, n Noun, query string, limit int, s Sco
 	if err != nil {
 		return nil, err
 	}
-	hits, err := env.Search(ctx, n.Table, query, MaxSearchLimit)
+	hits, err := opsmemory.SearchFields(ctx, env, n.Name, n.Table, query, columns, MaxSearchLimit)
 	if err != nil {
 		return nil, err
 	}
