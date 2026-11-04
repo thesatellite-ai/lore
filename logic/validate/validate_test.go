@@ -174,3 +174,54 @@ func boolS(b bool) string {
 	}
 	return "no"
 }
+
+// TestTagIDsTargets: every item of a tag_ids list (a many-to-many field)
+// is a Target of the tags table, like a belongs-to ref, sorted and
+// duplicated items kept (each must exist); the relation's AllowDangling
+// flag is copied to each item; an empty list or a null field makes none.
+func TestTagIDsTargets(t *testing.T) {
+	tagA := mustAnyID("tag_01936f3300007d4e8f5a6b7c8d9e0f01")
+	tagB := mustAnyID("tag_01936f3300007d4e8f5a6b7c8d9e0f02")
+	for _, dangling := range []bool{false, true} {
+		def := schema.Table("things", ids.PrefixMemory,
+			schema.RefList(schema.FieldTagIDs, schema.TableTags),
+			schema.ManyToManyRel(schema.RelTags, schema.FieldTagIDs, schema.TableTags, "thing_tags", schema.Cascade),
+		)
+		def.Relations[0].AllowDangling = dangling
+		list, err := value.ListOf(value.KindRef, ref(tagB.String()), ref(tagA.String()), ref(tagB.String()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := Targets(def, map[string]value.Value{schema.FieldTagIDs: list})
+		var lines []string
+		for _, tg := range got {
+			lines = append(lines, tg.Field+">"+string(tg.Table)+">"+tg.ID.String()[len(tg.ID.String())-2:]+">"+boolS(tg.AllowDangling))
+		}
+		flag := boolS(dangling)
+		want := "tag_ids>tags>01>" + flag + ",tag_ids>tags>02>" + flag + ",tag_ids>tags>02>" + flag
+		if strings.Join(lines, ",") != want {
+			t.Errorf("dangling=%v\n got %s\nwant %s", dangling, strings.Join(lines, ","), want)
+		}
+		r := row.Row{Table: "things", Fields: map[string]value.Value{schema.FieldTagIDs: list}}
+		if d := Dangling(def, r, func(tg Target) bool { return tg.ID == tagA }); len(d) != 2 {
+			t.Errorf("dangling items = %d, want 2 (both tagB)", len(d))
+		}
+		empty, err := value.ListOf(value.KindRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, v := range []value.Value{empty, value.Null{}} {
+			if got := Targets(def, map[string]value.Value{schema.FieldTagIDs: v}); len(got) != 0 {
+				t.Errorf("%v made targets %v", v, got)
+			}
+		}
+	}
+}
+
+func mustAnyID(s string) ids.AnyID {
+	id, err := ids.ParseAny(s)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
