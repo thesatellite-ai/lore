@@ -401,7 +401,7 @@ func TestMetaMatrix(t *testing.T) {
 	}
 	h.MustYes(settings.OpMetaRename, `{"id":"owner","new_name":"maintainer"}`)
 	keys := h.Must(settings.OpMetaKeys, `{"ids":true}`)
-	if got := opstest.Text(keys); !strings.Contains(got, "\ttier\trepo\ttext\tbronze, golden, platinum\n") || !strings.Contains(got, "\tmaintainer\trepo\ttext\t\n") {
+	if got := opstest.Text(keys); !strings.Contains(got, "\ttier\trepo\ttext\t0\tbronze, golden, platinum\n") || !strings.Contains(got, "\tmaintainer\trepo\ttext\t0\t\n") {
 		t.Errorf("keys %q", got)
 	}
 	h.Fails(settings.OpMetaDelete, `{"id":"maintainer"}`, errs.NeedsConfirm)

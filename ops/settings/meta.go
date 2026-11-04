@@ -82,6 +82,23 @@ type MetaEditIn struct {
 	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"mark it sensitive (values hidden, OQ2)"`
 	NoSensitive bool   `json:"no_sensitive,omitempty" flag:"no-sensitive" desc:"mark it not sensitive"`
 	Values      string `json:"values,omitempty" flag:"values" desc:"the new allowed values, comma separated"`
+	// Value maintenance (3.8, OQ-AV): ids stay, only meta_values rows change.
+	ValueLabel  []string `json:"value_label,omitempty" flag:"value-label" desc:"label an allowed value: name=label (repeatable)"`
+	RenameValue string   `json:"rename_value,omitempty" flag:"rename-value" desc:"rename an allowed value: old=new (its val_ id stays)"`
+	RemoveValue string   `json:"remove_value,omitempty" flag:"remove-value" desc:"remove an allowed value no row uses"`
+	// MergeInto folds this key into another of the same type (3.8 Fold, OQ3).
+	MergeInto string `json:"merge_into,omitempty" flag:"merge-into" desc:"fold this key into another key of the same type (rows rewritten, one batch)"`
+	// Everyday features (3.19); "none" clears a field.
+	Label        string `json:"label,omitempty" flag:"label" desc:"display label (column header); none clears it"`
+	RequiredOn   string `json:"required_on,omitempty" flag:"required-on" desc:"tables a new row must carry this key on, comma separated; none clears"`
+	Pattern      string `json:"pattern,omitempty" flag:"pattern" desc:"RE2 pattern text values must match; none clears"`
+	Min          string `json:"min,omitempty" flag:"min" desc:"lowest number, date or datetime; none clears"`
+	Max          string `json:"max,omitempty" flag:"max" desc:"highest number, date or datetime; none clears"`
+	Default      string `json:"default,omitempty" flag:"default" desc:"value given on add (with --default-on); none clears"`
+	DefaultOn    string `json:"default_on,omitempty" flag:"default-on" desc:"tables the default applies to, comma separated; none clears"`
+	Deprecated   bool   `json:"deprecated,omitempty" flag:"deprecated" desc:"new writes warn (refused on a strict key)"`
+	NoDeprecated bool   `json:"no_deprecated,omitempty" flag:"no-deprecated" desc:"not deprecated any more"`
+	ReplacedBy   string `json:"replaced_by,omitempty" flag:"replaced-by" desc:"the key to use instead of a deprecated one; none clears"`
 }
 
 // MetaDescribeIn is the input of meta.describe.
@@ -102,6 +119,8 @@ type MetaKeysIn struct {
 	// Unreviewed lists only keys an agent registered that no person has
 	// approved yet (MQ7).
 	Unreviewed bool `json:"unreviewed,omitempty" flag:"unreviewed" desc:"only keys an agent added that no person reviewed yet"`
+	// Unused lists keys no row uses (archived rows count as use, 3.8).
+	Unused bool `json:"unused,omitempty" flag:"unused" desc:"only keys used on no row (remove with lore meta forget)"`
 }
 
 // MetaValueAddIn is the input of meta.value.add.
@@ -132,6 +151,9 @@ type MetaKey struct {
 	Values      []string `json:"values,omitempty"`
 	AddedBy     string   `json:"added_by,omitempty"`
 	Unreviewed  bool     `json:"unreviewed,omitempty"`
+	Rows        int      `json:"rows"`
+	Label       string   `json:"label,omitempty"`
+	Retired     string   `json:"merged_into,omitempty"`
 }
 
 // MetaKeysOut is the output of meta.keys.
@@ -147,7 +169,7 @@ func (o MetaKeysOut) Text() string {
 		return "(no metadata keys)\n"
 	}
 	var b strings.Builder
-	head := "KEY\tSCOPE\tTYPE\tVALUES\n"
+	head := "KEY\tSCOPE\tTYPE\tROWS\tVALUES\n"
 	if o.ids {
 		head = "ID\t" + head
 	}
@@ -156,7 +178,11 @@ func (o MetaKeysOut) Text() string {
 		if o.ids {
 			b.WriteString(short(mustAny(k.ID)) + "\t")
 		}
-		fmt.Fprintf(&b, "%s\t%s\t%s\t%s\n", k.Name, k.Scope, k.Type, strings.Join(k.Values, ", "))
+		vals := strings.Join(k.Values, ", ")
+		if k.Retired != "" {
+			vals = "(merged into " + k.Retired + ")"
+		}
+		fmt.Fprintf(&b, "%s\t%s\t%s\t%d\t%s\n", k.Name, k.Scope, k.Type, k.Rows, vals)
 	}
 	return b.String()
 }
@@ -171,12 +197,12 @@ func mustAny(s string) ids.AnyID {
 }
 
 func (o ops) metaOps() []op.Entry {
-	return []op.Entry{
+	return append(append([]op.Entry{
 		op.Define(op.Spec{Name: OpMetaAdd, Summary: "Add a metadata key to a place's registry", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
 			Examples: []op.Example{{Title: "a closed set", CLI: "lore meta add release_window --type text --strict --values spring,summer", Want: "mky_"}}}, o.metaAdd),
 		op.Define(op.Spec{Name: OpMetaEdit, Summary: "Edit a metadata key (strict, internal, allowed values)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.HasDependents), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST}, o.metaEdit),
+			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.MetaKey, errs.MetaType, errs.MetaInUse, errs.MetaRetired, errs.MetaConflict), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST}, o.metaEdit),
 		op.Define(op.Spec{Name: OpMetaDescribe, Summary: "Set a metadata key's description", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST}, o.metaDescribe),
 		op.Define(op.Spec{Name: OpMetaRename, Summary: "Rename a metadata key (a label change; the id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
@@ -188,14 +214,14 @@ func (o ops) metaOps() []op.Entry {
 		op.Define(op.Spec{Name: OpMetaValueAdd, Summary: "Add an allowed value to a metadata key", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.metaValueAdd),
 		op.Define(op.Spec{Name: OpMetaSet, Summary: "Set metadata on a row by id", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: metaWriteErrors, Examples: []op.Example{{Title: "one value", CLI: "lore meta set tsk_… client=acme", Want: "set client"}}}, o.metaSet),
+			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "one value", CLI: "lore meta set tsk_… client=acme", Want: "set client"}}}, o.metaSet),
 		op.Define(op.Spec{Name: OpMetaUnset, Summary: "Remove a metadata key from a row (a parent removes its fields)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: metaWriteErrors}, o.metaUnset),
+			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.metaUnset),
 		op.Define(op.Spec{Name: OpMetaGet, Summary: "Show a row's metadata", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.metaGet),
 		op.Define(op.Spec{Name: OpMetaValueRename, Summary: "Rename an allowed value (a label change; the val_ id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.metaValueRename),
-	}
+	}, o.metaMaintOps()...), o.metaIOOps()...)
 }
 
 func (o ops) metaKey(ctx context.Context, key string) (located, error) {
@@ -321,56 +347,6 @@ func triStateBool(b *bool, on, off bool, name string) error {
 	return nil
 }
 
-func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
-	k, err := o.metaKey(ctx, in.Key)
-	if err != nil {
-		return RowOut{}, err
-	}
-	patch := map[string]value.Value{}
-	if err := triState(patch, mStrict, in.Strict, in.NoStrict); err != nil {
-		return RowOut{}, err
-	}
-	if err := triState(patch, mInternal, in.Internal, in.NoInternal); err != nil {
-		return RowOut{}, err
-	}
-	if err := triState(patch, mSensitive, in.Sensitive, in.NoSensitive); err != nil {
-		return RowOut{}, err
-	}
-	name := text(k.Row, mName)
-	var want []string
-	if in.Values != "" {
-		want = splitList(in.Values)
-		if err := checkMetaValues(want); err != nil {
-			return RowOut{}, err
-		}
-		have, verr := o.metaValues(ctx, k)
-		if verr != nil {
-			return RowOut{}, verr
-		}
-		for _, v := range have {
-			if !slices.Contains(want, text(v.Row, mName)) {
-				if _, err := o.env.Delete(ctx, engine.Ref{Store: v.Src, Table: schema.TableMetaValues, ID: v.Row.ID}); err != nil {
-					return RowOut{}, err
-				}
-			}
-		}
-		for _, v := range want {
-			if !slices.Contains(valueNames(have), v) {
-				if _, err := o.addValue(ctx, k, v, ""); err != nil {
-					return RowOut{}, err
-				}
-			}
-		}
-	}
-	if len(patch) == 0 && in.Values == "" {
-		return RowOut{}, errs.New(errs.InvalidInput, "meta edit: nothing to change").WithHint("give --strict, --no-strict, --internal, --no-internal, --sensitive, --no-sensitive or --values")
-	}
-	if len(patch) == 0 {
-		return RowOut{ID: k.Row.ID.String(), Store: string(k.Src), Human: name + ": allowed values " + strings.Join(want, ", ") + "\n"}, nil
-	}
-	return o.patchRow(ctx, k, patch, "edited "+name)
-}
-
 func (o ops) metaDescribe(ctx context.Context, in MetaDescribeIn) (RowOut, error) {
 	if utf8.RuneCountInString(in.Text) > maxMetaDescription {
 		return RowOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("a description has at most %d characters", maxMetaDescription))
@@ -421,7 +397,19 @@ func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
 		return MetaKeysOut{}, err
 	}
 	out := MetaKeysOut{Data: []MetaKey{}, ids: in.IDs}
+	data, err := o.metaRows(ctx)
+	if err != nil {
+		return MetaKeysOut{}, err
+	}
+	use := usage(data)
 	for _, k := range rows {
+		n := 0
+		if u := use[k.Row.ID.String()]; u != nil {
+			n = u.rows
+		}
+		if in.Unused && n > 0 {
+			continue
+		}
 		name := text(k.Row, mName)
 		if len(in.Keys) > 0 && !slices.Contains(in.Keys, name) {
 			continue
@@ -436,7 +424,8 @@ func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
 		}
 		out.Data = append(out.Data, MetaKey{ID: k.Row.ID.String(), Name: name, Scope: text(k.Row, mScope), Store: string(k.Src),
 			Type: text(k.Row, mType), Strict: flag(k.Row, mStrict), Internal: flag(k.Row, mInternal), Sensitive: flag(k.Row, mSensitive),
-			Description: text(k.Row, mDescription), Values: valueNames(vs), AddedBy: text(k.Row, mAddedBy), Unreviewed: unreviewed})
+			Description: text(k.Row, mDescription), Values: valueNames(vs), AddedBy: text(k.Row, mAddedBy), Unreviewed: unreviewed,
+			Rows: n, Label: text(k.Row, mLabel), Retired: text(k.Row, mMergedInto)})
 	}
 	out.Count = len(out.Data)
 	return out, nil
@@ -515,7 +504,7 @@ func (o ops) metaValueRename(ctx context.Context, in MetaValueRenameIn) (RowOut,
 // metaWriteErrors are the codes of meta set / unset (METADATA 6).
 var metaWriteErrors = append(slices.Clone(writeErrors), errs.MetaKey, errs.MetaReserved, errs.MetaType, errs.MetaValue,
 	errs.MetaShape, errs.MetaSize, errs.MetaDepth, errs.MetaOp, errs.MetaTable, errs.MetaUnknown, errs.MetaAmbiguous,
-	errs.MetaUnregistered)
+	errs.MetaUnregistered, errs.MetaRequired, errs.MetaInUse, errs.MetaRetired)
 
 // checkKeyName is the name rule of a registry key (3.5): dotted snake_case
 // ASCII (E_META_KEY, E_META_DEPTH) and not one of lore's words
@@ -561,18 +550,25 @@ func isUnreviewed(r row.Row) bool {
 // MetaSetIn is the input of meta.set. Its own field names keep it out of
 // Run's generic --meta binding: the op binds the change to the row it names.
 type MetaSetIn struct {
-	ID    string   `json:"id" arg:"0" desc:"the row (any id)"`
-	Pair  string   `json:"pair,omitempty" arg:"1" desc:"key=value, key:type=value, project:key=value"`
-	More  []string `json:"set,omitempty" flag:"set" desc:"more key=value pairs (repeatable)"`
-	JSON  []string `json:"json,omitempty" flag:"meta-json" desc:"a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)"`
-	Stdin string   `json:"stdin_key,omitempty" flag:"meta-stdin" desc:"read the value of this key from stdin"`
+	ID   string `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, a key=value pair"`
+	Pair string `json:"pair,omitempty" arg:"1" desc:"key=value, key:type=value, project:key=value"`
+	// Where and DryRun are the bulk form (3.19): every row the filter
+	// names, one batch.
+	Where  []string `json:"where,omitempty" flag:"where" desc:"set on every row matching this filter (repeatable, ANDed; one batch)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list the rows, write nothing"`
+	More   []string `json:"set,omitempty" flag:"set" desc:"more key=value pairs (repeatable)"`
+	JSON   []string `json:"json,omitempty" flag:"meta-json" desc:"a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)"`
+	Stdin  string   `json:"stdin_key,omitempty" flag:"meta-stdin" desc:"read the value of this key from stdin"`
 }
 
 // MetaUnsetIn is the input of meta.unset.
 type MetaUnsetIn struct {
-	ID   string   `json:"id" arg:"0" desc:"the row (any id)"`
-	Key  string   `json:"key" arg:"1" desc:"the key to remove (deploy removes deploy.env too)"`
+	ID   string   `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, the key to remove"`
+	Key  string   `json:"key,omitempty" arg:"1" desc:"the key to remove (deploy removes deploy.env too)"`
 	More []string `json:"keys,omitempty" flag:"key" desc:"more keys to remove (repeatable)"`
+	// Where and DryRun are the bulk form (3.19).
+	Where  []string `json:"where,omitempty" flag:"where" desc:"remove from every row matching this filter (repeatable, ANDed; one batch)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list the rows, write nothing"`
 }
 
 // MetaGetIn is the input of meta.get.
@@ -644,6 +640,9 @@ func (o ops) metaRowWrite(ctx context.Context, id ids.AnyID, mw engine.MetaWrite
 
 // metaSet is `lore meta set <id> k=v` (3.2; MQ9, MQ12, R13).
 func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
+	if len(in.Where) > 0 {
+		return o.metaSetWhere(ctx, in)
+	}
 	id, err := rowID(in.ID)
 	if err != nil {
 		return RowOut{}, err
@@ -670,9 +669,15 @@ func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
 // metaUnset is `lore meta unset <id> <key>` (3.2): E_META_UNKNOWN when the
 // row lacks the key.
 func (o ops) metaUnset(ctx context.Context, in MetaUnsetIn) (RowOut, error) {
+	if len(in.Where) > 0 {
+		return o.metaUnsetWhere(ctx, in)
+	}
 	id, err := rowID(in.ID)
 	if err != nil {
 		return RowOut{}, err
+	}
+	if in.Key == "" {
+		return RowOut{}, errs.New(errs.InvalidInput, "meta unset: name the key").WithHint("lore meta unset <id> <key>")
 	}
 	keys := append([]string{in.Key}, in.More...)
 	return o.metaRowWrite(ctx, id, engine.MetaWrite{ID: id, Unset: keys}, "removed "+strings.Join(keys, ", "))

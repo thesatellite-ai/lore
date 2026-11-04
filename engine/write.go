@@ -99,14 +99,14 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 		return Written{}, err
 	}
 	// metadata riding on this create (engine/meta.go; R13)
+	// (createMeta also applies the 3.19 defaults and required keys)
 	var rmeta map[ids.ID[ids.MetaKey]]value.JSON
-	if mw, ok := metaFor(ctx, table, ids.AnyID{}); ok {
-		var mwarn []Warning
-		if rmeta, mwarn, err = e.applyMeta(ctx, cl, target, def, id, nil, mw); err != nil {
-			return Written{}, err
-		}
-		sc.warnings = append(sc.warnings, mwarn...)
+	mw, hasMeta := metaFor(ctx, table, ids.AnyID{})
+	var mwarn []Warning
+	if rmeta, mwarn, err = e.createMeta(ctx, cl, target, def, id, mw, hasMeta); err != nil {
+		return Written{}, err
 	}
+	sc.warnings = append(sc.warnings, mwarn...)
 	origin, err := e.originOf(ctx, cl.op, st)
 	if err != nil {
 		return Written{}, err

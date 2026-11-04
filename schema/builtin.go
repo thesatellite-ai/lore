@@ -216,6 +216,19 @@ func coreDefs() []TableDef {
 			// (absent on older rows = reviewed).
 			Text("added_by", OneOf(MetaAddedByPerson, MetaAddedByAgent)),
 			Bool("reviewed"),
+			// METADATA 3.19 everyday features and the 3.12 fold (OV21):
+			// required_on/default_on are JSON lists of table names; min and
+			// max are text so one field covers numbers, dates and datetimes.
+			Text("label"),
+			JSON("required_on"),
+			Text("pattern"),
+			Text("min"),
+			Text("max"),
+			Text("default"),
+			JSON("default_on"),
+			Bool("deprecated"),
+			Text("replaced_by"),
+			Text("merged_into"),
 			UniqueOn(fieldName, "scope"),
 		),
 		Table(TableMetaValues, ids.PrefixMetaValue, Synced(), Description("an allowed value of a metadata key"),

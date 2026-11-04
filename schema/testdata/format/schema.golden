@@ -143,9 +143,19 @@ memories.valid_at datetime
 memories.valid_until datetime
 memories.validated_by_actor_id ref
 meta_keys.added_by text
+meta_keys.default text
+meta_keys.default_on json
+meta_keys.deprecated bool
 meta_keys.description text
 meta_keys.internal bool
+meta_keys.label text
+meta_keys.max text
+meta_keys.merged_into text
+meta_keys.min text
 meta_keys.name text required
+meta_keys.pattern text
+meta_keys.replaced_by text
+meta_keys.required_on json
 meta_keys.reviewed bool
 meta_keys.scope text required
 meta_keys.sensitive bool

@@ -9,6 +9,8 @@
 //	                                     ├─► CheckName / Reserved (E_META_KEY, _RESERVED, _DEPTH)
 //	          engine resolves the key ──►├─► Coerce / CoerceJSON (E_META_TYPE, _VALUE, _SHAPE)
 //	                                     ├─► Entry.Encode (name, scope, strict, sensitive, v, v_name)
+//	                                     ├─► Violation / DeprecatedNote (3.19 pattern, min/max, deprecated)
+//	                                     ├─► MissingRequired (3.19 required_on, on add)
 //	                                     └─► Size (E_META_SIZE, the 4 KB warning)
 //
 // Invariant: nothing is converted silently. Every normalisation (trim, NFC,

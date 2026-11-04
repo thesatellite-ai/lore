@@ -9,7 +9,9 @@ package engine
 //	      ├─ per term: name rules / reserved      E_META_KEY, _RESERVED, _DEPTH
 //	      │           resolve: id │ scope │ nearest; 2+ defs E_META_AMBIGUOUS; none → new key
 //	      │           coerce per registered type  E_META_TYPE, _VALUE, _SHAPE
+//	      │           3.19 rules: pattern, min/max, deprecated (warn; strict refuses E_META_VALUE)
 //	      ├─ unset (parent removes children)      E_META_UNKNOWN
+//	      ├─ create only (createMeta): defaults, then required_on   E_META_REQUIRED
 //	      ├─ size vs meta.max_bytes, 4 KB warning E_META_SIZE
 //	      ├─ secret scan of the values            E_SECRET_DETECTED
 //	      └─ register new keys (internal in a store, R2-Q2; added_by/reviewed, MQ7)
@@ -111,6 +113,10 @@ const (
 	mkName, mkScope, mkType            = "name", "scope", "type"
 	mkStrict, mkInternal, mkSensitive  = "strict", "internal", "sensitive"
 	mkAddedBy, mkReviewed, mvKey, mvLb = "added_by", "reviewed", "key_id", "label"
+	// METADATA 3.19 everyday-feature fields and the 3.12 fold.
+	mkPattern, mkMin, mkMax, mkDefault  = "pattern", "min", "max", "default"
+	mkRequiredOn, mkDefaultOn           = "required_on", "default_on"
+	mkDeprecated, mkReplacedBy, mkMerge = "deprecated", "replaced_by", "merged_into"
 	// scope labels (ops/settings uses the same words).
 	scopeRepo, scopeStore = "repo", "store"
 	folderSep             = "/"
@@ -124,6 +130,14 @@ type keyDef struct {
 	strict, sensitive, internal bool
 	src                         store.Source
 	values                      []valueDef
+	// rules are the 3.19 checks (pattern, min/max, deprecation); requiredOn
+	// and defaultOn name tables, dflt is the default's command-line text.
+	rules                 meta.Rules
+	requiredOn, defaultOn []string
+	dflt                  string
+	// retired: merged_into is set (3.12 fold); a bare name never resolves
+	// to a retired key, its survivor holds the name's values now.
+	retired bool
 }
 
 // valueDef is one allowed value of a key.
@@ -173,7 +187,11 @@ func (e *Engine) metaRegistry(ctx context.Context) ([]keyDef, error) {
 				continue
 			}
 			d := keyDef{id: mk, name: fieldText(k, mkName), scope: fieldText(k, mkScope), typ: t, src: src,
-				strict: fieldBool(k, mkStrict), sensitive: fieldBool(k, mkSensitive), internal: fieldBool(k, mkInternal)}
+				strict: fieldBool(k, mkStrict), sensitive: fieldBool(k, mkSensitive), internal: fieldBool(k, mkInternal),
+				rules: meta.Rules{Pattern: fieldText(k, mkPattern), Min: fieldText(k, mkMin), Max: fieldText(k, mkMax),
+					Deprecated: fieldBool(k, mkDeprecated), ReplacedBy: fieldText(k, mkReplacedBy)},
+				requiredOn: fieldList(k, mkRequiredOn), defaultOn: fieldList(k, mkDefaultOn), dflt: fieldText(k, mkDefault),
+				retired: fieldText(k, mkMerge) != ""}
 			for _, v := range vals {
 				if fieldText(v, mvKey) == k.ID.String() {
 					d.values = append(d.values, valueDef{id: v.ID, name: fieldText(v, mkName), label: fieldText(v, mvLb)})
@@ -192,6 +210,10 @@ func fieldText(r row.Row, f string) string {
 	}
 	return ""
 }
+
+// fieldList is a JSON list-of-text field of r (nil when absent; the
+// store reads a JSON array back as a list).
+func fieldList(r row.Row, f string) []string { return value.ItemStrings(r.Fields[f]) }
 
 // fieldBool is a bool field of r (false when absent).
 func fieldBool(r row.Row, f string) bool {
@@ -223,6 +245,25 @@ type metaPlan struct {
 // write with no change returns cur untouched.
 func (e *Engine) applyMeta(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
 	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
+	return e.applyMetaOn(ctx, cl, target, def, rowID, cur, mw, false)
+}
+
+// createMeta is the metadata step of every create (write.go): the change
+// riding on it (has) plus, on a table that accepts metadata, the 3.19
+// create-only rules: defaults (default_on, printed as "default: k = v",
+// never back-filled) and required keys (required_on, E_META_REQUIRED).
+// A create with no change on a table without metadata does nothing.
+func (e *Engine) createMeta(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
+	mw MetaWrite, has bool) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
+	if !has && !metaTables[def.Name] {
+		return nil, nil, nil
+	}
+	return e.applyMetaOn(ctx, cl, target, def, rowID, nil, mw, true)
+}
+
+// applyMetaOn is applyMeta; creating adds the create-only rules (3.19).
+func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
+	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite, creating bool) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
 	if !metaTables[def.Name] {
 		return nil, nil, errs.New(errs.MetaTable, "metadata cannot be set on "+string(def.Name)+" from the command line; knowledge, work and resource rows accept it").
 			WithHint("lore help meta")
@@ -251,6 +292,11 @@ func (e *Engine) applyMeta(ctx context.Context, cl call, target store.Source, de
 	}
 	for _, name := range mw.Unset {
 		if err := p.unset(rowID, name); err != nil {
+			return nil, nil, err
+		}
+	}
+	if creating {
+		if err := p.createRules(string(def.Name)); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -349,6 +395,11 @@ func (p *metaPlan) set(t meta.Term, isJSON bool) error {
 			return err
 		}
 	}
+	if d != nil && len(fields) == 0 {
+		if err = p.checkRules(*d, c.Raw); err != nil {
+			return err
+		}
+	}
 	id := p.keyID(d, t, name, fields, vt)
 	en := p.entries[id]
 	v := c.Raw
@@ -375,6 +426,66 @@ func (p *metaPlan) set(t meta.Term, isJSON bool) error {
 	}
 	if meta.TagLike(name) {
 		p.warn(shown, "key "+quoteName(name)+" looks like a tag; lore keeps labels in tags (lore tag), not in metadata")
+	}
+	return nil
+}
+
+// checkRules applies a key's 3.19 rules to one coerced value: a pattern or
+// min/max violation and a write of a deprecated key warn on a normal key
+// and are refused on a strict key (E_META_VALUE).
+func (p *metaPlan) checkRules(d keyDef, raw []byte) error {
+	if d.rules.Empty() {
+		return nil
+	}
+	msgs := []string{}
+	why, err := meta.Violation(d.name, d.typ, raw, d.rules)
+	if err != nil {
+		return err
+	}
+	if why != "" {
+		msgs = append(msgs, why)
+	}
+	if n := meta.DeprecatedNote(d.name, d.rules); n != "" {
+		msgs = append(msgs, n)
+	}
+	for _, m := range msgs {
+		if d.strict {
+			return errs.New(errs.MetaValue, "meta: "+m+" (the key is strict)").WithHint("lore meta keys --key " + d.name + " shows its rules")
+		}
+		p.warn(d.name, m)
+	}
+	return nil
+}
+
+// createRules applies defaults then required keys on a create (3.19): a
+// key with default_on naming the table and no value yet gets its default
+// (through the normal set path, so every check runs); then every key whose
+// required_on names the table must have a value, or E_META_REQUIRED.
+func (p *metaPlan) createRules(table string) error {
+	have := func(d keyDef) bool { _, ok := p.entries[d.id]; return ok }
+	for _, d := range p.reg {
+		if d.retired || d.dflt == "" || !slices.Contains(d.defaultOn, table) || have(d) {
+			continue
+		}
+		if err := p.set(meta.Term{KeyID: d.id, Value: d.dflt}, false); err != nil {
+			return err
+		}
+		p.warn(d.name, "default: "+d.name+" = "+d.dflt)
+	}
+	required := map[string][]string{}
+	var names []string
+	for _, d := range p.reg {
+		if d.retired || len(d.requiredOn) == 0 {
+			continue
+		}
+		if have(d) {
+			names = append(names, d.name)
+		}
+		required[d.name] = d.requiredOn
+	}
+	if miss := meta.MissingRequired(table, required, names); len(miss) > 0 {
+		return errs.New(errs.MetaRequired, table+" here need: "+strings.Join(miss, ", ")+" (required_on: "+table+")").
+			WithHint("add --meta " + miss[0] + "=<value>")
 	}
 	return nil
 }
@@ -406,7 +517,7 @@ func (p *metaPlan) resolve(t meta.Term) (*keyDef, []string, error) {
 	var hits []*keyDef
 	for i := range p.reg {
 		d := &p.reg[i]
-		if d.name != top {
+		if d.name != top || d.retired {
 			continue
 		}
 		if t.Level != "" && !p.inPlace(d.src, t) {
