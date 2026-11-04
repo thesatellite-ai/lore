@@ -1,0 +1,92 @@
+package git
+
+import (
+	"time"
+)
+
+// Merger merges one row file that both sides of a sync changed (spec 11).
+// The git backend never decides a merge itself: the engine injects the
+// core's field-level merge (logic/merge), the same function every backend
+// uses.
+//
+// base is the common ancestor's document (nil when both sides created the
+// row independently), ours the local one, theirs the remote one; all are
+// canonical row documents of the same table and id. merged must be a
+// canonical document of that row. conflict true means the row cannot be
+// merged automatically: the sync then fails closed (nothing merged or
+// pushed, the local commits kept, the row listed in SyncReport.Refused).
+type Merger interface {
+	Merge(base, ours, theirs []byte) (merged []byte, conflict bool, err error)
+}
+
+// Signature is a commit author: the actor a batch is written for, or the
+// opener's default.
+type Signature struct {
+	Name  string
+	Email string
+}
+
+// IsZero reports an unset signature.
+func (s Signature) IsZero() bool { return s.Name == "" && s.Email == "" }
+
+// DefaultAuthor signs commits when neither the opener nor the batch names
+// an author.
+var DefaultAuthor = Signature{Name: "lore", Email: "lore@localhost"}
+
+// DefaultBranch is the store branch when the store does not name one (an
+// empty remote, or one whose HEAD cannot be read).
+const DefaultBranch = "main"
+
+// DefaultBinary is the git program looked up on PATH.
+const DefaultBinary = "git"
+
+// config holds the options of one opener (or one direct Open).
+type config struct {
+	merger      Merger
+	author      Signature
+	now         func() time.Time
+	bin         string
+	branch      string
+	lockTimeout time.Duration
+}
+
+// Option configures the git backend.
+type Option func(*config)
+
+// WithMerger injects the row merge Sync uses. Without one, a row both sides
+// changed fails the sync closed.
+func WithMerger(m Merger) Option { return func(c *config) { c.merger = m } }
+
+// WithAuthor sets the default commit author (default DefaultAuthor).
+func WithAuthor(s Signature) Option { return func(c *config) { c.author = s } }
+
+// WithClock replaces time.Now for commit dates and the stat cursor.
+func WithClock(now func() time.Time) Option { return func(c *config) { c.now = now } }
+
+// WithGit names the git binary (default DefaultBinary on PATH).
+func WithGit(path string) Option { return func(c *config) { c.bin = path } }
+
+// WithBranch pins the store branch instead of following the remote's HEAD.
+func WithBranch(name string) Option { return func(c *config) { c.branch = name } }
+
+// WithLockTimeout sets how long a write or sync waits for the store lock
+// (default rowfs.DefaultLockTimeout).
+func WithLockTimeout(d time.Duration) Option { return func(c *config) { c.lockTimeout = d } }
+
+// build applies opts over the defaults.
+func build(opts []Option) config {
+	c := config{author: DefaultAuthor, now: time.Now, bin: DefaultBinary}
+	for _, o := range opts {
+		o(&c)
+	}
+	if c.author.IsZero() {
+		c.author = DefaultAuthor
+	}
+	if c.now == nil {
+		c.now = time.Now
+	}
+	if c.bin == "" {
+		c.bin = DefaultBinary
+	}
+	return c
+}

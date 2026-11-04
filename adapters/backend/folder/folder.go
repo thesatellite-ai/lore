@@ -1,0 +1,254 @@
+// Package folder is the local-folder store backend (`file:///abs/path`,
+// STORE_SERVER_SPEC 6.2): row files in the git layout, no git and no
+// network. It exists so every scenario can run without git, so a second
+// implementation proves the store interface is real, and for stores that
+// stay on one machine.
+//
+// One Backend opens one data folder of the store (owner decision O1): the
+// root folder by default, a project folder or `org` with `?folder=<name>`
+// on the url (rowfs.FolderParam) or the folder argument of Open.
+//
+// Layer L3 (adapters): imports model, store and adapters/backend/rowfs.
+package folder
+
+import (
+	"context"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// Scheme is the url scheme this backend answers.
+const Scheme = "file"
+
+// localHost is the one host a file url may name besides the empty one
+// (RFC 8089: file://localhost/path is the same as file:///path).
+const localHost = "localhost"
+
+// windowsOS is runtime.GOOS on Windows, where a file url path carries a
+// drive letter after its leading slash (file:///C:/stores/x).
+const windowsOS = "windows"
+
+// config holds the Opener's options.
+type config struct {
+	lockTimeout time.Duration
+	now         func() time.Time
+}
+
+// Option configures the folder backend.
+type Option func(*config)
+
+// WithLockTimeout sets how long a write waits for the store lock before
+// E_STORE_LOCKED (`store.lock_timeout`, default rowfs.DefaultLockTimeout).
+func WithLockTimeout(d time.Duration) Option { return func(c *config) { c.lockTimeout = d } }
+
+// WithClock replaces time.Now for the stat cursor (tests).
+func WithClock(now func() time.Time) Option { return func(c *config) { c.now = now } }
+
+// NewOpener returns the store.Opener for file:// urls. Register it under
+// Scheme in the binary's store.Openers.
+func NewOpener(opts ...Option) store.Opener {
+	return func(_ context.Context, u *url.URL, o store.OpenOptions) (store.Backend, error) {
+		dir, err := PathOf(u)
+		if err != nil {
+			return nil, err
+		}
+		name, err := rowfs.FolderOf(u)
+		if err != nil {
+			return nil, err
+		}
+		return Open(dir, name, o, opts...)
+	}
+}
+
+// PathOf returns the absolute folder a file:// url names. A relative or
+// host-qualified url (file:relative, file://host/x) is E_STORE_SCHEME
+// (spec 6.2): a store must be one unambiguous place on this machine.
+func PathOf(u *url.URL) (string, error) {
+	if u.Scheme != Scheme {
+		return "", errs.Wrap(errs.StoreScheme, "folder: not a file:// url", store.ErrScheme)
+	}
+	if u.Opaque != "" || (u.Host != "" && u.Host != localHost) || u.User != nil {
+		return "", errs.New(errs.StoreScheme, "folder: a file url needs an absolute path (file:///abs/path)")
+	}
+	p := u.Path
+	if runtime.GOOS == windowsOS && len(p) > 2 && p[0] == '/' && p[2] == ':' {
+		p = p[1:]
+	}
+	p = filepath.FromSlash(p)
+	if !filepath.IsAbs(p) || strings.Contains(u.Path, "/../") || strings.HasSuffix(u.Path, "/..") {
+		return "", errs.New(errs.StoreScheme, "folder: a file url needs an absolute path (file:///abs/path)")
+	}
+	return filepath.Clean(p), nil
+}
+
+// Init makes dir a folder store: the folder, lore-store.yaml and the root
+// data folder. It refuses a folder that already has a marker
+// (E_ALREADY_INITIALIZED), so a store id is never replaced.
+func Init(dir string, m rowfs.Marker) error {
+	if !filepath.IsAbs(dir) {
+		return errs.New(errs.BadPath, "folder: the store path must be absolute")
+	}
+	if err := os.MkdirAll(dir, storeDirMode); err != nil {
+		return errs.Wrap(errs.Internal, "folder: create the store folder", err)
+	}
+	r, err := rowfs.Open(dir)
+	if err != nil {
+		return err
+	}
+	if _, err = rowfs.ReadMarker(r.Dir()); err == nil {
+		return errs.New(errs.AlreadyInitialized, "folder: the folder is already a lore store")
+	}
+	if !errs.Has(err, errs.NotAStore) {
+		return err
+	}
+	if err = os.MkdirAll(filepath.Join(r.Dir(), rowfs.LoreDir, rowfs.DataDir), storeDirMode); err != nil {
+		return errs.Wrap(errs.Internal, "folder: create the data folder", err)
+	}
+	return rowfs.WriteMarker(r.Dir(), m)
+}
+
+// storeDirMode is the mode Init creates folders with (owner only, like
+// rowfs).
+const storeDirMode = 0o750
+
+// Backend is one open data folder of a folder store.
+type Backend struct {
+	root     *rowfs.Root
+	folder   *rowfs.Folder
+	marker   rowfs.Marker
+	readOnly bool
+
+	mu     sync.Mutex
+	closed bool
+}
+
+var _ store.Backend = (*Backend)(nil)
+
+// Open opens the data folder name of the store at dir. dir must hold
+// lore-store.yaml (else store.ErrNotAStore) and be on a local file system
+// (else E_NETWORK_FS).
+func Open(dir, name string, o store.OpenOptions, opts ...Option) (*Backend, error) {
+	var c config
+	for _, opt := range opts {
+		opt(&c)
+	}
+	r, err := rowfs.Open(dir, rowfs.WithLockTimeout(c.lockTimeout), rowfs.WithClock(c.now))
+	if err != nil {
+		return nil, err
+	}
+	m, err := rowfs.ReadMarker(r.Dir())
+	if err != nil {
+		return nil, err
+	}
+	f, err := r.Folder(name)
+	if err != nil {
+		return nil, err
+	}
+	return &Backend{root: r, folder: f, marker: m, readOnly: o.ReadOnly}, nil
+}
+
+// Marker is the store's lore-store.yaml as read at Open.
+func (b *Backend) Marker() rowfs.Marker { return b.marker }
+
+// usable fails after Close or when ctx is done.
+func (b *Backend) usable(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return errs.Wrap(errs.Internal, "folder: closed", store.ErrClosed)
+	}
+	return nil
+}
+
+// Read implements store.Backend with the stat cursor (rowfs.StatCursor).
+func (b *Backend) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, store.Cursor, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, "", err
+	}
+	return b.folder.Read(ctx, cursor)
+}
+
+// Get implements store.Backend.
+func (b *Backend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store.Row, error) {
+	if err := b.usable(ctx); err != nil {
+		return store.Row{}, err
+	}
+	return b.folder.Get(table, id)
+}
+
+// Write implements store.Backend: under the store lock, every Expect is
+// checked against disk, then every file is written; a failure part way
+// restores the files already replaced.
+func (b *Backend) Write(ctx context.Context, changes []store.Change) error {
+	if err := b.usable(ctx); err != nil {
+		return err
+	}
+	if b.readOnly {
+		return store.ErrReadOnly
+	}
+	lock, err := b.root.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = b.folder.Apply(ctx, changes)
+	return joinRelease(err, lock)
+}
+
+// joinRelease releases lock and keeps the first error.
+func joinRelease(err error, lock *rowfs.Lock) error {
+	if rerr := lock.Release(); rerr != nil && err == nil {
+		return errs.Wrap(errs.Internal, "folder: release the store lock", rerr)
+	}
+	return err
+}
+
+// Sync implements store.Backend: a folder has no remote.
+func (b *Backend) Sync(ctx context.Context) (store.SyncReport, error) {
+	if err := b.usable(ctx); err != nil {
+		return store.SyncReport{}, err
+	}
+	return store.SyncReport{}, nil
+}
+
+// Capabilities implements store.Backend: none (spec 5.5).
+func (b *Backend) Capabilities() store.Capabilities { return store.Capabilities{} }
+
+// Close implements store.Backend; idempotent.
+func (b *Backend) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	return nil
+}
+
+// Missing lists row files the cursor saw that are gone without a tombstone
+// (paths relative to the data folder). Never a delete; for `lore doctor`.
+func (b *Backend) Missing(ctx context.Context, cursor store.Cursor) ([]string, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, err
+	}
+	return b.folder.Missing(cursor)
+}
+
+// Problems lists data-folder entries that are not usable rows; for
+// `lore doctor`.
+func (b *Backend) Problems(ctx context.Context) ([]rowfs.Problem, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, err
+	}
+	return b.folder.Problems(ctx)
+}
