@@ -85,6 +85,8 @@ type Brief struct {
 	MissionID     string `json:"mission_id,omitempty"`
 	// Store is set for a task of a store other than the repo's own.
 	Store string `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 	// Line is the v0.1.17 human list line.
 	Line string `json:"-"`
 	// base is Line without the store label (withState inserts there).
@@ -112,6 +114,8 @@ type Full struct {
 	// TagIDs is new in 0.1.18 (O11; absent when untagged).
 	TagIDs []string `json:"tag_ids,omitempty"`
 	Store  string   `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 	// Refs are the task's --ref pointers (new in the show output; v0.1.17
 	// wrote them but never printed them).
 	Refs []RefOut `json:"refs,omitempty"`

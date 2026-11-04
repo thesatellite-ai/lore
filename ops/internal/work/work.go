@@ -380,6 +380,18 @@ func SourceName(src store.Source) string {
 	return string(src)
 }
 
+// Labeler is opsmemory.Labeler: the optional Env upgrade naming a store
+// as a person reads it (wire.App.StoreLabel).
+type Labeler = opsmemory.Labeler
+
+// LabelerOf is env's Labeler upgrade, or nil (opsmemory.LabelerOf).
+func LabelerOf(env Env) Labeler { return opsmemory.LabelerOf(env) }
+
+// Label is the `_label` of a row of src: "" for the repo, else
+// "[<label>]" (opsmemory.Label; l nil = the store name). Human lines
+// print it in place of the bare store name, as v0.1.17 did.
+func Label(l Labeler, src store.Source) string { return opsmemory.Label(l, src) }
+
 // Search runs a full-text query over table and returns the live hits with
 // their rows, best first, before any caller filter.
 func Search(ctx context.Context, env Env, table row.Table, query string, fetch int) ([]SearchRow, error) {
@@ -460,6 +472,8 @@ type SearchHit struct {
 	// Relations is v0.1.17's eager-loaded references (task search only).
 	Relations Relations `json:"relations,omitzero"`
 	Store     string    `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 	// Human is the hit's v0.1.17 human line.
 	Human string `json:"-"`
 }
@@ -499,13 +513,13 @@ const SchemaVersion = 1
 
 // HitOf builds the v0.1.17 hit of s with the named columns; withStatus
 // selects the "<id> [<status>] <title>" human line (tasks, missions) over
-// "<id> <title>" (tasklists, plans).
-func HitOf(s SearchRow, withStatus bool, cols ...string) SearchHit {
+// "<id> <title>" (tasklists, plans); lab labels a store hit (`_label`).
+func HitOf(lab Labeler, s SearchRow, withStatus bool, cols ...string) SearchHit {
 	m := make(map[string]string, len(cols))
 	for _, c := range cols {
 		m[c] = Field(s.Row, c)
 	}
-	h := SearchHit{ID: s.Row.ID.String(), Score: s.Hit.Score, Snippet: s.Hit.Snippet, Row: m, Store: SourceName(s.Source)}
+	h := SearchHit{ID: s.Row.ID.String(), Score: s.Hit.Score, Snippet: s.Hit.Snippet, Row: m, Store: SourceName(s.Source), Label: Label(lab, s.Source)}
 	h.Human = h.ID + " " + Field(s.Row, FieldTitle)
 	if withStatus {
 		h.Human = h.ID + " [" + Field(s.Row, FieldStatus) + "] " + Field(s.Row, FieldTitle)
@@ -603,7 +617,7 @@ func SearchTable(ctx context.Context, env Env, table row.Table, kind, query stri
 		if project != "" && Field(h.Row, FieldProject) != project {
 			continue
 		}
-		out.Data = append(out.Data, HitOf(h, withStatus, cols...))
+		out.Data = append(out.Data, HitOf(LabelerOf(env), h, withStatus, cols...))
 	}
 	out.Count = len(out.Data)
 	return out, nil

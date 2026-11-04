@@ -61,6 +61,8 @@ type Summary struct {
 	CreatedAt   string          `json:"created_at"`
 	Tasks       []opstask.Brief `json:"tasks,omitempty"`
 	Store       string          `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // Record is the ent Mission JSON plus its tasks (v0.1.17 missionShowJSON).
@@ -82,6 +84,8 @@ type Record struct {
 	Edges            Edges           `json:"edges"`
 	Tasks            []opstask.Brief `json:"tasks"`
 	Store            string          `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // Edges is ent's edges object: v0.1.17 printed it empty.

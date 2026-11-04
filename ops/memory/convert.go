@@ -92,7 +92,7 @@ func field(r row.Row, name string) string {
 // recordOf is the v0.1.17 --json form of a memory row (Record). A v0.1.17
 // row always had created_by_actor_id; a 0.1.18 row that does not set it
 // shows the envelope's created_by, which names the same actor.
-func recordOf(src store.Source, r row.Row) Record {
+func recordOf(lab Labeler, src store.Source, r row.Row) Record {
 	rec := Record{
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		TrustScore: numberOr(r, fieldTrust), Confidence: numberOr(r, fieldConfidence),
@@ -111,18 +111,20 @@ func recordOf(src store.Source, r row.Row) Record {
 	}
 	if src != store.SourceRepo {
 		rec.Store = string(src)
+		rec.Label = Label(lab, src)
 	}
 	return rec
 }
 
 // hitOf is the v0.1.17 search hit of a memory row.
-func hitOf(src store.Source, h Hit, r row.Row) SearchHit {
+func hitOf(lab Labeler, src store.Source, h Hit, r row.Row) SearchHit {
 	out := SearchHit{
 		ID: r.ID.String(), Score: h.Score, Snippet: h.Snippet,
 		Row: HitRow{Body: field(r, fieldBody), Kind: field(r, fieldKind), SourceKind: field(r, fieldSourceKind), TrustScore: numberOr(r, fieldTrust)},
 	}
 	if src != store.SourceRepo {
 		out.Store = string(src)
+		out.Label = Label(lab, src)
 	}
 	return out
 }

@@ -214,21 +214,87 @@ func (o ops) resourceOps() []op.Entry {
 	}
 }
 
-// decodeValues reads a resource's fields object (fld_ id → JSON value).
-func decodeValues(raw []byte) (map[string]json.RawMessage, error) {
-	out := map[string]json.RawMessage{}
+// fieldEntry is one entry of a resource's `fields` object, the stored
+// shape of STORE_SERVER_SPEC 4.4:
+//
+//	"fields": { "fld_…": { "name": "ip", "v": "203.0.113.10" } }
+//
+// keyed by the field's permanent fld_ id (a rename keeps the key, so the
+// value survives), with the field's name carried beside the value so a row
+// file reads on its own. The cache projection (adapters/cache/sqlite
+// project.go entryValue) reads exactly this shape; a flat {fld: value}
+// object would project as NULL columns, which is why a reader refuses it.
+type fieldEntry struct {
+	Name string          `json:"name"`
+	V    json.RawMessage `json:"v"`
+}
+
+// resValues is a decoded `fields` object: the values by fld_ id (what every
+// reader works on) and the stored name of each entry (kept for an id the
+// kind no longer lists, so a re-write never loses it).
+type resValues struct {
+	vals  map[string]json.RawMessage
+	names map[string]string
+}
+
+// decodeValues reads resource r's `fields` object. Any entry that is not
+// {name, v} (a flat value, a missing "v") is E_RESOURCE_INVALID naming the
+// row: showing it as unset would hide a broken row.
+func decodeValues(r located) (resValues, error) {
+	out := resValues{vals: map[string]json.RawMessage{}, names: map[string]string{}}
+	raw := fieldsRaw(r)
 	if len(raw) == 0 {
 		return out, nil
 	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, errs.Wrap(errs.ConfigInvalid, "resource: fields is not a JSON object", err)
+	bad := func(why string, err error) error {
+		e := errs.New(errs.ResourceInvalid, "resource "+r.Row.ID.String()+" ("+text(r.Row, rName)+"): fields "+why)
+		if err != nil {
+			e = errs.Wrap(errs.ResourceInvalid, e.Error(), err)
+		}
+		return e.WithHint(`each entry must be {"name": <field>, "v": <value>} (STORE_SERVER_SPEC 4.4)`)
+	}
+	var entries map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return resValues{}, bad("is not a JSON object", err)
+	}
+	for id, e := range entries {
+		var probe map[string]json.RawMessage
+		if json.Unmarshal(e, &probe) != nil {
+			return resValues{}, bad("entry "+id+" is not a {name, v} object", nil)
+		}
+		v, hasV := probe[entryValueKey]
+		var name string
+		if err := json.Unmarshal(probe[entryNameKey], &name); err != nil || !hasV || name == "" {
+			return resValues{}, bad("entry "+id+" lacks its name or value", nil)
+		}
+		out.vals[id], out.names[id] = v, name
 	}
 	return out, nil
 }
 
-// valuesPatch builds the `fields` patch from a values map.
-func valuesPatch(vals map[string]json.RawMessage) (map[string]value.Value, error) {
-	b, err := json.Marshal(vals)
+// Keys of one fieldEntry (the json tags above).
+const (
+	entryNameKey  = "name"
+	entryValueKey = "v"
+)
+
+// valuesPatch builds the `fields` patch from vals in the spec shape: each
+// entry named after d's field with that fld_ id, or, for an id d no longer
+// lists, the name the row stored (prev); an id with neither is a bug of the
+// caller and refused.
+func valuesPatch(d kindDef, vals map[string]json.RawMessage, prev map[string]string) (map[string]value.Value, error) {
+	entries := make(map[string]fieldEntry, len(vals))
+	for id, v := range vals {
+		name := prev[id]
+		if f, ok := d.byID[id]; ok {
+			name = text(f.Row, kName)
+		}
+		if name == "" {
+			return nil, errs.New(errs.Internal, "resource: no field name for "+id)
+		}
+		entries[id] = fieldEntry{Name: name, V: v}
+	}
+	b, err := json.Marshal(entries)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "resource: encode fields", err)
 	}
@@ -412,7 +478,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if err = requireFields(d, in.Name, vals); err != nil {
 		return RowOut{}, err
 	}
-	fields, err := valuesPatch(vals)
+	fields, err := valuesPatch(d, vals, nil)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -484,10 +550,11 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if len(in.Set) == 0 && len(in.Unset) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: nothing to change").WithHint("give --set field=value or --unset field")
 	}
-	vals, err := decodeValues(fieldsRaw(r))
+	stored, err := decodeValues(r)
 	if err != nil {
 		return RowOut{}, err
 	}
+	vals := stored.vals
 	name := text(r.Row, rName)
 	if err = o.applySets(ctx, d, name, in.Set, vals); err != nil {
 		return RowOut{}, err
@@ -502,7 +569,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if err = requireFields(d, name, vals); err != nil {
 		return RowOut{}, err
 	}
-	patch, err := valuesPatch(vals)
+	patch, err := valuesPatch(d, vals, stored.names)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -531,10 +598,11 @@ func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
 	if err != nil {
 		return Resource{}, err
 	}
-	vals, err := decodeValues(fieldsRaw(r))
+	stored, err := decodeValues(r)
 	if err != nil {
 		return Resource{}, err
 	}
+	vals := stored.vals
 	return Resource{ID: r.Row.ID.String(), Kind: d.name(), Name: text(r.Row, rName), Store: string(r.Src),
 		Values: o.named(ctx, d, vals, show), ArchivedAt: text(r.Row, rArchivedAt), LastChecked: text(r.Row, rLastChecked)}, nil
 }

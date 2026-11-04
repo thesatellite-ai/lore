@@ -128,7 +128,9 @@ type Record struct {
 	Message    string `json:"message"`
 	Recurrence string `json:"recurrence,omitempty"`
 	Store      string `json:"_source,omitempty"`
-	due        time.Time
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
+	due   time.Time
 }
 
 // Text is v0.1.17's list: "<mark> <due>  <message>[ (<recurrence>)]" then
@@ -311,7 +313,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		if done != in.Done {
 			continue
 		}
-		out.Data = append(out.Data, recordOf(s))
+		out.Data = append(out.Data, recordOf(work.LabelerOf(o.env), s))
 	}
 	slices.SortStableFunc(out.Data, func(a, b Record) int { return a.due.Compare(b.due) })
 	if len(out.Data) > listLimit {
@@ -322,13 +324,13 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 }
 
 // recordOf is the v0.1.17 --json form of one reminder row.
-func recordOf(s work.Sourced) Record {
+func recordOf(lab work.Labeler, s work.Sourced) Record {
 	due := work.Time(s.Row, schema.FieldReminderDueAt)
 	rec := Record{
 		DueAt: due.UTC().Format(time.RFC3339), ID: s.Row.ID.String(),
 		Message:    work.Field(s.Row, schema.FieldReminderMessage),
 		Recurrence: work.Field(s.Row, schema.FieldReminderRecurrence),
-		Store:      work.SourceName(s.Source), due: due,
+		Store:      work.SourceName(s.Source), Label: work.Label(lab, s.Source), due: due,
 	}
 	if t := work.Time(s.Row, schema.FieldReminderDoneAt); !t.IsZero() {
 		rec.DoneAt = t.UTC().Format(time.RFC3339)

@@ -174,7 +174,7 @@ func (o ListOut) Text() string {
 		if !r.ArchivedAt.IsZero() {
 			badge = " [archived]"
 		}
-		fmt.Fprintf(&b, "%s [%s/%s] %s%s%s\n", r.ID, r.Severity, r.Activation, kn.Cut(r.Body, kn.ListCut), badge, kn.StoreLabel(r.Store))
+		fmt.Fprintf(&b, "%s [%s/%s] %s%s%s\n", r.ID, r.Severity, r.Activation, kn.Cut(r.Body, kn.ListCut), badge, kn.LabelSuffix(r.Label))
 	}
 	return b.String()
 }
@@ -203,6 +203,8 @@ type Record struct {
 	CreatedByActorID     string    `json:"created_by_actor_id,omitempty"`
 	TagIDs               []string  `json:"tag_ids,omitempty"`
 	Store                string    `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // IDIn is the input of the operations that take one rule id.
@@ -280,6 +282,8 @@ type SearchHit struct {
 	Snippet string  `json:"snippet,omitempty"`
 	Row     HitRow  `json:"row"`
 	Store   string  `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // HitRow is the row map v0.1.17 printed (keys sorted, as json.Marshal of
@@ -331,7 +335,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}}
 	for _, it := range items {
-		out.Data = append(out.Data, recordOf(it.Source, it.Row))
+		out.Data = append(out.Data, recordOf(kn.LabelerOf(o.env), it.Source, it.Row))
 	}
 	out.Count = len(out.Data)
 	return out, nil
@@ -343,7 +347,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(it.Source, it.Row)}, nil
+	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(kn.LabelerOf(o.env), it.Source, it.Row)}, nil
 }
 
 // edit patches the given fields.
@@ -403,7 +407,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	for _, f := range found {
 		r := f.Row
 		out.Data = append(out.Data, SearchHit{
-			ID: r.ID.String(), Score: f.Hit.Score, Snippet: f.Hit.Snippet, Store: kn.SourceKey(f.Source),
+			ID: r.ID.String(), Score: f.Hit.Score, Snippet: f.Hit.Snippet, Store: kn.SourceKey(f.Source), Label: kn.Label(kn.LabelerOf(o.env), f.Source),
 			Row: HitRow{Activation: kn.Field(r, fieldActivation), Body: kn.Field(r, kn.FieldBody), Severity: kn.Field(r, fieldSeverity), SourceKind: kn.Field(r, kn.FieldSourceKind)},
 		})
 	}
@@ -420,7 +424,7 @@ func check(severity, activation string) error {
 }
 
 // recordOf is the v0.1.17 --json form of a rule row.
-func recordOf(src store.Source, r row.Row) Record {
+func recordOf(lab kn.Labeler, src store.Source, r row.Row) Record {
 	return Record{
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		TrustScore: kn.Number(r, kn.FieldTrust), Confidence: kn.Number(r, kn.FieldConfidence),
@@ -430,6 +434,6 @@ func recordOf(src store.Source, r row.Row) Record {
 		Body: kn.Field(r, kn.FieldBody), Activation: kn.Field(r, fieldActivation), Globs: kn.Field(r, fieldGlobs),
 		AppliesToDescription: kn.Field(r, fieldApplies), Severity: kn.Field(r, fieldSeverity),
 		SupersededByID: kn.Field(r, kn.FieldSuperseded), CreatedByActorID: kn.CreatedBy(r),
-		TagIDs: kn.TagsOf(r), Store: kn.SourceKey(src),
+		TagIDs: kn.TagsOf(r), Store: kn.SourceKey(src), Label: kn.Label(lab, src),
 	}
 }

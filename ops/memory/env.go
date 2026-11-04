@@ -73,6 +73,39 @@ type ColumnSearcher interface {
 	SearchColumns(ctx context.Context, table row.Table, match string, fields []string, limit int) ([]Hit, error)
 }
 
+// Labeler is the optional Env upgrade that names a store the way a person
+// reads it beside a row: wire.App.StoreLabel ("northwind/acme" for the org
+// store attached at the acme folder, the bare name for a store attached
+// at its root). An Env without it labels a store with its attached name.
+// The label is display only: `_source` always stays the store name, so
+// `--to`/`--store` values read back from --json keep working.
+type Labeler interface {
+	StoreLabel(name store.Source) string
+}
+
+// LabelerOf is env's Labeler upgrade, or nil when env has none (Label
+// then falls back to the store name). Generic so every noun's own Env
+// interface (memory, content, comment, tag, link) can pass itself.
+func LabelerOf[E any](env E) Labeler {
+	l, _ := any(env).(Labeler)
+	return l
+}
+
+// Label is v0.1.17's `_label` of a row of src (stores_reads.go, the
+// cache's Label column): "" for the repo store, "[<label>]" otherwise,
+// with the label from l (nil = the store name). v0.1.17 printed the same
+// bracketed text at the end of a human list line.
+func Label(l Labeler, src store.Source) string {
+	if src == store.SourceRepo || src == "" {
+		return ""
+	}
+	name := string(src)
+	if l != nil {
+		name = l.StoreLabel(src)
+	}
+	return "[" + name + "]"
+}
+
 // Hit is one search result: the row id and the store whose cache holds it.
 type Hit struct {
 	Source store.Source

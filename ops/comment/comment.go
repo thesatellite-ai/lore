@@ -148,6 +148,8 @@ type Record struct {
 	Body             string `json:"body"`
 	CreatedByActorID string `json:"created_by_actor_id,omitempty"`
 	Store            string `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // SearchIn is the input of comment.search. The repo-scope flags are
@@ -193,6 +195,8 @@ type SearchHit struct {
 	Snippet string  `json:"snippet,omitempty"`
 	Row     HitRow  `json:"row"`
 	Store   string  `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // HitRow is the row map v0.1.17's comment search printed (keys sorted).
@@ -347,7 +351,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 				(in.OnID != "" && field(r, schema.FieldEntityID) != in.OnID) {
 				continue
 			}
-			out.Data = append(out.Data, recordOf(src, r))
+			out.Data = append(out.Data, recordOf(opsmemory.LabelerOf(o.env), src, r))
 		}
 	}
 	sortByID(out.Data)
@@ -397,6 +401,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 		}}
 		if src != store.SourceRepo {
 			hit.Store = string(src)
+			hit.Label = opsmemory.Label(opsmemory.LabelerOf(o.env), src)
 		}
 		out.Data = append(out.Data, hit)
 	}
@@ -432,7 +437,7 @@ func (o ops) storeOf(ctx context.Context, id ids.AnyID, requested store.Source) 
 
 // recordOf is the v0.1.17 --json form of a comment row. A 0.1.18 row
 // without created_by_actor_id shows the envelope's created_by.
-func recordOf(src store.Source, r row.Row) Record {
+func recordOf(lab opsmemory.Labeler, src store.Source, r row.Row) Record {
 	rec := Record{
 		ID: r.ID.String(), CreatedAt: timeText(r.CreatedAt), UpdatedAt: timeText(r.UpdatedAt),
 		EntityTable: field(r, schema.FieldEntityTable), EntityID: field(r, schema.FieldEntityID),
@@ -444,6 +449,7 @@ func recordOf(src store.Source, r row.Row) Record {
 	}
 	if src != store.SourceRepo {
 		rec.Store = string(src)
+		rec.Label = opsmemory.Label(lab, src)
 	}
 	return rec
 }

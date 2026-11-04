@@ -129,19 +129,19 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	out := ListOut{SchemaVersion: content.SchemaVersion, Kind: KindList, Data: []Record{}}
 	for _, l := range rows {
-		out.Data = append(out.Data, recordOf(l.Source, l.Row))
+		out.Data = append(out.Data, recordOf(o.c.Labeler(), l.Source, l.Row))
 	}
 	out.Count = len(out.Data)
 	return out, nil
 }
 
 // recordOf is the v0.1.17 --json form of an external-source row.
-func recordOf(src store.Source, r row.Row) Record {
+func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 	on, _ := r.Fields[fieldEnabled].(value.Bool)
 	return Record{
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		ProjectID: content.Field(r, content.FieldProject), Kind: content.Field(r, fieldKind),
 		Name: content.Field(r, content.FieldName), ConfigJSON: content.Field(r, fieldConfig),
-		Enabled: on.Bool(), TagIDs: content.TagIDs(r), Store: content.Source(src),
+		Enabled: on.Bool(), TagIDs: content.TagIDs(r), Store: content.Source(src), Label: content.Label(lab, src),
 	}
 }

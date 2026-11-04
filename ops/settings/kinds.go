@@ -598,13 +598,17 @@ func (o ops) fieldRemove(ctx context.Context, in FieldRemoveIn) (RowOut, error) 
 		return RowOut{}, errs.New(errs.ResourceInUse, fmt.Sprintf("%s.%s has values on %d rows", in.Kind, in.Field, len(using))).
 			WithHint("pass --drop to remove the values in the same commit")
 	}
+	d, err := o.kindDef(ctx, k.Row.ID.String())
+	if err != nil {
+		return RowOut{}, err
+	}
 	for _, r := range using {
-		vals, verr := decodeValues(fieldsRaw(r))
+		stored, verr := decodeValues(r)
 		if verr != nil {
 			return RowOut{}, verr
 		}
-		delete(vals, f.Row.ID.String())
-		patch, perr := valuesPatch(vals)
+		delete(stored.vals, f.Row.ID.String())
+		patch, perr := valuesPatch(d, stored.vals, stored.names)
 		if perr != nil {
 			return RowOut{}, perr
 		}
@@ -627,11 +631,11 @@ func (o ops) resourcesUsing(ctx context.Context, k located, f located) ([]locate
 	}
 	var out []located
 	for _, r := range where(rows, map[string]string{rKind: k.Row.ID.String()}) {
-		vals, verr := decodeValues(fieldsRaw(r))
+		stored, verr := decodeValues(r)
 		if verr != nil {
 			return nil, verr
 		}
-		if _, ok := vals[f.Row.ID.String()]; ok {
+		if _, ok := stored.vals[f.Row.ID.String()]; ok {
 			out = append(out, r)
 		}
 	}
@@ -646,11 +650,11 @@ func (o ops) valueUses(ctx context.Context, k, f located, v string) (int, error)
 	}
 	n := 0
 	for _, r := range using {
-		vals, verr := decodeValues(fieldsRaw(r))
+		stored, verr := decodeValues(r)
 		if verr != nil {
 			return 0, verr
 		}
-		if display(fromJSONRaw(vals[f.Row.ID.String()])) == v {
+		if display(fromJSONRaw(stored.vals[f.Row.ID.String()])) == v {
 			n++
 		}
 	}

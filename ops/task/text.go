@@ -41,12 +41,12 @@ func badge(status string) string {
 // BriefOf is the v0.1.17 taskBrief of a task row, with its human list
 // line (taskListLine: badge, id, title, priority, due, a non-accepted
 // commitment chip, the deferral wake date).
-func BriefOf(src store.Source, r row.Row) Brief {
+func BriefOf(lab work.Labeler, src store.Source, r row.Row) Brief {
 	b := Brief{
 		ID: r.ID.String(), Title: work.Field(r, work.FieldTitle), Status: work.Field(r, work.FieldStatus),
 		Priority: work.Field(r, fieldPriority), Commitment: work.Field(r, fieldCommitment),
 		DeferredUntil: work.DateText(r, fieldDeferred), DueAt: work.DateText(r, fieldDue),
-		MissionID: work.Field(r, work.FieldMission), Store: work.SourceName(src),
+		MissionID: work.Field(r, work.FieldMission), Store: work.SourceName(src), Label: work.Label(lab, src),
 	}
 	status, priority := orDefault(b.Status, schema.TaskStatusTodo), orDefault(b.Priority, DefaultPriority)
 	line := badge(status) + " " + b.ID + " " + b.Title + " [" + priority + "]"
@@ -60,29 +60,31 @@ func BriefOf(src store.Source, r row.Row) Brief {
 		line += " " + deferMark + b.DeferredUntil
 	}
 	b.base = line
-	b.Line = line + storeLabel(b.Store)
+	b.Line = line + storeLabel(b.Label)
 	return b
 }
 
-// storeLabel is the "  [store]" suffix of a store task's line.
-func storeLabel(s string) string {
-	if s == "" {
+// storeLabel is the "  [<label>]" suffix of a store task's line, from its
+// `_label` (already bracketed; "" for a repo task): v0.1.17 printed the
+// label, so a store attached at a linked folder shows [northwind/acme].
+func storeLabel(label string) string {
+	if label == "" {
 		return ""
 	}
-	return "  [" + s + "]"
+	return "  " + label
 }
 
 // withState puts a STATE column (v0.1.17 taskListLine) after the line's
 // own fields, before the store label.
 func withState(b Brief, state string) Brief {
 	if state != "" {
-		b.Line = b.base + "  " + state + storeLabel(b.Store)
+		b.Line = b.base + "  " + state + storeLabel(b.Label)
 	}
 	return b
 }
 
 // fullOf is the v0.1.17 taskFull of a task row.
-func fullOf(src store.Source, r row.Row) Full {
+func fullOf(lab work.Labeler, src store.Source, r row.Row) Full {
 	return Full{
 		ID: r.ID.String(), Title: work.Field(r, work.FieldTitle), Body: work.Field(r, work.FieldBody),
 		Status: work.Field(r, work.FieldStatus), Priority: work.Field(r, fieldPriority), Commitment: work.Field(r, fieldCommitment),
@@ -90,7 +92,7 @@ func fullOf(src store.Source, r row.Row) Full {
 		StartedAt: work.TimeText(r, fieldStarted), CompletedAt: work.TimeText(r, work.FieldCompleted),
 		MissionID: work.Field(r, work.FieldMission), TaskListID: work.Field(r, work.FieldTasklist), PlanID: work.Field(r, work.FieldPlan),
 		ProjectID: work.Field(r, work.FieldProject), RepoID: work.Field(r, work.FieldRepo),
-		CreatedAt: r.CreatedAt.UTC().Format(work.TimeLayout), TagIDs: work.TagIDs(r), Store: work.SourceName(src),
+		CreatedAt: r.CreatedAt.UTC().Format(work.TimeLayout), TagIDs: work.TagIDs(r), Store: work.SourceName(src), Label: work.Label(lab, src),
 	}
 }
 

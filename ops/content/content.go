@@ -474,6 +474,17 @@ func Source(src store.Source) string {
 	return string(src)
 }
 
+// Labeler is opsmemory.Labeler: the optional Env upgrade naming a store
+// as a person reads it (wire.App.StoreLabel).
+type Labeler = opsmemory.Labeler
+
+// Label is the `_label` of a row of src: "" for the repo, else
+// "[<label>]" with the label from l (nil = the store name; opsmemory.Label).
+func Label(l Labeler, src store.Source) string { return opsmemory.Label(l, src) }
+
+// Labeler is o.Env's Labeler upgrade, or nil when it has none.
+func (o Ops) Labeler() Labeler { return opsmemory.LabelerOf(o.Env) }
+
 // TagIDs is a row's tag ids (O11 tag_ids; nil when untagged).
 func TagIDs(r row.Row) []string {
 	// ItemStrings: the same ids whether the list was built in memory or

@@ -139,6 +139,8 @@ type Record struct {
 	TagIDs []string `json:"tag_ids,omitempty"`
 	Edges  Edges    `json:"edges"`
 	Store  string   `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // Edges is ent's edges object: v0.1.17 printed it empty (no eager load).
@@ -223,6 +225,8 @@ type SearchHit struct {
 	Row     HitRow  `json:"row"`
 	// Store is set for a hit of a store other than the repo's own.
 	Store string `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // HitRow is the row map v0.1.17's memory search printed

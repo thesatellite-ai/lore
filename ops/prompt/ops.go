@@ -150,7 +150,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	out := ListOut{SchemaVersion: content.SchemaVersion, Kind: KindList, Data: []Record{}}
 	for _, l := range rows {
-		out.Data = append(out.Data, recordOf(l.Source, l.Row))
+		out.Data = append(out.Data, recordOf(o.c.Labeler(), l.Source, l.Row))
 	}
 	out.Count = len(out.Data)
 	return out, nil
@@ -162,7 +162,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: content.SchemaVersion, Kind: KindShow, Data: recordOf(src, r)}, nil
+	return ShowOut{SchemaVersion: content.SchemaVersion, Kind: KindShow, Data: recordOf(o.c.Labeler(), src, r)}, nil
 }
 
 // edit patches the fields whose flags were given.
@@ -192,7 +192,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	out := SearchOut{SchemaVersion: content.SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, f := range found {
 		out.Data = append(out.Data, SearchHit{
-			ID: f.Row.ID.String(), Score: f.Score, Snippet: f.Snippet, Store: content.Source(f.Source),
+			ID: f.Row.ID.String(), Score: f.Score, Snippet: f.Snippet, Store: content.Source(f.Source), Label: content.Label(o.c.Labeler(), f.Source),
 			Row: HitRow{Body: content.Field(f.Row, content.FieldBody), Name: content.Field(f.Row, content.FieldName)},
 		})
 	}
@@ -201,13 +201,13 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 }
 
 // recordOf is the v0.1.17 --json form of a prompt row.
-func recordOf(src store.Source, r row.Row) Record {
+func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 	return Record{
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		ArchivedAt: content.Time(r, content.FieldArchivedAt),
 		ProjectID:  content.Field(r, content.FieldProject), Name: content.Field(r, content.FieldName),
 		Description: content.Field(r, fieldDescription), Body: content.Field(r, content.FieldBody),
 		ArgsSchema: content.Field(r, fieldArgsSchema), CreatedByActorID: content.CreatedBy(r),
-		TagIDs: content.TagIDs(r), Store: content.Source(src),
+		TagIDs: content.TagIDs(r), Store: content.Source(src), Label: content.Label(lab, src),
 	}
 }

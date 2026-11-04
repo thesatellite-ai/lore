@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -319,6 +320,28 @@ func StoreLabel(src string) string {
 		return ""
 	}
 	return " [" + src + "]"
+}
+
+// Labeler is opsmemory.Labeler: the optional Env upgrade naming a store
+// as a person reads it (wire.App.StoreLabel).
+type Labeler = opsmemory.Labeler
+
+// LabelerOf is env's Labeler upgrade, or nil (opsmemory.LabelerOf).
+func LabelerOf(env Env) Labeler { return opsmemory.LabelerOf(env) }
+
+// Label is the `_label` of a row of src: "" for the repo, else
+// "[<label>]" (opsmemory.Label; l nil = the store name).
+func Label(l Labeler, src store.Source) string { return opsmemory.Label(l, src) }
+
+// LabelSuffix is the " [<label>]" end of a human list line, from a
+// record's `_label` ("" for a repo row): v0.1.17 printed the label, so a
+// store attached at a linked folder shows [northwind/acme], not the bare
+// store name.
+func LabelSuffix(label string) string {
+	if label == "" {
+		return ""
+	}
+	return " " + label
 }
 
 // AddLabel is the store label of v0.1.17's add line ("✓ <id> <label>"):

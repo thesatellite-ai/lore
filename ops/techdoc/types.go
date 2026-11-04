@@ -68,6 +68,8 @@ type Record struct {
 	Edges       Edges     `json:"edges"`
 	TagIDs      []string  `json:"tag_ids,omitempty"`
 	Store       string    `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // Edges is v0.1.17's unloaded ent edges object (always `{}`).
@@ -139,6 +141,8 @@ type SearchHit struct {
 	Snippet string  `json:"snippet,omitempty"`
 	Row     HitRow  `json:"row"`
 	Store   string  `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // HitRow is v0.1.17's techdoc hit row (keys sorted).

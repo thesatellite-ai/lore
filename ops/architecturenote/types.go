@@ -77,6 +77,8 @@ type Record struct {
 	CreatedByActorID string    `json:"created_by_actor_id,omitempty"`
 	TagIDs           []string  `json:"tag_ids,omitempty"`
 	Store            string    `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // IDIn is the input of the operations that take one architecture note id.
@@ -144,6 +146,8 @@ type SearchHit struct {
 	Snippet string  `json:"snippet,omitempty"`
 	Row     HitRow  `json:"row"`
 	Store   string  `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // HitRow is v0.1.17's architecture note hit row (keys sorted, as json.Marshal

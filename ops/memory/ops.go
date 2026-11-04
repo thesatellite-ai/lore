@@ -356,7 +356,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 				!sc.keeps(repoOf(r), repo) || (project != "" && field(r, fieldProject) != project) || !hasTags(idx, r, in.Tags) {
 				continue
 			}
-			out.Data = append(out.Data, recordOf(src, r))
+			out.Data = append(out.Data, recordOf(LabelerOf(o.env), src, r))
 		}
 	}
 	out.Count = len(out.Data)
@@ -376,7 +376,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if r.Deleted {
 		return ShowOut{}, errs.New(errs.NotFound, "memory "+id.String()+" is deleted")
 	}
-	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(src, r)}, nil
+	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(LabelerOf(o.env), src, r)}, nil
 }
 
 // edit patches the fields whose flags were given.
@@ -518,7 +518,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 			(project != "" && field(r, fieldProject) != project) {
 			continue
 		}
-		out.Data = append(out.Data, hitOf(src, h, r))
+		out.Data = append(out.Data, hitOf(LabelerOf(o.env), src, h, r))
 	}
 	out.Count = len(out.Data)
 	return out, nil

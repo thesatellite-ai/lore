@@ -219,7 +219,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		if s, ok, kerr := o.byKey(ctx, project.String(), in.Mission, in.Key); kerr != nil {
 			return AddOut{}, kerr
 		} else if ok {
-			out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(s.Source, s.Row), Store: string(s.Source)}
+			out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(work.LabelerOf(o.env), s.Source, s.Row), Store: string(s.Source)}
 			out.Human = work.Success + " " + s.Row.ID.String() + " — " + work.Field(s.Row, work.FieldTitle) + " (already added with --key " + in.Key + ")\n"
 			return out, nil
 		}
@@ -299,7 +299,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err := o.saveRefs(ctx, src, project.String(), w.Row.ID, refs); err != nil {
 		return AddOut{}, err
 	}
-	out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(src, w.Row), Store: string(src)}
+	out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(work.LabelerOf(o.env), src, w.Row), Store: string(src)}
 	for _, x := range w.Warnings {
 		out.Warnings = append(out.Warnings, Warning{Code: string(x.Code), Field: x.Field, Message: x.Message})
 	}
@@ -619,7 +619,7 @@ func (o ops) viewWith(ctx context.Context, only, project string, state func(row.
 		if (project != "" && work.Field(s.Row, work.FieldProject) != project) || !keep(s.Row) {
 			continue
 		}
-		b := BriefOf(s.Source, s.Row)
+		b := BriefOf(work.LabelerOf(o.env), s.Source, s.Row)
 		if state != nil {
 			b = withState(b, state(s.Row))
 		}
@@ -671,7 +671,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	full := fullOf(src, r)
+	full := fullOf(work.LabelerOf(o.env), src, r)
 	full.TimeEntries = TimeEntries(r)
 	full.TimeLine = TimeLine(full.TimeEntries)
 	if by := work.Field(r, fieldDoneBy); by != "" {
@@ -996,7 +996,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 			(project != "" && work.Field(r, work.FieldProject) != project) {
 			continue
 		}
-		hit := work.HitOf(h, true, work.FieldTitle, work.FieldBody, work.FieldStatus, fieldPriority)
+		hit := work.HitOf(work.LabelerOf(o.env), h, true, work.FieldTitle, work.FieldBody, work.FieldStatus, fieldPriority)
 		hit.Row[fieldDue] = work.TimeText(r, fieldDue)
 		hit.Relations = work.Relations{
 			Tasklist: op.SomeIf(work.BriefOf(ctx, o.env, schema.TableTasklists, work.Field(r, work.FieldTasklist), false)),

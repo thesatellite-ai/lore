@@ -104,6 +104,8 @@ type Record struct {
 	TagIDs           []string  `json:"tag_ids,omitempty"`
 	Edges            Edges     `json:"edges"`
 	Store            string    `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // Edges is ent's edges object: v0.1.17 printed it empty.
@@ -208,11 +210,11 @@ type ops struct{ env work.Env }
 func listID(s string) (ids.AnyID, error) { return work.ParseID(Noun, ids.PrefixPlan, s) }
 
 // recordOf is the v0.1.17 JSON of a plan row.
-func recordOf(src store.Source, r row.Row) Record {
+func recordOf(lab work.Labeler, src store.Source, r row.Row) Record {
 	return Record{
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, ProjectID: work.Field(r, work.FieldProject),
 		Title: work.Field(r, work.FieldTitle), Body: work.Field(r, work.FieldBody), Status: statusOf(r),
-		CreatedByActorID: work.Field(r, work.FieldCreatedBy), TagIDs: work.TagIDs(r), Store: work.SourceName(src),
+		CreatedByActorID: work.Field(r, work.FieldCreatedBy), TagIDs: work.TagIDs(r), Store: work.SourceName(src), Label: work.Label(lab, src),
 	}
 }
 
@@ -249,7 +251,7 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: recordOf(src, w.Row), Human: work.Success + " " + w.Row.ID.String() + "\n"}, nil
+	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: recordOf(work.LabelerOf(o.env), src, w.Row), Human: work.Success + " " + w.Row.ID.String() + "\n"}, nil
 }
 
 // list returns the plans of every attached store.
@@ -265,7 +267,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Record{}}
 	for _, s := range all {
 		if project == "" || work.Field(s.Row, work.FieldProject) == project {
-			out.Data = append(out.Data, recordOf(s.Source, s.Row))
+			out.Data = append(out.Data, recordOf(work.LabelerOf(o.env), s.Source, s.Row))
 		}
 	}
 	out.Count = len(out.Data)
@@ -282,7 +284,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: recordOf(src, r)}, nil
+	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: recordOf(work.LabelerOf(o.env), src, r)}, nil
 }
 
 // edit patches the fields whose flags were given.

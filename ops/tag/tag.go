@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -129,6 +130,8 @@ type Record struct {
 	Name      string `json:"name"`
 	Color     string `json:"color,omitempty"`
 	Store     string `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // listNameWidth is v0.1.17's name column ("%-20s").
@@ -316,6 +319,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			}
 			if src != store.SourceRepo {
 				rec.Store = string(src)
+				rec.Label = opsmemory.Label(opsmemory.LabelerOf(o.env), src)
 			}
 			out.Data = append(out.Data, rec)
 		}

@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -178,6 +179,8 @@ type Record struct {
 	CommittedAt      string `json:"committed_at,omitempty"`
 	CreatedByActorID string `json:"created_by_actor_id,omitempty"`
 	Store            string `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // ShowIn is the input of commit.show (the sha is the path id in REST).
@@ -465,7 +468,7 @@ func (o ops) links(ctx context.Context, keep func(row.Row) bool) ([]Record, erro
 			if r.Deleted || field(r, fieldProject) != project.String() || !keep(r) {
 				continue
 			}
-			out = append(out, recordOf(src, r))
+			out = append(out, recordOf(opsmemory.LabelerOf(o.env), src, r))
 		}
 	}
 	slices.SortStableFunc(out, func(a, b Record) int { return strings.Compare(a.CreatedAt, b.CreatedAt) })
@@ -499,7 +502,7 @@ func (o ops) storeOf(ctx context.Context, id ids.AnyID, requested store.Source) 
 }
 
 // recordOf is the v0.1.17 --json form of a link row.
-func recordOf(src store.Source, r row.Row) Record {
+func recordOf(lab opsmemory.Labeler, src store.Source, r row.Row) Record {
 	rec := Record{
 		ID: r.ID.String(), CreatedAt: timeText(r.CreatedAt), UpdatedAt: timeText(r.UpdatedAt),
 		ProjectID: field(r, fieldProject), EntityTable: field(r, schema.FieldEntityTable), EntityID: field(r, schema.FieldEntityID),
@@ -511,6 +514,7 @@ func recordOf(src store.Source, r row.Row) Record {
 	}
 	if src != store.SourceRepo {
 		rec.Store = string(src)
+		rec.Label = opsmemory.Label(lab, src)
 	}
 	return rec
 }

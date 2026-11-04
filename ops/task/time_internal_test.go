@@ -169,9 +169,31 @@ func TestBriefLine(t *testing.T) {
 		{"unicode title", store.SourceRepo, map[string]string{"title": "日本語 🚀"}, "", "○ " + tid + " 日本語 🚀 [medium]"},
 	}
 	for _, c := range cases {
-		b := withState(BriefOf(c.src, mk(c.kv)), c.state)
+		b := withState(BriefOf(nil, c.src, mk(c.kv)), c.state)
 		if b.Line != c.want {
 			t.Errorf("%s:\n got %q\nwant %q", c.name, b.Line, c.want)
 		}
 	}
+	// With the Env's labeler, a store attached at a linked folder shows its
+	// label (v0.1.17's [northwind/acme]) while _source stays the name; the
+	// repo store gets no label either way.
+	lab := folderLabeler{"agency": "agency/acme"}
+	b := withState(BriefOf(lab, "agency", mk(map[string]string{"title": "T"})), "EXPIRED")
+	if want := "○ " + tid + " T [medium]  EXPIRED  [agency/acme]"; b.Line != want || b.Store != "agency" || b.Label != "[agency/acme]" {
+		t.Errorf("labelled: line %q store %q label %q, want %q agency [agency/acme]", b.Line, b.Store, b.Label, want)
+	}
+	if r := BriefOf(lab, store.SourceRepo, mk(map[string]string{"title": "T"})); r.Label != "" || r.Store != "" {
+		t.Errorf("repo row: store %q label %q, want both empty", r.Store, r.Label)
+	}
+}
+
+// folderLabeler is a fake Env StoreLabel upgrade: the mapped label, else
+// the name (wire.App.StoreLabel for a root-attached store).
+type folderLabeler map[store.Source]string
+
+func (f folderLabeler) StoreLabel(name store.Source) string {
+	if l, ok := f[name]; ok {
+		return l
+	}
+	return string(name)
 }

@@ -71,6 +71,8 @@ type Record struct {
 	Enabled    bool      `json:"enabled,omitempty"`
 	TagIDs     []string  `json:"tag_ids,omitempty"`
 	Store      string    `json:"_source,omitempty"`
+	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
+	Label string `json:"_label,omitempty"`
 }
 
 // IDIn is the input of enable and disable.
