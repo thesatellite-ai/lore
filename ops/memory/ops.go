@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
@@ -347,10 +348,12 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			return ListOut{}, err
 		}
 	}
+	var kept []row.Row
+	var keptSrc []store.Source
 	for _, src := range sources {
-		rows, err := o.env.List(ctx, src, table)
-		if err != nil {
-			return ListOut{}, err
+		rows, lerr := o.env.List(ctx, src, table)
+		if lerr != nil {
+			return ListOut{}, lerr
 		}
 		for _, r := range rows {
 			archived := field(r, fieldArchivedAt) != ""
@@ -358,9 +361,17 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 				!sc.keeps(repoOf(r), repo) || (project != "" && field(r, fieldProject) != project) || !hasTags(idx, r, in.Tags) {
 				continue
 			}
-			out.Data = append(out.Data, recordOf(LabelerOf(o.env), src, r))
+			kept, keptSrc = append(kept, r), append(keptSrc, src)
 		}
 	}
+	sel, err := metalist.Select(ctx, o.env, in.Flags, kept)
+	if err != nil {
+		return ListOut{}, err
+	}
+	for _, i := range sel.Order {
+		out.Data = append(out.Data, recordOf(LabelerOf(o.env), keptSrc[i], kept[i]))
+	}
+	out.Notes = sel.Notes
 	out.Count = len(out.Data)
 	return out, nil
 }

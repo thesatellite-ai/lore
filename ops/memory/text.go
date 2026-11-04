@@ -52,6 +52,15 @@ func ExternalLine(id, title, body, status, label string) string {
 // memory of another store as v0.1.17 printed it after the repo's own
 // (ExternalLine, with its label); "(no memories)" when there is none.
 func (o ListOut) Text() string {
+	notes := ""
+	if len(o.Notes) > 0 {
+		notes = strings.Join(o.Notes, "\n") + "\n"
+	}
+	return o.rowsText() + notes
+}
+
+// rowsText is the v0.1.17 lines.
+func (o ListOut) rowsText() string {
 	if len(o.Data) == 0 {
 		return "(no memories)\n"
 	}

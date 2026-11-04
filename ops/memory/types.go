@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -94,6 +95,8 @@ type ListIn struct {
 	// Tags keeps memories carrying every named tag.
 	Tags  []string `json:"tags,omitempty" flag:"tag" desc:"only memories with this tag (repeatable: all must match)"`
 	Store string   `json:"store,omitempty" flag:"store" desc:"only memories of this store (default every attached store)"`
+	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
+	metalist.Flags
 }
 
 // ListOut is the output of memory.list: v0.1.17's envelope.
@@ -102,6 +105,8 @@ type ListOut struct {
 	Kind          string   `json:"kind"`
 	Count         int      `json:"count,omitempty"`
 	Data          []Record `json:"data"`
+	// Notes are the metadata filter's lines (METADATA 3.7, 3.13).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Record is one memory in v0.1.17's --json form: the ent Memory struct's

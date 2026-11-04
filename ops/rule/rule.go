@@ -164,6 +164,8 @@ type ListIn struct {
 	Archived   bool     `json:"archived,omitempty" flag:"archived" desc:"include archived rules"`
 	Tags       []string `json:"tags,omitempty" flag:"tag" desc:"only rules with this tag (repeatable: all must match)"`
 	Store      string   `json:"store,omitempty" flag:"store" desc:"only rules of this store (default every attached store)"`
+	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
+	kn.MetaFlags
 }
 
 // ListOut is v0.1.17's list envelope.
@@ -172,10 +174,16 @@ type ListOut struct {
 	Kind          string   `json:"kind"`
 	Count         int      `json:"count,omitempty"`
 	Data          []Record `json:"data"`
+	// Notes are the metadata filter's lines (unknown key, skipped, not
+	// checked; METADATA 3.7, 3.13), printed after the rows.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text prints one line per rule, or "(no rules)".
-func (o ListOut) Text() string {
+func (o ListOut) Text() string { return o.rowsText() + kn.NotesText(o.Notes) }
+
+// rowsText is the v0.1.17 lines.
+func (o ListOut) rowsText() string {
 	if len(o.Data) == 0 {
 		return "(no rules)\n"
 	}
@@ -358,7 +366,11 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}}
+	items, notes, err := kn.Narrow(ctx, o.env, items, in.MetaFlags)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, Notes: notes}
 	for _, it := range items {
 		out.Data = append(out.Data, recordOf(kn.LabelerOf(o.env), it.Source, it.Row))
 	}

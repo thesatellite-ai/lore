@@ -112,6 +112,8 @@ type ListIn struct {
 	Done  bool   `json:"done,omitempty" flag:"done" desc:"show completed instead of pending"`
 	Repo  string `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts; reminders have no repo scope"`
 	Store string `json:"store,omitempty" flag:"store" desc:"only reminders of this store (default every attached store)"`
+	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
+	work.MetaFlags
 }
 
 // ListOut is v0.1.17's list envelope.
@@ -120,6 +122,8 @@ type ListOut struct {
 	Kind          string   `json:"kind"`
 	Count         int      `json:"count,omitempty"`
 	Data          []Record `json:"data"`
+	// Notes are the metadata filter's lines (METADATA 3.7, 3.13).
+	Notes []string `json:"notes,omitempty"`
 	// now is when the list was read (the overdue marker compares to it).
 	now time.Time
 }
@@ -139,7 +143,10 @@ type Record struct {
 
 // Text is v0.1.17's list: "<mark> <due>  <message>[ (<recurrence>)]" then
 // the id indented on its own line.
-func (o ListOut) Text() string {
+func (o ListOut) Text() string { return o.rowsText() + work.NotesText(o.Notes) }
+
+// rowsText is the list lines.
+func (o ListOut) rowsText() string {
 	if len(o.Data) == 0 {
 		return "(no reminders)\n"
 	}
@@ -311,7 +318,11 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, now: opclock.Now(o.env)}
+	rows, notes, err := work.Narrow(ctx, o.env, rows, in.MetaFlags)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, now: opclock.Now(o.env), Notes: notes}
 	for _, s := range rows {
 		done := !work.Time(s.Row, schema.FieldReminderDoneAt).IsZero()
 		if done != in.Done {
@@ -319,7 +330,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		}
 		out.Data = append(out.Data, recordOf(work.LabelerOf(o.env), s))
 	}
-	slices.SortStableFunc(out.Data, func(a, b Record) int { return a.due.Compare(b.due) })
+	if in.Sort == "" { // --sort meta.<key> replaces the due order (3.7)
+		slices.SortStableFunc(out.Data, func(a, b Record) int { return a.due.Compare(b.due) })
+	}
 	if len(out.Data) > listLimit {
 		out.Data = out.Data[:listLimit]
 	}
