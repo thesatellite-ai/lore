@@ -46,6 +46,10 @@ func TestSyncPurgeCoreOwnedArchived(t *testing.T) {
 	if err != nil || !strings.Contains(string(b), `"_deleted": true`) {
 		t.Fatalf("the purged row's file is a tombstone: %v %s", err, b)
 	}
+	pb, err := os.ReadFile(filepath.Join(f.dir, ".lore", "data", "_purged.json"))
+	if err != nil || !strings.Contains(string(pb), id) {
+		t.Fatalf("_purged.json lists the purged id: %v %s", err, pb)
+	}
 	f.lore("memory", "show", keep)
 	if out := f.lore("sync", "purge", "--archived-before", "0d", "--dry-run").stdout; !strings.Contains(out, "would purge 0 archived row(s)") {
 		t.Fatalf("a second run has nothing to purge: %s", out)

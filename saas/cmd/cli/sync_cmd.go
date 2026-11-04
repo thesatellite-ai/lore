@@ -525,7 +525,7 @@ back. Run it on main and commit the result. Rows go to the local trash first.
 
 // corePurgeRow deletes one archived core-owned row ("table/id", as
 // lsync.ArchivedCoreOwnedBefore lists it) through the core: the engine's
-// Delete writes the tombstone that keeps old copies from returning.
+// Purge writes the tombstone and records the id in _purged.json.
 func corePurgeRow(ctx context.Context, key string) error {
 	if coreApp == nil {
 		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
@@ -535,8 +535,15 @@ func corePurgeRow(ctx context.Context, key string) error {
 	if !ok || err != nil {
 		return errcodes.New(errcodes.Internal, "purge: bad row key "+key)
 	}
-	if _, err := coreApp.Delete(ctx, engine.Ref{Table: row.Table(table), ID: rid}); err != nil {
-		return errcodes.New(errcodes.Internal, "purge "+key).WithCause(err)
+	eng, err := coreApp.Engine(ctx)
+	if err != nil {
+		return err
+	}
+	// Purge, not Delete: the tombstone and the _purged.json entry in one
+	// batch, so an old clone never brings the row back and its id is never
+	// reused. A backend that cannot purge answers E_UNSUPPORTED (as is).
+	if _, err := eng.Purge(ctx, engine.Ref{Table: row.Table(table), ID: rid}); err != nil {
+		return err
 	}
 	return nil
 }

@@ -125,8 +125,15 @@ func (b *storePushBackend) Write(ctx context.Context, changes []store.Change) er
 	if err := b.inner.Write(ctx, changes); err != nil {
 		return err
 	}
+	b.pushAfterWrite(ctx)
+	return nil
+}
+
+// pushAfterWrite pushes the commit a write just made, when autopush is on;
+// a failed push is a note (the commit waits for `lore sync`).
+func (b *storePushBackend) pushAfterWrite(ctx context.Context) {
 	if !b.autopush(ctx) {
-		return nil
+		return
 	}
 	rep, err := b.inner.Sync(ctx)
 	switch {
@@ -137,7 +144,6 @@ func (b *storePushBackend) Write(ctx context.Context, changes []store.Change) er
 	case len(rep.Refused) > 0:
 		b.note("the store refused " + strconv.Itoa(len(rep.Refused)) + " row(s)")
 	}
-	return nil
 }
 
 // note says the write waits in the local store clone.
