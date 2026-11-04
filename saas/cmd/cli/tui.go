@@ -75,6 +75,7 @@ func runTUI(ctx context.Context, f *tuiFlags) error {
 	app.SetScope("project_id", projectID)
 	app.SetDefaultViewMode(f.view)
 	app.SetInitialKind(f.kind)
+	tuigen.GuardCoreOwned(client) // core-owned tables are read-only here
 	tuigen.RegisterAll(app, client)
 	// Synthetic non-ent screen: all-tables overview (see tui_tables.go)
 	registerTablesScreen(app, rctx.DBPath)
