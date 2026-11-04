@@ -19,6 +19,9 @@ package main
 //     a client repo whose store cannot be read.
 
 import (
+	"errors"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,11 +220,20 @@ func TestLeak_WriteCheckNoOpWithoutOrg(t *testing.T) {
 	c := solo.Clone(w.Remote("github.com/solo/app"), "app")
 	c.MustLore("init", "--non-interactive", "--name=app")
 	calls := len(w.GitCalls("solo"))
+	// CONFIG_GUIDE CFG3 / STORE_SERVER_SPEC 7.4: every attached store has
+	// its cache under ~/.lore/cache/stores/, the personal store's included,
+	// so ~/.lore/cache exists after init (v0.1.17 created it only for the
+	// external cache the leak index read), and every command attaches the
+	// personal cache. The check is still a no-op: the write creates no new
+	// cache file, and never builds the v0.1.17 external cache
+	// ~/.lore/cache/<project-id>.db.
+	before := cacheFiles(t, solo.LorePath("cache"))
 	c.MustLore("rule", "add", "--body", leakNote, "--to", "repo").Says(t, "✓")
-	// The leak index lives in the external cache; a skipped check never
-	// opens (and so never creates) it.
-	if _, err := os.Stat(solo.LorePath("cache")); !os.IsNotExist(err) {
-		t.Fatalf("a plain repo write must not open the store cache: %v", err)
+	if after := cacheFiles(t, solo.LorePath("cache")); !maps.Equal(before, after) {
+		t.Fatalf("a plain repo write must not open the store cache: %v → %v", before, after)
+	}
+	if m, _ := filepath.Glob(solo.LorePath("cache", "prj_*.db")); len(m) != 0 {
+		t.Fatalf("a plain repo write must not build the external cache: %v", m)
 	}
 	for _, l := range w.GitCalls("solo")[calls:] {
 		if strings.HasPrefix(l, "fetch") || strings.HasPrefix(l, "ls-remote") || strings.HasPrefix(l, "clone") {
@@ -337,4 +349,25 @@ func TestF18_FreshCloneCoreWriteWiresTheMergeDriver(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(m.Dir, ".git", "hooks", "pre-commit")); !strings.Contains(string(b), "lore") {
 		t.Fatalf("and lore's hooks: %q", b)
 	}
+}
+
+// cacheFiles is the set of files under dir, to tell whether a command
+// created a cache file. A missing dir is empty.
+func cacheFiles(t *testing.T, dir string) map[string]bool {
+	t.Helper()
+	out := map[string]bool{}
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil || d.IsDir() {
+			return err
+		}
+		out[p] = true
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }

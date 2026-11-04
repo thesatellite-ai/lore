@@ -688,8 +688,55 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if full.Refs, err = o.refsOf(ctx, id); err != nil {
 		return ShowOut{}, err
 	}
+	if full.Notes, err = notesOn(ctx, o.env, id.String()); err != nil {
+		return ShowOut{}, err
+	}
+	if t, ok := work.TeamFrom(ctx); ok && src != store.SourceRepo {
+		if d, ok := t.(ShowDetailer); ok {
+			detail, has, err := d.ShowDetail(ctx, id.String())
+			if err != nil {
+				return ShowOut{}, err
+			}
+			if has {
+				full.Detail = detail
+			}
+		}
+	}
 	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: full}, nil
 }
+
+// notesOn is v0.1.17's printTaskNotes: the task's notes (comments on it)
+// from every attached store, oldest first, so a replacement agent reads
+// where its predecessor stopped (LORE_TEAM_SPEC §7.5 step 5). A store's
+// note carries its label ([org/folder]); internal notes point inward at a
+// repo task (F15) and are shown to the team, while a client checkout has
+// no such store attached and so never sees them.
+func notesOn(ctx context.Context, env work.Env, taskID string) ([]string, error) {
+	rows, err := work.ListAll(ctx, env, schema.TableComments, "")
+	if err != nil {
+		return nil, err
+	}
+	lab := work.LabelerOf(env)
+	var on []work.Sourced
+	for _, r := range rows {
+		if work.Field(r.Row, schema.FieldEntityTable) == schema.TableTasks && work.Field(r.Row, schema.FieldEntityID) == taskID {
+			on = append(on, r)
+		}
+	}
+	slices.SortStableFunc(on, func(a, b work.Sourced) int { return a.Row.CreatedAt.Compare(b.Row.CreatedAt) })
+	out := make([]string, 0, len(on))
+	for _, r := range on {
+		line := r.Row.CreatedAt.UTC().Format(noteTimeLayout) + "  " + work.Field(r.Row, work.FieldBody)
+		if l := work.Label(lab, r.Source); l != "" && r.Source != store.SourceRepo {
+			line += "  " + l
+		}
+		out = append(out, line)
+	}
+	return out, nil
+}
+
+// noteTimeLayout is the time of a note line (v0.1.17 printTaskNotes).
+const noteTimeLayout = "2006-01-02 15:04"
 
 // actorName is an actor's display name, else its id (v0.1.17 actorName).
 func (o ops) actorName(ctx context.Context, id string) string {

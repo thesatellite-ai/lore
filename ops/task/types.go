@@ -126,6 +126,11 @@ type Full struct {
 	TimeLine string `json:"-"`
 	// DoneBy / Detail feed the human show only.
 	DoneBy string `json:"-"`
+	// Notes are the task's note lines, oldest first (notesOn).
+	Notes []string `json:"-"`
+	// Detail is the host's coordination view of a store task
+	// (ShowDetailer); zero when the host added nothing.
+	Detail ShowDetail `json:"-"`
 }
 
 // ListIn is the input of task.list.

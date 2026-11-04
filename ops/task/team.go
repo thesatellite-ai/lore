@@ -205,6 +205,32 @@ type (
 	View = work.TaskView
 )
 
+// ShowDetailer is an optional upgrade of the host's Team: what `task show`
+// adds for a task held in a store, from the coordination machinery the
+// host owns (LORE_TEAM_SPEC §7.5 step 5: what a replacement agent reads
+// first, from any linked repo of the group, lore-docs BUG-D3): the after
+// list, the gate, the time box, attempts and outcome as field lines, and
+// the notes and the claim as this clone sees it now after the body. ok is
+// false when the host has nothing to add (the task is the repo's own, or
+// no coordination target holds it). A host without it shows the row's own
+// fields only.
+type ShowDetailer interface {
+	ShowDetail(ctx context.Context, taskID string) (detail ShowDetail, ok bool, err error)
+}
+
+// ShowDetail is the host's part of the human `task show` (ShowDetailer).
+// It never reaches --json, whose shape stays the row's (Full).
+type ShowDetail struct {
+	// Fields are printed after the row's own fields, in order.
+	Fields []DetailField
+	// Tail is printed verbatim after the body: whole lines, each ending
+	// in a newline.
+	Tail string
+}
+
+// DetailField is one "  name: value" line of the human show.
+type DetailField struct{ Name, Value string }
+
 // WithTeam returns ctx carrying t for the task, mission and plan
 // operations run under it (work.WithTeam).
 func WithTeam(ctx context.Context, t Team) context.Context { return work.WithTeam(ctx, t) }

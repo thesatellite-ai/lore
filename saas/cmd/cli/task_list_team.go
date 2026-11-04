@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"dbent/gen/ent"
@@ -163,35 +162,12 @@ func printTaskSignals(ctx context.Context, id string) error {
 }
 
 // printClaimOn prints the claim on task id in folder of the signals ref st
-// as this clone sees it now.
+// as this clone sees it now (claimText).
 func printClaimOn(ctx context.Context, st *signals.Store, folder, id string) error {
-	v, err := st.Read(ctx)
+	txt, err := claimText(ctx, st, folder, id)
 	if err != nil {
-		return coordError(err)
+		return err
 	}
-	p := signals.ClaimPath(folder, id)
-	s, ok := v.Board[p]
-	fmt.Println()
-	if !ok {
-		fmt.Printf("  claim:    none on %s\n", st.Ref)
-		return nil
-	}
-	_, active := v.Active(p)
-	state := "active"
-	if !active {
-		state = "expired (as seen by this clone)"
-	}
-	fmt.Printf("  claim:    %s, held by %s (session %s", state, holderLabel(s), s.Session)
-	if s.Host != "" {
-		fmt.Printf(", %s", s.Host)
-	}
-	fmt.Printf(")\n  token:    %s…  epoch %d\n  expires:  %s  renewed_seq %d\n", s.ClaimToken[:min(len(s.ClaimToken), coord.TokenPrefixLen)], s.ClaimEpoch,
-		s.Expires.UTC().Format(time.RFC3339), s.RenewedSeq)
-	if s.WorkBranch != "" {
-		fmt.Printf("  branch:   %s\n", s.WorkBranch)
-	}
-	if len(s.Owns) > 0 {
-		fmt.Printf("  owns:     %s\n", strings.Join(s.Owns, ", "))
-	}
+	fmt.Print(txt)
 	return nil
 }

@@ -617,9 +617,22 @@ func TestF20_RenderKeepsInternalContextOutsideTheCheckout(t *testing.T) {
 	a.aliceApp.MustLore("render")
 	pid := projectID(t, a.aliceApp)
 
+	// CONFIG_GUIDE CFG6 / STORE_SERVER_SPEC 7.3 (privrender 307e9f4): one
+	// private render file per internal store, ~/.lore/render/<repo_id>/<store_id>.md,
+	// and CLAUDE.local.md is exactly one import line per file (v0.1.17
+	// wrote one ~/.lore/render/<project-id>.md and one line).
 	local, ok := a.aliceApp.ReadFile("CLAUDE.local.md")
-	if !ok || strings.TrimSpace(local) != "@~/.lore/render/"+pid+".md" || strings.Count(local, "\n") > 1 {
-		t.Fatalf("CLAUDE.local.md must be exactly the import line: %q", local)
+	imports := strings.Split(strings.TrimSpace(local), "\n")
+	if !ok || len(imports) < 2 {
+		t.Fatalf("CLAUDE.local.md must hold one import line per internal store (org, me): %q", local)
+	}
+	var renders []string
+	for _, l := range imports {
+		rel, isImport := strings.CutPrefix(l, "@~/.lore/render/"+pid+"/")
+		if !isImport || !strings.HasPrefix(rel, "sto_") || !strings.HasSuffix(rel, ".md") || strings.Contains(rel, "/") {
+			t.Fatalf("CLAUDE.local.md must be exactly the import lines: %q", local)
+		}
+		renders = append(renders, a.alice.LorePath("render", pid, rel))
 	}
 	if out := a.aliceApp.Git("ls-files", "CLAUDE.local.md"); out != "" {
 		t.Fatal("CLAUDE.local.md must never be tracked")
@@ -630,12 +643,18 @@ func TestF20_RenderKeepsInternalContextOutsideTheCheckout(t *testing.T) {
 	if gi, _ := a.aliceApp.ReadFile(".gitignore"); strings.Contains(gi, "CLAUDE.local.md") {
 		t.Fatal("never through the client's .gitignore")
 	}
-	render, err := os.ReadFile(a.alice.LorePath("render", pid+".md"))
-	if err != nil {
-		t.Fatalf("internal render: %v", err)
+	var render string
+	for _, p := range renders {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("internal render: %v", err)
+		}
+		if first, _, _ := strings.Cut(string(b), "\n"); !strings.Contains(first, "never quote") {
+			t.Fatalf("internal render %s must start with the never-quote line: %s", p, b)
+		}
+		render += string(b)
 	}
-	first, _, _ := strings.Cut(string(render), "\n")
-	if !strings.Contains(first, "never quote") || !strings.Contains(string(render), internalNote) || !strings.Contains(string(render), "I forget the staging VPN") {
+	if !strings.Contains(render, internalNote) || !strings.Contains(render, "I forget the staging VPN") {
 		t.Fatalf("internal render content: %s", render)
 	}
 	if md, _ := a.aliceApp.ReadFile(".lore/LORE.md"); !strings.Contains(md, "money is stored in minor units") {

@@ -1,6 +1,7 @@
 package task
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/row"
@@ -136,8 +137,20 @@ func (o ShowOut) Text() string {
 	if t.TimeLine != "" {
 		b.WriteString("  time:     " + t.TimeLine + "\n")
 	}
+	for _, f := range t.Detail.Fields {
+		if f.Value != "" {
+			b.WriteString(fmt.Sprintf("  %-9s %s\n", f.Name+":", f.Value))
+		}
+	}
 	if t.Body != "" {
 		b.WriteString("\n" + t.Body + "\n")
 	}
+	if len(t.Notes) > 0 {
+		b.WriteString("\n  notes:\n")
+		for _, n := range t.Notes {
+			b.WriteString("    " + n + "\n")
+		}
+	}
+	b.WriteString(t.Detail.Tail)
 	return b.String()
 }
