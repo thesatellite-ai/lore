@@ -136,7 +136,7 @@ func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun b
 	for i, h := range hits {
 		w, uerr := o.env.Update(engine.WithMeta(bctx, write(h)), engine.Ref{ID: h.Row.ID}, map[string]value.Value{})
 		if uerr != nil {
-			return RowOut{}, errs.Wrap(errs.CodeOf(uerr), fmt.Sprintf("meta %s: stopped after %d of %d rows (batch %s; undo: lore batch undo %s)", what, i, len(hits), bid, bid), uerr)
+			return RowOut{}, errs.Wrap(errs.CodeOf(uerr), fmt.Sprintf("meta %s: stopped after %d of %d rows (batch %s; see: lore batch show %s)", what, i, len(hits), bid, bid), uerr)
 		}
 		for _, x := range w.Warnings {
 			if !slices.Contains(warns, x.Message) {
@@ -144,7 +144,7 @@ func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun b
 			}
 		}
 	}
-	human := fmt.Sprintf("%s on %d rows; batch %s (undo: lore batch undo %s)\n", what, len(hits), bid, bid)
+	human := fmt.Sprintf("%s on %d rows; batch %s (see: lore batch show %s)\n", what, len(hits), bid, bid)
 	for _, x := range warns {
 		human += x + "\n"
 	}

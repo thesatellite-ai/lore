@@ -426,7 +426,7 @@ func (o ops) metaMergeInto(ctx context.Context, k located, into string) (RowOut,
 		}
 		if _, err = o.env.Update(engine.WithMeta(bctx, mw), engine.Ref{ID: r.Row.ID}, map[string]value.Value{}); err != nil {
 			return RowOut{}, errs.Wrap(errs.CodeOf(err), "meta edit --merge-into: stopped after "+strconv.Itoa(i)+" of "+strconv.Itoa(len(hits))+
-				" rows (batch "+bid.String()+"; undo: lore batch undo "+bid.String()+")", err)
+				" rows (batch "+bid.String()+"; see: lore batch show "+bid.String()+")", err)
 		}
 	}
 	mi, err := txt(sv.Row.ID.String())
@@ -436,6 +436,6 @@ func (o ops) metaMergeInto(ctx context.Context, k located, into string) (RowOut,
 	if _, err := o.env.Update(bctx, engine.Ref{Store: k.Src, Table: schema.TableMetaKeys, ID: k.Row.ID}, map[string]value.Value{mMergedInto: mi}); err != nil {
 		return RowOut{}, err
 	}
-	return RowOut{ID: sv.Row.ID.String(), Store: string(sv.Src), Human: fmt.Sprintf("folded %s (%s) into %s (%s): %d rows rewritten in batch %s (undo: lore batch undo %s)\n",
+	return RowOut{ID: sv.Row.ID.String(), Store: string(sv.Src), Human: fmt.Sprintf("folded %s (%s) into %s (%s): %d rows rewritten in batch %s (see: lore batch show %s)\n",
 		name, short(k.Row.ID), sname, short(sv.Row.ID), len(hits), bid, bid)}, nil
 }
