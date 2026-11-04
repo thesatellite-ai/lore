@@ -48,7 +48,18 @@ var liveGroupTables = map[string]string{
 
 // liveTableForGroup returns the synced table a command group writes ("" if
 // none).
+//
+// A core-owned table (lsync.CoreOwned) is never a live table here: the
+// core's commands write its rows, and the live ref would carry v1 docs.
 func liveTableForGroup(group string) string {
+	t := liveTableForGroupRaw(group)
+	if lsync.CoreOwned(t) {
+		return ""
+	}
+	return t
+}
+
+func liveTableForGroupRaw(group string) string {
 	if t, ok := liveGroupTables[group]; ok && lsync.TableSynced(t) {
 		return t
 	}

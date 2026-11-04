@@ -56,6 +56,9 @@ func (o MergeOutcome) NewerWins() []string {
 // that is not a lore document (or is a newer format this binary cannot
 // fully represent) falls back to `git merge-file`.
 func MergeFiles(ctx context.Context, basePath, oursPath, theirsPath, repoPath string) (MergeOutcome, error) {
+	if coreOwnedRepoPath(repoPath) != "" {
+		return mergeCoreOwned(ctx, basePath, oursPath, theirsPath)
+	}
 	base, err := os.ReadFile(basePath)
 	if err != nil {
 		return MergeOutcome{}, fmt.Errorf("lsync: read base: %w", err)
@@ -87,7 +90,10 @@ func MergeFiles(ctx context.Context, basePath, oursPath, theirsPath, repoPath st
 	strategy := func(string) merge3.Strategy { return merge3.StrategyConflict }
 	if path.Base(filepath.ToSlash(repoPath)) == MetaFileName {
 		strategy = metaStrategy
-	} else if tbl, _ := oDoc[keyTable].(string); tbl != "" {
+	} else if tbl, _ := oDoc[keyTable].(string); CoreOwned(tbl) {
+		// A core-owned row at an unexpected path: still the core's merge.
+		return mergeCoreOwned(ctx, basePath, oursPath, theirsPath)
+	} else if tbl != "" {
 		reg, _ := NewRegistry()
 		if t, ok := reg.Table(tbl); ok {
 			strategy = StrategyFor(t)

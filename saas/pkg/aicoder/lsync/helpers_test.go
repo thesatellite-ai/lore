@@ -92,7 +92,9 @@ func newEmptyEnv(t *testing.T) *env {
 }
 
 func (e *env) opts(mod ...func(*Options)) Options {
-	o := Options{DB: e.db, DataDir: e.data, LockPath: filepath.Join(e.dir, "sync.lock")}
+	// legacyNoCoreOwned: these tests exercise the generic v1 engine with
+	// memories as the sample table; owned_test.go runs the real set.
+	o := Options{DB: e.db, DataDir: e.data, LockPath: filepath.Join(e.dir, "sync.lock"), coreOwned: legacyNoCoreOwned}
 	for _, m := range mod {
 		m(&o)
 	}
@@ -236,3 +238,7 @@ func hasPrefixIn(list []string, prefix string) bool {
 }
 
 func num(n int) json.Number { return json.Number(strconv.Itoa(n)) }
+
+// legacyNoCoreOwned is the empty core-owned set the generic engine tests run
+// with (see Options.coreOwned).
+var legacyNoCoreOwned = map[string]bool{}

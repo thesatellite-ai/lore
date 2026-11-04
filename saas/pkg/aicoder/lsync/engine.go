@@ -93,6 +93,12 @@ type Options struct {
 	// ReadOnly imports file changes into the cache but never writes files,
 	// never bootstraps, and leaves DB-side changes pending.
 	ReadOnly bool
+
+	// coreOwned overrides the core-owned table set (owned.go) for this
+	// pass; nil means the package set. Unexported on purpose: production
+	// callers always get the one switch. The package's older tests, which
+	// use memories as their generic sample table, pass an empty set.
+	coreOwned map[string]bool
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 	// CheckSecrets returns a non-empty reason when a row file must not be
@@ -224,6 +230,9 @@ type engine struct {
 	// blocked file, secret refusal). They stay dirty for the NEXT pass but
 	// later drain rounds of this pass skip them, so each is reported once.
 	deferred map[rowKey]bool
+	// coreSkipped dedupes the per-pass warning for core-owned rows whose
+	// lore.db change was not exported (owned.go).
+	coreSkipped map[string]bool
 }
 
 // Reconcile brings lore.db and .lore/data into agreement (see the package
@@ -575,6 +584,11 @@ func (e *engine) syncOne(ctx context.Context, k rowKey, fc fileChange, fileChang
 	t, ok := e.reg.Table(k.table)
 	if !ok {
 		return e.clearDirty(ctx, k)
+	}
+	if e.isCoreOwned(k.table) {
+		// Before Divert: a core-owned row is never published to the live
+		// ref as a v1 document either.
+		return e.syncCoreOwned(ctx, k, t, fc, fileChanged)
 	}
 	if e.o.Divert != nil {
 		if handled, err := e.divert(ctx, k, t, fc, fileChanged, dirty); handled || err != nil {
@@ -1023,7 +1037,7 @@ func (e *engine) mergeNaturalKey(ctx context.Context, k rowKey, t *Table, ra row
 				return fmt.Errorf("lsync: mark dirty: %w", err)
 			}
 		}
-		if loser == k.id {
+		if loser == k.id && !e.isCoreOwned(k.table) {
 			// The incoming file is the loser: drop it now so the next round
 			// does not re-import it.
 			if err := removeRowFile(filepath.Join(e.o.DataDir, filepath.FromSlash(k.rel()))); err != nil {
@@ -1053,6 +1067,14 @@ func withID(doc map[string]any, id string) map[string]any {
 func (e *engine) exportDoc(ctx context.Context, k rowKey, t *Table, dbDoc map[string]any) error {
 	rel := k.rel()
 	full := filepath.Join(e.o.DataDir, filepath.FromSlash(rel))
+	if e.isCoreOwned(k.table) {
+		// Every export path (sync pass, adopt, bootstrap, repair, merge)
+		// ends here: never write or remove a core-owned file (owned.go).
+		if dbDoc != nil {
+			e.skipCoreOwnedExport(rel)
+		}
+		return e.clearDirty(ctx, k)
+	}
 	if e.o.ReadOnly {
 		e.deferred[k] = true
 		return nil // stays dirty; exported by the next writable pass

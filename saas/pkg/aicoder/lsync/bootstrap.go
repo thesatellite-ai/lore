@@ -209,6 +209,18 @@ func (e *engine) adoptOne(ctx context.Context, k rowKey, purged map[string]bool,
 	if err != nil {
 		return err
 	}
+	if e.isCoreOwned(k.table) {
+		// Files are the source for a core-owned table whatever --prefer
+		// says (owned.go): import the file; a row with no file is kept in
+		// lore.db and reported, never exported as v1 nor trashed.
+		if fileDoc != nil {
+			return e.applyFile(ctx, k, t, fileDoc, fc)
+		}
+		if purged[k.id] {
+			return e.deleteRowToTrash(ctx, k, t, "purged on main")
+		}
+		return e.exportDoc(ctx, k, t, dbDoc)
+	}
 	switch {
 	case fileDoc == nil && dbDoc == nil:
 		return e.clearDirty(ctx, k)
