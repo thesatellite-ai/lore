@@ -5,14 +5,17 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -91,6 +94,9 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 			if err = refuseSecretRefs(row.Row{ID: cur.ID, Fields: typed}); err != nil {
 				return Written{}, err
 			}
+			if typed, err = e.rehomeProject(ctx, to, def, typed); err != nil {
+				return Written{}, err
+			}
 		}
 		names := slices.Sorted(maps.Keys(typed))
 		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {
@@ -104,10 +110,14 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 		moved.Fields = sc.fields
 		moved.HLC = e.clock.Now(cur.HLC)
 		moved.UpdatedAt, moved.UpdatedBy = moved.HLC.Wall, actor
-		if !dst.Client {
-			if moved.Origin, err = withMove(cur.Origin, moved.HLC, actor.String(), string(src), string(to)); err != nil {
+		if dst.Client {
+			// A client repo never learns where the row came from: a fresh
+			// _o naming only this store, as if it had been written here.
+			if moved.Origin, err = originOf(cl.op, to); err != nil {
 				return Written{}, err
 			}
+		} else if moved.Origin, err = withMove(cur.Origin, moved.HLC, actor.String(), string(src), string(to)); err != nil {
+			return Written{}, err
 		}
 		var got stored
 		if got, err = e.put(ctx, dst, moved, hlc.HLC{}); err != nil {
@@ -246,4 +256,41 @@ func withMove(origin value.JSON, at hlc.HLC, by, from, to string) (value.JSON, e
 		return value.JSON{}, errs.Wrap(errs.Internal, "engine: build _o", err)
 	}
 	return value.JSONOf(obj)
+}
+
+// projectField is the field naming a row's project (every project-scoped
+// table: schema.Builtin).
+const projectField = "project_id"
+
+// rehomeProject points a row moving into the client repo to at that
+// store's project: the source's project is an internal store folder's,
+// whose id must not reach the client (and F15 refuses it). A row whose
+// project already lives in to is unchanged; to must hold exactly one live
+// project, else the move is refused (nothing written).
+func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.TableDef, fields map[string]value.Value) (map[string]value.Value, error) {
+	f, ok := def.Field(projectField)
+	cur, has := fields[projectField]
+	if !ok || !has || f.RefTable != schema.TableProjects {
+		return fields, nil
+	}
+	if id, err := ids.ParseAny(cur.String()); err == nil {
+		if got, gerr := e.stores[to].Backend.Get(ctx, schema.TableProjects, id); gerr == nil && !got.Deleted {
+			return fields, nil
+		}
+	}
+	projects, err := e.List(ctx, to, schema.TableProjects)
+	if err != nil {
+		return nil, err
+	}
+	if len(projects) != 1 {
+		return nil, errs.New(errs.Unsupported, "engine: store "+string(to)+" holds "+strconv.Itoa(len(projects))+" projects; a row moving into it needs exactly one to belong to").
+			WithHint("run `lore init` in the client repo first")
+	}
+	ref, err := value.RefOf(projects[0].ID)
+	if err != nil {
+		return nil, err
+	}
+	out := maps.Clone(fields)
+	out[projectField] = ref
+	return out, nil
 }

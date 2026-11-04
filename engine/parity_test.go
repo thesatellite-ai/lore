@@ -443,8 +443,25 @@ func TestMove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(got.Row.Origin.String(), "moves") {
-		t.Fatalf("a client repo got a moves entry: %s", got.Row.Origin.String())
+	if o := got.Row.Origin.String(); strings.Contains(o, "moves") || strings.Contains(o, string(agency)) || !strings.Contains(o, `"store":"repo"`) {
+		t.Fatalf("a client repo row must carry a fresh _o naming only repo: %s", o)
+	}
+
+	// an internal project is re-homed to the client repo's one project
+	agPrj := w.project(t, agency, "internal-folder")
+	inner := w.memIn(t, agency, agPrj, "filed in an internal folder")
+	got, err = w.eng.Move(ctx, Ref{ID: inner.ID}, store.SourceRepo)
+	if err != nil {
+		t.Fatalf("move with an internal project into the client repo: %v", err)
+	}
+	if p := got.Row.Fields["project_id"].String(); p != repoPrj.String() {
+		t.Fatalf("project_id = %s, want the client repo's %s", p, repoPrj)
+	}
+	// two projects in the client repo: no single place to re-home to
+	w.project(t, store.SourceRepo, "second")
+	inner2 := w.memIn(t, agency, agPrj, "again")
+	if _, err = w.eng.Move(ctx, Ref{ID: inner2.ID}, store.SourceRepo); !errs.Has(err, errs.Unsupported) {
+		t.Fatalf("re-home with two client projects: %v", err)
 	}
 
 	// read-only destination: refused before anything is read or written

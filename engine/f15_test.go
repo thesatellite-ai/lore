@@ -339,9 +339,15 @@ func TestF15ThroughTheWritePaths(t *testing.T) {
 		t.Fatalf("patched client→client ref: %v", err)
 	}
 
-	// Move into the client repo with a pointer into agency: refused at the
-	// destination's class, nothing moved.
+	// Move into the client repo with a pointer into agency (its
+	// superseded_by names an agency memory): refused at the destination's
+	// class, nothing moved. (Its project_id is re-homed to the client
+	// repo's project, so that one pointer does not count.)
+	other := w.memIn(t, agency, agPrj, "the newer internal note")
 	inAg := w.memIn(t, agency, agPrj, "stays internal")
+	if _, err := w.eng.Update(ctx, Ref{ID: inAg.ID}, map[string]value.Value{"superseded_by_id": txt(other.ID.String())}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := w.eng.Move(ctx, Ref{ID: inAg.ID}, store.SourceRepo); !errs.Has(err, errs.LeakBlocked) {
 		t.Fatalf("move internal row with an internal pointer into the client repo: %v", err)
 	}
