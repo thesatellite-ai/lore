@@ -43,12 +43,13 @@ func newLiveFixture(t *testing.T) (*liveBackend, store.Backend, *liveSession) {
 	t.Setenv(envLive, "")
 	t.Setenv(envSync, "")
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	for _, args := range [][]string{
-		{"init", "-q", "-b", "main"},
-		{"-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init"},
+	for _, cmd := range []*exec.Cmd{
+		exec.Command("git", "init", "-q", "-b", "main"),
+		exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init"),
 	} {
-		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v %s", cmd.Args, err, out)
 		}
 	}
 	inner := memstore.NewData().Open(store.OpenOptions{})
