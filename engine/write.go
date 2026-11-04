@@ -542,21 +542,37 @@ func mergeClears(steps []step) []step {
 // s.drop removed from the list field (an emptied list is cleared).
 func clearIn(r row.Row, s step) row.Row {
 	r.Fields = maps.Clone(r.Fields)
-	if l, ok := r.Fields[s.clear].(value.List); ok && !s.drop.IsZero() {
+	if !s.drop.IsZero() {
+		// any form: a List of refs (in memory), of texts, or a JSON array
+		// (a row file Infer could not type); the kept ids become refs
 		var keep []value.Value
-		for _, it := range l.Items() {
-			if it.String() != s.drop.String() {
-				keep = append(keep, it)
+		for _, it := range value.ItemStrings(r.Fields[s.clear]) {
+			if it == s.drop.String() {
+				continue
 			}
+			id, err := ids.ParseAny(it)
+			if err != nil {
+				return clearAll(r, s.clear) // not a list of ids: clearing is the safe answer
+			}
+			ref, err := value.RefOf(id)
+			if err != nil {
+				return clearAll(r, s.clear)
+			}
+			keep = append(keep, ref)
 		}
 		if len(keep) > 0 {
-			if nl, err := value.ListOf(l.Elem(), keep...); err == nil {
+			if nl, err := value.ListOf(value.KindRef, keep...); err == nil {
 				r.Fields[s.clear] = nl
 				return r
 			}
 		}
 	}
-	delete(r.Fields, s.clear)
+	return clearAll(r, s.clear)
+}
+
+// clearAll removes field f from r (r.Fields already cloned).
+func clearAll(r row.Row, f string) row.Row {
+	delete(r.Fields, f)
 	return r
 }
 

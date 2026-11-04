@@ -80,17 +80,18 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 	}
 	var moved row.Row
 	if there.ID.IsZero() {
+		// A row read back from a backend carries inferred values (a ref is
+		// Text, a json array of objects a List of JSON items), and
+		// validate.Targets only sees typed refs: re-type it first, or the
+		// reference, F15 and secret-ref checks miss what the file form
+		// hides. Not a whole-row validation: a row the source accepted (a
+		// v0.1.17 row with extra columns) still moves.
+		typed := retype(def, cur.Fields)
 		if dst.Client {
-			if err = refuseSecretRefs(cur); err != nil {
+			if err = refuseSecretRefs(row.Row{ID: cur.ID, Fields: typed}); err != nil {
 				return Written{}, err
 			}
 		}
-		// A row read back from a backend carries inferred values (a ref is
-		// Text), and validate.Targets only sees typed refs: re-type it
-		// first, or the reference and F15 checks see no refs at all. Not a
-		// whole-row validation: a row the source accepted (a v0.1.17 row
-		// with extra columns) still moves.
-		typed := retype(def, cur.Fields)
 		names := slices.Sorted(maps.Keys(typed))
 		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {
 			return Written{}, err
@@ -185,8 +186,9 @@ func refuseSecretRefs(r row.Row) error {
 		WithHint("remove the references from the row first (BATCH 5)")
 }
 
-// texts returns the text of a value: a text, a json value's raw text, or
-// every text item of a list.
+// texts returns the text of a value in any form it is held in: a text, a
+// json value's raw text, or the texts of every item of a list (a list read
+// back from a file may hold json objects as items: value.Infer).
 func texts(v value.Value) []string {
 	switch x := v.(type) {
 	case value.Text:
@@ -196,9 +198,7 @@ func texts(v value.Value) []string {
 	case value.List:
 		var out []string
 		for _, it := range x.Items() {
-			if t, ok := it.(value.Text); ok {
-				out = append(out, t.String())
-			}
+			out = append(out, texts(it)...)
 		}
 		return out
 	}

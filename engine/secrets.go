@@ -68,8 +68,14 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		case value.JSON:
 			look(name, -1, v.String())
 		case value.List:
+			// A list read back from a file may hold json objects as items
+			// (value.Infer): scan those too. Redacting one is refused
+			// (redactValue), never skipped.
 			for i, it := range v.Items() {
-				if t, ok := it.(value.Text); ok {
+				switch t := it.(type) {
+				case value.Text:
+					look(name, i, t.String())
+				case value.JSON:
 					look(name, i, t.String())
 				}
 			}

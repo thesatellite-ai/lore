@@ -92,7 +92,7 @@ func (a *App) StoreFormat(ctx context.Context, target store.Source) (int, error)
 	if err != nil {
 		return 0, err
 	}
-	mb, ok := st.byName[target].(markerBackend)
+	mb, ok := concrete(st.byName[target]).(markerBackend)
 	if !ok {
 		return 0, nil
 	}
@@ -340,10 +340,7 @@ func actorOfRow(r row.Row) RosterActor {
 // teamOfRow reads one teams row.
 func teamOfRow(r row.Row) RosterTeam {
 	t := RosterTeam{ID: r.ID.String(), Handle: fieldText(r, actorFieldHandle), Name: fieldText(r, actorFieldDisplay), Active: fieldActive(r)}
-	if l, ok := r.Fields[schema.FieldTeamMembers].(value.List); ok {
-		for _, it := range l.Items() {
-			t.Members = append(t.Members, it.String())
-		}
-	}
+	// any form: a List, or a JSON array as a row file may decode
+	t.Members = value.ItemStrings(r.Fields[schema.FieldTeamMembers])
 	return t
 }

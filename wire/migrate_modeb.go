@@ -200,13 +200,8 @@ func modeBChanges(exp ModeBExport) ([]store.Change, error) {
 		if !ok {
 			return nil
 		}
-		var out []string
-		if list, ok := r.Fields[schema.FieldTagIDs].(value.List); ok {
-			for _, it := range list.Items() {
-				out = append(out, it.String())
-			}
-		}
-		return out
+		// any form: a List, or a JSON array as a row file may decode
+		return value.ItemStrings(r.Fields[schema.FieldTagIDs])
 	})
 	for k, tags := range merged {
 		r, ok := rows[k]

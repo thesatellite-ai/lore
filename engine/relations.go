@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/direction"
@@ -266,13 +267,7 @@ func points(r row.Row, rule dependentRule, table row.Table, id ids.AnyID) bool {
 	if !ok {
 		return false
 	}
-	if l, isList := v.(value.List); isList {
-		for _, it := range l.Items() {
-			if it.String() == id.String() {
-				return true
-			}
-		}
-		return false
-	}
-	return v.String() == id.String() // a ref, or text holding an id when read back without a schema
+	// any form: a ref, a List of refs or texts, a JSON array (a row file
+	// whose array Infer could not type), or text holding an id
+	return slices.Contains(value.ItemStrings(v), id.String())
 }

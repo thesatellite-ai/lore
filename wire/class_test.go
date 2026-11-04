@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
@@ -212,4 +213,45 @@ func TestActorKindOf(t *testing.T) {
 			t.Errorf("actorKindOf(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+// TestListFieldsInEveryForm: secret_rules keywords and team members read
+// the same from the engine's in-memory list and from a row file's form (a
+// List of texts, or a JSON array that Infer left as JSON).
+func TestListFieldsInEveryForm(t *testing.T) {
+	inMem, err := value.ListOf(value.KindText, mustText(t, "akia"), mustText(t, "aws"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, v := range map[string]value.Value{"in memory": inMem, "list of texts": inferred(t, `["akia","aws"]`), "json array": inferred(t, `["akia",1,"aws"]`)} {
+		rr, err := ruleRow(row.Row{Fields: map[string]value.Value{ruleFieldKeywords: v}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(rr.Keywords, ","); !strings.HasPrefix(got, "akia,") || !strings.HasSuffix(got, ",aws") {
+			t.Errorf("%s: keywords = %q", name, got)
+		}
+		tm := teamOfRow(row.Row{Fields: map[string]value.Value{schema.FieldTeamMembers: v}})
+		if len(tm.Members) < 2 || tm.Members[0] != "akia" {
+			t.Errorf("%s: members = %v", name, tm.Members)
+		}
+	}
+}
+
+func mustText(t *testing.T, s string) value.Value {
+	t.Helper()
+	v, err := value.TextOf(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func inferred(t *testing.T, raw string) value.Value {
+	t.Helper()
+	v, err := value.Infer([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
 }

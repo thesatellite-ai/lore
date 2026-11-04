@@ -457,15 +457,11 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, error) {
 		return nil, nil
 	}
 	merged, skipped := mergeTagLinks(reg, links, func(t row.Table, id ids.AnyID) []string {
-		var out []string
 		if _, r, gerr := st.eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: t, ID: id}); gerr == nil {
-			if list, ok := r.Fields[schema.FieldTagIDs].(value.List); ok {
-				for _, it := range list.Items() {
-					out = append(out, it.String())
-				}
-			}
+			// any form: a List, or a JSON array as a row file may decode
+			return value.ItemStrings(r.Fields[schema.FieldTagIDs])
 		}
-		return out
+		return nil
 	})
 	var steps []string
 	for _, l := range skipped {

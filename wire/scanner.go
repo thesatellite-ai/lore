@@ -66,11 +66,8 @@ func ruleRow(r row.Row) (gitleaks.RuleRow, error) {
 	rr := gitleaks.RuleRow{
 		RuleID: textField(r, ruleFieldID), Regex: textField(r, ruleFieldRegex), State: textField(r, ruleFieldState),
 	}
-	if l, ok := r.Fields[ruleFieldKeywords].(value.List); ok {
-		for _, it := range l.Items() {
-			rr.Keywords = append(rr.Keywords, it.String())
-		}
-	}
+	// any form: a List, or a JSON array as a row file may decode
+	rr.Keywords = value.ItemStrings(r.Fields[ruleFieldKeywords])
 	if n, ok := r.Fields[ruleFieldEntropy].(value.Number); ok {
 		f, err := n.Float64()
 		if err != nil {
