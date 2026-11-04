@@ -383,26 +383,23 @@ func (r *storeRows) RepoName(repoID string) string {
 // Stage implements coord.Rows: one commit on the store's live ref, pushed
 // atomically with the store's signals ref (same remote).
 func (r *storeRows) Stage(ctx context.Context, rows ...coord.RowWrite) ([]signals.Companion, error) {
-	if err := refuseNewFormatStore(ctx, r.sp.st, r.sp.branch); err != nil {
-		return nil, err
+	if newFormatStore(ctx, r.sp.st, r.sp.branch) {
+		// A 0.1.18 store: its rows are the core's, written on the store
+		// branch through the core's attachment and pushed at once
+		// (STORE_SERVER_SPEC 6.1, LORE_TEAM_SPEC §3.2), after the signals
+		// push confirmed the lease (coreCompanion, as for repo rows).
+		return []signals.Companion{&coreCompanion{rows: rows}}, nil
 	}
 	return []signals.Companion{&stagedLiveRows{spot: r.spot(), rows: rows}}, nil
 }
 
-// refuseNewFormatStore keeps this v0.1.17 live-ref path to stores that are
-// still in the v0.1.17 format: once `lore migrate run` made the store's
-// marker v2, its task rows belong to the 0.1.18 core (`_v: 2` files), and
-// a v1 document staged here would bypass the core's write path.
-//
-// The marker is read from the store branch as last fetched (the clone is
-// bare: there is no lore-store.yaml file on disk to read, which made the
-// first version of this check a no-op).
-func refuseNewFormatStore(ctx context.Context, st *stores.Store, branch string) error {
-	if st.FormatAt(ctx, stores.TrackingBranch(branch)) < stores.NewFormatMarkerVersion {
-		return nil // no marker or a v1 one: the v0.1.17 store this path serves
-	}
-	return errcodes.New(errcodes.Unsupported, "this store is in the 0.1.18 format: its task rows are written by the core, not through the v0.1.17 store live ref").
-		WithHint("attach the store in .lore/stores.yaml and use --to <store>; a store still on v0.1.17 is converted with `lore migrate run`")
+// newFormatStore reports a store whose marker on the fetched branch is
+// v2 (`lore migrate run` or a 0.1.18 `lore store init`): its task rows
+// belong to the core (`_v: 2` files), so a v1 document is never staged on
+// its v0.1.17 live ref. The marker is read from the store branch as last
+// fetched (the clone is bare: there is no lore-store.yaml file on disk).
+func newFormatStore(ctx context.Context, st *stores.Store, branch string) bool {
+	return st.FormatAt(ctx, stores.TrackingBranch(branch)) >= stores.NewFormatMarkerVersion
 }
 
 func (r *storeRows) spot() liveSpot {
