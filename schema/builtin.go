@@ -21,6 +21,25 @@ const (
 	TableSecretRules  = "secret_rules"
 	TableSecretAllows = "secret_allows"
 	TableResources    = "resources"
+	TableTags         = "tags"
+)
+
+// FieldTagIDs is the list-of-ref field that carries a row's tags (decision
+// O11: a many-to-many lives in the owning row, replacing v0.1.17's
+// entity_tags bridge rows). Every table v0.1.17 let carry tags that the
+// core declares has it, with the relation RelTags.
+const (
+	FieldTagIDs = "tag_ids"
+	RelTags     = "tags"
+)
+
+// Cache-only join tables filled from tag_ids (one per owning table, since
+// a join table belongs to exactly one relation).
+const (
+	JoinActorTags   = "actor_tags"
+	JoinProjectTags = "project_tags"
+	JoinRepoTags    = "repo_tags"
+	JoinMemoryTags  = "memory_tags"
 )
 
 // Memory kinds (the 5-tier taxonomy of dbent/schema/memory.go).
@@ -91,6 +110,8 @@ func Builtin() []TableDef {
 			IndexOn(fieldKind),
 			IndexOn("handle"),
 			SelfRel("owner", "owner_actor_id", TombstoneOnly),
+			tagIDs(),
+			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinActorTags, Cascade),
 		),
 		Table(TableProjects, ids.PrefixProject, Synced(), Description("a project, or a folder inside a store"),
 			Text(fieldName, Required()),
@@ -99,6 +120,8 @@ func Builtin() []TableDef {
 			IndexOn(fieldName),
 			HasManyRel("repos", TableRepos, "project_id"),
 			HasManyRel("memories", TableMemories, "project_id"),
+			tagIDs(),
+			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinProjectTags, Cascade),
 		),
 		Table(TableRepos, ids.PrefixRepo, Synced(), Description("a code repository of a project"),
 			Ref("project_id", TableProjects, Required()),
@@ -108,6 +131,8 @@ func Builtin() []TableDef {
 			DateTime("archived_at"),
 			UniqueOn("project_id", "mount_name"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
+			tagIDs(),
+			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinRepoTags, Cascade),
 		),
 		Table(TableMemories, ids.PrefixMemory, Synced(), FTS("body"), Description("free-form learned notes"),
 			Ref("project_id", TableProjects, Required()),
@@ -135,6 +160,8 @@ func Builtin() []TableDef {
 			BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
 			BelongsToRel("validated_by", "validated_by_actor_id", TableActors, TombstoneOnly),
 			SelfRel("superseded_by", "superseded_by_id", SetNull),
+			tagIDs(),
+			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinMemoryTags, Cascade),
 		),
 		Table(TablePolicies, ids.PrefixPolicy, Synced(), Description("one policy entry (spec 4.3)"),
 			Text("key", Required()),
@@ -207,6 +234,13 @@ func Builtin() []TableDef {
 			Text("reason"),
 			IndexOn("row_id"),
 		),
+		Table(TableTags, ids.PrefixTag, Synced(), Description("a tag; per project, same name allowed across projects"),
+			Ref("project_id", TableProjects, Required()),
+			Text(fieldName, Required()),
+			Text("color"),
+			UniqueOn("project_id", fieldName),
+			BelongsToRel("project", "project_id", TableProjects, Restrict),
+		),
 		Table(TableResources, ids.PrefixResource, Synced(), Description("a resource; its fields follow its kind"),
 			Ref(fieldKind, TableKinds, Required()),
 			Text(fieldName, Required()),
@@ -215,6 +249,11 @@ func Builtin() []TableDef {
 			BelongsToRel("kind_def", fieldKind, TableKinds, Restrict),
 		),
 	}
+}
+
+// tagIDs declares the tag_ids field of a table that carries tags.
+func tagIDs() Item {
+	return RefList(FieldTagIDs, TableTags, Describe("ids of the tags on this row"), Label("Tags"))
 }
 
 // kindWords lists the value kind words a settings row may name as a type

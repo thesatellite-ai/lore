@@ -143,8 +143,8 @@ func (r *Registry) checkField(t TableDef, f FieldDef) []error {
 		p = append(p, problem(t.Name, "field "+f.Name+": list fields, and only they, name an item kind"))
 	}
 	if f.RefTable != "" {
-		if f.Kind != value.KindRef {
-			p = append(p, problem(t.Name, "field "+f.Name+" names a ref table but is not a ref"))
+		if f.Kind != value.KindRef && (f.Kind != value.KindList || f.Elem != value.KindRef) {
+			p = append(p, problem(t.Name, "field "+f.Name+" names a ref table but is not a ref or a list of refs"))
 		} else if _, ok := r.tables[f.RefTable]; !ok {
 			p = append(p, problem(t.Name, "field "+f.Name+" refers to unknown table "+string(f.RefTable)))
 		}
@@ -188,17 +188,45 @@ func (r *Registry) checkRelation(t TableDef, rel Relation) []error {
 			p = append(p, problem(t.Name, "relation "+rel.Name+": "+string(rel.Target)+"."+rel.Field+" is not a ref field"))
 		}
 	case ManyToMany:
-		if !rel.JoinTable.Valid() {
-			p = append(p, problem(t.Name, "relation "+rel.Name+": invalid join table name"))
-		} else if _, clash := r.tables[rel.JoinTable]; clash {
-			p = append(p, problem(t.Name, "relation "+rel.Name+": join table "+string(rel.JoinTable)+" is also a table"))
-		}
+		p = append(p, r.checkManyToMany(t, rel)...)
 	case Polymorphic:
 		if f, ok := local(rel.TypeField); !ok || f.Kind != value.KindText {
 			p = append(p, problem(t.Name, "relation "+rel.Name+": type field "+rel.TypeField+" is not text"))
 		}
 		if f, ok := local(rel.Field); !ok || f.Kind != value.KindRef {
 			p = append(p, problem(t.Name, "relation "+rel.Name+": id field "+rel.Field+" is not a ref field"))
+		}
+	}
+	return p
+}
+
+// checkManyToMany validates a many-to-many relation (decision O11): Field
+// must be a local list-of-ref field pointing at Target, and JoinTable a
+// valid name that no registered table and no other relation uses, because
+// the cache creates it as its own table.
+func (r *Registry) checkManyToMany(t TableDef, rel Relation) []error {
+	var p []error
+	at := func(msg string) error { return problem(t.Name, "relation "+rel.Name+": "+msg) }
+	f, ok := t.Field(rel.Field)
+	switch {
+	case !ok:
+		p = append(p, at("field "+rel.Field+" does not exist"))
+	case f.Kind != value.KindList || f.Elem != value.KindRef:
+		p = append(p, at("field "+rel.Field+" is not a list of refs"))
+	case f.RefTable != rel.Target:
+		p = append(p, at("field "+rel.Field+" refers to "+string(f.RefTable)+", not "+string(rel.Target)))
+	}
+	if !rel.JoinTable.Valid() {
+		return append(p, at("invalid join table name"))
+	}
+	if _, clash := r.tables[rel.JoinTable]; clash {
+		p = append(p, at("join table "+string(rel.JoinTable)+" is also a table"))
+	}
+	for _, n := range r.names {
+		for _, other := range r.tables[n].Relations {
+			if other.Kind == ManyToMany && other.JoinTable == rel.JoinTable && (n != t.Name || other.Name != rel.Name) {
+				p = append(p, at("join table "+string(rel.JoinTable)+" is also used by "+string(n)+"."+other.Name))
+			}
 		}
 	}
 	return p

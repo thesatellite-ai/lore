@@ -34,7 +34,8 @@ func relDef() schema.TableDef {
 		schema.SelfRel("parent", "parent_id", schema.SetNull),
 		schema.PolymorphicRel("target", "target_type", "target_id", schema.TombstoneOnly),
 		schema.BelongsToRel("memory", "memory_id", schema.TableMemories, schema.TombstoneOnly),
-		schema.ManyToManyRel("tags", schema.TableMemories, "rule_memories", schema.Cascade),
+		schema.RefList("memory_ids", schema.TableMemories),
+		schema.ManyToManyRel("mems", "memory_ids", schema.TableMemories, "rule_memories", schema.Cascade),
 	}
 	for _, w := range sqlWords {
 		items = append(items, schema.Text(w))

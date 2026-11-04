@@ -14,6 +14,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -25,7 +26,9 @@ const driverName = "sqlite"
 // layoutVersion is PRAGMA user_version of a cache file this code writes.
 // Bump it when the internal tables change shape: a file with another
 // version is emptied and rebuilt (it is a cache), never migrated.
-const layoutVersion = 1
+// 2: typed tables keyed by (_source, id); join tables filled from
+// list-of-ref fields (O10, O11).
+const layoutVersion = 2
 
 // busyTimeoutMS is how long a writer waits for another process's lock
 // before failing with SQLITE_BUSY.
@@ -384,6 +387,27 @@ func (c *Cache) Close() error {
 		return dbErr("close", err)
 	}
 	return nil
+}
+
+// resolveRows is ResolveID's statement: every source holding a live row
+// with the id.
+const resolveRows = `SELECT source, tbl FROM "` + tblRows + `" WHERE id = ? AND deleted = 0 ORDER BY source, tbl`
+
+// ResolveID finds the one source of this file holding a live row with id.
+// In a combined cache (CFG3, several sources in one file) an id held by
+// two sources is E_AMBIGUOUS_ID instead of whichever applied last; none is
+// E_NOT_FOUND. LensHit.Source is the store.Source the row was applied as.
+func (c *Cache) ResolveID(ctx context.Context, id ids.AnyID) (LensHit, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.usable(); err != nil {
+		return LensHit{}, err
+	}
+	hits, err := resolveIn(c.db.QueryContext(ctx, resolveRows, id.String()))
+	if err != nil {
+		return LensHit{}, err
+	}
+	return oneHit(id, hits)
 }
 
 // Tables returns the typed tables the cache holds now (built-ins and

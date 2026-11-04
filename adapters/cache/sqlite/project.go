@@ -37,14 +37,14 @@ func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.
 	}
 	if isResource {
 		for _, k := range st.kinds {
-			if err := c.deleteTyped(ctx, tx, st.plans[k.table], sr.ID); err != nil {
+			if err := c.deleteTyped(ctx, tx, st.plans[k.table], string(source), sr.ID); err != nil {
 				return err
 			}
 		}
 	}
 	if sr.Deleted {
 		if known {
-			return c.deleteTyped(ctx, tx, p, sr.ID)
+			return c.deleteTyped(ctx, tx, p, string(source), sr.ID)
 		}
 		return nil
 	}
@@ -53,7 +53,7 @@ func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.
 		// A document this binary cannot read (a newer _v) stays in _rows
 		// only; a newer lore will project it.
 		if known {
-			return c.deleteTyped(ctx, tx, p, sr.ID)
+			return c.deleteTyped(ctx, tx, p, string(source), sr.ID)
 		}
 		return nil
 	}
@@ -139,7 +139,36 @@ func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 	if err := upsertFTS(ctx, tx, p, source, r.ID, vals); err != nil {
 		return err
 	}
+	if err := fillJoins(ctx, tx, p, source, r.ID, vals); err != nil {
+		return err
+	}
 	return c.refreshRefs(ctx, tx, p, r.ID, vals)
+}
+
+// fillJoins replaces the pairs of one row in every join table of p from
+// its list-of-ref fields (decision O11). An item that is not a valid id
+// (an old or hand-edited row) is skipped: the cache mirrors, the validator
+// reports it.
+func fillJoins(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID, vals map[string]value.Value) error {
+	for _, j := range p.joins {
+		if _, err := tx.ExecContext(ctx, j.deleteFrom, source, id.String()); err != nil {
+			return dbErr("clear pairs of "+j.rel.JoinTable.String(), err)
+		}
+		list, ok := vals[j.rel.Field].(value.List)
+		if !ok {
+			continue
+		}
+		for _, item := range list.Items() {
+			to, err := ids.ParseAny(item.String())
+			if err != nil {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, j.insert, source, id.String(), to.String()); err != nil {
+				return dbErr("record pair in "+j.rel.JoinTable.String(), err)
+			}
+		}
+	}
+	return nil
 }
 
 // extractList returns "json_extract(?1, '$[0]'), …" for n columns.
@@ -226,7 +255,7 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 	if p.fts == "" {
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, id.String()); err != nil {
+	if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, source, id.String()); err != nil {
 		return dbErr("fts delete", err)
 	}
 	cells := []json.RawMessage{canon.String(id.String()), canon.String(source)}
@@ -247,14 +276,23 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 	return nil
 }
 
-// deleteTyped removes id from p's table, FTS and references.
-func (c *Cache) deleteTyped(ctx context.Context, tx *sql.Tx, p plan, id ids.AnyID) error {
-	if _, err := tx.ExecContext(ctx, p.sql.deleteID, id.String()); err != nil {
+// deleteTyped removes source's copy of id from p's table, FTS and join
+// tables, and id's references. References are keyed by id alone, so when
+// two sources of a combined file hold the same id (itself an
+// E_AMBIGUOUS_ID state) deleting one copy also drops the other's until it
+// is applied again.
+func (c *Cache) deleteTyped(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID) error {
+	if _, err := tx.ExecContext(ctx, p.sql.deleteID, source, id.String()); err != nil {
 		return dbErr("delete", err)
 	}
 	if p.fts != "" {
-		if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, id.String()); err != nil {
+		if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, source, id.String()); err != nil {
 			return dbErr("fts delete", err)
+		}
+	}
+	for _, j := range p.joins {
+		if _, err := tx.ExecContext(ctx, j.deleteFrom, source, id.String()); err != nil {
+			return dbErr("delete pairs", err)
 		}
 	}
 	for _, q := range []string{
@@ -280,6 +318,11 @@ func clearSource(ctx context.Context, tx *sql.Tx, p plan, source store.Source) e
 	if p.fts != "" {
 		if _, err := tx.ExecContext(ctx, p.sql.ftsClearSource, string(source)); err != nil {
 			return dbErr("clear fts", err)
+		}
+	}
+	for _, j := range p.joins {
+		if _, err := tx.ExecContext(ctx, j.clearSource, string(source)); err != nil {
+			return dbErr("clear pairs", err)
 		}
 	}
 	if _, err := tx.ExecContext(ctx, p.sql.clearSource, string(source)); err != nil {

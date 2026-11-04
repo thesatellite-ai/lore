@@ -51,9 +51,17 @@ func TestRegistryRejects(t *testing.T) {
 			Ref("p_id", "things", Required()), BelongsToRel("p", "p_id", "things", SetNull))},
 		"unknown target": {Table("things", ids.PrefixTag, Ref("p_id", ""), BelongsToRel("p", "p_id", "nowhere", Restrict))},
 		"has many field": {base, Table("others", ids.PrefixTeam, HasManyRel("t", "things", "nope"))},
-		"m2m join clash": {base, Table("others", ids.PrefixTeam, ManyToManyRel("t", "things", "things", Cascade))},
-		"poly no type":   {Table("things", ids.PrefixTag, Ref("o_id", ""), PolymorphicRel("o", "o_type", "o_id", TombstoneOnly))},
-		"bad on delete":  {Table("things", ids.PrefixTag, Ref("p_id", "things"), BelongsToRel("p", "p_id", "things", "explode"))},
+		"m2m join clash": {base, Table("others", ids.PrefixTeam, RefList("t_ids", "things"), ManyToManyRel("t", "t_ids", "things", "things", Cascade))},
+		"m2m no field":   {base, Table("others", ids.PrefixTeam, ManyToManyRel("t", "t_ids", "things", "o_t", Cascade))},
+		"m2m not list":   {base, Table("others", ids.PrefixTeam, Ref("t_ids", "things"), ManyToManyRel("t", "t_ids", "things", "o_t", Cascade))},
+		"m2m text list":  {base, Table("others", ids.PrefixTeam, List("t_ids", value.KindText), ManyToManyRel("t", "t_ids", "things", "o_t", Cascade))},
+		"m2m any table":  {base, Table("others", ids.PrefixTeam, RefList("t_ids", ""), ManyToManyRel("t", "t_ids", "things", "o_t", Cascade))},
+		"m2m wrong ref":  {base, Table("others", ids.PrefixTeam, RefList("t_ids", "others"), ManyToManyRel("t", "t_ids", "things", "o_t", Cascade))},
+		"m2m join shared": {base, Table("others", ids.PrefixTeam, RefList("a_ids", "things"), RefList("b_ids", "things"),
+			ManyToManyRel("a", "a_ids", "things", "o_t", Cascade), ManyToManyRel("b", "b_ids", "things", "o_t", Cascade))},
+		"ref table on text": {Table("things", ids.PrefixTag, Field("x", value.KindText, func(f *FieldDef) { f.RefTable = "things" }))},
+		"poly no type":      {Table("things", ids.PrefixTag, Ref("o_id", ""), PolymorphicRel("o", "o_type", "o_id", TombstoneOnly))},
+		"bad on delete":     {Table("things", ids.PrefixTag, Ref("p_id", "things"), BelongsToRel("p", "p_id", "things", "explode"))},
 	}
 	for name, defs := range cases {
 		if _, err := NewRegistry(defs...); err == nil {
@@ -63,15 +71,50 @@ func TestRegistryRejects(t *testing.T) {
 	ok := []TableDef{
 		base,
 		Table("others", ids.PrefixTeam,
-			Ref("thing_id", "things"), Ref("parent_id", "others"), Text("o_type"), Ref("o_id", ""),
+			Ref("thing_id", "things"), Ref("parent_id", "others"), Text("o_type"), Ref("o_id", ""), RefList("thing_ids", "things"),
 			BelongsToRel("thing", "thing_id", "things", Cascade),
 			SelfRel("parent", "parent_id", SetNull),
-			ManyToManyRel("tags", "things", "others_things", Cascade),
+			ManyToManyRel("tags", "thing_ids", "things", "others_things", Cascade),
 			PolymorphicRel("owner", "o_type", "o_id", TombstoneOnly),
 		),
 	}
 	if _, err := NewRegistry(ok...); err != nil {
 		t.Fatalf("every relation kind: %v", err)
+	}
+}
+
+// TestBuiltinTags: every table that carries tags has a tag_ids list of
+// refs to tags and a many-to-many over it with its own join table (O11),
+// and no join table is a registered table.
+func TestBuiltinTags(t *testing.T) {
+	t.Parallel()
+	r, err := NewRegistry(Builtin()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tags, ok := r.Table(TableTags)
+	if !ok || tags.Prefix != ids.PrefixTag || !tags.Synced {
+		t.Fatalf("tags %+v", tags)
+	}
+	want := map[string]string{TableActors: JoinActorTags, TableProjects: JoinProjectTags, TableRepos: JoinRepoTags, TableMemories: JoinMemoryTags}
+	for table, join := range want {
+		def, _ := r.Table(row.Table(table))
+		f, ok := def.Field(FieldTagIDs)
+		if !ok || f.Kind != value.KindList || f.Elem != value.KindRef || f.RefTable != TableTags {
+			t.Errorf("%s.%s = %+v", table, FieldTagIDs, f)
+		}
+		found := false
+		for _, rel := range def.Relations {
+			if rel.Kind == ManyToMany && rel.Name == RelTags && rel.Field == FieldTagIDs && rel.Target == TableTags && rel.JoinTable == row.Table(join) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: no tags relation through %s", table, join)
+		}
+		if _, clash := r.Table(row.Table(join)); clash {
+			t.Errorf("join %s is a registered table", join)
+		}
 	}
 }
 

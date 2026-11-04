@@ -67,6 +67,15 @@ func Ref(name, target string, opts ...FieldOption) Item {
 	return Field(name, value.KindRef, append([]FieldOption{func(f *FieldDef) { f.RefTable = row.Table(target) }}, opts...)...)
 }
 
+// RefList declares a list field whose items are ids of target rows ("" =
+// any table), the field shape a ManyToMany relation names.
+func RefList(name, target string, opts ...FieldOption) Item {
+	return Field(name, value.KindList, append([]FieldOption{func(f *FieldDef) {
+		f.Elem = value.KindRef
+		f.RefTable = row.Table(target)
+	}}, opts...)...)
+}
+
 // Required marks the field as required on every live row.
 func Required() FieldOption { return func(f *FieldDef) { f.Required = true } }
 
@@ -137,9 +146,13 @@ func HasManyRel(name, target, field string) Item {
 	return relation(Relation{Name: name, Kind: HasMany, Field: field, Target: row.Table(target), OnDelete: TombstoneOnly})
 }
 
-// ManyToManyRel links through the join table join.
-func ManyToManyRel(name, target, join string, od OnDelete) Item {
-	return relation(Relation{Name: name, Kind: ManyToMany, Target: row.Table(target), JoinTable: row.Table(join), OnDelete: od})
+// ManyToManyRel declares that the list-of-ref field holds ids of target
+// rows; the cache keeps the cache-only join table join filled from it.
+func ManyToManyRel(name, field, target, join string, od OnDelete) Item {
+	return relation(Relation{
+		Name: name, Kind: ManyToMany, Field: field, Target: row.Table(target),
+		JoinTable: row.Table(join), OnDelete: od,
+	})
 }
 
 // SelfRel declares that field holds the id of another row of this table.

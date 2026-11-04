@@ -14,8 +14,11 @@
 //
 // One table per schema.TableDef, built at run time (no generated code):
 //
-//	id          TEXT PRIMARY KEY   the row id
+//	id          TEXT NOT NULL      the row id
 //	_source     TEXT NOT NULL      the store.Source that applied the row
+//	PRIMARY KEY (_source, id): one file may hold several sources (the
+//	combined cache, CFG3); an id two sources hold stays two rows and
+//	ResolveID reports it as E_AMBIGUOUS_ID
 //	_hlc        TEXT NOT NULL      the row's HLC
 //	created_at, created_by, updated_at, updated_by   TEXT (audit, may be NULL)
 //	<field>...  one column per FieldDef, affinity from the table below
@@ -43,6 +46,10 @@
 // check on write; a cache that refused a row the backend holds would just
 // be wrong. Relations become indexes only: every ref column, every
 // polymorphic (type, id) pair and both columns of a join table.
+//
+// A many-to-many relation (O11) names a list-of-ref field of the owning
+// table; its join table (from_id, to_id, _source) is cache-only, refilled
+// from that field on every upsert of the owning row.
 //
 // # Kinds
 //
@@ -75,6 +82,10 @@
 // maximum: raising SQLITE_LIMIT_ATTACHED to 125 (spec 7.4) is impossible
 // with this driver, so a lens holds at most MaxLensSources (10) sources and
 // refuses more with E_UNSUPPORTED. TestAttachLimit pins the real number.
+// Past that limit the caller keeps one combined cache file for every
+// source (Open, applying each store under its own Source) and reads it
+// with OpenLensCombined, whose `source` column is each row's _source
+// (CFG3 fallback, O10).
 //
 // Layer L3: imports model, schema and store, never the engine.
 package sqlite

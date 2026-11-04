@@ -77,6 +77,7 @@ type plan struct {
 	columns     []column // typed table columns in order, internal first
 	fts         string   // FTS table name, "" when the def has no FTS fields
 	view        string   // stable kind view name, "" for built-ins
+	joins       []joinPlan
 	create      []string
 	sql         tableSQL
 	objects     []dbObject
@@ -94,7 +95,7 @@ type tableSQL struct {
 	// slices.
 	insert    string
 	ftsInsert string
-	// deleteID / ftsDeleteID take the row id.
+	// deleteID / ftsDeleteID take (source, row id).
 	deleteID    string
 	ftsDeleteID string
 	// clearSource / ftsClearSource take the source; refsClearSource and
@@ -103,10 +104,26 @@ type tableSQL struct {
 	ftsClearSource      string
 	refsClearSource     string
 	expandedClearSource string
-	// selectText maps a text field to "SELECT field WHERE id = ?".
+	// selectText maps a text field to "SELECT field WHERE id = ?" (the
+	// first source's copy when two sources hold the id; references are
+	// tracked per id, see deleteTyped).
 	selectText map[string]string
 	// search takes (match, limit).
 	search string
+}
+
+// joinPlan is the cache-only join table of one many-to-many relation
+// (decision O11): (from_id, to_id, _source), filled from the owning row's
+// list-of-ref field on every upsert. Primary key (_source, from_id, to_id),
+// so a list naming one id twice yields one pair and two sources keep their
+// own pairs; both id columns are indexed.
+type joinPlan struct {
+	rel schema.Relation
+	// insert takes (source, from id, to id) and ignores a duplicate pair.
+	insert string
+	// deleteFrom takes (source, from id); clearSource takes the source.
+	deleteFrom  string
+	clearSource string
 }
 
 // column is one typed-table column.
@@ -162,16 +179,19 @@ func planFor(def schema.TableDef, view string) (plan, error) {
 		quoted = append(quoted, cq)
 		d := cq + " " + c.typ
 		switch c.name {
-		case colID:
-			d += " PRIMARY KEY NOT NULL"
-		case colSource, colHLC:
+		case colID, colSource, colHLC:
 			d += " NOT NULL"
 		}
 		defs = append(defs, d)
 	}
+	// The key is (_source, id), not id: one file may hold several sources
+	// (the combined cache of CFG3), and an id held by two of them must stay
+	// two rows so a reader can report E_AMBIGUOUS_ID instead of silently
+	// showing whichever source applied last.
+	defs = append(defs, `PRIMARY KEY ("`+colSource+`", "`+colID+`")`)
 	p.create = append(p.create, "CREATE TABLE "+tq+" ("+strings.Join(defs, ", ")+")")
 	p.sql.insert = "INSERT OR REPLACE INTO " + tq + " (" + strings.Join(quoted, ", ") + ") VALUES (" + extractList(len(quoted)) + ")"
-	p.sql.deleteID = "DELETE FROM " + tq + ` WHERE "` + colID + `" = ?`
+	p.sql.deleteID = "DELETE FROM " + tq + ` WHERE "` + colSource + `" = ? AND "` + colID + `" = ?`
 	p.sql.clearSource = "DELETE FROM " + tq + ` WHERE "` + colSource + `" = ?`
 	bySource := ` WHERE entity_table = ? AND entity_id IN (SELECT "` + colID + `" FROM ` + tq + ` WHERE "` + colSource + `" = ?)`
 	p.sql.refsClearSource = `DELETE FROM "` + tblRefs + `"` + bySource
@@ -179,7 +199,7 @@ func planFor(def schema.TableDef, view string) (plan, error) {
 	p.sql.selectText = map[string]string{}
 	for i, c := range p.columns {
 		if c.field.Kind == value.KindText {
-			p.sql.selectText[c.name] = "SELECT " + quoted[i] + " FROM " + tq + ` WHERE "` + colID + `" = ?`
+			p.sql.selectText[c.name] = "SELECT " + quoted[i] + " FROM " + tq + ` WHERE "` + colID + `" = ? ORDER BY "` + colSource + `" LIMIT 1`
 		}
 	}
 	p.objects = append(p.objects, dbObject{Type: objTable, Name: def.Name.String()})
@@ -224,6 +244,7 @@ func indexStatements(def schema.TableDef) ([]string, error) {
 		lists = append(lists, fields)
 	}
 	add(colSource)
+	add(colID)
 	for _, ix := range def.Indexes {
 		add(ix.Fields...)
 	}
@@ -285,7 +306,7 @@ func (p *plan) addFTS() error {
 		names = append(names, cq)
 	}
 	p.create = append(p.create, "CREATE VIRTUAL TABLE "+fq+" USING fts5("+strings.Join(cols, ", ")+")")
-	p.sql.ftsDeleteID = "DELETE FROM " + fq + ` WHERE "` + colID + `" = ?`
+	p.sql.ftsDeleteID = "DELETE FROM " + fq + ` WHERE "` + colSource + `" = ? AND "` + colID + `" = ?`
 	p.sql.ftsClearSource = "DELETE FROM " + fq + ` WHERE "` + colSource + `" = ?`
 	p.sql.search = `SELECT "` + colID + `" FROM ` + fq + " WHERE " + fq + " MATCH ? ORDER BY rank LIMIT ?"
 	p.sql.ftsInsert = "INSERT INTO " + fq + " (" + strings.Join(names, ", ") + ") VALUES (" + extractList(len(names)) + ")"
@@ -293,11 +314,8 @@ func (p *plan) addFTS() error {
 	return nil
 }
 
-// addJoins adds one join table per many-to-many relation: (from_id, to_id,
-// _source) with an index on each id column. The relation declares no field
-// that carries the pairs yet (schema.Relation: ManyToMany Field unused), so
-// the table is created empty and stays empty until the schema names that
-// source; the lens and joins can already be written against it.
+// addJoins adds the cache-only join table of every many-to-many relation
+// (see joinPlan) with an index on each id column.
 func (p *plan) addJoins() error {
 	for _, rel := range p.def.Relations {
 		if rel.Kind != schema.ManyToMany {
@@ -309,7 +327,7 @@ func (p *plan) addJoins() error {
 			return err
 		}
 		p.create = append(p.create,
-			"CREATE TABLE "+jq+` ("`+joinFrom+`" TEXT NOT NULL, "`+joinTo+`" TEXT NOT NULL, "`+colSource+`" TEXT NOT NULL, PRIMARY KEY ("`+joinFrom+`", "`+joinTo+`"))`)
+			"CREATE TABLE "+jq+` ("`+joinFrom+`" TEXT NOT NULL, "`+joinTo+`" TEXT NOT NULL, "`+colSource+`" TEXT NOT NULL, PRIMARY KEY ("`+colSource+`", "`+joinFrom+`", "`+joinTo+`"))`)
 		for n, c := range []string{joinFrom, joinTo} {
 			nq, err := ident(indexPrefix + name + indexSep + strconv.Itoa(n))
 			if err != nil {
@@ -317,6 +335,12 @@ func (p *plan) addJoins() error {
 			}
 			p.create = append(p.create, "CREATE INDEX "+nq+" ON "+jq+` ("`+c+`")`)
 		}
+		p.joins = append(p.joins, joinPlan{
+			rel:         rel,
+			insert:      "INSERT OR IGNORE INTO " + jq + ` ("` + colSource + `", "` + joinFrom + `", "` + joinTo + `") VALUES (?, ?, ?)`,
+			deleteFrom:  "DELETE FROM " + jq + ` WHERE "` + colSource + `" = ? AND "` + joinFrom + `" = ?`,
+			clearSource: "DELETE FROM " + jq + ` WHERE "` + colSource + `" = ?`,
+		})
 		p.objects = append(p.objects, dbObject{Type: objJoin, Name: name})
 	}
 	return nil

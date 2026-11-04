@@ -25,8 +25,10 @@ const wantAttached = 125
 
 // MaxLensSources is the most cache files one lens can attach: the
 // SQLITE_MAX_ATTACHED modernc.org/sqlite is compiled with. sqlite3_limit
-// cannot raise a limit past it (TestAttachLimit proves the number), so a
-// lens over more sources is refused rather than silently truncated.
+// cannot raise a limit past it (TestAttachLimit proves the number), so an
+// attach lens over more sources is refused (E_UNSUPPORTED) rather than
+// silently truncated; past the limit the caller uses one combined cache
+// file for every source and OpenLensCombined (CFG3 fallback, O10).
 const MaxLensSources = 10
 
 // LensSource is one cache file in a lens. Name becomes the `source` column
@@ -63,7 +65,11 @@ type Lens struct {
 	sources []LensSource
 	sql     []sourceSQL // per source, same order
 	views   []string
-	closed  bool
+	// combined marks a lens over one combined cache file: the `source`
+	// column and ResolveID read each row's own _source instead of the
+	// LensSource name.
+	combined bool
+	closed   bool
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -75,7 +81,7 @@ func attachedName(i int) string { return "s_" + strconv.Itoa(i) }
 type sourceSQL struct {
 	attach  string // takes the file URI
 	objects string // the `_tables` records
-	resolve string // takes an id: the table of a live row with that id
+	resolve string // takes an id: (source, table) of every live row with that id
 }
 
 // sqlForSource builds the statements of the i-th source.
@@ -87,7 +93,7 @@ func sqlForSource(i int) (sourceSQL, error) {
 	return sourceSQL{
 		attach:  "ATTACH DATABASE ? AS " + sq,
 		objects: "SELECT objects FROM " + sq + `."` + tblTables + `" ORDER BY name`,
-		resolve: "SELECT tbl FROM " + sq + `."` + tblRows + `" WHERE id = ? AND deleted = 0 ORDER BY tbl LIMIT 1`,
+		resolve: "SELECT source, tbl FROM " + sq + `."` + tblRows + `" WHERE id = ? AND deleted = 0 ORDER BY source, tbl`,
 	}, nil
 }
 
@@ -110,6 +116,39 @@ func OpenLens(ctx context.Context, sources []LensSource) (*Lens, error) {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
 	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources)}
+	if err := l.setup(ctx); err != nil {
+		return nil, errors.Join(err, l.Close())
+	}
+	return l, nil
+}
+
+// combinedSourceName is the LensSource name of the one file of a combined
+// lens; it never reaches a result (the `source` column comes from each
+// row's _source there).
+const combinedSourceName = "combined"
+
+// OpenLensCombined opens a lens over one combined cache file that holds
+// every source (CFG3 fallback past MaxLensSources, decision O10): the file
+// a Cache opened with Open fills by applying each store under its own
+// store.Source. Views are the same "<table>_all" as OpenLens, with
+// `source` = each row's _source (so wire should apply every store under
+// the name it would give it as a LensSource). Tables without a _source
+// column (row_refs, row_expanded) get a NULL source. ResolveID reports an
+// id held by two sources of the file as E_AMBIGUOUS_ID.
+func OpenLensCombined(ctx context.Context, path string) (*Lens, error) {
+	if path == "" {
+		return nil, errs.New(errs.InvalidInput, "sqlite lens: a combined lens needs a path")
+	}
+	db, err := sql.Open(driverName, "file::memory:")
+	if err != nil {
+		return nil, dbErr("open lens", err)
+	}
+	db.SetMaxOpenConns(1)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, errors.Join(dbErr("open lens", err), db.Close())
+	}
+	l := &Lens{db: db, conn: conn, sources: []LensSource{{Name: combinedSourceName, Path: path}}, combined: true}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -211,7 +250,14 @@ func (l *Lens) setup(ctx context.Context) error {
 		}
 		var parts []string
 		for _, st := range tables[n] {
-			sel := []string{literal(l.sources[st.src].Name) + ` AS "source"`}
+			src := literal(l.sources[st.src].Name)
+			if l.combined {
+				src = "NULL"
+				if slices.Contains(st.cols, colSource) {
+					src = `"` + colSource + `"`
+				}
+			}
+			sel := []string{src + ` AS "source"`}
 			for _, c := range all {
 				cq, colErr := ident(c)
 				if colErr != nil {
@@ -311,16 +357,50 @@ func (l *Lens) ResolveID(ctx context.Context, id ids.AnyID) (LensHit, error) {
 	}
 	var hits []LensHit
 	for i, s := range l.sources {
-		var tbl string
-		err := l.conn.QueryRowContext(ctx, l.sql[i].resolve, id.String()).Scan(&tbl)
-		if errors.Is(err, sql.ErrNoRows) {
-			continue
-		}
+		found, err := resolveIn(l.conn.QueryContext(ctx, l.sql[i].resolve, id.String()))
 		if err != nil {
-			return LensHit{}, dbErr("resolve id", err)
+			return LensHit{}, err
 		}
-		hits = append(hits, LensHit{Source: s.Name, Table: row.Table(tbl)})
+		for _, h := range found {
+			if !l.combined {
+				h.Source = s.Name
+			}
+			if !slices.Contains(hits, h) {
+				hits = append(hits, h)
+			}
+			if !l.combined {
+				break // one hit per attached file: its rows share one source name
+			}
+		}
 	}
+	return oneHit(id, hits)
+}
+
+// resolveIn reads the (source, tbl) rows a resolve statement returned
+// (rs is closed here).
+func resolveIn(rs *sql.Rows, err error) ([]LensHit, error) {
+	if err != nil {
+		return nil, dbErr("resolve id", err)
+	}
+	defer func() { _ = rs.Close() }()
+	var out []LensHit
+	for rs.Next() {
+		var src, tbl string
+		if err := rs.Scan(&src, &tbl); err != nil {
+			return nil, dbErr("resolve id", err)
+		}
+		out = append(out, LensHit{Source: src, Table: row.Table(tbl)})
+	}
+	if err := rs.Err(); err != nil {
+		return nil, dbErr("resolve id", err)
+	}
+	return out, nil
+}
+
+// oneHit turns the places an id was found into the answer: none is
+// E_NOT_FOUND, two or more sources E_AMBIGUOUS_ID (the caller must name
+// the store).
+func oneHit(id ids.AnyID, hits []LensHit) (LensHit, error) {
 	switch len(hits) {
 	case 0:
 		return LensHit{}, errs.New(errs.NotFound, "sqlite lens: no row "+id.String())

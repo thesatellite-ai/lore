@@ -86,8 +86,12 @@ const (
 	// HasMany: Target's Field holds the id of a row of this table (the
 	// inverse of a BelongsTo, declared for joins, nested routes and docs).
 	HasMany RelationKind = "has_many"
-	// ManyToMany: rows are linked through JoinTable (a cache table of
-	// (from id, to id) pairs built by the cache).
+	// ManyToMany: Field is a list-of-ref field on this table holding the
+	// Target ids (memories.tag_ids → tags, decision O11). The links travel
+	// inside the owning row, so they share its envelope, merge rule and
+	// sync path; JoinTable is a cache-only table of (from id, to id) pairs
+	// the cache fills from Field on every apply, for joins and reverse
+	// lookups. It is not a registered table and has no id prefix.
 	ManyToMany RelationKind = "many_to_many"
 	// Self: a BelongsTo whose Target is this table (supersession chains).
 	Self RelationKind = "self"
@@ -128,18 +132,24 @@ func OnDeletes() []OnDelete { return []OnDelete{Restrict, Cascade, SetNull, Tomb
 // They drive the cache's indexes (every ref column is indexed), the
 // engine's write-time ref check, joins, nested routes, docs and lint.
 //
-// Field meaning per kind: BelongsTo/Self/Polymorphic — the local field
-// holding the id; HasMany — the field on Target holding this table's id;
-// ManyToMany — unused.
+// Field meaning per kind: BelongsTo/Self/Polymorphic — the local ref
+// field holding the id; HasMany — the ref field on Target holding this
+// table's id; ManyToMany — the local list-of-ref field holding Target ids.
 type Relation struct {
 	Name      string
 	Kind      RelationKind
 	Field     string
 	Target    row.Table
-	TypeField string    // Polymorphic only
-	JoinTable row.Table // ManyToMany only
+	TypeField string // Polymorphic only: the local text field naming the target table
+	// JoinTable is the cache-only join table a ManyToMany fills from Field
+	// (empty for every other kind). NewRegistry refuses a name that is also
+	// a registered table or used by another relation.
+	JoinTable row.Table
 	// OnDelete is behaviour the engine applies when the target is deleted;
-	// it is never a database constraint.
+	// it is never a database constraint. For a ManyToMany it acts on the
+	// link, never on the owning row: Cascade and SetNull remove the deleted
+	// id from the list, Restrict refuses the delete while a live row lists
+	// it, TombstoneOnly leaves the id in the list.
 	OnDelete OnDelete
 	// AllowDangling lets a write keep a ref whose target is not in any
 	// visible store (rows may reference other stores, RES-OQ2). False, the
