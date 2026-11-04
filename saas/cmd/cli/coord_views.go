@@ -123,6 +123,14 @@ type coordView struct {
 	labels *actorLabels
 }
 
+// coreStoreTarget reports a coordination target on a 0.1.18 store: its
+// rows are read through the core, so the v0.1.17 store mirror (routeWrite's
+// project write path, which refuses a v2 store) is not opened for it.
+func coreStoreTarget(ctx context.Context, t coordTarget) bool {
+	sr, ok := t.Rows.(*storeRows)
+	return ok && newFormatStore(ctx, sr.sp.st, sr.sp.branch)
+}
+
 func openCoordView(ctx context.Context) (*coordView, func(), error) {
 	var f commonFlags
 	w, werr := openCoordWorld(ctx)
@@ -131,7 +139,7 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 	if werr == nil {
 		if t, err := openCoordTarget(ctx, w, ""); err == nil {
 			target, haveTarget = t, true
-			if len(w.Links) > 0 {
+			if len(w.Links) > 0 && !coreStoreTarget(ctx, t) {
 				// The group's missions, findings and handoffs are in the
 				// store project: read them from its mirror (stores work).
 				link, lerr := defaultLink(w.Links)
