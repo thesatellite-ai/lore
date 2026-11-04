@@ -215,7 +215,8 @@ type HitRow struct {
 
 // DeleteIn is the input of comment.delete.
 type DeleteIn struct {
-	ID string `json:"id" arg:"0" desc:"the comment id (cmt_…)"`
+	ID     string `json:"id" arg:"0" desc:"the comment id (cmt_…)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
 
 // DeleteOut is the output of comment.delete.
@@ -420,6 +421,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 
 // delete writes the comment's tombstone.
 func (o ops) delete(ctx context.Context, in DeleteIn) (DeleteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil || id.Prefix() != ids.PrefixComment {
 		return DeleteOut{}, lookup.BadID("comment: "+quote(in.ID)+" is not a comment id (cmt_…)", nil)

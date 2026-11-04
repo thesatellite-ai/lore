@@ -122,6 +122,9 @@ type MetaKeysIn struct {
 	Unreviewed bool `json:"unreviewed,omitempty" flag:"unreviewed" desc:"only keys an agent added that no person reviewed yet"`
 	// Unused lists keys no row uses (archived rows count as use, 3.8).
 	Unused bool `json:"unused,omitempty" flag:"unused" desc:"only keys used on no row (remove with lore meta forget)"`
+	// Place and Table narrow the list (CLI_REFERENCE 3.1 meta keys, XQ6).
+	Place string `json:"place,omitempty" flag:"place" desc:"one place only: repo, project, org or a scope label (project:acme-hub)"`
+	Table string `json:"table,omitempty" flag:"table" desc:"only keys used on rows of this table"`
 }
 
 // MetaValueAddIn is the input of meta.value.add.
@@ -415,6 +418,12 @@ func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
 		if len(in.Keys) > 0 && !slices.Contains(in.Keys, name) {
 			continue
 		}
+		if !placeMatches(text(k.Row, mScope), in.Place) {
+			continue
+		}
+		if u := use[k.Row.ID.String()]; in.Table != "" && (u == nil || u.byTable[row.Table(in.Table)] == 0) {
+			continue
+		}
 		unreviewed := isUnreviewed(k.Row)
 		if in.Unreviewed && !unreviewed {
 			continue
@@ -432,7 +441,16 @@ func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
 	return out, nil
 }
 
-func (o ops) metaDelete(ctx context.Context, in MetaKeyRef) (RowOut, error) {
+// MetaDeleteIn is the input of meta.delete.
+type MetaDeleteIn struct {
+	Key    string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why (deleted_reason on the key row, shown by lore trash)"`
+}
+
+func (o ops) metaDelete(ctx context.Context, in MetaDeleteIn) (RowOut, error) {
+	if in.Reason != "" {
+		ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason
+	}
 	k, err := o.metaKey(ctx, in.Key)
 	if err != nil {
 		return RowOut{}, err
@@ -557,6 +575,7 @@ type MetaSetIn struct {
 	// names, one batch.
 	Where  []string `json:"where,omitempty" flag:"where" desc:"set on every row matching this filter (repeatable, ANDed; one batch)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list the rows, write nothing"`
+	All    bool     `json:"all,omitempty" flag:"all" desc:"with --dry-run: list every row, not a sample"`
 	More   []string `json:"set,omitempty" flag:"set" desc:"more key=value pairs (repeatable)"`
 	JSON   []string `json:"json,omitempty" flag:"meta-json" desc:"a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)"`
 	Stdin  string   `json:"stdin_key,omitempty" flag:"meta-stdin" desc:"read the value of this key from stdin"`
@@ -570,6 +589,7 @@ type MetaUnsetIn struct {
 	// Where and DryRun are the bulk form (3.19).
 	Where  []string `json:"where,omitempty" flag:"where" desc:"remove from every row matching this filter (repeatable, ANDed; one batch)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list the rows, write nothing"`
+	All    bool     `json:"all,omitempty" flag:"all" desc:"with --dry-run: list every row, not a sample"`
 }
 
 // MetaGetIn is the input of meta.get.
@@ -714,4 +734,11 @@ func (o ops) metaGet(ctx context.Context, in MetaGetIn) (MetaGetOut, error) {
 	slices.SortFunc(out.Data, func(a, b MetaValue) int { return strings.Compare(a.Key+a.KeyID, b.Key+b.KeyID) })
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// placeMatches reports a key scope inside --place: a level word (repo,
+// project, org) matches every scope of that level, a scope label only
+// itself; "" matches all.
+func placeMatches(scope, place string) bool {
+	return place == "" || scope == place || strings.HasPrefix(scope, place+":")
 }

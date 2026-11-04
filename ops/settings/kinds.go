@@ -64,15 +64,19 @@ type KindAddIn struct {
 	Description string `json:"description,omitempty" flag:"description" desc:"what the kind is"`
 	NameFormat  string `json:"name_format,omitempty" flag:"name-format" desc:"id | dns | ip | text (default id)"`
 	Render      string `json:"render,omitempty" flag:"render" desc:"how a row renders (summary, …)"`
-	To          string `json:"to,omitempty" flag:"to" desc:"where the kind row is written (repo, <store>, <store>/<folder>; default repo)"`
+	// SecretManager is the manager a bare secret_ref path means for this
+	// kind (RES 3.1); it replaces the fixed gopass default of RES-SR1.
+	SecretManager string `json:"secret_manager,omitempty" flag:"secret-manager" desc:"the secret manager a bare secret_ref path means (gopass, op, vault, …; default from policy)"`
+	To            string `json:"to,omitempty" flag:"to" desc:"where the kind row is written (repo, <store>, <store>/<folder>; default repo)"`
 }
 
 // KindEditIn is the input of resource.kind.edit.
 type KindEditIn struct {
-	Kind        string `json:"id" arg:"0" desc:"the kind (name or knd_ id)"`
-	Description string `json:"description,omitempty" flag:"description" desc:"what the kind is"`
-	NameFormat  string `json:"name_format,omitempty" flag:"name-format" desc:"id | dns | ip | text"`
-	Render      string `json:"render,omitempty" flag:"render" desc:"how a row renders"`
+	Kind          string `json:"id" arg:"0" desc:"the kind (name or knd_ id)"`
+	Description   string `json:"description,omitempty" flag:"description" desc:"what the kind is"`
+	NameFormat    string `json:"name_format,omitempty" flag:"name-format" desc:"id | dns | ip | text"`
+	Render        string `json:"render,omitempty" flag:"render" desc:"how a row renders"`
+	SecretManager string `json:"secret_manager,omitempty" flag:"secret-manager" desc:"the secret manager a bare secret_ref path means"`
 }
 
 // KindRef names one kind.
@@ -102,6 +106,7 @@ type FieldAddIn struct {
 	Values      string `json:"values,omitempty" flag:"values" desc:"allowed values, comma separated (a closed set)"`
 	Description string `json:"description,omitempty" flag:"description" desc:"what the field means"`
 	Label       string `json:"label,omitempty" flag:"label" desc:"display label"`
+	FieldRuleFlags
 }
 
 // FieldEditIn is the input of resource.field.edit.
@@ -118,6 +123,9 @@ type FieldEditIn struct {
 	RemoveValues []string `json:"remove_values,omitempty" flag:"remove-value" desc:"remove an allowed value (repeatable; refused while rows use it)"`
 	Label        string   `json:"label,omitempty" flag:"label" desc:"display label"`
 	Description  string   `json:"description,omitempty" flag:"description" desc:"what the field means"`
+	NoStrict     bool     `json:"no_strict,omitempty" flag:"no-strict" desc:"back to newer-wins on a both-sides change (asks)"`
+	NoDeprecated bool     `json:"no_deprecated,omitempty" flag:"no-deprecated" desc:"not deprecated any more"`
+	FieldRuleFlags
 }
 
 // FieldRenameIn is the input of resource.field.rename.
@@ -162,18 +170,28 @@ type Field struct {
 	Values      []string `json:"values,omitempty"`
 	Label       string   `json:"label,omitempty"`
 	Description string   `json:"description,omitempty"`
+	// RES 3.1 options (OV32); ReplacedBy is the replacing field's name.
+	Default      string `json:"default,omitempty"`
+	Pattern      string `json:"pattern,omitempty"`
+	Min          string `json:"min,omitempty"`
+	Max          string `json:"max,omitempty"`
+	Strict       bool   `json:"strict,omitempty"`
+	Deprecated   bool   `json:"deprecated,omitempty"`
+	ReplacedBy   string `json:"replaced_by,omitempty"`
+	RemindBefore string `json:"remind_before,omitempty"`
 }
 
 // Kind is one kind as shown, with its fields.
 type Kind struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Store       string  `json:"store"`
-	Description string  `json:"description,omitempty"`
-	NameFormat  string  `json:"name_format,omitempty"`
-	Render      string  `json:"render,omitempty"`
-	Count       int     `json:"count"`
-	Fields      []Field `json:"fields"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Store         string  `json:"store"`
+	Description   string  `json:"description,omitempty"`
+	NameFormat    string  `json:"name_format,omitempty"`
+	Render        string  `json:"render,omitempty"`
+	SecretManager string  `json:"secret_manager,omitempty"`
+	Count         int     `json:"count"`
+	Fields        []Field `json:"fields"`
 }
 
 // KindOut is the output of resource.kind.show.
@@ -206,9 +224,14 @@ func fieldLine(f Field) string {
 	for _, x := range []struct {
 		on   bool
 		word string
-	}{{f.Required, "required"}, {f.Sensitive, "sensitive"}, {f.Internal, "internal"}} {
+	}{{f.Required, "required"}, {f.Sensitive, "sensitive"}, {f.Internal, "internal"}, {f.Strict, "strict"}, {f.Deprecated, "deprecated"}} {
 		if x.on {
 			parts = append(parts, x.word)
+		}
+	}
+	for _, x := range [][2]string{{"default", f.Default}, {"pattern", f.Pattern}, {"min", f.Min}, {"max", f.Max}, {"replaced by", f.ReplacedBy}, {"remind before", f.RemindBefore}} {
+		if x[1] != "" {
+			parts = append(parts, x[0]+" "+x[1])
 		}
 	}
 	if len(f.Values) > 0 {
@@ -289,6 +312,19 @@ func (o ops) fieldsOf(ctx context.Context, k located) ([]located, error) {
 	return where(rows, map[string]string{fKindID: k.Row.ID.String()}), nil
 }
 
+// fieldMap are k's live fields by name.
+func (o ops) fieldMap(ctx context.Context, k located) (map[string]located, error) {
+	fs, err := o.fieldsOf(ctx, k)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]located, len(fs))
+	for _, f := range fs {
+		m[text(f.Row, kName)] = f
+	}
+	return m, nil
+}
+
 func (o ops) fieldByName(ctx context.Context, k located, name string) (located, error) {
 	fs, err := o.fieldsOf(ctx, k)
 	if err != nil {
@@ -341,8 +377,11 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 	if err := checkOneOf("name-format", in.NameFormat, NameFormats()); err != nil {
 		return RowOut{}, err
 	}
+	if err := checkSecretManager(in.SecretManager); err != nil {
+		return RowOut{}, err
+	}
 	fields := map[string]value.Value{}
-	if err := optTexts(fields, map[string]string{kName: in.Kind, kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render}); err != nil {
+	if err := optTexts(fields, map[string]string{kName: in.Kind, kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render, kSecretMgr: in.SecretManager}); err != nil {
 		return RowOut{}, err
 	}
 	target := targetOf(in.To)
@@ -362,12 +401,15 @@ func (o ops) kindEdit(ctx context.Context, in KindEditIn) (RowOut, error) {
 	if err := checkOneOf("name-format", in.NameFormat, NameFormats()); err != nil {
 		return RowOut{}, err
 	}
+	if err := checkSecretManager(in.SecretManager); err != nil {
+		return RowOut{}, err
+	}
 	patch := map[string]value.Value{}
-	if err := optTexts(patch, map[string]string{kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render}); err != nil {
+	if err := optTexts(patch, map[string]string{kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render, kSecretMgr: in.SecretManager}); err != nil {
 		return RowOut{}, err
 	}
 	if len(patch) == 0 {
-		return RowOut{}, errs.New(errs.InvalidInput, "resource kind edit: nothing to change").WithHint("give --description, --name-format or --render")
+		return RowOut{}, errs.New(errs.InvalidInput, "resource kind edit: nothing to change").WithHint("give --description, --name-format, --render or --secret-manager")
 	}
 	return o.patchRow(ctx, k, patch, "edited kind "+text(k.Row, kName))
 }
@@ -391,12 +433,22 @@ func (o ops) kindView(ctx context.Context, k located) (Kind, error) {
 		return Kind{}, err
 	}
 	out := Kind{ID: k.Row.ID.String(), Name: text(k.Row, kName), Store: string(k.Src), Description: text(k.Row, kDescription),
-		NameFormat: text(k.Row, kNameFormat), Render: text(k.Row, kRender), Fields: []Field{},
+		NameFormat: text(k.Row, kNameFormat), Render: text(k.Row, kRender), SecretManager: text(k.Row, kSecretMgr), Fields: []Field{},
 		Count: len(where(res, map[string]string{rKind: k.Row.ID.String()}))}
 	for _, f := range fs {
 		fv := Field{ID: f.Row.ID.String(), Name: text(f.Row, kName), Type: text(f.Row, fType), Required: flag(f.Row, fRequired),
 			Sensitive: flag(f.Row, fSensitive), Internal: flag(f.Row, fInternal), Values: texts(f.Row, fValues),
-			Label: text(f.Row, fLabel), Description: text(f.Row, fDescription)}
+			Label: text(f.Row, fLabel), Description: text(f.Row, fDescription),
+			Default: text(f.Row, fDefault), Pattern: text(f.Row, fPattern), Min: text(f.Row, fMin), Max: text(f.Row, fMax),
+			Strict: flag(f.Row, fStrict), Deprecated: flag(f.Row, fDeprecated), RemindBefore: text(f.Row, fRemindBefore)}
+		if rb := text(f.Row, fReplacedBy); rb != "" {
+			fv.ReplacedBy = rb
+			for _, s := range fs {
+				if s.Row.ID.String() == rb {
+					fv.ReplacedBy = text(s.Row, kName)
+				}
+			}
+		}
 		if rk := text(f.Row, fRefKind); rk != "" {
 			fv.RefKind = o.kindName(ctx, rk)
 		}
@@ -503,10 +555,19 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 			return RowOut{}, err
 		}
 	}
-	if vs := splitList(in.Values); len(vs) > 0 {
+	vs := splitList(in.Values)
+	if len(vs) > 0 {
 		if fields[fValues], err = textList(vs); err != nil {
 			return RowOut{}, err
 		}
+	}
+	// RES 3.1 options: checked against the type and the allowed values.
+	siblings, err := o.fieldMap(ctx, k)
+	if err != nil {
+		return RowOut{}, err
+	}
+	if err = fieldOptions(in.Type, vs, siblings, in.FieldRuleFlags, fields); err != nil {
+		return RowOut{}, err
 	}
 	// The field row lives beside its kind, so the definition travels as one.
 	w, err := create(ctx, o.env, k.Src, schema.TableKindFields, map[string]string{fKindID: k.Row.ID.String(), kName: in.Field}, fields)
@@ -543,9 +604,29 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 	for _, t := range []struct {
 		f       string
 		on, off bool
-	}{{fRequired, in.Required, in.NoRequired}, {fSensitive, in.Sensitive, in.NoSensitive}, {fInternal, in.Internal, in.NoInternal}} {
+	}{{fRequired, in.Required, in.NoRequired}, {fSensitive, in.Sensitive, in.NoSensitive}, {fInternal, in.Internal, in.NoInternal},
+		{fStrict, in.Strict, in.NoStrict}, {fDeprecated, in.Deprecated, in.NoDeprecated}} {
 		if err = triState(patch, t.f, t.on, t.off); err != nil {
 			return RowOut{}, err
+		}
+	}
+	// RES 3.14: a loosening asks first.
+	if err = loosening(ctx, f, in); err != nil {
+		return RowOut{}, err
+	}
+	siblings, err := o.fieldMap(ctx, k)
+	if err != nil {
+		return RowOut{}, err
+	}
+	rules := in.FieldRuleFlags
+	rules.Strict, rules.Deprecated = false, in.Deprecated || (flag(f.Row, fDeprecated) && !in.NoDeprecated) // strict/deprecated went through triState
+	if err = fieldOptions(text(f.Row, fType), texts(f.Row, fValues), siblings, rules, patch); err != nil {
+		return RowOut{}, err
+	}
+	if !in.Deprecated {
+		delete(patch, fDeprecated)
+		if in.NoDeprecated {
+			patch[fDeprecated] = value.BoolOf(false)
 		}
 	}
 	if err = optTexts(patch, map[string]string{fLabel: in.Label, fDescription: in.Description}); err != nil {

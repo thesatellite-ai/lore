@@ -247,6 +247,8 @@ func coreDefs() []TableDef {
 			Text("description"),
 			Text("name_format"),
 			Text("render"),
+			// secret_manager is the manager a bare secret_ref path means for this kind (RES 3.1 --secret-manager); empty = the policy default.
+			Text("secret_manager"),
 			JSON("origin"),
 			UniqueOn(fieldName),
 			HasManyRel("fields", TableKindFields, "kind_id"),
@@ -265,6 +267,19 @@ func coreDefs() []TableDef {
 			Text("label"),
 			Text("widget", OneOf(widgetWords()...)),
 			Bool("in_list"),
+			// RES 3.1 field options (OV32): default/min/max are text so one
+			// column covers every type (like meta_keys); remind_before is a
+			// duration (date/datetime only); replaced_by names the replacing
+			// field; type_history is [{type, at}] kept by field retype (3.14).
+			Text("default"),
+			Text("pattern"),
+			Text("min"),
+			Text("max"),
+			Bool("strict"),
+			Bool("deprecated"),
+			Text("replaced_by"),
+			Text("remind_before"),
+			JSON("type_history"),
 			UniqueOn("kind_id", fieldName),
 			BelongsToRel("kind", "kind_id", TableKinds, Cascade),
 			BelongsToRel("ref_kind_def", "ref_kind", TableKinds, SetNull),

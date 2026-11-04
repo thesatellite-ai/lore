@@ -91,16 +91,25 @@ incidents.resolved_at datetime
 incidents.severity_str text
 incidents.tag_ids list[ref]
 incidents.title text required
+kind_fields.default text
+kind_fields.deprecated bool
 kind_fields.description text
 kind_fields.in_list bool
 kind_fields.internal bool
 kind_fields.kind_id ref required
 kind_fields.label text
+kind_fields.max text
+kind_fields.min text
 kind_fields.name text required
+kind_fields.pattern text
 kind_fields.ref_kind ref
+kind_fields.remind_before text
+kind_fields.replaced_by text
 kind_fields.required bool
 kind_fields.sensitive bool
+kind_fields.strict bool
 kind_fields.type text required
+kind_fields.type_history json
 kind_fields.values list[text]
 kind_fields.widget text
 kinds.description text
@@ -108,6 +117,7 @@ kinds.name text required
 kinds.name_format text
 kinds.origin json
 kinds.render text
+kinds.secret_manager text
 knowledge_refs.confidence text required
 knowledge_refs.dst_id ref required
 knowledge_refs.dst_project_id ref

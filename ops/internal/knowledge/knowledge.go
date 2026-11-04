@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -88,8 +89,10 @@ var ReadErrors = []errs.Code{errs.InvalidInput, errs.InvalidID, errs.NotFound, e
 // SearchErrors are the codes a knowledge search can return.
 var SearchErrors = []errs.Code{errs.InvalidInput, errs.Unsupported, errs.DBCorrupt, errs.StoreUnreachable, errs.Internal}
 
-// DeleteErrors are WriteErrors plus E_HAS_DEPENDENTS.
-func DeleteErrors() []errs.Code { return append(slices.Clone(WriteErrors), errs.HasDependents) }
+// DeleteErrors are WriteErrors plus E_HAS_DEPENDENTS and E_REASON_REQUIRED.
+func DeleteErrors() []errs.Code {
+	return append(slices.Clone(WriteErrors), errs.HasDependents, errs.ReasonRequired)
+}
 
 // Noun describes one knowledge table.
 type Noun struct {
@@ -148,16 +151,23 @@ type Create struct {
 	// SupersededPatch is extra fields set on the replaced row (a
 	// decision's status becomes superseded).
 	SupersededPatch map[string]value.Value
+	// Meta are the add's own --meta flags (Run binds them to the create);
+	// with Supersedes the replaced row's other keys are carried over
+	// unless NoMeta (--no-meta, METADATA 3.19, CLI_REFERENCE 2.4).
+	Meta   engine.MetaFlags
+	NoMeta bool
 }
 
-// Add creates one row of noun n and returns the store that holds it.
+// Add creates one row of noun n and returns the store that holds it and
+// how many metadata keys it carried over from the replaced row.
 // With Supersedes the old row is checked first (live, same project, no
-// successor yet) and pointed at the new one after; on failure the new row
-// is deleted again (v0.1.17 supersede.go).
-func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.Written, error) {
+// successor yet), its metadata is carried over (metalist.Carry, 3.19) and
+// it is pointed at the new one after; on failure the new row is deleted
+// again (v0.1.17 supersede.go).
+func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.Written, int, error) {
 	project, err := ResolveProject(ctx, env, n, c.Project)
 	if err != nil {
-		return "", engine.Written{}, err
+		return "", engine.Written{}, 0, err
 	}
 	texts := maps.Clone(c.Texts)
 	if texts[FieldSourceKind] == "" {
@@ -165,65 +175,77 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 	}
 	fields, err := Texts(n, texts)
 	if err != nil {
-		return "", engine.Written{}, err
+		return "", engine.Written{}, 0, err
 	}
 	if fields[FieldProject], err = value.RefOf(project.Any()); err != nil {
-		return "", engine.Written{}, err
+		return "", engine.Written{}, 0, err
 	}
 	if c.Repo != "" {
 		repo, rerr := env.RepoID(ctx, c.Repo)
 		if rerr != nil {
-			return "", engine.Written{}, rerr
+			return "", engine.Written{}, 0, rerr
 		}
 		if fields[FieldRepo], err = value.RefOf(repo.Any()); err != nil {
-			return "", engine.Written{}, err
+			return "", engine.Written{}, 0, err
 		}
 	}
 	if c.CreatedBy != "" {
 		a, aerr := ids.Parse[ids.Actor](strings.TrimSpace(c.CreatedBy))
 		if aerr != nil {
-			return "", engine.Written{}, lookup.BadID(n.Name+" add: "+Quote(c.CreatedBy)+" is not an actor id (act_…)", aerr)
+			return "", engine.Written{}, 0, lookup.BadID(n.Name+" add: "+Quote(c.CreatedBy)+" is not an actor id (act_…)", aerr)
 		}
 		if fields[FieldCreatedBy], err = value.RefOf(a.Any()); err != nil {
-			return "", engine.Written{}, err
+			return "", engine.Written{}, 0, err
 		}
 	}
 	if len(c.Tags) > 0 {
 		tags, terr := TagRefs(ctx, env, n, project.String(), c.Tags)
 		if terr != nil {
-			return "", engine.Written{}, terr
+			return "", engine.Written{}, 0, terr
 		}
 		if fields[schema.FieldTagIDs], err = TagList(tags); err != nil {
-			return "", engine.Written{}, err
+			return "", engine.Written{}, 0, err
 		}
 	}
 	trust, err := value.Float(DefaultTrust)
 	if err != nil {
-		return "", engine.Written{}, errs.Wrap(errs.Internal, n.Name+" add: trust score", err)
+		return "", engine.Written{}, 0, errs.Wrap(errs.Internal, n.Name+" add: trust score", err)
 	}
 	fields[FieldTrust] = trust
 	var old ids.AnyID
 	var oldSrc store.Source
+	var carry metalist.Carry
 	if c.Supersedes != "" {
-		if old, oldSrc, err = checkSupersedes(ctx, env, n, project, c.Supersedes); err != nil {
-			return "", engine.Written{}, err
+		var oldRow row.Row
+		if old, oldSrc, oldRow, err = checkSupersedes(ctx, env, n, project, c.Supersedes); err != nil {
+			return "", engine.Written{}, 0, err
+		}
+		if carry, err = metalist.PlanCarry(oldRow, n.Table, c.Meta, c.NoMeta); err != nil {
+			return "", engine.Written{}, 0, err
 		}
 	}
-	w, err := env.Create(ctx, store.Source(c.To), n.Table, fields)
+	w, err := env.Create(carry.Before(ctx), store.Source(c.To), n.Table, fields)
 	if err != nil {
-		return "", engine.Written{}, err
+		return "", engine.Written{}, 0, carry.Hint(err)
 	}
 	src := StoreOf(ctx, env, n, w.Row.ID, store.Source(c.To))
 	if !old.IsZero() {
+		newRef := engine.Ref{Store: src, Table: n.Table, ID: w.Row.ID}
+		if err := carry.After(ctx, env, newRef, w.Row); err != nil {
+			if _, derr := env.Delete(ctx, newRef); derr != nil {
+				return "", engine.Written{}, 0, errs.Wrap(errs.CodeOf(err), n.Name+" add: could not carry the metadata of "+old.String()+"; the new row "+w.Row.ID.String()+" is still there", carry.Hint(err))
+			}
+			return "", engine.Written{}, 0, carry.Hint(err)
+		}
 		if err := finishSupersedes(ctx, env, n, oldSrc, old, src, w.Row.ID, c.SupersededPatch); err != nil {
-			return "", engine.Written{}, err
+			return "", engine.Written{}, 0, err
 		}
 	}
-	return src, w, nil
+	return src, w, carry.Count, nil
 }
 
 // checkSupersedes validates --supersedes before anything is written.
-func checkSupersedes(ctx context.Context, env Env, n Noun, project ids.ID[ids.Project], raw string) (ids.AnyID, store.Source, error) {
+func checkSupersedes(ctx context.Context, env Env, n Noun, project ids.ID[ids.Project], raw string) (ids.AnyID, store.Source, row.Row, error) {
 	// v0.1.17 parity: any value that does not name a live row of this noun
 	// in this project (well-formed unknown, malformed, another noun's
 	// prefix) is E_NOT_FOUND here; plain id arguments keep E_INVALID_ID.
@@ -231,20 +253,20 @@ func checkSupersedes(ctx context.Context, env Env, n Noun, project ids.ID[ids.Pr
 		WithHint("run `lore " + n.Name + " list` to see the ids")
 	id, err := n.ID(raw)
 	if err != nil {
-		return ids.AnyID{}, "", notFound
+		return ids.AnyID{}, "", row.Row{}, notFound
 	}
 	src, r, err := env.Get(ctx, engine.Ref{Table: n.Table, ID: id})
 	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || Field(r, FieldProject) != project.String())) {
-		return ids.AnyID{}, "", notFound
+		return ids.AnyID{}, "", row.Row{}, notFound
 	}
 	if err != nil {
-		return ids.AnyID{}, "", err
+		return ids.AnyID{}, "", row.Row{}, err
 	}
 	if next := Field(r, FieldSuperseded); next != "" {
-		return ids.AnyID{}, "", errs.New(errs.InvalidInput, "--supersedes "+id.String()+": that "+n.Name+" was already replaced by "+next).
+		return ids.AnyID{}, "", row.Row{}, errs.New(errs.InvalidInput, "--supersedes "+id.String()+": that "+n.Name+" was already replaced by "+next).
 			WithHint("supersede " + next + " instead, so the chain stays one line")
 	}
-	return id, src, nil
+	return id, src, r, nil
 }
 
 // finishSupersedes points old at the new row; on failure the new row is

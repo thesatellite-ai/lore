@@ -69,7 +69,9 @@ func Ops(env content.Env) []op.Entry {
 			Name: OpDelete, Summary: "Delete a tastepref (a tombstone keeps old copies from returning)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
-		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Delete(ctx, in.ID) }),
+		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
+			return o.c.Delete(ctx, in.ID, in.Reason)
+		}),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across tastepref body + scope",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
@@ -119,7 +121,11 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	out := ListOut{SchemaVersion: content.SchemaVersion, Kind: KindList, Data: []Record{}}
+	rows, notes, err := o.c.Narrow(ctx, rows, in.MetaFlags)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{SchemaVersion: content.SchemaVersion, Kind: KindList, Data: []Record{}, Notes: notes}
 	for _, l := range rows {
 		out.Data = append(out.Data, recordOf(o.c.Labeler(), l.Source, l.Row))
 	}

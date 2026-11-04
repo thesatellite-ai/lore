@@ -94,8 +94,10 @@ func WriteErrors() []errs.Code {
 	}
 }
 
-// DeleteErrors are WriteErrors plus E_HAS_DEPENDENTS.
-func DeleteErrors() []errs.Code { return append(WriteErrors(), errs.HasDependents) }
+// DeleteErrors are WriteErrors plus E_HAS_DEPENDENTS and E_REASON_REQUIRED.
+func DeleteErrors() []errs.Code {
+	return append(WriteErrors(), errs.HasDependents, errs.ReasonRequired)
+}
 
 // ReadErrors are the codes a content read can return.
 func ReadErrors() []errs.Code {
@@ -327,8 +329,11 @@ func (o Ops) Unarchive(ctx context.Context, raw string) (WriteOut, error) {
 
 // Delete writes the row's tombstone ("✓ <id> deleted (hard)", v0.1.17's
 // line: the row is gone for every reader; the tombstone only keeps old
-// copies from coming back).
-func (o Ops) Delete(ctx context.Context, raw string) (WriteOut, error) {
+// copies from coming back). reason is --reason (DELETION 2.1, stored as
+// deleted_reason; the engine refuses an empty one under
+// delete.require_reason with E_REASON_REQUIRED).
+func (o Ops) Delete(ctx context.Context, raw, reason string) (WriteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, reason)
 	id, src, _, err := o.Live(ctx, raw)
 	if err != nil {
 		return WriteOut{}, err

@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -117,6 +118,7 @@ type AddIn struct {
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance pointer"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"rule_id (rul_*) this entry replaces"`
+	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata (METADATA 3.19)"`
 	CreatedBy  string   `json:"created_by,omitempty" flag:"created-by" desc:"actor_id (act_*); defaults to current identity"`
 	To         string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Repo       string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
@@ -133,6 +135,8 @@ type AddOut struct {
 	Scope    string       `json:"scope"`
 	Severity string       `json:"severity"`
 	Warnings []kn.Warning `json:"warnings,omitempty"`
+	// CarriedMeta is how many metadata keys --supersedes copied (3.19).
+	CarriedMeta int `json:"carried_meta,omitempty"`
 	// label is the store's `_label` for the add line (kn.Label; "" for
 	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
 	label string
@@ -142,8 +146,11 @@ type AddOut struct {
 // an empty label for the repo, so the first line keeps that trailing space
 // (o.label empty).
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s %s\n  scope: [%s] severity: %s\n", o.ID, o.label, o.Scope, o.Severity)
+	return fmt.Sprintf("✓ %s %s\n  scope: [%s] severity: %s\n", o.ID, o.label, o.Scope, o.Severity) + carriedLine(o.CarriedMeta)
 }
+
+// carriedLine is the "carried over N keys" note of a --supersedes add.
+func carriedLine(n int) string { return metalist.Carry{Count: n}.Line() }
 
 // WriteOut is the output of edit, archive, unarchive and delete.
 type WriteOut struct {
@@ -164,7 +171,6 @@ type ListIn struct {
 	MasterOnly bool     `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`
 	AllRepos   bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"list across every repo (ignore --repo)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
-	Archived   bool     `json:"archived,omitempty" flag:"archived" desc:"include archived rules"`
 	Tags       []string `json:"tags,omitempty" flag:"tag" desc:"only rules with this tag (repeatable: all must match)"`
 	Store      string   `json:"store,omitempty" flag:"store" desc:"only rules of this store (default every attached store)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
@@ -241,6 +247,13 @@ type Record struct {
 type IDIn struct {
 	ID      string `json:"id" arg:"0" desc:"the rule id (rul_…)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
+}
+
+// DeleteIn is the input of rule.delete.
+type DeleteIn struct {
+	ID      string `json:"id" arg:"0" desc:"the rule id (rul_…)"`
+	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
+	Reason  string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
 
 // ShowOut is v0.1.17's show envelope.
@@ -351,6 +364,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	c := kn.Create{
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, CreatedBy: in.CreatedBy, Tags: in.Tags,
+		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
 			kn.FieldBody: body, fieldSeverity: sev, fieldActivation: act, fieldGlobs: in.Globs, schema.FieldSummary: summary,
 			kn.FieldSourceKind: in.Source, kn.FieldSourceRef: in.SourceRef,
@@ -362,11 +376,11 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	src, w, err := kn.Add(ctx, o.env, noun, c)
+	src, w, carried, err := kn.Add(ctx, o.env, noun, c)
 	if err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), Scope: kn.Or(scopeLabel, kn.ScopeLabel(in.Repo)), Severity: sev, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Scope: kn.Or(scopeLabel, kn.ScopeLabel(in.Repo)), Severity: sev, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // list returns the rules in scope.
@@ -448,7 +462,8 @@ func (o ops) stamp(ctx context.Context, id string, v value.Value, done string) (
 }
 
 // delete writes the rule's tombstone.
-func (o ops) delete(ctx context.Context, in IDIn) (WriteOut, error) {
+func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	w, err := kn.Delete(ctx, o.env, noun, in.ID)
 	if err != nil {
 		return WriteOut{}, err

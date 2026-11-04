@@ -234,34 +234,47 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	fields[fieldTxAt] = value.DateTimeFrom(opclock.Now(o.env))
 	var old ids.ID[ids.Memory]
 	var oldSrc store.Source
+	var carry metalist.Carry // 3.19: --supersedes carries the metadata over unless --no-meta
 	if in.Supersedes != "" {
-		if old, oldSrc, err = o.checkSupersedes(ctx, project, in.Supersedes); err != nil {
+		var oldRow row.Row
+		if old, oldSrc, oldRow, err = o.checkSupersedes(ctx, project, in.Supersedes); err != nil {
+			return WriteOut{}, err
+		}
+		if carry, err = metalist.PlanCarry(oldRow, table, in.MetaFlags, in.NoMeta); err != nil {
 			return WriteOut{}, err
 		}
 	}
-	w, err := o.env.Create(ctx, store.Source(in.To), table, fields)
+	w, err := o.env.Create(carry.Before(ctx), store.Source(in.To), table, fields)
 	if err != nil {
-		return WriteOut{}, err
+		return WriteOut{}, carry.Hint(err)
 	}
 	src := o.storeOf(ctx, w.Row.ID, store.Source(in.To))
 	if !old.IsZero() {
+		newRef := engine.Ref{Store: src, Table: table, ID: w.Row.ID}
+		if err := carry.After(ctx, o.env, newRef, w.Row); err != nil {
+			if _, derr := o.env.Delete(ctx, newRef); derr != nil {
+				return WriteOut{}, errs.Wrap(errs.CodeOf(err), "memory add: could not carry the metadata of "+old.String()+"; the new memory "+w.Row.ID.String()+" is still there", carry.Hint(err))
+			}
+			return WriteOut{}, carry.Hint(err)
+		}
 		if err := o.finishSupersedes(ctx, oldSrc, old, src, w.Row.ID); err != nil {
 			return WriteOut{}, err
 		}
 	}
 	out := writeOut(src, w)
+	out.CarriedMeta = carry.Count
 	scope := badgeMaster
 	if in.Repo != "" {
 		scope = "repo:" + in.Repo
 	}
 	// v0.1.17: "✓ <id> <label>" ("" in the repo, keeping its space), then
 	// the scope line.
-	out.Human = mark + " " + out.ID + " " + Label(LabelerOf(o.env), src) + "\n  scope: [" + scope + "]\n"
+	out.Human = mark + " " + out.ID + " " + Label(LabelerOf(o.env), src) + "\n  scope: [" + scope + "]\n" + carry.Line()
 	return out, nil
 }
 
 // checkSupersedes validates --supersedes before anything is written.
-func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], raw string) (ids.ID[ids.Memory], store.Source, error) {
+func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], raw string) (ids.ID[ids.Memory], store.Source, row.Row, error) {
 	// v0.1.17 parity: any value that does not name a live memory of this
 	// project (well-formed unknown, malformed, another noun's prefix) is
 	// E_NOT_FOUND here; plain id arguments keep E_INVALID_ID.
@@ -269,20 +282,20 @@ func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], r
 		WithHint("run `lore memory list` to see the ids")
 	id, err := memoryID(raw)
 	if err != nil {
-		return ids.ID[ids.Memory]{}, "", notFound
+		return ids.ID[ids.Memory]{}, "", row.Row{}, notFound
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id.Any()})
 	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || field(r, fieldProject) != project.String())) {
-		return ids.ID[ids.Memory]{}, "", notFound
+		return ids.ID[ids.Memory]{}, "", row.Row{}, notFound
 	}
 	if err != nil {
-		return ids.ID[ids.Memory]{}, "", err
+		return ids.ID[ids.Memory]{}, "", row.Row{}, err
 	}
 	if next := field(r, fieldSuperseded); next != "" {
-		return ids.ID[ids.Memory]{}, "", errs.New(errs.InvalidInput, "--supersedes "+id.String()+": that memory was already replaced by "+next).
+		return ids.ID[ids.Memory]{}, "", row.Row{}, errs.New(errs.InvalidInput, "--supersedes "+id.String()+": that memory was already replaced by "+next).
 			WithHint("supersede " + next + " instead, so the chain stays one line")
 	}
-	return id, src, nil
+	return id, src, r, nil
 }
 
 // finishSupersedes points old at the new memory; on failure the new memory
@@ -492,6 +505,7 @@ func (o ops) retagPatch(ctx context.Context, id ids.ID[ids.Memory], add, drop []
 
 // delete writes the memory's tombstone.
 func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	id, err := memoryID(in.ID)
 	if err != nil {
 		return WriteOut{}, err

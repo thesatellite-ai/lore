@@ -55,6 +55,8 @@ type AddIn struct {
 	// Supersedes is v0.1.17 --supersedes: the new memory replaces this one,
 	// whose superseded_by_id is then set to the new id.
 	Supersedes string `json:"supersedes,omitempty" flag:"supersedes" desc:"memory id (mem_…) this entry replaces"`
+	// NoMeta (--no-meta) keeps the replaced memory's metadata off the new one (METADATA 3.19).
+	NoMeta bool `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced memory's metadata"`
 	// CreatedBy and ValidatedBy are v0.1.17's actor columns
 	// created_by_actor_id / validated_by_actor_id (an act_ id of an
 	// existing actor row; the engine refuses a missing one).
@@ -71,6 +73,8 @@ type WriteOut struct {
 	ID       string    `json:"id"`
 	Store    string    `json:"store"`
 	Warnings []Warning `json:"warnings,omitempty"`
+	// CarriedMeta is how many metadata keys a --supersedes add copied (3.19).
+	CarriedMeta int `json:"carried_meta,omitempty"`
 	// Human is the v0.1.17 human line(s) the op set for this write (see
 	// Text); never part of --json or REST.
 	Human string `json:"-"`
@@ -93,7 +97,6 @@ type ListIn struct {
 	MasterOnly bool   `json:"master_only,omitempty" flag:"master-only" desc:"only project-wide memories"`
 	AllRepos   bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"memories of every repo"`
 	Project    string `json:"project,omitempty" flag:"project" desc:"only memories of this project (prj_ id or name; default the repo's one project)"`
-	Archived   bool   `json:"archived,omitempty" flag:"archived" desc:"include archived memories"`
 	Kind       string `json:"kind,omitempty" flag:"kind" desc:"only memories of this kind"`
 	// Tags keeps memories carrying every named tag.
 	Tags  []string `json:"tags,omitempty" flag:"tag" desc:"only memories with this tag (repeatable: all must match)"`
@@ -197,7 +200,8 @@ type EditIn struct {
 
 // DeleteIn is the input of memory.delete.
 type DeleteIn struct {
-	ID string `json:"id" arg:"0" desc:"the memory id (mem_…)"`
+	ID     string `json:"id" arg:"0" desc:"the memory id (mem_…)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
 
 // MoveIn is the input of memory.move (PROV5: the row keeps its id).

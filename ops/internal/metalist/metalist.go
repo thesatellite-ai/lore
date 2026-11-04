@@ -32,6 +32,10 @@ type Flags struct {
 	Meta  []string `json:"meta_where,omitempty" flag:"meta" desc:"filter by metadata: key=value, key!=value, key~=text, key>n, key?, key!? (repeatable, all must match)"`
 	Place string   `json:"place,omitempty" flag:"place" desc:"narrow --meta names to one place: repo, project, org or a scope label (project:acme-hub)"`
 	Sort  string   `json:"sort,omitempty" flag:"sort" desc:"sort by a metadata key: meta.<key>, meta.<key>:asc or meta.<key>:desc (rows without it last)"`
+	// Archived keeps archived rows in --meta filters (METADATA 3.19:
+	// archived rows count as in use but are hidden from filters unless
+	// --archived; memory and rule lists also show them only with it).
+	Archived bool `json:"archived,omitempty" flag:"archived" desc:"include archived rows (also in --meta filters)"`
 }
 
 // Empty reports that no flag was given (the list is unchanged).
@@ -48,6 +52,7 @@ type Lister interface {
 const (
 	fName, fScope, fType, fMerged = "name", "scope", "type", "merged_into"
 	fKeyID, fLabel                = "key_id", "label"
+	fArchivedAt                   = "archived_at" // every archivable table's column
 )
 
 // Keys reads the visible key definitions of every attached store.
@@ -128,6 +133,9 @@ func Select(ctx context.Context, env Lister, f Flags, rows []row.Row) (Result, e
 	var unchecked []string
 	for _, i := range all {
 		r := rows[i]
+		if len(f.Meta) > 0 && !f.Archived && text(r, fArchivedAt) != "" {
+			continue // 3.19: archived rows are hidden from --meta filters
+		}
 		if len(f.Meta) > 0 && len(metafilter.Quarantine(r.Meta)) > 0 {
 			// 3.13: quarantined metadata is kept out of filters.
 			unchecked = append(unchecked, r.ID.String())

@@ -2,6 +2,7 @@ package pattern
 
 import (
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/ops/content"
 	"strings"
 	"time"
 
@@ -39,6 +40,9 @@ type AddIn struct {
 
 // ListIn is the input of pattern.list (v0.1.17 repo scope flags).
 type ListIn struct {
+	// MetaFlags: --meta / --place / --sort meta.<key> / --archived (METADATA 3.7).
+	content.MetaFlags
+
 	Repo       string `json:"repo,omitempty" flag:"repo" desc:"include this repo's patterns (mount name or rep_ id)"`
 	NoInherit  bool   `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope: --repo only, no master inheritance"`
 	MasterOnly bool   `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`
@@ -53,10 +57,15 @@ type ListOut struct {
 	Kind          string   `json:"kind"`
 	Count         int      `json:"count,omitempty"`
 	Data          []Record `json:"data"`
+	// Notes are the metadata filter\'s lines (unknown key, skipped, not checked).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text prints v0.1.17's "PA  <id>" lines, or "(no patterns)".
-func (o ListOut) Text() string {
+func (o ListOut) Text() string { return o.rowsText() + content.NotesText(o.Notes) }
+
+// rowsText is the list rows (v0.1.17's lines).
+func (o ListOut) rowsText() string {
 	if len(o.Data) == 0 {
 		return "(no patterns)\n"
 	}
@@ -100,6 +109,12 @@ type Record struct {
 // IDIn is the input of the operations that take one pattern id.
 type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the pattern id (pat_…)"`
+}
+
+// DeleteIn is the input of pattern.delete.
+type DeleteIn struct {
+	ID     string `json:"id" arg:"0" desc:"the pattern id (pat_…)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
 
 // ShowOut is v0.1.17's show envelope.

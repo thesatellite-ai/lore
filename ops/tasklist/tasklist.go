@@ -142,6 +142,12 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the tasklist id (tlt_…)"`
 }
 
+// DeleteIn is the input of tasklist.delete.
+type DeleteIn struct {
+	ID     string `json:"id" arg:"0" desc:"the tasklist id (tlt_…)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+}
+
 // EditIn is the input of tasklist.edit (only the flags given change).
 type EditIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
@@ -297,7 +303,8 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 //
 //	count list tasks + their sub-tasks in other lists → bulk.Ask → Begin →
 //	engine Delete (tasks.tasklist_id and tasks.parent_id cascade)
-func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
+func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	id, err := listID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err

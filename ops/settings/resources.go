@@ -18,9 +18,11 @@ import (
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -106,6 +108,9 @@ type ResDeleteIn struct {
 	Kind   string   `json:"kind,omitempty" flag:"kind" desc:"bulk: delete every resource of this kind matching --where (one batch)"`
 	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk: filter on a field, as resource list --where (repeatable; all must match)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"bulk: list what would be deleted; write nothing"`
+	// WithDependents puts every resource that refers to it (recursively,
+	// the impact set of 3.21) into the same batch (RES 3.23); always asks.
+	WithDependents bool `json:"with_dependents,omitempty" flag:"with-dependents" desc:"also delete every resource that refers to it, recursively (one batch; asks and lists them)"`
 }
 
 // ResDeleteOut is the output of resource.delete: the one row's id and
@@ -135,6 +140,11 @@ type ResListIn struct {
 	Sort          []string `json:"sort,omitempty" flag:"sort" desc:"sort by name, last_checked, archived_at or a field: <key>, <key>:asc or <key>:desc (repeatable; default name)"`
 	Archived      bool     `json:"archived,omitempty" flag:"archived" desc:"include archived resources"`
 	ShowSensitive bool     `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
+	// Meta and Place are metalist.Flags' --meta/--place (CLI_REFERENCE 3.2
+	// list --meta); the whole struct is not embedded because --sort and
+	// --archived already mean the resource forms here.
+	Meta  []string `json:"meta_where,omitempty" flag:"meta" desc:"filter by metadata: key=value, key!=value, key~=text, key>n, key?, key!? (repeatable, all must match)"`
+	Place string   `json:"place,omitempty" flag:"place" desc:"narrow --meta names to one place: repo, project, org or a scope label"`
 }
 
 // ResStaleIn is the input of resource.stale.
@@ -204,6 +214,8 @@ type ResListOut struct {
 	// kind's fields; stale: none).
 	columns []string
 	stale   bool
+	// Notes are metalist's lines after the rows (unregistered key, …).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text implements op.Texter: the CLI_REFERENCE 3.2 tables.
@@ -234,6 +246,9 @@ func (o ResListOut) Text() string {
 			cells = append(cells, r.Values[c])
 		}
 		b.WriteString(strings.Join(append(cells, dayOf(r.LastChecked)), "\t") + "\n")
+	}
+	for _, n := range o.Notes {
+		b.WriteString(n + "\n")
 	}
 	return b.String()
 }
@@ -279,7 +294,7 @@ func (o ops) resourceOps() []op.Entry {
 			Errors: append(slices.Clone(writeErrors), errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true}}, o.resCheck),
 		op.Define(op.Spec{Name: OpResStale, Summary: "Resources whose last_checked is older than --days, or never set", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.resStale),
-	}, o.resourceIOOps()...) // import, export, repoint, clone (resources_io.go)
+	}, append(append(o.resourceIOOps(), o.graphOps()...), o.maintOps()...)...) // import, export, repoint, clone (resources_io.go); graph, impact (resources_graph.go)
 }
 
 // fieldEntry is one entry of a resource's `fields` object, the stored
@@ -514,11 +529,15 @@ func (o ops) fieldValue(ctx context.Context, d kindDef, name string, def located
 		return ref(target.Row.ID)
 	}
 	if k == value.KindSecretRef {
-		return secretRefValue(d.name()+" "+name+": field "+fname, raw)
+		return secretRefValue(d.name()+" "+name+": field "+fname, raw, text(d.kind.Row, kSecretMgr))
 	}
 	v, err := parseAs(k, raw)
 	if err != nil {
 		return nil, invalid(d, name, fname+" "+quote(raw)+" is not a "+string(k))
+	}
+	// RES 3.1 pattern / min / max refuse a value outside them.
+	if err = checkFieldRules(d, name, def, k, v); err != nil {
+		return nil, err
 	}
 	return v, nil
 }
@@ -604,6 +623,12 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if err = o.applySets(ctx, d, in.Name, sets, vals); err != nil {
 		return RowOut{}, err
 	}
+	notes := deprecationNotes(d, vals)
+	// RES 3.1: a default fills an unset field on add, before the required check.
+	defaults, err := o.applyDefaults(ctx, d, in.Name, vals)
+	if err != nil {
+		return RowOut{}, err
+	}
 	if err = requireFields(d, in.Name, vals); err != nil {
 		return RowOut{}, err
 	}
@@ -625,6 +650,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if line := o.valuesLine(ctx, d, vals, false); line != "" {
 		human += "  " + line + "\n"
 	}
+	human += defaults + notes
 	human += sizeWarning(ctx, o.env, target, w.Row.Fields) // RQ4
 	return RowOut{ID: w.Row.ID.String(), Store: string(target), Human: human}, nil
 }
@@ -721,6 +747,15 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	}
 	out, err := o.patchRow(ctx, r, patch, "edited "+d.name()+" "+name)
 	if err == nil {
+		setNow := map[string]json.RawMessage{}
+		for _, s := range sets {
+			if f, _, ok := strings.Cut(s, setSep); ok {
+				if def, known := d.byName[f]; known {
+					setNow[def.Row.ID.String()] = nil
+				}
+			}
+		}
+		out.Human += deprecationNotes(d, setNow)
 		all := maps.Clone(r.Row.Fields)
 		maps.Copy(all, patch)
 		out.Human += sizeWarning(ctx, o.env, r.Src, all) // RQ4
@@ -829,6 +864,21 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 			return ResListOut{}, verr
 		}
 		hits = append(hits, hit{res: v, row: r, got: stored})
+	}
+	if mf := (metalist.Flags{Meta: in.Meta, Place: in.Place, Archived: in.Archived}); !mf.Empty() {
+		plain := make([]row.Row, len(hits))
+		for i, h := range hits {
+			plain[i] = h.row.Row
+		}
+		sel, serr := metalist.Select(ctx, o.env, mf, plain)
+		if serr != nil {
+			return ResListOut{}, serr
+		}
+		kept := make([]hit, 0, len(sel.Order))
+		for _, i := range sel.Order {
+			kept = append(kept, hits[i])
+		}
+		hits, out.Notes = kept, sel.Notes
 	}
 	slices.SortFunc(hits, func(a, b hit) int { return strings.Compare(a.res.Name, b.res.Name) })
 	// XQ10: --sort key[:asc|:desc]; ties keep the name order (stable).
@@ -951,6 +1001,16 @@ func resourceSortValue(d kindDef, r located, stored resValues) func(string) sort
 }
 
 func (o ops) resDelete(ctx context.Context, in ResDeleteIn) (ResDeleteOut, error) {
+	if in.Reason != "" {
+		// DELETION 2.1: --reason becomes deleted_reason on every deleted row.
+		ctx = engine.WithDeleteReason(ctx, in.Reason)
+	}
+	if in.WithDependents {
+		if in.Kind != "" || len(in.Where) > 0 || in.Name == "" {
+			return ResDeleteOut{}, errs.New(errs.InvalidInput, "resource delete: --with-dependents takes one named resource")
+		}
+		return o.resDeleteWithDependents(ctx, in)
+	}
 	bulkForm := in.Kind != "" || len(in.Where) > 0
 	switch {
 	case bulkForm && in.Name != "":

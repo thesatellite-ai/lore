@@ -122,6 +122,12 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the mission id (msn_…)"`
 }
 
+// DeleteIn is the input of mission.delete.
+type DeleteIn struct {
+	ID     string `json:"id" arg:"0" desc:"the mission id (msn_…)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+}
+
 // EditIn is the input of mission.edit (only the flags given change).
 type EditIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).

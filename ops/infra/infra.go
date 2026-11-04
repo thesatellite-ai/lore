@@ -158,6 +158,12 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the row id"`
 }
 
+// DeleteIn is the input of repo.delete.
+type DeleteIn struct {
+	ID     string `json:"id" arg:"0" desc:"the row id"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+}
+
 // stamp sets (archive) or clears (unarchive) archived_at of the row id in
 // table, printing v0.1.17's "✓ <label> archived|unarchived" line.
 func (o ops) stamp(ctx context.Context, noun string, p ids.Prefix, table row.Table, raw string, archive bool, label func(row.Row) string) (work.WriteOut, error) {

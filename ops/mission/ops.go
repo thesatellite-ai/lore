@@ -8,6 +8,7 @@ package mission
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/engine"
 	"slices"
 	"strconv"
 	"strings"
@@ -458,7 +459,8 @@ func (o ops) setStatus(ctx context.Context, raw, status, label string) (work.Wri
 }
 
 // delete tombstones the mission; its tasks' mission_id is cleared.
-func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
+func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	id, err := missionID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err

@@ -74,9 +74,14 @@ func secretRefNote(isSecretRef, internal bool) string {
 // gets the default manager, then the shape check and the manager list.
 // Errors never repeat the value (it may be a pasted secret).
 // where names the field in the message ("host h1: field ssh").
-func secretRefValue(where, raw string) (value.SecretRef, error) {
+//
+// manager is the kind's --secret-manager ("" = the RES-SR1 default).
+func secretRefValue(where, raw, manager string) (value.SecretRef, error) {
+	if manager == "" {
+		manager = defaultSecretManager
+	}
 	if !strings.Contains(raw, "://") {
-		raw = defaultSecretManager + "://" + raw
+		raw = manager + "://" + raw
 	}
 	v, err := value.SecretRefOf(raw)
 	if err != nil {

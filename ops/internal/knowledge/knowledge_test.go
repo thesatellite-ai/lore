@@ -290,7 +290,7 @@ func add(t *testing.T, env *fakeEnv, c Create) string {
 	if c.Texts == nil {
 		c.Texts = map[string]string{FieldBody: "b"}
 	}
-	_, w, err := Add(context.Background(), env, rules, c)
+	_, w, _, err := Add(context.Background(), env, rules, c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +331,7 @@ func TestSupersedesRefusals(t *testing.T) {
 		{"nope", errs.NotFound},
 	} {
 		n := env.next
-		if _, _, err := Add(ctx, env, rules, Create{Texts: map[string]string{FieldBody: "x"}, Supersedes: c.raw}); !errs.Has(err, c.code) {
+		if _, _, _, err := Add(ctx, env, rules, Create{Texts: map[string]string{FieldBody: "x"}, Supersedes: c.raw}); !errs.Has(err, c.code) {
 			t.Fatalf("%s: %v, want %s", c.raw, err, c.code)
 		}
 		if env.next != n {
@@ -348,7 +348,7 @@ func TestSupersedesRollback(t *testing.T) {
 	env := newEnv(t)
 	old := add(t, env, Create{})
 	env.failUpdate = errs.New(errs.Stale, "changed underneath")
-	_, _, err := Add(ctx, env, rules, Create{Texts: map[string]string{FieldBody: "v2"}, Supersedes: old})
+	_, _, _, err := Add(ctx, env, rules, Create{Texts: map[string]string{FieldBody: "v2"}, Supersedes: old})
 	if !errs.Has(err, errs.Stale) || !strings.Contains(err.Error(), "nothing was kept") {
 		t.Fatalf("rollback: %v", err)
 	}
@@ -357,7 +357,7 @@ func TestSupersedesRollback(t *testing.T) {
 		t.Fatalf("new row not removed (deleted %v) or old marked", env.deleted)
 	}
 	env.failDelete = errs.New(errs.StoreLocked, "locked")
-	_, _, err = Add(ctx, env, rules, Create{Texts: map[string]string{FieldBody: "v3"}, Supersedes: old})
+	_, _, _, err = Add(ctx, env, rules, Create{Texts: map[string]string{FieldBody: "v3"}, Supersedes: old})
 	if !errs.Has(err, errs.Stale) {
 		t.Fatalf("double failure: %v", err)
 	}
@@ -376,7 +376,7 @@ func TestSupersedesAcrossStores(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	src, w, err := Add(context.Background(), env, rules, Create{Texts: map[string]string{FieldBody: "v2"}, Supersedes: old, SupersededPatch: map[string]value.Value{"status": st}})
+	src, w, _, err := Add(context.Background(), env, rules, Create{Texts: map[string]string{FieldBody: "v2"}, Supersedes: old, SupersededPatch: map[string]value.Value{"status": st}})
 	if err != nil || src != store.SourceRepo {
 		t.Fatalf("%s %v", src, err)
 	}
@@ -406,7 +406,7 @@ func TestAddFields(t *testing.T) {
 	}
 	for _, c := range []Create{{Repo: "api"}, {CreatedBy: "nope"}, {CreatedBy: "rul_01a1a5aca7f57659be7320c5f4b70011"}, {Project: "nope"}} {
 		c.Texts = map[string]string{FieldBody: "x"}
-		if _, _, err := Add(context.Background(), env, rules, c); err == nil {
+		if _, _, _, err := Add(context.Background(), env, rules, c); err == nil {
 			t.Fatalf("%+v accepted", c)
 		}
 	}

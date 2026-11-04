@@ -170,6 +170,12 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the reminder id (rmd_…)"`
 }
 
+// DeleteIn is the input of reminder.delete.
+type DeleteIn struct {
+	ID     string `json:"id" arg:"0" desc:"the reminder id (rmd_…)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+}
+
 // DoneOut is the output of reminder.done.
 type DoneOut struct {
 	ID       string         `json:"id"`
@@ -388,7 +394,8 @@ func (o ops) done(ctx context.Context, in IDIn) (DoneOut, error) {
 
 // delete writes the reminder's tombstone (v0.1.17 hard-deleted it; a
 // tombstone keeps an old copy from coming back on the next sync).
-func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
+func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	id, err := work.ParseID(Noun, ids.PrefixReminder, in.ID)
 	if err != nil {
 		return work.WriteOut{}, err

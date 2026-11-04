@@ -187,8 +187,8 @@ func (o ops) repoUnarchive(ctx context.Context, in IDIn) (work.WriteOut, error) 
 	return o.stamp(ctx, NounRepo, ids.PrefixRepo, schema.TableRepos, in.ID, false, repoName)
 }
 
-func (o ops) repoDelete(ctx context.Context, in IDIn) (work.WriteOut, error) {
-	return o.remove(ctx, NounRepo, ids.PrefixRepo, schema.TableRepos, in.ID, repoName)
+func (o ops) repoDelete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
+	return o.remove(engine.WithDeleteReason(ctx, in.Reason), NounRepo, ids.PrefixRepo, schema.TableRepos, in.ID, repoName)
 }
 
 // ---- Repo identity and URL history (PROV1, PROV2, PROV3) ----

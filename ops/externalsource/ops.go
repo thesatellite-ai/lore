@@ -127,7 +127,11 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	out := ListOut{SchemaVersion: content.SchemaVersion, Kind: KindList, Data: []Record{}}
+	rows, notes, err := o.c.Narrow(ctx, rows, in.MetaFlags)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{SchemaVersion: content.SchemaVersion, Kind: KindList, Data: []Record{}, Notes: notes}
 	for _, l := range rows {
 		out.Data = append(out.Data, recordOf(o.c.Labeler(), l.Source, l.Row))
 	}

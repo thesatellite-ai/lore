@@ -2,6 +2,7 @@ package externalsource
 
 import (
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/ops/content"
 	"strings"
 	"time"
 
@@ -28,6 +29,9 @@ type AddIn struct {
 
 // ListIn is the input of external_source.list.
 type ListIn struct {
+	// MetaFlags: --meta / --place / --sort meta.<key> / --archived (METADATA 3.7).
+	content.MetaFlags
+
 	Project string `json:"project,omitempty" flag:"project" desc:"only sources of this project (prj_ id or name)"`
 	Store   string `json:"store,omitempty" flag:"store" desc:"only sources of this store (default every attached store)"`
 }
@@ -38,6 +42,8 @@ type ListOut struct {
 	Kind          string   `json:"kind"`
 	Count         int      `json:"count,omitempty"`
 	Data          []Record `json:"data"`
+	// Notes are the metadata filter\'s lines (unknown key, skipped, not checked).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // States v0.1.17's list line prints for enabled.
@@ -48,7 +54,10 @@ const (
 
 // Text prints v0.1.17's "[on|off] <name> (<kind>) <id>" lines, or
 // "(no external sources)".
-func (o ListOut) Text() string {
+func (o ListOut) Text() string { return o.rowsText() + content.NotesText(o.Notes) }
+
+// rowsText is the list rows (v0.1.17's lines).
+func (o ListOut) rowsText() string {
 	if len(o.Data) == 0 {
 		return "(no external sources)\n"
 	}

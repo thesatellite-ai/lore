@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"strings"
 	"time"
 
@@ -107,6 +108,7 @@ type AddIn struct {
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"decision_id (dec_*) this entry replaces"`
+	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata (METADATA 3.19)"`
 	CreatedBy  string   `json:"created_by,omitempty" flag:"created-by" desc:"actor_id (act_*); defaults to current identity"`
 	To         string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Repo       string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
@@ -124,6 +126,8 @@ type AddOut struct {
 	Store    string       `json:"store"`
 	Title    string       `json:"title"`
 	Warnings []kn.Warning `json:"warnings,omitempty"`
+	// CarriedMeta is how many metadata keys --supersedes copied (3.19).
+	CarriedMeta int `json:"carried_meta,omitempty"`
 	// label is the store's `_label` for the add line (kn.Label; "" for
 	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
 	label string
@@ -131,8 +135,11 @@ type AddOut struct {
 
 // Text prints v0.1.17's add line.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s — %s %s\n", o.ID, o.Title, o.label)
+	return fmt.Sprintf("✓ %s — %s %s\n", o.ID, o.Title, o.label) + carriedLine(o.CarriedMeta)
 }
+
+// carriedLine is the "carried over N keys" note of a --supersedes add.
+func carriedLine(n int) string { return metalist.Carry{Count: n}.Line() }
 
 // WriteOut is the output of edit, archive, unarchive and delete.
 type WriteOut struct {
@@ -215,6 +222,13 @@ type Record struct {
 type IDIn struct {
 	ID      string `json:"id" arg:"0" desc:"the decision id (dec_…)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
+}
+
+// DeleteIn is the input of decision.delete.
+type DeleteIn struct {
+	ID      string `json:"id" arg:"0" desc:"the decision id (dec_…)"`
+	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
+	Reason  string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
 
 // ShowOut is v0.1.17's show envelope.
@@ -347,6 +361,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	c := kn.Create{
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, CreatedBy: in.CreatedBy, Tags: in.Tags,
+		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
 			kn.FieldTitle: in.Title, kn.FieldBody: body, fieldStatus: status,
 			kn.FieldSourceKind: in.Source, kn.FieldSourceRef: in.SourceRef,
@@ -358,14 +373,14 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	src, w, err := kn.Add(ctx, o.env, noun, c)
+	src, w, carried, err := kn.Add(ctx, o.env, noun, c)
 	if err != nil {
 		return AddOut{}, err
 	}
 	if err = rowref.Save(ctx, o.env, src, noun.Table, kn.Field(w.Row, kn.FieldProject), w.Row.ID, rel, refs); err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), Title: in.Title, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: in.Title, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // addRefs writes --ref pointers of an existing decision it (parse, F15
@@ -479,7 +494,8 @@ func (o ops) stamp(ctx context.Context, id string, v value.Value, done string) (
 }
 
 // delete writes the decision's tombstone.
-func (o ops) delete(ctx context.Context, in IDIn) (WriteOut, error) {
+func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	w, err := kn.Delete(ctx, o.env, noun, in.ID)
 	if err != nil {
 		return WriteOut{}, err

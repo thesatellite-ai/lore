@@ -99,7 +99,7 @@ func (o ops) metaHits(ctx context.Context, where []string) ([]metaRow, error) {
 // (3.19, XQ1): a dry run lists the rows; otherwise above batch.preview_rows
 // nothing is written without --yes (XQ2), then each row is written with
 // the batch on its audit event so `lore batch undo` reverses it.
-func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun bool, write func(metaRow) engine.MetaWrite) (RowOut, error) {
+func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun, all bool, write func(metaRow) engine.MetaWrite) (RowOut, error) {
 	if len(hits) == 0 {
 		return RowOut{Human: "no rows match; nothing written\n"}, nil
 	}
@@ -117,13 +117,17 @@ func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun b
 	if dryRun {
 		ids := make([]string, 0, bulkSample)
 		for i, it := range items {
-			if i == bulkSample {
+			if i == bulkSample && !all { // --dry-run --all lists every row (CLI_REFERENCE 3.1)
 				ids = append(ids, "…")
 				break
 			}
 			ids = append(ids, it.ID)
 		}
-		return RowOut{Human: fmt.Sprintf("would %s on %d rows (%s): %s\ndry run: nothing written\n", what, len(hits), strings.Join(tabs, ", "), strings.Join(ids, ", "))}, nil
+		more := ""
+		if len(items) > bulkSample && !all {
+			more = " (--dry-run --all to list every row)"
+		}
+		return RowOut{Human: fmt.Sprintf("would %s on %d rows (%s): %s"+more+"\ndry run: nothing written\n", what, len(hits), strings.Join(tabs, ", "), strings.Join(ids, ", "))}, nil
 	}
 	if err := bulk.Preview(ctx, o.env, hits[0].Src, "meta "+what, items); err != nil {
 		return RowOut{}, err
@@ -153,6 +157,9 @@ func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun b
 
 // metaSetWhere is `lore meta set --where '<filter>' k=v …` (3.19).
 func (o ops) metaSetWhere(ctx context.Context, in MetaSetIn) (RowOut, error) {
+	if in.All && !in.DryRun {
+		return RowOut{}, errs.New(errs.InvalidInput, "meta set: --all belongs to --dry-run")
+	}
 	f := engine.MetaFlags{MetaJSON: in.JSON, MetaStdin: in.Stdin}
 	for _, p := range []string{in.ID, in.Pair} {
 		if p != "" {
@@ -176,7 +183,7 @@ func (o ops) metaSetWhere(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	for _, t := range append(slices.Clone(proto.Set), proto.JSON...) {
 		names = append(names, t.Name())
 	}
-	return o.metaBulk(ctx, "set "+strings.Join(names, ", "), hits, in.DryRun, func(h metaRow) engine.MetaWrite {
+	return o.metaBulk(ctx, "set "+strings.Join(names, ", "), hits, in.DryRun, in.All, func(h metaRow) engine.MetaWrite {
 		mw := proto
 		mw.ID = h.Row.ID
 		return mw
@@ -186,6 +193,9 @@ func (o ops) metaSetWhere(ctx context.Context, in MetaSetIn) (RowOut, error) {
 // metaUnsetWhere is `lore meta unset --where '<filter>' <key>…` (3.19):
 // only rows that carry a named key are changed.
 func (o ops) metaUnsetWhere(ctx context.Context, in MetaUnsetIn) (RowOut, error) {
+	if in.All && !in.DryRun {
+		return RowOut{}, errs.New(errs.InvalidInput, "meta unset: --all belongs to --dry-run")
+	}
 	var keys []string
 	for _, k := range append([]string{in.ID, in.Key}, in.More...) {
 		if k != "" {
@@ -213,7 +223,7 @@ func (o ops) metaUnsetWhere(ctx context.Context, in MetaUnsetIn) (RowOut, error)
 			hits = append(hits, h)
 		}
 	}
-	return o.metaBulk(ctx, "remove "+strings.Join(keys, ", "), hits, in.DryRun, func(h metaRow) engine.MetaWrite {
+	return o.metaBulk(ctx, "remove "+strings.Join(keys, ", "), hits, in.DryRun, in.All, func(h metaRow) engine.MetaWrite {
 		var mine []string
 		for _, en := range h.entries {
 			for _, k := range keys {

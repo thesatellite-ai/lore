@@ -72,8 +72,8 @@ var WriteErrors = []errs.Code{
 	errs.Stale, errs.StoreReadOnly, errs.StoreLocked, errs.StoreUnreachable, errs.OldLore, errs.Internal,
 }
 
-// DeleteErrors are WriteErrors plus E_HAS_DEPENDENTS.
-var DeleteErrors = append(slices.Clone(WriteErrors), errs.HasDependents)
+// DeleteErrors are WriteErrors plus E_HAS_DEPENDENTS and E_REASON_REQUIRED.
+var DeleteErrors = append(slices.Clone(WriteErrors), errs.HasDependents, errs.ReasonRequired)
 
 // ReadErrors are the codes a work read can return.
 var ReadErrors = []errs.Code{errs.InvalidInput, errs.InvalidID, errs.NotFound, errs.AmbiguousID, errs.StoreUnreachable, errs.OldLore, errs.Internal}
