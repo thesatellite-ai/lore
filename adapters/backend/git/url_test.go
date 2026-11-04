@@ -120,3 +120,42 @@ func TestRowRel(t *testing.T) {
 		}
 	}
 }
+
+// TestRemoteGitForm pins the origin spelling lore writes into a store
+// clone: an ssh url without a port goes back to git's scp-like form, so a
+// person's url.<base>.insteadOf rule keyed on `git@host:` still applies
+// (GDOCS-1: every store looked unreachable behind such a rule); a port,
+// https and http keep their url form; no credential survives either way.
+func TestRemoteGitForm(t *testing.T) {
+	t.Parallel()
+	const secret = "s3cr3t-tok"
+	cases := map[string]string{
+		"git@github.com:agency/notes":                  "git@github.com:agency/notes",
+		"ssh://git@github.com/agency/notes.git":        "git@github.com:agency/notes.git",
+		"ssh://git:" + secret + "@GitHub.com/a/b":      "git@GitHub.com:a/b",
+		"github.com:agency/notes":                      "github.com:agency/notes",
+		"ssh://git@host.example:2222/agency/notes":     "ssh://git@host.example:2222/agency/notes",
+		"https://" + secret + "@github.com/agency/n":   "https://github.com/agency/n",
+		"http://git.internal/agency/notes?folder=team": "http://git.internal/agency/notes",
+	}
+	for raw, want := range cases {
+		canon, err := CanonicalURL(raw)
+		if err != nil {
+			t.Fatalf("CanonicalURL(%q): %v", raw, err)
+		}
+		u, err := url.Parse(canon)
+		if err != nil {
+			t.Fatalf("parse %q: %v", canon, err)
+		}
+		r, err := RemoteOf(u)
+		if err != nil {
+			t.Fatalf("RemoteOf(%q): %v", canon, err)
+		}
+		if r.Git != want {
+			t.Errorf("%q: Git = %q, want %q", raw, r.Git, want)
+		}
+		if strings.Contains(r.Git, secret) {
+			t.Errorf("%q: the credential survived into %q", raw, r.Git)
+		}
+	}
+}

@@ -46,10 +46,12 @@ var hostPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$`)
 // Invariant: URL never holds a password or token (D24): it is what lore
 // writes into the clone's git config. Norm is `host/owner/repo` (lower-case
 // host, no port, user or .git) and names the clone folder, so every form of
-// one url shares one clone.
+// one url shares one clone. Git is the spelling written as the clone's
+// origin (see gitRemote): URL with an ssh url in git's scp-like form.
 type Remote struct {
 	URL  string
 	Norm string
+	Git  string
 }
 
 // CanonicalURL rewrites a store url into the form store.Openers can parse
@@ -122,7 +124,27 @@ func RemoteOf(u *url.URL) (Remote, error) {
 	if u.Scheme == SchemeSSH && u.User != nil && u.User.Username() != "" {
 		clean.User = url.User(u.User.Username())
 	}
-	return Remote{URL: clean.String(), Norm: host + "/" + path}, nil
+	return Remote{URL: clean.String(), Norm: host + "/" + path, Git: gitRemote(clean)}, nil
+}
+
+// gitRemote is the url lore writes as a store clone's origin. An ssh url
+// with no port is written in git's scp-like form (`git@host:owner/repo`),
+// the form hosts advertise, people type and v0.1.17 wrote: git matches
+// url.<base>.insteadOf / pushInsteadOf rules against the url text, so a
+// rule keyed on `git@github.com:` (a mirror, a proxy, a per-host key) never
+// applies to the equivalent `ssh://git@github.com/...` and the store looks
+// unreachable. An ssh url with a port has no scp-like form and stays
+// ssh://; https and http stay as they are. Invariant: clean holds no
+// password (RemoteOf strips it), so neither form leaks one.
+func gitRemote(clean url.URL) string {
+	if clean.Scheme != SchemeSSH || clean.Port() != "" {
+		return clean.String()
+	}
+	user := ""
+	if clean.User != nil {
+		user = clean.User.Username() + "@"
+	}
+	return user + clean.Hostname() + ":" + strings.TrimPrefix(clean.Path, "/")
 }
 
 // quoteScheme renders a scheme for a message (schemes never hold secrets).

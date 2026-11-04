@@ -168,19 +168,18 @@ orgs:
 Y
 on alice . "cat .lore/config.yaml"
 # 0.1.18: a store is attached to the repo by name (`lore store init <name> <url>`).
-# GDOCS-1: on the fake GitHub this stops with E_STORE_UNREACHABLE before any clone.
-on_known GDOCS-1 alice work/website "LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes"
-on_known GDOCS-1 alice work/website "LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes"
-on_known GDOCS-1 alice work/website "cat .lore/stores.yaml"
+on alice work/website "LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes"
+on alice work/website "LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes"
+on alice work/website "cat .lore/stores.yaml"
 
 note "org use"
 on! alice work/website "lore whoami"
 on alice work/website "lore org use agency"
 on alice . "grep -A3 repo_orgs ~/.lore/config.yaml"
-on_known GDOCS-1 alice work/website "lore org link agency --project client --yes"
+on alice work/website "lore org link agency --project client --yes"
 
 note "force org"
 on! alice work/website "LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'"
 # --force-org is gone: name the store the note goes to with --to.
 on! alice work/website "lore memory add --force-org --body 'The client pays invoices in 30 days'"
-on_known GDOCS-1 alice work/website "lore memory add --to freelance --body 'The client pays invoices in 30 days'"
+on alice work/website "lore memory add --to freelance --body 'The client pays invoices in 30 days'"

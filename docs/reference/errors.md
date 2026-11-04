@@ -198,9 +198,9 @@ ERROR: [E_NO_WORK] nothing ready: no open task matches
 ```console
 # alice, in website
 $ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
-ERROR: [E_LINK_UNKNOWN] cannot tell where this write belongs: org store freelance, freelance/org has no local copy and cannot be reached
-  hint: go online once (the store is then kept locally), or name the target: --to repo or --to <store>
-(exit 18)
+ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
+  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+(exit 17)
 ```
 <!-- /example -->
 

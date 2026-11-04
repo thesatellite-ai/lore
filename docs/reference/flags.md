@@ -105,15 +105,16 @@ Here `LORE_ORG` names `freelance`, but the repo is linked to the `agency` store,
 ```console
 # alice, in website
 $ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
-ERROR: [E_LINK_UNKNOWN] cannot tell where this write belongs: org store freelance, freelance/org has no local copy and cannot be reached
-  hint: go online once (the store is then kept locally), or name the target: --to repo or --to <store>
-(exit 18)
+ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
+  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+(exit 17)
 $ lore memory add --force-org --body 'The client pays invoices in 30 days'
 Error: unknown flag: --force-org
 Run 'lore memory add --help' for usage.
 (exit 1)
 $ lore memory add --to freelance --body 'The client pays invoices in 30 days'
-ERROR: [E_NOT_FOUND] engine: no store named freelance is attached
+✓ mem_d431…313a [freelance]
+  scope: [master]
 ```
 <!-- /example -->
 

@@ -115,7 +115,7 @@ When two org entries match a repo, `lore org use` records this machine's choice 
 $ lore whoami
 org        refused  (the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance))
 identity   (not resolved: the org is refused above)
-project    prj_05e9…4603
+project    prj_76bd…3f10
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   local: everywhere/
@@ -123,21 +123,21 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore org use agency
-✓ prj_05e9…4603 uses org agency on this machine
+✓ prj_76bd…3f10 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 
 # alice, in ~
 $ grep -A3 repo_orgs ~/.lore/config.yaml
 repo_orgs:
-  prj_05e9…4603: {org: agency, remotes: [github.com/client/website]}
+  prj_76bd…3f10: {org: agency, remotes: [github.com/client/website]}
 
 # alice, in website
 $ lore org link agency --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_05e9…4603 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-ERROR: [E_INVALID_INPUT] stores: store branch does not exist: github.com/agency/notes has no branch main (0.1.18 makes a store with `lore store init <name> <url>`; v0.1.17 stores branches are no longer created)
-  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: `lore migrate run`)
+  link: project prj_76bd…3f10 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_76bd…3f10, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  nothing was written to this repo
 ```
 <!-- /example -->
 
@@ -304,10 +304,15 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 ```console
 # alice, in website
 $ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
-ERROR: [E_STORE_UNREACHABLE] git: the store has no local copy yet and cannot be reached
-  hint: go online once; afterwards the local copy is used
+name: agency
+url: git@github.com:agency/notes
+id: sto_05e9…4603
 $ cat .lore/stores.yaml
-cat: .lore/stores.yaml: No such file or directory
+stores:
+    - name: agency
+      url: git@github.com:agency/notes
+    - name: freelance
+      url: git@github.com:other/notes
 ```
 <!-- /example -->
 
