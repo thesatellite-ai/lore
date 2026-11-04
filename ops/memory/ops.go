@@ -19,6 +19,8 @@ import (
 // Operation names. The CLI path and REST route derive from them
 // (op/route.go): memory.add → `lore memory add`, POST /v1/memories.
 const (
+	// Noun is the CLI noun of every memory operation (`lore memory …`).
+	Noun         = "memory"
 	OpAdd        = "memory.add"
 	OpList       = "memory.list"
 	OpShow       = "memory.show"
@@ -28,6 +30,7 @@ const (
 	OpArchive    = "memory.archive"
 	OpUnarchive  = "memory.unarchive"
 	OpInvalidate = "memory.invalidate"
+	OpMove       = "memory.move"
 )
 
 // Memory field names (schema.Builtin's memories table).
@@ -42,6 +45,13 @@ const (
 	fieldValidUntil = "valid_until"
 	fieldSuperseded = "superseded_by_id"
 	fieldTxAt       = "tx_at"
+	fieldTrust      = "trust_score"
+	fieldConfidence = "confidence"
+	fieldValidAt    = "valid_at"
+	fieldValidated  = "last_validated_at"
+	fieldCreatedBy  = "created_by_actor_id"
+	fieldValidBy    = "validated_by_actor_id"
+	fieldName       = "name"
 )
 
 // Defaults of memory.add (v0.1.17's flag defaults).
@@ -53,9 +63,11 @@ const (
 	// maxSearchLimit bounds one search so a REST caller cannot ask the
 	// cache for an unbounded result.
 	maxSearchLimit = 1000
-	// allowSecretsField is AddIn/EditIn's json name for --allow-secrets,
-	// the Confirm.When trigger.
-	allowSecretsField = "allow_secrets"
+	// DefaultTrust is v0.1.17's trust_score default (dbent mixin_aicoder).
+	DefaultTrust = 0.5
+	// searchFetch is how many hits search asks the caches for before its
+	// scope filter; --limit is applied after the filter.
+	searchFetch = maxSearchLimit
 )
 
 // table is the memories table.
@@ -79,7 +91,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Add a memory (free-form learned knowledge)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
-			Confirm: op.ConfirmRule{When: allowSecretsField},
+			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
 				{Title: "add a memory", CLI: `lore memory add "Retry the gateway twice on 502"`, Want: "id: mem_"},
 				{Title: "v0.1.17 spelling, to another store", CLI: `lore memory add --body="We use UTC for all timestamps" --to team_kb`, Want: "store: team_kb"},
@@ -98,7 +110,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit memory fields (only the flags given change)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
-			Confirm:  op.ConfirmRule{When: allowSecretsField},
+			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "change the body", CLI: `lore memory edit mem_<id> --body "Retry three times"`, Want: "id: mem_"}},
 		}, o.edit),
 		op.Define(op.Spec{
@@ -122,6 +134,11 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 		}, o.unarchive),
 		op.Define(op.Spec{
+			Name: OpMove, Summary: "Move a memory to another attached store (same id; the old copy is tombstoned)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.Unsupported),
+			Confirm: op.ConfirmRule{MayAsk: true},
+		}, o.move),
+		op.Define(op.Spec{
 			Name: OpInvalidate, Summary: "Mark a memory invalid as of now (sets valid_until)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 		}, o.invalidate),
@@ -132,12 +149,16 @@ func Ops(env Env) []op.Entry {
 type ops struct{ env Env }
 
 // add creates one memory in the target store (--to, else the default).
+// With --supersedes the old memory is checked first (live, same project,
+// no successor yet: nothing is written otherwise) and pointed at the new
+// one after; if that fails the new memory is deleted again, so a half
+// chain is never left (v0.1.17 supersede.go).
 func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	body, err := oneBody(in.Body, in.Text)
 	if err != nil {
 		return WriteOut{}, err
 	}
-	project, err := o.env.Project(ctx)
+	project, err := o.project(ctx, in.Project)
 	if err != nil {
 		return WriteOut{}, err
 	}
@@ -162,13 +183,132 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 			return WriteOut{}, err
 		}
 	}
+	for f, raw := range map[string]string{fieldCreatedBy: in.CreatedBy, fieldValidBy: in.ValidatedBy} {
+		if raw == "" {
+			continue
+		}
+		a, aerr := ids.Parse[ids.Actor](strings.TrimSpace(raw))
+		if aerr != nil {
+			return WriteOut{}, errs.Wrap(errs.InvalidID, "memory add: "+quoteID(raw)+" is not an actor id (act_…)", aerr)
+		}
+		if fields[f], err = value.RefOf(a.Any()); err != nil {
+			return WriteOut{}, err
+		}
+	}
+	if len(in.Tags) > 0 {
+		tags, terr := o.tagRefs(ctx, project.String(), in.Tags)
+		if terr != nil {
+			return WriteOut{}, terr
+		}
+		if fields[schema.FieldTagIDs], err = tagList(tags); err != nil {
+			return WriteOut{}, err
+		}
+	}
+	trust, err := value.Float(DefaultTrust)
+	if err != nil {
+		return WriteOut{}, errs.Wrap(errs.Internal, "memory add: trust score", err)
+	}
+	fields[fieldTrust] = trust
 	// tx_at is v0.1.17's transaction time; renderers sort by it.
 	fields[fieldTxAt] = value.DateTimeFrom(time.Now())
+	var old ids.ID[ids.Memory]
+	var oldSrc store.Source
+	if in.Supersedes != "" {
+		if old, oldSrc, err = o.checkSupersedes(ctx, project, in.Supersedes); err != nil {
+			return WriteOut{}, err
+		}
+	}
 	w, err := o.env.Create(ctx, store.Source(in.To), table, fields)
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return writeOut(o.storeOf(ctx, w.Row.ID, store.Source(in.To)), w), nil
+	src := o.storeOf(ctx, w.Row.ID, store.Source(in.To))
+	if !old.IsZero() {
+		if err := o.finishSupersedes(ctx, oldSrc, old, src, w.Row.ID); err != nil {
+			return WriteOut{}, err
+		}
+	}
+	return writeOut(src, w), nil
+}
+
+// checkSupersedes validates --supersedes before anything is written.
+func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], raw string) (ids.ID[ids.Memory], store.Source, error) {
+	id, err := memoryID(raw)
+	if err != nil {
+		return ids.ID[ids.Memory]{}, "", err
+	}
+	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id.Any()})
+	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || field(r, fieldProject) != project.String())) {
+		return ids.ID[ids.Memory]{}, "", errs.New(errs.NotFound, "--supersedes "+id.String()+": no memory with that id in this project").
+			WithHint("run `lore memory list` to see the ids")
+	}
+	if err != nil {
+		return ids.ID[ids.Memory]{}, "", err
+	}
+	if next := field(r, fieldSuperseded); next != "" {
+		return ids.ID[ids.Memory]{}, "", errs.New(errs.InvalidInput, "--supersedes "+id.String()+": that memory was already replaced by "+next).
+			WithHint("supersede " + next + " instead, so the chain stays one line")
+	}
+	return id, src, nil
+}
+
+// finishSupersedes points old at the new memory; on failure the new memory
+// is deleted again and the marking error returned.
+func (o ops) finishSupersedes(ctx context.Context, oldSrc store.Source, old ids.ID[ids.Memory], newSrc store.Source, newID ids.AnyID) error {
+	ref, err := value.RefOf(newID)
+	if err != nil {
+		return err
+	}
+	_, err = o.env.Update(ctx, engine.Ref{Store: oldSrc, Table: table, ID: old.Any()}, map[string]value.Value{fieldSuperseded: ref})
+	if err == nil {
+		return nil
+	}
+	if _, derr := o.env.Delete(ctx, engine.Ref{Store: newSrc, Table: table, ID: newID}); derr != nil {
+		return errs.Wrap(errs.CodeOf(err), "memory add: could not mark "+old.String()+" superseded by "+newID.String(), err).
+			WithHint("the new memory " + newID.String() + " was written but could not be removed again; delete it with `lore memory delete " + newID.String() + "`")
+	}
+	return errs.Wrap(errs.CodeOf(err), "memory add: could not mark "+old.String()+" superseded by "+newID.String()+"; nothing was kept", err)
+}
+
+// project resolves --project (a prj_ id or a project name among the repo
+// store's projects); "" is the repo's one project (Env.Project).
+func (o ops) project(ctx context.Context, flag string) (ids.ID[ids.Project], error) {
+	if flag == "" {
+		return o.env.Project(ctx)
+	}
+	rows, err := o.env.List(ctx, store.SourceRepo, schema.TableProjects)
+	if err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	var hits []row.Row
+	for _, r := range rows {
+		if r.ID.String() == flag || field(r, fieldName) == flag {
+			hits = append(hits, r)
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "memory: no project "+quoteID(flag)).
+			WithHint("run `lore project list` to see the projects")
+	case 1:
+		return ids.As[ids.Project](hits[0].ID)
+	}
+	return ids.ID[ids.Project]{}, errs.New(errs.ProjectNameCollision, "memory: several projects are named "+quoteID(flag)).
+		WithHint("name it by its prj_ id")
+}
+
+// projectFilter is the project a read keeps ("" = every project: without
+// --project the repo store holds one project and other stores' rows belong
+// to their own folders' projects, as v0.1.17 appended them unfiltered).
+func (o ops) projectFilter(ctx context.Context, flag string) (string, error) {
+	if flag == "" {
+		return "", nil
+	}
+	p, err := o.project(ctx, flag)
+	if err != nil {
+		return "", err
+	}
+	return p.String(), nil
 }
 
 // list returns the live memories of every attached store (or one).
@@ -177,22 +317,27 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
+	project, err := o.projectFilter(ctx, in.Project)
+	if err != nil {
+		return ListOut{}, err
+	}
 	sources := o.env.Stores()
 	if in.Store != "" {
 		sources = []store.Source{store.Source(in.Store)}
 	}
-	out := ListOut{Data: []Item{}}
+	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}}
 	for _, src := range sources {
 		rows, err := o.env.List(ctx, src, table)
 		if err != nil {
 			return ListOut{}, err
 		}
 		for _, r := range rows {
-			it := itemOf(src, r)
-			if (it.Archived && !in.Archived) || (in.Kind != "" && it.Kind != in.Kind) || !sc.keeps(repoOf(r), repo) {
+			archived := field(r, fieldArchivedAt) != ""
+			if (archived && !in.Archived) || (in.Kind != "" && field(r, fieldKind) != in.Kind) ||
+				!sc.keeps(repoOf(r), repo) || (project != "" && field(r, fieldProject) != project) || !hasTags(r, in.Tags) {
 				continue
 			}
-			out.Data = append(out.Data, it)
+			out.Data = append(out.Data, recordOf(src, r))
 		}
 	}
 	out.Count = len(out.Data)
@@ -212,7 +357,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if r.Deleted {
 		return ShowOut{}, errs.New(errs.NotFound, "memory "+id.String()+" is deleted")
 	}
-	return ShowOut{Data: memoryOf(src, r)}, nil
+	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(src, r)}, nil
 }
 
 // edit patches the fields whose flags were given.
@@ -227,11 +372,55 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
+	switch {
+	case in.RebindRepo != "" && in.RebindMaster:
+		return WriteOut{}, errs.New(errs.InvalidInput, "memory edit: give --rebind-repo or --rebind-master, not both")
+	case in.RebindRepo != "":
+		repo, rerr := o.env.RepoID(ctx, in.RebindRepo)
+		if rerr != nil {
+			return WriteOut{}, rerr
+		}
+		if patch[fieldRepo], err = value.RefOf(repo.Any()); err != nil {
+			return WriteOut{}, err
+		}
+	case in.RebindMaster:
+		patch[fieldRepo] = value.Null{}
+	}
+	if len(in.Tags) > 0 || len(in.Untags) > 0 {
+		v, terr := o.retagPatch(ctx, id, in.Tags, in.Untags)
+		if terr != nil {
+			return WriteOut{}, terr
+		}
+		patch[schema.FieldTagIDs] = v
+	}
 	if len(patch) == 0 {
 		return WriteOut{}, errs.New(errs.InvalidInput, "memory edit: nothing to change").
-			WithHint("give at least one of --body, --kind, --source, --source-ref")
+			WithHint("give at least one of --body, --kind, --source, --source-ref, --rebind-repo, --rebind-master, --tag, --untag")
 	}
 	return o.patch(ctx, id, patch)
+}
+
+// retagPatch is the new tag_ids of memory id: its tags plus add, minus
+// drop. A tag to remove only has to be named (it may be deleted already).
+func (o ops) retagPatch(ctx context.Context, id ids.ID[ids.Memory], add, drop []string) (value.Value, error) {
+	_, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id.Any()})
+	if err != nil {
+		return nil, err
+	}
+	project := field(r, fieldProject)
+	addIDs, err := o.tagRefs(ctx, project, add)
+	if err != nil {
+		return nil, err
+	}
+	dropIDs := make([]ids.AnyID, 0, len(drop))
+	for _, n := range drop {
+		t, terr := tagID(project, strings.TrimSpace(n))
+		if terr != nil {
+			return nil, terr
+		}
+		dropIDs = append(dropIDs, t)
+	}
+	return tagList(retag(r, addIDs, dropIDs))
 }
 
 // delete writes the memory's tombstone.
@@ -240,15 +429,34 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
+	src := o.storeOf(ctx, id.Any(), "")
 	w, err := o.env.Delete(ctx, engine.Ref{Table: table, ID: id.Any()})
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return writeOut(o.storeOf(ctx, id.Any(), ""), w), nil
+	return writeOut(src, w), nil
 }
 
-// search matches the query against every attached store's cache and
-// returns the live hits, best first per store.
+// move moves the memory to another attached store, keeping its id.
+func (o ops) move(ctx context.Context, in MoveIn) (WriteOut, error) {
+	id, err := memoryID(in.ID)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	mv, ok := o.env.(Mover)
+	if !ok {
+		return WriteOut{}, errs.New(errs.Unsupported, "memory move: this build's store wiring cannot move rows yet")
+	}
+	w, err := mv.Move(ctx, engine.Ref{Table: table, ID: id.Any()}, store.Source(in.To))
+	if err != nil {
+		return WriteOut{}, err
+	}
+	return writeOut(store.Source(in.To), w), nil
+}
+
+// search matches the query against every attached store's cache, keeps the
+// live hits in scope, best first, and cuts them at --limit AFTER the scope
+// filter (v0.1.17 filtered in SQL before its LIMIT).
 func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	if strings.TrimSpace(in.Query) == "" {
 		return SearchOut{}, errs.New(errs.InvalidInput, "memory search: empty query")
@@ -264,12 +472,19 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	if err != nil {
 		return SearchOut{}, err
 	}
-	hits, err := o.env.Search(ctx, table, in.Query, limit)
+	project, err := o.projectFilter(ctx, in.Project)
 	if err != nil {
 		return SearchOut{}, err
 	}
-	out := SearchOut{Results: []Item{}}
+	hits, err := o.env.Search(ctx, table, in.Query, searchFetch)
+	if err != nil {
+		return SearchOut{}, err
+	}
+	out := SearchOut{SchemaVersion: SchemaVersion, Kind: KindSearch, Query: in.Query, Data: []SearchHit{}}
 	for _, h := range hits {
+		if len(out.Data) == limit {
+			break
+		}
 		src, r, err := o.env.Get(ctx, engine.Ref{Store: h.Source, Table: table, ID: h.ID})
 		if errs.Has(err, errs.NotFound) {
 			continue // deleted since the cache was refreshed
@@ -277,13 +492,14 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 		if err != nil {
 			return SearchOut{}, err
 		}
-		it := itemOf(src, r)
-		if r.Deleted || (it.Archived && !in.IncludeArchived) || !sc.keeps(repoOf(r), repo) {
+		archived := field(r, fieldArchivedAt) != ""
+		if r.Deleted || (archived && !in.IncludeArchived) || !sc.keeps(repoOf(r), repo) ||
+			(project != "" && field(r, fieldProject) != project) {
 			continue
 		}
-		out.Results = append(out.Results, it)
+		out.Data = append(out.Data, hitOf(src, h, r))
 	}
-	out.Count = len(out.Results)
+	out.Count = len(out.Data)
 	return out, nil
 }
 

@@ -298,7 +298,7 @@ func TestArchiveRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if show.Data.ArchivedAt != "" || show.Data.ValidUntil == "" {
+	if !show.Data.ArchivedAt.IsZero() || show.Data.ValidUntil.IsZero() {
 		t.Fatalf("show = %+v", show.Data)
 	}
 }
@@ -341,7 +341,7 @@ func TestSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := call[SearchOut](t, env, OpSearch, `{"query":"gateway"}`)
-	if err != nil || out.Count != 1 || out.Results[0].Store != string(store.SourceRepo) {
+	if err != nil || out.Count != 1 || out.Data[0].Store != "" {
 		t.Fatalf("search = %+v %v", out, err)
 	}
 	if out, err = call[SearchOut](t, env, OpSearch, `{"query":"gateway","include_archived":true}`); err != nil || out.Count != 2 {
@@ -351,17 +351,6 @@ func TestSearch(t *testing.T) {
 		if _, err := call[SearchOut](t, env, OpSearch, bad); !errs.Has(err, errs.InvalidInput) {
 			t.Fatalf("%s: %v", bad, err)
 		}
-	}
-}
-
-// TestItemBodyIsCutOnRunes: a list body is cut to listBodyMax runes, never
-// inside a multi-byte character.
-func TestItemBodyIsCutOnRunes(t *testing.T) {
-	long := strings.Repeat("é", listBodyMax+5)
-	r := row.Row{Fields: map[string]value.Value{fieldBody: mustText(t, long)}}
-	got := itemOf(store.SourceRepo, r).Body
-	if n := len([]rune(got)); n != listBodyMax || !strings.HasSuffix(got, ellipsis) {
-		t.Fatalf("cut to %d runes: %q", n, got)
 	}
 }
 
@@ -423,8 +412,8 @@ func TestRepoScope(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, it := range out.Results {
-					got = append(got, it.Body)
+				for _, it := range out.Data {
+					got = append(got, it.Row.Body)
 				}
 			}
 			slices.Sort(got)

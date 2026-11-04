@@ -87,9 +87,13 @@ type sharedRow struct {
 
 func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 	if strings.HasPrefix(id, string(ids.PrefixMemory)+"_") {
-		// A share writes a copy (and a move deletes the original) through
-		// lore.db; memories are written only by the 0.1.18 core.
-		return errMemoryCoreOnly("share / move")
+		// Memories are written only by the 0.1.18 core: a move keeps the
+		// id (PROV5) and `lore share` is removed (BATCH 2: no copies).
+		if !move {
+			return errcodes.New(errcodes.Unsupported, "lore share is removed for memories (decision BATCH 2: a row has one home, no copies)").
+				WithHint("move it instead: `lore move " + id + " --to " + f.to.To + "`")
+		}
+		return coreMoveMemory(ctx, id, f.to.To, f.yes)
 	}
 	if f.to.To == "" {
 		return errcodes.New(errcodes.InvalidInput, "--to is required (repo, <org>, <org>/<folder> or me)")

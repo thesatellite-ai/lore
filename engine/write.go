@@ -5,9 +5,11 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/merge"
+	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/logic/validate"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -40,6 +42,23 @@ const (
 // to target ("" = the call's target, else the default). The returned row is
 // exactly what the backend stored.
 func (e *Engine) Create(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (Written, error) {
+	return e.create(ctx, target, table, ids.AnyID{}, fields)
+}
+
+// CreateWithID is Create with an id the caller pins (a natural id it
+// derived itself, e.g. the actor row of an identity). The id's prefix must
+// be the table's (E_INVALID_ID otherwise), and a row with that id must not
+// exist in target yet (E_STALE: the write expects no row), so it never
+// overwrites.
+func (e *Engine) CreateWithID(ctx context.Context, target store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) (Written, error) {
+	if id.IsZero() {
+		return Written{}, errs.New(errs.InvalidID, "engine: CreateWithID needs an id")
+	}
+	return e.create(ctx, target, table, id, fields)
+}
+
+// create is Create's path; pin, when set, is the id to use.
+func (e *Engine) create(ctx context.Context, target store.Source, table row.Table, pin ids.AnyID, fields map[string]value.Value) (Written, error) {
 	cl := e.callOf(ctx)
 	if target == "" {
 		target = cl.target
@@ -64,7 +83,19 @@ func (e *Engine) Create(ctx context.Context, target store.Source, table row.Tabl
 	if err = e.checkRefs(ctx, def, typed, names); err != nil {
 		return Written{}, err
 	}
-	id, err := e.ids.NewID(def.Prefix)
+	if !pin.IsZero() && pin.Prefix() != def.Prefix {
+		return Written{}, errs.New(errs.InvalidID, "engine: "+pin.String()+" is not an id of "+string(table))
+	}
+	keyFields, keyParts, natural := naturalKey(def, typed)
+	var id ids.AnyID
+	switch {
+	case !pin.IsZero():
+		id, natural = pin, false
+	case natural:
+		id, err = NaturalID(def.Prefix, keyParts...)
+	default:
+		id, err = e.ids.NewID(def.Prefix)
+	}
 	if err != nil {
 		return Written{}, err
 	}
@@ -83,6 +114,10 @@ func (e *Engine) Create(ctx context.Context, target store.Source, table row.Tabl
 		CreatedAt: stamp.Wall, CreatedBy: actor, UpdatedAt: stamp.Wall, UpdatedBy: actor,
 	}
 	got, err := e.put(ctx, st, r, hlc.HLC{})
+	if natural && errors.Is(err, store.ErrStale) {
+		return Written{}, errs.Wrap(errs.InvalidInput, "engine: a "+string(table)+" row with this "+strings.Join(keyFields, ", ")+" already exists ("+id.String()+")", err).
+			WithHint("use the existing row (a deleted one cannot come back)")
+	}
 	if err != nil {
 		return Written{}, err
 	}
@@ -178,7 +213,7 @@ func (e *Engine) putMerging(ctx context.Context, st Attached, def schema.TableDe
 			WithHint("restore it from the trash first if the edit should stand")
 	}
 	if !res.Clean() {
-		return stored{}, false, staleErr(base.ID, res.Conflicts, def)
+		return stored{}, false, e.staleErr(base.ID, res.Conflicts, def)
 	}
 	m := res.Row
 	whole, err := validate.Fields(def, m.Fields, validate.Whole)
@@ -213,17 +248,44 @@ func (c *Conflict) Error() string {
 	return "both sides changed " + strings.Join(names, ", ")
 }
 
-// staleErr builds the E_STALE error of a text clash.
-func staleErr(id ids.AnyID, fs []merge.FieldConflict, def schema.TableDef) error {
+// staleErr builds the E_STALE error of a text clash. The message carries
+// both values of every clashing field (newer side first) so a person can
+// pick one; a sensitive field shows no values, and a value the scanner
+// flags is masked (scan.Mask), so the error never leaks a secret.
+func (e *Engine) staleErr(id ids.AnyID, fs []merge.FieldConflict, def schema.TableDef) error {
 	c := &Conflict{ID: id}
+	parts := make([]string, 0, len(fs))
 	for _, f := range fs {
 		if fd, ok := def.Field(f.Field); ok && fd.Sensitive {
 			f.Newer, f.Older = nil, nil
+			parts = append(parts, f.Field+" (sensitive: values not shown)")
+		} else {
+			parts = append(parts, f.Field+": newer "+e.shown(f.Field, f.Newer)+", older "+e.shown(f.Field, f.Older))
 		}
 		c.Fields = append(c.Fields, f)
 	}
-	return errs.Wrap(errs.Stale, "engine: "+id.String()+" changed while you edited it", c).
-		WithHint("show both values, then rerun with the one to keep")
+	return errs.Wrap(errs.Stale, "engine: "+id.String()+" changed while you edited it; "+strings.Join(parts, "; "), c).
+		WithHint("both values are above: rerun the edit with the one to keep (or a merge of both)")
+}
+
+// staleShownMax bounds how many characters of one value an E_STALE message
+// repeats.
+const staleShownMax = 200
+
+// shown renders one clashing value for an error: quoted, cut at
+// staleShownMax, masked when the scanner flags it, "(none)" when absent.
+func (e *Engine) shown(field string, v value.Value) string {
+	if v == nil || v.Kind() == value.KindNull {
+		return "(none)"
+	}
+	s := v.String()
+	if found, _ := e.scanText(field, s); len(found) > 0 {
+		return strconv.Quote(scan.Mask(s))
+	}
+	if r := []rune(s); len(r) > staleShownMax {
+		s = string(r[:staleShownMax]) + "…"
+	}
+	return strconv.Quote(s)
 }
 
 // Delete writes a tombstone for a live row and applies every relation's
@@ -299,6 +361,9 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 type step struct {
 	row   row.Row
 	clear string // set_null: the field to clear; "" = tombstone
+	// drop: with clear, remove only this id from the list field clear
+	// (a many-to-many link to the deleted row); zero clears the field.
+	drop ids.AnyID
 }
 
 // deletePlan groups a delete's steps by store.
@@ -327,6 +392,21 @@ func (e *Engine) planDelete(ctx context.Context, src store.Source, root row.Row)
 		}
 		for _, d := range deps {
 			if seen[d.row.ID] {
+				continue
+			}
+			if d.rule.list {
+				switch d.rule.onDelete {
+				case schema.Restrict:
+					return deletePlan{}, errs.New(errs.HasDependents, "engine: "+d.row.ID.String()+" ("+string(d.rule.table)+"."+d.rule.field+") still lists "+it.row.ID.String()).
+						WithHint("remove it from the list first")
+				case schema.Cascade, schema.SetNull:
+					key := d.row.ID.String() + "." + d.rule.field + "." + it.row.ID.String()
+					if !cleared[key] {
+						cleared[key] = true
+						p.byStore[d.source] = append(p.byStore[d.source], step{row: d.row, clear: d.rule.field, drop: it.row.ID})
+					}
+				case schema.TombstoneOnly:
+				}
 				continue
 			}
 			switch d.rule.onDelete {
@@ -362,28 +442,45 @@ func (e *Engine) planDelete(ctx context.Context, src store.Source, root row.Row)
 }
 
 // mergeClears folds several set_null steps of one row into one step per
-// row (a batch may name a row once), clearing every field.
+// row (a batch may name a row once), clearing every field (or, for a list
+// link, dropping just the deleted id).
 func mergeClears(steps []step) []step {
 	var out []step
 	idx := map[ids.AnyID]int{}
 	for _, s := range steps {
 		if i, ok := idx[s.row.ID]; ok && s.clear != "" {
-			r := out[i].row
-			r.Fields = maps.Clone(r.Fields)
-			delete(r.Fields, s.clear)
-			out[i].row = r
+			out[i].row = clearIn(out[i].row, s)
 			continue
 		}
 		if s.clear != "" {
-			r := s.row
-			r.Fields = maps.Clone(r.Fields)
-			delete(r.Fields, s.clear)
-			s.row = r
+			s.row = clearIn(s.row, s)
 		}
 		idx[s.row.ID] = len(out)
 		out = append(out, s)
 	}
 	return out
+}
+
+// clearIn returns r with step s applied: the field cleared, or the id
+// s.drop removed from the list field (an emptied list is cleared).
+func clearIn(r row.Row, s step) row.Row {
+	r.Fields = maps.Clone(r.Fields)
+	if l, ok := r.Fields[s.clear].(value.List); ok && !s.drop.IsZero() {
+		var keep []value.Value
+		for _, it := range l.Items() {
+			if it.String() != s.drop.String() {
+				keep = append(keep, it)
+			}
+		}
+		if len(keep) > 0 {
+			if nl, err := value.ListOf(l.Elem(), keep...); err == nil {
+				r.Fields[s.clear] = nl
+				return r
+			}
+		}
+	}
+	delete(r.Fields, s.clear)
+	return r
 }
 
 // applyStep stamps one delete step. s.row already has cleared fields

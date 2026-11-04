@@ -99,6 +99,10 @@ type dependentRule struct {
 	field     string
 	typeField string // polymorphic: must name the deleted row's table
 	onDelete  schema.OnDelete
+	// list: a many-to-many list-of-ref field (O11). OnDelete then acts on
+	// the link only: cascade and set_null remove the deleted id from the
+	// list, restrict refuses, tombstone_only leaves it.
+	list bool
 }
 
 // dependentRules lists every relation pointing at target: the BelongsTo,
@@ -124,7 +128,11 @@ func (e *Engine) dependentRules(target row.Table) []dependentRule {
 				}
 			case schema.Polymorphic:
 				add(dependentRule{table: def.Name, field: rel.Field, typeField: rel.TypeField, onDelete: rel.OnDelete})
-			case schema.HasMany, schema.ManyToMany:
+			case schema.ManyToMany:
+				if rel.Target == target {
+					add(dependentRule{table: def.Name, field: rel.Field, onDelete: rel.OnDelete, list: true})
+				}
+			case schema.HasMany:
 			}
 		}
 	}

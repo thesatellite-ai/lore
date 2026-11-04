@@ -13,21 +13,29 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"saas/pkg/constants"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/surface/docs"
 	"github.com/thesatellite-ai/lore/surface/rest"
@@ -74,12 +82,117 @@ func mountCore(root *cobra.Command) {
 		panic(err)
 	}
 	coreApp = app
-	if err := cli.Mount(root, app.Registry(), app,
+	runner := &compatRunner{app: app}
+	if err := cli.Mount(root, app.Registry(), runner,
 		cli.WithInteractive(func() bool { return stdinIsTTY() }),
 	); err != nil {
 		panic(err)
 	}
+	if mem, _, ferr := root.Find([]string{opsmemory.Noun}); ferr == nil && mem.Name() == opsmemory.Noun {
+		for _, c := range mem.Commands() {
+			addCompatFlags(c, runner)
+		}
+	}
 	root.AddCommand(newAPICommand(), newSpecCommand())
+}
+
+// v0.1.17 flags every `lore memory …` command still accepts on the core
+// (CLI parity, phase 3). --read-only and --project keep working; --db and
+// --confirm are refused with the replacement named (spec-deltas.md);
+// --allow-secrets is gone with no alias (O12a: cobra's unknown flag).
+const (
+	jsonIndent = "  "
+)
+
+// compatRunner is the core's Runner as the old binary mounts it: it adds
+// v0.1.17's read-only mode (--read-only, LORE_READ_ONLY=1: a write
+// operation is refused with E_READ_ONLY before it runs) and returns the
+// refusal a compat flag set for this run. REST (`lore api`) uses the App
+// directly, without these CLI-only flags.
+type compatRunner struct {
+	app *wire.App
+	// pending is the refusal of the running command's compat flags (one
+	// command runs per process; set by the command's RunE wrapper).
+	pending error
+	// readOnly is --read-only of the running command.
+	readOnly bool
+}
+
+// Run implements op.Runner.
+func (r *compatRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+	if r.pending != nil {
+		return op.Result{}, r.pending
+	}
+	if e.Spec().Access == op.AccessWrite && (r.readOnly || os.Getenv(envReadOnly) == envValueOn) {
+		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
+			WithHint("unset --read-only and LORE_READ_ONLY")
+	}
+	return r.app.Run(ctx, e, d, c)
+}
+
+// addCompatFlags gives one mounted memory command v0.1.17's common flags
+// (--db, --project where the op has none, --read-only, and --confirm on the
+// commands that ask) and v0.1.17's indented --json output.
+func addCompatFlags(c *cobra.Command, r *compatRunner) {
+	var db, project string
+	var readOnly, confirm bool
+	if c.Flags().Lookup(constants.FlagDB) == nil {
+		c.Flags().StringVar(&db, constants.FlagDB, "", "v0.1.17 lore.db path: not used by memory commands (refused)")
+	}
+	if c.Flags().Lookup(constants.FlagProject) == nil {
+		// show/edit/delete/… address a memory by its id, which is unique
+		// across projects: --project is accepted and has nothing to do.
+		c.Flags().StringVar(&project, constants.FlagProject, "", "accepted for v0.1.17 scripts; a memory id already names its project")
+	}
+	if c.Flags().Lookup(constants.FlagReadOnly) == nil {
+		c.Flags().BoolVar(&readOnly, constants.FlagReadOnly, false, "refuse writes (also LORE_READ_ONLY=1)")
+	}
+	if c.Flags().Lookup(cli.FlagYes) != nil && c.Flags().Lookup(constants.FlagConfirm) == nil {
+		c.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "v0.1.17 spelling: refused, use --yes")
+	}
+	flagErr := c.FlagErrorFunc()
+	c.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		corePrinted = true // the surface prints cobra's usage error itself
+		return flagErr(cmd, err)
+	})
+	inner := c.RunE
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		// Every error a generated command returns was printed by surface/cli.
+		defer func() { corePrinted = true }()
+		r.readOnly = readOnly
+		switch {
+		case cmd.Flags().Changed(constants.FlagConfirm):
+			r.pending = errs.New(errs.InvalidInput, "--confirm was renamed: confirm with --yes").
+				WithHint("rerun with --yes instead of --confirm")
+		case cmd.Flags().Changed(constants.FlagDB):
+			r.pending = errs.New(errs.Unsupported, "--db is not supported by memory commands: memories are row files read from the repository, not lore.db").
+				WithHint("run the command inside the repository (or name a store with --store / --to)")
+		}
+		asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON)
+		if !asJSON {
+			return inner(cmd, args)
+		}
+		var buf bytes.Buffer
+		out := cmd.OutOrStdout()
+		cmd.SetOut(&buf)
+		err := inner(cmd, args)
+		cmd.SetOut(out)
+		return errors.Join(err, writeIndented(out, buf.Bytes()))
+	}
+}
+
+// writeIndented prints JSON the way v0.1.17's printJSON did
+// (json.MarshalIndent with two spaces, one trailing newline); anything that
+// is not one JSON value is written unchanged.
+func writeIndented(w io.Writer, b []byte) error {
+	var ind bytes.Buffer
+	if err := json.Indent(&ind, bytes.TrimSpace(b), "", jsonIndent); err != nil {
+		_, werr := w.Write(b)
+		return werr
+	}
+	ind.WriteByte('\n')
+	_, err := w.Write(ind.Bytes())
+	return err
 }
 
 // resolveCoreActor is the actor of the core's writes: the v0.1.17
@@ -293,14 +406,114 @@ func newSpecCommand() *cobra.Command {
 	return cmd
 }
 
+// corePrinted is set when a mounted memory command ran (or cobra refused
+// its flags): its error, if any, is already printed. One command runs per
+// process, like rootCmd.
+var corePrinted bool
+
 // coreExitCode returns the exit status of an error a core command already
 // printed (surface/cli prints its own errors), and false for any other
-// error, which main prints in the v0.1.17 format.
-//
-// Limitation: a core error whose class exits 1 (E_INTERNAL, cobra usage)
-// cannot be told apart from an old error by its status, so main prints it
-// a second time in the old format; the status is right either way.
+// error, which main prints in the v0.1.17 format. An E_INTERNAL or a cobra
+// usage error (both exit 1) of a mounted memory command counts as printed
+// too, so it is never printed twice.
 func coreExitCode(err error) (int, bool) {
 	code := cli.ExitCode(err)
-	return code, code != cli.ExitUsage
+	return code, code != cli.ExitUsage || (err != nil && corePrinted)
+}
+
+// coreMoveMemory is `lore move mem_… --to <store>` on the core: v0.1.17's
+// guard 4 flow (show the text, ask; agents can never confirm with --yes),
+// then memory.move, which keeps the id (PROV5) and tombstones the old
+// copy. A move into this repo while it is a client repo is refused when
+// the memory holds secret references (BATCH 5), before anything is asked.
+func coreMoveMemory(ctx context.Context, id, to string, yes bool) error {
+	if coreApp == nil {
+		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
+	}
+	if to == "" {
+		return errcodes.New(errcodes.InvalidInput, "--to is required (a store name from .lore/stores.yaml, or repo)")
+	}
+	me, err := resolveIdentityHere(ctx)
+	if err != nil {
+		return err
+	}
+	if yes && me.Kind == identityKindAgent {
+		return errcodes.New(errcodes.InvalidInput, "agents cannot confirm a move with --yes; a person must run it (§6.4)").
+			WithHint("ask the owner to run `lore move " + id + " --to " + to + "`")
+	}
+	mid, err := ids.Parse[ids.Memory](id)
+	if err != nil {
+		return errs.Wrap(errs.InvalidID, id+" is not a memory id", err)
+	}
+	_, r, err := coreApp.Get(ctx, engine.Ref{Table: schema.TableMemories, ID: mid.Any()})
+	if err != nil {
+		return err
+	}
+	body := ""
+	if t, ok := r.Fields["body"].(value.Text); ok {
+		body = t.String()
+	}
+	if store.Source(to) == store.SourceRepo {
+		if cwd, werr := os.Getwd(); werr == nil && repoIsClient(ctx, cwd) {
+			var found []string
+			for _, ref := range refs.References(body) {
+				if ref.Scheme == refs.SchemeSecret {
+					found = append(found, ref.String())
+				}
+			}
+			if len(found) > 0 {
+				return errs.New(errs.Unsupported, id+" holds secret references and cannot move into a client repo: "+strings.Join(found, ", ")).
+					WithHint("remove the references from the memory first (BATCH 5)")
+			}
+		}
+	}
+	fmt.Printf("This becomes visible to everyone with access to store %s:\n  %q\n", to, oneLine(body))
+	if !yes {
+		if !stdinIsTTY() || me.Kind == identityKindAgent {
+			return errcodes.New(errcodes.InvalidInput, "not moved: confirm on a terminal (or --yes, people only); nothing written")
+		}
+		if !confirmYes("Move it? [y/N] ") {
+			fmt.Println("nothing written")
+			return nil
+		}
+	}
+	e, ok := coreApp.Registry().Lookup(opsmemory.OpMove)
+	if !ok {
+		return errcodes.New(errcodes.Internal, "memory.move is not registered")
+	}
+	in, err := json.Marshal(opsmemory.MoveIn{ID: id, To: to})
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "encode the move").WithCause(err)
+	}
+	if _, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY(), Yes: true}); err != nil {
+		return err
+	}
+	fmt.Printf("✓ %s moved to store %s (same id; the old copy is tombstoned)\n", id, to)
+	return nil
+}
+
+// coreSetMemorySuccessor sets (next != "") or clears (next == "") a
+// memory's superseded_by_id through the core's write path: the supersede
+// repair of `lore doctor --fix` uses it, since memories are never written
+// through lore.db.
+func coreSetMemorySuccessor(ctx context.Context, id, next string) error {
+	if coreApp == nil {
+		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
+	}
+	mid, err := ids.Parse[ids.Memory](id)
+	if err != nil {
+		return errs.Wrap(errs.InvalidID, id+" is not a memory id", err)
+	}
+	var v value.Value = value.Null{}
+	if next != "" {
+		nid, perr := ids.ParseAny(next)
+		if perr != nil {
+			return errs.Wrap(errs.InvalidID, next+" is not an id", perr)
+		}
+		if v, err = value.RefOf(nid); err != nil {
+			return err
+		}
+	}
+	_, err = coreApp.Update(ctx, engine.Ref{Table: schema.TableMemories, ID: mid.Any()}, map[string]value.Value{"superseded_by_id": v})
+	return err
 }

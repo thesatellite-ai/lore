@@ -209,7 +209,7 @@ func clearSupersededBy(ctx context.Context, db *ent.Client, kind supersedeKind, 
 	case supersedeRule:
 		return db.Rule.UpdateOneID(id).ClearSupersededByID().Exec(ctx)
 	case supersedeMemory:
-		return errMemoryCoreOnly("repairing a supersede chain")
+		return coreSetMemorySuccessor(ctx, id, "")
 	case supersedeDecision:
 		return db.Decision.UpdateOneID(id).ClearSupersededByID().Exec(ctx)
 	case supersedeHotfix:

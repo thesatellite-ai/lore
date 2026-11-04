@@ -136,15 +136,34 @@ func Open(ctx context.Context, c Config, openers *store.Openers, opts store.Open
 	for _, s := range c.Stores {
 		u, err := NormalizeURL(s.URL)
 		if err != nil {
-			return fail(errs.Wrap(errs.CodeOf(err), "attach: store "+string(s.Name), err))
+			return fail(storeErr(s.Name, err))
 		}
 		o := opts
 		o.ReadOnly = s.ReadOnly
 		b, err := openers.Open(ctx, u, o)
 		if err != nil {
-			return fail(errs.Wrap(errs.CodeOf(err), "attach: store "+string(s.Name), err))
+			return fail(storeErr(s.Name, err))
 		}
 		out = append(out, Opened{Attached: engine.Attached{Name: s.Name, Backend: b, ReadOnly: s.ReadOnly}, Folder: s.Folder})
 	}
 	return out, nil
+}
+
+// storeErr is the error of a store that could not be attached: the message
+// names the store and the reason, and keeps the cause's hint. The reason is
+// the cause's own lore message when it has one; a foreign error (driver,
+// git, os text that may hold a path or a url) is named only by its code, so
+// no credential can leak through it.
+func storeErr(name store.Source, err error) error {
+	code := errs.CodeOf(err)
+	reason := string(code)
+	var le *errs.Error
+	if errors.As(err, &le) && le.Message != "" {
+		reason = le.Message
+	}
+	out := errs.Wrap(code, "attach: store "+string(name)+" could not be opened: "+reason, err)
+	if le != nil && le.Hint != "" {
+		out = out.WithHint(le.Hint)
+	}
+	return out
 }

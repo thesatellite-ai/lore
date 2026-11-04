@@ -12,8 +12,9 @@
 // Flag spellings follow v0.1.17 `lore memory …` where the field still
 // exists (--body, --kind, --source, --source-ref, --allow-secrets, --to,
 // --archived); flags whose feature has no 0.1.18 home yet (--tag,
-// --supersedes, --created-by, --validated-by, --repo scoping) are dropped
-// and listed in spec-deltas.md.
+// --supersedes, --created-by, --validated-by, --project, --rebind-*)
+// are restored on the new core; see spec-deltas.md for the removed ones
+// (--allow-secrets, --db, --confirm).
 package memory
 
 import (
@@ -52,8 +53,20 @@ type Env interface {
 	RepoID(ctx context.Context, mountOrID string) (ids.ID[ids.Repo], error)
 }
 
+// Mover is the optional Env upgrade memory.move needs: engine.Engine.Move
+// (the row keeps its id, the old copy is tombstoned). An Env without it
+// answers memory.move with E_UNSUPPORTED instead of pretending.
+type Mover interface {
+	Move(ctx context.Context, ref engine.Ref, to store.Source) (engine.Written, error)
+}
+
 // Hit is one search result: the row id and the store whose cache holds it.
 type Hit struct {
 	Source store.Source
 	ID     ids.AnyID
+	// Score is the FTS5 bm25 rank (lower is better, as v0.1.17 printed
+	// it) and Snippet the matched excerpt; both zero when the cache gave
+	// none.
+	Score   float64
+	Snippet string
 }

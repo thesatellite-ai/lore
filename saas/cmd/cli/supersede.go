@@ -133,7 +133,7 @@ func setSupersededBy(ctx context.Context, db *ent.Client, kind supersedeKind, ol
 	case supersedeRule:
 		return db.Rule.UpdateOneID(oldID).SetSupersededByID(newID).Exec(ctx)
 	case supersedeMemory:
-		return errMemoryCoreOnly("supersede")
+		return coreSetMemorySuccessor(ctx, oldID, newID)
 	case supersedeDecision:
 		return db.Decision.UpdateOneID(oldID).
 			SetSupersededByID(newID).
@@ -145,12 +145,4 @@ func setSupersededBy(ctx context.Context, db *ent.Client, kind supersedeKind, ol
 		return db.Pattern.UpdateOneID(oldID).SetSupersededByID(newID).Exec(ctx)
 	}
 	return fmt.Errorf("supersede: unknown kind %q", kind)
-}
-
-// errMemoryCoreOnly refuses an old write path on a memory: memories are
-// written only by the 0.1.18 core (ops/memory), so lore.db never becomes a
-// second source of truth for them. what names the refused action.
-func errMemoryCoreOnly(what string) error {
-	return errcodes.New(errcodes.Unsupported, what+" is not available for memories in this build: memories are written by the new core").
-		WithHint("use `lore memory edit <id>` (or `lore memory archive <id>`) instead")
 }

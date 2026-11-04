@@ -90,29 +90,79 @@ func field(r row.Row, name string) string {
 	return v.String()
 }
 
-// itemOf is the list form of a memory row.
-func itemOf(src store.Source, r row.Row) Item {
-	body := field(r, fieldBody)
-	if rs := []rune(body); len(rs) > listBodyMax {
-		body = string(rs[:listBodyMax-len(ellipsis)]) + ellipsis
+// recordOf is the v0.1.17 --json form of a memory row (Record). A v0.1.17
+// row always had created_by_actor_id; a 0.1.18 row that does not set it
+// shows the envelope's created_by, which names the same actor.
+func recordOf(src store.Source, r row.Row) Record {
+	rec := Record{
+		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		TrustScore: numberOr(r, fieldTrust), Confidence: numberOr(r, fieldConfidence),
+		LastValidatedAt: timePtr(r, fieldValidated), ArchivedAt: timePtr(r, fieldArchivedAt),
+		SourceKind: field(r, fieldSourceKind), SourceRef: textPtr(r, fieldSourceRef),
+		ProjectID: field(r, fieldProject), RepoID: textPtr(r, fieldRepo),
+		Kind: field(r, fieldKind), Body: field(r, fieldBody),
+		ValidAt: timePtr(r, fieldValidAt), ValidUntil: timePtr(r, fieldValidUntil),
+		SupersededByID:   textPtr(r, fieldSuperseded),
+		CreatedByActorID: textPtr(r, fieldCreatedBy), ValidatedByActorID: textPtr(r, fieldValidBy),
+		TagIDs: tagsOf(r),
 	}
-	return Item{
-		ID: r.ID.String(), Store: string(src), Kind: field(r, fieldKind), Body: body,
-		Archived: field(r, fieldArchivedAt) != "",
+	rec.TxAt = timePtr(r, fieldTxAt)
+	if rec.CreatedByActorID == "" && !r.CreatedBy.IsZero() {
+		rec.CreatedByActorID = r.CreatedBy.String()
 	}
+	if src != store.SourceRepo {
+		rec.Store = string(src)
+	}
+	return rec
 }
 
-// memoryOf is the full form of a memory row.
-func memoryOf(src store.Source, r row.Row) Memory {
-	return Memory{
-		ID: r.ID.String(), Store: string(src), Kind: field(r, fieldKind), Body: field(r, fieldBody),
-		ProjectID: field(r, fieldProject), RepoID: field(r, fieldRepo),
-		SourceKind: field(r, fieldSourceKind), SourceRef: field(r, fieldSourceRef),
-		ArchivedAt: field(r, fieldArchivedAt), ValidUntil: field(r, fieldValidUntil), Superseded: field(r, fieldSuperseded),
-		CreatedAt: timeText(r.CreatedAt), CreatedBy: r.CreatedBy.String(),
-		UpdatedAt: timeText(r.UpdatedAt), UpdatedBy: r.UpdatedBy.String(),
-		HLC: r.HLC.String(),
+// hitOf is the v0.1.17 search hit of a memory row.
+func hitOf(src store.Source, h Hit, r row.Row) SearchHit {
+	out := SearchHit{
+		ID: r.ID.String(), Score: h.Score, Snippet: h.Snippet,
+		Row: HitRow{Body: field(r, fieldBody), Kind: field(r, fieldKind), SourceKind: field(r, fieldSourceKind), TrustScore: numberOr(r, fieldTrust)},
 	}
+	if src != store.SourceRepo {
+		out.Store = string(src)
+	}
+	return out
+}
+
+// textPtr is a text field ("" when absent: omitted like ent's nil).
+func textPtr(r row.Row, name string) string { return field(r, name) }
+
+// numberPtr is a number field (nil when absent or not a number).
+func numberPtr(r row.Row, name string) *float64 {
+	n, ok := r.Fields[name].(value.Number)
+	if !ok {
+		return nil
+	}
+	f, err := n.Float64()
+	if err != nil {
+		return nil
+	}
+	return &f
+}
+
+// numberOr is a number field, 0 when absent.
+func numberOr(r row.Row, name string) float64 {
+	if p := numberPtr(r, name); p != nil {
+		return *p
+	}
+	return 0
+}
+
+// timePtr is a datetime field (zero when absent or not a datetime).
+func timePtr(r row.Row, name string) time.Time {
+	switch v := r.Fields[name].(type) {
+	case value.DateTime:
+		return v.Time()
+	case value.Text:
+		if dt, err := value.DateTimeOf(v.String()); err == nil {
+			return dt.Time()
+		}
+	}
+	return time.Time{}
 }
 
 // timeText renders an audit time like a datetime field ("" when unset).

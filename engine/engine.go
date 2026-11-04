@@ -37,6 +37,15 @@ type Attached struct {
 	Name     store.Source
 	Backend  store.Backend
 	ReadOnly bool // read_only: true in stores.yaml (spec 7.1)
+	// Level is the settings level this store's policies, secret_rules and
+	// secret_allows rows count at (logic/policy, O1). Empty: the repo
+	// store counts at policy.LevelRepo, any other store at
+	// policy.LevelStoreRoot (its rows still tighten, never loosen).
+	Level policy.Level
+	// Client marks a client repo (v0.1.17 routing: internal knowledge must
+	// never land in it): Move refuses rows holding secret references into
+	// it (BATCH 5) and writes no `moves` entry there.
+	Client bool
 }
 
 // IDSource issues permanent row ids. The default makes UUIDv7 ids (the
@@ -70,8 +79,8 @@ type Option func(*Engine) error
 // repo's own store is store.SourceRepo.
 func WithStore(a Attached) Option {
 	return func(e *Engine) error {
-		if !row.ValidName(string(a.Name)) || a.Backend == nil {
-			return errs.New(errs.ConfigInvalid, "engine: a store needs a snake_case name and a backend")
+		if !validStoreName(string(a.Name)) || a.Backend == nil {
+			return errs.New(errs.ConfigInvalid, "engine: a store needs a snake_case name (or <name>/<folder>) and a backend")
 		}
 		if _, dup := e.stores[a.Name]; dup {
 			return errs.New(errs.ConfigInvalid, "engine: store "+string(a.Name)+" attached twice")
@@ -80,6 +89,33 @@ func WithStore(a Attached) Option {
 		e.order = append(e.order, a.Name)
 		return nil
 	}
+}
+
+// validStoreName accepts an attached store name `<snake>` or
+// `<snake>/<folder>` (STORE TARGETS: `--to agency/org` is the company
+// folder of store agency). A folder target is attached under exactly the
+// name the person types, so --to needs no second parser. Folder segments
+// must be non-empty, never "." or "..", and use only lower-case letters,
+// digits, '_' and '-' (no backslash, no path tricks).
+func validStoreName(n string) bool {
+	base, rest, hasFolder := strings.Cut(n, "/")
+	if !row.ValidName(base) {
+		return false
+	}
+	if !hasFolder {
+		return true
+	}
+	for seg := range strings.SplitSeq(rest, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+		for _, c := range seg {
+			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // WithDefaultTarget names the store a write goes to when the operation names
@@ -100,9 +136,10 @@ func WithRegistry(r *schema.Registry) Option { return func(e *Engine) error { e.
 func WithScanner(s scan.Scanner) Option { return func(e *Engine) error { e.scanner = s; return nil } }
 
 // WithSettings sets where policy rows, secret rule states and allow entries
-// come from. Without it the built-in policy defaults apply
-// (secrets.on_detect: ask), no rule is off and nothing is allowed: the
-// strict reading, never a looser one.
+// come from. Without it they are the policies, secret_rules and
+// secret_allows rows of every attached store, each at its store's level
+// (storeSettings); with no such rows the built-in defaults apply
+// (secrets.on_detect: ask).
 func WithSettings(s Settings) Option { return func(e *Engine) error { e.settings = s; return nil } }
 
 // WithActor sets the actor every write is stamped with (required).
@@ -160,7 +197,7 @@ func New(opts ...Option) (*Engine, error) {
 		return nil, errs.New(errs.ConfigInvalid, "engine: default target "+string(e.target)+" is not attached")
 	}
 	if e.settings == nil {
-		e.settings = defaultSettings{}
+		e.settings = storeSettings{e: e}
 	}
 	e.clock = hlc.NewClock(e.actor, e.wall)
 	return e, nil
@@ -181,17 +218,6 @@ type Settings interface {
 	// Allows returns the "not a secret" entries that apply to target.
 	Allows(target store.Source) ([]scan.Allow, error)
 }
-
-// defaultSettings is the strict reading when no settings source is wired.
-type defaultSettings struct{}
-
-// Policy implements Settings: the built-in defaults, no rule off.
-func (defaultSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
-	return policy.Defaults(), policy.Rules{}, nil
-}
-
-// Allows implements Settings: nothing is allowed.
-func (defaultSettings) Allows(store.Source) ([]scan.Allow, error) { return nil, nil }
 
 // uuidIDs is the default IDSource.
 type uuidIDs struct{}
