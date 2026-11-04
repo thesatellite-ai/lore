@@ -431,6 +431,7 @@ func rerenderLoreMD(ctx context.Context, root string) bool {
 		fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"re-render "+loreMDRel+": "+err.Error()))
 		return false
 	}
+	rerenderPrivateQuiet(ctx, root)
 	return true
 }
 

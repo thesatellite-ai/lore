@@ -135,6 +135,11 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
 				return errcodes.New(errcodes.Internal, "sync pass").WithCause(err)
 			}
 			core, coreErr := syncCoreStores(cmd.Context())
+			if coreErr == nil {
+				// Store rows arrive through the core, not the lore.db
+				// import, so the private renders are refreshed here too.
+				rerenderPrivateQuiet(cmd.Context(), t.root)
+			}
 			if asJSON {
 				printJSON(jsonKindSyncReport, syncReportJSON{Report: rep, Stores: core.Stores}, 0)
 			} else {

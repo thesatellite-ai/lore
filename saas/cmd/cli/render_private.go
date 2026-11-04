@@ -471,3 +471,21 @@ func prunePrivate(p *privatePlan) error {
 	}
 	return nil
 }
+
+// rerenderPrivateQuiet refreshes the private per-store renders after a
+// sync (CONFIG_GUIDE: rebuilt after every sync), quietly and with the same
+// refusals as `lore render`. Only for a project that renders (LORE.md
+// exists) and when run from its root (render resolves the project from the
+// working directory); a failure is a warning, never a failed sync.
+func rerenderPrivateQuiet(ctx context.Context, root string) {
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(loreMDRel))); err != nil {
+		return
+	}
+	cwd, err := os.Getwd()
+	if err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
+		return
+	}
+	if err := renderPrivate(ctx, root, false, true); err != nil {
+		fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"re-render the private context: "+err.Error()))
+	}
+}
