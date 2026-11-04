@@ -253,6 +253,12 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}); err != nil {
 		return AddOut{}, err
 	}
+	if _, set := fields[work.FieldCreatedBy]; !set {
+		// v0.1.17 stamped created_by_actor_id with the current identity.
+		if v := o.currentActorRef(ctx); v != nil {
+			fields[work.FieldCreatedBy] = v
+		}
+	}
 	if len(in.After) > 0 {
 		deps, derr := o.parseAfter(ctx, in.After, repoID)
 		if derr != nil {
@@ -532,6 +538,11 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
 	if err != nil {
 		return ListOut{}, err
+	}
+	if in.Assignee != "" {
+		if in.Assignee, err = o.actorRef(ctx, in.Assignee); err != nil {
+			return ListOut{}, err
+		}
 	}
 	allowed := []string{schema.TaskCommitmentAccepted}
 	if in.IncludeProposed {
@@ -918,4 +929,96 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// actorMe is the --assignee spelling of the current identity.
+const actorMe = "@me"
+
+// Actor columns the --assignee lookup reads.
+const (
+	fieldStableKey = "stable_key"
+	// stableKeySep separates an actor kind from its name in a stable key
+	// (agent:review-bot), so the bare name matches too.
+	stableKeySep = ":"
+)
+
+// currentActorRef is a ref to the current identity's actor row, or nil
+// when the Env cannot tell or the row does not exist (the engine refuses a
+// dangling actor ref; the envelope's created_by still names the writer).
+func (o ops) currentActorRef(ctx context.Context) value.Value {
+	a, ok := o.env.(Actorer)
+	if !ok {
+		return nil
+	}
+	actor, err := a.Actor(ctx)
+	if err != nil || actor.IsZero() {
+		return nil
+	}
+	if _, r, gerr := o.env.Get(ctx, engine.Ref{Table: schema.TableActors, ID: actor.Any()}); gerr != nil || r.Deleted {
+		return nil
+	}
+	v, err := value.RefOf(actor.Any())
+	if err != nil {
+		return nil
+	}
+	return v
+}
+
+// actorRef resolves an actor reference as v0.1.17's resolveActorRef did:
+// an act_ id, @me (the current identity, which must have an actor row), a
+// stable_key, the name part of a stable_key, or a display name (any case).
+// Blank is E_INVALID_INPUT, no match E_NOT_FOUND, several E_INVALID_INPUT
+// listing the candidates.
+func (o ops) actorRef(ctx context.Context, raw string) (string, error) {
+	ref := strings.TrimSpace(raw)
+	if ref == "" {
+		return "", errs.New(errs.InvalidInput, "actor reference is empty").
+			WithHint("pass an actor id (act_*), " + actorMe + ", a stable_key or a display name")
+	}
+	all, err := work.ListAll(ctx, o.env, schema.TableActors, "")
+	if err != nil {
+		return "", err
+	}
+	if ref == actorMe {
+		a, ok := o.env.(Actorer)
+		if !ok {
+			return "", errs.New(errs.Unsupported, "--assignee "+actorMe+": the current identity is not known here")
+		}
+		me, aerr := a.Actor(ctx)
+		if aerr != nil {
+			return "", aerr
+		}
+		for _, s := range all {
+			if s.Row.ID.String() == me.String() {
+				return me.String(), nil
+			}
+		}
+		return "", errs.New(errs.NotFound, "current identity has no actor yet").
+			WithHint("an actor row is created on its first write, e.g. `lore task add`")
+	}
+	var byKey, byName []string
+	for _, s := range all {
+		id, key := s.Row.ID.String(), work.Field(s.Row, fieldStableKey)
+		_, short, _ := strings.Cut(key, stableKeySep)
+		switch {
+		case id == ref:
+			return id, nil
+		case key == ref:
+			byKey = append(byKey, id)
+		case strings.EqualFold(work.Field(s.Row, fieldDisplay), ref) || strings.EqualFold(short, ref):
+			byName = append(byName, id)
+		}
+	}
+	switch {
+	case len(byKey) == 1:
+		return byKey[0], nil
+	case len(byName) == 1:
+		return byName[0], nil
+	case len(byName) > 1:
+		slices.Sort(byName)
+		return "", errs.New(errs.InvalidInput, "actor "+work.Quote(ref)+" is ambiguous: "+strings.Join(slices.Compact(byName), ", ")).
+			WithHint("pass the actor id")
+	}
+	return "", errs.New(errs.NotFound, "no actor "+work.Quote(ref)).
+		WithHint("pass an actor id (act_*), " + actorMe + ", a stable_key or a display name")
 }
