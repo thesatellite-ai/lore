@@ -694,9 +694,7 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 		}
 		names = []store.Source{ref.Store}
 	}
-	var found []store.Source
-	var got row.Row
-	var hidden bool
+	var found []copyHit
 	seen := map[string]bool{} // Locations already looked in: one place counts once
 	for _, name := range names {
 		if loc := e.stores[name].Location; loc != "" {
@@ -712,23 +710,54 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 		if err != nil {
 			return "", row.Row{}, false, err
 		}
-		if got, err = sr.Decode(); err != nil {
+		got, err := sr.Decode()
+		if err != nil {
 			return "", row.Row{}, false, err
 		}
-		hidden = res
-		found = append(found, name)
+		found = append(found, copyHit{src: name, row: got, hidden: res})
 	}
-	switch len(found) {
-	case 0:
+	if len(found) == 0 {
 		return "", row.Row{}, false, errs.Wrap(errs.NotFound, "engine: no row "+ref.ID.String(), store.ErrNotFound)
+	}
+	h, err := pickCopy(ref.ID, found)
+	if err != nil {
+		return "", row.Row{}, false, err
+	}
+	return h.src, h.row, h.hidden, nil
+}
+
+// copyHit is one store's copy of an id that locate found.
+type copyHit struct {
+	src    store.Source
+	row    row.Row
+	hidden bool // a purged id's resurrected file, shown as a tombstone
+}
+
+// pickCopy chooses the copy an unqualified ref means (found is in
+// precedence order, never empty). A live copy wins over tombstones: a
+// move leaves a tombstone where the row was (spec 11 rule 3), so the
+// moved row stays addressable by its bare id. One live copy is the
+// answer; two or more are E_AMBIGUOUS_ID naming the stores. With no live
+// copy the nearest tombstone answers (`show` says deleted, a purged id
+// says E_PURGED on a write).
+func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
+	var live []copyHit
+	for _, h := range found {
+		if !h.row.Deleted {
+			live = append(live, h)
+		}
+	}
+	switch len(live) {
+	case 0:
+		return found[0], nil
 	case 1:
-		return found[0], got, hidden, nil
+		return live[0], nil
 	}
-	parts := make([]string, len(found))
-	for i, f := range found {
-		parts[i] = string(f)
+	parts := make([]string, len(live))
+	for i, h := range live {
+		parts[i] = string(h.src)
 	}
-	return "", row.Row{}, false, errs.New(errs.AmbiguousID, "engine: "+ref.ID.String()+" is in "+strings.Join(parts, " and ")).
+	return copyHit{}, errs.New(errs.AmbiguousID, "engine: "+id.String()+" is in "+strings.Join(parts, " and ")).
 		WithHint("name the store with --to")
 }
 

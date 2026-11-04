@@ -151,8 +151,7 @@ func (e *Engine) locateExcept(ctx context.Context, ref Ref, skip store.Source) (
 	if ref.Store != "" {
 		return e.locate(ctx, ref)
 	}
-	var found []store.Source
-	var got row.Row
+	var found []copyHit
 	seen := map[string]bool{} // Locations already looked in (see Attached.Location)
 	if loc := e.stores[skip].Location; loc != "" {
 		seen[loc] = true // another name of the skipped place is the same place
@@ -174,19 +173,16 @@ func (e *Engine) locateExcept(ctx context.Context, ref Ref, skip store.Source) (
 		if err != nil {
 			return "", row.Row{}, err
 		}
-		found, got = append(found, src), r
+		found = append(found, copyHit{src: src, row: r})
 	}
-	switch len(found) {
-	case 0:
+	if len(found) == 0 {
 		return "", row.Row{}, errs.Wrap(errs.NotFound, "engine: no row "+ref.ID.String()+" outside "+string(skip), store.ErrNotFound)
-	case 1:
-		return found[0], got, nil
 	}
-	parts := make([]string, len(found))
-	for i, f := range found {
-		parts[i] = string(f)
+	h, err := pickCopy(ref.ID, found) // a live copy wins over tombstones
+	if err != nil {
+		return "", row.Row{}, err
 	}
-	return "", row.Row{}, errs.New(errs.AmbiguousID, "engine: "+ref.ID.String()+" is in "+strings.Join(parts, " and "))
+	return h.src, h.row, nil
 }
 
 // refuseSecretRefs refuses a row whose text holds ${secret:…} references
