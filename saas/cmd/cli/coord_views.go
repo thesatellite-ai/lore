@@ -218,10 +218,8 @@ func (cv *coordView) tasks(ctx context.Context) ([]*ent.Task, error) {
 func taskFromDoc(d coord.Doc) (*ent.Task, error) { return docInto[ent.Task](d) }
 
 // projectDocs reads the live rows of a core-owned table that belong to the
-// view's project, through the core (every attached store). A row written
-// through the core names its author in the envelope (created_by) rather
-// than the v0.1.17 created_by_actor_id column; the document gets that
-// column from the envelope when it lacks it, so ownership reads the same.
+// view's project, through the core (every attached store); coreDocOf
+// fills created_by_actor_id from the envelope author.
 func (cv *coordView) projectDocs(ctx context.Context, table string) ([]coord.Doc, error) {
 	if coreApp == nil {
 		return nil, errcodes.New(errcodes.Internal, "the core is not mounted")
@@ -242,9 +240,6 @@ func (cv *coordView) projectDocs(ctx context.Context, table string) ([]coord.Doc
 			}
 			if d.Str(fieldProjectID) != cv.project {
 				continue
-			}
-			if d.Str(fieldCreatedByActor) == "" && !r.CreatedBy.IsZero() {
-				d[fieldCreatedByActor] = r.CreatedBy.String()
 			}
 			out = append(out, d)
 		}

@@ -66,7 +66,8 @@ func coreTableDef(table string) (schema.TableDef, bool) {
 	return schema.TableDef{}, false
 }
 
-// coreDocOf is the v0.1.17 document of a core row.
+// coreDocOf is the v0.1.17 document of a core row (created_by_actor_id
+// filled from the envelope author when the row has no such field).
 func coreDocOf(r row.Row) (coord.Doc, error) {
 	m := map[string]json.RawMessage{}
 	for k, v := range r.Fields {
@@ -93,7 +94,15 @@ func coreDocOf(r row.Row) (coord.Doc, error) {
 	if err != nil {
 		return nil, err
 	}
-	return coord.Doc(d), nil
+	doc := coord.Doc(d)
+	// A row written through the core names its author in the envelope
+	// (created_by), not in v0.1.17's created_by_actor_id column: the
+	// document gets the column from the envelope when it lacks it, so
+	// ownership (inbox, mission owner) reads the same for both writers.
+	if doc.Str(fieldCreatedByActor) == "" && !r.CreatedBy.IsZero() {
+		doc[fieldCreatedByActor] = r.CreatedBy.String()
+	}
+	return doc, nil
 }
 
 // coreDoc reads one task, mission or comment row from the core (any
