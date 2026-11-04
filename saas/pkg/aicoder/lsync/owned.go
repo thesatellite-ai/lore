@@ -155,7 +155,11 @@ func mergeCoreOwned(ctx context.Context, basePath, oursPath, theirsPath string) 
 	if err != nil {
 		return MergeOutcome{}, fmt.Errorf("lsync: core registry: %w", err)
 	}
-	out, conflict, err := merge.Driver{Registry: reg}.Merge(base, ours, theirs)
+	// Report carries the field decisions out of the core merge, so the
+	// merge driver can still tell a teammate which of their edits lost
+	// (sync_cmd prints NewerWins), as v0.1.17's field merge did.
+	var res merge.Result
+	out, conflict, err := merge.Driver{Registry: reg, Report: func(r merge.Result) { res = r }}.Merge(base, ours, theirs)
 	if err != nil {
 		// Not a core row on some side (a v1 copy from an old branch, a
 		// hand edit): git's line merge, which writes no format of its own.
@@ -166,8 +170,18 @@ func mergeCoreOwned(ctx context.Context, basePath, oursPath, theirsPath string) 
 			return MergeOutcome{}, fmt.Errorf("lsync: write merge result: %w", err)
 		}
 	}
-	return MergeOutcome{Conflicted: conflict}, nil
+	auto := append([]string(nil), res.NewerWins...)
+	if !res.EditAfterDelete.IsZero() {
+		auto = append(auto, keyDeletedVsEditedTombstoneKept)
+	}
+	return MergeOutcome{Conflicted: conflict, AutoResolved: auto}, nil
 }
+
+// keyDeletedVsEditedTombstoneKept is reported in AutoResolved when a
+// core-owned row was deleted on one side and edited later on the other:
+// the core keeps the tombstone (rows are never resurrected, STORE_SERVER_SPEC
+// 11 rule 3), unlike v0.1.17's keyDeletedVsEdited where the edit survived.
+const keyDeletedVsEditedTombstoneKept = "(deleted on one side, edited on the other: the delete was kept)"
 
 // syncCoreOwned is syncOne for a core-owned row: the file side always wins
 // and lore.db is only its mirror. A file change is imported (a deleted file

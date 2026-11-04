@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/merge3"
 )
 
@@ -19,15 +20,19 @@ func TestMergeDriver_AddAddMergesAgainstEmptyBase(t *testing.T) {
 	}
 }
 
-// F4: a tombstone on one side and an edit on the other keeps the edit.
+// F4 on the v0.1.17 field-merge path (tables lsync still writes, such as
+// entity_tags): a tombstone on one side and an edit on the other keeps the
+// edit. Core-owned tables settle this the other way round, see
+// TestMergeDriver_CoreTombstoneNeverResurrected.
 func TestMergeDriver_ModifyBeatsDelete(t *testing.T) {
 	t.Parallel()
-	base := taskDoc(t, nil)
-	tomb := `{"_live":{"deleted":true,"hlc":"2026-11-02T10:00:00.000Z/0000/a"},"id":"tsk_01a10237c9e87e4c843d8045973a65a1"}`
-	edited := taskDoc(t, map[string]any{"title": "edited"})
+	const id = "etg_01a10237c9e87e4c843d8045973a65a1"
+	base := `{"_table":"entity_tags","_v":1,"entity_id":"x","id":"` + id + `","updated_at":"2026-01-01T00:00:00.000000000Z"}`
+	tomb := `{"_live":{"deleted":true,"hlc":"2026-11-02T10:00:00.000Z/0000/a"},"id":"` + id + `"}`
+	edited := `{"_table":"entity_tags","_v":1,"entity_id":"edited","id":"` + id + `","updated_at":"2026-02-01T00:00:00.000000000Z"}`
 	for _, c := range []struct{ name, ours, theirs string }{{"tombstone ours", tomb, edited}, {"tombstone theirs", edited, tomb}} {
-		out, doc, _ := runDriver(t, base, c.ours, c.theirs, ".lore/data/tasks/x.json")
-		if out.Conflicted || doc["title"] != "edited" {
+		out, doc, _ := runDriver(t, base, c.ours, c.theirs, ".lore/data/entity_tags/x.json")
+		if out.Conflicted || doc["entity_id"] != "edited" {
 			t.Fatalf("%s: the edit must survive: %+v %v", c.name, out, doc)
 		}
 		if !strings.Contains(strings.Join(out.AutoResolved, ","), "kept") {
@@ -36,24 +41,77 @@ func TestMergeDriver_ModifyBeatsDelete(t *testing.T) {
 	}
 }
 
-// F4 step 2: when both sides carry an hlc, it decides scalars, not
-// updated_at (a laptop with a wrong clock does not win).
+// A core-owned row (tasks, 0.1.18) deleted on one side and edited later on
+// the other keeps the tombstone whichever side holds it: rows are never
+// resurrected (STORE_SERVER_SPEC 11 rule 3, logic/merge.Rows). The merge is
+// not a conflict, and the overruled edit is reported so the merge driver
+// tells the teammate.
+func TestMergeDriver_CoreTombstoneNeverResurrected(t *testing.T) {
+	t.Parallel()
+	base := coreTaskDoc(t, "2026-11-02T09:00:00.000Z/0000/", nil)
+	// A core tombstone is the header only: no body fields.
+	tomb := `{"_deleted":true,"_hlc":"2026-11-02T10:00:00.000Z/0000/","_table":"tasks","_v":2,"id":"tsk_01a10237c9e87e4c843d8045973a65a1"}`
+	editedLater := coreTaskDoc(t, "2026-11-02T11:00:00.000Z/0000/", map[string]any{"title": "edited"})
+	editedEarlier := coreTaskDoc(t, "2026-11-02T09:30:00.000Z/0000/", map[string]any{"title": "edited"})
+	for _, c := range []struct {
+		name, ours, theirs string
+		reported           bool
+	}{
+		{"tombstone ours, later edit theirs", tomb, editedLater, true},
+		{"later edit ours, tombstone theirs", editedLater, tomb, true},
+		{"tombstone ours, earlier edit theirs", tomb, editedEarlier, false},
+		{"earlier edit ours, tombstone theirs", editedEarlier, tomb, false},
+	} {
+		out, doc, raw := runDriver(t, base, c.ours, c.theirs, ".lore/data/tasks/x.json")
+		if out.Conflicted || doc["_deleted"] != true {
+			t.Fatalf("%s: the tombstone must win: %+v %s", c.name, out, raw)
+		}
+		if got := strings.Contains(strings.Join(out.AutoResolved, ","), "delete was kept"); got != c.reported {
+			t.Fatalf("%s: overruled edit reported=%v, want %v: %v", c.name, got, c.reported, out.AutoResolved)
+		}
+	}
+}
+
+// F4 step 2 on a core-owned table: when both sides carry an hlc it decides
+// scalars, not updated_at (a laptop with a wrong clock does not win); a
+// v0.1.17 file without an hlc is ordered by its updated_at (row upcast).
 func TestMergeDriver_HLCOrdersScalarsOverUpdatedAt(t *testing.T) {
 	t.Parallel()
-	base := taskDoc(t, map[string]any{"priority": "medium"})
-	ours := taskDoc(t, map[string]any{"priority": "high", "updated_at": "2026-01-01T00:00:00.000000000Z",
-		"_live": map[string]any{"hlc": "2026-11-02T10:20:00.000Z/0000/dev1"}})
-	theirs := taskDoc(t, map[string]any{"priority": "low", "updated_at": "2027-01-01T00:00:00.000000000Z",
-		"_live": map[string]any{"hlc": "2026-11-02T10:10:00.000Z/0001/dev2"}})
-	_, doc, _ := runDriver(t, base, ours, theirs, ".lore/data/tasks/x.json")
-	if doc["priority"] != "high" {
-		t.Fatalf("the higher hlc wins scalars: %v", doc["priority"])
+	base := coreTaskDoc(t, "2026-11-02T10:00:00.000Z/0000/", map[string]any{"priority": "medium"})
+	ours := coreTaskDoc(t, "2026-11-02T10:20:00.000Z/0000/", map[string]any{"priority": "high", "updated_at": "2026-01-01T00:00:00.000000000Z"})
+	theirs := coreTaskDoc(t, "2026-11-02T10:10:00.000Z/0001/", map[string]any{"priority": "low", "updated_at": "2027-01-01T00:00:00.000000000Z"})
+	for _, c := range []struct{ name, ours, theirs string }{{"higher hlc ours", ours, theirs}, {"higher hlc theirs", theirs, ours}} {
+		out, doc, raw := runDriver(t, base, c.ours, c.theirs, ".lore/data/tasks/x.json")
+		if out.Conflicted || doc["priority"] != "high" {
+			t.Fatalf("%s: the higher hlc wins scalars: %+v %s", c.name, out, raw)
+		}
+		if got := strings.Join(out.NewerWins(), ","); got != "priority" {
+			t.Fatalf("%s: the losing priority edit must be reported: %q", c.name, got)
+		}
 	}
-	noHLC := taskDoc(t, map[string]any{"priority": "low", "updated_at": "2027-01-01T00:00:00.000000000Z"})
-	_, doc, _ = runDriver(t, base, ours, noHLC, ".lore/data/tasks/x.json")
+	v1Base := taskDoc(t, map[string]any{"priority": "medium"})
+	v1Ours := taskDoc(t, map[string]any{"priority": "high", "updated_at": "2026-01-01T00:00:00.000000000Z"})
+	v1Theirs := taskDoc(t, map[string]any{"priority": "low", "updated_at": "2027-01-01T00:00:00.000000000Z"})
+	_, doc, _ := runDriver(t, v1Base, v1Ours, v1Theirs, ".lore/data/tasks/x.json")
 	if doc["priority"] != "low" {
 		t.Fatalf("without an hlc on both sides updated_at decides: %v", doc["priority"])
 	}
+}
+
+// coreTaskDoc is a 0.1.18 core task row document (`_v: 2`, ordered by
+// `_hlc`) with kv overriding the defaults.
+func coreTaskDoc(t *testing.T, hlc string, kv map[string]any) string {
+	t.Helper()
+	doc := map[string]any{keyVersion: num(2), keyTable: "tasks", "id": "tsk_01a10237c9e87e4c843d8045973a65a1", "_hlc": hlc,
+		"title": "t", "body": "b", "status": "todo", "updated_at": "2026-01-01T00:00:00.000000000Z"}
+	for k, v := range kv {
+		doc[k] = v
+	}
+	b, err := canonjson.Encode(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 // F4 / F11: _meta.json links merge as a set; concurrent links never
