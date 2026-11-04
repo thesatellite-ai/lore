@@ -227,12 +227,38 @@ func mergeRow(a, b row.Row) (row.Row, error) {
 
 // liveTables is the core-owned tables as a set (the tables a live row can
 // be brought in for).
+//
+// RQ2: resources travel with the branch only and never go to the live ref,
+// so a resources file found there is never brought in (liveResourceNote
+// names it instead).
 func liveTables() map[row.Table]bool {
 	out := map[row.Table]bool{}
 	for _, t := range CoreTables() {
 		out[t] = true
 	}
+	delete(out, schema.TableResources)
 	return out
+}
+
+// liveResourceNote warns about resources files on any live ref ("" when
+// none or unreadable): they are refused, never imported (RQ2), and the
+// paths say which files to remove from the ref.
+func liveResourceNote(ctx context.Context, st *state) string {
+	var paths []string
+	for _, src := range liveSources(st) {
+		rows, err := readLiveRows(ctx, src.dir, src.refs, src.folder, map[row.Table]bool{schema.TableResources: true})
+		if err != nil {
+			return ""
+		}
+		for _, lr := range rows {
+			paths = append(paths, lr.path)
+		}
+	}
+	if len(paths) == 0 {
+		return ""
+	}
+	sort.Strings(paths)
+	return "warning: " + strconv.Itoa(len(paths)) + " resources files on the live ref are ignored (resources travel with the branch only, RQ2): " + strings.Join(paths, ", ")
 }
 
 // pendingLive is a live row the repo store does not hold yet, or holds an
@@ -357,9 +383,10 @@ func (a *App) LiveNote(ctx context.Context) string {
 // liveNote is LiveNote for an opened state (App.state calls it while it
 // holds the App's lock, so it must not call back into the App).
 func liveNote(ctx context.Context, st *state) string {
+	warn := liveResourceNote(ctx, st)
 	p, err := pendingLiveRows(ctx, st, false)
 	if err != nil || len(p) == 0 {
-		return ""
+		return warn
 	}
 	counts := map[row.Table]int{}
 	for _, x := range p {
@@ -374,7 +401,11 @@ func liveNote(ctx context.Context, st *state) string {
 	for _, n := range names {
 		parts = append(parts, strconv.Itoa(counts[row.Table(n)])+" "+n)
 	}
-	return "note: lore 0.1.17 live rows not visible yet (" + strings.Join(parts, ", ") + "); run `" + MigrateCommand + "` to bring them in"
+	note := "note: lore 0.1.17 live rows not visible yet (" + strings.Join(parts, ", ") + "); run `" + MigrateCommand + "` to bring them in"
+	if warn != "" {
+		note += "\n" + warn
+	}
+	return note
 }
 
 // MigrateLive implements opsmigrate.Rewriter: every live-ref row of a

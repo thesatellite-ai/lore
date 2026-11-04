@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -67,6 +68,15 @@ type ResAddIn struct {
 	Name string   `json:"name" arg:"1" desc:"the resource name (snake_case, or DNS / IP under the kind's name format)"`
 	Set  []string `json:"set,omitempty" flag:"set" desc:"field=value (repeatable; ref fields take resource names)"`
 	To   string   `json:"to,omitempty" flag:"to" desc:"where the row is written (repo, <store>, <store>/<folder>; default repo)"`
+	resValueFlags
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+}
+
+// resValueFlags are the two other ways to give a value (RES-OQ4).
+type resValueFlags struct {
+	SetJSON  []string `json:"set_json,omitempty" flag:"set-json" desc:"field=<json> (repeatable; for list and json fields)"`
+	SetStdin string   `json:"set_stdin,omitempty" flag:"set-stdin" desc:"read this field's value from stdin (keeps it out of shell history)"`
 }
 
 // ResEditIn is the input of resource.edit.
@@ -74,6 +84,9 @@ type ResEditIn struct {
 	Name  string   `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	Set   []string `json:"set,omitempty" flag:"set" desc:"field=value (repeatable)"`
 	Unset []string `json:"unset,omitempty" flag:"unset" desc:"field to remove (repeatable)"`
+	resValueFlags
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
 }
 
 // ResRef names one resource.
@@ -139,6 +152,9 @@ type Resource struct {
 	Values      map[string]string `json:"values"`
 	ArchivedAt  string            `json:"archived_at,omitempty"`
 	LastChecked string            `json:"last_checked,omitempty"`
+	CheckedBy   string            `json:"checked_by,omitempty"`
+	// Conflicts are the fields a merge left for a person (by field name).
+	Conflicts []Conflict `json:"conflicts,omitempty"`
 }
 
 // ResOut is the output of resource.show.
@@ -159,8 +175,11 @@ func (o ResOut) Text() string {
 	for _, k := range keys {
 		fmt.Fprintf(&b, "  %s = %s\n", k, r.Values[k])
 	}
+	for _, c := range r.Conflicts {
+		fmt.Fprintf(&b, "  %s CONFLICT  ours %s | theirs %s | base %s  (settle: lore resource edit %s --set %s=…)\n", c.Field, c.Ours, c.Theirs, c.Base, r.Name, c.Field)
+	}
 	if r.LastChecked != "" {
-		fmt.Fprintf(&b, "  checked %s\n", r.LastChecked)
+		fmt.Fprintf(&b, "  checked %s%s\n", r.LastChecked, byWho(r.CheckedBy))
 	}
 	if r.ArchivedAt != "" {
 		fmt.Fprintf(&b, "  archived %s\n", r.ArchivedAt)
@@ -210,6 +229,14 @@ func (o ResListOut) Text() string {
 	return b.String()
 }
 
+// byWho is " (by <how>)" for a checked_by value, "" when unset (RQ8).
+func byWho(by string) string {
+	if by == "" {
+		return ""
+	}
+	return " (by " + by + ")"
+}
+
 // dayOf is the date part of an RFC 3339 time ("" stays "").
 func dayOf(s string) string {
 	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
@@ -219,9 +246,9 @@ func dayOf(s string) string {
 }
 
 func (o ops) resourceOps() []op.Entry {
-	return []op.Entry{
+	return append([]op.Entry{
 		op.Define(op.Spec{Name: OpResAdd, Summary: "Add a resource of a kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown, errs.ResourcePlace), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "add a host", CLI: "lore resource add host hub_prod --set provider=hetzner", Want: "res_"}}}, o.resAdd),
 		op.Define(op.Spec{Name: OpResEdit, Summary: "Edit a resource's values (stamps last_checked)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid), Confirm: op.ConfirmRule{MayAsk: true}}, o.resEdit),
@@ -242,7 +269,7 @@ func (o ops) resourceOps() []op.Entry {
 			Errors: writeErrors}, o.resCheck),
 		op.Define(op.Spec{Name: OpResStale, Summary: "Resources whose last_checked is older than --days, or never set", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.resStale),
-	}
+	}, o.resourceIOOps()...) // import, export, repoint, clone (resources_io.go)
 }
 
 // fieldEntry is one entry of a resource's `fields` object, the stored
@@ -266,13 +293,38 @@ type fieldEntry struct {
 type resValues struct {
 	vals  map[string]json.RawMessage
 	names map[string]string
+	// conflicts are the entries a strict merge clash left for a person
+	// (logic/merge entries_by_id, RESOURCES 3.13/R4): {"name", "strict":
+	// true, "conflict": {base, ours, theirs}} with no "v". The field reads
+	// as unset; a re-write keeps the entry as is until --set (or --unset)
+	// on that field settles it.
+	conflicts map[string]json.RawMessage
 }
+
+// Conflict is one unsettled field of a resource as shown: the three sides
+// of a strict merge clash, each as display text (sensitive ones masked).
+type Conflict struct {
+	Field  string `json:"field"`
+	Base   string `json:"base"`
+	Ours   string `json:"ours"`
+	Theirs string `json:"theirs"`
+}
+
+// conflictBody is the "conflict" member of a conflict entry.
+type conflictBody struct {
+	Base   json.RawMessage `json:"base"`
+	Ours   json.RawMessage `json:"ours"`
+	Theirs json.RawMessage `json:"theirs"`
+}
+
+// entryConflictKey is the member of a conflict entry (logic/merge).
+const entryConflictKey = "conflict"
 
 // decodeValues reads resource r's `fields` object. Any entry that is not
 // {name, v} (a flat value, a missing "v") is E_RESOURCE_INVALID naming the
 // row: showing it as unset would hide a broken row.
 func decodeValues(r located) (resValues, error) {
-	out := resValues{vals: map[string]json.RawMessage{}, names: map[string]string{}}
+	out := resValues{vals: map[string]json.RawMessage{}, names: map[string]string{}, conflicts: map[string]json.RawMessage{}}
 	raw := fieldsRaw(r)
 	if len(raw) == 0 {
 		return out, nil
@@ -295,6 +347,13 @@ func decodeValues(r located) (resValues, error) {
 		}
 		v, hasV := probe[entryValueKey]
 		var name string
+		if _, isConflict := probe[entryConflictKey]; isConflict && !hasV {
+			if err := json.Unmarshal(probe[entryNameKey], &name); err != nil || name == "" {
+				return resValues{}, bad("conflict entry "+id+" lacks its name", nil)
+			}
+			out.conflicts[id], out.names[id] = e, name
+			continue
+		}
 		if err := json.Unmarshal(probe[entryNameKey], &name); err != nil || !hasV || name == "" {
 			return resValues{}, bad("entry "+id+" lacks its name or value", nil)
 		}
@@ -313,17 +372,29 @@ const (
 // entry named after d's field with that fld_ id, or, for an id d no longer
 // lists, the name the row stored (prev); an id with neither is a bug of the
 // caller and refused.
-func valuesPatch(d kindDef, vals map[string]json.RawMessage, prev map[string]string) (map[string]value.Value, error) {
-	entries := make(map[string]fieldEntry, len(vals))
+//
+// Conflict entries of prev whose field vals does not set are kept as they
+// are (a merge clash stays for a person until that field is set).
+func valuesPatch(d kindDef, vals map[string]json.RawMessage, prev resValues) (map[string]value.Value, error) {
+	entries := make(map[string]json.RawMessage, len(vals)+len(prev.conflicts))
+	for id, c := range prev.conflicts {
+		if _, set := vals[id]; !set {
+			entries[id] = c
+		}
+	}
 	for id, v := range vals {
-		name := prev[id]
+		name := prev.names[id]
 		if f, ok := d.byID[id]; ok {
 			name = text(f.Row, kName)
 		}
 		if name == "" {
 			return nil, errs.New(errs.Internal, "resource: no field name for "+id)
 		}
-		entries[id] = fieldEntry{Name: name, V: v}
+		e, err := json.Marshal(fieldEntry{Name: name, V: v})
+		if err != nil {
+			return nil, errs.Wrap(errs.Internal, "resource: encode field "+id, err)
+		}
+		entries[id] = e
 	}
 	b, err := json.Marshal(entries)
 	if err != nil {
@@ -493,7 +564,15 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	}
 	target := targetOf(in.To)
 	if string(target) == storeMe {
-		return RowOut{}, errs.New(errs.InvalidInput, "--to me: resources are team facts, not personal ones").WithHint("--to repo or --to <store>[/<folder>]")
+		return RowOut{}, errs.New(errs.ResourcePlace, "--to me: resources are team facts, not personal ones").WithHint("--to repo or --to <store>[/<folder>]")
+	}
+	// RQ2: resources.allowed_in names the places a resource may live.
+	if err = checkPlace(ctx, o.env, target); err != nil {
+		return RowOut{}, err
+	}
+	sets, err := valueSets(in.Set, in.SetJSON, in.SetStdin)
+	if err != nil {
+		return RowOut{}, err
 	}
 	rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TableResources)
 	if err != nil {
@@ -503,13 +582,13 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 		return RowOut{}, errs.New(errs.NameTaken, d.name()+" "+in.Name+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")")
 	}
 	vals := map[string]json.RawMessage{}
-	if err = o.applySets(ctx, d, in.Name, in.Set, vals); err != nil {
+	if err = o.applySets(ctx, d, in.Name, sets, vals); err != nil {
 		return RowOut{}, err
 	}
 	if err = requireFields(d, in.Name, vals); err != nil {
 		return RowOut{}, err
 	}
-	fields, err := valuesPatch(d, vals, nil)
+	fields, err := valuesPatch(d, vals, resValues{})
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -527,6 +606,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if line := o.valuesLine(ctx, d, vals, false); line != "" {
 		human += "  " + line + "\n"
 	}
+	human += sizeWarning(ctx, o.env, target, w.Row.Fields) // RQ4
 	return RowOut{ID: w.Row.ID.String(), Store: string(target), Human: human}, nil
 }
 
@@ -578,8 +658,12 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	if len(in.Set) == 0 && len(in.Unset) == 0 {
-		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: nothing to change").WithHint("give --set field=value or --unset field")
+	sets, err := valueSets(in.Set, in.SetJSON, in.SetStdin)
+	if err != nil {
+		return RowOut{}, err
+	}
+	if len(sets) == 0 && len(in.Unset) == 0 && in.Empty() {
+		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: nothing to change").WithHint("give --set field=value, --unset field or --meta key=value")
 	}
 	stored, err := decodeValues(r)
 	if err != nil {
@@ -587,7 +671,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	}
 	vals := stored.vals
 	name := text(r.Row, rName)
-	if err = o.applySets(ctx, d, name, in.Set, vals); err != nil {
+	if err = o.applySets(ctx, d, name, sets, vals); err != nil {
 		return RowOut{}, err
 	}
 	for _, f := range in.Unset {
@@ -596,16 +680,27 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 			return RowOut{}, invalid(d, name, "unknown field "+f)
 		}
 		delete(vals, def.Row.ID.String())
+		delete(stored.conflicts, def.Row.ID.String()) // --unset settles a clash too
 	}
 	if err = requireFields(d, name, vals); err != nil {
 		return RowOut{}, err
 	}
-	patch, err := valuesPatch(d, vals, stored.names)
+	patch, err := valuesPatch(d, vals, stored)
 	if err != nil {
 		return RowOut{}, err
 	}
+	// RQ8: every edit stamps last_checked, and records that an edit did it.
 	patch[rLastChecked] = value.DateTimeFrom(opclock.Now(o.env))
-	return o.patchRow(ctx, r, patch, "edited "+d.name()+" "+name)
+	if patch[rCheckedBy], err = txt(CheckedEdit); err != nil {
+		return RowOut{}, err
+	}
+	out, err := o.patchRow(ctx, r, patch, "edited "+d.name()+" "+name)
+	if err == nil {
+		all := maps.Clone(r.Row.Fields)
+		maps.Copy(all, patch)
+		out.Human += sizeWarning(ctx, o.env, r.Src, all) // RQ4
+	}
+	return out, err
 }
 
 // fieldsRaw is a resource row's `fields` JSON bytes.
@@ -635,7 +730,8 @@ func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
 	}
 	vals := stored.vals
 	return Resource{ID: r.Row.ID.String(), Kind: d.name(), Name: text(r.Row, rName), Store: string(r.Src),
-		Values: o.named(ctx, d, vals, show), ArchivedAt: text(r.Row, rArchivedAt), LastChecked: text(r.Row, rLastChecked)}, nil
+		Values: o.named(ctx, d, vals, show), ArchivedAt: text(r.Row, rArchivedAt), LastChecked: text(r.Row, rLastChecked),
+		CheckedBy: text(r.Row, rCheckedBy), Conflicts: o.conflictsView(d, stored, show)}, nil
 }
 
 func (o ops) resShow(ctx context.Context, in ResRef) (ResOut, error) {
@@ -943,7 +1039,11 @@ func (o ops) resCheck(ctx context.Context, in ResNameIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	return o.patchRow(ctx, r, map[string]value.Value{rLastChecked: value.DateTimeFrom(opclock.Now(o.env))}, "checked "+text(r.Row, rName)+" now")
+	by, err := txt(CheckedManual) // RQ8: a person or agent looked
+	if err != nil {
+		return RowOut{}, err
+	}
+	return o.patchRow(ctx, r, map[string]value.Value{rLastChecked: value.DateTimeFrom(opclock.Now(o.env)), rCheckedBy: by}, "checked "+text(r.Row, rName)+" now")
 }
 
 func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
@@ -972,4 +1072,38 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// conflictsView shows a row's conflict entries by field name; a sensitive
+// field's sides are masked unless shown, like its value.
+func (o ops) conflictsView(d kindDef, stored resValues, show bool) []Conflict {
+	if len(stored.conflicts) == 0 {
+		return nil
+	}
+	out := make([]Conflict, 0, len(stored.conflicts))
+	for id, raw := range stored.conflicts {
+		var e struct {
+			Conflict conflictBody `json:"conflict"`
+		}
+		if json.Unmarshal(raw, &e) != nil {
+			continue
+		}
+		name := stored.names[id]
+		f, known := d.byID[id]
+		if known {
+			name = text(f.Row, kName)
+		}
+		side := func(b json.RawMessage) string {
+			if len(b) == 0 {
+				return "(unset)"
+			}
+			if known && flag(f.Row, fSensitive) && !show {
+				return maskedValue
+			}
+			return display(fromJSONRaw(b))
+		}
+		out = append(out, Conflict{Field: name, Base: side(e.Conflict.Base), Ours: side(e.Conflict.Ours), Theirs: side(e.Conflict.Theirs)})
+	}
+	slices.SortFunc(out, func(a, b Conflict) int { return strings.Compare(a.Field, b.Field) })
+	return out
 }

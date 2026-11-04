@@ -608,7 +608,8 @@ func (o ops) fieldRemove(ctx context.Context, in FieldRemoveIn) (RowOut, error) 
 			return RowOut{}, verr
 		}
 		delete(stored.vals, f.Row.ID.String())
-		patch, perr := valuesPatch(d, stored.vals, stored.names)
+		delete(stored.conflicts, f.Row.ID.String())
+		patch, perr := valuesPatch(d, stored.vals, stored)
 		if perr != nil {
 			return RowOut{}, perr
 		}
