@@ -586,7 +586,7 @@ func newGlobexGroup(t *testing.T, caps ...th.Cap) *globexGroup {
 		*x.dst = c
 	}
 	to := orgNorthwind + "/" + folderGlobex
-	g.mission = mustID(t, g.aliceBE.MustLore("mission", "add", "Invite landing page", "--to", to), "msn")
+	g.mission = mustID(t, g.aliceBE.MustLore("mission", "add", "Invite landing page", "--to", to, "--yes"), "msn")
 	g.t30 = mustID(t, g.aliceBE.MustLore("task", "add", "invite mutation", "--to", to, "--mission", g.mission, "--repo", "backend"), "tsk")
 	g.t31 = mustID(t, g.aliceBE.MustLore("task", "add", "landing route", "--to", to, "--mission", g.mission, "--repo", "frontend", "--after", g.t30), "tsk")
 	g.beAgent = startAgent(t, a.alice, g.aliceBE, "backend-1", "alice")
