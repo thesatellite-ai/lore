@@ -4,6 +4,8 @@
 //	lore context --for-file <path>   rules/hotfixes whose globs match (why "glob …"),
 //	                                 then rules/hotfixes naming the path or its folder,
 //	                                 then up to 5 memories/decisions on the path's words
+//	lore context --for-task <id>     the task, its plan/mission/refs, then what applies to
+//	                                 the files it names, its tags and words (context_fortask.go)
 //	lore context --topic <name>      every row tagged <name>, rules and hotfixes first
 //	lore context --topics            the topic index as a list
 //	lore context --for-prompt "<t>"  rows matching the prompt's words, best first
@@ -50,6 +52,7 @@ const (
 	flagContextTable     = "table"
 	flagContextSearch    = "search"
 	flagContextForFile   = "for-file"
+	flagContextForTask   = "for-task"
 	flagContextTopic     = "topic"
 	flagContextTopics    = "topics"
 	flagContextForPrompt = "for-prompt"
@@ -68,12 +71,13 @@ const (
 )
 
 // errContextNeedsMode: one of the modes is required.
-var errContextNeedsMode = errors.New("pass --for-file <path>, --topic <name>, --topics, --for-prompt <text>, --hook <tool> --hook-stdin, or --internal")
+var errContextNeedsMode = errors.New("pass --for-file <path>, --for-task <id>, --topic <name>, --topics, --for-prompt <text>, --hook <tool> --hook-stdin, or --internal")
 
 type contextFlags struct {
 	internal, asJSON, topics, hookStdin bool
 	table, search                       string
 	forFile, topic, forPrompt, hook     string
+	forTask                             string
 	maxBytes                            int
 }
 
@@ -83,6 +87,7 @@ func newContextCommand() *cobra.Command {
 		Use:   "context",
 		Short: "Print the rules, hotfixes and notes for a file, topic or prompt (the agent's fetch command)",
 		Example: `  lore context --for-file services/billing/invoice.go
+  lore context --for-task tsk_01jf8e5w…
   lore context --topic billing
   lore context --topics
   lore context --for-prompt "invoice rounding"
@@ -98,6 +103,7 @@ func newContextCommand() *cobra.Command {
 	fl.StringVar(&f.table, flagContextTable, "", "with --internal: only this table (rules, memories, decisions, tasks, …)")
 	fl.StringVar(&f.search, flagContextSearch, "", "with --internal: only rows whose title or body contains this text")
 	fl.StringVar(&f.forFile, flagContextForFile, "", "rules, hotfixes and notes for this path")
+	fl.StringVar(&f.forTask, flagContextForTask, "", "the task, its plan and links, then what applies to the files it names")
 	fl.StringVar(&f.topic, flagContextTopic, "", "every row tagged with this topic")
 	fl.BoolVar(&f.topics, flagContextTopics, false, "list the topics with their counts")
 	fl.StringVar(&f.forPrompt, flagContextForPrompt, "", "rows matching this free text")
@@ -151,6 +157,8 @@ func runContext(ctx context.Context, f *contextFlags, stdin io.Reader, out io.Wr
 	switch {
 	case f.forFile != "":
 		res, err = contextForFile(ctx, f.forFile)
+	case f.forTask != "":
+		res, err = contextForTask(ctx, f.forTask)
 	case f.topic != "":
 		res, err = contextForTopic(ctx, f.topic)
 	case f.forPrompt != "":
