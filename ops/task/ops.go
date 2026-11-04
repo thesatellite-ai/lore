@@ -236,12 +236,12 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	repoID := ""
 	if in.Repo != "" {
-		repo, rerr := o.env.RepoID(ctx, in.Repo)
+		repo, rerr := work.RepoFor(ctx, o.env, store.Source(in.To), in.Repo)
 		if rerr != nil {
 			return AddOut{}, rerr
 		}
 		repoID = repo.String()
-		if fields[work.FieldRepo], err = value.RefOf(repo.Any()); err != nil {
+		if fields[work.FieldRepo], err = value.RefOf(repo); err != nil {
 			return AddOut{}, err
 		}
 	}
@@ -957,11 +957,18 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 	repo := ""
 	if in.Repo != "" {
 		r, rerr := o.env.RepoID(ctx, in.Repo)
-		if rerr != nil {
+		switch {
+		case rerr == nil:
+			repo = r.String()
+		case errs.Has(rerr, errs.NotFound):
+			// the repo may exist only in another store's project: hits
+			// there are matched by name below (repoIn), never created
+			repo = repoByName + in.Repo
+		default:
 			return work.SearchEnvelope{}, rerr
 		}
-		repo = r.String()
 	}
+	scope := repoScope{env: o.env, name: strings.TrimSpace(in.Repo), want: repo, seen: map[string]string{}}
 	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
 	if err != nil {
 		return work.SearchEnvelope{}, err
@@ -977,7 +984,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 			break
 		}
 		r := h.Row
-		if (!in.All && !active(r, now)) || !work.InScope(work.Field(r, work.FieldRepo), repo, in.NoInherit, in.MasterOnly, in.AllRepos) ||
+		if (!in.All && !active(r, now)) || !work.InScope(scope.of(ctx, h.Source, work.Field(r, work.FieldRepo)), repo, in.NoInherit, in.MasterOnly, in.AllRepos) ||
 			(project != "" && work.Field(r, work.FieldProject) != project) {
 			continue
 		}
@@ -1097,4 +1104,43 @@ func (o ops) actorRef(ctx context.Context, raw string) (string, error) {
 	}
 	return "", errs.New(errs.NotFound, "no actor "+work.Quote(ref)).
 		WithHint("pass an actor id (act_*), " + actorMe + ", a stable_key or a display name")
+}
+
+// repoByName prefixes a search's wanted repo when --repo names no repo of
+// the repo store: it can never equal a row id, so only rows repoScope
+// maps by name match it.
+const repoByName = "name:"
+
+// fieldMount is a repos row's mount name (schema repos.mount_name).
+const fieldMount = "mount_name"
+
+// repoScope resolves --repo per searched store, read-only: a hit in the
+// repo store keeps its repo_id; a hit in another store whose repos row has
+// the --repo mount name (or id) counts as the wanted repo, since each
+// store's project has its own repos rows (v0.1.17 found the repo in the
+// target store's project). Nothing is created by a search.
+type repoScope struct {
+	env  work.Env
+	name string
+	want string
+	seen map[string]string // repos row id → what InScope compares
+}
+
+// of is the repo value InScope compares for a hit of src with repo_id got.
+func (s repoScope) of(ctx context.Context, src store.Source, got string) string {
+	if got == "" || s.name == "" || src == store.SourceRepo || got == s.want {
+		return got
+	}
+	if v, ok := s.seen[got]; ok {
+		return v
+	}
+	v := got
+	if id, err := ids.ParseAny(got); err == nil {
+		if _, r, gerr := s.env.Get(ctx, engine.Ref{Store: src, Table: schema.TableRepos, ID: id}); gerr == nil && !r.Deleted &&
+			(work.Field(r, fieldMount) == s.name || got == s.name) {
+			v = s.want
+		}
+	}
+	s.seen[got] = v
+	return v
 }

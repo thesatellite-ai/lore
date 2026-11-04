@@ -301,7 +301,7 @@ func (o ops) planTask(ctx context.Context, src store.Source, project ids.ID[ids.
 	refs := map[string]string{work.FieldProject: project.String(), work.FieldMission: mission, work.FieldTasklist: tasklist}
 	repoID := ""
 	if pt.Repo != "" {
-		r, rerr := o.env.RepoID(ctx, pt.Repo)
+		r, rerr := work.RepoFor(ctx, o.env, src, pt.Repo)
 		if rerr != nil {
 			return row.Row{}, false, rerr
 		}

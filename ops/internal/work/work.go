@@ -534,6 +534,31 @@ func BriefOf(ctx context.Context, env Env, table row.Table, id string, withStatu
 	return b
 }
 
+// GroupRepoer is the optional Env upgrade that resolves a --repo name in
+// a store other than the repo's own: the repos row of that store's
+// project, found or created (v0.1.17 found-or-created it in the target
+// store's project). wire.App implements it.
+type GroupRepoer interface {
+	GroupRepoID(ctx context.Context, to store.Source, name string) (ids.AnyID, error)
+}
+
+// RepoFor resolves a --repo value (mount name or rep_ id) for a write
+// whose target is to: the repo store (to "" or repo) uses env.RepoID; any
+// other store uses GroupRepoer when env has it, else falls back to
+// env.RepoID (an Env without stores beyond the repo's own).
+func RepoFor(ctx context.Context, env Env, to store.Source, name string) (ids.AnyID, error) {
+	if to != "" && to != store.SourceRepo {
+		if g, ok := env.(GroupRepoer); ok {
+			return g.GroupRepoID(ctx, to, name)
+		}
+	}
+	r, err := env.RepoID(ctx, name)
+	if err != nil {
+		return ids.AnyID{}, err
+	}
+	return r.Any(), nil
+}
+
 // InScope applies v0.1.17's repo scope (saas/cmd/cli/repo_scope.go) to a
 // row with repo_id got: --all-repos keeps every row, --master-only only
 // project-wide ones, --repo X --no-inherit only X's, --repo X X's plus
