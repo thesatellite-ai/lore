@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
@@ -87,15 +88,15 @@ func Quote(s string) string {
 	return `"` + textcut.Cut(s, maxQuotedID, maxQuotedID) + `"`
 }
 
-// ParseID parses an id argument of prefix p (E_INVALID_ID naming noun
-// otherwise).
+// ParseID parses an id argument of prefix p (E_NOT_FOUND naming noun
+// otherwise: ops/internal/lookup).
 func ParseID(noun string, p ids.Prefix, s string) (ids.AnyID, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(s))
 	if err == nil && id.Prefix() != p {
-		err = errs.New(errs.InvalidID, "wrong prefix")
+		err = errs.New(errs.NotFound, "wrong prefix")
 	}
 	if err != nil {
-		return ids.AnyID{}, errs.Wrap(errs.InvalidID, noun+": "+Quote(s)+" is not a "+noun+" id ("+string(p)+"_…)", err)
+		return ids.AnyID{}, lookup.BadID(noun+": "+Quote(s)+" is not a "+noun+" id ("+string(p)+"_…)", err)
 	}
 	return id, nil
 }
@@ -108,10 +109,10 @@ func RefTo(noun, flag string, p ids.Prefix, s string) (value.Value, error) {
 	}
 	id, err := ids.ParseAny(strings.TrimSpace(s))
 	if err == nil && id.Prefix() != p {
-		err = errs.New(errs.InvalidID, "wrong prefix")
+		err = errs.New(errs.NotFound, "wrong prefix")
 	}
 	if err != nil {
-		return nil, errs.Wrap(errs.InvalidID, noun+": --"+flag+" "+Quote(s)+" is not a "+string(p)+"_ id", err)
+		return nil, lookup.BadID(noun+": --"+flag+" "+Quote(s)+" is not a "+string(p)+"_ id", err)
 	}
 	return value.RefOf(id)
 }

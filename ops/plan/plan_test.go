@@ -88,7 +88,7 @@ func TestPlanAddEditRefusals(t *testing.T) {
 		{`{"title":"  ","body":"x"}`, errs.InvalidInput},
 		{`{"body":"x"}`, errs.InvalidInput},
 		{`{"title":"t","body":"a","text":"b"}`, errs.InvalidInput},
-		{`{"title":"t","body":"b","created_by":"nope"}`, errs.InvalidID},
+		{`{"title":"t","body":"b","created_by":"nope"}`, errs.NotFound},
 	}
 	for _, c := range cases {
 		h.Fails("plan.add", c.in, c.code)
@@ -109,7 +109,7 @@ func TestPlanAddEditRefusals(t *testing.T) {
 			t.Fatalf("status %s not stored", s)
 		}
 	}
-	h.Fails("plan.edit", `{"id":"pln_bad","title":"x"}`, errs.InvalidID)
+	h.Fails("plan.edit", `{"id":"pln_bad","title":"x"}`, errs.NotFound)
 }
 
 // TestPlanLegacyStatusStr: a v0.1.17 row (status_str only) reads with the

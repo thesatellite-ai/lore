@@ -21,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -301,7 +302,7 @@ func (o ops) target(ctx context.Context, to store.Source, rawTable, rawID string
 	}
 	id, err := ids.ParseAny(strings.TrimSpace(rawID))
 	if err != nil {
-		return "", ids.AnyID{}, errs.Wrap(errs.InvalidID, "comment: --on-id "+quote(rawID)+" is not an id", err).
+		return "", ids.AnyID{}, lookup.BadID("comment: --on-id "+quote(rawID)+" is not an id", err).
 			WithHint("use `lore <kind> list` to find the real id")
 	}
 	reg, err := schema.NewRegistry(schema.Builtin()...)
@@ -313,7 +314,7 @@ func (o ops) target(ctx context.Context, to store.Source, rawTable, rawID string
 		return tbl, id, nil
 	}
 	if id.Prefix() != def.Prefix {
-		return "", ids.AnyID{}, errs.New(errs.InvalidID, "comment: "+id.String()+" is not an id of "+string(tbl)+" ("+string(def.Prefix)+"_…)")
+		return "", ids.AnyID{}, lookup.BadID("comment: "+id.String()+" is not an id of "+string(tbl)+" ("+string(def.Prefix)+"_…)", nil)
 	}
 	_, r, err := o.env.Get(ctx, engine.Ref{Table: tbl, ID: id})
 	if err == nil && r.Deleted {
@@ -407,7 +408,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 func (o ops) delete(ctx context.Context, in DeleteIn) (DeleteOut, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil || id.Prefix() != ids.PrefixComment {
-		return DeleteOut{}, errs.New(errs.InvalidID, "comment: "+quote(in.ID)+" is not a comment id (cmt_…)")
+		return DeleteOut{}, lookup.BadID("comment: "+quote(in.ID)+" is not a comment id (cmt_…)", nil)
 	}
 	src := o.storeOf(ctx, id, "")
 	w, err := o.env.Delete(ctx, engine.Ref{Table: table, ID: id})

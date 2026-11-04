@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -370,7 +371,7 @@ func (o ops) ruleOn(ctx context.Context, in RuleOnIn) (RowOut, error) {
 func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 	rowID, err := ids.ParseAny(strings.TrimSpace(in.Row))
 	if err != nil {
-		return RowOut{}, errs.Wrap(errs.InvalidID, "secrets allow: "+quote(in.Row)+" is not a row id", err)
+		return RowOut{}, lookup.BadID("secrets allow: "+quote(in.Row)+" is not a row id", err)
 	}
 	if in.Rule == "" || strings.TrimSpace(in.Reason) == "" {
 		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: --rule and --reason are required")
@@ -431,7 +432,7 @@ func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 func (o ops) allowRm(ctx context.Context, in AllowRmIn) (RowOut, error) {
 	id, err := ids.Parse[ids.SecretAllow](strings.TrimSpace(in.ID))
 	if err != nil {
-		return RowOut{}, errs.Wrap(errs.InvalidID, "secrets allow rm: "+quote(in.ID)+" is not an allow id (sal_…)", err)
+		return RowOut{}, lookup.BadID("secrets allow rm: "+quote(in.ID)+" is not an allow id (sal_…)", err)
 	}
 	src, _, err := o.env.Get(ctx, engine.Ref{Table: schema.TableSecretAllows, ID: id.Any()})
 	if err != nil {

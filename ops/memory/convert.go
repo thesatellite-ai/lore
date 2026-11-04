@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -62,11 +63,11 @@ func texts(m map[string]string) (map[string]value.Value, error) {
 	return out, nil
 }
 
-// memoryID parses a memory id argument (E_INVALID_ID otherwise).
+// memoryID parses a memory id argument (E_NOT_FOUND otherwise: ops/internal/lookup).
 func memoryID(s string) (ids.ID[ids.Memory], error) {
 	id, err := ids.Parse[ids.Memory](strings.TrimSpace(s))
 	if err != nil {
-		return ids.ID[ids.Memory]{}, errs.Wrap(errs.InvalidID, "memory: "+quoteID(s)+" is not a memory id (mem_…)", err)
+		return ids.ID[ids.Memory]{}, lookup.BadID("memory: "+quoteID(s)+" is not a memory id (mem_…)", err)
 	}
 	return id, nil
 }

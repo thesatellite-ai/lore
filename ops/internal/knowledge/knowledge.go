@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
@@ -100,14 +101,15 @@ type Noun struct {
 	Prefix ids.Prefix
 }
 
-// ID parses a user-given id of this noun (E_INVALID_ID otherwise).
+// ID parses a user-given id of this noun (E_NOT_FOUND otherwise:
+// ops/internal/lookup).
 func (n Noun) ID(s string) (ids.AnyID, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(s))
 	if err == nil && id.Prefix() != n.Prefix {
-		err = errs.New(errs.InvalidID, "wrong prefix")
+		err = errs.New(errs.NotFound, "wrong prefix")
 	}
 	if err != nil {
-		return ids.AnyID{}, errs.Wrap(errs.InvalidID, n.Name+": "+Quote(s)+" is not a "+n.Name+" id ("+string(n.Prefix)+"_…)", err)
+		return ids.AnyID{}, lookup.BadID(n.Name+": "+Quote(s)+" is not a "+n.Name+" id ("+string(n.Prefix)+"_…)", err)
 	}
 	return id, nil
 }
@@ -180,7 +182,7 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 	if c.CreatedBy != "" {
 		a, aerr := ids.Parse[ids.Actor](strings.TrimSpace(c.CreatedBy))
 		if aerr != nil {
-			return "", engine.Written{}, errs.Wrap(errs.InvalidID, n.Name+" add: "+Quote(c.CreatedBy)+" is not an actor id (act_…)", aerr)
+			return "", engine.Written{}, lookup.BadID(n.Name+" add: "+Quote(c.CreatedBy)+" is not an actor id (act_…)", aerr)
 		}
 		if fields[FieldCreatedBy], err = value.RefOf(a.Any()); err != nil {
 			return "", engine.Written{}, err

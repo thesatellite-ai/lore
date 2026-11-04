@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -107,7 +108,7 @@ func (o ops) parseRefs(ctx context.Context, raw []string) ([]taskRef, error) {
 		id, perr := ids.ParseAny(rawID)
 		def, known := reg.ByPrefix(id.Prefix())
 		if perr != nil || !known {
-			return nil, errs.New(errs.InvalidInput, "--ref "+r+": not a row id or commit:<sha>")
+			return nil, lookup.BadID("--ref "+r+": not a row id or commit:<sha>", perr)
 		}
 		if project == "" {
 			if _, row, gerr := o.env.Get(ctx, engine.Ref{Table: def.Name, ID: id}); gerr != nil || row.Deleted {

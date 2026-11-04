@@ -83,6 +83,6 @@ func TestTasklistRefusals(t *testing.T) {
 	id := addID(t, h, `{"title":"t","body":"b"}`)
 	h.Fails("tasklist.edit", `{"id":"`+id+`"}`, errs.InvalidInput)
 	for _, bad := range []string{"tlt_bad", "pln_01a1a684b528751aa2fc45745b154d16"} {
-		h.Fails("tasklist.show", `{"id":"`+bad+`"}`, errs.InvalidID)
+		h.Fails("tasklist.show", `{"id":"`+bad+`"}`, errs.NotFound)
 	}
 }

@@ -88,9 +88,9 @@ func TestExternalSource(t *testing.T) {
 		id   string
 		code errs.Code
 	}{
-		"by name":      {"gh", errs.InvalidID},
+		"by name":      {"gh", errs.NotFound},
 		"unknown":      {"ext_01a1a5aca7f57659be7320c5f4b7ffff", errs.NotFound},
-		"wrong prefix": {"pat_01a1a5aca7f57659be7320c5f4b7ffff", errs.InvalidID},
+		"wrong prefix": {"pat_01a1a5aca7f57659be7320c5f4b7ffff", errs.NotFound},
 	} {
 		for _, verb := range []string{"enable", "disable"} {
 			_, err := h.Run("external_source."+verb, `{"id":"`+c.id+`"}`)

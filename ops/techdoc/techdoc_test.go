@@ -114,5 +114,5 @@ func TestTechdoc(t *testing.T) {
 	if strings.Contains(h.JSON(h.Must("techdoc.search", `{"query":"spec"}`)), ids[0]) {
 		t.Error("search finds a deleted techdoc")
 	}
-	h.Fails("techdoc.show", `{"id":"pat_01a1a5aca7f57659be7320c5f4b7ffff"}`, errs.InvalidID)
+	h.Fails("techdoc.show", `{"id":"pat_01a1a5aca7f57659be7320c5f4b7ffff"}`, errs.NotFound)
 }

@@ -509,7 +509,7 @@ func TestSecretAllow(t *testing.T) {
 	h := opstest.New(t)
 	mem := h.ID(h.Must("memory.add", `{"body":"the sample key is sample_0123 in the docs"}`))
 	checkRefusals(t, h, []refusal{
-		{settings.OpSecretAllow, `{"row_id":"nope","rule":"r","reason":"x","match":"sample_0123"}`, errs.InvalidID, ""},
+		{settings.OpSecretAllow, `{"row_id":"nope","rule":"r","reason":"x","match":"sample_0123"}`, errs.NotFound, ""},
 		{settings.OpSecretAllow, `{"row_id":"` + mem + `","rule":"","reason":"x","match":"sample_0123"}`, errs.InvalidInput, "missing required field rule"},
 		{settings.OpSecretAllow, `{"row_id":"` + mem + `","rule":"r","reason":"  ","match":"sample_0123"}`, errs.InvalidInput, "--rule and --reason are required"},
 		{settings.OpSecretAllow, `{"row_id":"` + mem + `","rule":"r","reason":"x","match":"not there"}`, errs.InvalidInput, "name the field with --field"},
@@ -517,7 +517,7 @@ func TestSecretAllow(t *testing.T) {
 		{settings.OpSecretAllow, `{"row_id":"` + mem + `","rule":"r","reason":"x","match":"sample_0123","match_hash":7}`, errs.InvalidInput, "not both"},
 		{settings.OpSecretAllow, `{"row_id":"` + mem + `","rule":"r","reason":"x","field":"body"}`, errs.InvalidInput, "give --match"},
 		{settings.OpSecretAllow, `{"row_id":"mem_01a1a679339b7c56896a5b5dd2cace7d","rule":"r","reason":"x","match":"a"}`, errs.NotFound, ""},
-		{settings.OpSecretAllowRm, `{"id":"srl_01a1a679339b7c56896a5b5dd2cace7d"}`, errs.InvalidID, "not an allow id"},
+		{settings.OpSecretAllowRm, `{"id":"srl_01a1a679339b7c56896a5b5dd2cace7d"}`, errs.NotFound, "not an allow id"},
 	})
 	res := h.MustYes(settings.OpSecretAllow, `{"row_id":"`+mem+`","rule":"generic-api-key","reason":"a doc sample","match":"sample_0123"}`)
 	if got := opstest.Text(res); !strings.HasPrefix(got, "✓ generic-api-key: mem_…"+mem[len(mem)-4:]+".body marked not a secret (sal_…") {

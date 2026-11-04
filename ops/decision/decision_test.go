@@ -128,8 +128,8 @@ func TestEdit(t *testing.T) {
 // unknown id E_NOT_FOUND (see ops/rule TestIDErrors for the v0.1.17 delta).
 func TestIDErrors(t *testing.T) {
 	h := opstest.New(t)
-	h.Fails(decision.OpShow, `{"id":"nope"}`, errs.InvalidID)
-	h.Fails(decision.OpShow, `{"id":"rul_01a1a5aca7f57659be7320c5f4b70011"}`, errs.InvalidID)
+	h.Fails(decision.OpShow, `{"id":"nope"}`, errs.NotFound)
+	h.Fails(decision.OpShow, `{"id":"rul_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound)
 	h.Fails(decision.OpShow, `{"id":"dec_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound)
 	id := add(t, h, `{"title":"A","body":"a"}`)
 	h.Fails(decision.OpDelete, `{"id":"`+id+`"}`, errs.NeedsConfirm)

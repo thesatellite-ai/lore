@@ -105,7 +105,7 @@ func TestActorFlags(t *testing.T) {
 	} {
 		n := env.next
 		_, err := call[WriteOut](t, env, OpAdd, in)
-		if !errs.Has(err, errs.InvalidID) || env.next != n || !utf8.ValidString(err.Error()) {
+		if !errs.Has(err, errs.NotFound) || env.next != n || !utf8.ValidString(err.Error()) {
 			t.Fatalf("%s: %v", in, err)
 		}
 	}

@@ -326,7 +326,7 @@ func TestEditAndShowErrors(t *testing.T) {
 	if _, err := call[WriteOut](t, env, OpEdit, `{"id":"`+id+`"}`); !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("empty edit: %v", err)
 	}
-	if _, err := call[ShowOut](t, env, OpShow, `{"id":"rul_01a1a5aca7f57659be7320c5f4b70011"}`); !errs.Has(err, errs.InvalidID) {
+	if _, err := call[ShowOut](t, env, OpShow, `{"id":"rul_01a1a5aca7f57659be7320c5f4b70011"}`); !errs.Has(err, errs.NotFound) {
 		t.Fatalf("wrong prefix: %v", err)
 	}
 	if _, err := call[ShowOut](t, env, OpShow, `{"id":"`+fakeIDs[3]+`"}`); !errs.Has(err, errs.NotFound) {

@@ -182,8 +182,8 @@ func TestTaskFillsMission(t *testing.T) {
 	}
 	before := h.JSON(h.Must("handoff.list", ""))
 	h.Fails("handoff.add", `{"for":"@alice","task":"tsk_01a1a5aca7f57659be7320c5f4b7ffff","text":"z"}`, errs.NotFound)
-	h.Fails("handoff.add", `{"for":"@alice","task":"`+mission+`","text":"z"}`, errs.InvalidID)
-	h.Fails("handoff.add", `{"for":"@alice","task":"tsk_31","text":"z"}`, errs.InvalidID)
+	h.Fails("handoff.add", `{"for":"@alice","task":"`+mission+`","text":"z"}`, errs.NotFound)
+	h.Fails("handoff.add", `{"for":"@alice","task":"tsk_31","text":"z"}`, errs.NotFound)
 	if h.JSON(h.Must("handoff.list", "")) != before {
 		t.Error("a refused --task wrote a handoff")
 	}

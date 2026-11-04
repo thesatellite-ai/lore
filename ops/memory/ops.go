@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
@@ -191,7 +192,7 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 		}
 		a, aerr := ids.Parse[ids.Actor](strings.TrimSpace(raw))
 		if aerr != nil {
-			return WriteOut{}, errs.Wrap(errs.InvalidID, "memory add: "+quoteID(raw)+" is not an actor id (act_…)", aerr)
+			return WriteOut{}, lookup.BadID("memory add: "+quoteID(raw)+" is not an actor id (act_…)", aerr)
 		}
 		if fields[f], err = value.RefOf(a.Any()); err != nil {
 			return WriteOut{}, err

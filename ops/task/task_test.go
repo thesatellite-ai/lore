@@ -113,7 +113,7 @@ func TestNotFoundAndBadIDs(t *testing.T) {
 			}
 		}
 		for _, bad := range []string{"xyz", "mem_01a1a5aca7f57659be7320c5f4b70011", "tsk_short", "tsk_01A1A5ACA7F57659BE7320C5F4B70011"} {
-			if _, err := h.RunYes(name, `{"id":"`+bad+`"}`); !errs.Has(err, errs.InvalidID) {
+			if _, err := h.RunYes(name, `{"id":"`+bad+`"}`); !errs.Has(err, errs.NotFound) {
 				t.Errorf("%s %q: %v, want E_INVALID_ID", name, bad, err)
 			}
 		}
@@ -135,11 +135,11 @@ func TestAddValidation(t *testing.T) {
 		{"bad commitment", `{"title":"x","commitment":"maybe"}`, errs.InvalidInput},
 		{"bad due", `{"title":"x","due":"2026-13-45"}`, errs.InvalidInput},
 		{"bad defer", `{"title":"x","defer_until":"tomorrow"}`, errs.InvalidInput},
-		{"mission wrong prefix", `{"title":"x","mission":"tsk_01a1a5aca7f57659be7320c5f4b70011"}`, errs.InvalidID},
+		{"mission wrong prefix", `{"title":"x","mission":"tsk_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound},
 		{"after unknown", `{"title":"x","after":["tsk_01a1a5aca7f57659be7320c5f4b70011"]}`, errs.NotFound},
 		{"repo unknown", `{"title":"x","repo":"nope"}`, errs.NotFound},
 		{"project unknown", `{"title":"x","project":"nope"}`, errs.NotFound},
-		{"ref bad", `{"title":"x","ref":["nope"]}`, errs.InvalidInput},
+		{"ref bad", `{"title":"x","ref":["nope"]}`, errs.NotFound},
 		{"ref commit empty", `{"title":"x","ref":["commit:"]}`, errs.InvalidInput},
 		{"ref missing row", `{"title":"x","ref":["mem_01a1a5aca7f57659be7320c5f4b70011"]}`, errs.NotFound},
 		{"assign no team host", `{"title":"x","assign":"@bob"}`, errs.Unsupported},
@@ -433,7 +433,7 @@ func TestEditMatrix(t *testing.T) {
 	}
 	h.Fails(opstask.OpEdit, `{"id":"`+id+`"}`, errs.InvalidInput)
 	for _, bad := range []string{`"priority":"huge"`, `"status":"open"`, `"commitment":"x"`, `"due":"2026-02-30"`, `"plan":"tsk_01a1a5aca7f57659be7320c5f4b70011"`} {
-		if _, err := h.Run(opstask.OpEdit, `{"id":"`+id+`",`+bad+`}`); !errs.Has(err, errs.InvalidInput) && !errs.Has(err, errs.InvalidID) {
+		if _, err := h.Run(opstask.OpEdit, `{"id":"`+id+`",`+bad+`}`); !errs.Has(err, errs.InvalidInput) && !errs.Has(err, errs.NotFound) {
 			t.Errorf("edit %s: %v", bad, err)
 		}
 	}

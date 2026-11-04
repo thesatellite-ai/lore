@@ -444,10 +444,13 @@ func checkIDs(t *testing.T, s Spec, r Runner) {
 			id   string
 			code errs.Code
 		}{
-			"empty":        {"", errs.InvalidInput},
-			"garbage":      {"not-an-id", errs.InvalidID},
-			"wrong prefix": {fakeID(other), errs.InvalidID},
-			"huge":         {strings.Repeat("z", 5000), errs.InvalidID},
+			"empty": {"", errs.InvalidInput},
+			// a lookup id that cannot name a row is E_NOT_FOUND like an
+			// unknown one (v0.1.17 parity, ops/internal/lookup)
+			"garbage":      {"not-an-id", errs.NotFound},
+			"wrong prefix": {fakeID(other), errs.NotFound},
+			"huge":         {strings.Repeat("z", 5000), errs.NotFound},
+			"all zeros":    {string(s.Prefix) + "_" + strings.Repeat("0", 32), errs.NotFound},
 			"unknown":      {fakeID(s.Prefix), errs.NotFound},
 		} {
 			_, err := r.RunYes(s.Noun+"."+verb, `{"id":`+Quote(c.id)+`}`)
@@ -455,7 +458,7 @@ func checkIDs(t *testing.T, s Spec, r Runner) {
 			if len(msg) > 400 {
 				t.Errorf("%s %s: message repeats the whole input (%d bytes)", verb, name, len(msg))
 			}
-			if c.code == errs.NotFound && !strings.Contains(msg, s.Noun+` "`+c.id+`" not found`) {
+			if name == "unknown" && !strings.Contains(msg, s.Noun+` "`+c.id+`" not found`) {
 				t.Errorf("%s unknown: message %q, want v0.1.17's `%s \"<id>\" not found`", verb, msg, s.Noun)
 			}
 		}

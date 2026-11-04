@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
@@ -475,7 +476,7 @@ func (o ops) links(ctx context.Context, keep func(row.Row) bool) ([]Record, erro
 func (o ops) remove(ctx context.Context, in RemoveIn) (RemoveOut, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil || id.Prefix() != ids.PrefixCommitLink {
-		return RemoveOut{}, errs.New(errs.InvalidID, "link: "+quote(in.ID)+" is not a link id (cml_…)")
+		return RemoveOut{}, lookup.BadID("link: "+quote(in.ID)+" is not a link id (cml_…)", nil)
 	}
 	src := o.storeOf(ctx, id, "")
 	w, err := o.env.Delete(ctx, engine.Ref{Table: table, ID: id})

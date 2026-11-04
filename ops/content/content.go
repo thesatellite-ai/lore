@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
@@ -139,10 +140,10 @@ func Written(src store.Source, w engine.Written, line string) WriteOut {
 func ParseID(noun string, p ids.Prefix, s string) (ids.AnyID, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(s))
 	if err == nil && id.Prefix() != p {
-		err = errs.New(errs.InvalidID, "wrong prefix")
+		err = errs.New(errs.NotFound, "wrong prefix")
 	}
 	if err != nil {
-		return ids.AnyID{}, errs.Wrap(errs.InvalidID, noun+": "+QuoteID(s)+" is not a "+noun+" id ("+string(p)+"_…)", err)
+		return ids.AnyID{}, lookup.BadID(noun+": "+QuoteID(s)+" is not a "+noun+" id ("+string(p)+"_…)", err)
 	}
 	return id, nil
 }
@@ -248,7 +249,7 @@ func Required(flag, v string) error {
 func ActorRef(noun, raw string) (value.Value, error) {
 	a, err := ids.Parse[ids.Actor](strings.TrimSpace(raw))
 	if err != nil {
-		return nil, errs.Wrap(errs.InvalidID, noun+": "+QuoteID(raw)+" is not an actor id (act_…)", err)
+		return nil, lookup.BadID(noun+": "+QuoteID(raw)+" is not an actor id (act_…)", err)
 	}
 	return value.RefOf(a.Any())
 }

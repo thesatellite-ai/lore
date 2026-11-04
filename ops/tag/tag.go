@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
@@ -434,7 +435,7 @@ func (o ops) bind(ctx context.Context, in BindIn, mustExist bool) (engine.Ref, r
 	}
 	id, err := ids.ParseAny(strings.TrimSpace(in.OnID))
 	if err != nil || id.Prefix() != def.Prefix {
-		return engine.Ref{}, row.Row{}, nil, errs.New(errs.InvalidID, "tag: --on-id "+quote(in.OnID)+" is not an id of "+string(table)+" ("+string(def.Prefix)+"_…)")
+		return engine.Ref{}, row.Row{}, nil, lookup.BadID("tag: --on-id "+quote(in.OnID)+" is not an id of "+string(table)+" ("+string(def.Prefix)+"_…)", nil)
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id})
 	if err == nil && r.Deleted {

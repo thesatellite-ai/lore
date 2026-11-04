@@ -176,7 +176,7 @@ func TestNounID(t *testing.T) {
 			}
 			continue
 		}
-		if !errs.Has(err, errs.InvalidID) || !strings.Contains(err.Error(), "is not a rule id (rul_…)") {
+		if !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "is not a rule id (rul_…)") {
 			t.Fatalf("%q: %v", c.in, err)
 		}
 	}
