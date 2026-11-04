@@ -11,8 +11,8 @@
 // (lsync.PendingProjectAdoptions); reconcileCheckout re-points every
 // core-owned row that names the local project through the core engine
 // (Update: HLC stamp, audit, secret scan and merge rules all hold), then
-// deletes the local project's row through the engine (a tombstone, so an
-// old copy can never bring it back), clears the mark, and runs one more
+// deletes the local project's row through the engine (a tombstone, DQ4, so
+// an old copy can never bring it back), clears the mark, and runs one more
 // pass so lore.db mirrors the rewritten files. `lore sync fix-projects`
 // (lsync.FixProjects) leaves the same mark for every project it folds and
 // then runs a pass, so it takes this path too. Idempotent: a re-run finds

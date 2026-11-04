@@ -138,7 +138,8 @@ func gatherCounts(ctx context.Context, f *doctorFlags) map[string]int {
 			counts["snapshots"] = n
 		}
 	}
-	// Machine-local tables stay on lore.db.
+	// Machine-local tables stay on lore.db (Q-LOCAL: ent/lore.db keeps them
+	// for 0.1.18 until a never-synced machine-local backend exists).
 	if n, err := client.LearnCandidate.Query().Count(ctx); err == nil {
 		counts["learn_candidates"] = n
 	}

@@ -16,7 +16,8 @@ import (
 // row files, so a TUI create, edit or delete there would never reach the
 // files (lsync does not export core-owned rows) and would be undone by the
 // next import. Every such mutation on client is refused with a message
-// naming the CLI command that writes the row. Not generated (enttui
+// naming the CLI command that writes the row (Q-TUI: the TUI stays a
+// read-only lsync bridge for core tables in 0.1.18). Not generated (enttui
 // regenerates the register_*.go files only).
 func GuardCoreOwned(client *ent.Client) {
 	client.Use(func(next ent.Mutator) ent.Mutator {

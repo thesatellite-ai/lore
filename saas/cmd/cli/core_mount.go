@@ -6,7 +6,8 @@
 // writes `_v: 2` row files through the new engine. Everything else stays
 // on lore.db; the old readers of memories (render, search, TUI, …) see
 // the new rows because the lsync import still copies changed row files
-// into lore.db before each old command.
+// into lore.db before each old command (Q-TUI + Q-LOCAL: the lsync bridge
+// and machine-local tables stay on ent/lore.db for 0.1.18).
 //
 // Also here: `lore api` (the local REST surface over the same registry and
 // engine) and `lore spec docs|openapi` (the generated reference).

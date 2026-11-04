@@ -75,6 +75,8 @@ func runTUI(ctx context.Context, f *tuiFlags) error {
 	app.SetScope("project_id", projectID)
 	app.SetDefaultViewMode(f.view)
 	app.SetInitialKind(f.kind)
+	// Q-TUI: for 0.1.18 the TUI stays on the lsync bridge, read-only for
+	// core-owned tables; the run-time browser replaces it in a later release.
 	tuigen.GuardCoreOwned(client) // core-owned tables are read-only here
 	tuigen.RegisterAll(app, client)
 	// Synthetic non-ent screen: all-tables overview (see tui_tables.go)
