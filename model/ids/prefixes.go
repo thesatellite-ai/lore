@@ -185,6 +185,9 @@ const (
 	// list impossible. A batch is not a row: the id lives on the audit
 	// events of the rows it wrote.
 	PrefixBatch Prefix = "bat"
+	// PrefixScope is a directory scope (CONTEXT_BUDGET 6.2, D12): a
+	// permanent id for a repo folder; the path is its label.
+	PrefixScope Prefix = "scp"
 )
 
 // allPrefixes is the iteration list of every constant above. Read-only.
@@ -273,6 +276,7 @@ var allPrefixes = [...]Prefix{
 	PrefixRecurSeries,
 	PrefixTaskTemplate,
 	PrefixBatch,
+	PrefixScope,
 }
 
 // Prefixes returns a fresh copy of every registered prefix, in declaration order.

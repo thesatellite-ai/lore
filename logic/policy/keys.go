@@ -77,6 +77,14 @@ const (
 	KeyContextPromptSearch Key = "context.hooks.prompt_search"
 	// KeyContextFullFile: render also writes .lore/LORE.full.md (CQ2).
 	KeyContextFullFile Key = "context.full_file"
+	// KeyContextDirFiles: render writes per-directory LORE.md files (6.2.7, CQ10): on by default in own repos; a client repo is off until set for that client.
+	KeyContextDirFiles Key = "context.dir_files"
+	// KeyContextBudgetDir: bytes of each per-directory LORE.md (6.1).
+	KeyContextBudgetDir Key = "context.budget.dir"
+	// KeyContextDirMinEntries: a directory with fewer scoped entries gets no file; its rows go to the parent file (6.1).
+	KeyContextDirMinEntries Key = "context.dir_min_entries"
+	// KeyContextChainMaxCodex: bytes the root-to-deepest AGENTS.md chain may hold (Codex adds every level into one cap, 6.2.6).
+	KeyContextChainMaxCodex Key = "context.chain_max.codex"
 	// KeyBatchPreviewRows is how many rows a bulk action (a --where
 	// delete, an import) may change before it shows a preview and asks
 	// (XQ2: one key for every bulk action, replacing the per-noun
@@ -93,20 +101,23 @@ const clientRouteSep = "="
 
 // Numeric defaults of the keys above.
 const (
-	defaultMaxBytes           int64 = 16 * 1024 // MQ3, RQ4, CFG10
-	defaultWarnBytes          int64 = 4 * 1024  // RQ4
-	defaultTasksMaxDepth      int64 = 4         // TSQ1
-	ceilingTasksMaxDepth      int64 = 8         // TSQ1: "default 4, up to 8"
-	defaultPreviewRows        int64 = 20        // XQ2
-	defaultTimeLongSpanMin    int64 = 600       // TQ2: 10h
-	defaultTimeCoalesceGapMin int64 = 2         // TQ4: 2m
-	defaultTimeMaxEntryMin    int64 = 1440      // D13: 24h, also the ceiling
-	defaultContextBudgetLarge int64 = 32000     // CQ1: claude_code, gemini_cli
-	defaultContextBudget      int64 = 16000     // CQ1: codex, cursor, copilot, generic, default
-	defaultContextEntryMax    int64 = 1500
-	defaultContextWarnAtPct   int64 = 80
-	ceilingContextWarnAtPct   int64 = 100
-	defaultContextHookCap     int64 = 9000
+	defaultMaxBytes             int64 = 16 * 1024 // MQ3, RQ4, CFG10
+	defaultWarnBytes            int64 = 4 * 1024  // RQ4
+	defaultTasksMaxDepth        int64 = 4         // TSQ1
+	ceilingTasksMaxDepth        int64 = 8         // TSQ1: "default 4, up to 8"
+	defaultPreviewRows          int64 = 20        // XQ2
+	defaultTimeLongSpanMin      int64 = 600       // TQ2: 10h
+	defaultTimeCoalesceGapMin   int64 = 2         // TQ4: 2m
+	defaultTimeMaxEntryMin      int64 = 1440      // D13: 24h, also the ceiling
+	defaultContextBudgetLarge   int64 = 32000     // CQ1: claude_code, gemini_cli
+	defaultContextBudget        int64 = 16000     // CQ1: codex, cursor, copilot, generic, default
+	defaultContextEntryMax      int64 = 1500
+	defaultContextWarnAtPct     int64 = 80
+	ceilingContextWarnAtPct     int64 = 100
+	defaultContextHookCap       int64 = 9000
+	defaultContextBudgetDir     int64 = 8000
+	defaultContextDirMinEntries int64 = 3
+	defaultContextChainMaxCodex int64 = 32768
 )
 
 // OnDetect is the value of secrets.on_detect.
@@ -221,6 +232,11 @@ func Keys() []KeyDef {
 		// CQ5: off by default; off is the strict value (no search on every prompt).
 		{Key: KeyContextPromptSearch, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(false), Doc: "lore setup --agent-hooks also installs the per-prompt search hook (CQ5)"},
 		{Key: KeyContextFullFile, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true), Doc: "lore render also writes .lore/LORE.full.md, every pinned entry in full (CQ2)"},
+		// CQ10: off is the strict value (no new files in a repo); client repos read an unset key as off.
+		{Key: KeyContextDirFiles, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true), Doc: "lore render writes per-directory LORE.md files for dir scopes (client repos: off until set for that client, CQ10)"},
+		{Key: KeyContextBudgetDir, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetDir), Doc: "bytes of each per-directory LORE.md (6.1)"},
+		{Key: KeyContextDirMinEntries, Shape: ShapeLimit, Default: value.Int(defaultContextDirMinEntries), Doc: "a directory scope with fewer entries gets no file; its rows go to the parent file (6.1)"},
+		{Key: KeyContextChainMaxCodex, Shape: ShapeLimit, Default: value.Int(defaultContextChainMaxCodex), Doc: "bytes the root-to-deepest AGENTS.md chain may hold for Codex (6.2.6)"},
 		// XQ2: a limit, the smaller is stricter: a lower preview count makes
 		// more bulk actions stop and ask, so a level may only lower it.
 		{Key: KeyBatchPreviewRows, Shape: ShapeLimit, Default: value.Int(defaultPreviewRows),

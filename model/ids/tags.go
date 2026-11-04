@@ -100,3 +100,9 @@ type Batch struct{}
 
 // Prefix implements Tag.
 func (Batch) Prefix() Prefix { return PrefixBatch }
+
+// Scope tags ids of directory scopes (scopes table, D12).
+type Scope struct{}
+
+// Prefix implements Tag.
+func (Scope) Prefix() Prefix { return PrefixScope }
