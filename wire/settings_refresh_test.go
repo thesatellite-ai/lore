@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -133,5 +134,26 @@ func TestClientRoutesReachTheWriteHook(t *testing.T) {
 	}
 	if len(seen) != n {
 		t.Fatalf("a create naming its target must not ask the hook: %v", seen)
+	}
+}
+
+// TestNowIsTheEngineWall: App.Now is Options.Wall (the clock rows are
+// stamped with), so ops reading their time through opclock agree with
+// created_at; New fills a nil Wall with time.Now.
+func TestNowIsTheEngineWall(t *testing.T) {
+	fixed := time.Date(2026, 11, 4, 9, 30, 0, 0, time.UTC)
+	a, err := New(Options{RepoDir: t.TempDir(), Home: t.TempDir(), Wall: func() time.Time { return fixed }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.Now().Equal(fixed) {
+		t.Fatalf("Now %v, want %v", a.Now(), fixed)
+	}
+	b, err := New(Options{RepoDir: t.TempDir(), Home: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(b.Now()); d < 0 || d > time.Minute {
+		t.Fatalf("default Now is not the real clock: %v", b.Now())
 	}
 }
