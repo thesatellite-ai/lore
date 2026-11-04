@@ -23,6 +23,9 @@ const (
 	KeyTrashRetentionDays Key = "trash.retention_days"
 	KeyAgentsPersonOnly   Key = "agents.person_only"
 	KeyTasksMaxDepth      Key = "tasks.max_depth"
+	// KeyTasksParentAutoclose is what happens when a parent's last open
+	// sub-task closes (TSQ2): off | suggest (default) | on.
+	KeyTasksParentAutoclose Key = "tasks.parent_autoclose"
 	// KeyClientRoutes is v0.1.17's lore-org.yaml `defaults.client_repos`
 	// (CFG8: team rules are policies rows of the org folder): where a row
 	// of each kind goes in a client repo when the write names no --to.
@@ -124,6 +127,10 @@ func Keys() []KeyDef {
 		{Key: KeyTrashRetentionDays, Shape: ShapeLimit, Doc: "maximum days a deleted row stays in the trash; unset keeps forever"},
 		{Key: KeyTasksMaxDepth, Shape: ShapeLimit, Ceiling: ceilingTasksMaxDepth, Default: value.Int(defaultTasksMaxDepth),
 			Doc: "deepest sub-task nesting"},
+		// TSQ2: strictest first: off writes and prints nothing, suggest prints the
+		// command, on closes the parent in the same write.
+		{Key: KeyTasksParentAutoclose, Shape: ShapeRank, Choices: []string{"off", "suggest", "on"}, Default: mustText("suggest"),
+			Doc: "when a parent's last open sub-task closes: off, suggest (print the close command) or on (close it in the same write) (TSQ2)"},
 		// XQ2: a limit, the smaller is stricter: a lower preview count makes
 		// more bulk actions stop and ask, so a level may only lower it.
 		{Key: KeyBatchPreviewRows, Shape: ShapeLimit, Default: value.Int(defaultPreviewRows),

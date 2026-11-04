@@ -164,7 +164,7 @@ func TestPolicyShowText(t *testing.T) {
 	// XQ2 added batch.preview_rows (default 20).
 	want := "agents.person_only\t(unset)\tdefault\nbatch.preview_rows\t20\tdefault\ncontext.targets\t(unset)\tdefault\nmeta.max_bytes\t16384\tdefault\nresources.max_bytes\t16384\tdefault\n" +
 		"routing.client_repos\t(unset)\tdefault\nsecrets.agent_reveal\task\tdefault\nsecrets.on_detect\task\tdefault\n" +
-		"secrets.use_repo_gitleaks\ttrue\tdefault\ntasks.max_depth\t4\tdefault\ntrash.retention_days\t(unset)\tdefault\n"
+		"secrets.use_repo_gitleaks\ttrue\tdefault\ntasks.max_depth\t4\tdefault\ntasks.parent_autoclose\tsuggest\tdefault\ntrash.retention_days\t(unset)\tdefault\n"
 	if got := opstest.Text(h.Must(settings.OpPolicyShow, ``)); got != want {
 		t.Errorf("defaults:\n%s\nwant\n%s", got, want)
 	}

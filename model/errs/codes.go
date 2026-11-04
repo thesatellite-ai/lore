@@ -81,19 +81,25 @@ const (
 	// name already taken in that place (CLI_REFERENCE 3.13).
 	MetaTaken Code = "E_META_TAKEN"
 
-	NoWork        Code = "E_NO_WORK"
-	Contended     Code = "E_CONTENDED"
-	LostClaim     Code = "E_LOST_CLAIM"
-	Cancelled     Code = "E_CANCELLED"
-	Reassigned    Code = "E_REASSIGNED"
-	Offline       Code = "E_OFFLINE"
-	AmbiguousID   Code = "E_AMBIGUOUS_ID"
-	OrgAmbiguous  Code = "E_ORG_AMBIGUOUS"
-	OrgDisagrees  Code = "E_ORG_DISAGREES"
-	LinkUnknown   Code = "E_LINK_UNKNOWN"
-	NotAStore     Code = "E_NOT_A_STORE"
-	LeakBlocked   Code = "E_LEAK_BLOCKED"
-	Cycle         Code = "E_CYCLE"
+	NoWork       Code = "E_NO_WORK"
+	Contended    Code = "E_CONTENDED"
+	LostClaim    Code = "E_LOST_CLAIM"
+	Cancelled    Code = "E_CANCELLED"
+	Reassigned   Code = "E_REASSIGNED"
+	Offline      Code = "E_OFFLINE"
+	AmbiguousID  Code = "E_AMBIGUOUS_ID"
+	OrgAmbiguous Code = "E_ORG_AMBIGUOUS"
+	OrgDisagrees Code = "E_ORG_DISAGREES"
+	LinkUnknown  Code = "E_LINK_UNKNOWN"
+	NotAStore    Code = "E_NOT_A_STORE"
+	LeakBlocked  Code = "E_LEAK_BLOCKED"
+	Cycle        Code = "E_CYCLE"
+	// Task tree refusals (TASK_SYSTEM_DESIGN 6.4-6.7, 24; CLI_REFERENCE 5.6: exit 23, 409).
+	OpenChildren  Code = "E_OPEN_CHILDREN"
+	ParentClosed  Code = "E_PARENT_CLOSED"
+	ParentMission Code = "E_PARENT_MISSION"
+	ParentProject Code = "E_PARENT_PROJECT"
+	TreeDepth     Code = "E_TREE_DEPTH"
 	OldLore       Code = "E_OLD_LORE"
 	ConfigInvalid Code = "E_CONFIG_INVALID"
 )
@@ -207,6 +213,11 @@ var table = map[Code]entry{
 	NotAStore:             {class: ClassGuard, desc: "the repo or url is not a lore store"},
 	LeakBlocked:           {class: ClassGuard, desc: "the write would put internal content where the client can read it"},
 	Cycle:                 {class: ClassGuard, desc: "the write would create a cycle"},
+	OpenChildren:          {class: ClassRefused, desc: "done or cancel of a parent task with open sub-tasks without --children"},
+	ParentClosed:          {class: ClassRefused, desc: "a sub-task added or reopened under a closed parent without --reopen-parent"},
+	ParentMission:         {class: ClassRefused, desc: "a sub-task's mission differs from its parent's"},
+	ParentProject:         {class: ClassRefused, desc: "the parent task is in another project"},
+	TreeDepth:             {class: ClassRefused, desc: "the sub-task tree would be deeper than tasks.max_depth"},
 	OldLore:               {class: ClassGuard, desc: "this lore binary is too old for the data; writes refused, reads work"},
 	ConfigInvalid:         {class: ClassBadInput, desc: "a config file failed validation"},
 
