@@ -169,7 +169,9 @@ type state struct {
 	actor    ids.ID[ids.Actor]
 	caches   *caches
 	backends []store.Backend
-	repoTop  string
+	// byName maps every attached store (the repo included) to its backend.
+	byName  map[store.Source]store.Backend
+	repoTop string
 	// format is the DOCS O6 answer computed at open: whether the first
 	// 0.1.18 write must ask (see format.go). Guarded by App.mu.
 	format formatState

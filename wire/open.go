@@ -143,6 +143,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	for _, o := range attached {
 		backends[o.Name] = o.Backend
 	}
+	st.byName = backends
 	scanner, err := newScanner(ctx, backends)
 	if err != nil {
 		return fail(err)

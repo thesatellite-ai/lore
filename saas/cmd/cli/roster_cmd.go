@@ -4,7 +4,8 @@
 // the org's store; ids derive from stable_key (natural_ids.go), so the
 // same person registering on two machines writes one file. With no org,
 // the repo's own actors table is the roster (coordinator answer Q4).
-// Nothing here writes into a client repo.
+// Nothing here writes into a client repo. An org whose roster is in a
+// 0.1.18 store goes through the core instead (roster_core.go).
 package main
 
 import (
@@ -294,6 +295,13 @@ func newActorRegisterCommand() *cobra.Command {
 			default:
 				return errcodes.New(errcodes.InvalidInput, "--kind is human (default) or agent")
 			}
+			cr, err := openCoreRoster(ctx)
+			if err != nil {
+				return err
+			}
+			if cr != nil {
+				return cr.registerHuman(ctx, id.StableKey, id.DisplayName, id.Handle)
+			}
 			r, err := openRoster(ctx, &f)
 			if err != nil {
 				return err
@@ -336,6 +344,13 @@ func newActorDeactivateCommand() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cr, err := openCoreRoster(ctx)
+			if err != nil {
+				return err
+			}
+			if cr != nil {
+				return cr.deactivate(ctx, args[0])
+			}
 			r, err := openRoster(ctx, &f)
 			if err != nil {
 				return err
@@ -364,6 +379,14 @@ func newActorDeactivateCommand() *cobra.Command {
 func rosterRegisterAgent(ctx context.Context, label, ownerHandle string) (string, string, error) {
 	if label == "" || strings.ContainsAny(label, " \t:/@") {
 		return "", "", errcodes.New(errcodes.InvalidInput, "an agent label is one word (no spaces, ':', '/', '@')")
+	}
+	cr, err := openCoreRoster(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	if cr != nil {
+		id, err := cr.registerAgent(ctx, label, ownerHandle)
+		return id, cr.where, err
 	}
 	var f commonFlags
 	r, err := openRoster(ctx, &f)
@@ -417,6 +440,13 @@ func newTeamAddCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			handle := strings.TrimPrefix(args[0], handlePrefix)
+			cr, err := openCoreRoster(ctx)
+			if err != nil {
+				return err
+			}
+			if cr != nil {
+				return cr.teamAdd(ctx, handle, name, members)
+			}
 			r, err := openRoster(ctx, &f)
 			if err != nil {
 				return err
@@ -474,6 +504,13 @@ func newTeamListCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
+			cr, err := openCoreRoster(ctx)
+			if err != nil {
+				return err
+			}
+			if cr != nil {
+				return cr.teamList(ctx)
+			}
 			r, err := openRoster(ctx, &f)
 			if err != nil {
 				return err
