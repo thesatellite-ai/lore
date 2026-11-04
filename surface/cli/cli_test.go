@@ -275,3 +275,26 @@ func TestExitCode(t *testing.T) {
 		t.Fatal("ExitCode")
 	}
 }
+
+// TestUsageErrorBytes pins v0.1.17's usage-error form: exactly one
+// `ERROR: <cobra message>` line on stderr, nothing on stdout, exit 1 — no
+// cobra "Error:" / "Run '… --help' for usage." pair, and no JSON envelope
+// even under --json (the docs' unknown-flag examples compare these bytes).
+func TestUsageErrorBytes(t *testing.T) {
+	f := newFake(t)
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"memory", "list", "--colour", "never"}, "ERROR: unknown flag: --colour\n"},
+		{[]string{"memory", "list", "--colour", "never", "--json"}, "ERROR: unknown flag: --colour\n"},
+		{[]string{"memory", "list", "-Z"}, "ERROR: unknown shorthand flag: 'Z' in -Z\n"},
+		{[]string{"memory", "bogus"}, "ERROR: unknown command \"bogus\" for \"" + RootName + " memory\"\n"},
+	}
+	for _, c := range cases {
+		r := execute(Build(f.reg, f), "", c.args...)
+		if r.exit != ExitUsage || r.stderr != c.want || r.stdout != "" {
+			t.Errorf("%v: exit %d stderr %q stdout %q; want exit %d stderr %q", c.args, r.exit, r.stderr, r.stdout, ExitUsage, c.want)
+		}
+	}
+}

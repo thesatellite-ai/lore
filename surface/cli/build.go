@@ -212,7 +212,7 @@ func group(parent *cobra.Command, name string) *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
+			return usageError(cmd, fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath()))
 		},
 	}
 	parent.AddCommand(g)
@@ -257,10 +257,9 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		c.Flags().BoolVar(yes, FlagYes, false, "answer yes to the confirmation without a terminal")
 	}
 	c.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
-		// A cobra flag parse error (unknown flag, missing value) is a usage
-		// error: exit 1 (CLI_REFERENCE 1.5), printed the way cobra prints.
-		_, _ = io.WriteString(cmd.ErrOrStderr(), "Error: "+err.Error()+"\nRun '"+cmd.CommandPath()+" --help' for usage.\n")
-		return &exitError{code: ExitUsage, cause: err}
+		// A cobra flag parse error (unknown flag, unknown shorthand flag,
+		// missing value) is a usage error: exit 1 (CLI_REFERENCE 1.5).
+		return usageError(cmd, err)
 	})
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		flags := map[string][]string{}
@@ -383,4 +382,15 @@ func examples(ex []op.Example) string {
 		lines = append(lines, "  "+x.CLI)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// usageError prints a cobra usage error (unknown flag, unknown shorthand
+// flag, unknown command) as v0.1.17's one line on stderr, `ERROR: <cobra's
+// message>`, and returns it as exit 1 already printed. No "Run '… --help'"
+// line and no JSON envelope even under --json: v0.1.17 printed exactly this
+// line for every usage error, the flags may not have parsed far enough to
+// know --json was given, and scripts and the docs compare these bytes.
+func usageError(cmd *cobra.Command, err error) error {
+	_, _ = io.WriteString(cmd.ErrOrStderr(), errorPrefix+err.Error()+"\n")
+	return &exitError{code: ExitUsage, cause: err}
 }

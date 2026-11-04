@@ -35,8 +35,7 @@ alice (work)$ lore rule list --json
 }
 (exit 19)
 alice (work/website)$ lore rule list --colour never
-Error: unknown flag: --colour
-Run 'lore rule list --help' for usage.
+ERROR: unknown flag: --colour
 (exit 1)
 
 ### read only
@@ -267,8 +266,7 @@ ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in ag
   hint: name the org the write goes to with --to <org>, or fix the choice with `lore org use` (or unset LORE_ORG)
 (exit 17)
 alice (work/website)$ lore memory add --force-org --body 'The client pays invoices in 30 days'
-Error: unknown flag: --force-org
-Run 'lore memory add --help' for usage.
+ERROR: unknown flag: --force-org
 (exit 1)
 alice (work/website)$ lore memory add --to freelance --body 'The client pays invoices in 30 days'
 ✓ mem_d4314eba822f1bf5908b2b8ded5f313a [freelance]

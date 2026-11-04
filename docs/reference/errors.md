@@ -289,8 +289,7 @@ $ lore rule list --json
 
 # alice, in website
 $ lore rule list --colour never
-Error: unknown flag: --colour
-Run 'lore rule list --help' for usage.
+ERROR: unknown flag: --colour
 (exit 1)
 ```
 <!-- /example -->
