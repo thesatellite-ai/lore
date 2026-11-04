@@ -58,6 +58,9 @@ type WriteOut struct {
 	ID       string    `json:"id"`
 	Store    string    `json:"store"`
 	Warnings []Warning `json:"warnings,omitempty"`
+	// Human is the v0.1.17 human line(s) the op set for this write (see
+	// Text); never part of --json or REST.
+	Human string `json:"-"`
 }
 
 // Warning is one engine warning copied into an output (W_SCAN_DEGRADED).

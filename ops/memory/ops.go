@@ -228,7 +228,13 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 			return WriteOut{}, err
 		}
 	}
-	return writeOut(src, w), nil
+	out := writeOut(src, w)
+	scope := badgeMaster
+	if in.Repo != "" {
+		scope = "repo:" + in.Repo
+	}
+	out.Human = mark + " " + out.ID + " \n  scope: [" + scope + "]\n"
+	return out, nil
 }
 
 // checkSupersedes validates --supersedes before anything is written.
@@ -397,7 +403,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 		return WriteOut{}, errs.New(errs.InvalidInput, "memory edit: nothing to change").
 			WithHint("give at least one of --body, --kind, --source, --source-ref, --rebind-repo, --rebind-master, --tag, --untag")
 	}
-	return o.patch(ctx, id, patch)
+	return withLine(o.patch(ctx, id, patch))("updated")
 }
 
 // retagPatch is the new tag_ids of memory id: its tags plus add, minus
@@ -434,7 +440,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return writeOut(src, w), nil
+	return withLine(writeOut(src, w), nil)("deleted")
 }
 
 // move moves the memory to another attached store, keeping its id.
@@ -451,7 +457,7 @@ func (o ops) move(ctx context.Context, in MoveIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return writeOut(store.Source(in.To), w), nil
+	return withLine(writeOut(store.Source(in.To), w), nil)("moved to " + in.To)
 }
 
 // search matches the query against every attached store's cache, keeps the
@@ -505,17 +511,17 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 
 // archive sets archived_at to now.
 func (o ops) archive(ctx context.Context, in IDIn) (WriteOut, error) {
-	return o.stamp(ctx, in.ID, fieldArchivedAt, value.DateTimeFrom(time.Now()))
+	return withLine(o.stamp(ctx, in.ID, fieldArchivedAt, value.DateTimeFrom(time.Now())))("archived")
 }
 
 // unarchive clears archived_at.
 func (o ops) unarchive(ctx context.Context, in IDIn) (WriteOut, error) {
-	return o.stamp(ctx, in.ID, fieldArchivedAt, value.Null{})
+	return withLine(o.stamp(ctx, in.ID, fieldArchivedAt, value.Null{}))("unarchived")
 }
 
 // invalidate sets valid_until to now (v0.1.17 bitemporal invalidation).
 func (o ops) invalidate(ctx context.Context, in IDIn) (WriteOut, error) {
-	return o.stamp(ctx, in.ID, fieldValidUntil, value.DateTimeFrom(time.Now()))
+	return withLine(o.stamp(ctx, in.ID, fieldValidUntil, value.DateTimeFrom(time.Now())))("invalidated (valid_until=now)")
 }
 
 // stamp sets one field of the memory whose id is raw.
@@ -551,4 +557,22 @@ func (o ops) storeOf(ctx context.Context, id ids.AnyID, requested store.Source) 
 		return ""
 	}
 	return src
+}
+
+// mark is v0.1.17's success mark (style.Success("✓"), uncoloured here).
+const mark = "✓"
+
+// badgeMaster is v0.1.17's scope badge text for a project-wide memory.
+const badgeMaster = "master"
+
+// withLine sets out's human form to v0.1.17's "✓ <id> <verb>" line when
+// the write succeeded; an error passes through untouched.
+func withLine(out WriteOut, err error) func(verb string) (WriteOut, error) {
+	return func(verb string) (WriteOut, error) {
+		if err != nil {
+			return out, err
+		}
+		out.Human = mark + " " + out.ID + " " + verb + "\n"
+		return out, nil
+	}
 }
