@@ -63,9 +63,9 @@ func teamByHandle(ctx context.Context, h string) (string, error) {
 		return "", err
 	}
 	if cr != nil {
-		teams, err := cr.app.RosterTeams(ctx, cr.target)
-		if err != nil {
-			return "", coreErr(err)
+		teams, terr := cr.app.RosterTeams(ctx, cr.target)
+		if terr != nil {
+			return "", coreErr(terr)
 		}
 		for _, t := range teams {
 			if t.Active && t.Handle == h {

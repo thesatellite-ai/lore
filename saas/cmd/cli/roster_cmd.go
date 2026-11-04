@@ -93,9 +93,9 @@ func openRoster(ctx context.Context, c *commonFlags) (*roster, error) {
 				WithHint("set org_folder on one of " + org.Name + "'s stores in ~/.lore/config.yaml")
 		}
 		before := len(openedExternal)
-		p, err := openStoreProject(ctx, s.Config, storeProjectRef{Org: org, Store: *sc, Folder: sc.OrgFolder})
-		if err != nil {
-			return nil, err
+		p, perr := openStoreProject(ctx, s.Config, storeProjectRef{Org: org, Store: *sc, Folder: sc.OrgFolder})
+		if perr != nil {
+			return nil, perr
 		}
 		r.ext, r.ownOpen = p, len(openedExternal) > before
 		useExternalProject(c, p)
@@ -220,9 +220,9 @@ func (r *roster) register(ctx context.Context, sp actorSpec) (*ent.Actor, bool, 
 		if sp.OwnerID != "" {
 			up.SetOwnerActorID(sp.OwnerID)
 		}
-		a, err := up.Save(ctx)
-		if err != nil {
-			return nil, false, errcodes.New(errcodes.Internal, "update the roster").WithCause(err)
+		a, serr := up.Save(ctx)
+		if serr != nil {
+			return nil, false, errcodes.New(errcodes.Internal, "update the roster").WithCause(serr)
 		}
 		return a, false, nil
 	case !ent.IsNotFound(err):
@@ -317,9 +317,9 @@ func newActorRegisterCommand() *cobra.Command {
 			}
 			switch kind {
 			case string(entActor.KindAgent):
-				aid, where, err := rosterRegisterAgent(ctx, label, owner)
-				if err != nil {
-					return err
+				aid, where, rerr := rosterRegisterAgent(ctx, label, owner)
+				if rerr != nil {
+					return rerr
 				}
 				fmt.Printf("✓ %s agent %s registered in %s\n", aid, label, redactIfQuiet(where))
 				return nil
@@ -338,7 +338,7 @@ func newActorRegisterCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer r.client.Close()
+			defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
 			if r.org == nil {
 				// No org: the repo's own actors table is the roster (Q4), and
 				// the row is written LIVE so every clone resolves the handle
@@ -387,7 +387,7 @@ func newActorDeactivateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer r.client.Close()
+			defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
 			a, err := r.resolveHandle(ctx, args[0])
 			if err != nil {
 				return err
@@ -417,15 +417,15 @@ func rosterRegisterAgent(ctx context.Context, label, ownerHandle string) (string
 		return "", "", err
 	}
 	if cr != nil {
-		id, err := cr.registerAgent(ctx, label, ownerHandle)
-		return id, cr.where, err
+		id, rerr := cr.registerAgent(ctx, label, ownerHandle)
+		return id, cr.where, rerr
 	}
 	var f commonFlags
 	r, err := openRoster(ctx, &f)
 	if err != nil {
 		return "", "", err
 	}
-	defer r.client.Close()
+	defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
 	var owner *ent.Actor
 	if ownerHandle != "" {
 		owner, err = r.resolveHandle(ctx, ownerHandle)
@@ -483,8 +483,8 @@ func newTeamAddCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer r.client.Close()
-			if a, err := r.client.Actor.Query().Where(entActor.Handle(handle), entActor.Active(true)).First(ctx); err == nil {
+			defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
+			if a, qerr := r.client.Actor.Query().Where(entActor.Handle(handle), entActor.Active(true)).First(ctx); qerr == nil {
 				return errcodes.New(errcodes.InvalidInput, "handle @"+handle+" is taken by actor "+a.DisplayName)
 			}
 			var ids []string
@@ -492,9 +492,9 @@ func newTeamAddCommand() *cobra.Command {
 				if m = strings.TrimSpace(m); m == "" {
 					continue
 				}
-				a, err := r.resolveHandle(ctx, m)
-				if err != nil {
-					return err
+				a, herr := r.resolveHandle(ctx, m)
+				if herr != nil {
+					return herr
 				}
 				ids = append(ids, a.ID)
 			}
@@ -547,7 +547,7 @@ func newTeamListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer r.client.Close()
+			defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
 			ts, err := r.client.Team.Query().Where(entTeam.Active(true)).Order(ent.Asc(entTeam.FieldHandle)).All(ctx)
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "read the roster").WithCause(err)

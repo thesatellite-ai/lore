@@ -240,7 +240,7 @@ func agentSharedNote(ctx context.Context, id, body, owner string) error {
 	if !ok {
 		return errRowsNotWired()
 	}
-	if _, _, err := rows.refresh(ctx); err != nil {
+	if _, err := rows.refresh(ctx); err != nil {
 		return coordError(err)
 	}
 	cid, doc, err := newCommentDoc(id, body, owner, w.Clock.Now())

@@ -82,9 +82,9 @@ func ltRow(t *testing.T, table, id string, sec int, title string, deleted bool) 
 	}
 	r := row.Row{Table: row.Table(table), ID: aid, HLC: hlc.HLC{Wall: ltBase.Add(time.Duration(sec) * time.Second), Actor: actor}, Deleted: deleted}
 	if !deleted {
-		tv, err := value.TextOf(title)
-		if err != nil {
-			t.Fatal(err)
+		tv, terr := value.TextOf(title)
+		if terr != nil {
+			t.Fatal(terr)
 		}
 		r.Fields = map[string]value.Value{"title": tv}
 	}
@@ -126,21 +126,21 @@ func TestLiveBackend_Placement(t *testing.T) {
 	}
 	// A row of a table that is not a live kind stays with the code.
 	m := ltRow(t, "memories", ltMemory, 1, "a lesson", false)
-	if err := b.Write(ctx, []store.Change{{Row: m}}); err != nil {
+	if err = b.Write(ctx, []store.Change{{Row: m}}); err != nil {
 		t.Fatal(err)
 	}
 	if liveHas(t, b, s, "memories", ltMemory) {
 		t.Fatal("a memory never goes live")
 	}
-	if _, err := inner.Get(ctx, m.Table, m.ID); err != nil {
+	if _, err = inner.Get(ctx, m.Table, m.ID); err != nil {
 		t.Fatalf("a memory is written to the branch data: %v", err)
 	}
 	// A branch row's edit stays in the branch data (F1).
 	br := ltRow(t, tableTasks, ltTaskB, 1, "branch task", false)
-	if err := inner.Write(ctx, []store.Change{{Row: br}}); err != nil {
+	if err = inner.Write(ctx, []store.Change{{Row: br}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Write(ctx, []store.Change{{Row: ltRow(t, tableTasks, ltTaskB, 2, "branch task edited", false), Expect: br.HLC}}); err != nil {
+	if err = b.Write(ctx, []store.Change{{Row: ltRow(t, tableTasks, ltTaskB, 2, "branch task edited", false), Expect: br.HLC}}); err != nil {
 		t.Fatal(err)
 	}
 	if liveHas(t, b, s, tableTasks, ltTaskB) {
@@ -192,7 +192,7 @@ func TestLiveBackend_ExpectRefusals(t *testing.T) {
 		t.Fatalf("v2 is read back: %v %s", err, got.Doc)
 	}
 	// A tombstone is never resurrected by a create.
-	if err := b.Write(ctx, []store.Change{{Row: ltRow(t, tableTasks, ltTaskA, 3, "", true), Expect: got.HLC}}); err != nil {
+	if err = b.Write(ctx, []store.Change{{Row: ltRow(t, tableTasks, ltTaskA, 3, "", true), Expect: got.HLC}}); err != nil {
 		t.Fatal(err)
 	}
 	dead, err := b.Get(ctx, v1.Table, v1.ID)

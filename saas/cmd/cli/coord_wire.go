@@ -282,12 +282,16 @@ func coordError(err error) error {
 	var off *signals.OfflineError
 	switch {
 	case errors.As(err, &fe):
-		code := errcodes.LostClaim
+		var code errcodes.Code
 		switch fe.Kind {
 		case coord.FenceCancelled:
 			code = errcodes.Cancelled
 		case coord.FenceReassigned:
 			code = errcodes.Reassigned
+		case coord.FenceLost:
+			code = errcodes.LostClaim
+		default:
+			code = errcodes.LostClaim // an unknown kind fails closed as a lost claim
 		}
 		return errcodes.New(code, fe.Error()).WithHint("stop work on this task; `lore task next` finds other work")
 	case errors.As(err, &off):

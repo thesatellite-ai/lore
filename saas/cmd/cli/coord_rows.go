@@ -190,21 +190,22 @@ func (r *liveRows) MergedCheck(ctx context.Context) {
 
 // refresh fetches and integrates the live ref (F3), ignoring the per-command
 // fetch cache: a coordination decision must see the remote as it is now.
-func (r *liveRows) refresh(ctx context.Context) (string, live.Tree, error) {
+func (r *liveRows) refresh(ctx context.Context) (live.Tree, error) {
 	if r.s.blocked != nil {
-		return "", nil, errcodes.New(errcodes.ReadOnly, "the remote live ref was rewritten; lore stopped writing to it").WithCause(r.s.blocked)
+		return nil, errcodes.New(errcodes.ReadOnly, "the remote live ref was rewritten; lore stopped writing to it").WithCause(r.s.blocked)
 	}
 	if r.s.ref.Remote != nil && r.s.autopush {
 		r.s.fetch(ctx, r.s.clk.Now())
 		if r.s.fetchErr != nil {
-			return "", nil, &signals.OfflineError{Reason: "live ref fetch failed", Err: r.s.fetchErr}
+			return nil, &signals.OfflineError{Reason: "live ref fetch failed", Err: r.s.fetchErr}
 		}
 	}
 	r.s.integrate(ctx)
 	if r.s.blocked != nil {
-		return "", nil, errcodes.New(errcodes.ReadOnly, "the remote live ref was rewritten; lore stopped writing to it").WithCause(r.s.blocked)
+		return nil, errcodes.New(errcodes.ReadOnly, "the remote live ref was rewritten; lore stopped writing to it").WithCause(r.s.blocked)
 	}
-	return r.s.ref.LocalTree(ctx)
+	_, tree, err := r.s.ref.LocalTree(ctx)
+	return tree, err
 }
 
 // Get implements coord.Rows: the live file when there is one (a tombstone
@@ -216,13 +217,13 @@ func (r *liveRows) Get(ctx context.Context, id string) (coord.Doc, bool, error) 
 		// after a fresh fetch + integrate: a decision on a stale row would
 		// overwrite a teammate's edit.
 		if r.s != nil {
-			if _, _, err := r.refresh(ctx); err != nil {
+			if _, err := r.refresh(ctx); err != nil {
 				return nil, false, err
 			}
 		}
 		return coreDoc(ctx, tableOf(id), id)
 	}
-	_, tree, err := r.refresh(ctx)
+	tree, err := r.refresh(ctx)
 	if err != nil {
 		return nil, false, err
 	}
@@ -237,10 +238,7 @@ func (r *liveRows) Get(ctx context.Context, id string) (coord.Doc, bool, error) 
 	if err != nil {
 		return nil, false, err
 	}
-	main, okMain, err := r.mainDoc(ctx, tableOf(id), id)
-	if err != nil {
-		return nil, false, err
-	}
+	main, okMain := r.mainDoc(ctx, tableOf(id), id)
 	d, ok := newerDoc(branch, okBranch, main, okMain)
 	return d, ok, nil
 }
@@ -262,17 +260,18 @@ func (r *liveRows) branchDoc(ctx context.Context, table, id string) (coord.Doc, 
 // (fixed rule 1). A row that landed and left live exists only there for a
 // clone whose checkout is older; a coordination decision must never act on
 // the stale branch copy (it would reopen a finished task).
-func (r *liveRows) mainDoc(ctx context.Context, table, id string) (coord.Doc, bool, error) {
+// Any read or decode failure means "no main copy".
+func (r *liveRows) mainDoc(ctx context.Context, table, id string) (coord.Doc, bool) {
 	target := "refs/remotes/" + r.s.ref.RemoteName + "/" + r.s.defaultBranch(ctx)
 	b, ok, err := r.s.ref.Repo.ReadFile(ctx, target, mainDataPath(r.folder, table+"/"+id+".json"))
 	if err != nil || !ok {
-		return nil, false, nil // nothing fetched yet, or not landed: no main copy
+		return nil, false // nothing fetched yet, or not landed: no main copy
 	}
 	d, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
 	if err != nil {
-		return nil, false, nil
+		return nil, false
 	}
-	return coord.Doc(d), true, nil
+	return coord.Doc(d), true
 }
 
 // newerDoc picks the newer of two copies of one row by updated_at (the
@@ -330,7 +329,7 @@ func (r *liveRows) Stage(_ context.Context, rows ...coord.RowWrite) ([]signals.C
 		if r.s != nil && r.s.ref.Remote != nil && !liveDisabled() {
 			// Live mode: the rows join the signals push (same remote).
 			out = append(out, &coreLiveCompanion{rows: core, refresh: func(ctx context.Context) error {
-				_, _, err := r.refresh(ctx)
+				_, err := r.refresh(ctx)
 				return err
 			}})
 		} else {

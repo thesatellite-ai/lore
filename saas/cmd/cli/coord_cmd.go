@@ -28,27 +28,6 @@ func addCoordCommands(root *cobra.Command) {
 	root.AddCommand(newAgentCommand(), newHoldCommand(), newGateCommand(), newFindingCommand(), newInboxCommand())
 }
 
-// attachToGroup adds sub under the existing top-level group name (one
-// group per name in `lore --help`), replacing a same-named generated
-// subcommand; it creates the group when none exists.
-func attachToGroup(root *cobra.Command, name, short string, sub *cobra.Command) {
-	for _, c := range root.Commands() {
-		if c.Name() != name {
-			continue
-		}
-		for _, old := range c.Commands() {
-			if old.Name() == sub.Name() {
-				c.RemoveCommand(old)
-			}
-		}
-		c.AddCommand(sub)
-		return
-	}
-	g := &cobra.Command{Use: name, Short: short}
-	g.AddCommand(sub)
-	root.AddCommand(g)
-}
-
 // ---------------------------------------------------------------- agent
 
 // sessionIDBytes of randomness make a session id ("s-" + hex) unique per
@@ -185,7 +164,7 @@ Example:
 			if err != nil {
 				return err
 			}
-			if err := w.requireActor(); err != nil {
+			if err = w.requireActor(); err != nil {
 				return err
 			}
 			st, err := w.repoSignalsChecked()
@@ -198,13 +177,13 @@ Example:
 			}
 			var held signals.Signal
 			_, err = st.Write(ctx, func(v signals.View) (signals.Change, error) {
-				tok, err := st.Tokens.New()
-				if err != nil {
-					return signals.Change{}, err
+				tok, terr := st.Tokens.New()
+				if terr != nil {
+					return signals.Change{}, terr
 				}
-				s, err := signals.DecideHold(v, signals.HoldRequest{Caller: w.Caller(), Folder: w.Folder, Name: args[0], TTL: d, Token: tok})
-				if err != nil {
-					return signals.Change{}, err
+				s, derr := signals.DecideHold(v, signals.HoldRequest{Caller: w.Caller(), Folder: w.Folder, Name: args[0], TTL: d, Token: tok})
+				if derr != nil {
+					return signals.Change{}, derr
 				}
 				held = s
 				return signals.Change{Put: map[string]signals.Signal{signals.ResourcePath(w.Folder, args[0]): s}}, nil
@@ -228,7 +207,7 @@ Example:
 			if err != nil {
 				return err
 			}
-			if err := w.requireActor(); err != nil {
+			if err = w.requireActor(); err != nil {
 				return err
 			}
 			st, err := w.repoSignalsChecked()
@@ -236,8 +215,8 @@ Example:
 				return err
 			}
 			_, err = st.Write(ctx, func(v signals.View) (signals.Change, error) {
-				p, err := signals.DecideUnhold(v, w.Caller(), w.Folder, args[0])
-				return signals.Change{Delete: []string{p}}, err
+				p, derr := signals.DecideUnhold(v, w.Caller(), w.Folder, args[0])
+				return signals.Change{Delete: []string{p}}, derr
 			})
 			if err != nil {
 				return coordError(err)

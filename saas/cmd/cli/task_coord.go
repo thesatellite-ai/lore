@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -59,7 +60,7 @@ func openTaskCoord(ctx context.Context, id, from string) (*coordWorld, coordTarg
 	if err != nil {
 		return nil, coordTarget{}, err
 	}
-	if err := w.requireActor(); err != nil {
+	if err = w.requireActor(); err != nil {
 		return nil, coordTarget{}, err
 	}
 	t, err := openCoordTargetFrom(ctx, w, id, from)
@@ -452,7 +453,7 @@ func newTaskRevokeCommand() *cobra.Command {
 				return err
 			}
 			defer t.Close()
-			if err := requireHuman(w, "revoke"); err != nil {
+			if err = requireHuman(w, "revoke"); err != nil {
 				return err
 			}
 			removed, err := coord.Override(ctx, w.env(t), args[0], coord.OverrideRevoke, nil)
@@ -493,7 +494,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			if err := requireHuman(w, "reassign"); err != nil {
+			if err = requireHuman(w, "reassign"); err != nil {
 				return err
 			}
 			to, err := resolveHandleActor(ctx, assign)
@@ -552,9 +553,9 @@ func resolveHandleActor(ctx context.Context, handle string) (string, error) {
 		return "", err
 	}
 	if cr != nil {
-		a, err := cr.resolveHandle(ctx, h)
-		if err != nil {
-			return "", err
+		a, herr := cr.resolveHandle(ctx, h)
+		if herr != nil {
+			return "", herr
 		}
 		return a.ID, nil
 	}
@@ -562,7 +563,7 @@ func resolveHandleActor(ctx context.Context, handle string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer r.client.Close()
+	defer func() { _ = r.client.Close() }() // a read: a close error changes nothing
 	a, err := r.resolveHandle(ctx, h)
 	if err != nil {
 		return "", err
@@ -613,6 +614,10 @@ func newTaskHookCommand() *cobra.Command {
 	return cmd
 }
 
+// commitMsgFileMode is used only if git's message file vanished meanwhile
+// (WriteFile keeps an existing file's mode): owner-only, it is private text.
+const commitMsgFileMode = 0o600
+
 // commitMsgHook rewrites the message file. Offline by design: it reads only
 // the session's held records in this checkout, never the network.
 func commitMsgHook(ctx context.Context, file string) error {
@@ -637,7 +642,15 @@ func commitMsgHook(ctx context.Context, file string) error {
 	}
 	held := coord.HeldStore{Path: strings.TrimSpace(string(gitDir)) + "/" + liveStateDirName + "/" + heldFileName}
 	now := cliClock().Now()
-	msg, err := os.ReadFile(file)
+	// The message file is git's (the hook's argument): read and rewrite it
+	// through a root at its folder, so the path can name nothing else.
+	root, err := os.OpenRoot(filepath.Dir(file))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }() // the rewrite below already returned its own error
+	name := filepath.Base(file)
+	msg, err := root.ReadFile(name)
 	if err != nil {
 		return err
 	}
@@ -651,5 +664,5 @@ func commitMsgHook(ctx context.Context, file string) error {
 	if string(out) == string(msg) {
 		return nil
 	}
-	return os.WriteFile(file, out, 0o644)
+	return root.WriteFile(name, out, commitMsgFileMode)
 }

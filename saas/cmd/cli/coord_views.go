@@ -103,12 +103,6 @@ Example:
 	return cmd
 }
 
-// ---------------------------------------------------------------- handoff
-
-// handoffGroupName is the generated `lore handoff` group `add` replaces
-// its generated add in (spec form: `handoff add --for @x [--task id]`).
-const handoffGroupName = "handoff"
-
 // ---------------------------------------------------------------- shared view
 
 // coordView is the data every coordination view reads once: rows of the
@@ -328,6 +322,11 @@ type inboxMarker struct {
 	Acked time.Time `json:"acked"`
 }
 
+// inboxStateDirMode is the mode of the checkout's lore state folder when
+// `inbox --ack` creates it: owner and group only (it holds this person's
+// ack marker, nothing others need).
+const inboxStateDirMode = 0o750
+
 func inboxMarkerPath(w *coordWorld) string {
 	return filepath.Join(w.StateDir, "inbox-"+w.ActorID+".json")
 }
@@ -375,11 +374,12 @@ Example:
 					shown = append(shown, it)
 				}
 			}
-			if jsonOut {
+			switch {
+			case jsonOut:
 				printJSON(constants.KindTaskList, shown, len(shown))
-			} else if len(shown) == 0 {
+			case len(shown) == 0:
 				fmt.Println(style.Muted("(inbox empty)"))
-			} else {
+			default:
 				for _, it := range shown {
 					m := it.Mission
 					if m == "" {
@@ -393,7 +393,7 @@ Example:
 				// a struct holding one time.Time cannot fail, and a failed write
 				// only means the next `inbox` shows the same items again.
 				b, _ := json.Marshal(inboxMarker{Acked: cv.now()})
-				if err := os.MkdirAll(cv.w.StateDir, 0o755); err == nil {
+				if err := os.MkdirAll(cv.w.StateDir, inboxStateDirMode); err == nil {
 					_ = os.WriteFile(inboxMarkerPath(cv.w), b, 0o600)
 				}
 			}
@@ -450,8 +450,8 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 			involved[mission] = true
 		}
 		open := t.Status == entTask.StatusTodo || t.Status == entTask.StatusInProgress
-		switch {
-		case open && t.AssignedToActorID != nil && *t.AssignedToActorID == me && !(claimed && active && sig.Holder != me):
+		heldByOther := claimed && active && sig.Holder != me
+		if open && t.AssignedToActorID != nil && *t.AssignedToActorID == me && !heldByOther {
 			involved[mission] = true
 			out = append(out, inboxItem{Mission: mission, Kind: inboxAssigned, Text: t.ID + "  " + t.Title, At: t.UpdatedAt})
 		}

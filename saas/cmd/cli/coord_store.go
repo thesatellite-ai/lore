@@ -242,7 +242,7 @@ func (r *storeRows) Get(ctx context.Context, id string) (coord.Doc, bool, error)
 		return nil, false, err
 	}
 	files, bad := tree.Rows(r.sp.folder)
-	if err := badRowsError(bad); err != nil {
+	if err = badRowsError(bad); err != nil {
 		return nil, false, err
 	}
 	if f, ok := files[live.RowKey{Table: tableOf(id), ID: id}]; ok {
@@ -466,18 +466,18 @@ type signalsWriter interface {
 func stampMerged(ctx context.Context, rows mergedRows, st signalsWriter, id string, at time.Time) (recorded bool, err error) {
 	_, err = st.Write(ctx, func(signals.View) (signals.Change, error) {
 		recorded = false
-		d, ok, err := rows.Get(ctx, id)
-		if err != nil {
-			return signals.Change{}, fmt.Errorf("read %s: %w", id, err)
+		d, ok, gerr := rows.Get(ctx, id)
+		if gerr != nil {
+			return signals.Change{}, fmt.Errorf("read %s: %w", id, gerr)
 		}
 		if !ok || d.Status() != string(statusDoneQ) || d.Str(keyMergedAtDoc) != "" {
 			return signals.Change{}, nil // gone, reopened, or already stamped
 		}
 		next := d.Clone()
 		next.SetTime(keyMergedAtDoc, at)
-		comps, err := rows.Stage(ctx, coord.RowWrite{ID: id, Doc: next})
-		if err != nil {
-			return signals.Change{}, fmt.Errorf("stage %s: %w", id, err)
+		comps, serr := rows.Stage(ctx, coord.RowWrite{ID: id, Doc: next})
+		if serr != nil {
+			return signals.Change{}, fmt.Errorf("stage %s: %w", id, serr)
 		}
 		recorded = true
 		return signals.Change{Companions: comps}, nil
@@ -494,11 +494,11 @@ func stampMerged(ctx context.Context, rows mergedRows, st signalsWriter, id stri
 // (F9: the lazy check never fails the command that ran it).
 func reportMerged(out io.Writer, id string, f mergewatch.Finding, recErr error) {
 	if recErr != nil {
-		fmt.Fprintf(out, "lore: %s merged %s (found by: %s, %s) but it could not be recorded: %v; the next lore command retries\n",
+		_, _ = fmt.Fprintf(out, "lore: %s merged %s (found by: %s, %s) but it could not be recorded: %v; the next lore command retries\n",
 			id, f.At.UTC().Format("15:04"), f.Method, shortSHA(f.Commit), recErr)
 		return
 	}
-	fmt.Fprintf(out, "✓ %s merged %s (found by: %s, %s)\n", id, f.At.UTC().Format("15:04"), f.Method, shortSHA(f.Commit))
+	_, _ = fmt.Fprintf(out, "✓ %s merged %s (found by: %s, %s)\n", id, f.At.UTC().Format("15:04"), f.Method, shortSHA(f.Commit))
 }
 
 // groupMergedCheck runs the merged check for the linked store project's
@@ -546,7 +546,7 @@ const mergeUncheckedPrefix = "lore: warning: merge state not checked: "
 // run, and why, as one line: done tasks of the linked store keep showing
 // "done, not merged yet" until a later command reaches the store.
 func warnMergeUnchecked(out io.Writer, cause error) {
-	fmt.Fprintf(out, "%s%s; done tasks may show as not merged yet (the next lore command retries)\n",
+	_, _ = fmt.Fprintf(out, "%s%s; done tasks may show as not merged yet (the next lore command retries)\n",
 		mergeUncheckedPrefix, oneLine(cause.Error()))
 }
 
@@ -886,7 +886,7 @@ func ownerOf(ctx context.Context, agentID string) string {
 	if err != nil {
 		return ""
 	}
-	defer r.client.Close()
+	defer func() { _ = r.client.Close() }() // a read: a close error changes nothing
 	a, err := r.client.Actor.Get(ctx, agentID)
 	if err != nil || a.OwnerActorID == nil {
 		return ""

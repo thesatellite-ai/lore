@@ -265,9 +265,9 @@ func (r *coreRoster) teamAdd(ctx context.Context, handle, name, members string) 
 		if m = strings.TrimSpace(m); m == "" {
 			continue
 		}
-		a, err := r.resolveHandle(ctx, m)
-		if err != nil {
-			return err
+		a, herr := r.resolveHandle(ctx, m)
+		if herr != nil {
+			return herr
 		}
 		ids = append(ids, a.ID)
 	}
