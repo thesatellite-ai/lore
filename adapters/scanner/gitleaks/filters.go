@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 )
 
 // postFilter decides whether one finding of a built-in lore rule is kept
@@ -185,6 +186,23 @@ func allowed(as []compiledAllow, ruleID, secret string) bool {
 	return false
 }
 
+// loreIDTrail is punctuation a rule may capture after an id in prose
+// ("see tsk_….").
+const loreIDTrail = ".,;:)'\""
+
+// isLoreID reports whether a finding's secret is exactly one lore row id
+// (a registered prefix + UUIDv7 hex, ids.ParseAny), maybe followed by
+// prose punctuation. OV40 measured switch: gitleaks' generic-api-key
+// flags "task key tsk_<32 hex>" in v0.1.17 stores (1 of 4 hits over a
+// 4727-file store). A row id is public by design (every row file, commit
+// and leak index carries it) and never a credential, so this drops only
+// that exact shape; every rule keeps running on everything else (D4:
+// never weaken the rules).
+func isLoreID(secret string) bool {
+	_, err := ids.ParseAny(strings.TrimRight(secret, loreIDTrail))
+	return err == nil
+}
+
 // lineRest is the text after end up to the end of its line.
 func lineRest(text string, end int) string {
 	if end < 0 || end > len(text) {
@@ -209,6 +227,9 @@ func (s *Scanner) keep(text string, fs []scan.Finding) []scan.Finding {
 			}
 		}
 		if in && len(s.allow) > 0 && allowed(s.allow, f.RuleID, text[f.Offset:f.Offset+f.Length]) {
+			continue
+		}
+		if in && isLoreID(text[f.Offset:f.Offset+f.Length]) {
 			continue
 		}
 		out = append(out, f)

@@ -379,3 +379,23 @@ func TestDetectorSettings(t *testing.T) {
 		t.Fatalf("detector settings: %+v", s.detector)
 	}
 }
+
+// TestLoreIDNotASecret: a lore row id that a generic rule captures (the
+// OV40 measured case, "task key tsk_<hex>.") is no finding; the same
+// shape with an unknown prefix or a non-UUIDv7 body still is.
+func TestLoreIDNotASecret(t *testing.T) {
+	t.Parallel()
+	id := "tsk_" + "01a1634ca3ce7b69a304438d07a0cb19"
+	if !isLoreID(id) || !isLoreID(id+".") {
+		t.Fatal("a lore id is not recognised")
+	}
+	for _, s := range []string{"zzq_" + "01a1634ca3ce7b69a304438d07a0cb19", id + "x", "tsk_" + rep("Q", 32)} {
+		if isLoreID(s) {
+			t.Errorf("len %d shape taken for a lore id", len(s))
+		}
+	}
+	text := "the task key = " + id + ".\n"
+	for _, f := range full(t).Scan("body", text) {
+		t.Errorf("lore id flagged by %s", f.RuleID)
+	}
+}
