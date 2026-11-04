@@ -230,4 +230,7 @@ type SearchIn struct {
 	AllRepos        bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"search across every repo (ignore --repo)"`
 	IncludeArchived bool   `json:"include_archived,omitempty" flag:"include-archived" desc:"accepted for v0.1.17 scripts (tasks have no archive)"`
 	Project         string `json:"project,omitempty" flag:"project" desc:"only tasks of this project (prj_ id or name)"`
+	// Columns restricts the match to some full-text fields (v0.1.17
+	// --column; tasks index title and body).
+	Columns []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable; tasks have: title, body)"`
 }

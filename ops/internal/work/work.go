@@ -383,10 +383,19 @@ func SourceName(src store.Source) string {
 // Search runs a full-text query over table and returns the live hits with
 // their rows, best first, before any caller filter.
 func Search(ctx context.Context, env Env, table row.Table, query string, fetch int) ([]SearchRow, error) {
+	return SearchColumns(ctx, env, "search", table, query, nil, fetch)
+}
+
+// SearchColumns is Search restricted to some of table's full-text fields
+// (`search --column`, v0.1.17 named the FTS5 columns by field name); no
+// columns searches them all. An unknown column is E_INVALID_INPUT naming
+// the table's columns, and an Env without the column seam E_UNSUPPORTED
+// (opsmemory.SearchFields). noun prefixes the messages.
+func SearchColumns(ctx context.Context, env Env, noun string, table row.Table, query string, columns []string, fetch int) ([]SearchRow, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, errs.New(errs.InvalidInput, "search: empty query")
 	}
-	hits, err := env.Search(ctx, table, query, fetch)
+	hits, err := opsmemory.SearchFields(ctx, env, noun, table, query, columns, fetch)
 	if err != nil {
 		return nil, err
 	}

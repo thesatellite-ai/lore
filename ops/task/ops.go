@@ -966,7 +966,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 	if err != nil {
 		return work.SearchEnvelope{}, err
 	}
-	hits, err := work.Search(ctx, o.env, table, in.Query, searchFetch)
+	hits, err := work.SearchColumns(ctx, o.env, Noun, table, in.Query, in.Columns, searchFetch)
 	if err != nil {
 		return work.SearchEnvelope{}, err
 	}
