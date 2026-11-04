@@ -708,6 +708,10 @@ type RepoSetURLIn struct {
 	Mirror bool   `json:"mirror,omitempty" flag:"mirror" desc:"add the address as a mirror (the primary is unchanged)"`
 	Remove bool   `json:"remove,omitempty" flag:"remove" desc:"close a mirror or drop an unconfirmed address"`
 	From   string `json:"from,omitempty" flag:"from" desc:"start date YYYY-MM-DD of the entry (default today)"`
+	// Repo names another repo of this project by mount name (or rep_ id):
+	// its row is updated; its own checkout's _meta.json is not touched from here
+	// (CLI_REFERENCE 3.14).
+	Repo string `json:"repo,omitempty" flag:"repo" desc:"the repo of this project to update, by mount name or rep_ id (default this checkout)"`
 }
 
 // RepoSetURLOut is the result of `lore repo set-url`.
@@ -725,6 +729,8 @@ type RepoSetURLOut struct {
 	Confirmed []string     `json:"confirmed"`
 	Warnings  []URLWarning `json:"warnings,omitempty"`
 	human     string
+	// other is set for --repo naming a repo other than this checkout.
+	other bool
 }
 
 // Text implements op.Texter.
@@ -767,6 +773,14 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 	if err != nil {
 		return RepoSetURLOut{}, err
 	}
+	// --repo <mount>: another repo row of the project; this checkout's
+	// _meta.json is written only when the row is this checkout's own.
+	own := true
+	if r := strings.TrimSpace(in.Repo); r != "" {
+		if id, own, err = otherRepo(ctx, env, id, r); err != nil {
+			return RepoSetURLOut{}, err
+		}
+	}
 	mode, label := repourl.SetPrimary, modePrimary
 	switch {
 	case in.Mirror:
@@ -782,7 +796,7 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 	if err != nil {
 		return RepoSetURLOut{}, err
 	}
-	out := RepoSetURLOut{RepoID: id.Meta.RepoID, URL: clean, Key: key, Mode: label, Changed: changed}
+	out := RepoSetURLOut{RepoID: id.Meta.RepoID, URL: clean, Key: key, Mode: label, Changed: changed, other: !own}
 	if stripped {
 		out.Warnings = []URLWarning{{Code: WarnURLUserinfo, Stored: clean}}
 	}
@@ -799,8 +813,10 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 		if _, err = env.Update(ctx, engine.Ref{Store: repoStore, Table: schema.TableRepos, ID: id.Row.ID}, patch); err != nil {
 			return RepoSetURLOut{}, err
 		}
-		if err = files.WriteRepoMeta(ctx, metaFor(id.Meta, h)); err != nil {
-			return RepoSetURLOut{}, err
+		if own {
+			if err = files.WriteRepoMeta(ctx, metaFor(id.Meta, h)); err != nil {
+				return RepoSetURLOut{}, err
+			}
 		}
 	}
 	out.Confirmed = h.Confirmed()
@@ -809,6 +825,33 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 	}
 	out.human = setURLText(out)
 	return out, nil
+}
+
+// otherRepo resolves `set-url --repo <name>` to a repo row of this
+// project by mount name or rep_ id; own reports whether it is this
+// checkout's row (then its _meta.json is written too). An unknown name is
+// E_NOT_FOUND naming lore repo list.
+func otherRepo(ctx context.Context, env Env, self Identity, name string) (Identity, bool, error) {
+	pid, err := env.Project(ctx)
+	if err != nil {
+		return Identity{}, false, err
+	}
+	rows, err := o(env).projectRepos(ctx, pid.String())
+	if err != nil {
+		return Identity{}, false, err
+	}
+	for _, r := range rows {
+		if r.ID.String() != name && work.Field(r, fieldMountName) != name {
+			continue
+		}
+		if r.ID == self.Row.ID {
+			return self, true, nil
+		}
+		h, herr := historyOf(r)
+		return Identity{Row: r, History: h, Meta: rowfs.RepoMeta{RepoID: r.ID.String()}}, false, herr
+	}
+	return Identity{}, false, errs.New(errs.NotFound, "repo set-url: no repo "+strconv.Quote(name)+" in this project").
+		WithHint("lore repo list shows the mount names")
 }
 
 // setURLText is the human output of `lore repo set-url` (10.4).
@@ -830,7 +873,10 @@ func setURLText(o RepoSetURLOut) string {
 	default:
 		b.WriteString(work.Success + " " + o.RepoID + " primary address is now " + o.Key + "\n")
 	}
-	if o.Changed {
+	switch {
+	case o.Changed && o.other:
+		b.WriteString("  the repo row is updated; that checkout's .lore/data/_meta.json is not changed from here (run set-url there to update it)\n")
+	case o.Changed:
 		b.WriteString("  .lore/data/_meta.json updated; commit it with your next push\n")
 	}
 	return b.String()

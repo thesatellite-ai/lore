@@ -257,9 +257,11 @@ func Ops(m Manager) []op.Entry {
 			return m.AddStore(ctx, in)
 		}),
 		op.Define(op.Spec{
-			Name: OpRemove, Summary: "Detach a store from this repo (its rows stay in the store)",
+			Name: OpRemove, Summary: "Detach a store from this repo (its rows stay in the store); asks first",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
-			Examples: []op.Example{{Title: "detach", CLI: "lore store remove golang", Want: "name:"}},
+			// CLI_REFERENCE 3.21: remove asks first (E_NEEDS_CONFIRM, then --yes).
+			Confirm:  op.ConfirmRule{Always: true},
+			Examples: []op.Example{{Title: "detach", CLI: "lore store remove golang --yes", Want: "name:"}},
 		}, func(ctx context.Context, in RemoveIn) (Entry, error) {
 			if in.Name == PersonalName {
 				return Entry{}, errs.New(errs.InvalidInput, "store remove: `me` is not attached by this repo").

@@ -13,8 +13,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -146,6 +148,9 @@ func init() {
 	// spec`: after wireLive, which must not wrap the core's commands (they
 	// never touch lore.db).
 	mountCore(rootCmd)
+	// lore trash --local / restore --local / purge --archived-before run
+	// the lore.db forms (CLI_REFERENCE 3.9); after mountCore made the noun.
+	attachTrashLocal(rootCmd)
 	// FLAG2: last, so it sees every old command registered above.
 	classifyInputErrors(rootCmd)
 }
@@ -164,6 +169,7 @@ func init() {
 // (inputError), because cobra raises it before any command runs.
 func classifyInputErrors(root *cobra.Command) {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		usageFailed = true
 		return errcodes.New(errcodes.InvalidInput, err.Error())
 	})
 	var walk func(c *cobra.Command)
@@ -181,6 +187,7 @@ func classifyInputErrors(root *cobra.Command) {
 				if errors.As(err, &known) {
 					return err // a validator that already names its code
 				}
+				usageFailed = true
 				return errcodes.New(errcodes.InvalidInput, err.Error())
 			}
 			return nil
@@ -205,12 +212,14 @@ func inputError(err error, args []string) error {
 	cmd, _, ferr := rootCmd.Find(args)
 	if ferr != nil {
 		if ferr.Error() == err.Error() {
+			usageFailed = true
 			return errcodes.New(errcodes.InvalidInput, err.Error())
 		}
 		return err
 	}
 	for _, again := range []func() error{cmd.ValidateRequiredFlags, cmd.ValidateFlagGroups} {
 		if verr := again(); verr != nil && verr.Error() == err.Error() {
+			usageFailed = true
 			return errcodes.New(errcodes.InvalidInput, err.Error())
 		}
 	}
@@ -242,12 +251,73 @@ func main() {
 		// FORMAT_EVOLUTION 8.11: "no such column/table" from an old lore.db is
 		// E_SCHEMA_OLD with the `lore setup` hint.
 		err = explainSchemaError(explainStorageError(err))
+		if wantsJSONError(os.Args[1:]) {
+			printJSONError(os.Stdout, err)
+			os.Exit(exitStatus(err))
+		}
 		fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+err.Error())
 		if hint := errorHint(err); hint != "" {
 			fmt.Fprintln(os.Stderr, hintPrefix+hint)
 		}
 		os.Exit(exitStatus(err))
 	}
+}
+
+// usageFailed is set when cobra refused the command line itself (FLAG2): a
+// usage error is found before the command runs, so it prints the text line
+// on stderr even under --json (CLI_REFERENCE 1.5).
+var usageFailed bool
+
+// wantsJSONError reports whether the failed command asked for --json and
+// was not refused as a usage error. The executed command is found again
+// from args; after Execute its flags (own and inherited) are parsed.
+func wantsJSONError(args []string) bool {
+	if usageFailed {
+		return false
+	}
+	cmd, _, err := rootCmd.Find(args)
+	if err != nil {
+		return false
+	}
+	f := cmd.Flag("json")
+	return f != nil && f.Value.String() == "true"
+}
+
+// printJSONError writes err as the stable --json error object (decision
+// OQ5, CLI_REFERENCE 1.4): exactly one object on stdout with code, exit,
+// class, retryable, needs_person, hint and next, the same shape the mounted
+// core commands print (surface/cli printError, writeIndented). A v0.1.17 CLIError becomes a
+// core error of the same code, so class and the retry/person defaults come
+// from the one registry (model/errs); exit is the process exit status.
+func printJSONError(w io.Writer, err error) {
+	env := errs.EnvelopeOf(asCoreError(err))
+	env.Error.Exit = exitStatus(err)
+	// Envelope is a fixed struct of strings, ints and bools: Marshal cannot
+	// fail on it, and a failing writer has nowhere left to report to.
+	// Indented like the mounted core commands print it (writeIndented).
+	b, mErr := json.MarshalIndent(env, "", jsonIndent)
+	if mErr == nil {
+		_, _ = w.Write(append(b, '\n'))
+	}
+}
+
+// asCoreError is err as a core *errs.Error: the outermost lore error of the
+// chain (firstLoreError's rule), a v0.1.17 CLIError converted field by
+// field (its code is the same E_ string; folded codes keep their own name),
+// or E_INTERNAL around anything else.
+func asCoreError(err error) error {
+	var ce *errcodes.CLIError
+	var ee *errs.Error
+	hasOld, hasCore := errors.As(err, &ce), errors.As(err, &ee)
+	if hasCore && (!hasOld || !errors.As(ce.Wrapped, &ee)) {
+		return ee
+	}
+	if hasOld {
+		out := errs.New(errs.Code(ce.Code), ce.Message).WithHint(ce.Hint)
+		out.DocURL = ce.DocURL
+		return out
+	}
+	return errs.Wrap(errs.Internal, err.Error(), err)
 }
 
 // hintPrefix starts the line under ERROR that carries a CLIError's next step,

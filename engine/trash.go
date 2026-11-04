@@ -13,7 +13,8 @@ package engine
 //	reads ─► getRow/readRows ─► hideTrashed: a trashed row reads as a
 //	         tombstone everywhere (list, show, cache, search, sql, render)
 //	Trashed ─► raw Backend.Read of every store (purged ids stay hidden)
-//	Restore(id|bat) ─► restoreSet ─► parent check ─► trash.Clear → Write
+//	Restore(id|bat) ─► restoreSet ─► rehome (4.2, WithRestoreHome)
+//	                 ─► parent check ─► trash.Clear → Write
 //	PurgeTrash(id|bat) ─► restoreSet ─► remove(raw, purge=true) per row
 
 import (
@@ -75,6 +76,11 @@ type Trashed struct {
 	Store store.Source
 	Row   row.Row
 	Info  trash.Info
+	// Dependent is set by Trashed when the row went into the trash as a
+	// cascade dependent of another row of its batch (links, comments, tag
+	// attachments, sub-tasks): `lore trash` counts these under their root
+	// unless --with-dependents (CLI_REFERENCE 3.9).
+	Dependent bool
 }
 
 // TrashResult is what a restore or a trash purge did.
@@ -354,7 +360,25 @@ func (e *Engine) Trashed(ctx context.Context) ([]Trashed, error) {
 			}
 		}
 	}
+	e.markDependents(out)
 	return out, nil
+}
+
+// markDependents sets Dependent on every row whose cascade parent is in the
+// trash under the same batch.
+func (e *Engine) markDependents(all []Trashed) {
+	byBatch := map[string]map[ids.AnyID]bool{}
+	for _, t := range all {
+		if byBatch[t.Info.Batch] == nil {
+			byBatch[t.Info.Batch] = map[ids.AnyID]bool{}
+		}
+		byBatch[t.Info.Batch][t.Row.ID] = true
+	}
+	for i, t := range all {
+		if t.Info.Batch != "" && e.dependsOnSet(t.Row, byBatch[t.Info.Batch]) {
+			all[i].Dependent = true
+		}
+	}
 }
 
 // TrashTarget resolves a restore or purge target (a row id or a bat_ id)
@@ -467,6 +491,9 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 	for _, t := range res.Rows {
 		set[t.Row.ID] = true
 	}
+	if res, err = e.rehome(ctx, res, set); err != nil {
+		return TrashResult{}, err
+	}
 	for _, t := range res.Rows {
 		if err := e.checkParents(ctx, t.Row, set); err != nil {
 			return TrashResult{}, err
@@ -566,7 +593,7 @@ func (e *Engine) checkParents(ctx context.Context, r row.Row, set map[ids.AnyID]
 			}
 			if sr.Deleted {
 				return errs.New(errs.ParentPurged, "engine: "+pid.String()+" was deleted for good; "+r.ID.String()+" cannot come back under it").
-					WithHint("give the row a new parent after restoring is supported, or add it again as a new row")
+					WithHint("give it a new home in the same restore: lore trash restore " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
 			}
 		}
 	}
@@ -640,4 +667,77 @@ func (e *Engine) requireReason(src store.Source) bool {
 		return isBool && b.Bool()
 	}
 	return false
+}
+
+// restoreHomeKey carries the pointers a restore replaces or clears.
+type restoreHomeKey struct{}
+
+// RestoreHome is one pointer a restore gives a new value (DELETION 4.2): the
+// restored row's Field becomes To, or null when Clear. It is how a child
+// whose parent was purged comes back (`lore trash restore <id> --tasklist
+// <id> | --no-tasklist | --parent | --no-parent | --mission | --plan`).
+type RestoreHome struct {
+	Field string
+	To    ids.AnyID
+	Clear bool
+}
+
+// WithRestoreHome returns ctx carrying homes for the next Restore.
+func WithRestoreHome(ctx context.Context, homes ...RestoreHome) context.Context {
+	return context.WithValue(ctx, restoreHomeKey{}, homes)
+}
+
+// rehome applies the RestoreHomes of ctx to the restored rows, in the same
+// write (4.2): every row of res whose table has the field and whose pointer
+// leads outside the restored set gets the new value. A home no row takes,
+// or a new parent that is missing or in the trash, is refused; nothing is
+// written then.
+func (e *Engine) rehome(ctx context.Context, res TrashResult, set map[ids.AnyID]bool) (TrashResult, error) {
+	homes, _ := ctx.Value(restoreHomeKey{}).([]RestoreHome)
+	for _, h := range homes {
+		var v value.Value = value.Null{}
+		if !h.Clear {
+			_, pr, err := e.locate(ctx, Ref{ID: h.To})
+			if err != nil {
+				return res, err
+			}
+			if pr.Deleted {
+				return res, errs.New(errs.ParentDeleted, "engine: "+h.To.String()+" is deleted; it cannot be the new home").
+					WithHint("restore it first: lore trash restore " + h.To.String())
+			}
+			t, terr := value.TextOf(h.To.String())
+			if terr != nil {
+				return res, terr
+			}
+			v = t
+		}
+		took := false
+		for i, t := range res.Rows {
+			def, ok := e.reg.Table(t.Row.Table)
+			if !ok {
+				continue
+			}
+			if _, has := def.Field(h.Field); !has {
+				continue
+			}
+			cur, ok := t.Row.Fields[h.Field]
+			if !ok || cur == nil || cur.Kind() == value.KindNull {
+				continue
+			}
+			if pid, perr := ids.ParseAny(cur.String()); perr == nil && set[pid] {
+				continue // its parent comes back in the same restore
+			}
+			fields := make(map[string]value.Value, len(t.Row.Fields))
+			for k, fv := range t.Row.Fields {
+				fields[k] = fv
+			}
+			fields[h.Field] = v
+			res.Rows[i].Row.Fields = fields
+			took = true
+		}
+		if !took {
+			return res, errs.New(errs.InvalidInput, "trash restore: no restored row has a "+h.Field+" outside the restore to replace")
+		}
+	}
+	return res, nil
 }

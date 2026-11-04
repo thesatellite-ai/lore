@@ -17,6 +17,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"unicode"
@@ -83,6 +85,9 @@ type MachineVersions interface {
 // MachineListIn is the input of machine.list.
 type MachineListIn struct {
 	Store string `json:"store,omitempty" flag:"store" desc:"only machines of this store (default every attached store)"`
+	// Org narrows to the stores this repo attaches for an org: the store
+	// named <org> and its folders <org>/<folder> (CLI_REFERENCE 3.8).
+	Org string `json:"org,omitempty" flag:"org" desc:"only machines of this org's attached stores"`
 }
 
 // MachineShowIn is the input of machine.show.
@@ -323,6 +328,11 @@ func (o ops) machineList(ctx context.Context, in MachineListIn) (MachineListOut,
 	if err != nil {
 		return MachineListOut{}, err
 	}
+	if org := strings.TrimSpace(in.Org); org != "" {
+		if rows, err = orgRows(o.env, rows, org); err != nil {
+			return MachineListOut{}, err
+		}
+	}
 	out := MachineListOut{SchemaVersion: SchemaVersion, Kind: KindMachines, Data: []Machine{}}
 	seen := map[string]bool{}
 	lab := work.LabelerOf(o.env)
@@ -478,4 +488,21 @@ func writeProfile(ctx context.Context, env Env, m Machines, me ThisMachine, targ
 		return false, err
 	}
 	return true, nil
+}
+
+// orgSep joins an org name and a linked folder in a store name
+// (wire renameOrgClashes: "<org>/<folder>").
+const orgSep = "/"
+
+// orgRows keeps the rows of org's attached stores (<org> and
+// <org>/<folder>); an org with no store attached here is E_NOT_FOUND.
+func orgRows(env work.Env, rows []work.Sourced, org string) ([]work.Sourced, error) {
+	ofOrg := func(src store.Source) bool {
+		return string(src) == org || strings.HasPrefix(string(src), org+orgSep)
+	}
+	if !slices.ContainsFunc(env.Stores(), ofOrg) {
+		return nil, errs.New(errs.NotFound, "machines: no store of org "+strconv.Quote(org)+" is attached in this repo").
+			WithHint("lore store list shows the attached stores")
+	}
+	return slices.DeleteFunc(rows, func(s work.Sourced) bool { return !ofOrg(s.Source) }), nil
 }

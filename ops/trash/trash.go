@@ -1,10 +1,12 @@
 // Package trash defines the `trash` noun (layer L5, DELETION_DESIGN 2.2-2.6,
 // CLI_REFERENCE 3.9): list, show, restore and purge of rows in the trash.
 //
-//	lore trash list [--type --by --since --reason --batch]
-//	    └► Env.Trashed ─► filter ─► rows (newest first)
-//	lore trash show <id>       └► Env.Trashed ─► the one row (body kept)
-//	lore trash restore <id|bat_> ─► Env.Restore (same ids, E_PARENT_DELETED)
+//	lore trash list [--type --by --since --reason --batch --to --with-dependents]
+//	    └► Env.Trashed ─► filter ─► roots (dependents counted) ─► newest first
+//	lore trash show <id> [--show-sensitive]
+//	    └► Env.Trashed ─► the one row (body kept; sensitive masked unless asked)
+//	lore trash restore <id|bat_> [--parent|--tasklist|--mission|--plan <id>, --no-parent|--no-tasklist]
+//	    └► engine.WithRestoreHome (4.2) ─► Env.Restore (same ids, E_PARENT_*)
 //	lore trash purge <id|bat_> | --older-than <d> | --expired  --confirm
 //	    └► no --confirm: E_NEEDS_CONFIRM naming --confirm (DQ2, never --yes)
 //	    └► Env.PurgeTrash / Env.PurgeOlder ─► tombstones kept forever (DQ4)
@@ -67,16 +69,33 @@ type ListIn struct {
 	Since  string      `json:"since,omitempty" flag:"since" desc:"only rows deleted since a date (YYYY-MM-DD) or a duration (36h, 7d)"`
 	Reason string      `json:"reason,omitempty" flag:"reason" desc:"only rows whose delete reason holds this text"`
 	Batch  string      `json:"batch,omitempty" flag:"batch" desc:"only rows of this batch (bat_…)"`
+	To     string      `json:"to,omitempty" flag:"to" desc:"only rows of this store (repo, me, an attached store name)"`
+	// WithDependents lists the rows that went into the trash as dependents
+	// of another row (links, comments, tag attachments) instead of counting
+	// them under it (CLI_REFERENCE 3.9).
+	WithDependents bool `json:"with_dependents,omitempty" flag:"with-dependents" desc:"list dependents (links, comments, tag attachments) instead of counting them"`
 }
 
 // ShowIn is the input of trash.show.
 type ShowIn struct {
-	ID string `json:"id" arg:"0" desc:"the row id"`
+	ID            string `json:"id" arg:"0" desc:"the row id"`
+	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive field values (asks first)"`
 }
 
-// TargetIn is the input of trash.restore.
+// showSensitiveField is the json name of ShowIn.ShowSensitive: trash.show
+// asks first when it is set (op.ConfirmRule.When), like lore sql.
+const showSensitiveField = "show_sensitive"
+
+// TargetIn is the input of trash.restore. The home flags give a row whose
+// parent was purged a new home, or none, in the same write (DELETION 4.2).
 type TargetIn struct {
-	Target string `json:"target" arg:"0" desc:"a row id or a batch id (bat_…)"`
+	Target     string `json:"target" arg:"0" desc:"a row id or a batch id (bat_…)"`
+	Parent     string `json:"parent,omitempty" flag:"parent" desc:"new parent task (tsk_…) for a sub-task whose parent was purged"`
+	NoParent   bool   `json:"no_parent,omitempty" flag:"no-parent" desc:"restore a sub-task whose parent was purged as a top-level task"`
+	Tasklist   string `json:"tasklist,omitempty" flag:"tasklist" desc:"new tasklist (tl_…) for a task whose tasklist was purged"`
+	NoTasklist bool   `json:"no_tasklist,omitempty" flag:"no-tasklist" desc:"restore a task whose tasklist was purged with no tasklist"`
+	Mission    string `json:"mission,omitempty" flag:"mission" desc:"new mission id for the restored row"`
+	Plan       string `json:"plan,omitempty" flag:"plan" desc:"new plan id for the restored row"`
 }
 
 // PurgeIn is the input of trash.purge.
@@ -98,6 +117,7 @@ type Item struct {
 	DeletedBy string `json:"deleted_by"`
 	Reason    string `json:"reason,omitempty"`
 	Batch     string `json:"batch"`
+	Dependent bool   `json:"dependent,omitempty"`
 	at        time.Time
 }
 
@@ -105,6 +125,9 @@ type Item struct {
 type ListOut struct {
 	Data  []Item `json:"data"`
 	Count int    `json:"count"`
+	// Dependents is how many dependents of the listed rows are in the
+	// trash and not listed (0 with --with-dependents).
+	Dependents int `json:"dependents"`
 }
 
 // ShowOut is the output of trash.show.
@@ -131,8 +154,9 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: OpList, Summary: "List the rows in the trash",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: read,
 			Examples: []op.Example{{Title: "the trash as JSON", CLI: "lore trash list --json", Want: `"data"`}}}, o.list),
-		op.Define(op.Spec{Name: OpShow, Summary: "Show one row in the trash, body included",
-			Permission: op.PermRead, Access: op.AccessRead, Errors: read}, o.show),
+		op.Define(op.Spec{Name: OpShow, Summary: "Show one row in the trash, body included (sensitive values masked)",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: append(slices.Clone(read), errs.NeedsConfirm, errs.Cancelled),
+			Confirm: op.ConfirmRule{When: showSensitiveField}}, o.show),
 		op.Define(op.Spec{Name: OpRestore, Summary: "Bring a row (with its dependents) or a whole batch back from the trash, same ids",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: write}, o.restore),
 		op.Define(op.Spec{Name: OpPurge, Summary: "Remove rows from the trash for good (a tombstone stays forever); needs --confirm",
@@ -159,16 +183,27 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		return ListOut{}, err
 	}
 	out := ListOut{Data: []Item{}}
+	shown := map[string]bool{} // batches with a listed root
+	var deps []Item
 	for _, t := range all {
 		it := itemOf(t)
 		switch {
+		case in.To != "" && it.Store != strings.TrimSpace(in.To):
 		case in.Type != "" && it.Table != in.Type && strings.TrimSuffix(it.Table, "s") != in.Type:
 		case by != "" && it.DeletedBy != by:
 		case in.Batch != "" && it.Batch != strings.TrimSpace(in.Batch):
 		case in.Reason != "" && !strings.Contains(strings.ToLower(it.Reason), strings.ToLower(in.Reason)):
 		case !since.IsZero() && it.at.Before(since):
+		case it.Dependent && !in.WithDependents:
+			deps = append(deps, it)
 		default:
 			out.Data = append(out.Data, it)
+			shown[it.Batch] = true
+		}
+	}
+	for _, d := range deps {
+		if shown[d.Batch] {
+			out.Dependents++ // counted under its root (3.9)
 		}
 	}
 	slices.SortStableFunc(out.Data, func(a, b Item) int { return b.at.Compare(a.at) })
@@ -190,7 +225,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		out := ShowOut{Data: itemOf(t), Fields: map[string]string{}}
 		def, _ := o.env.TableSchema(ctx, t.Row.Table)
 		for k, v := range t.Row.Fields {
-			if f, ok := def.Field(k); ok && f.Sensitive {
+			if f, ok := def.Field(k); ok && f.Sensitive && !in.ShowSensitive {
 				out.Fields[k] = "(sensitive, hidden)" // 3.11: protections stay in the trash
 				continue
 			}
@@ -204,6 +239,13 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 // restore is trash.restore (DELETION 3.3): the engine clears the delete
 // fields of the row and its batch dependents, or of the whole batch.
 func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
+	homes, err := homesOf(in)
+	if err != nil {
+		return ResultOut{}, err
+	}
+	if len(homes) > 0 {
+		ctx = engine.WithRestoreHome(ctx, homes...)
+	}
 	res, err := o.env.Restore(ctx, in.Target)
 	if err != nil {
 		return ResultOut{}, err
@@ -263,6 +305,46 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 	}
 	return resultOf("purged", res, false), nil
 }
+
+// homesOf turns the restore home flags into engine.RestoreHomes (4.2):
+// --parent and --no-parent (and --tasklist and --no-tasklist) exclude each
+// other; an id that does not parse is E_INVALID_ID.
+func homesOf(in TargetIn) ([]engine.RestoreHome, error) {
+	type flag struct {
+		name, field, id string
+		clear           bool
+	}
+	pairs := []flag{
+		{"parent", schema.FieldTaskParent, in.Parent, in.NoParent},
+		{"tasklist", fieldTasklist, in.Tasklist, in.NoTasklist},
+		{"mission", fieldMission, in.Mission, false},
+		{"plan", fieldPlan, in.Plan, false},
+	}
+	var out []engine.RestoreHome
+	for _, f := range pairs {
+		id := strings.TrimSpace(f.id)
+		switch {
+		case id != "" && f.clear:
+			return nil, errs.New(errs.InvalidInput, "trash restore: give --"+f.name+" or --no-"+f.name+", not both")
+		case f.clear:
+			out = append(out, engine.RestoreHome{Field: f.field, Clear: true})
+		case id != "":
+			pid, err := ids.ParseAny(id)
+			if err != nil {
+				return nil, errs.Wrap(errs.InvalidID, "trash restore: --"+f.name+" "+strconv.Quote(id)+" is not an id", err)
+			}
+			out = append(out, engine.RestoreHome{Field: f.field, To: pid})
+		}
+	}
+	return out, nil
+}
+
+// Pointer fields the restore home flags replace (schema/builtin_work.go).
+const (
+	fieldTasklist = "tasklist_id"
+	fieldMission  = "mission_id"
+	fieldPlan     = "plan_id"
+)
 
 // Actors is the optional Env upgrade --by uses to find an actor by handle,
 // display name or stable key (wire.App has it); without it --by takes an
@@ -328,7 +410,7 @@ func needsConfirm(msg string, args ...string) error {
 // itemOf is one listed row.
 func itemOf(t engine.Trashed) Item {
 	it := Item{ID: t.Row.ID.String(), Table: t.Row.Table.String(), Store: string(t.Store), Title: titleOf(t.Row),
-		DeletedBy: t.Info.By, Reason: t.Info.Reason, Batch: t.Info.Batch, at: t.Info.At}
+		DeletedBy: t.Info.By, Reason: t.Info.Reason, Batch: t.Info.Batch, Dependent: t.Dependent, at: t.Info.At}
 	if !t.Info.At.IsZero() {
 		it.DeletedAt = t.Info.At.Local().Format(timeLayout)
 	}
@@ -404,7 +486,11 @@ func (o ListOut) Text() string {
 	for _, it := range o.Data {
 		b.WriteString(it.line())
 	}
-	b.WriteString(strconv.Itoa(o.Count) + " rows in the trash\n")
+	b.WriteString(strconv.Itoa(o.Count) + " rows")
+	if o.Dependents > 0 {
+		b.WriteString(" (and " + strconv.Itoa(o.Dependents) + " dependents)")
+	}
+	b.WriteString(" in the trash\n")
 	return b.String()
 }
 
@@ -422,6 +508,9 @@ func (o ShowOut) Text() string {
 	var b strings.Builder
 	b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  in the trash\n")
 	b.WriteString("  deleted   " + o.Data.DeletedAt + " by " + o.Data.DeletedBy + " (store " + o.Data.Store + ")\n")
+	if o.Data.Dependent {
+		b.WriteString("  dependent of another row of its batch\n")
+	}
 	if o.Data.Reason != "" {
 		b.WriteString("  reason    " + o.Data.Reason + "\n")
 	}

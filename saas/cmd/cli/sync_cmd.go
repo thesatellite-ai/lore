@@ -383,13 +383,14 @@ func newSyncTrashCommand() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "trash",
-		Short: "List rows removed because their file disappeared",
+		Short: "Moved: lore trash --local (this spelling goes away in the next release)",
 		Long: `Rows deleted by sync (their file was deleted, reverted, or purged) are
-copied here first. Restore one with ` + "`lore sync trash restore <id>`" + `; the
+copied here first. Restore one with ` + "`lore trash restore --local <id>`" + `; the
 restored row is exported again like any edit.`,
-		Example: "  lore sync trash\n  lore sync trash restore 12",
+		Example: "  lore trash --local\n  lore trash restore --local 12",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			syncTrashPointer(cmd, "lore trash --local")
 			t, err := openSyncTarget(&f)
 			if err != nil {
 				return err
@@ -416,10 +417,11 @@ restored row is exported again like any edit.`,
 	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "JSON output")
 	restore := &cobra.Command{
 		Use:     "restore <trash-id>",
-		Short:   "Put a trashed row back (it is re-exported on the next pass)",
-		Example: "  lore sync trash restore 12",
+		Short:   "Moved: lore trash restore --local <n>",
+		Example: "  lore trash restore --local 12",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			syncTrashPointer(cmd, "lore trash restore --local "+args[0])
 			id, err := strconv.ParseInt(args[0], 10, 64)
 			if err != nil {
 				return errcodes.New(errcodes.InvalidInput, "trash id must be a number").WithCause(err)
@@ -438,7 +440,7 @@ restored row is exported again like any edit.`,
 					return errcodes.New(errcodes.InvalidInput, err.Error())
 				}
 				if errors.Is(err, lsync.ErrNotFound) {
-					return errcodes.New(errcodes.NotFound, err.Error()).WithHint("see `lore sync trash`")
+					return errcodes.New(errcodes.NotFound, err.Error()).WithHint("see `lore trash --local`")
 				}
 				return errcodes.New(errcodes.Internal, "restore from trash").WithCause(err)
 			}
@@ -453,6 +455,19 @@ restored row is exported again like any edit.`,
 	}
 	cmd.AddCommand(restore)
 	return cmd
+}
+
+// syncTrashCommandPath is the old spelling (DQ1, CLI_REFERENCE 2.15).
+const syncTrashCommandPath = "lore sync trash"
+
+// syncTrashPointer prints the one-release note of the old spelling (DQ1,
+// DELETION 502: `lore sync trash` keeps working with a line pointing to
+// `lore trash --local`). lore trash --local runs these same commands
+// (trash_local_cmd.go) and prints no note: cmd's path tells them apart.
+func syncTrashPointer(cmd *cobra.Command, now string) {
+	if strings.HasPrefix(cmd.CommandPath(), syncTrashCommandPath) {
+		fmt.Fprintf(os.Stderr, "note: %s is now %s; this spelling goes away in the next release\n", cmd.CommandPath(), now)
+	}
 }
 
 func newSyncPurgeCommand() *cobra.Command {
