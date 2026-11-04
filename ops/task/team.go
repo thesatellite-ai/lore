@@ -201,8 +201,8 @@ type (
 	Assignee = work.Assignee
 	// ClaimBoard is a read of the claims (work.ClaimBoard).
 	ClaimBoard = work.ClaimBoard
-	// TaskView is a task's STATE column input (work.TaskView).
-	TaskView = work.TaskView
+	// View is a task's STATE column input (work.TaskView).
+	View = work.TaskView
 )
 
 // WithTeam returns ctx carrying t for the task, mission and plan

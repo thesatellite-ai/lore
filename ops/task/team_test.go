@@ -60,7 +60,7 @@ func (b *fakeBoard) Claim(id string) (string, bool, bool) {
 	return c.holder, ok, c.active
 }
 
-func (b *fakeBoard) State(t opstask.TaskView) string { return b.states[t.ID] }
+func (b *fakeBoard) State(t opstask.View) string { return b.states[t.ID] }
 
 // listIDs runs task.list under ctx and returns the ids.
 func listIDs(t *testing.T, h *opstest.H, ctx context.Context, in string) []string {

@@ -556,7 +556,8 @@ func checkSearch(t *testing.T, s Spec, r Runner) {
 	if got := Text(res); got != lines.String() {
 		t.Errorf("search text %q, want %q", got, lines.String())
 	}
-	// no hits: v0.1.17 printed "(no matches)"; data is [] (v0.1.17 null).
+	// no hits: v0.1.17 printed "(no matches)" and "data": null (pinned for
+	// every noun by ops/content TestEmptyEnvelopesMatchV0117).
 	none := must(t, r, s.Noun+".search", `{"query":"zzzqqq"}`)
 	if got := Text(none); got != "(no matches)\n" {
 		t.Errorf("no hits text %q", got)

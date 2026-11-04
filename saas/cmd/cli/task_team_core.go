@@ -117,7 +117,7 @@ type claimBoard struct {
 func (b claimBoard) Me() string { return b.me }
 
 // State implements opstask.ClaimBoard: v0.1.17's taskState (§3.5 STATE).
-func (b claimBoard) State(t opstask.TaskView) string {
+func (b claimBoard) State(t opstask.View) string {
 	p := signals.ClaimPath(b.folder, t.ID)
 	sig, claimed := b.view.Board[p]
 	_, active := b.view.Active(p)

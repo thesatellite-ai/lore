@@ -595,7 +595,7 @@ func SearchTable(ctx context.Context, env Env, table row.Table, kind, query stri
 	if err != nil {
 		return SearchEnvelope{}, err
 	}
-	out := SearchEnvelope{SchemaVersion: SchemaVersion, Kind: kind, Query: query, Data: []SearchHit{}}
+	out := SearchEnvelope{SchemaVersion: SchemaVersion, Kind: kind, Query: query}
 	for _, h := range hits {
 		if len(out.Data) == limit {
 			break

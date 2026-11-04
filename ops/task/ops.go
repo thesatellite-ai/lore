@@ -986,7 +986,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 		return work.SearchEnvelope{}, err
 	}
 	now := time.Now()
-	out := work.SearchEnvelope{SchemaVersion: work.SchemaVersion, Kind: KindSearch, Query: in.Query, Data: []work.SearchHit{}}
+	out := work.SearchEnvelope{SchemaVersion: work.SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, h := range hits {
 		if len(out.Data) == limit {
 			break

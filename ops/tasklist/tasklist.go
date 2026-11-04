@@ -32,9 +32,11 @@ const (
 
 // Envelope kinds (v0.1.17 spelled the entity taskList).
 const (
-	KindList   = "taskList.list"
-	KindShow   = "taskList.show"
-	KindSearch = "taskList.search"
+	KindList = "taskList.list"
+	KindShow = "taskList.show"
+	// KindSearch is lowercase: v0.1.17's search envelope used the FTS entity name
+	// (tasklist), unlike its list/show envelopes.
+	KindSearch = "tasklist.search"
 )
 
 // Defaults and names.

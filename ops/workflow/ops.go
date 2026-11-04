@@ -164,7 +164,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	if err != nil {
 		return SearchOut{}, err
 	}
-	out := SearchOut{SchemaVersion: content.SchemaVersion, Kind: KindSearch, Query: in.Query, Data: []SearchHit{}}
+	out := SearchOut{SchemaVersion: content.SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, f := range found {
 		out.Data = append(out.Data, SearchHit{
 			ID: f.Row.ID.String(), Score: f.Score, Snippet: f.Snippet, Store: content.Source(f.Source),
