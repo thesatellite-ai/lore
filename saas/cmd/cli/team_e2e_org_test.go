@@ -326,8 +326,13 @@ func TestRecipe05_PersonalNotesSyncBetweenMachines(t *testing.T) {
 	server.WriteConfig(cfg)
 	sc := server.Clone(o.remote[slugOwnTools], "tools")
 	sc.MustLore("memory", "list").Says(t, "remember the VPN on devbox")
+	// STORE TARGETS (DECISIONS_LOG 18): `me` is one place, its root, shown in
+	// ALL your repos; the v0.1.17 per-company split (everywhere/ and <org>/)
+	// is gone, so the note written in a northwind repo also shows in this
+	// betalabs repo of the same person (it only ever renders into private,
+	// uncommitted files).
 	sb := server.Clone(o.remote[slugBetaAPI], "api")
-	sb.MustLore("memory", "list").Never(t, "remember the VPN on devbox")
+	sb.MustLore("memory", "list").Says(t, "remember the VPN on devbox")
 }
 
 // ---------------------------------------------------------------- F19 migration
