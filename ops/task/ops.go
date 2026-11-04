@@ -962,7 +962,15 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 			repo = r.String()
 		case errs.Has(rerr, errs.NotFound):
 			// the repo may exist only in another store's project: hits
-			// there are matched by name below (repoIn), never created
+			// there are matched by name below (repoScope), never created;
+			// a name no attached store has stays v0.1.17's refusal
+			found, ferr := o.repoNamedAnywhere(ctx, strings.TrimSpace(in.Repo))
+			if ferr != nil {
+				return work.SearchEnvelope{}, ferr
+			}
+			if !found {
+				return work.SearchEnvelope{}, rerr
+			}
 			repo = repoByName + in.Repo
 		default:
 			return work.SearchEnvelope{}, rerr
@@ -1143,4 +1151,21 @@ func (s repoScope) of(ctx context.Context, src store.Source, got string) string 
 	}
 	s.seen[got] = v
 	return v
+}
+
+// repoNamedAnywhere reports whether any attached store holds a live repos
+// row with mount name (or id) name.
+func (o ops) repoNamedAnywhere(ctx context.Context, name string) (bool, error) {
+	for _, src := range o.env.Stores() {
+		rows, err := o.env.List(ctx, src, schema.TableRepos)
+		if err != nil {
+			return false, err
+		}
+		for _, r := range rows {
+			if !r.Deleted && (work.Field(r, fieldMount) == name || r.ID.String() == name) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }

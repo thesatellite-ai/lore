@@ -15,7 +15,7 @@ import (
 // found-or-created it there); the same name twice gives the same repo; in
 // the repo store the repo must exist (E_NOT_FOUND, nothing created); a
 // search --repo <name> finds the store's task by that store's repos row
-// without creating anything, and a name no store has matches nothing.
+// without creating anything, and a name no store has is E_NOT_FOUND.
 func TestRepoInTargetStore(t *testing.T) {
 	h := opstest.WithStores(t, []string{"agency"})
 	repoOf := func(id string) string {
@@ -59,7 +59,6 @@ func TestRepoInTargetStore(t *testing.T) {
 	if got, want := search(`{"query":"backend","repo":"backend","no_inherit":true}`), sortedCopy([]string{first, second}); len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("search --repo backend: %v, want %v", got, want)
 	}
-	if got := search(`{"query":"backend","repo":"nowhere","no_inherit":true}`); len(got) != 0 {
-		t.Fatalf("search --repo nowhere: %v", got)
-	}
+	// a name no attached store has is still refused (v0.1.17)
+	h.Fails(opstask.OpSearch, `{"query":"backend","repo":"nowhere"}`, errs.NotFound)
 }
