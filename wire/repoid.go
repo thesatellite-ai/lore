@@ -137,3 +137,8 @@ func (a *App) CheckRepoAddresses(ctx context.Context) (opsinfra.AddressReport, e
 func (a *App) RepoAddressStatus(ctx context.Context) (opsinfra.AddressReport, error) {
 	return opsinfra.AddressStatus(ctx, a, a)
 }
+
+// RepoTop implements ops/scope.RepoTopper: the code repository's top
+// folder, so --scope dir:<path> checks the folder exists (CONTEXT_BUDGET
+// 6.2.3).
+func (a *App) RepoTop(ctx context.Context) (string, error) { return a.knownRepoTop(ctx) }
