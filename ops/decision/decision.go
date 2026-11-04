@@ -118,7 +118,7 @@ type AddOut struct {
 
 // Text prints v0.1.17's add line.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s — %s%s\n", o.ID, o.Title, kn.StoreLabel(o.Store))
+	return fmt.Sprintf("✓ %s — %s %s\n", o.ID, o.Title, kn.AddLabel(o.Store))
 }
 
 // WriteOut is the output of edit, archive, unarchive and delete.
@@ -288,7 +288,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, err
 	}
 	status := kn.Or(in.Status, schema.DecisionStatusAccepted)
-	if err := kn.OneOf(noun, "status", status, schema.DecisionStatuses()); err != nil {
+	if err = kn.OneOf(noun, "status", status, schema.DecisionStatuses()); err != nil {
 		return AddOut{}, err
 	}
 	superseded, err := value.TextOf(schema.DecisionStatusSuperseded)

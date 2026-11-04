@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
+
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 )
 
 // Human (op.Texter) forms of the memory outputs: v0.1.17's lines from
@@ -20,14 +21,7 @@ const listBodyCut = listBodyMax - len(ellipsis)
 // boundary so a multi-byte character is never split (v0.1.17 could emit
 // invalid UTF-8 there; that was a bug, not parity).
 func cutBody(body string) string {
-	if len(body) <= listBodyMax {
-		return body
-	}
-	n := listBodyCut
-	for n > 0 && !utf8.RuneStart(body[n]) {
-		n--
-	}
-	return body[:n] + ellipsis
+	return textcut.Cut(body, listBodyMax, listBodyCut)
 }
 
 // Text is the line(s) the op set in Human ("✓ <id> <verb>", and for add

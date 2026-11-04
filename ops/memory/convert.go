@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -75,10 +76,7 @@ const maxQuotedID = 48
 
 // quoteID renders a user-given id for an error, truncated.
 func quoteID(s string) string {
-	if len(s) > maxQuotedID {
-		s = s[:maxQuotedID] + ellipsis
-	}
-	return `"` + s + `"`
+	return `"` + textcut.Cut(s, maxQuotedID, maxQuotedID) + `"`
 }
 
 // field returns the text form of a row field ("" when absent or null).
@@ -163,14 +161,6 @@ func timePtr(r row.Row, name string) time.Time {
 		}
 	}
 	return time.Time{}
-}
-
-// timeText renders an audit time like a datetime field ("" when unset).
-func timeText(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return value.DateTimeFrom(t).String()
 }
 
 // writeOut is the output of a write.

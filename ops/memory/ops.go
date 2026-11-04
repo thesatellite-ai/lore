@@ -493,7 +493,9 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	if err != nil {
 		return SearchOut{}, err
 	}
-	out := SearchOut{SchemaVersion: SchemaVersion, Kind: KindSearch, Query: in.Query, Data: []SearchHit{}}
+	// Data stays nil when nothing matched: v0.1.17 printed "data": null
+	// (entitySearchEnvelope), and --json is byte-compatible with it.
+	out := SearchOut{SchemaVersion: SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, h := range hits {
 		if len(out.Data) == limit {
 			break

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -161,18 +162,13 @@ func Texts(n Noun, m map[string]string) (map[string]value.Value, error) {
 
 // Quote renders a user-given value for an error, truncated.
 func Quote(s string) string {
-	if len(s) > maxQuoted {
-		s = s[:maxQuoted] + ellipsis
-	}
-	return `"` + s + `"`
+	return `"` + textcut.Cut(s, maxQuoted, maxQuoted) + `"`
 }
 
-// Cut is v0.1.17's trunc: s cut to n characters, ending in "...".
+// Cut is v0.1.17's trunc: s cut to n bytes, ending in "...", never inside
+// a UTF-8 character (textcut.Cut; ASCII output is v0.1.17's bytes).
 func Cut(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n-len(ellipsis)] + ellipsis
+	return textcut.Cut(s, n, n-len(ellipsis))
 }
 
 // SourceKey is the v0.1.17 `_source` key of a row from a store other
@@ -330,4 +326,11 @@ func StoreLabel(src string) string {
 		return ""
 	}
 	return " [" + src + "]"
+}
+
+// AddLabel is the store label of v0.1.17's add line ("✓ <id> <label>"):
+// "[<store>]" for a row outside the repo store, "" for the repo, so the
+// caller's format keeps v0.1.17's separating space either way.
+func AddLabel(src string) string {
+	return strings.TrimPrefix(StoreLabel(src), " ")
 }

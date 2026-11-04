@@ -124,9 +124,11 @@ type AddOut struct {
 	Warnings []kn.Warning `json:"warnings,omitempty"`
 }
 
-// Text prints v0.1.17's add lines.
+// Text prints v0.1.17's add lines. v0.1.17 printed "✓ <id> <label>" with
+// an empty label for the repo, so the first line keeps that trailing space
+// (kn.AddLabel).
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s%s\n  scope: [%s] severity: %s\n", o.ID, kn.StoreLabel(o.Store), o.Scope, o.Severity)
+	return fmt.Sprintf("✓ %s %s\n  scope: [%s] severity: %s\n", o.ID, kn.AddLabel(o.Store), o.Scope, o.Severity)
 }
 
 // WriteOut is the output of edit, archive, unarchive and delete.
@@ -300,7 +302,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	sev := kn.Or(in.Severity, schema.RuleSeverityMust)
 	act := kn.Or(in.Activation, schema.RuleActivationAlways)
-	if err := check(sev, act); err != nil {
+	if err = check(sev, act); err != nil {
 		return AddOut{}, err
 	}
 	src, w, err := kn.Add(ctx, o.env, noun, kn.Create{

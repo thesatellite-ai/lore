@@ -281,7 +281,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, err
 	}
 	severity := kn.Or(in.Severity, schema.HotfixSeverityHigh)
-	if err := kn.OneOf(noun, "severity", severity, schema.HotfixSeverities()); err != nil {
+	if err = kn.OneOf(noun, "severity", severity, schema.HotfixSeverities()); err != nil {
 		return AddOut{}, err
 	}
 	src, w, err := kn.Add(ctx, o.env, noun, kn.Create{
