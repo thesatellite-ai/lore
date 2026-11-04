@@ -17,6 +17,7 @@ import (
 	"saas/pkg/aicoder/mergewatch"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
+	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/schema"
@@ -265,4 +266,43 @@ Example:
 	bindCommonFlags(cmd, &f)
 	bindFromFlag(cmd, &from)
 	return cmd
+}
+
+// taskListMergedCheck is the merged check `lore task list` runs before it
+// lists (v0.1.17's runTaskList: the lazy check for this checkout's repo,
+// then the linked store group's). task list is a core command now, so the
+// check is attached to it at mount time (wrapTaskListMergedCheck); without
+// it a squash merge with a Lore-Task trailer or a merge found by ancestry
+// was never recorded by the view that shows it (F9, E7). A read-only run
+// (--read-only, LORE_READ_ONLY=1) records nothing. Never fails the command.
+func taskListMergedCheck(ctx context.Context, readOnly bool) {
+	if readOnly || os.Getenv(envReadOnly) == envValueOn {
+		return
+	}
+	var f commonFlags
+	rctx, client, err := resolveContext(&f)
+	if err != nil {
+		return
+	}
+	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	repoID := ""
+	if err == nil {
+		repoID, err = resolveRepoID(ctx, client, projectID, rctx.RepoMount)
+	}
+	_ = client.Close() // the check reads the core from here on; a close error is not actionable
+	if err == nil {
+		lazyMergedCheck(ctx, projectID, repoID)
+	}
+	groupMergedCheck(ctx)
+}
+
+// wrapTaskListMergedCheck runs taskListMergedCheck before the generated
+// `lore task list` command (c).
+func wrapTaskListMergedCheck(c *cobra.Command) {
+	run := c.RunE
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		ro, _ := cmd.Flags().GetBool(constants.FlagReadOnly) // absent flag reads false
+		taskListMergedCheck(cmd.Context(), ro)
+		return run(cmd, args)
+	}
 }

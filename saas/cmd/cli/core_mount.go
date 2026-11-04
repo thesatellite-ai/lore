@@ -129,6 +129,9 @@ func mountCore(root *cobra.Command) {
 				if cli.Generated(c) && c.RunE != nil {
 					addCompatFlags(c, runner)
 					wrapCoreNotFound(c, runner)
+					if noun == opstask.Noun && c.Name() == op.VerbList {
+						wrapTaskListMergedCheck(c)
+					}
 				}
 			}
 		}
