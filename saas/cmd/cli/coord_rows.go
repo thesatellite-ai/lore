@@ -116,7 +116,7 @@ func openCoordTarget(ctx context.Context, w *coordWorld, id string) (coordTarget
 	}
 	if id != "" {
 		if repoT, err := openRepoTarget(ctx, w); err == nil {
-			_, found, gerr := repoT.Rows.Get(ctx, id)
+			found, gerr := repoOwnsRow(ctx, repoT, id)
 			if gerr == nil && found {
 				if w.Role != orgresolve.RoleClient {
 					return repoT, nil
@@ -127,6 +127,20 @@ func openCoordTarget(ctx context.Context, w *coordWorld, id string) (coordTarget
 		}
 	}
 	return openStoreTarget(ctx, w)
+}
+
+// repoOwnsRow reports whether id is one of this repo's own rows. A core
+// table's row is read through the core, which also answers from the linked
+// store; only a row in the repo's own store counts (coreRepoOwns).
+func repoOwnsRow(ctx context.Context, repoT coordTarget, id string) (bool, error) {
+	_, found, err := repoT.Rows.Get(ctx, id)
+	if err != nil || !found {
+		return false, err
+	}
+	if _, isLive := repoT.Rows.(*liveRows); isLive && coreRowTable(tableOf(id)) {
+		return coreRepoOwns(ctx, tableOf(id), id)
+	}
+	return true, nil
 }
 
 // openRepoTarget is the repo's own live ref + signals ref.

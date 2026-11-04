@@ -122,10 +122,31 @@ func coreDoc(ctx context.Context, table, id string) (coord.Doc, bool, error) {
 	return d, true, nil
 }
 
+// coreRepoOwns reports whether the core row table/id lives in this repo's
+// own store. coreDoc answers from any attached store (the linked org store
+// included), so "is this one of the repo's own rows?" (openCoordTarget's
+// repo-or-store decision, D8) must ask for the source: a store task read
+// through the repo would be coordinated as a client-repo task, its claim log
+// going to a linked row the store's own readers never see.
+func coreRepoOwns(ctx context.Context, table, id string) (bool, error) {
+	if coreApp == nil {
+		return false, errcodes.New(errcodes.Internal, "the core is not mounted")
+	}
+	src, _, found, err := coreLocate(ctx, table, id)
+	if err != nil || !found {
+		return false, err
+	}
+	return src == store.SourceRepo, nil
+}
+
 // coreLocate finds one row and the store holding it. A row present in
 // several stores under the same id (an actor's natural id is the same in
 // the repo and in the org folder) is the repo store's copy: coordination
-// writes a repo task's supporting rows (an owner projection) there.
+// writes a repo task's supporting rows (an owner projection) there. When
+// the repo has no live copy (an agent started in its own clone is on the
+// org roster and in that clone's repo only, never in this repo), the first
+// attached store, in attach order, holding a live copy answers: an
+// ambiguity the repo cannot settle must not read as "unknown id".
 // found=false for an unknown id, a non-id or a tombstone.
 func coreLocate(ctx context.Context, table, id string) (store.Source, row.Row, bool, error) {
 	aid, err := ids.ParseAny(id)
@@ -137,6 +158,9 @@ func coreLocate(ctx context.Context, table, id string) (store.Source, row.Row, b
 	if errs.Has(err, errs.AmbiguousID) {
 		ref.Store = store.SourceRepo
 		src, r, err = coreApp.Get(ctx, ref)
+		if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+			src, r, err = coreLocateInStores(ctx, ref)
+		}
 	}
 	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
 		return "", row.Row{}, false, nil
@@ -145,6 +169,24 @@ func coreLocate(ctx context.Context, table, id string) (store.Source, row.Row, b
 		return "", row.Row{}, false, coreErr(err)
 	}
 	return src, r, true, nil
+}
+
+// coreLocateInStores reads ref from each attached store other than the
+// repo, in attach order, and returns the first live copy; NotFound when no
+// store has one.
+func coreLocateInStores(ctx context.Context, ref engine.Ref) (store.Source, row.Row, error) {
+	for _, s := range coreApp.Stores() {
+		if s == store.SourceRepo {
+			continue
+		}
+		ref.Store = s
+		src, r, err := coreApp.Get(ctx, ref)
+		if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+			continue
+		}
+		return src, r, err
+	}
+	return "", row.Row{}, errs.New(errs.NotFound, "no live copy of "+ref.ID.String())
 }
 
 // coreDocs lists the live rows of table in every attached store.
@@ -224,6 +266,24 @@ func corePatchDoc(ctx context.Context, table, id string, doc coord.Doc) error {
 	return coreWrite(ctx, table, id, doc, false)
 }
 
+// newRowTarget is the store a new staged row is created in. A row that
+// points at another row (a note: a comment on a task) goes where that row
+// lives, so a note on a store task is written into the store and never
+// into the repo, whose pointer to an internal row F15 refuses (and which
+// the store's readers would never see). Anything else, or an entity the
+// core cannot place, goes to the default target ("").
+func newRowTarget(ctx context.Context, doc coord.Doc) store.Source {
+	et, eid := doc.Str(schema.FieldEntityTable), doc.Str(schema.FieldEntityID)
+	if et == "" || eid == "" {
+		return ""
+	}
+	src, _, found, err := coreLocate(ctx, et, eid)
+	if err != nil || !found {
+		return ""
+	}
+	return src
+}
+
 // coreWrite is coreWriteDoc (whole) or corePatchDoc.
 func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool) error {
 	def, ok := coreTableDef(table)
@@ -281,7 +341,7 @@ func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool)
 				delete(patch, fieldCreatedByActor)
 			}
 		}
-		_, err = coreApp.CreateWithID(ctx, store.Source(""), row.Table(table), aid, patch)
+		_, err = coreApp.CreateWithID(ctx, newRowTarget(ctx, doc), row.Table(table), aid, patch)
 		return coreErr(err)
 	}
 	if len(patch) == 0 {
