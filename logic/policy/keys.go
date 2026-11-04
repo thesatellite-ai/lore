@@ -38,6 +38,8 @@ const (
 	// KeyTasksAutoWatch: creators and assignees watch a task by default
 	// (TASK 14.4); false turns that off.
 	KeyTasksAutoWatch Key = "tasks.auto_watch"
+	// KeyTasksWeekEnd is the day "eow" / "end of week" means in date phrases (TASK 12.1).
+	KeyTasksWeekEnd Key = "tasks.week_end"
 	// Time tracking keys (TIME_TRACKING_DESIGN 14), in minutes: a limit,
 	// the smaller is stricter (flags more, merges less, allows less).
 	// OV7-1: integers in minutes, the policy layer has no duration shape.
@@ -202,6 +204,7 @@ func Keys() []KeyDef {
 		// OV12-2: auto watching is the flag's strict value (more people told).
 		{Key: KeyTasksAutoWatch, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(true),
 			Doc: "creators and assignees watch a task by default (TASK 14.4)"},
+		{Key: KeyTasksWeekEnd, Shape: ShapeRank, Choices: []string{"fri", "sat", "sun", "thu", "mon", "tue", "wed"}, Default: mustText("fri"), Doc: "the day eow / end of week means in date phrases (TASK 12.1)"},
 		{Key: KeyTimeLongSpan, Shape: ShapeLimit, Default: value.Int(defaultTimeLongSpanMin), Doc: "minutes after which a closed auto time span is flagged long_span; never capped (TQ2)"},
 		{Key: KeyTimeCoalesceGap, Shape: ShapeLimit, Default: value.Int(defaultTimeCoalesceGapMin), Doc: "minutes: auto spans of one worker closer than this are coalesced at write (TQ4)"},
 		{Key: KeyTimeMaxEntry, Shape: ShapeLimit, Ceiling: defaultTimeMaxEntryMin, Default: value.Int(defaultTimeMaxEntryMin), Doc: "minutes: the longest manual time entry (D13, max 24h)"},

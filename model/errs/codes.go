@@ -102,6 +102,8 @@ const (
 	TreeDepth       Code = "E_TREE_DEPTH"
 	HasOpenChildren Code = "E_HAS_OPEN_CHILDREN"
 	Date            Code = "E_DATE"
+	Recur           Code = "E_RECUR"
+	Template        Code = "E_TEMPLATE"
 	OpenItems       Code = "E_OPEN_ITEMS"
 	OldLore         Code = "E_OLD_LORE"
 	ConfigInvalid   Code = "E_CONFIG_INVALID"
@@ -266,6 +268,8 @@ var table = map[Code]entry{
 	TreeDepth:             {class: ClassRefused, desc: "the sub-task tree would be deeper than tasks.max_depth"},
 	HasOpenChildren:       {class: ClassRefused, desc: "claim of a parent task with open sub-tasks without --coordinate"},
 	Date:                  {class: ClassBadInput, desc: "a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days"},
+	Recur:                 {class: ClassBadInput, desc: "a recurrence rule lore does not understand; give e.g. every week, every month on last, every! 3 days, … until 2027-03-31"},
+	Template:              {class: ClassRefused, desc: "a task template is invalid or its arguments are missing or unknown"},
 	OpenItems:             {class: ClassRefused, desc: "done of a task with unticked checklist items without --tick-all or --force (TSQ14)"},
 	DurationBad:           {class: ClassBadInput, desc: "a duration lore does not accept (0, negative, a day unit); give e.g. 45m, 1h30m, 1.5h"},
 	TimeTooLong:           {class: ClassBadInput, desc: "a manual time entry over time.max_entry (default 24h); split it into one entry per day"},

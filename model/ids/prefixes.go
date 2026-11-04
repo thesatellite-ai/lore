@@ -173,6 +173,11 @@ const (
 	// checklist list (TASK_SYSTEM_DESIGN 7.2); items are not rows, the id
 	// is the merge key of the list (StrategyListByID).
 	PrefixChecklistItem Prefix = "chk"
+	// PrefixRecurSeries marks one recurrence series (TASK 10.3): not a row;
+	// the id lives in a task's recur.series and derives the instances' ids.
+	PrefixRecurSeries Prefix = "rcs"
+	// PrefixTaskTemplate marks a task_templates settings row (TASK 11.2).
+	PrefixTaskTemplate Prefix = "ttp"
 	// PrefixBatch marks one bulk action (a bulk delete, an import). XQ1:
 	// every bulk action of every noun uses this one prefix, and `lore
 	// batch show` reports the kind (task, meta, resource, delete, import),
@@ -265,6 +270,8 @@ var allPrefixes = [...]Prefix{
 	PrefixResource,
 	PrefixTimeEntry,
 	PrefixChecklistItem,
+	PrefixRecurSeries,
+	PrefixTaskTemplate,
 	PrefixBatch,
 }
 
