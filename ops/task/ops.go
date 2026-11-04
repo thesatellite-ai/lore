@@ -1,0 +1,921 @@
+// Package task defines the `task` noun's operations (STORE_SERVER_SPEC 9.1,
+// layer L5) on the new core: add, list, show, edit, start, done, cancel,
+// delete, search and the triage / someday / deferred views. Each is an
+// op.Define spec with typed input and output; the CLI commands, the REST
+// routes and the generated reference are built from these specs.
+//
+// Flag spellings follow v0.1.17 `lore task …`. The coordination verbs
+// (claim, next, heartbeat, release, revoke, reassign, note, merged) stay
+// on the signals machinery of the old binary (TSQ / p4 brief); done and
+// cancel here are the unclaimed path. --live/--no-live are gone (rows are
+// files of a store; there is no live ref on the core), as for memories.
+package task
+
+import (
+	"context"
+	"encoding/json"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/work"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// Operation names. The CLI path and REST route derive from them
+// (op/route.go): task.add → `lore task add`, POST /v1/tasks.
+const (
+	// Noun is the CLI noun of every task operation (`lore task …`).
+	Noun       = "task"
+	OpAdd      = "task.add"
+	OpList     = "task.list"
+	OpShow     = "task.show"
+	OpEdit     = "task.edit"
+	OpStart    = "task.start"
+	OpDone     = "task.done"
+	OpCancel   = "task.cancel"
+	OpDelete   = "task.delete"
+	OpSearch   = "task.search"
+	OpTriage   = "task.triage"
+	OpSomeday  = "task.someday"
+	OpDeferred = "task.deferred"
+)
+
+// Task field names (schema.TableTasks).
+const (
+	fieldPriority   = "priority"
+	fieldCommitment = "commitment"
+	fieldDeferred   = "deferred_until"
+	fieldDue        = "due_at"
+	fieldStarted    = "started_at"
+	fieldAssigned   = "assigned_to_actor_id"
+	fieldBlockedBy  = "blocked_by"
+	fieldTimebox    = "timebox_seconds"
+	fieldRole       = "role"
+	fieldDoneBy     = "done_by"
+	fieldDoneCommit = "done_commit"
+	fieldDonePR     = "done_pr"
+	fieldStatusStr  = "status_str"
+	fieldDisplay    = "display_name"
+)
+
+// Defaults (v0.1.17 flag and schema defaults).
+const (
+	DefaultPriority   = schema.TaskPriorityMedium
+	DefaultCommitment = schema.TaskCommitmentAccepted
+	// DefaultTasklistTitle names the list a task joins when --tasklist is
+	// left out (created on demand, status_str DefaultTasklistStatus).
+	DefaultTasklistTitle  = "default"
+	DefaultTasklistStatus = "active"
+	// searchFetch is how many hits search asks the caches for before its
+	// filters; --limit is applied after them.
+	searchFetch = work.MaxSearchLimit
+)
+
+// Dependency modes of --after (dbent/schema DependencyUntil).
+const (
+	untilDone   = "done"
+	untilMerged = "merged"
+)
+
+// Memory fields a --lesson writes (schema memories; v0.1.17
+// addLinkedMemory: source_kind lesson, source_ref the task id).
+const (
+	lessonSourceKind = "lesson"
+	lessonKind       = schema.MemoryKindRetrieved
+	lessonTrust      = 0.5
+)
+
+// table is the tasks table.
+const table row.Table = schema.TableTasks
+
+// Actorer is the optional Env upgrade task.done uses to record done_by
+// (wire.App has it). Without it done_by is left empty and the row's
+// envelope updated_by names the same actor.
+type Actorer interface {
+	Actor(ctx context.Context) (ids.ID[ids.Actor], error)
+}
+
+// Ops returns every task operation bound to env, for op.NewRegistry.
+func Ops(env work.Env) []op.Entry {
+	o := ops{env: env}
+	return []op.Entry{
+		op.Define(op.Spec{
+			Name: OpAdd, Summary: "Add a new task",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.Unsupported),
+			Confirm: op.ConfirmRule{MayAsk: true},
+			Examples: []op.Example{
+				{Title: "add a task", CLI: `lore task add "Fix the login redirect" --priority high`, Want: "tsk_"},
+				{Title: "a proposed task, as JSON", CLI: `lore task add "Try a cache" --commitment proposed --json`, Want: `"task.show"`},
+			},
+		}, o.add),
+		op.Define(op.Spec{
+			Name: OpList, Summary: "List tasks",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: append(slices.Clone(work.ReadErrors), errs.Unsupported),
+			Examples: []op.Example{{Title: "list as JSON", CLI: "lore task list --json", Want: `"data"`}},
+		}, o.list),
+		op.Define(op.Spec{
+			Name: OpShow, Summary: "Show task details",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
+		}, o.show),
+		op.Define(op.Spec{
+			Name: OpEdit, Summary: "Edit task fields (only flags you pass are applied)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.Unsupported, errs.Cycle),
+			Confirm: op.ConfirmRule{MayAsk: true},
+		}, o.edit),
+		op.Define(op.Spec{
+			Name: OpStart, Summary: "Mark task as in_progress",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
+		}, o.start),
+		op.Define(op.Spec{
+			Name: OpDone, Summary: "Mark a task done (with the code that finished it)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
+			Confirm:  op.ConfirmRule{MayAsk: true},
+			Examples: []op.Example{{Title: "done with a lesson", CLI: `lore task done tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"`, Want: "done"}},
+		}, o.done),
+		op.Define(op.Spec{
+			Name: OpCancel, Summary: "Cancel a task",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
+		}, o.cancel),
+		op.Define(op.Spec{
+			Name: OpDelete, Summary: "Delete a task (a tombstone is kept so old copies never return)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
+			Confirm:  op.ConfirmRule{Always: true},
+			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task delete tsk_<id> --yes", Want: "deleted"}},
+		}, o.delete),
+		op.Define(op.Spec{
+			Name: OpSearch, Summary: "Full-text search across task title + body (BM25 ranked)",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: work.SearchErrors,
+			Examples: []op.Example{{Title: "search as JSON", CLI: `lore task search "login" --json`, Want: `"task.search"`}},
+		}, o.search),
+		op.Define(op.Spec{
+			Name: OpTriage, Summary: "Show proposed tasks (agent-suggested, not yet committed)",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
+		}, o.triage),
+		op.Define(op.Spec{
+			Name: OpSomeday, Summary: "Show someday/maybe tasks (parking lot, no commitment)",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
+		}, o.someday),
+		op.Define(op.Spec{
+			Name: OpDeferred, Summary: "Show deferred tasks (snoozed; deferred_until in the future)",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
+		}, o.deferred),
+	}
+}
+
+// ops binds the run functions to one Env.
+type ops struct{ env work.Env }
+
+// notYet refuses a v0.1.17 flag whose feature has no home on the core yet.
+func notYet(flag, hint string) error {
+	return errs.New(errs.Unsupported, "task: --"+flag+" is not on the new core yet").WithHint(hint)
+}
+
+// taskID parses a task id argument.
+func taskID(s string) (ids.AnyID, error) { return work.ParseID(Noun, ids.PrefixTask, s) }
+
+// add creates one task in the target store (--to, else the default).
+func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
+	switch {
+	case in.Assign != "":
+		return AddOut{}, notYet("assign", "assign a person by actor id: --assigned-to act_…")
+	case len(in.Ref) > 0:
+		return AddOut{}, notYet("ref", "link the rows after adding the task: `lore link add`")
+	}
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
+		return AddOut{}, errs.New(errs.InvalidInput, "task add: the title is empty").WithHint(`lore task add "<title>"`)
+	}
+	project, err := work.Project(ctx, o.env, Noun, in.Project)
+	if err != nil {
+		return AddOut{}, err
+	}
+	priority := orDefault(in.Priority, DefaultPriority)
+	if err := work.OneOf(Noun, "priority", priority, schema.TaskPriorities()); err != nil {
+		return AddOut{}, err
+	}
+	commitment := orDefault(in.Commitment, DefaultCommitment)
+	if err := work.OneOf(Noun, "commitment", commitment, schema.TaskCommitments()); err != nil {
+		return AddOut{}, err
+	}
+	if in.Key != "" {
+		if s, ok, kerr := o.byKey(ctx, project.String(), in.Mission, in.Key); kerr != nil {
+			return AddOut{}, kerr
+		} else if ok {
+			out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(s.Source, s.Row), Store: string(s.Source)}
+			out.Human = work.Success + " " + s.Row.ID.String() + " — " + work.Field(s.Row, work.FieldTitle) + " (already added with --key " + in.Key + ")\n"
+			return out, nil
+		}
+	}
+	fields, err := work.Texts(Noun, map[string]string{
+		work.FieldTitle: title, work.FieldBody: in.Body, work.FieldStatus: schema.TaskStatusTodo,
+		fieldPriority: priority, fieldCommitment: commitment, fieldRole: in.Role, work.FieldKey: in.Key,
+	})
+	if err != nil {
+		return AddOut{}, err
+	}
+	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
+		return AddOut{}, err
+	}
+	repoID := ""
+	if in.Repo != "" {
+		repo, rerr := o.env.RepoID(ctx, in.Repo)
+		if rerr != nil {
+			return AddOut{}, rerr
+		}
+		repoID = repo.String()
+		if fields[work.FieldRepo], err = value.RefOf(repo.Any()); err != nil {
+			return AddOut{}, err
+		}
+	}
+	if err := setDates(fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
+		return AddOut{}, err
+	}
+	if in.Tasklist == "" {
+		if in.Tasklist, err = o.defaultTasklist(ctx, in.To, project); err != nil {
+			return AddOut{}, err
+		}
+	}
+	if err := setRefs(fields, []refFlag{
+		{work.FieldMission, "mission", ids.PrefixMission, in.Mission},
+		{work.FieldTasklist, "tasklist", ids.PrefixTaskList, in.Tasklist},
+		{work.FieldPlan, "plan", ids.PrefixPlan, in.Plan},
+		{fieldAssigned, "assigned-to", ids.PrefixActor, in.AssignedTo},
+		{work.FieldCreatedBy, "created-by", ids.PrefixActor, in.CreatedBy},
+	}); err != nil {
+		return AddOut{}, err
+	}
+	if len(in.After) > 0 {
+		deps, derr := o.parseAfter(ctx, in.After, repoID)
+		if derr != nil {
+			return AddOut{}, derr
+		}
+		if fields[fieldBlockedBy], err = depsValue(deps); err != nil {
+			return AddOut{}, err
+		}
+	}
+	if in.Timebox > 0 {
+		fields[fieldTimebox] = value.Int(int64(in.Timebox / time.Second))
+	}
+	src, w, err := work.Create(ctx, o.env, in.To, table, fields)
+	if err != nil {
+		return AddOut{}, err
+	}
+	out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(src, w.Row), Store: string(src)}
+	for _, x := range w.Warnings {
+		out.Warnings = append(out.Warnings, Warning{Code: string(x.Code), Field: x.Field, Message: x.Message})
+	}
+	label := ""
+	if src != "" && src != store.SourceRepo {
+		label = " → " + string(src)
+	}
+	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + " [" + priority + "]" + label + "\n"
+	return out, nil
+}
+
+// Text implements op.Texter.
+func (o AddOut) Text() string { return o.Human }
+
+// orDefault returns s, or def when s is empty.
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
+
+// refFlag is one id flag that sets a ref field.
+type refFlag struct {
+	field, flag string
+	prefix      ids.Prefix
+	raw         string
+}
+
+// setRefs sets each given ref flag's field.
+func setRefs(fields map[string]value.Value, flags []refFlag) error {
+	for _, f := range flags {
+		v, err := work.RefTo(Noun, f.flag, f.prefix, f.raw)
+		if err != nil {
+			return err
+		}
+		if v != nil {
+			fields[f.field] = v
+		}
+	}
+	return nil
+}
+
+// setDates sets each given YYYY-MM-DD flag's field.
+func setDates(fields map[string]value.Value, dates map[string]string) error {
+	for _, name := range []string{fieldDeferred, fieldDue} {
+		raw := dates[name]
+		if raw == "" {
+			continue
+		}
+		flag := "due"
+		if name == fieldDeferred {
+			flag = "defer-until"
+		}
+		v, err := work.Date(flag, raw)
+		if err != nil {
+			return err
+		}
+		fields[name] = v
+	}
+	return nil
+}
+
+// byKey finds the live task added with --key in the same project and
+// mission (v0.1.17 findByKey).
+func (o ops) byKey(ctx context.Context, project, mission, key string) (work.Sourced, bool, error) {
+	all, err := work.ListAll(ctx, o.env, table, "")
+	if err != nil {
+		return work.Sourced{}, false, err
+	}
+	for _, s := range all {
+		if work.Field(s.Row, work.FieldKey) == key && work.Field(s.Row, work.FieldProject) == project &&
+			work.Field(s.Row, work.FieldMission) == strings.TrimSpace(mission) {
+			return s, true, nil
+		}
+	}
+	return work.Sourced{}, false, nil
+}
+
+// defaultTasklist returns the project's "default" task list in the target
+// store, creating it on demand (v0.1.17 defaultTasklist).
+func (o ops) defaultTasklist(ctx context.Context, target string, project ids.ID[ids.Project]) (string, error) {
+	src := store.Source(target)
+	if src == "" {
+		src = store.SourceRepo
+	}
+	rows, err := o.env.List(ctx, src, schema.TableTasklists)
+	if err != nil {
+		return "", err
+	}
+	slices.SortFunc(rows, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
+	for _, r := range rows {
+		if !r.Deleted && work.Field(r, work.FieldProject) == project.String() && work.Field(r, work.FieldTitle) == DefaultTasklistTitle {
+			return r.ID.String(), nil
+		}
+	}
+	fields, err := work.Texts(Noun, map[string]string{work.FieldTitle: DefaultTasklistTitle, fieldStatusStr: DefaultTasklistStatus})
+	if err != nil {
+		return "", err
+	}
+	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
+		return "", err
+	}
+	w, err := o.env.Create(ctx, store.Source(target), schema.TableTasklists, fields)
+	if err != nil {
+		return "", err
+	}
+	return w.Row.ID.String(), nil
+}
+
+// dep is one --after edge (dbent/schema TaskDependency).
+type dep struct {
+	TaskID    string `json:"task_id"`
+	ProjectID string `json:"project_id,omitempty"`
+	Until     string `json:"until"`
+}
+
+// parseAfter resolves --after entries: each names an existing task; the
+// mode defaults to done in the same repo, merged across repos.
+func (o ops) parseAfter(ctx context.Context, entries []string, repoID string) ([]dep, error) {
+	var out []dep
+	seen := map[string]bool{}
+	for _, raw := range entries {
+		for _, e := range strings.Split(raw, ",") {
+			e = strings.TrimSpace(e)
+			if e == "" {
+				continue
+			}
+			until := ""
+			for _, mode := range []string{untilDone, untilMerged} {
+				if s, ok := strings.CutSuffix(e, ":"+mode); ok {
+					e, until = s, mode
+				}
+			}
+			id, err := taskID(e)
+			if err != nil {
+				return nil, err
+			}
+			_, up, err := work.Get(ctx, o.env, Noun, table, id)
+			if err != nil {
+				return nil, errs.Wrap(errs.NotFound, "--after "+e+": no such task", err)
+			}
+			if until == "" {
+				until = untilDone
+				if work.Field(up, work.FieldRepo) != repoID {
+					until = untilMerged
+				}
+			}
+			if seen[e] {
+				continue
+			}
+			seen[e] = true
+			out = append(out, dep{TaskID: e, Until: until})
+		}
+	}
+	return out, nil
+}
+
+// depsValue is the blocked_by JSON of deps (Null when empty: cleared).
+func depsValue(deps []dep) (value.Value, error) {
+	if len(deps) == 0 {
+		return value.Null{}, nil
+	}
+	raw, err := json.Marshal(deps)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "task: encode --after", err)
+	}
+	return value.JSONOf(raw)
+}
+
+// depsOf is a row's blocked_by edges (nil when absent or unreadable).
+func depsOf(r row.Row) []dep {
+	j, ok := r.Fields[fieldBlockedBy].(value.JSON)
+	if !ok || j.IsZero() {
+		return nil
+	}
+	var out []dep
+	if err := json.Unmarshal(j.Raw(), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// checkNoCycle refuses edges that would close a dependency cycle
+// (E_CYCLE): id waits on deps, so no dep may (transitively) wait on id.
+func (o ops) checkNoCycle(ctx context.Context, id string, deps []dep) error {
+	all, err := work.ListAll(ctx, o.env, table, "")
+	if err != nil {
+		return err
+	}
+	after := map[string][]string{}
+	for _, s := range all {
+		for _, d := range depsOf(s.Row) {
+			after[s.Row.ID.String()] = append(after[s.Row.ID.String()], d.TaskID)
+		}
+	}
+	for _, d := range deps {
+		after[id] = append(after[id], d.TaskID)
+	}
+	// Walk from each new dep; reaching id is a cycle.
+	for _, d := range deps {
+		path := []string{id, d.TaskID}
+		if cyc := walk(after, d.TaskID, id, map[string]bool{}, path); cyc != nil {
+			return errs.New(errs.Cycle, "dependency cycle: "+strings.Join(cyc, " → ")).
+				WithHint("drop one --after edge; a task may not wait on itself, even through others")
+		}
+	}
+	return nil
+}
+
+// walk is a depth-first search from at for target; it returns the path
+// when found.
+func walk(after map[string][]string, at, target string, seen map[string]bool, path []string) []string {
+	if at == target {
+		return path
+	}
+	if seen[at] {
+		return nil
+	}
+	seen[at] = true
+	for _, next := range after[at] {
+		if cyc := walk(after, next, target, seen, append(slices.Clone(path), next)); cyc != nil {
+			return cyc
+		}
+	}
+	return nil
+}
+
+// active is v0.1.17's ActiveTask predicate: open, accepted, not deferred.
+func active(r row.Row, now time.Time) bool {
+	return open(r) && work.Field(r, fieldCommitment) == schema.TaskCommitmentAccepted && !deferred(r, now)
+}
+
+// open reports a task not done or cancelled.
+func open(r row.Row) bool {
+	s := work.Field(r, work.FieldStatus)
+	return s != schema.TaskStatusDone && s != schema.TaskStatusCancelled
+}
+
+// deferred reports a task snoozed past now.
+func deferred(r row.Row, now time.Time) bool {
+	t := work.Time(r, fieldDeferred)
+	return !t.IsZero() && t.After(now)
+}
+
+// list returns the tasks of every attached store passing v0.1.17's
+// filters (default: open, accepted, not deferred).
+func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	switch {
+	case in.Mine:
+		return ListOut{}, notYet("mine", "filter by assignee: --assignee act_…")
+	case in.ClaimedBy != "":
+		return ListOut{}, notYet("claimed-by", "claims live on the signals ref; see `lore task show <id> --signals` on v0.1.17")
+	}
+	if in.Commitment != "" {
+		if err := work.OneOf(Noun, "commitment", in.Commitment, schema.TaskCommitments()); err != nil {
+			return ListOut{}, err
+		}
+	}
+	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
+	if err != nil {
+		return ListOut{}, err
+	}
+	allowed := []string{schema.TaskCommitmentAccepted}
+	if in.IncludeProposed {
+		allowed = append(allowed, schema.TaskCommitmentProposed)
+	}
+	if in.IncludeSomeday {
+		allowed = append(allowed, schema.TaskCommitmentSomeday)
+	}
+	now := time.Now()
+	return o.view(ctx, in.Store, project, func(r row.Row) bool {
+		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
+		switch {
+		case in.Commitment != "" && commit != in.Commitment,
+			in.Status != "" && status != in.Status,
+			in.Mission != "" && work.Field(r, work.FieldMission) != in.Mission,
+			in.Assignee != "" && work.Field(r, fieldAssigned) != in.Assignee:
+			return false
+		case in.All:
+			return true
+		case in.Status == "" && !open(r),
+			in.Commitment == "" && !slices.Contains(allowed, commit),
+			!in.IncludeDeferred && deferred(r, now):
+			return false
+		}
+		return true
+	})
+}
+
+// view lists the tasks keep accepts, in v0.1.17's envelope.
+func (o ops) view(ctx context.Context, only, project string, keep func(row.Row) bool) (ListOut, error) {
+	all, err := work.ListAll(ctx, o.env, table, only)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Brief{}}
+	for _, s := range all {
+		if (project != "" && work.Field(s.Row, work.FieldProject) != project) || !keep(s.Row) {
+			continue
+		}
+		out.Data = append(out.Data, BriefOf(s.Source, s.Row))
+	}
+	out.Count = len(out.Data)
+	return out, nil
+}
+
+// triage lists open proposed tasks.
+func (o ops) triage(ctx context.Context, in ViewIn) (ListOut, error) {
+	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
+	if err != nil {
+		return ListOut{}, err
+	}
+	return o.view(ctx, "", project, func(r row.Row) bool {
+		return work.Field(r, fieldCommitment) == schema.TaskCommitmentProposed && open(r)
+	})
+}
+
+// someday lists someday tasks.
+func (o ops) someday(ctx context.Context, in ViewIn) (ListOut, error) {
+	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
+	if err != nil {
+		return ListOut{}, err
+	}
+	return o.view(ctx, "", project, func(r row.Row) bool {
+		return work.Field(r, fieldCommitment) == schema.TaskCommitmentSomeday
+	})
+}
+
+// deferred lists tasks snoozed past now.
+func (o ops) deferred(ctx context.Context, in ViewIn) (ListOut, error) {
+	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
+	if err != nil {
+		return ListOut{}, err
+	}
+	now := time.Now()
+	return o.view(ctx, "", project, func(r row.Row) bool { return deferred(r, now) })
+}
+
+// show returns one task, from whichever attached store holds it.
+func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
+	id, err := taskID(in.ID)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	src, r, err := work.Get(ctx, o.env, Noun, table, id)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	full := fullOf(src, r)
+	if by := work.Field(r, fieldDoneBy); by != "" {
+		full.DoneBy = o.actorName(ctx, by)
+	}
+	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: full}, nil
+}
+
+// actorName is an actor's display name, else its id (v0.1.17 actorName).
+func (o ops) actorName(ctx context.Context, id string) string {
+	aid, err := ids.ParseAny(id)
+	if err != nil {
+		return id
+	}
+	_, r, err := o.env.Get(ctx, engine.Ref{Table: schema.TableActors, ID: aid})
+	if err != nil || r.Deleted || work.Field(r, fieldDisplay) == "" {
+		return id
+	}
+	return work.Field(r, fieldDisplay)
+}
+
+// edit patches the fields whose flags were given.
+func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
+	switch {
+	case in.Assign != "":
+		return work.WriteOut{}, notYet("assign", "assign a person by actor id: --assigned-to act_…")
+	case len(in.Ref) > 0:
+		return work.WriteOut{}, notYet("ref", "link the rows with `lore link add`")
+	}
+	id, err := taskID(in.ID)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	_, cur, err := work.Get(ctx, o.env, Noun, table, id)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	for _, c := range []struct{ flag, v string }{{"priority", in.Priority}, {"status", in.Status}, {"commitment", in.Commitment}} {
+		if c.v == "" {
+			continue
+		}
+		set := map[string][]string{"priority": schema.TaskPriorities(), "status": schema.TaskStatuses(), "commitment": schema.TaskCommitments()}[c.flag]
+		if err := work.OneOf(Noun, c.flag, c.v, set); err != nil {
+			return work.WriteOut{}, err
+		}
+	}
+	patch, err := work.Texts(Noun, map[string]string{
+		work.FieldTitle: strings.TrimSpace(in.Title), work.FieldBody: in.Body, fieldPriority: in.Priority,
+		work.FieldStatus: in.Status, fieldCommitment: in.Commitment, fieldRole: in.Role,
+	})
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if err := setDates(patch, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
+		return work.WriteOut{}, err
+	}
+	if err := setRefs(patch, []refFlag{
+		{work.FieldMission, "mission", ids.PrefixMission, in.Mission},
+		{work.FieldTasklist, "tasklist", ids.PrefixTaskList, in.Tasklist},
+		{work.FieldPlan, "plan", ids.PrefixPlan, in.Plan},
+		{fieldAssigned, "assigned-to", ids.PrefixActor, in.AssignedTo},
+	}); err != nil {
+		return work.WriteOut{}, err
+	}
+	clears := []struct {
+		on    bool
+		field string
+	}{
+		{in.ClearDefer, fieldDeferred}, {in.ClearDue, fieldDue}, {in.ClearMission, work.FieldMission},
+		{in.ClearPlan, work.FieldPlan}, {in.ClearAssignee, fieldAssigned},
+	}
+	for _, c := range clears {
+		if c.on {
+			patch[c.field] = value.Null{}
+		}
+	}
+	if len(in.After) > 0 {
+		deps, derr := o.parseAfter(ctx, in.After, work.Field(cur, work.FieldRepo))
+		if derr != nil {
+			return work.WriteOut{}, derr
+		}
+		if err := o.checkNoCycle(ctx, id.String(), deps); err != nil {
+			return work.WriteOut{}, err
+		}
+		if patch[fieldBlockedBy], err = depsValue(deps); err != nil {
+			return work.WriteOut{}, err
+		}
+	}
+	if in.Timebox > 0 {
+		patch[fieldTimebox] = value.Int(int64(in.Timebox / time.Second))
+	}
+	if len(patch) == 0 {
+		return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: nothing to change").
+			WithHint("give at least one flag, e.g. --title, --status, --priority, --due")
+	}
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n")
+}
+
+// start marks a task in_progress; starting work also commits it and
+// un-defers it (v0.1.17 updateTaskStatus).
+func (o ops) start(ctx context.Context, in IDIn) (work.WriteOut, error) {
+	id, err := taskID(in.ID)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	patch, err := statusPatch(schema.TaskStatusInProgress, fieldStarted)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" started\n")
+}
+
+// statusPatch sets status, stamps the time field, accepts the task and
+// clears its deferral.
+func statusPatch(status, stamp string) (map[string]value.Value, error) {
+	patch, err := work.Texts(Noun, map[string]string{work.FieldStatus: status, fieldCommitment: schema.TaskCommitmentAccepted})
+	if err != nil {
+		return nil, err
+	}
+	patch[stamp] = work.Now()
+	patch[fieldDeferred] = value.Null{}
+	return patch, nil
+}
+
+// done marks a task done with the code that finished it and saves the
+// lesson (v0.1.17 plainDone + finishDone). A claimed task's fencing stays
+// with the signals machinery of the old binary.
+func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
+	if in.PR < 0 {
+		return DoneOut{}, errs.New(errs.InvalidInput, "--pr must be a positive number")
+	}
+	id, err := taskID(in.ID)
+	if err != nil {
+		return DoneOut{}, err
+	}
+	patch, err := statusPatch(schema.TaskStatusDone, work.FieldCompleted)
+	if err != nil {
+		return DoneOut{}, err
+	}
+	if in.Commit != "" {
+		if patch[fieldDoneCommit], err = value.TextOf(strings.TrimSpace(in.Commit)); err != nil {
+			return DoneOut{}, err
+		}
+	}
+	if in.PR > 0 {
+		patch[fieldDonePR] = value.Int(int64(in.PR))
+	}
+	if a, ok := o.env.(Actorer); ok {
+		if actor, aerr := a.Actor(ctx); aerr == nil && !actor.IsZero() {
+			if patch[fieldDoneBy], err = value.TextOf(actor.String()); err != nil {
+				return DoneOut{}, err
+			}
+		}
+	}
+	code := ""
+	switch {
+	case in.PR > 0:
+		code = " (pr #" + strconv.Itoa(in.PR) + "); waiting for merge"
+	case in.Commit != "":
+		code = " (commit " + shortSHA(in.Commit) + "); waiting for merge"
+	}
+	w, err := work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" done"+code+"\n")
+	if err != nil {
+		return DoneOut{}, err
+	}
+	out := DoneOut{ID: w.ID, Store: w.Store, Human: w.Human}
+	for _, x := range w.Warnings {
+		out.Warnings = append(out.Warnings, Warning(x))
+	}
+	switch {
+	case strings.TrimSpace(in.Lesson) != "":
+		mem, lerr := o.lesson(ctx, store.Source(w.Store), id, in.Lesson)
+		if lerr != nil {
+			return DoneOut{}, lerr
+		}
+		out.Lesson = mem
+		out.Human += "  " + lessonSourceKind + " → " + mem + "\n"
+	case !in.NoLesson:
+		out.Human += "  learned something? `lore memory add --body \"…\"` (or pass --lesson next time)\n"
+	}
+	return out, nil
+}
+
+// Text implements op.Texter.
+func (o DoneOut) Text() string { return o.Human }
+
+// shortSHAlen is how much of a commit v0.1.17 printed.
+const shortSHAlen = 7
+
+// shortSHA is the first 7 characters of a commit.
+func shortSHA(s string) string {
+	if len(s) > shortSHAlen {
+		return s[:shortSHAlen]
+	}
+	return s
+}
+
+// lesson saves a memory pointing at the task, in the store that holds the
+// task (v0.1.17 D8 routed it there).
+func (o ops) lesson(ctx context.Context, src store.Source, task ids.AnyID, text string) (string, error) {
+	project, err := o.env.Project(ctx)
+	if err != nil {
+		return "", err
+	}
+	_, r, err := work.Get(ctx, o.env, Noun, table, task)
+	if err == nil && work.Field(r, work.FieldProject) != "" {
+		if p, perr := ids.Parse[ids.Project](work.Field(r, work.FieldProject)); perr == nil {
+			project = p
+		}
+	}
+	fields, err := work.Texts(Noun, map[string]string{
+		"body": strings.TrimSpace(text), "kind": lessonKind, "source_kind": lessonSourceKind, "source_ref": task.String(),
+	})
+	if err != nil {
+		return "", err
+	}
+	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
+		return "", err
+	}
+	trust, err := value.Float(lessonTrust)
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "task done: trust score", err)
+	}
+	fields["trust_score"] = trust
+	fields["tx_at"] = work.Now()
+	w, err := o.env.Create(ctx, src, schema.TableMemories, fields)
+	if err != nil {
+		return "", err
+	}
+	return w.Row.ID.String(), nil
+}
+
+// cancel marks a task cancelled.
+func (o ops) cancel(ctx context.Context, in IDIn) (work.WriteOut, error) {
+	id, err := taskID(in.ID)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	patch, err := work.Texts(Noun, map[string]string{work.FieldStatus: schema.TaskStatusCancelled})
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" cancelled\n")
+}
+
+// delete writes the task's tombstone.
+func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
+	id, err := taskID(in.ID)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	return work.Delete(ctx, o.env, Noun, table, id, work.Success+" "+id.String()+" deleted\n")
+}
+
+// search matches the query against every attached store's cache, keeps
+// active tasks (unless --all) in scope, and cuts at --limit after the
+// filters.
+func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, error) {
+	limit, err := work.Limit(in.Limit)
+	if err != nil {
+		return work.SearchEnvelope{}, err
+	}
+	repo := ""
+	if in.Repo != "" {
+		r, rerr := o.env.RepoID(ctx, in.Repo)
+		if rerr != nil {
+			return work.SearchEnvelope{}, rerr
+		}
+		repo = r.String()
+	}
+	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
+	if err != nil {
+		return work.SearchEnvelope{}, err
+	}
+	hits, err := work.Search(ctx, o.env, table, in.Query, searchFetch)
+	if err != nil {
+		return work.SearchEnvelope{}, err
+	}
+	now := time.Now()
+	out := work.SearchEnvelope{SchemaVersion: work.SchemaVersion, Kind: KindSearch, Query: in.Query, Data: []work.SearchHit{}}
+	for _, h := range hits {
+		if len(out.Data) == limit {
+			break
+		}
+		r := h.Row
+		if (!in.All && !active(r, now)) || !work.InScope(work.Field(r, work.FieldRepo), repo, in.NoInherit, in.MasterOnly, in.AllRepos) ||
+			(project != "" && work.Field(r, work.FieldProject) != project) {
+			continue
+		}
+		hit := work.HitOf(h, true, work.FieldTitle, work.FieldBody, work.FieldStatus, fieldPriority)
+		hit.Row[fieldDue] = work.TimeText(r, fieldDue)
+		hit.Relations = work.Relations{
+			Tasklist: work.BriefOf(ctx, o.env, schema.TableTasklists, work.Field(r, work.FieldTasklist), false),
+			Mission:  work.BriefOf(ctx, o.env, schema.TableMissions, work.Field(r, work.FieldMission), true),
+			Plan:     work.BriefOf(ctx, o.env, schema.TablePlans, work.Field(r, work.FieldPlan), false),
+		}
+		out.Data = append(out.Data, hit)
+	}
+	out.Count = len(out.Data)
+	return out, nil
+}
