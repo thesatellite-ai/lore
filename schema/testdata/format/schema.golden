@@ -94,6 +94,7 @@ incidents.title text required
 kind_fields.default text
 kind_fields.deprecated bool
 kind_fields.description text
+kind_fields.extends ref
 kind_fields.in_list bool
 kind_fields.internal bool
 kind_fields.kind_id ref required

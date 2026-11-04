@@ -106,6 +106,7 @@ type FieldAddIn struct {
 	Values      string `json:"values,omitempty" flag:"values" desc:"allowed values, comma separated (a closed set)"`
 	Description string `json:"description,omitempty" flag:"description" desc:"what the field means"`
 	Label       string `json:"label,omitempty" flag:"label" desc:"display label"`
+	To          string `json:"to,omitempty" flag:"to" desc:"write the field at this place (the kind's place or a nearer one; default beside the kind)"`
 	FieldRuleFlags
 }
 
@@ -125,6 +126,7 @@ type FieldEditIn struct {
 	Description  string   `json:"description,omitempty" flag:"description" desc:"what the field means"`
 	NoStrict     bool     `json:"no_strict,omitempty" flag:"no-strict" desc:"back to newer-wins on a both-sides change (asks)"`
 	NoDeprecated bool     `json:"no_deprecated,omitempty" flag:"no-deprecated" desc:"not deprecated any more"`
+	To           string   `json:"to,omitempty" flag:"to" desc:"tighten the field for a nearer place only (an extension row there; RES 3.6)"`
 	FieldRuleFlags
 }
 
@@ -266,7 +268,11 @@ func (o KindsOut) Text() string {
 // kindOps returns the kind and field operations.
 // nameErrors are the write errors of an op that takes a kind or field
 // name: a bad one is E_RESOURCE_NAME (RES 3.1).
-var nameErrors = append(slices.Clone(writeErrors), errs.ResourceName)
+var nameErrors = append(slices.Clone(layerErrors), errs.ResourceName)
+
+// layerErrors are the write errors of a kind or field op under kind
+// layering (RES 3.6): a conflicting definition, missing store kind rows.
+var layerErrors = append(slices.Clone(writeErrors), errs.KindConflict, errs.ResourceStale)
 
 func (o ops) kindOps() []op.Entry {
 	return []op.Entry{
@@ -274,42 +280,40 @@ func (o ops) kindOps() []op.Entry {
 			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "add a kind", CLI: `lore resource kind add host --description "a server"`, Want: "knd_"}}}, o.kindAdd),
 		op.Define(op.Spec{Name: OpKindEdit, Summary: "Edit a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.kindEdit),
+			Errors: layerErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.kindEdit),
 		op.Define(op.Spec{Name: OpKindShow, Summary: "Show a resource kind and its fields", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors}, o.kindShow),
+			Errors: append(slices.Clone(readErrors), errs.KindConflict, errs.ResourceStale)}, o.kindShow),
 		op.Define(op.Spec{Name: OpKindRename, Summary: "Rename a resource kind (a label change; ids stay)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: nameErrors}, o.kindRename),
 		op.Define(op.Spec{Name: OpKinds, Summary: "List resource kinds with their fields and row counts", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors}, o.kindList),
+			Errors: append(slices.Clone(readErrors), errs.KindConflict, errs.ResourceStale)}, o.kindList),
 		op.Define(op.Spec{Name: OpFieldAdd, Summary: "Add a field to a resource kind (a kind_fields settings row)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "closed set", CLI: "lore resource field add host provider --type text --required --values hetzner,aws", Want: "fld_"}}}, o.fieldAdd),
 		op.Define(op.Spec{Name: OpFieldEdit, Summary: "Edit a field of a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldEdit),
+			Errors: layerErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldEdit),
 		op.Define(op.Spec{Name: OpFieldRename, Summary: "Rename a field (a label change: rows key values by fld_ id)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: nameErrors}, o.fieldRename),
 		op.Define(op.Spec{Name: OpFieldRemove, Summary: "Remove a field from a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors}, o.fieldRemove),
+			Errors: layerErrors}, o.fieldRemove),
 	}
 }
 
 // kindByName finds a live kind by name or id in every attached store.
+// (layering rules in lookupKind, RES 3.6).
 func (o ops) kindByName(ctx context.Context, key string) (located, error) {
-	k, err := byNameOrID(ctx, o.env, o.env.Stores(), schema.TableKinds, kName, key, nil)
-	if errs.Has(err, errs.NotFound) {
-		return located{}, errs.New(errs.KindUnknown, "no resource kind "+quote(key)).WithHint("run `lore resource kinds` to see the kinds")
-	}
-	return k, err
+	return o.lookupKind(ctx, key)
 }
 
-// fieldsOf are the live fields of kind k (from every store: a field row
-// may live beside its kind or at a nearer place).
+// fieldsOf are the live fields of kind k as this view sees them (from
+// every store: a field row may live beside its kind or at a nearer place;
+// nearer extension rows are folded into their base, RES 3.6).
 func (o ops) fieldsOf(ctx context.Context, k located) ([]located, error) {
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableKindFields)
+	raw, err := o.rawFieldsOf(ctx, k)
 	if err != nil {
 		return nil, err
 	}
-	return where(rows, map[string]string{fKindID: k.Row.ID.String()}), nil
+	return effectiveFields(raw)
 }
 
 // fieldMap are k's live fields by name.
@@ -325,12 +329,17 @@ func (o ops) fieldMap(ctx context.Context, k located) (map[string]located, error
 	return m, nil
 }
 
+// fieldByName is k's defining field row named name, as stored (not folded
+// with nearer extensions: edits address the defining row, RES 3.6).
 func (o ops) fieldByName(ctx context.Context, k located, name string) (located, error) {
-	fs, err := o.fieldsOf(ctx, k)
+	fs, err := o.rawFieldsOf(ctx, k)
 	if err != nil {
 		return located{}, err
 	}
 	for _, f := range fs {
+		if schema.ExtendsOf(f.Row) != "" {
+			continue
+		}
 		if text(f.Row, kName) == name || f.Row.ID.String() == name {
 			return f, nil
 		}
@@ -385,6 +394,9 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	target := targetOf(in.To)
+	if err := o.kindNameClash(ctx, in.Kind, target); err != nil {
+		return RowOut{}, err
+	}
 	w, err := create(ctx, o.env, target, schema.TableKinds, map[string]string{kName: in.Kind}, fields)
 	if err != nil {
 		return RowOut{}, err
@@ -569,12 +581,20 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 	if err = fieldOptions(in.Type, vs, siblings, in.FieldRuleFlags, fields); err != nil {
 		return RowOut{}, err
 	}
-	// The field row lives beside its kind, so the definition travels as one.
-	w, err := create(ctx, o.env, k.Src, schema.TableKindFields, map[string]string{fKindID: k.Row.ID.String(), kName: in.Field}, fields)
+	// The field row lives beside its kind, so the definition travels as
+	// one, unless --to names a nearer place extending it (RES 3.6).
+	at := k.Src
+	if in.To != "" {
+		at = targetOf(in.To)
+		if err = o.checkFieldPlace(k, at); err != nil {
+			return RowOut{}, err
+		}
+	}
+	w, err := create(ctx, o.env, at, schema.TableKindFields, map[string]string{fKindID: k.Row.ID.String(), kName: in.Field}, fields)
 	if err != nil {
 		return RowOut{}, err
 	}
-	return RowOut{ID: w.Row.ID.String(), Store: string(k.Src),
+	return RowOut{ID: w.Row.ID.String(), Store: string(at),
 		Human: fmt.Sprintf("added field %s %s.%s (%s)%s\n", short(w.Row.ID), text(k.Row, kName), in.Field, in.Type, secretRefNote(isSecretRef, internal))}, nil
 }
 
@@ -599,6 +619,10 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 	f, err := o.fieldByName(ctx, k, in.Field)
 	if err != nil {
 		return RowOut{}, err
+	}
+	// RES 3.6: --to a nearer place tightens through an extension row.
+	if in.To != "" && targetOf(in.To) != f.Src {
+		return o.extendField(ctx, k, f, targetOf(in.To), in)
 	}
 	patch := map[string]value.Value{}
 	for _, t := range []struct {
@@ -656,6 +680,9 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 	}
 	if len(patch) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "resource field edit: nothing to change")
+	}
+	if err = o.checkOuterEdit(ctx, k, f, patch); err != nil {
+		return RowOut{}, err
 	}
 	return o.patchRow(ctx, f, patch, "edited field "+in.Kind+"."+in.Field)
 }

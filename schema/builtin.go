@@ -264,6 +264,9 @@ func coreDefs() []TableDef {
 			Bool("sensitive"),
 			Bool("internal"),
 			Ref("ref_kind", TableKinds),
+			// extends names the inherited field a lower level tightens (RES 3.6):
+			// the row then carries only the tightened options.
+			Ref("extends", TableKindFields),
 			Text("label"),
 			Text("widget", OneOf(widgetWords()...)),
 			Bool("in_list"),

@@ -566,8 +566,10 @@ func TestLiveNaturalKeyRefusal(t *testing.T) {
 		{settings.OpMetaAdd, `{"name":"tier","type":"text"}`, errs.MetaTaken, "already exists in repo"},
 		{settings.OpMetaValueAdd, `{"key":"tier","value":"gold"}`, errs.MetaTaken, "already exists in repo"},
 	})
-	// another place: a separate row.
-	other := h.ID(h.MustYes(settings.OpKindAdd, `{"kind":"server","to":"kb"}`))
+	// another place: a separate row; a kind is the exception (RES 3.6: a
+	// second definition of one kind name in one view is E_KIND_CONFLICT).
+	checkRefusals(t, h, []refusal{{settings.OpKindAdd, `{"kind":"server","to":"kb"}`, errs.KindConflict, "may extend it"}})
+	other := h.ID(h.MustYes(settings.OpKindAdd, `{"kind":"server2","to":"kb"}`))
 	h.MustYes(settings.OpMetaAdd, `{"name":"tier","type":"text","to":"kb/web"}`)
 	h.MustYes(settings.OpVarsSet, `{"name":"region","value":"us","to":"kb"}`)
 	if v := varOf(t, h, "region"); v.Value != "eu" || v.Store != "repo" {
