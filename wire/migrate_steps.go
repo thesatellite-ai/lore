@@ -9,6 +9,10 @@ package wire
 //	                    rename it, move the others' tag_ids bindings to it, delete them
 //	db_settings_to_rows (step 12, CFG12): v0.1.17 project_configs rows of the repo
 //	                    → a team policies row when the key maps; else reported, kept
+//	audit_fields        (step 9, audit rule): per store, every _v 2 live row missing
+//	                    created_by/updated_by/deleted_by → auditfill.Defaults, written
+//	                    with its own HLC (format-only, like the v1 rewrite, which
+//	                    fills v1 rows itself in rewriteStore)
 
 import (
 	"context"
@@ -19,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -34,6 +39,7 @@ import (
 const (
 	StepTagsSnakeCase    = "tags_snake_case"
 	StepDBSettingsToRows = "db_settings_to_rows"
+	StepAuditFields      = "audit_fields"
 )
 
 // tagFieldName is tags.name (schema/builtin.go).
@@ -317,4 +323,77 @@ func textListPolicy(key policy.Key, items []string, scope string) (map[string]va
 	}
 	f[policyFieldKey] = k
 	return f, nil
+}
+
+// migrateAuditFields is the audit_fields step (FORMAT_EVOLUTION section 3,
+// step 9) over every attached store: each `_v: 2` row that lacks an audit
+// actor gets auditfill.Defaults and is written back with the HLC it had, so
+// the change is format-only (no new edit, no new updated_by) and two
+// offline runs write the same bytes (7.3). `_v: 1` rows are filled by the
+// v1 rewrite itself (rewriteStore). One line per store that changed; a
+// read-only store is reported and left (its rows read with the same
+// defaults on every machine).
+func (a *App) migrateAuditFields(ctx context.Context, dryRun bool) ([]string, int, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	skip, err := a.flattenedUnderDryRun(dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	names := st.eng.Stores()
+	var steps []string
+	written := 0
+	for i, b := range st.backends {
+		if skip[names[i]] {
+			continue
+		}
+		rows, _, rerr := b.Read(ctx, "")
+		if rerr != nil {
+			return nil, 0, rerr
+		}
+		var changes []store.Change
+		for _, sr := range rows {
+			if sr.Deleted {
+				continue
+			}
+			r, derr := sr.Decode()
+			if derr != nil || r.SourceVersion != row.FormatVersion {
+				continue // a bad row is the format step's report; v1 rows are filled by the rewrite
+			}
+			filled, changed := auditfill.Defaults(r)
+			if !changed {
+				continue
+			}
+			up, ferr := store.FromRow(filled)
+			if ferr != nil {
+				return nil, 0, ferr
+			}
+			changes = append(changes, store.Change{Row: up, Expect: sr.HLC})
+		}
+		if len(changes) == 0 {
+			continue
+		}
+		line := StepAuditFields + ": store " + string(names[i]) + ": " + strconv.Itoa(len(changes)) + " rows get created_by/updated_by (" + auditfill.UnknownName + " where no writer is known)"
+		if dryRun {
+			steps, written = append(steps, line), written+len(changes)
+			continue
+		}
+		if werr := b.Write(ctx, changes); werr != nil {
+			if errs.Has(werr, errs.StoreReadOnly) {
+				steps = append(steps, StepAuditFields+": store "+string(names[i])+" is read-only here: "+strconv.Itoa(len(changes))+" rows not rewritten")
+				continue
+			}
+			return nil, 0, errs.Wrap(errs.CodeOf(werr), "migrate: store "+string(names[i]), werr)
+		}
+		steps, written = append(steps, line), written+len(changes)
+		if i == 0 {
+			a.wrote(nil)
+		}
+		if _, err := st.eng.Refresh(ctx, names[i]); err != nil {
+			return nil, 0, err
+		}
+	}
+	return steps, written, nil
 }

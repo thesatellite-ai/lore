@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -183,6 +184,11 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 		return nil, 0, err
 	}
 	steps, rows = append(steps, urlSteps...), rows+n
+	auditSteps, n, err := a.migrateAuditFields(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	steps, rows = append(steps, auditSteps...), rows+n
 	piiSteps, n, err := a.migratePIIPatterns(ctx, dryRun)
 	if err != nil {
 		return nil, 0, err
@@ -832,6 +838,7 @@ func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun 
 		if step, ok := formatSteps[table]; ok {
 			r.Fields = step(r.Fields)
 		}
+		r, _ = auditfill.Defaults(r) // audit_fields (step 9): a v1 row never had *_by actors
 		up, err := store.FromRow(r)
 		if err != nil {
 			return nil, err

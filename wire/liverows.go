@@ -11,6 +11,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -330,7 +331,8 @@ func fetchStoreLive(ctx context.Context, src liveSource) {
 
 // pendingLiveRows lists the live rows of core-owned tables that their
 // store is missing or holds older (by HLC). A store's tombstone is never
-// undone by a live row (rows are never resurrected). fetch: refresh each
+// undone by a live row (rows are never resurrected), nor a trashed row
+// (deleted_at set) edited. fetch: refresh each
 // store's live ref from its remote first (fetchAll: every git store;
 // otherwise only stores still marked v0.1.17, so a migrated setup pays
 // nothing).
@@ -360,6 +362,9 @@ func pendingLiveRows(ctx context.Context, st *state, fetchAll bool) ([]pendingLi
 			cur, err := sr.Decode()
 			if err != nil {
 				return nil, err
+			}
+			if at, trashed := cur.Fields[auditfill.FieldDeletedAt]; trashed && at != nil && at.String() != "" {
+				continue // a trashed row is left in the trash as it is, like a tombstone (never resurrected or edited by an old live copy)
 			}
 			out = append(out, pendingLive{source: src.name, live: lr, cur: cur, has: true})
 		}

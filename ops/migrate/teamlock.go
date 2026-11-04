@@ -1,0 +1,92 @@
+package migrate
+
+// The team lock (FORMAT_EVOLUTION 7.2, 7.5): a `lore-migrate` hold on the
+// project's signals ref, so two teammates never migrate at once.
+//
+//	run ─► M (LockMigration, machine) ─► T (TeamLock.Acquire; not for --dry-run,
+//	       --no-push, --offline) ─► … ─► release T ─► release M
+//	rollback ─► M ─► T ─► …                      (7.2: a rollback cannot race a run)
+//	unlock --team ─► clear a stale M ─► M ─► TeamLock.Unlock ─► release M
+//
+// The signals machinery lives in the host (the CLI), which the core cannot
+// import, so the host supplies a TeamLock per command with WithTeamLock,
+// like the work Team port. A surface without one (REST) takes no team lock
+// and says so in the run's journal lines.
+
+import (
+	"context"
+
+	"github.com/thesatellite-ai/lore/model/errs"
+)
+
+// TeamLock is the host's team migration lock.
+type TeamLock interface {
+	// Acquire takes the hold (one compare-and-swap push, never waits, 7.5
+	// rule 1) and keeps renewing it until release is called. A hold that
+	// someone else keeps alive is E_MIGRATE_LOCKED naming holder, host and
+	// age; an unreachable remote is E_OFFLINE. line says what happened
+	// ("" when there is nothing to say).
+	Acquire(ctx context.Context) (release func() error, line string, err error)
+	// Unlock clears a stale hold: one that expired, or this actor's own
+	// hold from this machine (the caller already holds the machine lock,
+	// so no migration runs here). Any other live hold is E_MIGRATE_LOCKED.
+	Unlock(ctx context.Context) (UnlockOut, error)
+}
+
+// teamLockKey is the context key of the command's TeamLock.
+type teamLockKey struct{}
+
+// WithTeamLock returns ctx carrying l for the migrate operations under it.
+func WithTeamLock(ctx context.Context, l TeamLock) context.Context {
+	return context.WithValue(ctx, teamLockKey{}, l)
+}
+
+// teamLockFrom returns the host's TeamLock, if any.
+func teamLockFrom(ctx context.Context) (TeamLock, bool) {
+	l, ok := ctx.Value(teamLockKey{}).(TeamLock)
+	return l, ok && l != nil
+}
+
+// noTeamLockLine is the journal line of a run on a surface with no team lock.
+const noTeamLockLine = "team lock: not available on this surface (no signals ref here); run `lore migrate run` from the CLI to guard against a teammate migrating at the same time"
+
+// takeTeamLock takes T when the host gives one and the run will push.
+// It returns the release func (never nil) and a journal line ("" for none).
+func takeTeamLock(ctx context.Context, pushes bool) (func() error, string, error) {
+	none := func() error { return nil }
+	if !pushes {
+		return none, "", nil
+	}
+	l, ok := teamLockFrom(ctx)
+	if !ok {
+		return none, noTeamLockLine, nil
+	}
+	release, line, err := l.Acquire(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	if release == nil {
+		release = none
+	}
+	return release, line, nil
+}
+
+// unlockTeam is `lore migrate unlock --team` (7.2): clear this machine's
+// stale machine lock (refused while its process lives), take M so no
+// migration can start here meanwhile, then let the host clear the hold.
+func unlockTeam(ctx context.Context, rw Rewriter, j Journal) (UnlockOut, error) {
+	l, ok := teamLockFrom(ctx)
+	if !ok {
+		return UnlockOut{}, errs.New(errs.InvalidInput, "migrate: the team lock lives on the signals ref, which this surface cannot reach").
+			WithHint("run `lore migrate unlock --team` from the CLI")
+	}
+	if _, err := j.Unlock(ctx); err != nil {
+		return UnlockOut{}, err
+	}
+	unlock, err := rw.LockMigration(ctx)
+	if err != nil {
+		return UnlockOut{}, err
+	}
+	defer func() { _ = unlock() }() // a failed release is reported by the next run
+	return l.Unlock(ctx)
+}

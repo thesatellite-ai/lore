@@ -113,8 +113,8 @@ func TestMigrateLiveRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 	goneBefore := rowFile(t, memPath(repo, gone))
-	if string(goneBefore[row.KeyDeleted]) != "true" {
-		t.Fatalf("fixture: %s is not a tombstone: %v", gone, goneBefore)
+	if len(goneBefore["deleted_at"]) == 0 { // delete is a soft delete: the row goes to the trash (deleted_at set)
+		t.Fatalf("fixture: %s is not in the trash: %v", gone, goneBefore)
 	}
 	newerBefore := rowFile(t, memPath(repo, newer))
 
@@ -173,10 +173,10 @@ func TestMigrateLiveRepo(t *testing.T) {
 		t.Fatalf("a newer store row changed: %v → %v", newerBefore, after)
 	}
 	if after := rowFile(t, memPath(repo, gone)); !jsonEqual(after, goneBefore) {
-		t.Fatalf("a tombstone changed (resurrected?): %v → %v", goneBefore, after)
+		t.Fatalf("a trashed row changed (resurrected?): %v → %v", goneBefore, after)
 	}
 	if _, err = run(t, a, opsmemory.OpShow, `{"id":"`+gone+`"}`, false); err == nil {
-		t.Fatal("the tombstoned memory is visible again")
+		t.Fatal("the trashed memory is visible again")
 	}
 	tracked := rowFile(t, memPath(repo, liveTrackedMem))
 	if fieldString(t, tracked, "body") != "remote copy" || fieldString(t, tracked, row.KeyHLC) != liveNewest {

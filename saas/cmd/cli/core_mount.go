@@ -202,7 +202,8 @@ func mountCore(root *cobra.Command) {
 	}
 	markCorePrinted(root)
 	mountSQLShortcut(root)
-	mountRowShortcuts(root) // CLI 2.7/2.13: lore show <id>, bare lore lint
+	mountRowShortcuts(root)   // CLI 2.7/2.13: lore show <id>, bare lore lint
+	withMigrateTeamLock(root) // FORMAT_EVOLUTION 7.2: migrate run|rollback|unlock --team get the signals-ref team lock
 	// The coordination verbs and mission status stay on the v0.1.17 signals
 	// machinery, mounted under the core nouns (after the compat loop: they
 	// carry their own v0.1.17 flags).

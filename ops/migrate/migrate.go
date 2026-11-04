@@ -144,7 +144,8 @@ func Ops(rw Rewriter) []op.Entry {
 // run is migrate.run (FORMAT_EVOLUTION rule 4, steps 2-7): lock (M) →
 // Begin (backup ref + journal, or resume) → settings → live → rewrites
 // (--offline: the repo's rows only) → Finish (push unless --no-push or
-// --offline). The team lock on the signals ref (T) is not built yet.
+// --offline). Lock order M then T (7.5); T only for a run that pushes
+// (not --dry-run, --no-push or --offline: nothing reaches a teammate).
 func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}}
 	unlock, err := rw.LockMigration(ctx)
@@ -152,6 +153,14 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		return RunOut{}, err
 	}
 	defer func() { _ = unlock() }() // a failed release leaves a lock file `lore migrate unlock` clears
+	releaseTeam, teamLine, err := takeTeamLock(ctx, !in.DryRun && !in.NoPush && !in.Offline)
+	if err != nil {
+		return RunOut{}, err
+	}
+	defer func() { _ = releaseTeam() }() // released before M (reverse order); an unreleased hold expires (7.2)
+	if teamLine != "" {
+		out.Journal = append(out.Journal, teamLine)
+	}
 	j, journaled := rw.(Journal)
 	if journaled && !in.DryRun {
 		b, err := j.Begin(ctx, in.Offline)
@@ -196,6 +205,8 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		out.Journal = append(out.Journal, lines...)
 		if len(lines) == 0 { // nothing changed: the backup was dropped
 			out.BackupRef, out.Journal = "", nil
+		} else if teamLine != "" {
+			out.Journal = append(out.Journal, "team lock released")
 		}
 	}
 	return out, nil

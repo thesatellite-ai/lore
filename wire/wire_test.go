@@ -359,7 +359,7 @@ func TestMigrateChangesOnlyTheFormat(t *testing.T) {
 		}
 	}
 	for k := range after {
-		if _, had := before[k]; !had && k != "_hlc" {
+		if _, had := before[k]; !had && k != "_hlc" && k != "created_by" && k != "updated_by" { // audit_fields (step 9) fills the actors
 			t.Fatalf("new key %s", k)
 		}
 	}

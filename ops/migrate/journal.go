@@ -9,6 +9,7 @@ package migrate
 //	status   ─► Journal.Status   (versions per place, format, journal, lock)
 //	rollback ─► lock ─► Journal.Rollback (refuse with E_MIGRATE_ROLLBACK_LOSES, or restore all)
 //	unlock   ─► Journal.Unlock   (only a lock whose process is gone)
+//	unlock --team ─► unlockTeam  (teamlock.go: a stale team lock on the signals ref)
 //
 // Journal is an optional upgrade of Rewriter: a Rewriter without it keeps
 // the plain run (no backup, no status/rollback/unlock operations).
@@ -101,8 +102,11 @@ type RollbackOut struct {
 	Kept []string `json:"kept"`
 }
 
-// UnlockIn is the input of migrate.unlock (none).
-type UnlockIn struct{}
+// UnlockIn is the input of migrate.unlock.
+type UnlockIn struct {
+	// Team clears a stale team lock on the signals ref instead (7.2); asks first.
+	Team bool `json:"team,omitempty" flag:"team" desc:"clear a stale team migration lock on the signals ref (asks first)"`
+}
 
 // UnlockOut is the output of migrate.unlock.
 type UnlockOut struct {
@@ -137,17 +141,28 @@ func journalOps(rw Rewriter, j Journal) []op.Entry {
 			if err != nil {
 				return RollbackOut{}, err
 			}
-			defer func() { _ = unlock() }() // a failed release is reported by the next run
+			defer func() { _ = unlock() }()                // a failed release is reported by the next run
+			releaseTeam, _, err := takeTeamLock(ctx, true) // 7.2: a rollback cannot race a run
+			if err != nil {
+				return RollbackOut{}, err
+			}
+			defer func() { _ = releaseTeam() }() // an unreleased hold expires (7.2)
 			return j.Rollback(ctx)
 		}),
 		op.Define(op.Spec{
-			Name: OpUnlock, Summary: "Release this machine's stale migration lock (its process is gone)",
+			Name: OpUnlock, Summary: "Release this machine's stale migration lock (its process is gone), or with --team a stale team lock",
 			Permission: op.PermAdmin, Access: op.AccessWrite, RESTNoun: restNoun,
-			Errors: []errs.Code{errs.MigrateLocked, errs.Internal},
+			Confirm: op.ConfirmRule{When: "team"},
+			Errors:  []errs.Code{errs.MigrateLocked, errs.NeedsConfirm, errs.Offline, errs.InvalidInput, errs.Internal},
 			Examples: []op.Example{
 				{Title: "after a crashed run", CLI: "lore migrate unlock", Want: "released:"},
 			},
-		}, func(ctx context.Context, _ UnlockIn) (UnlockOut, error) {
+		}, func(ctx context.Context, in UnlockIn) (UnlockOut, error) {
+			// unlock (7.2): machine lock only; --team: unlockTeam (stale M
+			// cleared, M taken, then the host clears an expired or own hold).
+			if in.Team {
+				return unlockTeam(ctx, rw, j)
+			}
 			return j.Unlock(ctx)
 		}),
 	}
