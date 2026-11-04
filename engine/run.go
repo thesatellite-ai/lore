@@ -89,15 +89,15 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		}
 	}
 	// --meta / --meta-json / --meta-stdin of any input (engine/meta.go, R13)
-	ctx, metaUsed, err := bindInputMeta(ctx, in)
-	if err != nil {
-		return op.Result{}, err
+	ctx, metaUsed, merr := bindInputMeta(ctx, in)
+	if merr != nil {
+		return op.Result{}, merr
 	}
-	res, err := entry.Invoke(context.WithValue(ctx, callKey{}, cl), in)
-	if err == nil {
-		err = metaUsed()
+	res, ierr := entry.Invoke(context.WithValue(ctx, callKey{}, cl), in)
+	if ierr == nil {
+		ierr = metaUsed()
 	}
-	return res, err
+	return res, ierr
 }
 
 // needsConfirm applies the spec's ConfirmRule to the decoded input.

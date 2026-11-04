@@ -89,6 +89,7 @@ func SetPath(obj []byte, path []string, v []byte) ([]byte, error) {
 	if len(path) == 0 {
 		return v, nil
 	}
+	first, rest := path[0], path[1:]
 	var ms []canon.Member
 	if len(obj) > 0 {
 		var err error
@@ -97,8 +98,8 @@ func SetPath(obj []byte, path []string, v []byte) ([]byte, error) {
 		}
 	}
 	for i, m := range ms {
-		if m.Key == path[0] {
-			inner, err := SetPath(m.Raw, path[1:], v)
+		if m.Key == first {
+			inner, err := SetPath(m.Raw, rest, v)
 			if err != nil {
 				return nil, err
 			}
@@ -106,28 +107,32 @@ func SetPath(obj []byte, path []string, v []byte) ([]byte, error) {
 			return compactObject(ms)
 		}
 	}
-	inner, err := SetPath(nil, path[1:], v)
+	inner, err := SetPath(nil, rest, v)
 	if err != nil {
 		return nil, err
 	}
-	return compactObject(append(ms, canon.Member{Key: path[0], Raw: inner}))
+	return compactObject(append(ms, canon.Member{Key: first, Raw: inner}))
 }
 
 // UnsetPath removes the dotted field path from obj; empty reports that
 // nothing is left (the key goes), found that the path existed.
 func UnsetPath(obj []byte, path []string) (out []byte, empty, found bool, err error) {
+	if len(path) == 0 {
+		return obj, false, false, nil
+	}
+	first, rest := path[0], path[1:]
 	ms, err := canon.Members(obj)
 	if err != nil {
 		return nil, false, false, nil
 	}
 	for i, m := range ms {
-		if m.Key != path[0] {
+		if m.Key != first {
 			continue
 		}
-		if len(path) == 1 {
+		if len(rest) == 0 {
 			ms = append(ms[:i], ms[i+1:]...)
 		} else {
-			inner, e, f, ierr := UnsetPath(m.Raw, path[1:])
+			inner, e, f, ierr := UnsetPath(m.Raw, rest)
 			if ierr != nil || !f {
 				return obj, false, f, ierr
 			}
@@ -226,6 +231,7 @@ func Show(e Entry) string {
 			}
 			return strings.Join(parts, " | ")
 		}
+	case canon.KindInvalid, canon.KindNull, canon.KindBool, canon.KindNumber, canon.KindObject:
 	}
 	return string(raw)
 }

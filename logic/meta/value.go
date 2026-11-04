@@ -49,6 +49,7 @@ func Coerce(t Type, raw string) (Coerced, error) {
 		return Coerced{Raw: arr, Notes: notes}, nil
 	case value.KindJSON:
 		return CoerceJSON(t, []byte(raw))
+	case value.KindText, value.KindNumber, value.KindBool, value.KindDate, value.KindDateTime, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef, value.KindNull:
 	}
 	return scalar(t.Kind, raw)
 }
@@ -205,6 +206,7 @@ func InferType(raw []byte) (Type, error) {
 			elem = k
 		}
 		return Type{Kind: value.KindList, Elem: elem}, nil
+	case canon.KindInvalid, canon.KindNull:
 	}
 	return Type{}, errs.New(errs.MetaValue, "meta: invalid json value")
 }
@@ -256,9 +258,9 @@ func CoerceJSON(t Type, raw []byte) (Coerced, error) {
 			if k := canon.KindOf(it); k == canon.KindArray || k == canon.KindObject {
 				return Coerced{}, shapeErr()
 			}
-			one, err := CoerceJSON(Type{Kind: elemOf(t)}, it)
-			if err != nil {
-				return Coerced{}, err
+			one, cerr := CoerceJSON(Type{Kind: elemOf(t)}, it)
+			if cerr != nil {
+				return Coerced{}, cerr
 			}
 			out = append(out, one.Raw)
 			notes = append(notes, one.Notes...)
@@ -268,6 +270,7 @@ func CoerceJSON(t Type, raw []byte) (Coerced, error) {
 			return Coerced{}, errs.Wrap(errs.Internal, "meta: build a list", err)
 		}
 		return Coerced{Raw: arr, Notes: notes}, nil
+	case value.KindText, value.KindNumber, value.KindBool, value.KindDate, value.KindDateTime, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef, value.KindNull:
 	}
 	switch canon.KindOf(c) {
 	case canon.KindString:
@@ -289,6 +292,7 @@ func CoerceJSON(t Type, raw []byte) (Coerced, error) {
 			return Coerced{}, errs.New(errs.MetaType, "meta: "+string(c)+" is a bool; the key is "+t.String())
 		}
 		return Coerced{Raw: c}, nil
+	case canon.KindInvalid, canon.KindNull, canon.KindArray, canon.KindObject:
 	}
 	return Coerced{}, errs.New(errs.MetaType, "meta: a "+t.String()+" value cannot be "+string(c))
 }

@@ -417,7 +417,7 @@ func (p *metaPlan) resolve(t meta.Term) (*keyDef, []string, error) {
 	switch len(hits) {
 	case 0:
 		if t.Level != "" && p.home(t) == "" {
-			return nil, nil, errs.New(errs.MetaUnregistered, "meta: no "+t.Level+" place "+t.Place+" is attached here, so "+top+" cannot be registered there").
+			return nil, nil, errs.New(errs.MetaUnregistered, "meta: no "+strings.TrimSpace(t.Level+" "+t.Place)+" place is attached here, so "+top+" cannot be registered there").
 				WithHint("drop the scope to register it where the row lives, or attach the store (lore store list)")
 		}
 		return nil, fields, nil
@@ -448,6 +448,7 @@ func (p *metaPlan) metaLevel(src store.Source) string {
 		return meta.LevelProject
 	case policy.LevelOrg, policy.LevelStoreRoot:
 		return meta.LevelOrg
+	case policy.LevelPersonal:
 	}
 	return ""
 }
