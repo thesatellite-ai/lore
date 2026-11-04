@@ -157,10 +157,7 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	if err = refuseMarkers(typedPatch, names); err != nil {
 		return Written{}, err
 	}
-	next := maps.Clone(cur.Fields)
-	if next == nil {
-		next = map[string]value.Value{}
-	}
+	next := retype(def, cur.Fields)
 	maps.Copy(next, typedPatch)
 	dropNulls(next)
 	whole, err := validate.Fields(def, next, validate.Whole)
@@ -187,6 +184,38 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	ev := Event{Op: cl.op, Action: ActionUpdate, Store: src, Table: cur.Table, ID: cur.ID, HLC: got.row.HLC, Actor: actor,
 		Merged: merged, SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
 	return Written{Row: got.row, Warnings: sc.warnings}, e.finish(ctx, src, []store.Row{got.doc}, ev)
+}
+
+// retype returns a copy of a stored row's fields with every field the
+// definition declares re-decoded as its declared kind. A row read back
+// from a store carries inferred values (value.Infer: a JSON string is
+// Text), so a json column holding a string, or a dns/url/date column,
+// would fail the whole-row check of an Update that does not patch it. A
+// field that does not parse as its kind is kept as read: validation then
+// reports it, as before. Fields the definition does not declare are kept.
+func retype(def schema.TableDef, fields map[string]value.Value) map[string]value.Value {
+	out := make(map[string]value.Value, len(fields))
+	for name, v := range fields {
+		out[name] = v
+		f, ok := def.Field(name)
+		if !ok || v.Kind() == f.Kind || v.Kind() == value.KindNull {
+			continue
+		}
+		raw, err := v.MarshalJSON()
+		if err != nil {
+			continue
+		}
+		var typed value.Value
+		if f.Kind == value.KindList && f.Elem != "" {
+			typed, err = value.ParseList(f.Elem, raw)
+		} else {
+			typed, err = value.Parse(f.Kind, raw)
+		}
+		if err == nil {
+			out[name] = typed
+		}
+	}
+	return out
 }
 
 // putMerging writes ours over base; on ErrStale it re-reads, merges
