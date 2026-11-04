@@ -97,6 +97,16 @@ const (
 	apiNote = "token: "
 )
 
+// coreOptions is the one wire.Options builder of this binary's core: every
+// host hook (routing, client-repo detection, org stores, audit, Mode B,
+// notices, the live-row wrapper, LORE_ALLOW_NETWORK_FS). mountCore and the
+// test fixtures call it, so a hook added here reaches both.
+func coreOptions(repoDir, home string) wire.Options {
+	return wire.Options{RepoDir: repoDir, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
+		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{},
+		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn}
+}
+
 // mountCore builds the core and mounts its commands under root. A failure
 // here is a programmer error (a registry or mount clash) and stops the
 // binary, like op.Define's panics.
@@ -109,7 +119,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn})
+	app, err := wire.New(coreOptions(cwd, home))
 	if err != nil {
 		panic(err)
 	}

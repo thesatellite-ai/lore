@@ -114,9 +114,7 @@ func (f *coreFixture) mount() {
 	f.t.Helper()
 	f.t.Setenv("HOME", f.home)
 	f.t.Chdir(f.dir)
-	app, err := wire.New(wire.Options{RepoDir: f.dir, Home: filepath.Join(f.home, ".lore"), Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
-		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{},
-		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn})
+	app, err := wire.New(coreOptions(f.dir, filepath.Join(f.home, ".lore")))
 	if err != nil {
 		f.t.Fatal(err)
 	}
