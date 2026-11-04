@@ -211,7 +211,7 @@ func deprecationNotes(d kindDef, set map[string]json.RawMessage) string {
 // value written when an add does not set the field"), on add only, and
 // returns the "default" notes.
 func (o ops) applyDefaults(ctx context.Context, d kindDef, name string, vals map[string]json.RawMessage) (string, error) {
-	var b strings.Builder
+	var names []string
 	for _, n := range d.fieldNames() {
 		f := d.byName[n]
 		dflt := text(f.Row, fDefault)
@@ -227,9 +227,12 @@ func (o ops) applyDefaults(ctx context.Context, d kindDef, name string, vals map
 			return "", errs.Wrap(errs.Internal, "encode default of "+n, err)
 		}
 		vals[f.Row.ID.String()] = raw
-		b.WriteString("  " + n + " = " + display(v) + " (default)\n")
+		names = append(names, n)
 	}
-	return b.String(), nil
+	if len(names) == 0 {
+		return "", nil
+	}
+	return "  default: " + strings.Join(names, ", ") + "\n", nil
 }
 
 // loosening is the confirmation a field edit asks before it loosens a

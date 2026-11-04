@@ -34,7 +34,7 @@ func TestFieldRuleOptions(t *testing.T) {
 		}
 	}
 	got := opstest.Text(h.MustYes(settings.OpResAdd, `{"kind":"service","name":"api","set":["git=x","keys=infra/api"]}`))
-	if !strings.Contains(got, "port = 8080 (default)") || !strings.Contains(got, "service.git is deprecated; use repo") {
+	if !strings.Contains(got, "default: port") || !strings.Contains(got, "service.git is deprecated; use repo") {
 		t.Fatalf("add %q", got)
 	}
 	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"api"}`)); !strings.Contains(s, "op://infra/api") {
