@@ -327,6 +327,7 @@ tasks.status text required
 tasks.tag_ids list[ref]
 tasks.tasklist_id ref
 tasks.time_entries json
+tasks.time_open json
 tasks.timebox_seconds number
 tasks.title text required
 tasks.work_branch text

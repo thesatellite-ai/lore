@@ -161,9 +161,10 @@ func parentClosed(parent, status string) error {
 }
 
 // reopenPatch is the parent's patch of --reopen-parent.
-func reopenPatch() (map[string]value.Value, error) {
-	p, err := work.Texts(Noun, map[string]string{work.FieldStatus: schema.TaskStatusInProgress})
-	if err != nil {
+func (o ops) reopenPatch(ctx context.Context, src store.Source, cur row.Row) (map[string]value.Value, error) {
+	p := map[string]value.Value{}
+	// D2 through setStatus; reopen opens no span on the parent (OV7-3).
+	if _, err := o.setStatus(ctx, src, cur, schema.TaskStatusInProgress, true, p); err != nil {
 		return nil, err
 	}
 	p[fieldCloseReason] = value.Null{}
@@ -173,13 +174,14 @@ func reopenPatch() (map[string]value.Value, error) {
 
 // closePatch closes a task: done → completed, cancel → cancelled (or the
 // given reason, 8.3).
-func (o ops) closePatch(status, reason string) (map[string]value.Value, error) {
+func (o ops) closePatch(ctx context.Context, src store.Source, cur row.Row, status, reason string) (map[string]value.Value, error) {
 	var patch map[string]value.Value
 	var err error
 	if status == schema.TaskStatusDone {
-		patch, err = o.statusPatch(schema.TaskStatusDone, work.FieldCompleted)
+		patch, _, err = o.statusPatch(ctx, src, cur, schema.TaskStatusDone, work.FieldCompleted)
 	} else {
-		patch, err = work.Texts(Noun, map[string]string{work.FieldStatus: status})
+		patch = map[string]value.Value{}
+		_, err = o.setStatus(ctx, src, cur, status, false, patch)
 	}
 	if err != nil {
 		return nil, err
@@ -231,14 +233,14 @@ func (o ops) closeChildren(ctx context.Context, f forest, id, verb, children, su
 	if err := bulk.Preview(ctx, o.env, f.row(id).Source, "task "+verb+" --children "+children, items); err != nil {
 		return "", err
 	}
-	patch, err := o.closePatch(status, "")
-	if err != nil {
-		return "", err
-	}
 	// deepest first, so no write ever leaves a closed task over an open one
 	slices.Reverse(targets)
 	for _, d := range targets {
 		s := f.row(d)
+		patch, err := o.closePatch(ctx, s.Source, s.Row, status, "")
+		if err != nil {
+			return "", err
+		}
 		if _, err := o.env.Update(ctx, engine.Ref{Store: s.Source, Table: table, ID: s.Row.ID}, patch); err != nil {
 			return "", err
 		}
@@ -289,7 +291,7 @@ func (o ops) afterClose(ctx context.Context, f forest, id string) (ParentNote, N
 	case mode == autocloseOff:
 		return note, Next{}, "", nil
 	case mode == autocloseOn && (gate == "" || gate == schema.TaskGateApproved):
-		patch, err := o.closePatch(schema.TaskStatusDone, "")
+		patch, err := o.closePatch(ctx, ps.Source, ps.Row, schema.TaskStatusDone, "")
 		if err != nil {
 			return ParentNote{}, Next{}, "", err
 		}
@@ -638,11 +640,11 @@ func (o ops) editTree(ctx context.Context, in EditIn, src store.Source, cur row.
 			if !in.ReopenParent {
 				return te, parentClosed(parent, work.Field(f.row(parent).Row, work.FieldStatus))
 			}
-			patch, perr := reopenPatch()
+			ps := f.row(parent)
+			patch, perr := o.reopenPatch(ctx, ps.Source, ps.Row)
 			if perr != nil {
 				return te, perr
 			}
-			ps := f.row(parent)
 			te.others = append(te.others, otherUpdate{ref: engine.Ref{Store: ps.Source, Table: table, ID: ps.Row.ID}, patch: patch})
 		}
 		if !closing {

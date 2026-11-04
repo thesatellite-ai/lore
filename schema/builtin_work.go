@@ -165,6 +165,10 @@ func workDefs() []TableDef {
 			// by entry id; internal so client repos get no time data (TQ3).
 			JSON("time_entries", Internal(), MergeBy(MergeListByID),
 				Describe("closed time spans [{id, kind, source, actor_id, start, end, seconds, …}] (TIME_TRACKING_DESIGN 6.2)")),
+			// time_open: open status spans, one per person working on the task
+			// (TIME_TRACKING_DESIGN 4.1, D2); same union-by-id merge, internal (TQ3).
+			JSON("time_open", Internal(), MergeBy(MergeListByID),
+				Describe("open status spans [{id, source, actor_id, start}] (TIME_TRACKING_DESIGN 4.1)")),
 			Number("timebox_seconds"),
 			Text("gate", OneOf(TaskGates()...)),
 			Text("approved_by"),

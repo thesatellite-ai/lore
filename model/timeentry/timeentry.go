@@ -87,19 +87,27 @@ type Entry struct {
 	// entry (the run id for SourceRun). Meaningful only on the machine that
 	// wrote it: runs never travel, so another clone cannot resolve it.
 	LocalRef string `json:"local_ref,omitempty"`
+	// SessionRef is lore's ses_ id of the agent session (D8: never the
+	// tool's own session id); empty for people and manual entries. With
+	// ActorID it names the worker (design 5.1 rule 3).
+	SessionRef string `json:"session_ref,omitempty"`
+	// SourceID is the claim token prefix of a claim entry (design 6.2).
+	SourceID string `json:"source_id,omitempty"`
 	Start    string `json:"start,omitempty"`
 	End      string `json:"end,omitempty"`
 	// Day is the calendar day of the work (UTC for auto entries).
-	Day       string   `json:"day,omitempty"`
-	Seconds   int64    `json:"seconds"`
-	Note      string   `json:"note,omitempty"`
-	Flags     []string `json:"flags,omitempty"`
-	CreatedAt string   `json:"created_at"`
-	CreatedBy string   `json:"created_by,omitempty"`
-	UpdatedAt string   `json:"updated_at"`
-	UpdatedBy string   `json:"updated_by,omitempty"`
-	DeletedAt string   `json:"deleted_at,omitempty"`
-	DeletedBy string   `json:"deleted_by,omitempty"`
+	Day     string   `json:"day,omitempty"`
+	Seconds int64    `json:"seconds"`
+	Note    string   `json:"note,omitempty"`
+	Flags   []string `json:"flags,omitempty"`
+	// Orig keeps the times of an auto entry before its first edit (6.2).
+	Orig      Orig   `json:"orig,omitzero"`
+	CreatedAt string `json:"created_at"`
+	CreatedBy string `json:"created_by,omitempty"`
+	UpdatedAt string `json:"updated_at"`
+	UpdatedBy string `json:"updated_by,omitempty"`
+	DeletedAt string `json:"deleted_at,omitempty"`
+	DeletedBy string `json:"deleted_by,omitempty"`
 }
 
 // Deleted reports a tombstoned entry.
@@ -220,3 +228,140 @@ func FormatSeconds(s int64) string {
 	}
 	return strconv.FormatInt(h, 10) + "h " + strconv.FormatInt(m, 10) + "m"
 }
+
+// Orig is an auto entry's span before its first `lore task time edit`.
+type Orig struct {
+	Start   string `json:"start,omitempty"`
+	End     string `json:"end,omitempty"`
+	Seconds int64  `json:"seconds"`
+}
+
+// Flags of an entry (design 6.2), snake_case, a closed set.
+const (
+	FlagLongSpan       = "long_span"
+	FlagEstimatedEnd   = "estimated_end"
+	FlagClockSkew      = "clock_skew"
+	FlagEdited         = "edited"
+	FlagClosedByExpiry = "closed_by_expiry"
+	// FlagCoalesced marks the tombstone of a span merged into an earlier
+	// entry of the same worker at write time (TQ4); it is never restored.
+	FlagCoalesced = "coalesced"
+)
+
+// HasFlag reports whether e carries flag f.
+func (e Entry) HasFlag(f string) bool {
+	for _, x := range e.Flags {
+		if x == f {
+			return true
+		}
+	}
+	return false
+}
+
+// WithFlag returns e with flag f added once.
+func (e Entry) WithFlag(f string) Entry {
+	if !e.HasFlag(f) {
+		e.Flags = append(append([]string(nil), e.Flags...), f)
+	}
+	return e
+}
+
+// StartTime parses Start (zero when unset or bad).
+func (e Entry) StartTime() time.Time { return parseTime(e.Start) }
+
+// EndTime parses End (zero when unset or bad).
+func (e Entry) EndTime() time.Time { return parseTime(e.End) }
+
+// parseTime reads a TimeLayout (or any RFC3339) text; "" or bad is zero.
+func parseTime(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// Open is one open status span of the task row's time_open list (design
+// 4.1): one per person working on the task. Closing moves its id into
+// time_entries, so the merge result is the same whichever side closed it.
+type Open struct {
+	ID      ids.ID[Tag]       `json:"id"`
+	Source  Source            `json:"source"`
+	ActorID ids.ID[ids.Actor] `json:"actor_id"`
+	Start   string            `json:"start"`
+	// UpdatedAt is the merge stamp of logic/merge StrategyListByID.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// StartTime parses Start.
+func (o Open) StartTime() time.Time { return parseTime(o.Start) }
+
+// DecodeOpen parses a time_open list. Empty input is no spans.
+func DecodeOpen(raw []byte) ([]Open, error) {
+	if len(strings.TrimSpace(string(raw))) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var out []Open
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, errs.Wrap(errs.InvalidInput, "time_open is not a list of open spans", err)
+	}
+	return out, nil
+}
+
+// EncodeOpen renders a time_open list as a JSON array.
+func EncodeOpen(list []Open) ([]byte, error) {
+	if list == nil {
+		list = []Open{}
+	}
+	b, err := json.Marshal(list)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "encode time_open", err)
+	}
+	return b, nil
+}
+
+// Close turns an open status span into a closed entry ending at end,
+// keeping the span's id (design 7.2: the id moves from time_open to
+// time_entries). An end before the start counts 0 and is flagged
+// clock_skew (11.3: never negative). by stamps the audit fields.
+func (o Open) Close(end time.Time, by ids.ID[ids.Actor]) Entry {
+	start := o.StartTime()
+	secs := int64(0)
+	var flags []string
+	if end.Before(start) {
+		flags = []string{FlagClockSkew}
+		end = start
+	} else {
+		secs = int64(end.Sub(start) / time.Second)
+	}
+	stamp := end.UTC().Format(TimeLayout)
+	who := by.String()
+	if by.IsZero() {
+		who = o.ActorID.String()
+	}
+	return Entry{
+		ID: o.ID, Kind: KindPerson, Source: o.Source, ActorID: o.ActorID,
+		Start: start.UTC().Format(TimeLayout), End: stamp, Day: start.UTC().Format(dayLayout),
+		Seconds: secs, Flags: flags,
+		CreatedAt: stamp, CreatedBy: who, UpdatedAt: stamp, UpdatedBy: who,
+	}
+}
+
+// NewOpen opens a status span for actor at start.
+func NewOpen(actor ids.ID[ids.Actor], start time.Time) (Open, error) {
+	if actor.IsZero() {
+		return Open{}, errs.New(errs.InvalidInput, "time span: no actor")
+	}
+	id, err := ids.New[Tag]()
+	if err != nil {
+		return Open{}, err
+	}
+	s := start.UTC().Format(TimeLayout)
+	return Open{ID: id, Source: SourceStatus, ActorID: actor, Start: s, UpdatedAt: s}, nil
+}
+
+// DayLayout is the calendar-day form of Entry.Day ("2006-01-02").
+const DayLayout = dayLayout

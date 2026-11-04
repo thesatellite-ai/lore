@@ -112,7 +112,7 @@ type Actorer interface {
 // Ops returns every task operation bound to env, for op.NewRegistry.
 func Ops(env work.Env) []op.Entry {
 	o := ops{env: env}
-	return []op.Entry{
+	return append([]op.Entry{
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Add a new task",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported}, treeAddErrors...)...),
@@ -181,7 +181,7 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpDeferred, Summary: "Show deferred tasks (snoozed; deferred_until in the future)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.deferred),
-	}
+	}, timeOps(o)...)
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
@@ -251,10 +251,14 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		}
 	}
 	fields, err := work.Texts(Noun, map[string]string{
-		work.FieldTitle: title, work.FieldBody: in.Body, work.FieldStatus: schema.TaskStatusTodo,
+		work.FieldTitle: title, work.FieldBody: in.Body,
 		fieldPriority: priority, fieldCommitment: commitment, fieldRole: in.Role, work.FieldKey: in.Key,
 	})
 	if err != nil {
+		return AddOut{}, err
+	}
+	// D2: even the first status goes through the one transition.
+	if _, err = o.setStatus(ctx, "", row.Row{}, schema.TaskStatusTodo, false, fields); err != nil {
 		return AddOut{}, err
 	}
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
@@ -341,7 +345,11 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 			return AddOut{}, berr
 		}
 		ctx = bctx
-		patch, perr := reopenPatch()
+		_, prow, perr := work.Get(ctx, o.env, Noun, table, par.reopen.ID)
+		if perr != nil {
+			return AddOut{}, perr
+		}
+		patch, perr := o.reopenPatch(ctx, par.reopen.Store, prow)
 		if perr != nil {
 			return AddOut{}, perr
 		}
@@ -938,10 +946,17 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	}
 	patch, err := work.Texts(Noun, map[string]string{
 		work.FieldTitle: strings.TrimSpace(in.Title), work.FieldBody: in.Body, fieldPriority: in.Priority,
-		work.FieldStatus: in.Status, fieldCommitment: in.Commitment, fieldRole: in.Role,
+		fieldCommitment: in.Commitment, fieldRole: in.Role,
 	})
 	if err != nil {
 		return work.WriteOut{}, err
+	}
+	timeHint := ""
+	if in.Status != "" {
+		// D2: --status goes through the one transition (time spans).
+		if timeHint, err = o.setStatus(ctx, curSrc, cur, in.Status, false, patch); err != nil {
+			return work.WriteOut{}, err
+		}
 	}
 	if err = setDates(patch, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
 		return work.WriteOut{}, err
@@ -1010,7 +1025,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: nothing to change").
 			WithHint("give at least one flag, e.g. --title, --status, --priority, --due")
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n")
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+timeHint)
 }
 
 // start marks a task in_progress; starting work also commits it and
@@ -1020,23 +1035,35 @@ func (o ops) start(ctx context.Context, in IDIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	patch, err := o.statusPatch(schema.TaskStatusInProgress, fieldStarted)
+	src, cur, err := work.Get(ctx, o.env, Noun, table, id)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" started\n")
+	patch, hint, err := o.statusPatch(ctx, src, cur, schema.TaskStatusInProgress, fieldStarted)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	// design 4.1: started_at keeps the FIRST start; it is no longer overwritten.
+	if !work.Time(cur, fieldStarted).IsZero() {
+		delete(patch, fieldStarted)
+	}
+	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" started\n"+hint)
 }
 
-// statusPatch sets status, stamps the time field, accepts the task and
-// clears its deferral.
-func (o ops) statusPatch(status, stamp string) (map[string]value.Value, error) {
-	patch, err := work.Texts(Noun, map[string]string{work.FieldStatus: status, fieldCommitment: schema.TaskCommitmentAccepted})
+// statusPatch sets status through setStatus (D2), stamps the time field,
+// accepts the task and clears its deferral; hint is setStatus's line.
+func (o ops) statusPatch(ctx context.Context, src store.Source, cur row.Row, status, stamp string) (map[string]value.Value, string, error) {
+	patch, err := work.Texts(Noun, map[string]string{fieldCommitment: schema.TaskCommitmentAccepted})
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	hint, err := o.setStatus(ctx, src, cur, status, false, patch)
+	if err != nil {
+		return nil, "", err
 	}
 	patch[stamp] = work.Now(o.env)
 	patch[fieldDeferred] = value.Null{}
-	return patch, nil
+	return patch, hint, nil
 }
 
 // done marks a task done with the code that finished it and saves the
@@ -1056,7 +1083,11 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
-	patch, err := o.closePatch(schema.TaskStatusDone, "")
+	dsrc, dcur, err := work.Get(ctx, o.env, Noun, table, id)
+	if err != nil {
+		return DoneOut{}, err
+	}
+	patch, err := o.closePatch(ctx, dsrc, dcur, schema.TaskStatusDone, "")
 	if err != nil {
 		return DoneOut{}, err
 	}
@@ -1166,7 +1197,11 @@ func (o ops) cancel(ctx context.Context, in CancelIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
-	patch, err := o.closePatch(schema.TaskStatusCancelled, in.Reason)
+	csrc, ccur, err := work.Get(ctx, o.env, Noun, table, id)
+	if err != nil {
+		return DoneOut{}, err
+	}
+	patch, err := o.closePatch(ctx, csrc, ccur, schema.TaskStatusCancelled, in.Reason)
 	if err != nil {
 		return DoneOut{}, err
 	}
