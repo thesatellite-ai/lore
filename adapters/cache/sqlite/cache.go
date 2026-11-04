@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -139,10 +140,13 @@ func (c *Cache) init(ctx context.Context) error {
 	}
 	var st state
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
-		for _, s := range internalDDL {
+		for _, s := range append(slices.Clone(internalDDL), taskTreeDDL...) {
 			if _, err := tx.ExecContext(ctx, s); err != nil {
 				return dbErr("create internal tables", err)
 			}
+		}
+		if err := backfillTaskTree(ctx, tx); err != nil {
+			return err
 		}
 		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(layoutVersion)); err != nil {
 			return dbErr("stamp layout version", err)
@@ -243,7 +247,7 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 	st := c.st
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
 		applied := make([]store.Row, 0, len(rows))
-		kindsChanged := false
+		kindsChanged, tasksChanged := false, false
 		for _, r := range rows {
 			newer, err := keepRaw(ctx, tx, source, r)
 			if err != nil {
@@ -253,6 +257,7 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 				continue
 			}
 			applied = append(applied, r)
+			tasksChanged = tasksChanged || r.Table == schema.TableTasks
 			if r.Table == schema.TableKinds || r.Table == schema.TableKindFields {
 				kindsChanged = true
 			}
@@ -268,6 +273,11 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 		}
 		for _, r := range applied {
 			if err := c.project(ctx, tx, st, source, r); err != nil {
+				return err
+			}
+		}
+		if tasksChanged {
+			if err := refreshTaskTree(ctx, tx); err != nil {
 				return err
 			}
 		}
@@ -361,6 +371,9 @@ func (c *Cache) Rebuild(ctx context.Context, source store.Source) error {
 			if _, err := tx.ExecContext(ctx, q, string(source)); err != nil {
 				return dbErr("rebuild", err)
 			}
+		}
+		if err := refreshTaskTree(ctx, tx); err != nil {
+			return err
 		}
 		var err error
 		if st, err = c.loadState(ctx, tx); err != nil {

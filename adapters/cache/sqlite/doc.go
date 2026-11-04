@@ -104,5 +104,13 @@
 // fields at open: tasks_all → spans (open ones end now) → counted seconds
 // per worker and per owner → view joined to tasks, projects, actors.
 //
-// Layer L3: imports model, schema and store, never the engine.
+// # Task tree
+//
+// tasktree.go (TASK_SYSTEM_DESIGN 23): the closure table task_tree
+// (ancestor_id, descendant_id, depth; self pairs at 0), rebuilt from the
+// live, untrashed tasks in `_rows` through logic/tasktree whenever a tasks
+// row is applied, on Rebuild and on first open of an older file; a lens
+// reads it as task_tree_all.
+//
+// Layer L3: imports model, schema, logic and store, never the engine.
 package sqlite
