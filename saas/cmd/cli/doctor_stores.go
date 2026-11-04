@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 
 	"saas/pkg/aicoder/lorecfg"
@@ -58,6 +60,9 @@ func doctorStores(ctx context.Context, r *doctorReport) {
 			r.Notes = append(r.Notes, strconv.Itoa(len(list))+" stores attached (more than "+strconv.Itoa(wire.MaxStoreCaches)+
 				"): this repo uses one combined store cache (CFG3) instead of one cache file per store")
 		}
+		for _, msg := range resurrectedFindings(ctx) {
+			warn(msg)
+		}
 	}
 	if root, err := os.Getwd(); err == nil {
 		local := filepath.Join(root, claudeLocalFile)
@@ -87,4 +92,38 @@ func hasStores(cfg *lorecfg.Config) bool {
 	}
 	ps := personalStoreV017(cfg)
 	return ps != "" && ps != lorecfg.PersonalStoreLocal
+}
+
+// doctorDataDir is a store's row folder relative to the store root
+// (rowfs: <folder>/.lore/data, the root folder at .lore/data).
+const doctorDataDir = ".lore/data"
+
+// resurrectedFindings names every live row file of a purged row an old
+// clone brought back (DQ4, DELETION_DESIGN 2.7). The engine already hides
+// such a file from every read; doctor says where it is so a person deletes
+// it. A failed check is itself a finding (doctor never hides a problem).
+func resurrectedFindings(ctx context.Context) []string {
+	eng, err := coreApp.Engine(ctx)
+	if err != nil {
+		return []string{"purged rows not checked: " + err.Error()}
+	}
+	res, err := eng.Resurrected(ctx)
+	if err != nil {
+		return []string{"purged rows not checked: " + err.Error()}
+	}
+	if len(res) == 0 {
+		return nil
+	}
+	folders := map[store.Source]string{}
+	if idents, err := coreApp.StoreIdentities(ctx); err == nil {
+		for _, si := range idents {
+			folders[si.Name] = si.Folder
+		}
+	}
+	out := make([]string, 0, len(res))
+	for _, x := range res {
+		p := path.Join(folders[x.Store], doctorDataDir, rowfs.RowPath(x.Table, x.ID))
+		out = append(out, "store "+string(x.Store)+": "+p+" is a live copy of a purged row (an old clone brought it back); lore hides it from every read; delete the file")
+	}
+	return out
 }
