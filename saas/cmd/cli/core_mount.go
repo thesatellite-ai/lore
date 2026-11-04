@@ -34,13 +34,16 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	opscomment "github.com/thesatellite-ai/lore/ops/comment"
 	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
+	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
+	opstag "github.com/thesatellite-ai/lore/ops/tag"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/surface/cli"
@@ -101,7 +104,42 @@ func mountCore(root *cobra.Command) {
 			}
 		}
 	}
+	if alias := newCommitShowAlias(root); alias != nil {
+		root.AddCommand(alias)
+	}
 	root.AddCommand(newAPICommand(), newSpecCommand())
+}
+
+// commitShowAlias is v0.1.17's spelling of `lore commit show <sha>`.
+const commitShowAlias = "commit-show"
+
+// newCommitShowAlias is the hidden `lore commit-show <sha>` of v0.1.17: it
+// parses its arguments with the mounted `lore commit show` command's flags
+// and runs that command, so both spellings share one implementation. nil
+// when commit show is not mounted.
+func newCommitShowAlias(root *cobra.Command) *cobra.Command {
+	show, _, err := root.Find([]string{opslink.CommitNoun, "show"})
+	if err != nil || show.Name() != "show" || show.RunE == nil {
+		return nil
+	}
+	return &cobra.Command{
+		Use:                commitShowAlias + " <sha>",
+		Short:              "v0.1.17 spelling of `lore commit show`",
+		Hidden:             true,
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			show.SetContext(cmd.Context())
+			show.SetOut(cmd.OutOrStdout())
+			show.SetErr(cmd.ErrOrStderr())
+			if err := show.ParseFlags(args); err != nil {
+				return show.FlagErrorFunc()(show, err)
+			}
+			if h, _ := show.Flags().GetBool("help"); h {
+				return show.Help()
+			}
+			return show.RunE(show, show.Flags().Args())
+		},
+	}
 }
 
 // coreNouns are the command groups mounted from the core that keep
@@ -111,6 +149,7 @@ var coreNouns = []string{
 	opsmemory.Noun,
 	opspattern.Noun, opsplaybook.Noun, opsprompt.Noun,
 	opsrule.Noun, opsdecision.Noun, opshotfix.Noun,
+	opstag.Noun, opscomment.Noun, opslink.Noun, opslink.CommitNoun,
 }
 
 // v0.1.17 flags every `lore memory …` command still accepts on the core
@@ -246,6 +285,7 @@ var coreRouteKinds = map[row.Table]string{
 	schema.TableMemories:  "memory",
 	schema.TableRules:     "rule",
 	schema.TableDecisions: "decision",
+	schema.TableComments:  "comment",
 }
 
 // guardCoreRepoWrite keeps v0.1.17's write routing in force for the rows

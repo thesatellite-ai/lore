@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
@@ -40,16 +41,20 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	opscomment "github.com/thesatellite-ai/lore/ops/comment"
 	opscontent "github.com/thesatellite-ai/lore/ops/content"
 	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
+	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
+	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
+	opstag "github.com/thesatellite-ai/lore/ops/tag"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -173,6 +178,10 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsrule.Ops(a)...)
 	entries = append(entries, opsdecision.Ops(a)...)
 	entries = append(entries, opshotfix.Ops(a)...)
+	entries = append(entries, opstag.Ops(a)...)
+	entries = append(entries, opscomment.Ops(a)...)
+	entries = append(entries, opslink.Ops(a, gitcommit.Resolver{})...)
+	entries = append(entries, opssettings.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 
@@ -283,11 +292,16 @@ func (s *state) close() error {
 }
 
 var (
-	_ op.Runner        = (*App)(nil)
-	_ opsmemory.Env    = (*App)(nil)
-	_ opsmemory.Mover  = (*App)(nil)
-	_ opsstores.Syncer = (*App)(nil)
-	_ opscontent.Env   = (*App)(nil)
+	_ op.Runner             = (*App)(nil)
+	_ opsmemory.Env         = (*App)(nil)
+	_ opsmemory.Mover       = (*App)(nil)
+	_ opsstores.Syncer      = (*App)(nil)
+	_ opscontent.Env        = (*App)(nil)
+	_ opstag.Env            = (*App)(nil)
+	_ opscomment.Env        = (*App)(nil)
+	_ opslink.Env           = (*App)(nil)
+	_ opssettings.Env       = (*App)(nil)
+	_ opssettings.IDCreator = (*App)(nil)
 )
 
 // SyncStores is the 0.1.18 half of `lore sync` (O12b: sync is one
