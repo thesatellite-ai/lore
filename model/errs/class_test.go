@@ -30,6 +30,7 @@ func allConstants() []Code {
 		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth,
 		DurationBad, TimeTooLong, UpgradePermission, UpgradeChecksum, UpgradePinned,
 		RefSyntax, RefScheme, RefCycle, RefDepth, RefLimit, RefDangling, RefRequired,
+		InTrash, ParentDeleted, ParentPurged, ReasonRequired, MigrateRollbackLoses,
 	}
 }
 

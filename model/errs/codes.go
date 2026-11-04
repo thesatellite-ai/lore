@@ -128,7 +128,9 @@ const (
 	MetaType          Code = "E_META_TYPE"
 	MetaAmbiguous     Code = "E_META_AMBIGUOUS"
 	MigrateLocked     Code = "E_MIGRATE_LOCKED"
-	URLUserinfo       Code = "E_URL_CREDENTIALS"
+	// FORMAT_EVOLUTION rule 4, FQ5.
+	MigrateRollbackLoses Code = "E_MIGRATE_ROLLBACK_LOSES"
+	URLUserinfo          Code = "E_URL_CREDENTIALS"
 	// Purged refuses any write that would bring a purged id back as a live
 	// row (update, create with the id, move, merge, restore): purged rows
 	// never come back (DELETION_DESIGN 3.5, DQ4; CLI_REFERENCE 5.5).
@@ -138,6 +140,11 @@ const (
 	// delete` answers it naming `lore actor deactivate`, because actors are
 	// never deleted (DELETION 4.1: every *_by field points at them).
 	Refused Code = "E_REFUSED"
+	// Trash refusals (DELETION_DESIGN 3.2-3.4, 4.2; CLI_REFERENCE 5.5: exit 23/20, 409/400).
+	InTrash        Code = "E_IN_TRASH"
+	ParentDeleted  Code = "E_PARENT_DELETED"
+	ParentPurged   Code = "E_PARENT_PURGED"
+	ReasonRequired Code = "E_REASON_REQUIRED"
 	// Reference errors (SECRETS_AND_REFERENCES 5.1, 8.1-8.6).
 	RefSyntax   Code = "E_REF_SYNTAX"
 	RefScheme   Code = "E_REF_SCHEME"
@@ -241,31 +248,36 @@ var table = map[Code]entry{
 	OldLore:               {class: ClassGuard, desc: "this lore binary is below the project's min_lore_version or does not know one of its features; run lore upgrade (reads still work)"},
 	ConfigInvalid:         {class: ClassBadInput, desc: "a config file failed validation"},
 
-	Stale:            {class: ClassRefused, desc: "the row changed between read and write and could not be merged automatically"},
-	StoreScheme:      {class: ClassBadInput, desc: "a store url uses a scheme no backend is registered for"},
-	StoreBackend:     {class: ClassRefused, desc: "a store's filler and backend do not fit"},
-	StoreUnreachable: {class: ClassCoordination, exit: ExitOffline, desc: "a store with no local copy could not be reached"},
-	StoreReadOnly:    {class: ClassRefused, desc: "a write to a store attached read-only"},
-	StoreLocked:      {class: ClassRefused, desc: "the store lock stayed held past store.lock_timeout"},
-	Unauthorized:     {class: ClassUnauthorized, desc: "the request has no valid token"},
-	ResourceInvalid:  {class: ClassBadInput, desc: "a value or field does not fit the kind"},
-	SchemaOld:        {class: ClassUpgrade, desc: "the local database is older than this binary"},
-	NeedsConfirm:     {class: ClassNeedsConfirmation, desc: "the command asks first and ran with no terminal and no --yes"},
-	PolicyDenied:     {class: ClassRefused, desc: "a team policy refuses this"},
-	KindUnknown:      {class: ClassDefinition, desc: "a kind not in this place's view"},
-	MetaType:         {class: ClassBadInput, desc: "a value does not parse as the key's type"},
-	MetaAmbiguous:    {class: ClassAmbiguous, desc: "a bare name matches definitions at two or more levels"},
-	MigrateLocked:    {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
-	URLUserinfo:      {class: ClassBadInput, desc: "a URL value holds credentials"},
-	Purged:           {class: ClassRefused, desc: "the row was purged; only a tombstone is left"},
-	Refused:          {class: ClassRefused, desc: "a fixed lore rule refuses this; the message names the rule and what to do instead"},
-	RefSyntax:        {class: ClassBadInput, desc: "a reference is malformed: an unknown option, a reference inside a path, or more than 3 secret alternates"},
-	RefScheme:        {class: ClassBadInput, desc: "a secret reference names a manager scheme lore does not know"},
-	RefCycle:         {class: ClassBadInput, desc: "references refer to each other in a loop; the message prints the chain"},
-	RefDepth:         {class: ClassBadInput, desc: "references nest deeper than 8"},
-	RefLimit:         {class: ClassBadInput, desc: "expanding a text took more than 256 references or 64 KB of output"},
-	RefDangling:      {class: ClassBadInput, desc: "the value refers to something that is not defined here; define it first or pass --allow-dangling"},
-	RefRequired:      {class: ClassBadInput, desc: "a ${scheme:name:?message} reference did not resolve"},
+	Stale:                {class: ClassRefused, desc: "the row changed between read and write and could not be merged automatically"},
+	StoreScheme:          {class: ClassBadInput, desc: "a store url uses a scheme no backend is registered for"},
+	StoreBackend:         {class: ClassRefused, desc: "a store's filler and backend do not fit"},
+	StoreUnreachable:     {class: ClassCoordination, exit: ExitOffline, desc: "a store with no local copy could not be reached"},
+	StoreReadOnly:        {class: ClassRefused, desc: "a write to a store attached read-only"},
+	StoreLocked:          {class: ClassRefused, desc: "the store lock stayed held past store.lock_timeout"},
+	Unauthorized:         {class: ClassUnauthorized, desc: "the request has no valid token"},
+	ResourceInvalid:      {class: ClassBadInput, desc: "a value or field does not fit the kind"},
+	SchemaOld:            {class: ClassUpgrade, desc: "the local database is older than this binary"},
+	NeedsConfirm:         {class: ClassNeedsConfirmation, desc: "the command asks first and ran with no terminal and no --yes"},
+	PolicyDenied:         {class: ClassRefused, desc: "a team policy refuses this"},
+	KindUnknown:          {class: ClassDefinition, desc: "a kind not in this place's view"},
+	MetaType:             {class: ClassBadInput, desc: "a value does not parse as the key's type"},
+	MetaAmbiguous:        {class: ClassAmbiguous, desc: "a bare name matches definitions at two or more levels"},
+	MigrateLocked:        {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
+	MigrateRollbackLoses: {class: ClassMigrate, desc: "rolling back the migration would lose changes made after it; nothing was changed"},
+	URLUserinfo:          {class: ClassBadInput, desc: "a URL value holds credentials"},
+	Purged:               {class: ClassRefused, desc: "the row was purged; only a tombstone is left"},
+	Refused:              {class: ClassRefused, desc: "a fixed lore rule refuses this; the message names the rule and what to do instead"},
+	InTrash:              {class: ClassRefused, desc: "an edit or delete of a row that is already in the trash"},
+	ParentDeleted:        {class: ClassRefused, desc: "restore of a child whose parent is in the trash"},
+	ParentPurged:         {class: ClassRefused, desc: "restore of a child whose parent was purged"},
+	ReasonRequired:       {class: ClassBadInput, desc: "a delete without --reason while delete.require_reason is true"},
+	RefSyntax:            {class: ClassBadInput, desc: "a reference is malformed: an unknown option, a reference inside a path, or more than 3 secret alternates"},
+	RefScheme:            {class: ClassBadInput, desc: "a secret reference names a manager scheme lore does not know"},
+	RefCycle:             {class: ClassBadInput, desc: "references refer to each other in a loop; the message prints the chain"},
+	RefDepth:             {class: ClassBadInput, desc: "references nest deeper than 8"},
+	RefLimit:             {class: ClassBadInput, desc: "expanding a text took more than 256 references or 64 KB of output"},
+	RefDangling:          {class: ClassBadInput, desc: "the value refers to something that is not defined here; define it first or pass --allow-dangling"},
+	RefRequired:          {class: ClassBadInput, desc: "a ${scheme:name:?message} reference did not resolve"},
 }
 
 // Lookup returns the registry entry of c. An unregistered code is reported
