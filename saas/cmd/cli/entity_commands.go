@@ -23,8 +23,6 @@ import (
 	"time"
 
 	"dbent/gen/ent"
-	entActor "dbent/gen/ent/actor"
-	entDbconfig "dbent/gen/ent/dbconfig"
 	entMountAlias "dbent/gen/ent/mountalias"
 	entPIIPattern "dbent/gen/ent/piipattern"
 	entTaskView "dbent/gen/ent/taskview"
@@ -37,86 +35,11 @@ import (
 
 // ── actor ────────────────────────────────────────────────────────────────
 
+// newActorCommand is the `lore actor` group: list and show are the
+// core's (ops/infra), register and deactivate the roster's
+// (attachRosterCommands). A pure group, so cli.Mount reuses it.
 func newActorCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "actor", Short: "Inspect actors (humans, agents, hooks, plugins)"}
-	cmd.AddCommand(newActorListCommand())
-	cmd.AddCommand(newActorShowCommand())
-	return cmd
-}
-
-func newActorListCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use: "list", Short: "List actors",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			rows, err := client.Actor.Query().Order(ent.Asc(entActor.FieldCreatedAt)).All(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "list actors").WithCause(err)
-			}
-			if jsonOut {
-				printJSON(constants.KindActorList, rows, len(rows))
-				return nil
-			}
-			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no actors)"))
-				return nil
-			}
-			for _, a := range rows {
-				fmt.Printf("%s [%s] %s\n", style.Code(a.ID), a.Kind, a.DisplayName)
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
-
-func newActorShowCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use: "show <id>", Short: "Show actor details",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			_prettyID, perr := resolvePrettyID(cmd.Context(), client, args[0])
-
-			if perr != nil {
-				return errcodes.New(errcodes.NotFound, perr.Error())
-			}
-
-			a, err := client.Actor.Get(cmd.Context(), _prettyID)
-			if err != nil {
-				return errcodes.New(errcodes.NotFound, fmt.Sprintf("actor %q not found", args[0]))
-			}
-			if jsonOut {
-				printJSON(constants.KindActorShow, a, 0)
-				return nil
-			}
-			fmt.Printf("%s\n", style.Code(a.ID))
-			fmt.Printf("  kind:        %s\n", a.Kind)
-			fmt.Printf("  display:     %s\n", a.DisplayName)
-			fmt.Printf("  stable_key:  %s\n", a.StableKey)
-			if !a.LastSeenAt.IsZero() {
-				fmt.Printf("  last_seen:   %s\n", a.LastSeenAt.Format(time.RFC3339))
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	return cmd
+	return &cobra.Command{Use: "actor", Short: "Inspect actors (humans, agents, hooks, plugins)"}
 }
 
 // ── snapshot ─────────────────────────────────────────────────────────────
@@ -309,70 +232,40 @@ func newPIIPatternListCommand() *cobra.Command {
 	return cmd
 }
 
+// errPIIPatternMoved is the answer of `lore pii-pattern add|enable|disable`:
+// custom secret patterns are settings rows now (SETTINGS ARE DATA,
+// FORMAT_EVOLUTION step 17), written by `lore secrets rule add|on|off`.
+// The v0.1.17 pii_patterns table was machine-local and no scanner ever
+// read it, so nothing that worked before stops working; `pii-pattern list`
+// still shows what is left in it.
+func errPIIPatternMoved(verb string) error {
+	repl := map[string]string{"add": "lore secrets rule add", "enable": "lore secrets rule on", "disable": "lore secrets rule off"}[verb]
+	return errcodes.New(errcodes.InvalidInput, "lore pii-pattern "+verb+" was replaced by "+repl+" (secret rules are settings rows)").
+		WithHint("use `" + repl + "`; `lore secrets rules` lists every rule")
+}
+
 func newPIIPatternAddCommand() *cobra.Command {
-	var f commonFlags
 	var name, regex, source string
 	cmd := &cobra.Command{
-		Use: "add", Short: "Add a custom PII pattern (disabled by default — `pii-pattern enable` to activate)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
-			}
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			r, err := client.PiiPattern.Create().
-				SetName(name).
-				SetRegex(regex).
-				SetSourceKind(source).
-				SetEnabled(false).
-				Save(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "create pattern").WithCause(err)
-			}
-			fmt.Printf("%s pii-pattern %s added (disabled — run `pii-pattern enable %s`)\n",
-				style.Success("✓"), r.Name, r.ID)
-			return nil
-		},
+		Use: "add", Short: "Replaced by `lore secrets rule add`",
+		RunE: func(cmd *cobra.Command, args []string) error { return errPIIPatternMoved("add") },
 	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().StringVar(&name, constants.FlagName, "", "pattern name (required)")
-	cmd.Flags().StringVar(&regex, "regex", "", "regex pattern (required)")
-	cmd.Flags().StringVar(&source, constants.FlagSource, "user", "source_kind (user | builtin | imported)")
-	_ = cmd.MarkFlagRequired(constants.FlagName)
-	_ = cmd.MarkFlagRequired("regex")
+	cmd.Flags().StringVar(&name, constants.FlagName, "", "pattern name")
+	cmd.Flags().StringVar(&regex, "regex", "", "regex pattern")
+	cmd.Flags().StringVar(&source, constants.FlagSource, "user", "source_kind")
 	return cmd
 }
 
 func newPIIPatternEnableCommand(enable bool) *cobra.Command {
-	var f commonFlags
 	verb := "enable"
+	repl := "lore secrets rule on"
 	if !enable {
-		verb = "disable"
+		verb, repl = "disable", "lore secrets rule off"
 	}
-	cmd := &cobra.Command{
-		Use: verb + " <id>", Short: verb + " a PII pattern by id",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
-			}
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			if err := client.PiiPattern.UpdateOneID(args[0]).SetEnabled(enable).Exec(cmd.Context()); err != nil {
-				return errcodes.New(errcodes.Internal, verb+" pattern").WithCause(err)
-			}
-			fmt.Printf("%s pii-pattern %s %sd\n", style.Success("✓"), args[0], verb)
-			return nil
-		},
+	return &cobra.Command{
+		Use: verb + " <id>", Short: "Replaced by `" + repl + "`",
+		RunE: func(cmd *cobra.Command, args []string) error { return errPIIPatternMoved(verb) },
 	}
-	bindCommonFlags(cmd, &f)
-	return cmd
 }
 
 // ── task-view ────────────────────────────────────────────────────────────
@@ -533,116 +426,18 @@ func newMountAliasListCommand() *cobra.Command {
 	return cmd
 }
 
-// ── config (dbconfig — DB-level KV) ──────────────────────────────────────
+// ── config (~/.lore/config.yaml, CFG12) ─────────────────────────────────
 
+// newConfigCommand is `lore config`: get, set and list edit only
+// ~/.lore/config.yaml (CFG12, config_yaml_cmd.go); check validates it.
+// The DB-level dbconfig table is the cache's own bookkeeping and has no
+// user command any more.
 func newConfigCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "config", Short: "Get/set DB-level config keys (dbconfig table)"}
+	cmd := &cobra.Command{Use: "config", Short: "Get/set keys of ~/.lore/config.yaml"}
 	cmd.AddCommand(newConfigGetCommand())
 	cmd.AddCommand(newConfigSetCommand())
 	cmd.AddCommand(newConfigListCommand())
 	cmd.AddCommand(newConfigCheckCommand())
-	return cmd
-}
-
-func newConfigGetCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use: "get <key>", Short: "Get a config value by key",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			r, err := client.DBConfig.Query().Where(entDbconfig.Key(args[0])).Only(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.NotFound, fmt.Sprintf("config key %q not found", args[0]))
-			}
-			if r.Value != nil {
-				fmt.Println(*r.Value)
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	return cmd
-}
-
-func newConfigSetCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use: "set <key> <value>", Short: "Set a config value (upsert)",
-		Args: cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
-			}
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			key, val := args[0], args[1]
-			existing, err := client.DBConfig.Query().Where(entDbconfig.Key(key)).Only(cmd.Context())
-			if err == nil {
-				if err := client.DBConfig.UpdateOneID(existing.ID).
-					SetValue(val).
-					SetSettingUpdatedAt(time.Now()).
-					Exec(cmd.Context()); err != nil {
-					return errcodes.New(errcodes.Internal, "update config").WithCause(err)
-				}
-			} else {
-				if _, err := client.DBConfig.Create().
-					SetKey(key).
-					SetValue(val).
-					Save(cmd.Context()); err != nil {
-					return errcodes.New(errcodes.Internal, "create config").WithCause(err)
-				}
-			}
-			fmt.Printf("%s %s=%s\n", style.Success("✓"), key, val)
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	return cmd
-}
-
-func newConfigListCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use: "list", Short: "List all config keys",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			rows, err := client.DBConfig.Query().Order(ent.Asc(entDbconfig.FieldKey)).All(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "list config").WithCause(err)
-			}
-			if jsonOut {
-				printJSON(constants.KindConfigList, rows, len(rows))
-				return nil
-			}
-			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no config keys)"))
-				return nil
-			}
-			for _, r := range rows {
-				val := ""
-				if r.Value != nil {
-					val = *r.Value
-				}
-				fmt.Printf("%s=%s\n", r.Key, val)
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
 }
 
