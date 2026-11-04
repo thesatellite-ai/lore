@@ -1,0 +1,61 @@
+# Strict lint for the root module (github.com/thesatellite-ai/lore).
+# The old nested modules (saas, dbent, lace) are separate modules and are not
+# linted by this file. Findings are fixed at the cause: no //nolint, no
+# per-rule carve-outs for hand-written code.
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - revive
+    - gocritic
+    - gosec
+    - unparam
+    - unused
+    - misspell
+    - forbidigo
+    - ineffassign
+    - errorlint
+    - exhaustive
+    - nolintlint
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # struct order follows meaning, not padding
+    revive:
+      rules:
+        - name: exported
+          arguments: ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: error-strings
+        - name: error-naming
+        - name: receiver-naming
+        - name: unexported-return
+        - name: blank-imports
+    exhaustive:
+      # a switch with a default arm states its fallback explicitly
+      default-signifies-exhaustive: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    forbidigo:
+      forbid:
+        # `any` / interface{} are caught by internal/layers TestNoAny, which
+        # understands type-parameter constraints. Panics are allowed only for
+        # startup programmer errors (op.Define tag checks), documented there.
+        - pattern: ^print(ln)?$
+          msg: "use the surface's writer"
+      analyze-types: true
+
+formatters:
+  enable:
+    - gofmt

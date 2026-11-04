@@ -1,0 +1,239 @@
+package schema
+
+import (
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/value"
+)
+
+// Built-in table names. Other packages refer to these constants, never to
+// string literals.
+const (
+	TableActors       = "actors"
+	TableProjects     = "projects"
+	TableRepos        = "repos"
+	TableMemories     = "memories"
+	TablePolicies     = "policies"
+	TableMetaKeys     = "meta_keys"
+	TableMetaValues   = "meta_values"
+	TableKinds        = "kinds"
+	TableKindFields   = "kind_fields"
+	TableVars         = "vars"
+	TableSecretRules  = "secret_rules"
+	TableSecretAllows = "secret_allows"
+	TableResources    = "resources"
+)
+
+// Memory kinds (the 5-tier taxonomy of dbent/schema/memory.go).
+const (
+	MemoryKindCore       = "core"
+	MemoryKindRetrieved  = "retrieved"
+	MemoryKindEpisodic   = "episodic"
+	MemoryKindProcedural = "procedural"
+	MemoryKindArchival   = "archival"
+)
+
+// MemoryKinds lists the memory kinds in v0.1.17 order.
+func MemoryKinds() []string {
+	return []string{MemoryKindCore, MemoryKindRetrieved, MemoryKindEpisodic, MemoryKindProcedural, MemoryKindArchival}
+}
+
+// Actor kinds (dbent/schema/enums.go ActorKind).
+const (
+	ActorKindHuman  = "human"
+	ActorKindAgent  = "agent"
+	ActorKindHook   = "hook"
+	ActorKindPlugin = "plugin"
+	ActorKindCron   = "cron"
+	ActorKindSystem = "system"
+)
+
+// ActorKinds lists the actor kinds in v0.1.17 order.
+func ActorKinds() []string {
+	return []string{ActorKindHuman, ActorKindAgent, ActorKindHook, ActorKindPlugin, ActorKindCron, ActorKindSystem}
+}
+
+// Secret rule states (spec 4.3).
+const (
+	SecretRuleOn      = "on"
+	SecretRuleOff     = "off"
+	SecretRuleChanged = "changed"
+)
+
+// SecretRuleStates lists the states.
+func SecretRuleStates() []string { return []string{SecretRuleOn, SecretRuleOff, SecretRuleChanged} }
+
+// Shared field names used across several tables and by KindDefFromRows.
+const (
+	fieldName = "name"
+	fieldKind = "kind"
+)
+
+// Builtin returns the compiled-in table definitions. Only the tables the
+// 0.1.18 core needs are declared so far; the other v0.1.17 tables join as
+// their nouns migrate (strangler, one noun at a time).
+//
+// Synced v0.1.17 columns are copied from dbent/schema; machine-local
+// columns (last_accessed_at, last_seen_at, last_active_at, embedding_*)
+// are left out on purpose: they never travel in a row (lsync volatile
+// columns). id, created_at and updated_at are envelope fields.
+func Builtin() []TableDef {
+	return []TableDef{
+		Table(TableActors, ids.PrefixActor, Synced(), Description("people and agents that write rows"),
+			Text(fieldKind, Required(), OneOf(ActorKinds()...)),
+			Text("display_name", Required()),
+			Text("stable_key", Required(), Internal()),
+			Ref("owner_actor_id", TableActors, Internal()),
+			Text("label"),
+			Text("handle"),
+			Bool("active"),
+			DateTime("left_at"),
+			UniqueOn("stable_key"),
+			IndexOn(fieldKind),
+			IndexOn("handle"),
+			SelfRel("owner", "owner_actor_id", TombstoneOnly),
+		),
+		Table(TableProjects, ids.PrefixProject, Synced(), Description("a project, or a folder inside a store"),
+			Text(fieldName, Required()),
+			Text("origin_url"),
+			DateTime("archived_at"),
+			IndexOn(fieldName),
+			HasManyRel("repos", TableRepos, "project_id"),
+			HasManyRel("memories", TableMemories, "project_id"),
+		),
+		Table(TableRepos, ids.PrefixRepo, Synced(), Description("a code repository of a project"),
+			Ref("project_id", TableProjects, Required()),
+			Text("mount_name", Required()),
+			Text("display_name"),
+			Text("origin_url"),
+			DateTime("archived_at"),
+			UniqueOn("project_id", "mount_name"),
+			BelongsToRel("project", "project_id", TableProjects, Restrict),
+		),
+		Table(TableMemories, ids.PrefixMemory, Synced(), FTS("body"), Description("free-form learned notes"),
+			Ref("project_id", TableProjects, Required()),
+			Ref("repo_id", TableRepos),
+			Text(fieldKind, Required(), OneOf(MemoryKinds()...)),
+			Text("body", Required(), WithWidget(WidgetMarkdown)),
+			DateTime("valid_at"),
+			DateTime("valid_until"),
+			DateTime("tx_at"),
+			Ref("superseded_by_id", TableMemories),
+			Ref("created_by_actor_id", TableActors),
+			Ref("validated_by_actor_id", TableActors),
+			Number("trust_score"),
+			Number("confidence"),
+			DateTime("last_validated_at"),
+			DateTime("archived_at"),
+			Text("source_kind", Required()),
+			Text("source_ref"),
+			IndexOn("project_id", "repo_id"),
+			IndexOn("project_id", fieldKind),
+			IndexOn("archived_at"),
+			IndexOn("superseded_by_id"),
+			BelongsToRel("project", "project_id", TableProjects, Restrict),
+			BelongsToRel("repo", "repo_id", TableRepos, SetNull),
+			BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
+			BelongsToRel("validated_by", "validated_by_actor_id", TableActors, TombstoneOnly),
+			SelfRel("superseded_by", "superseded_by_id", SetNull),
+		),
+		Table(TablePolicies, ids.PrefixPolicy, Synced(), Description("one policy entry (spec 4.3)"),
+			Text("key", Required()),
+			JSON("value", Required()),
+			Text("scope", Required()),
+			UniqueOn("key", "scope"),
+		),
+		Table(TableMetaKeys, ids.PrefixMetaKey, Synced(), Description("a metadata key definition"),
+			Text(fieldName, Required()),
+			Text("scope", Required()),
+			Text("type", Required(), OneOf(kindWords()...)),
+			Bool("strict"),
+			Bool("internal"),
+			Bool("sensitive"),
+			Text("description"),
+			UniqueOn(fieldName, "scope"),
+		),
+		Table(TableMetaValues, ids.PrefixMetaValue, Synced(), Description("an allowed value of a metadata key"),
+			Ref("key_id", TableMetaKeys, Required()),
+			Text(fieldName, Required()),
+			Text("label"),
+			UniqueOn("key_id", fieldName),
+			BelongsToRel("key", "key_id", TableMetaKeys, Cascade),
+		),
+		Table(TableKinds, ids.PrefixKind, Synced(), Description("a resource kind (a user-defined table shape)"),
+			Text(fieldName, Required()),
+			Text("description"),
+			Text("name_format"),
+			Text("render"),
+			JSON("origin"),
+			UniqueOn(fieldName),
+			HasManyRel("fields", TableKindFields, "kind_id"),
+		),
+		Table(TableKindFields, ids.PrefixKindField, Synced(), Description("one field of a resource kind"),
+			Ref("kind_id", TableKinds, Required()),
+			Text(fieldName, Required()),
+			Text("type", Required(), OneOf(kindWords()...)),
+			Bool("required"),
+			Bool("sensitive"),
+			Bool("internal"),
+			Ref("ref_kind", TableKinds),
+			Text("label"),
+			Text("widget", OneOf(widgetWords()...)),
+			Bool("in_list"),
+			UniqueOn("kind_id", fieldName),
+			BelongsToRel("kind", "kind_id", TableKinds, Cascade),
+			BelongsToRel("ref_kind_def", "ref_kind", TableKinds, SetNull),
+		),
+		Table(TableVars, ids.PrefixVar, Synced(), Description("a variable referenced as ${var:name}"),
+			Text(fieldName, Required()),
+			Text("type", Required(), OneOf(kindWords()...)),
+			JSON("value", Required()),
+			Bool("shareable"),
+			List("aliases", value.KindText),
+			UniqueOn(fieldName),
+		),
+		Table(TableSecretRules, ids.PrefixSecretRule, Synced(), Description("a secret scanner rule"),
+			Text("rule_id", Required()),
+			Text("regex"),
+			List("keywords", value.KindText),
+			Number("entropy"),
+			Text("state", Required(), OneOf(SecretRuleStates()...)),
+			UniqueOn("rule_id"),
+		),
+		Table(TableSecretAllows, ids.PrefixSecretAllow, Synced(), Description("a finding marked as not a secret"),
+			Ref("row_id", "", Required()),
+			Text("field", Required()),
+			Text("rule_id", Required()),
+			Number("match_hash", Required()),
+			Text("reason"),
+			IndexOn("row_id"),
+		),
+		Table(TableResources, ids.PrefixResource, Synced(), Description("a resource; its fields follow its kind"),
+			Ref(fieldKind, TableKinds, Required()),
+			Text(fieldName, Required()),
+			JSON("fields"),
+			IndexOn(fieldKind, fieldName),
+			BelongsToRel("kind_def", fieldKind, TableKinds, Restrict),
+		),
+	}
+}
+
+// kindWords lists the value kind words a settings row may name as a type
+// (every kind but null).
+func kindWords() []string {
+	var out []string
+	for _, k := range value.Kinds() {
+		if k != value.KindNull {
+			out = append(out, string(k))
+		}
+	}
+	return out
+}
+
+// widgetWords lists the widget words a kind field row may name.
+func widgetWords() []string {
+	out := make([]string, 0, len(Widgets()))
+	for _, w := range Widgets() {
+		out = append(out, string(w))
+	}
+	return out
+}
