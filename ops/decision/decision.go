@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
+	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/rowref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -111,6 +112,7 @@ type AddIn struct {
 	Repo       string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	Tags       []string `json:"tags,omitempty" flag:"tag" desc:"tag name (repeatable; the tag must exist)"`
+	Scope      string   `json:"scope,omitempty" flag:"scope" desc:"where it attaches: global | project | repo | dir:<path> (default: today's project/repo)"`
 	// Ref / Relation: knowledge_refs pointers (RES 3.11, RQ7, OQ22).
 	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
@@ -201,6 +203,7 @@ type Record struct {
 	Body             string          `json:"body,omitempty"`
 	Status           string          `json:"status,omitempty"`
 	SupersededByID   string          `json:"superseded_by_id,omitempty"`
+	ScopeID          string          `json:"scope_id,omitempty"`
 	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
 	TagIDs           []string        `json:"tag_ids,omitempty"`
 	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
@@ -250,6 +253,7 @@ type EditIn struct {
 	Tags         []string `json:"tags,omitempty" flag:"tag" desc:"add this tag (repeatable; the tag must exist)"`
 	Untags       []string `json:"untags,omitempty" flag:"untag" desc:"remove this tag (repeatable)"`
 	Project      string   `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
+	Scope        string   `json:"scope,omitempty" flag:"scope" desc:"move to another scope: project | repo | dir:<path>"`
 	// Ref / Relation: knowledge_refs pointers (RES 3.11, RQ7, OQ22).
 	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"add a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
@@ -341,21 +345,27 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err = rowref.Check(ctx, o.env, store.Source(in.To), refs); err != nil {
 		return AddOut{}, err
 	}
-	src, w, err := kn.Add(ctx, o.env, noun, kn.Create{
+	c := kn.Create{
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, CreatedBy: in.CreatedBy, Tags: in.Tags,
 		Texts: map[string]string{
 			kn.FieldTitle: in.Title, kn.FieldBody: body, fieldStatus: status,
 			kn.FieldSourceKind: in.Source, kn.FieldSourceRef: in.SourceRef,
 		},
 		SupersededPatch: map[string]value.Value{fieldStatus: superseded},
-	})
+	}
+	// 6.2.3 / D10: --scope picks the store, repo and folder.
+	_, sw, err := knscope.ForAdd(ctx, o.env, noun, in.Scope, "", &c)
+	if err != nil {
+		return AddOut{}, err
+	}
+	src, w, err := kn.Add(ctx, o.env, noun, c)
 	if err != nil {
 		return AddOut{}, err
 	}
 	if err = rowref.Save(ctx, o.env, src, noun.Table, kn.Field(w.Row, kn.FieldProject), w.Row.ID, rel, refs); err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), Title: in.Title, Warnings: kn.Warnings(w), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	return AddOut{ID: w.Row.ID.String(), Store: string(src), Title: in.Title, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // addRefs writes --ref pointers of an existing decision it (parse, F15
@@ -427,21 +437,26 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 			return WriteOut{}, err
 		}
 		if in.Title == "" && in.Body == "" && in.Status == "" && in.SourceRef == "" && in.RebindRepo == "" && !in.RebindMaster &&
-			len(in.Tags) == 0 && len(in.Untags) == 0 && len(in.Meta) == 0 && len(in.MetaJSON) == 0 && in.MetaStdin == "" {
+			len(in.Tags) == 0 && len(in.Untags) == 0 && in.Scope == "" && len(in.Meta) == 0 && len(in.MetaJSON) == 0 && in.MetaStdin == "" {
 			return WriteOut{ID: it.Row.ID.String(), Store: string(it.Source), done: "updated"}, nil
 		}
 	}
-	src, w, err := kn.Apply(ctx, o.env, noun, in.ID, kn.Edit{
+	e := kn.Edit{
 		Texts: map[string]string{
 			kn.FieldTitle: in.Title, kn.FieldBody: in.Body, fieldStatus: in.Status, kn.FieldSourceRef: in.SourceRef,
 		},
 		RebindRepo: in.RebindRepo, RebindMaster: in.RebindMaster, Tags: in.Tags, Untags: in.Untags,
-		Hint: "give at least one of --title, --body, --status, --source-ref, --rebind-repo, --rebind-master, --tag, --untag",
-	})
+		Hint: "give at least one of --title, --body, --status, --source-ref, --scope, --rebind-repo, --rebind-master, --tag, --untag",
+	}
+	plan, err := knscope.ForEdit(ctx, o.env, noun, in.ID, in.Scope, "", &e)
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return WriteOut{ID: w.Row.ID.String(), Store: string(src), Warnings: kn.Warnings(w), done: "updated"}, nil
+	src, w, err := plan.Run(ctx, o.env, noun, in.ID, func() (store.Source, engine.Written, error) { return kn.Apply(ctx, o.env, noun, in.ID, e) })
+	if err != nil {
+		return WriteOut{}, err
+	}
+	return WriteOut{ID: w.Row.ID.String(), Store: string(src), Warnings: append(kn.Warnings(w), plan.Warnings...), done: "updated"}, nil
 }
 
 // archive sets archived_at.
@@ -500,7 +515,7 @@ func recordOf(lab kn.Labeler, src store.Source, r row.Row) Record {
 		SourceKind: kn.Field(r, kn.FieldSourceKind), SourceRef: kn.Field(r, kn.FieldSourceRef),
 		ProjectID: kn.Field(r, kn.FieldProject), RepoID: kn.Field(r, kn.FieldRepo),
 		Title: kn.Field(r, kn.FieldTitle), Body: kn.Field(r, kn.FieldBody), Status: kn.Field(r, fieldStatus),
-		SupersededByID: kn.Field(r, kn.FieldSuperseded), CreatedByActorID: kn.CreatedBy(r),
+		SupersededByID: kn.Field(r, kn.FieldSuperseded), ScopeID: kn.Field(r, schema.FieldScope), CreatedByActorID: kn.CreatedBy(r),
 		TagIDs: kn.TagsOf(r), Store: kn.SourceOf(lab, src), Label: kn.Label(lab, src),
 	}
 }

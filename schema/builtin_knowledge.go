@@ -10,6 +10,22 @@ const (
 	TableRules     = "rules"
 	TableDecisions = "decisions"
 	TableHotfixes  = "hotfixes"
+	// TableScopes holds directory scopes (CONTEXT_BUDGET 6.2, D12): one
+	// row per repo folder that has scoped knowledge; the row id (scp_) is
+	// permanent and the path is only its label, so a folder rename is a
+	// label change (lore scope move) and no knowledge row is rewritten.
+	TableScopes = "scopes"
+)
+
+// Scope fields (6.2.1). FieldScope is on rules, hotfixes, decisions and
+// memories; FieldOverrides on rules and hotfixes (6.2.2: a narrower row
+// replaces a wider one only through an explicit --overrides).
+const (
+	FieldScope     = "scope_id"
+	FieldOverrides = "overrides_id"
+	// FieldScopePath is the folder, relative to the repo root with forward
+	// slashes and no leading or trailing slash.
+	FieldScopePath = "path"
 )
 
 // Cache-only join tables filled from the knowledge tables' tag_ids (O11).
@@ -111,6 +127,8 @@ func knowledgeDefs() []TableDef {
 		Text("severity", Required(), OneOf(RuleSeverities()...)),
 		summaryField(),
 		Ref("superseded_by_id", TableRules),
+		Ref(FieldScope, TableScopes),
+		Ref(FieldOverrides, TableRules),
 		Ref("created_by_actor_id", TableActors),
 		IndexOn("project_id", "repo_id"),
 		IndexOn("project_id", "activation"),
@@ -119,6 +137,8 @@ func knowledgeDefs() []TableDef {
 		BelongsToRel("repo", "repo_id", TableRepos, SetNull),
 		BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
 		SelfRel("superseded_by", "superseded_by_id", SetNull),
+		BelongsToRel("scope", FieldScope, TableScopes, SetNull),
+		SelfRel("overrides", FieldOverrides, SetNull),
 		tagIDs(),
 		ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinRuleTags, Cascade),
 	}
@@ -130,6 +150,7 @@ func knowledgeDefs() []TableDef {
 		Text("body", Required(), WithWidget(WidgetMarkdown)),
 		Text("status", Required(), OneOf(DecisionStatuses()...)),
 		Ref("superseded_by_id", TableDecisions),
+		Ref(FieldScope, TableScopes),
 		Ref("created_by_actor_id", TableActors),
 		IndexOn("project_id", "repo_id"),
 		IndexOn("status"),
@@ -138,6 +159,7 @@ func knowledgeDefs() []TableDef {
 		BelongsToRel("repo", "repo_id", TableRepos, SetNull),
 		BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
 		SelfRel("superseded_by", "superseded_by_id", SetNull),
+		BelongsToRel("scope", FieldScope, TableScopes, SetNull),
 		tagIDs(),
 		ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinDecisionTags, Cascade),
 	}
@@ -150,6 +172,8 @@ func knowledgeDefs() []TableDef {
 		Text("severity", Required(), OneOf(HotfixSeverities()...)),
 		summaryField(),
 		Ref("superseded_by_id", TableHotfixes),
+		Ref(FieldScope, TableScopes),
+		Ref(FieldOverrides, TableHotfixes),
 		Ref("created_by_actor_id", TableActors),
 		IndexOn("project_id", "repo_id"),
 		IndexOn("severity"),
@@ -158,10 +182,23 @@ func knowledgeDefs() []TableDef {
 		BelongsToRel("repo", "repo_id", TableRepos, SetNull),
 		BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
 		SelfRel("superseded_by", "superseded_by_id", SetNull),
+		BelongsToRel("scope", FieldScope, TableScopes, SetNull),
+		SelfRel("overrides", FieldOverrides, SetNull),
 		tagIDs(),
 		ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinHotfixTags, Cascade),
 	}
+	scope := []Item{
+		Synced(), Description("directory scopes: a permanent id per repo folder with scoped rules and hotfixes"),
+		Ref("repo_id", TableRepos, Required()),
+		Text(FieldScopePath, Required()),
+		// Unique: the id is natural (repo, path) so two clones that scope the
+		// same folder make the same row; after `lore scope move` the id keeps
+		// its old hash, which is fine: ids are never re-derived from a label.
+		UniqueOn("repo_id", FieldScopePath),
+		BelongsToRel("repo", "repo_id", TableRepos, Restrict),
+	}
 	return []TableDef{
+		Table(TableScopes, ids.PrefixScope, scope...),
 		Table(TableRules, ids.PrefixRule, append(rule, lifecycle()...)...),
 		Table(TableDecisions, ids.PrefixDecision, append(decision, lifecycle()...)...),
 		Table(TableHotfixes, ids.PrefixHotfix, append(hotfix, lifecycle()...)...),
