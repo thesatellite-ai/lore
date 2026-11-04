@@ -177,6 +177,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if st.format, err = readFormat(ctx, repo, actor); err != nil {
 		return fail(err)
 	}
+	if st.storeFormat, err = readStoreFormats(ctx, opts, st.byName, actor); err != nil {
+		return fail(err)
+	}
 	return st, nil
 }
 

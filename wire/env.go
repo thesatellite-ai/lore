@@ -45,11 +45,14 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 			return engine.Written{}, gerr
 		}
 	}
+	if ferr := a.checkTarget(target); ferr != nil {
+		return engine.Written{}, ferr
+	}
 	if aerr := a.ensureActor(ctx, st, target); aerr != nil {
 		return engine.Written{}, aerr
 	}
 	w, err := st.eng.Create(ctx, target, table, fields)
-	a.wrote(err)
+	a.wroteTo(target, err)
 	return w, err
 }
 
@@ -59,11 +62,15 @@ func (a *App) Update(ctx context.Context, ref engine.Ref, patch map[string]value
 	if err != nil {
 		return engine.Written{}, err
 	}
+	src := refStore(ctx, st, ref)
+	if ferr := a.checkTarget(src); ferr != nil {
+		return engine.Written{}, ferr
+	}
 	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
 		return engine.Written{}, aerr
 	}
 	w, err := st.eng.Update(ctx, ref, patch)
-	a.wrote(err)
+	a.wroteTo(src, err)
 	return w, err
 }
 
@@ -73,11 +80,15 @@ func (a *App) Delete(ctx context.Context, ref engine.Ref) (engine.Written, error
 	if err != nil {
 		return engine.Written{}, err
 	}
+	src := refStore(ctx, st, ref)
+	if ferr := a.checkTarget(src); ferr != nil {
+		return engine.Written{}, ferr
+	}
 	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
 		return engine.Written{}, aerr
 	}
 	w, err := st.eng.Delete(ctx, ref)
-	a.wrote(err)
+	a.wroteTo(src, err)
 	return w, err
 }
 
@@ -229,6 +240,49 @@ func (a *App) writeState(ctx context.Context) (*state, error) {
 	return st, nil
 }
 
+// checkTarget is the O6 question of an attached v0.1.17 org store before
+// a write into it (target "" is the default target: the repo, checked by
+// writeState).
+func (a *App) checkTarget(target store.Source) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.st == nil {
+		return nil
+	}
+	return a.st.storeFormat[target].checkStore(target)
+}
+
+// wroteTo records a landed write into target, so its O6 question is not
+// asked again in this process.
+func (a *App) wroteTo(target store.Source, err error) {
+	a.wrote(err)
+	if err != nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.st == nil {
+		return
+	}
+	if f, ok := a.st.storeFormat[target]; ok {
+		f.written = true
+		a.st.storeFormat[target] = f
+	}
+}
+
+// refStore is the store holding ref's row (ref.Store, else found by id;
+// "" when it cannot be found: the write itself reports that).
+func refStore(ctx context.Context, st *state, ref engine.Ref) store.Source {
+	if ref.Store != "" {
+		return ref.Store
+	}
+	s, _, err := st.eng.Get(ctx, ref)
+	if err != nil {
+		return ""
+	}
+	return s
+}
+
 // wrote records that a 0.1.18 write landed: the O6 question never comes
 // back once a `_v: 2` row exists.
 func (a *App) wrote(err error) {
@@ -263,11 +317,14 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 	if err != nil {
 		return engine.Written{}, err
 	}
+	if ferr := a.checkTarget(to); ferr != nil {
+		return engine.Written{}, ferr
+	}
 	if aerr := a.ensureActor(ctx, st, to); aerr != nil {
 		return engine.Written{}, aerr
 	}
 	w, err := st.eng.Move(ctx, ref, to)
-	a.wrote(err)
+	a.wroteTo(to, err)
 	return w, err
 }
 
@@ -282,10 +339,13 @@ func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.T
 	if err != nil {
 		return engine.Written{}, err
 	}
+	if ferr := a.checkTarget(target); ferr != nil {
+		return engine.Written{}, ferr
+	}
 	if aerr := a.ensureActor(ctx, st, target); aerr != nil {
 		return engine.Written{}, aerr
 	}
 	w, err := st.eng.CreateWithID(ctx, target, table, id, fields)
-	a.wrote(err)
+	a.wroteTo(target, err)
 	return w, err
 }

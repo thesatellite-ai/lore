@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -40,6 +41,44 @@ func (f formatState) check() error {
 		WithQuestion("has everyone who shares this repository upgraded to lore 0.1.18?").
 		WithHint("once they have, run `" + MigrateCommand + "` (it rewrites the files as _v: 2), then retry").
 		WithNext(MigrateCommand)
+}
+
+// checkStore is check for a write into an attached v0.1.17 org store
+// (O6 per store): the question names the store, because its teammates are
+// the org's, not this repository's.
+func (f formatState) checkStore(name store.Source) error {
+	if !f.ask || f.written {
+		return nil
+	}
+	return errs.New(errs.NeedsConfirm, "wire: store "+string(name)+" is still a lore 0.1.17 store whose rows teammates wrote; "+
+		"the first 0.1.18 write there changes the file format they would need 0.1.18 to read").
+		WithQuestion("has everyone who shares store "+string(name)+" upgraded to lore 0.1.18?").
+		WithHint("once they have, run `" + MigrateCommand + "` (it converts the org store), then retry").
+		WithNext(MigrateCommand)
+}
+
+// readStoreFormats computes the O6 state of every attached org store
+// (Options.OrgStores) still marked v0.1.17 (lore-store.yaml version 1);
+// a 0.1.18 store, or one whose rows only the caller wrote, never asks.
+func readStoreFormats(ctx context.Context, opts Options, byName map[store.Source]store.Backend, caller ids.ID[ids.Actor]) (map[store.Source]formatState, error) {
+	out := map[store.Source]formatState{}
+	for _, s := range orgStores(ctx, opts) {
+		b, ok := byName[s.Name]
+		if !ok {
+			continue
+		}
+		if mb, isMarker := b.(markerBackend); !isMarker || mb.Marker().Version >= rowfs.MarkerVersion {
+			continue
+		}
+		f, err := readFormat(ctx, b, caller)
+		if err != nil {
+			return nil, err
+		}
+		if f.ask {
+			out[s.Name] = f
+		}
+	}
+	return out, nil
 }
 
 // readFormat computes the format state from the repo store's rows.

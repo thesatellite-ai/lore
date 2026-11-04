@@ -56,9 +56,18 @@ func (e *Engine) Sync(ctx context.Context, source store.Source) (store.SyncRepor
 // whose writer is unknown (no created_by and no updated_by, as in rows
 // written before actors existed) does not count: a solo repo never asks.
 // Phase 2 calls it before that write; the engine does not ask by itself.
+//
+// A v0.1.17 row names its writer in a table field instead of the envelope
+// (v1CreatorField on memories and other knowledge rows); it counts too.
 func HasOtherWriter(rows []row.Row, caller ids.ID[ids.Actor]) bool {
 	for _, r := range rows {
-		for _, a := range []ids.ID[ids.Actor]{r.CreatedBy, r.UpdatedBy, r.HLC.Actor} {
+		writers := []ids.ID[ids.Actor]{r.CreatedBy, r.UpdatedBy, r.HLC.Actor}
+		if v, ok := r.Fields[v1CreatorField]; ok && v != nil {
+			if a, err := ids.Parse[ids.Actor](v.String()); err == nil {
+				writers = append(writers, a)
+			}
+		}
+		for _, a := range writers {
 			if !a.IsZero() && a != caller {
 				return true
 			}
@@ -66,3 +75,7 @@ func HasOtherWriter(rows []row.Row, caller ids.ID[ids.Actor]) bool {
 	}
 	return false
 }
+
+// v1CreatorField is the v0.1.17 column holding a row's creator
+// (created_by_actor_id), which `_v: 1` rows keep as an ordinary field.
+const v1CreatorField = "created_by_actor_id"

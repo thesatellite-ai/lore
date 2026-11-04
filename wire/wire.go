@@ -198,7 +198,11 @@ type state struct {
 	// format is the DOCS O6 answer computed at open: whether the first
 	// 0.1.18 write must ask (see format.go). Guarded by App.mu.
 	format formatState
-	audit  engine.AuditSink
+	// storeFormat is the O6 answer per attached v0.1.17 org store that
+	// asks (format.go readStoreFormats); absent = never asks. Guarded by
+	// App.mu.
+	storeFormat map[store.Source]formatState
+	audit       engine.AuditSink
 	// who is the resolved identity (zero when Options set the actor).
 	who identity.Resolved
 	// defaultTarget is the engine's default write target.
