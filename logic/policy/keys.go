@@ -40,6 +40,15 @@ const (
 	KeyTasksAutoWatch Key = "tasks.auto_watch"
 	// KeyTasksWeekEnd is the day "eow" / "end of week" means in date phrases (TASK 12.1).
 	KeyTasksWeekEnd Key = "tasks.week_end"
+	// KeyTasksHistoryMax: entries kept on a task's history before the oldest fold into one summary (TSQ10).
+	KeyTasksHistoryMax Key = "tasks.history_max"
+	// KeyTasksStaleDays: default --days of `lore task stale`; unset = 60 (TASK 18.5).
+	KeyTasksStaleDays Key = "tasks.stale_days"
+	// KeyTasksSLA*: hours from creation to done per priority; unset = no SLA (TASK 18.4). OV22-SLA: hours, limits are integers.
+	KeyTasksSLALow    Key = "tasks.sla.low"
+	KeyTasksSLAMedium Key = "tasks.sla.medium"
+	KeyTasksSLAHigh   Key = "tasks.sla.high"
+	KeyTasksSLAUrgent Key = "tasks.sla.urgent"
 	// Time tracking keys (TIME_TRACKING_DESIGN 14), in minutes: a limit,
 	// the smaller is stricter (flags more, merges less, allows less).
 	// OV7-1: integers in minutes, the policy layer has no duration shape.
@@ -105,6 +114,8 @@ const (
 	defaultWarnBytes            int64 = 4 * 1024  // RQ4
 	defaultTasksMaxDepth        int64 = 4         // TSQ1
 	ceilingTasksMaxDepth        int64 = 8         // TSQ1: "default 4, up to 8"
+	defaultTasksHistoryMax      int64 = 200       // TSQ10
+	ceilingTasksHistoryMax      int64 = 1000      // TSQ10 "up to 1000"
 	defaultPreviewRows          int64 = 20        // XQ2
 	defaultTimeLongSpanMin      int64 = 600       // TQ2: 10h
 	defaultTimeCoalesceGapMin   int64 = 2         // TQ4: 2m
@@ -216,6 +227,12 @@ func Keys() []KeyDef {
 		{Key: KeyTasksAutoWatch, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(true),
 			Doc: "creators and assignees watch a task by default (TASK 14.4)"},
 		{Key: KeyTasksWeekEnd, Shape: ShapeRank, Choices: []string{"fri", "sat", "sun", "thu", "mon", "tue", "wed"}, Default: mustText("fri"), Doc: "the day eow / end of week means in date phrases (TASK 12.1)"},
+		{Key: KeyTasksHistoryMax, Shape: ShapeLimit, Ceiling: ceilingTasksHistoryMax, Default: value.Int(defaultTasksHistoryMax), Doc: "entries kept in a task's history; older ones fold into one summary entry (TSQ10)"},
+		{Key: KeyTasksStaleDays, Shape: ShapeLimit, Doc: "days without a change after which lore task stale lists a task; unset uses 60 (TASK 18.5)"},
+		{Key: KeyTasksSLALow, Shape: ShapeLimit, Doc: "SLA in hours for low-priority tasks, creation to done; unset = none (TASK 18.4)"},
+		{Key: KeyTasksSLAMedium, Shape: ShapeLimit, Doc: "SLA in hours for medium-priority tasks (TASK 18.4)"},
+		{Key: KeyTasksSLAHigh, Shape: ShapeLimit, Doc: "SLA in hours for high-priority tasks (TASK 18.4)"},
+		{Key: KeyTasksSLAUrgent, Shape: ShapeLimit, Doc: "SLA in hours for urgent tasks (TASK 18.4)"},
 		{Key: KeyTimeLongSpan, Shape: ShapeLimit, Default: value.Int(defaultTimeLongSpanMin), Doc: "minutes after which a closed auto time span is flagged long_span; never capped (TQ2)"},
 		{Key: KeyTimeCoalesceGap, Shape: ShapeLimit, Default: value.Int(defaultTimeCoalesceGapMin), Doc: "minutes: auto spans of one worker closer than this are coalesced at write (TQ4)"},
 		{Key: KeyTimeMaxEntry, Shape: ShapeLimit, Ceiling: defaultTimeMaxEntryMin, Default: value.Int(defaultTimeMaxEntryMin), Doc: "minutes: the longest manual time entry (D13, max 24h)"},

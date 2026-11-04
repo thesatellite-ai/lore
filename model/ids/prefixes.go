@@ -178,6 +178,8 @@ const (
 	PrefixRecurSeries Prefix = "rcs"
 	// PrefixTaskTemplate marks a task_templates settings row (TASK 11.2).
 	PrefixTaskTemplate Prefix = "ttp"
+	// PrefixHistoryEntry marks one entry of a task row's history list (TASK 17.2, TSQ10); entries are not rows, the id is the merge key of the list.
+	PrefixHistoryEntry Prefix = "the"
 	// PrefixBatch marks one bulk action (a bulk delete, an import). XQ1:
 	// every bulk action of every noun uses this one prefix, and `lore
 	// batch show` reports the kind (task, meta, resource, delete, import),
@@ -275,6 +277,7 @@ var allPrefixes = [...]Prefix{
 	PrefixChecklistItem,
 	PrefixRecurSeries,
 	PrefixTaskTemplate,
+	PrefixHistoryEntry,
 	PrefixBatch,
 	PrefixScope,
 }
