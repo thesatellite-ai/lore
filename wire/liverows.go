@@ -199,14 +199,25 @@ func decodeLiveRow(b []byte) (row.Row, error) {
 	return row.Decode(clean)
 }
 
-// mergeRow merges two copies of one row with no common base (the newer side
-// wins per field; free text both changed gets conflict markers).
+// mergeRow merges two copies of one row with no common base: the newer
+// side wins per field (per-field strategies such as list-by-id still
+// apply), a field only one side holds is kept, and a tombstone is never
+// undone (merge.Rows).
+//
+// Why no conflict markers here, unlike a git merge: the copies are
+// versions of one row along one v0.1.17 history (the live ref held the
+// working copy that v0.1.17 later landed into .lore/data; a tracking ref
+// is the same ref fetched later), not concurrent edits, and with no base
+// every edited text would look like a clash. Markers would also be written
+// straight to the backend, past the engine's refusal of marker text, and
+// leave a row nobody can re-save without hand-editing it.
 func mergeRow(a, b row.Row) (row.Row, error) {
 	def, ok := builtinDef(a.Table)
 	p := merge.UnknownTable()
 	if ok {
 		p = merge.PolicyFor(def)
 	}
+	p.IsText = func(string) bool { return false }
 	res, err := merge.Rows(p, merge.Absent, a, b)
 	if err != nil {
 		return row.Row{}, err
