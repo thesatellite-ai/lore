@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,29 @@ func New(t testing.TB, mut ...func(*wire.Options)) *H {
 	h.SeedProject()
 	return h
 }
+
+// WithStores builds a harness whose repo has the named stores attached
+// (each `lore store init <name>` over a fresh folder store; "me" is the
+// personal store at its default place under Home), then seeds the
+// project. Stores must be initialised before the App opens its engine,
+// which attaches the stores of .lore/stores.yaml once.
+func WithStores(t testing.TB, names []string, mut ...func(*wire.Options)) *H {
+	t.Helper()
+	h := Bare(t, mut...)
+	for _, n := range names {
+		in := `{"name":` + Quote(n) + `}`
+		if n != personalStore {
+			in = `{"name":` + Quote(n) + `,"url":` + Quote("file://"+filepath.ToSlash(t.TempDir())) + `}`
+		}
+		h.MustYes("store.init", in)
+	}
+	h.SeedProject()
+	return h
+}
+
+// personalStore is the personal store's reserved name (ops/stores
+// PersonalName): its url defaults under the lore home.
+const personalStore = "me"
 
 // Bare builds a harness without a project row (for the "no lore project"
 // paths).
