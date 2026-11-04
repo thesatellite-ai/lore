@@ -72,7 +72,7 @@ func TestLeak_ShareToRepoWritesAnUnlinkedCopy(t *testing.T) {
 	if _, ok := a.aliceApp.ReadFile(rel); ok {
 		t.Fatalf("precondition: the memory must go to the store, not the repo")
 	}
-	a.aliceApp.Lore("share", mem, "--to", "repo", "--yes").Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+mem)
+	a.aliceApp.Lore("share", mem, "--to", "repo", "--yes").Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+mem)
 	if _, ok := a.aliceApp.ReadFile(rel); ok {
 		t.Fatal("a refused share writes nothing")
 	}

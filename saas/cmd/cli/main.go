@@ -245,38 +245,57 @@ func main() {
 // so the spec's two-line messages (LORE_TEAM_SPEC F10, F12) read as written.
 const hintPrefix = "  hint: "
 
-// errorHint is the actionable next step of the first CLIError in err's chain,
-// or "" when there is none. Hint is kept out of CLIError.Error() on purpose
-// (errcodes/error.go), so the CLI is the one place that prints it.
+// errorHint is the actionable next step of the first lore error in err's
+// chain (a v0.1.17 CLIError or a core *errs.Error), or "" when there is none.
+// Hint is kept out of Error() on purpose (errcodes/error.go, model/errs), so
+// the CLI is the one place that prints it.
+//
+// EXACT ERRORS: a core *errs.Error that reaches the old path (an old command
+// calling core code) prints its hint line exactly as the core surface
+// prints it (surface/cli/output.go), instead of losing it.
 func errorHint(err error) string {
-	var ce *errcodes.CLIError
-	if errors.As(err, &ce) {
-		return ce.Hint
-	}
-	return ""
+	_, hint := firstLoreError(err)
+	return hint
 }
 
-// exitStatus is the process exit status for a failed command: the code's
-// dedicated status when the error carries a registered code that has one
-// (errcodes.ExitCode; LORE_TEAM_SPEC §1), 20 for an input error (FLAG2),
-// else errcodes.ExitGeneric.
+// exitStatus is the process exit status for a failed command.
+//
+// Q-R2-5: an old command exits with the core class exit of its error's code,
+// exactly like the core surface (surface/cli/exit.go): E_NEEDS_CONFIRM 26,
+// E_NOT_FOUND 27, the refused class 23, bad_input 20 (FLAG2), the team
+// coordination numbers 10-18, guard 19. Exit 1 (errcodes.ExitGeneric) is
+// kept for unexpected failures only: E_INTERNAL, an unregistered code, or
+// an error that carries no lore code at all.
 func exitStatus(err error) int {
-	var ce *errcodes.CLIError
-	if errors.As(err, &ce) {
-		if n := errcodes.ExitCode(ce.Code); n != errcodes.ExitGeneric {
-			return n
-		}
-		// FLAG2: an input error (every code the core registry puts in
-		// class bad_input: E_INVALID_INPUT, E_INVALID_ID, E_EMPTY_BODY, …)
-		// exits 20 on the old commands too, not v0.1.17's 1; exit 1 stays
-		// for unexpected internal errors. Only the bad_input class moves
-		// here: other classes keep the old exit until their own decision
-		// is applied to the old commands.
-		if d, ok := errs.Lookup(errs.Code(ce.Code)); ok && d.Class == errs.ClassBadInput {
-			return d.Exit
-		}
+	code, _ := firstLoreError(err)
+	if code == "" {
+		return errcodes.ExitGeneric
 	}
-	return errcodes.ExitGeneric
+	return errcodes.ExitCode(code)
+}
+
+// firstLoreError returns the code and hint of the first lore error in err's
+// chain: a v0.1.17 *errcodes.CLIError or a core *errs.Error, whichever is
+// outermost (the one whose message is printed first). When the chain holds
+// both, the outer one is the one whose own chain contains the other. code is
+// "" when the chain holds neither.
+func firstLoreError(err error) (errcodes.Code, string) {
+	var ce *errcodes.CLIError
+	var ee *errs.Error
+	hasOld, hasCore := errors.As(err, &ce), errors.As(err, &ee)
+	switch {
+	case hasOld && hasCore:
+		var inner *errs.Error
+		if errors.As(ce.Wrapped, &inner) {
+			return ce.Code, ce.Hint
+		}
+		return errcodes.Code(ee.Code), ee.Hint
+	case hasOld:
+		return ce.Code, ce.Hint
+	case hasCore:
+		return errcodes.Code(ee.Code), ee.Hint
+	}
+	return "", ""
 }
 
 // sqliteFullMarker is SQLite's SQLITE_FULL message.

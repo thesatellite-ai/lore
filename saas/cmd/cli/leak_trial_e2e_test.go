@@ -68,7 +68,7 @@ func repoRows(t *testing.T, c *th.Clone, table string) []string {
 func TestLeak_TrialF11_ShareLongNoteToRepo(t *testing.T) {
 	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
 	mem := a.storeMem(t, leakShared)
-	a.aliceApp.Lore("share", mem, "--to", "repo", "--yes").Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+mem)
+	a.aliceApp.Lore("share", mem, "--to", "repo", "--yes").Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+mem)
 	a.aliceApp.MustLore("move", mem, "--to", "repo", "--yes")
 	body, ok := a.aliceApp.ReadFile(filepath.Join(".lore", "data", tblMemories, mem+".json"))
 	if !ok || !strings.Contains(body, leakShared) {
@@ -98,7 +98,7 @@ func TestLeak_TrialF11_ShareQuotingAnotherNoteRefused(t *testing.T) {
 	other := a.storeMem(t, leakOther)
 	mem := a.storeMem(t, leakShared+"; as noted, "+leakOther)
 	r := a.aliceApp.Lore("share", mem, "--to", "repo", "--yes")
-	r.Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+mem)
+	r.Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+mem)
 	if rows := repoRows(t, a.aliceApp, tblMemories); len(rows) != 0 {
 		t.Fatalf("a refused share writes nothing: %v", rows)
 	}

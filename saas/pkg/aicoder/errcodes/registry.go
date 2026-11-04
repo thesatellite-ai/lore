@@ -19,6 +19,8 @@
 //	json   → {"error":{"code":"E_NOT_FOUND","message":"...","hint":"..."}}
 package errcodes
 
+import coreerrs "github.com/thesatellite-ai/lore/model/errs"
+
 // Code is a stable identifier for an error class. Format: E_<UPPER_SNAKE>.
 // Codes are added freely (additive minor); removal = breaking major.
 type Code string
@@ -123,15 +125,16 @@ func All() []Code {
 	}
 }
 
-// ExitGeneric is the process exit status of every error without a
-// dedicated one: the CLI's historical "something failed".
+// ExitGeneric is the process exit status of an unexpected failure: a code
+// the core registry puts in class generic (E_INTERNAL) or does not know.
 const ExitGeneric = 1
 
 // exitCodes maps the codes that have their own process exit status
 // (LORE_TEAM_SPEC §1 "Error codes"). Agents loop on `lore task next` and
 // must tell "nothing to do" (10) from "lost a race" (11) from "you were
 // fenced out" (12–14) without parsing text, so these numbers are a
-// contract: never renumber, only add. Codes absent here exit ExitGeneric.
+// contract: never renumber, only add. Codes absent here exit their core
+// class exit (ExitCode, Q-R2-5).
 // ds:def id=team-exit-codes-vt2j5m98 owner=@khanakia stability=stable desc="exit statuses of the team error codes"
 var exitCodes = map[Code]int{
 	NoWork:       10,
@@ -152,10 +155,34 @@ var exitCodes = map[Code]int{
 	Refused: 23,
 }
 
+// foldedCodes are v0.1.17 codes the core registry folded into another code
+// (DOCS O4: a missing project or repo is E_NOT_FOUND like every other noun).
+// An old command that still returns one exits with the code it folded into.
+var foldedCodes = map[Code]coreerrs.Code{
+	ProjectNotFound: coreerrs.NotFound,
+	RepoNotFound:    coreerrs.NotFound,
+}
+
 // ExitCode returns the process exit status for code c.
+//
+// Q-R2-5: old commands exit with the core class exit of the code, exactly
+// like the core surface (model/errs is the one registry: E_NEEDS_CONFIRM 26,
+// E_NOT_FOUND 27, the refused class 23, bad_input 20, …), because agents and
+// scripts branch on the exit status and must get the same number whichever
+// command produced the error. exitCodes keeps the team spec's dedicated
+// numbers (the parity test proves they equal the core's); a code neither
+// table knows (and E_INTERNAL, class generic) exits ExitGeneric, which is
+// kept for unexpected failures only.
 func ExitCode(c Code) int {
 	if n, ok := exitCodes[c]; ok {
 		return n
+	}
+	core := coreerrs.Code(c)
+	if f, ok := foldedCodes[c]; ok {
+		core = f
+	}
+	if d, ok := coreerrs.Lookup(core); ok {
+		return d.Exit
 	}
 	return ExitGeneric
 }

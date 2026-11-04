@@ -12,7 +12,7 @@ import (
 // branch on them; the E_* string must also appear in the output.
 const (
 	ExitOK          = 0
-	ExitError       = 1
+	ExitError       = 1  // unexpected failures only: E_INTERNAL or no lore code (Q-R2-5)
 	ExitNoWork      = 10 // E_NO_WORK
 	ExitContended   = 11 // E_CONTENDED
 	ExitLostClaim   = 12 // E_LOST_CLAIM
@@ -24,6 +24,11 @@ const (
 	ExitLinkUnknown = 18 // E_LINK_UNKNOWN
 	ExitGuard       = 19 // E_NOT_A_STORE, E_LEAK_BLOCKED, E_CYCLE, E_OLD_LORE
 	ExitNotFound    = 27 // E_NOT_FOUND (0.1.18, decision DOCS O4 / BATCH 7; v0.1.17 exited 1)
+	// Q-R2-5: old commands exit their code's core class exit too, so a
+	// refusal (E_UNSUPPORTED, E_REFUSED, …) is 23 and an unconfirmed
+	// question with no terminal (E_NEEDS_CONFIRM) is 26, never ExitError.
+	ExitRefused      = 23 // class refused (E_UNSUPPORTED, E_REFUSED, E_SECRET_DETECTED, …)
+	ExitNeedsConfirm = 26 // E_NEEDS_CONFIRM
 )
 
 // Result is one finished process: what a user would see on the terminal.

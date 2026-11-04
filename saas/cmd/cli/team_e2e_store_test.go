@@ -748,7 +748,7 @@ func TestRecipe10_ShareChainMintsNewIds(t *testing.T) {
 	a := newAgency(t, th.Cmd("share"), th.Cmd("move"), th.Flag("to", "memory", "add"))
 	const text = "prune the pnpm store before the Docker build"
 	mine := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", text, "--to", "me"), "mem")
-	a.aliceApp.Lore("share", mine, "--to", orgNorthwind, "--yes").Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+mine)
+	a.aliceApp.Lore("share", mine, "--to", orgNorthwind, "--yes").Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+mine)
 	a.aliceApp.Lore("move", mine, "--to", orgNorthwind).Refused(t)
 	if a.storeHas(t, folderAcme, text) {
 		t.Fatal("a refused move writes nothing")
@@ -949,9 +949,9 @@ func TestSideEffect40_CachePruneRemovesOldProjects(t *testing.T) {
 	if len(listed) == 0 {
 		t.Fatal("--dry-run must list the caches of the stores only alice's removed checkout attached")
 	}
-	// The old binary's commands exit 1 for every class but bad_input
-	// (FLAG2, main.go exitStatus), so the refusal is pinned by its code.
-	a.alice.Lore("", "cache", "prune").Fails(t, th.ExitError, "E_NEEDS_CONFIRM", "--yes")
+	// Q-R2-5: the old commands exit their code's core class exit, so the
+	// unconfirmed prune with no terminal exits 26 (E_NEEDS_CONFIRM).
+	a.alice.Lore("", "cache", "prune").Fails(t, th.ExitNeedsConfirm, "E_NEEDS_CONFIRM", "--yes")
 	for _, f := range caches {
 		if _, err := os.Stat(f); err != nil {
 			t.Fatalf("--dry-run and an unconfirmed prune delete nothing: %s: %v", f, err)
@@ -1079,7 +1079,7 @@ func TestLeak_ShareInternalMemoryToClientRepoMintsAPointerFreeCopy(t *testing.T)
 	if !a.storeHas(t, folderAcme, internal) {
 		t.Fatal("the memory must start in the store's acme/ project")
 	}
-	a.aliceApp.Lore("share", internal, "--to", "repo", "--yes").Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+internal)
+	a.aliceApp.Lore("share", internal, "--to", "repo", "--yes").Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+internal)
 	a.aliceApp.MustLore("move", internal, "--to", "repo", "--yes")
 	body, ok := a.clientRepoRow(t, tblMemories, internal)
 	if !ok || !strings.Contains(body, text) {
