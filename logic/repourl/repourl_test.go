@@ -131,3 +131,45 @@ func TestSetModes(t *testing.T) {
 		t.Fatalf("remove must drop an unconfirmed entry: %+v %v", u, err)
 	}
 }
+
+// TestStripRemoved pins 14.3/14.4: what was removed decides the warning;
+// a plain user name is dropped silently, a token user or password warns;
+// an unreadable value with "@" is refused; Strip is idempotent.
+func TestStripRemoved(t *testing.T) {
+	tok := "ghp_" + strings.Repeat("A", 20)
+	random := "Zq8xK2pL9mW4vB7nR3tY6uE1" // 24 chars, high entropy
+	cases := []struct {
+		in, want string
+		removed  Removed
+	}{
+		{"https://mira@github.com/a/b.git", "https://github.com/a/b.git", RemovedUser},
+		{"https://" + tok + "@github.com/a/b.git", "https://github.com/a/b.git", RemovedTokenUser},
+		{"https://" + random + "@github.com/a/b.git", "https://github.com/a/b.git", RemovedTokenUser},
+		{"https://x-access-token:" + tok + "@github.com/a/b", "https://github.com/a/b", RemovedPassword},
+		{"ssh://git:" + tok + "@host:2222/a/b.git", "ssh://git@host:2222/a/b.git", RemovedPassword},
+		{"ssh://git@host/a/b.git", "ssh://git@host/a/b.git", RemovedNone},
+		{"git@github.com:a/b.git", "git@github.com:a/b.git", RemovedNone},
+		{"https://GitHub.com/A/b.git?x=1#f", "https://GitHub.com/A/b.git?x=1#f", RemovedNone},
+		{"github.com/a/b", "github.com/a/b", RemovedNone},
+	}
+	for _, c := range cases {
+		got, removed, err := Strip(c.in)
+		if err != nil || got != c.want || removed != c.removed {
+			t.Errorf("Strip(case %q) = %q, %v, %v; want %q, %v", c.want, got, removed, err, c.want, c.removed)
+		}
+		again, r2, err := Strip(got)
+		if err != nil || again != got || (r2 != RemovedNone && r2 != c.removed) {
+			t.Errorf("Strip is not idempotent on %q: %q %v %v", got, again, r2, err)
+		}
+		if c.removed.Warn() != (c.removed == RemovedPassword || c.removed == RemovedTokenUser) {
+			t.Errorf("Warn mismatch for %v", c.removed)
+		}
+	}
+	for _, bad := range []string{"mira:" + tok + "@github.com/a/b", "git:" + tok + "@host:a/b"} {
+		if _, _, err := Strip(bad); err == nil {
+			t.Errorf("a scheme-less value with a credential must be refused")
+		} else if strings.Contains(err.Error(), tok) {
+			t.Fatalf("the error printed the token")
+		}
+	}
+}

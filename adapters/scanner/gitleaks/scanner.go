@@ -48,13 +48,42 @@ type Scanner struct {
 	// safe for concurrent use (it updates counters on the detector).
 	mu       sync.Mutex
 	detector *detect.Detector // nil when no gitleaks rule is on
+	// builtin: rule ids still in their built-in form (post-filters run
+	// only on these); allow: the repo .gitleaks.toml allow (D8).
+	builtin map[string]bool
+	allow   []compiledAllow
+}
+
+// Detector settings (3.1). D7: a "gitleaks:allow" comment pasted into
+// lore text must not switch the check off. 3.6: decoded segments
+// (base64, hex, percent, unicode) are re-scanned up to depth 3.
+const (
+	maxDecodeDepth      = 3
+	ignoreGitleaksAllow = true
+)
+
+// Options are the optional scanner inputs.
+type Options struct {
+	// RepoAllow is the repo .gitleaks.toml allow (D8), read by the caller
+	// only while secrets.use_repo_gitleaks is on.
+	RepoAllow RepoAllow
 }
 
 var _ scan.Scanner = (*Scanner)(nil)
 
 // New builds a scanner for rules. A gitleaks-sourced rule must name a
 // gitleaks default (a changed one arrives as a store rule from Rules).
-func New(rules []scan.Rule) (*Scanner, error) {
+func New(rules []scan.Rule) (*Scanner, error) { return NewWith(rules, Options{}) }
+
+// NewWith is New with Options (the one constructor every scan path uses,
+// D4).
+func NewWith(rules []scan.Rule, opts Options) (*Scanner, error) {
+	builtin := map[string]bool{}
+	for _, r := range rules {
+		if r.Source == scan.SourceBuiltin {
+			builtin[r.ID] = true
+		}
+	}
 	var own []scan.Rule
 	glRules := map[string]config.Rule{}
 	var order []string
@@ -85,7 +114,7 @@ func New(rules []scan.Rule) (*Scanner, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Scanner{regex: rs}
+	s := &Scanner{regex: rs, builtin: builtin, allow: compileAllow(opts.RepoAllow)}
 	if len(glRules) > 0 {
 		base, err := gitleaksDefaults()
 		if err != nil {
@@ -100,6 +129,8 @@ func New(rules []scan.Rule) (*Scanner, error) {
 		s.detector = detect.NewDetector(config.Config{
 			Rules: glRules, Keywords: kw, OrderedRules: order, Allowlists: base.Allowlists,
 		})
+		s.detector.MaxDecodeDepth = maxDecodeDepth
+		s.detector.IgnoreGitleaksAllow = ignoreGitleaksAllow
 	}
 	return s, nil
 }
@@ -112,7 +143,7 @@ func (s *Scanner) Scan(field, text string) []scan.Finding {
 
 // ScanReport scans text and reports whether the size gate fell back.
 func (s *Scanner) ScanReport(field, text string) Report {
-	rep := Report{Findings: s.regex.Scan(field, text)}
+	rep := Report{Findings: s.keep(text, s.regex.Scan(field, text))}
 	if s.detector == nil {
 		return rep
 	}
@@ -120,12 +151,14 @@ func (s *Scanner) ScanReport(field, text string) Report {
 		rep.Degraded, rep.Note = true, NoteOversize
 		return rep
 	}
+	var gl []scan.Finding
 	s.mu.Lock()
 	found := s.detector.DetectString(text)
 	s.mu.Unlock()
 	for _, f := range found {
-		rep.Findings = append(rep.Findings, convert(field, text, f.RuleID, f.StartLine, f.Match, f.Secret))
+		gl = append(gl, convert(field, text, f.RuleID, f.StartLine, f.Match, f.Secret))
 	}
+	rep.Findings = append(rep.Findings, s.keep(text, gl)...)
 	return rep
 }
 

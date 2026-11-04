@@ -192,7 +192,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		st.folders[o.Name] = o.Folder
 	}
 	st.byName = backends
-	scanner, err := newScanner(ctx, backends)
+	scanner, err := newScanner(ctx, backends, withRepoGitleaks(st.repoTop))
 	if err != nil {
 		return fail(err)
 	}
@@ -219,6 +219,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}
+	scanner.bindEngine(st.eng) // D8: secrets.use_repo_gitleaks decides whether the repo .gitleaks.toml allow applies
 	for _, name := range st.eng.Stores() {
 		if _, refErr := st.eng.Refresh(ctx, name); refErr != nil {
 			return fail(errs.Wrap(errs.CodeOf(refErr), "wire: refresh the cache of store "+string(name), refErr))

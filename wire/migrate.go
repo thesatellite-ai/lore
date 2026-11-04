@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -163,7 +165,195 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 	if err != nil {
 		return nil, 0, err
 	}
-	return append(steps, tagSteps...), rows + n, nil
+	steps, rows = append(steps, tagSteps...), rows+n
+	urlSteps, n, err := a.migrateURLCredentials(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	steps, rows = append(steps, urlSteps...), rows+n
+	piiSteps, n, err := a.migratePIIPatterns(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	return append(steps, piiSteps...), rows + n, nil
+}
+
+// StepPIIPatterns names the pii_patterns step (3.3, SETTINGS ARE DATA).
+const StepPIIPatterns = "pii_patterns"
+
+// piiPatternsFile is v0.1.17's per-user pattern file under the lore home,
+// one regex per line, # comments.
+const piiPatternsFile = "pii-patterns.txt"
+
+// piiRulePrefix + the file line number is the rule id each line becomes,
+// v0.1.17's own naming (scrub.go LoadUserPatterns), so old audit lines
+// still read.
+const piiRulePrefix = "user:"
+
+// migratePIIPatterns converts ~/.lore/pii-patterns.txt into personal
+// secret_rules rows (3.3): each pattern line becomes rule "user:<line>"
+// with state on in the personal store (so it applies to this person's own
+// captures only, BATCH 8), and the file is kept as pii-patterns.txt
+// .migrated (Q-MODEB: never delete user config). A pattern that does not
+// compile fails closed (E_CONFIG_INVALID naming the line, never the
+// pattern); with no personal store attached the file is left in place and
+// the step says so (the config.yaml fallback is not built). Idempotent:
+// a rule id the personal store already holds is skipped.
+func (a *App) migratePIIPatterns(ctx context.Context, dryRun bool) ([]string, int, error) {
+	path := filepath.Join(a.opts.Home, piiPatternsFile)
+	data, err := os.ReadFile(filepath.Clean(path))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, 0, nil
+	}
+	if err != nil {
+		return nil, 0, errs.Wrap(errs.ConfigInvalid, "migrate: read ~/.lore/"+piiPatternsFile, err)
+	}
+	type pat struct{ id, re string }
+	var pats []pat
+	for i, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if _, cerr := regexp.Compile(line); cerr != nil {
+			return nil, 0, errs.New(errs.ConfigInvalid, "migrate: ~/.lore/"+piiPatternsFile+" line "+strconv.Itoa(i+1)+" is not a valid pattern").
+				WithHint("fix or remove that line, then run lore migrate run again")
+		}
+		pats = append(pats, pat{id: piiRulePrefix + strconv.Itoa(i+1), re: line})
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	personal := store.Source(opsstores.PersonalName)
+	b, ok := st.byName[personal]
+	if !ok {
+		return []string{StepPIIPatterns + ": ~/.lore/" + piiPatternsFile + " kept: no personal store is attached to receive its " + strconv.Itoa(len(pats)) + " rule(s)"}, 0, nil
+	}
+	have := map[string]bool{}
+	rows, _, err := b.Read(ctx, "")
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, sr := range rows {
+		if sr.Table != row.Table(schema.TableSecretRules) || sr.Deleted {
+			continue
+		}
+		if r, derr := sr.Decode(); derr == nil {
+			if t, isText := r.Fields["rule_id"].(value.Text); isText {
+				have[t.String()] = true
+			}
+		}
+	}
+	steps := []string{StepPIIPatterns + ": ~/.lore/" + piiPatternsFile + " → " + strconv.Itoa(len(pats)) + " personal secret rule(s); file kept as " + piiPatternsFile + migratedSuffix}
+	written := 0
+	for _, p := range pats {
+		if have[p.id] {
+			continue
+		}
+		steps = append(steps, StepPIIPatterns+": rule "+p.id+" (state on, personal store)")
+		if dryRun {
+			continue
+		}
+		fields := map[string]value.Value{}
+		for k, v := range map[string]string{"rule_id": p.id, "regex": p.re, "state": schema.SecretRuleOn, "description": "converted from ~/.lore/" + piiPatternsFile} {
+			t, terr := value.TextOf(v)
+			if terr != nil {
+				return nil, 0, terr
+			}
+			fields[k] = t
+		}
+		if _, cerr := st.eng.Create(ctx, personal, schema.TableSecretRules, fields); cerr != nil {
+			return nil, 0, errs.Wrap(errs.CodeOf(cerr), "migrate: personal secret rule "+p.id, cerr)
+		}
+		written++
+	}
+	if !dryRun {
+		if err = os.Rename(path, path+migratedSuffix); err != nil {
+			return nil, 0, errs.Wrap(errs.Internal, "migrate: keep ~/.lore/"+piiPatternsFile+" as "+piiPatternsFile+migratedSuffix, err)
+		}
+	}
+	return steps, written, nil
+}
+
+// StepURLCredentials names the url_credentials step (FORMAT_EVOLUTION
+// step 7, SECRETS_AND_REFERENCES_DESIGN 14.5).
+const StepURLCredentials = "url_credentials"
+
+// migrateURLCredentials is the url_credentials step over the synced rows
+// of every attached store (14.5, D24): each live row whose URL-named text
+// field (repourl.URLFieldName) still holds a credential is rewritten
+// through the engine's Update, which strips it (engine stripURLs) with a
+// fresh HLC and an audit event, so peers merge the clean value. A step
+// line names the store, row and field only, never the value, and says to
+// rotate, because git history may keep the old value. Idempotent: a clean
+// row is not touched. A value lore cannot read is reported, not written.
+//
+// Not covered here (reported by the agent): ~/.lore/config.yaml store URLs
+// and the bare clones' remotes (attach refuses a password there already),
+// and url-typed values (value.URLOf strips them on read).
+func (a *App) migrateURLCredentials(ctx context.Context, dryRun bool) ([]string, int, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	var steps []string
+	written := 0
+	names := slices.Sorted(maps.Keys(st.byName))
+	for _, name := range names {
+		rows, _, rerr := st.byName[name].Read(ctx, "")
+		if rerr != nil {
+			return nil, 0, rerr
+		}
+		for _, sr := range rows {
+			if sr.Deleted {
+				continue
+			}
+			r, derr := sr.Decode()
+			if derr != nil {
+				continue // a row the format step reports
+			}
+			patch := map[string]value.Value{}
+			for _, f := range slices.Sorted(maps.Keys(r.Fields)) {
+				t, ok := r.Fields[f].(value.Text)
+				if !ok || !repourl.URLFieldName(f) || t.String() == "" {
+					continue
+				}
+				clean, removed, serr := repourl.Strip(t.String())
+				where := StepURLCredentials + ": store " + string(name) + " " + sr.Table.String() + "/" + sr.ID.String() + " field " + f
+				if errors.Is(serr, repourl.ErrUnreadable) {
+					steps = append(steps, where+": cannot be read as a URL and may hold a credential; fix it by hand, then rotate the credential")
+					continue
+				}
+				if serr != nil || clean == t.String() {
+					continue
+				}
+				ct, terr := value.TextOf(clean)
+				if terr != nil {
+					return nil, 0, terr
+				}
+				patch[f] = ct
+				if removed.Warn() {
+					steps = append(steps, where+": a credential was removed (stored "+clean+"); this value may be in git history, rotate the credential")
+				} else {
+					steps = append(steps, where+": a user name was removed (stored "+clean+")")
+				}
+			}
+			if len(patch) == 0 || dryRun {
+				continue
+			}
+			if _, uerr := st.eng.Update(ctx, engine.Ref{Store: name, Table: sr.Table, ID: sr.ID}, patch); uerr != nil {
+				if errs.Has(uerr, errs.StoreReadOnly) {
+					// the next write of the row by someone who can write it strips it (engine stripURLs)
+					steps = append(steps, StepURLCredentials+": store "+string(name)+" is read-only here: "+sr.ID.String()+" not rewritten")
+					continue
+				}
+				return nil, 0, uerr
+			}
+			written++
+		}
+	}
+	return steps, written, nil
 }
 
 // rosterTables are the org roster's tables (LORE_TEAM_SPEC F18): not in

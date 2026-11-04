@@ -21,6 +21,7 @@ package repourl
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
 	"strings"
@@ -111,44 +112,134 @@ func isSCPLike(s string) bool {
 	return colon > 1
 }
 
-// StripCredentials returns raw in the form lore may store, and whether a
-// credential was removed (the caller then prints the credential warning,
-// never the value).
+// Removed says what Strip dropped from a URL. It never carries the
+// dropped text (D25: the warning names the remote and the clean URL only).
+type Removed string
+
+// Removed values (SECRETS_AND_REFERENCES_DESIGN 14.3).
+const (
+	RemovedNone Removed = "none"
+	// RemovedUser: a plain user name (https://mira@host) was dropped. Not
+	// a secret, so no warning (14.4).
+	RemovedUser Removed = "user"
+	// RemovedPassword: the password part of the user info was dropped.
+	RemovedPassword Removed = "password"
+	// RemovedTokenUser: a token-shaped user name was dropped (GitHub and
+	// others accept https://<token>@host/...).
+	RemovedTokenUser Removed = "token_user"
+)
+
+// Warn reports whether the removal is a credential the person must hear
+// about (14.4): a password or a token-shaped user name.
+func (r Removed) Warn() bool { return r == RemovedPassword || r == RemovedTokenUser }
+
+// tokenUserPrefixes are user names that are always tokens (14.6; the
+// same list the url_token_user scanner rule keys on).
+var tokenUserPrefixes = []string{"ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "glpat-", "x-access-token", "x-oauth-basic", "oauth2"}
+
+// Token-shaped user name without a known prefix: at least this long and
+// at least this Shannon entropy (bits/char), the url_token_user rule's
+// thresholds (14.6).
+const (
+	tokenUserMinLen  = 20
+	tokenUserEntropy = 3.5
+)
+
+// TokenShaped reports whether a URL user name looks like a token (14.6).
+func TokenShaped(user string) bool {
+	low := strings.ToLower(user)
+	for _, p := range tokenUserPrefixes {
+		if strings.HasPrefix(low, p) {
+			return true
+		}
+	}
+	return len(user) >= tokenUserMinLen && entropy(user) >= tokenUserEntropy
+}
+
+// entropy is the Shannon entropy of s in bits per byte.
+func entropy(s string) float64 {
+	if s == "" {
+		return 0
+	}
+	counts := map[byte]int{}
+	for i := 0; i < len(s); i++ {
+		counts[s[i]]++
+	}
+	var e float64
+	n := float64(len(s))
+	for _, c := range counts {
+		p := float64(c) / n
+		e -= p * math.Log2(p)
+	}
+	return e
+}
+
+// ErrUnreadable is returned when lore cannot tell where a credential in a
+// value ends (14.3: refused, E_URL_CREDENTIALS at the caller).
+var ErrUnreadable = errors.New("repourl: the URL cannot be read, and it may hold a credential")
+
+// Strip returns raw in the form lore may store and what it removed (D24,
+// one normaliser for every URL lore stores).
 //
-// URL CREDENTIALS FIX / SQ13: an http or https URL loses its whole user
-// part (a token is often the user name); an ssh:// URL keeps the login user
-// and loses a password; a scp-like URL (git@host:o/r) has no password field
-// and is returned as is. A host/path value has nothing to strip. A value
-// whose credential part cannot be found (unparsable with an "@" in it) is
-// an error, so a token is never stored by accident.
-func StripCredentials(raw string) (clean string, stripped bool, err error) {
+// URL CREDENTIALS FIX / SQ13: an http or https URL (and any scheme other
+// than ssh) loses its whole user part (a token is often the user name);
+// an ssh:// URL keeps the login user and loses a password; a scp-like
+// URL (git@host:o/r) keeps its login user. A value without a scheme that
+// has an "@" before its first "/" and is not scp-like is refused
+// (ErrUnreadable), so a token is never stored by accident. Host, port,
+// path, query, fragment and case are kept. Idempotent.
+func Strip(raw string) (clean string, removed Removed, err error) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
-		return "", false, ErrEmpty
+		return "", RemovedNone, ErrEmpty
 	}
 	if !strings.Contains(s, schemeSep) {
-		return s, false, nil
+		head, _, _ := strings.Cut(s, "/")
+		if at := strings.LastIndex(head, "@"); at >= 0 {
+			if !isSCPLike(s) || strings.Contains(head[:at], ":") {
+				return "", RemovedNone, ErrUnreadable
+			}
+		}
+		return s, RemovedNone, nil
 	}
 	u, perr := url.Parse(s)
 	if perr != nil {
 		if strings.Contains(s, "@") {
-			return "", false, errors.New("repourl: the URL cannot be read, and it may hold a credential")
+			return "", RemovedNone, ErrUnreadable
 		}
-		return "", false, fmt.Errorf("repourl: %q is not a URL", s)
+		return "", RemovedNone, fmt.Errorf("repourl: %q is not a URL", s)
 	}
 	if u.User == nil {
-		return s, false, nil
+		return s, RemovedNone, nil
 	}
+	_, hasPw := u.User.Password()
 	switch strings.ToLower(u.Scheme) {
 	case "ssh", "git+ssh", "ssh+git":
-		if _, has := u.User.Password(); !has {
-			return s, false, nil
+		if !hasPw {
+			return s, RemovedNone, nil
 		}
 		u.User = url.User(u.User.Username())
+		removed = RemovedPassword
 	default:
+		switch {
+		case hasPw:
+			removed = RemovedPassword
+		case TokenShaped(u.User.Username()):
+			removed = RemovedTokenUser
+		default:
+			removed = RemovedUser
+		}
 		u.User = nil
 	}
-	return u.String(), true, nil
+	return u.String(), removed, nil
+}
+
+// StripCredentials is Strip reporting only whether anything was removed
+// (the callers that predate Removed). New callers use Strip so a plain
+// user name is dropped without a warning (14.4).
+func StripCredentials(raw string) (clean string, stripped bool, err error) {
+	clean, r, err := Strip(raw)
+	return clean, r != RemovedNone, err
 }
 
 // CaseOnly reports whether two normalised keys differ only in letter case
@@ -162,4 +253,29 @@ func redact(raw string) string {
 		return c
 	}
 	return "<url>"
+}
+
+// urlFieldNames and urlFieldSuffixes mark a row field or config key as a
+// URL by name (D27: the class-sweep test and the engine's write-time strip
+// use the same rule, so a new "*_url" field is stripped without a code
+// change).
+var (
+	urlFieldNames    = []string{"url", "origin", "remote", "origin_url", "base_url"}
+	urlFieldSuffixes = []string{"_url", "_remote"}
+)
+
+// URLFieldName reports whether a field name marks a URL (D27).
+func URLFieldName(name string) bool {
+	n := strings.ToLower(name)
+	for _, x := range urlFieldNames {
+		if n == x {
+			return true
+		}
+	}
+	for _, x := range urlFieldSuffixes {
+		if strings.HasSuffix(n, x) {
+			return true
+		}
+	}
+	return false
 }

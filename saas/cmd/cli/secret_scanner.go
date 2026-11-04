@@ -13,6 +13,12 @@ import (
 // per line (# comments), under ~/.lore.
 const piiPatternsFile = "pii-patterns.txt"
 
+// piiPatternsMigrated is the copy lore migrate run keeps after it turned
+// the file into personal secret_rules rows (wire pii_patterns step). The
+// old scanner (hooks, export) keeps reading it until those paths scan
+// with the core's rules, so a migrated pattern never stops blocking.
+const piiPatternsMigrated = piiPatternsFile + ".migrated"
+
 // secretScanner returns the built-in credential patterns plus the user's
 // own from ~/.lore/pii-patterns.txt.
 //
@@ -31,10 +37,12 @@ func secretScanner() (*security.Scanner, error) {
 	if err != nil {
 		return nil, err
 	}
-	path := filepath.Join(home, piiPatternsFile)
-	if err := s.LoadUserPatterns(path); err != nil {
-		return nil, errcodes.New(errcodes.ConfigInvalid, "custom secret patterns: "+err.Error()).
-			WithHint("fix or remove the bad line in " + path)
+	for _, name := range []string{piiPatternsFile, piiPatternsMigrated} {
+		path := filepath.Join(home, name)
+		if err := s.LoadUserPatterns(path); err != nil {
+			return nil, errcodes.New(errcodes.ConfigInvalid, "custom secret patterns: "+err.Error()).
+				WithHint("fix or remove the bad line in " + path)
+		}
 	}
 	return s, nil
 }

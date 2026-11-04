@@ -2,12 +2,19 @@ package wire
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -44,16 +51,38 @@ const (
 // "stricter wins" resolution of logic/policy is not wired yet.
 type liveScanner struct {
 	backends map[store.Source]store.Backend
-	mu       sync.Mutex
-	key      string // the rule rows' ids and HLCs the current scanner was built from
-	cur      *gitleaks.Scanner
+	// repoDir is the repo top whose .gitleaks.toml contributes allow
+	// patterns and stopwords (D8) while secrets.use_repo_gitleaks is on;
+	// "" reads no file. policy reads the effective policy (set once the
+	// engine exists, usePolicy); nil means the key's default (true).
+	repoDir string
+	policy  func() (policy.Set, error)
+	mu      sync.Mutex
+	key     string // the rule rows' ids and HLCs the current scanner was built from
+	cur     *gitleaks.Scanner
 }
 
 var _ engine.RefreshingScanner = (*liveScanner)(nil)
 
+// scannerOption configures newScanner.
+type scannerOption func(*liveScanner)
+
+// withRepoGitleaks makes the scanner read <dir>/.gitleaks.toml (D8).
+func withRepoGitleaks(dir string) scannerOption {
+	return func(s *liveScanner) { s.repoDir = dir }
+}
+
+// repoGitleaksFile is the repo file gitleaks itself reads (D8).
+const repoGitleaksFile = ".gitleaks.toml"
+
 // newScanner builds the live scanner over backends and its first rule set.
-func newScanner(ctx context.Context, backends map[store.Source]store.Backend) (*liveScanner, error) {
+// It is the one scanner constructor of the core (D4): writes, hooks and
+// lore check leaks all scan through it.
+func newScanner(ctx context.Context, backends map[store.Source]store.Backend, opts ...scannerOption) (*liveScanner, error) {
 	s := &liveScanner{backends: backends}
+	for _, o := range opts {
+		o(s)
+	}
 	if err := s.Refresh(ctx); err != nil {
 		return nil, err
 	}
@@ -66,6 +95,11 @@ func (s *liveScanner) Refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	allow, allowKey, err := s.repoAllow()
+	if err != nil {
+		return err
+	}
+	key += "\n#repo-gitleaks:" + allowKey
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cur != nil && key == s.key {
@@ -79,12 +113,57 @@ func (s *liveScanner) Refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	next, err := gitleaks.New(rules)
+	next, err := gitleaks.NewWith(rules, gitleaks.Options{RepoAllow: allow})
 	if err != nil {
 		return err
 	}
 	s.cur, s.key = next, key
 	return nil
+}
+
+// usePolicy late-binds the policy reader (the engine is built after its
+// scanner); the next Refresh honours secrets.use_repo_gitleaks.
+func (s *liveScanner) usePolicy(fn func() (policy.Set, error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.policy = fn
+}
+
+// repoAllow reads the repo .gitleaks.toml allow when the policy allows it
+// (D8, default on), with a key that changes with the file's content or
+// the switch. A missing file is no allow; a bad file fails closed
+// (E_CONFIG_INVALID).
+func (s *liveScanner) repoAllow() (gitleaks.RepoAllow, string, error) {
+	s.mu.Lock()
+	dir, pol := s.repoDir, s.policy
+	s.mu.Unlock()
+	if dir == "" {
+		return gitleaks.RepoAllow{}, "", nil
+	}
+	if pol != nil {
+		set, err := pol()
+		if err != nil {
+			return gitleaks.RepoAllow{}, "", err
+		}
+		if e, ok := set.Get(policy.KeyUseRepoGitleaks); ok {
+			if b, isBool := e.Value.(value.Bool); isBool && !b.Bool() {
+				return gitleaks.RepoAllow{}, "off", nil
+			}
+		}
+	}
+	data, err := os.ReadFile(filepath.Clean(filepath.Join(dir, repoGitleaksFile)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return gitleaks.RepoAllow{}, "", nil
+	}
+	if err != nil {
+		return gitleaks.RepoAllow{}, "", errs.Wrap(errs.ConfigInvalid, "wire: read "+repoGitleaksFile, err)
+	}
+	allow, err := gitleaks.ParseRepoGitleaks(data)
+	if err != nil {
+		return gitleaks.RepoAllow{}, "", err
+	}
+	sum := sha256.Sum256(data)
+	return allow, hex.EncodeToString(sum[:]), nil
 }
 
 // scanner is the current rule set's scanner.
@@ -161,4 +240,11 @@ func textField(r row.Row, name string) string {
 		return v.String()
 	}
 	return ""
+}
+
+// bindEngine makes the scanner read secrets.use_repo_gitleaks from the
+// repo store's effective policy (the level the repo .gitleaks.toml
+// belongs to).
+func (s *liveScanner) bindEngine(eng *engine.Engine) {
+	s.usePolicy(func() (policy.Set, error) { return eng.Policy(store.SourceRepo) })
 }

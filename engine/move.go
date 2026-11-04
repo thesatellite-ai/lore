@@ -202,8 +202,10 @@ func refuseSecretRefs(r row.Row) error {
 	if len(found) == 0 {
 		return nil
 	}
-	return errs.New(errs.Unsupported, "engine: "+r.ID.String()+" holds secret references and cannot move into a client repo: "+strings.Join(found, ", ")).
-		WithHint("remove the references from the row first (BATCH 5)")
+	// FLAG5 / SQ17 / BATCH 5: a secret reference names our vault and its
+	// holder, which a client must never read: the leak guard's code.
+	return errs.New(errs.LeakBlocked, "engine: "+r.ID.String()+" holds secret references and cannot live in a client repo: "+strings.Join(found, ", ")+"; nothing written").
+		WithHint("remove the references from the row first, or keep the row in one of your own stores (BATCH 5)")
 }
 
 // texts returns the text of a value in any form it is held in: a text, a

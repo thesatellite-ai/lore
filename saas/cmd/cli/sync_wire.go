@@ -11,8 +11,10 @@
 //	LORE_SYNC_GIT=0             keep syncing files, but never touch git config,
 //	                            .gitattributes or hooks
 //	LORE_SYNC_QUIET=1           no sync chatter on stderr (errors still print)
-//	LORE_SYNC_ALLOW_SECRETS=1   export rows even when a credential pattern
-//	                            matches (one run; the value WILL be committed)
+//
+// LORE_SYNC_ALLOW_SECRETS is removed (D3): the export and the hooks always
+// scan and always refuse a finding; a false positive is kept with
+// `lore secrets allow`, never by switching the scan off.
 package main
 
 import (
@@ -41,13 +43,12 @@ import (
 // Environment switches (see file doc).
 // ds:def id=sync-env-qmha7pjc owner=@khanakia stability=stable desc="LORE_SYNC* environment switches"
 const (
-	envSync            = "LORE_SYNC"
-	envSyncGit         = "LORE_SYNC_GIT"
-	envSyncQuiet       = "LORE_SYNC_QUIET"
-	envSyncAllowSecret = "LORE_SYNC_ALLOW_SECRETS"
-	envReadOnly        = "LORE_READ_ONLY"
-	envValueOff        = "0"
-	envValueOn         = "1"
+	envSync      = "LORE_SYNC"
+	envSyncGit   = "LORE_SYNC_GIT"
+	envSyncQuiet = "LORE_SYNC_QUIET"
+	envReadOnly  = "LORE_READ_ONLY"
+	envValueOff  = "0"
+	envValueOn   = "1"
 )
 
 // syncLockFile serialises sync passes across lore processes. Separate from
@@ -217,11 +218,9 @@ func syncOptions(db *sql.DB, root, dataDir string, kind lsync.ChangeKind) lsync.
 }
 
 // secretCheck returns the credential scanner used for every file that may
-// reach git (export and pre-commit), or nil when LORE_SYNC_ALLOW_SECRETS=1.
+// reach git (export and pre-commit). It is never nil: D3 removed
+// LORE_SYNC_ALLOW_SECRETS, so the hooks always scan and always refuse.
 func secretCheck() func([]byte) string {
-	if os.Getenv(envSyncAllowSecret) == envValueOn {
-		return nil
-	}
 	scanner, err := secretScanner()
 	if err != nil {
 		// Fail closed: a pattern the user wrote must not silently stop

@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 )
 
@@ -119,12 +118,23 @@ func TestConstructorsReject(t *testing.T) {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	// The URL is built from two parts so no secret scanner flags the fixture.
-	if _, err := URLOf("https://u:" + "p@host.example/"); !errs.Has(err, errs.URLUserinfo) {
-		t.Errorf("url password err = %v", err)
+	// URL CREDENTIALS FIX (D24/SQ13): credentials are stripped, not
+	// refused. Built from two parts so no secret scanner flags the fixture.
+	urlCases := []struct {
+		in, want string
+		stripped bool
+	}{
+		{"https://u:" + "p@host.example/", "https://host.example/", true},
+		{"https://u@host.example/", "https://host.example/", true},
+		{"ssh://git:" + "p@host.example/a", "ssh://git@host.example/a", true},
+		{"ssh://git@host.example/a", "ssh://git@host.example/a", false},
+		{"https://host.example/a?q=1", "https://host.example/a?q=1", false},
 	}
-	if _, err := URLOf("https://u@host.example/"); err != nil {
-		t.Errorf("user without password refused: %v", err)
+	for _, c := range urlCases {
+		u, err := URLOf(c.in)
+		if err != nil || u.String() != c.want || u.Stripped() != c.stripped {
+			t.Errorf("URLOf -> %q %v %v; want %q %v", u.String(), u.Stripped(), err, c.want, c.stripped)
+		}
 	}
 }
 

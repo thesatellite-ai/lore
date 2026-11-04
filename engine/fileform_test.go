@@ -67,7 +67,7 @@ func TestMoveRefusesSecretRefsInEveryForm(t *testing.T) {
 		prj := w.project(t, store.SourceRepo, "client")
 		id := w.putTask(t, agency, prj, map[string]value.Value{"blocked_by": v})
 		_, err := w.eng.Move(ctx, Ref{ID: id}, store.SourceRepo)
-		if !errs.Has(err, errs.Unsupported) || !strings.Contains(err.Error(), "secret:deploy_key") {
+		if !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), "secret:deploy_key") {
 			t.Errorf("%s: move into a client repo = %v, want the secret-ref refusal", name, err)
 		}
 	}

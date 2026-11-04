@@ -88,6 +88,7 @@ func TestPackRules(t *testing.T) {
 		{RuleAuthorizationBearer, "Authorization: Bearer " + alnum, "Authorization: Bearer <token>"},
 		{RulePasswordPair, "password=" + "Zq8#Lm2!Vx", "password=" + "${DB_PASSWORD}"},
 		{RuleURLWithPassword, "postgres://app:" + "Zq8Lm2Vx" + "@db.local:5432/x", "postgres://app:" + "${PW}" + "@db.local/x"},
+		{RuleURLUserinfoID, "https://" + "glpat-" + rep("Ab3", 7) + "@git.acme.example/a/b", "https://" + "mira" + "@git.acme.example/a/b"},
 	}
 	s := packOnly(t)
 	covered := map[string]bool{}
@@ -282,4 +283,99 @@ func TestConcurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestPasswordPairProseFilter pins the 3.4 table (D10).
+func TestPasswordPairProseFilter(t *testing.T) {
+	s := packOnly(t)
+	cases := []struct {
+		text string
+		hit  bool
+	}{
+		{"change that password: credentials shouldn't sit in Slack history", false},
+		{"password: " + "Sunflower42", true},
+		{"password: " + "tractor", true},
+		{`password: "` + "tractor and seeds" + `"`, true},
+		{"password = " + "tractor; restart api", false},
+		{"the password: changeme", false},
+		{"PASSWORD=${secret:gopass://acme/x}", false},
+		{"pwd: " + "hunter-hunter-2 then restart", true},
+	}
+	for _, c := range cases {
+		if got := ruleIDs(s.Scan("body", c.text))[RulePasswordPair]; got != c.hit {
+			t.Errorf("password_pair on case hit=%v: got %v", c.hit, got)
+		}
+	}
+}
+
+// TestURLTokenUserRule pins 14.6/D26: a token user name is a finding, a
+// plain user, ssh forms and a clean URL are not.
+func TestURLTokenUserRule(t *testing.T) {
+	s := packOnly(t)
+	tok := "ghp_" + strings.Repeat("C", 36)
+	if !ruleIDs(s.Scan("body", "clone https://"+tok+"@github.com/acme/hub.git"))[RuleURLUserinfoID] {
+		t.Fatalf("a token user must be a finding")
+	}
+	for _, clean := range []string{"https://mira@github.com/acme/hub", "git@github.com:acme/hub.git", "ssh://git@github.com/acme/hub", "https://github.com/acme/hub"} {
+		got := ruleIDs(s.Scan("body", clean))
+		if got[RuleURLUserinfoID] || got[RuleURLWithPassword] {
+			t.Errorf("%q must not be a URL credential finding", clean)
+		}
+	}
+}
+
+// TestRepoGitleaksAllow pins D8: only allow regexes and stopwords are
+// taken from .gitleaks.toml, rules in it are ignored, a target rule
+// scopes an entry, and a bad file fails closed.
+func TestRepoGitleaksAllow(t *testing.T) {
+	file := []byte(`
+[[rules]]
+id = "mine"
+regex = '''zzz'''
+
+[[allowlists]]
+regexes = ['''^sk_live_FIXTURE''']
+
+[[allowlists]]
+targetRules = ["github_token"]
+stopwords = ["docsonly"]
+`)
+	allow, err := ParseRepoGitleaks(file)
+	if err != nil || len(allow.Entries) != 2 {
+		t.Fatalf("parse: %+v %v", allow, err)
+	}
+	s, err := NewWith(Pack(), Options{RepoAllow: allow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stripe := "sk_live_FIXTURE" + strings.Repeat("A", 20)
+	if ruleIDs(s.Scan("body", stripe))[RuleStripeLiveKey] {
+		t.Errorf("an allow regex must drop the finding")
+	}
+	other := "sk_live_" + strings.Repeat("B", 24)
+	if !ruleIDs(s.Scan("body", other))[RuleStripeLiveKey] {
+		t.Errorf("a non-matching value must still be found")
+	}
+	gh := "ghp_docsonly" + strings.Repeat("D", 30)
+	if ruleIDs(s.Scan("body", gh))[RuleGitHubToken] {
+		t.Errorf("a stopword must drop its target rule's finding")
+	}
+	if _, err := ParseRepoGitleaks([]byte("[[allowlists]]\nregexes = ['''(''']\n")); !errs.Has(err, errs.ConfigInvalid) {
+		t.Errorf("a bad regex must fail closed: %v", err)
+	}
+}
+
+// TestDetectorSettings pins D7 and the decode depth (3.1/3.6).
+func TestDetectorSettings(t *testing.T) {
+	base, err := Defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.detector == nil || !s.detector.IgnoreGitleaksAllow || s.detector.MaxDecodeDepth != 3 {
+		t.Fatalf("detector settings: %+v", s.detector)
+	}
 }

@@ -284,23 +284,44 @@ func (v DNS) String() string { return v.s }
 func (v DNS) MarshalJSON() ([]byte, error) { return canon.String(v.s), nil }
 func (DNS) sealed()                        {}
 
-// URL is an absolute URL without a password.
-type URL struct{ s string }
+// URL is an absolute URL without credentials.
+type URL struct {
+	s string
+	// stripped: URLOf removed user info from the input (D24, 14.2 rows
+	// 12-14); the engine turns it into W_URL_CREDENTIALS. Not part of the
+	// value: two URLs with the same text are equal values.
+	stripped bool
+}
 
-// URLOf validates an absolute URL (scheme plus host or opaque part). A URL
-// holding a password is refused with E_URL_CREDENTIALS: credentials never
-// enter a stored value; stripping them (W_URL_CREDENTIALS) is the caller's
-// job before it builds the value.
+// URLOf validates an absolute URL (scheme plus host or opaque part) and
+// strips credentials instead of refusing them (URL CREDENTIALS FIX, D24,
+// SQ13): an ssh URL keeps its login user and loses a password, every other
+// scheme loses its whole user part (over http a bare user name is often a
+// token). Stripped reports that something was removed, never what.
 func URLOf(s string) (URL, error) {
 	u, err := url.Parse(s)
 	if err != nil || u.Scheme == "" || (u.Host == "" && u.Opaque == "") {
 		return URL{}, invalid(KindURL, "not an absolute URL")
 	}
-	if _, has := u.User.Password(); has {
-		return URL{}, errs.New(errs.URLUserinfo, "value: the URL holds a password")
+	stripped := false
+	if u.User != nil {
+		switch strings.ToLower(u.Scheme) {
+		case "ssh", "git+ssh", "ssh+git":
+			if _, has := u.User.Password(); has {
+				u.User, stripped = url.User(u.User.Username()), true
+			}
+		default:
+			u.User, stripped = nil, true
+		}
 	}
-	return URL{s: u.String()}, nil
+	if !stripped {
+		return URL{s: u.String()}, nil
+	}
+	return URL{s: u.String(), stripped: true}, nil
 }
+
+// Stripped reports whether URLOf removed user info from its input.
+func (v URL) Stripped() bool { return v.stripped }
 
 // Kind implements Value.
 func (URL) Kind() Kind { return KindURL }

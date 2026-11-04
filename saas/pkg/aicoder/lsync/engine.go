@@ -1125,7 +1125,7 @@ func (e *engine) exportDoc(ctx context.Context, k rowKey, t *Table, dbDoc map[st
 	}
 	if e.o.CheckSecrets != nil {
 		if why := e.o.CheckSecrets(b); why != "" {
-			e.recordError(ctx, rel, ErrKindSecret, why+" — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run")
+			e.recordError(ctx, rel, ErrKindSecret, why+" — not written to git; edit the row, or mark a false positive with lore secrets allow <row> --rule <id> --reason <why>")
 			e.deferred[k] = true
 			return nil // stays dirty so it is retried (and reported) every pass
 		}

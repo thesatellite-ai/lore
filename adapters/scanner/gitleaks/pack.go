@@ -20,12 +20,12 @@ const (
 	RuleAuthorizationBearer = "authorization_bearer"
 	RulePasswordPair        = "password_pair"
 	RuleURLWithPassword     = "url_with_password"
+	RuleURLUserinfoID       = "url_token_user"
 )
 
 // passwordPairEntropy is the minimum Shannon entropy (bits/char) of a whole
-// password_pair match. "password = changeme" style prose sits below it;
-// a real literal with the key name in front sits above. This floor is what
-// makes the rule stricter than the v0.1.17 one.
+// password_pair match ("password = aaaaaaaaaaaa" sits below it). Kept
+// beside the D10 prose filter: it only drops repeated-character noise.
 const passwordPairEntropy = 3.0
 
 // Pack returns lore's own rule pack (SQ8), a fresh slice each call so a
@@ -35,8 +35,12 @@ func Pack() []scan.Rule {
 	b := func(id, desc, re string, kw ...string) scan.Rule {
 		return scan.Rule{ID: id, Description: desc, Regex: re, Keywords: kw, Source: scan.SourceBuiltin}
 	}
-	pw := b(RulePasswordPair, "password=literal (placeholders like <x>, ${x}, *** are not values)",
-		`(?i)\b(?:password|passwd|pwd)\s*[=:]\s*["']?[^\s"'<>${}*]{8,}`, "password", "passwd", "pwd")
+	// D10 / 3.4: the stricter password_pair; its post-filter proseValue
+	// drops placeholders and an unquoted plain word followed by prose.
+	pw := b(RulePasswordPair, "password=literal; an unquoted plain word followed by more prose on the line is not a hit "+
+		"(an all-letters password followed by prose is missed: the accepted trade-off)",
+		`(?i)\b(?:password|passwd|pwd|passphrase)\s*[=:]\s*(?:"([^"\r\n]{6,})"|'([^'\r\n]{6,})'|([^\s"'<>${}*,;]{6,}))`,
+		"password", "passwd", "pwd", "passphrase")
 	pw.Entropy = passwordPairEntropy
 	return []scan.Rule{
 		b(RuleAWSAccessKey, "AWS access key id", `\b(?:AKIA|ASIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASCA)[A-Z0-9]{16}\b`,
@@ -59,5 +63,9 @@ func Pack() []scan.Rule {
 		// placeholder passwords (<x>, ${x}, ***) are excluded by the class.
 		b(RuleURLWithPassword, "URL with an inline password",
 			`\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@]+:[^\s/@<>${}*]{3,}@[^\s/]+`, "://"),
+		// 14.6 / D26: http(s)://<token>@host. The post-filter tokenUser
+		// keeps only a token-shaped user name (repourl.TokenShaped).
+		b(RuleURLUserinfoID, "http(s) URL whose user name is a token",
+			`(?i)\bhttps?://[^\s:/@<>${}*]{4,}@[^\s/]+`, "http"),
 	}
 }

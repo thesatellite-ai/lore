@@ -9,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -48,7 +49,11 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	if err != nil {
 		return screened{}, err
 	}
-	out := screened{fields: fields, pol: pol}
+	fields, urlWarns, err := stripURLs(fields)
+	if err != nil {
+		return screened{}, err
+	}
+	out := screened{fields: fields, pol: pol, warnings: urlWarns}
 	// BATCH 8: a rule the personal store turned off covers only that
 	// person's own captures, i.e. a write stamped as the engine's own actor
 	// (the person whose personal store is attached). A write a surface
@@ -100,7 +105,7 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		}
 	}
 	if len(hits) == 0 {
-		return out, nil
+		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
 	}
 	var all []scan.Finding
 	for _, h := range hits {
@@ -116,7 +121,7 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 			return screened{}, err
 		}
 		out.accepted = all
-		return out, nil
+		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
 	case policy.OnDetectRedact:
 		red := make(map[string]value.Value, len(fields))
 		for k, v := range fields {
@@ -130,7 +135,8 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 			red[h.field] = v
 		}
 		out.fields, out.redacted = red, all
-		return out, nil
+		// a redacted ${secret:unstored} is a secret reference too
+		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
 	case policy.OnDetectRefuse:
 	}
 	return screened{}, secretErr(all)
@@ -281,4 +287,82 @@ func describe(fs []scan.Finding) string {
 func secretErr(fs []scan.Finding) *errs.Error {
 	return errs.New(errs.SecretDetected, "engine: "+describe(fs)).
 		WithHint("store it in your vault and write ${secret:…} instead, or mark it not a secret: lore secrets allow …")
+}
+
+// WarnURLUserinfo is W_URL_CREDENTIALS: a URL value lost a credential before it was stored
+// (D24/D25). The message names the field and the clean URL, never the
+// removed text.
+const WarnURLUserinfo WarnCode = "W_URL_CREDENTIALS"
+
+// stripURLs is the write-time URL credential strip (URL CREDENTIALS FIX,
+// D24, 14.2): every url-typed value (already stripped by value.URLOf)
+// and every text field whose name marks a URL (repourl.URLFieldName:
+// origin_url, base_url, *_url, ...) is stored through repourl.Strip, so
+// no write path can store https://user:token@host. A credential warns
+// (W_URL_CREDENTIALS, field + clean URL only); a plain user name is
+// dropped silently (14.4); a value lore cannot read is refused
+// (E_URL_CREDENTIALS). fields is copied only when something changes.
+func stripURLs(fields map[string]value.Value) (map[string]value.Value, []Warning, error) {
+	var warns []Warning
+	var out map[string]value.Value
+	names := make([]string, 0, len(fields))
+	for k := range fields {
+		names = append(names, k)
+	}
+	slices.Sort(names) // warnings in a stable order
+	for _, name := range names {
+		switch v := fields[name].(type) {
+		case value.URL:
+			if v.Stripped() {
+				warns = append(warns, urlWarning(name, v.String()))
+			}
+		case value.Text:
+			if !repourl.URLFieldName(name) || v.String() == "" {
+				continue
+			}
+			clean, removed, err := repourl.Strip(v.String())
+			if errors.Is(err, repourl.ErrUnreadable) {
+				return nil, nil, errs.New(errs.URLUserinfo, "engine: field "+name+" cannot be read as a URL, and lore cannot tell whether it holds a credential").
+					WithHint("give the address without any user name or token, e.g. https://host/path")
+			}
+			if err != nil || clean == v.String() {
+				continue // not a URL at all: kept as written
+			}
+			t, terr := value.TextOf(clean)
+			if terr != nil {
+				return nil, nil, terr
+			}
+			if out == nil {
+				out = make(map[string]value.Value, len(fields))
+				for k, fv := range fields {
+					out[k] = fv
+				}
+			}
+			out[name] = t
+			if removed.Warn() {
+				warns = append(warns, urlWarning(name, clean))
+			}
+		}
+	}
+	if out == nil {
+		out = fields
+	}
+	return out, warns, nil
+}
+
+// urlWarning is the one-line warning of 14.4 (D25: clean URL only).
+func urlWarning(field, clean string) Warning {
+	return Warning{Code: WarnURLUserinfo, Field: field,
+		Message: "a credential was in " + field + "; lore stored the URL without it: " + clean}
+}
+
+// refuseClientSecretRefs is SQ17 / BATCH 5 / FLAG5 on a write: a row whose
+// home is a client repo may hold no ${secret:…} reference (E_LEAK_BLOCKED),
+// the same refusal lore move gives (refuseSecretRefs).
+func (e *Engine) refuseClientSecretRefs(target store.Source, rowID ids.AnyID, fields map[string]value.Value) error {
+	a, err := e.attached(target)
+	if err != nil || !a.Client {
+		return nil // an unknown target is refused by the write itself
+	}
+	return refuseSecretRefs(row.Row{ID: rowID, Fields: fields})
 }

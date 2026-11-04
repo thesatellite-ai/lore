@@ -435,7 +435,7 @@ func TestMove(t *testing.T) {
 	// into the client repo: a secret reference refuses, none moves without
 	// a moves entry.
 	sec := w.memIn(t, agency, repoPrj, "uses ${secret:deploy_key} to ship")
-	if _, err = w.eng.Move(ctx, Ref{ID: sec.ID}, store.SourceRepo); !errs.Has(err, errs.Unsupported) || !strings.Contains(err.Error(), "secret:deploy_key") {
+	if _, err = w.eng.Move(ctx, Ref{ID: sec.ID}, store.SourceRepo); !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), "secret:deploy_key") {
 		t.Fatalf("secret ref into a client repo: %v", err)
 	}
 	clean := w.memIn(t, agency, repoPrj, "plain")

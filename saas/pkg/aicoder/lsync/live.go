@@ -106,7 +106,7 @@ func (e *engine) divert(ctx context.Context, k rowKey, t *Table, fc fileChange, 
 		}
 		if e.o.CheckSecrets != nil {
 			if why := e.o.CheckSecrets(d.Doc); why != "" {
-				e.recordError(ctx, rel, ErrKindSecret, why+" — not written to the live ref; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run")
+				e.recordError(ctx, rel, ErrKindSecret, why+" — not written to the live ref; edit the row, or mark a false positive with lore secrets allow <row> --rule <id> --reason <why>")
 				e.deferred[k] = true
 				return true, nil
 			}
