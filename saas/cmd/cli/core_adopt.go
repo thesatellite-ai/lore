@@ -1,5 +1,5 @@
-// core_adopt.go — a project adoption (E1) carried into the core-owned row
-// files.
+// core_adopt.go — a project adoption (E1) or a `lore sync fix-projects`
+// fold carried into the core-owned row files.
 //
 // When a clone that ran without sync turns it on, lsync's ADOPT pass
 // replaces the clone's own project id by the shared one _meta.json pins,
@@ -13,7 +13,9 @@
 // (Update: HLC stamp, audit, secret scan and merge rules all hold), then
 // deletes the local project's row through the engine (a tombstone, so an
 // old copy can never bring it back), clears the mark, and runs one more
-// pass so lore.db mirrors the rewritten files. Idempotent: a re-run finds
+// pass so lore.db mirrors the rewritten files. `lore sync fix-projects`
+// (lsync.FixProjects) leaves the same mark for every project it folds and
+// then runs a pass, so it takes this path too. Idempotent: a re-run finds
 // no row naming the local id and an already deleted project.
 package main
 
@@ -37,6 +39,12 @@ import (
 	"saas/pkg/aicoder/style"
 )
 
+// adoptFailed holds the checkout roots whose core re-pointing failed in
+// this process, so a command's start and end passes do not both retry it
+// and print the same warning twice. Per process, like syncSessions: the
+// next command retries.
+var adoptFailed = map[string]bool{}
+
 // reconcileCheckout is lsync.Reconcile for the checkout's own .lore/data
 // plus the core half of a project adoption (see the file comment). A
 // failure of the core half is printed, keeps the mark for the next
@@ -53,8 +61,12 @@ func reconcileCheckout(ctx context.Context, o lsync.Options, root string) (lsync
 		}
 		return rep, nil
 	}
+	if adoptFailed[root] {
+		return rep, nil // failed earlier in this command: retried, and warned, once per command
+	}
 	n, aerr := rehomeAdoptedProjects(ctx, o, root, pending)
 	if aerr != nil {
+		adoptFailed[root] = true
 		rep.Warnings = append(rep.Warnings, "project adoption: re-pointing core rows failed (retried on the next command): "+aerr.Error())
 	}
 	if n == 0 {

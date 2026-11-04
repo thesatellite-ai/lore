@@ -693,6 +693,52 @@ func TestE2E_ExistingDBsRollout(t *testing.T) {
 	}
 }
 
+// E1: two parallel bootstraps meet in a merge; `lore sync fix-projects`
+// folds them into one project. The rule files are core-owned (written by
+// the 0.1.18 core only), so the fold must re-point them through the core:
+// rewriting lore.db alone left every file of the folded project naming it.
+func TestE2E_FixProjectsRepointsCoreRows(t *testing.T) {
+	w := newWorld(t)
+	alice := w.newClone("alice")
+	bob := w.newClone("bob")
+	alice.lore("init", "--non-interactive", "--name=app")
+	aliceRule := alice.addRule("alice rule")
+	alice.commitAll("alice lore")
+	alice.git("push", "-q")
+	bob.lore("init", "--non-interactive", "--name=app")
+	bobRule := bob.addRule("bob rule")
+	bob.commitAll("bob lore")
+	if _, code := bob.tryGit("pull", "-q", "--no-rebase"); code == 0 {
+		t.Fatal("parallel bootstraps must clash on _meta.json")
+	}
+	bob.git("checkout", "-q", "--theirs", ".lore/data/_meta.json")
+	bob.commitAll("merge")
+	keep := alice.readDoc("rules", aliceRule)["project_id"]
+	folded := bob.readDoc("rules", bobRule)["project_id"]
+	if keep == folded {
+		t.Fatalf("setup: both clones share project %v", keep)
+	}
+	r := bob.lore("sync", "fix-projects")
+	if got := strings.Count(r.stdout+r.stderr, "re-pointing core rows failed"); got != 0 {
+		t.Fatalf("fix-projects failed to re-point: %s %s", r.stdout, r.stderr)
+	}
+	for _, id := range []string{aliceRule, bobRule} {
+		if got := bob.readDoc("rules", id)["project_id"]; got != keep {
+			t.Fatalf("rule %s names project %v, want the kept %v", id, got, keep)
+		}
+	}
+	if d := bob.readDoc("projects", folded.(string)); d["_deleted"] != true {
+		t.Fatalf("the folded project row is not deleted: %v", d)
+	}
+	var n int
+	if err := bob.loreDB().QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("lore.db projects: %d %v", n, err)
+	}
+	if v := bob.lore("audit", "verify"); !strings.Contains(v.stdout+v.stderr, "intact") {
+		t.Fatalf("audit verify: %s %s", v.stdout, v.stderr)
+	}
+}
+
 // E43: restore --prefer db brings the DB's version back into the files.
 func TestE2E_RestorePreferDB(t *testing.T) {
 	w := newWorld(t)

@@ -502,8 +502,11 @@ func archivedBefore(ctx context.Context, q execer, reg *Registry, present map[st
 
 // FixProjects collapses several project rows into one (E1, two parallel
 // bootstraps that met in a merge). keep defaults to the id _meta.json pins,
-// else the smallest id. Every reference is rewritten; the next Reconcile
-// exports the rewritten rows and removes the other project files.
+// else the smallest id. Every reference is rewritten in lore.db; the next
+// Reconcile exports the rewritten rows of lsync-owned tables, and each
+// folded id is left as a ProjectAdoption mark so the caller re-points the
+// core-owned row files and deletes the folded project row through the core
+// (PendingProjectAdoptions).
 func FixProjects(ctx context.Context, db *sql.DB, dataDir, keep string) (string, []string, error) {
 	reg, _ := NewRegistry()
 	if err := EnsureInfra(ctx, db, reg); err != nil {
@@ -548,6 +551,13 @@ func FixProjects(ctx context.Context, db *sql.DB, dataDir, keep string) (string,
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO `+tblDirty+`(table_name, row_id) VALUES (?, ?)`, projectsTable, id); err != nil {
 			return "", nil, fmt.Errorf("lsync: mark project: %w", err)
+		}
+		// The rewrite above reaches lore.db only; a core-owned row file
+		// (and the folded project's own file) is the core's to write
+		// (owned.go). The same durable mark as ADOPT hands it to the
+		// caller, which re-points them through the core (core_adopt.go).
+		if err := addProjectAdoption(ctx, tx, ProjectAdoption{Local: id, Shared: keep}); err != nil {
+			return "", nil, err
 		}
 		merged = append(merged, id)
 	}
