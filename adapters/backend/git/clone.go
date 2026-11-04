@@ -43,6 +43,27 @@ const cloneDirMode = 0o700
 // branchPattern is a conservative git branch name.
 var branchPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 
+// lockSuffix ends a name git refuses as a ref component.
+const lockSuffix = ".lock"
+
+// validBranch reports whether name is a branch lore accepts: branchPattern
+// plus the git check-ref-format rules that pattern lets through (no "..",
+// no empty or dot-led component, no trailing "/" or ".", no component
+// ending ".lock"). The name also becomes part of a clone folder
+// (<repo>@<branch>), so a refused name is refused before any folder or git
+// command sees it rather than failing half way in `git worktree add`.
+func validBranch(name string) bool {
+	if !branchPattern.MatchString(name) || strings.Contains(name, "..") || strings.HasSuffix(name, ".") {
+		return false
+	}
+	for part := range strings.SplitSeq(name, "/") {
+		if part == "" || strings.HasPrefix(part, ".") || strings.HasSuffix(part, lockSuffix) {
+			return false
+		}
+	}
+	return true
+}
+
 // NewOpener returns the store.Opener for ssh, https and http store urls
 // (register it under each of Schemes). It needs store.OpenOptions.Home:
 // clones live under <home>/clones. Scp-like urls must go through
@@ -65,14 +86,17 @@ func NewOpener(opts ...Option) store.Opener {
 		if err != nil {
 			return nil, err
 		}
+		// callOpts is per call: appending to the captured opts would pin
+		// every later open of this Opener to the first pinned branch.
+		callOpts := opts
 		if branch != "" {
 			// A pinned branch gets its own clone (bare + worktree + lock):
 			// a worktree holds one branch, and the default branch's clone
 			// may be open in another process.
 			base += branchCloneSep + filepath.FromSlash(branch)
-			opts = append(slices.Clone(opts), WithBranch(branch))
+			callOpts = append(slices.Clone(opts), WithBranch(branch))
 		}
-		return OpenClone(ctx, r.URL, base, folder, o, opts...)
+		return OpenClone(ctx, r.URL, base, folder, o, callOpts...)
 	}
 }
 
@@ -88,7 +112,7 @@ func OpenClone(ctx context.Context, remote, base, folder string, o store.OpenOpt
 	if err != nil {
 		return nil, err
 	}
-	if cfg.branch != "" && (!branchPattern.MatchString(cfg.branch) || strings.Contains(cfg.branch, "..")) {
+	if cfg.branch != "" && !validBranch(cfg.branch) {
 		return nil, errs.New(errs.InvalidInput, "git: the branch name is not valid")
 	}
 	if err = os.MkdirAll(base, cloneDirMode); err != nil {
@@ -232,7 +256,7 @@ func (b *Backend) remoteHead(ctx context.Context, dir string) string {
 		if !ok {
 			continue
 		}
-		if name, _, _ := strings.Cut(rest, "\t"); branchPattern.MatchString(name) {
+		if name, _, _ := strings.Cut(rest, "\t"); validBranch(name) {
 			return name
 		}
 	}
@@ -470,7 +494,7 @@ func branchOf(u *url.URL) (string, *url.URL, error) {
 	if !ok {
 		return "", u, nil
 	}
-	if len(vals) != 1 || !branchPattern.MatchString(vals[0]) || strings.Contains(vals[0], "..") {
+	if len(vals) != 1 || !validBranch(vals[0]) {
 		return "", nil, errs.New(errs.InvalidInput, "git: the branch name is not valid")
 	}
 	q.Del(BranchParam)
