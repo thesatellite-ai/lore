@@ -77,6 +77,17 @@ var recurrenceShift = map[string]struct{ y, m, d int }{
 	schema.Recurrence1y:  {1, 0, 0},
 }
 
+// bumpRecurrence advances from by the recurrence pattern; ok is false for
+// a pattern outside schema.ReminderRecurrences() (v0.1.17 panicked there;
+// a hand-edited row file must not crash the CLI).
+func bumpRecurrence(from time.Time, pattern string) (time.Time, bool) {
+	s, ok := recurrenceShift[pattern]
+	if !ok {
+		return time.Time{}, false
+	}
+	return from.AddDate(s.y, s.m, s.d), true
+}
+
 // AddIn is the input of reminder.add.
 type AddIn struct {
 	Message    string `json:"message" arg:"0" desc:"the reminder text"`
@@ -330,12 +341,11 @@ func (o ops) done(ctx context.Context, in IDIn) (DoneOut, error) {
 		return DoneOut{}, err
 	}
 	if rec := work.Field(r, schema.FieldReminderRecurrence); rec != "" {
-		shift, ok := recurrenceShift[rec]
+		next, ok := bumpRecurrence(work.Time(r, schema.FieldReminderDueAt), rec)
 		if !ok {
 			return DoneOut{}, errs.New(errs.InvalidInput, "reminder "+id.String()+": unknown recurrence "+work.Quote(rec)).
 				WithHint("fix it with a recurrence of: " + strings.Join(schema.ReminderRecurrences(), " | "))
 		}
-		next := work.Time(r, schema.FieldReminderDueAt).AddDate(shift.y, shift.m, shift.d)
 		human := work.Success + " rescheduled to " + next.UTC().Format(work.DateLayout) + "\n"
 		w, err := work.Patch(ctx, o.env, Noun, table, id, map[string]value.Value{schema.FieldReminderDueAt: value.DateTimeFrom(next)}, human)
 		if err != nil {
