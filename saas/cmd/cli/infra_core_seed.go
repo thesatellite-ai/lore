@@ -44,7 +44,12 @@ func coreSeedProject(ctx context.Context, root, projectID, name, originURL strin
 	if err != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: &coreAuditSink{}, ModeB: modeBExporter{}, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now})
+	// FLAG6: the seed App must be built from the binary's one options builder
+	// (live wrapper included), so it sees the actor row the init's first core
+	// write holds on the live session; a hand-built App without WrapBackend
+	// re-created that actor (a second actors.write) and the held row then
+	// failed with E_STALE when flushed.
+	app, err := wire.New(coreOptions(root, home))
 	if err != nil {
 		return err
 	}
