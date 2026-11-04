@@ -2,6 +2,8 @@ package git
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -57,6 +59,9 @@ type config struct {
 	// origins maps a canonical Remote.URL to the origin spelling NewOpener
 	// writes into the clone (WithOrigins); absent, the origin is Remote.URL.
 	origins map[string]string
+	// trailers are appended to every commit and merge this backend makes
+	// (WithTrailers): lore's own commits only, never a person's (FQ7).
+	trailers []string
 }
 
 // Option configures the git backend.
@@ -98,6 +103,44 @@ func WithOrigins(m map[string]string) Option {
 		cp[k] = v
 	}
 	return func(c *config) { c.origins = cp }
+}
+
+// WithTrailers appends "Key: value" trailer lines to every commit and
+// merge commit the backend makes (wire passes Lore-Version and, in CI,
+// Lore-CI-Run: gitcommit.OwnCommitTrailers). The backend only ever commits
+// to lore's own stores and live branches, never to a person's commit
+// (FQ7). Empty lines and lines with a newline are dropped.
+func WithTrailers(lines ...string) Option {
+	cp := slices.Clone(lines)
+	return func(c *config) { c.trailers = append(c.trailers, cp...) }
+}
+
+// Join bundles several options into one (for callers that take a single
+// Option slot).
+func Join(opts ...Option) Option {
+	cp := slices.Clone(opts)
+	return func(c *config) {
+		for _, o := range cp {
+			if o != nil {
+				o(c)
+			}
+		}
+	}
+}
+
+// withTrailers is msg with the configured trailers after one blank line
+// (git interpret-trailers form); msg unchanged when there are none.
+func (c config) withTrailers(msg string) string {
+	var keep []string
+	for _, t := range c.trailers {
+		if t = strings.TrimSpace(t); t != "" && !strings.ContainsAny(t, "\r\n") {
+			keep = append(keep, t)
+		}
+	}
+	if len(keep) == 0 {
+		return msg
+	}
+	return strings.TrimRight(msg, "\n") + "\n\n" + strings.Join(keep, "\n")
 }
 
 // WithLockTimeout sets how long a write or sync waits for the store lock

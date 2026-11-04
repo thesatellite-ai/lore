@@ -276,7 +276,7 @@ func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]
 	if len(refused) > 0 {
 		return nil, refused, b.abortMerge(ctx)
 	}
-	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", mergeSubject}, env: env}); err != nil {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(mergeSubject)}, env: env}); err != nil {
 		return nil, nil, errors.Join(errs.Wrap(errs.Internal, "git: commit the merge", err), b.abortMerge(ctx))
 	}
 	return merged, nil, nil

@@ -344,7 +344,7 @@ func (b *Backend) commitBatch(ctx context.Context, batch Batch, changes []store.
 		env, err = b.commitEnv(ctx, batch.Author)
 	}
 	if err == nil {
-		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", subject(batch.Op, changes)}, env: env})
+		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", b.cfg.withTrailers(subject(batch.Op, changes))}, env: env})
 	}
 	if err == nil {
 		return nil
