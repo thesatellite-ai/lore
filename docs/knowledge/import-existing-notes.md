@@ -126,7 +126,7 @@ $ lore external-source disable ext_4bfb…19ce
 $ lore learn promote lcd_d7c7…7fe6 --target rules
 ERROR: [E_NOT_IMPLEMENTED] promote target "rules" not yet supported in v0.1
   hint: only --target=memories is implemented
-(exit 1)
+(exit 23)
 ```
 <!-- /example -->
 

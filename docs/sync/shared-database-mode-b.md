@@ -28,7 +28,7 @@ Alice (an agency developer) has client 2's repos in `~/work`. In the first repo 
 $ lore store init client2 file://$HOME/stores/client2
 name: client2
 url: file://~/stores/client2
-id: sto_c0f3…b5b8
+id: sto_76bd…3f10
 
 # alice, in api
 $ lore store add client2 file://$HOME/stores/client2
@@ -54,27 +54,27 @@ The attachment is recorded in the repo's `.lore/stores.yaml`.
 ```console
 # alice, in app
 $ lore rule add --to client2 --body 'Every screen works on a phone.'
-lore sync: imported 2
-✓ rul_76bd…3f10 [client2]
+lore sync: imported 3
+✓ rul_d431…313a [client2]
   scope: [master] severity: must
 
 # alice, in api
 $ lore rule add --to client2 --body 'Every change comes with a test.'
-lore sync: imported 2
-✓ rul_d431…313a [client2]
+lore sync: imported 3
+✓ rul_b4f4…a5b0 [client2]
   scope: [master] severity: must
 $ lore rule add --body 'The API answers in JSON only.'
-✓ rul_b4f4…a5b0 
+✓ rul_28f8…03df 
   scope: [master] severity: must
 $ lore rule list
-rul_b4f4…a5b0 [must/always] The API answers in JSON only.
-rul_76bd…3f10  Every screen works on a phone.  [client2]
-rul_d431…313a  Every change comes with a test.  [client2]
+rul_28f8…03df [must/always] The API answers in JSON only.
+rul_d431…313a  Every screen works on a phone.  [client2]
+rul_b4f4…a5b0  Every change comes with a test.  [client2]
 
 # alice, in app
 $ lore rule list
-rul_76bd…3f10  Every screen works on a phone.  [client2]
-rul_d431…313a  Every change comes with a test.  [client2]
+rul_d431…313a  Every screen works on a phone.  [client2]
+rul_b4f4…a5b0  Every change comes with a test.  [client2]
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -93,19 +93,29 @@ $ git status --short
 ```console
 # alice, in scratch
 $ lore project list
-lore sync: imported 2
-prj_28f8…03df  scratch  https://github.com/client2/scratch
-$ lore project archive prj_28f8…03df
+lore sync: imported 3
+prj_4c59…6c38  scratch  https://github.com/client2/scratch
+$ lore project archive prj_4c59…6c38
 ✓ scratch archived
 $ lore project list
-prj_28f8…03df  scratch  https://github.com/client2/scratch [archived]
-$ lore project unarchive prj_28f8…03df
+prj_4c59…6c38  scratch  https://github.com/client2/scratch [archived]
+$ lore project unarchive prj_4c59…6c38
 ✓ scratch unarchived
-$ lore project delete prj_28f8…03df
+$ lore project delete prj_4c59…6c38
 ERROR: [E_NEEDS_CONFIRM] engine: run project delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore project delete prj_28f8…03df --yes
+$ lore project delete prj_4c59…6c38 --yes
+ERROR: [E_HAS_DEPENDENTS] engine: rep_3b62…e913 (repos.project_id) still points at prj_4c59…6c38
+  hint: delete or move the pointing rows first
+(exit 23)
+$ lore repo list
+rep_3b62…e913  scratch  https://github.com/client2/scratch
+$ lore repo delete rep_3b62…e913 --yes
+✓ scratch deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+$ lore project delete prj_4c59…6c38 --yes
 ✓ scratch deleted
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
@@ -123,20 +133,20 @@ A repo set up with an older lore may still hold a two-line pointer file, `.lore/
 # alice, in infra
 $ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
-project_id: prj_4c59…6c38
+project_id: prj_f147…5139
 $ lore rule list
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`
   hint: `lore migrate run --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)
 $ lore migrate run --dry-run
 dry_run: true
-count: 2
+count: 3
 rows: 
-steps: mode-b: memories/mem_3b62…e913 → store shared (~/.lore/stores/infra), mode-b: rules/rul_f147…5139 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aae…a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore migrate run
-count: 2
+count: 3
 rows: 
-steps: mode-b: memories/mem_3b62…e913 → store shared (~/.lore/stores/infra), mode-b: rules/rul_f147…5139 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aae…a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ ls .lore; cat .lore/stores.yaml
 lore-cache.db
 lore-cache.db-shm
@@ -148,8 +158,8 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 $ lore rule list; lore memory list
-rul_f147…5139  Terraform changes need a plan in the pull request.  [shared]
-mem_3b62…e913  The staging cluster sleeps at night.  [shared]
+rul_0aae…a61f  Terraform changes need a plan in the pull request.  [shared]
+mem_2537…6bbb  The staging cluster sleeps at night.  [shared]
 ```
 <!-- /example -->
 

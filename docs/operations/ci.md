@@ -29,7 +29,7 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-rul_c0f3…b5b8 [must/always] Buttons are blue
+rul_d431…313a [must/always] Buttons are blue
 $ lore rule add --read-only --body 'Buttons are blue'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
@@ -49,9 +49,9 @@ After an upgrade, lore warns on every command that opens its local database (`lo
 $ lore plugin list
 ⚠ search index is out of date
   run `lore setup` to rebuild
-tpg_76bd…3f10 hello  sha256:bfdeaeb08cff
+tpg_b4f4…a5b0 hello  sha256:bfdeaeb08cff
 $ lore plugin list
-tpg_76bd…3f10 hello  sha256:bfdeaeb08cff
+tpg_b4f4…a5b0 hello  sha256:bfdeaeb08cff
 $ lore setup
 ⚠ search index is out of date
   run `lore setup` to rebuild
@@ -59,7 +59,7 @@ $ lore setup
 → building FTS5 search index...
 ✓ setup complete (registry fingerprint: 601d2850ffd047c2)
 $ lore plugin list
-tpg_76bd…3f10 hello  sha256:bfdeaeb08cff
+tpg_b4f4…a5b0 hello  sha256:bfdeaeb08cff
 ```
 <!-- /example -->
 
@@ -73,7 +73,7 @@ A CI clone has the `.lore/data` files but not the database, and not lore's git s
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-rul_c0f3…b5b8 [must/always] Buttons are blue
+rul_d431…313a [must/always] Buttons are blue
 $ lore doctor
 Status: BROKEN
   …

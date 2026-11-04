@@ -64,6 +64,7 @@ $ lore init --non-interactive --name=website
     identity:   human:alice@agency.example (git config)
 · context targets: claude_code (CLAUDE.md) (detected in this repo; change with --target <profile>)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
   next: lore learn-from docs   to bootstrap from existing markdown
         lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it

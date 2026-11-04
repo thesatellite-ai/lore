@@ -33,23 +33,23 @@ Alice makes "Buttons are blue" a must-have rule (the `severity` field). At the s
 <!-- example: sync#merge-by-field only=5,6,7,8 -->
 ```console
 # alice, in website
-$ lore rule edit rul_76bd…3f10 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
-✓ rul_76bd…3f10 updated
+$ lore rule edit rul_b4f4…a5b0 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
+✓ rul_b4f4…a5b0 updated
 
 # bob, in website
-$ lore rule edit rul_76bd…3f10 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
-✓ rul_76bd…3f10 updated
+$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
+✓ rul_b4f4…a5b0 updated
 $ git pull --no-rebase origin main
 From /srv/git/github.com/client/website
  * branch            main       -> FETCH_HEAD
-Auto-merging .lore/data/rules/rul_76bd…3f10.json
+Auto-merging .lore/data/rules/rul_b4f4…a5b0.json
 Merge made by the 'ort' strategy.
- .lore/data/rules/rul_76bd…3f10.json | 2 +-
+ .lore/data/rules/rul_b4f4…a5b0.json | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 $ lore rule list
 rul_2ad3…f891 [must/always] Run the tests before you push.
-rul_c0f3…b5b8 [must/always] Never put passwords in the code.
-rul_76bd…3f10 [must/always] Buttons are blue, links are green.
+rul_76bd…3f10 [must/always] Never put passwords in the code.
+rul_b4f4…a5b0 [must/always] Buttons are blue, links are green.
 ```
 <!-- /example -->
 
@@ -60,22 +60,22 @@ Now Alice writes "dark blue" and Bob writes "light blue". Alice pulls and gets a
 <!-- example: sync#same-text-conflict only=2,3,4,5 -->
 ```console
 # alice, in website
-$ lore rule edit rul_76bd…3f10 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
-✓ rul_76bd…3f10 updated
+$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
+✓ rul_b4f4…a5b0 updated
 
 # bob, in website
-$ lore rule edit rul_76bd…3f10 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
-✓ rul_76bd…3f10 updated
+$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
+✓ rul_b4f4…a5b0 updated
 
 # alice, in website
 $ git pull -q --no-rebase origin main
-lore merge-driver: .lore/data/rules/rul_76bd…3f10.json needs a manual merge (markers are inside the JSON values)
-Auto-merging .lore/data/rules/rul_76bd…3f10.json
-CONFLICT (content): Merge conflict in .lore/data/rules/rul_76bd…3f10.json
+lore merge-driver: .lore/data/rules/rul_b4f4…a5b0.json needs a manual merge (markers are inside the JSON values)
+Auto-merging .lore/data/rules/rul_b4f4…a5b0.json
+CONFLICT (content): Merge conflict in .lore/data/rules/rul_b4f4…a5b0.json
 Automatic merge failed; fix conflicts and then commit the result.
 (exit 1)
-$ grep body .lore/data/rules/rul_76bd…3f10.json
-  "body": "<<<<<<< 2026-11-02T10:03:45.000Z/0000/act_d431…313a\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:40.000Z/0000/act_162d…9666",
+$ grep body .lore/data/rules/rul_b4f4…a5b0.json
+  "body": "<<<<<<< 2026-11-02T10:03:45.000Z/0000/act_28f8…03df\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:40.000Z/0000/act_162d…9666",
 ```
 <!-- /example -->
 
@@ -86,12 +86,12 @@ The commit is refused while the markers are there. The pre-commit hook (a small 
 # alice, in website
 $ git commit -qam 'merge'
 lore sync: imported 1
-lore sync: conflict-markers rules/rul_76bd…3f10.json: unresolved conflict markers in "body" — settle it with a lore edit of that row, or by editing the file
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_76bd…3f10.json (conflict-markers), .lore/data/rules/rul_76bd…3f10.json (conflict markers in body)
+lore sync: conflict-markers rules/rul_b4f4…a5b0.json: unresolved conflict markers in "body" — settle it with a lore edit of that row, or by editing the file
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4…a5b0.json (conflict-markers), .lore/data/rules/rul_b4f4…a5b0.json (conflict markers in body)
   hint: resolve the conflict markers (or `lore sync resolve`); remove the credential from the files that hold one, then commit again
 (exit 1)
-$ lore rule edit rul_76bd…3f10 --body 'Buttons are blue.'
-✓ rul_76bd…3f10 updated
+$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue.'
+✓ rul_b4f4…a5b0 updated
 $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main
 ```
 <!-- /example -->
@@ -105,11 +105,11 @@ For shared notes (rules, memories, tasks and the other core notes) the file is t
 <!-- example: sync#file-and-database-conflict only=2,3,4,5 -->
 ```console
 # alice, in website
-$ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_54fe…28f2.json
+$ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_05e9…4603.json
 $ lore memory list
 lore sync: imported 1
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email or phone.
-mem_b4f4…a5b0 [retrieved] Send the invoice reminder before the demo on Friday.
+mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email or phone.
+mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ lore sync
 · already in sync
 $ lore sync conflicts
@@ -127,27 +127,27 @@ Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" o
 ```console
 # alice, in website
 $ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
-✓ mem_b4f4…a5b0 
+✓ mem_4c59…6c38 
   scope: [master]
 
 # bob, in website
 $ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
-✓ mem_28f8…03df 
+✓ mem_3b62…e913 
   scope: [master]
 $ git pull -q --no-rebase origin main
 $ lore sync dupes
-memories: mem_b4f4…a5b0, mem_28f8…03df
+memories: mem_4c59…6c38, mem_3b62…e913
     Send the invoice reminder before the demo on Friday.
-$ lore sync merge-rows memories --keep mem_b4f4…a5b0 --drop mem_28f8…03df
-ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_b4f4…a5b0 (edit it with its lore command if it should carry the other's text), then delete mem_28f8…03df with its lore command
+$ lore sync merge-rows memories --keep mem_4c59…6c38 --drop mem_3b62…e913
+ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_4c59…6c38 (edit it with its lore command if it should carry the other's text), then delete mem_3b62…e913 with its lore command
 (exit 20)
-$ lore memory delete mem_28f8…03df --yes
-✓ mem_28f8…03df deleted
+$ lore memory delete mem_3b62…e913 --yes
+✓ mem_3b62…e913 deleted
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 $ lore memory list
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email.
-mem_b4f4…a5b0 [retrieved] Send the invoice reminder before the demo on Friday.
+mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
+mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 ```
 <!-- /example -->
 
@@ -162,23 +162,25 @@ $ git fetch -q origin && git merge --no-edit origin/bob-setup
 lore merge-driver: .lore/data/_meta.json needs a manual merge (markers are inside the JSON values)
 Auto-merging .lore/data/_meta.json
 CONFLICT (add/add): Merge conflict in .lore/data/_meta.json
+Auto-merging .lore/data/policies/pol_d431…313a.json
 Automatic merge failed; fix conflicts and then commit the result.
 (exit 1)
 $ lore project list
-lore sync: imported 2
+lore sync: imported 3
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-prj_4c59…6c38  app  https://github.com/client2/app
-prj_3b62…e913  app  https://github.com/client2/app
+prj_f147…5139  app  https://github.com/client2/app
+prj_2537…6bbb  app  https://github.com/client2/app
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 $ lore sync fix-projects --dry-run
 2 project row(s); 1 would be merged
 $ lore sync fix-projects
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-lore sync: re-pointed 1 row file(s) from local project prj_3b62…e913 to shared project prj_4c59…6c38
+lore sync: re-pointed 2 row file(s) from local project prj_2537…6bbb to shared project prj_f147…5139
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-✓ kept prj_4c59…6c38, merged prj_3b62…e913
+lore sync: repos/rep_b69e…5ed7.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+✓ kept prj_f147…5139, merged prj_2537…6bbb
 $ lore project list
-prj_4c59…6c38  app  https://github.com/client2/app
+prj_f147…5139  app  https://github.com/client2/app
 $ git add -A && git commit -qm 'lore: one project' && git push -q origin main
 ```
 <!-- /example -->

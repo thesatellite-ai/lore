@@ -83,10 +83,10 @@ Alice breaks a note file by hand and tries to commit it. The pre-commit hook sto
 <!-- example: sync#commit-refused -->
 ```console
 # alice, in website
-$ printf '{ broken' > .lore/data/rules/rul_76bd…3f10.json && git add .lore
+$ printf '{ broken' > .lore/data/rules/rul_b4f4…a5b0.json && git add .lore
 $ git commit -m 'oops'
-lore sync: invalid-file rules/rul_76bd…3f10.json: canonjson: decode: invalid character 'b' looking for beginning of value
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_76bd…3f10.json (invalid-file), .lore/data/rules/rul_76bd…3f10.json (invalid JSON)
+lore sync: invalid-file rules/rul_b4f4…a5b0.json: canonjson: decode: invalid character 'b' looking for beginning of value
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4…a5b0.json (invalid-file), .lore/data/rules/rul_b4f4…a5b0.json (invalid JSON)
   hint: fix the JSON syntax of the files marked invalid JSON; remove the credential from the files that hold one, then commit again
 (exit 1)
 $ git checkout -q HEAD -- .lore/data && git status --short

@@ -159,7 +159,7 @@ $ lore bench result list
 (no results)
 $ lore bench report summary
 ERROR: [E_NOT_FOUND] no bench runs yet for this project — run `lore bench run start` first
-(exit 1)
+(exit 27)
 $ lore bench report trend
 (no completed runs)
 $ lore bench grader audit

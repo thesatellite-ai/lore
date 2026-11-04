@@ -39,6 +39,7 @@ $ lore init --non-interactive --name=website
     identity:   human:alice@agency.example (git config)
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
   next: lore learn-from docs   to bootstrap from existing markdown
         lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
@@ -60,7 +61,7 @@ The new files are plain text. `.lore/lore.db` (the database) stays on your machi
 ```console
 # alice, in website
 $ lore setup
-lore sync: imported 2
+lore sync: imported 3
 → running ent schema migration...
 → building FTS5 search index...
 ✓ setup complete (registry fingerprint: 601d2850ffd047c2)
@@ -158,8 +159,8 @@ _lore_live_rows       0
 _lore_sync_conflicts  0
 _lore_sync_dirty      0
 _lore_sync_errors     0
-_lore_sync_extra      3
-_lore_sync_files      3
+_lore_sync_extra      4
+_lore_sync_files      4
 _lore_sync_meta       6
 …
 ```

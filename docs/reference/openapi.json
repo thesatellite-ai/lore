@@ -1501,6 +1501,364 @@
         }
       }
     },
+    "/v1/batches": {
+      "get": {
+        "operationId": "batch.list",
+        "summary": "List bulk actions (batches) run on this machine",
+        "tags": [
+          "batch"
+        ],
+        "parameters": [
+          {
+            "name": "by",
+            "in": "query",
+            "required": false,
+            "description": "only batches by this actor (@handle, stable key or act_ id)",
+            "schema": {
+              "type": "string",
+              "description": "only batches by this actor (@handle, stable key or act_ id)"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "only batches since a date (YYYY-MM-DD) or a duration (36h, 7d)",
+            "schema": {
+              "type": "string",
+              "description": "only batches since a date (YYYY-MM-DD) or a duration (36h, 7d)"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "only batches of this kind: task | meta | delete | resource | import | secrets",
+            "schema": {
+              "type": "string",
+              "description": "only batches of this kind: task | meta | delete | resource | import | secrets"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "actions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "rows": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "rows"
+                              ]
+                            }
+                          },
+                          "actor": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "op": {
+                            "type": "string"
+                          },
+                          "rows": {
+                            "type": "integer"
+                          },
+                          "stores": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "rows": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "rows"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "op",
+                          "actor",
+                          "at",
+                          "rows",
+                          "stores",
+                          "actions"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "count"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/batches/{id}": {
+      "get": {
+        "operationId": "batch.show",
+        "summary": "Show one batch: its kind, who ran it and the rows it wrote",
+        "tags": [
+          "batch"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the batch id (bat_…)",
+            "schema": {
+              "type": "string",
+              "description": "the batch id (bat_…)"
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "list every row instead of a sample",
+            "schema": {
+              "type": "boolean",
+              "description": "list every row instead of a sample"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "rows": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "rows"
+                            ]
+                          }
+                        },
+                        "actor": {
+                          "type": "string"
+                        },
+                        "at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "type": "string"
+                        },
+                        "rows": {
+                          "type": "integer"
+                        },
+                        "stores": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "rows": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "rows"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "op",
+                        "actor",
+                        "at",
+                        "rows",
+                        "stores",
+                        "actions"
+                      ]
+                    },
+                    "row_list": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "store",
+                          "action"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "row_list"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/behaviours": {
       "get": {
         "operationId": "behaviour.list",
@@ -24077,6 +24435,332 @@
         }
       }
     },
+    "/v1/repos/fork": {
+      "post": {
+        "operationId": "repo.fork",
+        "summary": "This clone is a fork (or --split): give it its own permanent repo id",
+        "tags": [
+          "repo"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "split": {
+                    "type": "boolean",
+                    "description": "this repo was split from the recorded one (records split_from instead of forked_from)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "forked_from": {
+                      "type": "string"
+                    },
+                    "mount_name": {
+                      "type": "string"
+                    },
+                    "repo_id": {
+                      "type": "string"
+                    },
+                    "split_from": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "repo_id",
+                    "mount_name"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_IDENTIFIER, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_MOUNT_NAME_TAKEN, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repos/set_url": {
+      "post": {
+        "operationId": "repo.set_url",
+        "summary": "Confirm this repo's address: the primary (moved or renamed), a --mirror, or --remove one",
+        "tags": [
+          "repo"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "description": "start date YYYY-MM-DD of the entry (default today)"
+                  },
+                  "mirror": {
+                    "type": "boolean",
+                    "description": "add the address as a mirror (the primary is unchanged)"
+                  },
+                  "remove": {
+                    "type": "boolean",
+                    "description": "close a mirror or drop an unconfirmed address"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "the repo's address (https, ssh or host/owner/repo)"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "confirmed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "previous": {
+                      "type": "string"
+                    },
+                    "repo_id": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "remote": {
+                            "type": "string"
+                          },
+                          "stored": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "stored"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "repo_id",
+                    "url",
+                    "key",
+                    "mode",
+                    "confirmed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_IDENTIFIER, E_INVALID_INPUT, E_URL_CREDENTIALS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_MOUNT_NAME_TAKEN, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repos/{id}": {
       "delete": {
         "operationId": "repo.delete",
@@ -25857,10 +26541,23 @@
             "name": "where",
             "in": "query",
             "required": false,
-            "description": "field=value filter (repeatable; all must match)",
+            "description": "filter on a field: = != ~= \u003e \u003e= \u003c \u003c= ? !? or field:a,b (repeatable; all must match)",
             "schema": {
               "type": "array",
-              "description": "field=value filter (repeatable; all must match)",
+              "description": "filter on a field: = != ~= \u003e \u003e= \u003c \u003c= ? !? or field:a,b (repeatable; all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "sort by name, last_checked, archived_at or a field: \u003ckey\u003e, \u003ckey\u003e:asc or \u003ckey\u003e:desc (repeatable; default name)",
+            "schema": {
+              "type": "array",
+              "description": "sort by name, last_checked, archived_at or a field: \u003ckey\u003e, \u003ckey\u003e:asc or \u003ckey\u003e:desc (repeatable; default name)",
               "items": {
                 "type": "string"
               }
@@ -26562,7 +27259,7 @@
     "/v1/resources/{id}": {
       "delete": {
         "operationId": "resource.delete",
-        "summary": "Delete a resource (a tombstone is kept)",
+        "summary": "Delete a resource, or every resource of a kind matching --where (a tombstone is kept)",
         "tags": [
           "resource"
         ],
@@ -26571,10 +27268,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the resource (name or res_ id)",
+            "description": "the resource (name or res_ id); leave out for the bulk form --kind --where",
             "schema": {
               "type": "string",
-              "description": "the resource (name or res_ id)"
+              "description": "the resource (name or res_ id); leave out for the bulk form --kind --where"
             }
           },
           {
@@ -26585,6 +27282,39 @@
             "schema": {
               "type": "string",
               "description": "why (recorded in the audit log)"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "bulk: delete every resource of this kind matching --where (one batch)",
+            "schema": {
+              "type": "string",
+              "description": "bulk: delete every resource of this kind matching --where (one batch)"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk: filter on a field, as resource list --where (repeatable; all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk: filter on a field, as resource list --where (repeatable; all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "bulk: list what would be deleted; write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "bulk: list what would be deleted; write nothing"
             }
           },
           {
@@ -26606,17 +27336,28 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "store": {
                       "type": "string"
                     }
-                  },
-                  "required": [
-                    "id",
-                    "store"
-                  ]
+                  }
                 }
               }
             }
@@ -26663,6 +27404,16 @@
           },
           "409": {
             "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_IN_USE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "E_KIND_UNKNOWN",
             "content": {
               "application/json": {
                 "schema": {
@@ -35133,6 +35884,32 @@
               "type": "string",
               "description": "only tasks claimed right now by @handle (or actor id)"
             }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "filter on a task field: status:todo,in_progress priority\u003e=high due_at\u003c2026-12-01 (= != ~= \u003e \u003e= \u003c \u003c= ? !?; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "filter on a task field: status:todo,in_progress priority\u003e=high due_at\u003c2026-12-01 (= != ~= \u003e \u003e= \u003c \u003c= ? !?; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "sort by a task field: \u003ckey\u003e, \u003ckey\u003e:asc or \u003ckey\u003e:desc (repeatable; ties keep the default order)",
+            "schema": {
+              "type": "array",
+              "description": "sort by a task field: \u003ckey\u003e, \u003ckey\u003e:asc or \u003ckey\u003e:desc (repeatable; ties keep the default order)",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         ],
         "responses": {
@@ -35890,6 +36667,190 @@
           },
           "409": {
             "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/import": {
+      "post": {
+        "operationId": "task.import",
+        "summary": "Import tasks from a CSV or JSON file (one batch)",
+        "tags": [
+          "task"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "list what would be created; write nothing"
+                  },
+                  "file": {
+                    "type": "string",
+                    "description": "the file to import"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "csv | json (default: from the file extension)"
+                  },
+                  "map": {
+                    "type": "array",
+                    "description": "rename columns: \u003cfile column\u003e=\u003ctask field\u003e[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ext_id": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "ext_id",
+                          "title"
+                        ]
+                      }
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "count",
+                    "rows"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {

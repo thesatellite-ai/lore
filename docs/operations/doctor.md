@@ -174,7 +174,7 @@ When you report a problem, attach a support bundle: one JSON file with the docto
 ```console
 # alice, in website
 $ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (1528 bytes)
+✓ wrote support bundle to bundle.json (1615 bytes)
 $ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
   "binary_version": "0.1.0-dev",
     "status": "healthy",

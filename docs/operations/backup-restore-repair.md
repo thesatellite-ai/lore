@@ -27,7 +27,7 @@ You want this page when you are about to try something risky, when you deleted s
 ```console
 # alice, in website
 $ lore backup --out .lore/backups/before-buttons.sqlite
-✓ ~/work/website/.lore/backups/before-buttons.sqlite (1441792 bytes)
+✓ ~/work/website/.lore/backups/before-buttons.sqlite (1449984 bytes)
 $ ls .lore/backups
 20261102-100000.000000000-pre-sync.sqlite
 before-buttons.sqlite
@@ -44,12 +44,12 @@ Alice adds a rule, then decides to go back to the copy she made before. `lore re
 ```console
 # alice, in website
 $ lore rule add --body 'Buttons are blue'
-✓ rul_c0f3…b5b8 
+✓ rul_d431…313a 
   scope: [master] severity: must
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-rul_c0f3…b5b8 [must/always] Buttons are blue
+rul_d431…313a [must/always] Buttons are blue
 $ lore restore .lore/backups/before-buttons.sqlite
 ERROR: [E_INVALID_INPUT] refusing to overwrite DB without --confirm
 (exit 20)
@@ -72,10 +72,10 @@ The restored database and the files in `.lore/data` may now disagree. The first 
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-rul_c0f3…b5b8 [must/always] Buttons are blue
+rul_d431…313a [must/always] Buttons are blue
 $ git status --short
 ?? .lore/data/rules/rul_7a67…9504.json
-?? .lore/data/rules/rul_c0f3…b5b8.json
+?? .lore/data/rules/rul_d431…313a.json
 ```
 <!-- /example -->
 
@@ -110,7 +110,7 @@ Errors:
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-rul_c0f3…b5b8 [must/always] Buttons are blue
+rul_d431…313a [must/always] Buttons are blue
 ```
 <!-- /example -->
 
@@ -134,7 +134,7 @@ $ lore repair --tier=2 --confirm
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-rul_c0f3…b5b8 [must/always] Buttons are blue
+rul_d431…313a [must/always] Buttons are blue
 ```
 <!-- /example -->
 
@@ -146,7 +146,7 @@ Tier 1, for the record:
 $ lore repair --tier=1 --confirm
 ERROR: [E_NOT_IMPLEMENTED] repair tier 1 not implemented in v0.1
   hint: use --tier=2 (recommended) or --tier=3
-(exit 1)
+(exit 23)
 ```
 <!-- /example -->
 
@@ -161,7 +161,7 @@ $ mv .lore/lore.db .lore/lore.db.old && rm -f .lore/lore.db-wal .lore/lore.db-sh
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
-rul_c0f3…b5b8 [must/always] Buttons are blue
+rul_d431…313a [must/always] Buttons are blue
 $ lore sync
 · already in sync
 $ lore doctor | head -1

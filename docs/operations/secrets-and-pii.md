@@ -39,10 +39,10 @@ When the match is not a real secret (a sample value like this one, a test string
 ```console
 # alice, in website
 $ lore memory add --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
-✓ mem_d431…313a 
+✓ mem_28f8…03df 
   scope: [master]
 $ grep -rl AKIA .lore/data || echo 'not in .lore/data'
-.lore/data/memories/mem_d431…313a.json
+.lore/data/memories/mem_28f8…03df.json
 ```
 <!-- /example -->
 
@@ -51,8 +51,8 @@ Delete the row (or edit the key out) before you commit:
 <!-- example: ops#allow-secrets only=3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_d431…313a --yes
-✓ mem_d431…313a deleted
+$ lore memory delete mem_28f8…03df --yes
+✓ mem_28f8…03df deleted
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
 ```
@@ -122,11 +122,11 @@ $ lore migrate run --dry-run
 ERROR: [E_INTERNAL] internal error
 (exit 1)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
-count: 1
+count: 2
 rows: 
-steps: mode-b: rules/rul_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore rule list
-rul_b4f4…a5b0  Posts go out on Tuesdays  [shared]
+rul_28f8…03df  Posts go out on Tuesdays  [shared]
 ```
 <!-- /example -->
 

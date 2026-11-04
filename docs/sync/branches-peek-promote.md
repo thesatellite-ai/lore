@@ -25,17 +25,17 @@ Alice (an agency developer) starts a branch for the client's payment page and wr
 # alice, in website
 $ git checkout -q -b feature/payments
 $ lore memory add --body 'We use Stripe for payments.'
-✓ mem_05e9…4603 
+✓ mem_c0f3…b5b8 
   scope: [master]
 $ lore rule add --body 'Never put passwords in the code.'
-✓ rul_c0f3…b5b8 
+✓ rul_76bd…3f10 
   scope: [master] severity: must
 $ git add -A && git commit -qm 'lore: payment notes' && git push -q -u origin feature/payments
 $ git checkout -q main && lore memory list
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email.
+mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
 $ git checkout -q feature/payments && lore memory list
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email.
-mem_05e9…4603 [retrieved] We use Stripe for payments.
+mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
+mem_c0f3…b5b8 [retrieved] We use Stripe for payments.
 ```
 <!-- /example -->
 
@@ -49,14 +49,16 @@ Bob (another agency developer) is on main. He fetches and peeks at Alice's branc
 $ git fetch -q origin
 $ lore sync peek origin/feature/payments
 actors             act_162d…9666  
-memories           mem_54fe…28f2  The client replies faster on WhatsApp than email.
-memories           mem_05e9…4603  We use Stripe for payments.
+memories           mem_05e9…4603  The client replies faster on WhatsApp than email.
+memories           mem_c0f3…b5b8  We use Stripe for payments.
+policies           pol_d431…313a  context.targets
 projects           prj_7a67…9504  website
+repos              rep_54fe…28f2  
 rules              rul_2ad3…f891  Run the tests before you push.
-rules              rul_c0f3…b5b8  Never put passwords in the code.
+rules              rul_76bd…3f10  Never put passwords in the code.
 $ lore sync peek origin/feature/payments memories
-memories           mem_54fe…28f2  The client replies faster on WhatsApp than email.
-memories           mem_05e9…4603  We use Stripe for payments.
+memories           mem_05e9…4603  The client replies faster on WhatsApp than email.
+memories           mem_c0f3…b5b8  We use Stripe for payments.
 ```
 <!-- /example -->
 
@@ -69,12 +71,12 @@ The rule "Never put passwords in the code" should apply on every branch today. A
 <!-- example: sync#promote only=1,2,3 -->
 ```console
 # alice, in website
-$ lore sync promote rul_c0f3…b5b8 --to main --dry-run
-would commit .lore/data/rules/rul_c0f3…b5b8.json onto main
-$ lore sync promote rul_c0f3…b5b8 --to main
+$ lore sync promote rul_76bd…3f10 --to main --dry-run
+would commit .lore/data/rules/rul_76bd…3f10.json onto main
+$ lore sync promote rul_76bd…3f10 --to main
 ✓ committed 1 file(s) onto main (601d2850ffd0) — not pushed
 $ git log --oneline -2 main
-601d285 lore: promote rul_c0f3…b5b8
+601d285 lore: promote rul_76bd…3f10
 86dbae4 lore: whatsapp memory
 ```
 <!-- /example -->
@@ -89,7 +91,7 @@ $ git push -q origin main
 # bob, in website
 $ git pull -q && lore rule list
 rul_2ad3…f891 [must/always] Run the tests before you push.
-rul_c0f3…b5b8 [must/always] Never put passwords in the code.
+rul_76bd…3f10 [must/always] Never put passwords in the code.
 ```
 <!-- /example -->
 

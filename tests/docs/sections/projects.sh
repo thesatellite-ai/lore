@@ -64,6 +64,12 @@ on alice work/scratch "lore project archive $prj_scratch"
 on alice work/scratch "lore project list"
 on alice work/scratch "lore project unarchive $prj_scratch"
 on! alice work/scratch "lore project delete $prj_scratch"
+# PROV1 + DELETION D8: every checkout has its own repos row (lore init writes it), and a
+# project with repos cannot be deleted; the refusal names the row, so delete it first.
+on! alice work/scratch "lore project delete $prj_scratch --yes"
+on alice work/scratch "lore repo list"
+local rep_scratch; rep_scratch=$(id rep)
+on alice work/scratch "lore repo delete $rep_scratch --yes"
 on alice work/scratch "lore project delete $prj_scratch --yes"
 on alice work/scratch "lore project list"
 

@@ -8,29 +8,33 @@ Project: prj_7a670ae8548ed05bf57ad29ad0759504
   origin:  https://github.com/client/website
   created: 2026-11-02 10:00:00Z
 
+Repos:
+  rep_2ad3618e878ebbf527d34d446ef4f891  website
+
 ### add repos
 alice (work/website)$ lore repo list
-(no repos)
+rep_2ad3618e878ebbf527d34d446ef4f891  website  https://github.com/client/website
 alice (work/website)$ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
-✓ repo shop registered (rep_2ad3618e878ebbf527d34d446ef4f891)
+✓ repo shop registered (rep_162df51b7f78b785c97c26b41ea89666)
 alice (work/website)$ lore repo add help --display-name 'Help pages'
-✓ repo help registered (rep_162df51b7f78b785c97c26b41ea89666)
+✓ repo help registered (rep_54fe984c9b495744c0217776765a28f2)
 alice (work/website)$ lore repo list
-rep_2ad3618e878ebbf527d34d446ef4f891  shop  https://github.com/client/website
-rep_162df51b7f78b785c97c26b41ea89666  help
+rep_2ad3618e878ebbf527d34d446ef4f891  website  https://github.com/client/website
+rep_162df51b7f78b785c97c26b41ea89666  shop  https://github.com/client/website
+rep_54fe984c9b495744c0217776765a28f2  help
 
 ### notes per repo
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
-✓ rul_54fe984c9b495744c0217776765a28f2 
+✓ rul_05e99e22e9e86e96fe4daa7777994603 
   scope: [master] severity: must
 alice (work/website)$ lore rule add --repo shop --body 'Buttons are blue.'
-✓ rul_05e99e22e9e86e96fe4daa7777994603 
+✓ rul_c0f3c11a5724b0cfd74b256190d9b5b8 
   scope: [repo:shop] severity: must
 alice (work/website)$ lore rule list
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push.
+rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
 alice (work/website)$ lore rule list --repo shop
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push.
-rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Buttons are blue.
+rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
+rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Buttons are blue.
 alice (work/website)$ lore rule list --repo blog
 ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
   hint: run `lore repo list` to see the mount names
@@ -41,12 +45,13 @@ alice (work/website)$ lore repo archive help
 ERROR: [E_NOT_FOUND] repo: "help" is not a repo id (rep_…)
   hint: it may have landed on main while this branch is older: `lore sync peek origin/main repos`
 (exit 27)
-alice (work/website)$ lore repo archive rep_162df51b7f78b785c97c26b41ea89666
+alice (work/website)$ lore repo archive rep_54fe984c9b495744c0217776765a28f2
 ✓ help archived
 alice (work/website)$ lore repo list
-rep_2ad3618e878ebbf527d34d446ef4f891  shop  https://github.com/client/website
-rep_162df51b7f78b785c97c26b41ea89666  help [archived]
-alice (work/website)$ lore repo unarchive rep_162df51b7f78b785c97c26b41ea89666
+rep_2ad3618e878ebbf527d34d446ef4f891  website  https://github.com/client/website
+rep_162df51b7f78b785c97c26b41ea89666  shop  https://github.com/client/website
+rep_54fe984c9b495744c0217776765a28f2  help [archived]
+alice (work/website)$ lore repo unarchive rep_54fe984c9b495744c0217776765a28f2
 ✓ help unarchived
 alice (work/website)$ lore mount-alias list
 (no mount aliases)
@@ -56,7 +61,7 @@ alice (work/website)$ git add -A && git commit -qm 'lore: repos' && git push -q 
 alice (work/app)$ lore store init client2 file://$HOME/stores/client2
 name: client2
 url: file://~/stores/client2
-id: sto_c0f3c11a5724b0cfd74b256190d9b5b8
+id: sto_76bd560aff0771fab8457dbfa9823f10
 alice (work/api)$ lore store add client2 file://$HOME/stores/client2
 name: client2
 url: file://~/stores/client2
@@ -68,23 +73,23 @@ count: 1
 
 ### shared notes
 alice (work/app)$ lore rule add --to client2 --body 'Every screen works on a phone.'
-lore sync: imported 2
-✓ rul_76bd560aff0771fab8457dbfa9823f10 [client2]
-  scope: [master] severity: must
-alice (work/api)$ lore rule add --to client2 --body 'Every change comes with a test.'
-lore sync: imported 2
+lore sync: imported 3
 ✓ rul_d4314eba822f1bf5908b2b8ded5f313a [client2]
   scope: [master] severity: must
+alice (work/api)$ lore rule add --to client2 --body 'Every change comes with a test.'
+lore sync: imported 3
+✓ rul_b4f4765e593d51fd1352985e8af3a5b0 [client2]
+  scope: [master] severity: must
 alice (work/api)$ lore rule add --body 'The API answers in JSON only.'
-✓ rul_b4f4765e593d51fd1352985e8af3a5b0 
+✓ rul_28f8d32584b2db54ffb146bede5b03df 
   scope: [master] severity: must
 alice (work/api)$ lore rule list
-rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] The API answers in JSON only.
-rul_76bd560aff0771fab8457dbfa9823f10  Every screen works on a phone.  [client2]
-rul_d4314eba822f1bf5908b2b8ded5f313a  Every change comes with a test.  [client2]
+rul_28f8d32584b2db54ffb146bede5b03df [must/always] The API answers in JSON only.
+rul_d4314eba822f1bf5908b2b8ded5f313a  Every screen works on a phone.  [client2]
+rul_b4f4765e593d51fd1352985e8af3a5b0  Every change comes with a test.  [client2]
 alice (work/app)$ lore rule list
-rul_76bd560aff0771fab8457dbfa9823f10  Every screen works on a phone.  [client2]
-rul_d4314eba822f1bf5908b2b8ded5f313a  Every change comes with a test.  [client2]
+rul_d4314eba822f1bf5908b2b8ded5f313a  Every screen works on a phone.  [client2]
+rul_b4f4765e593d51fd1352985e8af3a5b0  Every change comes with a test.  [client2]
 alice (work/app)$ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -93,19 +98,29 @@ alice (work/app)$ git status --short
 
 ### archive a project
 alice (work/scratch)$ lore project list
-lore sync: imported 2
-prj_28f8d32584b2db54ffb146bede5b03df  scratch  https://github.com/client2/scratch
-alice (work/scratch)$ lore project archive prj_28f8d32584b2db54ffb146bede5b03df
+lore sync: imported 3
+prj_4c590afb2a0cc7ae1b97b7e4e62d6c38  scratch  https://github.com/client2/scratch
+alice (work/scratch)$ lore project archive prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 ✓ scratch archived
 alice (work/scratch)$ lore project list
-prj_28f8d32584b2db54ffb146bede5b03df  scratch  https://github.com/client2/scratch [archived]
-alice (work/scratch)$ lore project unarchive prj_28f8d32584b2db54ffb146bede5b03df
+prj_4c590afb2a0cc7ae1b97b7e4e62d6c38  scratch  https://github.com/client2/scratch [archived]
+alice (work/scratch)$ lore project unarchive prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 ✓ scratch unarchived
-alice (work/scratch)$ lore project delete prj_28f8d32584b2db54ffb146bede5b03df
+alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 ERROR: [E_NEEDS_CONFIRM] engine: run project delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
-alice (work/scratch)$ lore project delete prj_28f8d32584b2db54ffb146bede5b03df --yes
+alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38 --yes
+ERROR: [E_HAS_DEPENDENTS] engine: rep_3b6283bc4392c556bbae5f094246e913 (repos.project_id) still points at prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
+  hint: delete or move the pointing rows first
+(exit 23)
+alice (work/scratch)$ lore repo list
+rep_3b6283bc4392c556bbae5f094246e913  scratch  https://github.com/client2/scratch
+alice (work/scratch)$ lore repo delete rep_3b6283bc4392c556bbae5f094246e913 --yes
+✓ scratch deleted
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38 --yes
 ✓ scratch deleted
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
@@ -115,7 +130,7 @@ alice (work/scratch)$ lore project list
 ### convert a shared database
 alice (work/infra)$ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
-project_id: prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
+project_id: prj_f147dd95f1aaf742dd4f5214843a5139
 alice (work/infra)$ lore rule list
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/infra/.git/hooks)
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`
@@ -123,13 +138,13 @@ ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lo
 (exit 23)
 alice (work/infra)$ lore migrate run --dry-run
 dry_run: true
-count: 2
+count: 3
 rows: 
-steps: mode-b: memories/mem_3b6283bc4392c556bbae5f094246e913 → store shared (~/.lore/stores/infra), mode-b: rules/rul_f147dd95f1aaf742dd4f5214843a5139 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aaebe6aca5bb46cc521869f5ba2a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 alice (work/infra)$ lore migrate run
-count: 2
+count: 3
 rows: 
-steps: mode-b: memories/mem_3b6283bc4392c556bbae5f094246e913 → store shared (~/.lore/stores/infra), mode-b: rules/rul_f147dd95f1aaf742dd4f5214843a5139 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aaebe6aca5bb46cc521869f5ba2a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 alice (work/infra)$ ls .lore; cat .lore/stores.yaml
 lore-cache.db
 lore-cache.db-shm
@@ -141,8 +156,8 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 alice (work/infra)$ lore rule list; lore memory list
-rul_f147dd95f1aaf742dd4f5214843a5139  Terraform changes need a plan in the pull request.  [shared]
-mem_3b6283bc4392c556bbae5f094246e913  The staging cluster sleeps at night.  [shared]
+rul_0aaebe6aca5bb46cc521869f5ba2a61f  Terraform changes need a plan in the pull request.  [shared]
+mem_2537f9b2f7de77bfe5ca958860216bbb  The staging cluster sleeps at night.  [shared]
 
 ### errors
 alice (work)$ lore rule list

@@ -34,8 +34,8 @@ alice (work/website)$ lore sync
 alice (work)$ git clone -q -o upstream https://github.com/client/website website-fork && cd website-fork && git remote
 upstream
 alice (work/website-fork)$ lore task list
-lore sync: built .lore/lore.db from .lore/data (2 rows)
-lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
+lore sync: built .lore/lore.db from .lore/data (3 rows)
+lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
 lore sync: backup of lore.db before adopt: ~/work/website-fork/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website-fork/.git/hooks)
 (no tasks)
@@ -71,6 +71,7 @@ alice (work/shop)$ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
 
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/shop/AGENTS.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
   next: lore learn-from docs   to bootstrap from existing markdown
         lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
@@ -78,7 +79,7 @@ lore sync: backup of lore.db before bootstrap: ~/work/shop/.lore/backups/2026110
 alice (work/shop)$ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)
 alice (work/shop)$ lore sync
-lore sync: imported 2
+lore sync: imported 3
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/shop/.git/hooks)
 alice (work/shop)$ ls .git/hooks | grep -v sample; cat .gitattributes
 commit-msg
@@ -123,11 +124,11 @@ lore sync: configured git for lore data (merge driver, .gitattributes, hooks in 
 ERROR: [E_INTERNAL] internal error
 (exit 1)
 alice (work/blog)$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
-count: 1
+count: 2
 rows: 
-steps: mode-b: rules/rul_b4f4765e593d51fd1352985e8af3a5b0 → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: repos/rep_b4f4765e593d51fd1352985e8af3a5b0 → store shared (~/work/stores/blog), mode-b: rules/rul_28f8d32584b2db54ffb146bede5b03df → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 alice (work/blog)$ lore rule list
-rul_b4f4765e593d51fd1352985e8af3a5b0  Posts go out on Tuesdays  [shared]
+rul_28f8d32584b2db54ffb146bede5b03df  Posts go out on Tuesdays  [shared]
 
 ### lore home
 alice (work/docs)$ cat .lore/lore.yaml
@@ -138,11 +139,11 @@ lore sync: configured git for lore data (merge driver, .gitattributes, hooks in 
 ERROR: [E_INTERNAL] internal error
 (exit 1)
 alice (work/docs)$ LORE_HOME=~/shared-dbs lore migrate run
-count: 1
+count: 2
 rows: 
-steps: mode-b: rules/rul_b4f4765e593d51fd1352985e8af3a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: repos/rep_b4f4765e593d51fd1352985e8af3a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: rules/rul_28f8d32584b2db54ffb146bede5b03df → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 alice (work/docs)$ lore rule list
-rul_b4f4765e593d51fd1352985e8af3a5b0  Posts go out on Tuesdays  [shared]
+rul_28f8d32584b2db54ffb146bede5b03df  Posts go out on Tuesdays  [shared]
 alice$ ls ~/shared-dbs ~/shared-dbs/stores
 ~/shared-dbs:
 client-docs.db

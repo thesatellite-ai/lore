@@ -43,11 +43,11 @@ $ lore migrate run --dry-run
 ERROR: [E_INTERNAL] internal error
 (exit 1)
 $ LORE_HOME=~/shared-dbs lore migrate run
-count: 1
+count: 2
 rows: 
-steps: mode-b: rules/rul_b4f4…a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore rule list
-rul_b4f4…a5b0  Posts go out on Tuesdays  [shared]
+rul_28f8…03df  Posts go out on Tuesdays  [shared]
 
 # alice, in ~
 $ ls ~/shared-dbs ~/shared-dbs/stores
@@ -71,11 +71,11 @@ $ lore migrate run --dry-run
 ERROR: [E_INTERNAL] internal error
 (exit 1)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
-count: 1
+count: 2
 rows: 
-steps: mode-b: rules/rul_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore rule list
-rul_b4f4…a5b0  Posts go out on Tuesdays  [shared]
+rul_28f8…03df  Posts go out on Tuesdays  [shared]
 ```
 <!-- /example -->
 

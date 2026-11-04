@@ -35,6 +35,7 @@ $ lore init --non-interactive --name=website
     identity:   human:alice@agency.example (git config)
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
   next: lore learn-from docs   to bootstrap from existing markdown
         lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
@@ -58,7 +59,9 @@ state
 .lore/data:
 _meta.json
 actors
+policies
 projects
+repos
 $ cat .gitattributes
 # >>> lore-sync >>>
 .lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
@@ -66,7 +69,7 @@ $ cat .gitattributes
 .lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
 # <<< lore-sync <<<
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
-lore sync: imported 2
+lore sync: imported 3
 ```
 <!-- /example -->
 
@@ -90,10 +93,19 @@ $ cat .lore/data/rules/rul_2ad3…f891.json
   "_hlc": "2026-11-02T10:00:30.000Z/0000/act_162d…9666",
   "_o": {
     "cmd": "rule add",
+    "git": {
+      "branch": "main",
+      "commit": "93577ef19dfd",
+      "state": "branch"
+    },
+    "repo": "rep_54fe…28f2",
     "store": "repo"
   },
   "_table": "rules",
   "_v": 2,
+  "_w": {
+    "v": "0.1.0-dev"
+  },
   "activation": "always",
   "body": "Run the tests before you push.",
   "created_at": "2026-11-02T10:00:00.000000001Z",
@@ -109,7 +121,7 @@ $ cat .lore/data/rules/rul_2ad3…f891.json
 $ lore sync status
 baselined:        true
 data dir present: true
-tracked files:    3
+tracked files:    4
 pending exports:  0
 open conflicts:   0
 trash rows:       0
@@ -150,7 +162,7 @@ $ lore sync
 $ lore sync status
 baselined:        true
 data dir present: true
-tracked files:    3
+tracked files:    4
 pending exports:  0
 open conflicts:   0
 trash rows:       0
@@ -178,7 +190,7 @@ Here Alice adds a memory with sync off. A memory is something worth remembering,
 ```console
 # alice, in website
 $ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
-✓ mem_54fe…28f2 
+✓ mem_05e9…4603 
   scope: [master]
 $ git status --short
 ?? .lore/data/memories/
@@ -218,13 +230,14 @@ $ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
     identity:   human:alice@agency.example (git config)
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/shop/AGENTS.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
   next: lore learn-from docs   to bootstrap from existing markdown
         lore render            to write .lore/LORE.md for those tools
 lore sync: exported 0 rows to .lore/data — review and commit it
 $ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)
 $ lore sync
-lore sync: imported 2
+lore sync: imported 3
 $ ls .git/hooks | grep -v sample; cat .gitattributes
 commit-msg
 post-checkout

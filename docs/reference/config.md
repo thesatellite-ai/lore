@@ -115,6 +115,7 @@ When two org entries match a repo, `lore org use` records this machine's choice 
 $ lore whoami
 org        refused  (the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance))
 identity   (not resolved: the org is refused above)
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
 project    prj_76bd…3f10
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)

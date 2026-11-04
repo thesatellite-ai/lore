@@ -33,12 +33,15 @@ $ lore audit log
 2026-11-02T10:00:00Z  rules.write                  rules/rul_7a67…9504  by act_2ad3…f891
 2026-11-02T10:00:00Z  memories.write               memories/mem_162d…9666  by act_2ad3…f891
 2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe…28f2  by act_2ad3…f891
-2026-11-02T10:00:00Z  projects.import              projects/prj_05e9…4603  by act_2ad3…f891
+2026-11-02T10:00:00Z  repos.import                 repos/rep_05e9…4603  by act_2ad3…f891
+2026-11-02T10:00:00Z  projects.import              projects/prj_c0f3…b5b8  by act_2ad3…f891
 2026-11-02T10:00:00Z  actors.import                actors/act_2ad3…f891  by act_2ad3…f891
-2026-11-02T10:00:00Z  projects.write               projects/prj_05e9…4603  by act_2ad3…f891
+2026-11-02T10:00:00Z  repos.write                  repos/rep_05e9…4603  by act_2ad3…f891
+2026-11-02T10:00:00Z  policies.write               policies/pol_76bd…3f10  by act_2ad3…f891
+2026-11-02T10:00:00Z  projects.write               projects/prj_c0f3…b5b8  by act_2ad3…f891
 2026-11-02T10:00:00Z  actors.write                 actors/act_2ad3…f891  by act_2ad3…f891
 $ lore audit verify
-✓ audit chain intact (7 entries)
+✓ audit chain intact (10 entries)
 ```
 <!-- /example -->
 
@@ -52,11 +55,11 @@ Now someone changes the first rule's text straight in the database file, without
 ```console
 # alice, in website
 $ lore audit verify
-✓ audit chain intact (7 entries)
+✓ audit chain intact (10 entries)
 ✗ hash mismatch: rules/rul_54fe…28f2 changed outside lore
 ERROR: [E_AUDIT_CHAIN_BROKEN] hash mismatch: 1 row(s) changed outside lore
   hint: inspect them (`lore <kind> show <id>`); the next lore command records them as external writes
-(exit 1)
+(exit 23)
 ```
 <!-- /example -->
 
@@ -87,7 +90,7 @@ Run `lore audit verify` in any repo with lore. Exit 0 means the log is whole and
 ```console
 # alice, in website
 $ lore audit verify
-✓ audit chain intact (7 entries)
+✓ audit chain intact (10 entries)
 ```
 <!-- /example -->
 

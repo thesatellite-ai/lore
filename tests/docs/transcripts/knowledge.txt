@@ -261,7 +261,7 @@ lore sync: imported 1
 alice (work/website)$ lore learn promote lcd_d7c7956f4acfc4409bcde8bcf2627fe6 --target rules
 ERROR: [E_NOT_IMPLEMENTED] promote target "rules" not yet supported in v0.1
   hint: only --target=memories is implemented
-(exit 1)
+(exit 23)
 alice (work/website)$ lore learn promote lcd_06b12747c0fad05aadf714f05f1d3d1c
 ✓ promoted lcd_06b12747c0fad05aadf714f05f1d3d1c → memories
 alice (work/website)$ lore learn reject lcd_78c802586e1d1bcbd68d3bc11b965b6c

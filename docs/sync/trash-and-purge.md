@@ -26,23 +26,23 @@ Alice deletes a memory's file (here with `git rm`, as a teammate's commit or a r
 <!-- example: sync#trash -->
 ```console
 # alice, in website
-$ git rm -q .lore/data/memories/mem_54fe…28f2.json
+$ git rm -q .lore/data/memories/mem_05e9…4603.json
 $ lore memory list
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
-mem_b4f4…a5b0 [retrieved] Send the invoice reminder before the demo on Friday.
+mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ lore sync trash
-#4 memories/mem_54fe…28f2  2026-11-02T10:05:40Z  (file deleted)
-#3 memories/mem_05e9…4603  2026-11-02T10:02:50Z  (file deleted)
-#2 rules/rul_c0f3…b5b8  2026-11-02T10:02:00Z  (file deleted)
-#1 memories/mem_05e9…4603  2026-11-02T10:02:00Z  (file deleted)
+#4 memories/mem_05e9…4603  2026-11-02T10:05:40Z  (file deleted)
+#3 memories/mem_c0f3…b5b8  2026-11-02T10:02:50Z  (file deleted)
+#2 rules/rul_76bd…3f10  2026-11-02T10:02:00Z  (file deleted)
+#1 memories/mem_c0f3…b5b8  2026-11-02T10:02:00Z  (file deleted)
 $ lore sync trash restore 4
-ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: a trash restore of memories is not done in lore.db (the row files are the truth): restore the file from git (`git checkout HEAD -- .lore/data/memories/mem_54fe…28f2.json`, or from the commit before the one that deleted it: `git log --diff-filter=D -- .lore/data/memories/mem_54fe…28f2.json`)
+ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: a trash restore of memories is not done in lore.db (the row files are the truth): restore the file from git (`git checkout HEAD -- .lore/data/memories/mem_05e9…4603.json`, or from the commit before the one that deleted it: `git log --diff-filter=D -- .lore/data/memories/mem_05e9…4603.json`)
 (exit 20)
-$ git checkout HEAD -- .lore/data/memories/mem_54fe…28f2.json
+$ git checkout HEAD -- .lore/data/memories/mem_05e9…4603.json
 $ lore memory list
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email or phone.
-mem_b4f4…a5b0 [retrieved] Send the invoice reminder before the demo on Friday.
+mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email or phone.
+mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ git add -A && git status --short
 ```
 <!-- /example -->
@@ -59,23 +59,24 @@ If `.lore/data` is deleted, lore does not empty your database. It warns on every
 $ rm -rf .lore/data && lore sync status
 baselined:        true
 data dir present: false
-tracked files:    8
+tracked files:    9
 pending exports:  0
 open conflicts:   0
 trash rows:       4
-uncommitted:      10
+uncommitted:      12
 live rows:        0 (_root)
 lore sync: ~/work/website/.lore/data is missing (a branch without lore data, or deleted): lore.db is left untouched; run `lore sync export --all` to recreate it
 $ lore sync export --all
 lore sync: ~/work/website/.lore/data is missing (a branch without lore data, or deleted): lore.db is left untouched; run `lore sync export --all` to recreate it
-lore sync: actors/act_d431…313a.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+lore sync: actors/act_28f8…03df.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
 lore sync: actors/act_162d…9666.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: memories/mem_54fe…28f2.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: memories/mem_b4f4…a5b0.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+lore sync: memories/mem_05e9…4603.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+lore sync: memories/mem_4c59…6c38.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
 lore sync: projects/prj_7a67…9504.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+lore sync: repos/rep_54fe…28f2.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
 lore sync: rules/rul_2ad3…f891.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: rules/rul_c0f3…b5b8.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
 lore sync: rules/rul_76bd…3f10.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+lore sync: rules/rul_b4f4…a5b0.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
 ✓ 0 file(s) written
 $ git checkout -q HEAD -- .lore/data && git status --short
 ```
@@ -90,8 +91,8 @@ Alice archives a memory and commits that. Later the team decides archived notes 
 <!-- example: sync#purge -->
 ```console
 # alice, in website
-$ lore memory archive mem_54fe…28f2 && git commit -qam 'lore: archive whatsapp memory'
-✓ mem_54fe…28f2 archived
+$ lore memory archive mem_05e9…4603 && git commit -qam 'lore: archive whatsapp memory'
+✓ mem_05e9…4603 archived
 $ lore sync purge --archived-before 0d --dry-run
 would purge 1 archived row(s) archived before 2026-11-02T10:06:30Z
 $ lore sync purge --archived-before 0d
@@ -105,12 +106,12 @@ $ cat .lore/data/_purged.json
 {
   "_v": 1,
   "ids": [
-    "mem_54fe…28f2"
+    "mem_05e9…4603"
   ]
 }
 $ git add -A && git status --short && git commit -qm 'lore: purge archived rows' && git push -q origin main
 A  .lore/data/_purged.json
-M  .lore/data/memories/mem_54fe…28f2.json
+M  .lore/data/memories/mem_05e9…4603.json
 ```
 <!-- /example -->
 

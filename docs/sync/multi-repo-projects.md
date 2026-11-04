@@ -29,6 +29,8 @@ Project: prj_7a67…9504
   name:    website
   origin:  https://github.com/client/website
   created: 2026-11-02 10:00:00Z
+Repos:
+  rep_2ad3…f891  website
 ```
 <!-- /example -->
 
@@ -40,14 +42,15 @@ Give each part a short mount name. `--origin` records where its code lives and `
 ```console
 # alice, in website
 $ lore repo list
-(no repos)
+rep_2ad3…f891  website  https://github.com/client/website
 $ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
-✓ repo shop registered (rep_2ad3…f891)
+✓ repo shop registered (rep_162d…9666)
 $ lore repo add help --display-name 'Help pages'
-✓ repo help registered (rep_162d…9666)
+✓ repo help registered (rep_54fe…28f2)
 $ lore repo list
-rep_2ad3…f891  shop  https://github.com/client/website
-rep_162d…9666  help
+rep_2ad3…f891  website  https://github.com/client/website
+rep_162d…9666  shop  https://github.com/client/website
+rep_54fe…28f2  help
 ```
 <!-- /example -->
 
@@ -61,16 +64,16 @@ Without `--repo`, a rule applies to the whole project. With `--repo shop` it app
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
-✓ rul_54fe…28f2 
+✓ rul_05e9…4603 
   scope: [master] severity: must
 $ lore rule add --repo shop --body 'Buttons are blue.'
-✓ rul_05e9…4603 
+✓ rul_c0f3…b5b8 
   scope: [repo:shop] severity: must
 $ lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push.
+rul_05e9…4603 [must/always] Run the tests before you push.
 $ lore rule list --repo shop
-rul_54fe…28f2 [must/always] Run the tests before you push.
-rul_05e9…4603 [must/always] Buttons are blue.
+rul_05e9…4603 [must/always] Run the tests before you push.
+rul_c0f3…b5b8 [must/always] Buttons are blue.
 $ lore rule list --repo blog
 ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
   hint: run `lore repo list` to see the mount names
@@ -91,12 +94,13 @@ $ lore repo archive help
 ERROR: [E_NOT_FOUND] repo: "help" is not a repo id (rep_…)
   hint: it may have landed on main while this branch is older: `lore sync peek origin/main repos`
 (exit 27)
-$ lore repo archive rep_162d…9666
+$ lore repo archive rep_54fe…28f2
 ✓ help archived
 $ lore repo list
-rep_2ad3…f891  shop  https://github.com/client/website
-rep_162d…9666  help [archived]
-$ lore repo unarchive rep_162d…9666
+rep_2ad3…f891  website  https://github.com/client/website
+rep_162d…9666  shop  https://github.com/client/website
+rep_54fe…28f2  help [archived]
+$ lore repo unarchive rep_54fe…28f2
 ✓ help unarchived
 $ lore mount-alias list
 (no mount aliases)

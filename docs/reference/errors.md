@@ -150,7 +150,7 @@ change that rule so .lore/data/ is not excluded (a negation cannot re-include fi
 ERROR: [E_SYNC_DATA_IGNORED] lore sync: git ignores lore data, so teammates will not receive it:
   .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
 change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
-(exit 1)
+(exit 23)
 ```
 <!-- /example -->
 
