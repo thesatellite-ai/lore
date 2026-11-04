@@ -27,6 +27,9 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 	if err != nil {
 		return engine.Written{}, err
 	}
+	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
+		return engine.Written{}, uerr
+	}
 	q, err := a.writeQuery(st, table, fields)
 	if err != nil {
 		return engine.Written{}, err
@@ -63,6 +66,9 @@ func (a *App) Update(ctx context.Context, ref engine.Ref, patch map[string]value
 		return engine.Written{}, err
 	}
 	src := refStore(ctx, st, ref)
+	if uerr := a.unreachableGuard(ctx, st, explicitTarget(src)); uerr != nil {
+		return engine.Written{}, uerr
+	}
 	if ferr := a.checkTarget(src); ferr != nil {
 		return engine.Written{}, ferr
 	}
@@ -379,6 +385,9 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 	if err != nil {
 		return engine.Written{}, err
 	}
+	if uerr := a.unreachableGuard(ctx, st, explicitTarget(to)); uerr != nil {
+		return engine.Written{}, uerr
+	}
 	if ferr := a.checkTarget(to); ferr != nil {
 		return engine.Written{}, ferr
 	}
@@ -401,6 +410,9 @@ func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.T
 	if err != nil {
 		return engine.Written{}, err
 	}
+	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
+		return engine.Written{}, uerr
+	}
 	if ferr := a.checkTarget(target); ferr != nil {
 		return engine.Written{}, ferr
 	}
@@ -410,4 +422,53 @@ func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.T
 	w, err := st.eng.CreateWithID(ctx, target, table, id, fields)
 	a.wroteTo(target, err)
 	return w, err
+}
+
+// explicitTarget is the target a write into an existing row's store names:
+// the repo store is named explicitly (src is never "" for a found row).
+func explicitTarget(src store.Source) store.Source {
+	if src == "" {
+		return store.SourceRepo
+	}
+	return src
+}
+
+// unreachableGuard fails a write closed while an org store (the one that
+// holds the repo's links and the internal rows the leak check compares
+// against) could not be opened: it has no local copy and is offline
+// (state.unreachable). Reads are never stopped (spec 5.4). Per situation,
+// v0.1.17's codes:
+//   - no explicit target (target ""): where the row should go depends on
+//     the links, which cannot be read: E_LINK_UNKNOWN (exit 18);
+//   - the repo store of a client repo (RepoIsClient true, or unknown: fail
+//     closed): the write-time leak check cannot run: E_LEAK_BLOCKED
+//     "cannot check";
+//   - the unreachable store itself: its own E_STORE_UNREACHABLE (a store
+//     with no local copy, spec 5.4).
+//
+// Any other target (an internal repo's repo store, another store) writes.
+func (a *App) unreachableGuard(ctx context.Context, st *state, target store.Source) error {
+	if len(st.unreachable) == 0 {
+		return nil
+	}
+	if err, ok := st.unreachable[target]; ok {
+		return err
+	}
+	names := make([]string, 0, len(st.unreachable))
+	for n := range st.unreachable {
+		names = append(names, string(n))
+	}
+	slices.Sort(names)
+	which := strings.Join(names, ", ")
+	switch target {
+	case "":
+		return errs.New(errs.LinkUnknown, "cannot tell where this write belongs: org store "+which+" has no local copy and cannot be reached").
+			WithHint("go online once (the store is then kept locally), or name the target: --to repo or --to <store>")
+	case store.SourceRepo:
+		if client, _ := repoIsClient(ctx, a.opts); client {
+			return errs.New(errs.LeakBlocked, "cannot check this write for internal content: org store "+which+" has no local copy and cannot be reached").
+				WithHint("go online once so the store is kept locally, then write again")
+		}
+	}
+	return nil
 }

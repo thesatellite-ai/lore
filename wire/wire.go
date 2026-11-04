@@ -245,6 +245,10 @@ type state struct {
 	// actorMu / actorDone: the actor row is written once per store.
 	actorMu   sync.Mutex
 	actorDone map[store.Source]bool
+	// unreachable holds the org stores (Options.OrgStores) left out at open
+	// because they have no local copy and cannot be reached, with that
+	// error; nil when every store opened (openAttached, unreachableGuard).
+	unreachable map[store.Source]error
 	// repoClassNote says why the repo store is client-class without a
 	// positive answer (no RepoIsClient hook, or its error); empty when the
 	// hook answered.
@@ -408,7 +412,37 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err != nil {
 		return op.Result{}, err
 	}
+	if uerr := a.unreachableTarget(e, d); uerr != nil {
+		return op.Result{}, uerr
+	}
 	return eng.Run(ctx, e, d, c)
+}
+
+// unreachableTarget answers an operation whose `to` names an org store
+// left out at open (state.unreachable) with that store's own
+// E_STORE_UNREACHABLE, instead of the engine's "no store named …".
+func (a *App) unreachableTarget(e op.Entry, d op.Decoder) error {
+	a.mu.Lock()
+	var gone map[store.Source]error
+	if a.st != nil {
+		gone = a.st.unreachable
+	}
+	a.mu.Unlock()
+	if len(gone) == 0 {
+		return nil
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return nil // the engine's Run reports the decode error itself
+	}
+	for _, tv := range in.Texts() {
+		if tv.Field == engine.InputTarget {
+			if uerr, ok := gone[store.Source(tv.Text)]; ok {
+				return uerr
+			}
+		}
+	}
+	return nil
 }
 
 // confirmClientStoresFile is CFG7: `lore store init|add <name>` in a client

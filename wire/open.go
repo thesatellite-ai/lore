@@ -105,7 +105,12 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		if perr != nil {
 			return fail(perr)
 		}
-		if attached, err = openAttached(ctx, st.repoTop, opts, reg, slices.Concat(extra, orgStores(ctx, opts, st.repoTop), personal)); err != nil {
+		org := orgStores(ctx, opts, st.repoTop)
+		optional := make(map[store.Source]bool, len(org))
+		for _, s := range org {
+			optional[s.Name] = true
+		}
+		if attached, st.unreachable, err = openAttached(ctx, st.repoTop, opts, reg, slices.Concat(extra, org, personal), optional); err != nil {
 			return fail(err)
 		}
 	}
@@ -278,11 +283,18 @@ func renameOrgClashes(org []attach.Store, top string) []attach.Store {
 // the `--to <store>/<folder>` targets and the personal store `me` (last,
 // BATCH 15; skipped when stores.yaml already attaches the same url's root,
 // so it loads once), and opens them all.
-func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema.Registry, extra []attach.Store) ([]attach.Opened, error) {
+//
+// optional names the stores the org brings (Options.OrgStores): one of
+// them that has no local copy and cannot be reached (E_STORE_UNREACHABLE)
+// is left out and returned in unreachable instead of failing the open, so
+// reads keep working offline (spec 5.4) and each write decides how to
+// fail closed (App.unreachableGuard). Any other failure, and any failure
+// of a committed or personal store, still fails the open.
+func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema.Registry, extra []attach.Store, optional map[store.Source]bool) (opened []attach.Opened, unreachable map[store.Source]error, err error) {
 	home := opts.Home
 	cfg, err := readStoresFile(repoTop)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, x := range extra {
 		// The committed file wins a name clash (an org store the repo
@@ -293,7 +305,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	}
 	mc, err := readMachineConfig(home)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if p := mc.personalURL(); p != "" {
 		me := attach.Store{Name: store.Source(attach.ReservedMe), URL: p}
@@ -311,21 +323,45 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	}
 	for i, s := range cfg.Stores {
 		if cfg.Stores[i].URL, err = canonical(s); err != nil {
-			return nil, errs.Wrap(errs.CodeOf(err), "wire: store "+string(s.Name), err)
+			return nil, nil, errs.Wrap(errs.CodeOf(err), "wire: store "+string(s.Name), err)
 		}
 	}
 	openers, err := newOpeners(reg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	opened, err := attach.Open(ctx, cfg, openers, opts.openOptions())
-	if err != nil {
-		return nil, err
+	var strict, maybe attach.Config
+	for _, s := range cfg.Stores {
+		if optional[s.Name] {
+			maybe.Stores = append(maybe.Stores, s)
+		} else {
+			strict.Stores = append(strict.Stores, s)
+		}
+	}
+	if opened, err = attach.Open(ctx, strict, openers, opts.openOptions()); err != nil {
+		return nil, nil, err
+	}
+	for _, s := range maybe.Stores {
+		one, oerr := attach.Open(ctx, attach.Config{Stores: []attach.Store{s}}, openers, opts.openOptions())
+		switch {
+		case errs.Has(oerr, errs.StoreUnreachable):
+			if unreachable == nil {
+				unreachable = map[store.Source]error{}
+			}
+			unreachable[s.Name] = oerr
+			continue
+		case oerr != nil:
+			for _, o := range opened {
+				_ = o.Backend.Close() // best effort: the open error is what the caller needs
+			}
+			return nil, nil, oerr
+		}
+		opened = append(opened, one...)
 	}
 	for i := range opened {
 		opened[i].Level = levelOf(opened[i])
 	}
-	return opened, nil
+	return opened, unreachable, nil
 }
 
 // levelOf is the settings level of one attached store folder (O1, spec
