@@ -2,7 +2,6 @@ package wire
 
 import (
 	"context"
-	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -15,16 +14,13 @@ import (
 // targetSep splits `--to <store>/<folder>` (STORE TARGETS).
 const targetSep = "/"
 
-// Shortcut targets STORE TARGETS reserves for the repo's org store; the org
-// noun is still v0.1.17's, so the core names the folder explicitly instead.
-var orgShortcuts = []string{attach.ReservedTeam, attach.ReservedCompany}
-
 // prepareTarget looks at the operation's `to` before the engine runs it:
 // `--to <store>/<folder>` attaches that folder of an attached store (or of
 // `me`) as its own target, named "<store>/<folder>" (O1: one backend per
 // data folder; `--to agency/org` is the company folder). A folder the store
 // does not have yet is created only after a yes (E_NEEDS_CONFIRM).
-// `team` and `company` are refused with the explicit form to use.
+// `team` and `company` were already rewritten to the org store names
+// (resolveAlias).
 func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) error {
 	in, err := e.Decode(d)
 	if err != nil {
@@ -35,10 +31,6 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 		if tv.Field == engine.InputTarget {
 			to = tv.Text
 		}
-	}
-	if slices.Contains(orgShortcuts, to) {
-		return errs.New(errs.Unsupported, "--to "+to+" needs the repo's org, which the 0.1.18 core does not resolve yet").
-			WithHint("name the store and folder: --to <store>/org for the company folder, --to <store> for the linked one")
 	}
 	base, folderName, ok := strings.Cut(to, targetSep)
 	if !ok || base == "" || folderName == "" {

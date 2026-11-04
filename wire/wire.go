@@ -353,6 +353,10 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		}
 		return st.eng.Run(ctx, e, d, c)
 	}
+	d, err := a.resolveAlias(ctx, e, d)
+	if err != nil {
+		return op.Result{}, err
+	}
 	if err := a.prepareTarget(ctx, e, d, c); err != nil {
 		return op.Result{}, err
 	}
