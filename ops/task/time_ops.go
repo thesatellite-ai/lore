@@ -186,11 +186,15 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		return TimeOut{}, err
 	}
 	now := opclock.Now(o.env).UTC()
-	since, err := dayText(o.clock(), "since", in.Since)
+	clk, err := o.clock(ctx, src)
 	if err != nil {
 		return TimeOut{}, err
 	}
-	until, err := dayText(o.clock(), "until", in.Until)
+	since, err := dayText(clk, "since", in.Since)
+	if err != nil {
+		return TimeOut{}, err
+	}
+	until, err := dayText(clk, "until", in.Until)
 	if err != nil {
 		return TimeOut{}, err
 	}

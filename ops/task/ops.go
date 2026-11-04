@@ -283,7 +283,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 			return AddOut{}, err
 		}
 	}
-	dateNotes, err := o.setDates(fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due})
+	dateNotes, err := o.setDates(ctx, store.Source(in.To), fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due})
 	if err != nil {
 		return AddOut{}, err
 	}
@@ -437,8 +437,15 @@ func setRefs(fields map[string]value.Value, flags []refFlag) error {
 // setDates sets each given YYYY-MM-DD flag's field.
 // Values are TASK 12 phrases (dates.go); notes say what each phrase
 // stored.
-func (o ops) setDates(fields map[string]value.Value, given map[string]string) ([]string, error) {
+func (o ops) setDates(ctx context.Context, target store.Source, fields map[string]value.Value, given map[string]string) ([]string, error) {
 	var notes []string
+	if given[fieldDeferred] == "" && given[fieldDue] == "" {
+		return nil, nil
+	}
+	c, err := o.clock(ctx, target)
+	if err != nil {
+		return nil, err
+	}
 	for _, name := range []string{fieldDeferred, fieldDue} {
 		raw := given[name]
 		if raw == "" {
@@ -448,7 +455,7 @@ func (o ops) setDates(fields map[string]value.Value, given map[string]string) ([
 		if name == fieldDeferred {
 			flag = "defer-until"
 		}
-		v, note, err := dateValue(o.clock(), flag, raw)
+		v, note, err := dateValue(c, flag, raw)
 		if err != nil {
 			return nil, err
 		}
@@ -1028,7 +1035,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 			return work.WriteOut{}, err
 		}
 	}
-	dateNotes, err := o.setDates(patch, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due})
+	dateNotes, err := o.setDates(ctx, curSrc, patch, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due})
 	if err != nil {
 		return work.WriteOut{}, err
 	}

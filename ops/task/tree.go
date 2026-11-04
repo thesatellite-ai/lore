@@ -526,7 +526,11 @@ func (o ops) addParent(ctx context.Context, in *AddIn, project string) (*addPare
 	}
 	// 6.5 warnings: never refusals.
 	// in.Due is a TASK 12 phrase; a bad one is refused later by setDates.
-	cd, _ := dayText(o.clock(), "due", in.Due)
+	clk, err := o.clock(ctx, src)
+	if err != nil {
+		return nil, err
+	}
+	cd, _ := dayText(clk, "due", in.Due)
 	if pd := work.DateText(pr, fieldDue); pd != "" && cd != "" && cd > pd {
 		p.notes = append(p.notes, "child due "+cd+" is after parent due "+pd)
 	}

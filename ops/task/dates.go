@@ -1,14 +1,19 @@
 package task
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/dates"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Date flags read TASK 12's phrase table (logic/dates, T11). The day is
@@ -17,13 +22,28 @@ import (
 // is E_DATE with the list of forms. Lore always says what it stored for a
 // phrase (R12 "never silent conversion"): parseDate returns that line.
 
-// defaultWeekEnd is tasks.week_end's default (TASK 12.1); the policy key
-// is not registered yet, so eow is always Friday.
+// defaultWeekEnd is tasks.week_end's default (TASK 12.1).
 const defaultWeekEnd = time.Friday
 
-// clockOf is the phrase clock of env: its wall clock, the local zone.
-func (o ops) clock() dates.Clock {
-	return dates.Clock{Now: opclock.Now(o.env), Loc: time.Local, WeekEnd: defaultWeekEnd}
+// clock is the phrase clock: env's wall clock, the local zone, and
+// tasks.week_end as the policy of target resolves it (the default when
+// env has no policy reader or no level sets it).
+func (o ops) clock(ctx context.Context, target store.Source) (dates.Clock, error) {
+	c := dates.Clock{Now: opclock.Now(o.env), Loc: time.Local, WeekEnd: defaultWeekEnd}
+	p, ok := upgrade.As[bulk.Policier](o.env)
+	if !ok {
+		return c, nil
+	}
+	set, err := p.Policy(ctx, target)
+	if err != nil {
+		return dates.Clock{}, err
+	}
+	if e, isSet := set.Get(policy.KeyTasksWeekEnd); isSet && e.Value != nil {
+		if wd, known := dates.WeekdayOf(e.Value.String()); known {
+			c.WeekEnd = wd
+		}
+	}
+	return c, nil
 }
 
 // parseDate reads one date flag value. note is "" for a plain
