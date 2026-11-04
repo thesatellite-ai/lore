@@ -76,6 +76,7 @@ hotfixes.repo_id ref
 hotfixes.severity text required
 hotfixes.source_kind text required
 hotfixes.source_ref text
+hotfixes.summary text
 hotfixes.superseded_by_id ref
 hotfixes.tag_ids list[ref]
 hotfixes.title text required
@@ -253,6 +254,7 @@ rules.repo_id ref
 rules.severity text required
 rules.source_kind text required
 rules.source_ref text
+rules.summary text
 rules.superseded_by_id ref
 rules.tag_ids list[ref]
 rules.trust_score number

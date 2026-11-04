@@ -17,6 +17,10 @@
 //     project;
 //   - both ordered by id ascending (string order, as SQLite compared them).
 //
+// 0.1.18 (CONTEXT_BUDGET 6.3, 6.12): a row with superseded_by_id set is
+// no longer pinned (its replacement is), and an activation: manual rule
+// never enters the core; both are counted in the render report instead.
+//
 // The project filter applies to repo-store rows only: a shareable store's
 // rows carry its own folder's project id, and attaching the store is what
 // puts them in scope.
@@ -26,6 +30,7 @@ import (
 	"context"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -43,6 +48,9 @@ const (
 	renderFieldTrustScore = "trust_score"
 	renderFieldBody       = "body"
 	renderFieldTitle      = "title"
+	renderFieldSuperseded = "superseded_by_id"
+	renderFieldActivation = "activation"
+	renderFieldGlobs      = "globs"
 )
 
 // Severities render pins (v0.1.17 ent enum values, the same strings the
@@ -63,6 +71,12 @@ type pinnedRule struct {
 	Severity   string
 	TrustScore float64
 	Body       string
+	// Budget inputs (CONTEXT_BUDGET 6.4, 6.6).
+	Summary    string
+	Activation string
+	Globs      string
+	Updated    time.Time
+	TagIDs     []string
 }
 
 // pinnedHotfix is one hotfix as the render prints it.
@@ -71,6 +85,15 @@ type pinnedHotfix struct {
 	Severity string
 	Title    string
 	Body     string
+	Summary  string
+	TagIDs   []string
+}
+
+// pinSkips counts rows that would have been pinned before 0.1.18 but are
+// left out of the core, by reason (the render report's "moved out" rows).
+type pinSkips struct {
+	SupersededRules, SupersededHotfixes int
+	ManualRules                         int
 }
 
 // renderSources are the stores whose rows may reach the committed render:
@@ -155,7 +178,7 @@ func renderTrust(r row.Row) float64 {
 }
 
 // loadPinnedRules returns the must rules of projectID (and global ones).
-func loadPinnedRules(ctx context.Context, projectID string) ([]pinnedRule, error) {
+func loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]pinnedRule, error) {
 	rows, err := renderLiveRows(ctx, schema.TableRules)
 	if err != nil {
 		return nil, err
@@ -168,16 +191,51 @@ func loadPinnedRules(ctx context.Context, projectID string) ([]pinnedRule, error
 		if !r.inProject(projectID, true) {
 			continue
 		}
+		// 6.12: a superseded rule is replaced by its successor, never pinned.
+		if renderField(r.Row, renderFieldSuperseded) != "" {
+			skips.SupersededRules++
+			continue
+		}
+		act := renderField(r.Row, renderFieldActivation)
+		// 6.3: manual rules load only by lore show / lore context --topic.
+		if act == schema.RuleActivationManual {
+			skips.ManualRules++
+			continue
+		}
 		out = append(out, pinnedRule{
 			ID: r.ID.String(), Severity: renderRuleSeverityMust,
 			TrustScore: renderTrust(r.Row), Body: renderField(r.Row, renderFieldBody),
+			Summary: renderField(r.Row, schema.FieldSummary), Activation: act,
+			Globs: renderField(r.Row, renderFieldGlobs), Updated: renderUpdated(r.Row),
+			TagIDs: renderList(r.Row, schema.FieldTagIDs),
 		})
 	}
 	return out, nil
 }
 
+// renderUpdated is the row's last edit time (updated, else created).
+func renderUpdated(r row.Row) time.Time {
+	if !r.UpdatedAt.IsZero() {
+		return r.UpdatedAt
+	}
+	return r.CreatedAt
+}
+
+// renderList is a list field's items as text (nil when absent).
+func renderList(r row.Row, name string) []string {
+	l, ok := r.Fields[name].(value.List)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(l.Items()))
+	for _, it := range l.Items() {
+		out = append(out, it.String())
+	}
+	return out
+}
+
 // loadPinnedHotfixes returns the critical and high hotfixes of projectID.
-func loadPinnedHotfixes(ctx context.Context, projectID string) ([]pinnedHotfix, error) {
+func loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) ([]pinnedHotfix, error) {
 	rows, err := renderLiveRows(ctx, schema.TableHotfixes)
 	if err != nil {
 		return nil, err
@@ -191,9 +249,14 @@ func loadPinnedHotfixes(ctx context.Context, projectID string) ([]pinnedHotfix, 
 		if !r.inProject(projectID, false) {
 			continue
 		}
+		if renderField(r.Row, renderFieldSuperseded) != "" {
+			skips.SupersededHotfixes++
+			continue
+		}
 		out = append(out, pinnedHotfix{
 			ID: r.ID.String(), Severity: sev,
 			Title: renderField(r.Row, renderFieldTitle), Body: renderField(r.Row, renderFieldBody),
+			Summary: renderField(r.Row, schema.FieldSummary), TagIDs: renderList(r.Row, schema.FieldTagIDs),
 		})
 	}
 	return out, nil

@@ -53,7 +53,8 @@ const (
 // tools read, so it is the neutral choice; CLAUDE.md is never a default.
 const FallbackName = NameCodex
 
-// Budgets, in tokens. TOOL NEUTRAL: each comes from the tool's profile and
+// Budgets, in bytes (CONTEXT_BUDGET 6.1: a UTF-8 byte count is never
+// smaller than the character count, so it is safe for every tool). TOOL NEUTRAL: each comes from the tool's profile and
 // is documented as a neutral table, never as one tool's default.
 const (
 	// DefaultBudget applies to a profile that states none (CQ1 table).
@@ -97,7 +98,7 @@ type Profile struct {
 	PointerFile string `yaml:"pointer_file,omitempty" json:"pointer_file,omitempty"`
 	// Import is how PointerFile points at LORE.md.
 	Import Import `yaml:"import" json:"import"`
-	// Budget is the tool's context budget in tokens; 0 means DefaultBudget.
+	// Budget is the tool's context budget in bytes; 0 means DefaultBudget.
 	Budget int `yaml:"budget,omitempty" json:"budget,omitempty"`
 }
 

@@ -84,6 +84,17 @@ func lifecycle() []Item {
 	}
 }
 
+// FieldSummary is the optional one-line short form of a rule or hotfix
+// (CONTEXT_BUDGET 6.4, CQ4): render prints it as the entry's line form when
+// the full body does not fit the budget; empty means "use the first
+// sentence" (rules) or the title (hotfixes). Plain text, up to 200
+// characters (logic/contextfit.MaxSummary, checked by the noun's add/edit).
+const FieldSummary = "summary"
+
+func summaryField() Item {
+	return Text(FieldSummary, Describe("one-line short form used when the full text does not fit LORE.md (up to 200 characters)"))
+}
+
 // knowledgeDefs returns the built-in rule, decision and hotfix tables.
 // There is no separate "warning" noun: v0.1.17's hotfix is the loud
 // recurring warning.
@@ -98,6 +109,7 @@ func knowledgeDefs() []TableDef {
 		Text("globs"),
 		Text("applies_to_description"),
 		Text("severity", Required(), OneOf(RuleSeverities()...)),
+		summaryField(),
 		Ref("superseded_by_id", TableRules),
 		Ref("created_by_actor_id", TableActors),
 		IndexOn("project_id", "repo_id"),
@@ -136,6 +148,7 @@ func knowledgeDefs() []TableDef {
 		Text("title", Required()),
 		Text("body", Required(), WithWidget(WidgetMarkdown)),
 		Text("severity", Required(), OneOf(HotfixSeverities()...)),
+		summaryField(),
 		Ref("superseded_by_id", TableHotfixes),
 		Ref("created_by_actor_id", TableActors),
 		IndexOn("project_id", "repo_id"),
