@@ -55,6 +55,7 @@ import (
 	opsincident "github.com/thesatellite-ai/lore/ops/incident"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
+	opslint "github.com/thesatellite-ai/lore/ops/lint"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opsmission "github.com/thesatellite-ai/lore/ops/mission"
@@ -63,6 +64,7 @@ import (
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
+	opsrow "github.com/thesatellite-ai/lore/ops/row"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
@@ -361,6 +363,10 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsexternalsource.Ops(a)...)
 	entries = append(entries, opsreminder.Ops(a)...)
 	entries = append(entries, opssql.Ops(a)...)
+	// CLI 2.7 / 2.13, PROV 9.1: lore show|move <any id> (lore row show|move).
+	entries = append(entries, opsrow.Ops(a)...)
+	// lore lint: one host for the findings the design sends to lint (PROV9, SQ20/22, TQ2/TQ4, DOCS O2).
+	entries = append(entries, opslint.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 

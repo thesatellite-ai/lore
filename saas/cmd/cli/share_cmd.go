@@ -48,6 +48,10 @@ const (
 type shareFlags struct {
 	to  toFlags
 	yes bool
+	// move only, rows of core nouns (CLI_REFERENCE 2.7): --drop-internal
+	// (MQ11, BATCH 7) and --with-time totals|none (TQ3).
+	dropInternal bool
+	withTime     string
 }
 
 func newShareCommand() *cobra.Command { return newShareLikeCommand(false) }
@@ -59,8 +63,9 @@ func newShareLikeCommand(move bool) *cobra.Command {
 		`  lore share mem_0c12 --to repo
   lore share mem_77 --to agency`
 	if move {
-		use, short, example = "move <id> --to <target>", "Move a row to another project (new id; the original is deleted; asks first)",
-			`  lore move mem_0b77 --to agency`
+		use, short, example = "move <id> --to <target>", "Move a row to another store (same id for rows on the core; asks first)",
+			`  lore move mem_0b77 --to agency
+  lore move tsk_0201 --to repo --drop-internal`
 	}
 	cmd := &cobra.Command{
 		Use: use, Short: short, Example: example,
@@ -70,7 +75,11 @@ func newShareLikeCommand(move bool) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&f.to.To, flagTo, "", "the target: repo | <org> | <org>/<folder> | me (required)")
-	cmd.Flags().BoolVar(&f.yes, flagYes, false, "confirm without a prompt (never accepted from agent actors)")
+	cmd.Flags().BoolVar(&f.yes, flagYes, false, "confirm without a prompt")
+	if move {
+		cmd.Flags().BoolVar(&f.dropInternal, flagDropInternal, false, "into a client repo: remove the row's internal metadata values instead of refusing (MQ11)")
+		cmd.Flags().StringVar(&f.withTime, flagWithTime, "", "totals | none (default none): time totals for a task moved into a client repo (TQ3; totals not built yet)")
+	}
 	return cmd
 }
 
@@ -94,7 +103,10 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 			return errcodes.New(errcodes.Unsupported, "lore share is removed for "+string(table)+" (decision BATCH 2: a row has one home, no copies)").
 				WithHint("move it instead: `lore move " + id + " --to " + f.to.To + "`")
 		}
-		return coreMoveRow(ctx, table, id, f.to.To, f.yes)
+		return runCoreMove(ctx, table, id, f)
+	}
+	if f.dropInternal || f.withTime != "" {
+		return errcodes.New(errcodes.Unsupported, "--drop-internal and --with-time apply to rows on the 0.1.18 core only; "+id+" still moves the v0.1.17 way")
 	}
 	if f.to.To == "" {
 		return errcodes.New(errcodes.InvalidInput, "--to is required (repo, <org>, <org>/<folder> or me)")

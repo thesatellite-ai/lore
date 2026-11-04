@@ -50,6 +50,54 @@ const (
 // Interrupted after the first write, the row is in both stores; running
 // Move again finds the copy in to and only writes the source tombstone.
 func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, error) {
+	return e.MoveWith(ctx, ref, to, MoveOptions{})
+}
+
+// TimeShare is `lore move --with-time` (TQ3, CLI_REFERENCE 2.7): what a
+// task moved into a client repo carries of its time.
+type TimeShare string
+
+// The --with-time values. TimeNone is the default (client repos get no
+// time data, TQ3).
+const (
+	TimeNone   TimeShare = "none"
+	TimeTotals TimeShare = "totals"
+)
+
+// TimeShares lists the --with-time values.
+func TimeShares() []string { return []string{string(TimeNone), string(TimeTotals)} }
+
+// MoveOptions are the choices of one move beyond the row and the target.
+type MoveOptions struct {
+	// DropInternal accepts losing the row's internal metadata values on a
+	// move into a client repo (MQ11, BATCH 7); without it such a move is
+	// refused with E_META_INTERNAL. The dropped keys come back as warnings.
+	DropInternal bool
+	// WithTime is the hook for --with-time (TQ3): "" and TimeNone carry no
+	// time; TimeTotals is refused until time reporting (batch B3) builds the
+	// per-worker totals and the time.client_share policy check.
+	WithTime TimeShare
+}
+
+// WarnMetaDropped names a metadata value --drop-internal removed (MQ11).
+const WarnMetaDropped WarnCode = "W_META_DROPPED"
+
+// MoveWith is Move with options (--drop-internal, --with-time).
+//
+//	locate the one live copy ─► refuse (target tombstone, secret refs,
+//	internal meta into a client repo: E_META_INTERNAL unless DropInternal)
+//	─► write at to (+ moves entry, or the client _o) ─► tombstone at src
+func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt MoveOptions) (Written, error) {
+	switch opt.WithTime {
+	case "", TimeNone:
+	case TimeTotals:
+		// TQ3: totals need time.client_share=totals and the time reports
+		// (batch B3); never pretend to carry them.
+		return Written{}, errs.New(errs.NotImplemented, "engine: --with-time totals is not built yet; nothing written").
+			WithHint("move without --with-time (the client repo gets no time data, TQ3)")
+	default:
+		return Written{}, errs.New(errs.InvalidInput, "engine: --with-time takes totals or none, not "+strconv.Quote(string(opt.WithTime)))
+	}
 	cl := e.callOf(ctx)
 	dst, err := e.writable(to)
 	if err != nil {
@@ -85,6 +133,7 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 			WithHint("keep it in " + string(src))
 	}
 	var moved row.Row
+	var dropped []Warning
 	if there.ID.IsZero() {
 		// A row read back from a backend carries inferred values (a ref is
 		// Text, a json array of objects a List of JSON items), and
@@ -98,6 +147,9 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 				return Written{}, err
 			}
 			if typed, err = e.rehomeProject(ctx, to, def, typed); err != nil {
+				return Written{}, err
+			}
+			if cur.Meta, dropped, err = e.internalMeta(ctx, cur, opt.DropInternal); err != nil {
 				return Written{}, err
 			}
 		}
@@ -143,7 +195,49 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 			WithHint("run the same move again: it only removes the old copy")
 	}
 	ev := Event{Op: cl.op, Action: ActionDelete, Store: src, Table: cur.Table, ID: cur.ID, HLC: h, Actor: actor}
-	return Written{Row: moved}, e.finish(ctx, src, []store.Row{got.doc}, ev)
+	return Written{Row: moved, Warnings: dropped}, e.finish(ctx, src, []store.Row{got.doc}, ev)
+}
+
+// internalMeta returns r's metadata without its internal keys' values, for
+// a move into a client repo (MQ11: internal keys never reach a client).
+// Without drop a row holding any is refused with E_META_INTERNAL naming
+// them (BATCH 7: the row keeps no other copy, so losing them is a choice).
+func (e *Engine) internalMeta(ctx context.Context, r row.Row, drop bool) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
+	if len(r.Meta) == 0 {
+		return r.Meta, nil, nil
+	}
+	reg, err := e.metaRegistry(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	internal := map[ids.ID[ids.MetaKey]]string{}
+	for _, d := range reg {
+		if d.internal {
+			internal[d.id] = d.name
+		}
+	}
+	var names []string
+	out := make(map[ids.ID[ids.MetaKey]]value.JSON, len(r.Meta))
+	for k, v := range r.Meta {
+		if n, ok := internal[k]; ok {
+			names = append(names, n)
+			continue
+		}
+		out[k] = v
+	}
+	if len(names) == 0 {
+		return r.Meta, nil, nil
+	}
+	slices.Sort(names)
+	if !drop {
+		return nil, nil, errs.New(errs.MetaInternal, "engine: "+r.ID.String()+" holds internal metadata ("+strings.Join(names, ", ")+") that must not reach a client repo; nothing written").
+			WithHint("lore move " + r.ID.String() + " --to <target> --drop-internal (removes them), or keep the row in the store")
+	}
+	ws := make([]Warning, 0, len(names))
+	for _, n := range names {
+		ws = append(ws, Warning{Code: WarnMetaDropped, Field: n, Message: "kept back: internal metadata " + n + " was removed (--drop-internal)"})
+	}
+	return out, ws, nil
 }
 
 // locateExcept finds ref's row in ref.Store, or in every attached store

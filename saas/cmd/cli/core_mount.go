@@ -31,7 +31,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
-	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -203,6 +202,7 @@ func mountCore(root *cobra.Command) {
 	}
 	markCorePrinted(root)
 	mountSQLShortcut(root)
+	mountRowShortcuts(root) // CLI 2.7/2.13: lore show <id>, bare lore lint
 	// The coordination verbs and mission status stay on the v0.1.17 signals
 	// machinery, mounted under the core nouns (after the compat loop: they
 	// carry their own v0.1.17 flags).
@@ -1064,107 +1064,6 @@ func coreExitCode(err error) (int, bool) {
 	// FLAG2: a usage error is now an exitError with its own exit (20), so
 	// "not printed by the core" is the fallback exit for foreign errors.
 	return code, code != cli.ExitUnknown || (err != nil && corePrinted)
-}
-
-// coreMoveRow is `lore move <id> --to <store>` for a row of a core-owned
-// table: v0.1.17's guard 4 flow (show the text, ask; agents can never
-// confirm with --yes), then the move, which keeps the id (PROV5) and
-// tombstones the old copy (memory.move for a memory, the App's Move for the
-// other core tables). A move into this repo while it is a client repo is
-// refused when the row holds secret references (BATCH 5), before anything
-// is asked.
-func coreMoveRow(ctx context.Context, table row.Table, id, to string, yes bool) error {
-	if coreApp == nil {
-		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
-	}
-	if to == "" {
-		return errcodes.New(errcodes.InvalidInput, "--to is required (a store name from .lore/stores.yaml, or repo)")
-	}
-	me, err := resolveIdentityHere(ctx)
-	if err != nil {
-		return err
-	}
-	if yes && me.Kind == identityKindAgent {
-		return errcodes.New(errcodes.InvalidInput, "agents cannot confirm a move with --yes; a person must run it (§6.4)").
-			WithHint("ask the owner to run `lore move " + id + " --to " + to + "`")
-	}
-	rid, err := ids.ParseAny(id)
-	if err != nil {
-		return errs.Wrap(errs.InvalidID, id+" is not an id", err)
-	}
-	ref := engine.Ref{Table: table, ID: rid}
-	_, r, err := coreApp.Get(ctx, ref)
-	if err != nil {
-		return err
-	}
-	body := ""
-	for _, f := range []string{fieldBody, fieldTitle} {
-		if t, ok := r.Fields[f].(value.Text); ok && body == "" {
-			body = t.String()
-		}
-	}
-	if store.Source(to) == store.SourceRepo {
-		cwd, werr := os.Getwd()
-		if werr != nil {
-			return errcodes.New(errcodes.Internal, "getwd").WithCause(werr)
-		}
-		// A move is a write (coordinator decision): the F16 check runs
-		// now, before anything is asked or written, not only at commit.
-		var texts []string
-		for _, f := range leakTextFields {
-			if s := renderField(r, f); s != "" {
-				texts = append(texts, s)
-			}
-		}
-		if lerr := leakCheckMove(ctx, cwd, id, texts); lerr != nil {
-			return lerr
-		}
-		if repoIsClient(ctx, cwd) {
-			var found []string
-			for _, ref := range refs.References(body) {
-				if ref.Scheme == refs.SchemeSecret {
-					found = append(found, ref.String())
-				}
-			}
-			if len(found) > 0 {
-				return errs.New(errs.Unsupported, id+" holds secret references and cannot move into a client repo: "+strings.Join(found, ", ")).
-					WithHint("remove the references from the row first (BATCH 5)")
-			}
-		}
-	}
-	fmt.Printf("This becomes visible to everyone with access to store %s:\n  %q\n", to, oneLine(body))
-	if !yes {
-		if !stdinIsTTY() || me.Kind == identityKindAgent {
-			return errcodes.New(errcodes.InvalidInput, "not moved: confirm on a terminal (or --yes, people only); nothing written")
-		}
-		if !confirmYes("Move it? [y/N] ") {
-			fmt.Println("nothing written")
-			return nil
-		}
-	}
-	if err := ensureCoreGitignore(ctx); err != nil {
-		return coreErr(err)
-	}
-	if table != schema.TableMemories {
-		if _, err := coreApp.Move(ctx, ref, store.Source(to)); err != nil {
-			return err
-		}
-		fmt.Printf("✓ %s moved to store %s (same id; the old copy is tombstoned)\n", id, to)
-		return nil
-	}
-	e, ok := coreApp.Registry().Lookup(opsmemory.OpMove)
-	if !ok {
-		return errcodes.New(errcodes.Internal, "memory.move is not registered")
-	}
-	in, err := json.Marshal(opsmemory.MoveIn{ID: id, To: to})
-	if err != nil {
-		return errcodes.New(errcodes.Internal, "encode the move").WithCause(err)
-	}
-	if _, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY(), Yes: true}); err != nil {
-		return err
-	}
-	fmt.Printf("✓ %s moved to store %s (same id; the old copy is tombstoned)\n", id, to)
-	return nil
 }
 
 // coreSetSuccessor sets (next != "") or clears (next == "") the
