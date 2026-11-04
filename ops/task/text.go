@@ -114,7 +114,7 @@ func (o ShowOut) Text() string {
 		b.WriteString("  done by:  " + t.DoneBy + "\n")
 	}
 	for _, r := range t.Refs {
-		b.WriteString("  ref:      " + r.Table + "/" + r.ID + "\n")
+		b.WriteString("  ref:      " + r.Where() + "\n")
 	}
 	if t.TimeLine != "" {
 		b.WriteString("  time:     " + t.TimeLine + "\n")

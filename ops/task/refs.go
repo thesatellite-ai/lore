@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -57,6 +58,22 @@ type RefOut struct {
 	ID        string `json:"id"`
 	ProjectID string `json:"project_id,omitempty"`
 	Relation  string `json:"relation"`
+	// Unavailable is set when the target row is not among the loaded
+	// stores (F15 resolve): it prints "→ <project>:<id> (not available
+	// here)", never an error.
+	Unavailable bool `json:"unavailable,omitempty"`
+}
+
+// Where prints the pointer: "<table>/<id>", or F15's unavailable form.
+func (r RefOut) Where() string {
+	if !r.Unavailable {
+		return r.Table + "/" + r.ID
+	}
+	at := r.ID
+	if r.ProjectID != "" {
+		at = r.ProjectID + projectRefSep + r.ID
+	}
+	return "→ " + at + " (not available here)"
 }
 
 // parseRefs reads --ref values. A row pointer must name an id of a known
@@ -101,6 +118,21 @@ func (o ops) parseRefs(ctx context.Context, raw []string) ([]taskRef, error) {
 		out = append(out, taskRef{Table: def.Name, ID: id, Project: project})
 	}
 	return out, nil
+}
+
+// checkRefs applies F15 (ops/internal/pointer) to every row pointer of
+// refs as stored in a task of store from, before anything is written. A
+// commit pointer names no row and is not checked.
+func (o ops) checkRefs(ctx context.Context, from store.Source, refs []taskRef) error {
+	for _, r := range refs {
+		if r.SHA != "" {
+			continue
+		}
+		if err := pointer.Check(ctx, o.env, from, engine.Ref{Table: r.Table, ID: r.ID}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // saveRefs records refs of task id (project prj) in store src.
@@ -179,7 +211,9 @@ func (o ops) refsOf(ctx context.Context, id ids.AnyID) ([]RefOut, error) {
 		return nil, err
 	}
 	for _, f := range rows {
-		out = append(out, RefOut{Table: text(f.Row, fieldDstTable), ID: text(f.Row, fieldDstID), ProjectID: text(f.Row, fieldDstProject), Relation: text(f.Row, fieldRelation)})
+		ro := RefOut{Table: text(f.Row, fieldDstTable), ID: text(f.Row, fieldDstID), ProjectID: text(f.Row, fieldDstProject), Relation: text(f.Row, fieldRelation)}
+		ro.Unavailable = !o.loaded(ctx, ro.Table, ro.ID)
+		out = append(out, ro)
 	}
 	links, err := engine.FindByKey(ctx, o.env, tableCommitLinks, map[string]string{schema.FieldEntityTable: string(table), schema.FieldEntityID: id.String()})
 	if err != nil {
@@ -189,6 +223,22 @@ func (o ops) refsOf(ctx context.Context, id ids.AnyID) ([]RefOut, error) {
 		out = append(out, RefOut{Table: "commits", ID: text(f.Row, fieldSHA), Relation: refRelation})
 	}
 	return out, nil
+}
+
+// loaded reports whether a ref target is a row of an attached store. Any
+// failure to read it (unknown table, bad id, not found) counts as not
+// loaded: a ref never errors on show (F15 resolve).
+func (o ops) loaded(ctx context.Context, tbl, rawID string) bool {
+	t, err := row.ParseTable(tbl)
+	if err != nil {
+		return false
+	}
+	id, err := ids.ParseAny(rawID)
+	if err != nil {
+		return false
+	}
+	_, r, err := o.env.Get(ctx, engine.Ref{Table: t, ID: id})
+	return err == nil && !r.Deleted
 }
 
 // text is a field's string form ("" when unset).

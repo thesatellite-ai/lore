@@ -21,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -270,7 +271,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, errs.New(errs.EmptyBody, "comment add: the body is empty").
 			WithHint(`lore comment add --on-table=<table> --on-id=<id> --body="<text>"`)
 	}
-	tbl, id, err := o.target(ctx, in.OnTable, in.OnID)
+	tbl, id, err := o.target(ctx, store.Source(in.To), in.OnTable, in.OnID)
 	if err != nil {
 		return AddOut{}, err
 	}
@@ -297,8 +298,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 
 // target validates --on-table/--on-id. A table on the core must hold the
 // id as a live row (E_NOT_FOUND otherwise) and the id must carry the
-// table's prefix; a table not on the core only needs a valid id.
-func (o ops) target(ctx context.Context, rawTable, rawID string) (row.Table, ids.AnyID, error) {
+// table's prefix, and F15 must allow a comment written to store to point at
+// it (ops/internal/pointer); a table not on the core only needs a valid id.
+func (o ops) target(ctx context.Context, to store.Source, rawTable, rawID string) (row.Table, ids.AnyID, error) {
 	tbl, err := row.ParseTable(strings.TrimSpace(rawTable))
 	if err != nil {
 		return "", ids.AnyID{}, errs.Wrap(errs.InvalidInput, "comment: --on-table "+quote(rawTable)+" is not a table name", err)
@@ -324,6 +326,9 @@ func (o ops) target(ctx context.Context, rawTable, rawID string) (row.Table, ids
 		err = errs.New(errs.NotFound, "comment: "+id.String()+" is deleted")
 	}
 	if err != nil {
+		return "", ids.AnyID{}, err
+	}
+	if err := pointer.Check(ctx, o.env, to, engine.Ref{Table: tbl, ID: id}); err != nil {
 		return "", ids.AnyID{}, err
 	}
 	return tbl, id, nil

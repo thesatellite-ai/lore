@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -269,9 +270,14 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, errs.New(errs.InvalidInput, "--entity and --commit are required").
 			WithHint("example: lore link add --entity=tsk_<id> --commit=HEAD")
 	}
-	tbl, id, err := o.entity(ctx, in.Entity)
+	tbl, id, core, err := o.entity(ctx, in.Entity)
 	if err != nil {
 		return AddOut{}, err
+	}
+	if core {
+		if err := pointer.Check(ctx, o.env, store.Source(in.To), engine.Ref{Table: tbl, ID: id}); err != nil {
+			return AddOut{}, err
+		}
 	}
 	sha, msg, author, when, err := o.resolve(ctx, in.Commit, in.RepoPath)
 	if err != nil {
@@ -347,15 +353,15 @@ func (o ops) resolve(ctx context.Context, arg, dir string) (sha, msg, author, wh
 
 // entity resolves --entity to its table (by id prefix) and id. A table on
 // the core must hold the id as a live row; a table not on the core yet is
-// accepted, as v0.1.17 accepted it.
-func (o ops) entity(ctx context.Context, raw string) (row.Table, ids.AnyID, error) {
+// accepted, as v0.1.17 accepted it (core reports which).
+func (o ops) entity(ctx context.Context, raw string) (row.Table, ids.AnyID, bool, error) {
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
-		return "", ids.AnyID{}, errs.Wrap(errs.Internal, "link: built-in schema", err)
+		return "", ids.AnyID{}, false, errs.Wrap(errs.Internal, "link: built-in schema", err)
 	}
 	name, id, core, err := tableForID(reg, raw)
 	if err != nil {
-		return "", ids.AnyID{}, err
+		return "", ids.AnyID{}, false, err
 	}
 	if core {
 		_, r, gerr := o.env.Get(ctx, engine.Ref{Table: name, ID: id})
@@ -363,10 +369,10 @@ func (o ops) entity(ctx context.Context, raw string) (row.Table, ids.AnyID, erro
 			gerr = errs.New(errs.NotFound, "entity "+id.String()+" is deleted")
 		}
 		if gerr != nil {
-			return "", ids.AnyID{}, gerr
+			return "", ids.AnyID{}, false, gerr
 		}
 	}
-	return name, id, nil
+	return name, id, core, nil
 }
 
 // tableForID is v0.1.17's tableForOpaqueID over the core: the table an

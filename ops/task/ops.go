@@ -273,6 +273,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if in.Timebox > 0 {
 		fields[fieldTimebox] = value.Int(int64(in.Timebox / time.Second))
 	}
+	if err := o.checkRefs(ctx, store.Source(in.To), refs); err != nil {
+		return AddOut{}, err
+	}
 	src, w, err := work.Create(ctx, o.env, in.To, table, fields)
 	if err != nil {
 		return AddOut{}, err
@@ -676,6 +679,9 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	}
 	refs, err := o.parseRefs(ctx, in.Ref)
 	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if err := o.checkRefs(ctx, curSrc, refs); err != nil {
 		return work.WriteOut{}, err
 	}
 	if err := o.saveRefs(ctx, curSrc, work.Field(cur, work.FieldProject), id, refs); err != nil {
