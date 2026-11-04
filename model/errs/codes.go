@@ -187,6 +187,8 @@ const (
 	RefLimit    Code = "E_REF_LIMIT"
 	RefDangling Code = "E_REF_DANGLING"
 	RefRequired Code = "E_REF_REQUIRED"
+	// SecretUnavailable: a secret manager could not give the entry (SQ14/D20).
+	SecretUnavailable Code = "E_SECRET_UNAVAILABLE"
 )
 
 // Def is the registry entry of one code: everything a surface needs to print
@@ -343,6 +345,7 @@ var table = map[Code]entry{
 	RefLimit:             {class: ClassBadInput, desc: "expanding a text took more than 256 references or 64 KB of output"},
 	RefDangling:          {class: ClassBadInput, desc: "the value refers to something that is not defined here; define it first or pass --allow-dangling"},
 	RefRequired:          {class: ClassBadInput, desc: "a ${scheme:name:?message} reference did not resolve"},
+	SecretUnavailable:    {class: ClassCoordination, exit: ExitOffline, desc: "a secret manager could not give the named entry: CLI missing, locked, not logged in, timed out, or no such entry on this machine"},
 }
 
 // Lookup returns the registry entry of c. An unregistered code is reported
