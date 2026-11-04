@@ -53,7 +53,24 @@ func coreLeakRows(ctx context.Context, client bool) ([]leakcheck.IndexRow, error
 	if coreApp == nil {
 		return nil, nil
 	}
-	idents, err := coreApp.StoreIdentities(ctx)
+	return leakRowsFrom(ctx, coreApp, client)
+}
+
+// leakStores is the part of the core the leak index reads: which stores are
+// attached, each one's class, and its live rows. *wire.App implements it;
+// the seam exists so the class choice and the fail-closed paths are tested
+// without a real store on disk.
+type leakStores interface {
+	StoreIdentities(ctx context.Context) ([]wire.StoreIdentity, error)
+	StoreClass(ctx context.Context, name store.Source) (direction.Class, error)
+	List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error)
+}
+
+// leakRowsFrom is coreLeakRows over any leakStores. Every error (the store
+// list, a class, a table listing) refuses with E_LEAK_BLOCKED "cannot
+// check": an internal store that cannot be read must never count as empty.
+func leakRowsFrom(ctx context.Context, app leakStores, client bool) ([]leakcheck.IndexRow, error) {
+	idents, err := app.StoreIdentities(ctx)
 	if err != nil {
 		return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()).WithCause(err)
 	}
@@ -62,7 +79,7 @@ func coreLeakRows(ctx context.Context, client bool) ([]leakcheck.IndexRow, error
 		if si.Shareable {
 			continue
 		}
-		class, err := coreApp.StoreClass(ctx, si.Name)
+		class, err := app.StoreClass(ctx, si.Name)
 		if err != nil {
 			return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()).WithCause(err)
 		}
@@ -71,7 +88,7 @@ func coreLeakRows(ctx context.Context, client bool) ([]leakcheck.IndexRow, error
 		}
 		label := leakStoreLabelPrefix + string(si.Name)
 		for _, t := range wire.CoreTables() {
-			rows, err := coreApp.List(ctx, si.Name, t)
+			rows, err := app.List(ctx, si.Name, t)
 			if err != nil {
 				return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()+" (store "+string(si.Name)+")").WithCause(err)
 			}
@@ -90,8 +107,10 @@ func leakIndexesClass(class direction.Class, client bool) bool {
 		return true
 	case direction.Internal:
 		return client
+	case direction.Client:
+		return false
 	}
-	return false
+	return false // the repo store, or a class this binary does not know
 }
 
 // leakIndexRows turns live rows of one table into index rows (tombstones
