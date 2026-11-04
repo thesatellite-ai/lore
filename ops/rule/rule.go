@@ -473,7 +473,7 @@ func recordOf(lab kn.Labeler, src store.Source, r row.Row) Record {
 func checkSummary(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if n := utf8.RuneCountInString(s); n > contextfit.MaxSummary {
-		return "", errs.New(errs.InvalidInput, fmt.Sprintf("%s: --summary is %d characters; the most is %d", noun, n, contextfit.MaxSummary)).
+		return "", errs.New(errs.InvalidInput, fmt.Sprintf("%s: --summary is %d characters; the most is %d", Noun, n, contextfit.MaxSummary)).
 			WithHint("keep it to one short line; the full text stays in the body")
 	}
 	return s, nil
