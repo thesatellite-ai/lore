@@ -26,6 +26,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
@@ -262,4 +263,99 @@ func allHex(s string) bool {
 		}
 	}
 	return true
+}
+
+// sampleJSON is a valid JSON literal of each field kind, for Seed's
+// required fields.
+var sampleJSON = map[value.Kind]string{
+	value.KindText: `"sample"`, value.KindNumber: `1`, value.KindBool: `true`,
+	value.KindDate: `"2026-01-02"`, value.KindDateTime: `"2026-01-02T03:04:05Z"`,
+	value.KindDuration: `"1h"`, value.KindIP: `"10.0.0.1"`, value.KindCIDR: `"10.0.0.0/8"`,
+	value.KindDNS: `"example.com"`, value.KindURL: `"https://example.com"`,
+	value.KindEmail: `"a@example.com"`, value.KindJSON: `{}`,
+}
+
+// Seed writes a row of table into the repo store through the engine and
+// returns its id. Every required field the caller does not set (set maps
+// a field to a JSON literal) gets a sample value: a closed set's first
+// value, the seeded project for a ref to projects, the harness actor for a
+// ref to actors, and a freshly seeded row for any other ref. It is the
+// generic row factory for tests that must cover every table of a kind
+// (for example every table that carries tags).
+func (h *H) Seed(table row.Table, set map[string]string) string {
+	h.T.Helper()
+	reg, err := schema.NewRegistry(schema.Builtin()...)
+	if err != nil {
+		h.T.Fatal(err)
+	}
+	def, ok := reg.Table(table)
+	if !ok {
+		h.T.Fatalf("seed: no table %s", table)
+	}
+	fields := map[string]value.Value{}
+	for _, f := range def.Fields {
+		raw, given := set[f.Name]
+		if !given && !f.Required {
+			continue
+		}
+		if !given {
+			raw = h.sample(f)
+		}
+		var v value.Value
+		if f.Kind == value.KindList {
+			v, err = value.ParseList(f.Elem, []byte(raw))
+		} else {
+			v, err = value.Parse(f.Kind, []byte(raw))
+		}
+		if err != nil {
+			h.T.Fatalf("seed %s.%s = %s: %v", table, f.Name, raw, err)
+		}
+		fields[f.Name] = v
+	}
+	w, err := h.App.Create(context.Background(), store.SourceRepo, table, fields)
+	if err != nil {
+		h.T.Fatalf("seed %s: %v", table, err)
+	}
+	return w.Row.ID.String()
+}
+
+// sample is the JSON literal Seed writes into a required field f.
+func (h *H) sample(f schema.FieldDef) string {
+	h.T.Helper()
+	switch {
+	case len(f.Values) > 0:
+		return Quote(f.Values[0])
+	case f.Kind == value.KindRef && f.RefTable == schema.TableProjects:
+		return Quote(h.Project)
+	case f.Kind == value.KindRef && f.RefTable == schema.TableActors:
+		return Quote(Actor)
+	case f.Kind == value.KindRef && f.RefTable != "":
+		return Quote(h.Seed(f.RefTable, nil))
+	case f.Kind == value.KindList:
+		return `[]`
+	}
+	raw, ok := sampleJSON[f.Kind]
+	if !ok {
+		h.T.Fatalf("seed: no sample for field %s (kind %s)", f.Name, f.Kind)
+	}
+	return raw
+}
+
+// SeedProjectID writes the repo's project row under a given id (a
+// v0.1.17 project id, so natural ids derived from it can be compared with
+// files v0.1.17 wrote) and records it. Use it on a Bare harness.
+func (h *H) SeedProjectID(id string) {
+	h.T.Helper()
+	pid, err := ids.ParseAny(id)
+	if err != nil {
+		h.T.Fatal(err)
+	}
+	name, err := value.TextOf(ProjectName)
+	if err != nil {
+		h.T.Fatal(err)
+	}
+	if _, err := h.App.CreateWithID(context.Background(), store.SourceRepo, schema.TableProjects, pid, map[string]value.Value{"name": name}); err != nil {
+		h.T.Fatal(err)
+	}
+	h.Project = id
 }
