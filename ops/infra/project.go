@@ -145,6 +145,9 @@ func (o ops) projectShow(ctx context.Context, in IDIn) (ProjectShowOut, error) {
 	if err != nil {
 		return ProjectShowOut{}, err
 	}
+	// Oldest first, the order `repo list` prints (the store's own order
+	// follows the random ids, so two runs would differ).
+	slices.SortStableFunc(repos, func(a, b row.Row) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	for _, rp := range repos {
 		if rp.Deleted || work.Field(rp, fieldProject) != d.ID {
 			continue

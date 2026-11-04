@@ -62,13 +62,15 @@ func (o RepoListOut) Text() string {
 }
 
 // mountName validates a mount name like v0.1.17's
-// textnorm.ValidateIdentifier: trimmed, lowercase letters, digits, '-',
-// '_' and '.'.
+// textnorm.ValidateIdentifier: trimmed, then only lowercase letters,
+// digits, '-', '_' and '.'. An upper-case letter is refused, never folded:
+// v0.1.17 answered `repo add Web` with E_INVALID_IDENTIFIER, and folding it
+// would silently register (or collide with) a different name.
 func mountName(raw string) (string, error) {
-	s := strings.ToLower(strings.TrimSpace(raw))
+	s := strings.TrimSpace(raw)
 	ok := s != ""
 	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
+		if !identChar(r) {
 			ok = false
 			break
 		}
@@ -78,6 +80,12 @@ func mountName(raw string) (string, error) {
 			WithHint("use lowercase letters, digits, '-', '_' or '.'")
 	}
 	return s, nil
+}
+
+// identChar is one character v0.1.17's isIdentChar allowed in an
+// identifier: a-z, 0-9, '-', '_' and '.'.
+func identChar(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.'
 }
 
 // projectRepos is the live repos of project pid in the repo store.
