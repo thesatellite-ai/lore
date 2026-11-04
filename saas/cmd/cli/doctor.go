@@ -264,6 +264,8 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	doctorRepoAddresses(ctx, r)
 	// 10. Duplicate imports (PROV9).
 	doctorDuplicateImports(ctx, r)
+	// 10b. Secret rules that are off + leftover LORE_SYNC_ALLOW_SECRETS (D2/D3, doctor_secrets.go).
+	doctorSecretRules(ctx, r)
 	// 11. Context budget and launch set (CONTEXT_BUDGET 6.11, CQ7).
 	if repoTop != "" {
 		cw, cn := contextDoctor(ctx, repoTop)

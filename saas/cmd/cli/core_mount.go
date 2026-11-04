@@ -1007,9 +1007,24 @@ func newSpecCommand() *cobra.Command {
 	dir := specDefaultDir
 	cmd := &cobra.Command{Use: "spec", Short: "Write the generated CLI reference and OpenAPI file"}
 	cmd.PersistentFlags().StringVar(&dir, "out", specDefaultDir, "folder holding "+specCommandsFile+" and "+specOpenAPIFile)
+	// spec 9.6: --check writes nothing and fails when the committed
+	// reference is stale (a CI-able drift gate).
+	check := false
+	cmd.PersistentFlags().BoolVar(&check, "check", false, "write nothing; exit non-zero when the committed file is stale")
 	write := func(file string) func(*cobra.Command, []string) error {
 		return func(cmd *cobra.Command, _ []string) error {
 			path := filepath.Join(dir, file)
+			if check {
+				drift, err := docs.Stale(coreApp.Registry(), path)
+				if err != nil {
+					return err
+				}
+				if err := docs.CheckError(drift); err != nil {
+					return err // E_CONFIG_INVALID naming every stale file + "run: lore spec docs && lore spec openapi"
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "current "+path)
+				return err
+			}
 			if err := docs.Update(coreApp.Registry(), path); err != nil {
 				return err
 			}
