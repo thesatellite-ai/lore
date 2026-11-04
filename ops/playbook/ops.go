@@ -59,7 +59,7 @@ func Ops(env content.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show playbook details",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.ReadErrors(),
-		}, o.show),
+		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit playbook fields",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),

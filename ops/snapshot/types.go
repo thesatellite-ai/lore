@@ -1,10 +1,12 @@
 package snapshot
 
 import (
-	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/ops/content"
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/content"
 
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -113,10 +115,14 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
+	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
+	// expanded and refs"); empty without --expand.
+	Expanded map[string]string `json:"expanded,omitempty"`
+	Refs     []refpoint.Used   `json:"refs,omitempty"`
 }
 
 // Text prints v0.1.17's id, title, taken_at (RFC 3339) and body.
-func (o ShowOut) Text() string {
+func (o ShowOut) baseText() string {
 	d := o.Data
 	return d.ID + "\n  title:    " + d.Title + "\n  taken_at: " + d.TakenAt.Format(time.RFC3339) + "\n\n" + d.Body + "\n"
 }

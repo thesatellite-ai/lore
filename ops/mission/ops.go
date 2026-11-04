@@ -72,7 +72,7 @@ func Ops(env work.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show mission details + attached tasks",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
-		}, o.show),
+		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit mission fields (only flags you pass are applied)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
@@ -299,7 +299,7 @@ func (o ops) showOf(ctx context.Context, src store.Source, r row.Row) (ShowOut, 
 }
 
 // Text implements op.Texter: the add line, or v0.1.17's mission show.
-func (o ShowOut) Text() string {
+func (o ShowOut) baseText() string {
 	if o.Human != "" {
 		return o.Human
 	}

@@ -3,9 +3,7 @@ package row
 import (
 	"context"
 	"encoding/json"
-	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -13,13 +11,13 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
-	"github.com/thesatellite-ai/lore/logic/refs"
-	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/expand"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -59,19 +57,11 @@ type Mover interface {
 	MoveWith(ctx context.Context, ref engine.Ref, to store.Source, opt engine.MoveOptions) (engine.Written, error)
 }
 
-// Expander is the Env upgrade show --expand needs (wire.App: the same
-// resolver the cache uses, and the write scanner for the output, 13.2).
-// An Env without it answers E_UNSUPPORTED for --expand.
-type Expander interface {
-	RefResolver(ctx context.Context) (refs.Resolver, error)
-	OutputScanner(ctx context.Context) (scan.Scanner, error)
-}
-
 // ShowIn is the input of row.show.
 type ShowIn struct {
 	ID     string `json:"id" arg:"0" desc:"any row id (mem_…, tsk_…, res_…, var_…)"`
 	Origin bool   `json:"origin,omitempty" flag:"origin" desc:"also print where the row came from: _o, the audit fields, the _w stamp and its moves (PROV 9.1)"`
-	Expand bool   `json:"expand,omitempty" flag:"expand" desc:"fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"`
+	expand.Flag
 }
 
 // MoveIn is the input of row.move.
@@ -243,6 +233,11 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
+	if r.Deleted { // DELETION 3.2: a trashed row says where it is; a tombstone shows as it is
+		if terr := lookup.InTrash(ctx, o.env, engine.Ref{Store: src, Table: r.Table, ID: id}); terr != nil {
+			return ShowOut{}, terr
+		}
+	}
 	out := ShowOut{ID: r.ID.String(), Table: string(r.Table), Store: string(src), Fields: map[string]string{}}
 	def, _ := o.env.TableSchema(ctx, r.Table)
 	for k, v := range r.Fields {
@@ -261,7 +256,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		}
 	}
 	if in.Expand {
-		if err := o.expand(ctx, r, def, &out); err != nil {
+		if err := o.expand(ctx, r, &out); err != nil {
 			return ShowOut{}, err
 		}
 	}
@@ -275,44 +270,15 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	return out, nil
 }
 
-// expand is --expand: every non-sensitive text field through the show
-// point of refpoint (var/res/row/env filled, secrets masked, scanner hits
-// masked; SECRETS 2.7, 12, 13.2). Stored text is never changed (SQ3).
-func (o ops) expand(ctx context.Context, r row.Row, def schema.TableDef, out *ShowOut) error {
-	ex, ok := o.env.(Expander)
-	if !ok {
-		return errs.New(errs.Unsupported, "show --expand: this build's store wiring cannot resolve references")
-	}
-	rv, err := ex.RefResolver(ctx)
+// expand is --expand (ops/internal/expand: the show point of refpoint;
+// SECRETS 2.7, 12, 13.2). Stored text is never changed (SQ3).
+func (o ops) expand(ctx context.Context, r row.Row, out *ShowOut) error {
+	ex, _ := o.env.(expand.Env)
+	blk, err := expand.Row(ctx, ex, r)
 	if err != nil {
 		return err
 	}
-	sc, err := ex.OutputScanner(ctx)
-	if err != nil {
-		return err
-	}
-	opt := refpoint.Options{Point: refpoint.Show, Resolver: rv, Scanner: sc, Env: os.LookupEnv}
-	for _, k := range slices.Sorted(maps.Keys(r.Fields)) {
-		t, isText := r.Fields[k].(value.Text)
-		if f, ok := def.Field(k); !isText || (ok && f.Sensitive) {
-			continue
-		}
-		res, err := refpoint.Expand(opt, k, t.String())
-		if err != nil {
-			return err
-		}
-		for _, u := range res.Refs {
-			if !slices.ContainsFunc(out.Refs, func(v refpoint.Used) bool { return v.Ref == u.Ref }) {
-				out.Refs = append(out.Refs, u)
-			}
-		}
-		if res.Text != t.String() {
-			if out.Expanded == nil {
-				out.Expanded = map[string]string{}
-			}
-			out.Expanded[k] = res.Text
-		}
-	}
+	out.Expanded, out.Refs = blk.Expanded, blk.Refs
 	return nil
 }
 
@@ -465,33 +431,11 @@ func (o ShowOut) Text() string {
 	for _, k := range slices.Sorted(maps.Keys(o.Meta)) {
 		b.WriteString("  meta " + k + ": " + o.Meta[k] + "\n")
 	}
-	if len(o.Refs) > 0 {
-		b.WriteString("references:\n")
-		for _, u := range o.Refs {
-			b.WriteString("  " + u.Ref + "  " + refLine(u) + "\n")
-		}
-	}
+	b.WriteString(expand.RefsText(o.Refs))
 	if o.prov != nil {
 		b.WriteString(o.prov.text())
 	}
 	return b.String()
-}
-
-// refLine is one reference's state as show --expand prints it.
-func refLine(u refpoint.Used) string {
-	parts := []string{}
-	if u.State == refpoint.StateExpanded {
-		parts = append(parts, u.Value)
-	} else {
-		parts = append(parts, string(u.State))
-	}
-	if u.Source != "" {
-		parts = append(parts, "("+u.Source+")")
-	}
-	if u.Note != "" {
-		parts = append(parts, u.Note)
-	}
-	return strings.Join(parts, "  ")
 }
 
 // text is the human form of --origin.

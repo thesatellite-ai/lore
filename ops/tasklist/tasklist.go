@@ -5,11 +5,13 @@ package tasklist
 
 import (
 	"context"
-	"github.com/thesatellite-ai/lore/engine"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
+
+	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -94,10 +96,14 @@ type ShowOut struct {
 	Data          Record `json:"data"`
 	// Human is the add line; show prints "TA  <id>".
 	Human string `json:"-"`
+	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
+	// expanded and refs"); empty without --expand.
+	Expanded map[string]string `json:"expanded,omitempty"`
+	Refs     []refpoint.Used   `json:"refs,omitempty"`
 }
 
 // Text implements op.Texter.
-func (o ShowOut) Text() string {
+func (o ShowOut) baseText() string {
 	if o.Human != "" {
 		return o.Human
 	}
@@ -179,7 +185,7 @@ func Ops(env work.Env) []op.Entry {
 			Examples: []op.Example{{Title: "add a list", CLI: `lore tasklist add --title "Sprint 4" --body "two weeks"`, Want: "tlt_"}},
 		}, o.add),
 		op.Define(op.Spec{Name: OpList, Summary: "List tasklists", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.list),
-		op.Define(op.Spec{Name: OpShow, Summary: "Show tasklist details", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.show),
+		op.Define(op.Spec{Name: OpShow, Summary: "Show tasklist details", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit tasklist fields",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},

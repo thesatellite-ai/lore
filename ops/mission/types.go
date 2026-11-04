@@ -1,9 +1,11 @@
 package mission
 
 import (
-	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/internal/work"
 
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/store"
@@ -115,6 +117,10 @@ type ShowOut struct {
 	Data          Record `json:"data"`
 	// Human is the human output (set by add; show builds it in Text).
 	Human string `json:"-"`
+	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
+	// expanded and refs"); empty without --expand.
+	Expanded map[string]string `json:"expanded,omitempty"`
+	Refs     []refpoint.Used   `json:"refs,omitempty"`
 }
 
 // IDIn is the input of the operations that take one mission id.

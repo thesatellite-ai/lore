@@ -1,10 +1,12 @@
 package incident
 
 import (
-	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/ops/content"
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/content"
 
 	"github.com/thesatellite-ai/lore/ops/internal/rowref"
 	"github.com/thesatellite-ai/lore/store"
@@ -128,10 +130,14 @@ type ShowOut struct {
 	Data          Record `json:"data"`
 	// Refs are the incident's --ref pointers (0.1.18; absent when none).
 	Refs []rowref.Out `json:"refs,omitempty"`
+	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
+	// expanded and refs"); empty without --expand.
+	Expanded     map[string]string `json:"expanded,omitempty"`
+	ExpandedRefs []refpoint.Used   `json:"expanded_refs,omitempty"`
 }
 
 // Text prints v0.1.17's "IN  <id>" line, then one line per --ref pointer.
-func (o ShowOut) Text() string {
+func (o ShowOut) baseText() string {
 	s := badge + "  " + o.Data.ID + "\n"
 	for _, r := range o.Refs {
 		s += "  " + r.Relation + " " + r.Where() + "\n"

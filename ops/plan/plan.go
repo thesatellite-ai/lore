@@ -9,10 +9,12 @@ package plan
 
 import (
 	"context"
-	"github.com/thesatellite-ai/lore/engine"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -122,10 +124,14 @@ type ShowOut struct {
 	Data          Record `json:"data"`
 	// Human is the add line; show prints "PL  <id>".
 	Human string `json:"-"`
+	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
+	// expanded and refs"); empty without --expand.
+	Expanded map[string]string `json:"expanded,omitempty"`
+	Refs     []refpoint.Used   `json:"refs,omitempty"`
 }
 
 // Text implements op.Texter.
-func (o ShowOut) Text() string {
+func (o ShowOut) baseText() string {
 	if o.Human != "" {
 		return o.Human
 	}
@@ -207,7 +213,7 @@ func Ops(env work.Env) []op.Entry {
 			Examples: []op.Example{{Title: "add a plan document", CLI: `lore plan add --title "Invite flow" --body "1. backend 2. landing page"`, Want: "pln_"}},
 		}, o.add),
 		op.Define(op.Spec{Name: OpList, Summary: "List plans", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.list),
-		op.Define(op.Spec{Name: OpShow, Summary: "Show plan details", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.show),
+		op.Define(op.Spec{Name: OpShow, Summary: "Show plan details", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit plan fields (only flags you pass are applied)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},

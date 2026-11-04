@@ -1,10 +1,12 @@
 package handoff
 
 import (
-	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/ops/content"
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/content"
 
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -112,10 +114,14 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
+	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
+	// expanded and refs"); empty without --expand.
+	Expanded map[string]string `json:"expanded,omitempty"`
+	Refs     []refpoint.Used   `json:"refs,omitempty"`
 }
 
 // Text prints v0.1.17's "HA  <id>" line.
-func (o ShowOut) Text() string { return badge + "  " + o.Data.ID + "\n" }
+func (o ShowOut) baseText() string { return badge + "  " + o.Data.ID + "\n" }
 
 // SearchIn is the input of handoff.search (v0.1.17 entitySearchFlags).
 type SearchIn struct {

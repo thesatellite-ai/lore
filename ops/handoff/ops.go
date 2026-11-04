@@ -88,7 +88,7 @@ func Ops(env content.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show handoff details",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.ReadErrors(),
-		}, o.show),
+		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpAck, Summary: "Acknowledge a handoff (sets status_str=acked)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),

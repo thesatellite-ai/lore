@@ -4,7 +4,7 @@
 //
 //	lore show <id> [--origin] [--expand]   (row.show)
 //	    └► Env.Get (table from the id prefix) ─► fields (sensitive hidden)
-//	        └► --expand: Expander (RefResolver + OutputScanner) ─► refpoint
+//	        └► --expand: ops/internal/expand (RefResolver + OutputScanner) ─► refpoint
 //	           Show point: var/res/row/env filled, secrets and scanner
 //	           hits masked ─► "expanded" + "refs" (SECRETS 2.7, 12, 13.2)
 //	        └► --origin: _o, audit fields, _w, moves read from the row file

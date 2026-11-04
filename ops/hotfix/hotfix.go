@@ -8,13 +8,15 @@ package hotfix
 import (
 	"context"
 	"fmt"
-	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/logic/contextfit"
-	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/contextfit"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -72,7 +74,7 @@ func Ops(env kn.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show hotfix details",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.ReadErrors,
-		}, o.show),
+		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit hotfix fields (only the flags given change)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
@@ -238,10 +240,14 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
+	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
+	// expanded and refs"); empty without --expand.
+	Expanded map[string]string `json:"expanded,omitempty"`
+	Refs     []refpoint.Used   `json:"refs,omitempty"`
 }
 
 // Text prints v0.1.17's show block.
-func (o ShowOut) Text() string {
+func (o ShowOut) baseText() string {
 	return fmt.Sprintf("%s\n  severity: %s\n\n%s\n", o.Data.ID, o.Data.Severity, o.Data.Body)
 }
 

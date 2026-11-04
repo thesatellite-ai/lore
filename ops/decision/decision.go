@@ -8,10 +8,12 @@ package decision
 import (
 	"context"
 	"fmt"
-	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -70,7 +72,7 @@ func Ops(env kn.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show decision details",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.ReadErrors,
-		}, o.show),
+		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit decision fields (only the flags given change)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
@@ -238,10 +240,14 @@ type ShowOut struct {
 	Data          Record `json:"data"`
 	// Refs are the decision's --ref pointers (0.1.18; absent when none).
 	Refs []rowref.Out `json:"refs,omitempty"`
+	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
+	// expanded and refs"); empty without --expand.
+	Expanded     map[string]string `json:"expanded,omitempty"`
+	ExpandedRefs []refpoint.Used   `json:"expanded_refs,omitempty"`
 }
 
 // Text prints v0.1.17's show block.
-func (o ShowOut) Text() string {
+func (o ShowOut) baseText() string {
 	s := fmt.Sprintf("%s\n  title:  %s\n  status: %s\n", o.Data.ID, o.Data.Title, o.Data.Status)
 	for _, r := range o.Refs {
 		s += "  " + r.Relation + " " + r.Where() + "\n"
