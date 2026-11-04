@@ -9,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // AuditFile is where the 0.1.18 write path records its audit events,
@@ -52,6 +53,13 @@ var _ engine.AuditSink = (*fileAudit)(nil)
 
 // Record implements engine.AuditSink: one fsynced line per event.
 func (f *fileAudit) Record(_ context.Context, ev engine.Event) error {
+	// The file lives inside the checkout, so it records only the repo
+	// store's own writes: an event for an attached store would leave that
+	// store's row id in the checkout (CONFIG_GUIDE: a checkout never holds
+	// store rows; same rule as the CLI's audit-chain sink, 54a6669).
+	if ev.Store != store.SourceRepo {
+		return nil
+	}
 	line, err := json.Marshal(auditLine{
 		Op: ev.Op, Action: string(ev.Action), Store: string(ev.Store), Table: ev.Table.String(), ID: ev.ID.String(),
 		HLC: ev.HLC.String(), Actor: ev.Actor.String(), Merged: ev.Merged,
