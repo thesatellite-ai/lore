@@ -11,11 +11,14 @@ import (
 	"os"
 	"strings"
 
+	"dbent"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
+	"saas/pkg/aicoder/projresolve"
+	"saas/pkg/aicoder/sessions"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
@@ -83,7 +86,44 @@ func whoamiAgent() *whoamiAgentJSON {
 	if det.CI != nil {
 		a.CI = det.CI.ActorKey()
 	}
+	// OV11: a tool that does not expose its model in the environment may
+	// have reported it through `lore agent start` (the session hook); the
+	// session row in lore.db then holds it (AGENT_IDENTITY 6.3).
+	if a.Model == "" && det.Tool != "" && det.SessionID != "" {
+		if m := hookReportedModel(context.Background(), det.Tool, det.SessionID); m != "" {
+			a.Model = m
+			if a.Sources == nil {
+				a.Sources = map[string]string{}
+			}
+			a.Sources["model"] = sessions.SourceSessionHook
+		}
+	}
 	return a
+}
+
+// hookReportedModel is the model the session hook recorded on this
+// machine's session row for (tool, tool session id), "" when there is
+// none. It only reads an existing lore.db (never builds one: whoami must
+// not write) and answers "" on any error or a pre-0.1.18 table.
+func hookReportedModel(ctx context.Context, tool, toolSession string) string {
+	rctx, err := projresolve.Resolve(projresolve.Inputs{})
+	if err != nil {
+		return ""
+	}
+	if li, lerr := os.Lstat(rctx.DBPath); lerr != nil || !li.Mode().IsRegular() {
+		return "" // missing, or a symlink (never followed)
+	}
+	db := dbent.InitDB(rctx.DBPath)
+	defer func() { _ = db.Close() }() // read-only use: a close error loses nothing
+	if ok, rerr := sessions.Ready(ctx, db); rerr != nil || !ok {
+		return ""
+	}
+	var model string
+	err = db.QueryRowContext(ctx, `SELECT model FROM sessions WHERE tool = ? AND tool_session_id = ? AND model <> '' ORDER BY started_at DESC LIMIT 1`, tool, toolSession).Scan(&model)
+	if err != nil {
+		return ""
+	}
+	return model
 }
 
 type whoamiIdentityJSON struct {
@@ -442,7 +482,10 @@ func printWhoamiAgent(a *whoamiAgentJSON) {
 		printWhoamiRow("tool version", a.Version+"  "+style.Muted("(from: "+a.Sources["tool_version"]+")"))
 	}
 	model := style.Muted("(not exposed by the tool)")
-	if a.Model != "" {
+	switch {
+	case a.Model != "" && a.Sources["model"] == sessions.SourceSessionHook:
+		model = a.Model + "  " + style.Muted("(from: session hook)")
+	case a.Model != "":
 		model = a.Model + "  " + style.Muted("(from config)")
 	}
 	printWhoamiRow("model", model)

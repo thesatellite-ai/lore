@@ -66,6 +66,7 @@ import (
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
 	opsrow "github.com/thesatellite-ai/lore/ops/row"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
+	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
@@ -332,6 +333,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsrule.Ops(a)...)
 	entries = append(entries, opsdecision.Ops(a)...)
 	entries = append(entries, opshotfix.Ops(a)...)
+	// CONTEXT_BUDGET 6.2 (D12): lore scope show|list|move.
+	entries = append(entries, opsscope.Ops(a)...)
 	entries = append(entries, opstag.Ops(a)...)
 	entries = append(entries, opscomment.Ops(a)...)
 	entries = append(entries, opslink.Ops(a, gitcommit.Resolver{})...)
@@ -485,7 +488,11 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if uerr := a.unreachableTarget(e, d); uerr != nil {
 		return op.Result{}, uerr
 	}
-	return eng.Run(ctx, e, d, c)
+	res, err := eng.Run(ctx, e, d, c)
+	if err == nil {
+		a.afterWrite(ctx, e) // OV3 MACH-AUTO: the profile goes with the next ordinary write
+	}
+	return res, err
 }
 
 // unreachableTarget answers an operation whose `to` names an org store

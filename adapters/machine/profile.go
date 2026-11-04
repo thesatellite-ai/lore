@@ -24,16 +24,15 @@ type CPU struct {
 // carries no lore version (that is each row's _w.v) and no cloud account
 // id. Label is set by `lore whoami --machine-label`, never collected.
 type Profile struct {
-	Hostname      string      `json:"hostname,omitempty"`
-	OS            NameVersion `json:"os"`
-	Kernel        NameVersion `json:"kernel"`
-	Libc          NameVersion `json:"libc"`
-	Arch          string      `json:"arch"`
-	CPU           CPU         `json:"cpu"`
-	RAMMB         int64       `json:"ram_mb,omitempty"`
-	OSUser        string      `json:"os_user,omitempty"`
-	InstallMethod string      `json:"install_method,omitempty"`
-	Runtime       Runtime     `json:"runtime"`
+	Hostname string      `json:"hostname,omitempty"`
+	OS       NameVersion `json:"os"`
+	Kernel   NameVersion `json:"kernel"`
+	Libc     NameVersion `json:"libc"`
+	Arch     string      `json:"arch"`
+	CPU      CPU         `json:"cpu"`
+	RAMMB    int64       `json:"ram_mb,omitempty"`
+	OSUser   string      `json:"os_user,omitempty"`
+	Runtime  Runtime     `json:"runtime"`
 }
 
 // Collect reads this machine's profile. Every reader that fails leaves its

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/machine"
 	"github.com/thesatellite-ai/lore/adapters/procwalk"
@@ -16,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -142,7 +144,7 @@ func (a *App) ThisMachine(context.Context) (opsinfra.ThisMachine, error) {
 		return nil
 	}
 	for _, kv := range [][2]string{{schema.FieldMachineID, id.String()}, {"id_source", string(src)}, {"hostname", p.Hostname},
-		{"arch", p.Arch}, {"os_user", p.OSUser}, {"install_method", p.InstallMethod}} {
+		{"arch", p.Arch}, {"os_user", p.OSUser}, {"install_method", string(machine.ThisInstall(a.opts.Version))}} {
 		if err := put(kv[0], kv[1]); err != nil {
 			return opsinfra.ThisMachine{}, err
 		}
@@ -197,3 +199,80 @@ func (a *App) MachineTarget(ctx context.Context, to string) (store.Source, error
 }
 
 var _ opsinfra.Machines = (*App)(nil)
+
+// MachineVersions is the team_versions read (OQ7) over every attached
+// store's cache, folded per machine: the newest lore version each full
+// machine id saved with and when (ops/infra.MachineVersions, the LORE and
+// LAST WRITE columns of `lore machines`). Code-repo saves carry no machine
+// id (Q-R3-9) and are skipped.
+func (a *App) MachineVersions(ctx context.Context) (map[string]opsinfra.MachineVersion, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]opsinfra.MachineVersion{}
+	for _, c := range cacheFiles(st.caches) {
+		tvs, terr := c.TeamVersions(ctx)
+		if terr != nil {
+			return nil, terr
+		}
+		for _, tv := range tvs {
+			if tv.Machine == "" {
+				continue
+			}
+			// RFC 3339 UTC text sorts by time: the newest save wins.
+			if cur, ok := out[tv.Machine]; !ok || tv.LastSeen > cur.LastWrite {
+				out[tv.Machine] = opsinfra.MachineVersion{Version: tv.Version, LastWrite: tv.LastSeen}
+			}
+		}
+	}
+	return out, nil
+}
+
+// RefreshMachineProfile writes this machine's profile into its own store
+// when a field changed (OV3 MACH-AUTO: with the next ordinary write, not
+// only through `lore whoami --machine-label`). wire's Run calls it once
+// after a successful write command; a failure is a notice, never the
+// command's error.
+func (a *App) RefreshMachineProfile(ctx context.Context) (bool, error) {
+	return opsinfra.RefreshMachineProfile(ctx, a, a)
+}
+
+// afterWrite runs after a successful operation (wire Run): a write
+// command refreshes this machine's profile in its own store (MACH-AUTO).
+// machine.label already wrote it; a failure is only a notice.
+func (a *App) afterWrite(ctx context.Context, e op.Entry) {
+	if e.Spec().Access != op.AccessWrite || e.Spec().Name == opsinfra.OpMachineLabel {
+		return
+	}
+	_, err := a.RefreshMachineProfile(ctx)
+	switch {
+	case err == nil, errs.Has(err, errs.StoreReadOnly):
+		// A read-only own store simply holds no profile from here: not
+		// news on every write, so no notice.
+	case a.opts.Notice != nil:
+		a.opts.Notice("machine profile not refreshed: " + err.Error())
+	}
+}
+
+var _ opsinfra.MachineVersions = (*App)(nil)
+
+// cacheFiles is every distinct open cache file of the router (a combined
+// cache is shared by many sources: listed once), in source order.
+func cacheFiles(c *caches) []*sqlite.Cache {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	seen := map[*sqlite.Cache]bool{}
+	var out []*sqlite.Cache
+	add := func(x *sqlite.Cache) {
+		if x != nil && !seen[x] {
+			seen[x] = true
+			out = append(out, x)
+		}
+	}
+	for _, name := range c.order {
+		add(c.by[name])
+	}
+	add(c.combined)
+	return out
+}

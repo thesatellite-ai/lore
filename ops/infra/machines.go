@@ -9,6 +9,9 @@ package infra
 //	              → Machines.MachineTarget (never a code or client repo, Q-R3-9)
 //	              → create the row (deterministic id) or patch it only
 //	                where a field changed ("rewritten only when a field changes")
+//	RefreshMachineProfile (wire, after an ordinary write; OV3 MACH-AUTO)
+//	              → the same refresh without touching the label
+//	machine.list LORE / LAST WRITE ← MachineVersions (team_versions, OQ7)
 
 import (
 	"context"
@@ -62,6 +65,20 @@ type Machines interface {
 	CreateWithID(ctx context.Context, target store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) (engine.Written, error)
 }
 
+// MachineVersion is the newest lore one machine wrote with, from the
+// `_w` stamps of the attached stores (the team_versions read, OQ7).
+type MachineVersion struct {
+	Version   string
+	LastWrite string // RFC 3339 updated_at of that save
+}
+
+// MachineVersions is the optional Env upgrade for the LORE and LAST WRITE
+// columns of `lore machines` (6.8): full machine id → newest version.
+// Without it the columns fall back to "-" and the profile's updated_at.
+type MachineVersions interface {
+	MachineVersions(ctx context.Context) (map[string]MachineVersion, error)
+}
+
 // MachineListIn is the input of machine.list.
 type MachineListIn struct {
 	Store string `json:"store,omitempty" flag:"store" desc:"only machines of this store (default every attached store)"`
@@ -92,9 +109,14 @@ type Machine struct {
 	CPU       map[string]string `json:"cpu,omitempty"`
 	RAMMB     int64             `json:"ram_mb,omitempty"`
 	OSUser    string            `json:"os_user,omitempty"`
+	Install   string            `json:"install_method,omitempty"`
 	Runtime   map[string]string `json:"runtime,omitempty"`
 	UpdatedAt string            `json:"updated_at,omitempty"`
-	Store     store.SourceRef   `json:"_source,omitempty,omitzero"`
+	// Lore and LastWrite come from the team_versions read (MachineVersions):
+	// the newest lore version this machine saved with, and when.
+	Lore      string          `json:"lore_version,omitempty"`
+	LastWrite string          `json:"last_write,omitempty"`
+	Store     store.SourceRef `json:"_source,omitempty,omitzero"`
 }
 
 // MachineListOut is the list envelope.
@@ -166,7 +188,7 @@ func (o MachineListOut) Text() string {
 	}
 	var b strings.Builder
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "ID\tLABEL\tHOST\tOS\tKERNEL\tLIBC\tARCH\tCPU (CORES)\tRAM\tRUNTIME\tLAST WRITE")
+	_, _ = fmt.Fprintln(tw, "ID\tLABEL\tHOST\tOS\tKERNEL\tLIBC\tARCH\tCPU (CORES)\tRAM\tRUNTIME\tLORE\tLAST WRITE")
 	for _, m := range o.Data {
 		cpu := nv(m.CPU, "model", "")
 		if c := nv(m.CPU, "cores", ""); c != "" {
@@ -176,9 +198,13 @@ func (o MachineListOut) Text() string {
 		if m.RAMMB > 0 {
 			ram = fmt.Sprintf("%d GB", (m.RAMMB+512)/1024)
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", shortMachine(m.ID), dash(m.Label), dash(m.Hostname),
+		last := m.LastWrite
+		if last == "" {
+			last = m.UpdatedAt
+		}
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", shortMachine(m.ID), dash(m.Label), dash(m.Hostname),
 			dash(nv(m.OS, "name", "version")), dash(nv(m.Kernel, "name", "version")), dash(nv(m.Libc, "name", "version")), dash(m.Arch),
-			dash(cpu), ram, dash(runtimeText(m.Runtime)), dash(dateOnly(m.UpdatedAt)))
+			dash(cpu), ram, dash(runtimeText(m.Runtime)), dash(m.Lore), dash(dateOnly(last)))
 	}
 	_ = tw.Flush()
 	return b.String()
@@ -192,7 +218,7 @@ func (o MachineShowOut) Text() string {
 	for _, kv := range [][2]string{{"label", m.Label}, {"id_source", m.IDSource}, {"host", m.Hostname}, {"os", nv(m.OS, "name", "version")},
 		{"kernel", nv(m.Kernel, "name", "version")}, {"libc", nv(m.Libc, "name", "version")}, {"arch", m.Arch},
 		{"cpu", nv(m.CPU, "model", "")}, {"cores", nv(m.CPU, "cores", "")}, {"ram_mb", fmt.Sprint(m.RAMMB)}, {"os_user", m.OSUser},
-		{"runtime", runtimeText(m.Runtime)}, {"updated", m.UpdatedAt}} {
+		{"install", m.Install}, {"runtime", runtimeText(m.Runtime)}, {"lore", m.Lore}, {"last_write", m.LastWrite}, {"updated", m.UpdatedAt}} {
 		fmt.Fprintf(&b, "  %-10s %s\n", kv[0]+":", dash(kv[1]))
 	}
 	return b.String()
@@ -286,7 +312,7 @@ func machineOf(lab work.Labeler, s work.Sourced) Machine {
 	return Machine{ID: work.Field(r, schema.FieldMachineID), RowID: r.ID.String(), IDSource: work.Field(r, "id_source"),
 		Label: work.Field(r, schema.FieldMachineLabel), Hostname: work.Field(r, "hostname"), OS: objMap(raw("os")), Kernel: objMap(raw("kernel")),
 		Libc: objMap(raw("libc")), Arch: work.Field(r, "arch"), CPU: objMap(raw("cpu")), RAMMB: work.Int(r, "ram_mb"), OSUser: work.Field(r, "os_user"),
-		Runtime: objMap(raw("runtime")), UpdatedAt: timeOf(r, false), Store: sourceOf(lab, s.Source)}
+		Install: work.Field(r, "install_method"), Runtime: objMap(raw("runtime")), UpdatedAt: timeOf(r, false), Store: sourceOf(lab, s.Source)}
 }
 
 // machineList lists every live profile once (same id in several stores:
@@ -307,6 +333,17 @@ func (o ops) machineList(ctx context.Context, in MachineListIn) (MachineListOut,
 		out.Data = append(out.Data, machineOf(lab, s))
 	}
 	out.Count = len(out.Data)
+	if mv, ok := upgrade.As[MachineVersions](o.env); ok && len(out.Data) > 0 {
+		vers, verr := mv.MachineVersions(ctx)
+		if verr != nil {
+			return MachineListOut{}, verr
+		}
+		for i := range out.Data {
+			if v, hit := vers[out.Data[i].ID]; hit {
+				out.Data[i].Lore, out.Data[i].LastWrite = v.Version, v.LastWrite
+			}
+		}
+	}
 	return out, nil
 }
 
@@ -361,35 +398,63 @@ func machineLabel(ctx context.Context, env Env, m Machines, in MachineLabelIn) (
 	if err != nil {
 		return MachineLabelOut{}, err
 	}
-	want := map[string]value.Value{}
-	for k, v := range me.Fields {
-		want[k] = v
-	}
-	if label == "" {
-		want[schema.FieldMachineLabel] = value.Null{}
-	} else {
+	var lv value.Value = value.Null{}
+	if label != "" {
 		t, terr := value.TextOf(label)
 		if terr != nil {
 			return MachineLabelOut{}, errs.Wrap(errs.InvalidInput, "machine: the label is not valid text", terr)
 		}
-		want[schema.FieldMachineLabel] = t
+		lv = t
 	}
 	out := MachineLabelOut{ID: me.ID.String(), Label: label, Store: string(target)}
+	out.Changed, err = writeProfile(ctx, env, m, me, target, lv)
+	return out, err
+}
+
+// RefreshMachineProfile writes this machine's profile into its default
+// target store (MACH-TARGET) when a field changed or the row is missing,
+// leaving the label as it is. wire calls it after an ordinary write
+// (OV3 MACH-AUTO); E_REFUSED (no own store attached) means nothing to do
+// and answers changed=false, nil.
+func RefreshMachineProfile(ctx context.Context, env Env, m Machines) (bool, error) {
+	me, err := m.ThisMachine(ctx)
+	if err != nil {
+		return false, err
+	}
+	target, err := m.MachineTarget(ctx, "")
+	if errs.Has(err, errs.Refused) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return writeProfile(ctx, env, m, me, target, nil)
+}
+
+// writeProfile creates the machines row (with label when not nil and not
+// null) or patches only the fields that changed; label nil leaves the
+// label untouched, value.Null clears it.
+func writeProfile(ctx context.Context, env Env, m Machines, me ThisMachine, target store.Source, label value.Value) (bool, error) {
+	want := map[string]value.Value{}
+	for k, v := range me.Fields {
+		want[k] = v
+	}
+	if label != nil {
+		want[schema.FieldMachineLabel] = label
+	}
 	ref := engine.Ref{Store: target, Table: schema.TableMachines, ID: me.RowID}
 	_, cur, gerr := env.Get(ctx, ref)
 	if errs.Has(gerr, errs.NotFound) {
-		delete(want, schema.FieldMachineLabel)
-		if label != "" {
-			want[schema.FieldMachineLabel], _ = value.TextOf(label)
+		if label == nil || label.Kind() == value.KindNull {
+			delete(want, schema.FieldMachineLabel)
 		}
 		if _, err := m.CreateWithID(ctx, target, schema.TableMachines, me.RowID, want); err != nil {
-			return MachineLabelOut{}, err
+			return false, err
 		}
-		out.Changed = true
-		return out, nil
+		return true, nil
 	}
 	if gerr != nil {
-		return MachineLabelOut{}, gerr
+		return false, gerr
 	}
 	patch := map[string]value.Value{}
 	for k, v := range want {
@@ -404,11 +469,10 @@ func machineLabel(ctx context.Context, env Env, m Machines, in MachineLabelIn) (
 		patch[k] = v
 	}
 	if len(patch) == 0 {
-		return out, nil
+		return false, nil
 	}
 	if _, err := env.Update(ctx, ref, patch); err != nil {
-		return MachineLabelOut{}, err
+		return false, err
 	}
-	out.Changed = true
-	return out, nil
+	return true, nil
 }
