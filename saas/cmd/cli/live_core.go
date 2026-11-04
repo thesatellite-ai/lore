@@ -74,9 +74,13 @@ type dirBackend interface {
 }
 
 // coreWrapBackend is wire.Options.WrapBackend: the repo store gets the live
-// overlay when live mode applies; every other store is returned as is.
+// overlay when live mode applies; a store clone with a remote pushes after
+// each write (store_push_core.go); every other store is returned as is.
 func coreWrapBackend(_ context.Context, name store.Source, _ string, b store.Backend) store.Backend {
-	if name != store.SourceRepo || liveDisabled() {
+	if name != store.SourceRepo {
+		return wrapStorePush(name, b)
+	}
+	if liveDisabled() {
 		return b
 	}
 	d, ok := b.(dirBackend)

@@ -690,8 +690,11 @@ func TestRecipe12_InternalTasksNeverReachClient(t *testing.T) {
 	appRefs := strings.Join(a.app.Refs(""), ",") + a.app.Rev(refMain) + a.app.Rev(refLive)
 	r := a.aliceApp.MustLore("task", "add", "send invoice reminder before demo", "--to", orgNorthwind, "--assign", "@dev1", "--ref", clientTask, "--ref", "commit:a1b2c3")
 	id := mustID(t, r, "tsk")
-	if _, ok := a.storeLiveRow(t, folderAcme, tblTasks, id); !ok {
-		t.Fatalf("the task must be live on the store: %v", a.store.Files(storeLive(storeBranch)))
+	// A row written into a store is committed on the store branch and
+	// pushed at once (STORE_SERVER_SPEC 6.1 + LORE_TEAM_SPEC §3.2; a store
+	// clone has no live ref in 0.1.18), so dev1's clone can see it.
+	if row, ok := a.storeMainRow(t, folderAcme, tblTasks, id); !ok || row.Status == statusDone {
+		t.Fatalf("the open task must be on the store branch after the push: %v", a.store.Files(refMain))
 	}
 	a.dev1App.Git("checkout", "-q", "-b", "feat/login")
 	a.dev1App.MustLore("task", "list").Says(t, "["+orgNorthwind+"/"+folderAcme+"]", "send invoice reminder before demo")
