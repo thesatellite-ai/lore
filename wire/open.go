@@ -134,6 +134,16 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err = st.caches.open(ctx, store.SourceRepo, repoCache, reg, exp); err != nil {
 		return fail(err)
 	}
+	// FLAG3: the cache use record (see after the caches open); committed
+	// marks the stores.yaml entries so prune sees a `lore store remove`.
+	cacheRoot := filepath.Join(opts.Home, cacheDir)
+	var uses []sqlite.Use
+	committed := map[store.Source]bool{}
+	if cfg, cfgErr := readStoresFile(st.repoTop); cfgErr == nil {
+		for _, s := range cfg.Stores {
+			committed[s.Name] = true
+		}
+	}
 	if len(attached) > MaxStoreCaches {
 		// CFG3 fallback (O10): past the lens attach limit every attached
 		// store shares one combined cache file for this repo, each applied
@@ -149,6 +159,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		if err = st.caches.openCombined(ctx, names, path, reg, exp); err != nil {
 			return fail(err)
 		}
+		for _, n := range names {
+			uses = append(uses, sqlite.UseOf(cacheRoot, path, string(n), committed[n]))
+		}
 	} else {
 		for _, o := range attached {
 			path, pathErr := cachePath(opts.Home, o)
@@ -158,7 +171,18 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			if err = st.caches.open(ctx, o.Name, path, reg, exp); err != nil {
 				return fail(err)
 			}
+			uses = append(uses, sqlite.UseOf(cacheRoot, path, string(o.Name), committed[o.Name]))
 		}
+	}
+	if !repoOnly {
+		// FLAG3: every full open records which cache files this repo uses
+		// (~/.lore/cache/repos/<hash>.json), so `lore cache prune` can
+		// remove only caches no repo on this machine attaches any more:
+		// caches always rebuild from row files and old client data must
+		// not linger. A repoOnly open attaches nothing and must not wipe
+		// the record. A failed write is ignored: it can only make prune
+		// drop a cache that the next command rebuilds.
+		_ = sqlite.RecordUse(cacheRoot, st.repoTop, uses)
 	}
 
 	backends := map[store.Source]store.Backend{store.SourceRepo: repoBackend}
