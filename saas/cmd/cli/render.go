@@ -59,6 +59,8 @@ type renderFlags struct {
 	report bool
 	check  bool
 	asJSON bool
+	// trend: 6.11 bytes per render, growth per day (render_trend.go).
+	trend bool
 	// quiet suppresses the per-file stdout lines. Not a CLI flag: set by the
 	// post-command sync step that re-renders LORE.md after importing
 	// teammates' changes, where stdout belongs to the user's command (and
@@ -116,7 +118,8 @@ replaced in place on re-run. Pass --no-pointer to skip stitching, or
 	cmd.Flags().BoolVar(&f.dryRun, constants.FlagDryRun, false, "print to stdout instead of writing file")
 	cmd.Flags().BoolVar(&f.report, flagRenderReport, false, "print the budget report (what is full, what is a line, what moved out) and write nothing")
 	cmd.Flags().BoolVar(&f.check, flagRenderCheck, false, "CI check: write nothing, fail when LORE.md would be over the warn level or the budget")
-	cmd.Flags().BoolVar(&f.asJSON, constants.FlagJSON, false, "with --report: machine-readable output")
+	cmd.Flags().BoolVar(&f.asJSON, constants.FlagJSON, false, "with --report or --trend: machine-readable output")
+	cmd.Flags().BoolVar(&f.trend, flagRenderTrend, false, "bytes per render over the last 14 days, growth per day and when LORE.md reaches its budget; writes nothing")
 	return cmd
 }
 
@@ -141,6 +144,9 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	repoID, err := resolveRepoID(ctx, client, projectID, rctx.RepoMount)
 	if err != nil {
 		return err
+	}
+	if f.trend { // 6.11: read-only, from render_history
+		return renderTrend(ctx, client, projectID, f)
 	}
 
 	// ds:def id=render-pins-ez0g6hen owner=@khanakia stability=stable desc="what render pins into the context file (must rules, critical/high hotfixes, directive)"
