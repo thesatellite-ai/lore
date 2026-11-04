@@ -324,7 +324,9 @@ func TestSupersedesRefusals(t *testing.T) {
 		{gone, errs.NotFound},
 		{foreign, errs.NotFound},
 		{"rul_01a1a5aca7f57659be7320c5f4b70099", errs.NotFound},
-		{"dec_01a1a5aca7f57659be7320c5f4b70011", errs.InvalidID},
+		{"dec_01a1a5aca7f57659be7320c5f4b70011", errs.NotFound},
+		{"rul_zz", errs.NotFound},
+		{"nope", errs.NotFound},
 	} {
 		n := env.next
 		if _, _, err := Add(ctx, env, rules, Create{Texts: map[string]string{FieldBody: "x"}, Supersedes: c.raw}); !errs.Has(err, c.code) {

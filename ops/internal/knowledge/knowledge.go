@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -221,14 +222,18 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 
 // checkSupersedes validates --supersedes before anything is written.
 func checkSupersedes(ctx context.Context, env Env, n Noun, project ids.ID[ids.Project], raw string) (ids.AnyID, store.Source, error) {
+	// v0.1.17 parity: any value that does not name a live row of this noun
+	// in this project (well-formed unknown, malformed, another noun's
+	// prefix) is E_NOT_FOUND here; plain id arguments keep E_INVALID_ID.
+	notFound := errs.New(errs.NotFound, "--supersedes "+textcut.Cut(strings.TrimSpace(raw), maxQuoted, maxQuoted)+": no "+n.Name+" with that id in this project").
+		WithHint("run `lore " + n.Name + " list` to see the ids")
 	id, err := n.ID(raw)
 	if err != nil {
-		return ids.AnyID{}, "", err
+		return ids.AnyID{}, "", notFound
 	}
 	src, r, err := env.Get(ctx, engine.Ref{Table: n.Table, ID: id})
 	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || Field(r, FieldProject) != project.String())) {
-		return ids.AnyID{}, "", errs.New(errs.NotFound, "--supersedes "+id.String()+": no "+n.Name+" with that id in this project").
-			WithHint("run `lore " + n.Name + " list` to see the ids")
+		return ids.AnyID{}, "", notFound
 	}
 	if err != nil {
 		return ids.AnyID{}, "", err

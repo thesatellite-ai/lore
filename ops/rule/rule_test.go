@@ -140,7 +140,9 @@ func TestAddRefusals(t *testing.T) {
 		{`{"body":"x","project":"nope"}`, errs.NotFound},
 		{`{"body":"x","created_by":"nope"}`, errs.InvalidID},
 		{`{"body":"x","created_by":"mem_01a1a5aca7f57659be7320c5f4b70011"}`, errs.InvalidID},
-		{`{"body":"x","supersedes":"nope"}`, errs.InvalidID},
+		{`{"body":"x","supersedes":"nope"}`, errs.NotFound}, // --supersedes: v0.1.17 parity
+		{`{"body":"x","supersedes":"rul_zz"}`, errs.NotFound},
+		{`{"body":"x","supersedes":"dec_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound},
 		{`{"body":"x","supersedes":"rul_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound},
 	}
 	before := h.Must(rule.OpList, ``)

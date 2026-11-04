@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -240,14 +241,18 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 
 // checkSupersedes validates --supersedes before anything is written.
 func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], raw string) (ids.ID[ids.Memory], store.Source, error) {
+	// v0.1.17 parity: any value that does not name a live memory of this
+	// project (well-formed unknown, malformed, another noun's prefix) is
+	// E_NOT_FOUND here; plain id arguments keep E_INVALID_ID.
+	notFound := errs.New(errs.NotFound, "--supersedes "+textcut.Cut(strings.TrimSpace(raw), maxQuotedID, maxQuotedID)+": no memory with that id in this project").
+		WithHint("run `lore memory list` to see the ids")
 	id, err := memoryID(raw)
 	if err != nil {
-		return ids.ID[ids.Memory]{}, "", err
+		return ids.ID[ids.Memory]{}, "", notFound
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id.Any()})
 	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || field(r, fieldProject) != project.String())) {
-		return ids.ID[ids.Memory]{}, "", errs.New(errs.NotFound, "--supersedes "+id.String()+": no memory with that id in this project").
-			WithHint("run `lore memory list` to see the ids")
+		return ids.ID[ids.Memory]{}, "", notFound
 	}
 	if err != nil {
 		return ids.ID[ids.Memory]{}, "", err

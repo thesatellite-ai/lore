@@ -63,6 +63,8 @@ func TestAddRefusals(t *testing.T) {
 		{`{"title":"x","body":"b","severity":"bogus"}`, errs.InvalidInput},
 		{`{"title":"x","body":"b","severity":"must"}`, errs.InvalidInput},
 		{`{"title":"x","body":"b","supersedes":"hfx_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound},
+		{`{"title":"x","body":"b","supersedes":"rul_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound},
+		{`{"title":"x","body":"b","supersedes":"hfx_zz"}`, errs.NotFound},
 	} {
 		h.Fails(hotfix.OpAdd, c.input, c.code)
 	}

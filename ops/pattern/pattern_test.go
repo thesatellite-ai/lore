@@ -97,8 +97,11 @@ func TestSupersedes(t *testing.T) {
 	}{
 		"already replaced": {old, errs.InvalidInput},
 		"unknown":          {"pat_01a1a5aca7f57659be7320c5f4b7ffff", errs.NotFound},
-		"wrong prefix":     {"rul_01a1a5aca7f57659be7320c5f4b7ffff", errs.InvalidID},
-		"garbage":          {"nope", errs.InvalidID},
+		// v0.1.17 parity: --supersedes answers E_NOT_FOUND for any value
+		// that names no live pattern, malformed ones included.
+		"wrong prefix": {"rul_01a1a5aca7f57659be7320c5f4b7ffff", errs.NotFound},
+		"bad hex":      {"pat_zz", errs.NotFound},
+		"garbage":      {"nope", errs.NotFound},
 	} {
 		msg := h.Fails("pattern.add", `{"title":"v3","body":"third","supersedes":"`+c.sup+`"}`, c.code)
 		if name == "already replaced" && !strings.Contains(msg, next) {

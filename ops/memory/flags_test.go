@@ -47,8 +47,9 @@ func TestSupersedesRefusals(t *testing.T) {
 		{gone, "no memory with that id in this project", errs.NotFound},
 		{foreign, "no memory with that id in this project", errs.NotFound},
 		{fakeIDs[7], "no memory with that id in this project", errs.NotFound},
-		{"nope", "", errs.InvalidID},
-		{"rul_01a1a5aca7f57659be7320c5f4b70011", "", errs.InvalidID},
+		{"nope", "--supersedes nope: no memory with that id in this project", errs.NotFound},
+		{"mem_zz", "no memory with that id", errs.NotFound},
+		{"rul_01a1a5aca7f57659be7320c5f4b70011", "no memory with that id", errs.NotFound},
 	} {
 		n := env.next
 		_, err := call[WriteOut](t, env, OpAdd, `{"body":"x","supersedes":"`+c.raw+`"}`)
