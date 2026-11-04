@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -71,13 +72,21 @@ func secretRefNote(isSecretRef, internal bool) string {
 // secretRefValue parses a --set value of a secret_ref field: a bare path
 // gets the default manager, then the shape check and the manager list.
 // Errors never repeat the value (it may be a pasted secret).
-func secretRefValue(raw string) (value.SecretRef, error) {
+// where names the field in the message ("host h1: field ssh").
+func secretRefValue(where, raw string) (value.SecretRef, error) {
 	if !strings.Contains(raw, "://") {
 		raw = defaultSecretManager + "://" + raw
 	}
 	v, err := value.SecretRefOf(raw)
 	if err != nil {
-		return value.SecretRef{}, errs.Wrap(errs.SecretDetected, "a secret_ref takes an entry name such as gopass://acme/hub_stag/ssh_deploy, not a secret", err)
+		// value's own message never repeats the input.
+		why := err.Error()
+		var e *errs.Error
+		if errors.As(err, &e) {
+			why = strings.TrimPrefix(e.Message, "value: ")
+		}
+		return value.SecretRef{}, errs.New(errs.SecretDetected, where+" holds no entry name ("+why+")").
+			WithHint("a secret_ref takes an entry name such as gopass://acme/hub_stag/ssh_deploy; keep the secret in the manager")
 	}
 	return v, nil
 }

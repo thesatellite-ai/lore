@@ -26,27 +26,27 @@ import (
 //	  └─ per row         the single-row path (resEdit / archive / check stamp),
 //	                     so validation, refs and last_checked are identical
 
-// bulkWhere are the flags of a bulk form shared by edit and check.
-type bulkWhere struct {
+// BulkWhere are the flags of a bulk form shared by edit and check.
+type BulkWhere struct {
 	Kind   string   `json:"kind,omitempty" flag:"kind" desc:"bulk: the kind of the rows --where matches"`
 	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk: filter on a field, as resource list --where (repeatable; all must match)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"bulk: list what would change; write nothing"`
 }
 
 // bulk reports whether the bulk form was asked for.
-func (b bulkWhere) bulk() bool { return b.Kind != "" || len(b.Where) > 0 || b.DryRun }
+func (b BulkWhere) bulk() bool { return b.Kind != "" || len(b.Where) > 0 || b.DryRun }
 
 // ResCheckIn is the input of resource.check: one resource, or the bulk
 // form --kind --where.
 type ResCheckIn struct {
 	Name string `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
-	bulkWhere
+	BulkWhere
 }
 
 // matchWhere is every live, unarchived resource of b.Kind matching b.Where,
 // sorted by name (archived rows are left alone by a bulk edit: archive or
 // check them by name).
-func (o ops) matchWhere(ctx context.Context, b bulkWhere, verb string) (kindDef, []located, error) {
+func (o ops) matchWhere(ctx context.Context, b BulkWhere, verb string) (kindDef, []located, error) {
 	if b.Kind == "" || len(b.Where) == 0 {
 		return kindDef{}, nil, errs.New(errs.InvalidInput, "resource "+verb+": the bulk form needs both --kind and --where").
 			WithHint("lore resource " + verb + " --kind <kind> --where <field>=<value> …")
@@ -136,7 +136,7 @@ func (o ops) resEditWhere(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if !in.Archive && len(sets) == 0 && len(in.Unset) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: nothing to change").WithHint("give --set, --unset or --archive")
 	}
-	d, hits, err := o.matchWhere(ctx, in.bulkWhere, "edit")
+	d, hits, err := o.matchWhere(ctx, in.BulkWhere, "edit")
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -168,7 +168,7 @@ func (o ops) resEditWhere(ctx context.Context, in ResEditIn) (RowOut, error) {
 	}
 	return o.bulkRun(ctx, d, hits, in.DryRun, "edit", change, func(c context.Context, r located) error {
 		one := in
-		one.Name, one.bulkWhere = r.Row.ID.String(), bulkWhere{}
+		one.Name, one.BulkWhere = r.Row.ID.String(), BulkWhere{}
 		// the stdin value was read once above; every row gets the same pairs
 		one.Set, one.SetJSON, one.SetStdin = sets, nil, ""
 		_, eerr := o.resEdit(c, one)
@@ -187,7 +187,7 @@ func orUnset(s string) string {
 // resCheckWhere is resource check --kind --where: the manual stamp on every
 // matching row, one batch (RESOURCES 3.20, RQ8).
 func (o ops) resCheckWhere(ctx context.Context, in ResCheckIn) (RowOut, error) {
-	d, hits, err := o.matchWhere(ctx, in.bulkWhere, "check")
+	d, hits, err := o.matchWhere(ctx, in.BulkWhere, "check")
 	if err != nil {
 		return RowOut{}, err
 	}

@@ -69,13 +69,13 @@ type ResAddIn struct {
 	Name string   `json:"name" arg:"1" desc:"the resource name (snake_case, or DNS / IP under the kind's name format)"`
 	Set  []string `json:"set,omitempty" flag:"set" desc:"field=value (repeatable; ref fields take resource names)"`
 	To   string   `json:"to,omitempty" flag:"to" desc:"where the row is written (repo, <store>, <store>/<folder>; default repo)"`
-	resValueFlags
+	ResValueFlags
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
 }
 
-// resValueFlags are the two other ways to give a value (RES-OQ4).
-type resValueFlags struct {
+// ResValueFlags are the two other ways to give a value (RES-OQ4).
+type ResValueFlags struct {
 	SetJSON  []string `json:"set_json,omitempty" flag:"set-json" desc:"field=<json> (repeatable; for list and json fields)"`
 	SetStdin string   `json:"set_stdin,omitempty" flag:"set-stdin" desc:"read this field's value from stdin (keeps it out of shell history)"`
 }
@@ -85,9 +85,9 @@ type ResEditIn struct {
 	Name  string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
 	Set   []string `json:"set,omitempty" flag:"set" desc:"field=value (repeatable)"`
 	Unset []string `json:"unset,omitempty" flag:"unset" desc:"field to remove (repeatable)"`
-	bulkWhere
+	BulkWhere
 	Archive bool `json:"archive,omitempty" flag:"archive" desc:"bulk: archive every matching resource"`
-	resValueFlags
+	ResValueFlags
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
 }
@@ -514,11 +514,7 @@ func (o ops) fieldValue(ctx context.Context, d kindDef, name string, def located
 		return ref(target.Row.ID)
 	}
 	if k == value.KindSecretRef {
-		sr, serr := secretRefValue(raw)
-		if serr != nil {
-			return nil, errs.Wrap(errs.CodeOf(serr), d.name()+" "+name+": field "+fname, serr)
-		}
-		return sr, nil
+		return secretRefValue(d.name()+" "+name+": field "+fname, raw)
 	}
 	v, err := parseAs(k, raw)
 	if err != nil {
