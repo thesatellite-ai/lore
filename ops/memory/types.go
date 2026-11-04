@@ -1,6 +1,10 @@
 package memory
 
-import "time"
+import (
+	"time"
+
+	"github.com/thesatellite-ai/lore/op"
+)
 
 // Input and output structs of the memory operations. Struct tags are the
 // op contract (op/fields.go): `json` is the REST and --json name (no
@@ -101,7 +105,8 @@ type ListOut struct {
 // values with omitempty (and omitzero for times), which print the same
 // bytes for every value a memory row can hold (an absent field is never
 // an empty string here). Machine-local columns v0.1.17 never synced
-// (last_accessed_at, embedding_*) are always absent here. Store, Label are
+// (last_accessed_at, embedding_model_id, embedding_dim) are always absent
+// here; embedding itself always prints null (see Embedding). Store, Label are
 // the v0.1.17 external-row keys `_source`/`_label` (stores_reads.go), set
 // only for a row of a store other than the repo's own.
 type Record struct {
@@ -124,6 +129,11 @@ type Record struct {
 	SupersededByID     string    `json:"superseded_by_id,omitempty"`
 	CreatedByActorID   string    `json:"created_by_actor_id,omitempty"`
 	ValidatedByActorID string    `json:"validated_by_actor_id,omitempty"`
+	// Embedding is always JSON null: v0.1.17's ent struct scanned the
+	// NULL column into a non-nil *[]byte, so omitempty never dropped it
+	// and every row printed `"embedding": null` here. The vector itself
+	// is machine-local and never synced, so the core never holds one.
+	Embedding op.Null[string] `json:"embedding"`
 	// TagIDs is new in 0.1.18 (O11; absent when untagged, so an untagged
 	// row prints v0.1.17's bytes).
 	TagIDs []string `json:"tag_ids,omitempty"`
