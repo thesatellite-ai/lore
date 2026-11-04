@@ -25,7 +25,34 @@ import (
 var templateDB string
 
 func TestMain(m *testing.M) {
+	if os.Getenv(envDriverHelper) == "1" {
+		os.Exit(driverHelper(os.Args))
+	}
 	os.Exit(runTests(m))
+}
+
+// envDriverHelper makes the test binary act as `lore merge-driver %O %A %B
+// %P` (mergedriver_git_test.go configures git to run it), so the git
+// end-to-end test runs the real driver body without building lore.
+const envDriverHelper = "LSYNC_TEST_MERGE_DRIVER"
+
+// driverHelper runs MergeFiles on the last four arguments; exit 1 on a
+// conflict or an error, as git expects from a merge driver.
+func driverHelper(args []string) int {
+	if len(args) < 4 {
+		fmt.Fprintln(os.Stderr, "driver helper: want %O %A %B %P")
+		return 2
+	}
+	a := args[len(args)-4:]
+	out, err := MergeFiles(context.Background(), a[0], a[1], a[2], a[3])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if out.Conflicted {
+		return 1
+	}
+	return 0
 }
 
 // runTests builds the template, runs the tests and cleans up (split from
