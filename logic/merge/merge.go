@@ -19,7 +19,8 @@
 //	  each field: pick (3-way) ─ clash? ─ strategyMerge (schema.FieldDef.Merge)
 //	                                       list_by_id │ set_union │ url_set │ entries_by_id
 //	                                     └ else: text → Mark, other → newer side
-//	  meta (3-way, newer), reserved, _o (mergeOrigin: write-once + moves union)
+//	  meta: StrategyMeta (entry by entry, objects per field, lists union,
+//	        strict clash → {conflict}), reserved, _o (mergeOrigin)
 //
 // Invariants:
 //   - Rows is deterministic, and for every field that is not free text its
@@ -245,17 +246,20 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row, newerSide side) 
 		out.Fields = merged
 	}
 
-	meta := map[ids.ID[ids.MetaKey]]value.JSON{}
-	for _, k := range keys(metaView(base.Meta), metaView(ours.Meta), metaView(theirs.Meta)) {
-		v, how := pick(metaView(base.Meta), metaView(ours.Meta), metaView(theirs.Meta), metaView(newer.Meta), k)
-		if how == pickedNewer {
-			res.NewerWins = append(res.NewerWins, "meta."+k)
+	// meta: entry by entry (StrategyMeta, METADATA 3.12). Should the
+	// sides not merge (a corrupt entry), the newer meta is kept and the
+	// whole meta is one conflict for a person (R10), never dropped.
+	meta, metaConflicts, metaWins, merr := StrategyMeta(base.Meta, ours.Meta, theirs.Meta, newerSide)
+	switch {
+	case merr != nil:
+		meta = newer.Meta
+		res.Conflicts = append(res.Conflicts, FieldConflict{Field: FieldMeta})
+	default:
+		for _, id := range metaConflicts {
+			res.Conflicts = append(res.Conflicts, FieldConflict{Field: metaField(id), Newer: newer.Meta[mustMetaID(id)], Older: older.Meta[mustMetaID(id)]})
 		}
-		if j, ok := v.(value.JSON); ok {
-			id, err := ids.Parse[ids.MetaKey](k)
-			if err == nil { // keys came from valid ids on the sides
-				meta[id] = j
-			}
+		for _, id := range metaWins {
+			res.NewerWins = append(res.NewerWins, metaField(id))
 		}
 	}
 	if len(meta) > 0 {
@@ -338,13 +342,14 @@ func keys(ms ...map[string]value.Value) []string {
 	return out
 }
 
-// metaView turns a meta map into the generic shape pick works on.
-func metaView(m map[ids.ID[ids.MetaKey]]value.JSON) map[string]value.Value {
-	out := make(map[string]value.Value, len(m))
-	for k, v := range m {
-		out[k.String()] = v
+// mustMetaID parses an entry id StrategyMeta returned (it came from a
+// valid key of a side; the zero id, which no map holds, otherwise).
+func mustMetaID(s string) ids.ID[ids.MetaKey] {
+	id, err := ids.Parse[ids.MetaKey](s)
+	if err != nil {
+		return ids.ID[ids.MetaKey]{}
 	}
-	return out
+	return id
 }
 
 // isTextValue reports a present text value.

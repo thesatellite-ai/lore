@@ -43,6 +43,22 @@ const (
 // holds a conflict stays one. A side that is not a JSON object is refused
 // (the caller turns that into one conflict on the whole field, R10).
 func StrategyEntriesByID(base, ours, theirs value.Value, newer side) (merged value.Value, conflicts []string, err error) {
+	return entriesMerge(base, ours, theirs, newer, &entryOpts{})
+}
+
+// entryOpts are the differences between the two users of the entry merge.
+// resources.fields keeps the RESOURCES 3.13 rules (zero value); a row's
+// meta (METADATA 3.12, StrategyMeta) also recurses into object values field
+// by field, drops a list key the set merge emptied, and records each
+// newer-side pick in newerWins.
+type entryOpts struct {
+	objects   bool
+	dropEmpty bool
+	newerWins []string
+}
+
+// entriesMerge is StrategyEntriesByID with the options of its caller.
+func entriesMerge(base, ours, theirs value.Value, newer side, opts *entryOpts) (merged value.Value, conflicts []string, err error) {
 	b, err := entryMap(base)
 	if err != nil {
 		return nil, nil, err
@@ -66,7 +82,11 @@ func StrategyEntriesByID(base, ours, theirs value.Value, newer side) (merged val
 		)
 		switch {
 		case inO && inT:
-			entry, conflict, err = mergeEntry(bv, inB, ov, tv, newer)
+			var won bool
+			entry, conflict, won, err = mergeEntry(bv, inB, ov, tv, newer, opts)
+			if won {
+				opts.newerWins = append(opts.newerWins, id)
+			}
 		case inO, inT:
 			present := ov
 			if inT {
@@ -92,6 +112,9 @@ func StrategyEntriesByID(base, ours, theirs value.Value, newer side) (merged val
 		if conflict {
 			conflicts = append(conflicts, id)
 		}
+		if entry == nil {
+			continue // a meta list key the set merge emptied (3.12)
+		}
 		out = append(out, canon.Member{Key: id, Raw: entry})
 	}
 	obj, err := canon.Object(out)
@@ -103,24 +126,25 @@ func StrategyEntriesByID(base, ours, theirs value.Value, newer side) (merged val
 }
 
 // mergeEntry merges one entry present on both sides.
-func mergeEntry(bv []byte, inB bool, ov, tv []byte, newer side) ([]byte, bool, error) {
+// won reports that a v both sides changed was settled by the newer side.
+// A nil entry (meta only) means the merged list is empty: the key goes.
+func mergeEntry(bv []byte, inB bool, ov, tv []byte, newer side, opts *entryOpts) (entry []byte, conflict, won bool, err error) {
 	if bytes.Equal(ov, tv) {
-		return ov, hasConflict(ov), nil
+		return ov, hasConflict(ov), false, nil
 	}
 	if inB && bytes.Equal(ov, bv) && !hasConflict(tv) {
-		return tv, false, nil
+		return tv, false, false, nil
 	}
 	if inB && bytes.Equal(tv, bv) && !hasConflict(ov) {
-		return ov, false, nil
+		return ov, false, false, nil
 	}
 	if hasConflict(ov) || hasConflict(tv) {
 		// An unsettled conflict on either side stays unsettled.
-		return pickRaw(bv, inB, ov, tv, newer), true, nil
+		return pickRaw(bv, inB, ov, tv, newer), true, false, nil
 	}
 	bm, om, tm := memberMap(bv), memberMap(ov), memberMap(tv)
 	strict := isStrict(bv) || isStrict(ov) || isStrict(tv)
 	res := map[string][]byte{}
-	conflict := false
 	for _, k := range unionKeys(bm, om, tm) {
 		bk, inBk := bm[k]
 		ok, inOk := om[k]
@@ -132,18 +156,22 @@ func mergeEntry(bv []byte, inB bool, ov, tv []byte, newer side) ([]byte, bool, e
 			}
 			continue
 		case entryValue:
-			v, clash, err := mergeEntryValue(bk, inBk, ok, inOk, tk, inTk, strict, newer)
-			if err != nil {
-				return nil, false, err
+			v, clash, w, verr := mergeEntryValue(bk, inBk, ok, inOk, tk, inTk, strict, newer, opts)
+			if verr != nil {
+				return nil, false, false, verr
 			}
+			won = won || w
 			if clash {
 				conflict = true
 				c, cerr := conflictObject(bk, inBk, ok, inOk, tk, inTk)
 				if cerr != nil {
-					return nil, false, cerr
+					return nil, false, false, cerr
 				}
 				res[entryConflict] = c
 				continue
+			}
+			if opts.dropEmpty && v != nil && string(v) == "[]" {
+				return nil, false, won, nil
 			}
 			if v != nil {
 				res[k] = v
@@ -154,55 +182,106 @@ func mergeEntry(bv []byte, inB bool, ov, tv []byte, newer side) ([]byte, bool, e
 			res[k] = v
 		}
 	}
+	if _, hasV := res[entryValue]; opts.dropEmpty && !hasV && !conflict {
+		return nil, false, won, nil // v gone on the merge (an object emptied): the key goes
+	}
 	ms := make([]canon.Member, 0, len(res))
 	for _, k := range sortedKeys(res) {
 		ms = append(ms, canon.Member{Key: k, Raw: res[k]})
 	}
 	obj, err := canon.Object(ms)
 	if err != nil {
-		return nil, false, errs.Wrap(errs.Internal, "merge: build a merged entry", err)
+		return nil, false, false, errs.Wrap(errs.Internal, "merge: build a merged entry", err)
 	}
-	return obj, conflict, nil
+	return obj, conflict, won, nil
 }
 
-// mergeEntryValue settles v. clash is true when a person must decide.
-func mergeEntryValue(b []byte, inB bool, o []byte, inO bool, t []byte, inT bool, strict bool, newer side) (v []byte, clash bool, err error) {
+// mergeEntryValue settles v. clash is true when a person must decide; won
+// when both sides changed it and the newer side was taken (reported).
+func mergeEntryValue(b []byte, inB bool, o []byte, inO bool, t []byte, inT bool, strict bool, newer side, opts *entryOpts) (v []byte, clash, won bool, err error) {
 	switch {
 	case inO && inT && bytes.Equal(o, t):
-		return o, false, nil
+		return o, false, false, nil
 	case inB && inO && bytes.Equal(o, b):
-		return t, false, nil // nil when theirs removed v
+		return t, false, false, nil // nil when theirs removed v
 	case inB && inT && bytes.Equal(t, b):
-		return o, false, nil
+		return o, false, false, nil
 	case !inB && !inO:
-		return t, false, nil
+		return t, false, false, nil
 	case !inB && !inT:
-		return o, false, nil
+		return o, false, false, nil
+	}
+	if opts.objects && inO && inT && canon.KindOf(o) == canon.KindObject && canon.KindOf(t) == canon.KindObject &&
+		(!inB || canon.KindOf(b) == canon.KindObject) {
+		// META-B8-OBJ: an object value (a dotted key, META-B7-OBJ) merges
+		// per field with the same rules, so deploy.env on one side and
+		// deploy.region on the other both survive (3.12 object row).
+		return mergeObjectValue(b, inB, o, t, strict, newer, opts)
 	}
 	// Both sides changed v differently.
 	if inO && inT && canon.KindOf(o) == canon.KindArray && canon.KindOf(t) == canon.KindArray &&
 		(!inB || canon.KindOf(b) == canon.KindArray) {
-		if strict && removeVsAdd(b, o, t) {
-			return nil, true, nil
+		// RQ5 (resources): a strict list where one side removed and the
+		// other added is a person's call; a meta list never conflicts (3.12).
+		if strict && !opts.objects && removeVsAdd(b, o, t) {
+			return nil, true, false, nil
 		}
 		bv, ov, tv, perr := rawLists(b, inB, o, t)
 		if perr != nil {
-			return nil, false, perr
+			return nil, false, false, perr
 		}
 		m, merr := setMerge(bv, ov, tv, newer, setKeyValue, nil)
 		if merr != nil {
-			return nil, false, merr
+			return nil, false, false, merr
 		}
 		raw, rerr := m.MarshalJSON()
-		return raw, false, rerr
+		return raw, false, false, rerr
 	}
 	if strict {
-		return nil, true, nil
+		return nil, true, false, nil
 	}
 	if newer == newerOurs {
-		return o, false, nil // nil when ours removed v
+		return o, false, true, nil // nil when ours removed v
 	}
-	return t, false, nil
+	return t, false, true, nil
+}
+
+// mergeObjectValue merges two object values field by field: each field
+// is settled by mergeEntryValue (nested objects recurse, lists union); a
+// strict clash on any field is a clash of the whole value.
+func mergeObjectValue(b []byte, inB bool, o, t []byte, strict bool, newer side, opts *entryOpts) (v []byte, clash, won bool, err error) {
+	var bm map[string][]byte
+	if inB {
+		bm = memberMap(b)
+	}
+	om, tm := memberMap(o), memberMap(t)
+	res := map[string][]byte{}
+	for _, k := range unionKeys(bm, om, tm) {
+		bk, inBk := bm[k]
+		ok, inOk := om[k]
+		tk, inTk := tm[k]
+		fv, c, w, ferr := mergeEntryValue(bk, inBk, ok, inOk, tk, inTk, strict, newer, opts)
+		if ferr != nil || c {
+			return nil, c, false, ferr
+		}
+		won = won || w
+		if fv != nil && (!opts.dropEmpty || string(fv) != "[]") {
+			res[k] = fv
+		}
+	}
+	if len(res) == 0 {
+		return nil, false, won, nil // every field gone: the key goes
+	}
+	ms := make([]canon.Member, 0, len(res))
+	for _, k := range sortedKeys(res) {
+		ms = append(ms, canon.Member{Key: k, Raw: res[k]})
+	}
+	obj, err := canon.Object(ms)
+	if err != nil {
+		return nil, false, false, errs.Wrap(errs.Internal, "merge: build a merged object value", err)
+	}
+	c, err := canon.Compact(obj)
+	return c, false, won, err
 }
 
 // removeVsAdd reports a strict list clash: one side removed an element of
