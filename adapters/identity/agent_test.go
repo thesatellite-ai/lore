@@ -39,10 +39,18 @@ func TestResolveAgentDetection(t *testing.T) {
 	if again.StableKey != r.StableKey {
 		t.Fatal("the agent key is not deterministic")
 	}
+	// 6.1 collision rule: the widened key carries 10 hex of the owner id and
+	// keeps everything else; an explicit actor is never widened.
+	if w, ok, werr := WidenAgentKey(r); werr != nil || !ok || w.StableKey != "agent:auto/codex/"+owner.String()[4:14] || w.Owner == nil || w.DisplayName != r.DisplayName {
+		t.Fatalf("widen: %+v ok=%v err=%v", w, ok, werr)
+	}
 
 	explicit := map[string]string{"LORE_ACTOR": "agent:frontend_2", "CODEX_THREAD_ID": "t"}
 	if r, _ = Resolve(ctx, base(explicit)); r.StableKey != "agent:frontend_2" || r.Agent != "agent:frontend_2" || r.Detection.Tool != "codex" {
 		t.Fatalf("explicit: %+v", r)
+	}
+	if _, ok, _ := WidenAgentKey(r); ok {
+		t.Fatal("an explicit LORE_ACTOR key was widened")
 	}
 
 	human := map[string]string{"LORE_HUMAN": "1", "CODEX_THREAD_ID": "t"}

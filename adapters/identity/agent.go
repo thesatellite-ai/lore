@@ -15,6 +15,9 @@ const (
 	// ownerShortHex is how many hex characters of the owner's act_ id the
 	// key carries (OQ9).
 	ownerShortHex = 6
+	// ownerWideHex is the width used instead when another owner already
+	// holds the 6-hex key (6.1 collision rule: "the second one uses 10").
+	ownerWideHex = 10
 	// actPrefixLen skips "act_".
 	actPrefixLen = 4
 	// FlagHumanOverAgent is set when LORE_HUMAN=1 met tool markers (10.6).
@@ -60,7 +63,7 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 		r.Notes = append(r.Notes, EnvHuman+" ignored: only the value 1 counts")
 	}
 	if det.IsAgent() {
-		return agentOf(r, det)
+		return agentOf(r, det, ownerShortHex)
 	}
 	if det.CI != nil {
 		return ciOf(det), nil
@@ -72,12 +75,12 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 // agent:auto/<tool>/<first 6 hex of the owner's act_ id>, display
 // "<owner> via <tool>", label the tool slug. The owner's handle is only
 // the display, because handles change and stable_key cannot (OQ9).
-func agentOf(person Resolved, det agentdetect.Result) (Resolved, error) {
+func agentOf(person Resolved, det agentdetect.Result, width int) (Resolved, error) {
 	ownerID, err := ActorID(person.StableKey)
 	if err != nil {
 		return person, err
 	}
-	short := ownerID.String()[actPrefixLen : actPrefixLen+ownerShortHex]
+	short := ownerID.String()[actPrefixLen : actPrefixLen+width]
 	key := agentAutoPrefix + det.Tool + "/" + short
 	owner := person
 	out := Resolved{StableKey: key, DisplayName: person.DisplayName + " via " + det.Tool, Kind: KindAgent, Step: StepDetected,
@@ -91,4 +94,20 @@ func ciOf(det agentdetect.Result) Resolved {
 	c := det.CI
 	display := strings.TrimSpace("ci " + c.Provider + " " + c.Repo)
 	return Resolved{StableKey: c.ActorKey(), DisplayName: display, Kind: KindSystem, Step: StepCI, Label: c.Provider, Detection: &det}
+}
+
+// WidenAgentKey is r with the 10-hex owner short id, for a detected agent
+// whose 6-hex key is already held by another owner's agent (6.1, OQ9: the
+// second one created uses 10). ok is false when r is not a detected agent
+// (an explicit LORE_ACTOR key is never rewritten). The caller decides when
+// the key is taken (it needs the stores); this only computes the key.
+func WidenAgentKey(r Resolved) (Resolved, bool, error) {
+	if r.Step != StepDetected || r.Owner == nil || r.Detection == nil {
+		return r, false, nil
+	}
+	w, err := agentOf(*r.Owner, *r.Detection, ownerWideHex)
+	if err != nil {
+		return r, false, err
+	}
+	return w, true, nil
 }

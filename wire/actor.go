@@ -417,3 +417,54 @@ func writeClientActor(ctx context.Context, st *state, target store.Source, id id
 	_, err = st.eng.Update(ctx, ref, patch)
 	return err
 }
+
+// settleAgentKey applies the 6.1 collision rule (OQ9) to a detected
+// agent's key before anything is stamped with it: the key carries the
+// first 6 hex of the owner's act_ id, and the second owner whose agent
+// would get the same key uses 10 instead, for good.
+//
+//	my 10-hex row exists in any store       → 10 (the key never changes back)
+//	6-hex row exists with another owner     → 10
+//	otherwise                               → 6
+//
+// Stores that fail to read are skipped: refusing every command over an
+// unreadable store would be worse, and the 10-hex row, once written, wins
+// from then on. A non-detected identity (person, LORE_ACTOR, CI) is never
+// touched.
+func (s *state) settleAgentKey(ctx context.Context, backends map[store.Source]store.Backend) error {
+	wide, ok, err := identity.WidenAgentKey(s.who)
+	if err != nil || !ok {
+		return err
+	}
+	ownerID, err := identity.ActorID(s.who.Owner.StableKey)
+	if err != nil {
+		return err
+	}
+	wideID, err := identity.ActorID(wide.StableKey)
+	if err != nil {
+		return err
+	}
+	widen := false
+	for _, b := range backends {
+		if _, gerr := b.Get(ctx, schema.TableActors, wideID.Any()); gerr == nil {
+			widen = true
+			break
+		}
+		got, gerr := b.Get(ctx, schema.TableActors, s.actor.Any())
+		if gerr != nil || got.Deleted {
+			continue
+		}
+		r, derr := got.Decode()
+		if derr != nil {
+			continue
+		}
+		if o := fieldText(r, rosterFieldOwner); o != "" && o != ownerID.String() {
+			widen = true
+			break
+		}
+	}
+	if widen {
+		s.who, s.actor = wide, wideID
+	}
+	return nil
+}
