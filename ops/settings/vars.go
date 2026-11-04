@@ -290,14 +290,7 @@ func (o ops) varsRename(ctx context.Context, in VarsRenameIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	patch := map[string]value.Value{vName: nv, vAliases: al}
-	// A stored text value reads back as text, not json: re-type it so the
-	// whole-row validation of the update accepts it (later.md: the engine
-	// should re-type stored fields by the schema itself).
-	if patch[vValue], err = asJSON(fromJSON(l.Row.Fields[vValue])); err != nil {
-		return RowOut{}, err
-	}
-	return o.patchRow(ctx, l, patch, "renamed variable "+old+" → "+in.New+" (old name kept as an alias)")
+	return o.patchRow(ctx, l, map[string]value.Value{vName: nv, vAliases: al}, "renamed variable "+old+" → "+in.New+" (old name kept as an alias)")
 }
 
 func (o ops) varsRm(ctx context.Context, in VarsRmIn) (RowOut, error) {
