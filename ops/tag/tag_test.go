@@ -191,3 +191,28 @@ func TestTagBindRefusals(t *testing.T) {
 		t.Fatalf("deleted row: %s", msg)
 	}
 }
+
+// TestTagUsesReadFromFiles: tag_ids written by one process are read back
+// from the row files by a fresh App (a new process: no in-memory row) as
+// the same list, so use counts, detach and a second attach still see the
+// binding. Guards against a decoder handing back another value kind for a
+// list field (the ops/task blocked_by bug, 1ed65b7).
+func TestTagUsesReadFromFiles(t *testing.T) {
+	h := opstest.New(t)
+	h.Must("tag.add", `{"name":"cert_rotation"}`)
+	mem := h.Seed(schema.TableMemories, nil)
+	in := `{"on_table":"memories","on_id":"` + mem + `","tag":"cert_rotation"}`
+	h.Must("tag.attach", in)
+
+	fresh := h.ReopenCold()
+	if got := opstest.IDPattern(opstest.Text(fresh.Must("tag.list", ``))); got != "cert_rotation        tag_ID  (1 uses)\n" {
+		t.Fatalf("fresh process counts %q", got)
+	}
+	if !strings.Contains(fresh.JSON(fresh.Must("memory.list", `{"tags":["cert_rotation"]}`)), mem) {
+		t.Fatal("memory list --tag misses a file-read row")
+	}
+	fresh.Must("tag.attach", in) // already bound: no second id
+	if got := opstest.Text(fresh.Must("tag.detach", in)); got != "✓ detached 1 tag binding(s)\n" {
+		t.Fatalf("fresh detach %q", got)
+	}
+}

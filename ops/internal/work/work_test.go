@@ -133,8 +133,13 @@ func TestFieldReaders(t *testing.T) {
 	if Int(r, "n") != 7 || Int(r, "half") != 0 || Int(r, "absent") != 0 || Int(r, "junk") != 0 {
 		t.Error("Int")
 	}
-	if got := List(r, "l"); len(got) != 2 || got[0] != "a" || List(r, "n") != nil {
+	if got := List(r, "l"); len(got) != 2 || got[0] != "a" || List(r, "absent") != nil || List(r, "null") != nil {
 		t.Errorf("List = %v", got)
+	}
+	// a scalar is a one-item list (value.ItemStrings: a list field written
+	// as a single value by hand or by an old writer keeps its value).
+	if got := List(r, "n"); len(got) != 1 || got[0] != "7" {
+		t.Errorf("List(scalar) = %v", got)
 	}
 }
 

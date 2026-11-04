@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -382,4 +383,53 @@ func (h *H) SeedProjectID(id string) {
 		h.T.Fatal(err)
 	}
 	h.Project = id
+}
+
+// Reopen builds a second App over the same repo and home, as a new lore
+// process would: nothing is held in memory, every row is read back from
+// its file (or the cache rebuilt from the files). The first App stays
+// open; both are closed at cleanup.
+func (h *H) Reopen(mut ...func(*wire.Options)) *H {
+	h.T.Helper()
+	actor, err := ids.Parse[ids.Actor](Actor)
+	if err != nil {
+		h.T.Fatal(err)
+	}
+	opts := wire.Options{RepoDir: h.Repo, Home: h.Home, Actor: actor}
+	for _, m := range mut {
+		m(&opts)
+	}
+	a, err := wire.New(opts)
+	if err != nil {
+		h.T.Fatal(err)
+	}
+	h.T.Cleanup(func() {
+		if err := a.Close(); err != nil {
+			h.T.Error(err)
+		}
+	})
+	return &H{T: h.T, App: a, Repo: h.Repo, Home: h.Home, Project: h.Project}
+}
+
+// ReopenCold is Reopen with every cache gone: the repo cache files are
+// removed and the new App gets a fresh home, so each row is decoded from
+// its row file (what a teammate's fresh clone, or a deleted cache, sees).
+func (h *H) ReopenCold(mut ...func(*wire.Options)) *H {
+	h.T.Helper()
+	files, err := filepath.Glob(filepath.Join(h.Repo, filepath.FromSlash(wire.RepoCacheFile)) + "*")
+	if err != nil {
+		h.T.Fatal(err)
+	}
+	if len(files) == 0 {
+		h.T.Fatal("ReopenCold: no repo cache file to remove (did the App write anything?)")
+	}
+	for _, f := range files {
+		if err := os.Remove(f); err != nil {
+			h.T.Fatal(err)
+		}
+	}
+	home := h.T.TempDir()
+	c := h.Reopen(append([]func(*wire.Options){func(o *wire.Options) { o.Home = home }}, mut...)...)
+	c.Home = home
+	return c
 }

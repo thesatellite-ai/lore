@@ -488,15 +488,9 @@ func tagTables(reg *schema.Registry) []string {
 
 // tagsOf is a row's tag ids.
 func tagsOf(r row.Row) []string {
-	l, ok := r.Fields[schema.FieldTagIDs].(value.List)
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(l.Items()))
-	for _, it := range l.Items() {
-		out = append(out, it.String())
-	}
-	return out
+	// ItemStrings: the same ids whether the list was built in memory or
+	// decoded from the row file.
+	return value.ItemStrings(r.Fields[schema.FieldTagIDs])
 }
 
 // tagList builds a tag_ids value (Null when empty: the field is cleared).

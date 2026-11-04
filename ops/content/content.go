@@ -475,13 +475,7 @@ func Source(src store.Source) string {
 
 // TagIDs is a row's tag ids (O11 tag_ids; nil when untagged).
 func TagIDs(r row.Row) []string {
-	l, ok := r.Fields[schema.FieldTagIDs].(value.List)
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(l.Items()))
-	for _, it := range l.Items() {
-		out = append(out, it.String())
-	}
-	return out
+	// ItemStrings: the same ids whether the list was built in memory or
+	// decoded from the row file.
+	return value.ItemStrings(r.Fields[schema.FieldTagIDs])
 }

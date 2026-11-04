@@ -210,15 +210,9 @@ func Int(r row.Row, name string) int64 {
 
 // List is the text forms of a list field's items.
 func List(r row.Row, name string) []string {
-	l, ok := r.Fields[name].(value.List)
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(l.Items()))
-	for _, it := range l.Items() {
-		out = append(out, it.String())
-	}
-	return out
+	// ItemStrings: the same items whether the list was built in memory or
+	// decoded from the row file.
+	return value.ItemStrings(r.Fields[name])
 }
 
 // TagIDs is a row's tag ids.

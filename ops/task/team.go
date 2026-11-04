@@ -9,6 +9,7 @@ package task
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/direction"
@@ -183,14 +184,9 @@ func (o ops) teamsOf(ctx context.Context, actor string) (map[string]bool, error)
 		if work.Field(s.Row, fieldTeamActive) != teamActive {
 			continue
 		}
-		members, ok := s.Row.Fields[schema.FieldTeamMembers].(value.List)
-		if !ok {
-			continue
-		}
-		for _, m := range members.Items() {
-			if m.String() == actor {
-				out[s.Row.ID.String()] = true
-			}
+		// ItemStrings: in-memory and file-decoded members read the same.
+		if slices.Contains(value.ItemStrings(s.Row.Fields[schema.FieldTeamMembers]), actor) {
+			out[s.Row.ID.String()] = true
 		}
 	}
 	return out, nil
