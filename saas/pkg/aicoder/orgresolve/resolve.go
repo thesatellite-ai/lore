@@ -118,7 +118,7 @@ type Inputs struct {
 
 // Disagreement is set when an explicit choice (rule 1 or 2) names another
 // org than the store links do. Org-scoped writes are refused with
-// E_ORG_DISAGREES unless --force-org (F10).
+// E_ORG_DISAGREES unless the write names its target with --to <org> (F10).
 type Disagreement struct {
 	Chosen  string
 	Linked  []string
@@ -362,19 +362,24 @@ func Resolve(in Inputs) (Result, error) {
 		if len(others) > 0 {
 			r.Disagreement = &Disagreement{Chosen: r.Org.Name, Linked: others, ByRule: r.Step,
 				Message: fmt.Sprintf("%s chose %s, but this repo is linked in %s", r.Step, r.Org.Name, strings.Join(others, ", "))}
-			r.Warnings = append(r.Warnings, r.Disagreement.Message+"; org-scoped writes need --force-org")
+			r.Warnings = append(r.Warnings, r.Disagreement.Message+"; org-scoped writes need --to <org>")
 		}
 	}
 	return r, nil
 }
 
+// DisagreesHint is E_ORG_DISAGREES' hint: what the write commands accept
+// now (--force-org is gone from them; the target is named with --to).
+const DisagreesHint = "name the org the write goes to with --to <org>, or fix the choice with `lore org use` (or unset LORE_ORG)"
+
 // CheckWrite applies the F10 write-time refusals to an org-scoped write:
-// a disagreement needs --force-org, and an unknown link status needs an
+// a disagreement needs the target named (--to <org>; forceOrg is the
+// override `lore task note` still passes), and an unknown link status needs an
 // explicit --to (F14 `link status unknown → E_LINK_UNKNOWN`).
 func (r Result) CheckWrite(forceOrg, explicitTo bool) error {
 	if r.Disagreement != nil && !forceOrg {
 		return &Error{Kind: KindDisagrees, Message: r.Disagreement.Message,
-			Hint: "pass --force-org to write anyway, or fix the choice with `lore org use`"}
+			Hint: DisagreesHint}
 	}
 	if r.LinkUnknown && !explicitTo {
 		return &Error{Kind: KindLinkUnknown,

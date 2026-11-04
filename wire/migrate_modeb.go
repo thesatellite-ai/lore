@@ -263,10 +263,10 @@ func (a *App) writeModeBStore(ctx context.Context, raw string, changes []store.C
 		return 0, errs.Wrap(errs.Internal, "migrate: new store id", err)
 	}
 	m := rowfs.Marker{ID: id, Visibility: rowfs.VisibilityInternal, Created: a.opts.Wall().UTC().Format(markerDateLayout), OrgFolder: defaultOrgFolder}
-	if _, _, err = a.makeStore(ctx, canon, m); err != nil {
+	if _, _, err = a.makeStore(ctx, canon, raw, m); err != nil {
 		return 0, err
 	}
-	b, err := a.openStore(ctx, canon)
+	b, err := a.openStore(ctx, canon, raw)
 	if err != nil {
 		return 0, err
 	}

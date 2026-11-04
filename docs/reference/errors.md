@@ -199,7 +199,7 @@ ERROR: [E_NO_WORK] nothing ready: no open task matches
 # alice, in website
 $ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
 ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
-  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+  hint: name the org the write goes to with --to <org>, or fix the choice with `lore org use` (or unset LORE_ORG)
 (exit 17)
 ```
 <!-- /example -->
@@ -257,7 +257,7 @@ This table is made from `lore errors list` and the exit table in the code, so it
 | `E_OFFLINE` | 15 | a coordination write (claim, renew, release, done, approve, hold) could not be confirmed by the remote; nothing was queued |
 | `E_AMBIGUOUS_ID` | 16 | the id exists in two loaded sources; name one with --from |
 | `E_ORG_AMBIGUOUS` | 17 | two org entries match this repo at the same rule; choose one with `lore org use <entry>` |
-| `E_ORG_DISAGREES` | 17 | LORE_ORG or `lore org use` names a different org than the store link; pass --force-org to override |
+| `E_ORG_DISAGREES` | 17 | LORE_ORG or `lore org use` names a different org than the store link; name the target with --to <org> |
 | `E_LINK_UNKNOWN` | 18 | lore cannot tell whether this repo is a client repo (store unreachable, no cached link index); pass --to or retry online |
 | `E_NOT_A_STORE` | 19 | the repo is not a lore store (no lore-store.yaml marker, or it holds non-lore files) |
 | `E_LEAK_BLOCKED` | 19 | the write would put internal content where the client can read it; see `lore check leaks --explain` |

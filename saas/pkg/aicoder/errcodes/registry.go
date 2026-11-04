@@ -204,7 +204,7 @@ func Description(c Code) string {
 		Offline:               "a coordination write (claim, renew, release, done, approve, hold) could not be confirmed by the remote; nothing was queued",
 		AmbiguousID:           "the id exists in two loaded sources; name one with --from",
 		OrgAmbiguous:          "two org entries match this repo at the same rule; choose one with `lore org use <entry>`",
-		OrgDisagrees:          "LORE_ORG or `lore org use` names a different org than the store link; pass --force-org to override",
+		OrgDisagrees:          "LORE_ORG or `lore org use` names a different org than the store link; name the target with --to <org>",
 		LinkUnknown:           "lore cannot tell whether this repo is a client repo (store unreachable, no cached link index); pass --to or retry online",
 		NotAStore:             "the repo is not a lore store (no lore-store.yaml marker, or it holds non-lore files)",
 		LeakBlocked:           "the write would put internal content where the client can read it; see `lore check leaks --explain`",

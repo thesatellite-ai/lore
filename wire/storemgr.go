@@ -78,7 +78,7 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 		return opsstores.InitOut{}, errs.Wrap(errs.Internal, "store init: new store id", err)
 	}
 	m := rowfs.Marker{ID: id, Visibility: vis, Created: a.opts.Wall().UTC().Format(markerDateLayout), OrgFolder: defaultOrgFolder}
-	got, already, err := a.makeStore(ctx, canon, m)
+	got, already, err := a.makeStore(ctx, canon, raw, m)
 	if err != nil {
 		return opsstores.InitOut{}, err
 	}
@@ -99,7 +99,7 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 
 // makeStore writes m as the marker of the store at canon unless it already
 // has one; it returns the marker in force and whether it was already there.
-func (a *App) makeStore(ctx context.Context, canon string, m rowfs.Marker) (rowfs.Marker, bool, error) {
+func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) (rowfs.Marker, bool, error) {
 	u, err := url.Parse(canon)
 	if err != nil {
 		return rowfs.Marker{}, false, errs.New(errs.StoreScheme, "store init: the url does not parse")
@@ -115,7 +115,7 @@ func (a *App) makeStore(ctx context.Context, canon string, m rowfs.Marker) (rowf
 		}
 		return m, false, folder.Init(dir, m, a.opts.rowfsOptions()...)
 	}
-	b, err := a.openStore(ctx, canon)
+	b, err := a.openStore(ctx, canon, raw)
 	if err != nil {
 		return rowfs.Marker{}, false, err
 	}
@@ -169,12 +169,14 @@ func gitCommitFiles(ctx context.Context, dir string, now time.Time, subject stri
 }
 
 // openStore opens the store at a canonical url with this App's backends.
-func (a *App) openStore(ctx context.Context, canon string) (store.Backend, error) {
+// raw is the url as the person wrote it (canonical's input): a git clone's
+// origin keeps that spelling (originsOf).
+func (a *App) openStore(ctx context.Context, canon, raw string) (store.Backend, error) {
 	reg, err := builtinRegistry()
 	if err != nil {
 		return nil, err
 	}
-	o, err := newOpeners(reg)
+	o, err := newOpeners(reg, originsOf(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +198,7 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 	if err != nil {
 		return opsstores.Entry{}, err
 	}
-	b, err := a.openStore(ctx, canon)
+	b, err := a.openStore(ctx, canon, s.URL)
 	if err != nil {
 		return opsstores.Entry{}, err
 	}
@@ -324,7 +326,7 @@ func (a *App) storeDir(ctx context.Context, src attach.Store) (string, error) {
 	if u.Scheme == folder.Scheme {
 		return filepath.FromSlash(u.Path), nil
 	}
-	b, err := a.openStore(ctx, canon)
+	b, err := a.openStore(ctx, canon, src.URL)
 	if err != nil {
 		return "", err
 	}

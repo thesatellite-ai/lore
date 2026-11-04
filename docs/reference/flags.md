@@ -106,7 +106,7 @@ Here `LORE_ORG` names `freelance`, but the repo is linked to the `agency` store,
 # alice, in website
 $ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
 ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
-  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+  hint: name the org the write goes to with --to <org>, or fix the choice with `lore org use` (or unset LORE_ORG)
 (exit 17)
 $ lore memory add --force-org --body 'The client pays invoices in 30 days'
 Error: unknown flag: --force-org

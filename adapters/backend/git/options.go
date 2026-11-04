@@ -48,6 +48,9 @@ type config struct {
 	bin         string
 	branch      string
 	lockTimeout time.Duration
+	// origins maps a canonical Remote.URL to the origin spelling NewOpener
+	// writes into the clone (WithOrigins); absent, the origin is Remote.URL.
+	origins map[string]string
 }
 
 // Option configures the git backend.
@@ -68,6 +71,20 @@ func WithGit(path string) Option { return func(c *config) { c.bin = path } }
 
 // WithBranch pins the store branch instead of following the remote's HEAD.
 func WithBranch(name string) Option { return func(c *config) { c.branch = name } }
+
+// WithOrigins tells NewOpener the person's own spelling of each store url
+// (OriginOf of the url as written), keyed by the canonical credential-free
+// Remote.URL the opener receives: the clone's origin is that spelling, so a
+// url.<base>.insteadOf rule keyed on it applies and an scp-like relative
+// path stays relative. The map is copied. A url absent from it gets
+// Remote.URL. Callers must pass credential-free values (OriginOf output).
+func WithOrigins(m map[string]string) Option {
+	cp := make(map[string]string, len(m))
+	for k, v := range m {
+		cp[k] = v
+	}
+	return func(c *config) { c.origins = cp }
+}
 
 // WithLockTimeout sets how long a write or sync waits for the store lock
 // (default rowfs.DefaultLockTimeout).

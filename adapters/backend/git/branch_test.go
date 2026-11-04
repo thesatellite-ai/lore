@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
@@ -147,5 +148,67 @@ func TestOpenerPinnedBranch(t *testing.T) {
 	}
 	if gitT(t, remote, "rev-parse", "staging") != gitT(t, staging.Dir(), "rev-parse", "HEAD") {
 		t.Fatal("staging was not pushed")
+	}
+}
+
+// TestOpenerOriginSpelling drives NewOpener with WithOrigins over both
+// spellings a person types, each reachable only through a real git
+// url.<base>.insteadOf rule keyed on that spelling (as a mirror or a
+// per-host key would be): the clone opens, and its configured origin is
+// the spelling itself, not the canonical ssh:// form (GDOCS-1) and not an
+// scp-like rewrite of an absolute ssh:// path. Without WithOrigins the
+// canonical url is the origin and the scp-keyed rule never matches.
+// Not parallel: it sets the process's git config environment.
+func TestOpenerOriginSpelling(t *testing.T) {
+	remote := newRemote(t, true)
+	t.Setenv("GIT_CONFIG_COUNT", "2")
+	t.Setenv("GIT_CONFIG_KEY_0", "url."+remote+".insteadOf")
+	t.Setenv("GIT_CONFIG_VALUE_0", "git@scp.invalid:acme/notes")
+	t.Setenv("GIT_CONFIG_KEY_1", "url."+remote+".insteadOf")
+	t.Setenv("GIT_CONFIG_VALUE_1", "ssh://git@abs.invalid/srv/acme/notes.git")
+	for _, raw := range []string{"git@scp.invalid:acme/notes", "ssh://git@abs.invalid/srv/acme/notes.git"} {
+		home := t.TempDir()
+		canon, err := CanonicalURL(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		u, err := url.Parse(canon)
+		if err != nil {
+			t.Fatal(err)
+		}
+		origin, err := OriginOf(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if origin != strings.TrimSpace(raw) {
+			t.Fatalf("OriginOf(%q) = %q", raw, origin)
+		}
+		r, err := RemoteOf(u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sb, err := NewOpener(WithOrigins(map[string]string{r.URL: origin}))(t.Context(), u, store.OpenOptions{Home: home})
+		if err != nil {
+			t.Fatalf("open %s: %v", raw, err)
+		}
+		if err := sb.Close(); err != nil {
+			t.Fatal(err)
+		}
+		base, err := CloneBase(home, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := strings.TrimSpace(gitT(t, base+bareSuffix, "config", "--get", "remote."+RemoteName+".url"))
+		if got != raw {
+			t.Fatalf("%s: clone origin %q, want the spelling itself", raw, got)
+		}
+	}
+	// The canonical form of the scp spelling is not what the rule names.
+	u, err := url.Parse("ssh://git@scp.invalid/acme/notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewOpener()(t.Context(), u, store.OpenOptions{Home: t.TempDir()}); !errs.Has(err, errs.StoreUnreachable) {
+		t.Fatalf("canonical origin behind an scp-keyed rule: want E_STORE_UNREACHABLE, got %v", err)
 	}
 }

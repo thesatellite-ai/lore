@@ -121,41 +121,45 @@ func TestRowRel(t *testing.T) {
 	}
 }
 
-// TestRemoteGitForm pins the origin spelling lore writes into a store
-// clone: an ssh url without a port goes back to git's scp-like form, so a
-// person's url.<base>.insteadOf rule keyed on `git@host:` still applies
-// (GDOCS-1: every store looked unreachable behind such a rule); a port,
-// https and http keep their url form; no credential survives either way.
-func TestRemoteGitForm(t *testing.T) {
+// TestOriginOf pins the origin spelling lore writes into a store clone:
+// the url exactly as the person wrote it (as v0.1.17 did), minus any
+// credential and lore's query. An scp-like url stays scp-like (an
+// insteadOf rule keyed on `git@host:` still applies, GDOCS-1) and an
+// explicit ssh:// url keeps its absolute path (`host:srv/repo` would be
+// home-relative on a plain sshd); ports, https and http are unchanged.
+func TestOriginOf(t *testing.T) {
 	t.Parallel()
 	const secret = "s3cr3t-tok"
 	cases := map[string]string{
-		"git@github.com:agency/notes":                  "git@github.com:agency/notes",
-		"ssh://git@github.com/agency/notes.git":        "git@github.com:agency/notes.git",
-		"ssh://git:" + secret + "@GitHub.com/a/b":      "git@GitHub.com:a/b",
-		"github.com:agency/notes":                      "github.com:agency/notes",
-		"ssh://git@host.example:2222/agency/notes":     "ssh://git@host.example:2222/agency/notes",
-		"https://" + secret + "@github.com/agency/n":   "https://github.com/agency/n",
-		"http://git.internal/agency/notes?folder=team": "http://git.internal/agency/notes",
+		"git@github.com:agency/notes":                    "git@github.com:agency/notes",
+		"  git@github.com:agency/notes.git  ":            "git@github.com:agency/notes.git",
+		"github.com:agency/notes":                        "github.com:agency/notes",
+		"git@github.com:agency/notes?folder=team":        "git@github.com:agency/notes",
+		"git:" + secret + "@github.com:agency/notes":     "git@github.com:agency/notes",
+		"ssh://git@host.example/srv/repo.git":            "ssh://git@host.example/srv/repo.git",
+		"ssh://git@GitHub.com/agency/notes":              "ssh://git@GitHub.com/agency/notes",
+		"ssh://git:" + secret + "@host.example/srv/repo": "ssh://git@host.example/srv/repo",
+		"ssh://git@host.example:2222/x":                  "ssh://git@host.example:2222/x",
+		"https://github.com/agency/notes.git":            "https://github.com/agency/notes.git",
+		"https://" + secret + "@github.com/agency/n":     "https://github.com/agency/n",
+		"https://u:" + secret + "@github.com/agency/n":   "https://github.com/agency/n",
+		"http://git.internal/agency/notes?folder=team":   "http://git.internal/agency/notes",
 	}
 	for raw, want := range cases {
-		canon, err := CanonicalURL(raw)
+		got, err := OriginOf(raw)
 		if err != nil {
-			t.Fatalf("CanonicalURL(%q): %v", raw, err)
+			t.Fatalf("OriginOf(%q): %v", raw, err)
 		}
-		u, err := url.Parse(canon)
-		if err != nil {
-			t.Fatalf("parse %q: %v", canon, err)
+		if got != want {
+			t.Errorf("OriginOf(%q) = %q, want %q", raw, got, want)
 		}
-		r, err := RemoteOf(u)
-		if err != nil {
-			t.Fatalf("RemoteOf(%q): %v", canon, err)
+		if strings.Contains(got, secret) {
+			t.Errorf("%q: the credential survived into %q", raw, got)
 		}
-		if r.Git != want {
-			t.Errorf("%q: Git = %q, want %q", raw, r.Git, want)
-		}
-		if strings.Contains(r.Git, secret) {
-			t.Errorf("%q: the credential survived into %q", raw, r.Git)
+	}
+	for _, bad := range []string{"ftp://h/x", "git@:x", "https://github.com/"} {
+		if _, err := OriginOf(bad); err == nil {
+			t.Errorf("OriginOf(%q): want an error", bad)
 		}
 	}
 }

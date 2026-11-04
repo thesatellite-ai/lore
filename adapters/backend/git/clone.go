@@ -96,7 +96,11 @@ func NewOpener(opts ...Option) store.Opener {
 			base += branchCloneSep + filepath.FromSlash(branch)
 			callOpts = append(slices.Clone(opts), WithBranch(branch))
 		}
-		return OpenClone(ctx, r.Git, base, folder, o, callOpts...)
+		remote := r.URL
+		if spelled, ok := build(opts).origins[r.URL]; ok && spelled != "" {
+			remote = spelled
+		}
+		return OpenClone(ctx, remote, base, folder, o, callOpts...)
 	}
 }
 
@@ -104,7 +108,7 @@ func NewOpener(opts ...Option) store.Opener {
 // folders stem is base: the bare clone base+".git", the worktree
 // base/work, the lock base/lock. remote is any url or path git can fetch
 // (tests use a local bare repository); NewOpener passes a credential-free
-// url (Remote.Git). The first open fetches the store: if it cannot be reached then,
+// url (the WithOrigins spelling, else Remote.URL). The first open fetches the store: if it cannot be reached then,
 // E_STORE_UNREACHABLE. Later opens never touch the network (Sync does).
 func OpenClone(ctx context.Context, remote, base, folder string, o store.OpenOptions, opts ...Option) (*Backend, error) {
 	cfg := build(opts)

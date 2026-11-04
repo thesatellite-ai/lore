@@ -2,6 +2,7 @@ package orgresolve
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -321,5 +322,20 @@ func TestStagingLinksOnlyWhenChosenOnPurpose(t *testing.T) {
 		if l.Entry == "northwind-stag" {
 			t.Fatalf("staging link attached to the main entry: %+v", res.Links)
 		}
+	}
+}
+
+// TestDisagreesHintNamesLiveFlags: E_ORG_DISAGREES' hint and warning name
+// --to <org> (what the write commands accept), never the removed
+// --force-org.
+func TestDisagreesHintNamesLiveFlags(t *testing.T) {
+	r := Result{Disagreement: &Disagreement{Chosen: "freelance", Linked: []string{"agency"}, Message: "LORE_ORG chose freelance, but this repo is linked in agency"}}
+	err := r.CheckWrite(false, true)
+	var oe *Error
+	if !errors.As(err, &oe) || oe.Kind != KindDisagrees {
+		t.Fatalf("want KindDisagrees, got %v", err)
+	}
+	if strings.Contains(oe.Hint, "force-org") || !strings.Contains(oe.Hint, "--to <org>") {
+		t.Fatalf("hint %q", oe.Hint)
 	}
 }

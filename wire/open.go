@@ -336,12 +336,14 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 			cfg.Stores = append(cfg.Stores, me)
 		}
 	}
+	raws := make([]string, 0, len(cfg.Stores))
 	for i, s := range cfg.Stores {
 		if cfg.Stores[i].URL, err = canonical(s); err != nil {
 			return nil, nil, errs.Wrap(errs.CodeOf(err), "wire: store "+string(s.Name), err)
 		}
+		raws = append(raws, s.URL)
 	}
-	openers, err := newOpeners(reg)
+	openers, err := newOpeners(reg, originsOf(raws...))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -457,15 +459,45 @@ func canonical(s attach.Store) (string, error) {
 	return u.String(), nil
 }
 
+// originsOf maps each git store url in raws (as written: stores.yaml, the
+// command line) to the origin its clone gets: keyed by the canonical
+// credential-free remote url the git opener receives (canonical() minus its
+// query), valued by git.OriginOf, the person's own spelling without
+// credentials. canonical() stays the identity everywhere else (clone
+// folders, locations, duplicate checks); only the clone's origin follows
+// the spelling, so an insteadOf rule keyed on it applies and an scp-like
+// home-relative path is not turned into an absolute one. A file:// url, or
+// one that does not canonicalise (canonical reports that), is skipped; when
+// two spellings share one remote url the first wins.
+func originsOf(raws ...string) map[string]string {
+	out := map[string]string{}
+	for _, raw := range raws {
+		canon, err := canonical(attach.Store{URL: raw})
+		if err != nil || strings.HasPrefix(canon, folder.Scheme+":") {
+			continue
+		}
+		key, kerr := git.OriginOf(canon)
+		origin, oerr := git.OriginOf(raw)
+		if kerr != nil || oerr != nil {
+			continue
+		}
+		if _, seen := out[key]; !seen {
+			out[key] = origin
+		}
+	}
+	return out
+}
+
 // newOpeners registers the 0.1.18 backends: folder for file://, git for
 // ssh, https and http with logic/merge as the row merger (spec 11 rule 5:
-// the same merge the engine runs).
-func newOpeners(reg *schema.Registry) (*store.Openers, error) {
+// the same merge the engine runs). origins is originsOf the store urls as
+// written: each git clone's origin spelling.
+func newOpeners(reg *schema.Registry, origins map[string]string) (*store.Openers, error) {
 	o := store.NewOpeners()
 	if err := o.Register(folder.Scheme, folder.NewOpener()); err != nil {
 		return nil, err
 	}
-	gitOpen := git.NewOpener(git.WithMerger(merge.Driver{Registry: reg}))
+	gitOpen := git.NewOpener(git.WithMerger(merge.Driver{Registry: reg}), git.WithOrigins(origins))
 	for _, s := range git.Schemes {
 		if err := o.Register(s, gitOpen); err != nil {
 			return nil, err

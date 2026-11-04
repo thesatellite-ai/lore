@@ -394,3 +394,33 @@ func TestCanonical(t *testing.T) {
 		}
 	}
 }
+
+// TestOriginsOf: each git store url as written maps from the canonical
+// remote url the git opener receives to the person's own spelling (scp
+// stays scp, an absolute ssh:// path stays ssh://), lore's folder/branch
+// never enter the origin, a file:// store has no origin, and the first of
+// two spellings of one remote wins.
+func TestOriginsOf(t *testing.T) {
+	got := originsOf(
+		"git@github.com:acme/kb.git",
+		"ssh://git@host.example/srv/kb.git",
+		"https://example.com/acme/kb.git?folder=hub",
+		"ssh://git@host.example:2222/x",
+		"file:///srv/kb",
+		"ssh://git@github.com/acme/kb.git",
+	)
+	want := map[string]string{
+		"ssh://git@github.com/acme/kb.git":  "git@github.com:acme/kb.git",
+		"ssh://git@host.example/srv/kb.git": "ssh://git@host.example/srv/kb.git",
+		"https://example.com/acme/kb.git":   "https://example.com/acme/kb.git",
+		"ssh://git@host.example:2222/x":     "ssh://git@host.example:2222/x",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("originsOf = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Fatalf("originsOf[%q] = %q, want %q (all: %v)", k, got[k], v, got)
+		}
+	}
+}
