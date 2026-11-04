@@ -211,7 +211,27 @@ func (o ops) varsSet(ctx context.Context, in VarsSetIn) (RowOut, error) {
 	if !snakeName.MatchString(in.Name) {
 		return RowOut{}, errs.New(errs.InvalidInput, "variable name "+quote(in.Name)+" is not snake_case")
 	}
-	typ := in.Type
+	target := targetOf(in.To)
+	rows, err := liveRows(ctx, o.env, sources(o.env, string(target)), schema.TableVars)
+	if err != nil {
+		return RowOut{}, err
+	}
+	var existing *located
+	if hit := where(rows, map[string]string{vName: in.Name}); len(hit) > 0 {
+		existing = &hit[0]
+	}
+	// Changing the value of a variable in its place keeps what the caller
+	// did not name: its type (the new value is checked against it) and
+	// its shareable flag (switching shareable is `lore move`, same id,
+	// CONFIG_GUIDE VARS ARE DATA). Only a new variable defaults to text,
+	// not shareable.
+	typ, shareable := in.Type, in.Shareable
+	if existing != nil {
+		if typ == "" {
+			typ = text(existing.Row, vType)
+		}
+		shareable = shareable || flag(existing.Row, vShareable)
+	}
 	if typ == "" {
 		typ = string(value.KindText)
 	}
@@ -231,30 +251,28 @@ func (o ops) varsSet(ctx context.Context, in VarsSetIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	fields := map[string]value.Value{vValue: jv, vShareable: value.BoolOf(in.Shareable)}
+	fields := map[string]value.Value{vValue: jv}
+	if existing == nil || in.Shareable {
+		fields[vShareable] = value.BoolOf(shareable)
+	}
 	if err = optTexts(fields, map[string]string{vName: in.Name, vType: typ, vDescription: in.Description}); err != nil {
 		return RowOut{}, err
 	}
-	target := targetOf(in.To)
-	rows, err := liveRows(ctx, o.env, sources(o.env, string(target)), schema.TableVars)
-	if err != nil {
-		return RowOut{}, err
-	}
-	if hit := where(rows, map[string]string{vName: in.Name}); len(hit) > 0 {
+	if existing != nil {
 		delete(fields, vName)
-		w, uerr := o.env.Update(ctx, engine.Ref{Store: target, Table: schema.TableVars, ID: hit[0].Row.ID}, fields)
+		w, uerr := o.env.Update(ctx, engine.Ref{Store: target, Table: schema.TableVars, ID: existing.Row.ID}, fields)
 		if uerr != nil {
 			return RowOut{}, uerr
 		}
 		return RowOut{ID: w.Row.ID.String(), Store: string(target),
-			Human: fmt.Sprintf("Changed %s %s = %s (%s) %s.\n", short(w.Row.ID), in.Name, in.Value, typ, varWhere(target, in.Shareable))}, nil
+			Human: fmt.Sprintf("Changed %s %s = %s (%s) %s.\n", short(w.Row.ID), in.Name, in.Value, typ, varWhere(target, shareable))}, nil
 	}
 	w, err := create(ctx, o.env, target, schema.TableVars, map[string]string{vName: in.Name}, fields)
 	if err != nil {
 		return RowOut{}, err
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("Added %s %s = %s (%s) %s.\n", short(w.Row.ID), in.Name, in.Value, typ, varWhere(target, in.Shareable))}, nil
+		Human: fmt.Sprintf("Added %s %s = %s (%s) %s.\n", short(w.Row.ID), in.Name, in.Value, typ, varWhere(target, shareable))}, nil
 }
 
 // varWhere is the "where and who sees it" tail of a vars set line.

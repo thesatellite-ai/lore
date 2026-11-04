@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -47,7 +48,7 @@ const (
 
 // Metadata limits (CLI_REFERENCE 3.1).
 const (
-	maxMetaDescription = 300
+	maxMetaDescription = 300 // characters (runes), not bytes: the spec counts characters
 	maxMetaValues      = 100
 )
 
@@ -232,7 +233,7 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 	if !snakeName.MatchString(in.Name) {
 		return RowOut{}, errs.New(errs.InvalidInput, "metadata key "+quote(in.Name)+" is not snake_case")
 	}
-	if len(in.Description) > maxMetaDescription {
+	if utf8.RuneCountInString(in.Description) > maxMetaDescription {
 		return RowOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("--description has at most %d characters", maxMetaDescription))
 	}
 	if _, err := value.ParseKind(in.Type); err != nil || in.Type == string(value.KindNull) {
@@ -304,8 +305,9 @@ func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	name := text(k.Row, mName)
+	var want []string
 	if in.Values != "" {
-		want := splitList(in.Values)
+		want = splitList(in.Values)
 		if err := checkMetaValues(want); err != nil {
 			return RowOut{}, err
 		}
@@ -332,13 +334,13 @@ func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta edit: nothing to change").WithHint("give --strict, --no-strict, --internal, --no-internal or --values")
 	}
 	if len(patch) == 0 {
-		return RowOut{ID: k.Row.ID.String(), Store: string(k.Src), Human: name + ": allowed values " + in.Values + "\n"}, nil
+		return RowOut{ID: k.Row.ID.String(), Store: string(k.Src), Human: name + ": allowed values " + strings.Join(want, ", ") + "\n"}, nil
 	}
 	return o.patchRow(ctx, k, patch, "edited "+name)
 }
 
 func (o ops) metaDescribe(ctx context.Context, in MetaDescribeIn) (RowOut, error) {
-	if len(in.Text) > maxMetaDescription {
+	if utf8.RuneCountInString(in.Text) > maxMetaDescription {
 		return RowOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("a description has at most %d characters", maxMetaDescription))
 	}
 	k, err := o.metaKey(ctx, in.Key)

@@ -226,20 +226,10 @@ func flag(r row.Row, f string) bool {
 	return ok && b.Bool()
 }
 
-// texts is a list-of-text field's items.
+// texts is a list-of-text field's items, the same for a field built in
+// memory (a List) and one decoded from its row file (value.ItemStrings).
 func texts(r row.Row, f string) []string {
-	l, ok := r.Fields[f].(value.List)
-	if !ok {
-		if t := text(r, f); t != "" {
-			return []string{t}
-		}
-		return nil
-	}
-	out := make([]string, 0, len(l.Items()))
-	for _, it := range l.Items() {
-		out = append(out, it.String())
-	}
-	return out
+	return value.ItemStrings(r.Fields[f])
 }
 
 // jsonText is a value's JSON form ("" for none).
@@ -317,18 +307,21 @@ func asJSON(v value.Value) (value.Value, error) {
 	return value.JSONOf(b)
 }
 
-// fromJSON reads a json field back as its inferred value (a text field
-// written by hand stays text).
+// fromJSON reads a json field back as its inferred value, from either
+// form of the field (value.JSONForm: a JSON value in memory, an inferred
+// number, list or text from the row file).
 func fromJSON(v value.Value) value.Value {
-	if j, ok := v.(value.JSON); ok {
-		if in, err := value.Infer(j.Raw()); err == nil {
+	if b, ok := value.JSONForm(v); ok {
+		if in, err := value.Infer(b); err == nil {
 			return in
 		}
 	}
 	return v
 }
 
-// display prints a value for a person: text as is, others as JSON.
+// display prints a value for a person: text as is, a list (a List in
+// memory, a JSON array from a row file) as its items joined by ", ",
+// anything else as JSON.
 func display(v value.Value) string {
 	if v == nil {
 		return ""
@@ -336,11 +329,14 @@ func display(v value.Value) string {
 	if t, ok := v.(value.Text); ok {
 		return t.String()
 	}
-	if l, ok := v.(value.List); ok {
-		return l.String()
+	if b, ok := value.JSONForm(v); ok && canon.KindOf(b) == canon.KindArray {
+		return strings.Join(value.ItemStrings(v), listJoin)
 	}
 	return jsonText(v)
 }
+
+// listJoin separates a list's items in human output.
+const listJoin = ", "
 
 // short is v0.1.17's short id form for human lines: the prefix and the
 // last four characters (pol_…7e5f).
