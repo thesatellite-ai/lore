@@ -10,6 +10,338 @@
     }
   ],
   "paths": {
+    "/v1/actors": {
+      "get": {
+        "operationId": "actor.list",
+        "summary": "List actors",
+        "tags": [
+          "actor"
+        ],
+        "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "only actors of this store (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "only actors of this store (default every attached store)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_source": {
+                            "type": "string"
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "handle": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "left_at": {
+                            "type": "string"
+                          },
+                          "owner_actor_id": {
+                            "type": "string"
+                          },
+                          "stable_key": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "display_name",
+                          "stable_key"
+                        ]
+                      }
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "kind",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/actors/{id}": {
+      "get": {
+        "operationId": "actor.show",
+        "summary": "Show actor details",
+        "tags": [
+          "actor"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row id",
+            "schema": {
+              "type": "string",
+              "description": "the row id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "_source": {
+                          "type": "string"
+                        },
+                        "active": {
+                          "type": "boolean"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "display_name": {
+                          "type": "string"
+                        },
+                        "handle": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "left_at": {
+                          "type": "string"
+                        },
+                        "owner_actor_id": {
+                          "type": "string"
+                        },
+                        "stable_key": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "display_name",
+                        "stable_key"
+                      ]
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "kind",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/comments": {
       "get": {
         "operationId": "comment.list",
@@ -13873,6 +14205,798 @@
         }
       }
     },
+    "/v1/projects": {
+      "get": {
+        "operationId": "project.list",
+        "summary": "List projects in the current DB",
+        "tags": [
+          "project"
+        ],
+        "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "only projects of this store (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "only projects of this store (default every attached store)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_source": {
+                            "type": "string"
+                          },
+                          "archived_at": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "origin_url": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ]
+                      }
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "kind",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{id}": {
+      "delete": {
+        "operationId": "project.delete",
+        "summary": "Delete a project (a tombstone; archive is usually what you want)",
+        "tags": [
+          "project"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row id",
+            "schema": {
+              "type": "string",
+              "description": "the row id"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "project.show",
+        "summary": "Show project details (with attached repos)",
+        "tags": [
+          "project"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row id",
+            "schema": {
+              "type": "string",
+              "description": "the row id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "archived_at": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "origin_url": {
+                          "type": "string"
+                        },
+                        "repos": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "archived_at": {
+                                "type": "string"
+                              },
+                              "display_name": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "mount_name": {
+                                "type": "string"
+                              },
+                              "origin_url": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "mount_name"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "created_at",
+                        "repos"
+                      ]
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "kind",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{id}/archive": {
+      "post": {
+        "operationId": "project.archive",
+        "summary": "Archive a project (soft-delete via archived_at)",
+        "tags": [
+          "project"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row id",
+            "schema": {
+              "type": "string",
+              "description": "the row id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_IDENTIFIER, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_MOUNT_NAME_TAKEN, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{id}/unarchive": {
+      "post": {
+        "operationId": "project.unarchive",
+        "summary": "Unarchive a project (clear archived_at)",
+        "tags": [
+          "project"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row id",
+            "schema": {
+              "type": "string",
+              "description": "the row id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_IDENTIFIER, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_MOUNT_NAME_TAKEN, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/prompts": {
       "get": {
         "operationId": "prompt.list",
@@ -15863,6 +16987,804 @@
           },
           "409": {
             "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repos": {
+      "get": {
+        "operationId": "repo.list",
+        "summary": "List repos in the current project",
+        "tags": [
+          "repo"
+        ],
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "required": false,
+            "description": "override project (id or name)",
+            "schema": {
+              "type": "string",
+              "description": "override project (id or name)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "archived_at": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "mount_name": {
+                            "type": "string"
+                          },
+                          "origin_url": {
+                            "type": "string"
+                          },
+                          "project_id": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "project_id",
+                          "mount_name"
+                        ]
+                      }
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "kind",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "repo.add",
+        "summary": "Register a repo within the current project",
+        "tags": [
+          "repo"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "description": "free-form display name"
+                  },
+                  "mount_name": {
+                    "type": "string",
+                    "description": "the repo's mount name (a-z, 0-9, - _ .)"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "description": "git remote URL"
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "override project (id or name)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "mount_name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_IDENTIFIER, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_MOUNT_NAME_TAKEN, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repos/{id}": {
+      "delete": {
+        "operationId": "repo.delete",
+        "summary": "Delete a repo (a tombstone; archive is usually what you want)",
+        "tags": [
+          "repo"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row id",
+            "schema": {
+              "type": "string",
+              "description": "the row id"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repos/{id}/archive": {
+      "post": {
+        "operationId": "repo.archive",
+        "summary": "Archive a repo (soft-delete via archived_at)",
+        "tags": [
+          "repo"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row id",
+            "schema": {
+              "type": "string",
+              "description": "the row id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_IDENTIFIER, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_MOUNT_NAME_TAKEN, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repos/{id}/unarchive": {
+      "post": {
+        "operationId": "repo.unarchive",
+        "summary": "Unarchive a repo (clear archived_at)",
+        "tags": [
+          "repo"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row id",
+            "schema": {
+              "type": "string",
+              "description": "the row id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_IDENTIFIER, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_MOUNT_NAME_TAKEN, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {

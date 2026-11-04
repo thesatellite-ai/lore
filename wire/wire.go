@@ -45,6 +45,7 @@ import (
 	opscontent "github.com/thesatellite-ai/lore/ops/content"
 	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
@@ -196,6 +197,7 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opstasklist.Ops(a)...)
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
+	entries = append(entries, opsinfra.Ops(a)...)
 	entries = append(entries, opsreminder.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
@@ -316,6 +318,7 @@ var (
 	_ opscomment.Env      = (*App)(nil)
 	_ opslink.Env         = (*App)(nil)
 	_ opssettings.Env     = (*App)(nil)
+	_ opsinfra.Env        = (*App)(nil)
 	_ opsreminder.Env     = (*App)(nil)
 	_ opsreminder.Actorer = (*App)(nil)
 )

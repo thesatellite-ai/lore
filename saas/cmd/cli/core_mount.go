@@ -37,6 +37,7 @@ import (
 	opscomment "github.com/thesatellite-ai/lore/ops/comment"
 	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmission "github.com/thesatellite-ai/lore/ops/mission"
@@ -167,6 +168,7 @@ var coreNouns = []string{
 	opstag.Noun, opscomment.Noun, opslink.Noun, opslink.CommitNoun,
 	opstask.Noun, opstasklist.Noun, opsmission.Noun, opsplan.Noun,
 	opsreminder.Noun,
+	opsinfra.NounActor, opsinfra.NounProject, opsinfra.NounRepo,
 }
 
 // v0.1.17 flags every `lore memory …` command still accepts on the core

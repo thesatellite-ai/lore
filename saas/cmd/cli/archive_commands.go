@@ -207,46 +207,6 @@ func newDeleteCommand(t archiveTarget) *cobra.Command {
 
 // ── per-entity targets ──────────────────────────────────────────────────
 
-var projectArchiveTarget = archiveTarget{
-	label: "project",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.Project.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.Name, nil
-	},
-	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
-		return c.Project.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
-	},
-	unArch: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Project.UpdateOneID(id).ClearArchivedAt().Exec(ctx)
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Project.DeleteOneID(id).Exec(ctx)
-	},
-}
-
-var repoArchiveTarget = archiveTarget{
-	label: "repo",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.Repo.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.MountName, nil
-	},
-	archive: func(ctx context.Context, c *ent.Client, id string, when time.Time) error {
-		return c.Repo.UpdateOneID(id).SetArchivedAt(when).Exec(ctx)
-	},
-	unArch: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Repo.UpdateOneID(id).ClearArchivedAt().Exec(ctx)
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Repo.DeleteOneID(id).Exec(ctx)
-	},
-}
-
 // ── mission pause / resume (E) ──────────────────────────────────────────
 
 // ── handoff ack (D) ─────────────────────────────────────────────────────
