@@ -220,7 +220,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		}
 	}
 	asJSON := c.Flags().Bool(FlagJSON, false, "print the result (or the error) as JSON")
-	asksFirst := s.Confirm.Always || s.Confirm.When != ""
+	asksFirst := s.Confirm.CanAsk()
 	yes := new(bool)
 	if asksFirst {
 		c.Flags().BoolVar(yes, FlagYes, false, "answer yes to the confirmation without a terminal")

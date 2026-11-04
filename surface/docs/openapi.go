@@ -208,7 +208,7 @@ func PathHasID(path string) bool { return strings.Contains(path, "{"+IDParam+"}"
 
 // AsksFirst reports whether an operation can answer E_NEEDS_CONFIRM, so its
 // route accepts the "yes" field.
-func AsksFirst(s op.Spec) bool { return s.Confirm.Always || s.Confirm.When != "" }
+func AsksFirst(s op.Spec) bool { return s.Confirm.CanAsk() }
 
 // operationOf describes one route.
 func operationOf(e op.Entry, rt op.Route) *operation {

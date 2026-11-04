@@ -57,7 +57,17 @@ type ConfirmRule struct {
 	When string `json:"when"`
 	// PersonOnlyEligible: the team policy agents.person_only may list it.
 	PersonOnlyEligible bool `json:"person_only_eligible"`
+	// MayAsk: nothing is asked up front, but the write path may answer
+	// E_NEEDS_CONFIRM (a secret finding under secrets.on_detect: ask), so
+	// surfaces must still offer the yes answer (--yes, REST "yes"). Run never
+	// pre-confirms on MayAsk alone.
+	MayAsk bool `json:"may_ask"`
 }
+
+// CanAsk reports whether the operation can answer E_NEEDS_CONFIRM at all,
+// up front or from its write path. Every surface decides from this one
+// method whether to offer --yes / "yes", so CLI, REST and OpenAPI agree.
+func (c ConfirmRule) CanAsk() bool { return c.Always || c.When != "" || c.MayAsk }
 
 // Example is shown in --help and the docs, and run by the docs test, so an
 // example can never drift from what the operation does.
