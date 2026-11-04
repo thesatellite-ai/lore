@@ -35,7 +35,7 @@ func TestF11_SyncRefreshesTheLinkIndex(t *testing.T) {
 	acmeApp.MustLore("init", "--non-interactive", "--name=app")
 	acmeApp.CommitAll("lore")
 	acmeApp.AdminPush("origin", "main")
-	alice.Lore("", "store", "init", "https://"+slugStore).OK(t)
+	initStore(w, alice, "northwind", "https://"+slugStore, "", "--yes").OK(t)
 
 	dev1App := dev1.Clone(app, "app")
 	if l := linksLine(t, dev1App); !strings.Contains(l, "0 link(s)") {
@@ -55,11 +55,11 @@ func TestF11_SyncRefreshesTheLinkIndex(t *testing.T) {
 // that chose the staging entry `whoami` counts the staging branch's links,
 // not the main branch's.
 func TestF10_StagingWhoamiCountsTheStagingBranchLinks(t *testing.T) {
-	a := newAgency(t, th.Cmd("org", "use"), th.Cmd("whoami"), th.Flag("branch", "store", "init"))
+	a := newAgency(t, th.Cmd("org", "use"), th.Cmd("whoami"), th.Cmd("store", "init"))
 	if l := linksLine(t, a.aliceApp); !strings.Contains(l, "1 link(s)") {
 		t.Fatalf("on the main entry the main branch's link counts: %q", l)
 	}
-	a.alice.Lore("", "store", "init", "https://"+slugStore, "--branch", stagingBranch).OK(t)
+	initStore(a.w, a.alice, "northwind_staging", "https://"+slugStore, stagingBranch, "--yes").OK(t)
 	a.aliceApp.MustLore("org", "use", orgStaging)
 	if l := linksLine(t, a.aliceApp); !strings.Contains(l, "0 link(s)") || !strings.Contains(l, stagingBranch) {
 		t.Fatalf("nothing is linked on the staging branch yet: %q", l)
@@ -88,7 +88,7 @@ func TestF11_RefusedLinkLeavesNothingAndTheRerunSaysWhatItDid(t *testing.T) {
 	acmeApp.MustLore("init", "--non-interactive", "--name=app")
 	acmeApp.CommitAll("lore")
 	acmeApp.AdminPush("origin", "main")
-	alice.Lore("", "store", "init", "https://"+slugStore).OK(t)
+	initStore(w, alice, "northwind", "https://"+slugStore, "", "--yes").OK(t)
 
 	aliceApp := alice.Clone(app, "app")
 	before := store.Rev(refMain)

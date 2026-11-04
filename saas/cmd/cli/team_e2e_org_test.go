@@ -39,7 +39,7 @@ func newOrgWorld(t *testing.T, caps ...th.Cap) *orgWorld {
 	// hook then (correctly) fails closed on every commit (lore-stores report).
 	for _, slug := range []string{slugStore, slugBetaStore} {
 		w.Remote(slug)
-		o.alice.Lore("", "store", "init", "https://"+slug).OK(t)
+		initStore(w, o.alice, "", "https://"+slug, "", "--yes").OK(t)
 	}
 	mk := func(slug, name string) *th.Clone {
 		r := w.Remote(slug)
@@ -317,7 +317,7 @@ func TestF17_EverywhereNoteNamingAKnownOrgNeedsConfirmation(t *testing.T) {
 func TestRecipe05_PersonalNotesSyncBetweenMachines(t *testing.T) {
 	o := newOrgWorld(t, th.Flag("to", "memory", "add"), th.Cmd("store", "init"))
 	personal := o.w.Remote(slugPersonal)
-	o.alice.Lore("", "store", "init", personal.URL()).OK(t)
+	initStore(o.w, o.alice, "personal", personal.URL(), "", "--yes").OK(t)
 	cfg := aliceConfig()
 	cfg.Personal = &th.Personal{Store: personal.URL()}
 	o.alice.WriteConfig(cfg)

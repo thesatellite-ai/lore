@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -89,9 +90,9 @@ func TestF12_StoreInitOnlyOnAnEmptyRepo(t *testing.T) {
 	seed.WriteFile("main.go", "package main\n")
 	seed.CommitAll("code")
 	seed.AdminPush("origin", "main")
-	alice.Lore("", "store", "init", used.URL()).Refused(t)
+	initStore(w, alice, "used", used.URL(), "", "--yes").Refused(t)
 	empty := w.Remote(slugStore)
-	alice.Lore("", "store", "init", empty.URL()).OK(t)
+	initStore(w, alice, "empty", empty.URL(), "", "--yes").OK(t)
 	if !hasItem(empty.Files(refMain), storeMarker) || empty.CommitCount(refMain) != 1 || empty.Parents(refMain) != 0 {
 		t.Fatalf("store init writes %s as one parentless commit: %v", storeMarker, empty.Files(refMain))
 	}
@@ -229,8 +230,8 @@ func TestRecipe14_OneStorePerClient(t *testing.T) {
 	client.MustLore("init", "--non-interactive", "--name=app")
 	client.CommitAll("lore")
 	client.AdminPush("origin", "main")
-	alice.Lore("", "store", "init", orgStore.URL()).OK(t)
-	alice.Lore("", "store", "init", acmeStore.URL()).OK(t)
+	initStore(w, alice, "", orgStore.URL(), "", "--yes").OK(t)
+	initStore(w, alice, "", acmeStore.URL(), "", "--yes").OK(t)
 	c := alice.Clone(app, "app")
 	c.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--store", acmeStore.URL(), "--yes")
 	c.MustLore("memory", "add", "--body", "NDA client note")
@@ -261,7 +262,7 @@ func TestRecipe04_ContractorSeesOnlyTheirClient(t *testing.T) {
 	full.Stores = []th.Store{{URL: orgStore.URL(), OrgFolder: "."}, {URL: acmeStore.URL()}, {URL: globexStore.URL()}}
 	alice.WriteConfig(th.Config{Orgs: []th.Org{full}, Live: th.FreshFetch()})
 	for _, s := range []*th.Remote{orgStore, acmeStore, globexStore} {
-		alice.Lore("", "store", "init", s.URL()).OK(t)
+		initStore(w, alice, "", s.URL(), "", "--yes").OK(t)
 	}
 	app, globex := w.Remote(slugApp), w.Remote("github.com/globex/backend")
 	for _, r := range []*th.Remote{app, globex} {
@@ -376,7 +377,11 @@ func TestF15_PointersOnlyFlowInward(t *testing.T) {
 func TestE11_PastedInternalSentenceIsBlocked(t *testing.T) {
 	a := newAgency(t)
 	memID := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", internalNote), "mem")
+	// 0.1.18: a store write is pushed by `lore sync` (STORE_SERVER_SPEC 6.1
+	// Sync, the git outbox), not at once like v0.1.17's live ref.
+	a.aliceApp.MustLore("sync")
 	c := a.dev1App
+	c.MustLore("sync")
 	c.MustLore("memory", "list")
 	words := strings.Fields(internalNote)
 
@@ -406,6 +411,7 @@ func TestE11_PastedInternalSentenceIsBlocked(t *testing.T) {
 func TestF16_CIModeCatchesForeignIdsAndNamesNothingInternal(t *testing.T) {
 	a := newAgency(t, th.Cmd("check", "leaks"), th.Flag("ci", "check", "leaks"))
 	memID := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", internalNote), "mem")
+	a.aliceApp.MustLore("sync") // 0.1.18 pushes store writes on sync (spec 6.1)
 	var body string
 	for _, ref := range []string{refMain, storeLive(storeBranch)} {
 		for _, f := range a.store.FilesMatching(ref, memID) {
@@ -709,14 +715,14 @@ func TestRecipe12_InternalTasksNeverReachClient(t *testing.T) {
 // it refuses with a hint, and `lore store init <url> --branch staging`
 // creates the branch explicitly as a parentless commit (C2).
 func TestRecipe13_StagingLoreIsSeparate(t *testing.T) {
-	a := newAgency(t, th.Cmd("org", "use"), th.Flag("to", "task", "add"), th.Flag("branch", "store", "init"), th.Flag("from", "task", "done"))
+	a := newAgency(t, th.Cmd("org", "use"), th.Flag("to", "task", "add"), th.Cmd("store", "init"), th.Flag("from", "task", "done"))
 	stagingHead := "refs/heads/" + stagingBranch
 	a.aliceApp.MustLore("org", "use", orgStaging)
 	a.aliceApp.Lore("org", "link", orgStaging, "--project", folderAcme, "--yes").Refused(t, stagingBranch, "lore store init")
 	if a.store.Has(stagingHead) {
 		t.Fatal("a refused link must not create the store branch")
 	}
-	a.alice.Lore("", "store", "init", "https://"+slugStore, "--branch", stagingBranch).OK(t)
+	initStore(a.w, a.alice, "northwind_staging", "https://"+slugStore, stagingBranch, "--yes").OK(t)
 	if !a.store.Has(stagingHead) || a.store.Parents(stagingHead) != 0 || a.store.CommitCount(stagingHead) != 1 {
 		t.Fatalf("store init --branch makes one parentless commit: parents=%d commits=%d", a.store.Parents(stagingHead), a.store.CommitCount(stagingHead))
 	}
@@ -863,6 +869,37 @@ var (
 // copy: {id, display name, kind}, plus the engine's file bookkeeping).
 var clientActorFields = map[string]bool{"_table": true, "_v": true, "id": true, "display_name": true, "kind": true, "created_at": true, "updated_at": true}
 
+// clientActorEnvelopeOK reports whether a 0.1.18 row-envelope key (model/row,
+// STORE_SERVER_SPEC 4.1: every v2 row file carries them) may sit in a client
+// actor copy: bookkeeping only, naming nothing internal. It mirrors the leak
+// guard (leakcheck envelopeKeyAllowed): _hlc text; created_by/updated_by an
+// act_ id; _o exactly {store: "repo"[, cmd: text]}.
+func clientActorEnvelopeOK(k string, raw json.RawMessage) bool {
+	switch k {
+	case "_hlc":
+		var s string
+		return json.Unmarshal(raw, &s) == nil
+	case "created_by", "updated_by":
+		var s string
+		return json.Unmarshal(raw, &s) == nil && actorIDOnlyRe.MatchString(s)
+	case "_o":
+		var o map[string]json.RawMessage
+		if json.Unmarshal(raw, &o) != nil || string(o["store"]) != `"repo"` {
+			return false
+		}
+		for ok := range o {
+			if ok != "store" && ok != "cmd" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// actorIDOnlyRe is a bare act_ id.
+var actorIDOnlyRe = regexp.MustCompile(`^act_[0-9a-f]{32}$`)
+
 // clientRepoRow reads a row the client repo acme/app holds in alice's
 // checkout (.lore/data) or, failing that, on the app's live ref.
 func (a *agency) clientRepoRow(t *testing.T, table, id string) (string, bool) {
@@ -935,7 +972,7 @@ func TestF18_ClientRepoActorCopyIsTheProjection(t *testing.T) {
 		}
 		bugD2ActorCopyStableKey.PendingIf(t, doc["stable_key"] != nil, filepath.Base(f)+" still has stable_key")
 		for k := range doc {
-			if !clientActorFields[k] {
+			if !clientActorFields[k] && !clientActorEnvelopeOK(k, doc[k]) {
 				t.Fatalf("an actor copy in a client repo may hold only {id, display name, kind}; %s also has %q", f, k)
 			}
 		}

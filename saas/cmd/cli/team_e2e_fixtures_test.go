@@ -450,7 +450,7 @@ func newAgency(t *testing.T, caps ...th.Cap) *agency {
 	a.acmeApp.CommitAll("lore")
 	a.acmeApp.AdminPush("origin", "main")
 
-	a.alice.Lore("", "store", "init", "https://"+slugStore).OK(t)
+	initStore(w, a.alice, "northwind", "https://"+slugStore, "", "--yes").OK(t)
 	a.aliceApp = a.alice.Clone(a.app, "app")
 	a.aliceApp.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes")
 	a.aliceApp.MustLore("actor", "register")
@@ -458,6 +458,48 @@ func newAgency(t *testing.T, caps ...th.Cap) *agency {
 	a.dev1App.MustLore("actor", "register")
 	return a
 }
+
+// initStore makes url a lore store the 0.1.18 way. v0.1.17's
+// `lore store init <url>` (run from anywhere) was removed by O12b: the core
+// command is `lore store init <name> <url>`, and it also attaches the store
+// to the repo it runs in (.lore/stores.yaml). So the person runs it from a
+// scratch repo under their HOME, never from one of the world's code repos
+// (whose files the tests inspect); name is only that scratch repo's entry
+// name, nothing the org config refers to ("" derives a snake_case one
+// from the url's owner/repo, as store names must be). branch != "" is v0.1.17's
+// `--branch <b>`, spelled by the core as the git url's ?branch= parameter.
+// extra are further flags (e.g. --yes).
+func initStore(w *th.World, a *th.Actor, name, url, branch string, extra ...string) th.Result {
+	w.T.Helper()
+	if name == "" {
+		name = storeNameFor(url)
+	}
+	dir := filepath.Join(a.Home, "store-init", name)
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			w.T.Fatalf("store-init dir: %v", err)
+		}
+		w.Git(dir, "init", "-q", "-b", storeBranch)
+		a.Lore(dir, "init", "--non-interactive", "--name="+name).OK(w.T)
+	}
+	if branch != "" {
+		url += "?branch=" + branch
+	}
+	return a.Lore(dir, append([]string{"store", "init", name, url}, extra...)...)
+}
+
+// storeNameFor is the snake_case store name initStore gives a url:
+// owner_repo of its last two path parts, every other character an '_'.
+func storeNameFor(url string) string {
+	parts := strings.Split(strings.TrimSuffix(url, "/"), "/")
+	if len(parts) > 2 {
+		parts = parts[len(parts)-2:]
+	}
+	return nonSnake.ReplaceAllString(strings.ToLower(strings.Join(parts, "_")), "_")
+}
+
+// nonSnake matches what a store name may not hold (store names are snake_case).
+var nonSnake = regexp.MustCompile(`[^a-z0-9_]`)
 
 // storeRow reads a row of a store project from the store's live ref.
 func (a *agency) storeLiveRow(t *testing.T, folder, table, id string) (rowDoc, bool) {

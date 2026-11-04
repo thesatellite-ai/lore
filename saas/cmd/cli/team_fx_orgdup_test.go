@@ -63,7 +63,7 @@ func newOrgRace(t *testing.T, caps ...th.Cap) *orgRace {
 	acmeApp.MustLore("init", "--non-interactive", "--name=app")
 	acmeApp.CommitAll("lore")
 	acmeApp.AdminPush("origin", "main")
-	dev1.Lore("", "store", "init", "https://"+slugStore).OK(t)
+	initStore(w, dev1, "northwind", "https://"+slugStore, "", "--yes").OK(t)
 	r := &orgRace{w: w, store: store, dev1: dev1.Clone(app, "app"), dev2: dev2.Clone(app, "app")}
 	r.dev1.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes")
 	r.dev2.MustLore("sync") // dev2's store clone now: acme/ linked, no org/
