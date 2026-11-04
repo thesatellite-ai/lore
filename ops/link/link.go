@@ -99,10 +99,11 @@ type CommitResolver interface {
 	Describe(ctx context.Context, dir, sha string) (subject, author, committedAt string, err error)
 }
 
-// AddIn is the input of link.add.
+// AddIn is the input of link.add. Entity and Commit are required; they
+// are checked by add so the error keeps v0.1.17's wording.
 type AddIn struct {
-	Entity      string `json:"entity" flag:"entity" desc:"entity to link to (opaque id: tsk_…, mem_…, dec_…)"`
-	Commit      string `json:"commit" flag:"commit" desc:"git commit sha (or HEAD / auto for current HEAD)"`
+	Entity      string `json:"entity,omitempty" flag:"entity" desc:"entity to link to (opaque id: tsk_…, mem_…, dec_…)"`
+	Commit      string `json:"commit,omitempty" flag:"commit" desc:"git commit sha (or HEAD / auto for current HEAD)"`
 	Message     string `json:"message,omitempty" flag:"message" desc:"commit message (auto-filled from git log when --commit=HEAD)"`
 	RepoPath    string `json:"repo_path,omitempty" flag:"repo-path" desc:"path to git repo on disk (default: cwd; distinct from --repo scope flag)"`
 	Author      string `json:"author,omitempty" flag:"author" desc:"commit author (auto-filled from git)"`
@@ -183,7 +184,10 @@ type ShowIn struct {
 
 // ShowOut is the output of commit.show.
 type ShowOut struct {
-	ListOut
+	SchemaVersion int      `json:"schema_version"`
+	Kind          string   `json:"kind"`
+	Count         int      `json:"count,omitempty"`
+	Data          []Record `json:"data"`
 	// SHA is the asked sha, for the human header.
 	SHA string `json:"-"`
 }
@@ -405,7 +409,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{ListOut: ListOut{SchemaVersion: SchemaVersion, Kind: KindShow, Count: len(rows), Data: rows}, SHA: sha}, nil
+	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Count: len(rows), Data: rows, SHA: sha}, nil
 }
 
 // links lists the live links of the current project in every attached
