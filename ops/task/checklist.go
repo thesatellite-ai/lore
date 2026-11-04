@@ -253,7 +253,7 @@ func (o ops) saveChecklist(ctx context.Context, h clHit, changed []string, human
 	if err := putChecklist(patch, h.list); err != nil {
 		return ChecklistOut{}, err
 	}
-	w, err := o.env.Update(ctx, engine.Ref{Store: h.src, Table: table, ID: h.task.ID}, patch)
+	w, err := o.hist().Update(ctx, engine.Ref{Store: h.src, Table: table, ID: h.task.ID}, patch)
 	if err != nil {
 		return ChecklistOut{}, err
 	}

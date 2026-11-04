@@ -134,7 +134,7 @@ func (o ops) recurEdit(ctx context.Context, in RecurEditIn) (RecurOut, error) {
 	if err != nil {
 		return RecurOut{}, err
 	}
-	w, err := work.Patch(ctx, o.env, Noun, table, cur.ID, patch, work.Success+" "+cur.ID.String()+" updated\n  "+line+"\n")
+	w, err := work.Patch(ctx, o.hist(), Noun, table, cur.ID, patch, work.Success+" "+cur.ID.String()+" updated\n  "+line+"\n")
 	if err != nil {
 		return RecurOut{}, err
 	}
@@ -161,7 +161,7 @@ func (o ops) recurSkip(ctx context.Context, in IDIn) (RecurOut, error) {
 	if err != nil {
 		return RecurOut{}, err
 	}
-	w, err := work.Patch(ctx, o.env, Noun, table, cur.ID, patch, work.Success+" "+cur.ID.String()+" skipped\n")
+	w, err := work.Patch(ctx, o.hist(), Noun, table, cur.ID, patch, work.Success+" "+cur.ID.String()+" skipped\n")
 	if err != nil {
 		return RecurOut{}, err
 	}
@@ -183,7 +183,7 @@ func (o ops) recurStop(ctx context.Context, in IDIn) (RecurOut, error) {
 	if err != nil {
 		return RecurOut{}, err
 	}
-	w, err := work.Patch(ctx, o.env, Noun, table, cur.ID, map[string]value.Value{fieldRecur: v},
+	w, err := work.Patch(ctx, o.hist(), Noun, table, cur.ID, map[string]value.Value{fieldRecur: v},
 		work.Success+" "+cur.ID.String()+" series "+rc.Series+" stopped (no further instances; this one stays)\n")
 	if err != nil {
 		return RecurOut{}, err

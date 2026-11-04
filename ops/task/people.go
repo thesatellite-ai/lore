@@ -357,7 +357,7 @@ func (o ops) watch(ctx context.Context, in WatchIn, on bool) (work.WriteOut, err
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, map[string]value.Value{fieldWatchers: v}, work.Success+" "+verb+" "+id.String()+"\n")
+	return work.Patch(ctx, o.hist(), Noun, table, id, map[string]value.Value{fieldWatchers: v}, work.Success+" "+verb+" "+id.String()+"\n")
 }
 
 // leadIs reports whether actor leads r (list --lead).

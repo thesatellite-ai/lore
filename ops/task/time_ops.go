@@ -584,7 +584,7 @@ func (o ops) timeLog(ctx context.Context, in TimeLogIn) (work.WriteOut, error) {
 			}
 		}
 	}
-	out, err := work.Patch(ctx, o.env, Noun, table, id, patch, human)
+	out, err := work.Patch(ctx, o.hist(), Noun, table, id, patch, human)
 	out.ID = eid.String() // the new thing is the entry
 	return out, err
 }
@@ -636,7 +636,7 @@ func (o ops) save(ctx context.Context, h entryHit, human string) (work.WriteOut,
 	if err := putEntries(patch, h.list); err != nil {
 		return work.WriteOut{}, err
 	}
-	w, err := o.env.Update(ctx, engine.Ref{Store: h.src, Table: table, ID: h.task.ID}, patch)
+	w, err := o.hist().Update(ctx, engine.Ref{Store: h.src, Table: table, ID: h.task.ID}, patch)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
@@ -814,5 +814,5 @@ func (o ops) timeStop(ctx context.Context, in IDIn) (work.WriteOut, error) {
 		return work.WriteOut{}, errs.New(errs.NotFound, "you have no open status span on "+id.String()).
 			WithHint("time counts from lore task start; agents get time from claims and runs")
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" stopped your time on "+id.String()+"  ("+timeentry.FormatSeconds(e.Seconds)+", entry "+e.ID.String()+"); status stays "+work.Field(r, work.FieldStatus)+"\n")
+	return work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" stopped your time on "+id.String()+"  ("+timeentry.FormatSeconds(e.Seconds)+", entry "+e.ID.String()+"); status stays "+work.Field(r, work.FieldStatus)+"\n")
 }

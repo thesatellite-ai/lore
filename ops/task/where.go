@@ -32,6 +32,8 @@ func taskKeys() map[string]filter.Field {
 		keyID:        {Kind: value.KindText},
 		keyCreatedAt: {Kind: value.KindDateTime},
 		keyUpdatedAt: {Kind: value.KindDateTime},
+		// 18.4: the SLA state, computed on read (views.go withSLA).
+		keySLA: {Kind: value.KindText, Values: SLAStates()},
 	}
 	for _, t := range schema.Builtin() {
 		if t.Name != table {

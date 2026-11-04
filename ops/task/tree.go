@@ -241,7 +241,7 @@ func (o ops) closeChildren(ctx context.Context, f forest, id, verb, children, su
 		if err != nil {
 			return "", err
 		}
-		if _, err := o.env.Update(ctx, engine.Ref{Store: s.Source, Table: table, ID: s.Row.ID}, patch); err != nil {
+		if _, err := o.hist().Update(ctx, engine.Ref{Store: s.Source, Table: table, ID: s.Row.ID}, patch); err != nil {
 			return "", err
 		}
 	}
@@ -295,7 +295,7 @@ func (o ops) afterClose(ctx context.Context, f forest, id string) (ParentNote, N
 		if err != nil {
 			return ParentNote{}, Next{}, "", err
 		}
-		if _, err = o.env.Update(ctx, engine.Ref{Store: ps.Source, Table: table, ID: ps.Row.ID}, patch); err != nil {
+		if _, err = o.hist().Update(ctx, engine.Ref{Store: ps.Source, Table: table, ID: ps.Row.ID}, patch); err != nil {
 			return ParentNote{}, Next{}, "", err
 		}
 		note.Closed = true

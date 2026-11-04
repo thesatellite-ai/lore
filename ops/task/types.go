@@ -135,6 +135,8 @@ type Brief struct {
 	Unestimated     int    `json:"unestimated,omitempty"`
 	// Lead is the lead (assigned_to_actor_id, 14.2).
 	Lead string `json:"lead,omitempty"`
+	// SLA is ok | at_risk | breached when the priority has an SLA (18.4).
+	SLA string `json:"sla,omitempty"`
 	// Store is set for a task of a store other than the repo's own.
 	Store store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
@@ -313,7 +315,11 @@ type ShowOut struct {
 type EditIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
-	ID            string        `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+	ID string `json:"id,omitempty" arg:"0" desc:"the task id (tsk_…); leave out with --where"`
+	// Where / DryRun are the bulk edit (TASK 18.1): every matching task gets
+	// the same flags in one bat_ batch, previewed above batch.preview_rows.
+	Where         []string      `json:"where,omitempty" flag:"where" desc:"bulk edit: every task matching this filter (the task list --where grammar; repeatable, all must match)"`
+	DryRun        bool          `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list the tasks that would change, write nothing"`
 	Title         string        `json:"title,omitempty" flag:"title" desc:"new title"`
 	Body          string        `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
 	Priority      string        `json:"priority,omitempty" flag:"priority" desc:"low | medium | high | urgent"`

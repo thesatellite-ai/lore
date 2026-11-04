@@ -344,6 +344,7 @@ tasks.done_pr number
 tasks.due_at datetime
 tasks.estimate text
 tasks.gate text
+tasks.history json
 tasks.idempotency_key text
 tasks.merged_at datetime
 tasks.mission_id ref

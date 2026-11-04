@@ -135,7 +135,7 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpEdit, Summary: "Edit task fields (only flags you pass are applied)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported, errs.Cycle, errs.OpenChildren}, treeAddErrors...)...),
 			Confirm: op.ConfirmRule{MayAsk: true},
-		}, o.edit),
+		}, o.editOp),
 		op.Define(op.Spec{
 			Name: OpStart, Summary: "Mark task as in_progress",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
@@ -181,7 +181,7 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpDeferred, Summary: "Show deferred tasks (snoozed; deferred_until in the future)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.deferred),
-	}, slices.Concat(timeOps(o), recurOps(o), templateOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o))...)
+	}, slices.Concat(timeOps(o), recurOps(o), templateOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o), historyOps(o), exportOps(o), viewOps(o))...)
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
@@ -392,7 +392,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		if perr != nil {
 			return AddOut{}, perr
 		}
-		if _, perr = o.env.Update(ctx, *par.reopen, patch); perr != nil {
+		if _, perr = o.hist().Update(ctx, *par.reopen, patch); perr != nil {
 			return AddOut{}, perr
 		}
 	}
@@ -743,8 +743,24 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			o.meta.Sort, fieldSort = s, nil
 		}
 	}
+	// TASK 13 (OV15 leftover): --sort urgency[:asc|:desc] comes first and
+	// ranks by the computed score; the other keys break its ties.
+	urg, fieldSort, err := urgencySort(fieldSort)
+	if err != nil {
+		return ListOut{}, err
+	}
 	// XQ10: --sort key[:asc|:desc]; ties keep the default order (stable).
 	specs, err := listSort(fieldSort, keys)
+	if err != nil {
+		return ListOut{}, err
+	}
+	get, sla, err := o.withSLA(ctx, rowGetter(keys))
+	if err != nil {
+		return ListOut{}, err
+	}
+	now := opclock.Now(o.env)
+	// TASK 6.3/6.6: tree filters and the derived rollup of umbrellas.
+	f, err := o.forest(ctx, project)
 	if err != nil {
 		return ListOut{}, err
 	}
@@ -752,12 +768,10 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if len(specs) > 0 {
 		order = func(a, b row.Row) int { return sortspec.Compare(specs, sortValue(keys, a), sortValue(keys, b)) }
 	}
-	get := rowGetter(keys)
-	now := opclock.Now(o.env)
-	// TASK 6.3/6.6: tree filters and the derived rollup of umbrellas.
-	f, err := o.forest(ctx, project)
-	if err != nil {
-		return ListOut{}, err
+	if urg != 0 {
+		if order, err = o.urgencyOrder(ctx, f, now, urg, order); err != nil {
+			return ListOut{}, err
+		}
 	}
 	inTree, err := treeFilter(f, in)
 	if err != nil {
@@ -768,6 +782,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		e := estimateInfo(f, r, unit)
 		b.Estimate, b.EstimateUnit, b.EstimateSubtree, b.Unestimated = e.Estimate, e.Unit, e.Subtree, e.Unestimated
 		b.Lead = work.Field(r, fieldAssigned)
+		b.SLA = sla(r)
 	}
 	return o.viewWith(ctx, in.Store, project, team.state, order, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
@@ -1143,7 +1158,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		}
 		ctx = bctx
 		for _, u := range te.others {
-			if _, uerr := o.env.Update(ctx, u.ref, u.patch); uerr != nil {
+			if _, uerr := o.hist().Update(ctx, u.ref, u.patch); uerr != nil {
 				return work.WriteOut{}, uerr
 			}
 		}
@@ -1155,7 +1170,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: nothing to change").
 			WithHint("give at least one flag, e.g. --title, --status, --priority, --due")
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+noteLines(dateNotes)+timeHint)
+	return work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+noteLines(dateNotes)+timeHint)
 }
 
 // start marks a task in_progress; starting work also commits it and
@@ -1177,7 +1192,7 @@ func (o ops) start(ctx context.Context, in IDIn) (work.WriteOut, error) {
 	if !work.Time(cur, fieldStarted).IsZero() {
 		delete(patch, fieldStarted)
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" started\n"+hint)
+	return work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" started\n"+hint)
 }
 
 // statusPatch sets status through setStatus (D2), stamps the time field,
@@ -1248,7 +1263,8 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	case in.Commit != "":
 		code = " (commit " + shortSHA(in.Commit) + "); waiting for merge"
 	}
-	w, err := work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" done"+code+"\n")
+	// TSQ14 / 17.2: the history's status entry records the unticked items.
+	w, err := work.Patch(withHistoryNote(ctx, "open_items_at_close: "+strconv.Itoa(forced)), o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" done"+code+"\n")
 	if err != nil {
 		return DoneOut{}, err
 	}
@@ -1353,7 +1369,7 @@ func (o ops) cancel(ctx context.Context, in CancelIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
-	w, err := work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" cancelled\n")
+	w, err := work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" cancelled\n")
 	if err != nil {
 		return DoneOut{}, err
 	}

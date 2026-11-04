@@ -244,7 +244,7 @@ func (o ops) addEdge(ctx context.Context, waiter, up string) error {
 	if err != nil {
 		return err
 	}
-	_, err = work.Patch(ctx, o.env, Noun, table, wid, map[string]value.Value{fieldBlockedBy: v}, "")
+	_, err = work.Patch(ctx, o.hist(), Noun, table, wid, map[string]value.Value{fieldBlockedBy: v}, "")
 	return err
 }
 
@@ -269,7 +269,7 @@ func (o ops) removeEdge(ctx context.Context, waiter, up string) (bool, error) {
 			return false, err
 		}
 	}
-	_, err = work.Patch(ctx, o.env, Noun, table, wid, map[string]value.Value{fieldBlockedBy: v}, "")
+	_, err = work.Patch(ctx, o.hist(), Noun, table, wid, map[string]value.Value{fieldBlockedBy: v}, "")
 	return true, err
 }
 

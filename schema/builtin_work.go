@@ -112,6 +112,9 @@ const (
 	FieldTaskAssignees = "assignees"
 	// FieldTaskWatchers is who gets told about changes (14).
 	FieldTaskWatchers = "watchers"
+	// FieldTaskHistory is the capped activity history of tracked fields
+	// (TASK 17, TSQ10): append-only entries merged by entry id (the_…).
+	FieldTaskHistory = "history"
 )
 
 // Task gates (TaskGate, LORE_TEAM_SPEC 7.4): a human approval step.
@@ -216,6 +219,9 @@ func workDefs() []TableDef {
 			Text(FieldTaskEstimate, Describe("estimate, a decimal >= 0 in the tasks.estimate_unit unit (TASK 9)")),
 			List(FieldTaskAssignees, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids responsible, the lead (assigned_to_actor_id) included (TASK 14.2)")),
 			List(FieldTaskWatchers, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids told about changes (TASK 14)")),
+			// TSQ10: last tasks.history_max entries + one summary fold; union by id (17.3).
+			JSON(FieldTaskHistory, MergeBy(MergeListByID),
+				Describe("activity history [{id (the_…), at, by, field, from, to, note}] of tracked fields (TASK 17.2)")),
 			IndexOn("project_id", "status"),
 			IndexOn("project_id", FieldTaskParent),
 			IndexOn("project_id", "commitment"),

@@ -608,7 +608,7 @@ func (o ops) templateEdit(ctx context.Context, in TemplateAddIn) (TemplateOut, e
 	if f.Description == "" {
 		fields["description"] = value.Null{}
 	}
-	w, err := o.env.Update(ctx, engine.Ref{Table: tplTable, ID: cur.ID}, fields)
+	w, err := o.hist().Update(ctx, engine.Ref{Table: tplTable, ID: cur.ID}, fields)
 	if err != nil {
 		return TemplateOut{}, err
 	}
@@ -637,7 +637,7 @@ func (o ops) templateRename(ctx context.Context, in TemplateRenameIn) (TemplateO
 	if err != nil {
 		return TemplateOut{}, err
 	}
-	w, err := o.env.Update(ctx, engine.Ref{Table: tplTable, ID: cur.ID}, patch)
+	w, err := o.hist().Update(ctx, engine.Ref{Table: tplTable, ID: cur.ID}, patch)
 	if err != nil {
 		return TemplateOut{}, err
 	}
@@ -821,7 +821,7 @@ func (o ops) applyNode(ctx context.Context, base AddIn, n TemplateTask, parent s
 		if perr != nil {
 			return AddOut{}, false, perr
 		}
-		if _, err = o.env.Update(ctx, engine.Ref{Table: table, ID: id}, patch); err != nil {
+		if _, err = o.hist().Update(ctx, engine.Ref{Table: table, ID: id}, patch); err != nil {
 			return AddOut{}, false, err
 		}
 	}
