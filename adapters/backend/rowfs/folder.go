@@ -3,6 +3,7 @@ package rowfs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -400,6 +401,9 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 			prevs[i] = cur.Doc
 		}
 	}
+	if err := f.ensureMeta(a); err != nil {
+		return nil, errors.Join(err, a.Undo())
+	}
 	for i, c := range changes {
 		if err := ctx.Err(); err != nil {
 			return nil, errors.Join(err, a.Undo())
@@ -416,6 +420,53 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 		a.Paths = append(a.Paths, f.StorePath(c.Row.Table, c.Row.ID))
 	}
 	return a, nil
+}
+
+// Keys of the _meta.json a folder gets on its first write (spec 6.1: "a
+// project folder (prj_ id in its _meta.json)"; v0.1.17 stores package
+// metaKeyProjectID / metaKeyVersion, which read and keep it).
+const (
+	metaKeyProjectID = "project_id"
+	metaKeyVersion   = "_v"
+)
+
+// ensureMeta gives a non-root folder its _meta.json with a new prj_ id
+// when the batch is the folder's first write (the file is missing), as
+// part of the batch: undone with it, and in a.Paths so a git store
+// commits it with the rows. An existing _meta.json (written by `lore org
+// link`, or by another lore) is never touched. The root folder's identity
+// is lore-store.yaml, so it gets none.
+func (f *Folder) ensureMeta(a *Applied) error {
+	if f.name == FolderRoot {
+		return nil
+	}
+	full := filepath.Join(f.dataDir, MetaFileName)
+	if err := checkChain(f.root.dir, f.rel+"/"+MetaFileName); err != nil {
+		return err
+	}
+	if _, err := os.Lstat(full); err == nil {
+		return nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return errs.Wrap(errs.Internal, "rowfs: stat "+MetaFileName, err)
+	}
+	id, err := ids.New[ids.Project]()
+	if err != nil {
+		return errs.Wrap(errs.Internal, "rowfs: new project id", err)
+	}
+	raw, err := json.Marshal(map[string]any{metaKeyProjectID: id.String(), metaKeyVersion: row.FormatVersion})
+	if err != nil {
+		return errs.Wrap(errs.Internal, "rowfs: encode "+MetaFileName, err)
+	}
+	doc, err := canon.Document(raw)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "rowfs: encode "+MetaFileName, err)
+	}
+	if err := writeAtomic(full, doc); err != nil {
+		return err
+	}
+	a.undo = append(a.undo, undoStep{full: full})
+	a.Paths = append(a.Paths, f.rel+"/"+MetaFileName)
+	return nil
 }
 
 // sortedKeys returns m's keys in order, so reads are deterministic.
