@@ -330,3 +330,50 @@ func TestScannerRefreshedBeforeEachWrite(t *testing.T) {
 		t.Fatalf("a failed refresh must fail the write: %v", err)
 	}
 }
+
+// TestConfirmedFindingBecomesAnAllowEntry (SQ2): a write whose finding the
+// caller confirms as not a secret (on_detect ask, then --yes) stores one
+// secret_allows row in the same store, in the same batch, naming the row,
+// the field, the rule and the match hash (never the value). An edit of the
+// row keeping that match asks nothing; an edit adding a DIFFERENT match
+// still asks.
+func TestConfirmedFindingBecomesAnAllowEntry(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	o := memAddOp(f, op.ConfirmRule{})
+	res, err := f.eng.Run(ctx, o, op.ArgsDecoder{Args: []string{"key " + fakeKey}}, op.Caller{Actor: testActor, Yes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := res.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	memID := strings.TrimSuffix(strings.TrimPrefix(string(out), `{"id":"`), `"}`)
+	allows, err := f.eng.List(ctx, store.SourceRepo, schema.TableSecretAllows)
+	if err != nil || len(allows) != 1 {
+		t.Fatalf("want one allow row: %v %v", allows, err)
+	}
+	a := allows[0]
+	if textOf(a, allowRowID) != memID || textOf(a, allowField) != "body" || textOf(a, allowRule) != awsRule ||
+		a.Fields[allowHash].String() != value.Int(int64(scan.HashMatch(fakeKey))).String() {
+		t.Fatalf("allow row fields: %v (row %s)", a.Fields, memID)
+	}
+	if !strings.HasPrefix(textOf(a, allowReason), allowReasonPrefix) || strings.Contains(textOf(a, allowReason), fakeKey) {
+		t.Fatalf("reason: %q", textOf(a, allowReason))
+	}
+	id, err := ids.ParseAny(memID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.eng.Update(ctx, Ref{ID: id}, map[string]value.Value{"body": txt("key " + fakeKey + " still here")}); err != nil {
+		t.Fatalf("the accepted match must not ask again: %v", err)
+	}
+	other := "AKIA" + strings.Repeat("Z", 16)
+	if _, err = f.eng.Update(ctx, Ref{ID: id}, map[string]value.Value{"body": txt("key " + fakeKey + " and " + other)}); !errs.Has(err, errs.NeedsConfirm) {
+		t.Fatalf("a different match must still ask: %v", err)
+	}
+	if n, _ := f.eng.List(ctx, store.SourceRepo, schema.TableSecretAllows); len(n) != 1 {
+		t.Fatalf("a refused edit must add no allow row: %d", len(n))
+	}
+}

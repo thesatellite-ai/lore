@@ -11,8 +11,11 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -140,6 +143,76 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 type RefreshingScanner interface {
 	scan.Scanner
 	Refresh(ctx context.Context) error
+}
+
+// allowReasonPrefix starts the reason of a secret_allows row a confirmed
+// write records. The confirm carries no typed reason (op.Caller has none),
+// so the reason is this fixed text plus the actor and the command, which
+// is enough for lore doctor and the commit hook to say who accepted it.
+const allowReasonPrefix = "confirmed not a secret by "
+
+// allowRows turns the findings a caller accepted as not secrets (on_detect
+// ask, then --yes or a terminal yes) into secret_allows rows for rowID
+// (SQ2): one per distinct (field, rule, match hash), so scan.Filter drops
+// exactly that match on every later write and the commit hook can read
+// them, while a different match in the same row still asks. A zero rowID
+// makes rows to be pointed at the final id later (pointAllows).
+func (e *Engine) allowRows(cl call, accepted []scan.Finding, rowID ids.AnyID, actor ids.ID[ids.Actor], stamp hlc.HLC) ([]row.Row, error) {
+	if len(accepted) == 0 {
+		return nil, nil
+	}
+	reasonText := allowReasonPrefix + actor.String()
+	if cl.op != "" {
+		reasonText += " (" + strings.ReplaceAll(cl.op, ".", " ") + ")"
+	}
+	reason, err := value.TextOf(reasonText)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []row.Row
+	for _, f := range accepted {
+		k := f.Field + "\x00" + f.RuleID + "\x00" + strconv.FormatUint(uint64(f.MatchHash), 10)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		id, err := e.ids.NewID(ids.PrefixSecretAllow)
+		if err != nil {
+			return nil, err
+		}
+		field, err := value.TextOf(f.Field)
+		if err != nil {
+			return nil, err
+		}
+		rule, err := value.TextOf(f.RuleID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, row.Row{
+			Table: schema.TableSecretAllows, ID: id, HLC: stamp,
+			Fields: map[string]value.Value{
+				allowField: field, allowRule: rule, allowHash: value.Int(int64(f.MatchHash)), allowReason: reason,
+			},
+			CreatedAt: stamp.Wall, CreatedBy: actor, UpdatedAt: stamp.Wall, UpdatedBy: actor,
+		})
+	}
+	return pointAllows(out, rowID)
+}
+
+// pointAllows sets the row_id of allow rows to rowID (zero: left unset).
+func pointAllows(rows []row.Row, rowID ids.AnyID) ([]row.Row, error) {
+	if rowID.IsZero() {
+		return rows, nil
+	}
+	ref, err := value.RefOf(rowID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i].Fields[allowRowID] = ref
+	}
+	return rows, nil
 }
 
 // scanText runs the scanner, turning a degraded scan into a warning.

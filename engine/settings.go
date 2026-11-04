@@ -16,10 +16,11 @@ import (
 
 // secret_allows field names (schema.Builtin).
 const (
-	allowRowID = "row_id"
-	allowField = "field"
-	allowRule  = "rule_id"
-	allowHash  = "match_hash"
+	allowRowID  = "row_id"
+	allowField  = "field"
+	allowRule   = "rule_id"
+	allowHash   = "match_hash"
+	allowReason = "reason"
 )
 
 // storeSettings is the engine's default Settings: the policies,

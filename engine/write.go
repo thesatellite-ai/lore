@@ -116,9 +116,17 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 		Table: table, ID: id, HLC: stamp, Origin: origin, Fields: sc.fields,
 		CreatedAt: stamp.Wall, CreatedBy: actor, UpdatedAt: stamp.Wall, UpdatedBy: actor,
 	}
-	got, err := e.put(ctx, st, r, hlc.HLC{})
+	allows, err := e.allowRows(cl, sc.accepted, id, actor, stamp)
+	if err != nil {
+		return Written{}, err
+	}
+	got, err := e.put(ctx, st, r, hlc.HLC{}, allows...)
 	if natural && errors.Is(err, store.ErrStale) {
-		got, err = e.recreateNatural(ctx, st, def, keyFields, r, err)
+		// the re-created row gets a fresh id: its allow entries follow it
+		if allows, err = e.allowRows(cl, sc.accepted, ids.AnyID{}, actor, stamp); err != nil {
+			return Written{}, err
+		}
+		got, err = e.recreateNatural(ctx, st, def, keyFields, r, err, allows)
 		id = got.row.ID
 	}
 	if err != nil {
@@ -126,7 +134,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	}
 	ev := Event{Op: cl.op, Action: ActionCreate, Store: target, Table: table, ID: id, HLC: stamp, Actor: actor,
 		SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
-	return Written{Row: got.row, Warnings: sc.warnings}, e.finish(ctx, target, []store.Row{got.doc}, ev)
+	return Written{Row: got.row, Warnings: sc.warnings}, e.finish(ctx, target, got.docs(), append(got.allowEvents(cl.op, target), ev)...)
 }
 
 // recreateNatural handles a natural-id create whose id is taken (stale is
@@ -138,7 +146,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 // row with the key stays "already exists". Two machines re-creating the
 // same key offline get two rows (spec-deltas; a merge by key is later
 // work).
-func (e *Engine) recreateNatural(ctx context.Context, st Attached, def schema.TableDef, keyFields []string, r row.Row, stale error) (stored, error) {
+func (e *Engine) recreateNatural(ctx context.Context, st Attached, def schema.TableDef, keyFields []string, r row.Row, stale error, allows []row.Row) (stored, error) {
 	exists := func(id ids.AnyID) error {
 		return errs.Wrap(errs.InvalidInput, "engine: a "+string(def.Name)+" row with this "+strings.Join(keyFields, ", ")+" already exists ("+id.String()+")", stale).
 			WithHint("use the existing row")
@@ -162,7 +170,10 @@ func (e *Engine) recreateNatural(ctx context.Context, st Attached, def schema.Ta
 	if r.ID, err = e.ids.NewID(def.Prefix); err != nil {
 		return stored{}, err
 	}
-	return e.put(ctx, st, r, hlc.HLC{})
+	if allows, err = pointAllows(allows, r.ID); err != nil {
+		return stored{}, err
+	}
+	return e.put(ctx, st, r, hlc.HLC{}, allows...)
 }
 
 // sameKey reports whether a and b hold equal values in every key field.
@@ -231,13 +242,17 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	ours.HLC = e.clock.Now(cur.HLC)
 	ours.UpdatedAt, ours.UpdatedBy = ours.HLC.Wall, actor
 
-	got, merged, err := e.putMerging(ctx, st, def, cur, ours)
+	allows, err := e.allowRows(cl, sc.accepted, cur.ID, actor, ours.HLC)
+	if err != nil {
+		return Written{}, err
+	}
+	got, merged, err := e.putMerging(ctx, st, def, cur, ours, allows)
 	if err != nil {
 		return Written{}, err
 	}
 	ev := Event{Op: cl.op, Action: ActionUpdate, Store: src, Table: cur.Table, ID: cur.ID, HLC: got.row.HLC, Actor: actor,
 		Merged: merged, SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
-	return Written{Row: got.row, Warnings: sc.warnings}, e.finish(ctx, src, []store.Row{got.doc}, ev)
+	return Written{Row: got.row, Warnings: sc.warnings}, e.finish(ctx, src, got.docs(), append(got.allowEvents(cl.op, src), ev)...)
 }
 
 // retype returns a copy of a stored row's fields with every field the
@@ -274,8 +289,8 @@ func retype(def schema.TableDef, fields map[string]value.Value) map[string]value
 
 // putMerging writes ours over base; on ErrStale it re-reads, merges
 // (logic/merge) and retries once. merged reports the retry.
-func (e *Engine) putMerging(ctx context.Context, st Attached, def schema.TableDef, base, ours row.Row) (stored, bool, error) {
-	got, err := e.put(ctx, st, ours, base.HLC)
+func (e *Engine) putMerging(ctx context.Context, st Attached, def schema.TableDef, base, ours row.Row, allows []row.Row) (stored, bool, error) {
+	got, err := e.put(ctx, st, ours, base.HLC, allows...)
 	if !errors.Is(err, store.ErrStale) {
 		return got, false, err
 	}
@@ -306,7 +321,7 @@ func (e *Engine) putMerging(ctx context.Context, st Attached, def schema.TableDe
 	m.Fields = whole
 	m.HLC = e.clock.Now(theirs.HLC, ours.HLC)
 	m.UpdatedAt, m.UpdatedBy = m.HLC.Wall, ours.UpdatedBy
-	got, err = e.put(ctx, st, m, theirs.HLC)
+	got, err = e.put(ctx, st, m, theirs.HLC, allows...)
 	if errors.Is(err, store.ErrStale) {
 		return stored{}, false, errs.Wrap(errs.Stale, "engine: "+base.ID.String()+" kept changing while it was merged", err).
 			WithHint("rerun the command")
@@ -677,22 +692,53 @@ func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, er
 // put writes one row with expect and returns it as stored, in both forms:
 // the typed model row for the caller (its bytes are exactly doc's) and the
 // backend row for the cache.
-func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC) (stored, error) {
+//
+// extra are new rows written in the SAME backend batch (all or none): the
+// secret_allows entries a confirmed write records (SQ2). They expect no
+// row (fresh ids).
+func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC, extra ...row.Row) (stored, error) {
 	r = stampAs(st, r)
 	sr, err := store.FromRow(r)
 	if err != nil {
 		return stored{}, err
 	}
-	if err := st.Backend.Write(ctx, []store.Change{{Row: sr, Expect: expect}}); err != nil {
+	changes := []store.Change{{Row: sr, Expect: expect}}
+	out := stored{row: r, doc: sr}
+	for _, x := range extra {
+		x = stampAs(st, x)
+		xr, xerr := store.FromRow(x)
+		if xerr != nil {
+			return stored{}, xerr
+		}
+		changes = append(changes, store.Change{Row: xr})
+		out.extra = append(out.extra, x)
+		out.extraDocs = append(out.extraDocs, xr)
+	}
+	if err := st.Backend.Write(ctx, changes); err != nil {
 		return stored{}, err
 	}
-	return stored{row: r, doc: sr}, nil
+	return out, nil
 }
 
-// stored is one row as the backend accepted it.
+// stored is one row as the backend accepted it, with the extra rows of
+// the same batch.
 type stored struct {
-	row row.Row
-	doc store.Row
+	row       row.Row
+	doc       store.Row
+	extra     []row.Row
+	extraDocs []store.Row
+}
+
+// docs is every backend row of the batch, the main row first.
+func (s stored) docs() []store.Row { return append([]store.Row{s.doc}, s.extraDocs...) }
+
+// allowEvents audits each extra row as a create.
+func (s stored) allowEvents(opName string, target store.Source) []Event {
+	evs := make([]Event, 0, len(s.extra))
+	for _, x := range s.extra {
+		evs = append(evs, Event{Op: opName, Action: ActionCreate, Store: target, Table: x.Table, ID: x.ID, HLC: x.HLC, Actor: x.CreatedBy})
+	}
+	return evs
 }
 
 // finish refreshes the cache with the stored rows and records the audit
