@@ -26,7 +26,7 @@ func allConstants() []Code {
 		Stale, StoreScheme, StoreBackend, StoreUnreachable, StoreReadOnly, StoreLocked,
 		Unauthorized, ResourceInvalid, SchemaOld, NeedsConfirm, PolicyDenied, KindUnknown,
 		MetaType, MetaAmbiguous, MigrateLocked, URLUserinfo,
-		ResourceInUse, KindConflict, NameTaken, MetaTaken,
+		ResourceInUse, KindConflict, NameTaken, MetaTaken, Purged,
 	}
 }
 
@@ -174,5 +174,15 @@ func TestOnlyInternalIsGeneric(t *testing.T) {
 	}
 	if DefOf(Internal).Class != ClassGeneric {
 		t.Error("E_INTERNAL must stay generic")
+	}
+}
+
+// TestPurgedRow pins E_PURGED to its CLI_REFERENCE 5.5 row: refused, exit
+// 23, HTTP 409 (DELETION_DESIGN 3.5: purged rows never come back).
+func TestPurgedRow(t *testing.T) {
+	t.Parallel()
+	d, ok := Lookup(Purged)
+	if !ok || d.Code != "E_PURGED" || d.Class != ClassRefused || d.Exit != 23 || d.HTTP != http.StatusConflict {
+		t.Fatalf("E_PURGED = %+v (ok %v), want refused/23/409", d, ok)
 	}
 }

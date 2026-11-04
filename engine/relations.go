@@ -133,7 +133,7 @@ func (e *Engine) holders(ctx context.Context, t validate.Target) ([]store.Source
 	}
 	var out []store.Source
 	for _, name := range e.order {
-		got, err := e.stores[name].Backend.Get(ctx, table, t.ID)
+		got, _, err := e.getRow(ctx, name, table, t.ID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		}
@@ -233,7 +233,7 @@ func (e *Engine) dependents(ctx context.Context, table row.Table, id ids.AnyID) 
 	}
 	var out []dependent
 	for _, name := range e.order {
-		rows, _, err := e.stores[name].Backend.Read(ctx, "")
+		rows, _, err := e.readRows(ctx, name, "")
 		if err != nil {
 			return nil, err
 		}

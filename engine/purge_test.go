@@ -50,7 +50,7 @@ func rowPath(dir string, table row.Table, id ids.AnyID) string {
 // changes nothing; afterwards no write path brings the id back as a live
 // row, even when an old clone has put the live file back over the
 // tombstone: CreateWithID, Update, Move into the store are refused
-// (E_INVALID_ID), a natural-key create of the same key takes a fresh id,
+// (E_PURGED, decision: coordinator item 1), a natural-key create of the same key takes a fresh id,
 // and a tombstone write is still allowed. A store without the list cannot
 // be purged in (E_UNSUPPORTED, nothing written).
 func TestPurgeNeverComesBack(t *testing.T) {
@@ -100,14 +100,14 @@ func TestPurgeNeverComesBack(t *testing.T) {
 	if werr := root.WriteFile(rel, live, 0o600); werr != nil {
 		t.Fatal(werr)
 	}
-	if _, uerr := f.eng.Update(ctx, ref, map[string]value.Value{"color": txt("red")}); !errs.Has(uerr, errs.InvalidID) {
-		t.Fatalf("update of a purged id: %v, want E_INVALID_ID", uerr)
+	if _, uerr := f.eng.Update(ctx, ref, map[string]value.Value{"color": txt("red")}); !errs.Has(uerr, errs.Purged) {
+		t.Fatalf("update of a purged id: %v, want E_PURGED", uerr)
 	}
 	if rerr := root.Remove(rel); rerr != nil {
 		t.Fatal(rerr)
 	}
-	if _, cerr := f.eng.CreateWithID(ctx, kbStore, schema.TableTags, tag.Row.ID, tagFields); !errs.Has(cerr, errs.InvalidID) {
-		t.Fatalf("CreateWithID of a purged id: %v, want E_INVALID_ID", cerr)
+	if _, cerr := f.eng.CreateWithID(ctx, kbStore, schema.TableTags, tag.Row.ID, tagFields); !errs.Has(cerr, errs.Purged) {
+		t.Fatalf("CreateWithID of a purged id: %v, want E_PURGED", cerr)
 	}
 	// the same natural key: a fresh id, never the purged one
 	again, err := f.eng.Create(ctx, kbStore, schema.TableTags, tagFields)
@@ -126,8 +126,8 @@ func TestPurgeNeverComesBack(t *testing.T) {
 	if err := f.repo.Open(store.OpenOptions{}).Write(ctx, []store.Change{{Row: sr}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.eng.Move(ctx, Ref{Store: store.SourceRepo, Table: schema.TableTags, ID: tag.Row.ID}, kbStore); !errs.Has(err, errs.InvalidID) {
-		t.Fatalf("move of a purged id into kb: %v, want E_INVALID_ID", err)
+	if _, err := f.eng.Move(ctx, Ref{Store: store.SourceRepo, Table: schema.TableTags, ID: tag.Row.ID}, kbStore); !errs.Has(err, errs.Purged) {
+		t.Fatalf("move of a purged id into kb: %v, want E_PURGED", err)
 	}
 	if _, err := f.repo.Open(store.OpenOptions{}).Get(ctx, schema.TableTags, tag.Row.ID); err != nil {
 		t.Fatalf("the refused move must leave the source row: %v", err)

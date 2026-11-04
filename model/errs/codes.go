@@ -114,6 +114,10 @@ const (
 	MetaAmbiguous    Code = "E_META_AMBIGUOUS"
 	MigrateLocked    Code = "E_MIGRATE_LOCKED"
 	URLUserinfo      Code = "E_URL_CREDENTIALS"
+	// Purged refuses any write that would bring a purged id back as a live
+	// row (update, create with the id, move, merge, restore): purged rows
+	// never come back (DELETION_DESIGN 3.5, DQ4; CLI_REFERENCE 5.5).
+	Purged Code = "E_PURGED"
 )
 
 // Def is the registry entry of one code: everything a surface needs to print
@@ -215,6 +219,7 @@ var table = map[Code]entry{
 	MetaAmbiguous:    {class: ClassAmbiguous, desc: "a bare name matches definitions at two or more levels"},
 	MigrateLocked:    {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
 	URLUserinfo:      {class: ClassBadInput, desc: "a URL value holds credentials"},
+	Purged:           {class: ClassRefused, desc: "the row was purged; only a tombstone is left"},
 }
 
 // Lookup returns the registry entry of c. An unregistered code is reported

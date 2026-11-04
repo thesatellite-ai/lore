@@ -121,7 +121,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 		return Written{}, err
 	}
 	got, err := e.put(ctx, st, r, hlc.HLC{}, allows...)
-	if natural && (errors.Is(err, store.ErrStale) || errors.Is(err, errPurgedID)) {
+	if natural && (errors.Is(err, store.ErrStale) || errs.Has(err, errs.Purged)) {
 		taken := err // why the id is taken (kept: allowRows below reuses err)
 		// the re-created row gets a fresh id: its allow entries follow it
 		if allows, err = e.allowRows(cl, sc.accepted, ids.AnyID{}, actor, stamp); err != nil {
@@ -154,7 +154,7 @@ func (e *Engine) recreateNatural(ctx context.Context, st Attached, def schema.Ta
 	}
 	_, cur, err := e.locate(ctx, Ref{Store: st.Name, Table: def.Name, ID: r.ID})
 	switch {
-	case errs.Has(err, errs.NotFound) && errors.Is(stale, errPurgedID):
+	case errs.Has(err, errs.NotFound) && errs.Has(stale, errs.Purged):
 		// purged and its tombstone file gone: the id is still taken for good
 	case err != nil:
 		return stored{}, err
@@ -208,7 +208,7 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 		return Written{}, err
 	}
 	if cur.Deleted {
-		return Written{}, errs.New(errs.NotFound, "engine: "+cur.ID.String()+" is deleted")
+		return Written{}, deletedErr(ctx, st, cur, "is deleted")
 	}
 	def, err := e.tableDef(cur.Table)
 	if err != nil {
@@ -398,11 +398,12 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 	if err != nil {
 		return Written{}, err
 	}
-	if _, err = e.writable(src); err != nil {
+	st, err := e.writable(src)
+	if err != nil {
 		return Written{}, err
 	}
 	if cur.Deleted {
-		return Written{}, errs.New(errs.NotFound, "engine: "+cur.ID.String()+" is already deleted")
+		return Written{}, deletedErr(ctx, st, cur, "is already deleted")
 	}
 	return e.remove(ctx, src, cur, false)
 }
@@ -649,7 +650,7 @@ func (e *Engine) List(ctx context.Context, source store.Source, table row.Table)
 	if err != nil {
 		return nil, err
 	}
-	rows, _, err := a.Backend.Read(ctx, "")
+	rows, _, err := e.readRows(ctx, a.Name, "")
 	if err != nil {
 		return nil, err
 	}
@@ -668,25 +669,34 @@ func (e *Engine) List(ctx context.Context, source store.Source, table row.Table)
 	return out, nil
 }
 
-// locate finds ref's row and the store holding it.
+// locate finds ref's row and the store holding it. A purged id whose live
+// file came back reads as a tombstone (hidePurged).
 func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, error) {
+	src, r, _, err := e.locateRaw(ctx, ref)
+	return src, r, err
+}
+
+// locateRaw is locate that also reports whether the row found is a purged
+// id's resurrected file shown as a tombstone (Purge repairs it).
+func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row, bool, error) {
 	table := ref.Table
 	if table == "" {
 		def, ok := e.reg.ByPrefix(ref.ID.Prefix())
 		if !ok {
-			return "", row.Row{}, errs.New(errs.NotFound, "engine: no table holds ids like "+ref.ID.String())
+			return "", row.Row{}, false, errs.New(errs.NotFound, "engine: no table holds ids like "+ref.ID.String())
 		}
 		table = def.Name
 	}
 	names := e.order
 	if ref.Store != "" {
 		if _, err := e.attached(ref.Store); err != nil {
-			return "", row.Row{}, err
+			return "", row.Row{}, false, err
 		}
 		names = []store.Source{ref.Store}
 	}
 	var found []store.Source
 	var got row.Row
+	var hidden bool
 	seen := map[string]bool{} // Locations already looked in: one place counts once
 	for _, name := range names {
 		if loc := e.stores[name].Location; loc != "" {
@@ -695,29 +705,30 @@ func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, er
 			}
 			seen[loc] = true
 		}
-		sr, err := e.stores[name].Backend.Get(ctx, table, ref.ID)
+		sr, res, err := e.getRow(ctx, name, table, ref.ID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		}
 		if err != nil {
-			return "", row.Row{}, err
+			return "", row.Row{}, false, err
 		}
 		if got, err = sr.Decode(); err != nil {
-			return "", row.Row{}, err
+			return "", row.Row{}, false, err
 		}
+		hidden = res
 		found = append(found, name)
 	}
 	switch len(found) {
 	case 0:
-		return "", row.Row{}, errs.Wrap(errs.NotFound, "engine: no row "+ref.ID.String(), store.ErrNotFound)
+		return "", row.Row{}, false, errs.Wrap(errs.NotFound, "engine: no row "+ref.ID.String(), store.ErrNotFound)
 	case 1:
-		return found[0], got, nil
+		return found[0], got, hidden, nil
 	}
 	parts := make([]string, len(found))
 	for i, f := range found {
 		parts[i] = string(f)
 	}
-	return "", row.Row{}, errs.New(errs.AmbiguousID, "engine: "+ref.ID.String()+" is in "+strings.Join(parts, " and ")).
+	return "", row.Row{}, false, errs.New(errs.AmbiguousID, "engine: "+ref.ID.String()+" is in "+strings.Join(parts, " and ")).
 		WithHint("name the store with --to")
 }
 
@@ -729,7 +740,7 @@ func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, er
 // secret_allows entries a confirmed write records (SQ2). They expect no
 // row (fresh ids).
 func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC, extra ...row.Row) (stored, error) {
-	if err := refusePurged(ctx, st, r.ID, r.Deleted); err != nil {
+	if err := refusePurged(ctx, st, r.Table, r.ID, r.Deleted); err != nil {
 		return stored{}, err // every live write (create, update, merge, move) passes here
 	}
 	r = stampAs(st, r)

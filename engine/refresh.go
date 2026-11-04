@@ -14,15 +14,14 @@ import (
 // outside lore (a git pull, a hand edit, another process) reach search and
 // render. Returns the number of rows applied.
 func (e *Engine) Refresh(ctx context.Context, source store.Source) (int, error) {
-	a, err := e.attached(source)
-	if err != nil {
+	if _, err := e.attached(source); err != nil {
 		return 0, err
 	}
 	cur, err := e.cache.Cursor(ctx, source)
 	if err != nil {
 		return 0, err
 	}
-	rows, next, err := a.Backend.Read(ctx, cur)
+	rows, next, err := e.readRows(ctx, source, cur) // purged ids reach the cache as tombstones
 	if err != nil {
 		return 0, err
 	}

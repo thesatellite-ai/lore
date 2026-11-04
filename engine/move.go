@@ -64,20 +64,23 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 		return Written{}, err
 	}
 	if cur.Deleted {
-		return Written{}, errs.New(errs.NotFound, "engine: "+cur.ID.String()+" is deleted")
+		return Written{}, deletedErr(ctx, srcSt, cur, "is deleted")
 	}
 	def, err := e.tableDef(cur.Table)
 	if err != nil {
 		return Written{}, err
 	}
 	actor := e.actorOf(cl)
-	there, err := dst.Backend.Get(ctx, cur.Table, cur.ID)
+	there, _, err := e.getRow(ctx, to, cur.Table, cur.ID)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		there = store.Row{}
 	case err != nil:
 		return Written{}, err
 	case there.Deleted:
+		if perr := refusePurged(ctx, dst, cur.Table, cur.ID, false); perr != nil {
+			return Written{}, perr // purged there: E_PURGED names who and when
+		}
 		return Written{}, errs.New(errs.Unsupported, "engine: "+cur.ID.String()+" was in store "+string(to)+" before and left it; a row never returns to a place it left").
 			WithHint("keep it in " + string(src))
 	}
@@ -284,7 +287,7 @@ func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.
 		return fields, nil
 	}
 	if id, err := ids.ParseAny(cur.String()); err == nil {
-		if got, gerr := e.stores[to].Backend.Get(ctx, schema.TableProjects, id); gerr == nil && !got.Deleted {
+		if got, _, gerr := e.getRow(ctx, to, schema.TableProjects, id); gerr == nil && !got.Deleted {
 			return fields, nil
 		}
 	}
