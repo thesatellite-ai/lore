@@ -31,8 +31,6 @@ import (
 	"strings"
 
 	"dbent/gen/ent"
-	entHotfix "dbent/gen/ent/hotfix"
-	entRule "dbent/gen/ent/rule"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/style"
@@ -134,25 +132,13 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	// directive into CLAUDE.md. Everything else (should/may rules,
 	// memories, decisions, patterns, …) is fetched via `lore search`
 	// on demand per the directive's pre-response checklist
-	rules, err := client.Rule.Query().Where(
-		entRule.Or(entRule.ProjectID(projectID), entRule.ProjectIDIsNil()),
-		entRule.ArchivedAtIsNil(),
-		entRule.SeverityEQ(entRule.SeverityMust),
-	).Order(ent.Asc(entRule.FieldID)).All(ctx)
+	rules, err := loadPinnedRules(ctx, projectID)
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "query rules").WithCause(err)
+		return err
 	}
-
-	hotfixes, err := client.Hotfix.Query().Where(
-		entHotfix.ProjectID(projectID),
-		entHotfix.ArchivedAtIsNil(),
-		entHotfix.SeverityIn(
-			entHotfix.SeverityCritical,
-			entHotfix.SeverityHigh,
-		),
-	).Order(ent.Asc(entHotfix.FieldID)).All(ctx)
+	hotfixes, err := loadPinnedHotfixes(ctx, projectID)
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "query hotfixes").WithCause(err)
+		return err
 	}
 
 	// Build the rendered text. The canary is content-derived (sha256 of the
@@ -297,7 +283,7 @@ func stitchPointer(agentFile, outFile string) error {
 //	(rules section)
 //	(hotfixes section)
 //	(memories section)
-func buildClaudeMd(canary string, rules []*ent.Rule, hotfixes []*ent.Hotfix) string {
+func buildClaudeMd(canary string, rules []pinnedRule, hotfixes []pinnedHotfix) string {
 	var b strings.Builder
 
 	// Preamble + canary (R15 #29 — per-session canary; R21 #25 — sigil at top)
