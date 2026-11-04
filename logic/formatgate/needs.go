@@ -15,6 +15,9 @@ const (
 	TablePolicies   = "policies"
 	TablePlans      = "plans"
 	KindTablePrefix = "res_"
+	// FieldDeletedAt marks a row in the trash (logic/trash.FieldDeletedAt;
+	// same layer rank, so the string is repeated, not imported).
+	FieldDeletedAt = "deleted_at"
 )
 
 // Needs lists the features a row written by this binary uses, sorted
@@ -27,8 +30,8 @@ func Needs(r row.Row) []string {
 	if len(r.Meta) > 0 {
 		out = append(out, Meta)
 	}
-	if r.Deleted {
-		out = append(out, Trash)
+	if _, trashed := r.Fields[FieldDeletedAt]; r.Deleted || trashed {
+		out = append(out, Trash) // a tombstone, or a row in the trash (DELETION 3.1)
 	}
 	switch t := r.Table.String(); {
 	case t == TablePolicies:
