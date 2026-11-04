@@ -256,7 +256,7 @@ func (o ops) kindOps() []op.Entry {
 		op.Define(op.Spec{Name: OpFieldRename, Summary: "Rename a field (a label change: rows key values by fld_ id)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.fieldRename),
 		op.Define(op.Spec{Name: OpFieldRemove, Summary: "Remove a field from a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.HasDependents)}, o.fieldRemove),
+			Errors: writeErrors}, o.fieldRemove),
 	}
 }
 
@@ -437,7 +437,7 @@ func (o ops) kindRename(ctx context.Context, in RenameIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	if _, err := o.kindByName(ctx, in.New); err == nil {
-		return RowOut{}, errs.New(errs.InvalidInput, "a kind named "+quote(in.New)+" already exists")
+		return RowOut{}, errs.New(errs.NameTaken, "a kind named "+quote(in.New)+" already exists")
 	}
 	v, err := txt(in.New)
 	if err != nil {
@@ -544,7 +544,7 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 				return RowOut{}, uerr
 			}
 			if n > 0 {
-				return RowOut{}, errs.New(errs.HasDependents, fmt.Sprintf("%s.%s value %s is used by %d resources", in.Kind, in.Field, quote(v), n)).
+				return RowOut{}, errs.New(errs.ResourceInUse, fmt.Sprintf("%s.%s value %s is used by %d resources", in.Kind, in.Field, quote(v), n)).
 					WithHint("change those resources first; nothing written")
 			}
 			vals = slices.DeleteFunc(vals, func(x string) bool { return x == v })
@@ -595,7 +595,7 @@ func (o ops) fieldRemove(ctx context.Context, in FieldRemoveIn) (RowOut, error) 
 		return RowOut{}, err
 	}
 	if len(using) > 0 && !in.Drop {
-		return RowOut{}, errs.New(errs.HasDependents, fmt.Sprintf("%s.%s has values on %d rows", in.Kind, in.Field, len(using))).
+		return RowOut{}, errs.New(errs.ResourceInUse, fmt.Sprintf("%s.%s has values on %d rows", in.Kind, in.Field, len(using))).
 			WithHint("pass --drop to remove the values in the same commit")
 	}
 	for _, r := range using {

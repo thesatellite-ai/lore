@@ -66,6 +66,18 @@ const (
 	// HasDependents refuses a delete while a restrict relation still has
 	// live rows pointing at the target (the engine applies OnDelete, O2).
 	HasDependents Code = "E_HAS_DEPENDENTS"
+	// ResourceInUse refuses removing a kind field (or a closed value of
+	// one) while resources still hold values for it (CLI_REFERENCE 3.12).
+	ResourceInUse Code = "E_RESOURCE_IN_USE"
+	// KindConflict is a kind definition that clashes with another level's
+	// definition of the same kind (CLI_REFERENCE 1.5 class definition).
+	KindConflict Code = "E_KIND_CONFLICT"
+	// NameTaken refuses a create or rename onto a name a live settings row
+	// of that place already uses (a var, a kind, a resource).
+	NameTaken Code = "E_NAME_TAKEN"
+	// MetaTaken refuses a metadata key or value create or rename onto a
+	// name already taken in that place (CLI_REFERENCE 3.13).
+	MetaTaken Code = "E_META_TAKEN"
 
 	NoWork        Code = "E_NO_WORK"
 	Contended     Code = "E_CONTENDED"
@@ -167,6 +179,10 @@ var table = map[Code]entry{
 	NotImplemented:        {class: ClassRefused, desc: "feature not yet implemented"},
 	Unsupported:           {class: ClassRefused, desc: "operation not supported in current mode"},
 	HasDependents:         {class: ClassRefused, desc: "a delete refused while restrict relations still have live pointing rows"},
+	ResourceInUse:         {class: ClassRefused, desc: "a kind field or value is still used by resources"},
+	KindConflict:          {class: ClassDefinition, desc: "a kind definition clashes with another level's definition"},
+	NameTaken:             {class: ClassRefused, desc: "that name is already used by a live row in this place"},
+	MetaTaken:             {class: ClassRefused, desc: "that metadata key or value name is already taken in this place"},
 	NoWork:                {class: ClassCoordination, exit: 10, desc: "no ready task"},
 	Contended:             {class: ClassCoordination, exit: 11, desc: "every claim attempt lost a race; retry after a short wait"},
 	LostClaim:             {class: ClassCoordination, exit: 12, desc: "your claim is no longer held; stop work on this task"},

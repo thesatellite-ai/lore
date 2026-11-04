@@ -277,7 +277,7 @@ func (o ops) varsRename(ctx context.Context, in VarsRenameIn) (RowOut, error) {
 		return RowOut{}, errs.New(errs.InvalidInput, "the variable is already named "+in.New)
 	}
 	if other, oerr := o.varByName(ctx, in.New, string(l.Src)); oerr == nil && other.Row.ID != l.Row.ID {
-		return RowOut{}, errs.New(errs.InvalidInput, "a variable named "+quote(in.New)+" already exists in "+string(l.Src))
+		return RowOut{}, errs.New(errs.NameTaken, "a variable named "+quote(in.New)+" already exists in "+string(l.Src))
 	}
 	old := text(l.Row, vName)
 	aliases := append(texts(l.Row, vAliases), old)

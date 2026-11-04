@@ -401,7 +401,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TableResources); err != nil {
 		return RowOut{}, err
 	} else if hit := where(rows, map[string]string{rKind: d.kind.Row.ID.String(), rName: in.Name}); len(hit) > 0 {
-		return RowOut{}, errs.New(errs.InvalidInput, d.name()+" "+in.Name+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")")
+		return RowOut{}, errs.New(errs.NameTaken, d.name()+" "+in.Name+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")")
 	}
 	vals := map[string]json.RawMessage{}
 	if err := o.applySets(ctx, d, in.Name, in.Set, vals); err != nil {

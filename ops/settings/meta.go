@@ -365,7 +365,7 @@ func (o ops) metaRename(ctx context.Context, in RenameIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	if len(where(rows, map[string]string{mName: in.New, mScope: text(k.Row, mScope)})) > 0 {
-		return RowOut{}, errs.New(errs.InvalidInput, "a metadata key named "+quote(in.New)+" already exists there")
+		return RowOut{}, errs.New(errs.MetaTaken, "a metadata key named "+quote(in.New)+" already exists there")
 	}
 	v, err := txt(in.New)
 	if err != nil {

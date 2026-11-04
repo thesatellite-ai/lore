@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -32,6 +33,7 @@ var writeErrors = []errs.Code{
 	errs.InvalidInput, errs.InvalidID, errs.NotFound, errs.AmbiguousID, errs.SecretDetected,
 	errs.NeedsConfirm, errs.Cancelled, errs.PolicyDenied, errs.ConfigInvalid, errs.Stale,
 	errs.StoreReadOnly, errs.StoreLocked, errs.StoreUnreachable, errs.OldLore, errs.Internal,
+	errs.NameTaken, errs.MetaTaken, errs.ResourceInUse,
 }
 
 // readErrors are the codes a settings read can return.
@@ -163,11 +165,21 @@ func create(ctx context.Context, env Env, target store.Source, table row.Table, 
 			return engine.Written{}, err
 		}
 		if hit := where(rows, match); len(hit) > 0 {
-			return engine.Written{}, errs.New(errs.InvalidInput, string(table)+": "+describeMatch(match)+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")").
+			return engine.Written{}, errs.New(takenCode(table), string(table)+": "+describeMatch(match)+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")").
 				WithHint("edit the existing row instead")
 		}
 	}
 	return env.Create(ctx, target, table, fields)
+}
+
+// takenCode is the refusal of a create onto a live natural key: metadata
+// keys and values answer E_META_TAKEN, every other settings row
+// E_NAME_TAKEN.
+func takenCode(table row.Table) errs.Code {
+	if table == schema.TableMetaKeys || table == schema.TableMetaValues {
+		return errs.MetaTaken
+	}
+	return errs.NameTaken
 }
 
 func describeMatch(m map[string]string) string {
