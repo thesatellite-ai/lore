@@ -71,7 +71,9 @@ func openWith(t *testing.T, repo string, opts Options) *App {
 // class. nil, an error and true make it client-class (fail closed: F15
 // refuses repo → internal pointers, the actor row is the F18 projection
 // without the email) with a note for nil and error; false makes it
-// internal (full actor row, no note).
+// internal (no note). The repo actor row carries the email only in an
+// org's own repo (identity resolved in an org); a no-org repo keeps the
+// projection, as v0.1.17 did.
 func TestRepoIsClientHook(t *testing.T) {
 	boom := errors.New("org store unreachable")
 	cases := []struct {
@@ -84,12 +86,21 @@ func TestRepoIsClientHook(t *testing.T) {
 		{"no hook", nil, true, "no client-repo check is wired", false},
 		{"hook error", func(context.Context) (bool, error) { return false, boom }, true, boom.Error(), false},
 		{"client", func(context.Context) (bool, error) { return true, nil }, true, "", false},
-		{"internal", func(context.Context) (bool, error) { return false, nil }, false, "", true},
+		// not a client repo but no org: still the projection (v0.1.17
+		// wrote {id, display_name, kind} in a no-org repo)
+		{"internal, no org", func(context.Context) (bool, error) { return false, nil }, false, "", false},
+		{"org own repo", func(context.Context) (bool, error) { return false, nil }, false, "", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			repo := gitRepo(t)
-			a := openWith(t, repo, Options{RepoIsClient: c.hook})
+			opts := Options{RepoIsClient: c.hook}
+			if c.name == "org own repo" {
+				opts.Org = func(context.Context) (*identity.Org, error) {
+					return &identity.Org{Name: "agency", Identity: identity.Entry{Key: testEmail, Handle: "alice"}}, nil
+				}
+			}
+			a := openWith(t, repo, opts)
 			ctx := background()
 			class, err := a.StoreClass(ctx, store.SourceRepo)
 			if err != nil {
@@ -129,7 +140,7 @@ func TestRepoIsClientHook(t *testing.T) {
 			if hasKey != c.emailRow {
 				t.Fatalf("actor row stable_key present = %v, want %v: %v", hasKey, c.emailRow, f)
 			}
-			if c.client && strings.Contains(string(mustRead(t, filepath.Join(repo, ".lore", "data", schema.TableActors, who.String()+".json"))), "alice@example.com") {
+			if !c.emailRow && strings.Contains(string(mustRead(t, filepath.Join(repo, ".lore", "data", schema.TableActors, who.String()+".json"))), "alice@example.com") {
 				t.Fatal("the email reached a client repo's actor row")
 			}
 		})

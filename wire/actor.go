@@ -50,13 +50,24 @@ func (a *App) EnsureActor(ctx context.Context, target store.Source) error {
 }
 
 // fullActorRow reports whether the caller's actor row written into target
-// may carry the identity's stable key (an email) and handle. Only a store
-// that is not a client repo may: a client repo (the repo store when
-// Options.RepoIsClient says so, fails or is unset) gets v0.1.17's F18
-// projection (id, display_name, kind), because a teammate's email must
-// never land in a customer org's repository.
+// may carry the identity's stable key (an email) and handle. A client
+// repo (the repo store when Options.RepoIsClient says so, fails or is
+// unset) never may. The repo store otherwise may only in an org's OWN
+// repo (the identity resolved inside an org, Resolved.Org): a repo with
+// no org, or a client's developer checkout with no org config, gets
+// v0.1.17's F18 projection (id, display_name, kind), as v0.1.17 wrote it
+// (spec-deltas: "in a repo that is not an org own repo the file is the
+// F18 projection"), because the repo's files are committed and an email
+// there is published with the code. Every other store that is not
+// client-class (org stores, me) keeps the full row.
 func fullActorRow(st *state, target store.Source) bool {
-	return !st.eng.IsClient(target)
+	if st.eng.IsClient(target) {
+		return false
+	}
+	if target == store.SourceRepo {
+		return st.who.Org != ""
+	}
+	return true
 }
 
 // ensureActor writes the caller's actor row into target on its first write
