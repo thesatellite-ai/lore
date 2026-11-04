@@ -264,6 +264,15 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	doctorRepoAddresses(ctx, r)
 	// 10. Duplicate imports (PROV9).
 	doctorDuplicateImports(ctx, r)
+	// 11. Context budget and launch set (CONTEXT_BUDGET 6.11, CQ7).
+	if repoTop != "" {
+		cw, cn := contextDoctor(ctx, repoTop)
+		r.Notes = append(r.Notes, cn...)
+		for _, w := range cw {
+			r.Warnings = append(r.Warnings, w)
+			degrade(r)
+		}
+	}
 
 	r.OK = r.Status == doctorHealthy
 	return r, nil

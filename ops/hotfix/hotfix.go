@@ -9,8 +9,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/contextfit"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -100,6 +103,7 @@ type AddIn struct {
 
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
+	Summary    string   `json:"summary,omitempty" flag:"summary" desc:"one-line short form used when the full text does not fit LORE.md (up to 200 characters)"`
 	Text       string   `json:"text,omitempty" arg:"0" desc:"the hotfix body, instead of --body"`
 	Severity   string   `json:"severity,omitempty" flag:"severity" desc:"low | medium | high | critical (default high)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
@@ -223,6 +227,7 @@ type EditIn struct {
 	Title        string   `json:"title,omitempty" flag:"title" desc:"new title"`
 	Body         string   `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
 	Severity     string   `json:"severity,omitempty" flag:"severity" desc:"low | medium | high | critical"`
+	Summary      string   `json:"summary,omitempty" flag:"summary" desc:"one-line short form used when the full text does not fit LORE.md (up to 200 characters)"`
 	RebindRepo   string   `json:"rebind_repo,omitempty" flag:"rebind-repo" desc:"move this row to repo <mount> (rebinds repo_id)"`
 	RebindMaster bool     `json:"rebind_master,omitempty" flag:"rebind-master" desc:"move this row to master scope (clears repo_id)"`
 	Tags         []string `json:"tags,omitempty" flag:"tag" desc:"add this tag (repeatable; the tag must exist)"`
@@ -298,10 +303,14 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err = kn.OneOf(noun, "severity", severity, schema.HotfixSeverities()); err != nil {
 		return AddOut{}, err
 	}
+	summary, err := checkSummary(in.Summary)
+	if err != nil {
+		return AddOut{}, err
+	}
 	src, w, err := kn.Add(ctx, o.env, noun, kn.Create{
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, CreatedBy: in.CreatedBy, Tags: in.Tags,
 		Texts: map[string]string{
-			kn.FieldTitle: in.Title, kn.FieldBody: body, fieldSeverity: severity, kn.FieldSourceKind: in.Source,
+			kn.FieldTitle: in.Title, kn.FieldBody: body, fieldSeverity: severity, kn.FieldSourceKind: in.Source, schema.FieldSummary: summary,
 		},
 	})
 	if err != nil {
@@ -343,12 +352,16 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	if err := kn.OneOf(noun, "severity", in.Severity, schema.HotfixSeverities()); err != nil {
 		return WriteOut{}, err
 	}
+	summary, err := checkSummary(in.Summary)
+	if err != nil {
+		return WriteOut{}, err
+	}
 	src, w, err := kn.Apply(ctx, o.env, noun, in.ID, kn.Edit{
 		Texts: map[string]string{
-			kn.FieldTitle: in.Title, kn.FieldBody: in.Body, fieldSeverity: in.Severity,
+			kn.FieldTitle: in.Title, kn.FieldBody: in.Body, fieldSeverity: in.Severity, schema.FieldSummary: summary,
 		},
 		RebindRepo: in.RebindRepo, RebindMaster: in.RebindMaster, Tags: in.Tags, Untags: in.Untags,
-		Hint: "give at least one of --title, --body, --severity, --rebind-repo, --rebind-master, --tag, --untag",
+		Hint: "give at least one of --title, --body, --severity, --summary, --rebind-repo, --rebind-master, --tag, --untag",
 	})
 	if err != nil {
 		return WriteOut{}, err
@@ -415,4 +428,16 @@ func recordOf(lab kn.Labeler, src store.Source, r row.Row) Record {
 		SupersededByID: kn.Field(r, kn.FieldSuperseded), CreatedByActorID: kn.CreatedBy(r),
 		TagIDs: kn.TagsOf(r), Store: kn.SourceOf(lab, src), Label: kn.Label(lab, src),
 	}
+}
+
+// checkSummary trims a --summary and refuses one longer than
+// contextfit.MaxSummary characters (CONTEXT_BUDGET 6.4): the short form
+// render uses when the full text does not fit LORE.md.
+func checkSummary(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if n := utf8.RuneCountInString(s); n > contextfit.MaxSummary {
+		return "", errs.New(errs.InvalidInput, fmt.Sprintf("%s: --summary is %d characters; the most is %d", noun, n, contextfit.MaxSummary)).
+			WithHint("keep it to one short line; the full text stays in the body")
+	}
+	return s, nil
 }
