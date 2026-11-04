@@ -406,6 +406,7 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 		events := make([]Event, 0, len(steps))
 		for _, s := range steps {
 			next, action := e.applyStep(s, actor)
+			next = stampAs(st, next)
 			sr, err := store.FromRow(next)
 			if err != nil {
 				return Written{}, err
@@ -671,6 +672,7 @@ func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, er
 // the typed model row for the caller (its bytes are exactly doc's) and the
 // backend row for the cache.
 func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC) (stored, error) {
+	r = stampAs(st, r)
 	sr, err := store.FromRow(r)
 	if err != nil {
 		return stored{}, err
@@ -700,6 +702,14 @@ func (e *Engine) finish(ctx context.Context, source store.Source, rows []store.R
 		return err
 	}
 	for _, ev := range evs {
+		if as := e.stores[source].ActorAs; as != nil && !ev.Actor.IsZero() {
+			ev.Actor = as(ev.Actor)
+		}
+		if !ev.HLC.Actor.IsZero() {
+			if as := e.stores[source].ActorAs; as != nil {
+				ev.HLC.Actor = as(ev.HLC.Actor)
+			}
+		}
 		if err := e.audit.Record(ctx, ev); err != nil {
 			return errs.Wrap(errs.Internal, "engine: the row is stored but its audit record failed", err)
 		}

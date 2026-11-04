@@ -245,6 +245,11 @@ type state struct {
 	// actorMu / actorDone: the actor row is written once per store.
 	actorMu   sync.Mutex
 	actorDone map[store.Source]bool
+	// agentOwner is the owning person of the App's agent identity in a
+	// client repo (agentOwnerOf); zero otherwise. Read by clientActorAs.
+	agentOwner ids.ID[ids.Actor]
+	// agentOwnerName is that person's roster display_name ("" unknown).
+	agentOwnerName string
 	// unreachable holds the org stores (Options.OrgStores) left out at open
 	// because they have no local copy and cannot be reached, with that
 	// error; nil when every store opened (openAttached, unreachableGuard).

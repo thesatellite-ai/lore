@@ -180,7 +180,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	repoClient, note := repoIsClient(ctx, opts)
 	st.repoClassNote = note
 	engOpts := []engine.Option{
-		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient}),
+		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient, ActorAs: st.clientActorAs(repoClient)}),
 		engine.WithCache(st.caches), engine.WithRegistry(reg), engine.WithScanner(scanner),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 	}
@@ -196,6 +196,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	for _, name := range st.eng.Stores() {
 		if _, refErr := st.eng.Refresh(ctx, name); refErr != nil {
 			return fail(errs.Wrap(errs.CodeOf(refErr), "wire: refresh the cache of store "+string(name), refErr))
+		}
+	}
+	if repoClient && st.who.Kind == identity.KindAgent {
+		if st.agentOwner, st.agentOwnerName, err = agentOwnerOf(ctx, st); err != nil {
+			return fail(err)
 		}
 	}
 	if st.format, err = readFormat(ctx, repo, actor); err != nil {

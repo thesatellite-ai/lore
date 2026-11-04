@@ -7,6 +7,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -90,7 +91,14 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	if st.actorDone[target] {
 		return nil
 	}
-	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: st.actor.Any()}
+	// In a client repo an agent's writes are stamped as its owner
+	// (clientActorAs), so the actor row written there is the owner's
+	// projection, never the agent's (D8).
+	who, kind, display := st.actor, actorKindOf(st.who.Kind), st.who.DisplayName
+	if !st.agentOwner.IsZero() && st.eng.IsClient(target) {
+		who, kind, display = st.agentOwner, schema.ActorKindHuman, st.agentOwnerName
+	}
+	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: who.Any()}
 	if _, _, err := st.eng.Get(ctx, ref); err == nil {
 		st.actorDone[target] = true
 		return nil
@@ -98,8 +106,8 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		return err
 	}
 	fields := map[string]value.Value{}
-	vals := map[string]string{actorFieldKind: actorKindOf(st.who.Kind), actorFieldDisplay: st.who.DisplayName}
-	if fullActorRow(st, target) {
+	vals := map[string]string{actorFieldKind: kind, actorFieldDisplay: display}
+	if who == st.actor && fullActorRow(st, target) {
 		vals[actorFieldKey], vals[actorFieldHandle] = st.who.StableKey, st.who.Handle
 	}
 	for k, v := range vals {
@@ -112,7 +120,7 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		}
 		fields[k] = t
 	}
-	_, err := st.eng.CreateWithID(ctx, target, schema.TableActors, st.actor.Any(), fields)
+	_, err := st.eng.CreateWithID(ctx, target, schema.TableActors, who.Any(), fields)
 	if err != nil && !errs.Has(err, errs.Stale) { // a concurrent first write by the same person made the same row
 		return errs.Wrap(errs.CodeOf(err), "wire: write the actor row to store "+string(target), err)
 	}
@@ -129,4 +137,57 @@ func actorKindOf(k string) string {
 		return k
 	}
 	return schema.ActorKindHuman
+}
+
+// clientActorAs is the repo store's engine.Attached.ActorAs: in a client
+// repo, a write by this App's agent identity is stamped as the agent's
+// owning person (state.agentOwner, read from the org roster at open), as
+// v0.1.17 recorded it (D8, Q11: ClientActorProjection), so neither the
+// agent's id nor its label reaches the client's committed files. Any other
+// actor, an internal repo, or an agent with no known owner is stamped as
+// is (v0.1.17 kept the id of an agent without an owner).
+func (s *state) clientActorAs(client bool) func(ids.ID[ids.Actor]) ids.ID[ids.Actor] {
+	if !client {
+		return nil
+	}
+	return func(a ids.ID[ids.Actor]) ids.ID[ids.Actor] {
+		if a == s.actor && !s.agentOwner.IsZero() {
+			return s.agentOwner
+		}
+		return a
+	}
+}
+
+// agentOwnerOf finds the owning person of this App's agent actor in the
+// rosters of the attached stores (an actors row with this id and an
+// owner_actor_id; the first store in precedence order that has one wins),
+// with the owner's display_name from the same roster ("" when the owner
+// row is absent). None found is the zero id, not an error.
+func agentOwnerOf(ctx context.Context, st *state) (ids.ID[ids.Actor], string, error) {
+	for _, name := range st.eng.Stores() {
+		if name == store.SourceRepo {
+			continue
+		}
+		rows, err := st.eng.List(ctx, name, schema.TableActors)
+		if err != nil {
+			return ids.ID[ids.Actor]{}, "", err
+		}
+		for _, r := range rows {
+			if r.Deleted || r.ID != st.actor.Any() {
+				continue
+			}
+			id, perr := ids.Parse[ids.Actor](fieldText(r, rosterFieldOwner))
+			if perr != nil {
+				continue
+			}
+			display := ""
+			for _, o := range rows {
+				if !o.Deleted && o.ID == id.Any() {
+					display = fieldText(o, actorFieldDisplay)
+				}
+			}
+			return id, display, nil
+		}
+	}
+	return ids.ID[ids.Actor]{}, "", nil
 }

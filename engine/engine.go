@@ -54,6 +54,33 @@ type Attached struct {
 	// Empty keeps v0.1.17's bytes: the repo store, whose rows must keep
 	// converging with v0.1.17 writers of the same repository.
 	KeyNamespace string
+	// ActorAs, when set, maps the writer of a row stored in this store to
+	// the actor the row is stamped with: created_by, updated_by, the HLC's
+	// actor part and the audit event's actor. Why: in a client repo an
+	// agent's work is recorded as its owning person (v0.1.17 D8, Q11: a
+	// client never sees an agent id), while every other store keeps the
+	// agent's own id. nil stamps the writer as is. It must be idempotent
+	// (a mapped id maps to itself) because a row's created_by is mapped
+	// again on every later write.
+	ActorAs func(ids.ID[ids.Actor]) ids.ID[ids.Actor]
+}
+
+// stampAs applies st.ActorAs to the audit fields and the HLC actor of r
+// (see Attached.ActorAs); a store without ActorAs returns r unchanged.
+func stampAs(st Attached, r row.Row) row.Row {
+	if st.ActorAs == nil {
+		return r
+	}
+	if !r.CreatedBy.IsZero() {
+		r.CreatedBy = st.ActorAs(r.CreatedBy)
+	}
+	if !r.UpdatedBy.IsZero() {
+		r.UpdatedBy = st.ActorAs(r.UpdatedBy)
+	}
+	if !r.HLC.Actor.IsZero() {
+		r.HLC.Actor = st.ActorAs(r.HLC.Actor)
+	}
+	return r
 }
 
 // IDSource issues permanent row ids. The default makes UUIDv7 ids (the
