@@ -226,6 +226,68 @@ func (a *App) RepoID(ctx context.Context, mountOrID string) (ids.ID[ids.Repo], e
 		WithHint("run `lore repo list` to see the mount names")
 }
 
+// GroupRepoID resolves `--repo <name>` for a write whose target is to.
+//
+// Why it exists: a task filed into a store folder (`--to northwind/globex
+// --repo backend`) names a repo of THAT folder's project, which the repo
+// store's repos table does not hold. v0.1.17 (ensureGroupRepo/repoIDFor)
+// found or created a repos row {project_id: the folder's project,
+// mount_name: name} in the store; this keeps that behaviour on the core.
+//
+// For the repo store (to "" or repo) it is RepoID: an existing row only,
+// else E_NOT_FOUND. For any other target it returns the live repos row of
+// to whose mount_name (or id) is name, else creates one there through the
+// App's write path (the folder's project row is made first when the folder
+// has none, as the roster does). The create uses the store's natural id,
+// so a second call, or another clone, finds the same row; each store keeps
+// its own rows. The row stays in to, so the task's ref never crosses a
+// store (F15 is unaffected).
+func (a *App) GroupRepoID(ctx context.Context, to store.Source, name string) (ids.AnyID, error) {
+	if to == "" || to == store.SourceRepo {
+		id, err := a.RepoID(ctx, name)
+		if err != nil {
+			return ids.AnyID{}, err
+		}
+		return id.Any(), nil
+	}
+	if strings.TrimSpace(name) == "" {
+		return ids.AnyID{}, errs.New(errs.InvalidInput, "wire: --repo needs a mount name")
+	}
+	st, err := a.writeState(ctx)
+	if err != nil {
+		return ids.AnyID{}, err
+	}
+	rows, err := st.eng.List(ctx, to, schema.TableRepos)
+	if err != nil {
+		return ids.AnyID{}, err
+	}
+	for _, r := range rows {
+		if !r.Deleted && (r.ID.String() == name || textField(r, repoMountField) == name) {
+			return r.ID, nil
+		}
+	}
+	folderName := string(to)
+	if _, f, ok := strings.Cut(folderName, targetSep); ok {
+		folderName = f
+	}
+	project, err := a.rosterProject(ctx, st, to, folderName)
+	if err != nil {
+		return ids.AnyID{}, err
+	}
+	mount, err := value.TextOf(name)
+	if err != nil {
+		return ids.AnyID{}, errs.Wrap(errs.InvalidInput, "wire: the repo name is not valid text", err)
+	}
+	w, err := a.Create(ctx, to, schema.TableRepos, map[string]value.Value{repoProjectField: project, repoMountField: mount})
+	if err != nil {
+		return ids.AnyID{}, err
+	}
+	return w.Row.ID, nil
+}
+
+// repoProjectField is the repos field naming the repo's project.
+const repoProjectField = "project_id"
+
 // writeState opens the App and applies the O6 format check.
 func (a *App) writeState(ctx context.Context) (*state, error) {
 	st, err := a.state(ctx)
