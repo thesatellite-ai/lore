@@ -174,9 +174,10 @@ func Ops(env work.Env) []op.Entry {
 // ops binds the run functions to one Env.
 type ops struct{ env work.Env }
 
-// notYet refuses a v0.1.17 flag whose feature has no home on the core yet.
+// notYet refuses a v0.1.17 team flag on a surface that supplies no
+// work.Team (the roster and claims live in the host, not in a row store).
 func notYet(flag, hint string) error {
-	return errs.New(errs.Unsupported, "task: --"+flag+" is not on the new core yet").WithHint(hint)
+	return errs.New(errs.Unsupported, "task: --"+flag+" needs the team roster and claims, which this surface does not provide").WithHint(hint)
 }
 
 // taskID parses a task id argument.
@@ -184,9 +185,11 @@ func taskID(s string) (ids.AnyID, error) { return work.ParseID(Noun, ids.PrefixT
 
 // add creates one task in the target store (--to, else the default).
 func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
-	switch {
-	case in.Assign != "":
-		return AddOut{}, notYet("assign", "assign a person by actor id: --assigned-to act_…")
+	// --assign resolves before anything is written (v0.1.17: the default
+	// task list is not created for a handle on no roster).
+	assign, err := o.resolveAssign(ctx, in.Assign)
+	if err != nil {
+		return AddOut{}, err
 	}
 	refs, err := o.parseRefs(ctx, in.Ref)
 	if err != nil {
@@ -254,6 +257,15 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		{work.FieldCreatedBy, "created-by", ids.PrefixActor, in.CreatedBy},
 	}); err != nil {
 		return AddOut{}, err
+	}
+	if err := setAssign(fields, assign); err != nil {
+		return AddOut{}, err
+	}
+	if v, ok := fields[fieldTeam]; ok && v.Kind() == value.KindNull {
+		delete(fields, fieldTeam) // a create clears nothing
+	}
+	if v, ok := fields[fieldAssigned]; ok && v.Kind() == value.KindNull {
+		delete(fields, fieldAssigned)
 	}
 	if _, set := fields[work.FieldCreatedBy]; !set {
 		// v0.1.17 stamped created_by_actor_id with the current identity.
@@ -532,11 +544,9 @@ func deferred(r row.Row, now time.Time) bool {
 // list returns the tasks of every attached store passing v0.1.17's
 // filters (default: open, accepted, not deferred).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
-	switch {
-	case in.Mine:
-		return ListOut{}, notYet("mine", "filter by assignee: --assignee act_…")
-	case in.ClaimedBy != "":
-		return ListOut{}, notYet("claimed-by", "claims live on the signals ref; see `lore task show <id> --signals` on v0.1.17")
+	team, err := o.teamList(ctx, in)
+	if err != nil {
+		return ListOut{}, err
 	}
 	if in.Commitment != "" {
 		if err := work.OneOf(Noun, "commitment", in.Commitment, schema.TaskCommitments()); err != nil {
@@ -560,13 +570,14 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		allowed = append(allowed, schema.TaskCommitmentSomeday)
 	}
 	now := time.Now()
-	return o.view(ctx, in.Store, project, func(r row.Row) bool {
+	return o.viewWith(ctx, in.Store, project, team.state, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
 		switch {
 		case in.Commitment != "" && commit != in.Commitment,
 			in.Status != "" && status != in.Status,
 			in.Mission != "" && work.Field(r, work.FieldMission) != in.Mission,
-			in.Assignee != "" && work.Field(r, fieldAssigned) != in.Assignee:
+			in.Assignee != "" && work.Field(r, fieldAssigned) != in.Assignee,
+			team.keep != nil && !team.keep(r):
 			return false
 		case in.All:
 			return true
@@ -581,6 +592,12 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 
 // view lists the tasks keep accepts, in v0.1.17's envelope.
 func (o ops) view(ctx context.Context, only, project string, keep func(row.Row) bool) (ListOut, error) {
+	return o.viewWith(ctx, only, project, nil, keep)
+}
+
+// viewWith is view whose human lines carry state(row) when it says
+// something (task list's STATE column; nil = none).
+func (o ops) viewWith(ctx context.Context, only, project string, state func(row.Row) string, keep func(row.Row) bool) (ListOut, error) {
 	all, err := work.ListAll(ctx, o.env, table, only)
 	if err != nil {
 		return ListOut{}, err
@@ -590,7 +607,11 @@ func (o ops) view(ctx context.Context, only, project string, keep func(row.Row) 
 		if (project != "" && work.Field(s.Row, work.FieldProject) != project) || !keep(s.Row) {
 			continue
 		}
-		out.Data = append(out.Data, BriefOf(s.Source, s.Row))
+		b := BriefOf(s.Source, s.Row)
+		if state != nil {
+			b = withState(b, state(s.Row))
+		}
+		out.Data = append(out.Data, b)
 	}
 	out.Count = len(out.Data)
 	return out, nil
@@ -665,9 +686,9 @@ func (o ops) actorName(ctx context.Context, id string) string {
 
 // edit patches the fields whose flags were given.
 func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
-	switch {
-	case in.Assign != "":
-		return work.WriteOut{}, notYet("assign", "assign a person by actor id: --assigned-to act_…")
+	assign, err := o.resolveAssign(ctx, in.Assign)
+	if err != nil {
+		return work.WriteOut{}, err
 	}
 	id, err := taskID(in.ID)
 	if err != nil {
@@ -712,6 +733,9 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		{work.FieldPlan, "plan", ids.PrefixPlan, in.Plan},
 		{fieldAssigned, "assigned-to", ids.PrefixActor, in.AssignedTo},
 	}); err != nil {
+		return work.WriteOut{}, err
+	}
+	if err := setAssign(patch, assign); err != nil {
 		return work.WriteOut{}, err
 	}
 	clears := []struct {

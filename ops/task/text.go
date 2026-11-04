@@ -59,10 +59,25 @@ func BriefOf(src store.Source, r row.Row) Brief {
 	if b.DeferredUntil != "" {
 		line += " " + deferMark + b.DeferredUntil
 	}
-	if b.Store != "" {
-		line += "  [" + b.Store + "]"
+	b.base = line
+	b.Line = line + storeLabel(b.Store)
+	return b
+}
+
+// storeLabel is the "  [store]" suffix of a store task's line.
+func storeLabel(s string) string {
+	if s == "" {
+		return ""
 	}
-	b.Line = line
+	return "  [" + s + "]"
+}
+
+// withState puts a STATE column (v0.1.17 taskListLine) after the line's
+// own fields, before the store label.
+func withState(b Brief, state string) Brief {
+	if state != "" {
+		b.Line = b.base + "  " + state + storeLabel(b.Store)
+	}
 	return b
 }
 

@@ -227,7 +227,7 @@ func (o ops) planMission(ctx context.Context, to string, project ids.ID[ids.Proj
 		return row.Row{}, false, "", err
 	}
 	if len(p.Approvers) > 0 {
-		if fields[fieldApprovers], err = approvers(p.Approvers); err != nil {
+		if fields[fieldApprovers], err = approvers(ctx, p.Approvers); err != nil {
 			return row.Row{}, false, "", err
 		}
 	}

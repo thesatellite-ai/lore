@@ -359,4 +359,5 @@ func guardTaskCoreCommands(root *cobra.Command) {
 		}
 		c.RunE = guard(c.RunE)
 	}
+	withCLITeam(root)
 }

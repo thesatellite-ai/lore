@@ -152,7 +152,7 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 		}
 	}
 	if len(in.Approvers) > 0 {
-		if fields[fieldApprovers], err = approvers(in.Approvers); err != nil {
+		if fields[fieldApprovers], err = approvers(ctx, in.Approvers); err != nil {
 			return ShowOut{}, err
 		}
 	}
@@ -170,8 +170,9 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 }
 
 // approvers is the approvers list of act_ ids (comma separated or
-// repeated). @handles need the team roster: refused for now.
-func approvers(raw []string) (value.Value, error) {
+// repeated). An @handle resolves to a person through the host's work.Team
+// (the roster); without one it is refused, never guessed.
+func approvers(ctx context.Context, raw []string) (value.Value, error) {
 	var items []value.Value
 	for _, r := range raw {
 		for _, a := range strings.Split(r, ",") {
@@ -179,9 +180,17 @@ func approvers(raw []string) (value.Value, error) {
 			if a == "" {
 				continue
 			}
-			if strings.HasPrefix(a, "@") {
-				return nil, errs.New(errs.Unsupported, "mission: --approvers "+a+": @handles are not on the new core yet").
-					WithHint("name the approver by actor id (act_…)")
+			if work.IsHandle(a) {
+				t, ok := work.TeamFrom(ctx)
+				if !ok {
+					return nil, errs.New(errs.Unsupported, "mission: --approvers "+a+": @handles need the team roster, which this surface does not provide").
+						WithHint("name the approver by actor id (act_…)")
+				}
+				who, err := t.ResolveHandle(ctx, a, false)
+				if err != nil {
+					return nil, err
+				}
+				a = who.ActorID
 			}
 			if _, err := ids.Parse[ids.Actor](a); err != nil {
 				return nil, errs.Wrap(errs.InvalidID, "mission: --approvers "+work.Quote(a)+" is not an actor id (act_…)", err)

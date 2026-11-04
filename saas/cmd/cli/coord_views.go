@@ -545,6 +545,8 @@ func newMissionStatusCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
+	// Mounted after wireLive: wrapped here for the F1 not-found hint.
+	wrapLeaves(cmd)
 	return cmd
 }
 

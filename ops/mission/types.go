@@ -24,9 +24,9 @@ type AddIn struct {
 	Body      string `json:"body,omitempty" flag:"body" desc:"longer description" ui:"widget=markdown"`
 	Target    string `json:"target,omitempty" flag:"target" desc:"target completion date (YYYY-MM-DD)"`
 	CreatedBy string `json:"created_by,omitempty" flag:"created-by" desc:"actor_id (act_*); default: the row's created_by is the current identity"`
-	// Approvers are actor ids (act_…); v0.1.17's @handle form needs the
-	// team roster, which has not moved to the core yet.
-	Approvers []string `json:"approvers,omitempty" flag:"approvers" desc:"only these people (act_… ids) may approve the mission's gates"`
+	// Approvers are actor ids (act_…) or v0.1.17's @handles (resolved
+	// through the host's roster, work.Team).
+	Approvers []string `json:"approvers,omitempty" flag:"approvers" desc:"only these people (@handle or act_…, comma separated) may approve the mission's gates"`
 	Key       string   `json:"key,omitempty" flag:"key" desc:"idempotency key: a re-run with the same key adds nothing"`
 	// Plan links the mission to its plan document (TSQ9).
 	Plan    string `json:"plan,omitempty" flag:"plan" desc:"plan_id (pln_*) this mission carries out"`

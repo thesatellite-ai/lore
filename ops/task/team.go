@@ -1,0 +1,209 @@
+package task
+
+// team.go — v0.1.17's team flags on the core (LORE_TEAM_SPEC §1 "Flags",
+// §3.5, §7.2): `task add|edit --assign @handle` (a person sets the
+// assignee, a team the assigned team) and `task list --mine` /
+// `--claimed-by`. Handles and claims come from the host's work.Team (the
+// roster and the signals ref are not row stores); without one these flags
+// are refused, never guessed.
+
+import (
+	"context"
+	"strings"
+
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/work"
+	"github.com/thesatellite-ai/lore/schema"
+)
+
+// Team fields the team flags read and write.
+const (
+	fieldTeam         = "assigned_team"
+	fieldGate         = "gate"
+	fieldApprovedHash = "approved_hash"
+	fieldMergedAt     = "merged_at"
+	fieldTeamActive   = "active"
+	// teamActive is a bool field's String() when set.
+	teamActive = "true"
+)
+
+// team returns the host's Team, or the not-on-this-surface refusal for flag.
+func team(ctx context.Context, flag, hint string) (work.Team, error) {
+	t, ok := work.TeamFrom(ctx)
+	if !ok {
+		return nil, notYet(flag, hint)
+	}
+	return t, nil
+}
+
+// resolveAssign resolves --assign: an @handle (a person, else a team) or an
+// actor reference (id, stable key, display name). "" assigns nothing.
+func (o ops) resolveAssign(ctx context.Context, raw string) (work.Assignee, error) {
+	ref := strings.TrimSpace(raw)
+	if ref == "" {
+		return work.Assignee{}, nil
+	}
+	if !work.IsHandle(ref) {
+		id, err := o.actorRef(ctx, ref)
+		return work.Assignee{ActorID: id}, err
+	}
+	t, err := team(ctx, "assign", "assign a person by actor id: --assigned-to act_…")
+	if err != nil {
+		return work.Assignee{}, err
+	}
+	return t.ResolveHandle(ctx, ref, true)
+}
+
+// setAssign writes an --assign result into fields: a person clears the
+// team and a team clears the person (v0.1.17 edit), so the row names one.
+func setAssign(fields map[string]value.Value, a work.Assignee) error {
+	switch {
+	case a.ActorID != "":
+		id, err := ids.ParseAny(a.ActorID)
+		if err != nil {
+			return err
+		}
+		v, err := value.RefOf(id)
+		if err != nil {
+			return err
+		}
+		fields[fieldAssigned], fields[fieldTeam] = v, value.Null{}
+	case a.TeamID != "":
+		v, err := value.TextOf(a.TeamID)
+		if err != nil {
+			return err
+		}
+		fields[fieldTeam], fields[fieldAssigned] = v, value.Null{}
+	}
+	return nil
+}
+
+// teamView is the team side of one `task list`: the --mine / --claimed-by
+// keep test (nil = no filter) and the board that fills the STATE column
+// (nil = rows only).
+type teamView struct {
+	keep  func(row.Row) bool
+	board work.ClaimBoard
+}
+
+// state is r's STATE column, "" without a board.
+func (v teamView) state(r row.Row) string {
+	if v.board == nil {
+		return ""
+	}
+	return v.board.State(work.TaskView{
+		ID: r.ID.String(), Title: work.Field(r, work.FieldTitle), Body: work.Field(r, work.FieldBody), Status: work.Field(r, work.FieldStatus),
+		Gate: work.Field(r, fieldGate), ApprovedHash: work.Field(r, fieldApprovedHash),
+		DoneCommit: work.Field(r, fieldDoneCommit), DonePR: work.Field(r, fieldDonePR), MergedAt: work.Time(r, fieldMergedAt),
+	})
+}
+
+// teamList reads the host's claims for `task list` (v0.1.17
+// applyTaskListTeam): with --mine or --claimed-by a board that cannot be
+// read (or no host Team) is the command's error; without them the rows
+// are shown without states.
+func (o ops) teamList(ctx context.Context, in ListIn) (teamView, error) {
+	filter := in.Mine || in.ClaimedBy != ""
+	flag := "mine"
+	if in.ClaimedBy != "" {
+		flag = "claimed-by"
+	}
+	t, ok := work.TeamFrom(ctx)
+	if !ok {
+		if filter {
+			return teamView{}, notYet(flag, "filter by assignee: --assignee act_…")
+		}
+		return teamView{}, nil
+	}
+	holder := ""
+	var err error
+	if in.ClaimedBy != "" {
+		if work.IsHandle(in.ClaimedBy) {
+			a, herr := t.ResolveHandle(ctx, in.ClaimedBy, false)
+			if herr != nil {
+				return teamView{}, herr
+			}
+			holder = a.ActorID
+		} else if holder, err = o.actorRef(ctx, in.ClaimedBy); err != nil {
+			return teamView{}, err
+		}
+	}
+	board, err := t.Claims(ctx)
+	if err != nil {
+		if filter {
+			return teamView{}, err
+		}
+		return teamView{}, nil
+	}
+	if !filter {
+		return teamView{board: board}, nil
+	}
+	me := board.Me()
+	myTeams := map[string]bool{}
+	if in.Mine {
+		if myTeams, err = o.teamsOf(ctx, me); err != nil {
+			return teamView{}, err
+		}
+	}
+	return teamView{board: board, keep: func(r row.Row) bool {
+		h, claimed, active := board.Claim(r.ID.String())
+		if holder != "" && !(claimed && active && h == holder) {
+			return false
+		}
+		if in.Mine {
+			assigned := (me != "" && work.Field(r, fieldAssigned) == me) || myTeams[work.Field(r, fieldTeam)]
+			free := !claimed || !active || h == me
+			if !assigned || !free {
+				return false
+			}
+		}
+		return true
+	}}, nil
+}
+
+// teamsOf returns the ids of the active teams (every attached store) that
+// list actor as a member.
+func (o ops) teamsOf(ctx context.Context, actor string) (map[string]bool, error) {
+	out := map[string]bool{}
+	if actor == "" {
+		return out, nil
+	}
+	all, err := work.ListAll(ctx, o.env, schema.TableTeams, "")
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range all {
+		if work.Field(s.Row, fieldTeamActive) != teamActive {
+			continue
+		}
+		members, ok := s.Row.Fields[schema.FieldTeamMembers].(value.List)
+		if !ok {
+			continue
+		}
+		for _, m := range members.Items() {
+			if m.String() == actor {
+				out[s.Row.ID.String()] = true
+			}
+		}
+	}
+	return out, nil
+}
+
+// The host side of the team flags, exported for hosts outside ops (the CLI
+// lives in another module and cannot import ops/internal/work).
+type (
+	// Team supplies @handles and claims (work.Team).
+	Team = work.Team
+	// Assignee is what an @handle resolved to (work.Assignee).
+	Assignee = work.Assignee
+	// ClaimBoard is a read of the claims (work.ClaimBoard).
+	ClaimBoard = work.ClaimBoard
+	// TaskView is a task's STATE column input (work.TaskView).
+	TaskView = work.TaskView
+)
+
+// WithTeam returns ctx carrying t for the task, mission and plan
+// operations run under it (work.WithTeam).
+func WithTeam(ctx context.Context, t Team) context.Context { return work.WithTeam(ctx, t) }

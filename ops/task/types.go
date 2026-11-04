@@ -43,10 +43,10 @@ type AddIn struct {
 	Timebox time.Duration `json:"timebox,omitempty" flag:"timebox" desc:"time box, e.g. 60m (active lease time summed across holders)"`
 	Role    string        `json:"role,omitempty" flag:"role" desc:"plan role matched by task next --role (e.g. coordinator)"`
 	Key     string        `json:"key,omitempty" flag:"key" desc:"idempotency key: a re-run with the same key (in the same mission) adds nothing"`
-	// Assign is a v0.1.17 team flag whose home (the team roster) has not
-	// moved to the core yet: refused. Ref pointers are refs.go.
+	// Assign is v0.1.17's --assign @handle (a person sets the assignee, a
+	// team the assigned team; team.go). Ref pointers are refs.go.
 
-	Assign  string   `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (not on the new core yet; use --assigned-to act_…)"`
+	Assign  string   `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (a person sets the assignee, a team the assigned team)"`
 	Ref     []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 	To      string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
 	Repo    string   `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id)"`
@@ -87,6 +87,8 @@ type Brief struct {
 	Store string `json:"_source,omitempty"`
 	// Line is the v0.1.17 human list line.
 	Line string `json:"-"`
+	// base is Line without the store label (withState inserts there).
+	base string
 }
 
 // Full is v0.1.17's taskFull (task show --json).
@@ -138,10 +140,10 @@ type ListIn struct {
 	AllRepos bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"every repo of the project (the default)"`
 	Project  string `json:"project,omitempty" flag:"project" desc:"only tasks of this project (prj_ id or name)"`
 	Store    string `json:"store,omitempty" flag:"store" desc:"only tasks of this store (default every attached store)"`
-	// Mine and ClaimedBy read claims on the signals ref, which the core
-	// does not see yet: refused.
-	Mine      bool   `json:"mine,omitempty" flag:"mine" desc:"assigned to me (not on the new core yet)"`
-	ClaimedBy string `json:"claimed_by,omitempty" flag:"claimed-by" desc:"only tasks claimed by @handle (not on the new core yet)"`
+	// Mine and ClaimedBy read claims on the signals ref through the
+	// host's work.Team (team.go).
+	Mine      bool   `json:"mine,omitempty" flag:"mine" desc:"assigned to me or my team, and unclaimed or claimed by me"`
+	ClaimedBy string `json:"claimed_by,omitempty" flag:"claimed-by" desc:"only tasks claimed right now by @handle (or actor id)"`
 }
 
 // ViewIn is the input of the triage, someday and deferred views.
@@ -193,7 +195,7 @@ type EditIn struct {
 	After         []string      `json:"after,omitempty" flag:"after" desc:"dependencies: <id>[:done|:merged][,…] (replaces the list)"`
 	Timebox       time.Duration `json:"timebox,omitempty" flag:"timebox" desc:"time box, e.g. 60m"`
 	Role          string        `json:"role,omitempty" flag:"role" desc:"plan role matched by task next --role (e.g. coordinator)"`
-	Assign        string        `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (not on the new core yet; use --assigned-to act_…)"`
+	Assign        string        `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (a person sets the assignee, a team the assigned team)"`
 	Ref           []string      `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 }
 

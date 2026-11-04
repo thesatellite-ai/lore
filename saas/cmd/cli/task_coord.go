@@ -38,11 +38,18 @@ const (
 )
 
 // taskCoordCommands are the coordination subcommands added to `lore task`.
+//
+// They are mounted after wireLive ran, so each is wrapped here for the F1
+// not-found explanation (the "sync peek" hint) v0.1.17 gave them.
 func taskCoordCommands() []*cobra.Command {
-	return []*cobra.Command{
+	cmds := []*cobra.Command{
 		newTaskClaimCommand(), newTaskNextCommand(), newTaskHeartbeatCommand(), newTaskReleaseCommand(),
 		newTaskRevokeCommand(), newTaskReassignCommand(), newTaskHookCommand(), newTaskMergedCommand(), newTaskNoteCommand(),
 	}
+	for _, c := range cmds {
+		wrapLeaves(c)
+	}
+	return cmds
 }
 
 // openTaskCoord opens the world and the target of one task, refusing
