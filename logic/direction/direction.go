@@ -69,7 +69,12 @@ func ClassOf(name string, client bool) Class {
 // direction; it carries no text of either row. Two personal stores are
 // always the same person's (only one `me` is ever attached), so personal →
 // personal is allowed.
+//
+// A Class that is none of the three (the zero value, a typo) fails closed:
+// as from it is client-class (the widest audience), as to it is personal
+// (the narrowest), so an unplaced store can never widen a pointer.
 func Check(from, to Class) error {
+	from, to = placeFrom(from), placeTo(to)
 	switch {
 	case to == Client:
 		return nil
@@ -79,6 +84,27 @@ func Check(from, to Class) error {
 		return refuse("a shared row cannot point at a personal row (the pointer alone reveals it)", hintPersonal)
 	}
 	return nil
+}
+
+// known reports whether c is one of the three F15 classes.
+func known(c Class) bool {
+	return c == Client || c == Internal || c == Personal
+}
+
+// placeFrom maps an unknown source class to Client (fail closed).
+func placeFrom(c Class) Class {
+	if known(c) {
+		return c
+	}
+	return Client
+}
+
+// placeTo maps an unknown target class to Personal (fail closed).
+func placeTo(c Class) Class {
+	if known(c) {
+		return c
+	}
+	return Personal
 }
 
 // Refusal hints: where the pointer may be written instead.
