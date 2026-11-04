@@ -3,6 +3,8 @@ package toolprofile
 import (
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // mapProbe is a Probe over a fixed map of file states.
@@ -217,4 +219,39 @@ func mustReg(t *testing.T) *Registry {
 		t.Fatal(err)
 	}
 	return r
+}
+
+// TestSelect (Q-R2-3): a context.targets row picks its profiles in registry
+// order whatever order it was typed in, includes user profiles, lists the
+// tool files it leaves alone as Unwired, and refuses an unknown or empty
+// name list with E_INVALID_INPUT naming the bad profile.
+func TestSelect(t *testing.T) {
+	reg, err := New([]Profile{{Name: "windsurf", PointerFile: ".windsurfrules", Import: ImportRead}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := mapProbe{"CLAUDE.md": FileWired, "GEMINI.md": FilePresent}
+	sel, err := reg.Select([]string{"cursor", "codex", "windsurf"}, probe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(sel.Profiles); got != "codex,cursor,windsurf" || sel.Reason != ReasonSetting {
+		t.Errorf("profiles %s reason %s", got, sel.Reason)
+	}
+	if got := names(sel.Unwired); got != NameGeminiCLI {
+		t.Errorf("unwired %s, want gemini_cli (CLAUDE.md is wired, not merely present)", got)
+	}
+	for _, bad := range [][]string{{"codex", "claud"}, nil} {
+		_, serr := reg.Select(bad, probe)
+		if serr == nil || !errs.Has(serr, errs.InvalidInput) {
+			t.Errorf("%v: err %v, want E_INVALID_INPUT", bad, serr)
+			continue
+		}
+		if len(bad) > 0 && !strings.Contains(serr.Error(), `"claud"`) {
+			t.Errorf("error does not name the profile: %v", serr)
+		}
+	}
+	if u := reg.Unknown([]string{"x", "codex", "x"}); len(u) != 1 || u[0] != "x" {
+		t.Errorf("Unknown = %v", u)
+	}
 }

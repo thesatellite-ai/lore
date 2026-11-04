@@ -29,6 +29,10 @@ const (
 	// Each item is "<kind>=<target>", target "repo", "<org>" or
 	// "<org>/<folder>" (ClientRoutes reads it).
 	KeyClientRoutes Key = "routing.client_repos"
+	// KeyContextTargets is the tool profiles (logic/toolprofile names) a
+	// repo's context is wired into: `lore init` writes the chosen ones and
+	// `lore policy set context.targets codex,cursor` changes them (Q-R2-3).
+	KeyContextTargets Key = "context.targets"
 )
 
 // ClientRouteRepo is the KeyClientRoutes target that keeps a kind in the
@@ -121,6 +125,18 @@ func Keys() []KeyDef {
 		// first in sorted order between two stores.
 		{Key: KeyClientRoutes, Shape: ShapeSet, Default: mustList(),
 			Doc: "where each kind goes in a client repo without --to: items <kind>=repo|<org>|<org>/<folder>; a store beats repo"},
+		// Q-R2-3 (SETTINGS ARE DATA): a repo's tool targets are a settings
+		// row, not a fact re-detected from pointer files on every render, so
+		// the choice is explicit, synced and changed by one command. A set:
+		// the levels' lists join, so a team folder can add a tool to every
+		// repo it covers and a repo cannot drop it (the same "lower levels
+		// only add" rule as every other key). The empty default means "no
+		// row": render then falls back to the pointer-file detection, so a
+		// repo wired before 0.1.18 keeps its CLAUDE.md. Profile names are
+		// checked against the registry by policy set (ops/settings), not
+		// here: user profiles live in ~/.lore/config.yaml, outside L1.
+		{Key: KeyContextTargets, Shape: ShapeSet, Default: mustList(),
+			Doc: "the tool profiles lore render wires (claude_code, codex, cursor, gemini_cli, copilot, generic, or your own); unset = detect from the repo's tool files"},
 	}
 	slices.SortFunc(defs, func(a, b KeyDef) int { return cmp.Compare(a.Key, b.Key) })
 	return defs
@@ -186,3 +202,16 @@ func (s Set) ClientRoutes() map[string]string {
 
 // ClientRouteItem is one KeyClientRoutes item ("memory=agency").
 func ClientRouteItem(kind, target string) string { return kind + clientRouteSep + target }
+
+// ContextTargets returns the effective KeyContextTargets profile names,
+// sorted; ok is false when no level sets the key or the joined list is
+// empty, which is the caller's cue to fall back to pointer-file detection
+// (Q-R2-3: repos without the row keep working unchanged).
+func (s Set) ContextTargets() (names []string, ok bool) {
+	e, found := s.m[KeyContextTargets]
+	if !found || e.IsDefault {
+		return nil, false
+	}
+	names = s.Strings(KeyContextTargets)
+	return names, len(names) > 0
+}

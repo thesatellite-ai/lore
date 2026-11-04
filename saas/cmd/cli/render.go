@@ -37,7 +37,11 @@ import (
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/style"
 
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 
 	"github.com/spf13/cobra"
 )
@@ -46,7 +50,8 @@ type renderFlags struct {
 	commonFlags
 	outPath string
 	// targets are --target values: profile names or pointer files. Empty
-	// means the repo's context targets (toolprofile.Resolve).
+	// means the repo's context targets (its context.targets row, else
+	// toolprofile.Resolve).
 	targets   []string
 	noPointer bool
 	dryRun    bool
@@ -70,6 +75,8 @@ Tools are profiles: claude_code (CLAUDE.md), codex (AGENTS.md), cursor
 (.cursor/rules/lore.mdc), gemini_cli (GEMINI.md), copilot
 (.github/copilot-instructions.md), generic (no pointer file), plus your own
 under context.profiles in ~/.lore/config.yaml. Without --target, render uses
+the repo's context.targets setting (written by lore init, changed with
+lore policy set context.targets codex,cursor --yes); a repo without it uses
 the tool files that already carry lore's pointer; if none does, the tool
 files present in the repo; if there are none, AGENTS.md
 
@@ -90,8 +97,9 @@ replaced in place on re-run. Pass --no-pointer to skip stitching, or
 	bindCommonFlags(cmd, &f.commonFlags)
 	cmd.Flags().StringVar(&f.outPath, constants.FlagOut, ".lore/LORE.md", "generated knowledge file path")
 	// TOOL NEUTRAL: no default tool file; an empty --target resolves the
-	// repo's own targets (wired pointer files, else detected tools, else
-	// AGENTS.md), so an existing CLAUDE.md repo keeps rendering as before.
+	// repo's own targets (the context.targets row, Q-R2-3; without one the
+	// wired pointer files, else detected tools, else AGENTS.md), so an
+	// existing CLAUDE.md repo keeps rendering as before.
 	cmd.Flags().StringSliceVar(&f.targets, constants.FlagTarget, nil,
 		"tool profile name or pointer file to wire (repeatable; default: the repo's tool files, else AGENTS.md)")
 	cmd.Flags().BoolVar(&f.noPointer, constants.FlagNoPointer, false, "do not stitch the pointer into the agent file")
@@ -235,6 +243,9 @@ func runRender(ctx context.Context, f *renderFlags) error {
 type contextTarget struct {
 	profile toolprofile.Profile
 	file    string
+	// known is true when profile is a registry profile (its name can go in
+	// the context.targets row); false for any other file given to --target.
+	known bool
 }
 
 // loadToolRegistry is the built-in tool profiles plus the user's own from
@@ -269,35 +280,118 @@ func (p rootProbe) State(rel string) toolprofile.FileState {
 	}
 }
 
+// targetSetting reads a repo's context.targets settings row: the profile
+// names and whether a row sets them (ok false = no row, fall back to the
+// repo's tool files).
+type targetSetting func(ctx context.Context) (names []string, ok bool, err error)
+
+// coreContextTargets is the targetSetting of the repo this process runs in
+// (the core App mounted at the working directory). Q-R2-3: the
+// context.targets row is read first; a broken policy row fails closed
+// (E_CONFIG_INVALID, as for every write), while a core that cannot open at
+// all (no repo store yet) falls back to the tool files with a warning, so
+// render keeps working where it did before the row existed.
+func coreContextTargets(ctx context.Context) ([]string, bool, error) {
+	if coreApp == nil {
+		return nil, false, nil
+	}
+	return contextTargetsOf(ctx, coreApp)
+}
+
+// contextTargetsOf reads the effective context.targets of app's repo.
+func contextTargetsOf(ctx context.Context, app *wire.App) ([]string, bool, error) {
+	eng, err := app.Engine(ctx)
+	if err != nil {
+		if errs.Has(err, errs.ConfigInvalid) {
+			return nil, false, err
+		}
+		fmt.Fprintln(os.Stderr, style.Warn("WARN: could not read the context.targets setting ("+err.Error()+"); using the repo's tool files"))
+		return nil, false, nil
+	}
+	set, err := eng.Policy(store.SourceRepo)
+	if err != nil {
+		return nil, false, err
+	}
+	names, ok := set.ContextTargets()
+	return names, ok, nil
+}
+
+// targetPick is what resolveTargets chose: the files, and how (Selection;
+// Reason is empty when --target values chose them).
+type targetPick struct {
+	targets []contextTarget
+	sel     toolprofile.Selection
+}
+
 // resolveContextTargets turns --target values into tool files, or, with
-// none, resolves the repo's own targets (toolprofile.Resolve). A value is a
-// profile name, a known profile's pointer file, or any other file, wired
-// with an @import pointer as v0.1.17's --target was. TOOL NEUTRAL: no tool
-// file is assumed; the first wiring of a repo says which tools it chose and
-// why, so the choice is never a surprise.
+// none, resolves the repo's own targets: its context.targets settings row
+// (Q-R2-3), else the pointer-file detection (toolprofile.Resolve). A value
+// is a profile name, a known profile's pointer file, or any other file,
+// wired with an @import pointer as v0.1.17's --target was. TOOL NEUTRAL: no
+// tool file is assumed; the first wiring of a repo says which tools it
+// chose and why, so the choice is never a surprise.
 func resolveContextTargets(ctx context.Context, root string, values []string, quiet bool) ([]contextTarget, error) {
-	reg, err := loadToolRegistry(ctx)
+	pick, err := resolveTargets(ctx, root, values, coreContextTargets)
 	if err != nil {
 		return nil, err
 	}
-	var out []contextTarget
+	if !quiet {
+		printTargetPick(pick)
+	}
+	return pick.targets, nil
+}
+
+// printTargetPick prints how the targets were chosen (silent for an
+// already-wired repo and for the settings row: nothing new to say) and
+// names each tool file found but not wired.
+func printTargetPick(pick targetPick) {
+	switch pick.sel.Reason {
+	case toolprofile.ReasonDetected, toolprofile.ReasonFallback:
+		fmt.Printf("%s context targets: %s (%s)\n", style.Muted("·"), describeTargets(pick.targets), describeReason(pick.sel.Reason))
+	case toolprofile.ReasonWired, toolprofile.ReasonSetting:
+	}
+	// TOOL NEUTRAL, no surprises: a tool file added after lore was wired
+	// (say CLAUDE.md in an AGENTS.md repo) is not wired behind the user's
+	// back; render names it and the command that adds it.
+	for _, p := range pick.sel.Unwired {
+		hint := "lore render --target " + p.Name
+		if pick.sel.Reason == toolprofile.ReasonSetting {
+			hint = "lore policy set " + string(policy.KeyContextTargets) + " <profiles incl. " + p.Name + "> --yes"
+		}
+		fmt.Printf("%s %s found but not wired to lore; add it with: %s\n", style.Muted("·"), p.PointerFile, hint)
+	}
+}
+
+// resolveTargets is resolveContextTargets without the output, reading the
+// settings row through setting.
+func resolveTargets(ctx context.Context, root string, values []string, setting targetSetting) (targetPick, error) {
+	reg, err := loadToolRegistry(ctx)
+	if err != nil {
+		return targetPick{}, err
+	}
+	var pick targetPick
 	if len(values) == 0 {
-		sel := reg.Resolve(rootProbe{root: root})
-		for _, p := range sel.Profiles {
-			out = append(out, contextTarget{profile: p, file: p.PointerFile})
+		names, ok, serr := setting(ctx)
+		if serr != nil {
+			return targetPick{}, serr
 		}
-		if !quiet && sel.Reason != toolprofile.ReasonWired {
-			fmt.Printf("%s context targets: %s (%s)\n", style.Muted("·"), describeTargets(out), describeReason(sel.Reason))
-		}
-		// TOOL NEUTRAL, no surprises: a tool file added after lore was
-		// wired (say CLAUDE.md in an AGENTS.md repo) is not wired behind
-		// the user's back; render names it and the command that adds it.
-		if !quiet {
-			for _, p := range sel.Unwired {
-				fmt.Printf("%s %s found but not wired to lore; add it with: lore render --target %s\n", style.Muted("·"), p.PointerFile, p.Name)
+		if ok {
+			// Q-R2-3: the row names the targets; an unknown profile in it
+			// (say a teammate's own profile this machine lacks) is refused,
+			// never silently skipped.
+			sel, selErr := reg.Select(names, rootProbe{root: root})
+			if selErr != nil {
+				return targetPick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting", selErr).
+					WithHint("change it with: lore policy set " + string(policy.KeyContextTargets) + " <profiles> --yes, or add the profile under context.profiles in ~/.lore/config.yaml")
 			}
+			pick.sel = sel
+		} else {
+			pick.sel = reg.Resolve(rootProbe{root: root})
 		}
-		return out, nil
+		for _, p := range pick.sel.Profiles {
+			pick.targets = append(pick.targets, contextTarget{profile: p, file: p.PointerFile, known: true})
+		}
+		return pick, nil
 	}
 	for _, v := range values {
 		v = strings.TrimSpace(v)
@@ -305,7 +399,7 @@ func resolveContextTargets(ctx context.Context, root string, values []string, qu
 			continue
 		}
 		if p, ok := reg.Lookup(v); ok {
-			out = append(out, contextTarget{profile: p, file: p.PointerFile})
+			pick.targets = append(pick.targets, contextTarget{profile: p, file: p.PointerFile, known: true})
 			continue
 		}
 		rel := v
@@ -315,15 +409,15 @@ func resolveContextTargets(ctx context.Context, root string, values []string, qu
 			}
 		}
 		if p, ok := reg.ByPointerFile(filepath.ToSlash(rel)); ok {
-			out = append(out, contextTarget{profile: p, file: p.PointerFile})
+			pick.targets = append(pick.targets, contextTarget{profile: p, file: p.PointerFile, known: true})
 			continue
 		}
-		out = append(out, contextTarget{
+		pick.targets = append(pick.targets, contextTarget{
 			profile: toolprofile.Profile{Name: v, PointerFile: filepath.ToSlash(v), Import: toolprofile.ImportAt},
 			file:    v,
 		})
 	}
-	return out, nil
+	return pick, nil
 }
 
 // describeTargets is "codex (AGENTS.md), generic" for one output line.
@@ -346,6 +440,8 @@ func describeReason(r toolprofile.Reason) string {
 		return "detected in this repo; change with --target <profile>"
 	case toolprofile.ReasonFallback:
 		return "no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>"
+	case toolprofile.ReasonSetting:
+		return "the repo's " + string(policy.KeyContextTargets) + " setting"
 	case toolprofile.ReasonWired:
 	}
 	return "already wired"

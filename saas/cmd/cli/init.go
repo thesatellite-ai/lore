@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"saas/pkg/constants"
+	"slices"
 	"strings"
 	"time"
 
@@ -40,14 +41,21 @@ import (
 	"saas/pkg/aicoder/textnorm"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/settings"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 var (
 	initFlagName           string
 	initFlagNonInteractive bool
 	// initFlagTargets are --target values (tool profiles or files); empty
-	// means the tools detected in the repo, else AGENTS.md.
+	// means the tools detected in the repo, else AGENTS.md (Q-R2-4: the
+	// override of init's printed choice, never a prompt).
 	initFlagTargets []string
 )
 
@@ -66,7 +74,9 @@ It will:
   • point the AI tools the repo already uses at .lore/LORE.md: a pointer
     block in each tool file found (CLAUDE.md, AGENTS.md, GEMINI.md,
     .cursor/rules/lore.mdc, .github/copilot-instructions.md, or your own
-    profiles); with none found, AGENTS.md. Pick others with --target
+    profiles); with none found, AGENTS.md. Pick others with --target. The
+    choice is printed and saved as the repo's context.targets setting
+    (change it later with lore policy set context.targets <profiles> --yes)
 
 Refuses if a project already exists (.lore/lore.db or .lore/lore.yaml).`,
 		Args: cobra.MaximumNArgs(1),
@@ -83,6 +93,9 @@ Refuses if a project already exists (.lore/lore.db or .lore/lore.yaml).`,
 		},
 	}
 	cmd.Flags().StringVar(&initFlagName, constants.FlagName, "", "explicit project name (default: from git remote OR dir basename)")
+	// Q-R2-4: init never prompts (it prints the targets it chose and --target
+	// overrides them), so --non-interactive is kept for v0.1.17 scripts and
+	// changes nothing.
 	cmd.Flags().BoolVar(&initFlagNonInteractive, constants.FlagNonInteractive, false, "skip prompts and use auto-detected defaults")
 	cmd.Flags().StringSliceVar(&initFlagTargets, constants.FlagTarget, nil,
 		"AI tool profile(s) or file(s) to point at .lore/LORE.md (default: tool files found in the repo, else AGENTS.md)")
@@ -240,21 +253,108 @@ func runInit(ctx context.Context, projectRoot string) error {
 }
 
 // wireToolFiles stitches the lore pointer block into each context target of
-// the repo at projectRoot (values from --target, else toolprofile.Resolve),
-// pointing at the canonical .lore/LORE.md.
+// the repo at projectRoot (values from --target, else the repo's
+// context.targets row, else toolprofile.Resolve), pointing at the canonical
+// .lore/LORE.md, prints the chosen targets and records them as the repo's
+// context.targets settings row.
+//
+// Q-R2-4: init stays non-interactive. It never asks which tools to wire: it
+// prints what it chose and why on one line, and --target overrides the
+// choice, so the same command behaves the same in a terminal, a script and
+// an agent session (--non-interactive is accepted and changes nothing).
 func wireToolFiles(ctx context.Context, projectRoot string, values []string) error {
-	targets, err := resolveContextTargets(ctx, projectRoot, values, false)
+	home, err := loreHome()
+	if err != nil {
+		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
+	}
+	app, err := wire.New(initCoreOptions(projectRoot, home))
 	if err != nil {
 		return err
 	}
+	defer func() { _ = app.Close() }()
+	pick, err := resolveTargets(ctx, projectRoot, values, func(ctx context.Context) ([]string, bool, error) {
+		return contextTargetsOf(ctx, app)
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s context targets: %s (%s)\n", style.Muted("·"), describeTargets(pick.targets), initTargetReason(len(values) > 0, pick.sel.Reason))
 	out := filepath.Join(projectRoot, filepath.FromSlash(toolprofile.CanonicalOutput))
-	for _, t := range targets {
+	for _, t := range pick.targets {
 		if err := stitchPointer(projectRoot, t, out); err != nil {
 			return err
 		}
 	}
+	if len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetting {
+		return nil // the row already says it (a re-init over shared data)
+	}
+	var names []string
+	for _, t := range pick.targets {
+		if t.known && !slices.Contains(names, t.profile.Name) {
+			names = append(names, t.profile.Name)
+		} else if !t.known {
+			fmt.Printf("%s %s is not a tool profile, so it is wired but not saved in %s\n", style.Muted("·"), t.file, policy.KeyContextTargets)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	if err := writeContextTargets(ctx, app, names); err != nil {
+		return err
+	}
+	fmt.Printf("%s saved as %s; change with: lore policy set %s <profiles> --yes\n", style.Muted("·"), policy.KeyContextTargets, policy.KeyContextTargets)
 	return nil
 }
+
+// initTargetReason says in words why init chose its targets.
+func initTargetReason(fromFlag bool, r toolprofile.Reason) string {
+	if fromFlag {
+		return "from --target"
+	}
+	return describeReason(r)
+}
+
+// initCoreOptions are the core options of init's own writes: the same
+// minimal set as coreSeedProject (infra_core_seed.go), for the same reason:
+// the org's stores have no local copy yet while init runs, so the client/org
+// hooks of coreOptions would refuse a repo write (TestE8, TestE10); the
+// live-row wrapper is kept so the actor row the seed wrote is seen (FLAG6).
+func initCoreOptions(root, home string) wire.Options {
+	return wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: &coreAuditSink{}, ModeB: modeBExporter{},
+		WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
+}
+
+// writeContextTargets writes names as the repo's context.targets policies
+// row through the core (the one writer of .lore/data/policies), updating the
+// repo's row when one exists.
+//
+// Q-R2-3 (SETTINGS ARE DATA): the targets init chose become a synced row,
+// the same row `lore policy set context.targets` edits, so every clone
+// renders into the same tools without re-detecting them from files.
+func writeContextTargets(ctx context.Context, app *wire.App, names []string) error {
+	fields, err := settings.ContextTargetsFields(names)
+	if err != nil {
+		return err
+	}
+	rows, err := app.List(ctx, store.SourceRepo, schema.TablePolicies)
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if k, ok := r.Fields[policyFieldKey].(value.Text); ok && !r.Deleted && k.String() == string(policy.KeyContextTargets) {
+			_, err = app.Update(ctx, engine.Ref{Store: store.SourceRepo, Table: schema.TablePolicies, ID: r.ID}, map[string]value.Value{policyFieldValue: fields[policyFieldValue]})
+			return err
+		}
+	}
+	_, err = app.Create(ctx, store.SourceRepo, schema.TablePolicies, fields)
+	return err
+}
+
+// Field names of a policies row (schema.Builtin) init reads and updates.
+const (
+	policyFieldKey   = "key"
+	policyFieldValue = "value"
+)
 
 // createProjectDB creates a ready-to-use lore.db at dbPath: pragmas, the
 // full schema, config singletons and the FTS5 search tables. Shared by

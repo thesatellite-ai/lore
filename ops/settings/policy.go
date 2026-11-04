@@ -169,6 +169,12 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	if string(target) == storeMe {
 		return RowOut{}, errs.New(errs.InvalidInput, "--to me: a personal store holds no team rules").WithHint("--to repo, --to <store> or --to <store>/<folder>")
 	}
+	if d.Key == policy.KeyContextTargets {
+		// Q-R2-3: only known tool profiles (built-ins + the user's own).
+		if err := checkContextTargets(ctx, o.env, in.Value); err != nil {
+			return RowOut{}, err
+		}
+	}
 	v, err := policyValue(d, in.Value)
 	if err != nil {
 		return RowOut{}, err

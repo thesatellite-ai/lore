@@ -9,13 +9,15 @@
 // registry a user extends from config, so nothing in lore names one tool's
 // file outside this package.
 //
-// Which profiles a repo uses (context.targets) is read from the repo itself
-// by Resolve: the committed pointer files that already carry lore's pointer
-// block are the record, so the same checkout resolves the same targets on
-// every machine with no hidden state. A repo where no pointer file carries
-// the block yet uses the tools whose pointer files exist (detected); a repo
-// with none of them gets the cross-tool convention AGENTS.md, never
-// CLAUDE.md by default.
+// Which profiles a repo uses is its context.targets settings row (Q-R2-3,
+// SETTINGS ARE DATA): Select turns the row's names into profiles. A repo
+// without the row (every repo wired before 0.1.18) falls back to Resolve,
+// which reads the repo itself: the committed pointer files that already
+// carry lore's pointer block are the record, so the same checkout resolves
+// the same targets on every machine with no hidden state. A repo where no
+// pointer file carries the block yet uses the tools whose pointer files
+// exist (detected); a repo with none of them gets the cross-tool convention
+// AGENTS.md, never CLAUDE.md by default.
 //
 // Layer L1: pure. File access goes through the Probe the caller supplies.
 package toolprofile
@@ -25,7 +27,10 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // CanonicalOutput is the generated knowledge file every profile points at,
@@ -267,6 +272,8 @@ const (
 	ReasonDetected Reason = "detected"
 	// ReasonFallback: no tool detected; FallbackName.
 	ReasonFallback Reason = "fallback"
+	// ReasonSetting: the repo's context.targets settings row (Select).
+	ReasonSetting Reason = "setting"
 )
 
 // Selection is the resolved context.targets of a repo.
@@ -274,8 +281,9 @@ type Selection struct {
 	Profiles []Profile
 	Reason   Reason
 	// Unwired are tools whose file exists but carries no pointer while
-	// others do (ReasonWired only): never wired silently, so the caller can
-	// tell the user how to add them.
+	// others do (ReasonWired), or that the context.targets row does not
+	// name (ReasonSetting): never wired silently, so the caller can tell
+	// the user how to add them.
 	Unwired []Profile
 }
 
@@ -306,4 +314,67 @@ func (r *Registry) Resolve(probe Probe) Selection {
 	default:
 		return Selection{Profiles: []Profile{r.Fallback()}, Reason: ReasonFallback}
 	}
+}
+
+// Unknown returns the names that are not a profile of r, in input order
+// without repeats.
+func (r *Registry) Unknown(names []string) []string {
+	var out []string
+	for _, n := range names {
+		if _, ok := r.Lookup(n); !ok && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// CheckNames refuses names that are not profiles of r with E_INVALID_INPUT
+// naming each one and listing the known profiles; an empty list is refused
+// too (the generic profile is how a repo asks for LORE.md only).
+//
+// Q-R2-3: context.targets is validated against the registry the user
+// actually has (built-ins plus context.profiles), so a typo never becomes a
+// row that silently wires nothing.
+func (r *Registry) CheckNames(names []string) error {
+	if len(names) == 0 {
+		return errs.New(errs.InvalidInput, "context.targets: name at least one tool profile (known: "+strings.Join(r.Names(), ", ")+"; "+NameGeneric+" writes only "+CanonicalOutput+")")
+	}
+	if bad := r.Unknown(names); len(bad) > 0 {
+		return errs.New(errs.InvalidInput, "context.targets: unknown tool profile "+quoteAll(bad)+" (known: "+strings.Join(r.Names(), ", ")+")").
+			WithHint("add your own under context.profiles in ~/.lore/config.yaml")
+	}
+	return nil
+}
+
+// quoteAll is `"a", "b"`.
+func quoteAll(xs []string) string {
+	q := make([]string, len(xs))
+	for i, x := range xs {
+		q[i] = fmt.Sprintf("%q", x)
+	}
+	return strings.Join(q, ", ")
+}
+
+// Select returns the profiles a context.targets row names, in registry
+// order (so the stitch order never depends on how the row was typed),
+// with Reason ReasonSetting. Unwired lists the tools whose pointer file
+// exists without lore's block and that the row does not name. An unknown
+// or empty name list is refused (CheckNames).
+//
+// Q-R2-3: the row is the repo's record of its tools; Resolve's pointer-file
+// detection is only the fallback for repos without one.
+func (r *Registry) Select(names []string, probe Probe) (Selection, error) {
+	if err := r.CheckNames(names); err != nil {
+		return Selection{}, err
+	}
+	sel := Selection{Reason: ReasonSetting}
+	for _, p := range r.profiles {
+		switch {
+		case slices.Contains(names, p.Name):
+			sel.Profiles = append(sel.Profiles, p)
+		case p.HasPointerFile() && probe.State(p.PointerFile) == FilePresent:
+			sel.Unwired = append(sel.Unwired, p)
+		}
+	}
+	return sel, nil
 }

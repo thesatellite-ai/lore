@@ -136,7 +136,9 @@ func TestToolNeutral_WiredRepoNotRewiredBehindItsBack(t *testing.T) {
 	r.mustAbsent("AGENTS.md")
 	r.write("AGENTS.md", "hand only\n")
 	out := r.lore("render")
-	if !strings.Contains(out.stdout, "AGENTS.md found but not wired to lore; add it with: lore render --target codex") {
+	// Q-R2-3: init saved context.targets = claude_code, so the way to add
+	// a tool is to change that row (a one-off --target does not persist).
+	if !strings.Contains(out.stdout, "AGENTS.md found but not wired to lore; add it with: lore policy set context.targets <profiles incl. codex> --yes") {
 		t.Fatalf("render must name the unwired tool file: %s", out.stdout)
 	}
 	if got, _ := r.read("AGENTS.md"); got != "hand only\n" {
@@ -165,10 +167,12 @@ func TestToolNeutral_UserProfileAndRenderTarget(t *testing.T) {
 	if !strings.HasPrefix(mdc, "---\n") || !strings.Contains(mdc, "alwaysApply: true") || !toolprofile.HasPointer(mdc) {
 		t.Fatalf("cursor rule file = %q", mdc)
 	}
-	// A plain render keeps every wired file, user profile included.
+	// Q-R2-3: a plain render wires what the context.targets row names (init
+	// saved codex); the user profile joins once the row lists it.
+	r.lore("policy", "set", "context.targets", "codex,cursor,windsurf", "--yes")
 	plain := r.lore("render")
 	if !strings.Contains(plain.stdout, ".windsurfrules (pointer present)") || !strings.Contains(plain.stdout, "lore.mdc (pointer present)") {
-		t.Fatalf("plain render must keep every wired tool file: %s", plain.stdout)
+		t.Fatalf("plain render must keep every tool the row names: %s", plain.stdout)
 	}
 	r.mustWired(".windsurfrules", "")
 	r.mustWired("AGENTS.md", "")
@@ -186,5 +190,77 @@ func TestToolNeutral_UserProfileAndRenderTarget(t *testing.T) {
 	check := r.w.run(r.dir, nil, e2eBin, "config", "check")
 	if check.code == 0 || !strings.Contains(check.stdout+check.stderr, "context.profiles") || !strings.Contains(check.stdout+check.stderr, "already taken") {
 		t.Fatalf("config check must name the bad profile: %d %s %s", check.code, check.stdout, check.stderr)
+	}
+}
+
+// policyTargets is `lore policy show context.targets`'s value column.
+func (r *toolRepo) policyTargets() string {
+	r.t.Helper()
+	line := strings.TrimSpace(r.lore("policy", "show", "context.targets").stdout)
+	f := strings.Split(line, "\t")
+	if len(f) < 2 || f[0] != "context.targets" {
+		r.t.Fatalf("policy show context.targets = %q", line)
+	}
+	return f[1]
+}
+
+// Q-R2-3 + Q-R2-4: init prints the targets it chose (no prompt) and saves
+// them as the repo's context.targets row.
+func TestToolNeutral_InitWritesContextTargets(t *testing.T) {
+	r := newToolRepo(t, map[string]string{"CLAUDE.md": "notes\n"})
+	out := r.lore("init")
+	if !strings.Contains(out.stdout, "context targets: claude_code (CLAUDE.md)") || !strings.Contains(out.stdout, "saved as context.targets") {
+		t.Fatalf("init must print and save its targets: %s", out.stdout)
+	}
+	if got := r.policyTargets(); got != "claude_code" {
+		t.Fatalf("row = %q, want claude_code", got)
+	}
+}
+
+// Q-R2-4: --target overrides init's choice, says so, and is what is saved.
+func TestToolNeutral_InitTargetOverrides(t *testing.T) {
+	o := newToolRepo(t, map[string]string{"CLAUDE.md": "notes\n"})
+	flag := o.lore("init", "--target", "gemini_cli")
+	if !strings.Contains(flag.stdout, "context targets: gemini_cli (GEMINI.md) (from --target)") {
+		t.Fatalf("--target must override and say so: %s", flag.stdout)
+	}
+	if got := o.policyTargets(); got != "gemini_cli" {
+		t.Fatalf("row = %q, want gemini_cli", got)
+	}
+	o.mustWired("GEMINI.md", "")
+	if got, _ := o.read("CLAUDE.md"); toolprofile.HasPointer(got) {
+		t.Fatalf("--target gemini_cli must not wire CLAUDE.md: %q", got)
+	}
+}
+
+// Q-R2-3: render reads the row first: set to [codex, cursor] it writes
+// those (and not the detected CLAUDE.md); an unknown profile is refused
+// with E_INVALID_INPUT naming it and the row is unchanged; with the row
+// removed the pointer-file fallback applies again.
+func TestToolNeutral_RenderFollowsContextTargets(t *testing.T) {
+	r := newToolRepo(t, nil)
+	r.lore("init")
+	r.write("CLAUDE.md", "hand\n")
+	r.lore("policy", "set", "context.targets", "codex,cursor", "--yes")
+	r.lore("render")
+	r.mustWired("AGENTS.md", "")
+	r.mustWired(".cursor/rules/lore.mdc", "")
+	if got, _ := r.read("CLAUDE.md"); got != "hand\n" {
+		t.Fatalf("CLAUDE.md is not in the row and must stay untouched: %q", got)
+	}
+	bad := r.w.run(r.dir, []string{"LORE_ACTOR=human:tools@example.com"}, e2eBin, "policy", "set", "context.targets", "codex,claud", "--yes")
+	if bad.code == 0 || !strings.Contains(bad.stderr, "E_INVALID_INPUT") || !strings.Contains(bad.stderr, `"claud"`) {
+		t.Fatalf("unknown profile: %d %s", bad.code, bad.stderr)
+	}
+	if got := r.policyTargets(); got != "codex, cursor" {
+		t.Fatalf("a refused set changed the row: %q", got)
+	}
+	// No row: the v0.1.17 fallback (every wired pointer file, so the
+	// hand CLAUDE.md, still without a pointer, is named, not wired).
+	r.lore("policy", "unset", "context.targets", "--yes")
+	out := r.lore("render")
+	if !strings.Contains(out.stdout, "AGENTS.md (pointer present)") || !strings.Contains(out.stdout, "lore.mdc (pointer present)") ||
+		!strings.Contains(out.stdout, "CLAUDE.md found but not wired to lore; add it with: lore render --target claude_code") {
+		t.Fatalf("fallback render: %s", out.stdout)
 	}
 }
