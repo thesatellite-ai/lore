@@ -410,6 +410,10 @@ func editStoresFile(top string, edit func(list *yaml.Node) error) error {
 	return writeFileAtomic(path, out, storesFileMode)
 }
 
+// homeTilde is the shell's home shorthand, accepted at the start of a
+// file:// url's path.
+const homeTilde = "~"
+
 // cleanFileURL writes a file:// url in its one canonical form (absolute,
 // clean path) so the folder backend accepts it and two spellings of one
 // folder name the same store; other urls pass unchanged.
@@ -418,7 +422,23 @@ func cleanFileURL(raw string) (string, error) {
 		return raw, nil
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Path == "" {
+	if err != nil {
+		return "", errs.New(errs.StoreScheme, "store: a file url needs an absolute path (file:///abs/path)")
+	}
+	// `file://~/stores/x` (host "~") and `file:///~/stores/x` name a folder
+	// under the user's home, as a shell would read it (O7, docs examples).
+	if u.Host == homeTilde || u.Path == "/"+homeTilde || strings.HasPrefix(u.Path, "/"+homeTilde+"/") {
+		home, herr := os.UserHomeDir()
+		if herr != nil {
+			return "", errs.Wrap(errs.BadPath, "store: ~ in a file url needs a home folder", herr)
+		}
+		rest := u.Path
+		if u.Host != homeTilde {
+			rest = strings.TrimPrefix(rest, "/"+homeTilde)
+		}
+		u.Host, u.Path = "", filepath.ToSlash(home)+rest
+	}
+	if u.Path == "" {
 		return "", errs.New(errs.StoreScheme, "store: a file url needs an absolute path (file:///abs/path)")
 	}
 	p, err := filepath.Abs(filepath.FromSlash(u.Path))
