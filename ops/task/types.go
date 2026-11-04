@@ -3,6 +3,7 @@ package task
 import (
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -52,6 +53,23 @@ type AddIn struct {
 	To      string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
 	Repo    string   `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id)"`
 	Project string   `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
+	// Parent makes the task a sub-task (TASK 6.3); it inherits the
+	// parent's mission, tasklist, plan, repo, commitment, priority and team
+	// unless those flags are given (6.5).
+	Parent       string `json:"parent,omitempty" flag:"parent" desc:"the parent task (tsk_…): add as a sub-task, inheriting mission, tasklist, plan, repo, commitment, priority"`
+	ReopenParent bool   `json:"reopen_parent,omitempty" flag:"reopen-parent" desc:"the parent is done or cancelled: reopen it to in_progress in the same write"`
+}
+
+// Inherited is what a new sub-task copied from its parent (6.5: the output
+// lists it, so nothing is silent).
+type Inherited struct {
+	MissionID  string `json:"mission_id,omitempty"`
+	TasklistID string `json:"tasklist_id,omitempty"`
+	PlanID     string `json:"plan_id,omitempty"`
+	RepoID     string `json:"repo_id,omitempty"`
+	Priority   string `json:"priority,omitempty"`
+	Commitment string `json:"commitment,omitempty"`
+	Team       string `json:"assigned_team,omitempty"`
 }
 
 // AddOut is the output of task.add: the new (or, with --key, the
@@ -62,6 +80,9 @@ type AddOut struct {
 	Data          Full      `json:"data"`
 	Store         string    `json:"store,omitempty"`
 	Warnings      []Warning `json:"warnings,omitempty"`
+	// Parent and Inherited are set for a sub-task (6.3).
+	Parent    string    `json:"parent_id,omitempty"`
+	Inherited Inherited `json:"inherited,omitzero"`
 	// Human is the v0.1.17 human line.
 	Human string `json:"-"`
 }
@@ -84,6 +105,10 @@ type Brief struct {
 	DeferredUntil string `json:"deferred_until,omitempty"`
 	DueAt         string `json:"due_at,omitempty"`
 	MissionID     string `json:"mission_id,omitempty"`
+	// ParentID is the parent task (6.2); Rollup the derived progress of an
+	// umbrella (6.6, absent for a task without sub-tasks).
+	ParentID string          `json:"parent_id,omitempty"`
+	Rollup   tasktree.Rollup `json:"rollup,omitzero"`
 	// Store is set for a task of a store other than the repo's own.
 	Store store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
@@ -111,7 +136,16 @@ type Full struct {
 	PlanID        string `json:"plan_id,omitempty"`
 	ProjectID     string `json:"project_id"`
 	RepoID        string `json:"repo_id,omitempty"`
-	CreatedAt     string `json:"created_at"`
+	// Tree fields (6.2, 8.3) and the derived rollup (6.6).
+	ParentID    string          `json:"parent_id,omitempty"`
+	Rank        string          `json:"rank,omitempty"`
+	CloseReason string          `json:"close_reason,omitempty"`
+	Rollup      tasktree.Rollup `json:"rollup,omitzero"`
+	// Tree is the subtree, depth first, for show --tree.
+	Tree []TreeLine `json:"tree,omitempty"`
+	// TreeWarnings are E_PARENT_CYCLE warnings of the merged tree (6.13).
+	TreeWarnings []Warning `json:"tree_warnings,omitempty"`
+	CreatedAt    string    `json:"created_at"`
 	// TagIDs is new in 0.1.18 (O11; absent when untagged).
 	TagIDs []string        `json:"tag_ids,omitempty"`
 	Store  store.SourceRef `json:"_source,omitempty,omitzero"`
@@ -132,6 +166,16 @@ type Full struct {
 	// Detail is the host's coordination view of a store task
 	// (ShowDetailer); zero when the host added nothing.
 	Detail ShowDetail `json:"-"`
+}
+
+// TreeLine is one task of a show --tree subtree.
+type TreeLine struct {
+	ID     string `json:"id"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+	Rank   string `json:"rank,omitempty"`
+	// Depth is 1 for a direct child.
+	Depth int `json:"depth"`
 }
 
 // ListIn is the input of task.list.
@@ -159,6 +203,11 @@ type ListIn struct {
 	Where []string `json:"where,omitempty" flag:"where" desc:"filter on a task field: status:todo,in_progress priority>=high due_at<2026-12-01 (= != ~= > >= < <= ? !?; repeatable, all must match)"`
 	// Sort is the one sort grammar (XQ10, logic/sortspec).
 	Sort []string `json:"sort,omitempty" flag:"sort" desc:"sort by a task field: <key>, <key>:asc or <key>:desc (repeatable; ties keep the default order)"`
+	// Tree filters (TASK 6.3).
+	Parent string `json:"parent,omitempty" flag:"parent" desc:"only the direct sub-tasks of this task (tsk_…)"`
+	Under  string `json:"under,omitempty" flag:"under" desc:"only the whole subtree under this task (tsk_…)"`
+	Top    bool   `json:"top,omitempty" flag:"top" desc:"only top-level tasks"`
+	Leaves bool   `json:"leaves,omitempty" flag:"leaves" desc:"only tasks with no open sub-tasks (what can be worked on)"`
 }
 
 // ViewIn is the input of the triage, someday and deferred views.
@@ -186,6 +235,7 @@ type IDIn struct {
 type ShowIn struct {
 	ID   string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	From string `json:"from,omitempty" flag:"from" desc:"the source of the id: repo | <org> | <org>/<folder>"`
+	Tree bool   `json:"tree,omitempty" flag:"tree" desc:"also print the sub-task tree"`
 }
 
 // ShowOut is the output of task.show.
@@ -220,6 +270,16 @@ type EditIn struct {
 	Role          string        `json:"role,omitempty" flag:"role" desc:"plan role matched by task next --role (e.g. coordinator)"`
 	Assign        string        `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (a person sets the assignee, a team the assigned team)"`
 	Ref           []string      `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
+	// Tree edits (TASK 6.3, 6.8): re-parent (with the subtree), detach,
+	// reorder among siblings. --after-sibling because --after is a
+	// dependency.
+	Parent       string `json:"parent,omitempty" flag:"parent" desc:"move under this task (tsk_…), with its subtree"`
+	NoParent     bool   `json:"no_parent,omitempty" flag:"no-parent" desc:"detach: make it a top-level task"`
+	Before       string `json:"before,omitempty" flag:"before" desc:"place just before this sibling (tsk_…)"`
+	AfterSibling string `json:"after_sibling,omitempty" flag:"after-sibling" desc:"place just after this sibling (tsk_…)"`
+	First        bool   `json:"first,omitempty" flag:"first" desc:"place first among its siblings"`
+	Last         bool   `json:"last,omitempty" flag:"last" desc:"place last among its siblings"`
+	ReopenParent bool   `json:"reopen_parent,omitempty" flag:"reopen-parent" desc:"the parent is closed: reopen it to in_progress in the same write"`
 }
 
 // DoneIn is the input of task.done.
@@ -229,7 +289,44 @@ type DoneIn struct {
 	PR       int    `json:"pr,omitempty" flag:"pr" desc:"the pull request that finished the task"`
 	Lesson   string `json:"lesson,omitempty" flag:"lesson" desc:"save a lesson learned (a memory pointing at the task)"`
 	NoLesson bool   `json:"no_lesson,omitempty" flag:"no-lesson" desc:"skip the lesson reminder"`
+	Children string `json:"children,omitempty" flag:"children" desc:"open sub-tasks: done | cancel them in the same write (required when there are any)"`
 }
+
+// CancelIn is the input of task.cancel.
+type CancelIn struct {
+	ID       string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+	Reason   string `json:"reason,omitempty" flag:"reason" desc:"close reason: cancelled (default) | duplicate | wont_do | obsolete | stale"`
+	Children string `json:"children,omitempty" flag:"children" desc:"open sub-tasks: cancel | done them in the same write (required when there are any)"`
+}
+
+// SplitIn is the input of task.split (TASK 6.3).
+type SplitIn struct {
+	ID     string   `json:"id" arg:"0" desc:"the task to split (tsk_…)"`
+	Titles []string `json:"titles,omitempty" flag:"title" desc:"a sub-task title; repeatable, one sub-task each, in order"`
+	From   string   `json:"from,omitempty" flag:"from" desc:"read titles from a file (- = stdin): one per line, or YAML: a list of titles or of {title, priority, commitment, body}"`
+	Key    string   `json:"key,omitempty" flag:"key" desc:"idempotency key: child n gets <key>/<n>, so a re-run adds nothing"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be added, write nothing"`
+}
+
+// SplitAdded is one sub-task of a split.
+type SplitAdded struct {
+	ID    string `json:"id,omitempty"`
+	Title string `json:"title"`
+	Rank  string `json:"rank"`
+}
+
+// SplitOut is the output of task.split.
+type SplitOut struct {
+	ParentID  string       `json:"parent_id"`
+	Added     []SplitAdded `json:"added"`
+	Inherited Inherited    `json:"inherited,omitzero"`
+	DryRun    bool         `json:"dry_run,omitempty"`
+	Batch     string       `json:"batch,omitempty"`
+	Human     string       `json:"-"`
+}
+
+// Text implements op.Texter.
+func (o SplitOut) Text() string { return o.Human }
 
 // DoneOut is the output of task.done: the write, and the lesson memory
 // when --lesson saved one.
@@ -238,7 +335,10 @@ type DoneOut struct {
 	Store    string    `json:"store"`
 	Lesson   string    `json:"lesson_id,omitempty"`
 	Warnings []Warning `json:"warnings,omitempty"`
-	Human    string    `json:"-"`
+	// Parent and Next are the parent auto-close answer (6.7, TSQ2).
+	Parent ParentNote `json:"parent,omitzero"`
+	Next   Next       `json:"next,omitzero"`
+	Human  string     `json:"-"`
 }
 
 // SearchIn is the input of task.search.

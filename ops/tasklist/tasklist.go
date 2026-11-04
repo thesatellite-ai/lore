@@ -5,14 +5,17 @@ package tasklist
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -162,8 +165,10 @@ func Ops(env work.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a tasklist (its tasks are detached; a tombstone is kept)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors, Confirm: op.ConfirmRule{Always: true},
+			Name: OpDelete, Summary: "Delete a tasklist and its tasks, with their sub-tasks (one batch; a tombstone is kept)",
+			// DQ6: the op asks itself, so the question names what goes with
+			// the list; it always asks.
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.delete),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across tasklist title + body + status",
@@ -267,13 +272,82 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" tasklist "+id.String()+" updated\n")
 }
 
-// delete tombstones the tasklist; its tasks' tasklist_id is cleared.
+// delete tombstones the tasklist and every task in it, with their
+// sub-tasks even in other lists (DQ6, TASK 6.12.1): one bat_ batch of
+// kind delete through the relations' cascade, after a confirm that counts
+// what goes with the list.
+//
+//	count list tasks + their sub-tasks in other lists → bulk.Ask → Begin →
+//	engine Delete (tasks.tasklist_id and tasks.parent_id cascade)
 func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
 	id, err := listID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, Noun, table, id, work.Success+" "+id.String()+" deleted\n")
+	_, cur, err := work.Get(ctx, o.env, Noun, table, id)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	inList, elsewhere, err := o.listTasks(ctx, id.String())
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	question := "delete tasklist " + id.String() + " " + work.Quote(work.Field(cur, work.FieldTitle)) + "?"
+	if inList+elsewhere > 0 {
+		question = "deleting tasklist " + id.String() + " " + work.Quote(work.Field(cur, work.FieldTitle)) + " also deletes " +
+			strconv.Itoa(inList) + " task(s)"
+		if elsewhere > 0 {
+			question += " and " + strconv.Itoa(elsewhere) + " sub-task(s) in other lists"
+		}
+		question += "; delete them all?"
+	}
+	if err = bulk.Ask(ctx, question); err != nil {
+		return work.WriteOut{}, err
+	}
+	bctx, batch, err := bulk.Begin(ctx, bulk.KindDelete)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	human := work.Success + " " + id.String() + " deleted\n"
+	if inList+elsewhere > 0 {
+		human = work.Success + " tasklist " + id.String() + " + " + strconv.Itoa(inList+elsewhere) + " tasks deleted (batch " + batch.String() + ")\n"
+	}
+	return work.Delete(bctx, o.env, Noun, table, id, human)
+}
+
+// listTasks counts the live tasks of list and their sub-tasks that sit in
+// other lists (they go with their parent, 6.12.1).
+func (o ops) listTasks(ctx context.Context, list string) (inList, elsewhere int, err error) {
+	all, err := work.ListAll(ctx, o.env, schema.TableTasks, "")
+	if err != nil {
+		return 0, 0, err
+	}
+	var nodes []tasktree.Node
+	var roots []string
+	for _, s := range all {
+		if s.Row.Deleted {
+			continue
+		}
+		nodes = append(nodes, tasktree.Node{ID: s.Row.ID.String(), Parent: work.Field(s.Row, schema.FieldTaskParent)})
+		if work.Field(s.Row, work.FieldTasklist) == list {
+			roots = append(roots, s.Row.ID.String())
+		}
+	}
+	t := tasktree.Build(nodes)
+	gone := map[string]bool{}
+	for _, r := range roots {
+		gone[r] = true
+	}
+	inList = len(roots)
+	for _, r := range roots {
+		for _, d := range t.Descendants(r) {
+			if !gone[d] {
+				gone[d] = true
+				elsewhere++
+			}
+		}
+	}
+	return inList, elsewhere, nil
 }
 
 // search matches tasklists by title, body and status.

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
@@ -93,6 +94,7 @@ func fullOf(lab work.Labeler, src store.Source, r row.Row) Full {
 		StartedAt: work.TimeText(r, fieldStarted), CompletedAt: work.TimeText(r, work.FieldCompleted),
 		MissionID: work.Field(r, work.FieldMission), TaskListID: work.Field(r, work.FieldTasklist), PlanID: work.Field(r, work.FieldPlan),
 		ProjectID: work.Field(r, work.FieldProject), RepoID: work.Field(r, work.FieldRepo),
+		ParentID: work.Field(r, fieldParent), Rank: work.Field(r, fieldRank), CloseReason: work.Field(r, fieldCloseReason),
 		CreatedAt: r.CreatedAt.UTC().Format(work.TimeLayout), TagIDs: work.TagIDs(r), Store: work.SourceOf(lab, src), Label: work.Label(lab, src),
 	}
 }
@@ -130,6 +132,24 @@ func (o ShowOut) Text() string {
 	}
 	if t.DoneBy != "" {
 		b.WriteString("  done by:  " + t.DoneBy + "\n")
+	}
+	if t.CloseReason != "" {
+		b.WriteString("  closed:   " + t.CloseReason + "\n")
+	}
+	if t.ParentID != "" {
+		b.WriteString("  parent:   " + t.ParentID + "\n")
+	}
+	if t.Rollup != (tasktree.Rollup{}) {
+		fmt.Fprintf(&b, "  progress: %d/%d sub-tasks, %d/%d leaves\n", t.Rollup.ChildrenDone, t.Rollup.ChildrenTotal, t.Rollup.LeavesDone, t.Rollup.LeavesTotal)
+	}
+	for _, w := range t.TreeWarnings {
+		b.WriteString("  warning:  " + w.Code + " " + w.Message + "\n")
+	}
+	if len(t.Tree) > 0 {
+		b.WriteString("  tree:\n")
+		for _, l := range t.Tree {
+			b.WriteString("    " + strings.Repeat("  ", l.Depth-1) + badge(orDefault(l.Status, schema.TaskStatusTodo)) + " " + l.ID + " " + l.Title + "\n")
+		}
 	}
 	for _, r := range t.Refs {
 		b.WriteString("  ref:      " + r.Where() + "\n")

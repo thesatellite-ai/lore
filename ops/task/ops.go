@@ -14,6 +14,7 @@ package task
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
@@ -113,7 +115,7 @@ func Ops(env work.Env) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Add a new task",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.Unsupported),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported}, treeAddErrors...)...),
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
 				{Title: "add a task", CLI: `lore task add "Fix the login redirect" --priority high`, Want: "tsk_"},
@@ -131,7 +133,7 @@ func Ops(env work.Env) []op.Entry {
 		}, o.show),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit task fields (only flags you pass are applied)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.Unsupported, errs.Cycle),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported, errs.Cycle, errs.OpenChildren}, treeAddErrors...)...),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
@@ -140,18 +142,26 @@ func Ops(env work.Env) []op.Entry {
 		}, o.start),
 		op.Define(op.Spec{
 			Name: OpDone, Summary: "Mark a task done (with the code that finished it)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren),
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "done with a lesson", CLI: `lore task done tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"`, Want: "done"}},
 		}, o.done),
 		op.Define(op.Spec{
 			Name: OpCancel, Summary: "Cancel a task",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren),
+			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.cancel),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a task (a tombstone is kept so old copies never return)",
+			Name: OpSplit, Summary: "Split a task into sub-tasks (one batch)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), treeAddErrors...),
+			Examples: []op.Example{{Title: "preview a split", CLI: `lore task split tsk_<id> --title "Export query" --title "Download button" --dry-run`, Want: "would add"}},
+		}, o.split),
+		op.Define(op.Spec{
+			Name: OpDelete, Summary: "Delete a task and its sub-tasks (a tombstone is kept so old copies never return)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
-			Confirm:  op.ConfirmRule{Always: true},
+			// TSQ3: the op asks itself, so the question can list the subtree
+			// and its claimed children (bulk.Ask); it always asks.
+			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task delete tsk_<id> --yes", Want: "deleted"}},
 		}, o.delete),
 		op.Define(op.Spec{
@@ -174,8 +184,15 @@ func Ops(env work.Env) []op.Entry {
 	}
 }
 
-// ops binds the run functions to one Env.
-type ops struct{ env work.Env }
+// treeAddErrors are the refusals of placing a task in the tree (TASK 24).
+var treeAddErrors = []errs.Code{errs.Cycle, errs.ParentClosed, errs.ParentMission, errs.ParentProject, errs.TreeDepth}
+
+// ops binds the run functions to one Env. deco, set per call on the value
+// copy (list), adds the tree columns to each brief.
+type ops struct {
+	env  work.Env
+	deco func(*Brief, row.Row)
+}
 
 // notYet refuses a v0.1.17 team flag on a surface that supplies no
 // work.Team (the roster and claims live in the host, not in a row store).
@@ -208,6 +225,13 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	project, err := work.Project(ctx, o.env, Noun, in.Project)
 	if err != nil {
 		return AddOut{}, err
+	}
+	// TASK 6.5: a sub-task inherits from its parent before the defaults.
+	var par *addParent
+	if in.Parent != "" {
+		if par, err = o.addParent(ctx, &in, project.String()); err != nil {
+			return AddOut{}, err
+		}
 	}
 	priority := orDefault(in.Priority, DefaultPriority)
 	if err = work.OneOf(Noun, "priority", priority, schema.TaskPriorities()); err != nil {
@@ -250,6 +274,17 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err = setDates(fields, map[string]string{fieldDeferred: in.DeferUntil, fieldDue: in.Due}); err != nil {
 		return AddOut{}, err
 	}
+	if par != nil {
+		if repoID == "" && par.repo != nil {
+			fields[work.FieldRepo], repoID = par.repo, par.repo.String()
+		}
+		if fields[fieldParent], err = parentRef(par.id); err != nil {
+			return AddOut{}, err
+		}
+		if fields[fieldRank], err = value.TextOf(par.rank); err != nil {
+			return AddOut{}, err
+		}
+	}
 	if in.Tasklist == "" {
 		if in.Tasklist, err = o.defaultTasklist(ctx, in.To, project); err != nil {
 			return AddOut{}, err
@@ -269,6 +304,11 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	if v, ok := fields[fieldTeam]; ok && v.Kind() == value.KindNull {
 		delete(fields, fieldTeam) // a create clears nothing
+	}
+	if _, set := fields[fieldTeam]; !set && par != nil && par.inh.Team != "" {
+		if fields[fieldTeam], err = value.TextOf(par.inh.Team); err != nil {
+			return AddOut{}, err
+		}
 	}
 	if v, ok := fields[fieldAssigned]; ok && v.Kind() == value.KindNull {
 		delete(fields, fieldAssigned)
@@ -294,6 +334,21 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err = o.checkRefs(ctx, store.Source(in.To), refs); err != nil {
 		return AddOut{}, err
 	}
+	if par != nil && par.reopen != nil {
+		// --reopen-parent: the parent reopens in the same batch (6.7)
+		bctx, _, berr := bulk.Begin(ctx, bulk.KindTask)
+		if berr != nil {
+			return AddOut{}, berr
+		}
+		ctx = bctx
+		patch, perr := reopenPatch()
+		if perr != nil {
+			return AddOut{}, perr
+		}
+		if _, perr = o.env.Update(ctx, *par.reopen, patch); perr != nil {
+			return AddOut{}, perr
+		}
+	}
 	src, w, err := work.Create(ctx, o.env, in.To, table, fields)
 	if err != nil {
 		return AddOut{}, err
@@ -310,6 +365,10 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		label = " → " + l // v0.1.17 task add: " → " + route.Label ("[northwind/acme]")
 	}
 	out.Human = work.Success + " " + w.Row.ID.String() + " — " + title + " [" + priority + "]" + label + "\n"
+	if par != nil {
+		out.Parent, out.Inherited = par.id, par.inh
+		out.Human += par.human()
+	}
 	return out, nil
 }
 
@@ -614,9 +673,21 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	get := rowGetter(keys)
 	now := opclock.Now(o.env)
+	// TASK 6.3/6.6: tree filters and the derived rollup of umbrellas.
+	f, err := o.forest(ctx, project)
+	if err != nil {
+		return ListOut{}, err
+	}
+	inTree, err := treeFilter(f, in)
+	if err != nil {
+		return ListOut{}, err
+	}
+	o.deco = func(b *Brief, r row.Row) { decorate(f, b, r) }
 	return o.viewWith(ctx, in.Store, project, team.state, order, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
 		switch {
+		case !inTree(r.ID.String()):
+			return false
 		case !m.Match(get(r)),
 			in.Commitment != "" && commit != in.Commitment,
 			in.Status != "" && status != in.Status,
@@ -657,6 +728,9 @@ func (o ops) viewWith(ctx context.Context, only, project string, state func(row.
 			continue
 		}
 		b := BriefOf(work.LabelerOf(o.env), s.Source, s.Row)
+		if o.deco != nil {
+			o.deco(&b, s.Row)
+		}
 		if state != nil {
 			b = withState(b, state(s.Row))
 		}
@@ -715,6 +789,9 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		return ShowOut{}, err
 	}
 	full := fullOf(work.LabelerOf(o.env), src, r)
+	if err = o.showTree(ctx, &full, r, in.Tree); err != nil {
+		return ShowOut{}, err
+	}
 	full.TimeEntries = TimeEntries(r)
 	full.TimeLine = TimeLine(full.TimeEntries)
 	if by := work.Field(r, fieldDoneBy); by != "" {
@@ -907,6 +984,25 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if in.Timebox > 0 {
 		patch[fieldTimebox] = value.Int(int64(in.Timebox / time.Second))
 	}
+	// TASK 6.3/6.8: re-parent, detach, reorder; the subtree's mission and a
+	// reopened parent are written in one bat_ batch with the task.
+	te, err := o.editTree(ctx, in, curSrc, cur)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	maps.Copy(patch, te.patch)
+	if len(te.others) > 0 {
+		bctx, _, berr := bulk.Begin(ctx, bulk.KindTask)
+		if berr != nil {
+			return work.WriteOut{}, berr
+		}
+		ctx = bctx
+		for _, u := range te.others {
+			if _, uerr := o.env.Update(ctx, u.ref, u.patch); uerr != nil {
+				return work.WriteOut{}, uerr
+			}
+		}
+	}
 	if len(patch) == 0 && len(refs) > 0 {
 		return work.WriteOut{ID: id.String(), Store: work.SourceName(curSrc), Human: work.Success + " " + id.String() + " updated\n"}, nil
 	}
@@ -954,7 +1050,13 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
-	patch, err := o.statusPatch(schema.TaskStatusDone, work.FieldCompleted)
+	// TASK 6.7: open sub-tasks refuse (E_OPEN_CHILDREN) unless --children
+	// closes them in the same bat_ batch; close_reason completed (8.3).
+	ctx, f, childLines, err := o.closeTree(ctx, id, "done", in.Children, childrenDone)
+	if err != nil {
+		return DoneOut{}, err
+	}
+	patch, err := o.closePatch(schema.TaskStatusDone, "")
 	if err != nil {
 		return DoneOut{}, err
 	}
@@ -984,10 +1086,15 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
-	out := DoneOut{ID: w.ID, Store: w.Store, Human: w.Human}
+	out := DoneOut{ID: w.ID, Store: w.Store, Human: w.Human + childLines}
 	for _, x := range w.Warnings {
 		out.Warnings = append(out.Warnings, Warning(x))
 	}
+	parentLine := ""
+	if out.Parent, out.Next, parentLine, err = o.afterClose(ctx, f, id.String()); err != nil {
+		return DoneOut{}, err
+	}
+	out.Human += parentLine
 	switch {
 	case strings.TrimSpace(in.Lesson) != "":
 		mem, lerr := o.lesson(ctx, store.Source(w.Store), id, in.Lesson)
@@ -1051,26 +1158,74 @@ func (o ops) lesson(ctx context.Context, src store.Source, task ids.AnyID, text 
 	return w.Row.ID.String(), nil
 }
 
-// cancel marks a task cancelled.
-func (o ops) cancel(ctx context.Context, in IDIn) (work.WriteOut, error) {
+// cancel marks a task cancelled with its close reason (8.3); open
+// sub-tasks follow the done rule (6.7, default suggestion --children
+// cancel).
+func (o ops) cancel(ctx context.Context, in CancelIn) (DoneOut, error) {
 	id, err := taskID(in.ID)
 	if err != nil {
-		return work.WriteOut{}, err
+		return DoneOut{}, err
 	}
-	patch, err := work.Texts(Noun, map[string]string{work.FieldStatus: schema.TaskStatusCancelled})
+	patch, err := o.closePatch(schema.TaskStatusCancelled, in.Reason)
 	if err != nil {
-		return work.WriteOut{}, err
+		return DoneOut{}, err
 	}
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" cancelled\n")
+	ctx, f, childLines, err := o.closeTree(ctx, id, "cancel", in.Children, childrenCancel)
+	if err != nil {
+		return DoneOut{}, err
+	}
+	w, err := work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" cancelled\n")
+	if err != nil {
+		return DoneOut{}, err
+	}
+	out := DoneOut{ID: w.ID, Store: w.Store, Human: w.Human + childLines}
+	for _, x := range w.Warnings {
+		out.Warnings = append(out.Warnings, Warning(x))
+	}
+	parentLine := ""
+	if out.Parent, out.Next, parentLine, err = o.afterClose(ctx, f, id.String()); err != nil {
+		return DoneOut{}, err
+	}
+	out.Human += parentLine
+	return out, nil
 }
 
-// delete writes the task's tombstone.
+// delete tombstones the task and, through the parent relation's cascade,
+// its whole subtree, under one bat_ batch of kind delete. It always asks
+// (--yes); with at least one sub-task the question lists the count, the
+// first titles and every claimed child with its holder (TSQ3, DQ5).
 func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
 	id, err := taskID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, Noun, table, id, work.Success+" "+id.String()+" deleted\n")
+	_, cur, err := work.Get(ctx, o.env, Noun, table, id)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	f, err := o.forest(ctx, work.Field(cur, work.FieldProject))
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	desc := f.tree.Descendants(id.String())
+	question := "delete task " + id.String() + " " + work.Field(cur, work.FieldTitle) + "?"
+	if len(desc) > 0 {
+		if question, _, err = o.subtreeQuestion(ctx, f, id.String()); err != nil {
+			return work.WriteOut{}, err
+		}
+	}
+	if err = bulk.Ask(ctx, question); err != nil {
+		return work.WriteOut{}, err
+	}
+	bctx, batch, err := bulk.Begin(ctx, bulk.KindDelete)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	human := work.Success + " " + id.String() + " deleted\n"
+	if len(desc) > 0 {
+		human = work.Success + " " + strconv.Itoa(len(desc)+1) + " tasks deleted (" + id.String() + " and its sub-tasks; batch " + batch.String() + ")\n"
+	}
+	return work.Delete(bctx, o.env, Noun, table, id, human)
 }
 
 // search matches the query against every attached store's cache, keeps

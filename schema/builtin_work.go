@@ -66,6 +66,31 @@ func TaskCommitments() []string {
 	return []string{TaskCommitmentAccepted, TaskCommitmentProposed, TaskCommitmentSomeday}
 }
 
+// Task close reasons (TASK_SYSTEM_DESIGN 8.3): why a closed task closed.
+// done sets completed, cancel cancelled by default. Old rows have none
+// and read as completed when done, cancelled when cancelled.
+const (
+	TaskCloseCompleted = "completed"
+	TaskCloseDuplicate = "duplicate"
+	TaskCloseWontDo    = "wont_do"
+	TaskCloseObsolete  = "obsolete"
+	TaskCloseStale     = "stale"
+	TaskCloseCancelled = "cancelled"
+)
+
+// TaskCloseReasons lists the close reasons (8.3 order).
+func TaskCloseReasons() []string {
+	return []string{TaskCloseCompleted, TaskCloseDuplicate, TaskCloseWontDo, TaskCloseObsolete, TaskCloseStale, TaskCloseCancelled}
+}
+
+// Task tree fields (TASK_SYSTEM_DESIGN 6.2, DQ5): a row with either is part
+// of the task_tree feature (T14).
+const (
+	FieldTaskParent      = "parent_id"
+	FieldTaskRank        = "rank"
+	FieldTaskCloseReason = "close_reason"
+)
+
 // Task gates (TaskGate, LORE_TEAM_SPEC 7.4): a human approval step.
 const (
 	TaskGateRequired  = "required"
@@ -152,14 +177,25 @@ func workDefs() []TableDef {
 			Text("work_branch"),
 			Text("idempotency_key"),
 			Text("role"),
+			// Sub-tasks (DQ5, TASK 6.2): the parent is stored on the child
+			// only (T1: children are a query), rank orders siblings.
+			Ref(FieldTaskParent, TableTasks, Describe("the parent task (tsk_…); empty = top level")),
+			Text(FieldTaskRank, Describe("order among siblings (fractional index; ties by id)")),
+			Text(FieldTaskCloseReason, OneOf(TaskCloseReasons()...), Describe("why a closed task closed (TASK 8.3)")),
 			IndexOn("project_id", "status"),
+			IndexOn("project_id", FieldTaskParent),
 			IndexOn("project_id", "commitment"),
 			IndexOn("mission_id"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 			BelongsToRel("repo", "repo_id", TableRepos, SetNull),
 			BelongsToRel("mission", "mission_id", TableMissions, SetNull),
-			BelongsToRel("tasklist", "tasklist_id", TableTasklists, SetNull),
+			// DQ6: deleting a tasklist takes its tasks with it (one batch,
+			// behind the op's confirm).
+			BelongsToRel("tasklist", "tasklist_id", TableTasklists, Cascade),
 			BelongsToRel("plan", "plan_id", TablePlans, SetNull),
+			// DQ5/TSQ3: children are dependents of their parent; a delete
+			// takes the subtree (the op asks first when there is a child).
+			SelfRel("parent", FieldTaskParent, Cascade),
 			BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
 			BelongsToRel("assigned_to", "assigned_to_actor_id", TableActors, TombstoneOnly),
 			tagIDs(),
