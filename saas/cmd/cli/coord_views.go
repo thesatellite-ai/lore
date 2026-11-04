@@ -27,6 +27,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/model/row"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Handoff states (handoffs.status_str): open until accepted or declined
@@ -193,16 +195,9 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 
 // tasks returns the project's tasks with live rows winning.
 func (cv *coordView) tasks(ctx context.Context) ([]*ent.Task, error) {
-	var docs []coord.Doc
-	var err error
-	if cv.lister == nil {
-		// No live target: the project's tasks through the core.
-		docs, err = cv.projectDocs(ctx, tableTasks)
-		if err != nil {
-			return nil, err
-		}
-	} else if docs, err = cv.lister.List(ctx); err != nil {
-		return nil, coordError(err)
+	docs, err := cv.taskDocs(ctx)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]*ent.Task, 0, len(docs))
 	for _, d := range docs {
@@ -213,6 +208,63 @@ func (cv *coordView) tasks(ctx context.Context) ([]*ent.Task, error) {
 		out = append(out, t)
 	}
 	return out, nil
+}
+
+// taskDocs returns the project's task documents, live rows winning; the
+// inbox reads watchers and history from them (fields ent.Task lacks).
+func (cv *coordView) taskDocs(ctx context.Context) ([]coord.Doc, error) {
+	if cv.lister == nil {
+		// No live target: the project's tasks through the core.
+		return cv.projectDocs(ctx, tableTasks)
+	}
+	docs, err := cv.lister.List(ctx)
+	if err != nil {
+		return nil, coordError(err)
+	}
+	return docs, nil
+}
+
+// taskWatch is the part of a task document the "watched" inbox items read
+// (TASK 14 watchers, 17.2 history).
+type taskWatch struct {
+	ID       string                 `json:"id"`
+	Title    string                 `json:"title"`
+	Mission  string                 `json:"mission_id"`
+	Watchers []string               `json:"watchers"`
+	History  []opstask.HistoryEntry `json:"history"`
+}
+
+// watchedFields are the history fields a watcher is told about (TASK 20:
+// "watched task changed status, parent, due, assignees").
+var watchedFields = map[string]bool{
+	fieldStatus: true, schema.FieldTaskParent: true, fieldTaskDueAt: true, schema.FieldTaskAssignees: true,
+}
+
+// fieldTaskDueAt is the tasks column holding the due date.
+const fieldTaskDueAt = "due_at"
+
+// watchedItems lists, for every task me watches, its history entries on a
+// watched field written by someone else (one's own edits are not news).
+func (cv *coordView) watchedItems(ctx context.Context, docs []coord.Doc, me string) []inboxItem {
+	var out []inboxItem
+	for _, d := range docs {
+		w, err := docInto[taskWatch](d)
+		if err != nil || !slices.Contains(w.Watchers, me) {
+			continue // an unreadable row is skipped, as in tasks()
+		}
+		for _, e := range w.History {
+			if !watchedFields[e.Field] || e.By == me {
+				continue
+			}
+			at, err := time.Parse(time.RFC3339Nano, e.At)
+			if err != nil {
+				continue
+			}
+			out = append(out, inboxItem{Mission: w.Mission, Kind: inboxWatched, Who: cv.actorLabel(ctx, e.By),
+				Text: fmt.Sprintf("%s %s: %s %s → %s", w.ID, w.Title, e.Field, orNone(e.From), orNone(e.To)), At: at})
+		}
+	}
+	return out
 }
 
 // taskFromDoc decodes a canonical task document into the ORM struct (the
@@ -423,13 +475,20 @@ const (
 	inboxBlocked  = "blocked"
 	inboxFinding  = "finding"
 	inboxOverdue  = "overdue"
+	inboxWatched  = "watched"
 )
 
 func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 	me := cv.w.ActorID
-	tasks, err := cv.tasks(ctx)
+	docs, err := cv.taskDocs(ctx)
 	if err != nil {
 		return nil, err
+	}
+	tasks := make([]*ent.Task, 0, len(docs))
+	for _, d := range docs {
+		if t, terr := taskFromDoc(d); terr == nil {
+			tasks = append(tasks, t) // unreadable rows skipped, as in tasks()
+		}
 	}
 	missions, err := cv.projectDocs(ctx, tableMissions)
 	if err != nil {
@@ -481,6 +540,7 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 			out = append(out, inboxItem{Mission: mission, Kind: inboxOverdue, Who: holderLabel(sig), Text: fmt.Sprintf("%s over its time box (%s)", t.ID, time.Duration(*t.TimeboxSeconds)*time.Second)})
 		}
 	}
+	out = append(out, cv.watchedItems(ctx, docs, me)...)
 	hs, err := cv.projectDocs(ctx, tableHandoffs)
 	if err == nil {
 		for _, h := range hs {
