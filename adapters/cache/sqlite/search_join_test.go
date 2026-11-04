@@ -210,6 +210,18 @@ func TestJoinFill(t *testing.T) {
 	if got := pairs(t, c); !slices.Equal(got, []string{pair(store.SourceRepo, t2)}) {
 		t.Fatalf("non-id item: %v", got)
 	}
+	// A mixed array decodes from the file as JSON, not a List: its id
+	// items still make pairs (the form must not hide them).
+	doc.Fields[schema.FieldTagIDs] = must(value.JSONOf([]byte(`["` + t3.String() + `",5]`)))
+	sr := must(store.FromRow(doc))
+	back := must(sr.Decode())
+	if _, isJSON := back.Fields[schema.FieldTagIDs].(value.JSON); !isJSON {
+		t.Fatalf("fixture: mixed array decoded as %T", back.Fields[schema.FieldTagIDs])
+	}
+	f.apply(c, store.SourceRepo, "5", sr)
+	if got := pairs(t, c); !slices.Equal(got, []string{pair(store.SourceRepo, t3)}) {
+		t.Fatalf("json-form list: %v", got)
+	}
 }
 
 // TestLayoutReset: a file stamped with another layout version (1, before

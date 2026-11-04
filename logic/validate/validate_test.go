@@ -225,3 +225,44 @@ func mustAnyID(s string) ids.AnyID {
 	}
 	return id
 }
+
+// TestTargetsFileForm: a row read back from its file holds refs as Text and
+// lists of refs as a List of Text; Targets finds the same references as for
+// the typed row, so Dangling (lore lint) sees them too.
+func TestTargetsFileForm(t *testing.T) {
+	def := schema.Table("notes", ids.PrefixMemory,
+		schema.Ref("project_id", schema.TableProjects),
+		schema.List("links", value.KindRef),
+	)
+	l, err := value.ListOf(value.KindRef, ref(mem), ref(prj))
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed := map[string]value.Value{"project_id": ref(prj), "links": l}
+	file := map[string]value.Value{}
+	for k, v := range typed {
+		raw, ok := value.JSONForm(v)
+		if !ok {
+			t.Fatal(k)
+		}
+		if file[k], err = value.Infer(raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, isText := file["project_id"].(value.Text); !isText {
+		t.Fatalf("fixture: file form of a ref is %T", file["project_id"])
+	}
+	a, b := Targets(def, typed), Targets(def, file)
+	if len(a) != 3 || len(a) != len(b) {
+		t.Fatalf("typed %v, file %v", a, b)
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			t.Errorf("target %d: %+v vs %+v", i, a[i], b[i])
+		}
+	}
+	bad := map[string]value.Value{"project_id": txt("not an id")}
+	if got := Targets(def, bad); len(got) != 0 {
+		t.Errorf("non-id text made targets %v", got)
+	}
+}

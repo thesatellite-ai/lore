@@ -32,7 +32,8 @@ type Target struct {
 }
 
 // Targets lists every reference in fields (typed values, as Fields
-// returns), sorted by field then id. Null and absent ref fields make none.
+// returns, or the inferred values of a row read back from its file),
+// sorted by field then id. Null and absent ref fields make none.
 func Targets(def schema.TableDef, fields map[string]value.Value) []Target {
 	var out []Target
 	for _, f := range def.Fields {
@@ -82,21 +83,18 @@ func Dangling(def schema.TableDef, r row.Row, exists func(Target) bool) []Target
 	return out
 }
 
-// refIDs returns the ids a ref value or list of refs holds.
+// refIDs returns the ids a ref value or list of refs holds, in either form:
+// typed (Ref, List of Ref) or as decoded from a row file (a ref is Text,
+// a list of refs a List of Text). An item that is not an id is skipped:
+// field validation reports it.
 func refIDs(v value.Value) []ids.AnyID {
-	switch x := v.(type) {
-	case value.Ref:
-		return []ids.AnyID{x.ID()}
-	case value.List:
-		var out []ids.AnyID
-		for _, it := range x.Items() {
-			if r, ok := it.(value.Ref); ok {
-				out = append(out, r.ID())
-			}
+	var out []ids.AnyID
+	for _, s := range value.ItemStrings(v) {
+		if id, err := ids.ParseAny(s); err == nil {
+			out = append(out, id)
 		}
-		return out
 	}
-	return nil
+	return out
 }
 
 // polyTable reads a polymorphic type field; an unusable value leaves the

@@ -81,7 +81,9 @@ func (c *Cache) upsertKind(ctx context.Context, tx *sql.Tx, st state, kind ids.I
 	if v, ok := r.Fields[fieldName]; ok {
 		vals[fieldName] = v
 	}
-	if raw, ok := r.Fields[fieldResVals].(value.JSON); ok && raw.IsObject() {
+	// ObjectForm: the fields object reads the same built in memory or
+	// decoded from the row file.
+	if raw, ok := value.ObjectForm(r.Fields[fieldResVals]); ok {
 		members, err := canon.Members(raw.Raw())
 		if err != nil {
 			return errs.Wrap(errs.DBCorrupt, "sqlite cache: resource "+r.ID.String()+" fields", err)
@@ -154,12 +156,10 @@ func fillJoins(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 		if _, err := tx.ExecContext(ctx, j.deleteFrom, source, id.String()); err != nil {
 			return dbErr("clear pairs of "+j.rel.JoinTable.String(), err)
 		}
-		list, ok := vals[j.rel.Field].(value.List)
-		if !ok {
-			continue
-		}
-		for _, item := range list.Items() {
-			to, err := ids.ParseAny(item.String())
+		// ItemStrings: a list of refs (in memory), of text (decoded from
+		// the file) or a JSON array all give the same ids.
+		for _, item := range value.ItemStrings(vals[j.rel.Field]) {
+			to, err := ids.ParseAny(item)
 			if err != nil {
 				continue
 			}

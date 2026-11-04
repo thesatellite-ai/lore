@@ -110,7 +110,32 @@ func TestStrategyListByID(t *testing.T) {
 		if ab.String() != ba.String() {
 			t.Errorf("%s: order-dependent:\n%s\n%s", c.name, ab, ba)
 		}
+		// Both sides as decoded from their row files (a List of JSON
+		// items, not value.JSON) give the same bytes.
+		fa, fb := fileForm(t, c.a), fileForm(t, c.b)
+		ff, err := StrategyListByID(fa, fb)
+		if err != nil {
+			t.Fatalf("%s (file form): %v", c.name, err)
+		}
+		if ff.String() != ab.String() {
+			t.Errorf("%s: file form %s, memory form %s", c.name, ff, ab)
+		}
 	}
+}
+
+// fileForm is v as row.Decode would hand it back (value.Infer of its
+// JSON); nil stays nil.
+func fileForm(t *testing.T, v value.Value) value.Value {
+	t.Helper()
+	raw, ok := value.JSONForm(v)
+	if !ok {
+		return v
+	}
+	out, err := value.Infer(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // TestStrategyListByIDRefuses: a value that is not a list of objects each

@@ -3,6 +3,10 @@ package policy
 import (
 	"maps"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // TestClientRoutes: the routing.client_repos set joins across levels, then
@@ -69,5 +73,54 @@ func TestClientRoutes(t *testing.T) {
 	}
 	if got := Defaults().ClientRoutes(); len(got) != 0 {
 		t.Errorf("defaults route something: %v", got)
+	}
+}
+
+// TestEntryFromRowBothForms: a policies row reads the same whether its
+// value was built in memory (a json field) or decoded from the row file
+// (inferred: a list, text, bool or number), and ClientRoutes then gives
+// the same answer.
+func TestEntryFromRowBothForms(t *testing.T) {
+	t.Parallel()
+	id := src(1)
+	for _, raw := range []string{`["memory=agency","task=repo"]`, `"refuse"`, `true`, `4000`, `[]`} {
+		j, err := value.JSONOf([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		mem := row.Row{Table: schema.TablePolicies, ID: id, Fields: map[string]value.Value{"key": txt(string(KeyClientRoutes)), "value": j}}
+		inferred, err := value.Infer([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		file := row.Row{Table: schema.TablePolicies, ID: id, Fields: map[string]value.Value{"key": txt(string(KeyClientRoutes)), "value": inferred}}
+		a, err := EntryFromRow(LevelFolder, mem)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := EntryFromRow(LevelFolder, file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ja, _ := value.JSONForm(a.Value)
+		jb, _ := value.JSONForm(b.Value)
+		if a.Value.Kind() != b.Value.Kind() || string(ja) != string(jb) {
+			t.Errorf("%s: memory %s %s, file %s %s", raw, a.Value.Kind(), ja, b.Value.Kind(), jb)
+		}
+	}
+	j, err := value.JSONOf([]byte(`["memory=agency"]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := EntryFromRow(LevelFolder, row.Row{Table: schema.TablePolicies, ID: id, Fields: map[string]value.Value{"key": txt(string(KeyClientRoutes)), "value": j}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := Resolve([]Entry{e})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := set.ClientRoutes(); got["memory"] != "agency" {
+		t.Errorf("json-form routes %v", got)
 	}
 }
