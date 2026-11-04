@@ -124,7 +124,7 @@ func Decode(b []byte) (Row, error) {
 		return Row{}, err
 	}
 	if r.SourceVersion == formatV1 && r.HLC.IsZero() {
-		r.HLC = hlc.FromUpdate(r.UpdatedAt, r.UpdatedBy)
+		r.HLC = upcastHLC(r)
 	}
 	if err := r.check(); err != nil {
 		return Row{}, err
@@ -317,3 +317,23 @@ func appendActor(ms []canon.Member, key string, a ids.ID[ids.Actor]) []canon.Mem
 
 // bad builds a malformed-envelope error.
 func bad(why string) error { return errs.New(errs.InvalidInput, "row: "+why) }
+
+// v1Floor is the stamp given to a v1 row that carries neither updated_at nor
+// created_at (some v0.1.17 tables, e.g. actors, never wrote them): the Unix
+// epoch, the lowest stamp lore can issue, so any real edit of the row sorts
+// after it and wins the merge.
+var v1Floor = time.Unix(0, 0).UTC()
+
+// upcastHLC is the v1 upcast rule (spec 12) with fallbacks: updated_at and
+// updated_by first, then created_at and created_by, then v1Floor, so a v1
+// row is always readable instead of failing with "missing _hlc".
+func upcastHLC(r Row) hlc.HLC {
+	switch {
+	case !r.UpdatedAt.IsZero():
+		return hlc.FromUpdate(r.UpdatedAt, r.UpdatedBy)
+	case !r.CreatedAt.IsZero():
+		return hlc.FromUpdate(r.CreatedAt, r.CreatedBy)
+	default:
+		return hlc.FromUpdate(v1Floor, r.UpdatedBy)
+	}
+}
