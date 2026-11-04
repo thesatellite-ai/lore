@@ -268,16 +268,18 @@ func TestMount(t *testing.T) {
 	}
 }
 
-// TestExitCode: nil is 0, foreign errors are usage errors, never 0.
+// TestExitCode: nil is 0, foreign errors are the generic exit (FLAG2: no
+// longer the usage exit, which is now 20), never 0.
 func TestExitCode(t *testing.T) {
 	t.Parallel()
-	if ExitCode(nil) != 0 || ExitCode(errs.New(errs.NotFound, "x")) != ExitUsage || ExitCode(&exitError{code: 27}) != 27 {
+	if ExitCode(nil) != 0 || ExitCode(errs.New(errs.NotFound, "x")) != ExitUnknown || ExitUsage != errs.ExitBadInput || ExitCode(&exitError{code: 27}) != 27 {
 		t.Fatal("ExitCode")
 	}
 }
 
-// TestUsageErrorBytes pins v0.1.17's usage-error form: exactly one
-// `ERROR: <cobra message>` line on stderr, nothing on stdout, exit 1 — no
+// TestUsageErrorBytes pins the usage-error form: exactly one
+// `ERROR: [E_INVALID_INPUT] <cobra message>` line on stderr, nothing on
+// stdout, exit 20 (FLAG2; v0.1.17 printed no code and exited 1) — no
 // cobra "Error:" / "Run '… --help' for usage." pair, and no JSON envelope
 // even under --json (the docs' unknown-flag examples compare these bytes).
 func TestUsageErrorBytes(t *testing.T) {
@@ -286,10 +288,10 @@ func TestUsageErrorBytes(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"memory", "list", "--colour", "never"}, "ERROR: unknown flag: --colour\n"},
-		{[]string{"memory", "list", "--colour", "never", "--json"}, "ERROR: unknown flag: --colour\n"},
-		{[]string{"memory", "list", "-Z"}, "ERROR: unknown shorthand flag: 'Z' in -Z\n"},
-		{[]string{"memory", "bogus"}, "ERROR: unknown command \"bogus\" for \"" + RootName + " memory\"\n"},
+		{[]string{"memory", "list", "--colour", "never"}, "ERROR: [E_INVALID_INPUT] unknown flag: --colour\n"},
+		{[]string{"memory", "list", "--colour", "never", "--json"}, "ERROR: [E_INVALID_INPUT] unknown flag: --colour\n"},
+		{[]string{"memory", "list", "-Z"}, "ERROR: [E_INVALID_INPUT] unknown shorthand flag: 'Z' in -Z\n"},
+		{[]string{"memory", "bogus"}, "ERROR: [E_INVALID_INPUT] unknown command \"bogus\" for \"" + RootName + " memory\"\n"},
 	}
 	for _, c := range cases {
 		r := execute(Build(f.reg, f), "", c.args...)

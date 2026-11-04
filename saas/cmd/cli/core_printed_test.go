@@ -7,7 +7,7 @@ import (
 
 // TestCoreErrorPrintedOnce: a failing generated command outside the compat
 // nouns (store init into a folder that cannot be created: E_INTERNAL, exit
-// 1, the usage-error code) prints its error once, never a second bare
+// 1, the fallback exit of foreign errors) prints its error once, never a second bare
 // "internal error" line from main.
 func TestCoreErrorPrintedOnce(t *testing.T) {
 	f := newCoreFixture(t)

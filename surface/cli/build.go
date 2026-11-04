@@ -96,12 +96,22 @@ func newConfig(opts []Option) config {
 // programmer error (an operation field named like a reserved flag): the
 // same startup-panic rule as op.Define.
 func Build(reg *op.Registry, runner op.Runner, opts ...Option) *cobra.Command {
-	// The root prints cobra's own errors (unknown command); the generated
-	// commands silence theirs because they print them in the lore format.
+	// FLAG2: the root refuses an unknown command word like a group does
+	// (usageError: E_INVALID_INPUT, exit 20) instead of letting cobra print
+	// its own "Error: unknown command" with exit 1; bare, it prints help.
 	root := &cobra.Command{
-		Use:          RootName,
-		SilenceUsage: true,
+		Use:           RootName,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			return usageError(cmd, fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath()))
+		},
 	}
+	root.SetFlagErrorFunc(usageError)
 	if err := Mount(root, reg, runner, opts...); err != nil {
 		panic(err)
 	}
@@ -383,12 +393,15 @@ func examples(ex []op.Example) string {
 }
 
 // usageError prints a cobra usage error (unknown flag, unknown shorthand
-// flag, unknown command) as v0.1.17's one line on stderr, `ERROR: <cobra's
-// message>`, and returns it as exit 1 already printed. No "Run '… --help'"
-// line and no JSON envelope even under --json: v0.1.17 printed exactly this
-// line for every usage error, the flags may not have parsed far enough to
-// know --json was given, and scripts and the docs compare these bytes.
+// flag, unknown command) as one line on stderr, `ERROR: [E_INVALID_INPUT]
+// <cobra's message>`, and returns it as ExitUsage already printed.
+//
+// FLAG2: a usage error is an invalid argument, so it carries
+// E_INVALID_INPUT and exits 20 (bad_input), not v0.1.17's bare line with
+// exit 1; this supersedes CLI_REFERENCE 1.5. Still no "Run '… --help'"
+// line and no JSON envelope even under --json: the flags may not have
+// parsed far enough to know --json was given.
 func usageError(cmd *cobra.Command, err error) error {
-	_, _ = io.WriteString(cmd.ErrOrStderr(), errorPrefix+err.Error()+"\n")
-	return &exitError{code: ExitUsage, cause: err}
+	_, _ = io.WriteString(cmd.ErrOrStderr(), errorPrefix+"["+string(UsageCode)+"] "+err.Error()+"\n")
+	return &exitError{code: ExitUsage, cause: errs.Wrap(UsageCode, err.Error(), err)}
 }

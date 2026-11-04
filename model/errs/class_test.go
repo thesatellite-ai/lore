@@ -26,7 +26,7 @@ func allConstants() []Code {
 		Stale, StoreScheme, StoreBackend, StoreUnreachable, StoreReadOnly, StoreLocked,
 		Unauthorized, ResourceInvalid, SchemaOld, NeedsConfirm, PolicyDenied, KindUnknown,
 		MetaType, MetaAmbiguous, MigrateLocked, URLUserinfo,
-		ResourceInUse, KindConflict, NameTaken, MetaTaken, Purged,
+		ResourceInUse, KindConflict, NameTaken, MetaTaken, Purged, Refused,
 	}
 }
 

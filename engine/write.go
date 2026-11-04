@@ -398,6 +398,9 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 	if err != nil {
 		return Written{}, err
 	}
+	if err = refuseActorDelete(cur); err != nil {
+		return Written{}, err
+	}
 	st, err := e.writable(src)
 	if err != nil {
 		return Written{}, err
@@ -876,4 +879,22 @@ func originOf(opName string, target store.Source) (value.JSON, error) {
 		return value.JSON{}, errs.Wrap(errs.Internal, "engine: build _o", err)
 	}
 	return value.JSONOf(obj)
+}
+
+// actorDeactivateHint is the way out a refused actor delete names.
+const actorDeactivateHint = "deactivate the person instead: lore actor deactivate <@handle> (the row stays, marked inactive)"
+
+// refuseActorDelete refuses a delete or purge of an actor row.
+//
+// BATCH2 #8: actors are never deleted (DELETION 4.1): every *_by field of
+// every row, deleted_by included, points at an actor, so a tombstoned actor
+// would leave attribution dangling. The refusal is E_REFUSED naming the
+// actor and `lore actor deactivate`, here in the engine so every surface
+// (a generic delete, REST, a future actor op) gets it, not only the CLI.
+func refuseActorDelete(r row.Row) error {
+	if r.Table != schema.TableActors {
+		return nil
+	}
+	return errs.New(errs.Refused, "actor "+r.ID.String()+" cannot be deleted: actors are never deleted, every *_by field points at them").
+		WithHint(actorDeactivateHint)
 }

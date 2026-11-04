@@ -118,6 +118,11 @@ const (
 	// row (update, create with the id, move, merge, restore): purged rows
 	// never come back (DELETION_DESIGN 3.5, DQ4; CLI_REFERENCE 5.5).
 	Purged Code = "E_PURGED"
+	// Refused is a refusal by a fixed lore rule that no other code names,
+	// with the rule and the way out in the message. BATCH2 #8: `lore actor
+	// delete` answers it naming `lore actor deactivate`, because actors are
+	// never deleted (DELETION 4.1: every *_by field points at them).
+	Refused Code = "E_REFUSED"
 )
 
 // Def is the registry entry of one code: everything a surface needs to print
@@ -220,6 +225,7 @@ var table = map[Code]entry{
 	MigrateLocked:    {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
 	URLUserinfo:      {class: ClassBadInput, desc: "a URL value holds credentials"},
 	Purged:           {class: ClassRefused, desc: "the row was purged; only a tombstone is left"},
+	Refused:          {class: ClassRefused, desc: "a fixed lore rule refuses this; the message names the rule and what to do instead"},
 }
 
 // Lookup returns the registry entry of c. An unregistered code is reported

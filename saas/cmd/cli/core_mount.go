@@ -1018,7 +1018,9 @@ var corePrinted bool
 // too, so it is never printed twice.
 func coreExitCode(err error) (int, bool) {
 	code := cli.ExitCode(err)
-	return code, code != cli.ExitUsage || (err != nil && corePrinted)
+	// FLAG2: a usage error is now an exitError with its own exit (20), so
+	// "not printed by the core" is the fallback exit for foreign errors.
+	return code, code != cli.ExitUnknown || (err != nil && corePrinted)
 }
 
 // coreMoveRow is `lore move <id> --to <store>` for a row of a core-owned

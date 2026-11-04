@@ -22,6 +22,11 @@ func TestExitStatus(t *testing.T) {
 		{"double wrapped", fmt.Errorf("a: %w", fmt.Errorf("b: %w", errcodes.New(errcodes.OrgAmbiguous, "two"))), 17},
 		{"coded without own status", errcodes.New(errcodes.NotFound, "x"), errcodes.ExitGeneric},
 		{"plain error", errors.New("boom"), errcodes.ExitGeneric},
+		// FLAG2: every bad_input code exits 20 on the old commands too.
+		{"invalid input", errcodes.New(errcodes.InvalidInput, "bad"), 20},
+		{"invalid id (stays E_INVALID_ID, BATCH2 #11)", errcodes.New(errcodes.InvalidID, "bad id"), 20},
+		{"wrapped invalid input", fmt.Errorf("x: %w", errcodes.New(errcodes.EmptyBody, "empty")), 20},
+		{"refused (BATCH2 #8)", errcodes.New(errcodes.Refused, "no"), 23},
 	} {
 		if got := exitStatus(tc.err); got != tc.want {
 			t.Errorf("%s: exitStatus = %d, want %d", tc.name, got, tc.want)

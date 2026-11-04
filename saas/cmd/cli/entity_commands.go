@@ -39,7 +39,32 @@ import (
 // core's (ops/infra), register and deactivate the roster's
 // (attachRosterCommands). A pure group, so cli.Mount reuses it.
 func newActorCommand() *cobra.Command {
-	return &cobra.Command{Use: "actor", Short: "Inspect actors (humans, agents, hooks, plugins)"}
+	cmd := &cobra.Command{Use: "actor", Short: "Inspect actors (humans, agents, hooks, plugins)"}
+	cmd.AddCommand(newActorDeleteCommand())
+	return cmd
+}
+
+// newActorDeleteCommand is `lore actor delete [<id>]`, which always refuses.
+//
+// BATCH2 #8: actors are never deleted (DELETION 4.1): every *_by field of
+// every row points at an actor, so the command answers E_REFUSED naming
+// `lore actor deactivate` instead of printing the group help with exit 0
+// (it did before: no delete existed, so cobra fell back to the help). The
+// engine refuses the same delete for every other surface.
+func newActorDeleteCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete [<id>]",
+		Short: "Refused: actors are never deleted (use `lore actor deactivate`)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			what := "an actor"
+			if len(args) == 1 {
+				what = "actor " + args[0]
+			}
+			return errcodes.New(errcodes.Refused, what+" cannot be deleted: actors are never deleted, every *_by field points at them").
+				WithHint(fmt.Sprintf("deactivate the person instead: %s actor deactivate <@handle> (the row stays, marked inactive)", BinaryName))
+		},
+	}
 }
 
 // ── snapshot ─────────────────────────────────────────────────────────────

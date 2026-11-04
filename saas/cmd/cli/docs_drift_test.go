@@ -243,8 +243,10 @@ func TestDocsMatchCLI(t *testing.T) {
 // lore refusing a wrong flag or command on purpose (a troubleshooting page
 // demonstrating "unknown flag"). The command line right above it is the
 // error being taught, so it is not checked. Only the parser's own refusals
-// count: any other ERROR keeps the command checked.
-var deliberateCLIErrorOutput = regexp.MustCompile(`^ERROR: unknown (flag|shorthand flag|command)\b`)
+// count: any other ERROR keeps the command checked. FLAG2: the refusal now
+// carries [E_INVALID_INPUT] (exit 20); pages pasted before it lack the code,
+// so both spellings count.
+var deliberateCLIErrorOutput = regexp.MustCompile(`^ERROR: (\[E_INVALID_INPUT\] )?unknown (flag|shorthand flag|command)\b`)
 
 // deliberateCLIError reports whether a fenced line is such output.
 func deliberateCLIError(line string) bool {
@@ -551,6 +553,8 @@ func TestDeliberateCLIErrorExemption(t *testing.T) {
 		"$ lore nosuchverb\n" +
 		"\n" +
 		"ERROR: unknown command \"nosuchverb\" for \"lore\"\n" +
+		"$ lore task list --nope\n" +
+		"ERROR: [E_INVALID_INPUT] unknown flag: --nope\n" +
 		"$ lore memory list\n" +
 		"```\n" +
 		"ERROR: unknown flag: --x\n"

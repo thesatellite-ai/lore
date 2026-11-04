@@ -111,9 +111,23 @@ func (o ops) parseRefs(ctx context.Context, raw []string) ([]taskRef, error) {
 			return nil, lookup.BadID("--ref "+r+": not a row id or commit:<sha>", perr)
 		}
 		if project == "" {
-			if _, row, gerr := o.env.Get(ctx, engine.Ref{Table: def.Name, ID: id}); gerr != nil || row.Deleted {
-				return nil, errs.New(errs.NotFound, "--ref "+r+": no such row in this project").
+			// PRINCIPLE EXACT ERRORS / FLAG5: env.Get looks in every
+			// attached store (repo, org and personal stores alike), so a
+			// row of an internal store is found here and checkRefs answers
+			// F15's E_LEAK_BLOCKED naming it. Only an id no attached store
+			// holds is E_NOT_FOUND; a deleted row says so, and any other
+			// read failure (store unreachable, …) keeps its own code
+			// instead of being reported as a missing row.
+			_, got, gerr := o.env.Get(ctx, engine.Ref{Table: def.Name, ID: id})
+			switch {
+			case errs.CodeOf(gerr) == errs.NotFound:
+				return nil, errs.New(errs.NotFound, "--ref "+r+": no row "+id.String()+" in any attached store").
 					WithHint("qualify a row of another project as <prj_…>:<id>")
+			case gerr != nil:
+				return nil, gerr
+			case got.Deleted:
+				return nil, errs.New(errs.NotFound, "--ref "+r+": row "+id.String()+" is deleted").
+					WithHint("point at a live row")
 			}
 		}
 		out = append(out, taskRef{Table: def.Name, ID: id, Project: project})

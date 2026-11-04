@@ -98,6 +98,10 @@ const (
 	Cycle         Code = "E_CYCLE"
 	OldLore       Code = "E_OLD_LORE"
 	ConfigInvalid Code = "E_CONFIG_INVALID"
+	// Refused mirrors model/errs.Refused (BATCH2 #8: `lore actor delete`
+	// is refused naming `lore actor deactivate`; actors are never deleted,
+	// DELETION 4.1). Exit 23, the core's class refused.
+	Refused Code = "E_REFUSED"
 )
 
 // All returns every registered code. Used by `lore errors list` and tests.
@@ -115,7 +119,7 @@ func All() []Code {
 		NotFound, Internal, NotImplemented, Unsupported,
 		NoWork, Contended, LostClaim, Cancelled, Reassigned, Offline, AmbiguousID,
 		OrgAmbiguous, OrgDisagrees, LinkUnknown, NotAStore, LeakBlocked, Cycle, OldLore,
-		ConfigInvalid,
+		ConfigInvalid, Refused,
 	}
 }
 
@@ -144,6 +148,8 @@ var exitCodes = map[Code]int{
 	LeakBlocked:  19,
 	Cycle:        19,
 	OldLore:      19,
+	// Refused exits with the core's class refused status (BATCH2 #8).
+	Refused: 23,
 }
 
 // ExitCode returns the process exit status for code c.
@@ -211,6 +217,7 @@ func Description(c Code) string {
 		Cycle:                 "the dependency would create a cycle between tasks",
 		OldLore:               "this lore binary is below the live ref's min_lore_version; upgrade lore (reads still work)",
 		ConfigInvalid:         "~/.lore/config.yaml failed validation; run `lore config check`",
+		Refused:               "a fixed lore rule refuses this; the message names the rule and what to do instead",
 	}
 	if d, ok := descs[c]; ok {
 		return d

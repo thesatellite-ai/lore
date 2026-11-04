@@ -23,6 +23,8 @@ import (
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/surface/cli"
 )
 
 // version is set at build time via -ldflags '-X main.version=<value>'
@@ -140,11 +142,80 @@ func init() {
 	// spec`: after wireLive, which must not wrap the core's commands (they
 	// never touch lore.db).
 	mountCore(rootCmd)
+	// FLAG2: last, so it sees every old command registered above.
+	classifyInputErrors(rootCmd)
+}
+
+// classifyInputErrors makes cobra's own refusals of the old (non-generated)
+// commands input errors.
+//
+// FLAG2: a missing or invalid argument exits 20 E_INVALID_INPUT everywhere
+// (the generated core commands already do, surface/cli usageError); exit 1
+// is kept for unexpected internal errors only. cobra answers a wrong
+// argument count (cobra.ExactArgs, …) and an unknown or malformed flag
+// with a plain error, which main used to print with exit 1; this wraps the
+// Args validator of every old command and sets the root's flag-error
+// function (inherited by every old command that sets none), so both carry
+// E_INVALID_INPUT. An unknown root command word is classified in main
+// (inputError), because cobra raises it before any command runs.
+func classifyInputErrors(root *cobra.Command) {
+	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return errcodes.New(errcodes.InvalidInput, err.Error())
+	})
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+		if cli.Generated(c) || c.Args == nil {
+			return
+		}
+		args := c.Args
+		c.Args = func(cmd *cobra.Command, a []string) error {
+			if err := args(cmd, a); err != nil {
+				var known *errcodes.CLIError
+				if errors.As(err, &known) {
+					return err // a validator that already names its code
+				}
+				return errcodes.New(errcodes.InvalidInput, err.Error())
+			}
+			return nil
+		}
+	}
+	walk(root)
+}
+
+// inputError classifies err, the error rootCmd.Execute returned for args,
+// as E_INVALID_INPUT when it is one of cobra's own input refusals raised
+// outside any hook classifyInputErrors can wrap (FLAG2): the unknown
+// command word (Find raises it before any command runs), a required flag
+// not set and a flag-group violation (cobra checks both after the Args
+// validator, with no hook). Each is recognised by asking cobra the same
+// question again and comparing the answer, never by matching text, so any
+// other error is returned unchanged.
+func inputError(err error, args []string) error {
+	var known *errcodes.CLIError
+	if err == nil || errors.As(err, &known) {
+		return err
+	}
+	cmd, _, ferr := rootCmd.Find(args)
+	if ferr != nil {
+		if ferr.Error() == err.Error() {
+			return errcodes.New(errcodes.InvalidInput, err.Error())
+		}
+		return err
+	}
+	for _, again := range []func() error{cmd.ValidateRequiredFlags, cmd.ValidateFlagGroups} {
+		if verr := again(); verr != nil && verr.Error() == err.Error() {
+			return errcodes.New(errcodes.InvalidInput, err.Error())
+		}
+	}
+	return err
 }
 
 func main() {
 	style.Init(style.ParseMode(flagColor))
-	err := rootCmd.Execute()
+	err := inputError(rootCmd.Execute(), os.Args[1:])
 	// Export this command's writes to .lore/data (and wire git) even when the
 	// command failed part-way: rows it already wrote must not be left behind.
 	// A refusal found while storing the command's writes (a leak-blocked
@@ -178,20 +249,32 @@ const hintPrefix = "  hint: "
 // or "" when there is none. Hint is kept out of CLIError.Error() on purpose
 // (errcodes/error.go), so the CLI is the one place that prints it.
 func errorHint(err error) string {
-	var cli *errcodes.CLIError
-	if errors.As(err, &cli) {
-		return cli.Hint
+	var ce *errcodes.CLIError
+	if errors.As(err, &ce) {
+		return ce.Hint
 	}
 	return ""
 }
 
 // exitStatus is the process exit status for a failed command: the code's
 // dedicated status when the error carries a registered code that has one
-// (errcodes.ExitCode; LORE_TEAM_SPEC §1), else errcodes.ExitGeneric.
+// (errcodes.ExitCode; LORE_TEAM_SPEC §1), 20 for an input error (FLAG2),
+// else errcodes.ExitGeneric.
 func exitStatus(err error) int {
-	var cli *errcodes.CLIError
-	if errors.As(err, &cli) {
-		return errcodes.ExitCode(cli.Code)
+	var ce *errcodes.CLIError
+	if errors.As(err, &ce) {
+		if n := errcodes.ExitCode(ce.Code); n != errcodes.ExitGeneric {
+			return n
+		}
+		// FLAG2: an input error (every code the core registry puts in
+		// class bad_input: E_INVALID_INPUT, E_INVALID_ID, E_EMPTY_BODY, …)
+		// exits 20 on the old commands too, not v0.1.17's 1; exit 1 stays
+		// for unexpected internal errors. Only the bad_input class moves
+		// here: other classes keep the old exit until their own decision
+		// is applied to the old commands.
+		if d, ok := errs.Lookup(errs.Code(ce.Code)); ok && d.Class == errs.ClassBadInput {
+			return d.Exit
+		}
 	}
 	return errcodes.ExitGeneric
 }
