@@ -114,7 +114,7 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
-	// Human is the add line; show prints "TA  <id>".
+	// Human is the add line; show prints "PL  <id>".
 	Human string `json:"-"`
 }
 
@@ -289,8 +289,8 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		return work.WriteOut{}, err
 	}
 	if in.Status != "" {
-		if err := work.OneOf(Noun, "status", in.Status, schema.PlanStatuses()); err != nil {
-			return work.WriteOut{}, err
+		if serr := work.OneOf(Noun, "status", in.Status, schema.PlanStatuses()); serr != nil {
+			return work.WriteOut{}, serr
 		}
 	}
 	patch, err := work.Texts(Noun, map[string]string{work.FieldTitle: strings.TrimSpace(in.Title), work.FieldBody: in.Body, fieldStatus: in.Status})
