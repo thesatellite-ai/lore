@@ -175,6 +175,11 @@ type Full struct {
 	EstimateLine string `json:"-"`
 	// Tree is the subtree, depth first, for show --tree.
 	Tree []TreeLine `json:"tree,omitempty"`
+	// Why / Who / Relations are the show --why / --who / --relations
+	// blocks; nil without the flag.
+	Why       Why           `json:"why,omitzero"`
+	Who       Who           `json:"who,omitzero"`
+	Relations ShowRelations `json:"relations,omitzero"`
 	// TreeWarnings are E_PARENT_CYCLE warnings of the merged tree (6.13).
 	TreeWarnings []Warning `json:"tree_warnings,omitempty"`
 	CreatedAt    string    `json:"created_at"`
@@ -270,6 +275,10 @@ type ShowIn struct {
 	ID   string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	From string `json:"from,omitempty" flag:"from" desc:"the source of the id: repo | <org> | <org>/<folder>"`
 	Tree bool   `json:"tree,omitempty" flag:"tree" desc:"also print the sub-task tree"`
+	// TASK 13.3, 8.2, AGENT_IDENTITY 6.2.
+	Why       bool `json:"why,omitempty" flag:"why" desc:"explain the urgency score term by term"`
+	Who       bool `json:"who,omitempty" flag:"who" desc:"who created and last changed it (and, on the writing machine, with which session)"`
+	Relations bool `json:"relations,omitempty" flag:"relations" desc:"show every relation, both directions"`
 }
 
 // ShowOut is the output of task.show.

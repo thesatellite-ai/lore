@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"saas/pkg/aicoder/queue"
 	"saas/pkg/aicoder/signals"
+
+	"github.com/thesatellite-ai/lore/logic/urgency"
 )
 
 // NextRequest is one `lore task next` (§7.3).
@@ -23,6 +26,17 @@ type NextRequest struct {
 	// Pick returns a number in [0, n) for the random pick after a lost
 	// race (the Rand seam).
 	Pick func(n int) int
+	// Urgency is what the score reads beyond the task row (TASK 13.2):
+	// tag names and mission target dates; zero value = none known.
+	Urgency UrgencyContext
+}
+
+// UrgencyContext resolves the urgency inputs that live on other rows.
+type UrgencyContext struct {
+	// NextTag reports whether a tag id names the `next` tag.
+	NextTag func(tagID string) bool
+	// MissionTarget is a mission's target_date (zero = none).
+	MissionTarget func(missionID string) time.Time
 }
 
 // NextResult is a successful `task next`.
@@ -33,6 +47,8 @@ type NextResult struct {
 	Claim   ClaimResult
 	// Poisoned are tasks this call blocked after max_attempts.
 	Poisoned []string
+	// Scores are the urgency of every open task ranked (TASK 13; --why).
+	Scores map[string]urgency.Score
 }
 
 // NoWorkError is E_NO_WORK: nothing is ready; Waiting explains each
@@ -74,7 +90,27 @@ func ToQueueTask(d Doc, repoName func(string) string, claim queue.ClaimState, cl
 		Attempts: d.Int(keyAttempts), After: after,
 		Merged: !d.Time(keyMergedAt).IsZero(), DonePR: d.Int(keyDonePR), DoneCommit: d.Str(keyDoneCommit),
 		Claim: claim, ClaimedBy: claimedBy,
+		ParentID: d.Str(keyParentID), Due: d.Time(keyDueAt), Proposed: d.Str(keyCommitment) == commitmentProposed,
 	}
+}
+
+// commitmentProposed is the commitment the proposed term reads (13.2).
+const commitmentProposed = "proposed"
+
+// withUrgency fills the inputs that live on other rows (tags, missions).
+func withUrgency(t queue.Task, d Doc, u UrgencyContext) queue.Task {
+	if u.NextTag != nil {
+		for _, id := range d.Strs(keyTagIDs) {
+			if u.NextTag(id) {
+				t.NextTag = true
+				break
+			}
+		}
+	}
+	if u.MissionTarget != nil && t.MissionID != "" {
+		t.MissionTarget = u.MissionTarget(t.MissionID)
+	}
+	return t
 }
 
 // ClaimStateOf reads a task's claim state from a view.
@@ -96,12 +132,28 @@ func Queue(ctx context.Context, env Env, v signals.View, req NextRequest) (queue
 	if err != nil {
 		return queue.Result{}, err
 	}
+	return queueOf(env, v, req, docs), nil
+}
+
+// OpenChildrenOf indexes the open sub-tasks of every parent in docs
+// (TASK 6.9: a claim of such a parent is a coordinator lease).
+func OpenChildrenOf(docs []Doc) func(id string) []string {
+	kids := map[string][]string{}
+	for _, d := range docs {
+		if p := d.Str(keyParentID); p != "" && isOpen(d.Status()) {
+			kids[p] = append(kids[p], d.Str(keyID))
+		}
+	}
+	return func(id string) []string { return kids[id] }
+}
+
+func queueOf(env Env, v signals.View, req NextRequest, docs []Doc) queue.Result {
 	tasks := make([]queue.Task, 0, len(docs))
 	for _, d := range docs {
 		st, by := ClaimStateOf(v, env.Folder, d.Str(keyID))
-		tasks = append(tasks, ToQueueTask(d, req.RepoName, st, by))
+		tasks = append(tasks, withUrgency(ToQueueTask(d, req.RepoName, st, by), d, req.Urgency))
 	}
-	return queue.Next(queue.Input{Tasks: tasks, Filter: req.Filter, Now: v.Now, MaxAttempts: env.Agents.MaxAttempts}), nil
+	return queue.Next(queue.Input{Tasks: tasks, Filter: req.Filter, Now: v.Now, MaxAttempts: env.Agents.MaxAttempts})
 }
 
 // Next runs §7.3: resume first, block poisoned tasks, then claim the first
@@ -111,16 +163,22 @@ func Next(ctx context.Context, env Env, req NextRequest) (NextResult, error) {
 	if err != nil {
 		return NextResult{}, err
 	}
-	for _, h := range v.ActiveClaimsOf(env.Caller.ActorID) {
-		if h.Signal.Session == env.Caller.Session && !IsMission(h.Signal.Task) {
-			return NextResult{Resumed: true, Task: h.Signal.Task}, nil
-		}
-	}
-	res, err := Queue(ctx, env, v, req)
+	docs, err := req.List(ctx)
 	if err != nil {
 		return NextResult{}, err
 	}
-	var out NextResult
+	if req.Opts.OpenChildren == nil {
+		req.Opts.OpenChildren = OpenChildrenOf(docs)
+	}
+	// Resume first (§7.3 step 2), but a coordinator lease on a parent is
+	// not work to resume (TASK 6.9): the caller is offered a leaf.
+	for _, h := range v.ActiveClaimsOf(env.Caller.ActorID) {
+		if h.Signal.Session == env.Caller.Session && !IsMission(h.Signal.Task) && len(req.Opts.OpenChildren(h.Signal.Task)) == 0 {
+			return NextResult{Resumed: true, Task: h.Signal.Task}, nil
+		}
+	}
+	res := queueOf(env, v, req, docs)
+	out := NextResult{Scores: res.Scores}
 	for _, t := range res.Poisoned {
 		_, err := Claim(ctx, env, t.ID, req.Opts)
 		var pe *PoisonedError

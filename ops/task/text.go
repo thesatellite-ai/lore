@@ -157,6 +157,15 @@ func (o ShowOut) Text() string {
 	if t.TimeLine != "" {
 		b.WriteString("  time:     " + t.TimeLine + "\n")
 	}
+	if t.Why.shown {
+		b.WriteString(t.Why.text())
+	}
+	if t.Who.shown {
+		b.WriteString(t.Who.text())
+	}
+	if t.Relations.shown {
+		b.WriteString(t.Relations.text())
+	}
 	if t.EstimateLine != "" {
 		b.WriteString("  estimate: " + t.EstimateLine + "\n")
 	}

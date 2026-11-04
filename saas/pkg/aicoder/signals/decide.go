@@ -130,6 +130,9 @@ type ClaimRequest struct {
 	// CountsTowardWIP is false for a mission (a coordinator's claim on a
 	// mission does not stop it from claiming a task, §7.5 step 6).
 	CountsTowardWIP bool
+	// Exempt reports held tasks that do not count toward WIP: coordinator
+	// leases on a parent with open sub-tasks (TASK 6.9). nil = none.
+	Exempt func(task string) bool
 	// MaxClaims is agents.max_claims_per_agent (0 = unlimited).
 	MaxClaims int
 	// MaxAttempts is agents.max_attempts (0 = unlimited).
@@ -198,7 +201,7 @@ func DecideClaim(v View, req ClaimRequest) (ClaimPlan, error) {
 	if req.CountsTowardWIP && req.MaxClaims > 0 {
 		var held []Held
 		for _, h := range v.ActiveClaimsOf(req.Caller.ActorID) {
-			if h.Signal.Session == req.Caller.Session && h.Path != p && isTaskID(h.Signal.Task) {
+			if h.Signal.Session == req.Caller.Session && h.Path != p && isTaskID(h.Signal.Task) && (req.Exempt == nil || !req.Exempt(h.Signal.Task)) {
 				held = append(held, h)
 			}
 		}

@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -25,6 +26,8 @@ import (
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/logic/urgency"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // Flag names of the coordination subcommands (§1 "Flags").
@@ -141,9 +144,12 @@ func shortDuration(d time.Duration) string {
 	return s
 }
 
+// flagCoordinate is `claim --coordinate` (TASK 6.9).
+const flagCoordinate = "coordinate"
+
 func newTaskClaimCommand() *cobra.Command {
 	var owns []string
-	var strict bool
+	var strict, coordinate bool
 	var from string
 	cmd := &cobra.Command{
 		Use:   "claim <task-or-mission-id>",
@@ -163,9 +169,26 @@ Examples:
 				return err
 			}
 			defer t.Close()
-			cr, err := coord.Claim(ctx, w.env(t), args[0], coord.ClaimOptions{Owns: owns, WorkBranch: currentWorkBranch(ctx, w.Repo), Repo: t.Repo, InRepo: !isStoreTarget(t)})
+			opts := coord.ClaimOptions{Owns: owns, WorkBranch: currentWorkBranch(ctx, w.Repo), Repo: t.Repo, InRepo: !isStoreTarget(t), Coordinate: coordinate}
+			// TASK 6.9: a parent with open sub-tasks is refused unless
+			// --coordinate (a coordinator lease, WIP-exempt).
+			if list, ok := t.Rows.(coordLister); ok {
+				docs, lerr := list.List(ctx)
+				if lerr != nil {
+					return coordError(lerr)
+				}
+				opts.OpenChildren = coord.OpenChildrenOf(docs)
+			}
+			cr, err := coord.Claim(ctx, w.env(t), args[0], opts)
+			var hoc *coord.HasOpenChildrenError
+			if errors.As(err, &hoc) {
+				return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim " + hoc.Children[0] + "   (or: lore task claim " + hoc.Task + " --coordinate)")
+			}
 			if err != nil {
 				return coordError(err)
+			}
+			if coordinate && len(opts.OpenChildren(args[0])) > 0 {
+				fmt.Printf("you now coordinate %s; claim a child to work: lore task claim %s\n", args[0], opts.OpenChildren(args[0])[0])
 			}
 			if strict && len(cr.Overlaps) > 0 && !cr.Plan.Resumed {
 				// The claim is taken; --strict gives it back at once.
@@ -181,6 +204,7 @@ Examples:
 	}
 	cmd.Flags().StringSliceVar(&owns, flagOwns, nil, "paths this claim owns (directory prefixes ending in / or exact files)")
 	cmd.Flags().BoolVar(&strict, flagStrict, false, "refuse instead of warning when --owns overlaps another claim")
+	cmd.Flags().BoolVar(&coordinate, flagCoordinate, false, "take a coordinator lease on a parent with open sub-tasks (TASK 6.9)")
 	bindFromFlag(cmd, &from)
 	return cmd
 }
@@ -188,15 +212,19 @@ Examples:
 func newTaskNextCommand() *cobra.Command {
 	var f queue.Filter
 	var owns []string
+	var why, dryRun, asJSON bool
 	cmd := &cobra.Command{
 		Use:   "next",
-		Short: "Claim the next ready task (resume-first, dependencies, gates, priority)",
-		Long: `Next returns the task you already hold, or claims the first ready task: open,
-not gated, no live claim, every --after dependency satisfied. Exit 10 (E_NO_WORK)
+		Short: "Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency)",
+		Long: `Next returns the task you already hold, or claims the most urgent ready leaf task:
+open, no open sub-tasks, not gated, no live claim, every --after dependency (its own
+and its ancestors') satisfied. Order is the urgency score (TASK 13): --why explains
+every point, --dry-run ranks and explains without claiming. Exit 10 (E_NO_WORK)
 lists why each task waits; exit 11 (E_CONTENDED) means every claim lost a race.
 
 Examples:
   lore task next --mission mis_12 --repo backend
+  lore task next --mission mis_12 --why --dry-run
   lore task next --mission mis_12 --role coordinator`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -216,10 +244,23 @@ Examples:
 			repo, _ := cmd.Flags().GetString(constants.FlagRepo) // registered below: GetString errors only for an unknown flag name
 			f.Repo = repo
 			f.Here = t.Repo
-			res, err := coord.Next(ctx, w.env(t), coord.NextRequest{
+			req := coord.NextRequest{
 				Filter: f, Opts: coord.ClaimOptions{Owns: owns, WorkBranch: currentWorkBranch(ctx, w.Repo), InRepo: !isStoreTarget(t)},
-				List: list.List, RepoName: list.RepoName, Pick: cryptoPick,
-			})
+				List: list.List, RepoName: list.RepoName, Pick: cryptoPick, Urgency: urgencyContext(ctx),
+			}
+			if dryRun {
+				// TASK 13.3: rank and explain, write nothing.
+				v, err := w.env(t).Signals.Read(ctx)
+				if err != nil {
+					return coordError(err)
+				}
+				res, err := coord.Queue(ctx, w.env(t), v, req)
+				if err != nil {
+					return coordError(err)
+				}
+				return printNextDryRun(res, why, asJSON)
+			}
+			res, err := coord.Next(ctx, w.env(t), req)
 			for _, p := range res.Poisoned {
 				fmt.Printf("%s %s failed %d times and is now blocked (owner's inbox)\n", style.Warn("!"), p, w.Agents.MaxAttempts)
 			}
@@ -231,6 +272,14 @@ Examples:
 				return nil
 			}
 			printClaim(res.Task, res.Claim, w, t.Signals.Ref)
+			if why {
+				if s, ok := res.Scores[res.Task]; ok {
+					fmt.Printf("  urgency %s\n", urgency.Format(s.Total))
+					for _, l := range s.Lines() {
+						fmt.Println("    " + l)
+					}
+				}
+			}
 			fmt.Printf("  read its notes: lore task show %s\n", res.Task)
 			return nil
 		},
@@ -239,7 +288,111 @@ Examples:
 	cmd.Flags().StringVar(&f.Role, flagRole, "", "plan role (e.g. coordinator)")
 	cmd.Flags().String(constants.FlagRepo, "", "only tasks of this repo (a repo name of the group)")
 	cmd.Flags().StringSliceVar(&owns, flagOwns, nil, "paths the claim owns")
+	cmd.Flags().BoolVar(&why, flagWhy, false, "explain the urgency score term by term")
+	cmd.Flags().BoolVar(&dryRun, flagDryRun, false, "rank and explain without claiming (nothing written)")
+	cmd.Flags().BoolVar(&asJSON, flagJSONOut, false, "with --dry-run: the ranking as JSON (urgency + terms)")
 	return cmd
+}
+
+// Flags of task next (TASK 13.3).
+const (
+	flagWhy     = "why"
+	flagDryRun  = "dry-run"
+	flagJSONOut = "json"
+)
+
+// nextTag is the tag whose tasks get the next_tag term (TASK 13.2).
+const nextTag = "next"
+
+// urgencyContext resolves the urgency inputs that live on other core rows:
+// the `next` tag and mission target dates. A read failure degrades to no
+// such terms (the score stays defined), never to an error: ordering is a
+// preference, not a safety rule.
+func urgencyContext(ctx context.Context) coord.UrgencyContext {
+	var u coord.UrgencyContext
+	if tags, err := coreDocs(ctx, tableTags); err == nil {
+		next := map[string]bool{}
+		for _, d := range tags {
+			if strings.EqualFold(d.Str(fieldName), nextTag) {
+				next[d.Str(docKeyID)] = true
+			}
+		}
+		u.NextTag = func(id string) bool { return next[id] }
+	}
+	if ms, err := coreDocs(ctx, tableMissions); err == nil {
+		target := map[string]time.Time{}
+		for _, d := range ms {
+			target[d.Str(docKeyID)] = d.Time(fieldTargetDate)
+		}
+		u.MissionTarget = func(id string) time.Time { return target[id] }
+	}
+	return u
+}
+
+// Core table and field names urgencyContext reads.
+const (
+	fieldTargetDate = "target_date"
+)
+
+// nextRanked is one --dry-run --json entry.
+type nextRanked struct {
+	ID      string         `json:"id"`
+	Title   string         `json:"title"`
+	Urgency string         `json:"urgency"`
+	Terms   []urgency.Part `json:"terms"`
+}
+
+// nextWaiting is one waiting entry of --dry-run --json.
+type nextWaiting struct {
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Reason string `json:"reason"`
+}
+
+// printNextDryRun prints 13.3's ranking: the would-be claim, the ranked
+// ready tasks and why every other matched task waits.
+func printNextDryRun(res queue.Result, why, asJSON bool) error {
+	if asJSON {
+		out := struct {
+			Ready   []nextRanked  `json:"ready"`
+			Waiting []nextWaiting `json:"waiting"`
+			DryRun  bool          `json:"dry_run"`
+		}{DryRun: true, Ready: []nextRanked{}, Waiting: []nextWaiting{}}
+		for _, t := range res.Ready {
+			s := res.Scores[t.ID]
+			out.Ready = append(out.Ready, nextRanked{ID: t.ID, Title: t.Title, Urgency: urgency.Format(s.Total), Terms: s.Terms})
+		}
+		for _, wt := range res.Waiting {
+			out.Waiting = append(out.Waiting, nextWaiting{ID: wt.Task.ID, Kind: string(wt.Kind), Reason: wt.Reason})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+	if len(res.Ready) == 0 {
+		fmt.Println("nothing ready")
+	} else {
+		top := res.Ready[0]
+		s := res.Scores[top.ID]
+		fmt.Printf("would claim %s %s   urgency %s\n", top.ID, top.Title, urgency.Format(s.Total))
+		if why {
+			for _, l := range s.Lines() {
+				fmt.Println("  " + l)
+			}
+		}
+		fmt.Println("ranked:")
+		for i, t := range res.Ready {
+			fmt.Printf("  %d  %s  %s\n", i+1, t.ID, urgency.Format(res.Scores[t.ID].Total))
+		}
+	}
+	if len(res.Waiting) > 0 {
+		fmt.Println("waiting:")
+		for _, wt := range res.Waiting {
+			fmt.Printf("  %s  %s\n", wt.Task.ID, wt.Reason)
+		}
+	}
+	fmt.Println("nothing written (--dry-run)")
+	return nil
 }
 
 // coordLister is the optional listing half of a row store (task next).

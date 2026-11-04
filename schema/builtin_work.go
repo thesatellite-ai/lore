@@ -173,7 +173,8 @@ func workDefs() []TableDef {
 			// Team fields (LORE_TEAM_SPEC 7, 10 C14); all optional so rows
 			// written before the team feature stay valid.
 			Text("assigned_team", Describe("team id (tem_…) when --assign named a team")),
-			JSON("blocked_by", Describe("--after edges: [{task_id, project_id?, until}]")),
+			// RQ5 / OV12 leftover: concurrent edits of these sets union instead of newest-wins.
+			JSON("blocked_by", MergeBy(MergeSetUnion), Describe("--after edges: [{task_id, project_id?, until}]")),
 			Number("claim_epoch", Internal()),
 			Number("attempts", Internal()),
 			JSON("claim_log", Internal()),
@@ -205,8 +206,8 @@ func workDefs() []TableDef {
 			JSON(FieldTaskChecklist, MergeBy(MergeListByID),
 				Describe("checklist items [{id, text, done, done_at, done_by, rank, …}] (TASK 7.2)")),
 			Text(FieldTaskEstimate, Describe("estimate, a decimal >= 0 in the tasks.estimate_unit unit (TASK 9)")),
-			List(FieldTaskAssignees, value.KindText, Describe("actor ids responsible, the lead (assigned_to_actor_id) included (TASK 14.2)")),
-			List(FieldTaskWatchers, value.KindText, Describe("actor ids told about changes (TASK 14)")),
+			List(FieldTaskAssignees, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids responsible, the lead (assigned_to_actor_id) included (TASK 14.2)")),
+			List(FieldTaskWatchers, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids told about changes (TASK 14)")),
 			IndexOn("project_id", "status"),
 			IndexOn("project_id", FieldTaskParent),
 			IndexOn("project_id", "commitment"),

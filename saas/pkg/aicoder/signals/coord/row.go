@@ -57,6 +57,10 @@ const (
 	keyMergedAt    = "merged_at"
 	keyWorkBranch  = "work_branch"
 	keyCommitment  = "commitment"
+	// Urgency inputs (TASK 13.2, 6.10) read by task next.
+	keyParentID = "parent_id"
+	keyDueAt    = "due_at"
+	keyTagIDs   = "tag_ids"
 	// keyDeferredUntil is cleared by done (a finished task is not snoozed).
 	keyDeferredUntil = "deferred_until"
 )
@@ -120,6 +124,22 @@ func (d Doc) Time(k string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// Strs returns a list-of-strings field (tag_ids); non-strings are skipped.
+func (d Doc) Strs(k string) []string {
+	var out []string
+	switch v := d[k].(type) {
+	case []string:
+		out = append(out, v...)
+	case []any: // decoded JSON; narrowed element by element
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
 }
 
 // SetInt sets an integer field.

@@ -181,7 +181,7 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpDeferred, Summary: "Show deferred tasks (snoozed; deferred_until in the future)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.deferred),
-	}, slices.Concat(timeOps(o), checklistOps(o), watchOps(o))...)
+	}, slices.Concat(timeOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o))...)
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
@@ -845,6 +845,21 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	}
 	if full.Notes, err = notesOn(ctx, o.env, id.String()); err != nil {
 		return ShowOut{}, err
+	}
+	if in.Why {
+		if full.Why, err = o.why(ctx, r); err != nil {
+			return ShowOut{}, err
+		}
+	}
+	if in.Who {
+		if full.Who, err = o.who(ctx, r); err != nil {
+			return ShowOut{}, err
+		}
+	}
+	if in.Relations {
+		if full.Relations, err = o.relationsOf(ctx, r); err != nil {
+			return ShowOut{}, err
+		}
 	}
 	if t, ok := work.TeamFrom(ctx); ok && src != store.SourceRepo {
 		if d, ok := t.(ShowDetailer); ok {

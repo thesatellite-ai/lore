@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/logic/urgency"
 )
 
 // Status is a task status (dbent/schema/enums.go TaskStatus).
@@ -118,6 +120,14 @@ type Task struct {
 	// Claim is the signals state; ClaimedBy names the holder for reasons.
 	Claim     ClaimState
 	ClaimedBy string
+	// Urgency inputs (TASK 13.2, 6.10): ParentID links the tree (leaves
+	// only, ancestors pass their waits down), Due / MissionTarget feed the
+	// due curves, Proposed / NextTag / InProgress-by-status their terms.
+	ParentID      string
+	Due           time.Time
+	MissionTarget time.Time
+	Proposed      bool
+	NextTag       bool
 }
 
 // Filter is the caller's `task next` filter (§7.3).
@@ -145,6 +155,8 @@ type Input struct {
 	Now time.Time
 	// MaxAttempts is agents.max_attempts (0 = unlimited).
 	MaxAttempts int
+	// Weights are the urgency weights (urgency.Default when zero).
+	Weights urgency.Weights
 }
 
 // Waiting is a task the filter matched that is not ready, with the reason.
@@ -179,7 +191,7 @@ const (
 
 // Result is a ready-queue decision.
 type Result struct {
-	// Ready is in claim order: effective priority, then age, then id.
+	// Ready is in claim order: urgency, then age, then id (TASK 13.2).
 	Ready []Task
 	// Waiting lists every other matched open task, in the same order.
 	Waiting []Waiting
@@ -187,22 +199,37 @@ type Result struct {
 	// because attempts reached MaxAttempts; `task next` blocks them
 	// ("failed N times", F7 poison task).
 	Poisoned []Task
+	// Scores are the urgency of every open task seen (TASK 13; --why).
+	Scores map[string]urgency.Score
 }
 
-// agingStep is the age after which a task gains one priority step (§7.3
-// step 4), so old low-priority work is not starved forever.
-const agingStep = 24 * time.Hour
-
-// Next computes the ready queue.
+// Next computes the ready queue (TASK 6.10, 13; TSQ13: the urgency score
+// fully replaces v0.1.17's effective priority + 24 h aging step):
+//
+//	open ∧ filter ─► leaf? (no open children) ─► no cycle ─► own deps
+//	  ─► ancestors' deps ─► own / ancestors' gates ─► claim state ─► Ready
+//	Ready, Waiting ordered by urgency.Less (urgency, created, id)
 func Next(in Input) Result {
 	byID := make(map[string]Task, len(in.Tasks))
+	openKids := map[string]int{}
 	for _, t := range in.Tasks {
 		byID[t.ID] = t
+		if t.Status.Open() && t.ParentID != "" {
+			openKids[t.ParentID]++
+		}
 	}
-	eff := effectivePriorities(in.Tasks, byID, in.Now)
-	var res Result
+	w := in.Weights
+	if w.PriorityPoints == nil {
+		w = urgency.Default()
+	}
+	res := Result{Scores: urgency.Compute(urgencyTasks(in.Tasks), in.Now, w)}
 	for _, t := range in.Tasks {
 		if !t.Status.Open() || !matches(t, in.Filter) {
+			continue
+		}
+		// 6.10 leaves only: a parent with open children is coordination, not
+		// work; it is neither offered nor listed as waiting.
+		if openKids[t.ID] > 0 {
 			continue
 		}
 		if cyc := cycleThrough(byID, t.ID); cyc != nil {
@@ -211,6 +238,10 @@ func Next(in Input) Result {
 		}
 		if reason, ok := depsSatisfied(t, byID); !ok {
 			res.Waiting = append(res.Waiting, Waiting{Task: t, Kind: WaitDependency, Reason: reason})
+			continue
+		}
+		if w, waits := ancestorWait(t, byID); waits {
+			res.Waiting = append(res.Waiting, w)
 			continue
 		}
 		if t.Gated {
@@ -231,13 +262,7 @@ func Next(in Input) Result {
 		res.Ready = append(res.Ready, t)
 	}
 	less := func(a, b Task) bool {
-		if eff[a.ID] != eff[b.ID] {
-			return eff[a.ID] > eff[b.ID]
-		}
-		if !a.CreatedAt.Equal(b.CreatedAt) {
-			return a.CreatedAt.Before(b.CreatedAt)
-		}
-		return a.ID < b.ID
+		return urgency.Less(urgencyTask(a), urgencyTask(b), res.Scores[a.ID], res.Scores[b.ID])
 	}
 	sort.SliceStable(res.Ready, func(i, j int) bool { return less(res.Ready[i], res.Ready[j]) })
 	sort.SliceStable(res.Waiting, func(i, j int) bool { return less(res.Waiting[i].Task, res.Waiting[j].Task) })
@@ -321,41 +346,60 @@ func shortSHA(s string) string {
 	return s
 }
 
-// effectivePriorities returns max(own priority, priority of any open task
-// waiting on it, directly or transitively) plus one aging step for tasks
-// older than a day, capped at urgent (§7.3 step 4).
-func effectivePriorities(tasks []Task, byID map[string]Task, now time.Time) map[string]int {
-	eff := make(map[string]int, len(tasks))
-	for _, t := range tasks {
-		p := t.Priority
-		if p == 0 {
-			p = PriorityMedium
+// ancestorWait is 6.10 "ancestors pass their waits down": the first
+// ancestor (nearest first) with an unmet --after edge or an unapproved gate
+// makes t wait, and the reason names it. A merged parent cycle stops at
+// the first repeat.
+func ancestorWait(t Task, byID map[string]Task) (Waiting, bool) {
+	seen := map[string]bool{t.ID: true}
+	for p := t.ParentID; p != "" && !seen[p]; {
+		seen[p] = true
+		anc, ok := byID[p]
+		if !ok {
+			return Waiting{}, false
 		}
-		if !t.CreatedAt.IsZero() && now.Sub(t.CreatedAt) > agingStep && p < PriorityUrgent {
-			p++
+		if reason, ok := depsSatisfied(anc, byID); !ok {
+			return Waiting{Task: t, Kind: WaitDependency, Reason: "waits: parent " + anc.ID + " " + reason}, true
 		}
-		eff[t.ID] = p
+		if anc.Gated {
+			return Waiting{Task: t, Kind: WaitGate, Reason: fmt.Sprintf("parent %s gate needs approval (lore gate approve %s)", anc.ID, anc.ID)}, true
+		}
+		p = anc.ParentID
 	}
-	// Propagate a waiter's priority to everything it waits on, transitively.
-	// Bounded by the number of tasks: each pass can only raise values.
-	for range tasks {
-		changed := false
-		for _, t := range tasks {
-			if !t.Status.Open() {
-				continue
-			}
-			for _, d := range t.After {
-				if _, ok := byID[d.TaskID]; ok && eff[d.TaskID] < eff[t.ID] {
-					eff[d.TaskID] = eff[t.ID]
-					changed = true
-				}
-			}
-		}
-		if !changed {
-			break
-		}
+	return Waiting{}, false
+}
+
+// urgencyTask maps a queue task to the score's input.
+func urgencyTask(t Task) urgency.Task {
+	after := make([]string, 0, len(t.After))
+	for _, d := range t.After {
+		after = append(after, d.TaskID)
 	}
-	return eff
+	return urgency.Task{
+		ID: t.ID, Priority: priorityName(t.Priority), Status: urgency.Status(t.Status), CreatedAt: t.CreatedAt,
+		Proposed: t.Proposed, Due: t.Due, MissionTarget: t.MissionTarget, Parent: t.ParentID, After: after, NextTag: t.NextTag,
+	}
+}
+
+func urgencyTasks(ts []Task) []urgency.Task {
+	out := make([]urgency.Task, 0, len(ts))
+	for _, t := range ts {
+		out = append(out, urgencyTask(t))
+	}
+	return out
+}
+
+// priorityName is the inverse of PriorityRank (0 = the medium default).
+func priorityName(rank int) urgency.Priority {
+	switch rank {
+	case PriorityLow:
+		return urgency.PriorityLow
+	case PriorityHigh:
+		return urgency.PriorityHigh
+	case PriorityUrgent:
+		return urgency.PriorityUrgent
+	}
+	return urgency.PriorityMedium
 }
 
 // cycleThrough returns a dependency cycle that passes through id (as ids,

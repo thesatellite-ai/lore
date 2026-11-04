@@ -154,6 +154,31 @@ type ClaimOptions struct {
 	// InRepo: the task row lives in the caller's checkout repo (see
 	// HeldRecord.InRepo).
 	InRepo bool
+	// OpenChildren lists a task's open sub-tasks (TASK 6.9); nil = the
+	// caller has no tree (every task is a leaf).
+	OpenChildren func(id string) []string
+	// Coordinate takes a coordinator lease on a parent with open
+	// sub-tasks (`claim --coordinate`, 6.9): it does not count toward WIP
+	// and never stops others from claiming the children.
+	Coordinate bool
+}
+
+// HasOpenChildrenError is E_HAS_OPEN_CHILDREN: a claim of a parent with
+// open sub-tasks without --coordinate (TASK 6.9, 24). Children are the
+// open ones, so the message can list what to claim instead.
+type HasOpenChildrenError struct {
+	Task     string
+	Children []string
+}
+
+func (e *HasOpenChildrenError) Error() string {
+	return fmt.Sprintf("%s has %d open sub-task(s): %s; claim a sub-task, or coordinate with --coordinate", e.Task, len(e.Children), strings.Join(e.Children, ", "))
+}
+
+// coordinating reports a held task that is a coordinator lease (an open
+// parent): exempt from WIP (6.9).
+func (o ClaimOptions) coordinating(task string) bool {
+	return o.OpenChildren != nil && len(o.OpenChildren(task)) > 0
 }
 
 // ClaimResult is a successful claim.
@@ -182,6 +207,16 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		if !claimable(mission, doc.Status()) {
 			return signals.Change{}, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
 		}
+		// 6.9: a parent with open children is coordinated, never worked.
+		lease := false
+		if !mission && opts.OpenChildren != nil {
+			if kids := opts.OpenChildren(id); len(kids) > 0 {
+				if !opts.Coordinate {
+					return signals.Change{}, &HasOpenChildrenError{Task: id, Children: kids}
+				}
+				lease = true
+			}
+		}
 		// A claim records the caller's branch only while the row has none: a
 		// reclaim (or a claim after a release) keeps the work branch the
 		// earlier holder recorded and pushed (§7.4 "Work branch"), so the
@@ -195,7 +230,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			return signals.Change{}, err
 		}
 		plan, err := signals.DecideClaim(v, signals.ClaimRequest{
-			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission,
+			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission && !lease, Exempt: opts.coordinating,
 			MaxClaims: env.Agents.MaxClaims, MaxAttempts: env.Agents.MaxAttempts,
 			Row: signals.RowState{Epoch: doc.Epoch(), Attempts: doc.Int(keyAttempts)}, Token: tok,
 			WorkBranch: workBranch, Owns: opts.Owns,
