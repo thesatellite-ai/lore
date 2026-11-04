@@ -1,6 +1,9 @@
 package settings_test
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,7 +11,9 @@ import (
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/ops/settings"
+	"github.com/thesatellite-ai/lore/surface/rest"
 )
 
 // TestResourceImportExportRepointClone: a json import with refs between
@@ -70,5 +75,47 @@ func TestResourceImportExportRepointClone(t *testing.T) {
 	h.MustYes(settings.OpResClone, `{"from":"api","name":"api2","set":["port=1"]}`)
 	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"api2"}`)); !strings.Contains(s, "runs_on = h2") || !strings.Contains(s, "port = 1") {
 		t.Fatalf("clone %q", s)
+	}
+}
+
+// TestRESTDynamicKind: POST /v1/resources/<kind> and GET
+// /v1/resources/<kind>?where=… run the generic resource operations, with
+// the same E_RESOURCE_INVALID as the CLI on an unknown field (ONE
+// OPERATION SPEC); a res_ id stays the show route.
+func TestRESTDynamicKind(t *testing.T) {
+	h := opstest.New(t)
+	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
+	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"region","type":"text"}`)
+	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"cores","type":"number"}`)
+	actor, err := ids.Parse[ids.Actor](opstest.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := rest.New(h.App.Registry(), h.App, rest.Options{Token: restToken, Actor: actor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+	auth := "Bearer " + restToken
+	code, body := call(t, ts, http.MethodPost, "/v1/resources/host", auth, `{"name":"h1","fields":{"region":"eu","cores":4},"yes":true}`)
+	if code != http.StatusCreated || !strings.Contains(body, `"res_`) {
+		t.Fatalf("POST kind: %d %s", code, body)
+	}
+	var made settings.RowOut
+	if err = json.Unmarshal([]byte(body), &made); err != nil {
+		t.Fatal(err)
+	}
+	if code, body = call(t, ts, http.MethodGet, "/v1/resources/"+made.ID, auth, ``); code != http.StatusOK || !strings.Contains(body, `"region":"eu"`) {
+		t.Fatalf("show by id: %d %s", code, body)
+	}
+	if code, body = call(t, ts, http.MethodPost, "/v1/resources/host", auth, `{"name":"h2","fields":{"colour":"red"},"yes":true}`); code != http.StatusBadRequest || !strings.Contains(body, "E_RESOURCE_INVALID") {
+		t.Fatalf("unknown field: %d %s", code, body)
+	}
+	if code, body = call(t, ts, http.MethodGet, "/v1/resources/host?where=region%3Deu", auth, ``); code != http.StatusOK || !strings.Contains(body, `"h1"`) {
+		t.Fatalf("GET kind: %d %s", code, body)
+	}
+	if code, body = call(t, ts, http.MethodGet, "/v1/resources/host?where=region%3Dus", auth, ``); code != http.StatusOK || strings.Contains(body, `"h1"`) {
+		t.Fatalf("GET kind filtered: %d %s", code, body)
 	}
 }

@@ -194,7 +194,8 @@ func TestOpenAPIStructure(t *testing.T) {
 	}
 }
 
-// TestOpenAPIKinds: kinds become component schemas with typed fields.
+// TestOpenAPIKinds: kinds become component schemas with typed fields and
+// POST|GET /v1/resources/<kind> paths.
 func TestOpenAPIKinds(t *testing.T) {
 	t.Parallel()
 	server := schema.TableDef{Name: "server", Fields: []schema.FieldDef{
@@ -211,6 +212,12 @@ func TestOpenAPIKinds(t *testing.T) {
 	if k.Properties["ip"].Type != "string" || k.Required[0] != "ip" || k.Properties["cores"].Type != "number" ||
 		len(k.Properties["region"].Enum) != 2 || k.Properties["tags"].Items.Type != "string" {
 		t.Fatalf("kind schema %+v", k)
+	}
+	// The per-kind routes (kindroutes.go): POST with the kind schema as
+	// "fields", GET with where.
+	p := parse(t, b).Paths["/v1/resources/server"]
+	if p["get"].OperationID == "" || p["post"].RequestBody == nil || p["post"].RequestBody.Content["application/json"].Schema.Properties["fields"].Ref != refSchemas+KindSchemaPrefix+"server" {
+		t.Fatalf("kind paths %+v", p)
 	}
 }
 

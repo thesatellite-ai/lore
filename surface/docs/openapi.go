@@ -192,6 +192,7 @@ func OpenAPI(reg *op.Registry, kinds []schema.TableDef) ([]byte, error) {
 	}
 	for _, k := range kinds {
 		doc.Components.Schemas[KindSchemaPrefix+string(k.Name)] = kindSchema(k)
+		kindPaths(&doc, k) // openapi_kinds.go: POST|GET /v1/resources/<kind>
 	}
 	b, err := json.MarshalIndent(doc, "", jsonIndent)
 	if err != nil {

@@ -343,7 +343,7 @@ func TestOpenAPIServed(t *testing.T) {
 	if err := json.Unmarshal([]byte(r.body), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.OpenAPI != "3.1.0" || len(doc.Paths) != 3 || doc.Components.Schemas["kind.server"] == nil {
+	if doc.OpenAPI != "3.1.0" || len(doc.Paths) != 4 || doc.Paths["/v1/resources/server"] == nil || doc.Components.Schemas["kind.server"] == nil {
 		t.Fatalf("doc %d paths, schemas %v", len(doc.Paths), doc.Components.Schemas)
 	}
 }

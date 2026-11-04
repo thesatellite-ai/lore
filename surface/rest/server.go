@@ -122,7 +122,7 @@ func New(reg *op.Registry, runner op.Runner, opts Options) (*Server, error) {
 	if err := register(mux, "/", http.HandlerFunc(notFound)); err != nil {
 		return nil, err
 	}
-	return &Server{handler: authenticate(opts.Token, limitBody(mux))}, nil
+	return &Server{handler: authenticate(opts.Token, limitBody(kindRoutes(mux)))}, nil // kindroutes.go: /v1/resources/<kind>
 }
 
 // register adds a pattern, turning the mux's conflict panic into an error.
