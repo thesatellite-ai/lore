@@ -213,7 +213,7 @@ func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, expl
 		if !leakcheck.NeedsIndex(items) {
 			// Nothing here could match an internal row (no file, too few
 			// words, no id): the check is decided without the store.
-			fs := leakcheck.Blocking(leakcheck.Check(items, nil, leakcheck.Options{Secrets: true}))
+			fs := leakcheck.Blocking(leakcheck.Check(items, nil, leakcheck.Options{Secrets: true, SessionIDs: knownSessionIDs(ctx)}))
 			if len(fs) == 0 {
 				return nil
 			}
@@ -221,7 +221,7 @@ func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, expl
 		}
 		return err
 	}
-	fs := leakcheck.Check(items, idx, leakcheck.Options{Secrets: true, RepoProjectID: pid, ClientRepo: client, DataPrefix: projectDataPrefix(ctx, root)})
+	fs := leakcheck.Check(items, idx, leakcheck.Options{Secrets: true, RepoProjectID: pid, ClientRepo: client, DataPrefix: projectDataPrefix(ctx, root), SessionIDs: knownSessionIDs(ctx)})
 	for _, f := range fs {
 		if f.Warn {
 			fmt.Fprintf(os.Stderr, "lore: warning: %s: %s\n", f.Where, f.Detail)
