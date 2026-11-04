@@ -18,14 +18,15 @@ import (
 
 	"dbent"
 	"dbent/gen/ent"
-	entProject "dbent/gen/ent/project"
-	entRepo "dbent/gen/ent/repo"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/fts5"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/projresolve"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // commonFlags are the universal scope flags applied to every subcommand
@@ -188,7 +189,7 @@ func resolveProjectID(ctx context.Context, client *ent.Client, projectIDOrName s
 	// Mode A "local" source means we don't have a project_id at all yet —
 	// query the projects table; if exactly one row, use it; refuse if 0 or 2+
 	if projectIDOrName == "" {
-		all, err := client.Project.Query().All(ctx)
+		all, err := coreProjectIDs(ctx, nil)
 		if err != nil {
 			return "", err
 		}
@@ -202,13 +203,12 @@ func resolveProjectID(ctx context.Context, client *ent.Client, projectIDOrName s
 				"DB has multiple projects; specify --project=<id|name>").
 				WithHint("run `lore project list` to see available IDs")
 		}
-		return all[0].ID, nil
+		return all[0], nil
 	}
 
 	// Otherwise treat as name; refuse on collision
-	matches, err := client.Project.Query().
-		Where(entProject.Name(projectIDOrName)).
-		All(ctx)
+	name := projectIDOrName
+	matches, err := coreProjectIDs(ctx, &name)
 	if err != nil {
 		return "", err
 	}
@@ -221,7 +221,35 @@ func resolveProjectID(ctx context.Context, client *ent.Client, projectIDOrName s
 			fmt.Sprintf("multiple projects share name %q; specify by opaque ID", projectIDOrName)).
 			WithHint("run `lore project list` to see opaque IDs")
 	}
-	return matches[0].ID, nil
+	return matches[0], nil
+}
+
+// coreProjectIDs lists the ids of the live projects rows of the checkout's
+// own store (the repo store holds this repository's project row; store
+// folders name theirs in _meta.json), optionally only those called name.
+// projects is core-owned in a checkout, so the row files are read through
+// the core, never .lore/lore.db.
+func coreProjectIDs(ctx context.Context, name *string) ([]string, error) {
+	if coreApp == nil {
+		return nil, errcodes.New(errcodes.Internal, "the core is not mounted")
+	}
+	rows, err := coreApp.List(ctx, store.SourceRepo, schema.TableProjects)
+	if err != nil {
+		return nil, coreErr(err)
+	}
+	var out []string
+	for _, r := range rows {
+		if r.Deleted {
+			continue
+		}
+		if name != nil {
+			if v, ok := r.Fields[fieldName]; !ok || v == nil || v.String() != *name {
+				continue
+			}
+		}
+		out = append(out, r.ID.String())
+	}
+	return out, nil
 }
 
 // resolveRepoID converts a --repo flag (mount_name OR rep_id) to repo row ID
@@ -233,12 +261,24 @@ func resolveRepoID(ctx context.Context, client *ent.Client, projectID, repoFlag 
 	if err := ids.Validate(repoFlag, ids.PrefixRepo); err == nil {
 		return repoFlag, nil
 	}
-	r, err := client.Repo.Query().
-		Where(entRepo.ProjectID(projectID), entRepo.MountName(repoFlag)).
-		Only(ctx)
-	if err != nil {
-		return "", errcodes.New(errcodes.RepoNotFound,
-			fmt.Sprintf("no repo with mount_name %q in current project", repoFlag))
+	notFound := errcodes.New(errcodes.RepoNotFound,
+		fmt.Sprintf("no repo with mount_name %q in current project", repoFlag))
+	if coreApp == nil {
+		return "", notFound
 	}
-	return r.ID, nil
+	if _, err := coreApp.Engine(ctx); err != nil { // open it: Stores is empty before
+		return "", coreErr(err)
+	}
+	found, err := engine.FindByKey(ctx, coreApp, schema.TableRepos, map[string]string{fieldProjectID: projectID, fieldMountName: repoFlag})
+	if err != nil || len(found) != 1 {
+		return "", notFound
+	}
+	return found[0].Row.ID.String(), nil
 }
+
+// Row fields the project / repo resolution matches on.
+const (
+	fieldName      = "name"
+	fieldProjectID = "project_id"
+	fieldMountName = "mount_name"
+)
