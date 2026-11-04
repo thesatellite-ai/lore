@@ -43,6 +43,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	opsarchitecturenote "github.com/thesatellite-ai/lore/ops/architecturenote"
+	opsbatch "github.com/thesatellite-ai/lore/ops/batch"
 	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
 	opscomment "github.com/thesatellite-ai/lore/ops/comment"
 	opscontent "github.com/thesatellite-ai/lore/ops/content"
@@ -333,6 +334,10 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opslink.Ops(a, gitcommit.Resolver{})...)
 	entries = append(entries, opssettings.Ops(a)...)
 	entries = append(entries, opstask.Ops(a)...)
+	// XQ9: importing is a verb under the noun it creates (lore task import).
+	entries = append(entries, opstask.ImportOps(a)...)
+	// XQ1: lore batch list|show over the machine-local batch log (Q-R3-8).
+	entries = append(entries, opsbatch.Ops(a)...)
 	entries = append(entries, opstasklist.Ops(a)...)
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
