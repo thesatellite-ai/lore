@@ -149,3 +149,9 @@ func textOf(r row.Row, f string) string {
 	}
 	return ""
 }
+
+// Level is the settings level an attached store's rows count at: its
+// Attached.Level when the opener set one, else the repo / store_root
+// defaults levelOf applies. An unknown name gets levelOf's zero-Attached
+// answer; callers check Stores() first.
+func (e *Engine) Level(name store.Source) policy.Level { return levelOf(e.stores[name]) }
