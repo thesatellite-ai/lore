@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -445,5 +447,62 @@ func TestServe(t *testing.T) {
 	}
 	if announce.String() != "lore api listening on http://"+addr+" (token: ~/.lore/api-token)\n" {
 		t.Fatalf("announce %q", announce.String())
+	}
+}
+
+// TestServeShutdownWithFreshConnection: a client that connected but never
+// sent a request (a browser pre-connect, or Go's transport dialling a
+// spare) must not hold shutdown for shutdownTimeout. Before the fix this
+// was the timing-sensitive TestServe failure: Shutdown treats a StateNew
+// connection as busy until it is 5 s old and then returned E_INTERNAL.
+func TestServeShutdownWithFreshConnection(t *testing.T) {
+	t.Parallel()
+	f := newFake(t)
+	s, err := New(f.reg, f, Options{Token: testToken})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := Listen(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- s.Serve(ctx, ln, io.Discard, "") }()
+	var d net.Dialer
+	idle := make([]net.Conn, 0, 3)
+	for range 3 {
+		c, err := d.DialContext(t.Context(), "tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		idle = append(idle, c)
+	}
+	t.Cleanup(func() {
+		for _, c := range idle {
+			_ = c.Close()
+		}
+	})
+	// Give the server time to accept all three (they enter StateNew).
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+ln.Addr().String()+"/v1/memories", nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			_ = resp.Body.Close()
+			break
+		}
+	}
+	start := time.Now()
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("shutdown with idle fresh connections: %v", err)
+		}
+	case <-time.After(shutdownTimeout + time.Second):
+		t.Fatal("Serve did not return")
+	}
+	if took := time.Since(start); took > shutdownTimeout/2 {
+		t.Fatalf("shutdown took %s: fresh connections held it", took)
 	}
 }

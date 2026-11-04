@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -170,6 +171,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener, announce io.Writer,
 		IdleTimeout:       idleTimeout,
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
+	fresh := trackFreshConns(srv)
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ln) }()
 	select {
@@ -179,6 +181,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener, announce io.Writer,
 	}
 	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
+	srv.RegisterOnShutdown(fresh.closeAll)
 	if err := srv.Shutdown(sctx); err != nil {
 		return errs.Wrap(errs.Internal, "rest: shutdown", err)
 	}
@@ -186,6 +189,48 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener, announce io.Writer,
 		return errs.Wrap(errs.Internal, "rest: serve", err)
 	}
 	return nil
+}
+
+// freshConns tracks the connections a client opened but has not sent a
+// request on yet (http.StateNew).
+//
+// Why: http.Server.Shutdown waits for such a connection as if it were busy
+// until it is 5 s old, so one pre-connected socket (a browser's speculative
+// connect, or Go's own transport dialling a spare while an earlier
+// connection frees up) made every `lore api` shutdown take the full
+// shutdownTimeout and fail with E_INTERNAL. Nothing has been read from a
+// fresh connection, so closing it at shutdown loses no request.
+type freshConns struct {
+	mu    sync.Mutex
+	conns map[net.Conn]struct{}
+}
+
+// trackFreshConns installs the ConnState hook on srv and returns the set it
+// keeps. Call it before srv.Serve.
+func trackFreshConns(srv *http.Server) *freshConns {
+	f := &freshConns{conns: map[net.Conn]struct{}{}}
+	srv.ConnState = func(c net.Conn, st http.ConnState) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if st == http.StateNew {
+			f.conns[c] = struct{}{}
+			return
+		}
+		delete(f.conns, c)
+	}
+	return f
+}
+
+// closeAll closes every connection still waiting for its first request. It
+// runs from Shutdown (RegisterOnShutdown), after the listeners are closed,
+// so no new connection can join the set afterwards.
+func (f *freshConns) closeAll() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for c := range f.conns {
+		_ = c.Close()
+		delete(f.conns, c)
+	}
 }
 
 // authenticate refuses every request without the right bearer token, before
