@@ -5,8 +5,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -169,8 +173,121 @@ func (o ops) projectUnarchive(ctx context.Context, in IDIn) (work.WriteOut, erro
 	return o.stamp(ctx, NounProject, ids.PrefixProject, schema.TableProjects, in.ID, false, projectName)
 }
 
+// RepoIdentifier is the optional Env upgrade `project delete` needs: the
+// permanent repo id of this checkout (PROV1, the repo_id of
+// .lore/data/_meta.json). wire.App implements it; ok is false when the
+// checkout has no identity yet.
+type RepoIdentifier interface {
+	RepoIdentity(ctx context.Context) (repoID string, ok bool)
+}
+
+// projectDelete deletes a project together with the checkout's own repos
+// row.
+//
+// Q-R3-11: since PROV1 every checkout has its own repos row and
+// repos.project_id is Restrict, so a plain delete was always refused. The
+// checkout's own row goes with the project, both tombstoned under one
+// bat_ batch of kind delete; any OTHER live row still pointing at the
+// project (another repo's row, DELETION D8, or a row of another Restrict
+// table) refuses the delete with E_HAS_DEPENDENTS naming them, before
+// anything is written, so a refusal never leaves the own row half
+// deleted. An Env without RepoIdentifier, or a checkout without an
+// identity, keeps every repos row a dependent (fail closed, today's
+// refusal).
 func (o ops) projectDelete(ctx context.Context, in IDIn) (work.WriteOut, error) {
-	return o.remove(ctx, NounProject, ids.PrefixProject, schema.TableProjects, in.ID, projectName)
+	id, err := work.ParseID(NounProject, ids.PrefixProject, in.ID)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	src, p, err := work.Get(ctx, o.env, NounProject, schema.TableProjects, id)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	own := ""
+	if ri, ok := upgrade.As[RepoIdentifier](o.env); ok {
+		if rid, known := ri.RepoIdentity(ctx); known {
+			own = rid
+		}
+	}
+	deps, ownRef, err := o.projectDependents(ctx, id, own)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if len(deps) > 0 {
+		return work.WriteOut{}, dependentsErr(deps, id)
+	}
+	bctx, _, err := bulk.Begin(ctx, bulk.KindDelete)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if ownRef != nil {
+		if _, err = o.env.Delete(bctx, *ownRef); err != nil {
+			return work.WriteOut{}, err
+		}
+	}
+	w, err := o.env.Delete(bctx, engine.Ref{Store: src, Table: schema.TableProjects, ID: id})
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	return work.Out(src, w, work.Success+" "+projectName(p)+" deleted\n"), nil
+}
+
+// dependent is one live row whose Restrict relation points at a project.
+type dependent struct {
+	id    string
+	table row.Table
+	field string
+}
+
+// projectDependents lists the live rows of every attached store whose
+// belongs-to Restrict relation (built-in tables) points at project, except
+// the checkout's own repos row (ownRepo, "" for none), which it returns as
+// a ref to delete instead. The engine re-checks every relation on the
+// delete itself, so a table this list misses (a dynamic kind) still
+// refuses there.
+func (o ops) projectDependents(ctx context.Context, project ids.AnyID, ownRepo string) ([]dependent, *engine.Ref, error) {
+	var out []dependent
+	var own *engine.Ref
+	for _, def := range schema.Builtin() {
+		for _, rel := range def.Relations {
+			if (rel.Kind != schema.BelongsTo && rel.Kind != schema.Self) || rel.Target != schema.TableProjects || rel.OnDelete != schema.Restrict {
+				continue
+			}
+			for _, s := range o.env.Stores() {
+				rows, err := o.env.List(ctx, s, def.Name)
+				if err != nil {
+					return nil, nil, err
+				}
+				for _, r := range rows {
+					if r.Deleted || work.Field(r, rel.Field) != project.String() {
+						continue
+					}
+					if def.Name == schema.TableRepos && ownRepo != "" && r.ID.String() == ownRepo {
+						own = &engine.Ref{Store: s, Table: def.Name, ID: r.ID}
+						continue
+					}
+					out = append(out, dependent{id: r.ID.String(), table: def.Name, field: rel.Field})
+				}
+			}
+		}
+	}
+	return out, own, nil
+}
+
+// dependentsErr is the engine's E_HAS_DEPENDENTS shape ("<id>
+// (<table>.<field>) still points at <project>"), naming every remaining
+// row (FLAG5: the exact rows, not a vaguer refusal).
+func dependentsErr(deps []dependent, project ids.AnyID) error {
+	parts := make([]string, 0, len(deps))
+	for _, d := range deps {
+		parts = append(parts, d.id+" ("+string(d.table)+"."+d.field+")")
+	}
+	verb := " still points at "
+	if len(deps) > 1 {
+		verb = " still point at "
+	}
+	return errs.New(errs.HasDependents, "project delete: "+strings.Join(parts, ", ")+verb+project.String()).
+		WithHint("delete or move the pointing rows first")
 }
 
 // repoStore is where repos are written: the repo store (repos belong to
