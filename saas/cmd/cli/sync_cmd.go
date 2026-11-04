@@ -29,6 +29,9 @@ import (
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 )
 
 // syncTarget is an opened Mode A project for a sync subcommand.
@@ -474,21 +477,36 @@ back. Run it on main and commit the result. Rows go to the local trash first.
 				return err
 			}
 			defer t.close()
+			// The dry run counts what --confirm would purge, so it catches up
+			// first too (it said 0 while --confirm then purged 1).
+			if err := t.catchUp(cmd.Context()); err != nil {
+				return err
+			}
+			// Core-owned rows are not lsync's to remove (lsync 8cd677d skips
+			// them): they are deleted through the core, whose tombstone keeps
+			// an old copy from coming back.
+			coreRows, err := lsync.ArchivedCoreOwnedBefore(cmd.Context(), t.db, cutoff)
+			if err != nil {
+				return errcodes.New(errcodes.Internal, "list archived core rows").WithCause(err)
+			}
 			if dryRun {
 				n, err := lsync.CountArchivedBefore(cmd.Context(), t.db, cutoff)
 				if err != nil {
 					return errcodes.New(errcodes.Internal, "count archived rows").WithCause(err)
 				}
-				fmt.Printf("would purge %d archived row(s) archived before %s\n", n, cutoff.Format(time.RFC3339))
+				fmt.Printf("would purge %d archived row(s) archived before %s\n", n+len(coreRows), cutoff.Format(time.RFC3339))
 				return nil
-			}
-			if err := t.catchUp(cmd.Context()); err != nil {
-				return err
 			}
 			purged, err := lsync.PurgeArchived(cmd.Context(), t.db, t.dataDir, cutoff)
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "purge").WithCause(err)
 			}
+			for _, key := range coreRows {
+				if err := corePurgeRow(cmd.Context(), key); err != nil {
+					return err
+				}
+			}
+			purged = append(purged, coreRows...)
 			rep, err := runSyncPass(cmd.Context(), t.db, t.root, t.dataDir)
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "sync pass").WithCause(err)
@@ -503,6 +521,24 @@ back. Run it on main and commit the result. Rows go to the local trash first.
 	cmd.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "required: purge is durable")
 	cmd.Flags().BoolVar(&dryRun, constants.FlagDryRun, false, "count what would be purged")
 	return cmd
+}
+
+// corePurgeRow deletes one archived core-owned row ("table/id", as
+// lsync.ArchivedCoreOwnedBefore lists it) through the core: the engine's
+// Delete writes the tombstone that keeps old copies from returning.
+func corePurgeRow(ctx context.Context, key string) error {
+	if coreApp == nil {
+		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
+	}
+	table, id, ok := strings.Cut(key, "/")
+	rid, err := ids.ParseAny(id)
+	if !ok || err != nil {
+		return errcodes.New(errcodes.Internal, "purge: bad row key "+key)
+	}
+	if _, err := coreApp.Delete(ctx, engine.Ref{Table: row.Table(table), ID: rid}); err != nil {
+		return errcodes.New(errcodes.Internal, "purge "+key).WithCause(err)
+	}
+	return nil
 }
 
 // dayUnit is the "d" suffix parseCutoff accepts on top of time.ParseDuration.
