@@ -27,6 +27,7 @@ func allConstants() []Code {
 		Unauthorized, ResourceInvalid, SchemaOld, NeedsConfirm, PolicyDenied, KindUnknown,
 		MetaType, MetaAmbiguous, MigrateLocked, URLUserinfo,
 		ResourceInUse, KindConflict, NameTaken, MetaTaken, Purged, Refused,
+		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth,
 	}
 }
 
