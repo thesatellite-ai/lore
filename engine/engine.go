@@ -16,6 +16,7 @@
 package engine
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -89,7 +91,53 @@ func stampAs(st Attached, r row.Row) row.Row {
 	if !r.HLC.Actor.IsZero() {
 		r.HLC.Actor = st.ActorAs(r.HLC.Actor)
 	}
+	r.Fields = actorFieldsAs(st.ActorAs, r.Fields)
 	return r
+}
+
+// actorFieldsAs maps every top-level field that holds exactly one actor id
+// (a Ref to an actors row, or a Text field such as tasks.done_by or
+// approved_by that stores the id as text) through as, keeping the field's
+// kind. Why: the envelope is not the only place a writer's id lands —
+// task done records done_by, --assign @me records assigned_to_actor_id —
+// and in a client repo every one of them must name the agent's owner, not
+// the agent (D8, Q11), or the client's committed files carry the agent id.
+// The map is copied before the first change, so the caller's row is never
+// mutated; a field whose value as leaves unchanged is left as it was.
+func actorFieldsAs(as func(ids.ID[ids.Actor]) ids.ID[ids.Actor], fields map[string]value.Value) map[string]value.Value {
+	out, copied := fields, false
+	for k, v := range fields {
+		if v == nil || (v.Kind() != value.KindText && v.Kind() != value.KindRef) {
+			continue
+		}
+		id, err := ids.Parse[ids.Actor](v.String())
+		if err != nil || id.IsZero() {
+			continue
+		}
+		mapped := as(id)
+		if mapped == id || mapped.IsZero() {
+			continue
+		}
+		var nv value.Value
+		if v.Kind() == value.KindRef {
+			ref, rerr := value.RefOf(mapped.Any())
+			if rerr != nil {
+				continue
+			}
+			nv = ref
+		} else {
+			txt, terr := value.TextOf(mapped.String())
+			if terr != nil {
+				continue
+			}
+			nv = txt
+		}
+		if !copied {
+			out, copied = maps.Clone(fields), true
+		}
+		out[k] = nv
+	}
+	return out
 }
 
 // IDSource issues permanent row ids. The default makes UUIDv7 ids (the
