@@ -22,8 +22,8 @@ import (
 // Keys of one move entry in _o (PROVENANCE_DESIGN 5.4: {at, by,
 // moved_from, moved_to}). The entries are kept in the `moves` list of _o
 // because row.Row has no bookkeeping field of its own (spec-deltas.md);
-// moved_from / moved_to name attached store names until store ids are
-// carried by Attached.
+// moved_from / moved_to are each attachment's Place (sto_ id, plus the
+// folder's prj_ id; FQ4), or its attached name where no Place is known.
 const (
 	originMoves  = "moves"
 	moveAt       = "at"
@@ -172,7 +172,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 			if moved.Origin, err = e.movedIntoClient(ctx, dst, cur.Origin); err != nil {
 				return Written{}, err
 			}
-		} else if moved.Origin, err = withMove(cur.Origin, moved.HLC, actor.String(), string(src), string(to)); err != nil {
+		} else if moved.Origin, err = withMove(cur.Origin, moved.HLC, actor.String(), e.placeOf(src), e.placeOf(to)); err != nil {
 			return Written{}, err
 		}
 		var got stored
@@ -399,4 +399,14 @@ func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.
 	out := maps.Clone(fields)
 	out[projectField] = ref
 	return out, nil
+}
+
+// placeOf is the place id a `moves` entry records for the attached store
+// name (FQ4): its Place, or the attached name when wire knows no place id
+// (the repo store, test backends). The merge unions both forms alike.
+func (e *Engine) placeOf(name store.Source) string {
+	if p := e.stores[name].Place; p != "" {
+		return p
+	}
+	return string(name)
 }

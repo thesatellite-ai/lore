@@ -56,6 +56,11 @@ type Attached struct {
 	// Empty keeps v0.1.17's bytes: the repo store, whose rows must keep
 	// converging with v0.1.17 writers of the same repository.
 	KeyNamespace string
+	// Place is the attachment's place id recorded in `_o.moves`
+	// (PROVENANCE_DESIGN 5.4, FQ4): "<sto_ id>/<folder prj_ id>" for a
+	// store folder, "<sto_ id>" for a store root. Empty: the attached name
+	// is recorded (the repo store, test backends).
+	Place string
 	// ActorAs, when set, maps the writer of a row stored in this store to
 	// the actor the row is stamped with: created_by, updated_by, the HLC's
 	// actor part and the audit event's actor. Why: in a client repo an
