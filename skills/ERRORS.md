@@ -68,7 +68,7 @@ These codes also set the process exit status, so a script or agent can branch on
 | `E_INVALID_UTF8` | input is not valid UTF-8 |
 | `E_BODY_TOO_LARGE` | body exceeds maximum allowed size |
 | `E_INVALID_IDENTIFIER` | identifier contains disallowed character |
-| `E_SECRET_DETECTED` | input contains a credential pattern; refusing to store. Use --allow-secrets to override (logged) |
+| `E_SECRET_DETECTED` | input contains a credential pattern; refusing to store. In 0.1.18 a write asks first (`E_NEEDS_CONFIRM`); rerun with --yes only after the person confirms it is not a secret |
 | `E_ROOT_REFUSED` | lore refuses to run as root; set LORE_ALLOW_ROOT=1 to override |
 | `E_SYMLINK_DB` | DB path is a symlink; refusing for safety. Use --allow-symlink-db to override |
 | `E_SYMLINK_LOOP` | filesystem walk encountered a symlink loop |
@@ -127,7 +127,7 @@ E_AMBIGUOUS_PROJECT
 
 E_SECRET_DETECTED
     → input matched a credential pattern. Strip the secret OR use
-      --allow-secrets (the override is logged loudly).
+      --yes once the person confirms it is not a secret (agents ask first).
 
 E_ROOT_REFUSED
     → run as your normal user; set LORE_ALLOW_ROOT=1 only if you really

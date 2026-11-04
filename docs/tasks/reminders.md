@@ -23,12 +23,8 @@ Alice (an agency developer) keeps the dates for the client's website, `github.co
 # alice, in website
 $ lore reminder add 'Renew the domain name' --due 2027-06-01 --recurrence 1y
 ✓ reminder rmd_b69e…5ed7 due 2027-06-01
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ lore reminder add 'Call the client about the new logo' --due 2026-11-01
 ✓ reminder rmd_0aae…a61f due 2026-11-01
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore reminder list
 ! 2026-11-01  Call the client about the new logo
     rmd_0aae…a61f
@@ -48,12 +44,8 @@ Reminders are listed by date, soonest first. A `!` at the start of the line mean
 # alice, in website
 $ lore reminder done rmd_b69e…5ed7
 ✓ rescheduled to 2028-06-01
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore reminder done rmd_0aae…a61f
 ✓ reminder rmd_0aae…a61f completed
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore reminder list
   2028-06-01  Renew the domain name (1y)
     rmd_b69e…5ed7
@@ -65,19 +57,17 @@ $ lore reminder list --done
 
 ## Step 3 — Delete a reminder
 
-Delete only for mistakes. It needs `--confirm`:
+Delete only for mistakes. lore asks first; without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`:
 
 <!-- example: tasks#reminder-delete -->
 ```console
 # alice, in website
 $ lore reminder delete rmd_0aae…a61f
-ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
-  hint: a hard delete cannot be undone; pass --confirm if you really mean it
-(exit 1)
-$ lore reminder delete rmd_0aae…a61f --confirm
-✓ rmd_0aae…a61f deleted (hard)
-lore sync: removed files 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+ERROR: [E_NEEDS_CONFIRM] engine: run reminder delete?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+$ lore reminder delete rmd_0aae…a61f --yes
+✓ rmd_0aae…a61f deleted
 ```
 <!-- /example -->
 

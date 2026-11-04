@@ -47,7 +47,7 @@ note "delete"
 on alice $W "lore task add 'Test task, please ignore'"
 local t4; t4=$(id tsk)
 on! alice $W "lore task delete $t4"
-on alice $W "lore task delete $t4 --confirm"
+on alice $W "lore task delete $t4 --yes"
 
 # --- order: one task waits for another ---------------------------------------
 note "after"
@@ -115,7 +115,7 @@ on alice $W "lore reminder list --done"
 
 note "reminder delete"
 on! alice $W "lore reminder delete $r2"
-on alice $W "lore reminder delete $r2 --confirm"
+on alice $W "lore reminder delete $r2 --yes"
 
 # --- link commits ------------------------------------------------------------
 note "push after done"
@@ -147,4 +147,4 @@ note "link remove"
 on alice $W "lore link list"
 local cml; cml=$(id cml)
 on! alice $W "lore link remove $cml"
-on alice $W "lore link remove $cml --confirm"
+on alice $W "lore link remove $cml --yes"

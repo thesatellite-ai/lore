@@ -107,7 +107,7 @@ A program git runs instead of its line-by-line merge for files `.gitattributes` 
 `.github/workflows/lore-sync-merge.yml`, written by `lore sync install-action` (opt-in; runs only when started by hand unless installed with `--auto`; a re-run or a version update keeps the triggers the file already has). Runs `ci-merge` for open pull requests (with `--auto`, whenever lore data changes) and pushes the merges it is allowed to make. Uses a `LORE_SYNC_TOKEN` secret when present so required checks re-run on its merge commits. Its lore version is pinned `auto` (follows the newest lore release a developer runs in the repo; never downgraded) or `fixed` (`--lore-version`); a checksum line marks hand edits, which stop the automatic updates.
 
 ## Mode B
-Shared DB mode. Multiple project roots pointing at a single shared SQLite file via `.lore/lore.toml`. Used when many sibling projects want one knowledge base.
+The v0.1.17 shared-database mode: several repos pointing at one shared database file via `.lore/lore.yaml` (older: `.lore/lore.toml`). Retired in 0.1.18: share notes through a store (`lore store init` / `lore store add`); `lore migrate run` converts such a repo.
 
 ## NFC
 Unicode Normalization Form C. lore normalizes all text input to NFC on write so equivalent characters compare equal. Defeats homoglyph attacks and accidental encoding drift.
@@ -146,7 +146,7 @@ The DB schema generation. v0.1 = `schema_version: 1`. Bumped only on breaking ch
 The triple `(project_id, repo_id, master?)` that determines who sees a row. Flags `--repo`, `--all-repos`, `--master-only`, `--no-inherit` control scope at query time.
 
 ## Secret scrubber
-Pre-write check that refuses bodies containing credential patterns (AWS keys, GitHub PATs, JWTs, OpenAI keys, Stripe keys, etc.). Override via `--allow-secrets`, which is logged loudly.
+Pre-write check that refuses bodies containing credential patterns (AWS keys, GitHub PATs, JWTs, OpenAI keys, Stripe keys, etc.). The write stops with `E_NEEDS_CONFIRM`; `--yes` (after the person confirms) stores it as not a secret, and the commit hook still refuses a credential.
 
 ## Symlink protection
 lore refuses to open `.lore/lore.db` if it's a symlink (O_NOFOLLOW semantics). Prevents an attacker with write access to `.lore/` from redirecting writes to `/etc/passwd` etc.
@@ -161,7 +161,7 @@ Discrete work item with status + priority + optional mission. Lifecycle: todo â†
 Alternative grouping for tasks. Lighter than Mission; no target date.
 
 ## TOML pointer
-The 2-line file at `.lore/lore.toml` in Mode B. Lists `db_path` (where the shared DB lives) and `project_id` (which project this directory belongs to).
+The 2-line file at `.lore/lore.yaml` (older: `.lore/lore.toml`) in a v0.1.17 Mode B repo; `lore migrate run` converts it and keeps it as `<file>.migrated`. Lists `db_path` (where the shared DB lives) and `project_id` (which project this directory belongs to).
 
 ## Trojan source defense
 lore strips bidi-override + zero-width characters from input text. Prevents copy-paste attacks that visually swap characters mid-string.

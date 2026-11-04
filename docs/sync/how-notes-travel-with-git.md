@@ -163,7 +163,7 @@ live rows:        0 (_root)
 ## Try it — turn sync off for one command
 
 <!-- ds:block id=sync-env-qmha7pjc -->
-Four environment variables (settings you put in front of a command, like `LORE_SYNC=0 lore ...`) change what a pass does. `LORE_SYNC=0` turns syncing off for that command: the database changes, but no file is written. `LORE_SYNC_GIT=0` keeps syncing files but never touches git settings, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` hides the `lore sync:` progress lines (errors still print). `LORE_SYNC_ALLOW_SECRETS=1` writes a row to a file even when its text looks like a password or key, for that one run; the value will then be committed.
+Four environment variables (settings you put in front of a command, like `LORE_SYNC=0 lore ...`) change what a pass does. `LORE_SYNC=0` turns syncing off for that command: the database changes, but no file is written. `LORE_SYNC_GIT=0` keeps syncing files but never touches git settings, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` hides the `lore sync:` progress lines (errors still print). `LORE_SYNC_ALLOW_SECRETS=1` is kept for older scripts and changes nothing you can see (below).
 
 Here Alice adds a memory with sync off. A memory is something worth remembering, like "the client replies faster on WhatsApp than email". Nothing shows in git until the next normal command (here `lore sync`) writes the file:
 
@@ -190,8 +190,6 @@ $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin mai
 $ lore rule add --body 'Run the tests before you push'
 ✓ rul_54fe…28f2 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
 ✓ mem_05e9…4603 
   scope: [master]
@@ -211,11 +209,11 @@ $ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
     db:         ~/work/shop/.lore/lore.db
     identity:   human:alice@agency.example (git config)
   next: lore learn-from docs   to bootstrap from existing markdown
-lore sync: exported 2 rows to .lore/data — review and commit it
+lore sync: exported 0 rows to .lore/data — review and commit it
 $ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)
 $ lore sync
-· already in sync
+lore sync: imported 2
 $ ls .git/hooks | grep -v sample; cat .gitattributes
 commit-msg
 post-checkout
@@ -232,19 +230,18 @@ pre-push
 ```
 <!-- /example -->
 
-A row that looks like a password is kept out of `.lore/data` even when `--allow-secrets` let it into the database; `LORE_SYNC_ALLOW_SECRETS=1` writes it for one run, and the next commit would share it:
+Text that looks like a password stops `lore memory add` with a question; `--yes` answers it and stores the row as not a secret, so its file is in `.lore/data` at once (`LORE_SYNC_ALLOW_SECRETS=1` adds nothing). lore's commit hook still checks every file and refuses to commit one that holds a credential pattern, so edit or delete such a row before you commit:
 
 <!-- example: environment#sync-allow-secrets -->
 ```console
 # alice, in website
-$ lore memory add --allow-secrets --body 'The staging password is password=example-only'
+$ lore memory add --yes --body 'The staging password is password=example-only'
 ✓ mem_76bd…3f10 
   scope: [master]
-lore sync: secret-detected memories/mem_76bd…3f10.json: credential pattern password_pair found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
 $ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
-0
+1
 $ LORE_SYNC_ALLOW_SECRETS=1 lore sync
-lore sync: exported 1
+lore sync: imported 3
 $ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
 1
 ```

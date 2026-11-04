@@ -13,7 +13,7 @@ alice (work/website)$ lore init --non-interactive --name=website
     identity:   human:alice@agency.example (git config)
 
   next: lore learn-from docs   to bootstrap from existing markdown
-lore sync: exported 2 rows to .lore/data — review and commit it
+lore sync: exported 0 rows to .lore/data — review and commit it
 lore sync: backup of lore.db before bootstrap: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 alice (work/website)$ git status --short
@@ -23,6 +23,7 @@ alice (work/website)$ git status --short
 
 ### setup
 alice (work/website)$ lore setup
+lore sync: imported 2
 → running ent schema migration...
 → building FTS5 search index...
 ✓ setup complete (registry fingerprint: 601d2850ffd047c2)
@@ -31,13 +32,12 @@ alice (work/website)$ lore setup
 alice (work/website)$ lore rule add --body 'Run the tests before you push'
 ✓ rul_2ad3618e878ebbf527d34d446ef4f891 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore rule list
 rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push
 
 ### render
 alice (work/website)$ lore render
+lore sync: imported 1
 ✓ .lore/LORE.md (12293 bytes; 1R + 0HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 alice (work/website)$ cat CLAUDE.md
@@ -85,16 +85,16 @@ _lore_live_rows       0
 _lore_sync_conflicts  0
 _lore_sync_dirty      0
 _lore_sync_errors     0
-_lore_sync_extra      0
+_lore_sync_extra      3
 _lore_sync_files      3
-_lore_sync_meta       4
+_lore_sync_meta       6
 _lore_sync_trash      0
 activity_archives     0
 actors                1
 architecture_notes    0
 assemble_citations    0
 assemble_runs         0
-audit_logs            1
+audit_logs            6
 behaviours            0
 bench_evals           0
 bench_results         0
@@ -132,7 +132,7 @@ projects              1
 prompts               0
 query_logs            0
 reminders             0
-render_histories      1
+render_histories      2
 repos                 0
 rule_verifier_refs    0
 rules                 1
@@ -154,7 +154,7 @@ trusted_plugins       0
 users                 0
 workflows             0
 workspaces            0
-73 tables, 19 total records
+73 tables, 30 total records
 
 ### completion
 alice (work/website)$ lore completion bash | head -3

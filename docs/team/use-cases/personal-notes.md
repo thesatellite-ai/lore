@@ -17,39 +17,35 @@ personal:
 
 ## The commands
 
-`--to me` files a note by where you are when you write it. In a repo of an org (one company's setup), it goes under that org's folder. Anywhere else, it goes under `everywhere/`. If you file a note under `everywhere/` on purpose and it names a company you know, lore asks first:
+`--to me` files a note by where you are when you write it. In a repo of an org (one company's setup), it goes under that org's folder. Anywhere else, it goes under `everywhere/`:
 
 <!-- example: personal#local-personal-store -->
 ```console
 # alice, in website
-$ lore rule add --body 'I always forget the staging VPN profile' --to me
-✓ rul_7a67…9504 [me]
+$ lore memory add --body 'I always forget the staging VPN profile' --to me
+✓ mem_7a67…9504 [me]
   filed: --to me → personal agency/
   scope: [master]
 
 # alice, in scratch
-$ lore rule add --body 'I prefer tabs over spaces' --to me
-✓ rul_2ad3…f891 [me]
+$ lore memory add --body 'I prefer tabs over spaces' --to me
+✓ mem_2ad3…f891 [me]
   filed: --to me → personal everywhere/
   scope: [master]
 
 # alice, in website
-$ lore rule add --body 'agency invoices go to the finance inbox' --to me --everywhere
-note mentions [agency], a known org or repo. Save it under everywhere/ anyway? [y/N] n
-ERROR: [E_INVALID_INPUT] not saved
-(exit 1)
-$ lore rule list
-rul_7a67…9504  I always forget the staging VPN profile  [me]
-rul_2ad3…f891  I prefer tabs over spaces  [me]
+$ lore memory list
+mem_7a67…9504  I always forget the staging VPN profile  [me]
+mem_2ad3…f891  I prefer tabs over spaces  [me]
 
 # alice, in scratch
-$ lore rule list
-rul_2ad3…f891  I prefer tabs over spaces  [me]
+$ lore memory list
+mem_2ad3…f891  I prefer tabs over spaces  [me]
 
 # alice, in ~
-$ find ~/.lore/personal -name '*.json' -path '*rules*' | sed 's#.*/personal/##'
-everywhere/.lore/data/rules/rul_2ad3…f891.json
-agency/.lore/data/rules/rul_7a67…9504.json
+$ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
+everywhere/.lore/data/memories/mem_2ad3…f891.json
+agency/.lore/data/memories/mem_7a67…9504.json
 ```
 <!-- /example -->
 
@@ -64,15 +60,15 @@ $ lore store init git@github.com:alice/lore-me
 ✓ wrote lore-store.yaml to github.com/alice/lore-me (new branch main, first commit) and pushed
 
 # alice, in website
-$ lore rule add --body 'the client invoice template lives in the shared drive' --to me
-✓ rul_162d…9666 [me]
+$ lore memory add --body 'the client invoice template lives in the shared drive' --to me
+✓ mem_162d…9666 [me]
   filed: --to me → personal agency/
   scope: [master]
 lore: [me] 4 file(s) pushed
 
 # alice-devbox, in website
-$ lore rule list
-rul_162d…9666  the client invoice template lives in the shared drive  [me]
+$ lore memory list
+mem_162d…9666  the client invoice template lives in the shared drive  [me]
 ```
 <!-- /example -->
 
@@ -80,14 +76,14 @@ rul_162d…9666  the client invoice template lives in the shared drive  [me]
 
 ```text
  personal store (~/.lore/personal, or github.com/alice/lore-me)
-   everywhere/.lore/data/rules/…      loads in every repo
-   agency/.lore/data/rules/…          loads only where the org is agency
-   client3/.lore/data/rules/…         loads only where the org is client3
+   everywhere/.lore/data/memories/…      loads in every repo
+   agency/.lore/data/memories/…          loads only where the org is agency
+   client3/.lore/data/memories/…         loads only where the org is client3
 ```
 
 ## Pitfalls
 
-- **Filing is by place, not by text.** Lore never guesses the company from what you wrote. It files the note under the org of the repo you are in. `--everywhere` overrides that. If the text names a known org or repo, you get a warning first (refused without a terminal unless `--yes`).
+- **Filing is by place, not by text.** Lore never guesses the company from what you wrote. It files the note under the org of the repo you are in. To file a note for every repo, write it from a repo that belongs to no org.
 - **Never in the checkout.** Personal notes are rendered into `~/.lore/render/…`, outside the repo, like internal notes. Nothing personal is written to a committed file.
 - **A personal store repo is a lore store**: create it with `lore store init` on a new, empty, private repo.
 - Personal notes are for you. To give one to your team, use `lore share <id> --to agency`; see [Sharing an internal note with the client](sharing-a-note.md) for how sharing works.

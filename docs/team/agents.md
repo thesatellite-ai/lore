@@ -59,7 +59,7 @@ Words used below:
 | after each meaningful step | `lore task note <id> "…"` | a replacement agent reads your notes and fetches your pushed branch |
 | learned something others need | `lore finding add --mission <id> "…"` | it appears in every agent's inbox |
 | about to do something risky | `lore gate request <id>`, then stop | a person approves with `lore gate approve`; you never can |
-| need the shared test suite alone | `lore resource claim full-suite --ttl 30m`, then `lore resource release full-suite` | one heavy run at a time |
+| need the shared test suite alone | `lore hold claim full-suite --ttl 30m`, then `lore hold release full-suite` | one heavy run at a time |
 | finished | `lore task done <id> --commit <sha>` or `--pr <n>` | dependents in other repos wait until that code is merged |
 | giving up the task | `lore task release <id>` | frees it at once instead of after the lease |
 | handing to someone specific | `lore handoff add --for @agent-frontend-2 --task <id> "…"` | the handoff waits in their inbox |
@@ -213,32 +213,32 @@ $ lore task list
 
 In a linked client repo you cannot assign a whole team: team names are internal to the agency, so lore refuses it. Assign a person, or keep the task internal with `--to <org>`.
 
-## Sharing one thing nobody may use twice at once: `lore resource`
+## Sharing one thing nobody may use twice at once: `lore hold`
 
-Some things break when two runs use them together, like one shared test database or the full test suite on a small server. `lore resource claim <name>` holds such a thing for you until `--ttl` passes or you release it; anyone else who asks gets an error that names the holder:
+Some things break when two runs use them together, like one shared test database or the full test suite on a small server. `lore hold claim <name>` holds such a thing for you until `--ttl` passes or you release it; anyone else who asks gets an error that names the holder:
 
 <!-- example: team-ops#resource -->
 ```console
 # alice, in billing
-$ lore resource claim full-suite --ttl 30m
+$ lore hold claim full-suite --ttl 30m
 ✓ holding full-suite until 2026-11-02T10:35:50Z
 
 # bob, in billing
-$ lore resource claim full-suite --ttl 30m
+$ lore hold claim full-suite --ttl 30m
 ERROR: [E_INVALID_INPUT] full-suite is held by alice since 10:05AM (lease until 10:35AM)
 (exit 1)
 
 # alice, in billing
-$ lore resource release full-suite
+$ lore hold release full-suite
 ✓ released full-suite
 
 # bob, in billing
-$ lore resource claim full-suite --ttl 30m
+$ lore hold claim full-suite --ttl 30m
 ✓ holding full-suite until 2026-11-02T10:39:20Z
 ```
 <!-- /example -->
 
-Running `lore resource claim` again while you hold it renews your hold. A typical line in a script: `lore resource claim full-suite --ttl 30m && task test && lore resource release full-suite`.
+Running `lore hold claim` again while you hold it renews your hold. A typical line in a script: `lore hold claim full-suite --ttl 30m && task test && lore hold release full-suite`.
 
 ## Rules for agents
 
@@ -260,7 +260,7 @@ Running `lore resource claim` again while you hold it renews your hold. A typica
 
 - **A released task stays `in_progress`.** `lore task release` drops only the claim. If nobody should work on it, cancel it or move it back yourself.
 - **Revoke and reassign need the holder to write once more to notice.** The agent finds out on its next heartbeat, note or `done`. An agent that never writes again keeps working on its copy. The claim is still gone, and its `done` is refused.
-- **Resources are per project in a repo without a store.** In a linked client repo, `lore resource claim` is not available yet (it answers `E_NOT_IMPLEMENTED`); run shared-resource scripts from the agency's own repos.
+- **Resources are per project in a repo without a store.** In a linked client repo, `lore hold claim` is not available yet (it answers `E_NOT_IMPLEMENTED`); run shared-resource scripts from the agency's own repos.
 - **Teams live where `lore team add` ran.** In a repo with no org, the team is a row in that repo's `.lore/data`, so commit it with your change, like any other row.
 - **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`lore sync` always fetches). A teammate's claim from a few seconds ago may not be visible yet; a claim itself always checks the remote.
 - **One label per session.** Two sessions started with the same `--label` are one actor, and their claims collide.
@@ -270,5 +270,5 @@ Running `lore resource claim` again while you hold it renews your hold. A typica
 - [Agents on one mission](use-cases/agents-mission.md): the full worked example (plan, claims, crash and reclaim, gate).
 - [Concepts](concepts.md): live rows, signals, stores.
 - [How it works](how-it-works.md#signals-claim-renew-expire-reclaim): what a claim writes in git.
-- [Commands](commands.md): every flag of `task claim`, `task release`, `task revoke`, `task reassign`, `resource claim`, `team add`.
+- [Commands](commands.md): every flag of `task claim`, `task release`, `task revoke`, `task reassign`, `hold claim`, `team add`.
 - [Troubleshooting](troubleshooting.md): error codes and exit statuses.

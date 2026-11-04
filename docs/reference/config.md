@@ -13,7 +13,7 @@ This page lists every file and every key, with its default and a plain one-line 
 | `.lore/org.yaml` | in a repo the org owns | yes, it is committed | `lore org set` | the org's name, and optionally the project folder |
 | `lore-store.yaml` | at the top of a store repo | yes, everyone who can open the store | `lore store init` | the marker that makes a repo a store |
 | `<org_folder>/.lore/lore-org.yaml` | inside a store | yes, everyone who can open the store | a team member, by hand | the org entry the team suggests; `lore org import` copies it into your config |
-| `.lore/lore.yaml` | in a project folder | it is committed if you commit it | `lore project shared-init` | a pointer to a shared database instead of `.lore/lore.db` |
+| `.lore/lore.yaml` | in a project folder | it is committed if you commit it | v0.1.17 `lore project shared-init` (retired) | an old pointer to a shared database; `lore migrate run` converts it |
 | database settings | inside `.lore/lore.db` | no | lore itself; `lore config set` | internal values such as the schema version |
 
 A **store** is a separate repo that holds only lore notes, so private notes never sit in a repo the client can read. An **org** is one company you work for, set up as one entry under `orgs:`.
@@ -325,7 +325,7 @@ The org entry a team suggests to its members, kept in the store's org folder. It
 
 ## `.lore/lore.yaml` (shared database)
 
-Normally a project keeps its notes in `.lore/lore.db`. With this pointer file instead, the project uses a database somewhere else, which several projects can share. `lore project shared-init` writes it. A folder may hold either `.lore/lore.db` or this file, never both (`E_AMBIGUOUS_PROJECT`). Older versions called it `.lore/lore.toml`; lore converts that file on first read.
+v0.1.17 could point a project at a database somewhere else, shared by several projects, with this pointer file (older versions called it `.lore/lore.toml`). 0.1.18 retired that mode: every command in such a folder stops and names `lore migrate run`, which copies the project's notes into a folder store beside the shared database, attaches it, and keeps the pointer as `<file>.migrated` ([One store for several repos](../sync/shared-database-mode-b.md#step-4--convert-a-repo-that-used-a-shared-database)). `lore migrate run` reads these keys:
 
 | Key | Default | What it means |
 |---|---|---|

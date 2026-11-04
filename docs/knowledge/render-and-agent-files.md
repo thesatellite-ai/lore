@@ -24,6 +24,7 @@ Here `CLAUDE.md` already has hand-written notes. After `lore render` the pointer
 ```console
 # alice, in website
 $ lore render
+lore sync: imported 4
 ✓ .lore/LORE.md (12498 bytes; 1R + 1HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 $ cat CLAUDE.md
@@ -167,6 +168,7 @@ rnd_2ad3…f891
 rnd_162d…9666
 rnd_54fe…28f2
 rnd_05e9…4603
+rnd_c0f3…b5b8
 ```
 <!-- /example -->
 

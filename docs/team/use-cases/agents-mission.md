@@ -34,7 +34,7 @@ tasks:
 ```
 <!-- /example -->
 
-`lore agent start` registers an agent actor for this session (one actor per label, owned by a person). It prints the environment the session must export. `lore plan apply` creates the mission and every task in one write. Applying it again finds them by their keys and adds nothing. The coordinator then holds a claim on the mission itself. So a second coordinator would be told the mission is taken:
+`lore agent start` registers an agent actor for this session (one actor per label, owned by a person). It prints the environment the session must export. `lore mission apply` creates the mission and every task in one write. Applying it again finds them by their keys and adds nothing. The coordinator then holds a claim on the mission itself. So a second coordinator would be told the mission is taken:
 
 <!-- example: agents#plan only=2,3,4,5 -->
 ```console
@@ -45,13 +45,13 @@ export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 lore: [agency/org] 1 file(s) pushed
 
 # agent-coord, in api
-$ lore plan apply invite.yaml
+$ lore mission apply invite.yaml
 ✓ msn_2ad3…f891 Invite landing page (created) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
   tsk_05e9…4603 allow /invite on the proxy  
   tsk_c0f3…b5b8 deploy to staging             after frontend,proxy  gate required
-$ lore plan apply invite.yaml
+$ lore mission apply invite.yaml
 ✓ msn_2ad3…f891 Invite landing page (found) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
@@ -290,7 +290,7 @@ msn_2ad3…f891 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready 
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:04 4m
   done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:02 24m (timebox 1h; agent-frontend 20m + agent-frontend-2 4m)
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:23 12m (timebox 1h)
-$ lore task show tsk_c0f3…b5b8 --from agency/client2
+$ lore task show tsk_c0f3…b5b8
 tsk_c0f3…b5b8
   title:    deploy to staging
   status:   in_progress
@@ -331,7 +331,7 @@ tsk_54fe…28f2
 
 ```text
  agency/notes (store)                                     who wrote it
-   refs/lore/live/main    client2/missions/…, tasks/…     agent-coord (plan apply), workers (notes, done)
+   refs/lore/live/main    client2/missions/…, tasks/…     agent-coord (mission apply), workers (notes, done)
                           client2/memories/… (finding, lessons)
    refs/heads/main        client2/.lore/data/…            landings: every finished task, with done_by,
                                                           done_commit, merged_at, claim log

@@ -37,11 +37,9 @@ A hotfix has a `--severity`: `low`, `medium`, `high` (the default) or `critical`
 ```console
 # alice, in website
 $ lore hotfix add --title 'Checkout button is broken on Safari' --body 'Use the old button until the fix ships.' --severity critical
-⚠ hfx_4c59…6c38 — Checkout button is broken on Safari [critical]
-lore sync: exported 1
-lore sync: 9 file(s) in .lore/data not committed — commit them with your change
+⚠ hfx_3b62…e913 — Checkout button is broken on Safari [critical]
 $ lore hotfix list
-hfx_4c59…6c38 [critical] Use the old button until the fix ships.
+hfx_3b62…e913 [critical] Use the old button until the fix ships.
 ```
 <!-- /example -->
 
@@ -55,9 +53,7 @@ Each kind is one `add` command. Here are the ones with a title and a body:
 ```console
 # alice, in website
 $ lore pattern add --title 'Load data in one place' --body 'Each page loads its data in its loader, never inside a button handler.'
-✓ pat_3b62…e913
-lore sync: exported 1
-lore sync: 10 file(s) in .lore/data not committed — commit them with your change
+✓ pat_f147…5139
 ```
 <!-- /example -->
 
@@ -65,9 +61,7 @@ lore sync: 10 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore playbook add --title 'How to release' --body '1. Run the tests. 2. Tag the release. 3. Post in the team chat.'
-✓ pbk_f147…5139
-lore sync: exported 1
-lore sync: 11 file(s) in .lore/data not committed — commit them with your change
+✓ pbk_2537…6bbb
 ```
 <!-- /example -->
 
@@ -77,9 +71,7 @@ A playbook and a prompt also keep a one-line summary. `--description` sets it; w
 ```console
 # alice, in website
 $ lore prompt add --title 'Review a pull request' --description 'Bugs first, then style' --body 'Read the change, list bugs first, then style notes.'
-✓ prm_2537…6bbb
-lore sync: exported 1
-lore sync: 12 file(s) in .lore/data not committed — commit them with your change
+✓ prm_b69e…5ed7
 ```
 <!-- /example -->
 
@@ -89,11 +81,9 @@ A snapshot is stamped with today's date, which `lore snapshot list` shows. `--so
 ```console
 # alice, in website
 $ lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'
-✓ snp_b69e…5ed7 — Week 44
-lore sync: exported 1
-lore sync: 13 file(s) in .lore/data not committed — commit them with your change
+✓ snp_0aae…a61f — Week 44
 $ lore snapshot list
-snp_b69e…5ed7 Week 44   (2026-11-02)
+snp_0aae…a61f Week 44   (2026-11-04)
 ```
 <!-- /example -->
 
@@ -101,9 +91,7 @@ snp_b69e…5ed7 Week 44   (2026-11-02)
 ```console
 # alice, in website
 $ lore incident add --title 'Site down for 20 minutes' --body 'The disk filled up with logs. We now rotate logs daily.'
-✓ inc_0aae…a61f
-lore sync: exported 1
-lore sync: 14 file(s) in .lore/data not committed — commit them with your change
+✓ inc_6a86…ed8c
 ```
 <!-- /example -->
 
@@ -111,9 +99,7 @@ lore sync: 14 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete any file you did not create.'
-✓ bhv_6a86…ed8c
-lore sync: exported 1
-lore sync: 15 file(s) in .lore/data not committed — commit them with your change
+✓ bhv_4f89…b64b
 ```
 <!-- /example -->
 
@@ -121,9 +107,7 @@ lore sync: 15 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore architecturenote add --title 'How the site is built' --body 'The website reads products from the shop API and caches them for 5 minutes.'
-✓ anr_4f89…b64b
-lore sync: exported 1
-lore sync: 16 file(s) in .lore/data not committed — commit them with your change
+✓ anr_77cb…76c4
 ```
 <!-- /example -->
 
@@ -131,9 +115,7 @@ lore sync: 16 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore cookbookrecipe add --title 'Add a new page' --body 'Copy pages/about, rename it, add a link in the menu.'
-✓ cbr_77cb…76c4
-lore sync: exported 1
-lore sync: 17 file(s) in .lore/data not committed — commit them with your change
+✓ cbr_d191…45c2
 ```
 <!-- /example -->
 
@@ -141,9 +123,7 @@ lore sync: 17 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore suggestion add --title 'Add dark mode' --body 'Several users asked for it.'
-✓ sug_d191…45c2
-lore sync: exported 1
-lore sync: 18 file(s) in .lore/data not committed — commit them with your change
+✓ sug_b4d3…11aa
 ```
 <!-- /example -->
 
@@ -151,9 +131,7 @@ lore sync: 18 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore workflow add --title 'Code review' --body 'One approval from a second developer before merge.'
-✓ wfl_bfed…eeea
-lore sync: exported 1
-lore sync: 21 file(s) in .lore/data not committed — commit them with your change
+✓ wfl_376c…8e1a
 ```
 <!-- /example -->
 
@@ -161,9 +139,7 @@ lore sync: 21 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore workspace add --title 'Website redesign' --body 'Everything for the new look of the site.'
-✓ wsp_376c…8e1a
-lore sync: exported 1
-lore sync: 22 file(s) in .lore/data not committed — commit them with your change
+✓ wsp_67e2…291e
 ```
 <!-- /example -->
 
@@ -173,9 +149,7 @@ lore sync: 22 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore tastepref add --body 'Buttons are blue'
-✓ tst_b4d3…11aa
-lore sync: exported 1
-lore sync: 19 file(s) in .lore/data not committed — commit them with your change
+✓ tst_9a34…b418
 ```
 <!-- /example -->
 
@@ -183,9 +157,7 @@ lore sync: 19 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore techdoc add --name 'Payments docs' --base-url https://docs.example.com/payments --description 'How to take a card payment'
-✓ tdc_9a34…b418 Payments docs
-lore sync: exported 1
-lore sync: 20 file(s) in .lore/data not committed — commit them with your change
+✓ tdc_bfed…eeea Payments docs
 ```
 <!-- /example -->
 
@@ -195,9 +167,9 @@ lore sync: 20 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore incident list; lore tastepref list; lore techdoc list
-IN  inc_0aae…a61f
-TA  tst_b4d3…11aa
-tdc_9a34…b418 Payments docs https://docs.example.com/payments
+IN  inc_6a86…ed8c
+TA  tst_9a34…b418
+tdc_bfed…eeea Payments docs https://docs.example.com/payments
 ```
 <!-- /example -->
 

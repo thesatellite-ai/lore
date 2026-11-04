@@ -488,9 +488,10 @@ P5  multi-repo scoping
     lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
     lore render --repo=api --out=api/.lore/LORE.md --target=api/CLAUDE.md
 
-P6  shared DB across sibling projects (Mode B)
-    lore project shared-init --db=${HOME}/.lore/shared.db --name=<proj>
-    # subsequent commands: LORE_DB=~/.lore/shared.db lore <cmd>
+P6  notes shared by sibling projects (a store; Mode B is retired)
+    lore store init shared "file://$HOME/stores/shared"   # first repo
+    lore store add shared "file://$HOME/stores/shared"    # each other repo
+    # old Mode B repo: lore migrate run
 
 P7  disaster recovery
     lore doctor --json
@@ -612,7 +613,7 @@ E_DB_NOT_FOUND         DB missing; run lore init or check LORE_DB env
 E_MIGRATION_INCOMPLETE run lore doctor (triggers auto-migrate)
 E_NOT_PROJECT_ROOT     cd to project root or use --db=<path>
 E_AMBIGUOUS_PROJECT    both lore.db and lore.toml exist; remove one
-E_SECRET_DETECTED      strip secret or use --allow-secrets (logged loudly)
+E_SECRET_DETECTED      strip secret, or --yes after the person confirms it is not a secret
 E_ROOT_REFUSED         set MINI_ALLOW_ROOT=1 only if truly needed
 E_SYMLINK_DB           DB is a symlink; delete + restore from backup
 E_READ_ONLY            drop --read-only or unset LORE_READ_ONLY

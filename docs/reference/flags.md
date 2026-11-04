@@ -32,7 +32,7 @@ rul_162d…9666 [must/always] Run the tests before you push
 ```
 <!-- /example -->
 
-A few commands use `--db` or `--project` for something of their own: `lore project shared-init` and `shared-list` take `--db` for the shared database they create or read, and `lore org link`, `org unlink` and `org set` take `--project` for the internal project folder in the org's store. `lore task next --repo` picks tasks of one repo of the group.
+A few commands use `--project` for something of their own: `lore org link`, `org unlink` and `org set` take `--project` for the internal project folder in the org's store. `lore task next --repo` picks tasks of one repo of the group.
 
 ## Output
 
@@ -87,7 +87,7 @@ These matter when you work for an org in client repos. A **store** is a separate
 | `--body <text>` | the row's text |
 | `--created-by <actor id>` | who wrote it (an `act_` id); defaults to you |
 | `--supersedes <id>` | on `rule`, `memory`, `decision`, `hotfix` and `pattern add`: the older row this one replaces. Rows linked by older versions point the wrong way; `lore doctor --fix` repairs them once |
-| `--allow-secrets` | on `rule add` and `memory add`: store the text even though it looks like it holds a password or key (logged) |
+| `--yes` on a secret warning | on `rule add`, `memory add` and the other `add`/`edit` commands: store the text as not a secret even though it looks like it holds a password or key (the commit hook still refuses a file with a credential pattern) |
 
 ## Pitfalls
 

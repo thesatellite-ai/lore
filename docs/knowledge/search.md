@@ -104,13 +104,9 @@ A project can have several repos (see [Multi-repo projects](../sync/multi-repo-p
 # alice, in website
 $ lore repo add web --origin https://github.com/client/website
 ✓ repo web registered (rep_54fe…28f2)
-lore sync: exported 1
-lore sync: 6 file(s) in .lore/data not committed — commit them with your change
 $ lore memory add --repo web --body 'The web repo deploys on every merge to main'
 ✓ mem_05e9…4603 
   scope: [repo:web]
-lore sync: exported 1
-lore sync: 7 file(s) in .lore/data not committed — commit them with your change
 $ lore memory list --repo web
 mem_162d…9666 [retrieved] The client replies faster on WhatsApp than email
 mem_05e9…4603 [retrieved] The web repo deploys on every merge to main
@@ -157,12 +153,12 @@ Found 1 hit for "client Fridays" across 1 entity type:
 ```console
 # alice, in website
 $ lore search status
+lore sync: imported 6
 ENTITY                 FTS_TABLE                   FTS   SOURCE STATUS
 architecturenote       architecturenote_fts          0        0 ✓ ok
 behaviour              behaviour_fts                 0        0 ✓ ok
 comment                comment_fts                   0        0 ✓ ok
 cookbookrecipe         cookbookrecipe_fts            0        0 ✓ ok
-decision               decision_fts                  1        1 ✓ ok
 …
 ```
 <!-- /example -->
@@ -189,6 +185,7 @@ $ lore search rebuild --kind memory
 ```console
 # alice, in website
 $ lore querylog list
+lore sync: imported 3
 (no querylogs)
 ```
 <!-- /example -->

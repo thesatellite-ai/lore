@@ -116,24 +116,25 @@ lore memory search "" --no-inherit    # strict scope (no master fallback)
 
 ---
 
-## P6 — Shared DB across sibling projects (Mode B)
+## P6 — Notes shared by sibling projects (a store)
 
-Multiple unrelated repos sharing one `.db` file under `~/.lore/`.
+Several repos reading and writing one set of notes. (The v0.1.17 shared-database mode is retired; in a repo that still has its pointer, run `lore migrate run`.)
 
 ```bash
 # In repo A
 cd ~/projects/alpha
-lore project shared-init --db=${HOME}/.lore/shared.db --name=alpha
+lore store init shared "file://$HOME/stores/shared"
 
 # In repo B
 cd ~/projects/beta
-lore project shared-init --db=${HOME}/.lore/shared.db --name=beta
+lore store add shared "file://$HOME/stores/shared"
+lore rule add --to shared --body "Every change comes with a test"
 
 # Inspect
-lore project shared-list --db=${HOME}/.lore/shared.db --json
+lore store list --json
 ```
 
-Each project sees only its own rows (partitioned by `project_id`).
+Notes written `--to shared` show in every repo that attached the store; everything else stays in the repo's own `.lore/data`.
 
 ---
 

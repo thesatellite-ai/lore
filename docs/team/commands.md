@@ -230,19 +230,22 @@ Available Commands:
 ### `lore store init`
 
 <!-- help: store init -->
-Make an empty repo a lore store (writes lore-store.yaml and pushes)
+Make a git repo or folder a lore store and attach it (me = your personal store)
 
 ```text
 Usage:
-  lore store init <url>
+  lore store init <name> [url]
 
 Examples:
-  lore store init git@github.com:agency/notes
-  lore store init git@github.com:agency/notes --branch staging
+  # your personal store, a local folder
+  lore store init me
+  # a team store on git
+  lore store init agency git@github.com:agency/notes
 
 Flags:
-      --branch string       the store branch to make a lore (default: the entry's branch, else main); may not contain /
-      --org-folder string   org folder recorded in lore-store.yaml (default: the entry's org_folder, else org)
+      --json                print the result (or the error) as JSON
+      --visibility string   internal (default) or shareable (CFG4)
+      --yes                 answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -606,35 +609,39 @@ Add a new task
 
 ```text
 Usage:
-  lore task add <title>
+  lore task add <title...>
+
+Examples:
+  # add a task
+  lore task add "Fix the login redirect" --priority high
+  # a proposed task, as JSON
+  lore task add "Try a cache" --commitment proposed --json
 
 Flags:
-      --after strings           dependencies: <id>[:done|:merged][,…] (default: done in the same repo, merged across repos)
-      --assign string           assign to @handle (a person sets the assignee, a team the assigned team)
-      --assigned-to string      actor_id (act_*) the task is assigned to
-      --body string             longer description
-      --commitment string       accepted | proposed | someday (REQUIRED for agent callers)
-      --created-by string       actor_id (act_*); defaults to current identity
-      --db string               override DB path (default: cwd's .lore/lore.db)
-      --defer-until string      snooze until date (YYYY-MM-DD); hides from active list until then
-      --due string              due date (YYYY-MM-DD)
-      --everywhere              with --to me: file the note under everywhere/ (loads in every repo)
-      --force-org               write even though LORE_ORG or lore org use disagrees with a store link
-      --json                    print the new task as JSON (incl. its id)
-      --key string              idempotency key: a re-run with the same key (in the same mission) adds nothing
-      --live                    share this row with everyone at once on the live ref (refs/lore/live)
-      --mission string          mission_id (msn_*) to attach to
-      --no-live                 keep this row with the code (this branch's .lore/data)
-      --plan string             plan_id (pln_*) to attach to
-      --priority string         low | medium | high | urgent (default "medium")
-      --project string          override project (id or name)
-      --read-only               skip lock acquisition; refuse writes
-      --ref stringArray         a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
-      --repo string             scope to a specific repo (mount_name or rep_id)
-      --role task next --role   plan role matched by task next --role (e.g. coordinator)
-      --tasklist string         tasklist_id (tlt_*); default: the project's default list (created on demand)
-      --timebox duration        time box, e.g. 60m (active lease time summed across holders)
-      --to string               where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --after stringArray    dependencies: <id>[:done|:merged][,…] (default: done in the same repo, merged across repos)
+      --assign string        assign to @handle (a person sets the assignee, a team the assigned team)
+      --assigned-to string   actor_id (act_*) the task is assigned to
+      --body string          longer description
+      --commitment string    accepted | proposed | someday (default accepted)
+      --confirm              v0.1.17 spelling: refused, use --yes
+      --created-by string    actor_id (act_*); default: the row's created_by is the current identity
+      --db string            v0.1.17 lore.db path: not used by this command (refused)
+      --defer-until string   snooze until date (YYYY-MM-DD); hides from active list until then
+      --due string           due date (YYYY-MM-DD)
+      --json                 print the result (or the error) as JSON
+      --key string           idempotency key: a re-run with the same key (in the same mission) adds nothing
+      --mission string       mission_id (msn_*) to attach to
+      --plan string          plan_id (pln_*) to attach to
+      --priority string      low | medium | high | urgent (default medium)
+      --project string       the project (prj_ id or name; default the repo's one project)
+      --read-only            refuse writes (also LORE_READ_ONLY=1)
+      --ref stringArray      a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
+      --repo string          scope to a repo of the project (mount name or rep_ id)
+      --role string          plan role matched by task next --role (e.g. coordinator)
+      --tasklist string      tasklist_id (tlt_*); default: the project's default list (created on demand)
+      --timebox duration     time box, e.g. 60m (active lease time summed across holders)
+      --to string            store to write to (a name from .lore/stores.yaml; default repo)
+      --yes                  answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -650,34 +657,33 @@ Usage:
   lore task edit <id>
 
 Flags:
-      --after strings           dependencies: <id>[:done|:merged][,…] (default: done in the same repo, merged across repos)
-      --assign string           assign to @handle (a person sets the assignee, a team the assigned team)
-      --assigned-to string      actor_id (act_*) to assign to
-      --body string             new body
-      --clear-assignee          unassign
-      --clear-defer             un-defer (clear deferred_until)
-      --clear-due               remove due date
-      --clear-mission           detach from mission
-      --clear-plan              detach from plan
-      --commitment string       accepted | proposed | someday
-      --db string               override DB path (default: cwd's .lore/lore.db)
-      --defer-until string      snooze until date YYYY-MM-DD
-      --due string              due date YYYY-MM-DD
-      --from string             the source of the id: repo | <org> | <org>/<folder>
-      --live                    share this row with everyone at once on the live ref (refs/lore/live)
-      --mission string          attach to mission_id (msn_*)
-      --no-live                 keep this row with the code (this branch's .lore/data)
-      --plan string             attach to plan_id (pln_*)
-      --priority string         low | medium | high | urgent
-      --project string          override project (id or name)
-      --read-only               skip lock acquisition; refuse writes
-      --ref stringArray         a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
-      --repo string             scope to a specific repo (mount_name or rep_id)
-      --role task next --role   plan role matched by task next --role (e.g. coordinator)
-      --status string           todo | in_progress | done | cancelled | blocked
-      --tasklist string         move to tasklist_id (tlt_*)
-      --timebox duration        time box, e.g. 60m (active lease time summed across holders)
-      --title string            new title
+      --after stringArray    dependencies: <id>[:done|:merged][,…] (replaces the list)
+      --assign string        assign to @handle (a person sets the assignee, a team the assigned team)
+      --assigned-to string   actor_id (act_*) to assign to
+      --body string          new body
+      --clear-assignee       unassign
+      --clear-defer          un-defer (clear deferred_until)
+      --clear-due            remove due date
+      --clear-mission        detach from mission
+      --clear-plan           detach from plan
+      --commitment string    accepted | proposed | someday
+      --confirm              v0.1.17 spelling: refused, use --yes
+      --db string            v0.1.17 lore.db path: not used by this command (refused)
+      --defer-until string   snooze until date YYYY-MM-DD
+      --due string           due date YYYY-MM-DD
+      --json                 print the result (or the error) as JSON
+      --mission string       attach to mission_id (msn_*)
+      --plan string          attach to plan_id (pln_*)
+      --priority string      low | medium | high | urgent
+      --project string       accepted for v0.1.17 scripts; a row id already names its project
+      --read-only            refuse writes (also LORE_READ_ONLY=1)
+      --ref stringArray      a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
+      --role string          plan role matched by task next --role (e.g. coordinator)
+      --status string        todo | in_progress | done | cancelled | blocked
+      --tasklist string      move to tasklist_id (tlt_*)
+      --timebox duration     time box, e.g. 60m
+      --title string         new title
+      --yes                  answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -690,23 +696,28 @@ List tasks
 Usage:
   lore task list
 
+Examples:
+  # list as JSON
+  lore task list --json
+
 Flags:
       --all                 show everything: done/cancelled + proposed/someday + deferred
-      --all-repos           every repo of the project (the default for team views)
-      --assignee string     filter by assignee: actor_id (act_*), @me, stable_key or display name
-      --claimed-by string   only tasks claimed right now by @handle
+      --all-repos           every repo of the project (the default)
+      --assignee string     filter by assignee: actor_id (act_*)
+      --claimed-by string   only tasks claimed right now by @handle (or actor id)
       --commitment string   filter: accepted | proposed | someday
-      --db string           override DB path (default: cwd's .lore/lore.db)
+      --db string           v0.1.17 lore.db path: not used by this command (refused)
       --include-deferred    also include deferred (deferred_until in the future)
       --include-proposed    also include commitment=proposed
       --include-someday     also include commitment=someday
-      --json                JSON output
+      --json                print the result (or the error) as JSON
       --mine                assigned to me or my team, and unclaimed or claimed by me
       --mission string      filter by mission_id
-      --project string      override project (id or name)
-      --read-only           skip lock acquisition; refuse writes
-      --repo string         scope to a specific repo (mount_name or rep_id)
+      --project string      only tasks of this project (prj_ id or name)
+      --read-only           refuse writes (also LORE_READ_ONLY=1)
+      --repo string         accepted for v0.1.17 scripts (task list shows every repo's tasks)
       --status string       filter: todo | in_progress | done | cancelled | blocked (empty = default active set, see --all)
+      --store string        only tasks of this store (default every attached store)
 ```
 <!-- /help -->
 
@@ -720,35 +731,37 @@ Usage:
   lore task show <id>
 
 Flags:
-      --db string        override DB path (default: cwd's .lore/lore.db)
-      --from string      the source of the id: repo | <org> | <org>/<folder>
-      --json             JSON output
-      --project string   override project (id or name)
-      --read-only        skip lock acquisition; refuse writes
-      --repo string      scope to a specific repo (mount_name or rep_id)
-      --signals          show the claim as seen now (holder, token prefix, expires, renewed_seq)
+      --db string        v0.1.17 lore.db path: not used by this command (refused)
+      --json             print the result (or the error) as JSON
+      --project string   accepted for v0.1.17 scripts; a row id already names its project
+      --read-only        refuse writes (also LORE_READ_ONLY=1)
 ```
 <!-- /help -->
 
 ### `lore task done`
 
 <!-- help: task done -->
-Done finishes a task. On a task you hold, it is fenced: your claim token must still be on the signals ref (else exit 12/13/14) and the row change is pushed atomically with the claim's removal. --commit/--pr record the code so lore can tell when it merged (F9). Never prompts: --lesson saves a lesson, --no-lesson skips the reminder.
+Mark a task done (with the code that finished it)
 
 ```text
 Usage:
   lore task done <id>
 
+Examples:
+  # done with a lesson
+  lore task done tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"
+
 Flags:
       --commit string    the commit that finished the task
-      --db string        override DB path (default: cwd's .lore/lore.db)
-      --from string      the source of the id: repo | <org> | <org>/<folder>
+      --confirm          v0.1.17 spelling: refused, use --yes
+      --db string        v0.1.17 lore.db path: not used by this command (refused)
+      --json             print the result (or the error) as JSON
       --lesson string    save a lesson learned (a memory pointing at the task)
       --no-lesson        skip the lesson reminder
       --pr int           the pull request that finished the task
-      --project string   override project (id or name)
-      --read-only        skip lock acquisition; refuse writes
-      --repo string      scope to a specific repo (mount_name or rep_id)
+      --project string   accepted for v0.1.17 scripts; a row id already names its project
+      --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -773,18 +786,17 @@ Flags:
 ### `lore task cancel`
 
 <!-- help: task cancel -->
-Cancel a task (a held task's holder is fenced out: E_CANCELLED)
+Cancel a task
 
 ```text
 Usage:
   lore task cancel <id>
 
 Flags:
-      --db string        override DB path (default: cwd's .lore/lore.db)
-      --from string      the source of the id: repo | <org> | <org>/<folder>
-      --project string   override project (id or name)
-      --read-only        skip lock acquisition; refuse writes
-      --repo string      scope to a specific repo (mount_name or rep_id)
+      --db string        v0.1.17 lore.db path: not used by this command (refused)
+      --json             print the result (or the error) as JSON
+      --project string   accepted for v0.1.17 scripts; a row id already names its project
+      --read-only        refuse writes (also LORE_READ_ONLY=1)
 ```
 <!-- /help -->
 
@@ -795,24 +807,26 @@ Add a new mission
 
 ```text
 Usage:
-  lore mission add <title>
+  lore mission add <title...>
+
+Examples:
+  # add a mission
+  lore mission add "Ship the invite flow" --target 2026-12-31
 
 Flags:
-      --approvers strings   only these people (@handle,…) may approve the mission's gates
-      --body string         longer description
-      --created-by string   actor_id (act_*); defaults to current identity
-      --db string           override DB path (default: cwd's .lore/lore.db)
-      --everywhere          with --to me: file the note under everywhere/ (loads in every repo)
-      --force-org           write even though LORE_ORG or lore org use disagrees with a store link
-      --json                JSON output (the created mission)
-      --key string          idempotency key: a re-run with the same key adds nothing
-      --live                share this row with everyone at once on the live ref (refs/lore/live)
-      --no-live             keep this row with the code (this branch's .lore/data)
-      --project string      override project (id or name)
-      --read-only           skip lock acquisition; refuse writes
-      --repo string         scope to a specific repo (mount_name or rep_id)
-      --target string       target completion date (YYYY-MM-DD)
-      --to string           where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --approvers stringArray   only these people (@handle or act_…, comma separated) may approve the mission's gates
+      --body string             longer description
+      --confirm                 v0.1.17 spelling: refused, use --yes
+      --created-by string       actor_id (act_*); default: the row's created_by is the current identity
+      --db string               v0.1.17 lore.db path: not used by this command (refused)
+      --json                    print the result (or the error) as JSON
+      --key string              idempotency key: a re-run with the same key adds nothing
+      --plan string             plan_id (pln_*) this mission carries out
+      --project string          the project (prj_ id or name; default the repo's one project)
+      --read-only               refuse writes (also LORE_READ_ONLY=1)
+      --target string           target completion date (YYYY-MM-DD)
+      --to string               store to write to (a name from .lore/stores.yaml; default repo)
+      --yes                     answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -830,25 +844,26 @@ Flags:
 ```
 <!-- /help -->
 
-### `lore plan apply`
+### `lore mission apply`
 
-<!-- help: plan apply -->
-Apply creates a mission and all of its tasks from one YAML plan file, in one command: titles, dependencies (after), time boxes, roles, gates and the people who may approve them. Every row keeps its plan key, so running the same plan again finds the rows and adds nothing.
+<!-- help: mission apply -->
+Create a mission and its tasks from a YAML plan; a re-run adds nothing
 
 ```text
 Usage:
-  lore plan apply <file>
+  lore mission apply <file>
 
 Examples:
-  # invite.yaml
-  mission: {key: invite, title: "Invite landing page", to: agency/client2}
-  approvers: ["@alice"]
-  tasks:
-    - {key: backend,  title: "invite mutation + email", repo: api, timebox: 60m}
-    - {key: frontend, title: "invite landing route", repo: app, after: [backend]}
-    - {key: deploy,   title: "deploy to staging", role: coordinator, after: [frontend], gate: required}
+  # apply a plan file
+  lore mission apply invite.yaml
 
-  lore plan apply invite.yaml
+Flags:
+      --confirm          v0.1.17 spelling: refused, use --yes
+      --db string        v0.1.17 lore.db path: not used by this command (refused)
+      --json             print the result (or the error) as JSON
+      --project string   accepted for v0.1.17 scripts; a row id already names its project
+      --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1006,47 +1021,57 @@ Flags:
 
 Who may approve: any person (human) on the org's roster, never an agent. A mission's `approvers:` list narrows it to the people listed.
 
-### `lore resource claim`
+### `lore hold claim`
 
-<!-- help: resource claim -->
+<!-- help: hold claim -->
 Claim holds a named resource on the project's signals ref, exclusively, until --ttl passes or you release it; running claim again renews your hold. Fails closed (exit 15, E_OFFLINE) when the push cannot be confirmed.
 
 ```text
 Usage:
-  lore resource claim <name>
+  lore hold claim <name>
 
 Flags:
-      --scope string   project (the project's signals ref) or machine (default "project")
+      --on string      project (the project's signals ref) or machine (default "project")
       --ttl duration   how long the hold lasts (default: lease.ttl)
 ```
 <!-- /help -->
 
-### `lore resource release`
+### `lore hold release`
 
-<!-- help: resource release -->
+<!-- help: hold release -->
 Release a resource you hold
 
 ```text
 Usage:
-  lore resource release <name>
+  lore hold release <name>
 ```
 <!-- /help -->
 
 ### `lore handoff add`
 
 <!-- help: handoff add -->
-Add leaves a handoff for a person or agent on the roster; it shows in their inbox, grouped under the task's mission.
+Leave a handoff for someone (shows in their inbox)
 
 ```text
 Usage:
-  lore handoff add --for <@handle> [--task <id>] <text>
+  lore handoff add [text...]
+
+Examples:
+  # hand work over
+  lore handoff add --for @agent-frontend --task tsk_31 "form is half done"
 
 Flags:
-      --body string   the handoff text (instead of the positional text)
-      --for string    who the handoff is for (@handle)
-      --live          share this row with everyone at once on the live ref (refs/lore/live)
-      --no-live       keep this row with the code (this branch's .lore/data)
-      --task string   the task it is about
+      --body string      the handoff text (instead of the positional text)
+      --confirm          v0.1.17 spelling: refused, use --yes
+      --db string        v0.1.17 lore.db path: not used by this command (refused)
+      --for string       who the handoff is for (@handle, stable key, display name or act_ id)
+      --json             print the result (or the error) as JSON
+      --project string   the project (prj_ id or name; default the repo's one project)
+      --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --store string     store to write to (a name from .lore/stores.yaml; default repo)
+      --task string      the task it is about (its mission is recorded too)
+      --to string        deprecated alias of --for
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1082,15 +1107,13 @@ Flags:
 
 ## Other row kinds (team flags)
 
-`lore memory add`, `lore rule add`, `lore decision add` (and the other `add` and `edit` commands of shared kinds) accept the same team flags:
+`lore memory add`, `lore rule add`, `lore decision add` (and the other `add` commands of shared kinds) accept the same team flag:
 
 | Flag | Meaning |
 |---|---|
-| `--to repo\|<org>\|<org>/<folder>\|me\|me/<org>` | which project the row is written to: this repo, the linked internal project, a store folder, or your personal store |
-| `--create` | with `--to <org>/<folder>`: create that store folder if it does not exist yet (without it an unknown folder is refused) |
-| `--everywhere` | with `--to me`: file the note under `everywhere/` so it loads in every repo |
-| `--live` / `--no-live` | share this row with everyone at once on the live list (a hidden list every teammate sees, whatever branch they are on), or keep it with the code |
-| `--force-org` | write even though `LORE_ORG` or `lore org use` disagrees with a store link |
+| `--to <store>\|<store>/<folder>\|me` | which store the row is written to: a name from `.lore/stores.yaml`, one folder of it, or your personal store (default: this repo) |
+
+Whether a row is live (seen by everyone at once, whatever branch they are on) depends on its kind, not on a flag: tasks, missions, handoffs and comments are live; rules, decisions and memories travel with the code (`live.defaults.<kind>` below). To send one rule to `main` now, use `lore sync promote <id> --to main`.
 
 ## Environment variables
 
@@ -1128,7 +1151,7 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `orgs[].repos` | — | URL patterns of client repos |
 | `orgs[].defaults.client_repos.<kind>` | tasks, memories and other kinds: the linked project | where a row goes in a client repo without `--to`: `repo`, `<org>` or `<org>/<folder>`; rules and decisions by an agent or without a terminal always need `--to` |
 | `orgs[].agent_details` | `internal` | `client` keeps agent work notes in the client repo |
-| `live.defaults.<kind>` | tasks, missions, handoffs, comments: `true`; rules, decisions, memories: `false` | which kinds are live without `--live` |
+| `live.defaults.<kind>` | tasks, missions, handoffs, comments: `true`; rules, decisions, memories: `false` | which kinds are live |
 | `live.max_age` | `7d` | an open live row is copied to `main` this often while it differs |
 | `live.fetch_ttl` | `60s` | each command fetches at most this often; `lore sync` always fetches |
 | `live.autopush` | `true` | push live writes at once |

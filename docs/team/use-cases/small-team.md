@@ -81,20 +81,14 @@ $ git log --oneline -1 && git status --short
 
 Alice's branch and working folder are untouched. The landing was pushed to the remote's `main` directly.
 
-An urgent rule can be added from any branch with `--live`. Everyone sees it at once. A rule counts as finished on write, so a copy lands on `main` at once:
+An urgent rule learned on a feature branch can reach `main` without switching branches. Add it as usual, copy it onto `main` with `lore sync promote`, then push `main` (or open a pull request for it):
 
-<!-- example: small-team#urgent-rule -->
 ```console
-# bob, in billing
-$ lore rule add --body 'Never deploy on a Friday' --live
-✓ rul_05e9…4603 
-  scope: [master] severity: must
-lore live: (live, pushed)
-lore live: landed on main (df3a55c); leaves live once main is fetched
-$ git fetch -q origin && git log --oneline -1 origin/main
-df3a55c lore: land 1 row (_root)
+$ lore rule add --body 'Never deploy on a Friday'
+$ lore sync promote rul_05e9…4603 --to main --dry-run
+$ lore sync promote rul_05e9…4603 --to main
+$ git push origin main
 ```
-<!-- /example -->
 
 ## When main is protected
 
@@ -152,6 +146,6 @@ $ git status --short
 
 - **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
 - **Register first.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your clone has fetched since.
-- **Rules and decisions travel with the code** unless you pass `--live`. That is on purpose: most rules belong with the change that needs them.
+- **Rules, decisions and memories travel with the code.** That is on purpose: most rules belong with the change that needs them. Use `lore sync promote <id> --to main` for the one that cannot wait.
 - **`git push --no-verify`** skips every local check lore runs at push: the ride-along (the rows simply wait and ride on a later push) and, in a client repo, the push leak check (see [Agency with a client repo](agency-client-repo.md)).
 - **Unprotected `main`** receives small `lore: land N rows` commits directly. They change only files under `.lore/data`.

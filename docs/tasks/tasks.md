@@ -45,6 +45,7 @@ The line `lore live: (live, pushed)` means lore shared the task at once: it put 
 ```console
 # alice, in website
 $ lore task list
+lore sync: imported 1
 ○ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
 ○ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
 ○ tsk_162d…9666 Update the footer year [medium]
@@ -113,11 +114,10 @@ tsk_162d…9666
 $ lore task done tsk_7a67…9504 --lesson 'The client pays faster when the reminder goes out two days before the demo'
 ✓ tsk_7a67…9504 done
   lesson → mem_54fe…28f2
-lore sync: exported 1
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ lore task list
+lore sync: imported 1
 ▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
 ○ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
 $ lore task list --all
@@ -158,13 +158,13 @@ $ lore task cancel tsk_162d…9666
 ✓ tsk_162d…9666 cancelled
 lore live: (live, pushed)
 lore live: landed on main (86dbae4); leaves live once main is fetched
-lore live: 2 row(s) left live (main holds them)
+lore live: 1 row(s) left live (main holds them)
 $ lore task list --status cancelled
 ✗ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
 ```
 <!-- /example -->
 
-Delete only removes a task for good, with no undo. lore asks for `--confirm` first, so a typo cannot delete the wrong task.
+Delete only removes a task for good, with no undo. lore asks first (without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`), so a typo cannot delete the wrong task.
 
 <!-- example: tasks#delete -->
 ```console
@@ -172,15 +172,13 @@ Delete only removes a task for good, with no undo. lore asks for `--confirm` fir
 $ lore task add 'Test task, please ignore'
 ✓ tsk_05e9…4603 — Test task, please ignore [medium]
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
 $ lore task delete tsk_05e9…4603
-ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
-  hint: a hard delete cannot be undone; pass --confirm if you really mean it
-(exit 1)
-$ lore task delete tsk_05e9…4603 --confirm
-✓ tsk_05e9…4603 deleted (hard)
+ERROR: [E_NEEDS_CONFIRM] engine: run task delete?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+$ lore task delete tsk_05e9…4603 --yes
+✓ tsk_05e9…4603 deleted
 lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -231,8 +229,6 @@ A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from
 # alice, in website
 $ lore tasklist add --title 'Launch week' --body 'Everything that must happen before the shop opens'
 ✓ tlt_d431…313a
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ lore task add 'Check every link on the home page' --tasklist tlt_d431…313a
 ✓ tsk_b4f4…a5b0 — Check every link on the home page [medium]
 lore live: (live, pushed)
@@ -246,8 +242,6 @@ $ lore tasklist search launch
 tlt_d431…313a Launch week
 $ lore tasklist edit tlt_d431…313a --status closed
 ✓ tasklist tlt_d431…313a updated
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -262,6 +256,7 @@ lore sync: 2 file(s) in .lore/data not committed — commit them with your chang
 ```console
 # alice, in website
 $ lore task-view add --name urgent --filter '{"priority":"urgent"}'
+lore sync: imported 1
 ✓ task-view urgent saved
 $ lore task-view list
 tvw_4c59…6c38 urgent
@@ -299,6 +294,7 @@ The commands and their output are written to `tests/docs/transcripts/tasks.txt`.
 ```console
 # alice, in website
 $ git commit -qm 'Fix the Pro plan price on the pricing page'
+lore sync: imported 1
 $ git push -q origin main
 To /srv/git/github.com/client/website
  ! [rejected]        main -> main (non-fast-forward)
@@ -315,7 +311,7 @@ $ git pull -q --rebase origin main && git push -q origin main
 Other traps:
 
 - **Search misses a done task.** `lore task search` looks at open tasks only. Add `--all`.
-- **`--confirm` is required to delete.** Without it, `task delete` stops with `E_INVALID_INPUT`. Its hint suggests `task archive`, which does not exist as a command yet; use `lore task cancel` instead.
+- **Deleting needs a yes.** Without a terminal, `task delete` stops with `E_NEEDS_CONFIRM` until you add `--yes`; the old spelling `--confirm` is refused. To keep the task but stop it, use `lore task cancel` instead.
 - **`lore tasklist list` and `lore tasklist show` print only `TA` and the id**, not the title. Use `lore tasklist search <word>` to see titles.
 - **`lore task show` does not list the tasks a task in this repo waits for.** Use `lore mission status` for that: it prints "waits for <id> to be done" next to the task. (For a task kept in an org's notes store, `task show` does print an `after:` line.)
 - **A saved view is only stored.** No command applies a saved `task-view` to `task list` yet, and lore does not check the filter text when you save it.

@@ -525,9 +525,9 @@ tasks:
 Y
   on alice work/api "cat invite.yaml"
   start_agent agent-coord work/api
-  ag agent-coord work/api "lore plan apply invite.yaml"
+  ag agent-coord work/api "lore mission apply invite.yaml"
   local mis; mis=$(id msn)
-  ag agent-coord work/api "lore plan apply invite.yaml"
+  ag agent-coord work/api "lore mission apply invite.yaml"
   ag agent-coord work/api "lore task claim $mis"
 
   note "workers start"

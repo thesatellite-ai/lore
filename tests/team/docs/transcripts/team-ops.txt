@@ -14,14 +14,14 @@ bob (work/billing)$ lore task list
 ○ tsk_2ad3618e878ebbf527d34d446ef4f891 make the buttons blue [medium]
 
 ### resource
-alice (work/billing)$ lore resource claim full-suite --ttl 30m
+alice (work/billing)$ lore hold claim full-suite --ttl 30m
 ✓ holding full-suite until 2026-11-02T10:35:50Z
-bob (work/billing)$ lore resource claim full-suite --ttl 30m
+bob (work/billing)$ lore hold claim full-suite --ttl 30m
 ERROR: [E_INVALID_INPUT] full-suite is held by alice since 10:05AM (lease until 10:35AM)
 (exit 1)
-alice (work/billing)$ lore resource release full-suite
+alice (work/billing)$ lore hold release full-suite
 ✓ released full-suite
-bob (work/billing)$ lore resource claim full-suite --ttl 30m
+bob (work/billing)$ lore hold claim full-suite --ttl 30m
 ✓ holding full-suite until 2026-11-02T10:39:20Z
 
 ### release

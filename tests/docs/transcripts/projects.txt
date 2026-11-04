@@ -6,162 +6,140 @@ alice (work/website)$ lore project show website
 Project: prj_7a670ae8548ed05bf57ad29ad0759504
   name:    website
   origin:  https://github.com/client/website
-  created: 2026-11-02 10:00:00Z
-  active:  2026-11-02 10:00:00Z
+  created: 2026-11-04 13:11:29Z
 
 ### add repos
 alice (work/website)$ lore repo list
 (no repos)
 alice (work/website)$ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
 ✓ repo shop registered (rep_2ad3618e878ebbf527d34d446ef4f891)
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore repo add help --display-name 'Help pages'
 ✓ repo help registered (rep_162df51b7f78b785c97c26b41ea89666)
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore repo list
-rep_162df51b7f78b785c97c26b41ea89666  help
 rep_2ad3618e878ebbf527d34d446ef4f891  shop  https://github.com/client/website
+rep_162df51b7f78b785c97c26b41ea89666  help
 
 ### notes per repo
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
 ✓ rul_54fe984c9b495744c0217776765a28f2 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore rule add --repo shop --body 'Buttons are blue.'
 ✓ rul_05e99e22e9e86e96fe4daa7777994603 
   scope: [repo:shop] severity: must
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push.
 alice (work/website)$ lore rule list --repo shop
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push.
 rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Buttons are blue.
-alice (work/website)$ LORE_REPO=shop lore rule list
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push.
-rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Buttons are blue.
 alice (work/website)$ lore rule list --repo blog
-ERROR: [E_REPO_NOT_FOUND] no repo with mount_name "blog" in current project
-(exit 1)
+ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
+  hint: run `lore repo list` to see the mount names
+(exit 27)
 
 ### archive a repo
 alice (work/website)$ lore repo archive help
-ERROR: [E_NOT_FOUND] repo "help" not found
+ERROR: [E_NOT_FOUND] repo: "help" is not a repo id (rep_…)
   hint: it may have landed on main while this branch is older: `lore sync peek origin/main repos`
-(exit 1)
+(exit 27)
 alice (work/website)$ lore repo archive rep_162df51b7f78b785c97c26b41ea89666
 ✓ help archived
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore repo list
-rep_162df51b7f78b785c97c26b41ea89666  help [archived]
 rep_2ad3618e878ebbf527d34d446ef4f891  shop  https://github.com/client/website
+rep_162df51b7f78b785c97c26b41ea89666  help [archived]
 alice (work/website)$ lore repo unarchive rep_162df51b7f78b785c97c26b41ea89666
 ✓ help unarchived
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore mount-alias list
+lore sync: imported 4
 (no mount aliases)
 alice (work/website)$ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 
-### shared init
-alice (work/app)$ lore project shared-init --db '${HOME}/.lore/client2.db' --name app
-✓ registered project "app"
-    project_id: prj_c0f3c11a5724b0cfd74b256190d9b5b8
-    db:         ~/.lore/client2.db
-    pointer:    ~/work/app/.lore/lore.yaml
-alice (work/app)$ cat .lore/lore.yaml
-db_path: ${HOME}/.lore/client2.db
-project_id: prj_c0f3c11a5724b0cfd74b256190d9b5b8
-alice (work/api)$ lore project shared-init --db '${HOME}/.lore/client2.db' --name api
-✓ registered project "api"
-    project_id: prj_76bd560aff0771fab8457dbfa9823f10
-    db:         ~/.lore/client2.db
-    pointer:    ~/work/api/.lore/lore.yaml
-alice (work/infra)$ lore project shared-init --db '${HOME}/.lore/client2.db' --name infra
-✓ registered project "infra"
-    project_id: prj_d4314eba822f1bf5908b2b8ded5f313a
-    db:         ~/.lore/client2.db
-    pointer:    ~/work/infra/.lore/lore.yaml
-alice (work)$ lore project shared-list --db ~/.lore/client2.db
-api                            prj_76bd560aff0771fab8457dbfa9823f10  last_active=2026-11-02
-app                            prj_c0f3c11a5724b0cfd74b256190d9b5b8  last_active=2026-11-02
-infra                          prj_d4314eba822f1bf5908b2b8ded5f313a  last_active=2026-11-02
+### one store
+alice (work/app)$ lore store init client2 file://$HOME/stores/client2
+name: client2
+url: file://~/stores/client2
+id: sto_c0f3c11a5724b0cfd74b256190d9b5b8
+alice (work/api)$ lore store add client2 file://$HOME/stores/client2
+name: client2
+url: file://~/stores/client2
+alice (work/app)$ lore store list
+stores:
+  NAME     URL                                                                                                FOLDER  READ_ONLY  BRANCH  PERSONAL
+  client2  file://~/stores/client2          false              false
+count: 1
 
 ### shared notes
-alice (work/app)$ lore rule add --body 'Every screen works on a phone.'
+alice (work/app)$ lore rule add --to client2 --body 'Every screen works on a phone.'
+✓ rul_76bd560aff0771fab8457dbfa9823f10 [client2]
+  scope: [master] severity: must
+alice (work/api)$ lore rule add --to client2 --body 'Every change comes with a test.'
+✓ rul_d4314eba822f1bf5908b2b8ded5f313a [client2]
+  scope: [master] severity: must
+alice (work/api)$ lore rule add --body 'The API answers in JSON only.'
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 
   scope: [master] severity: must
-alice (work/api)$ lore rule add --body 'Every change comes with a test.'
-✓ rul_28f8d32584b2db54ffb146bede5b03df 
-  scope: [master] severity: must
 alice (work/api)$ lore rule list
-rul_28f8d32584b2db54ffb146bede5b03df [must/always] Every change comes with a test.
+rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] The API answers in JSON only.
+rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Every screen works on a phone. [client2]
+rul_d4314eba822f1bf5908b2b8ded5f313a [must/always] Every change comes with a test. [client2]
 alice (work/app)$ lore rule list
-rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] Every screen works on a phone.
+rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Every screen works on a phone. [client2]
+rul_d4314eba822f1bf5908b2b8ded5f313a [must/always] Every change comes with a test. [client2]
 alice (work/app)$ git status --short
+?? .gitattributes
+?? .gitignore
 ?? .lore/
 
-### pick the database
-alice (work)$ lore rule list --db ~/.lore/client2.db --project api
-rul_28f8d32584b2db54ffb146bede5b03df [must/always] Every change comes with a test.
-alice (work)$ LORE_DB=~/.lore/client2.db lore rule list --project app
-rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] Every screen works on a phone.
-alice (work/infra)$ LORE_PROJECT_ID=$(grep project_id ../api/.lore/lore.yaml | cut -d' ' -f2) lore rule list
-rul_28f8d32584b2db54ffb146bede5b03df [must/always] Every change comes with a test.
-alice (work)$ LORE_DB=~/.lore/client2.db LORE_PROJECT_ID=$(grep project_id api/.lore/lore.yaml | cut -d' ' -f2) lore rule list
-rul_28f8d32584b2db54ffb146bede5b03df [must/always] Every change comes with a test.
-
 ### archive a project
-alice (work)$ mkdir -p scratch && cd scratch && lore project shared-init --db '${HOME}/.lore/client2.db' --name scratch
-✓ registered project "scratch"
-    project_id: prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
-    db:         ~/.lore/client2.db
-    pointer:    ~/work/scratch/.lore/lore.yaml
-alice (work/scratch)$ lore project archive prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
+alice (work/scratch)$ lore project list
+prj_28f8d32584b2db54ffb146bede5b03df  scratch  https://github.com/client2/scratch
+alice (work/scratch)$ lore project archive prj_28f8d32584b2db54ffb146bede5b03df
 ✓ scratch archived
-alice (work)$ lore project shared-list --db ~/.lore/client2.db
-api                            prj_76bd560aff0771fab8457dbfa9823f10  last_active=2026-11-02
-app                            prj_c0f3c11a5724b0cfd74b256190d9b5b8  last_active=2026-11-02
-infra                          prj_d4314eba822f1bf5908b2b8ded5f313a  last_active=2026-11-02
-scratch                        prj_4c590afb2a0cc7ae1b97b7e4e62d6c38  last_active=2026-11-03
-alice (work/scratch)$ lore project unarchive prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
+alice (work/scratch)$ lore project list
+prj_28f8d32584b2db54ffb146bede5b03df  scratch  https://github.com/client2/scratch [archived]
+alice (work/scratch)$ lore project unarchive prj_28f8d32584b2db54ffb146bede5b03df
 ✓ scratch unarchived
-alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
-ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
-  hint: prefer `lore project archive prj_4c590afb2a0cc7ae1b97b7e4e62d6c38` for soft-delete (reversible); pass --confirm if you really mean hard-delete
-(exit 1)
-alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38 --confirm
-✓ scratch deleted (hard)
-alice (work)$ rm -rf scratch && lore project shared-list --db ~/.lore/client2.db
-api                            prj_76bd560aff0771fab8457dbfa9823f10  last_active=2026-11-02
-app                            prj_c0f3c11a5724b0cfd74b256190d9b5b8  last_active=2026-11-02
-infra                          prj_d4314eba822f1bf5908b2b8ded5f313a  last_active=2026-11-02
+alice (work/scratch)$ lore project delete prj_28f8d32584b2db54ffb146bede5b03df
+ERROR: [E_NEEDS_CONFIRM] engine: run project delete?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/scratch)$ lore project delete prj_28f8d32584b2db54ffb146bede5b03df --yes
+✓ scratch deleted
+alice (work/scratch)$ lore project list
+(no projects)
 
-### old pointer file
-alice (work/infra)$ mv .lore/lore.yaml ~/pointer.keep; printf 'db_path = "${HOME}/.lore/client2.db"\nproject_id = "%s"\n' $(grep project_id ~/pointer.keep | cut -d' ' -f2) > .lore/lore.toml; rm ~/pointer.keep; ls .lore
-lore.toml
+### convert a shared database
+alice (work/infra)$ cat .lore/lore.yaml
+db_path: ${HOME}/.lore/client2.db
+project_id: prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 alice (work/infra)$ lore rule list
-lore: migrated ~/work/infra/.lore/lore.toml → lore.yaml (old file kept as lore.toml.migrated)
-(no rules)
-alice (work/infra)$ ls .lore
-lore.toml.migrated
-lore.yaml
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/infra/.git/hooks)
+ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`
+  hint: `lore migrate run --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
+(exit 23)
+alice (work/infra)$ lore migrate run --dry-run
+dry_run: true
+count: 0
+rows: 
+steps: mode-b: memories/mem_3b6283bc4392c556bbae5f094246e913 → store shared (~/.lore/stores/infra), mode-b: rules/rul_f147dd95f1aaf742dd4f5214843a5139 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+alice (work/infra)$ lore migrate run
+count: 0
+rows: 
+steps: mode-b: memories/mem_3b6283bc4392c556bbae5f094246e913 → store shared (~/.lore/stores/infra), mode-b: rules/rul_f147dd95f1aaf742dd4f5214843a5139 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+alice (work/infra)$ ls .lore; cat .lore/stores.yaml
+lore-cache.db
+lore-cache.db-shm
+lore-cache.db-wal
+lore.yaml.migrated
+state
+stores.yaml
+stores:
+    - name: shared
+      url: file://~/.lore/stores/infra
+alice (work/infra)$ lore rule list; lore memory list
+rul_f147dd95f1aaf742dd4f5214843a5139 [must/always] Terraform changes need a plan in the pull request. [shared]
+mem_3b6283bc4392c556bbae5f094246e913 [retrieved] The staging cluster sleeps at night.
 
 ### errors
 alice (work)$ lore rule list
-ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
-  hint: run `lore init` here, or cd into a project root
-(exit 1)
-alice (work/app)$ touch .lore/lore.db && lore rule list
-ERROR: [E_AMBIGUOUS_PROJECT] both .lore/lore.db AND a .lore/lore.yaml (or lore.toml) pointer present
-  hint: delete the one you don't need (Mode A uses lore.db; Mode B uses lore.yaml)
-(exit 1)
-alice (work/app)$ rm .lore/lore.db
-alice (work/app)$ cd .lore && lore rule list
-ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
-  hint: run `lore init` here, or cd into a project root
-(exit 1)
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
+(exit 19)

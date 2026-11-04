@@ -50,21 +50,25 @@ quiet alice work "mkdir -p Dropbox && git clone -q https://github.com/client/web
 on! alice work/Dropbox/website "lore rule list"
 on alice work/Dropbox/website "LORE_ALLOW_NETWORK_FS=1 lore rule list"
 
+# LORE_ALLOW_DB_PATH_OUTSIDE and LORE_HOME now matter only when `lore migrate run`
+# reads a v0.1.17 shared-database pointer (Mode B, retired in 0.1.18: decision Q-MODEB).
+# A v0.1.17 shared lore.db holding one project's rows: a scratch repo's lore.db, copied out.
+quiet alice work "mkdir -p old-blog && cd old-blog && git init -q && lore init --non-interactive --name=blog && lore rule add --body 'Posts go out on Tuesdays' && lore sync && lore backup --out ../client.db && mkdir -p ~/shared-dbs && cp ../client.db ~/shared-dbs/client-docs.db && lore project list --json | grep -o 'prj_[0-9a-f]*' | head -1 > ../old-project-id && cd .. && rm -rf old-blog"
+
 note "db path outside"
-quiet alice work "mkdir -p blog && cd blog && git init -q && lore project shared-init --db '\${HOME}/.lore/client.db' --name blog && lore rule add --body 'Posts go out on Tuesdays'"
-quiet alice work "mv ~/.lore/client.db client.db"
-on alice work/blog "printf 'db_path: ../client.db\nproject_id: %s\n' \$(grep project_id .lore/lore.yaml | cut -d' ' -f2) > .lore/lore.yaml.new && mv .lore/lore.yaml.new .lore/lore.yaml && cat .lore/lore.yaml"
-on! alice work/blog "lore rule list"
-on alice work/blog "LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list"
+quiet alice work "mkdir -p blog && cd blog && git init -q && mkdir .lore && printf 'db_path: ../client.db\nproject_id: %s\n' \$(cat ../old-project-id) > .lore/lore.yaml"
+on alice work/blog "cat .lore/lore.yaml"
+on! alice work/blog "lore migrate run --dry-run"
+on alice work/blog "LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run"
+on alice work/blog "lore rule list"
 
 note "lore home"
-quiet alice work "mkdir -p docs && cd docs && git init -q && lore project shared-init --db '\${LORE_HOME}/client-docs.db' --name docs"
+quiet alice work "mkdir -p docs && cd docs && git init -q && mkdir .lore && printf 'db_path: \${LORE_HOME}/client-docs.db\nproject_id: %s\n' \$(cat ../old-project-id) > .lore/lore.yaml"
 on alice work/docs "cat .lore/lore.yaml"
-quiet alice . "mkdir -p shared-dbs && cp ~/.lore/client-docs.db shared-dbs/"
-on alice work/docs "LORE_HOME=~/shared-dbs lore rule add --body 'Every page needs a meta description'"
-on alice work/docs "LORE_HOME=~/shared-dbs lore rule list"
+on! alice work/docs "lore migrate run --dry-run"
+on alice work/docs "LORE_HOME=~/shared-dbs lore migrate run"
 on alice work/docs "lore rule list"
-on alice . "ls ~/.lore"
+on alice . "ls ~/shared-dbs ~/shared-dbs/stores"
 
 note "colour"
 on alice work/website "unset NO_COLOR; lore doctor | head -1 | cat -v"

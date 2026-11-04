@@ -21,7 +21,7 @@
 | `lore doctor`, `lore errors list`, `lore support-bundle` | [doctor](doctor.md) |
 | `lore backup`, `lore restore`, `lore repair` | [backup-restore-repair](backup-restore-repair.md) |
 | `lore audit log`, `lore audit verify` | [audit-log](audit-log.md) |
-| `lore pii-pattern add/list/enable/disable`, `--allow-secrets`, `LORE_ALLOW_ROOT`, `LORE_ALLOW_NETWORK_FS`, `LORE_ALLOW_DB_PATH_OUTSIDE` | [secrets-and-pii](secrets-and-pii.md) |
+| `lore pii-pattern add/list/enable/disable`, `--yes` on a secret warning, `LORE_ALLOW_ROOT`, `LORE_ALLOW_NETWORK_FS`, `LORE_ALLOW_DB_PATH_OUTSIDE` | [secrets-and-pii](secrets-and-pii.md) |
 | `--read-only`, `LORE_READ_ONLY`, `LORE_NO_STALE_WARN`, `lore context --internal` | [ci](ci.md) |
 | `lore plugin list/trust/untrust`, `lore config get/set/list` | [plugins-and-db-config](plugins-and-db-config.md) |
 | `lore bench eval/run/result/grader/report`, `OLLAMA_HOST` | [bench](bench.md) |

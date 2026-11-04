@@ -31,7 +31,8 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Attach task to mission | `lore task add "<t>" --tasklist=<tlt_id> --mission=<msn_id>` |
 | Attach task to plan | `lore task add "<t>" --tasklist=<tlt_id> --plan=<pln_id>` |
 | Assign task to an actor | `lore task add "<t>" --tasklist=<tlt_id> --assigned-to=<act_id>` |
-| Supersede a rule/decision/hotfix/pattern | `lore <kind> add ... --supersedes=<old_id>` (a memory: add the new one, archive the old) |
+| Supersede a memory/rule/decision/hotfix/pattern | `lore <kind> add ... --supersedes=<old_id>` |
+| Mark a memory as validated by an actor | `lore memory add ... --validated-by=<act_id>` |
 | Authored-by override (any entity) | `--created-by=<act_id>` (defaults to current identity) |
 | Move task to another tasklist | `lore task edit <id> --tasklist=<tlt_id>` |
 | Reassign task | `lore task edit <id> --assigned-to=<act_id>` |
@@ -77,7 +78,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Check a PR body for internal content before posting | `lore check pr-body <file>` (or `-` for stdin) |
 | An internal row reached the client's live ref | `lore live purge <id>`, then `lore live compact` |
 | Start an agent session | `lore agent start --label <name> --owner @<you>` and export what it prints |
-| Create a mission and its tasks from a file (re-run adds nothing) | `lore plan apply <file>` |
+| Create a mission and its tasks from a file (re-run adds nothing) | `lore mission apply <file>` |
 | Take the next ready task as an agent | `lore task next --mission <id> [--repo <name>]` (exit 10: nothing ready) |
 | Keep an agent's claim alive | `lore task heartbeat --daemon <id>`, started from a process that lives as long as the agent (it stops when the process that started it exits), or `lore task heartbeat` from the agent tool's hook |
 | Record progress and push the work branch | `lore task note <id> "<text>"` |
@@ -155,7 +156,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Intent | Command |
 |---|---|
 | Bootstrap new project (Mode A) | `lore init --non-interactive` |
-| Bootstrap shared-DB project (Mode B) | `lore project shared-init --db=<path>` |
+| Share notes between repos (replaces Mode B) | `lore store init <name> file://<abs-path>` once, `lore store add <name> <url>` in each other repo; an old Mode B repo: `lore migrate run` |
 | List projects in cwd's DB | `lore project list` |
 | Show project + repos | `lore project show <name> --json` |
 | Add a repo | `lore repo add <mount> --origin=<url>` |

@@ -17,6 +17,7 @@ on alice $W "lore rule show $r1"
 note "memory"
 on alice $W "lore memory add --body 'The client replies faster on WhatsApp than email'"
 local m1; m1=$(id mem)
+on alice $W "lore tag add --name staging"
 on alice $W "lore memory add --body 'The staging site is reset every Monday morning' --tag staging"
 on alice $W "lore memory list"
 
@@ -56,7 +57,7 @@ on alice $W "lore memory search WhatsApp"
 note "delete"
 on alice $W "lore memory add --body 'Lunch is at noon'"
 local m3; m3=$(id mem)
-on alice $W "lore memory delete $m3 --confirm"
+on alice $W "lore memory delete $m3 --yes"
 on alice $W "lore memory show $m3 || true"
 
 note "secrets"
@@ -64,7 +65,7 @@ on! alice $W "lore memory add --body 'The staging password is password=example-o
 on alice $W "lore memory add --body 'The staging password is password=example-only' --yes"
 local ms; ms=$(id mem)
 on alice $W "ls .lore/data/memories | grep -c $ms || true"
-on alice $W "lore memory delete $ms --confirm"
+on alice $W "lore memory delete $ms --yes"
 
 # --- the other kinds ----------------------------------------------------------
 note "hotfix"

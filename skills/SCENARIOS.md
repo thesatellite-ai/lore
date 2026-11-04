@@ -363,29 +363,25 @@ lore repo list --json
 
 ---
 
-## H · Mode B (shared DB)
+## H · Notes shared by several repos (a store)
 
-### H.1 "Use my home shared DB for this repo"
+### H.1 "Share notes between these repos"
 ```bash
-lore project shared-init --db=${HOME}/.lore/shared.db --name=myproject
+lore store init shared "file://$HOME/stores/shared"   # first repo: make the folder store, attach it
+lore store add shared "file://$HOME/stores/shared"    # each other repo
+lore memory add --to shared --body "<...>"
 ```
 
-### H.2 "Show all projects in the shared DB"
+### H.2 "Which stores does this repo see?"
 ```bash
-lore project shared-list --db=${HOME}/.lore/shared.db --json
+lore store list --json
 ```
 
-### H.3 "Switch this repo from Mode A to Mode B"
+### H.3 "This repo still uses the old shared database (Mode B)"
+Every command stops with `E_UNSUPPORTED` and names `lore migrate run` (0.1.18 retired Mode B).
 ```bash
-# Export Mode A rows:
-sqlite3 .lore/lore.db ".dump memories rules decisions hotfixes" > /tmp/dump.sql
-# Move aside Mode A db:
-mv .lore/lore.db .lore/lore.db.modeA-backup
-# Init Mode B:
-lore project shared-init --db=${HOME}/.lore/shared.db --name=$(basename $PWD)
-# Apply dump (manual project_id remap may be needed):
-sqlite3 ${HOME}/.lore/shared.db < /tmp/dump.sql
-lore render
+lore migrate run --dry-run    # lists the rows that move into a folder store beside the shared DB
+lore migrate run              # converts; the pointer is kept as .lore/lore.yaml.migrated
 ```
 
 ---
@@ -524,7 +520,7 @@ lore run list --json
 ```bash
 # lore refuses by default with E_SECRET_DETECTED.
 # Only override if user explicitly says "yes, I know, override":
-lore memory add --body "<...>" --allow-secrets    # logged loudly; never written to .lore/data
+lore memory add --body "<...>" --yes              # only after the person confirms it is not a secret; the commit hook still refuses a credential
 ```
 
 ### N.2 User runs as root
@@ -674,7 +670,7 @@ lore bench report summary --latest
 ## O · What you should refuse
 
 ### O.1 User: "store this AWS key as a memory"
-**Refuse.** Even if they say "trust me" — the secret-scrubber pattern is broad and the false-positive rate is low. Suggest: store in `.env` (gitignored) or a secrets manager. If they really insist, require explicit `--allow-secrets` AND log a warning.
+**Refuse.** Even if they say "trust me" — the secret-scrubber pattern is broad and the false-positive rate is low. Suggest: store in `.env` (gitignored) or a secrets manager. If they really insist, require the person's explicit yes, then rerun with `--yes`.
 
 ### O.2 User: "run lore as root"
 **Refuse by default.** Suggest: chown the directory to the user.

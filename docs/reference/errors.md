@@ -118,7 +118,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_SECRET_DETECTED` | 1 | the text looks like it holds a password or key, so lore will not store it | remove the secret; `lore rule add` and `lore memory add` take `--allow-secrets` when you are sure |
+| `E_SECRET_DETECTED` | 1 | the text looks like it holds a password or key, so lore will not store it | remove the secret; in 0.1.18 a write asks first instead (`E_NEEDS_CONFIRM`), and `--yes` stores it as not a secret when you are sure |
 | `E_ROOT_REFUSED` | 1 | lore will not run as the root user | run as your normal user, or set `LORE_ALLOW_ROOT=1` |
 | `E_SYMLINK_DB` | 1 | `.lore/lore.db` is a symbolic link (a shortcut to another file) | delete the link and run `lore init` again, or restore from a backup |
 | `E_SYMLINK_LOOP` | 1 | a folder walk went round in a loop of links. Not raised yet | remove the looping link |

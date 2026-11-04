@@ -9,7 +9,7 @@
 
 You want repos when one repository holds several parts that need different notes (a monorepo), or when you want to say which remote (the online address of a repo, like `github.com/client/website`) a part comes from. You want the project commands to see what a database holds and to tidy up old projects.
 
-If the client's product is several separate git repositories that should share one notes database on your machine, read [One database for several repos](shared-database-mode-b.md) instead.
+If the client's product is several separate git repositories that should share one notes database on your machine, read [One store for several repos](shared-database-mode-b.md) instead.
 
 ## Before you start
 
@@ -28,8 +28,7 @@ $ lore project show website
 Project: prj_7a67…9504
   name:    website
   origin:  https://github.com/client/website
-  created: 2026-11-02 10:00:00Z
-  active:  2026-11-02 10:00:00Z
+  created: 2026-11-04 13:11:29Z
 ```
 <!-- /example -->
 
@@ -44,15 +43,11 @@ $ lore repo list
 (no repos)
 $ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
 ✓ repo shop registered (rep_2ad3…f891)
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ lore repo add help --display-name 'Help pages'
 ✓ repo help registered (rep_162d…9666)
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ lore repo list
-rep_162d…9666  help
 rep_2ad3…f891  shop  https://github.com/client/website
+rep_162d…9666  help
 ```
 <!-- /example -->
 
@@ -60,7 +55,7 @@ Repos are rows like any other: lore writes them to `.lore/data/repos`, and you c
 
 ## Step 3 — Attach notes to one repo
 
-Without `--repo`, a rule applies to the whole project. With `--repo shop` it applies to the shop only. `lore rule list` alone shows the project-wide rules; with `--repo shop` (or `LORE_REPO=shop` in the environment) it shows the project-wide rules plus the shop's own:
+Without `--repo`, a rule applies to the whole project. With `--repo shop` it applies to the shop only. `lore rule list` alone shows the project-wide rules; with `--repo shop` it shows the project-wide rules plus the shop's own:
 
 <!-- example: projects#notes-per-repo -->
 ```console
@@ -68,24 +63,18 @@ Without `--repo`, a rule applies to the whole project. With `--repo shop` it app
 $ lore rule add --body 'Run the tests before you push.'
 ✓ rul_54fe…28f2 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ lore rule add --repo shop --body 'Buttons are blue.'
 ✓ rul_05e9…4603 
   scope: [repo:shop] severity: must
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push.
 $ lore rule list --repo shop
 rul_54fe…28f2 [must/always] Run the tests before you push.
 rul_05e9…4603 [must/always] Buttons are blue.
-$ LORE_REPO=shop lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push.
-rul_05e9…4603 [must/always] Buttons are blue.
 $ lore rule list --repo blog
-ERROR: [E_REPO_NOT_FOUND] no repo with mount_name "blog" in current project
-(exit 1)
+ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
+  hint: run `lore repo list` to see the mount names
+(exit 27)
 ```
 <!-- /example -->
 
@@ -99,27 +88,24 @@ Archiving hides a repo or project without losing anything; unarchive brings it b
 ```console
 # alice, in website
 $ lore repo archive help
-ERROR: [E_NOT_FOUND] repo "help" not found
+ERROR: [E_NOT_FOUND] repo: "help" is not a repo id (rep_…)
   hint: it may have landed on main while this branch is older: `lore sync peek origin/main repos`
-(exit 1)
+(exit 27)
 $ lore repo archive rep_162d…9666
 ✓ help archived
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore repo list
-rep_162d…9666  help [archived]
 rep_2ad3…f891  shop  https://github.com/client/website
+rep_162d…9666  help [archived]
 $ lore repo unarchive rep_162d…9666
 ✓ help unarchived
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore mount-alias list
+lore sync: imported 4
 (no mount aliases)
 $ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 ```
 <!-- /example -->
 
-`lore repo delete <id> --confirm` and `lore project delete <id> --confirm` remove a row for good; without `--confirm` they refuse and suggest archiving. An example with projects is on [One database for several repos](shared-database-mode-b.md#step-4--archive-or-delete-a-project).
+`lore repo delete <id>` and `lore project delete <id>` remove a row for good; lore asks first, and without a terminal they stop with `E_NEEDS_CONFIRM` until you add `--yes`. An example with projects is on [One store for several repos](shared-database-mode-b.md#step-3--archive-or-delete-a-project).
 
 ## Try it — renamed repos
 
@@ -129,6 +115,7 @@ When a repo's mount name changes, lore keeps the old name working for a while as
 ```console
 # alice, in website
 $ lore mount-alias list
+lore sync: imported 4
 (no mount aliases)
 ```
 <!-- /example -->
@@ -143,7 +130,7 @@ $ lore mount-alias list
 
 ## Related
 
-- [One database for several repos](shared-database-mode-b.md)
+- [One store for several repos](shared-database-mode-b.md)
 - [How notes travel with git](how-notes-travel-with-git.md)
 - [Lore for teams › Stores and links](../team/concepts.md#stores-and-links): an agency project linked to a client repo.
 - [Feature index › Projects and repos](../reference/features.md#projects-and-repos)

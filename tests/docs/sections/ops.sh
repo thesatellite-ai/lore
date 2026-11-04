@@ -22,11 +22,9 @@ quiet alice work/website "python3 -c \"import sqlite3; c=sqlite3.connect('.lore/
 note "audit tamper"
 on! alice work/website "lore audit verify"
 on alice work/website "lore rule list"
+on alice work/website "lore sync"
 on alice work/website "lore audit log --limit 2"
 on alice work/website "lore audit verify"
-local tampered; tampered=$(grep -o 'rul_[0-9a-f]\{32\}' <<<"$(grep 'Pushing without tests' "$TRANSCRIPT" | head -1)" | head -1)
-on alice work/website "lore rule edit $tampered --body 'Run the tests before you push'"
-on alice work/website "lore rule list"
 
 note "backup"
 on alice work/website "lore backup --out .lore/backups/before-buttons.sqlite"
@@ -71,13 +69,9 @@ on alice work/website "grep -E '\"(binary_version|status|rules|memories|sanitize
 quiet alice work/website "rm -f bundle.json"
 
 note "pii pattern"
-on alice work/website "lore pii-pattern add --name invoice-number --regex 'INV-[0-9]{6}'"
-on alice work/website "lore pii-pattern list"
-quiet alice work/website "lore pii-pattern list --json > pii.json"
-local pip; pip=$(grep -o 'pip_[0-9a-f]\{32\}' "$HOMES/alice/work/website/pii.json" | head -1)
-quiet alice work/website "rm -f pii.json"
-on alice work/website "lore pii-pattern enable $pip"
-on alice work/website "lore pii-pattern list"
+on alice work/website "lore secrets rule add invoice-number --regex 'INV-[0-9]{6}' --description 'our invoice numbers' --yes"
+on alice work/website "lore secrets rules"
+on! alice work/website "lore memory add --body 'Invoice INV-123456 is still open'"
 
 note "plugin"
 on alice work/website "lore plugin list"
@@ -132,7 +126,7 @@ note "allow secrets"
 on alice work/website "lore memory add --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'"
 local secret_mem; secret_mem=$(id mem)
 on alice work/website "grep -rl AKIA .lore/data || echo 'not in .lore/data'"
-on alice work/website "lore memory delete $secret_mem --confirm"
+on alice work/website "lore memory delete $secret_mem --yes"
 # A hard-deleted row leaves no warning behind: doctor drops the refused-export
 # warning once the row is gone.
 on alice work/website "lore doctor"

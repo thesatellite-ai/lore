@@ -21,12 +21,14 @@ lore init --non-interactive --name=my-app
 
 Flags: `--name=<str>`, `--non-interactive`.
 
-### `lore project shared-init`
-**Mode B** — register cwd as a project inside a shared SQLite file used by multiple repos.
+### `lore store init` / `lore store add` (notes shared by several repos)
+One folder store holds the notes several repos share; each repo attaches it once. (The v0.1.17 shared-database mode, `lore project shared-init`, is retired; `lore migrate run` converts a repo that still has its `.lore/lore.yaml` pointer.)
 
 ```bash
-lore project shared-init --db=${HOME}/.lore/shared.db --name=alpha
-# Writes .lore/lore.toml at cwd pointing at the shared DB.
+lore store init client2 "file://$HOME/stores/client2"   # in the first repo: make the store, attach it
+lore store add client2 "file://$HOME/stores/client2"    # in every other repo: attach it
+lore rule add --to client2 --body "Every screen works on a phone"
+lore migrate run --dry-run                              # in a v0.1.17 Mode B repo: what moves
 ```
 
 ### `lore learn-from docs`
@@ -49,7 +51,7 @@ lore learn reject --all                    # batch — every pending candidate
 
 ```bash
 # add
-lore memory add --body="Tailwind v4 only" [--repo=web] [--kind=manual] [--allow-secrets]
+lore memory add --body="Tailwind v4 only" [--repo=web] [--kind=procedural] [--tag=frontend] [--yes]
 
 # search (FTS5 BM25; LIKE fallback)
 lore memory search "tailwind" [--limit=10] [--all-repos|--master-only|--no-inherit] [--include-archived] [--json]
@@ -257,7 +259,7 @@ Every text-bearing entity exposes a `search` subcommand. Powered by SQLite FTS5 
 
 ```bash
 # Per-entity search
-lore task search "<query>"       [--column=title,body] [--limit=20] [--json]
+lore task search "<query>"       [--limit=20] [--all] [--json]
 lore memory search "<query>"
 lore rule search "<query>"
 lore decision search "<query>"
@@ -594,8 +596,7 @@ Entity tables you can attach to: `memories | rules | decisions | hotfixes | patt
 ```bash
 lore project list [--json]
 lore project show <id-or-name> [--json]    # JSON eager-loads repos
-lore project shared-init --db=<path> --name=<n>
-lore project shared-list --db=<path> [--json]
+lore store list                            # stores this repo sees (replaces project shared-list)
 
 lore repo add <mount> [--origin=git@...] [--display-name=...]
 lore repo list [--json]
@@ -689,10 +690,10 @@ lore whoami                                   # org, why it matched, identity, w
 lore config check                             # validate ~/.lore/config.yaml
 ```
 
-Live rows (shared with everyone at once; tasks are live by default):
+Live rows (shared with everyone at once; tasks, missions, handoffs and comments are live by default; rules, decisions and memories travel with the code, `lore sync promote <id> --to main` sends one to main now):
 
 ```bash
-lore rule add --body "Never deploy on a Friday" --live
+lore task add "Rotate the staging keys"            # tasks, missions, handoffs and comments are live
 lore land --all --dry-run                     # what would land on main now
 lore live show                                # this project's live rows
 lore explain tsk_01                           # where an id lives and which copy won
@@ -725,7 +726,7 @@ lore handoff add --for @agent-frontend-2 --task tsk_31 "form is half done"
 Humans coordinating:
 
 ```bash
-lore plan apply plan.yaml                     # mission + tasks; a re-run adds nothing
+lore mission apply plan.yaml                     # mission + tasks; a re-run adds nothing
 lore task add "invite UI" --after tsk_30:merged
 lore gate request tsk_31 && lore gate approve tsk_31
 lore mission status mis_12

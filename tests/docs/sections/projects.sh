@@ -23,7 +23,6 @@ on alice work/website "lore rule add --body 'Run the tests before you push.'"
 on alice work/website "lore rule add --repo shop --body 'Buttons are blue.'"
 on alice work/website "lore rule list"
 on alice work/website "lore rule list --repo shop"
-on alice work/website "LORE_REPO=shop lore rule list"
 on! alice work/website "lore rule list --repo blog"
 
 note "archive a repo"
@@ -35,46 +34,52 @@ on alice work/website "lore mount-alias list"
 on alice work/website "git add -A && git commit -qm 'lore: repos' && git push -q origin main"
 
 # --- docs/sync/shared-database-mode-b.md -----------------------------------------------
-note "shared init"
+# 0.1.18 retired the shared-database mode (Mode B, decision Q-MODEB): one folder store,
+# attached in each repo with `lore store add`, holds the notes the repos share, and
+# `lore migrate run` converts a repo that still has a v0.1.17 pointer file.
+note "one store"
 solo_repo alice client2/app
 solo_repo alice client2/api
 solo_repo alice client2/infra
-on alice work/app "lore project shared-init --db '\${HOME}/.lore/client2.db' --name app"
-on alice work/app "cat .lore/lore.yaml"
-on alice work/api "lore project shared-init --db '\${HOME}/.lore/client2.db' --name api"
-on alice work/infra "lore project shared-init --db '\${HOME}/.lore/client2.db' --name infra"
-on alice work "lore project shared-list --db ~/.lore/client2.db"
+quiet alice work/app "lore init --non-interactive --name=app"
+quiet alice work/api "lore init --non-interactive --name=api"
+on alice work/app "lore store init client2 file://\$HOME/stores/client2"
+on alice work/api "lore store add client2 file://\$HOME/stores/client2"
+on alice work/app "lore store list"
 
 note "shared notes"
-on alice work/app "lore rule add --body 'Every screen works on a phone.'"
-on alice work/api "lore rule add --body 'Every change comes with a test.'"
+on alice work/app "lore rule add --to client2 --body 'Every screen works on a phone.'"
+on alice work/api "lore rule add --to client2 --body 'Every change comes with a test.'"
+on alice work/api "lore rule add --body 'The API answers in JSON only.'"
 on alice work/api "lore rule list"
 on alice work/app "lore rule list"
 on alice work/app "git status --short"
 
-note "pick the database"
-on alice work "lore rule list --db ~/.lore/client2.db --project api"
-on alice work "LORE_DB=~/.lore/client2.db lore rule list --project app"
-on alice work/infra "LORE_PROJECT_ID=\$(grep project_id ../api/.lore/lore.yaml | cut -d' ' -f2) lore rule list"
-on alice work "LORE_DB=~/.lore/client2.db LORE_PROJECT_ID=\$(grep project_id api/.lore/lore.yaml | cut -d' ' -f2) lore rule list"
-
 note "archive a project"
-on alice work "mkdir -p scratch && cd scratch && lore project shared-init --db '\${HOME}/.lore/client2.db' --name scratch"
+solo_repo alice client2/scratch
+quiet alice work/scratch "lore init --non-interactive --name=scratch"
+on alice work/scratch "lore project list"
 local prj_scratch; prj_scratch=$(id prj)
 on alice work/scratch "lore project archive $prj_scratch"
-on alice work "lore project shared-list --db ~/.lore/client2.db"
+on alice work/scratch "lore project list"
 on alice work/scratch "lore project unarchive $prj_scratch"
 on! alice work/scratch "lore project delete $prj_scratch"
-on alice work/scratch "lore project delete $prj_scratch --confirm"
-on alice work "rm -rf scratch && lore project shared-list --db ~/.lore/client2.db"
+on alice work/scratch "lore project delete $prj_scratch --yes"
+on alice work/scratch "lore project list"
 
-note "old pointer file"
-on alice work/infra "mv .lore/lore.yaml ~/pointer.keep; printf 'db_path = \"\${HOME}/.lore/client2.db\"\nproject_id = \"%s\"\n' \$(grep project_id ~/pointer.keep | cut -d' ' -f2) > .lore/lore.toml; rm ~/pointer.keep; ls .lore"
-on alice work/infra "lore rule list"
-on alice work/infra "ls .lore"
+# A v0.1.17 shared database for infra: a project's rows in a lore.db outside the repo,
+# and the two-line pointer file v0.1.17 wrote into .lore/. (The rows come from a
+# scratch repo whose lore.db is copied out, which is what v0.1.17 kept there.)
+quiet alice work "mkdir -p old-infra && cd old-infra && git init -q && lore init --non-interactive --name=infra && lore rule add --body 'Terraform changes need a plan in the pull request.' && lore memory add --body 'The staging cluster sleeps at night.' && lore sync && mkdir -p ~/.lore && lore backup --out ~/.lore/client2.db"
+quiet alice work/infra "mkdir -p .lore && printf 'db_path: \${HOME}/.lore/client2.db\nproject_id: %s\n' \$(cd ../old-infra && lore project list --json | grep -o 'prj_[0-9a-f]*' | head -1) > .lore/lore.yaml && rm -rf ../old-infra"
+
+note "convert a shared database"
+on alice work/infra "cat .lore/lore.yaml"
+on! alice work/infra "lore rule list"
+on alice work/infra "lore migrate run --dry-run"
+on alice work/infra "lore migrate run"
+on alice work/infra "ls .lore; cat .lore/stores.yaml"
+on alice work/infra "lore rule list; lore memory list"
 
 note "errors"
 on! alice work "lore rule list"
-on! alice work/app "touch .lore/lore.db && lore rule list"
-on alice work/app "rm .lore/lore.db"
-on! alice work/app "cd .lore && lore rule list"

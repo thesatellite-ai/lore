@@ -12,13 +12,13 @@ alice (work/api)$ lore agent start --label agent-coord --owner @alice
 ✓ act_7a670ae8548ed05bf57ad29ad0759504 agent agent-coord (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 lore: [agency/org] 1 file(s) pushed
-agent-coord (work/api)$ lore plan apply invite.yaml
+agent-coord (work/api)$ lore mission apply invite.yaml
 ✓ msn_2ad3618e878ebbf527d34d446ef4f891 Invite landing page (created) → [agency/client2]
   tsk_162df51b7f78b785c97c26b41ea89666 send the invite email from the API  timebox 1h
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page         timebox 1h  after backend
   tsk_05e99e22e9e86e96fe4daa7777994603 allow /invite on the proxy  
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging             after frontend,proxy  gate required
-agent-coord (work/api)$ lore plan apply invite.yaml
+agent-coord (work/api)$ lore mission apply invite.yaml
 ✓ msn_2ad3618e878ebbf527d34d446ef4f891 Invite landing page (found) → [agency/client2]
   tsk_162df51b7f78b785c97c26b41ea89666 send the invite email from the API  timebox 1h
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page         timebox 1h  after backend

@@ -94,5 +94,5 @@ The frontend task ("build the invite page") waits for the backend task to be **m
 
 - **`--repo` takes the repo's lore name**: the name given to `lore init --name`, usually the repo name. A task with no repo is offered only to callers that pass no `--repo`, or a matching `--role`.
 - **Every repo lists every group task.** `lore task list` in `app` shows the backend task too. To see only what is ready for one repo, use the mission status, or `lore task next --repo app`.
-- **Same key, same row.** Running the `task add … --key invite/backend` command again prints "already added with --key invite/backend" and changes nothing. You can apply a whole plan from a file with `lore plan apply`. See [Agents on one mission](agents-mission.md).
+- **Same key, same row.** Running the `task add … --key invite/backend` command again prints "already added with --key invite/backend" and changes nothing. You can apply a whole plan from a file with `lore mission apply`. See [Agents on one mission](agents-mission.md).
 - Client 2 can see nothing about the plan. It is all in the agency's store.

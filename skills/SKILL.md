@@ -464,8 +464,8 @@ lore render
 | "archive mem_<id>" / "stop showing mem_<id>" | `lore memory archive mem_<id>` (works for every entity: rule, decision, hotfix, pattern, playbook, prompt, project, repo) |
 | "unarchive mem_<id>" | `lore memory unarchive mem_<id>` |
 | "mem_<id> is no longer true as of today" (bitemporal — keep history) | `lore memory invalidate mem_<id>` (sets `valid_until=now`; preferred over archive when you want to remember WHEN it became wrong) |
-| "supersede mem_<id> with new memory X" | `lore memory add --body="X"` then `lore memory archive mem_<id>` (memories have no `--supersedes` chain in 0.1.18; rules, decisions, hotfixes and patterns still do) |
-| "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit mem_<id> --body="..."` (every edit is kept in git history and the audit log) |
+| "supersede mem_<id> with new memory X" | `lore memory add --body="X" --supersedes=mem_<id>` (preserves chain) |
+| "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit mem_<id> --body="..."` (no chain — use `--supersedes` instead if audit trail matters) |
 | "archive project PRJ-X" / "retire repo REP-Y" | `lore project archive PRJ-X` / `lore repo archive REP-Y` |
 
 ### Directive (lock the file against agent drift)
@@ -493,7 +493,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "find any rule/task/decision about X" | `lore <kind> search "X" --json` — works on every entity (memory, rule, decision, hotfix, pattern, playbook, prompt, architecturenote, behaviour, cookbookrecipe, incident, suggestion, tastepref, snapshot, handoff, mission, task, tasklist, plan, workflow, workspace, techdoc, comment) |
 | "search across all task fields" | `lore task search "auth*"` — FTS5 BM25 across title + body; relations eager-loaded in JSON |
 | "wildcard / phrase / boolean search" | FTS5 syntax: `auth*` (prefix), `"connection pool"` (phrase), `redis OR cache`, `auth NOT login` |
-| "restrict search to specific columns" | `lore task search "X" --column=title,body` |
+| "restrict search to specific columns" | `lore memory search "X" --column body` (every kind's `search` except `task search`, which always covers title + body) |
 | "list all memories" / "what memories exist?" | `lore memory list [--archived] [--json]` |
 | "show mem_<id>" | `lore memory show mem_<id> [--json]` (includes archived_at, valid_until, superseded_by) |
 | "is search working / how healthy is the index" | `lore search status` — per-entity row counts + drift detection |
@@ -697,8 +697,8 @@ User just made an architectural decision and gave the rationale. Write a decisio
 ### P5 — Multi-repo scoping
 Platform with web + admin + api repos sharing one project. **Recipe: [PLAYBOOKS.md § P5](./PLAYBOOKS.md), worked example: [examples/03-multi-repo.md](./examples/03-multi-repo.md).**
 
-### P6 — Shared DB across sibling projects (Mode B)
-Multiple unrelated repos sharing `~/.lore/shared.db`. **Recipe: [PLAYBOOKS.md § P6](./PLAYBOOKS.md).**
+### P6 — Notes shared by sibling projects (a store)
+Several repos attaching one folder store (`lore store init` / `lore store add`); the v0.1.17 shared DB (Mode B) converts with `lore migrate run`. **Recipe: [PLAYBOOKS.md § P6](./PLAYBOOKS.md).**
 
 ### P7 — Disaster recovery
 DB corrupt / missing / truncated. **Recipe: [PLAYBOOKS.md § P7](./PLAYBOOKS.md), worked example: [examples/04-disaster-recovery.md](./examples/04-disaster-recovery.md).**
@@ -768,8 +768,8 @@ lore
 ├── project
 │   ├── list                   projects in current DB
 │   ├── show <id|name>         project + eager-loaded repos
-│   ├── shared-init            create Mode B (shared DB) project
-│   └── shared-list            list projects in a shared DB
+│   ├── shared-init            retired (0.1.18): use lore store init + lore store add
+│   └── shared-list            retired (0.1.18): use lore store list
 ├── repo
 │   ├── add <mount>            register a repo within current project
 │   └── list                   repos in current project
@@ -909,7 +909,7 @@ Quick reactions:
 | `E_DB_CORRUPT` / `E_DB_NOT_FOUND` | `lore repair --tier=2 --confirm`. |
 | `E_NOT_PROJECT_ROOT` | Either `cd` to the project, or use `--db=<path>`. |
 | `E_AMBIGUOUS_PROJECT` | Both `lore.db` and `lore.toml` exist — remove one. |
-| `E_SECRET_DETECTED` | Strip the secret. `--allow-secrets` only with explicit user consent. |
+| `E_SECRET_DETECTED` / `E_NEEDS_CONFIRM` on a secret | Strip the secret. `--yes` only with explicit user consent. |
 | `E_ROOT_REFUSED` | Set `MINI_ALLOW_ROOT=1` (only if user explicitly wants). |
 | `E_SYMLINK_DB` | DB path is a symlink — delete + restore from backup. |
 | `E_READ_ONLY` | Drop `--read-only` and unset `LORE_READ_ONLY`. |
@@ -926,7 +926,7 @@ Quick reactions:
 | Calling `lore memory add` but skipping `lore render` | Knowledge is in DB but invisible to the agent | Always `render` after capture |
 | Adding a rule for a one-off preference | Pollutes future sessions | Use `memory add` for soft preferences; `rule add` for true constraints |
 | Mixing repo-scoped + master memories without `--repo` | Memories leak into other repos' renders | Always pass `--repo=<mount>` for repo-specific captures |
-| Bypassing secret-scrub without user consent | Leaks credentials into DB | Refuse loudly; require explicit `--allow-secrets` only with user OK |
+| Bypassing secret-scrub without user consent | Leaks credentials into DB | Refuse loudly; rerun with `--yes` only with user OK |
 | Storing tasks that map 1:1 to GitHub issues | Duplicate state, drift | Use tags + comments to cross-link, don't mirror |
 | Using `rule` when `decision` is right | Rules say WHAT, decisions say WHY | Use `decision add` when the rationale matters more than the conclusion |
 | Adding rules without severity | Defaults to `must` (blocking) | Always set `--severity=must|should|may` explicitly |
@@ -941,7 +941,7 @@ Quick reactions:
 
 1. **Capture is cheap. Forgetting is expensive.** When unsure, write a memory.
 2. **Render after every write.** Otherwise the agent doesn't see it.
-3. **Never bypass secret-scrub silently.** `--allow-secrets` requires explicit user consent.
+3. **Never bypass secret-scrub silently.** `--yes` on a secret warning requires explicit user consent.
 4. **Read-only mode is honored.** If `LORE_READ_ONLY=1` or `--read-only`, refuse writes.
 5. **Scope before storing.** Repo-specific → `--repo=<mount>`. Cross-cutting → master.
 6. **Errors are codes, not prose.** Match `E_*` strings; use `lore errors list --json` for the registry.

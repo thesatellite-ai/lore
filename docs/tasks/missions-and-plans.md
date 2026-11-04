@@ -8,7 +8,7 @@ One task is one step. Most real goals need many steps in an order: take the phot
 
 A **plan** is a written note with a title and a body, such as "Collect emails on the home page first, then send one newsletter a month." Use it to write down the idea before you split it into tasks.
 
-A **plan file** is a small YAML file (a plain text format of `name: value` lines) that lists a mission and its tasks. `lore plan apply` reads it and creates everything at once. Running it again adds nothing, so you can keep the file in the repo and apply it safely.
+A **plan file** is a small YAML file (a plain text format of `name: value` lines) that lists a mission and its tasks. `lore mission apply` reads it and creates everything at once. Running it again adds nothing, so you can keep the file in the repo and apply it safely.
 
 A **handoff** is a short note for a person, like a sticky note on their desk: "Two of the three sections are written; the team photo is still missing." It appears in their `lore inbox` until they mark it read.
 
@@ -74,6 +74,7 @@ Tasks:
 ```console
 # alice, in website
 $ lore mission status msn_7a67…9504
+lore sync: imported 1
 msn_7a67…9504 Open the online shop   3 tasks · 0 done · 0 claimed · 2 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_54fe…28f2  Send the invoice reminder                 
   ready     tsk_2ad3…f891  Take the product photos                   
@@ -111,7 +112,6 @@ $ lore task list --mission msn_7a67…9504
 $ lore mission edit msn_7a67…9504 --target 2026-12-07 --title 'Open the online shop before Christmas'
 ✓ msn_7a67…9504 updated
 lore live: (live, pushed)
-lore live: 2 row(s) left live (main holds them)
 $ lore mission search christmas
 msn_7a67…9504 [active] Open the online shop before Christmas
 ```
@@ -141,7 +141,6 @@ lore live: (live, pushed)
 $ lore mission done msn_7a67…9504
 ✓ msn_7a67…9504 completed
 lore live: (live, pushed)
-lore live: landed on main (86dbae4); leaves live once main is fetched
 $ lore mission list
 (no missions)
 $ lore mission list --all
@@ -149,7 +148,7 @@ msn_7a67…9504 [done] Open the online shop before Christmas   (3 tasks)
 ```
 <!-- /example -->
 
-Delete is for mistakes only. It needs `--confirm`:
+Delete is for mistakes only. lore asks first; without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`:
 
 <!-- example: missions#mission-delete -->
 ```console
@@ -157,15 +156,13 @@ Delete is for mistakes only. It needs `--confirm`:
 $ lore mission add 'Test mission, please ignore'
 ✓ msn_05e9…4603 — Test mission, please ignore
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
 $ lore mission delete msn_05e9…4603
-ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
-  hint: a hard delete cannot be undone; pass --confirm if you really mean it
-(exit 1)
-$ lore mission delete msn_05e9…4603 --confirm
-✓ msn_05e9…4603 deleted (hard)
+ERROR: [E_NEEDS_CONFIRM] engine: run mission delete?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+$ lore mission delete msn_05e9…4603 --yes
+✓ msn_05e9…4603 deleted
 lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -178,16 +175,12 @@ lore live: landed on main (9b40ce7); leaves live once main is fetched
 # alice, in website
 $ lore plan add --title 'Newsletter plan' --body 'Collect emails on the home page first, then send one newsletter a month.'
 ✓ pln_c0f3…b5b8
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ lore plan list
 PL  pln_c0f3…b5b8
 $ lore plan search newsletter
 pln_c0f3…b5b8 Newsletter plan
 $ lore plan edit pln_c0f3…b5b8 --status approved
 ✓ plan pln_c0f3…b5b8 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -209,18 +202,19 @@ tasks:
 ```
 <!-- /example -->
 
-`lore plan apply` creates the mission and every task, with the order you wrote down:
+`lore mission apply` creates the mission and every task, with the order you wrote down:
 
-<!-- example: missions#plan-apply -->
+<!-- example: missions#mission-apply -->
 ```console
 # alice, in website
-$ lore plan apply newsletter.yaml
+$ lore mission apply newsletter.yaml
 ✓ msn_76bd…3f10 Start the monthly newsletter (created)
   tsk_d431…313a Add the sign-up form to the home page  timebox 1h30m
   tsk_b4f4…a5b0 Write the first newsletter    after form
   tsk_28f8…03df Send the first newsletter     after first
 lore live: (live, pushed)
 $ lore mission status msn_76bd…3f10
+lore sync: imported 1
 msn_76bd…3f10 Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_d431…313a  Add the sign-up form to the home page              0s (timebox 1h30m)
   waiting   tsk_28f8…03df  Send the first newsletter                 waits for tsk_b4f4…a5b0 to be done (todo)
@@ -230,10 +224,10 @@ msn_76bd…3f10 Start the monthly newsletter   3 tasks · 0 done · 0 claimed ·
 
 Run it again and nothing new is made: lore finds each row again by its key and says `(found)`.
 
-<!-- example: missions#plan-apply-again -->
+<!-- example: missions#mission-apply-again -->
 ```console
 # alice, in website
-$ lore plan apply newsletter.yaml
+$ lore mission apply newsletter.yaml
 ✓ msn_76bd…3f10 Start the monthly newsletter (found)
   tsk_d431…313a Add the sign-up form to the home page  timebox 1h30m
   tsk_b4f4…a5b0 Write the first newsletter    after form
@@ -248,7 +242,7 @@ $ lore plan apply newsletter.yaml
 |---|---|---|
 | `mission.title` | yes | the mission's title |
 | `mission.key` | no | a short name for the mission; a re-run finds the mission by it (without a key, by its exact title) |
-| `mission.to` | no | where the mission goes in a team setup: `repo`, an org or a store folder (see [Team commands › lore plan apply](../team/commands.md#lore-plan-apply)) |
+| `mission.to` | no | where the mission goes in a team setup: `repo`, an org or a store folder (see [Team commands › lore mission apply](../team/commands.md#lore-mission-apply)) |
 | `approvers` | no | team only: the people who may approve this mission's gates, as `["@alice"]` |
 | `tasks[].key` | yes | a short name, unique in the file |
 | `tasks[].title` | yes | the task's title |
@@ -266,9 +260,7 @@ A handoff is for someone on the repo's *roster* (the list of people and agents l
 ```console
 # alice, in website
 $ lore actor register
-✓ act_3b62…e913 alice (@alice) already registered (refreshed) in this repo
-lore live: (live, pushed)
-lore live: landed on main (05513aa); leaves live once main is fetched
+✓ act_4c59…6c38 alice (@alice) already registered (refreshed) in this repo
 ```
 <!-- /example -->
 
@@ -278,14 +270,14 @@ lore already knew Alice from `lore init`, so it says `already registered (refres
 ```console
 # alice, in website
 $ lore task add 'Write the about page'
-✓ tsk_f147…5139 — Write the about page [medium]
+✓ tsk_3b62…e913 — Write the about page [medium]
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
-$ lore handoff add --for @alice --task tsk_f147…5139 'Two of the three sections are written; the team photo is still missing'
-✓ handoff hnd_2537…6bbb for @alice
+$ lore handoff add --for @alice --task tsk_3b62…e913 'Two of the three sections are written; the team photo is still missing'
+✓ handoff hnd_f147…5139 for @alice
 lore live: (live, pushed)
 $ lore inbox
--  handoff  @alice       tsk_f147…5139  Two of the three sections are written; the team photo is still missing
+lore sync: imported 1
+-  handoff  @alice       tsk_3b62…e913  Two of the three sections are written; the team photo is still missing
 ```
 <!-- /example -->
 
@@ -294,13 +286,13 @@ $ lore inbox
 <!-- example: missions#handoff-ack -->
 ```console
 # alice, in website
-$ lore handoff ack hnd_2537…6bbb
-✓ hnd_2537…6bbb acked
+$ lore handoff ack hnd_f147…5139
+✓ hnd_f147…5139 acked
 lore live: (live, pushed)
 $ lore inbox
 (inbox empty)
 $ lore handoff search photo
-hnd_2537…6bbb [acked] Two of the three sections are written; the team photo is still missing
+hnd_f147…5139 [acked] Two of the three sections are written; the team photo is still missing
 ```
 <!-- /example -->
 
@@ -308,16 +300,17 @@ hnd_2537…6bbb [acked] Two of the three sections are written; the team photo is
 
 The plan file from Step 6 is all you need. Save it as `newsletter.yaml` in your repo, then:
 
-<!-- example: missions#plan-apply -->
+<!-- example: missions#mission-apply -->
 ```console
 # alice, in website
-$ lore plan apply newsletter.yaml
+$ lore mission apply newsletter.yaml
 ✓ msn_76bd…3f10 Start the monthly newsletter (created)
   tsk_d431…313a Add the sign-up form to the home page  timebox 1h30m
   tsk_b4f4…a5b0 Write the first newsletter    after form
   tsk_28f8…03df Send the first newsletter     after first
 lore live: (live, pushed)
 $ lore mission status msn_76bd…3f10
+lore sync: imported 1
 msn_76bd…3f10 Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_d431…313a  Add the sign-up form to the home page              0s (timebox 1h30m)
   waiting   tsk_28f8…03df  Send the first newsletter                 waits for tsk_b4f4…a5b0 to be done (todo)
@@ -327,7 +320,7 @@ msn_76bd…3f10 Start the monthly newsletter   3 tasks · 0 done · 0 claimed ·
 
 ## Pitfalls
 
-**In a plan file, `after` must name an earlier task.** A task that waits for a task further down the file is refused. lore creates the mission before it checks the tasks, so the failed run leaves an empty mission behind. Fix the file, then remove that mission with `lore mission delete <id> --confirm`:
+**In a plan file, `after` must name an earlier task.** A task that waits for a task further down the file is refused before anything is created. Fix the file and apply it again:
 
 <!-- example: missions#plan-errors -->
 ```console
@@ -337,12 +330,10 @@ mission: {title: "Bad plan"}
 tasks:
   - {key: b, title: "Second", after: [a]}
   - {key: a, title: "First"}
-$ lore plan apply bad.yaml
-✓ msn_4c59…6c38 Bad plan (created)
-lore live: (live, pushed)
+$ lore mission apply bad.yaml
 ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task of the plan
   hint: after: takes keys of earlier tasks, optionally with :done or :merged (e.g. backend:merged)
-(exit 1)
+(exit 20)
 ```
 <!-- /example -->
 
@@ -352,16 +343,16 @@ ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task o
 ```console
 # alice, in website
 $ lore handoff add --for @dave 'The logo files are in the shared drive'
-ERROR: [E_INVALID_INPUT] no one is @dave on this repo's roster
-  hint: register first: `lore actor register` (as that person)
-(exit 1)
+ERROR: [E_NOT_FOUND] no actor "@dave"
+  hint: an actor row exists once that person or agent has written to lore; or pass an act_ id
+(exit 27)
 ```
 <!-- /example -->
 
 Other traps:
 
 - **Changing a title in the plan file does not change the task.** A re-run finds each task by its key and leaves it as it is. Use `lore task edit` to rename it.
-- **Misspelled fields are ignored.** A field lore does not know, such as `afer:`, is skipped without a warning. Check the `after` part of the `plan apply` output.
+- **Misspelled fields are ignored.** A field lore does not know, such as `afer:`, is skipped without a warning. Check the `after` part of the `mission apply` output.
 - **`lore plan list` and `lore plan show` print only `PL` and the id**, not the title. Use `lore plan search <word>`, or `lore plan show <id> --json`, to read it.
 - **`lore mission done` does not check the tasks.** You can close a mission that still has open tasks; they stay open.
 

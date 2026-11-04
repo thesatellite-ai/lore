@@ -414,7 +414,7 @@ A **link** tells lore that a store folder holds the agency's private notes for o
 ## Store checks
 
 <!-- ds:block id=team-store-allowed-yhy36m4v -->
-A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore folders plus `README*`, `LICENSE*`, `.gitattributes` and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/clones` or committed to by lore. `lore store init <url>` turns a new empty repo into a store; `lore store init <url> --branch staging` creates another store branch. A missing store branch is never created by accident.
+A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore folders plus `README*`, `LICENSE*`, `.gitattributes` and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/clones` or committed to by lore. `lore store init <name> <url>` turns a new empty repo into a store and attaches it; `lore store init <name> '<url>?branch=staging'` creates another store branch, and `lore store add <name> <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
 
 ## Leak guards
 

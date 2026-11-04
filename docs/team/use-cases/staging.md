@@ -32,7 +32,7 @@ Alice (an agency developer) creates the staging branch once and switches this re
 <!-- example: staging#staging-branch -->
 ```console
 # alice, in website
-$ lore store init git@github.com:agency/notes --branch staging
+$ lore store init agency_stag 'git@github.com:agency/notes?branch=staging'
 ✓ wrote lore-store.yaml to github.com/agency/notes (new branch staging, first commit) and pushed
 $ lore org use agency-stag
 ✓ prj_7a67…9504 uses org agency-stag on this machine
@@ -87,7 +87,7 @@ With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=ag
 
 ## Pitfalls
 
-- **The branch must exist first.** Linking or writing to a staging entry whose branch does not exist is refused, with a hint to run `lore store init <url> --branch staging`. A typo never creates a new lore silently. See [Troubleshooting](../troubleshooting.md#store-branch-does-not-exist).
+- **The branch must exist first.** Linking or writing to a staging entry whose branch does not exist is refused, with a hint to create it on purpose with `lore store init <name> '<url>?branch=staging'`; `lore store add <name> <url> --branch staging` attaches a branch that already exists. A typo never creates a new lore silently. See [Troubleshooting](../troubleshooting.md#store-branch-does-not-exist).
 - **Links, roster and global project are per branch.** The roster is the list of people and agents in the org. A staging entry needs its own `lore org link`, and `lore actor register` if you want `@handles` there. With a staging entry chosen, `lore whoami` counts only that branch's links: `0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)` until you link it.
 - **A branch name may not contain `/`** (`release/2026` is refused by `lore config check`), so `refs/lore/live/<branch>` names can never clash.
 - `lore org use` is saved in `repo_orgs:` of your own `~/.lore/config.yaml`. Nothing is committed, and teammates are not affected.

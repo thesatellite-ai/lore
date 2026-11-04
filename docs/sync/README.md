@@ -19,7 +19,7 @@ The examples follow Alice and Bob (two agency developers) in the client's repo `
 | [Hooks and the merge driver](hooks-and-merge-driver.md) | You want to know what lore adds to `.git/hooks` and `.gitattributes`, and why a commit was refused. |
 | [The GitHub workflow](github-workflow.md) | Pull requests on GitHub show a conflict in `.lore/data` that lore could have merged. |
 | [Projects and repos](multi-repo-projects.md) | You want notes that apply to one part of the code only, or you want to see and tidy the projects in a database. |
-| [One database for several repos](shared-database-mode-b.md) | A client's product is several repos and you want them to share one notes database on your machine. |
+| [One store for several repos](shared-database-mode-b.md) | A client's product is several repos and you want them to share notes through one folder store on your machine, or a repo still uses the old shared database. |
 
 ## Two words you will see everywhere
 

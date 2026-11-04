@@ -42,7 +42,7 @@ We use Stripe for payments.
 $ lore learn-from docs --paths .ai/notes.md
 ✓ learn-from docs complete
   snapshots:  1
-  candidates: 3 (job_id=lcd_71f0…c07d)
+  candidates: 3 (job_id=lcd_ada3…c018)
 …
 ```
 <!-- /example -->
@@ -55,9 +55,9 @@ $ lore learn-from docs --paths .ai/notes.md
 ```console
 # alice, in website
 $ lore learn list
-[pending] lcd_ada3…c018 → memories   # Team notes  
-[pending] lcd_78c8…5b6c → memories    Run the tests before you push.  
-[pending] lcd_d7c7…7fe6 → memories    We use Stripe for payments. 
+[pending] lcd_78c8…5b6c → memories   # Team notes  
+[pending] lcd_d7c7…7fe6 → memories    Run the tests before you push.  
+[pending] lcd_06b1…3d1c → memories    We use Stripe for payments. 
 ```
 <!-- /example -->
 
@@ -70,16 +70,15 @@ The first candidate is the file's title line with nothing under it; you will dro
 <!-- example: knowledge#promote only=2,3,4 -->
 ```console
 # alice, in website
-$ lore learn promote lcd_d7c7…7fe6
-✓ promoted lcd_d7c7…7fe6 → memories
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
-$ lore learn reject lcd_ada3…c018
+$ lore learn promote lcd_06b1…3d1c
+✓ promoted lcd_06b1…3d1c → memories
+$ lore learn reject lcd_78c8…5b6c
+lore sync: imported 1
 ✓ rejected 1 candidate(s)
 $ lore learn list --status ''
-[rejected] lcd_ada3…c018 → memories   # Team notes  
-[pending] lcd_78c8…5b6c → memories    Run the tests before you push.  
-[accepted] lcd_d7c7…7fe6 → memories    We use Stripe for payments. 
+[rejected] lcd_78c8…5b6c → memories   # Team notes  
+[pending] lcd_d7c7…7fe6 → memories    Run the tests before you push.  
+[accepted] lcd_06b1…3d1c → memories    We use Stripe for payments. 
 ```
 <!-- /example -->
 
@@ -90,9 +89,9 @@ $ lore learn list --status ''
 # alice, in website
 $ lore memory list
 mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email, even on weekends
-mem_05e9…4603 [retrieved] The staging site is reset every Monday morning
-mem_d431…313a [retrieved] The office printer is on the second floor
-mem_06b1…3d1c [retrieved] 
+mem_c0f3…b5b8 [retrieved] The staging site is reset every Monday morning
+mem_b4f4…a5b0 [retrieved] The office printer is on the second floor
+mem_7289…c813 [retrieved] 
 We use Stripe for payments.
 ```
 <!-- /example -->
@@ -106,19 +105,13 @@ We use Stripe for payments.
 # alice, in website
 $ lore external-source add --kind wiki --name 'Team wiki'
 ✓ external-source Team wiki added
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ lore external-source list
-[off] Team wiki (wiki) ext_7289…c813
-$ lore external-source enable ext_7289…c813 && lore external-source list
-✓ external-source ext_7289…c813 enabled
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
-[on] Team wiki (wiki) ext_7289…c813
-$ lore external-source disable ext_7289…c813
-✓ external-source ext_7289…c813 disabled
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+[off] Team wiki (wiki) ext_4bfb…19ce
+$ lore external-source enable ext_4bfb…19ce && lore external-source list
+✓ external-source ext_4bfb…19ce enabled
+[on] Team wiki (wiki) ext_4bfb…19ce
+$ lore external-source disable ext_4bfb…19ce
+✓ external-source ext_4bfb…19ce disabled
 ```
 <!-- /example -->
 
@@ -129,7 +122,7 @@ lore sync: 3 file(s) in .lore/data not committed — commit them with your chang
 <!-- example: knowledge#promote only=1 -->
 ```console
 # alice, in website
-$ lore learn promote lcd_78c8…5b6c --target rules
+$ lore learn promote lcd_d7c7…7fe6 --target rules
 ERROR: [E_NOT_IMPLEMENTED] promote target "rules" not yet supported in v0.1
   hint: only --target=memories is implemented
 (exit 1)

@@ -86,7 +86,7 @@ ERROR: [E_INVALID_INPUT] 1 store(s) need attention
 ```
 <!-- /example -->
 
-Fix: remove the code repo from `stores:`. To make a store, create a new, empty repo and run `lore store init <url>` on it. A code repo can never be a store.
+Fix: remove the code repo from `stores:`. To make a store, create a new, empty repo and run `lore store init <name> <url>` on it. A code repo can never be a store.
 
 ## `E_ORG_AMBIGUOUS`
 
@@ -153,7 +153,7 @@ ERROR: [E_INVALID_INPUT] stores: store branch does not exist: github.com/agency/
 ```
 <!-- /example -->
 
-Fix: if you meant it, `lore store init <url> --branch <branch>` once; otherwise fix `branch:` in the config.
+Fix: if you meant it, create the branch once with `lore store init <name> '<url>?branch=<branch>'` (or attach an existing one with `lore store add <name> <url> --branch <branch>`); otherwise fix `branch:` in the config.
 
 ## `E_OFFLINE` on a claim, heartbeat or done
 

@@ -84,7 +84,7 @@ Each step builds on the one before. Every example is a script that runs the real
 - [Hooks and the merge driver](sync/hooks-and-merge-driver.md): the git set-up lore adds and why.
 - [The GitHub workflow](sync/github-workflow.md): let GitHub merge note files with lore.
 - [Projects and repos](sync/multi-repo-projects.md): projects, repos inside a project, and renamed repos.
-- [One database for several repos](sync/shared-database-mode-b.md): Mode B, one database file on your machine with a pointer in each repo.
+- [One store for several repos](sync/shared-database-mode-b.md): one folder store attached in each repo; converting an old shared-database (Mode B) repo with `lore migrate run`.
 
 ### Keep lore healthy and safe
 
@@ -113,7 +113,7 @@ Each step builds on the one before. Every example is a script that runs the real
 ### Decision guides
 
 - [Decision guides](choosing/README.md): the overview, and a good default for most people.
-- [Where your notes live](choosing/database-mode.md): in each repo (Mode A), one database on your machine (Mode B), or a store.
+- [Where your notes live](choosing/database-mode.md): in each repo (Mode A), a folder store on your machine, or a store.
 - [Keep a note with the code, or share it at once](choosing/with-code-or-live.md): `--no-live` or `--live`.
 - [How to lay out your stores](choosing/store-layout.md): one store, one per client, or a mix.
 - [Which org and identity setup](choosing/org-and-identity.md): no config, one org, joining, two companies.

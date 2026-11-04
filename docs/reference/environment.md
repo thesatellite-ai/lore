@@ -13,8 +13,8 @@ A command picks its database, project and repo in this order, and the first one 
 | `LORE_DB` | use this database file instead of `.lore/lore.db`; lets you run a command from outside the project folder |
 | `LORE_PROJECT_ID` | use this project id instead of looking it up |
 | `LORE_REPO` | work in this repo of a multi-repo project (its mount name or `rep_` id) instead of the whole project |
-| `LORE_HOME` | the value of `${LORE_HOME}` inside `db_path` in `.lore/lore.yaml` (default `~/.lore`). It does **not** move lore's own folder: config, identity and caches always stay in `~/.lore` |
-| `LORE_ALLOW_DB_PATH_OUTSIDE` | `1` allows a `..` part in `db_path` (normally refused, so a pointer file cannot point somewhere unexpected) |
+| `LORE_HOME` | the value of `${LORE_HOME}` inside `db_path` of an old shared-database pointer (`.lore/lore.yaml`), read when `lore migrate run` converts it (default `~/.lore`). It does **not** move lore's own folder: config, identity and caches always stay in `~/.lore` |
+| `LORE_ALLOW_DB_PATH_OUTSIDE` | `1` lets `lore migrate run` read an old pointer whose `db_path` has a `..` part (normally refused, so a pointer file cannot point somewhere unexpected) |
 
 <!-- example: reference#db-flag -->
 ```console
@@ -26,26 +26,32 @@ rul_162d…9666 [must/always] Run the tests before you push
 ```
 <!-- /example -->
 
-The pointer file below names `${LORE_HOME}`, so `LORE_HOME` decides which database file the project opens. lore's own folder stays `~/.lore` either way:
+Older lore could point a repo at a shared database file with a pointer, `.lore/lore.yaml`; 0.1.18 converts such a repo with `lore migrate run` ([One store for several repos](../sync/shared-database-mode-b.md#step-4--convert-a-repo-that-used-a-shared-database)). The pointer below names `${LORE_HOME}`, so `LORE_HOME` decides which database file is converted, and the new store lands beside it. lore's own folder stays `~/.lore` either way:
 
 <!-- example: environment#lore-home -->
 ```console
 # alice, in docs
 $ cat .lore/lore.yaml
 db_path: ${LORE_HOME}/client-docs.db
-project_id: prj_28f8…03df
-$ LORE_HOME=~/shared-dbs lore rule add --body 'Every page needs a meta description'
-✓ rul_4c59…6c38 
-  scope: [master] severity: must
-$ LORE_HOME=~/shared-dbs lore rule list
-rul_4c59…6c38 [must/always] Every page needs a meta description
+project_id: prj_d431…313a
+$ lore migrate run --dry-run
+ERROR: [E_INTERNAL] internal error
+ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there: stat ~/.lore/client-docs.db: no such file or directory
+(exit 1)
+$ LORE_HOME=~/shared-dbs lore migrate run
+count: 0
+rows: 
+steps: mode-b: rules/rul_b4f4…a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore rule list
-(no rules)
+rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays [shared]
 
 # alice, in ~
-$ ls ~/.lore
-cache
+$ ls ~/shared-dbs ~/shared-dbs/stores
+~/shared-dbs:
 client-docs.db
+stores
+~/shared-dbs/stores:
+blog
 ```
 <!-- /example -->
 
@@ -54,15 +60,20 @@ A `..` in `db_path` is refused until `LORE_ALLOW_DB_PATH_OUTSIDE=1` is set for t
 <!-- example: environment#db-path-outside -->
 ```console
 # alice, in blog
-$ printf 'db_path: ../client.db\nproject_id: %s\n' $(grep project_id .lore/lore.yaml | cut -d' ' -f2) > .lore/lore.yaml.new && mv .lore/lore.yaml.new .lore/lore.yaml && cat .lore/lore.yaml
+$ cat .lore/lore.yaml
 db_path: ../client.db
 project_id: prj_d431…313a
-$ lore rule list
+$ lore migrate run --dry-run
+ERROR: [E_INTERNAL] internal error
 ERROR: [E_BAD_PATH] db_path "../client.db" has a `..` part: projresolve: path contains traversal sequence or refers outside allowed roots
   hint: write db_path in .lore/lore.yaml without a `..` part, or set LORE_ALLOW_DB_PATH_OUTSIDE=1 for one command if the path really is meant to leave the project
 (exit 1)
-$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore rule list
-rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays
+$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
+count: 0
+rows: 
+steps: mode-b: rules/rul_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+$ lore rule list
+rul_b4f4…a5b0 [must/always] Posts go out on Tuesdays [shared]
 ```
 <!-- /example -->
 
@@ -91,9 +102,9 @@ A repo inside a folder a sync app owns (here `Dropbox`) is refused with `E_NETWO
 ```console
 # alice, in Dropbox/website
 $ lore rule list
-ERROR: [E_NETWORK_FS] guard: path is on a cloud-sync or network filesystem: ~/work/Dropbox/website is inside a "dropbox" folder
-  hint: SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set LORE_ALLOW_NETWORK_FS=1
-(exit 1)
+ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
+  hint: move the store to a local folder
+(exit 23)
 $ LORE_ALLOW_NETWORK_FS=1 lore rule list
 (no rules)
 ```
@@ -109,7 +120,7 @@ lore copies your notes into `.lore/data`, the folder git commits, before and aft
 | `LORE_SYNC` | `0` turns sync off for this command or shell: lore uses only the local database, writes nothing to `.lore/data`, and live rows are off too |
 | `LORE_SYNC_GIT` | `0` keeps syncing the files but stops lore from running git setup by itself: no hooks, no `.gitattributes`, no git config |
 | `LORE_SYNC_QUIET` | `1` hides sync's progress lines; errors still print |
-| `LORE_SYNC_ALLOW_SECRETS` | `1` writes a row to `.lore/data` even when it looks like it holds a password or key. For one run only, and the value **will** be committed |
+| `LORE_SYNC_ALLOW_SECRETS` | kept for older scripts. A row you confirmed with `--yes` on a secret warning is already in `.lore/data`; lore's commit hook still refuses a file that holds a credential pattern |
 
 ## Live rows and the network
 
@@ -130,8 +141,6 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 # alice, in website
 $ LORE_LIVE=0 lore task add 'Update the privacy page'
 ✓ tsk_7a67…9504 — Update the privacy page [medium]
-lore sync: exported 2
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ git status --short
 ?? .lore/data/task_lists/
 ?? .lore/data/tasks/
@@ -160,6 +169,7 @@ pending   1 write(s) not confirmed by the remote
   _root/tasks/tsk_162d…9666.json
 lore live: pushed waiting live writes
 $ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_162d…9666
+lore sync: imported 2
 ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
   hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
 (exit 15)

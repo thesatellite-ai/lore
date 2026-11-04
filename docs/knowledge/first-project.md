@@ -38,7 +38,7 @@ $ lore init --non-interactive --name=website
     db:         ~/work/website/.lore/lore.db
     identity:   human:alice@agency.example (git config)
   next: lore learn-from docs   to bootstrap from existing markdown
-lore sync: exported 2 rows to .lore/data — review and commit it
+lore sync: exported 0 rows to .lore/data — review and commit it
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -56,6 +56,7 @@ The new files are plain text. `.lore/lore.db` (the database) stays on your machi
 ```console
 # alice, in website
 $ lore setup
+lore sync: imported 2
 → running ent schema migration...
 → building FTS5 search index...
 ✓ setup complete (registry fingerprint: 601d2850ffd047c2)
@@ -72,8 +73,6 @@ A *rule* is a hard "always" or "never", like a sign on the office wall. Give the
 $ lore rule add --body 'Run the tests before you push'
 ✓ rul_2ad3…f891 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore rule list
 rul_2ad3…f891 [must/always] Run the tests before you push
 ```
@@ -89,6 +88,7 @@ rul_2ad3…f891 [must/always] Run the tests before you push
 ```console
 # alice, in website
 $ lore render
+lore sync: imported 1
 ✓ .lore/LORE.md (12293 bytes; 1R + 0HF)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 $ cat CLAUDE.md
@@ -156,9 +156,9 @@ _lore_live_rows       0
 _lore_sync_conflicts  0
 _lore_sync_dirty      0
 _lore_sync_errors     0
-_lore_sync_extra      0
+_lore_sync_extra      3
 _lore_sync_files      3
-_lore_sync_meta       4
+_lore_sync_meta       6
 …
 ```
 <!-- /example -->
