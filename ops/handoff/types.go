@@ -22,8 +22,12 @@ const badge = "HA"
 // [--task <id>] <text>`). --to keeps v0.1.17's meaning (deprecated alias
 // of --for), so the store target of this one command is --store.
 type AddIn struct {
-	For   string `json:"for,omitempty" flag:"for" desc:"who the handoff is for (@handle, stable key, display name or act_ id)"`
-	To    string `json:"to,omitempty" flag:"to" desc:"deprecated alias of --for"`
+	For string `json:"for,omitempty" flag:"for" desc:"who the handoff is for (@handle, stable key, display name or act_ id)"`
+	// To is v0.1.17's --to spelling of --for. Its JSON name is not "to":
+	// the engine reads an input field named "to" as the write's target
+	// store (engine.InputTarget), so `--to @alice` would look for a store
+	// named @alice; the handoff's store is --store.
+	To    string `json:"to_actor,omitempty" flag:"to" desc:"deprecated alias of --for"`
 	Task  string `json:"task,omitempty" flag:"task" desc:"the task it is about (its mission is recorded too)"`
 	Body  string `json:"body,omitempty" flag:"body" desc:"the handoff text (instead of the positional text)" ui:"widget=markdown"`
 	Text  string `json:"text,omitempty" arg:"0" rest:"true" desc:"the handoff text"`
