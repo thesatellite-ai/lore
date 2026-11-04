@@ -39,7 +39,7 @@ on alice work/shop "lore sync"
 on alice work/shop "ls .git/hooks | grep -v sample; cat .gitattributes"
 
 note "sync allow secrets"
-on alice work/website "lore memory add --allow-secrets --body 'The staging password is password=example-only'"
+on alice work/website "lore memory add --yes --body 'The staging password is password=example-only'"
 local m_secret; m_secret=$(id mem)
 on alice work/website "ls .lore/data/memories | grep -c $m_secret || true"
 on alice work/website "LORE_SYNC_ALLOW_SECRETS=1 lore sync"

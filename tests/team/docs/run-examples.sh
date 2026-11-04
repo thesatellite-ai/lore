@@ -757,10 +757,10 @@ s_team_ops() {
   on bob work/billing "lore task list"
 
   note "resource"
-  on alice work/billing "lore resource claim full-suite --ttl 30m"
-  on! bob work/billing "lore resource claim full-suite --ttl 30m"
-  on alice work/billing "lore resource release full-suite"
-  on bob work/billing "lore resource claim full-suite --ttl 30m"
+  on alice work/billing "lore hold claim full-suite --ttl 30m"
+  on! bob work/billing "lore hold claim full-suite --ttl 30m"
+  on alice work/billing "lore hold release full-suite"
+  on bob work/billing "lore hold claim full-suite --ttl 30m"
 
   # Then the agency's client repo, with the org config: claims a person takes back or moves.
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
