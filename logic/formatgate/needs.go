@@ -18,6 +18,8 @@ const (
 	// FieldDeletedAt marks a row in the trash (logic/trash.FieldDeletedAt;
 	// same layer rank, so the string is repeated, not imported).
 	FieldDeletedAt = "deleted_at"
+	// FieldTimeEntries is tasks.time_entries (ops/task.FieldTimeEntries; repeated, same layer rule as above).
+	FieldTimeEntries = "time_entries"
 )
 
 // Needs lists the features a row written by this binary uses, sorted
@@ -32,6 +34,9 @@ func Needs(r row.Row) []string {
 	}
 	if _, trashed := r.Fields[FieldDeletedAt]; r.Deleted || trashed {
 		out = append(out, Trash) // a tombstone, or a row in the trash (DELETION 3.1)
+	}
+	if _, ok := r.Fields[FieldTimeEntries]; ok {
+		out = append(out, Time) // a task with time entries (TIME_TRACKING_DESIGN 13 step 1)
 	}
 	switch t := r.Table.String(); {
 	case t == TablePolicies:

@@ -55,6 +55,8 @@ const (
 	KeyTimeLongSpan    Key = "time.long_span"
 	KeyTimeCoalesceGap Key = "time.coalesce_gap"
 	KeyTimeMaxEntry    Key = "time.max_entry"
+	// KeyTimeClientShare: what a task moved into a client repo carries of its time (TQ3): none (default, strictest) | totals.
+	KeyTimeClientShare Key = "time.client_share"
 	// KeyClientRoutes is v0.1.17's lore-org.yaml `defaults.client_repos`
 	// (CFG8: team rules are policies rows of the org folder): where a row
 	// of each kind goes in a client repo when the write names no --to.
@@ -236,6 +238,8 @@ func Keys() []KeyDef {
 		{Key: KeyTimeLongSpan, Shape: ShapeLimit, Default: value.Int(defaultTimeLongSpanMin), Doc: "minutes after which a closed auto time span is flagged long_span; never capped (TQ2)"},
 		{Key: KeyTimeCoalesceGap, Shape: ShapeLimit, Default: value.Int(defaultTimeCoalesceGapMin), Doc: "minutes: auto spans of one worker closer than this are coalesced at write (TQ4)"},
 		{Key: KeyTimeMaxEntry, Shape: ShapeLimit, Ceiling: defaultTimeMaxEntryMin, Default: value.Int(defaultTimeMaxEntryMin), Doc: "minutes: the longest manual time entry (D13, max 24h)"},
+		// TQ3: none is the strict value (a client gets no time data); a per-move --with-time overrides it.
+		{Key: KeyTimeClientShare, Shape: ShapeRank, Choices: []string{"none", "totals"}, Default: mustText("none"), Doc: "what a task moved into a client repo carries of its time: none or totals (per worker, no spans) (TQ3)"},
 		{Key: KeyContextBudgetClaudeCode, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetLarge), Doc: "bytes of .lore/LORE.md when the claude_code profile reads it (CQ1)"},
 		{Key: KeyContextBudgetCodex, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md when the codex profile reads it (CQ1)"},
 		{Key: KeyContextBudgetCursor, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md when the cursor profile reads it (CQ1)"},
