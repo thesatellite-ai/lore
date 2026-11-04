@@ -45,7 +45,8 @@ const personOnlySep = "."
 // lists, at any level (the key is a set: every level's items join, so the
 // stricter answer always wins). A person is never refused by it. The
 // message names the rule, the row that set it, the level and what lore saw;
-// never a field value.
+// never a field value. DOCS O9: this list is the one way to keep agents from
+// a command (it replaced meta.agents_new_keys).
 func personOnly(pol policy.Set, spec op.Spec, in op.Input, c op.Caller) error {
 	if c.Agent == "" {
 		return nil

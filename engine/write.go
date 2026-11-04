@@ -139,11 +139,11 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 }
 
 // recreateNatural handles a natural-id create whose id is taken (stale is
-// the put's ErrStale). Tombstones are kept forever (DQ), so a deleted
-// tag, commit link, var, policy or kind could otherwise never be added
-// again: when the row at the natural id is a tombstone and no LIVE row of
-// the table in that store holds the same key (an earlier re-create got a
-// random id), the row is written under a fresh random id instead. A live
+// the put's ErrStale; natural-id re-create, L89 + L93). Tombstones are
+// kept forever (DQ4), so a deleted tag, commit link, var, policy or kind
+// could otherwise never be added again: when the row at the natural id is
+// a tombstone and no LIVE row of the table in that store holds the same
+// key (an earlier re-create got a random id), the row is written under a fresh random id instead. A live
 // row with the key stays "already exists". Two machines re-creating the
 // same key offline get two rows (spec-deltas; a merge by key is later
 // work).
@@ -392,7 +392,7 @@ func (e *Engine) shown(field string, v value.Value) string {
 // Delete writes a tombstone for a live row and applies every relation's
 // on-delete rule first (DOCS O2): restrict refuses while live rows point at
 // it (E_HAS_DEPENDENTS), cascade tombstones them too, set_null clears their
-// field, tombstone_only leaves them. Tombstones are kept forever.
+// field, tombstone_only leaves them. Tombstones are kept forever (DQ4).
 func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 	src, cur, err := e.locate(ctx, ref)
 	if err != nil {

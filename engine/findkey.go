@@ -23,9 +23,10 @@ type Found struct {
 
 // FindByKey returns the live rows of table whose fields equal key (field
 // name → the value's string form), nearest store first. Natural ids are
-// per store (the target store's namespace is part of the hash), so a row
-// is found by its key, never by recomputing its id: the same tag name in
-// two stores is two rows, and the first one is the nearest.
+// per store (L78 + L101: the target store's namespace is part of the
+// hash), so a row is found by its key, never by recomputing its id: the
+// same tag name in two stores is two rows, and the first one is the
+// nearest.
 func FindByKey(ctx context.Context, l KeyLister, table row.Table, key map[string]string) ([]Found, error) {
 	var out []Found
 	for _, src := range l.Stores() {

@@ -1,6 +1,8 @@
 // Package attach reads a repo's .lore/stores.yaml (STORE_SERVER_SPEC 7.1)
 // and opens every store it lists through the backends the binary
-// registered (store.Openers), giving the engine its attached stores.
+// registered (store.Openers), giving the engine its attached stores
+// (STORES DIRECT: a repo attaches any number of stores itself, no org
+// needed).
 //
 // Rules enforced: names are snake_case, unique and not reserved (repo, me,
 // team, company: CFG2, STORE TARGETS); a url must name a backend scheme

@@ -1,7 +1,7 @@
 package engine
 
 // Purge (DELETION_DESIGN 3.5, STORE_SERVER_SPEC 6.1): removing a row for
-// good. The core's delete already writes a tombstone kept forever; a purge
+// good. The core's delete already writes a tombstone kept forever (DQ4); a purge
 // also lists the id in the folder's .lore/data/_purged.json, which
 // v0.1.17 honours on ADOPT and git merges as a set union, and which the
 // engine reads before every write: a purged id never holds a live row

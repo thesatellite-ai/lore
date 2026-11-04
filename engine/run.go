@@ -105,7 +105,8 @@ func needsConfirm(spec op.Spec, in op.Input) bool {
 
 // confirm settles one question: yes passes; an interactive caller with a
 // Confirmer is asked; anyone else gets E_NEEDS_CONFIRM carrying the
-// question, so an agent can relay it to its person.
+// question, so an agent can relay it to its person (XQ3: no terminal
+// means --yes is required; DQ2: --yes for every non-permanent confirm).
 func (e *Engine) confirm(ctx context.Context, cl call, question string) error {
 	if cl.caller.Yes {
 		return nil
