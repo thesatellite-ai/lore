@@ -266,7 +266,8 @@ func boolInt(b bool) int {
 
 // RowsOf turns one source's files into rows: every <table>/<id>.json, with
 // a live file replacing the branch file of the same path (live wins, fixed
-// rule 4) and a live tombstone (`_live.deleted`) hiding it. Files starting
+// rule 4) and a live tombstone (`_live.deleted`) hiding it; a 0.1.18
+// tombstone file (`_deleted: true`) is no row either. Files starting
 // with "_" (_meta.json, _purged.json) are not rows. Sorted.
 func RowsOf(s SourceFiles) []Row {
 	docs := map[string][]byte{}
@@ -287,6 +288,15 @@ func RowsOf(s SourceFiles) []Row {
 		var doc map[string]json.RawMessage
 		if err := json.Unmarshal(b, &doc); err != nil {
 			continue // a broken file is reported by the owner's sync, not cached
+		}
+		// A 0.1.18 row file (_v 2) that is a tombstone carries no row: its
+		// id must not count as internal content (the row was deleted or
+		// moved away with `lore move`, which keeps the id).
+		if del, ok := doc["_deleted"]; ok {
+			var d bool
+			if json.Unmarshal(del, &d) == nil && d {
+				continue
+			}
 		}
 		if lv, ok := doc["_live"]; ok {
 			var l struct {

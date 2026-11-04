@@ -173,3 +173,27 @@ func TestPrune(t *testing.T) {
 		}
 	}
 }
+
+// A 0.1.18 tombstone file (`_deleted: true`, what `lore move` and delete
+// leave in the old store) is no row: its id must not reach the leak index
+// as internal content. `_deleted: false`, a non-bool, or a body field named
+// like it keep the row.
+func TestRowsOfV2Tombstone(t *testing.T) {
+	s := src(StoreSource("northwind", "acme"), "[northwind/acme]", map[string]string{
+		"memories/mem_moved.json": `{"_v":2,"_table":"memories","id":"mem_moved","_deleted":true,"_hlc":"2026-11-04T13:49:01.206Z/0000/act_x"}`,
+		"memories/mem_live.json":  `{"_v":2,"_table":"memories","id":"mem_live","body":"still here","_deleted":false}`,
+		"memories/mem_odd.json":   `{"_v":2,"_table":"memories","id":"mem_odd","body":"odd flag","_deleted":"yes"}`,
+		"rules/rul_text.json":     `{"_v":2,"_table":"rules","id":"rul_text","body":"_deleted: true is just text here"}`,
+	}, map[string]string{
+		"tasks/tsk_gone.json": `{"_v":2,"_table":"tasks","id":"tsk_gone","_deleted":true}`,
+	})
+	got := map[string]bool{}
+	for _, r := range RowsOf(s) {
+		got[r.ID] = true
+	}
+	for id, want := range map[string]bool{"mem_moved": false, "tsk_gone": false, "mem_live": true, "mem_odd": true, "rul_text": true} {
+		if got[id] != want {
+			t.Errorf("%s cached = %v, want %v", id, got[id], want)
+		}
+	}
+}
