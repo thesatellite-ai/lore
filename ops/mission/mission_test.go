@@ -92,8 +92,9 @@ func TestMissionLifecycle(t *testing.T) {
 	}
 }
 
-// TestMissionDeleteClearsTasks: deleting a mission keeps its tasks and
-// clears their mission_id (SetNull), as the schema relation says.
+// TestMissionDeleteClearsTasks: deleting a mission takes its tasks into
+// the trash in the same batch (DELETION 3.4: tasks are a mission's
+// dependents; this used to pin the old SetNull behaviour).
 func TestMissionDeleteClearsTasks(t *testing.T) {
 	h := opstest.New(t)
 	id := addMission(t, h, `{"title":"Doomed"}`)
@@ -101,10 +102,7 @@ func TestMissionDeleteClearsTasks(t *testing.T) {
 	h.Fails("mission.delete", `{"id":"`+id+`"}`, errs.NeedsConfirm)
 	h.MustYes("mission.delete", `{"id":"`+id+`"}`)
 	h.Fails("mission.show", `{"id":"`+id+`"}`, errs.NotFound)
-	got := h.JSON(h.Must("task.show", `{"id":"`+child+`"}`))
-	if strings.Contains(got, id) {
-		t.Fatalf("task still points at the deleted mission: %s", got)
-	}
+	h.Fails("task.show", `{"id":"`+child+`"}`, errs.NotFound)
 }
 
 // TestMissionRefusals: empty title, bad target date, the status closed

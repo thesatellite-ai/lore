@@ -240,7 +240,9 @@ func workDefs() []TableDef {
 			IndexOn("mission_id"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 			BelongsToRel("repo", "repo_id", TableRepos, SetNull),
-			BelongsToRel("mission", "mission_id", TableMissions, SetNull),
+			// DELETION 3.4: a mission's tasks are its dependents; deleting
+			// the mission takes them (and their subtrees) into the same batch.
+			BelongsToRel("mission", "mission_id", TableMissions, Cascade),
 			// DQ6: deleting a tasklist takes its tasks with it (one batch,
 			// behind the op's confirm).
 			BelongsToRel("tasklist", "tasklist_id", TableTasklists, Cascade),
