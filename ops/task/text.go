@@ -113,6 +113,9 @@ func (o ShowOut) Text() string {
 	if t.DoneBy != "" {
 		b.WriteString("  done by:  " + t.DoneBy + "\n")
 	}
+	for _, r := range t.Refs {
+		b.WriteString("  ref:      " + r.Table + "/" + r.ID + "\n")
+	}
 	if t.Body != "" {
 		b.WriteString("\n" + t.Body + "\n")
 	}

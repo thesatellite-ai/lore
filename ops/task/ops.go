@@ -187,8 +187,10 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	switch {
 	case in.Assign != "":
 		return AddOut{}, notYet("assign", "assign a person by actor id: --assigned-to act_…")
-	case len(in.Ref) > 0:
-		return AddOut{}, notYet("ref", "link the rows after adding the task: `lore link add`")
+	}
+	refs, err := o.parseRefs(ctx, in.Ref)
+	if err != nil {
+		return AddOut{}, err
 	}
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
@@ -273,6 +275,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	src, w, err := work.Create(ctx, o.env, in.To, table, fields)
 	if err != nil {
+		return AddOut{}, err
+	}
+	if err := o.saveRefs(ctx, src, project.String(), w.Row.ID, refs); err != nil {
 		return AddOut{}, err
 	}
 	out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(src, w.Row), Store: string(src)}
@@ -634,6 +639,9 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if by := work.Field(r, fieldDoneBy); by != "" {
 		full.DoneBy = o.actorName(ctx, by)
 	}
+	if full.Refs, err = o.refsOf(ctx, id); err != nil {
+		return ShowOut{}, err
+	}
 	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: full}, nil
 }
 
@@ -655,15 +663,20 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	switch {
 	case in.Assign != "":
 		return work.WriteOut{}, notYet("assign", "assign a person by actor id: --assigned-to act_…")
-	case len(in.Ref) > 0:
-		return work.WriteOut{}, notYet("ref", "link the rows with `lore link add`")
 	}
 	id, err := taskID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	_, cur, err := work.Get(ctx, o.env, Noun, table, id)
+	curSrc, cur, err := work.Get(ctx, o.env, Noun, table, id)
 	if err != nil {
+		return work.WriteOut{}, err
+	}
+	refs, err := o.parseRefs(ctx, in.Ref)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if err := o.saveRefs(ctx, curSrc, work.Field(cur, work.FieldProject), id, refs); err != nil {
 		return work.WriteOut{}, err
 	}
 	for _, c := range []struct{ flag, v string }{{"priority", in.Priority}, {"status", in.Status}, {"commitment", in.Commitment}} {
@@ -719,6 +732,9 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	}
 	if in.Timebox > 0 {
 		patch[fieldTimebox] = value.Int(int64(in.Timebox / time.Second))
+	}
+	if len(patch) == 0 && len(refs) > 0 {
+		return work.WriteOut{ID: id.String(), Store: work.SourceName(curSrc), Human: work.Success + " " + id.String() + " updated\n"}, nil
 	}
 	if len(patch) == 0 {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: nothing to change").

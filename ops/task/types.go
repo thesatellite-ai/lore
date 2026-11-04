@@ -39,10 +39,11 @@ type AddIn struct {
 	Timebox time.Duration `json:"timebox,omitempty" flag:"timebox" desc:"time box, e.g. 60m (active lease time summed across holders)"`
 	Role    string        `json:"role,omitempty" flag:"role" desc:"plan role matched by task next --role (e.g. coordinator)"`
 	Key     string        `json:"key,omitempty" flag:"key" desc:"idempotency key: a re-run with the same key (in the same mission) adds nothing"`
-	// Assign and Ref are v0.1.17 team flags whose homes (the team roster,
-	// knowledge refs) have not moved to the core yet: refused.
+	// Assign is a v0.1.17 team flag whose home (the team roster) has not
+	// moved to the core yet: refused. Ref pointers are refs.go.
+
 	Assign  string   `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (not on the new core yet; use --assigned-to act_…)"`
-	Ref     []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (not on the new core yet)"`
+	Ref     []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 	To      string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
 	Repo    string   `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id)"`
 	Project string   `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
@@ -105,6 +106,9 @@ type Full struct {
 	// TagIDs is new in 0.1.18 (O11; absent when untagged).
 	TagIDs []string `json:"tag_ids,omitempty"`
 	Store  string   `json:"_source,omitempty"`
+	// Refs are the task's --ref pointers (new in the show output; v0.1.17
+	// wrote them but never printed them).
+	Refs []RefOut `json:"refs,omitempty"`
 	// DoneBy / Detail feed the human show only.
 	DoneBy string `json:"-"`
 }
@@ -181,7 +185,7 @@ type EditIn struct {
 	Timebox       time.Duration `json:"timebox,omitempty" flag:"timebox" desc:"time box, e.g. 60m"`
 	Role          string        `json:"role,omitempty" flag:"role" desc:"plan role matched by task next --role (e.g. coordinator)"`
 	Assign        string        `json:"assign,omitempty" flag:"assign" desc:"assign to @handle (not on the new core yet; use --assigned-to act_…)"`
-	Ref           []string      `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (not on the new core yet)"`
+	Ref           []string      `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 }
 
 // DoneIn is the input of task.done.

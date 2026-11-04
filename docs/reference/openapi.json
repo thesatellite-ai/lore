@@ -25881,7 +25881,7 @@
                   },
                   "ref": {
                     "type": "array",
-                    "description": "a pointer to another row (not on the new core yet)",
+                    "description": "a pointer to another row (\u003cid\u003e or \u003cproject\u003e:\u003cid\u003e) or a commit (commit:\u003csha\u003e); repeatable",
                     "items": {
                       "type": "string"
                     }
@@ -25970,6 +25970,31 @@
                         },
                         "project_id": {
                           "type": "string"
+                        },
+                        "refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "project_id": {
+                                "type": "string"
+                              },
+                              "relation": {
+                                "type": "string"
+                              },
+                              "table": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "table",
+                              "id",
+                              "relation"
+                            ]
+                          }
                         },
                         "repo_id": {
                           "type": "string"
@@ -27119,6 +27144,31 @@
                         "project_id": {
                           "type": "string"
                         },
+                        "refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "project_id": {
+                                "type": "string"
+                              },
+                              "relation": {
+                                "type": "string"
+                              },
+                              "table": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "table",
+                              "id",
+                              "relation"
+                            ]
+                          }
+                        },
                         "repo_id": {
                           "type": "string"
                         },
@@ -27329,7 +27379,7 @@
                   },
                   "ref": {
                     "type": "array",
-                    "description": "a pointer to another row (not on the new core yet)",
+                    "description": "a pointer to another row (\u003cid\u003e or \u003cproject\u003e:\u003cid\u003e) or a commit (commit:\u003csha\u003e); repeatable",
                     "items": {
                       "type": "string"
                     }
