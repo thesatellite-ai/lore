@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/origin"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -55,10 +59,19 @@ type Mover interface {
 	MoveWith(ctx context.Context, ref engine.Ref, to store.Source, opt engine.MoveOptions) (engine.Written, error)
 }
 
+// Expander is the Env upgrade show --expand needs (wire.App: the same
+// resolver the cache uses, and the write scanner for the output, 13.2).
+// An Env without it answers E_UNSUPPORTED for --expand.
+type Expander interface {
+	RefResolver(ctx context.Context) (refs.Resolver, error)
+	OutputScanner(ctx context.Context) (scan.Scanner, error)
+}
+
 // ShowIn is the input of row.show.
 type ShowIn struct {
 	ID     string `json:"id" arg:"0" desc:"any row id (mem_…, tsk_…, res_…, var_…)"`
 	Origin bool   `json:"origin,omitempty" flag:"origin" desc:"also print where the row came from: _o, the audit fields, the _w stamp and its moves (PROV 9.1)"`
+	Expand bool   `json:"expand,omitempty" flag:"expand" desc:"fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"`
 }
 
 // MoveIn is the input of row.move.
@@ -169,7 +182,12 @@ type ShowOut struct {
 	Write   Write       `json:"write,omitzero"`
 	Lineage Lineage     `json:"lineage,omitzero"`
 	Legacy  Legacy      `json:"legacy,omitzero"`
-	prov    *Origin
+	// Expanded is each text field that --expand changed, filled in
+	// (SECRETS 12: "--json adds expanded and refs"); Refs lists every
+	// reference met, with its value or why it stayed as written.
+	Expanded map[string]string `json:"expanded,omitempty"`
+	Refs     []refpoint.Used   `json:"refs,omitempty"`
+	prov     *Origin
 }
 
 // MoveOut is the output of row.move.
@@ -202,7 +220,8 @@ func Ops(env Env) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpShow, Summary: "Show any row by id, with --origin for where it came from",
 			Permission: op.PermRead, Access: op.AccessRead,
-			Errors: []errs.Code{errs.InvalidID, errs.NotFound, errs.Internal}}, o.show),
+			Errors: []errs.Code{errs.InvalidID, errs.NotFound, errs.Unsupported, errs.RefCycle, errs.RefDepth,
+				errs.RefLimit, errs.RefRequired, errs.Internal}}, o.show),
 		op.Define(op.Spec{Name: OpMove, Summary: "Move any row to another store, keeping its id (the old copy is tombstoned)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{Always: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.MetaInternal, errs.LeakBlocked,
@@ -241,6 +260,11 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			out.Meta[name] = val
 		}
 	}
+	if in.Expand {
+		if err := o.expand(ctx, r, def, &out); err != nil {
+			return ShowOut{}, err
+		}
+	}
 	if in.Origin {
 		og, oerr := o.origin(ctx, r)
 		if oerr != nil {
@@ -249,6 +273,47 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		out.Origin, out.Audit, out.Write, out.Lineage, out.Legacy, out.prov = og.Origin, og.Audit, og.Write, og.Lineage, og.Legacy, &og
 	}
 	return out, nil
+}
+
+// expand is --expand: every non-sensitive text field through the show
+// point of refpoint (var/res/row/env filled, secrets masked, scanner hits
+// masked; SECRETS 2.7, 12, 13.2). Stored text is never changed (SQ3).
+func (o ops) expand(ctx context.Context, r row.Row, def schema.TableDef, out *ShowOut) error {
+	ex, ok := o.env.(Expander)
+	if !ok {
+		return errs.New(errs.Unsupported, "show --expand: this build's store wiring cannot resolve references")
+	}
+	rv, err := ex.RefResolver(ctx)
+	if err != nil {
+		return err
+	}
+	sc, err := ex.OutputScanner(ctx)
+	if err != nil {
+		return err
+	}
+	opt := refpoint.Options{Point: refpoint.Show, Resolver: rv, Scanner: sc, Env: os.LookupEnv}
+	for _, k := range slices.Sorted(maps.Keys(r.Fields)) {
+		t, isText := r.Fields[k].(value.Text)
+		if f, ok := def.Field(k); !isText || (ok && f.Sensitive) {
+			continue
+		}
+		res, err := refpoint.Expand(opt, k, t.String())
+		if err != nil {
+			return err
+		}
+		for _, u := range res.Refs {
+			if !slices.ContainsFunc(out.Refs, func(v refpoint.Used) bool { return v.Ref == u.Ref }) {
+				out.Refs = append(out.Refs, u)
+			}
+		}
+		if res.Text != t.String() {
+			if out.Expanded == nil {
+				out.Expanded = map[string]string{}
+			}
+			out.Expanded[k] = res.Text
+		}
+	}
+	return nil
 }
 
 // metaPair is one meta entry's name and value text ({name, v, …}).
@@ -389,17 +454,44 @@ func (o ShowOut) Text() string {
 	}
 	b.WriteString("\n")
 	for _, k := range slices.Sorted(maps.Keys(o.Fields)) {
-		if o.Fields[k] != "" {
-			b.WriteString("  " + k + ": " + o.Fields[k] + "\n")
+		v := o.Fields[k]
+		if e, ok := o.Expanded[k]; ok {
+			v = e
+		}
+		if v != "" {
+			b.WriteString("  " + k + ": " + v + "\n")
 		}
 	}
 	for _, k := range slices.Sorted(maps.Keys(o.Meta)) {
 		b.WriteString("  meta " + k + ": " + o.Meta[k] + "\n")
 	}
+	if len(o.Refs) > 0 {
+		b.WriteString("references:\n")
+		for _, u := range o.Refs {
+			b.WriteString("  " + u.Ref + "  " + refLine(u) + "\n")
+		}
+	}
 	if o.prov != nil {
 		b.WriteString(o.prov.text())
 	}
 	return b.String()
+}
+
+// refLine is one reference's state as show --expand prints it.
+func refLine(u refpoint.Used) string {
+	parts := []string{}
+	if u.State == refpoint.StateExpanded {
+		parts = append(parts, u.Value)
+	} else {
+		parts = append(parts, string(u.State))
+	}
+	if u.Source != "" {
+		parts = append(parts, "("+u.Source+")")
+	}
+	if u.Note != "" {
+		parts = append(parts, u.Note)
+	}
+	return strings.Join(parts, "  ")
 }
 
 // text is the human form of --origin.

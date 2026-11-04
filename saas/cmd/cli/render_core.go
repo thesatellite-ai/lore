@@ -21,6 +21,17 @@
 // no longer pinned (its replacement is), and an activation: manual rule
 // never enters the core; both are counted in the render report instead.
 //
+// Expansion (SECRETS_AND_REFERENCES 12, 13; SQ11, SQ18, SQ23, D23):
+//
+//	pinned rows ─▶ expandPinned ─▶ refpoint Render point (Client in a client repo)
+//	                 var: shareable and not personal; res/row: home is a render source
+//	                 secret: as written (ours) | ${secret:redacted} (client); env never
+//	               ─▶ scanner on the expanded text: a new hit refuses the render
+//
+// Every committed output (LORE.md, LORE.full.md, folder files) is built
+// from the expanded rows, so one pass covers them all; row files keep the
+// references (SQ3).
+//
 // The project filter applies to repo-store rows only: a shareable store's
 // rows carry its own folder's project id, and attaching the store is what
 // puts them in scope.
@@ -32,6 +43,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/direction"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -275,4 +291,98 @@ func repoScope(r renderRow, field string) string {
 		return ""
 	}
 	return renderField(r.Row, field)
+}
+
+// renderVarShareable is the vars field that lets a committed render fill
+// the variable in (BATCH 1).
+const renderVarShareable = "shareable"
+
+// expandPinned fills the references of the pinned rows' text fields for
+// the committed render, or refuses when an expanded value brings a secret
+// in (13.2, D23).
+func expandPinned(ctx context.Context, rules []pinnedRule, hotfixes []pinnedHotfix) ([]pinnedRule, []pinnedHotfix, error) {
+	opt, err := renderExpandOptions(ctx)
+	if err != nil {
+		return nil, nil, coreErr(err)
+	}
+	fill := func(id, field string, s *string) error {
+		if *s == "" || len(refs.References(*s)) == 0 {
+			return nil
+		}
+		res, err := refpoint.Expand(opt, id+" "+field, *s)
+		if err != nil {
+			return coreErr(err)
+		}
+		*s = res.Text
+		return nil
+	}
+	for i := range rules {
+		r := &rules[i]
+		for _, f := range []struct {
+			name string
+			s    *string
+		}{{renderFieldBody, &r.Body}, {schema.FieldSummary, &r.Summary}} {
+			if err := fill(r.ID, f.name, f.s); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	for i := range hotfixes {
+		h := &hotfixes[i]
+		for _, f := range []struct {
+			name string
+			s    *string
+		}{{renderFieldTitle, &h.Title}, {renderFieldBody, &h.Body}, {schema.FieldSummary, &h.Summary}} {
+			if err := fill(h.ID, f.name, f.s); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	return rules, hotfixes, nil
+}
+
+// renderExpandOptions builds the render point: Client when the repo store
+// is client-class (13.1), the resolver and scanner from the App, and
+// Locate placing a value's row against the render sources.
+func renderExpandOptions(ctx context.Context) (refpoint.Options, error) {
+	opt := refpoint.Options{Point: refpoint.Render}
+	if coreApp == nil {
+		return opt, errcodes.New(errcodes.Internal, "the core is not mounted")
+	}
+	repoClass, err := coreApp.StoreClass(ctx, store.SourceRepo)
+	if err != nil {
+		return opt, err
+	}
+	if repoClass == direction.Client {
+		opt.Point = refpoint.Client
+	}
+	if opt.Resolver, err = coreApp.RefResolver(ctx); err != nil { // wire/expandport.go
+		return opt, err
+	}
+	if opt.Scanner, err = coreApp.OutputScanner(ctx); err != nil {
+		return opt, err
+	}
+	srcs, err := renderSources(ctx)
+	if err != nil {
+		return opt, err
+	}
+	reach := map[store.Source]bool{}
+	for _, s := range srcs {
+		// a client render shows only the client repo's own rows (13.1)
+		reach[s] = opt.Point == refpoint.Render || s == store.SourceRepo
+	}
+	opt.Locate = func(id ids.AnyID) refpoint.Target {
+		src, r, err := coreApp.Get(ctx, engine.Ref{ID: id})
+		if err != nil || r.Deleted {
+			return refpoint.Target{} // unplaced: kept as written
+		}
+		class, err := coreApp.StoreClass(ctx, src)
+		b, _ := r.Fields[renderVarShareable].(value.Bool)
+		return refpoint.Target{
+			Personal:  err != nil || class == direction.Personal,
+			Shareable: b.Bool(),
+			Reaches:   reach[src],
+		}
+	}
+	return opt, nil
 }

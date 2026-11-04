@@ -157,6 +157,11 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	if err != nil {
 		return err
 	}
+	// SECRETS 12 / 13.2: references filled for the committed render; a
+	// value that brings a secret in refuses it (D23).
+	if rules, hotfixes, err = expandPinned(ctx, rules, hotfixes); err != nil {
+		return err
+	}
 	root, err := os.Getwd()
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
