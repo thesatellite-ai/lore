@@ -144,3 +144,16 @@ func Begin(ctx context.Context, kind Kind) (context.Context, ids.ID[ids.Batch], 
 	}
 	return engine.WithBatch(ctx, engine.Batch{ID: id, Kind: string(kind)}), id, nil
 }
+
+// Ask is the confirmation of an operation that both asks always for one
+// row and previews for many (`resource delete <name>` and `resource delete
+// --kind --where`): its spec can only say MayAsk (an up-front Always would
+// ask before the bulk form could count and preview, XQ2), so the one-row
+// form asks here: E_NEEDS_CONFIRM with question unless the caller already
+// said yes. The CLI prompts a terminal on it and re-runs with yes.
+func Ask(ctx context.Context, question string) error {
+	if engine.Confirmed(ctx) {
+		return nil
+	}
+	return errs.New(errs.NeedsConfirm, question).WithHint("ask the person, then rerun with --yes")
+}

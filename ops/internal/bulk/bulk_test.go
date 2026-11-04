@@ -91,3 +91,9 @@ func TestBeginRefusesUnknownKind(t *testing.T) {
 		t.Fatalf("Begin = %s %v", id, err)
 	}
 }
+
+func TestAskOutsideRun(t *testing.T) {
+	if err := Ask(context.Background(), "delete x?"); !errs.Has(err, errs.NeedsConfirm) || !strings.Contains(err.Error(), "delete x?") {
+		t.Fatalf("Ask = %v, want E_NEEDS_CONFIRM (no caller has said yes)", err)
+	}
+}
