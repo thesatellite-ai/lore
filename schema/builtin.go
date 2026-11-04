@@ -100,7 +100,7 @@ func Builtin() []TableDef {
 	// Each noun group owns one file (builtin_<group>.go) so the parallel
 	// migrations never edit the same file; the order here is stable so the
 	// registry and the written docs stay deterministic.
-	for _, group := range [][]TableDef{knowledgeDefs(), contentDefs(), workDefs(), linkDefs(), settingsDefs()} {
+	for _, group := range [][]TableDef{knowledgeDefs(), contentDefs(), workDefs(), linkDefs(), settingsDefs(), content2Defs(), learnDefs(), telemetryDefs(), infraDefs()} {
 		defs = append(defs, group...)
 	}
 	return defs
