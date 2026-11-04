@@ -148,6 +148,16 @@ type Options struct {
 	// already uses is skipped (the committed file wins). Nil, or an error,
 	// attaches nothing (fail closed: an internal store is never guessed).
 	OrgStores func(ctx context.Context) ([]attach.Store, error)
+	// WrapBackend, when set, wraps each store's backend before the
+	// engine, the scanner and the format readers' map see it (the CLI's
+	// live-ref overlay, v0.1.17 live mode: open rows of live tables go to
+	// and come from refs/lore/live, merged with the branch copy by HLC).
+	// name is the store's source (store.SourceRepo for the repo store),
+	// folder the attached store's project folder ("" for the repo store).
+	// Returning b unchanged is a no-op; nil changes nothing. The wrapper's
+	// Close must close b. The close list and the migration rewrite keep
+	// the unwrapped backends (RewriteV1 rewrites branch files).
+	WrapBackend func(ctx context.Context, name store.Source, folder string, b store.Backend) store.Backend
 	// Notice receives one-line notices for the person, once per open (a
 	// CLI prints them on stderr; nil drops them). Today: LiveNote, when the
 	// v0.1.17 live ref holds rows the core cannot see yet.

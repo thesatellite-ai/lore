@@ -268,7 +268,7 @@ func liveSources(st *state) []liveSource {
 		if name == store.SourceRepo {
 			continue
 		}
-		gb, ok := st.byName[name].(gitStoreBackend)
+		gb, ok := concrete(st.byName[name]).(gitStoreBackend)
 		if !ok || gb.Branch() == "" {
 			continue
 		}
@@ -277,7 +277,7 @@ func liveSources(st *state) []liveSource {
 			f = liveRootFolder
 		}
 		v017 := false
-		if m, ok := st.byName[name].(markerOf); ok {
+		if m, ok := concrete(st.byName[name]).(markerOf); ok {
 			v017 = m.Marker().Version < rowfs.MarkerVersion
 		}
 		b := gb.Branch()

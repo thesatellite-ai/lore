@@ -37,7 +37,7 @@ func (a *App) StoreIdentities(ctx context.Context) ([]StoreIdentity, error) {
 			continue
 		}
 		si := StoreIdentity{Name: name, Folder: st.folders[name]}
-		if m, ok := st.byName[name].(markerOf); ok {
+		if m, ok := concrete(st.byName[name]).(markerOf); ok {
 			mk := m.Marker()
 			if !mk.ID.IsZero() {
 				si.ID = mk.ID.String()

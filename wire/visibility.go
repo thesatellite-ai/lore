@@ -24,7 +24,7 @@ func (a *App) ShareableStores(ctx context.Context) ([]store.Source, error) {
 		if name == store.SourceRepo {
 			continue
 		}
-		m, ok := st.byName[name].(markerOf)
+		m, ok := concrete(st.byName[name]).(markerOf)
 		if ok && m.Marker().Visibility == rowfs.VisibilityShareable {
 			out = append(out, name)
 		}

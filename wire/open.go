@@ -92,6 +92,12 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	st.backends = append(st.backends, repo)
 	st.repoTop = repo.Dir()
+	var repoBackend store.Backend = repo
+	if opts.WrapBackend != nil {
+		if repoBackend, err = wrapBackend(ctx, opts, store.SourceRepo, "", repo); err != nil {
+			return fail(err)
+		}
+	}
 
 	var attached []attach.Opened
 	if !repoOnly {
@@ -105,6 +111,13 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	for _, o := range attached {
 		st.backends = append(st.backends, o.Backend)
+	}
+	if opts.WrapBackend != nil {
+		for i := range attached {
+			if attached[i].Backend, err = wrapBackend(ctx, opts, attached[i].Name, attached[i].Folder, attached[i].Backend); err != nil {
+				return fail(err)
+			}
+		}
 	}
 
 	st.caches = newCaches()
@@ -143,7 +156,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		}
 	}
 
-	backends := map[store.Source]store.Backend{store.SourceRepo: repo}
+	backends := map[store.Source]store.Backend{store.SourceRepo: repoBackend}
 	st.folders = map[store.Source]string{}
 	for _, o := range attached {
 		backends[o.Name] = o.Backend
@@ -162,7 +175,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	repoClient, note := repoIsClient(ctx, opts)
 	st.repoClassNote = note
 	engOpts := []engine.Option{
-		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repo, Client: repoClient}),
+		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient}),
 		engine.WithCache(st.caches), engine.WithRegistry(reg), engine.WithScanner(scanner),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 	}
@@ -393,11 +406,11 @@ type branchOf interface{ Branch() string }
 // is still stable for this repo.
 func cachePath(home string, o attach.Opened) (string, error) {
 	id := string(o.Name)
-	if m, ok := o.Backend.(markerOf); ok && !m.Marker().ID.IsZero() {
+	if m, ok := concrete(o.Backend).(markerOf); ok && !m.Marker().ID.IsZero() {
 		id = m.Marker().ID.String()
 	}
 	branch := localBranch
-	if b, ok := o.Backend.(branchOf); ok && b.Branch() != "" {
+	if b, ok := concrete(o.Backend).(branchOf); ok && b.Branch() != "" {
 		branch = b.Branch()
 	}
 	name := rootFolderName
@@ -440,7 +453,7 @@ type markerBackend interface{ Marker() rowfs.Marker }
 // sto_ id, plus "/<folder>" for a `<store>/<folder>` target ("" when the
 // backend has no marker id: such a store keeps v0.1.17's ids).
 func keyNamespace(a engine.Attached) string {
-	mb, ok := a.Backend.(markerBackend)
+	mb, ok := concrete(a.Backend).(markerBackend)
 	if !ok || mb.Marker().ID.IsZero() {
 		return ""
 	}
@@ -460,4 +473,40 @@ func sameURL(a, b attach.Store) bool {
 	}
 	cb, err := canonical(attach.Store{URL: b.URL, Branch: b.Branch})
 	return err == nil && ca == cb
+}
+
+// Unwrapper is what a backend returned by Options.WrapBackend implements:
+// the backend it wraps. wire reads a store's marker, branch and clone
+// through the concrete backend (natural-id namespace, cache path, store
+// identity), so a wrapper that hid it would silently change row ids.
+type Unwrapper interface {
+	Unwrap() store.Backend
+}
+
+// concrete is b with every WrapBackend layer removed.
+func concrete(b store.Backend) store.Backend {
+	for {
+		u, ok := b.(Unwrapper)
+		if !ok {
+			return b
+		}
+		b = u.Unwrap()
+	}
+}
+
+// wrapBackend applies Options.WrapBackend to one store's backend. A
+// wrapper that returns a different backend must implement Unwrapper
+// (fail closed: E_CONFIG_INVALID), and nil is refused.
+func wrapBackend(ctx context.Context, opts Options, name store.Source, folder string, b store.Backend) (store.Backend, error) {
+	w := opts.WrapBackend(ctx, name, folder, b)
+	switch {
+	case w == nil:
+		return nil, errs.New(errs.ConfigInvalid, "wire: WrapBackend returned no backend for store "+string(name))
+	case w == b:
+		return b, nil
+	}
+	if _, ok := w.(Unwrapper); !ok {
+		return nil, errs.New(errs.ConfigInvalid, "wire: the WrapBackend wrapper of store "+string(name)+" does not implement wire.Unwrapper")
+	}
+	return w, nil
 }
