@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
@@ -158,10 +159,27 @@ type Options struct {
 	// Close must close b. The close list and the migration rewrite keep
 	// the unwrapped backends (RewriteV1 rewrites branch files).
 	WrapBackend func(ctx context.Context, name store.Source, folder string, b store.Backend) store.Backend
+	// AllowNetworkFS lets stores (the repo itself included) live inside a
+	// cloud-sync folder or on a network file system, refused otherwise
+	// with E_NETWORK_FS. The CLI sets it from LORE_ALLOW_NETWORK_FS=1, the
+	// v0.1.17 override; false, the default, keeps the refusal.
+	AllowNetworkFS bool
 	// Notice receives one-line notices for the person, once per open (a
 	// CLI prints them on stderr; nil drops them). Today: LiveNote, when the
 	// v0.1.17 live ref holds rows the core cannot see yet.
 	Notice func(msg string)
+}
+
+// openOptions is what every store open of this App passes to a backend:
+// the lore home and the user's network-FS override.
+func (o Options) openOptions() store.OpenOptions {
+	return store.OpenOptions{Home: o.Home, AllowNetworkFS: o.AllowNetworkFS}
+}
+
+// rowfsOptions are the rowfs options of a store this App makes on disk
+// (folder.Init), matching openOptions.
+func (o Options) rowfsOptions() []rowfs.Option {
+	return []rowfs.Option{rowfs.WithAllowNetworkFS(o.AllowNetworkFS)}
 }
 
 // WriteQuery is what the write hooks (Options.GuardRepoWrite,

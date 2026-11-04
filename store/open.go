@@ -16,6 +16,12 @@ type Opener func(ctx context.Context, u *url.URL, opts OpenOptions) (Backend, er
 type OpenOptions struct {
 	Home     string // the lore home (~/.lore)
 	ReadOnly bool   // read_only: true in stores.yaml
+	// AllowNetworkFS lets a store live inside a cloud-sync folder or on a
+	// network file system, which is otherwise refused with E_NETWORK_FS
+	// (locks are not honoured and renames are not atomic there). It is
+	// the user's explicit override (v0.1.17's LORE_ALLOW_NETWORK_FS=1);
+	// false, the zero value, keeps the refusal.
+	AllowNetworkFS bool
 }
 
 // Openers maps url schemes to Openers. It is a value built by the binary's

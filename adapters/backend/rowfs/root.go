@@ -15,7 +15,8 @@ import (
 // store lock and the data folders. It is safe for concurrent use.
 //
 // Invariant: dir is absolute with symlinks resolved, and was checked by
-// CheckLocal when the Root was opened.
+// CheckLocal when the Root was opened unless the caller passed
+// WithAllowNetworkFS(true).
 type Root struct {
 	dir      string
 	lockPath string
@@ -24,6 +25,8 @@ type Root struct {
 	// gate serialises this Root's own writers before they touch the OS
 	// lock, so goroutines of one process queue instead of polling flock.
 	gate chan struct{}
+	// allowNetworkFS skips CheckLocal (WithAllowNetworkFS).
+	allowNetworkFS bool
 }
 
 // Option configures a Root.
@@ -41,6 +44,12 @@ func WithLockTimeout(d time.Duration) Option {
 // WithLockPath puts the lock file somewhere other than <root>/.lore/lock.
 // The git backend uses it to keep the lock out of the worktree it commits.
 func WithLockPath(path string) Option { return func(r *Root) { r.lockPath = path } }
+
+// WithAllowNetworkFS skips the CheckLocal refusal when allow is true: the
+// user's explicit override for a store in a cloud-sync folder or on a
+// network file system (store.OpenOptions.AllowNetworkFS). false keeps the
+// refusal, so passing the option through unconditionally is safe.
+func WithAllowNetworkFS(allow bool) Option { return func(r *Root) { r.allowNetworkFS = allow } }
 
 // WithClock replaces time.Now for the stat cursor and tmp cleanup (tests).
 func WithClock(now func() time.Time) Option {
@@ -72,12 +81,14 @@ func Open(dir string, opts ...Option) (*Root, error) {
 	if !info.IsDir() {
 		return nil, errs.New(errs.NotAStore, "rowfs: the store path is not a folder")
 	}
-	if err := CheckLocal(real); err != nil {
-		return nil, err
-	}
 	r := &Root{dir: real, lockWait: DefaultLockTimeout, now: time.Now, gate: make(chan struct{}, 1)}
 	for _, o := range opts {
 		o(r)
+	}
+	if !r.allowNetworkFS {
+		if err := CheckLocal(real); err != nil {
+			return nil, err
+		}
 	}
 	if r.lockPath == "" {
 		r.lockPath = filepath.Join(real, LoreDir, LockFileName)

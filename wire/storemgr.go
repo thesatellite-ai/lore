@@ -113,7 +113,7 @@ func (a *App) makeStore(ctx context.Context, canon string, m rowfs.Marker) (rowf
 				return rowfs.Marker{}, false, rerr
 			}
 		}
-		return m, false, folder.Init(dir, m)
+		return m, false, folder.Init(dir, m, a.opts.rowfsOptions()...)
 	}
 	b, err := a.openStore(ctx, canon)
 	if err != nil {
@@ -178,7 +178,7 @@ func (a *App) openStore(ctx context.Context, canon string) (store.Backend, error
 	if err != nil {
 		return nil, err
 	}
-	return o.Open(ctx, canon, store.OpenOptions{Home: a.opts.Home})
+	return o.Open(ctx, canon, a.opts.openOptions())
 }
 
 // AddStore implements opsstores.Manager.

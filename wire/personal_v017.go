@@ -73,7 +73,7 @@ func fileURL(dir string) string {
 
 // ensureLocalMarker gives the v0.1.17 local personal store a marker
 // (internal, a new sto_ id) unless it has one.
-func ensureLocalMarker(dir string, now time.Time) error {
+func ensureLocalMarker(dir string, now time.Time, opts ...rowfs.Option) error {
 	_, err := rowfs.ReadMarker(dir)
 	if err == nil {
 		return nil
@@ -85,7 +85,7 @@ func ensureLocalMarker(dir string, now time.Time) error {
 	if err != nil {
 		return errs.Wrap(errs.Internal, "wire: new store id", err)
 	}
-	return folder.Init(dir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: id, Visibility: rowfs.VisibilityInternal, Created: now.UTC().Format(markerDateLayout)})
+	return folder.Init(dir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: id, Visibility: rowfs.VisibilityInternal, Created: now.UTC().Format(markerDateLayout)}, opts...)
 }
 
 // localPersonalStores returns the `me` entries of a v0.1.17 local
@@ -103,7 +103,7 @@ func localPersonalStores(ctx context.Context, opts Options) ([]attach.Store, err
 	if wall == nil {
 		wall = time.Now
 	}
-	if err := ensureLocalMarker(dir, wall()); err != nil {
+	if err := ensureLocalMarker(dir, wall(), opts.rowfsOptions()...); err != nil {
 		return nil, errs.Wrap(errs.CodeOf(err), "wire: the v0.1.17 personal store ~/.lore/"+personalDirV017, err)
 	}
 	place := personalEverywhereV017
@@ -172,16 +172,16 @@ func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, 
 	if dryRun {
 		return steps, nil
 	}
-	if err = ensureLocalMarker(dir, a.opts.Wall()); err != nil {
+	if err = ensureLocalMarker(dir, a.opts.Wall(), a.opts.rowfsOptions()...); err != nil {
 		return nil, err
 	}
-	root, err := folder.Open(dir, rowfs.FolderRoot, store.OpenOptions{Home: a.opts.Home})
+	root, err := folder.Open(dir, rowfs.FolderRoot, a.opts.openOptions())
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = root.Close() }()
 	for _, f := range folders {
-		n, err := flattenFolder(ctx, dir, f, root, a.opts.Home)
+		n, err := flattenFolder(ctx, dir, f, root, a.opts.openOptions())
 		if err != nil {
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: personal folder "+f, err)
 		}
@@ -203,8 +203,8 @@ func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, 
 
 // flattenFolder moves the live rows of folder f of the store at dir into
 // root, returning how many it copied.
-func flattenFolder(ctx context.Context, dir, f string, root store.Backend, home string) (int, error) {
-	src, err := folder.Open(dir, f, store.OpenOptions{Home: home})
+func flattenFolder(ctx context.Context, dir, f string, root store.Backend, oo store.OpenOptions) (int, error) {
+	src, err := folder.Open(dir, f, oo)
 	if err != nil {
 		return 0, err
 	}

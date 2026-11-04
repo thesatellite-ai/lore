@@ -95,14 +95,15 @@ func PathOf(u *url.URL) (string, error) {
 // Init makes dir a folder store: the folder, lore-store.yaml and the root
 // data folder. It refuses a folder that already has a marker
 // (E_ALREADY_INITIALIZED), so a store id is never replaced.
-func Init(dir string, m rowfs.Marker) error {
+// opts are passed to rowfs.Open (rowfs.WithAllowNetworkFS).
+func Init(dir string, m rowfs.Marker, opts ...rowfs.Option) error {
 	if !filepath.IsAbs(dir) {
 		return errs.New(errs.BadPath, "folder: the store path must be absolute")
 	}
 	if err := os.MkdirAll(dir, storeDirMode); err != nil {
 		return errs.Wrap(errs.Internal, "folder: create the store folder", err)
 	}
-	r, err := rowfs.Open(dir)
+	r, err := rowfs.Open(dir, opts...)
 	if err != nil {
 		return err
 	}
@@ -143,7 +144,7 @@ func Open(dir, name string, o store.OpenOptions, opts ...Option) (*Backend, erro
 	for _, opt := range opts {
 		opt(&c)
 	}
-	r, err := rowfs.Open(dir, rowfs.WithLockTimeout(c.lockTimeout), rowfs.WithClock(c.now))
+	r, err := rowfs.Open(dir, rowfs.WithLockTimeout(c.lockTimeout), rowfs.WithClock(c.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
 	if err != nil {
 		return nil, err
 	}

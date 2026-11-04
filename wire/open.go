@@ -86,7 +86,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	fail := func(err error) (*state, error) { return nil, errors.Join(err, st.close()) }
 
-	repo, err := git.OpenRepo(ctx, opts.RepoDir, rowfs.FolderRoot, store.OpenOptions{Home: opts.Home})
+	repo, err := git.OpenRepo(ctx, opts.RepoDir, rowfs.FolderRoot, opts.openOptions())
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		if perr != nil {
 			return fail(perr)
 		}
-		if attached, err = openAttached(ctx, st.repoTop, opts.Home, reg, slices.Concat(extra, orgStores(ctx, opts, st.repoTop), personal)); err != nil {
+		if attached, err = openAttached(ctx, st.repoTop, opts, reg, slices.Concat(extra, orgStores(ctx, opts, st.repoTop), personal)); err != nil {
 			return fail(err)
 		}
 	}
@@ -278,7 +278,8 @@ func renameOrgClashes(org []attach.Store, top string) []attach.Store {
 // the `--to <store>/<folder>` targets and the personal store `me` (last,
 // BATCH 15; skipped when stores.yaml already attaches the same url's root,
 // so it loads once), and opens them all.
-func openAttached(ctx context.Context, repoTop, home string, reg *schema.Registry, extra []attach.Store) ([]attach.Opened, error) {
+func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema.Registry, extra []attach.Store) ([]attach.Opened, error) {
+	home := opts.Home
 	cfg, err := readStoresFile(repoTop)
 	if err != nil {
 		return nil, err
@@ -317,7 +318,7 @@ func openAttached(ctx context.Context, repoTop, home string, reg *schema.Registr
 	if err != nil {
 		return nil, err
 	}
-	opened, err := attach.Open(ctx, cfg, openers, store.OpenOptions{Home: home})
+	opened, err := attach.Open(ctx, cfg, openers, opts.openOptions())
 	if err != nil {
 		return nil, err
 	}
