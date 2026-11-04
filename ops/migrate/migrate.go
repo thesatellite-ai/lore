@@ -18,6 +18,10 @@
 //
 //	enable ─► Rewriter.EnableFeature ─► (O6 open and no --yes: E_NEEDS_CONFIRM)
 //	       ─► rowfs.DeclareRepo ─► features ∪ {name}, min_lore_version = max(floor, Since)
+//
+// run with a Journal (journal.go): lock ─► Begin (backup ref, journal or
+// resume) ─► steps ─► Finish (push unless --no-push/--offline); plus
+// status, rollback (FQ5) and unlock.
 package migrate
 
 import (
@@ -86,6 +90,10 @@ type Settings struct {
 // RunIn is the input of migrate.run.
 type RunIn struct {
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"list the files that would be rewritten; change nothing"`
+	// NoPush keeps the store commits local (rollback is then a local undo).
+	NoPush bool `json:"no_push,omitempty" flag:"no-push" desc:"commit the store changes but do not push them"`
+	// Offline rewrites the repo's branch files only (FORMAT_EVOLUTION 7.3).
+	Offline bool `json:"offline,omitempty" flag:"offline" desc:"branch files only: skip the settings, live rows and stores (they need the network)"`
 }
 
 // RunOut is the output of migrate.run.
@@ -98,6 +106,12 @@ type RunOut struct {
 	Rows  []string `json:"rows"`
 	// Steps are the settings changes (identity, store markers).
 	Steps []string `json:"steps"`
+	// Journal is the run's own lines: backup, resume, offline, push, undo
+	// (kept apart so a dry run and a run list the same Steps).
+	Journal []string `json:"journal,omitempty"`
+	// BackupRef is the local backup of this run ("" for a dry run or a
+	// Rewriter without Journal).
+	BackupRef string `json:"backup_ref,omitempty"`
 }
 
 // OpEnable is `lore migrate enable <feature>`, POST /v1/migrate/enable.
@@ -117,8 +131,78 @@ type EnableOut struct {
 	MinLoreVersion string   `json:"min_lore_version,omitempty"`
 }
 
-// Ops returns the migration operations bound to rw.
+// Ops returns the migration operations bound to rw (plus status, rollback
+// and unlock when rw also implements Journal).
 func Ops(rw Rewriter) []op.Entry {
+	out := baseOps(rw)
+	if j, ok := rw.(Journal); ok {
+		out = append(out, journalOps(rw, j)...)
+	}
+	return out
+}
+
+// run is migrate.run (FORMAT_EVOLUTION rule 4, steps 2-7): lock (M) →
+// Begin (backup ref + journal, or resume) → settings → live → rewrites
+// (--offline: the repo's rows only) → Finish (push unless --no-push or
+// --offline). The team lock on the signals ref (T) is not built yet.
+func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
+	out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}}
+	unlock, err := rw.LockMigration(ctx)
+	if err != nil {
+		return RunOut{}, err
+	}
+	defer func() { _ = unlock() }() // a failed release leaves a lock file `lore migrate unlock` clears
+	j, journaled := rw.(Journal)
+	if journaled && !in.DryRun {
+		b, err := j.Begin(ctx, in.Offline)
+		if err != nil {
+			return RunOut{}, err
+		}
+		out.BackupRef = b.BackupRef
+		out.Journal = append(out.Journal, b.Lines...)
+	}
+	rewrite := rw.RewriteV1
+	if in.Offline && journaled {
+		rewrite = j.RewriteRepoV1
+		out.Journal = append(out.Journal, "offline: no team lock taken; branch files only (settings, live rows and stores skipped: run `lore migrate run` again when online)")
+	} else {
+		settings, err := rw.MigrateSettings(ctx, in.DryRun)
+		if err != nil {
+			return RunOut{}, err
+		}
+		out.Steps = append(out.Steps, settings.Steps...)
+		out.Count += settings.Rows
+		live, err := rw.MigrateLive(ctx, in.DryRun)
+		if err != nil {
+			return RunOut{}, err
+		}
+		out.Rows = append(out.Rows, live...)
+	}
+	for _, t := range rw.MigratedTables() {
+		got, err := rewrite(ctx, t, in.DryRun)
+		if err != nil {
+			return RunOut{}, err
+		}
+		for _, id := range got {
+			out.Rows = append(out.Rows, t.String()+"/"+id.String())
+		}
+	}
+	out.Count += len(out.Rows)
+	if journaled && !in.DryRun {
+		lines, err := j.Finish(ctx, !in.NoPush && !in.Offline, out.Count)
+		if err != nil {
+			return RunOut{}, err
+		}
+		out.Journal = append(out.Journal, lines...)
+		if len(lines) == 0 { // nothing changed: the backup was dropped
+			out.BackupRef, out.Journal = "", nil
+		}
+	}
+	return out, nil
+}
+
+// baseOps are run and enable.
+func baseOps(rw Rewriter) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
 			Name: OpRun, Summary: "Rewrite v0.1.17 row files (_v: 1) as _v: 2 (the migrated nouns)",
@@ -129,33 +213,7 @@ func Ops(rw Rewriter) []op.Entry {
 				{Title: "rewrite once the whole team runs 0.1.18", CLI: "lore migrate run", Want: "count:"},
 			},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) {
-			out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}}
-			unlock, err := rw.LockMigration(ctx)
-			if err != nil {
-				return RunOut{}, err
-			}
-			defer func() { _ = unlock() }() // a failed release leaves a lock file `lore migrate run` reports next time
-			settings, err := rw.MigrateSettings(ctx, in.DryRun)
-			if err != nil {
-				return RunOut{}, err
-			}
-			out.Steps = append(out.Steps, settings.Steps...)
-			live, err := rw.MigrateLive(ctx, in.DryRun)
-			if err != nil {
-				return RunOut{}, err
-			}
-			out.Rows = append(out.Rows, live...)
-			for _, t := range rw.MigratedTables() {
-				got, err := rw.RewriteV1(ctx, t, in.DryRun)
-				if err != nil {
-					return RunOut{}, err
-				}
-				for _, id := range got {
-					out.Rows = append(out.Rows, t.String()+"/"+id.String())
-				}
-			}
-			out.Count = len(out.Rows) + settings.Rows
-			return out, nil
+			return run(ctx, rw, in)
 		}),
 		// migrate.enable (FORMAT_EVOLUTION rule 2): declare → (ask while
 		// teammates on v0.1.17 wrote the rows: E_NEEDS_CONFIRM, FQ2 as

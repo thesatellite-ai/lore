@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -198,6 +199,17 @@ func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, 
 		}
 		steps = append(steps, StepPersonalStoreFlatten+": "+f+"/: "+strconv.Itoa(n)+" row(s) moved to the root")
 		moved += n
+		// Step 13: declare personal_flat in the old folder's _meta.json, so a
+		// v0.1.17 lore turns read-only there instead of writing rows into a
+		// folder 0.1.18 no longer reads. A folder without one has nothing to
+		// declare (rowfs.DeclareRepo answers E_NOT_FOUND).
+		added, derr := rowfs.DeclareRepo(filepath.Join(dir, f), []string{formatgate.PersonalFlat})
+		if derr != nil && !errs.Has(derr, errs.NotFound) {
+			return nil, 0, errs.Wrap(errs.CodeOf(derr), "migrate: declare "+formatgate.PersonalFlat+" in personal folder "+f, derr)
+		}
+		if len(added) > 0 {
+			steps = append(steps, StepPersonalStoreFlatten+": "+f+"/"+rowfs.RepoMetaPath+": features + "+formatgate.PersonalFlat)
+		}
 	}
 	cfg := configPath(a.opts.Home)
 	if b, rerr := os.ReadFile(filepath.Clean(cfg)); rerr == nil {

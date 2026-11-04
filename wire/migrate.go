@@ -57,6 +57,8 @@ func CoreTables() []row.Table {
 		schema.TableArchitectureNotes, schema.TableBehaviours, schema.TableCookbookRecipes, schema.TableIncidents,
 		schema.TableSuggestions, schema.TableTastePrefs, schema.TableWorkflows, schema.TableWorkspaces,
 		schema.TableHandoffs, schema.TableSnapshots, schema.TableTechDocs, schema.TableExternalSources,
+		// Core-only tables added overnight (lsync owned set lists them too).
+		schema.TableMachines, schema.TableTaskTemplates, schema.TableTaskViews, schema.TableScopes,
 	}
 }
 
@@ -84,7 +86,7 @@ func (a *App) LockMigration(ctx context.Context) (func() error, error) {
 	if errors.Is(err, fs.ErrExist) {
 		holder, _ := os.ReadFile(filepath.Clean(path)) // best effort: the holder is only shown
 		return nil, errs.New(errs.MigrateLocked, "migrate: another migration holds "+MigrateLockFile+" (pid "+strings.TrimSpace(string(holder))+")").
-			WithHint("wait for it to finish; if no lore process runs, delete " + MigrateLockFile)
+			WithHint("wait for it to finish; if that process is gone, run `lore migrate unlock`")
 	}
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "wire: take the migration lock", err)
@@ -166,6 +168,16 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 		return nil, 0, err
 	}
 	steps, rows = append(steps, tagSteps...), rows+n
+	snakeSteps, n, err := a.migrateTagsSnakeCase(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	steps, rows = append(steps, snakeSteps...), rows+n
+	dbSteps, n, err := a.migrateDBSettings(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	steps, rows = append(steps, dbSteps...), rows+n
 	urlSteps, n, err := a.migrateURLCredentials(ctx, dryRun)
 	if err != nil {
 		return nil, 0, err

@@ -270,12 +270,14 @@ func checkName(name string) error {
 	if snakeCase.MatchString(name) {
 		return nil
 	}
-	return errs.New(errs.InvalidIdentifier, fmt.Sprintf("tag %q is not snake_case. Use: %s", name, snakeOf(name))).
+	return errs.New(errs.InvalidIdentifier, fmt.Sprintf("tag %q is not snake_case. Use: %s", name, SnakeOf(name))).
 		WithHint("nothing written")
 }
 
-// snakeOf suggests the snake_case spelling of name.
-func snakeOf(name string) string {
+// SnakeOf is the shared snake_case converter (META 3.5, R13): new tag
+// names are checked against it, and lore migrate's tags_snake_case step
+// renames old dash names with it.
+func SnakeOf(name string) string {
 	var b strings.Builder
 	sep := false
 	for _, r := range strings.ToLower(name) {
