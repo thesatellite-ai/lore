@@ -21,6 +21,16 @@ import (
 // The App is the operations' Env: each method opens the App on first use
 // and delegates to the engine (writes pass the DOCS O6 format check first).
 
+// AuditSecret implements settings.SecretAuditor: one secret.* audit event
+// (SECRETS_AND_REFERENCES 16), never a value.
+func (a *App) AuditSecret(ctx context.Context, action engine.Action, s engine.SecretAudit) error {
+	st, err := a.state(ctx)
+	if err != nil {
+		return err
+	}
+	return st.eng.AuditSecret(ctx, action, s)
+}
+
 // Create implements opsmemory.Env.
 func (a *App) Create(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (engine.Written, error) {
 	st, err := a.writeState(ctx)

@@ -78,6 +78,16 @@ type auditLine struct {
 	// Both machine-local: the audit files never leave this machine.
 	Session   string `json:"session_id,omitempty"`
 	Confirmed bool   `json:"confirmed,omitempty"`
+	// Secret detail of a secret.* action (SECRETS_AND_REFERENCES 16):
+	// names, ids, counts and result words only, never a value.
+	SecretRef      string `json:"secret_ref,omitempty"`
+	SecretCommand  string `json:"secret_command,omitempty"`
+	SecretResult   string `json:"secret_result,omitempty"`
+	SecretForced   bool   `json:"secret_forced,omitempty"`
+	SecretForcedBy string `json:"secret_forced_by,omitempty"`
+	SecretCount    int    `json:"secret_count,omitempty"`
+	SecretFrom     string `json:"secret_from,omitempty"`
+	SecretTo       string `json:"secret_to,omitempty"`
 }
 
 // SessionSource is an optional capability of the repo audit sink
@@ -122,6 +132,8 @@ func encodeAuditLine(ev engine.Event) ([]byte, error) {
 		HLC: ev.HLC.String(), Actor: ev.Actor.String(), Merged: ev.Merged,
 		Accepted: len(ev.SecretsAccepted), Redacted: len(ev.SecretsRedacted), Cascade: ev.Cascade.String(),
 		Batch: ev.Batch.ID.String(), BatchKind: ev.Batch.Kind, Session: ev.Session, Confirmed: ev.Confirmed,
+		SecretRef: ev.Secret.Ref, SecretCommand: ev.Secret.Command, SecretResult: ev.Secret.Result, SecretForced: ev.Secret.Forced,
+		SecretForcedBy: string(ev.Secret.ForcedBy), SecretCount: ev.Secret.Count, SecretFrom: ev.Secret.From, SecretTo: ev.Secret.To,
 	})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "wire: encode an audit event", err)

@@ -74,6 +74,15 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 		reason += " (cascade of " + ev.Cascade.String() + ")"
 	}
 	table := ev.Table.String()
+	action := table + "." + kind
+	if ev.Secret != (engine.SecretAudit{}) {
+		// a secret.* event (SECRETS 16): no row write; FORCED is loud.
+		action = string(ev.Action)
+		reason += " " + ev.Secret.Command + " " + ev.Secret.Result
+		if ev.Secret.Forced {
+			reason += " FORCED (" + string(ev.Secret.ForcedBy) + ")"
+		}
+	}
 	ses := ev.Session
 	if ses == "" {
 		var serr error
@@ -86,7 +95,7 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 		return errcodes.New(errcodes.Internal, "audit: begin").WithCause(err)
 	}
 	if err = audit.Append(ctx, tx, audit.Entry{
-		ActorID: ev.Actor.String(), Action: table + "." + kind,
+		ActorID: ev.Actor.String(), Action: action,
 		TargetTable: table, TargetID: ev.ID.String(), Reason: reason,
 		SessionID: ses, Confirmed: ev.Confirmed || engine.Confirmed(ctx), // 6.6, hashed only when set (OQ10)
 	}); err != nil {
