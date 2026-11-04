@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -128,23 +129,40 @@ func fieldsOf(op string, t reflect.Type, dir fieldDirection) []FieldInfo {
 		if !sf.IsExported() {
 			continue
 		}
-		f, skip := fieldOf(op, sf, dir)
-		if skip {
-			continue
-		}
-		where := fmt.Sprintf("op.Define(%s): field %s", op, sf.Name)
-		if names[f.Name] {
-			panic(tagError{where + ": json name " + f.Name + " used twice"})
-		}
-		names[f.Name] = true
-		if f.Arg != NoArg {
-			if prev, dup := args[f.Arg]; dup {
-				panic(tagError{where + ": arg " + strconv.Itoa(f.Arg) + " also used by " + prev})
+		var batch []FieldInfo
+		if _, tagged := sf.Tag.Lookup(tagJSON); sf.Anonymous && !tagged && sf.Type.Kind() == reflect.Struct && dir == dirInput {
+			// An embedded input struct with no json tag (a shared flag set
+			// such as metaflag.Flags) adds its fields, as encoding/json
+			// flattens it; positional args stay with the outer struct.
+			for _, f := range fieldsOf(op, sf.Type, dir) {
+				if f.Arg != NoArg {
+					panic(tagError{fmt.Sprintf("op.Define(%s): embedded %s may not hold positional args", op, sf.Name)})
+				}
+				f.index = append(slices.Clone(sf.Index), f.index...)
+				batch = append(batch, f)
 			}
-			args[f.Arg] = f.Name
+		} else {
+			f, skip := fieldOf(op, sf, dir)
+			if skip {
+				continue
+			}
+			f.index = sf.Index
+			batch = append(batch, f)
 		}
-		f.index = sf.Index
-		out = append(out, f)
+		for _, f := range batch {
+			where := fmt.Sprintf("op.Define(%s): field %s", op, f.Name)
+			if names[f.Name] {
+				panic(tagError{where + ": json name " + f.Name + " used twice"})
+			}
+			names[f.Name] = true
+			if f.Arg != NoArg {
+				if prev, dup := args[f.Arg]; dup {
+					panic(tagError{where + ": arg " + strconv.Itoa(f.Arg) + " also used by " + prev})
+				}
+				args[f.Arg] = f.Name
+			}
+			out = append(out, f)
+		}
 	}
 	for i := range len(args) {
 		if _, ok := args[i]; !ok {

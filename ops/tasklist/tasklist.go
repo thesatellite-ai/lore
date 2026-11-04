@@ -5,6 +5,7 @@ package tasklist
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/engine"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +57,9 @@ const table row.Table = schema.TableTasklists
 
 // AddIn is the input of tasklist.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Title string `json:"title" flag:"title" desc:"title (required)"`
 	// Body is required, by --body or as the first argument.
 	Body    string `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
@@ -133,6 +137,9 @@ type IDIn struct {
 
 // EditIn is the input of tasklist.edit (only the flags given change).
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID     string `json:"id" arg:"0" desc:"the tasklist id (tlt_…)"`
 	Title  string `json:"title,omitempty" flag:"title" desc:"new title"`
 	Body   string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

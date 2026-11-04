@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -24,6 +25,9 @@ const badge = "WO"
 
 // AddIn is the input of workflow.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	// Name is set with --title, as v0.1.17 add did.
 	Name    string `json:"name" flag:"title" desc:"title (required)"`
 	Body    string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
@@ -92,6 +96,9 @@ func (o ShowOut) Text() string { return badge + "  " + o.Data.ID + "\n" }
 
 // EditIn is the input of workflow.edit (only the flags given change).
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID   string `json:"id" arg:"0" desc:"the workflow id (wfl_…)"`
 	Name string `json:"name,omitempty" flag:"name" desc:"new name"`
 	Body string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

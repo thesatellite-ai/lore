@@ -1,6 +1,7 @@
 package techdoc
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -19,6 +20,9 @@ const (
 
 // AddIn is the input of techdoc.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Name        string `json:"name" flag:"name" desc:"doc name (required)"`
 	BaseURL     string `json:"base_url,omitempty" flag:"base-url" desc:"base URL"`
 	Description string `json:"description,omitempty" flag:"description" desc:"description"`

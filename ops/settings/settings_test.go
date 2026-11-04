@@ -371,7 +371,7 @@ func TestMetaMatrix(t *testing.T) {
 	checkRefusals(t, h, []refusal{
 		{settings.OpMetaAdd, `{"name":"owner","type":"text"}`, errs.MetaTaken, `name "owner"`},
 		{settings.OpMetaAdd, `{"name":"x","type":"blob"}`, errs.MetaType, `--type "blob" is not a metadata type`},
-		{settings.OpMetaAdd, `{"name":"Bad","type":"text"}`, errs.InvalidInput, "is not snake_case"},
+		{settings.OpMetaAdd, `{"name":"Bad","type":"text"}`, errs.MetaKey, "is not a snake_case key name"},
 		{settings.OpMetaAdd, `{"name":"d","type":"text","description":"` + strings.Repeat("é", 301) + `"}`, errs.InvalidInput, "at most 300 characters"},
 		{settings.OpMetaAdd, `{"name":"v","type":"text","values":"Gold"}`, errs.InvalidInput, `allowed value "Gold" is not snake_case`},
 		{settings.OpMetaAdd, `{"name":"i","type":"text","internal":true,"no_internal":true}`, errs.InvalidInput, "not both"},

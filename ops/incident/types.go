@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -24,6 +25,9 @@ const badge = "IN"
 
 // AddIn is the input of incident.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	// Title is set with --title, as v0.1.17 add did.
 	Title     string `json:"title" flag:"title" desc:"title (required)"`
 	Body      string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`

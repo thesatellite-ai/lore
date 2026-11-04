@@ -1,6 +1,7 @@
 package handoff
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -24,6 +25,9 @@ const badge = "HA"
 // [--task <id>] <text>`). --to keeps v0.1.17's meaning (deprecated alias
 // of --for), so the store target of this one command is --store.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	For string `json:"for,omitempty" flag:"for" desc:"who the handoff is for (@handle, stable key, display name or act_ id)"`
 	// To is v0.1.17's --to spelling of --for. Its JSON name is not "to":
 	// the engine reads an input field named "to" as the write's target

@@ -8,6 +8,7 @@ package rule
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -100,6 +101,9 @@ func Ops(env kn.Env) []op.Entry {
 
 // AddIn is the input of rule.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
 	Text       string   `json:"text,omitempty" arg:"0" desc:"the rule text, instead of --body"`
 	Severity   string   `json:"severity,omitempty" flag:"severity" desc:"must | should | may (default must)"`
@@ -236,6 +240,9 @@ func (o ShowOut) Text() string {
 
 // EditIn is the input of rule.edit; an empty flag leaves its field.
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID           string   `json:"id" arg:"0" desc:"the rule id (rul_…)"`
 	Body         string   `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
 	Severity     string   `json:"severity,omitempty" flag:"severity" desc:"must | should | may"`

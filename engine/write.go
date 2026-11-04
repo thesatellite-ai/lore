@@ -98,6 +98,15 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err = enforceRow(sc.pol, def, sc.fields); err != nil {
 		return Written{}, err
 	}
+	// metadata riding on this create (engine/meta.go; R13)
+	var rmeta map[ids.ID[ids.MetaKey]]value.JSON
+	if mw, ok := metaFor(ctx, table, ids.AnyID{}); ok {
+		var mwarn []Warning
+		if rmeta, mwarn, err = e.applyMeta(ctx, cl, target, def, id, nil, mw); err != nil {
+			return Written{}, err
+		}
+		sc.warnings = append(sc.warnings, mwarn...)
+	}
 	origin, err := e.originOf(ctx, cl.op, st)
 	if err != nil {
 		return Written{}, err
@@ -105,7 +114,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	actor := e.actorOf(cl)
 	stamp := e.clock.Now()
 	r := row.Row{
-		Table: table, ID: id, HLC: stamp, Origin: origin, Fields: sc.fields,
+		Table: table, ID: id, HLC: stamp, Origin: origin, Fields: sc.fields, Meta: rmeta,
 		CreatedAt: stamp.Wall, CreatedBy: actor, UpdatedAt: stamp.Wall, UpdatedBy: actor,
 	}
 	allows, err := e.allowRows(cl, sc.accepted, id, actor, stamp)
@@ -234,6 +243,14 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	actor := e.actorOf(cl)
 	ours := cur
 	ours.Fields = sc.fields
+	// metadata riding on this update (engine/meta.go; R13)
+	if mw, ok := metaFor(ctx, cur.Table, cur.ID); ok {
+		var mwarn []Warning
+		if ours.Meta, mwarn, err = e.applyMeta(ctx, cl, src, def, cur.ID, cur.Meta, mw); err != nil {
+			return Written{}, err
+		}
+		sc.warnings = append(sc.warnings, mwarn...)
+	}
 	ours.HLC = e.clock.Now(cur.HLC)
 	ours.UpdatedAt, ours.UpdatedBy = ours.HLC.Wall, actor
 

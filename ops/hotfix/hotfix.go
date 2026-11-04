@@ -8,6 +8,7 @@ package hotfix
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -94,6 +95,9 @@ func Ops(env kn.Env) []op.Entry {
 
 // AddIn is the input of hotfix.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
 	Text       string   `json:"text,omitempty" arg:"0" desc:"the hotfix body, instead of --body"`
@@ -212,6 +216,9 @@ func (o ShowOut) Text() string {
 
 // EditIn is the input of hotfix.edit; an empty flag leaves its field.
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID           string   `json:"id" arg:"0" desc:"the hotfix id (hfx_…)"`
 	Title        string   `json:"title,omitempty" flag:"title" desc:"new title"`
 	Body         string   `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

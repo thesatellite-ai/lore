@@ -24,6 +24,12 @@ const (
 	TableTags         = "tags"
 )
 
+// meta_keys.added_by values (MQ7).
+const (
+	MetaAddedByPerson = "person"
+	MetaAddedByAgent  = "agent"
+)
+
 // FieldTagIDs is the list-of-ref field that carries a row's tags (decision
 // O11: a many-to-many lives in the owning row, replacing v0.1.17's
 // entity_tags bridge rows). Every table v0.1.17 let carry tags that the
@@ -206,6 +212,10 @@ func coreDefs() []TableDef {
 			Bool("internal"),
 			Bool("sensitive"),
 			Text("description"),
+			// MQ7: who registered the key and whether a person approved it
+			// (absent on older rows = reviewed).
+			Text("added_by", OneOf(MetaAddedByPerson, MetaAddedByAgent)),
+			Bool("reviewed"),
 			UniqueOn(fieldName, "scope"),
 		),
 		Table(TableMetaValues, ids.PrefixMetaValue, Synced(), Description("an allowed value of a metadata key"),

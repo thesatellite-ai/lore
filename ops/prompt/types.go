@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -22,6 +23,9 @@ const badge = "PR"
 
 // AddIn is the input of prompt.add. v0.1.17's --title sets the name.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	// ArgsSchema is new on the CLI (the v0.1.17 column had no flag).
 	ArgsSchema  string `json:"args_schema,omitempty" flag:"args-schema" desc:"JSON schema of the {{args.x}} placeholders"`
 	Title       string `json:"title" flag:"title" desc:"title (required)"`
@@ -96,6 +100,9 @@ func (o ShowOut) Text() string { return badge + "  " + o.Data.ID + "\n" }
 
 // EditIn is the input of prompt.edit (only the flags given change).
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID         string `json:"id" arg:"0" desc:"the prompt id (prm_…)"`
 	Name       string `json:"name,omitempty" flag:"name" desc:"new name"`
 	Body       string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

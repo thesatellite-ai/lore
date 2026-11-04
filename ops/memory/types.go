@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"time"
 
 	"github.com/thesatellite-ai/lore/op"
@@ -28,6 +29,9 @@ const (
 
 // AddIn is the input of memory.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	// Body is v0.1.17's --body. Text is the same value given positionally
 	// (`lore memory add "…"`); exactly one of them must be set.
 	Body string `json:"body,omitempty" flag:"body" desc:"the memory text (or give it as the first argument)" ui:"widget=markdown"`
@@ -163,6 +167,9 @@ type ShowOut struct {
 // EditIn is the input of memory.edit. An empty string flag leaves its
 // field as it is.
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID        string `json:"id" arg:"0" desc:"the memory id (mem_…)"`
 	Body      string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
 	Kind      string `json:"kind,omitempty" flag:"kind" desc:"core | retrieved | episodic | procedural | archival"`

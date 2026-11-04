@@ -1,6 +1,7 @@
 package playbook
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -22,6 +23,9 @@ const badge = "PL"
 
 // AddIn is the input of playbook.add. v0.1.17's --title sets the name.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Title       string `json:"title" flag:"title" desc:"title (required)"`
 	Description string `json:"description,omitempty" flag:"description" desc:"one-line summary (default: the title)"`
 	Body        string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
@@ -99,6 +103,9 @@ func (o ShowOut) Text() string { return badge + "  " + o.Data.ID + "\n" }
 
 // EditIn is the input of playbook.edit (only the flags given change).
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID   string `json:"id" arg:"0" desc:"the playbook id (pbk_…)"`
 	Name string `json:"name,omitempty" flag:"name" desc:"new name"`
 	Body string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

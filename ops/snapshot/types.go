@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -23,6 +24,9 @@ const dayLayout = "2006-01-02"
 
 // AddIn is the input of snapshot.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Title   string `json:"title" flag:"title" desc:"snapshot title (required)"`
 	Body    string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
 	Text    string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`

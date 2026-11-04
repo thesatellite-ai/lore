@@ -1,6 +1,7 @@
 package cookbookrecipe
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -24,6 +25,9 @@ const badge = "CO"
 
 // AddIn is the input of cookbookrecipe.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	// Title is set with --title, as v0.1.17 add did.
 	Title string `json:"title" flag:"title" desc:"title (required)"`
 	Body  string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
@@ -97,6 +101,9 @@ func (o ShowOut) Text() string { return badge + "  " + o.Data.ID + "\n" }
 
 // EditIn is the input of cookbookrecipe.edit (only the flags given change).
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID    string `json:"id" arg:"0" desc:"the cookbook recipe id (cbr_…)"`
 	Title string `json:"title,omitempty" flag:"title" desc:"new title"`
 	Body  string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

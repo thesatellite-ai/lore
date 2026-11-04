@@ -1,6 +1,7 @@
 package externalsource
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -15,6 +16,9 @@ const KindList = "external-source.list"
 
 // AddIn is the input of external_source.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Name    string `json:"name" flag:"name" desc:"source name (required)"`
 	Kind    string `json:"kind" flag:"kind" desc:"source kind (required, e.g. github | notion | gitlab)"`
 	Config  string `json:"config,omitempty" flag:"config" desc:"JSON config blob"`

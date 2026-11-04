@@ -82,6 +82,9 @@ type Env interface {
 
 // AddIn is the input of comment.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	OnTable string `json:"on_table" flag:"on-table" desc:"target entity table (memories|rules|decisions|...)"`
 	OnID    string `json:"on_id" flag:"on-id" desc:"target entity id"`
 	Body    string `json:"body" flag:"body" desc:"the comment text" ui:"widget=markdown"`

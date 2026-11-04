@@ -1,6 +1,7 @@
 package tastepref
 
 import (
+	"github.com/thesatellite-ai/lore/engine"
 	"strings"
 	"time"
 
@@ -24,6 +25,9 @@ const badge = "TA"
 
 // AddIn is the input of tastepref.add.
 type AddIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	Body      string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
 	Text      string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
 	Project   string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
@@ -92,6 +96,9 @@ func (o ShowOut) Text() string { return badge + "  " + o.Data.ID + "\n" }
 
 // EditIn is the input of tastepref.edit (only the flags given change).
 type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
 	ID    string `json:"id" arg:"0" desc:"the taste preference id (tst_…)"`
 	Body  string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
 	Scope string `json:"scope,omitempty" flag:"scope" desc:"new scope"`
