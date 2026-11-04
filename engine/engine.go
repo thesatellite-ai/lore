@@ -162,6 +162,7 @@ type Engine struct {
 	actor     ids.ID[ids.Actor]
 	audit     AuditSink
 	confirmer Confirmer
+	prov      Provenance // nil: _o is {cmd, store}, no _w (WithProvenance)
 }
 
 // Option configures New.

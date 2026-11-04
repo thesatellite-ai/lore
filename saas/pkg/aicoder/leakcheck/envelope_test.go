@@ -25,6 +25,12 @@ func TestClientActorEnvelopeMatrix(t *testing.T) {
 		{"origin unicode cmd", `"_o":{"store":"repo","cmd":"régle ✓"}`, true},
 		{"empty created_by", `"created_by":""`, true},
 		{"null origin", `"_o":null`, true},
+		// PROV8: a row born in the client repo keeps dir, its repo id and
+		// git state/commit (branch only with an upstream: engine's call).
+		{"origin client place facts", `"_o":{"store":"repo","cmd":"rule add","dir":"services/billing","repo":"rep_01a1a679f24c759abb49e8625618d86c","git":{"state":"branch","branch":"main","commit":"4e6ed1c09b7a2f51d3c8e0a4b6f2d1e9c7a5b3f0"}}`, true},
+		{"origin detached git", `"_o":{"store":"repo","git":{"state":"detached","commit":"4e6ed1c0"}}`, true},
+		// Q-R3-3: _w in a client repo is {v} only.
+		{"write stamp version only", `"_w":{"v":"0.1.18"}`, true},
 		{"full v2 envelope", `"_hlc":"x","_o":{"store":"repo","cmd":"rule add"},"created_at":"t","updated_at":"t","created_by":"` + writer + `","updated_by":"` + writer + `"`, true},
 		// refusals: each names something internal or has an unexpected shape
 		{"origin internal store name", `"_o":{"store":"agency"}`, false},
@@ -35,6 +41,20 @@ func TestClientActorEnvelopeMatrix(t *testing.T) {
 		{"origin unknown key", `"_o":{"store":"repo","machine":"alice-laptop"}`, false},
 		{"origin non-text cmd", `"_o":{"store":"repo","cmd":7}`, false},
 		{"origin not an object", `"_o":"repo"`, false},
+		{"origin git unknown key", `"_o":{"store":"repo","git":{"state":"branch","remote":"origin"}}`, false},
+		{"origin git not an object", `"_o":{"store":"repo","git":"main"}`, false},
+		{"origin git non-text commit", `"_o":{"store":"repo","git":{"commit":7}}`, false},
+		{"origin org id", `"_o":{"store":"repo","org":"org_01a1a679f24c759abb49e8625618d86c"}`, false},
+		{"origin folder id", `"_o":{"store":"repo","folder":"prj_01a1a679f24c759abb49e8625618d86c"}`, false},
+		{"origin import block", `"_o":{"store":"repo","import":{"source":"jira"}}`, false},
+		{"origin plugin id", `"_o":{"store":"repo","plugin":"plg_01a1a679f24c759abb49e8625618d86c"}`, false},
+		{"origin non-text dir", `"_o":{"store":"repo","dir":["a"]}`, false},
+		{"origin client facts with internal store", `"_o":{"store":"agency","dir":"x","git":{"state":"branch"}}`, false},
+		{"write stamp machine id", `"_w":{"m":"mch_0cd630f071ab154c3b6a0f44e9366337ec0fb87c4e688d19fc5e84f1bf8dd980","v":"0.1.18"}`, false},
+		{"write stamp machine only", `"_w":{"m":"mch_0cd630f0"}`, false},
+		{"write stamp unknown key", `"_w":{"v":"0.1.18","host":"alice-laptop"}`, false},
+		{"write stamp non-text v", `"_w":{"v":18}`, false},
+		{"write stamp not an object", `"_w":"0.1.18"`, false},
 		{"created_by email", `"created_by":"alice@northwind.example"`, false},
 		{"created_by stable key", `"created_by":"human:alice@northwind.example"`, false},
 		{"updated_by wrong prefix", `"updated_by":"mem_00000000000000000000000000000abc"`, false},

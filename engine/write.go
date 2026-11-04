@@ -11,7 +11,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/logic/validate"
-	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -29,13 +28,6 @@ type Ref struct {
 	Table row.Table
 	ID    ids.AnyID
 }
-
-// origin keys written into _o at create (PROVENANCE_DESIGN owns the full
-// shape; the engine records what it knows: the command and the store).
-const (
-	originCmd   = "cmd"
-	originStore = "store"
-)
 
 // Create validates fields against table's definition, checks references,
 // scans text, stamps a new id, HLC, audit fields and _o, and writes the row
@@ -106,7 +98,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err = enforceRow(sc.pol, def, sc.fields); err != nil {
 		return Written{}, err
 	}
-	origin, err := originOf(cl.op, target)
+	origin, err := e.originOf(ctx, cl.op, st)
 	if err != nil {
 		return Written{}, err
 	}
@@ -451,6 +443,9 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 				action = ActionPurge
 			}
 			next = stampAs(st, next)
+			if next, err = e.stampWrite(st, next); err != nil { // a set_null clear changes content: _w (OQ7)
+				return Written{}, err
+			}
 			sr, err := store.FromRow(next)
 			if err != nil {
 				return Written{}, err
@@ -776,6 +771,10 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 		return stored{}, err // every live write (create, update, merge, move) passes here
 	}
 	r = stampAs(st, r)
+	r, err := e.stampWrite(st, r)
+	if err != nil {
+		return stored{}, err
+	}
 	sr, err := store.FromRow(r)
 	if err != nil {
 		return stored{}, err
@@ -840,6 +839,9 @@ func (e *Engine) finish(ctx context.Context, source store.Source, rows []store.R
 				ev.HLC.Actor = as(ev.HLC.Actor)
 			}
 		}
+		if b, ok := BatchOf(ctx); ok {
+			ev.Batch = b // XQ1: every row of a bulk action carries its one batch id
+		}
 		if err := e.audit.Record(ctx, ev); err != nil {
 			return errs.Wrap(errs.Internal, "engine: the row is stored but its audit record failed", err)
 		}
@@ -866,19 +868,6 @@ func refuseMarkers(fields map[string]value.Value, names []string) error {
 		}
 	}
 	return nil
-}
-
-// originOf builds the _o block written once at create.
-func originOf(opName string, target store.Source) (value.JSON, error) {
-	ms := []canon.Member{{Key: originStore, Raw: canon.String(string(target))}}
-	if opName != "" {
-		ms = append(ms, canon.Member{Key: originCmd, Raw: canon.String(strings.ReplaceAll(opName, ".", " "))})
-	}
-	obj, err := canon.Object(ms)
-	if err != nil {
-		return value.JSON{}, errs.Wrap(errs.Internal, "engine: build _o", err)
-	}
-	return value.JSONOf(obj)
 }
 
 // actorDeactivateHint is the way out a refused actor delete names.

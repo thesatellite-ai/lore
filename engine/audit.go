@@ -42,6 +42,9 @@ type Event struct {
 	SecretsRedacted []scan.Finding
 	// Cascade names the row whose delete caused this write ("" otherwise).
 	Cascade ids.AnyID
+	// Batch is the bulk action this write belongs to (XQ1: one bat_ id per
+	// bulk action, read back by `lore batch list|show`); zero otherwise.
+	Batch Batch
 }
 
 // AuditSink stores audit events (the audit table, phase 2). Record is

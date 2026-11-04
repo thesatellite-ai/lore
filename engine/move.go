@@ -114,9 +114,10 @@ func (e *Engine) Move(ctx context.Context, ref Ref, to store.Source) (Written, e
 		moved.HLC = e.clock.Now(cur.HLC)
 		moved.UpdatedAt, moved.UpdatedBy = moved.HLC.Wall, actor
 		if dst.Client {
-			// A client repo never learns where the row came from: a fresh
-			// _o naming only this store, as if it had been written here.
-			if moved.Origin, err = originOf(cl.op, to); err != nil {
+			// A client repo never learns where the row came from: the
+			// row keeps only the client-safe part of its own _o and no
+			// moves entries (PROVENANCE_DESIGN 8.1, PROV7, PROV8).
+			if moved.Origin, err = e.movedIntoClient(ctx, dst, cur.Origin); err != nil {
 				return Written{}, err
 			}
 		} else if moved.Origin, err = withMove(cur.Origin, moved.HLC, actor.String(), string(src), string(to)); err != nil {

@@ -116,8 +116,20 @@ const (
 // test fixtures call it, so a hook added here reaches both.
 func coreOptions(repoDir, home string) wire.Options {
 	return wire.Options{RepoDir: repoDir, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
-		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, OrgSigners: coreOrgSigners, Audit: &coreAuditSink{},
+		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, OrgSigners: coreOrgSigners,
+		WorkDir: coreWorkDir(), Version: version, Audit: &coreAuditSink{},
 		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, ProjectHint: coreProjectHint, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
+}
+
+// coreWorkDir is the folder the command runs in, for `_o.dir` (PROV6:
+// relative to the repo root, omitted at the root). "" when the working
+// directory cannot be read: wire then uses RepoDir, so dir is left out.
+func coreWorkDir() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return wd
 }
 
 // coreOrgSigners lists every org entry of ~/.lore/config.yaml that has an

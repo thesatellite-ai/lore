@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -1029,7 +1030,9 @@ var clientActorFields = map[string]bool{"_table": true, "_v": true, "id": true, 
 // STORE_SERVER_SPEC 4.1: every v2 row file carries them) may sit in a client
 // actor copy: bookkeeping only, naming nothing internal. It mirrors the leak
 // guard (leakcheck envelopeKeyAllowed): _hlc text; created_by/updated_by an
-// act_ id; _o exactly {store: "repo"[, cmd: text]}.
+// act_ id; _o {store: "repo"} plus only cmd, dir, repo (text) and git
+// {state, commit, branch} (PROV8); _w {v} only, never the machine id m
+// (Q-R3-3).
 func clientActorEnvelopeOK(k string, raw json.RawMessage) bool {
 	switch k {
 	case "_hlc":
@@ -1043,14 +1046,43 @@ func clientActorEnvelopeOK(k string, raw json.RawMessage) bool {
 		if json.Unmarshal(raw, &o) != nil || string(o["store"]) != `"repo"` {
 			return false
 		}
-		for ok := range o {
-			if ok != "store" && ok != "cmd" {
+		for ok, ov := range o {
+			switch ok {
+			case "store":
+			case "cmd", "dir", "repo":
+				var s string
+				if json.Unmarshal(ov, &s) != nil {
+					return false
+				}
+			case "git":
+				if !textMembersOnly(ov, "state", "commit", "branch") {
+					return false
+				}
+			default:
 				return false
 			}
 		}
 		return true
+	case "_w":
+		return textMembersOnly(raw, "v")
 	}
 	return false
+}
+
+// textMembersOnly reports whether raw is an object whose every member is
+// one of keys and holds text.
+func textMembersOnly(raw json.RawMessage, keys ...string) bool {
+	var o map[string]json.RawMessage
+	if json.Unmarshal(raw, &o) != nil {
+		return false
+	}
+	for k, v := range o {
+		var s string
+		if !slices.Contains(keys, k) || json.Unmarshal(v, &s) != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // actorIDOnlyRe is a bare act_ id.

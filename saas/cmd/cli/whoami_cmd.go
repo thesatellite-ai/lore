@@ -18,6 +18,9 @@ import (
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+
+	"github.com/thesatellite-ai/lore/adapters/machine"
+	coreids "github.com/thesatellite-ai/lore/model/ids"
 )
 
 // flagExplain is whoami's switch for the full rule trace.
@@ -38,6 +41,9 @@ type whoamiJSON struct {
 	Trace      []orgresolve.RuleTrace `json:"trace"`
 	Warnings   []string               `json:"warnings"`
 	Error      string                 `json:"error,omitempty"`
+	// Machine is this machine's full id (PROV4: mch_ + 64 hex keyed
+	// fingerprint of the OS machine id); "" when the OS has none.
+	Machine string `json:"machine,omitempty"`
 }
 
 type whoamiIdentityJSON struct {
@@ -87,6 +93,16 @@ func newWhoamiCommand() *cobra.Command {
 	return cmd
 }
 
+// whoamiMachine is this machine's id (adapters/machine); zero when the OS
+// has no readable machine id.
+func whoamiMachine() coreids.MachineID {
+	m, err := machine.ID()
+	if err != nil {
+		return coreids.MachineID{}
+	}
+	return m
+}
+
 func firstErr(resolveErr, idErr error) error {
 	if resolveErr != nil {
 		return orgResolveCLIError(resolveErr)
@@ -119,7 +135,7 @@ func whoamiData(s *orgSituation, id identity.Resolved, idErr error, red whoamiRe
 		Org: r.OrgName(), MatchedBy: red.str(r.MatchedBy), Rule: int(r.Step), RepoRole: r.Role,
 		ProjectID: s.ProjectID, Remotes: nonNil(s.Remotes), Personal: personalFolders(r.OrgName()),
 		LinkStatus: r.LinkStatus.String(), Trace: red.trace(r.Trace), Warnings: nonNil(red.strs(whoamiWarnings(s, id))),
-		Stores: []lorecfg.Store{},
+		Stores: []lorecfg.Store{}, Machine: whoamiMachine().String(),
 	}
 	if r.Org != nil {
 		out.Stores = red.stores(r.Org.Stores)
@@ -222,6 +238,13 @@ func printWhoami(s *orgSituation, id identity.Resolved, idErr error, explain boo
 		default:
 			printWhoamiRow("repo", "no org  "+style.Muted("(fallback identity, personal everywhere/ notes only)"))
 		}
+	}
+	// PROV4: the machine line shows the short form (mch_ + 8 hex, like a
+	// git short hash); stored data and --json keep the full id.
+	if m := whoamiMachine(); m.IsZero() {
+		printWhoamiRow("machine", style.Muted("(no OS machine id readable here)"))
+	} else {
+		printWhoamiRow("machine", m.Short()+"  "+style.Muted("("+m.String()+")"))
 	}
 	project := s.ProjectID
 	if project == "" {

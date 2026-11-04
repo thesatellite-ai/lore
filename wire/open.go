@@ -208,6 +208,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient, ActorAs: st.clientActorAs(repoClient)}),
 		engine.WithCache(st.caches), engine.WithRegistry(reg), engine.WithScanner(scanner),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
+		engine.WithProvenance(newProvenance(opts, st.repoTop)), // _o place facts and the _w stamp (PROV4, PROV6, PROV8, OQ7)
 	}
 	for _, o := range attached {
 		a := o.Attached

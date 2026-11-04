@@ -246,18 +246,32 @@ var allowedActorKeys = map[string]bool{
 //   - "_hlc": the edit stamp (time/counter/writer act_ id); always allowed.
 //   - "created_by", "updated_by": an act_ id (the writer; actor ids are
 //     already public in a client repo, every row's created_by_actor_id is one).
-//   - "_o": the provenance block (engine originOf), allowed only as
-//     {"store": "repo", "cmd": <text>}: an actor row the core wrote into the
-//     client repo itself. Any other store name, a "moves" list or another key
-//     would tell the client about an internal store, so it blocks.
+//   - "_o": the provenance block (engine originOf, logic/origin
+//     ClientFilter), allowed only with "store": "repo" and the client-safe
+//     keys cmd, dir, repo and git {state, commit, branch} as text. PROV8:
+//     a client repo keeps the commit id and state of a row born there, and a
+//     branch name only when it has an upstream on the client's remote (the
+//     engine drops a local-only one; this check cannot see git, so it
+//     accepts the key the engine let through). Any other store name, a
+//     "moves" list or another key (org, folder, plugin, import, …) would
+//     tell the client about an internal place, so it blocks.
+//   - "_w": the write stamp, allowed only as {"v": <text>}. Q-R3-3 / OQ7: a
+//     client repo gets the lore version only, never "m": no machine id of
+//     ours reaches a client.
 const (
 	envHLC       = "_hlc"
 	envCreatedBy = "created_by"
 	envUpdatedBy = "updated_by"
 	envOrigin    = "_o"
-	// originStoreKey / originCmdKey are the _o members (engine/write.go).
+	envWrite     = "_w"
+	// The _o members a client copy may hold (logic/origin keys).
 	originStoreKey = "store"
 	originCmdKey   = "cmd"
+	originDirKey   = "dir"
+	originRepoKey  = "repo"
+	originGitKey   = "git"
+	// writeVersionKey is the only _w member a client copy may hold.
+	writeVersionKey = "v"
 	// repoStoreSource is the repo store's source name (store.Source "repo"):
 	// the only origin a client actor copy may name.
 	repoStoreSource = "repo"
@@ -288,8 +302,12 @@ func envelopeKeyAllowed(k string, v any) bool {
 				if ov != repoStoreSource {
 					return false
 				}
-			case originCmdKey:
+			case originCmdKey, originDirKey, originRepoKey:
 				if _, isText := ov.(string); !isText {
+					return false
+				}
+			case originGitKey:
+				if !onlyTextKeys(ov, clientGitKeys) {
 					return false
 				}
 			default:
@@ -297,8 +315,32 @@ func envelopeKeyAllowed(k string, v any) bool {
 			}
 		}
 		return true
+	case envWrite:
+		return onlyTextKeys(v, clientWriteKeys)
 	}
 	return false
+}
+
+// clientGitKeys are the _o.git members a client copy may hold (PROV8).
+var clientGitKeys = map[string]bool{"state": true, "commit": true, "branch": true}
+
+// clientWriteKeys are the _w members a client copy may hold (Q-R3-3: v
+// only, never the machine id m).
+var clientWriteKeys = map[string]bool{writeVersionKey: true}
+
+// onlyTextKeys reports whether v is an object whose every member is in
+// allowed and holds text. Fails closed on any other shape.
+func onlyTextKeys(v any, allowed map[string]bool) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	for k, mv := range m {
+		if _, isText := mv.(string); !isText || !allowed[k] {
+			return false
+		}
+	}
+	return true
 }
 
 // originMovesKey / moveToKey are the move entries of _o (engine/move.go).

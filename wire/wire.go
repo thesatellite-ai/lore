@@ -182,6 +182,17 @@ type Options struct {
 	// hint that names one of the live projects is used; ok=false, or a
 	// hint naming none of them, keeps E_AMBIGUOUS_PROJECT. nil = no hint.
 	ProjectHint func(ctx context.Context) (id string, ok bool)
+	// WorkDir is the folder the command runs in (the process's working
+	// directory), for `_o.dir`: PROV6 records it relative to the repo
+	// root for monorepos and omits it at the root. Empty = RepoDir.
+	WorkDir string
+	// Version is the lore version written into every `_w` stamp (OQ7,
+	// PROVENANCE_DESIGN 6.2). Empty leaves `v` out.
+	Version string
+	// Machine returns this machine's id for `_w.m` (PROV4); nil reads the
+	// OS machine id through adapters/machine. An error leaves `m` out
+	// (never a made-up id). Tests pass a fixed id.
+	Machine func() (ids.MachineID, error)
 }
 
 // openOptions is what every store open of this App passes to a backend:
