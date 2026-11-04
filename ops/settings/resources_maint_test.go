@@ -29,6 +29,9 @@ func TestResourceMaint(t *testing.T) {
 	if _, err := h.RunYes(settings.OpResRename, `{"id":"hub","new_name":"Bad Name"}`); !errs.Has(err, errs.ResourceName) {
 		t.Fatalf("bad rename: %v", err)
 	}
+	if _, err := h.RunYes(settings.OpResMerge, `{"id":"api","into":"hub"}`); !errs.Has(err, errs.ResourceKindMismatch) {
+		t.Fatalf("merge across kinds: %v", err) // RES 3.6
+	}
 	got := opstest.Text(h.MustYes(settings.OpResMerge, `{"id":"h1_dup","into":"hub"}`))
 	if !strings.Contains(got, "values filled from h1_dup: region") || !strings.Contains(got, "repointed 1 rows") {
 		t.Fatalf("merge %q", got)
@@ -47,7 +50,7 @@ func TestResourceMaint(t *testing.T) {
 		t.Fatalf("lint %q", lint)
 	}
 
-	if _, err := h.RunYes(settings.OpFieldRetype, `{"kind":"host","field":"os","type":"number"}`); !errs.Has(err, errs.ResourceInvalid) {
+	if _, err := h.RunYes(settings.OpFieldRetype, `{"kind":"host","field":"os","type":"number"}`); !errs.Has(err, errs.ResourceType) {
 		t.Fatalf("retype misfit: %v", err)
 	}
 	h.MustYes(settings.OpFieldRetype, `{"kind":"service","field":"port","type":"number"}`)

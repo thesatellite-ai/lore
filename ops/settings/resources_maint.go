@@ -115,12 +115,12 @@ func (o ops) maintOps() []op.Entry {
 		op.Define(op.Spec{Name: OpResRename, Summary: "Rename a resource (ids and refs stay)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceName)}, o.resRename),
 		op.Define(op.Spec{Name: OpResMerge, Summary: "Fold a duplicate resource into another of the same kind: refs move, values fill, the duplicate is archived", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceKindMismatch), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "fold a duplicate", CLI: "lore resource merge hub_prod_old --into hub_prod --yes", Want: "merged"}}}, o.resMerge),
 		op.Define(op.Spec{Name: OpResLint, Summary: "Find dangling and bare-name refs, missing required fields, deprecated fields, due reminders and duplicates", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.resLint),
 		op.Define(op.Spec{Name: OpFieldRetype, Summary: "Change a field's type: every value is checked first, then converted (the field id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid), Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldRetype),
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceType), Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldRetype),
 	}
 }
 
@@ -172,8 +172,8 @@ func (o ops) resMerge(ctx context.Context, in ResMergeIn) (ResRepointOut, error)
 		return ResRepointOut{}, errs.New(errs.InvalidInput, "resource merge: a resource cannot be merged into itself")
 	}
 	if text(dup.Row, rKind) != text(keep.Row, rKind) {
-		// RES 3.6 names E_RESOURCE_KIND_MISMATCH; until that code exists it is E_RESOURCE_INVALID.
-		return ResRepointOut{}, errs.New(errs.ResourceInvalid, "resource merge: "+in.Name+" and "+in.Into+" are of different kinds").
+		// RES 3.6: a merge across kinds is its own exact error.
+		return ResRepointOut{}, errs.New(errs.ResourceKindMismatch, "resource merge: "+in.Name+" and "+in.Into+" are of different kinds").
 			WithHint("use lore resource repoint for refs between kinds")
 	}
 	d, err := o.kindDef(ctx, text(keep.Row, rKind))
@@ -413,8 +413,8 @@ func (o ops) fieldRetype(ctx context.Context, in FieldRetypeIn) (RowOut, error) 
 		convs = append(convs, conv{r: r, stored: stored})
 	}
 	if len(bad) > 0 {
-		// RES 3.14 names E_RESOURCE_TYPE; until that code exists it is E_RESOURCE_INVALID.
-		return RowOut{}, errs.New(errs.ResourceInvalid, fmt.Sprintf("%d value(s) do not fit %s: %s", len(bad), in.Type, strings.Join(bad, ", "))).
+		// RES 3.14: values that do not fit the new type are E_RESOURCE_TYPE.
+		return RowOut{}, errs.New(errs.ResourceType, fmt.Sprintf("%d value(s) do not fit %s: %s", len(bad), in.Type, strings.Join(bad, ", "))).
 			WithHint("fix them first; nothing written")
 	}
 	if in.DryRun {

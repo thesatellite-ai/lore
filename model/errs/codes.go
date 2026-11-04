@@ -115,25 +115,27 @@ const (
 // New codes of 0.1.18 (STORE_SERVER_SPEC 5.4 and 9.5, CLI_REFERENCE 5).
 const (
 	// lore upgrade refusals (FORMAT_EVOLUTION 8.10).
-	UpgradePermission Code = "E_UPGRADE_PERMISSION"
-	UpgradeChecksum   Code = "E_UPGRADE_CHECKSUM"
-	UpgradePinned     Code = "E_UPGRADE_PINNED"
-	Stale             Code = "E_STALE"
-	StoreScheme       Code = "E_STORE_SCHEME"
-	StoreBackend      Code = "E_STORE_BACKEND"
-	StoreUnreachable  Code = "E_STORE_UNREACHABLE"
-	StoreReadOnly     Code = "E_STORE_READ_ONLY"
-	StoreLocked       Code = "E_STORE_LOCKED"
-	Unauthorized      Code = "E_UNAUTHORIZED"
-	ResourceInvalid   Code = "E_RESOURCE_INVALID"
-	ResourcePlace     Code = "E_RESOURCE_PLACE"
-	ResourceName      Code = "E_RESOURCE_NAME"
-	SchemaOld         Code = "E_SCHEMA_OLD"
-	NeedsConfirm      Code = "E_NEEDS_CONFIRM"
-	PolicyDenied      Code = "E_POLICY_DENIED"
-	KindUnknown       Code = "E_KIND_UNKNOWN"
-	MetaType          Code = "E_META_TYPE"
-	MetaAmbiguous     Code = "E_META_AMBIGUOUS"
+	UpgradePermission    Code = "E_UPGRADE_PERMISSION"
+	UpgradeChecksum      Code = "E_UPGRADE_CHECKSUM"
+	UpgradePinned        Code = "E_UPGRADE_PINNED"
+	Stale                Code = "E_STALE"
+	StoreScheme          Code = "E_STORE_SCHEME"
+	StoreBackend         Code = "E_STORE_BACKEND"
+	StoreUnreachable     Code = "E_STORE_UNREACHABLE"
+	StoreReadOnly        Code = "E_STORE_READ_ONLY"
+	StoreLocked          Code = "E_STORE_LOCKED"
+	Unauthorized         Code = "E_UNAUTHORIZED"
+	ResourceInvalid      Code = "E_RESOURCE_INVALID"
+	ResourcePlace        Code = "E_RESOURCE_PLACE"
+	ResourceName         Code = "E_RESOURCE_NAME"
+	ResourceType         Code = "E_RESOURCE_TYPE"
+	ResourceKindMismatch Code = "E_RESOURCE_KIND_MISMATCH"
+	SchemaOld            Code = "E_SCHEMA_OLD"
+	NeedsConfirm         Code = "E_NEEDS_CONFIRM"
+	PolicyDenied         Code = "E_POLICY_DENIED"
+	KindUnknown          Code = "E_KIND_UNKNOWN"
+	MetaType             Code = "E_META_TYPE"
+	MetaAmbiguous        Code = "E_META_AMBIGUOUS"
 	// The rest of the metadata set (METADATA_DESIGN 6, CLI_REFERENCE 5).
 	MetaKey             Code = "E_META_KEY"
 	MetaReserved        Code = "E_META_RESERVED"
@@ -290,6 +292,8 @@ var table = map[Code]entry{
 	ResourceInvalid:      {class: ClassBadInput, desc: "a value or field does not fit the kind"},
 	ResourcePlace:        {class: ClassRefused, desc: "the place is not allowed by resources.allowed_in, or --to me (RQ2)"},
 	ResourceName:         {class: ClassBadInput, desc: "a kind, field or resource name breaks its format, is reserved, or looks like a credential (RES 3.1)"},
+	ResourceType:         {class: ClassBadInput, desc: "field retype found values that do not fit the new type (RES 3.14)"},
+	ResourceKindMismatch: {class: ClassBadInput, desc: "merge across resource kinds (RES 3.6)"},
 	SchemaOld:            {class: ClassUpgrade, desc: "the local database is older than this binary"},
 	NeedsConfirm:         {class: ClassNeedsConfirmation, desc: "the command asks first and ran with no terminal and no --yes"},
 	PolicyDenied:         {class: ClassRefused, desc: "a team policy refuses this"},
