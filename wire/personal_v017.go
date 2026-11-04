@@ -88,23 +88,41 @@ func ensureLocalMarker(dir string, now time.Time, opts ...rowfs.Option) error {
 	return folder.Init(dir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: id, Visibility: rowfs.VisibilityInternal, Created: now.UTC().Format(markerDateLayout)}, opts...)
 }
 
-// localPersonalStores returns the `me` entries of a v0.1.17 local
-// personal store (none when config.yaml does not select one).
+// localPersonalStores returns the `me` entries of the personal store,
+// filed by F17 (the folder of the org this repo resolves to, else
+// everywhere/; with an org, everywhere/ is attached too as me/everywhere),
+// so a repo of org X attaches only me/<X> and me/everywhere and never the
+// store root, where every org's notes would meet:
+//   - the v0.1.17 local store (~/.lore/personal), given a marker on first use;
+//   - a personal.store url (a git remote, a hand-set file:// dir), the
+//     same layout: a note written with `--to me` in a northwind repo must
+//     not load in a betalabs repo, whichever kind of store holds it.
+//
+// The one exception is the store personal_store_flatten produced
+// (personal.store = file://~/.lore/personal after `lore migrate run`):
+// that migration moved every row to the root on purpose (DECISIONS_LOG
+// 18), so it stays attached at its root by openAttached. None when no
+// personal store is configured.
 func localPersonalStores(ctx context.Context, opts Options) ([]attach.Store, error) {
 	mc, err := readMachineConfig(opts.Home)
 	if err != nil {
 		return nil, err
 	}
-	dir := mc.localPersonalV017(opts.Home)
-	if dir == "" {
+	u := ""
+	if dir := mc.localPersonalV017(opts.Home); dir != "" {
+		wall := opts.Wall
+		if wall == nil {
+			wall = time.Now
+		}
+		if err := ensureLocalMarker(dir, wall(), opts.rowfsOptions()...); err != nil {
+			return nil, errs.Wrap(errs.CodeOf(err), "wire: the v0.1.17 personal store ~/.lore/"+personalDirV017, err)
+		}
+		u = fileURL(dir)
+	} else if p := mc.personalURL(); p != "" && !flattenedPersonal(opts.Home, p) {
+		u = p
+	}
+	if u == "" {
 		return nil, nil
-	}
-	wall := opts.Wall
-	if wall == nil {
-		wall = time.Now
-	}
-	if err := ensureLocalMarker(dir, wall(), opts.rowfsOptions()...); err != nil {
-		return nil, errs.Wrap(errs.CodeOf(err), "wire: the v0.1.17 personal store ~/.lore/"+personalDirV017, err)
 	}
 	place := personalEverywhereV017
 	if opts.Org != nil {
@@ -114,12 +132,18 @@ func localPersonalStores(ctx context.Context, opts Options) ([]attach.Store, err
 			}
 		}
 	}
-	u := fileURL(dir)
 	out := []attach.Store{{Name: store.Source(attach.ReservedMe), URL: u, Folder: place}}
 	if place != personalEverywhereV017 {
 		out = append(out, attach.Store{Name: store.Source(attach.ReservedMe + targetSep + personalEverywhereV017), URL: u, Folder: personalEverywhereV017})
 	}
 	return out, nil
+}
+
+// flattenedPersonal reports whether personal.store url p is the store
+// personal_store_flatten switched config.yaml to (file:// of
+// ~/.lore/personal), which keeps its rows at the root.
+func flattenedPersonal(home, p string) bool {
+	return p == fileURL(filepath.Join(home, personalDirV017))
 }
 
 // personalFoldersV017 lists the folders of dir holding a .lore/data.
