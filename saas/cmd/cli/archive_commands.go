@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"dbent/gen/ent"
-	entMission "dbent/gen/ent/mission"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
 
@@ -250,54 +249,6 @@ var repoArchiveTarget = archiveTarget{
 
 // ── mission pause / resume (E) ──────────────────────────────────────────
 
-func newMissionPauseCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use:   "pause <id>",
-		Short: "Mark mission as paused",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return setMissionStatus(cmd.Context(), &f, args[0], entMission.StatusPaused, "paused")
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	return cmd
-}
-
-func newMissionResumeCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use:   "resume <id>",
-		Short: "Mark mission as active (resume from paused)",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return setMissionStatus(cmd.Context(), &f, args[0], entMission.StatusActive, "resumed")
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	return cmd
-}
-
-func setMissionStatus(ctx context.Context, f *commonFlags, idArg string, target entMission.Status, label string) error {
-	if err := refuseIfReadOnly(f); err != nil {
-		return err
-	}
-	_, client, err := resolveContext(f)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	m, err := client.Mission.Get(ctx, idArg)
-	if err != nil {
-		return errcodes.New(errcodes.NotFound, fmt.Sprintf("mission %q not found", idArg))
-	}
-	if err := client.Mission.UpdateOneID(m.ID).SetStatus(target).Exec(ctx); err != nil {
-		return errcodes.New(errcodes.Internal, "update mission status").WithCause(err)
-	}
-	fmt.Printf("%s %s %s\n", style.Success("✓"), m.ID, label)
-	return nil
-}
-
 // ── handoff ack (D) ─────────────────────────────────────────────────────
 
 func newHandoffAckCommand() *cobra.Command {
@@ -340,62 +291,6 @@ var _ = json.Marshal
 // meaningful. Hard delete is the only escape hatch. Each target sets `del`
 // + `get` only; archive / unArch stay nil because archiveCmdPair is never
 // called against them — only newDeleteCommand is
-
-var taskDeleteTarget = archiveTarget{
-	label: "task",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.Task.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.ID, nil
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Task.DeleteOneID(id).Exec(ctx)
-	},
-}
-
-var missionDeleteTarget = archiveTarget{
-	label: "mission",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.Mission.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.ID, nil
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Mission.DeleteOneID(id).Exec(ctx)
-	},
-}
-
-var tasklistDeleteTarget = archiveTarget{
-	label: "tasklist",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.TaskList.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.ID, nil
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.TaskList.DeleteOneID(id).Exec(ctx)
-	},
-}
-
-var planDeleteTarget = archiveTarget{
-	label: "plan",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.Plan.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.ID, nil
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Plan.DeleteOneID(id).Exec(ctx)
-	},
-}
 
 var architectureNoteDeleteTarget = archiveTarget{
 	label: "architecturenote",

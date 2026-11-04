@@ -22,11 +22,8 @@ import (
 	entCookbookRecipe "dbent/gen/ent/cookbookrecipe"
 	entHandoff "dbent/gen/ent/handoff"
 	entIncident "dbent/gen/ent/incident"
-	entMission "dbent/gen/ent/mission"
-	entPlan "dbent/gen/ent/plan"
 	entSnapshot "dbent/gen/ent/snapshot"
 	entSuggestion "dbent/gen/ent/suggestion"
-	entTaskList "dbent/gen/ent/tasklist"
 	entTastePref "dbent/gen/ent/tastepref"
 	entTechDoc "dbent/gen/ent/techdoc"
 	entWorkflow "dbent/gen/ent/workflow"
@@ -370,99 +367,9 @@ func newHandoffSearchCommand() *cobra.Command {
 
 // ── mission ──────────────────────────────────────────────────────────────
 
-func newMissionSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across mission title + body + status",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityMission.FTSEntity(), constants.EntityMission.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Mission.Query().Where(entMission.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch mission").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{"title": r.Title, "body": derefStr(r.Body), "status": string(r.Status)},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s [%s] %s", h.ID, row["status"], row["title"])
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
-
 // ── tasklist ─────────────────────────────────────────────────────────────
 
-func newTaskListSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across tasklist title + body + status",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityTaskList.FTSEntity(), constants.EntityTaskList.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.TaskList.Query().Where(entTaskList.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch tasklist").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{"title": r.Title, "body": r.Body, "status_str": r.StatusStr},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s %s", h.ID, row["title"])
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
-
 // ── plan ─────────────────────────────────────────────────────────────────
-
-func newPlanSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across plan title + body + status",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityPlan.FTSEntity(), constants.EntityPlan.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Plan.Query().Where(entPlan.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch plan").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID, Row: map[string]any{"title": r.Title, "body": r.Body, "status_str": r.StatusStr},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s %s", h.ID, row["title"])
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
 
 // ── workflow ─────────────────────────────────────────────────────────────
 
