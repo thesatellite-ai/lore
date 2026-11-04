@@ -22,6 +22,10 @@ const (
 	Render Point = "render"
 	// Client is a render in a client repo (13.1).
 	Client Point = "client"
+	// Private is the uncommitted private render (~/.lore/render/…, CFG6):
+	// it also fills private team variables and res/row of internal
+	// stores; personal-store targets stay references (BATCH 16, SQ23).
+	Private Point = "private"
 )
 
 // Mask replaces a secret, or a value the scanner flags, in show (2.7).
@@ -149,7 +153,7 @@ func (x *expansion) secret(raw string) string {
 	case Client:
 		x.note(Used{Ref: raw, State: StateRedacted, Note: "rendered for a client (SQ11)"})
 		return Redacted
-	case Render:
+	case Render, Private:
 	}
 	x.note(Used{Ref: raw, State: StateKept, Note: "secret references stay as written (SQ11)"})
 	return raw
@@ -223,6 +227,17 @@ func (x *expansion) blocked(s refs.Scheme, id ids.AnyID) string {
 	var t Target // nil Locate or no id: nothing reaches a render (fail closed)
 	if x.o.Locate != nil && !id.IsZero() {
 		t = x.o.Locate(id)
+	} else if x.o.Point == Private {
+		return "unplaced target: kept as written (fail closed)"
+	}
+	if x.o.Point == Private {
+		// The private file is this machine's local output (CONTEXT_BUDGET
+		// 6.13, SECRETS 12): every non-personal var/res/row this machine
+		// sees is filled; personal-store targets never (BATCH 16, SQ23).
+		if t.Personal {
+			return "personal-store target: stays a reference in every render (BATCH 16, SQ23)"
+		}
+		return ""
 	}
 	switch s {
 	case refs.SchemeVar:

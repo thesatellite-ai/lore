@@ -23,20 +23,33 @@
 // attached sources of one store (an org store's two folders) share its sto_
 // id and therefore one file. A store whose marker carries no id (v0.1.17)
 // gets a name-derived file stem so its rows are not dropped.
+//
+// Expansion (SECRETS_AND_REFERENCES 12, CONTEXT_BUDGET 6.13):
+//
+//	row text ─▶ privateExpander ─▶ refpoint Private point
+//	              var/res/row: every non-personal target (private team vars too)
+//	              personal-store targets: kept (BATCH 16, SQ23); env never; secret as written
+//	          ─▶ scanner on the expanded text: a new hit refuses the render (13.2)
 package main
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/direction"
+	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 
@@ -178,7 +191,7 @@ func planPrivate(ctx context.Context, root string) (*privatePlan, error) {
 		return nil, coreErr(err)
 	}
 	urls := map[string]string{}
-	if list, err := coreApp.ListStores(ctx); err == nil {
+	if list, lerr := coreApp.ListStores(ctx); lerr == nil {
 		for _, e := range list {
 			urls[e.Name] = e.URL
 		}
@@ -219,8 +232,14 @@ func planPrivate(ctx context.Context, root string) (*privatePlan, error) {
 	repoName := filepath.Base(root)
 
 	var imports []string
+	var ex *privateExpander
+	if len(internal) > 0 {
+		if ex, err = newPrivateExpander(ctx); err != nil {
+			return nil, err
+		}
+	}
 	for _, s := range internal {
-		body, n, err := buildPrivateStore(ctx, repoName, p.repoKey, s)
+		body, n, err := buildPrivateStore(ctx, ex, repoName, p.repoKey, s)
 		if err != nil {
 			return nil, err
 		}
@@ -254,7 +273,7 @@ func privateRepoKey(root, projectID string) string {
 // buildPrivateStore renders one internal store's file: the pinned rules
 // and hotfixes in the committed render's format, then every other live row
 // as one bullet per row. It returns the text and the number of rows in it.
-func buildPrivateStore(ctx context.Context, repoName, repoKey string, s privateStore) (string, int, error) {
+func buildPrivateStore(ctx context.Context, ex *privateExpander, repoName, repoKey string, s privateStore) (string, int, error) {
 	byTable := map[row.Table][]row.Row{}
 	for _, t := range privateTables {
 		for _, src := range s.sources {
@@ -271,7 +290,11 @@ func buildPrivateStore(ctx context.Context, repoName, repoKey string, s privateS
 						continue
 					}
 				}
-				byTable[t.table] = append(byTable[t.table], r)
+				er, err := ex.row(r)
+				if err != nil {
+					return "", 0, err
+				}
+				byTable[t.table] = append(byTable[t.table], er)
 			}
 		}
 		sort.SliceStable(byTable[t.table], func(i, j int) bool {
@@ -488,4 +511,62 @@ func rerenderPrivateQuiet(ctx context.Context, root string) {
 	if err := renderPrivate(ctx, root, false, true); err != nil {
 		fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"re-render the private context: "+err.Error()))
 	}
+}
+
+// privateExpandFields are the text fields the private file prints.
+var privateExpandFields = []string{renderFieldTitle, renderFieldBody, privateFieldName, privateFieldDescription}
+
+// privateExpander fills references for the private render (refpoint
+// Private point).
+type privateExpander struct{ opt refpoint.Options }
+
+// newPrivateExpander builds the private point: resolver and scanner from
+// the App, Locate marking personal-store targets (kept, BATCH 16).
+func newPrivateExpander(ctx context.Context) (*privateExpander, error) {
+	opt := refpoint.Options{Point: refpoint.Private}
+	var err error
+	if opt.Resolver, err = coreApp.RefResolver(ctx); err != nil { // wire/expandport.go
+		return nil, coreErr(err)
+	}
+	if opt.Scanner, err = coreApp.OutputScanner(ctx); err != nil {
+		return nil, coreErr(err)
+	}
+	opt.Locate = func(id ids.AnyID) refpoint.Target {
+		src, r, err := coreApp.Get(ctx, engine.Ref{ID: id})
+		if err != nil || r.Deleted {
+			return refpoint.Target{Personal: true} // unplaced: kept as written (fail closed)
+		}
+		class, err := coreApp.StoreClass(ctx, src)
+		return refpoint.Target{Personal: err != nil || class == direction.Personal, Reaches: true}
+	}
+	return &privateExpander{opt: opt}, nil
+}
+
+// row returns r with its printed text fields expanded (a copy; the row
+// file keeps its references, SQ3). A scanner hit refuses (13.2).
+func (e *privateExpander) row(r row.Row) (row.Row, error) {
+	var out map[string]value.Value
+	for _, f := range privateExpandFields {
+		txt := renderField(r, f)
+		if txt == "" || len(refs.References(txt)) == 0 {
+			continue
+		}
+		res, err := refpoint.Expand(e.opt, r.ID.String()+" "+f, txt)
+		if err != nil {
+			return r, coreErr(err)
+		}
+		if out == nil {
+			out = make(map[string]value.Value, len(r.Fields))
+			maps.Copy(out, r.Fields)
+		}
+		tv, err := value.TextOf(res.Text)
+		if err != nil {
+			return r, coreErr(err)
+		}
+		out[f] = tv
+	}
+	if out != nil {
+		r.Fields = out
+	}
+	return r, nil
 }

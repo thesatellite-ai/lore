@@ -19,6 +19,7 @@
 //	show    var res row: yes (personal vars too, SQ23)   env: yes, masked if secret-like   secret: ••••••
 //	render  var: shareable, not personal (BATCH 1, 16)   res/row: target reaches this render   env: never   secret: as written (SQ11)
 //	client  as render, targets in the client repo only   secret: ${secret:redacted} (SQ11)
+//	private var/res/row: any non-personal target (CFG6 private file)   env: never   secret: as written
 //
 // Layer L1: pure; the caller supplies the Resolver, the Locate lookup,
 // the environment and the scanner. Secrets never resolve here (OV13b's

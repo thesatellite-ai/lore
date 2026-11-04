@@ -72,6 +72,7 @@ func TestExpandPoints(t *testing.T) {
 	}{
 		{Show, "h=db.example m=personal.example p=private.example s=" + Mask + " r=" + Mask + " e=/home/x k=" + Mask + " x=${var:host}"},
 		{Render, "h=db.example m=${var:mine} p=${var:priv} s=" + secretRef + " r=${secret:gopass://acme/x} e=${env:HOME_DIR} k=${env:API_TOKEN} x=${var:host}"},
+		{Private, "h=db.example m=${var:mine} p=private.example s=" + secretRef + " r=${secret:gopass://acme/x} e=${env:HOME_DIR} k=${env:API_TOKEN} x=${var:host}"},
 		{Client, "h=db.example m=${var:mine} p=${var:priv} s=" + Redacted + " r=" + Redacted + " e=${env:HOME_DIR} k=${env:API_TOKEN} x=${var:host}"},
 	} {
 		got, err := Expand(Options{Point: tc.point, Resolver: vars, Locate: locate, Env: env, Scanner: tokenScanner(t)}, "body", text)
@@ -91,7 +92,7 @@ func TestExpandPoints(t *testing.T) {
 	if err != nil || got.Text != "k="+Mask {
 		t.Fatalf("show leak: %q %v", got.Text, err)
 	}
-	for _, p := range []Point{Render, Client} {
+	for _, p := range []Point{Render, Client, Private} {
 		_, err = Expand(Options{Point: p, Resolver: vars, Locate: locate, Scanner: tokenScanner(t)}, "body", "k=${var:leak}")
 		if !errs.Has(err, errs.SecretDetected) || !strings.Contains(err.Error(), "${var:leak}") {
 			t.Fatalf("%s leak: want E_SECRET_DETECTED naming ${var:leak}, got %v", p, err)
