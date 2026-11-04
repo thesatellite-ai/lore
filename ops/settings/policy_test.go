@@ -28,6 +28,9 @@ var policyCases = []policyCase{
 	{key: "meta.max_bytes", base: "100", looser: []string{"101", "16384"}, tighter: []string{"100", "0", "50"}},
 	{key: "tasks.max_depth", base: "3", looser: []string{"4", "8"}, tighter: []string{"3", "1"}},
 	{key: "trash.retention_days", base: "30", looser: []string{"31"}, tighter: []string{"30", "7"}},
+	{key: "resources.warn_bytes", base: "2000", looser: []string{"2001", "4096"}, tighter: []string{"2000", "100"}},
+	// An allow list only narrows: levels intersect (RQ2).
+	{key: "resources.allowed_in", base: "store,repo", looser: []string{"store,repo,client", "client"}, tighter: []string{"store,repo", "store"}},
 	// A set never loosens: every level's items join.
 	{key: "agents.person_only", base: "task.delete", tighter: []string{"rule.add", "task.delete,memory.add"}},
 }
@@ -161,8 +164,8 @@ func TestPolicySetUpdatesOneRow(t *testing.T) {
 func TestPolicyShowText(t *testing.T) {
 	h := multiStore(t)
 	// Q-R2-3 added context.targets (unset by default: detect from files);
-	// XQ2 added batch.preview_rows (default 20).
-	want := "agents.person_only\t(unset)\tdefault\nbatch.preview_rows\t20\tdefault\ncontext.targets\t(unset)\tdefault\nmeta.max_bytes\t16384\tdefault\nresources.max_bytes\t16384\tdefault\n" +
+	// XQ2 added batch.preview_rows (default 20); RQ2/RQ4 resources.allowed_in, warn_bytes.
+	want := "agents.person_only\t(unset)\tdefault\nbatch.preview_rows\t20\tdefault\ncontext.targets\t(unset)\tdefault\nmeta.max_bytes\t16384\tdefault\nresources.allowed_in\tstore, repo, client\tdefault\nresources.max_bytes\t16384\tdefault\nresources.warn_bytes\t4096\tdefault\n" +
 		"routing.client_repos\t(unset)\tdefault\nsecrets.agent_reveal\task\tdefault\nsecrets.on_detect\task\tdefault\n" +
 		"secrets.use_repo_gitleaks\ttrue\tdefault\ntasks.auto_watch\ttrue\tdefault\ntasks.estimate_unit\tpoints\tdefault\ntasks.max_depth\t4\tdefault\ntasks.parent_autoclose\tsuggest\tdefault\ntime.coalesce_gap\t2\tdefault\ntime.long_span\t600\tdefault\ntime.max_entry\t1440\tdefault\ntrash.retention_days\t(unset)\tdefault\n"
 	if got := opstest.Text(h.Must(settings.OpPolicyShow, ``)); got != want {

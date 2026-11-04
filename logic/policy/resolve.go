@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -137,6 +138,16 @@ func stricter(d KeyDef, cur Effective, e Entry) (Effective, error) {
 			return Effective{}, err
 		}
 		cur.Value = u
+	case ShapeAllow:
+		// RQ2: levels intersect; a farther level that removes items wins
+		// and is named as the source (so policy set reports the widening).
+		i, err := intersect(cur.Value, e.Value)
+		if err != nil {
+			return Effective{}, err
+		}
+		if len(i.Items()) < listLen(cur.Value) {
+			return Effective{Key: d.Key, Value: i, Level: e.Level, Source: e.Source}, nil
+		}
 	}
 	return cur, nil
 }
@@ -163,6 +174,16 @@ func check(d KeyDef, v value.Value) error {
 	case ShapeSet:
 		if l, ok := v.(value.List); !ok || (len(l.Items()) > 0 && l.Elem() != value.KindText) {
 			return errs.New(errs.ConfigInvalid, "value must be a list of text")
+		}
+	case ShapeAllow:
+		l, ok := v.(value.List)
+		if !ok || (len(l.Items()) > 0 && l.Elem() != value.KindText) {
+			return errs.New(errs.ConfigInvalid, "value must be a list of: "+strings.Join(d.Choices, ", "))
+		}
+		for _, it := range l.Items() {
+			if !slices.Contains(d.Choices, it.String()) {
+				return errs.New(errs.ConfigInvalid, "value must be a list of: "+strings.Join(d.Choices, ", "))
+			}
 		}
 	}
 	return nil
@@ -241,6 +262,38 @@ func union(a, b value.Value) (value.Value, error) {
 		items[i] = seen[n]
 	}
 	return value.ListOf(value.KindText, items...)
+}
+
+// intersect is the sorted distinct items present in both text lists.
+func intersect(a, b value.Value) (value.List, error) {
+	in := map[string]bool{}
+	if l, ok := b.(value.List); ok {
+		for _, it := range l.Items() {
+			in[it.String()] = true
+		}
+	}
+	seen := map[string]value.Value{}
+	if l, ok := a.(value.List); ok {
+		for _, it := range l.Items() {
+			if in[it.String()] {
+				seen[it.String()] = it
+			}
+		}
+	}
+	names := slices.Sorted(maps.Keys(seen))
+	items := make([]value.Value, len(names))
+	for i, n := range names {
+		items[i] = seen[n]
+	}
+	return value.ListOf(value.KindText, items...)
+}
+
+// listLen is the item count of a list value (0 for anything else).
+func listLen(v value.Value) int {
+	if l, ok := v.(value.List); ok {
+		return len(l.Items())
+	}
+	return 0
 }
 
 func ceiling(c int64) string {

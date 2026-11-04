@@ -151,7 +151,7 @@ func (o ops) policyShow(ctx context.Context, in PolicyShowIn) (PolicyOut, error)
 
 // policyValue parses CLI text for key d.
 func policyValue(d policy.KeyDef, raw string) (value.Value, error) {
-	if d.Shape == policy.ShapeSet {
+	if d.Shape == policy.ShapeSet || d.Shape == policy.ShapeAllow {
 		return textList(splitList(raw))
 	}
 	return inferText(raw)

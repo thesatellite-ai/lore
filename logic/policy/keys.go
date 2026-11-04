@@ -15,11 +15,17 @@ type Key string
 // Keys of the log whose values have no "stricter" (estimate units, budgets)
 // join with their noun and a declared order; an unknown key is refused.
 const (
-	KeyOnDetect           Key = "secrets.on_detect"
-	KeyAgentReveal        Key = "secrets.agent_reveal"
-	KeyUseRepoGitleaks    Key = "secrets.use_repo_gitleaks"
-	KeyMetaMaxBytes       Key = "meta.max_bytes"
-	KeyResourcesMaxBytes  Key = "resources.max_bytes"
+	KeyOnDetect          Key = "secrets.on_detect"
+	KeyAgentReveal       Key = "secrets.agent_reveal"
+	KeyUseRepoGitleaks   Key = "secrets.use_repo_gitleaks"
+	KeyMetaMaxBytes      Key = "meta.max_bytes"
+	KeyResourcesMaxBytes Key = "resources.max_bytes"
+	// KeyResourcesWarnBytes: a resource larger than this prints a warning
+	// (RQ4: 4 KB); a limit, the smaller is stricter.
+	KeyResourcesWarnBytes Key = "resources.warn_bytes"
+	// KeyResourcesAllowedIn: where resources may live, items from
+	// AllowedInPlaces (RQ2, OQ24); levels intersect, a lower one only narrows.
+	KeyResourcesAllowedIn Key = "resources.allowed_in"
 	KeyTrashRetentionDays Key = "trash.retention_days"
 	KeyAgentsPersonOnly   Key = "agents.person_only"
 	KeyTasksMaxDepth      Key = "tasks.max_depth"
@@ -65,6 +71,7 @@ const clientRouteSep = "="
 // Numeric defaults of the keys above.
 const (
 	defaultMaxBytes           int64 = 16 * 1024 // MQ3, RQ4, CFG10
+	defaultWarnBytes          int64 = 4 * 1024  // RQ4
 	defaultTasksMaxDepth      int64 = 4         // TSQ1
 	ceilingTasksMaxDepth      int64 = 8         // TSQ1: "default 4, up to 8"
 	defaultPreviewRows        int64 = 20        // XQ2
@@ -112,7 +119,20 @@ const (
 	// ShapeSet: a list of text; the union of every level is the result
 	// (agents.person_only: a command any level lists stays person-only).
 	ShapeSet Shape = "set"
+	// ShapeAllow: a list of text from Choices; the levels INTERSECT, so a
+	// lower level may only narrow it (RQ2 resources.allowed_in).
+	ShapeAllow Shape = "allow"
 )
+
+// Places of KeyResourcesAllowedIn (RQ2): a store, our own repo, a client repo.
+const (
+	PlaceStore  = "store"
+	PlaceRepo   = "repo"
+	PlaceClient = "client"
+)
+
+// AllowedInPlaces lists the KeyResourcesAllowedIn items; all are allowed by default (RQ2).
+func AllowedInPlaces() []string { return []string{PlaceStore, PlaceRepo, PlaceClient} }
 
 // KeyDef declares one key: its shape, how strictness is ordered, and the
 // default when no level sets it.
@@ -139,6 +159,9 @@ func Keys() []KeyDef {
 			Doc: "read a repo's .gitleaks.toml allowlists (D8); reading fewer allowlists is stricter"},
 		{Key: KeyMetaMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest metadata value in bytes"},
 		{Key: KeyResourcesMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest resource in bytes"},
+		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource larger than this many bytes prints a warning (RQ4)"},
+		{Key: KeyResourcesAllowedIn, Shape: ShapeAllow, Choices: AllowedInPlaces(), Default: mustTexts(AllowedInPlaces()...),
+			Doc: "where resources may live: store, repo, client; a lower level may only narrow (RQ2)"},
 		{Key: KeyTrashRetentionDays, Shape: ShapeLimit, Doc: "maximum days a deleted row stays in the trash; unset keeps forever"},
 		{Key: KeyTasksMaxDepth, Shape: ShapeLimit, Ceiling: ceilingTasksMaxDepth, Default: value.Int(defaultTasksMaxDepth),
 			Doc: "deepest sub-task nesting"},
@@ -215,6 +238,19 @@ func mustList() value.Value {
 	l, err := value.ListOf(value.KindText)
 	if err != nil {
 		panic("policy: invalid empty list default") // programmer error in Keys
+	}
+	return l
+}
+
+// mustTexts builds a constant text list default from ASCII literals.
+func mustTexts(xs ...string) value.Value {
+	items := make([]value.Value, len(xs))
+	for i, x := range xs {
+		items[i] = mustText(x)
+	}
+	l, err := value.ListOf(value.KindText, items...)
+	if err != nil {
+		panic("policy: invalid list default") // programmer error in Keys
 	}
 	return l
 }
