@@ -6,6 +6,7 @@ kind_fields.widget text,markdown,code,secret,select,date,number,bool,json
 knowledge_refs.confidence extracted,inferred,ambiguous
 machines.id_source os_machine_id,runtime_key,random
 memories.kind core,retrieved,episodic,procedural,archival
+meta_keys.added_by person,agent
 meta_keys.type text,number,bool,date,datetime,duration,ip,cidr,dns,url,email,json,list,ref
 missions.status active,paused,done,cancelled
 plans.status draft,approved,in_progress,done,dropped

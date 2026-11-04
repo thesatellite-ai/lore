@@ -231,6 +231,7 @@ repos.split_from ref
 repos.tag_ids list[ref]
 repos.urls json
 resources.archived_at datetime
+resources.checked_by text
 resources.fields json
 resources.kind ref required
 resources.last_checked datetime

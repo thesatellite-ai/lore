@@ -295,6 +295,8 @@ func coreDefs() []TableDef {
 			// last_checked is when `lore resource check` last verified it
 			// (resource stale reads it).
 			DateTime("last_checked"),
+			// checked_by is who stamped last_checked: manual | edit | verifier:<plugin> (RQ8); the actor is the audit event's.
+			Text("checked_by"),
 			JSON("fields"),
 			IndexOn(fieldKind, fieldName),
 			BelongsToRel("kind_def", fieldKind, TableKinds, Restrict),
