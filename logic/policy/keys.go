@@ -33,6 +33,11 @@ const (
 	// repo's context is wired into: `lore init` writes the chosen ones and
 	// `lore policy set context.targets codex,cursor` changes them (Q-R2-3).
 	KeyContextTargets Key = "context.targets"
+	// KeyBatchPreviewRows is how many rows a bulk action (a --where
+	// delete, an import) may change before it shows a preview and asks
+	// (XQ2: one key for every bulk action, replacing the per-noun
+	// meta/tasks/delete/resources.bulk_preview_rows).
+	KeyBatchPreviewRows Key = "batch.preview_rows"
 )
 
 // ClientRouteRepo is the KeyClientRoutes target that keeps a kind in the
@@ -47,6 +52,7 @@ const (
 	defaultMaxBytes      int64 = 16 * 1024 // MQ3, RQ4, CFG10
 	defaultTasksMaxDepth int64 = 4         // TSQ1
 	ceilingTasksMaxDepth int64 = 8         // TSQ1: "default 4, up to 8"
+	defaultPreviewRows   int64 = 20        // XQ2
 )
 
 // OnDetect is the value of secrets.on_detect.
@@ -118,6 +124,10 @@ func Keys() []KeyDef {
 		{Key: KeyTrashRetentionDays, Shape: ShapeLimit, Doc: "maximum days a deleted row stays in the trash; unset keeps forever"},
 		{Key: KeyTasksMaxDepth, Shape: ShapeLimit, Ceiling: ceilingTasksMaxDepth, Default: value.Int(defaultTasksMaxDepth),
 			Doc: "deepest sub-task nesting"},
+		// XQ2: a limit, the smaller is stricter: a lower preview count makes
+		// more bulk actions stop and ask, so a level may only lower it.
+		{Key: KeyBatchPreviewRows, Shape: ShapeLimit, Default: value.Int(defaultPreviewRows),
+			Doc: "rows a bulk action (a --where delete, an import) changes before it previews and asks (XQ2)"},
 		{Key: KeyAgentsPersonOnly, Shape: ShapeSet, Default: mustList(), Doc: "operations only a person may run"},
 		// A set: every level's items join (union), and ClientRoutes then
 		// takes, per kind, a store target over "repo" (a store is

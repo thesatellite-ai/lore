@@ -73,6 +73,11 @@ func TestResolveStricterWins(t *testing.T) {
 				{Level: LevelRepo, Key: KeyMetaMaxBytes, Value: value.Int(9000), Source: src(1)},
 				{Level: LevelOrg, Key: KeyMetaMaxBytes, Value: value.Int(4000), Source: src(2)},
 			}, KeyMetaMaxBytes, "4000", LevelOrg},
+		{"batch preview: a lower count is stricter (XQ2)",
+			[]Entry{
+				{Level: LevelRepo, Key: KeyBatchPreviewRows, Value: value.Int(50), Source: src(1)},
+				{Level: LevelOrg, Key: KeyBatchPreviewRows, Value: value.Int(5), Source: src(2)},
+			}, KeyBatchPreviewRows, "5", LevelOrg},
 		{"flag: false (fewer allowlists) is stricter",
 			[]Entry{
 				{Level: LevelRepo, Key: KeyUseRepoGitleaks, Value: value.BoolOf(true), Source: src(1)},
@@ -136,6 +141,9 @@ func TestDefaultsAndLimits(t *testing.T) {
 	}
 	if n, set := d.Limit(KeyMetaMaxBytes); !set || n != defaultMaxBytes {
 		t.Fatalf("meta.max_bytes = %d %v", n, set)
+	}
+	if n, set := d.Limit(KeyBatchPreviewRows); !set || n != 20 {
+		t.Fatalf("batch.preview_rows = %d %v, want the XQ2 default 20", n, set)
 	}
 	for _, k := range Keys() {
 		if k.Default != nil {
