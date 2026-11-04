@@ -232,7 +232,7 @@ func (o ops) varsSet(ctx context.Context, in VarsSetIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	fields := map[string]value.Value{vValue: jv, vShareable: value.BoolOf(in.Shareable)}
-	if err := optTexts(fields, map[string]string{vName: in.Name, vType: typ, vDescription: in.Description}); err != nil {
+	if err = optTexts(fields, map[string]string{vName: in.Name, vType: typ, vDescription: in.Description}); err != nil {
 		return RowOut{}, err
 	}
 	target := targetOf(in.To)

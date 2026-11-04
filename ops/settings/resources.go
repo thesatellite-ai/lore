@@ -391,23 +391,25 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	if err := checkResourceName(d, in.Name); err != nil {
+	if err = checkResourceName(d, in.Name); err != nil {
 		return RowOut{}, err
 	}
 	target := targetOf(in.To)
 	if string(target) == storeMe {
 		return RowOut{}, errs.New(errs.InvalidInput, "--to me: resources are team facts, not personal ones").WithHint("--to repo or --to <store>[/<folder>]")
 	}
-	if rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TableResources); err != nil {
+	rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TableResources)
+	if err != nil {
 		return RowOut{}, err
-	} else if hit := where(rows, map[string]string{rKind: d.kind.Row.ID.String(), rName: in.Name}); len(hit) > 0 {
+	}
+	if hit := where(rows, map[string]string{rKind: d.kind.Row.ID.String(), rName: in.Name}); len(hit) > 0 {
 		return RowOut{}, errs.New(errs.NameTaken, d.name()+" "+in.Name+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")")
 	}
 	vals := map[string]json.RawMessage{}
-	if err := o.applySets(ctx, d, in.Name, in.Set, vals); err != nil {
+	if err = o.applySets(ctx, d, in.Name, in.Set, vals); err != nil {
 		return RowOut{}, err
 	}
-	if err := requireFields(d, in.Name, vals); err != nil {
+	if err = requireFields(d, in.Name, vals); err != nil {
 		return RowOut{}, err
 	}
 	fields, err := valuesPatch(vals)
@@ -487,7 +489,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	name := text(r.Row, rName)
-	if err := o.applySets(ctx, d, name, in.Set, vals); err != nil {
+	if err = o.applySets(ctx, d, name, in.Set, vals); err != nil {
 		return RowOut{}, err
 	}
 	for _, f := range in.Unset {
@@ -497,7 +499,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 		}
 		delete(vals, def.Row.ID.String())
 	}
-	if err := requireFields(d, name, vals); err != nil {
+	if err = requireFields(d, name, vals); err != nil {
 		return RowOut{}, err
 	}
 	patch, err := valuesPatch(vals)
@@ -524,17 +526,17 @@ func fieldsRaw(r located) []byte {
 	}
 }
 
-func (o ops) view(ctx context.Context, r located, show bool) (Resource, kindDef, error) {
+func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
 	d, err := o.kindDef(ctx, text(r.Row, rKind))
 	if err != nil {
-		return Resource{}, kindDef{}, err
+		return Resource{}, err
 	}
 	vals, err := decodeValues(fieldsRaw(r))
 	if err != nil {
-		return Resource{}, kindDef{}, err
+		return Resource{}, err
 	}
 	return Resource{ID: r.Row.ID.String(), Kind: d.name(), Name: text(r.Row, rName), Store: string(r.Src),
-		Values: o.named(ctx, d, vals, show), ArchivedAt: text(r.Row, rArchivedAt), LastChecked: text(r.Row, rLastChecked)}, d, nil
+		Values: o.named(ctx, d, vals, show), ArchivedAt: text(r.Row, rArchivedAt), LastChecked: text(r.Row, rLastChecked)}, nil
 }
 
 func (o ops) resShow(ctx context.Context, in ResRef) (ResOut, error) {
@@ -542,7 +544,7 @@ func (o ops) resShow(ctx context.Context, in ResRef) (ResOut, error) {
 	if err != nil {
 		return ResOut{}, err
 	}
-	v, _, err := o.view(ctx, r, in.ShowSensitive)
+	v, err := o.view(ctx, r, in.ShowSensitive)
 	return ResOut{Data: v}, err
 }
 
@@ -571,7 +573,7 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 		if text(r.Row, rArchivedAt) != "" && !in.Archived {
 			continue
 		}
-		v, _, verr := o.view(ctx, r, in.ShowSensitive)
+		v, verr := o.view(ctx, r, in.ShowSensitive)
 		if verr != nil {
 			return ResListOut{}, verr
 		}
@@ -659,7 +661,7 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 		if t, err := time.Parse(time.RFC3339Nano, text(r.Row, rLastChecked)); err == nil && t.After(cut) {
 			continue
 		}
-		v, _, verr := o.view(ctx, r, false)
+		v, verr := o.view(ctx, r, false)
 		if verr != nil {
 			return ResListOut{}, verr
 		}

@@ -174,7 +174,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	level := storeLevel(o.env, target)
-	if _, err := policy.Resolve([]policy.Entry{{Level: level, Key: d.Key, Value: v}}); err != nil {
+	if _, err = policy.Resolve([]policy.Entry{{Level: level, Key: d.Key, Value: v}}); err != nil {
 		return RowOut{}, errs.Wrap(errs.InvalidInput, "policy set "+in.Key+": "+quote(in.Value)+" is not a valid value", err)
 	}
 	entries, where, err := o.policyEntries(ctx)

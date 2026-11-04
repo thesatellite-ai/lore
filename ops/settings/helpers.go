@@ -292,8 +292,11 @@ func parseAs(k value.Kind, raw string) (value.Value, error) {
 			return value.Parse(k, []byte(raw))
 		}
 		return textList(splitList(raw))
+	default:
+		// Every other kind (text, date, ip, url, ref, …) reads the CLI text
+		// as a JSON string.
+		return value.Parse(k, canon.String(raw))
 	}
-	return value.Parse(k, canon.String(raw))
 }
 
 // inferText reads CLI text as plain JSON when it is JSON (365, true,

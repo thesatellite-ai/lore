@@ -40,7 +40,7 @@ func newStore(t *testing.T, id string) string {
 // file), a second store's linked folder under the plain name "agency"
 // (what `--to team` resolves to in a client repo) and its company folder
 // "agency/org".
-func multiStore(t *testing.T, mut ...func(*wire.Options)) *opstest.H {
+func multiStore(t *testing.T) *opstest.H {
 	t.Helper()
 	team := newStore(t, teamStoreID)
 	org := newStore(t, orgStoreID)
@@ -49,7 +49,7 @@ func multiStore(t *testing.T, mut ...func(*wire.Options)) *opstest.H {
 			return []attach.Store{{Name: "agency", URL: org, Folder: "client1"}, {Name: "agency/org", URL: org, Folder: "org"}}, nil
 		}
 	}
-	h := opstest.Bare(t, append([]func(*wire.Options){orgStores}, mut...)...)
+	h := opstest.Bare(t, orgStores)
 	yaml := "stores:\n" +
 		"  - name: kb\n    url: " + team + "\n" +
 		"  - name: kb/web\n    url: " + team + "\n    folder: web\n" +

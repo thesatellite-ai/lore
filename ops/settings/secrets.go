@@ -414,7 +414,7 @@ func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match <text> or --match-hash <n>")
 	}
 	fields := map[string]value.Value{aHash: value.Int(int64(hash))}
-	if err := optTexts(fields, map[string]string{aField: field, aRuleID: in.Rule, aReason: in.Reason}); err != nil {
+	if err = optTexts(fields, map[string]string{aField: field, aRuleID: in.Rule, aReason: in.Reason}); err != nil {
 		return RowOut{}, err
 	}
 	if fields[aRowID], err = ref(rowID); err != nil {

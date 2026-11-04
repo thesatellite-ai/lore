@@ -436,7 +436,7 @@ func (o ops) kindRename(ctx context.Context, in RenameIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	if _, err := o.kindByName(ctx, in.New); err == nil {
+	if _, err = o.kindByName(ctx, in.New); err == nil {
 		return RowOut{}, errs.New(errs.NameTaken, "a kind named "+quote(in.New)+" already exists")
 	}
 	v, err := txt(in.New)
@@ -458,11 +458,11 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	if _, err := o.fieldByName(ctx, k, in.Field); err == nil {
+	if _, err = o.fieldByName(ctx, k, in.Field); err == nil {
 		return RowOut{}, errs.New(errs.InvalidInput, "kind "+in.Kind+" already has a field "+quote(in.Field))
 	}
 	fields := map[string]value.Value{fRequired: value.BoolOf(in.Required), fSensitive: value.BoolOf(in.Sensitive), fInternal: value.BoolOf(in.Internal)}
-	if err := optTexts(fields, map[string]string{kName: in.Field, fType: in.Type, fLabel: in.Label, fDescription: in.Description}); err != nil {
+	if err = optTexts(fields, map[string]string{kName: in.Field, fType: in.Type, fLabel: in.Label, fDescription: in.Description}); err != nil {
 		return RowOut{}, err
 	}
 	if fields[fKindID], err = ref(k.Row.ID); err != nil {
@@ -524,11 +524,11 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 		f       string
 		on, off bool
 	}{{fRequired, in.Required, in.NoRequired}, {fSensitive, in.Sensitive, in.NoSensitive}, {fInternal, in.Internal, in.NoInternal}} {
-		if err := triState(patch, t.f, t.on, t.off); err != nil {
+		if err = triState(patch, t.f, t.on, t.off); err != nil {
 			return RowOut{}, err
 		}
 	}
-	if err := optTexts(patch, map[string]string{fLabel: in.Label, fDescription: in.Description}); err != nil {
+	if err = optTexts(patch, map[string]string{fLabel: in.Label, fDescription: in.Description}); err != nil {
 		return RowOut{}, err
 	}
 	if len(in.AddValues) > 0 || len(in.RemoveValues) > 0 {
@@ -571,7 +571,7 @@ func (o ops) fieldRename(ctx context.Context, in FieldRenameIn) (RowOut, error) 
 	if err != nil {
 		return RowOut{}, err
 	}
-	if _, err := o.fieldByName(ctx, k, in.New); err == nil {
+	if _, err = o.fieldByName(ctx, k, in.New); err == nil {
 		return RowOut{}, errs.New(errs.InvalidInput, "kind "+in.Kind+" already has a field "+quote(in.New))
 	}
 	v, err := txt(in.New)
