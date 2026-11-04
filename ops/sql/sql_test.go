@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -12,16 +13,17 @@ import (
 
 // fakeEnv records the call and answers with res / err.
 type fakeEnv struct {
-	res   Result
-	err   error
-	query string
-	show  bool
-	calls int
+	res     Result
+	err     error
+	query   string
+	show    bool
+	timeout time.Duration
+	calls   int
 }
 
-func (f *fakeEnv) SQL(_ context.Context, query string, show bool) (Result, error) {
+func (f *fakeEnv) SQL(_ context.Context, r Request) (Result, error) {
 	f.calls++
-	f.query, f.show = query, show
+	f.query, f.show, f.timeout = r.Query, r.ShowSensitive, r.Timeout
 	return f.res, f.err
 }
 
@@ -62,8 +64,8 @@ func TestRunPassesQueryAndFlag(t *testing.T) {
 			t.Fatalf("%q: %v (calls %d)", q, err, f.calls)
 		}
 	}
-	boom := errs.New(errs.ReadOnly, "refused")
-	if _, err := run(context.Background(), &fakeEnv{err: boom}, RunIn{Query: "DELETE FROM x"}); !errs.Has(err, errs.ReadOnly) {
+	boom := errs.New(errs.SQLRefused, "refused")
+	if _, err := run(context.Background(), &fakeEnv{err: boom}, RunIn{Query: "DELETE FROM x"}); !errs.Has(err, errs.SQLRefused) {
 		t.Fatalf("env error lost: %v", err)
 	}
 }
@@ -132,5 +134,38 @@ func TestSpec(t *testing.T) {
 	r, ok := op.RouteOf(s, es[0].InputFields())
 	if !ok || r.Method != "POST" || r.Path != "/v1/sql/run" {
 		t.Fatalf("route = %+v", r)
+	}
+}
+
+// TestRunFormatsAndTimeout: --format csv/json print the same typed rows,
+// an unknown format is E_INVALID_INPUT, and --timeout defaults to 10s.
+func TestRunFormatsAndTimeout(t *testing.T) {
+	res := Result{Columns: []string{"name", "port", "note"}, Rows: [][]value.Value{
+		{txt(t, "hub_api"), num(t, "8080"), value.Null{}},
+		{txt(t, `a,"b"`), num(t, "2.5"), txt(t, "x")},
+	}}
+	f := &fakeEnv{res: res}
+	out, err := run(context.Background(), f, RunIn{Query: "SELECT 1", Format: FormatCSV})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.timeout != DefaultTimeout {
+		t.Fatalf("timeout = %v, want %v", f.timeout, DefaultTimeout)
+	}
+	if got, want := out.Text(), "name,port,note\nhub_api,8080,\n\"a,\"\"b\"\"\",2.5,x\n"; got != want {
+		t.Fatalf("csv = %q, want %q", got, want)
+	}
+	out, err = run(context.Background(), f, RunIn{Query: "SELECT 1", Format: FormatJSON, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.timeout != time.Second {
+		t.Fatalf("timeout = %v", f.timeout)
+	}
+	if got, want := out.Text(), "[\n  {\"name\": \"hub_api\", \"port\": 8080, \"note\": null},\n  {\"name\": \"a,\\\"b\\\"\", \"port\": 2.5, \"note\": \"x\"}\n]\n"; got != want {
+		t.Fatalf("json = %q, want %q", got, want)
+	}
+	if _, err := run(context.Background(), f, RunIn{Query: "SELECT 1", Format: "xml"}); !errs.Has(err, errs.InvalidInput) {
+		t.Fatalf("format xml: %v", err)
 	}
 }

@@ -130,11 +130,11 @@ func TestLensRefusesWrites(t *testing.T) {
 	for _, q := range writes {
 		if _, err := l.Query(context.Background(), q); err == nil {
 			t.Errorf("write accepted: %s", q)
-		} else if !errs.Has(err, errs.ReadOnly) && !errs.Has(err, errs.InvalidInput) {
+		} else if !errs.Has(err, errs.SQLRefused) && !errs.Has(err, errs.InvalidInput) {
 			t.Errorf("%s: unexpected error %v", q, err)
 		}
 	}
-	if _, err := l.Query(context.Background(), `WITH x AS (SELECT 1) DELETE FROM s_0.memories`); !errs.Has(err, errs.ReadOnly) {
+	if _, err := l.Query(context.Background(), `WITH x AS (SELECT 1) DELETE FROM s_0.memories`); !errs.Has(err, errs.SQLRefused) {
 		t.Errorf("a WITH-hidden delete is not E_READ_ONLY: %v", err)
 	}
 	if fileExists(filepath.Join(f.dir, "new.db")) {

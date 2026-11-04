@@ -168,7 +168,7 @@ func TestLensMaskRefusesBypass(t *testing.T) {
 	}
 	for _, q := range bypass {
 		_, err := masked.Query(ctx, q)
-		if !errs.Has(err, errs.InvalidInput) || err == nil || !strings.Contains(err.Error(), "masked views") {
+		if !errs.Has(err, errs.SQLRefused) || err == nil || !strings.Contains(err.Error(), "masked views") {
 			t.Errorf("bypass not refused: %s → %v", q, err)
 		}
 	}
@@ -206,7 +206,7 @@ func TestLensMaskedStillReadOnly(t *testing.T) {
 		// A WITH-hidden write passes the keyword check; SQLite then refuses
 		// it (a view cannot be modified, or query_only): either code is a
 		// refusal, and the row count below proves nothing changed.
-		if _, err := l.Query(context.Background(), q); !errs.Has(err, errs.ReadOnly) && !errs.Has(err, errs.InvalidInput) {
+		if _, err := l.Query(context.Background(), q); !errs.Has(err, errs.SQLRefused) && !errs.Has(err, errs.InvalidInput) {
 			t.Errorf("%s: %v (want a refusal)", q, err)
 		}
 	}

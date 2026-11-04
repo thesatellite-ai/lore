@@ -88,13 +88,14 @@ func (a *App) lensSources(st *state) ([]sqlite.LensSource, error) {
 const combinedLensName = "combined"
 
 // SQL implements ops/sql.Env: it opens a lens for this one query (masked
-// unless showSensitive), runs it and closes the lens.
-func (a *App) SQL(ctx context.Context, query string, showSensitive bool) (opssql.Result, error) {
-	l, err := a.Lens(ctx, sqlite.LensOptions{MaskSensitive: !showSensitive})
+// unless r.ShowSensitive), runs it under r.Timeout (E_SQL_TIMEOUT past it)
+// and closes the lens.
+func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) {
+	l, err := a.Lens(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive})
 	if err != nil {
 		return opssql.Result{}, err
 	}
-	res, qerr := l.Query(ctx, query)
+	res, qerr := l.QueryTimeout(ctx, r.Query, r.Timeout)
 	if cerr := l.Close(); qerr == nil && cerr != nil {
 		return opssql.Result{}, errs.Wrap(errs.Internal, "wire: close the lens", cerr)
 	}

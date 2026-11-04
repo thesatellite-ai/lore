@@ -266,6 +266,11 @@ func (l *Lens) setup(ctx context.Context) error {
 			return err
 		}
 	}
+	// RES 3.10: res__kinds, res__all, res__edges, res__dangling over the
+	// `_all` views (resviews below).
+	if err := l.createResourceViews(ctx, tables); err != nil {
+		return err
+	}
 	// TIME 9 (timespans.go): task_time_spans + the time_spent view, built
 	// from the rows before the lens locks (open spans end now).
 	if err := l.createTimeSpent(ctx, tables, time.Now()); err != nil {
@@ -469,34 +474,69 @@ func oneHit(id ids.AnyID, hits []LensHit) (LensHit, error) {
 		WithHint("name the store")
 }
 
-// Query runs one read-only statement and returns typed rows. A statement
-// that is not a single SELECT / WITH / VALUES is refused before it runs
-// (E_READ_ONLY), and query_only refuses any write a WITH could hide.
+// Query runs one read-only statement and returns typed rows, with no
+// time limit (QueryTimeout with 0).
 func (l *Lens) Query(ctx context.Context, query string) (Result, error) {
+	return l.QueryTimeout(ctx, query, 0)
+}
+
+// QueryTimeout runs one read-only statement and returns typed rows. A
+// statement that is not a single SELECT / WITH / VALUES, or that names
+// something a masked lens hides, is refused before it runs (E_SQL_REFUSED,
+// META 3.16 / R7), and query_only refuses any write a WITH could hide (also
+// E_SQL_REFUSED). timeout > 0 interrupts the statement past it
+// (E_SQL_TIMEOUT, `lore sql --timeout`).
+func (l *Lens) QueryTimeout(ctx context.Context, query string, timeout time.Duration) (Result, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
 		return Result{}, errs.New(errs.Internal, "sqlite lens: closed")
 	}
 	if err := checkReadOnly(query); err != nil {
-		return Result{}, err
+		return Result{}, refused(err)
 	}
 	if l.masked {
 		if err := checkHidden(query, l.hidden); err != nil {
-			return Result{}, err
+			return Result{}, refused(err)
 		}
 	}
+	qctx := ctx
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		qctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	timedOut := func(err error) error {
+		if timeout > 0 && ctx.Err() == nil && errors.Is(qctx.Err(), context.DeadlineExceeded) {
+			return errs.Wrap(errs.SQLTimeout, "sqlite lens: the query ran longer than "+timeout.String()+" (--timeout)", err).
+				WithHint("narrow the query or raise --timeout")
+		}
+		return queryErr(err)
+	}
 	defer useExpander(l.expand)()
-	rs, err := l.conn.QueryContext(ctx, query)
+	rs, err := l.conn.QueryContext(qctx, query)
 	if err != nil {
-		return Result{}, queryErr(err)
+		return Result{}, timedOut(err)
 	}
 	defer func() { _ = rs.Close() }()
 	res, err := scanAll(rs)
 	if err != nil {
-		return Result{}, queryErr(err)
+		return Result{}, timedOut(err)
 	}
 	return res, nil
+}
+
+// refused turns a pre-flight refusal (checkReadOnly, checkHidden) into
+// E_SQL_REFUSED, keeping its message (CLI_REFERENCE 5: one code for every
+// statement lore sql will not run).
+func refused(err error) error {
+	msg := err.Error()
+	var e *errs.Error
+	if errors.As(err, &e) {
+		msg = e.Message
+	}
+	return errs.New(errs.SQLRefused, strings.TrimPrefix(msg, "sqlite lens: ")).
+		WithHint("lore sql is read-only; change data with lore commands so it reaches git")
 }
 
 // queryErr maps a driver error of a lens query: SQLITE_READONLY (a write
@@ -509,7 +549,7 @@ func queryErr(err error) error {
 	}
 	var se *modernc.Error
 	if errors.As(err, &se) && se.Code()&primaryCodeMask == sqlite3.SQLITE_READONLY {
-		return errs.Wrap(errs.ReadOnly, "sqlite lens: the lens is read-only", err)
+		return errs.Wrap(errs.SQLRefused, "lore sql is read-only; change data with lore commands so it reaches git", err)
 	}
 	// A compile error of the caller's own SQL (SQLITE_ERROR: "no such
 	// column: ipp", a syntax error) is the caller's whole answer, and
@@ -599,4 +639,84 @@ func loreExpand(_ *modernc.FunctionContext, args []driver.Value) (driver.Value, 
 		return nil, err
 	}
 	return out, nil
+}
+
+// Resource helper views (RESOURCES_DESIGN 3.10, "Names"): built once per
+// lens over the `_all` views, so they span every attached source.
+//
+//	res__kinds     source, id, name, description, table_name, view_name, fields
+//	res__all       source, id, kind, name, scope, archived (one row per resource)
+//	res__edges     source, src_id, field, dst_id (one row per set ref value)
+//	res__dangling  source, src_id, name, field, dst_id (an edge whose dst is in no source)
+//
+// scope is the source (store) name: the cache keeps no scope label per row.
+// On a masked lens a sensitive ref field makes no edge (RQ1: which resource
+// it points at is part of the value).
+const (
+	ViewResKinds    = "res__kinds"
+	ViewResAll      = "res__all"
+	ViewResEdges    = "res__edges"
+	ViewResDangling = "res__dangling"
+)
+
+// resKindCol is the resources column holding the row's knd_ id.
+const resKindCol = "kind"
+
+// ResourceViews lists the resource helper views a lens builds.
+func ResourceViews() []string {
+	return []string{ViewResKinds, ViewResAll, ViewResEdges, ViewResDangling}
+}
+
+// resViewNeeds is every (table, column) the resource views read; a lens
+// whose sources lack one (an old cache) gets no resource views.
+var resViewNeeds = map[string][]string{
+	schema.TableResources:  {"id", fieldName, resKindCol, "archived_at", "fields"},
+	schema.TableKinds:      {"id", fieldName, "description"},
+	schema.TableKindFields: {"id", fieldName, fieldKindID, "type", fieldSensitive},
+}
+
+// createResourceViews creates the four res__ views when every table and
+// column they read is in the lens.
+func (l *Lens) createResourceViews(ctx context.Context, tables map[string][]srcTable) error {
+	for t, cols := range resViewNeeds {
+		have := map[string]bool{}
+		for _, st := range tables[t] {
+			for _, c := range st.cols {
+				have[c] = true
+			}
+		}
+		for _, c := range cols {
+			if !have[c] {
+				return nil
+			}
+		}
+	}
+	res := `"` + schema.TableResources + lensViewSuffix + `"`
+	kinds := `"` + schema.TableKinds + lensViewSuffix + `"`
+	kf := `"` + schema.TableKindFields + lensViewSuffix + `"`
+	sensitiveCut := ""
+	if l.masked {
+		sensitiveCut = ` AND COALESCE(f."` + fieldSensitive + `", 0) = 0`
+	}
+	views := []struct{ name, body string }{
+		{ViewResKinds, `SELECT k.source, k.id, k.name, k.description, '` + schema.KindTablePrefix + `' || k.name AS table_name, '` +
+			schema.KindTablePrefix + `' || k.id AS view_name, (SELECT COUNT(DISTINCT f.id) FROM ` + kf + ` f WHERE f.kind_id = k.id) AS fields FROM ` + kinds + ` k`},
+		// the nearest source's kind name wins (the _all views list sources in attach order, repo first)
+		{ViewResAll, `SELECT r.source, r.id, (SELECT k.name FROM ` + kinds + ` k WHERE k.id = r."` + resKindCol + `" LIMIT 1) AS kind, ` +
+			`r.name, r.source AS scope, r.archived_at IS NOT NULL AS archived FROM ` + res + ` r`},
+		// a ref value is stored as {"fld_…": {"name", "v": "<res id>"}} in resources.fields
+		{ViewResEdges, `SELECT r.source, r.id AS src_id, f.name AS field, json_extract(r.fields, '$."' || f.id || '".v') AS dst_id FROM ` + res +
+			` r JOIN (SELECT DISTINCT id, kind_id, name, type, "` + fieldSensitive + `" FROM ` + kf + `) f ON f.kind_id = r."` + resKindCol +
+			`" AND f.type = '` + string(value.KindRef) + `'` + sensitiveCut + ` WHERE json_valid(r.fields) AND json_extract(r.fields, '$."' || f.id || '".v') IS NOT NULL`},
+		{ViewResDangling, `SELECT e.source, e.src_id, (SELECT s.name FROM ` + res + ` s WHERE s.id = e.src_id LIMIT 1) AS name, e.field, e.dst_id FROM "` +
+			ViewResEdges + `" e WHERE NOT EXISTS (SELECT 1 FROM ` + res + ` d WHERE d.id = e.dst_id)`},
+	}
+	for _, v := range views {
+		if _, err := l.conn.ExecContext(ctx, `CREATE TEMP VIEW "`+v.name+`" AS `+v.body); err != nil {
+			return dbErr("create view "+v.name, err)
+		}
+		l.views = append(l.views, v.name)
+	}
+	slices.Sort(l.views)
+	return nil
 }

@@ -59,7 +59,7 @@ func cells(r opssql.Result) []string {
 
 func sqlRows(t *testing.T, a *App, q string) []string {
 	t.Helper()
-	res, err := a.SQL(background(), q, false)
+	res, err := a.SQL(background(), opssql.Request{Query: q})
 	if err != nil {
 		t.Fatalf("%s: %v", q, err)
 	}
@@ -125,7 +125,7 @@ func TestLensClientRepoSeesOnlyRepo(t *testing.T) {
 			if !c.stores {
 				// No attached file but the repo's: s_1 does not exist even
 				// on an unmasked lens.
-				if _, err := a.SQL(background(), `SELECT name FROM s_1.projects`, true); err == nil {
+				if _, err := a.SQL(background(), opssql.Request{Query: `SELECT name FROM s_1.projects`, ShowSensitive: true}); err == nil {
 					t.Fatal("a client lens attached a second file")
 				}
 			}
@@ -185,7 +185,7 @@ func TestSQLSpec15Check(t *testing.T) {
 	if err != nil || strings.Contains(out, "198.51.100.7") {
 		t.Fatalf("resources_all.fields = %s, %v", out, err)
 	}
-	if _, err = run(t, a, opssql.OpRun, `{"query":"SELECT admin_ip FROM s_0.res_server"}`, false); !errs.Has(err, errs.InvalidInput) {
+	if _, err = run(t, a, opssql.OpRun, `{"query":"SELECT admin_ip FROM s_0.res_server"}`, false); !errs.Has(err, errs.SQLRefused) {
 		t.Fatalf("direct file read on a masked lens: %v", err)
 	}
 }
@@ -236,7 +236,7 @@ func TestSQLRefusesWrites(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := run(t, a, opssql.OpRun, string(in), true); !errs.Has(err, errs.ReadOnly) && !errs.Has(err, errs.InvalidInput) {
+			if _, err := run(t, a, opssql.OpRun, string(in), true); !errs.Has(err, errs.SQLRefused) && !errs.Has(err, errs.InvalidInput) {
 				t.Errorf("%q (show=%v): %v, want a refusal", q, show, err)
 			}
 		}

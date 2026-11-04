@@ -20,8 +20,13 @@ package sql
 
 import (
 	"context"
+	"encoding/csv"
+	"encoding/json"
+	"math"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -51,19 +56,46 @@ type Result struct {
 	Rows    [][]value.Value
 }
 
+// Request is one query as sql.run hands it to Env.
+type Request struct {
+	Query         string
+	ShowSensitive bool
+	// Timeout bounds the statement itself, not the lens open (the refresh
+	// before it can fetch); always > 0 here (DefaultTimeout when unset).
+	Timeout time.Duration
+}
+
 // Env is what sql.run needs; *wire.App implements it.
 //
-// Invariant: SQL runs query on a read-only lens it opens and closes for
-// this one call; with showSensitive false every sensitive value is masked
-// and the lens refuses names that would read past the masked views.
+// Invariant: SQL runs the query on a read-only lens it opens and closes for
+// this one call; with ShowSensitive false every sensitive value is masked
+// and the lens refuses names that would read past the masked views. A
+// statement past Timeout is E_SQL_TIMEOUT, a refused one E_SQL_REFUSED.
 type Env interface {
-	SQL(ctx context.Context, query string, showSensitive bool) (Result, error)
+	SQL(ctx context.Context, r Request) (Result, error)
 }
+
+// DefaultTimeout is --timeout when unset (META 3.16: "the query ran longer
+// than 10s").
+const DefaultTimeout = 10 * time.Second
+
+// Output formats of --format (RES 3.10, META 3.16, R7). --json stays the
+// typed machine form; --format json is a plain array of row objects.
+const (
+	FormatTable = "table"
+	FormatCSV   = "csv"
+	FormatJSON  = "json"
+)
+
+// Formats lists the --format words.
+func Formats() []string { return []string{FormatTable, FormatCSV, FormatJSON} }
 
 // RunIn is the input of sql.run.
 type RunIn struct {
-	Query         string `json:"query" arg:"0" rest:"true" desc:"one SELECT, WITH or VALUES statement (quote it; several words are joined)"`
-	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
+	Query         string        `json:"query" arg:"0" rest:"true" desc:"one SELECT, WITH or VALUES statement (quote it; several words are joined)"`
+	ShowSensitive bool          `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
+	Format        string        `json:"format,omitempty" flag:"format" desc:"table (default), csv or json (an array of row objects)"`
+	Timeout       time.Duration `json:"timeout,omitempty" flag:"timeout" desc:"stop the statement after this long (default 10s); past it E_SQL_TIMEOUT"`
 }
 
 // RunOut is the output of sql.run (--json and REST): column names, rows
@@ -78,6 +110,8 @@ type RunOut struct {
 	Columns []string `json:"columns"`
 	Rows    []Row    `json:"rows"`
 	Count   int      `json:"count"`
+	// Format is RunIn.Format for Text; not part of the --json shape.
+	Format string `json:"-"`
 }
 
 // Row is one result row, its cells in Columns order.
@@ -108,25 +142,45 @@ func Ops(env Env) []op.Entry {
 			Name: OpRun, Summary: "Run one read-only SQL query over every table of the repo's lens (sensitive values masked)",
 			Permission: op.PermRead, Access: op.AccessRead, RESTNoun: restNoun,
 			Errors: []errs.Code{
-				errs.InvalidInput, errs.InvalidIdentifier, errs.ReadOnly, errs.NeedsConfirm, errs.Cancelled,
+				errs.InvalidInput, errs.InvalidIdentifier, errs.SQLRefused, errs.SQLTimeout, errs.NeedsConfirm, errs.Cancelled,
 				errs.Unsupported, errs.DBNotFound, errs.NotAStore, errs.StoreUnreachable, errs.OldLore, errs.Internal,
 			},
 			Confirm: op.ConfirmRule{When: showSensitiveField},
 			Examples: []op.Example{
 				{Title: "count memories per store", CLI: `lore sql run "SELECT source, COUNT(*) AS n FROM memories_all GROUP BY source"`, Want: "source"},
+				{Title: "every resource as csv", CLI: `lore sql run "SELECT kind, name FROM res__all ORDER BY kind, name" --format csv`, Want: "kind,name"},
 			},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) { return run(ctx, env, in) }),
 	}
 }
 
-// run checks the query and asks env.
+// run checks the input and asks env:
+//
+//	query trimmed, non-empty ─▶ --format known ─▶ --timeout (default 10s)
+//	  ─▶ env.SQL (lens: refuse writes E_SQL_REFUSED, stop at timeout E_SQL_TIMEOUT)
+//	  ─▶ typed cells ─▶ Text prints table | csv | json (R7)
 func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	q := strings.TrimSpace(in.Query)
 	if q == "" {
 		return RunOut{}, errs.New(errs.InvalidInput, "sql: a query is required").
 			WithHint(`lore sql run "SELECT name, ip FROM res_server"`)
 	}
-	res, err := env.SQL(ctx, q, in.ShowSensitive)
+	format := in.Format
+	if format == "" {
+		format = FormatTable
+	}
+	if !slices.Contains(Formats(), format) {
+		return RunOut{}, errs.New(errs.InvalidInput, "sql: unknown --format "+strconv.Quote(in.Format)).
+			WithHint("one of " + strings.Join(Formats(), ", "))
+	}
+	if in.Timeout < 0 {
+		return RunOut{}, errs.New(errs.InvalidInput, "sql: --timeout must be positive")
+	}
+	timeout := in.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+	res, err := env.SQL(ctx, Request{Query: q, ShowSensitive: in.ShowSensitive, Timeout: timeout})
 	if err != nil {
 		return RunOut{}, err
 	}
@@ -142,7 +196,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if cols == nil {
 		cols = []string{}
 	}
-	return RunOut{Columns: cols, Rows: rows, Count: len(rows)}, nil
+	return RunOut{Columns: cols, Rows: rows, Count: len(rows), Format: format}, nil
 }
 
 // Human-form constants.
@@ -168,6 +222,12 @@ const (
 // "(N rows)" line. A cell's line breaks and tabs print as spaces so a row
 // stays one line.
 func (o RunOut) Text() string {
+	switch o.Format {
+	case FormatCSV:
+		return o.csvText()
+	case FormatJSON:
+		return o.jsonText()
+	}
 	if len(o.Rows) == 0 {
 		return strings.Join(o.Columns, colGap) + "\n" + noRows + "\n"
 	}
@@ -229,4 +289,75 @@ func cellText(c Cell) string {
 		s = string([]rune(s)[:cutKeepRunes]) + ellipsis
 	}
 	return s
+}
+
+// csvText is RFC 4180 csv: a header of the column names, then one record
+// per row; NULL is an empty field, values are whole (no capping).
+func (o RunOut) csvText() string {
+	var b strings.Builder
+	w := csv.NewWriter(&b)
+	// strings.Builder writes never fail, so Write's error is always nil.
+	_ = w.Write(o.Columns)
+	for _, r := range o.Rows {
+		rec := make([]string, len(r.Cells))
+		for i, c := range r.Cells {
+			rec[i] = c.Value
+		}
+		_ = w.Write(rec)
+	}
+	w.Flush()
+	return b.String()
+}
+
+// jsonText is one JSON array of row objects keyed by column name, in
+// column order: numbers as JSON numbers, text as strings, NULL as null.
+// Built by hand so the cells stay typed without an "any" map.
+func (o RunOut) jsonText() string {
+	var b strings.Builder
+	b.WriteString("[")
+	for ri, r := range o.Rows {
+		if ri > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString("\n  {")
+		for i, c := range r.Cells {
+			if i >= len(o.Columns) {
+				break
+			}
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(jsonString(o.Columns[i]) + ": " + jsonCell(c))
+		}
+		b.WriteString("}")
+	}
+	if len(o.Rows) > 0 {
+		b.WriteString("\n")
+	}
+	b.WriteString("]\n")
+	return b.String()
+}
+
+// jsonCell is one cell as a JSON value. A number SQLite printed that is not
+// a finite JSON number (Inf, NaN) prints as a string rather than break the
+// document.
+func jsonCell(c Cell) string {
+	switch c.Kind {
+	case string(value.KindNull):
+		return "null"
+	case string(value.KindNumber):
+		if f, err := strconv.ParseFloat(c.Value, 64); err == nil && !math.IsInf(f, 0) && !math.IsNaN(f) && json.Valid([]byte(c.Value)) {
+			return c.Value
+		}
+	}
+	return jsonString(c.Value)
+}
+
+// jsonString is s as a JSON string (encoding a string cannot fail).
+func jsonString(s string) string {
+	out, err := json.Marshal(s)
+	if err != nil {
+		return `""`
+	}
+	return string(out)
 }
