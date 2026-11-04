@@ -322,11 +322,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	if err != nil {
 		return nil, nil, err
 	}
-	// The root `me` only for a personal store localPersonalStores did not
-	// file by org (the flattened one): when it attached me at an org
-	// folder, attaching the root too would load every org's notes.
-	filed := slices.ContainsFunc(cfg.Stores, func(s attach.Store) bool { return s.Name == attach.ReservedMe })
-	if p := mc.personalURL(); p != "" && !filed {
+	if p := mc.personalURL(); p != "" {
 		me := attach.Store{Name: store.Source(attach.ReservedMe), URL: p}
 		dup := false
 		if pc, perr := canonical(me); perr == nil {
