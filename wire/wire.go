@@ -169,6 +169,15 @@ type Options struct {
 	// CLI prints them on stderr; nil drops them). Today: LiveNote, when the
 	// v0.1.17 live ref holds rows the core cannot see yet.
 	Notice func(msg string)
+	// ProjectHint names the project the running command works in when the
+	// repo store holds several live projects (App.Project): the CLI passes
+	// v0.1.17's resolution (the project of the checkout's lore.db). Why: a
+	// clone that ran `lore init` before it ever synced has its own project
+	// row beside the one teammates committed, until the sync pass adopts
+	// them into one; v0.1.17 wrote to lore.db's project meanwhile. Only a
+	// hint that names one of the live projects is used; ok=false, or a
+	// hint naming none of them, keeps E_AMBIGUOUS_PROJECT. nil = no hint.
+	ProjectHint func(ctx context.Context) (id string, ok bool)
 }
 
 // openOptions is what every store open of this App passes to a backend:

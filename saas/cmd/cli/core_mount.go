@@ -115,7 +115,7 @@ const (
 func coreOptions(repoDir, home string) wire.Options {
 	return wire.Options{RepoDir: repoDir, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
 		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{},
-		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
+		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, ProjectHint: coreProjectHint, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
 }
 
 // mountCore builds the core and mounts its commands under root. A failure
@@ -316,6 +316,7 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 				WithHint("run the command inside the repository (or name a store with --store / --to)")
 		}
 		applyEnvDefaults(cmd)
+		coreSyncBefore(cmd.Context(), readOnly)
 		asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON)
 		if !asJSON {
 			// Buffered so v0.1.17's "filed:" line (printRoute: where a
@@ -448,6 +449,14 @@ func coreProjectRoot() string {
 // Not a git repo, or no git, is fine (rows still work on files); another
 // failure is a warning, never a refused command.
 func ensureCoreGitSetup(ctx context.Context, root string) {
+	// LORE_SYNC=0 turns sync off, git wiring included, and LORE_SYNC_GIT=0
+	// turns only the wiring off, as in v0.1.17 (finishSyncSessions; the
+	// caller already skips read-only runs): no hook may then run a sync
+	// pass behind the person's back (a pre-commit bootstrap baselined
+	// lore.db, so turning sync on later found nothing to export).
+	if os.Getenv(envSync) == envValueOff || os.Getenv(envSyncGit) == envValueOff {
+		return
+	}
 	// With the lore.db read copy present, wire through v0.1.17's wireGit:
 	// its fingerprint of the watched files (git config, .gitattributes, the
 	// ignore files, hooks) skips the git calls while nothing changed and

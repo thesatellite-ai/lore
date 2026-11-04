@@ -173,6 +173,15 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	case 1:
 		return ids.As[ids.Project](rows[0].ID)
 	}
+	if a.opts.ProjectHint != nil {
+		if hint, ok := a.opts.ProjectHint(ctx); ok {
+			for _, r := range rows {
+				if r.ID.String() == hint {
+					return ids.As[ids.Project](r.ID)
+				}
+			}
+		}
+	}
 	return ids.ID[ids.Project]{}, errs.New(errs.AmbiguousProject, "wire: the repository holds several projects").
 		WithHint("run `lore project list` and archive the ones you do not use")
 }
