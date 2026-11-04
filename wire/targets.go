@@ -53,6 +53,10 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 		}
 	}
 	a.mu.Unlock()
+	recorded, err := a.recordedTarget(ctx, name)
+	if err != nil || recorded {
+		return err // a recorded target is attached from stores.yaml
+	}
 	src, found, err := a.baseStore(ctx, base)
 	if err != nil || !found {
 		return err // not found: the engine answers "no store named … is attached"
@@ -66,9 +70,26 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 			WithQuestion("create the folder " + folderName + " in store " + base + "?").
 			WithHint("rerun with --yes to create it with this write")
 	}
+	target := attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly}
+	persist := base != attach.ReservedMe
+	if persist {
+		// A confirmed folder target is recorded in stores.yaml (spec 7.1
+		// `folder:` key, entry named "<store>/<folder>"), so later reads
+		// attach it and list its rows. `me/<folder>` is not: the personal
+		// store's url is machine-local and stores.yaml is shared.
+		top, terr := a.repoTop(ctx)
+		if terr != nil {
+			return terr
+		}
+		if err := addStoresEntry(top, target); err != nil {
+			return err
+		}
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.extra = append(a.extra, attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly})
+	if !persist {
+		a.extra = append(a.extra, target)
+	}
 	if a.st != nil { // already open (a long-lived `lore api`): reopen with the new target
 		cerr := a.st.close()
 		a.st, a.opened, a.err = nil, false, nil
@@ -105,4 +126,23 @@ func (a *App) baseStore(ctx context.Context, name string) (attach.Store, bool, e
 		}
 	}
 	return attach.Store{}, false, nil
+}
+
+// recordedTarget reports whether stores.yaml already lists the folder
+// target name (recorded by an earlier confirmed write).
+func (a *App) recordedTarget(ctx context.Context, name store.Source) (bool, error) {
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return false, err
+	}
+	cfg, err := readStoresFile(top)
+	if err != nil {
+		return false, err
+	}
+	for _, s := range cfg.Stores {
+		if s.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
 }

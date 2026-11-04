@@ -75,10 +75,15 @@ func Parse(b []byte) (Config, error) {
 	seen := map[store.Source]bool{}
 	for i, s := range c.Stores {
 		at := "store " + strconv.Itoa(i+1) + " (" + string(s.Name) + ")"
+		base, folder, isFolder := strings.Cut(string(s.Name), "/")
 		switch {
-		case !row.ValidName(string(s.Name)):
+		case isFolder && (!row.ValidName(base) || folder == "" || folder != s.Folder):
+			// A recorded `--to <store>/<folder>` target (wire): the name is
+			// "<store>/<folder>" and its folder key repeats the folder.
+			problems = append(problems, at+": a <store>/<folder> name needs a snake_case store and a matching folder key")
+		case !isFolder && !row.ValidName(string(s.Name)):
 			problems = append(problems, at+": the name must be snake_case")
-		case slices.Contains(Reserved(), string(s.Name)):
+		case slices.Contains(Reserved(), base) && !isFolder:
 			problems = append(problems, at+": "+string(s.Name)+" is a reserved name")
 		case seen[s.Name]:
 			problems = append(problems, at+": the name is used twice")
