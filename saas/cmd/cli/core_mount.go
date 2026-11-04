@@ -117,7 +117,12 @@ func mountCore(root *cobra.Command) {
 	for _, noun := range coreNouns {
 		if g, _, ferr := root.Find([]string{noun}); ferr == nil && g.Name() == noun {
 			for _, c := range g.Commands() {
-				addCompatFlags(c, runner)
+				// Only the surface's operation commands: a host command
+				// mounted under a core noun (project shared-init) prints
+				// its own errors, and a group has no RunE to wrap.
+				if cli.Generated(c) && c.RunE != nil {
+					addCompatFlags(c, runner)
+				}
 			}
 		}
 	}

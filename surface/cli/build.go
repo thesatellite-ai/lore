@@ -189,6 +189,10 @@ func child(c *cobra.Command, name string) *cobra.Command {
 // ours reports whether this package created c.
 func ours(c *cobra.Command) bool { return c.Annotations[annotationOwner] == annotationValue }
 
+// Generated reports whether c is a command Mount built from an operation
+// (or a group of them), as opposed to one the host added beside them.
+func Generated(c *cobra.Command) bool { return ours(c) }
+
 // group returns the noun command name under parent, creating it.
 func group(parent *cobra.Command, name string) *cobra.Command {
 	if c := child(parent, name); c != nil {
