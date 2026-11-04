@@ -68,6 +68,11 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 		}
 		changes, docs, cur = []store.Change{{Row: sr, Expect: cur.HLC}}, []store.Row{sr}, next
 	}
+	// FORMAT_EVOLUTION rule 2: a purge is a write too, so a lore below the
+	// folder's floor (or missing one of its features) is refused here.
+	if err := e.gate(ctx, st, cur); err != nil {
+		return Written{}, err
+	}
 	if err := p.WritePurge(ctx, changes, []ids.AnyID{cur.ID}); err != nil {
 		return Written{}, err
 	}

@@ -218,7 +218,7 @@ var table = map[Code]entry{
 	ParentMission:         {class: ClassRefused, desc: "a sub-task's mission differs from its parent's"},
 	ParentProject:         {class: ClassRefused, desc: "the parent task is in another project"},
 	TreeDepth:             {class: ClassRefused, desc: "the sub-task tree would be deeper than tasks.max_depth"},
-	OldLore:               {class: ClassGuard, desc: "this lore binary is too old for the data; writes refused, reads work"},
+	OldLore:               {class: ClassGuard, desc: "this lore binary is below the project's min_lore_version or does not know one of its features; upgrade lore (reads still work)"},
 	ConfigInvalid:         {class: ClassBadInput, desc: "a config file failed validation"},
 
 	Stale:            {class: ClassRefused, desc: "the row changed between read and write and could not be merged automatically"},

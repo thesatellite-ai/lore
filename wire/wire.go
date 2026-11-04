@@ -342,6 +342,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
 	entries = append(entries, opsinfra.Ops(a)...)
+	// MACHINE PROFILE / MACHINE LABEL: lore machine list|show|label.
+	entries = append(entries, opsinfra.MachineOps(a)...)
 	entries = append(entries, opsarchitecturenote.Ops(a)...)
 	entries = append(entries, opsbehaviour.Ops(a)...)
 	entries = append(entries, opscookbookrecipe.Ops(a)...)
@@ -438,6 +440,13 @@ func (a *App) repoTop(ctx context.Context) (string, error) {
 // The store operations run on the repo-only engine (configState); a
 // `--to <store>/<folder>` target is attached first (prepareTarget).
 func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+	// AGENT_IDENTITY 8.2 (#7): the CLI caller carries the detected agent, so
+	// agents.person_only fires on the CLI too, not only for REST callers
+	// that send X-Lore-Agent. A surface that already set an agent or an
+	// explicit actor keeps it.
+	if c.Agent == "" && c.Actor.IsZero() {
+		c.Agent = a.CallerAgent(ctx)
+	}
 	if name := e.Spec().Name; name != opsmigrate.OpRun && !opsstores.IsStoreOp(name) {
 		if err := a.RefuseRetiredModeB(ctx); err != nil {
 			return op.Result{}, err

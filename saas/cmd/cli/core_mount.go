@@ -261,7 +261,7 @@ var coreNouns = []string{
 	opstag.Noun, opscomment.Noun, opslink.Noun, opslink.CommitNoun,
 	opstask.Noun, opstasklist.Noun, opsmission.Noun, opsplan.Noun,
 	opsreminder.Noun,
-	opsinfra.NounActor, opsinfra.NounProject, opsinfra.NounRepo,
+	opsinfra.NounActor, opsinfra.NounProject, opsinfra.NounRepo, opsinfra.NounMachine,
 	opsarchitecturenote.Noun, opsbehaviour.Noun, opscookbookrecipe.Noun, opsincident.Noun,
 	opssuggestion.Noun, opstastepref.Noun, opsworkflow.Noun, opsworkspace.Noun,
 	opshandoff.Noun, opssnapshot.Noun, opstechdoc.Noun, externalSourceNoun,

@@ -29,7 +29,9 @@ func resolveIdentity(ctx context.Context, opts Options) (identity.Resolved, erro
 	if err != nil {
 		return identity.Resolved{}, err
 	}
-	in := identity.Inputs{Home: opts.Home, FlagActor: opts.FlagActor, Config: mc.Config, Dir: opts.RepoDir}
+	// R11 (#7): agent detection is part of the identity chain (LORE_ACTOR and
+	// LORE_HUMAN=1 still win inside it).
+	in := identity.Inputs{Home: opts.Home, FlagActor: opts.FlagActor, Config: mc.Config, Dir: opts.RepoDir, Detect: DetectAgent}
 	if opts.Org != nil {
 		org, err := opts.Org(ctx)
 		if err != nil {
@@ -115,6 +117,23 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	vals := map[string]string{actorFieldKind: kind, actorFieldDisplay: display}
 	if who == st.actor && fullActorRow(st, target) {
 		vals[actorFieldKey], vals[actorFieldHandle] = st.who.StableKey, st.who.Handle
+		// OQ8/OQ9: an agent's own row names the person it acts for and its
+		// display label ("tomas via codex").
+		if st.who.Owner != nil {
+			if oid, oerr := identity.ActorID(st.who.Owner.StableKey); oerr == nil {
+				// The owner's row must exist in this store first: actors
+				// refs are checked at write time (DOCS O2), so naming an
+				// owner the store does not hold would refuse the agent's
+				// first write (found under Claude Code, 2026-11-04).
+				if oerr := a.ensureOwnerRow(ctx, st, target, oid, *st.who.Owner); oerr != nil {
+					return oerr
+				}
+				vals[rosterFieldOwner] = oid.String()
+			}
+		}
+		if st.who.Label != "" {
+			vals["label"] = st.who.Label
+		}
 	}
 	for k, v := range vals {
 		if v == "" {
@@ -131,6 +150,38 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		return errs.Wrap(errs.CodeOf(err), "wire: write the actor row to store "+string(target), err)
 	}
 	st.actorDone[target] = true
+	return nil
+}
+
+// ensureOwnerRow writes the agent owner's actor row into target when that
+// store does not hold it yet, so the agent's row can name its owner
+// (OQ8/OQ9). Same shape as any actor row there: stable_key and handle only
+// where fullActorRow allows them (Q-R2-2, BATCH2 #14/#15).
+func (a *App) ensureOwnerRow(ctx context.Context, st *state, target store.Source, oid ids.ID[ids.Actor], owner identity.Resolved) error {
+	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: oid.Any()}
+	if _, _, err := st.eng.Get(ctx, ref); err == nil {
+		return nil
+	} else if !errs.Has(err, errs.NotFound) {
+		return err
+	}
+	vals := map[string]string{actorFieldKind: actorKindOf(owner.Kind), actorFieldDisplay: owner.DisplayName}
+	if fullActorRow(st, target) {
+		vals[actorFieldKey], vals[actorFieldHandle] = owner.StableKey, owner.Handle
+	}
+	fields := map[string]value.Value{}
+	for k, v := range vals {
+		if v == "" {
+			continue
+		}
+		t, err := value.TextOf(v)
+		if err != nil {
+			return errs.Wrap(errs.InvalidInput, "wire: the owner's "+k+" is not valid text", err)
+		}
+		fields[k] = t
+	}
+	if _, err := st.eng.CreateWithID(ctx, target, schema.TableActors, oid.Any(), fields); err != nil && !errs.Has(err, errs.Stale) {
+		return errs.Wrap(errs.CodeOf(err), "wire: write the owner's actor row to store "+string(target), err)
+	}
 	return nil
 }
 

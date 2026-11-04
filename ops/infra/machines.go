@@ -80,21 +80,21 @@ type MachineLabelIn struct {
 
 // Machine is one profile in --json form.
 type Machine struct {
-	ID        string          `json:"id"`
-	RowID     string          `json:"row_id"`
-	IDSource  string          `json:"id_source,omitempty"`
-	Label     string          `json:"label,omitempty"`
-	Hostname  string          `json:"hostname,omitempty"`
-	OS        json.RawMessage `json:"os,omitempty"`
-	Kernel    json.RawMessage `json:"kernel,omitempty"`
-	Libc      json.RawMessage `json:"libc,omitempty"`
-	Arch      string          `json:"arch,omitempty"`
-	CPU       json.RawMessage `json:"cpu,omitempty"`
-	RAMMB     int64           `json:"ram_mb,omitempty"`
-	OSUser    string          `json:"os_user,omitempty"`
-	Runtime   json.RawMessage `json:"runtime,omitempty"`
-	UpdatedAt string          `json:"updated_at,omitempty"`
-	Store     store.SourceRef `json:"_source,omitempty,omitzero"`
+	ID        string            `json:"id"`
+	RowID     string            `json:"row_id"`
+	IDSource  string            `json:"id_source,omitempty"`
+	Label     string            `json:"label,omitempty"`
+	Hostname  string            `json:"hostname,omitempty"`
+	OS        map[string]string `json:"os,omitempty"`
+	Kernel    map[string]string `json:"kernel,omitempty"`
+	Libc      map[string]string `json:"libc,omitempty"`
+	Arch      string            `json:"arch,omitempty"`
+	CPU       map[string]string `json:"cpu,omitempty"`
+	RAMMB     int64             `json:"ram_mb,omitempty"`
+	OSUser    string            `json:"os_user,omitempty"`
+	Runtime   map[string]string `json:"runtime,omitempty"`
+	UpdatedAt string            `json:"updated_at,omitempty"`
+	Store     store.SourceRef   `json:"_source,omitempty,omitzero"`
 }
 
 // MachineListOut is the list envelope.
@@ -212,22 +212,36 @@ func dateOnly(s string) string {
 	return s
 }
 
-// nv joins two keys of a small JSON object ("ubuntu 24.04").
-func nv(raw json.RawMessage, a, b string) string {
-	var m map[string]json.RawMessage
-	if len(raw) == 0 || json.Unmarshal(raw, &m) != nil {
-		return ""
-	}
+// nv joins two keys of a small profile object ("ubuntu 24.04").
+func nv(m map[string]string, a, b string) string {
 	var parts []string
 	for _, k := range []string{a, b} {
 		if k == "" {
 			continue
 		}
-		if v := scalar(m[k]); v != "" {
+		if v := m[k]; v != "" {
 			parts = append(parts, v)
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// objMap reads a small JSON object of the profile (os, kernel, libc, cpu,
+// runtime) as name → text: the op registry describes outputs with closed
+// types only, and every value of these objects is a string or a number.
+// A value that is neither (a nested object) is left out.
+func objMap(raw json.RawMessage) map[string]string {
+	var m map[string]json.RawMessage
+	if len(raw) == 0 || json.Unmarshal(raw, &m) != nil {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		if t := scalar(v); t != "" {
+			out[k] = t
+		}
+	}
+	return out
 }
 
 // scalar is a JSON string or number as text.
@@ -244,14 +258,13 @@ func scalar(raw json.RawMessage) string {
 }
 
 // runtimeText is "bare", "ci github_actions acme/x", "aws_lambda f r".
-func runtimeText(raw json.RawMessage) string {
-	var m map[string]json.RawMessage
-	if len(raw) == 0 || json.Unmarshal(raw, &m) != nil {
+func runtimeText(m map[string]string) string {
+	if len(m) == 0 {
 		return ""
 	}
-	parts := []string{scalar(m["type"])}
+	parts := []string{m["type"]}
 	for _, k := range []string{"provider", "repo", "function", "region", "service", "job", "pod", "namespace", "name", "distro", "container", "inside"} {
-		if v := scalar(m[k]); v != "" {
+		if v := m[k]; v != "" {
 			parts = append(parts, v)
 		}
 	}
@@ -271,9 +284,9 @@ func machineOf(lab work.Labeler, s work.Sourced) Machine {
 		return nil
 	}
 	return Machine{ID: work.Field(r, schema.FieldMachineID), RowID: r.ID.String(), IDSource: work.Field(r, "id_source"),
-		Label: work.Field(r, schema.FieldMachineLabel), Hostname: work.Field(r, "hostname"), OS: raw("os"), Kernel: raw("kernel"),
-		Libc: raw("libc"), Arch: work.Field(r, "arch"), CPU: raw("cpu"), RAMMB: work.Int(r, "ram_mb"), OSUser: work.Field(r, "os_user"),
-		Runtime: raw("runtime"), UpdatedAt: timeOf(r, false), Store: sourceOf(lab, s.Source)}
+		Label: work.Field(r, schema.FieldMachineLabel), Hostname: work.Field(r, "hostname"), OS: objMap(raw("os")), Kernel: objMap(raw("kernel")),
+		Libc: objMap(raw("libc")), Arch: work.Field(r, "arch"), CPU: objMap(raw("cpu")), RAMMB: work.Int(r, "ram_mb"), OSUser: work.Field(r, "os_user"),
+		Runtime: objMap(raw("runtime")), UpdatedAt: timeOf(r, false), Store: sourceOf(lab, s.Source)}
 }
 
 // machineList lists every live profile once (same id in several stores:
