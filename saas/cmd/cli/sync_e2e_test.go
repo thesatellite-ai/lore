@@ -8,6 +8,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,12 +18,15 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"dbent"
 
 	"dbent/pkg/dbtemplate"
+
+	"saas/pkg/aicoder/ids"
 )
 
 // e2eBin is the lore binary built by TestMain ("" when -short).
@@ -230,6 +234,84 @@ func (c *clone) rows() string {
 	return c.lore("rule", "list").stdout
 }
 
+// configTable is the vehicle table for the scenarios that pin the v0.1.17
+// lore.db sync engine itself (export of a lore.db change, trash, merge-rows,
+// restore --prefer db, rebuild of a deleted lore.db). Every table with a body
+// moved to the 0.1.18 core (lsync/owned.go coreOwned; STORE_SERVER_SPEC 3,
+// "the order flips": the row files are the truth and lore.db only mirrors
+// them), so rules no longer pass through that engine's write side; the rows
+// of project_configs still do (lore.db → .lore/data). No command writes the
+// table, so fixtures go in with SQL, the way an old command wrote lore.db.
+const configTable = "project_configs"
+
+// configTimeLayout is how a fixture writes a datetime column into lore.db
+// (a layout the engine's export reads back).
+const configTimeLayout = "2006-01-02 15:04:05.000000000-07:00"
+
+// loreDB opens the clone's lore.db for a fixture write or a check.
+func (c *clone) loreDB() *sql.DB {
+	c.w.t.Helper()
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(c.dir, ".lore", "lore.db")+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		c.w.t.Fatal(err)
+	}
+	return db
+}
+
+// insertConfig writes one project_configs row straight into lore.db (no
+// lore command runs) and returns its id.
+func (c *clone) insertConfig(key, value string) string {
+	c.w.t.Helper()
+	db := c.loreDB()
+	defer func() { _ = db.Close() }() // test fixture; a close error has nothing to undo
+	ctx := context.Background()
+	var project string
+	if err := db.QueryRowContext(ctx, `SELECT id FROM projects LIMIT 1`).Scan(&project); err != nil {
+		c.w.t.Fatalf("no project in lore.db: %v", err)
+	}
+	id := ids.MustNew(ids.PrefixProjectConfig)
+	now := time.Now().UTC().Format(configTimeLayout)
+	if _, err := db.ExecContext(ctx, `INSERT INTO project_configs (id, created_at, updated_at, project_id, key, value, setting_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, now, now, project, key, value, now); err != nil {
+		c.w.t.Fatal(err)
+	}
+	return id
+}
+
+// addConfig is insertConfig followed by `lore sync`, which exports the row
+// to .lore/data the way v0.1.17's commands did on every write.
+func (c *clone) addConfig(key, value string) string {
+	c.w.t.Helper()
+	id := c.insertConfig(key, value)
+	c.lore("sync")
+	return id
+}
+
+// configRows lists lore.db's project_configs rows, one "id key value" line
+// each (the old engine's read side, as `rule list` was for rules).
+func (c *clone) configRows() string {
+	c.w.t.Helper()
+	db := c.loreDB()
+	defer func() { _ = db.Close() }() // read-only check
+	rows, err := db.QueryContext(context.Background(), `SELECT id, key, COALESCE(value, '') FROM project_configs ORDER BY id`)
+	if err != nil {
+		c.w.t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var b strings.Builder
+	for rows.Next() {
+		var id, key, value string
+		if err := rows.Scan(&id, &key, &value); err != nil {
+			c.w.t.Fatal(err)
+		}
+		fmt.Fprintf(&b, "%s %s %s\n", id, key, value)
+	}
+	if err := rows.Err(); err != nil {
+		c.w.t.Fatal(err)
+	}
+	return b.String()
+}
+
 func (c *clone) dataFile(table, id string) string {
 	return filepath.Join(c.dir, ".lore", "data", table, id+".json")
 }
@@ -338,17 +420,22 @@ func TestE2E_SameRowMergeDriverAndConflict(t *testing.T) {
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
 	rule := c.addRule("use JWT")
+	cfg := c.addConfig("default_model", "use JWT")
 	c.commitAll("base")
 
 	c.git("checkout", "-q", "-b", "feat")
 	c.writeDocField("rules", rule, "severity", "should")
 	c.writeDocField("rules", rule, "updated_at", "2030-01-01T00:00:00.000000000Z")
+	c.writeDocField(configTable, cfg, "value", "should")
+	c.writeDocField(configTable, cfg, "updated_at", "2030-01-01T00:00:00.000000000Z")
 	c.lore("sync")
 	c.commitAll("feat severity")
 	c.git("checkout", "-q", "main")
 	c.lore("sync")
 	c.writeDocField("rules", rule, "applies_to_description", "only api")
 	c.writeDocField("rules", rule, "updated_at", "2030-02-01T00:00:00.000000000Z")
+	c.writeDocField(configTable, cfg, "setting_updated_at", "2029-06-01T00:00:00.000000000Z")
+	c.writeDocField(configTable, cfg, "updated_at", "2030-02-01T00:00:00.000000000Z")
 	c.lore("sync")
 	c.commitAll("main desc")
 	if out, code := c.tryGit("merge", "--no-edit", "feat"); code != 0 {
@@ -361,22 +448,38 @@ func TestE2E_SameRowMergeDriverAndConflict(t *testing.T) {
 	if !strings.Contains(c.lore("rule", "list").stdout, "should") {
 		t.Fatal("merged row not imported")
 	}
+	cdoc := c.readDoc(configTable, cfg)
+	if cdoc["value"] != "should" || cdoc["setting_updated_at"] != "2029-06-01T00:00:00.000000000Z" {
+		t.Fatalf("driver lost a side: %v", cdoc)
+	}
+	if !strings.Contains(c.configRows(), cfg+" default_model should") {
+		t.Fatal("merged row not imported")
+	}
 
 	c.git("checkout", "-q", "-b", "feat2")
 	c.writeDocField("rules", rule, "body", "feature body")
+	c.writeDocField(configTable, cfg, "value", "feature body")
 	c.lore("sync")
 	c.commitAll("f2")
 	c.git("checkout", "-q", "main")
 	c.lore("sync")
 	c.writeDocField("rules", rule, "body", "main body")
+	c.writeDocField(configTable, cfg, "value", "main body")
 	c.lore("sync")
 	c.commitAll("m2")
 	if _, code := c.tryGit("merge", "--no-edit", "feat2"); code == 0 {
 		t.Fatal("same-field edit must conflict")
 	}
+	value, _ := c.readDoc(configTable, cfg)["value"].(string)
+	if !strings.Contains(value, "<<<<<<< ours") || !strings.Contains(value, "feature body") {
+		t.Fatalf("markers missing from value: %q", value)
+	}
+	// A core row's file is merged by the core (cf0f486: the driver hands
+	// core-owned files to logic/merge.Driver), whose markers carry each
+	// side's clock instead of "ours"; both sides stay in the value.
 	body, _ := c.readDoc("rules", rule)["body"].(string)
-	if !strings.Contains(body, "<<<<<<< ours") || !strings.Contains(body, "feature body") {
-		t.Fatalf("markers missing from value: %q", body)
+	if !strings.Contains(body, "<<<<<<< ") || !strings.Contains(body, "main body") || !strings.Contains(body, "feature body") || !strings.Contains(body, ">>>>>>> ") {
+		t.Fatalf("markers missing from core value: %q", body)
 	}
 	if r := c.loreAny("sync"); r.code == 0 || !strings.Contains(r.stderr, "conflict-markers") {
 		t.Fatalf("lore must refuse marker text: %d %s", r.code, r.stderr)
@@ -386,9 +489,13 @@ func TestE2E_SameRowMergeDriverAndConflict(t *testing.T) {
 		t.Fatal("pre-commit must block committing conflict markers")
 	}
 	c.writeDocField("rules", rule, "body", "resolved body")
+	c.writeDocField(configTable, cfg, "value", "resolved body")
 	c.git("add", "-A")
 	c.git("commit", "-qm", "resolved")
 	if !strings.Contains(c.lore("rule", "list").stdout, "resolved body") {
+		t.Fatal("hand resolution not imported")
+	}
+	if !strings.Contains(c.configRows(), cfg+" default_model resolved body") {
 		t.Fatal("hand resolution not imported")
 	}
 }
@@ -433,23 +540,56 @@ func TestE2E_RevertTrashRestore(t *testing.T) {
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
 	c.commitAll("base")
-	mem := c.addRow("temporary")
+	cfg := c.addConfig("default_model", "temporary")
 	c.commitAll("add")
 	c.git("revert", "--no-edit", "HEAD")
 	r := c.lore("sync")
-	if !strings.Contains(r.stderr, "trashed rows 1") || strings.Contains(c.rows(), "temporary") {
+	if !strings.Contains(r.stderr, "trashed rows 1") || strings.Contains(c.configRows(), "temporary") {
 		t.Fatalf("revert not applied: %s", r.stderr)
 	}
 	trash := c.lore("sync", "trash", "--json").stdout
-	if !strings.Contains(trash, mem) {
+	if !strings.Contains(trash, cfg) {
 		t.Fatalf("trash missing row: %s", trash)
 	}
 	c.lore("sync", "trash", "restore", "1")
-	if !strings.Contains(c.rows(), "temporary") {
+	if !strings.Contains(c.configRows(), "temporary") {
 		t.Fatal("restore failed")
 	}
-	if _, err := os.Stat(c.dataFile("rules", mem)); err != nil {
+	if _, err := os.Stat(c.dataFile(configTable, cfg)); err != nil {
 		t.Fatal("restored row not exported")
+	}
+
+	// A core row's file is the truth (STORE_SERVER_SPEC 3): a trash restore
+	// done in lore.db would change only the mirror, so it is refused and
+	// names the git restore of the file instead (a63c6f8).
+	rule := c.addRule("temporary rule")
+	c.commitAll("add rule")
+	c.git("revert", "--no-edit", "HEAD")
+	c.lore("sync")
+	if strings.Contains(c.rows(), "temporary rule") {
+		t.Fatal("revert of a core row not applied")
+	}
+	var listing struct {
+		Data []struct {
+			ID    int64  `json:"id"`
+			RowID string `json:"row_id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(c.lore("sync", "trash", "--json").stdout), &listing); err != nil {
+		t.Fatal(err)
+	}
+	var entry int64
+	for _, e := range listing.Data {
+		if e.RowID == rule {
+			entry = e.ID
+		}
+	}
+	if entry == 0 {
+		t.Fatalf("trash missing core row %s: %+v", rule, listing.Data)
+	}
+	r = c.loreAny("sync", "trash", "restore", fmt.Sprint(entry))
+	if r.code == 0 || !strings.Contains(r.stderr, "E_INVALID_INPUT") || !strings.Contains(r.stderr, "git checkout HEAD -- .lore/data/rules/"+rule+".json") {
+		t.Fatalf("trash restore of a core row must be refused with the git way: %d %s", r.code, r.stderr)
 	}
 }
 
@@ -491,9 +631,22 @@ func TestE2E_SyncDisabled(t *testing.T) {
 	c := w.newClone("solo")
 	c.env = []string{"LORE_SYNC=0"}
 	c.lore("init", "--non-interactive", "--name=app")
-	c.addRow("x")
-	if _, err := os.Stat(filepath.Join(c.dir, ".lore", "data")); !os.IsNotExist(err) {
+	c.insertConfig("default_model", "x")
+	c.lore("rule", "list") // a command run: the sync engine would export here
+	// The lore.db engine writes nothing under LORE_SYNC=0. (.lore/data itself
+	// exists: init's project and actor rows are core rows, written by the
+	// core as files whatever LORE_SYNC says, STORE_SERVER_SPEC 3.)
+	if _, err := os.Stat(filepath.Join(c.dir, ".lore", "data", configTable)); !os.IsNotExist(err) {
 		t.Fatal("LORE_SYNC=0 must not create .lore/data")
+	}
+	if _, err := os.Stat(filepath.Join(c.dir, ".gitattributes")); !os.IsNotExist(err) {
+		t.Fatal("LORE_SYNC=0 must not touch git")
+	}
+	// A core row's file is the row itself (STORE_SERVER_SPEC 3): LORE_SYNC=0
+	// switches the lore.db engine off, never the core's own write.
+	rule := c.addRule("x")
+	if _, err := os.Stat(c.dataFile("rules", rule)); err != nil {
+		t.Fatalf("LORE_SYNC=0 must not stop the core writing its row file: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(c.dir, ".gitattributes")); !os.IsNotExist(err) {
 		t.Fatal("LORE_SYNC=0 must not touch git")
@@ -545,15 +698,23 @@ func TestE2E_RestorePreferDB(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	mem := c.addRow("before backup")
+	cfg := c.addConfig("default_model", "before backup")
+	rule := c.addRule("before backup")
 	backup := filepath.Join(c.dir, "snap.sqlite")
 	c.lore("backup", "--out", backup)
-	c.writeDocField("rules", mem, "body", "after backup")
+	c.writeDocField(configTable, cfg, "value", "after backup")
+	c.writeDocField("rules", rule, "body", "after backup")
 	c.lore("sync")
 	c.lore("restore", backup, "--confirm", "--prefer", "db")
 	c.lore("sync")
-	if c.readDoc("rules", mem)["body"] != "before backup" {
+	if c.readDoc(configTable, cfg)["value"] != "before backup" {
 		t.Fatal("restore --prefer db did not win")
+	}
+	// A core row's file is the truth and lore.db only its mirror
+	// (STORE_SERVER_SPEC 3; cf0f486: no old writer writes a core-owned file),
+	// so --prefer db cannot put a backup's copy over it.
+	if got := c.readDoc("rules", rule)["body"]; got != "after backup" {
+		t.Fatalf("restore --prefer db must not overwrite a core row's file: body %v", got)
 	}
 }
 
@@ -760,18 +921,38 @@ func TestE2E_DupesAndMergeRows(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	a := c.addRow("Same Fact")
-	b := c.addRow("same   fact")
+	a := c.addRule("Same Fact")
+	b := c.addRule("same   fact")
+	// The core writes the row files; a pass brings them into lore.db, which
+	// dupes reads (STORE_SERVER_SPEC 3: lore.db is the files' read copy).
+	c.lore("sync")
 	out := c.lore("sync", "dupes").stdout
 	if !strings.Contains(out, a) || !strings.Contains(out, b) {
 		t.Fatalf("dupes: %s", out)
 	}
-	c.lore("sync", "merge-rows", "rules", "--keep", a, "--drop", b)
+	// merge-rows of a core row would change only lore.db, so it is refused
+	// and names the core's way: keep one, delete the other (a63c6f8).
+	if r := c.loreAny("sync", "merge-rows", "rules", "--keep", a, "--drop", b); r.code == 0 || !strings.Contains(r.stderr, "delete "+b) {
+		t.Fatalf("merge-rows of a core row must be refused with the core's way: %d %s", r.code, r.stderr)
+	}
+	c.lore("rule", "delete", b, "--yes")
 	if strings.Contains(c.rows(), b) {
 		t.Fatal("dropped row still listed")
 	}
 	if out := c.lore("sync", "dupes").stdout; !strings.Contains(out, "no duplicates") {
 		t.Fatalf("still dupes: %s", out)
+	}
+
+	// The lore.db engine still folds rows of the tables it owns: references
+	// move, the dropped row leaves lore.db and its file.
+	keep := c.addConfig("default_model", "kept")
+	drop := c.addConfig("default_behaviour", "dropped")
+	c.lore("sync", "merge-rows", configTable, "--keep", keep, "--drop", drop)
+	if rows := c.configRows(); strings.Contains(rows, drop) || !strings.Contains(rows, keep) {
+		t.Fatalf("merge-rows: %s", rows)
+	}
+	if _, err := os.Stat(c.dataFile(configTable, drop)); !os.IsNotExist(err) {
+		t.Fatalf("dropped row's file not removed: %v", err)
 	}
 }
 
@@ -816,13 +997,20 @@ func TestE2E_DeletedDBRebuilt(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
-	c.addRow("survives")
+	c.addRule("survives")
+	cfg := c.addConfig("default_model", "survives")
 	for _, f := range []string{"lore.db", "lore.db-wal", "lore.db-shm"} {
 		_ = os.Remove(filepath.Join(c.dir, ".lore", f)) // sidecars may not exist
 	}
-	r := c.lore("rule", "list")
-	if !strings.Contains(r.stdout, "survives") || !strings.Contains(r.stderr, "built .lore/lore.db") {
-		t.Fatalf("not rebuilt: %s %s", r.stdout, r.stderr)
+	// A core command reads the row files, not lore.db (STORE_SERVER_SPEC 3),
+	// so it lists the rule with lore.db gone and has no need to build it.
+	if r := c.lore("rule", "list"); !strings.Contains(r.stdout, "survives") {
+		t.Fatalf("core row lost with lore.db: %s %s", r.stdout, r.stderr)
+	}
+	// The lore.db engine's next pass rebuilds lore.db from the files.
+	r := c.lore("sync")
+	if !strings.Contains(c.configRows(), cfg+" default_model survives") || !strings.Contains(r.stderr, "built .lore/lore.db") {
+		t.Fatalf("not rebuilt: %s %s", c.configRows(), r.stderr)
 	}
 }
 
