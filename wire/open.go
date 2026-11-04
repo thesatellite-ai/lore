@@ -199,8 +199,18 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		}
 	}
 	if repoClient && st.who.Kind == identity.KindAgent {
-		if st.agentOwner, st.agentOwnerName, err = agentOwnerOf(ctx, st); err != nil {
-			return fail(err)
+		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
+		// agent in a client repo is recorded as its owning person; an org
+		// that sets agent_details: client shows the agent as itself, so no
+		// owner is looked up and clientActorAs stamps the agent's id.
+		details, derr := agentDetailsOf(opts.Home, st.who.Org)
+		if derr != nil {
+			return fail(derr)
+		}
+		if details == AgentDetailsInternal {
+			if st.agentOwner, st.agentOwnerName, err = agentOwnerOf(ctx, st); err != nil {
+				return fail(err)
+			}
 		}
 	}
 	if st.format, err = readFormat(ctx, repo, actor); err != nil {

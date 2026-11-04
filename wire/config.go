@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -188,4 +189,61 @@ func writeFileAtomic(path string, b []byte, mode os.FileMode) error {
 		return errs.Wrap(errs.Internal, "wire: write "+filepath.Base(path), err)
 	}
 	return nil
+}
+
+// agent_details values of an org entry (LORE_TEAM_SPEC 7.6, D8): where an
+// agent's work details go for a client repo of the org.
+const (
+	// AgentDetailsInternal is the default: in a client repo an agent is
+	// recorded as its owning person (Q11), its details stay internal.
+	AgentDetailsInternal = "internal"
+	// AgentDetailsClient is the opt-in: the client sees the agent as
+	// itself (its own id and projection) in its repo.
+	AgentDetailsClient = "client"
+)
+
+// orgAgentDetails is the part of config.yaml agentDetailsOf reads; a
+// second decode of the same file, because `orgs` is already decoded inline
+// by identity.Config, whose Org type does not carry the key.
+type orgAgentDetails struct {
+	Orgs []struct {
+		Name         string `yaml:"name"`
+		AgentDetails string `yaml:"agent_details,omitempty"`
+	} `yaml:"orgs,omitempty"`
+}
+
+// agentDetailsOf returns the agent_details setting of the org entry named
+// org in config.yaml: AgentDetailsInternal when the file, the entry or the
+// key is absent (the decided default, the safer side), E_CONFIG_INVALID
+// for a value outside the two (as v0.1.17's lorecfg validation refused
+// it), so a typo never silently picks either.
+func agentDetailsOf(home, org string) (string, error) {
+	if org == "" {
+		return AgentDetailsInternal, nil
+	}
+	b, err := os.ReadFile(filepath.Clean(configPath(home)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return AgentDetailsInternal, nil
+	}
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "wire: read "+ConfigFile, err)
+	}
+	var c orgAgentDetails
+	if err = yaml.Unmarshal(b, &c); err != nil {
+		return "", errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+	}
+	for _, o := range c.Orgs {
+		if o.Name != org {
+			continue
+		}
+		switch o.AgentDetails {
+		case "", AgentDetailsInternal:
+			return AgentDetailsInternal, nil
+		case AgentDetailsClient:
+			return AgentDetailsClient, nil
+		}
+		return "", errs.New(errs.ConfigInvalid, "wire: orgs["+org+"].agent_details "+strconv.Quote(o.AgentDetails)+" must be "+AgentDetailsInternal+" or "+AgentDetailsClient).
+			WithHint("fix it in ~/.lore/" + ConfigFile)
+	}
+	return AgentDetailsInternal, nil
 }

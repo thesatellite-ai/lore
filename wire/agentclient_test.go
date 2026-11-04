@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -144,5 +146,103 @@ func TestAgentWritesInClientRepoStampTheOwner(t *testing.T) {
 	}
 	if got := fieldString(t, rowFile(t, memPath(internalRepo, idOf(t, inOut))), "created_by"); got != agent.String() {
 		t.Fatalf("an internal repo keeps the agent's id, got %s", got)
+	}
+}
+
+// TestAgentDetailsSwitch (LORE_TEAM_SPEC 7.6, D8): the org entry's
+// agent_details in ~/.lore/config.yaml decides how an agent's write into a
+// client repo is stamped. Absent or `internal` (the default): as its owning
+// person. `client` (the opt-in): as the agent itself. Any other value fails
+// the open with E_CONFIG_INVALID, never silently picking a side. An org
+// entry of another name does not apply.
+func TestAgentDetailsSwitch(t *testing.T) {
+	cases := []struct {
+		name    string
+		config  string // config.yaml body; "" writes none
+		asAgent bool
+		bad     bool
+	}{
+		{name: "no config file"},
+		{name: "org entry without the key", config: "orgs:\n  - name: northwind\n"},
+		{name: "internal", config: "orgs:\n  - name: northwind\n    agent_details: internal\n"},
+		{name: "client", config: "orgs:\n  - name: northwind\n    agent_details: client\n", asAgent: true},
+		{name: "client set on another org", config: "orgs:\n  - name: globex\n    agent_details: client\n  - name: northwind\n"},
+		{name: "unknown value", config: "orgs:\n  - name: northwind\n    agent_details: Client\n", bad: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
+			home := t.TempDir()
+			isClient := func(context.Context) (bool, error) { return true, nil }
+			newAgentApp := func(repo string, client bool) *App {
+				opts := Options{RepoDir: repo, Home: home, FlagActor: agentKey, OrgStores: func(context.Context) ([]attach.Store, error) {
+					return []attach.Store{{Name: "northwind", URL: orgURL, Folder: "acme"}}, nil
+				}, Org: func(context.Context) (*identity.Org, error) { return &identity.Org{Name: "northwind"}, nil }}
+				if client {
+					opts.RepoIsClient = isClient
+				}
+				a, err := New(opts)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = a.Close() })
+				return a
+			}
+			seed := newAgentApp(gitRepo(t), false)
+			withProject(t, seed)
+			agent, err := seed.Actor(background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			owner, err := ids.Parse[ids.Actor](otherActor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ownerRef, err := value.RefOf(owner.Any())
+			if err != nil {
+				t.Fatal(err)
+			}
+			agentFields := textValues(t, map[string]string{"kind": "agent", "display_name": "backend bot"})
+			agentFields[rosterFieldOwner] = ownerRef
+			eng, err := seed.Engine(background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = eng.CreateWithID(background(), "northwind", schema.TableActors, owner.Any(), textValues(t, map[string]string{"kind": "human", "display_name": "Alice Owner"})); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = eng.CreateWithID(background(), "northwind", schema.TableActors, agent.Any(), agentFields); err != nil {
+				t.Fatal(err)
+			}
+			if err = seed.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if c.config != "" {
+				if err = os.WriteFile(filepath.Join(home, ConfigFile), []byte(c.config), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			repo := gitRepo(t)
+			app := newAgentApp(repo, true)
+			if c.bad {
+				if _, err = app.Engine(background()); !errs.Has(err, errs.ConfigInvalid) || !strings.Contains(err.Error(), "agent_details") {
+					t.Fatalf("an unknown agent_details must fail the open: %v", err)
+				}
+				return
+			}
+			withProject(t, app)
+			out, err := run(t, app, opsmemory.OpAdd, `{"body":"client note","to":"repo"}`, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := owner.String()
+			if c.asAgent {
+				want = agent.String()
+			}
+			f := rowFile(t, memPath(repo, idOf(t, out)))
+			if got := fieldString(t, f, "created_by"); got != want || !strings.HasSuffix(fieldString(t, f, "_hlc"), want) {
+				t.Fatalf("created_by %s, want %s (agent %s, owner %s)", got, want, agent, owner)
+			}
+		})
 	}
 }
