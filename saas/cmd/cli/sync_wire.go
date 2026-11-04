@@ -297,7 +297,7 @@ func printSyncReport(rep lsync.Report) {
 				fmt.Fprintf(os.Stderr, "%s%s\n", syncLogPrefix, strings.Join(parts, ", "))
 			}
 			if len(rep.Deleted) > 0 {
-				fmt.Fprintf(os.Stderr, "%srows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)\n", syncLogPrefix)
+				fmt.Fprintf(os.Stderr, "%srows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)\n", syncLogPrefix)
 			}
 		}
 		if rep.BackupPath != "" {

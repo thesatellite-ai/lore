@@ -92,7 +92,7 @@ files may disagree. --prefer decides which side wins on the next command:
 db (default: you restored because you want the DB back — its rows are
 re-exported and rows that exist only in the files are removed; review the
 git diff), files (the committed files win, rows only in the DB are moved
-to ` + "`lore sync trash`" + `), or
+to ` + "`lore trash --local`" + `), or
 newest (later updated_at wins; the other version is kept under
 ` + "`lore sync conflicts`" + `).`,
 		Example: `  lore restore .lore/backups/20261003-101500.sqlite --confirm
