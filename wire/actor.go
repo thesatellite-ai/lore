@@ -39,14 +39,16 @@ func resolveIdentity(ctx context.Context, opts Options) (identity.Resolved, erro
 
 // ensureActor writes the caller's actor row into target on its first write
 // there (through the engine, so it is scanned, stamped and audited like any
-// row). The repo store is skipped: v0.1.17 still owns the repo's actor
-// files (it upserts and exports them on every old write, with the D8
-// projection for client repos) until the actors noun migrates.
+// row), the repo store included: an identity that only runs core commands
+// would otherwise have no actor row there (task --assignee, created_by
+// refs). The id is v0.1.17's deterministic actor id, so a v0.1.17 export
+// of the same actor writes the same file (it may rewrite it as `_v: 1`
+// until the actors noun migrates; both read the same).
 func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) error {
 	if target == "" {
 		target = st.defaultTarget
 	}
-	if target == store.SourceRepo || st.who.StableKey == "" {
+	if st.who.StableKey == "" {
 		return nil
 	}
 	st.actorMu.Lock()
