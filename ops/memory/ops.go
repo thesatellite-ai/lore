@@ -16,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -177,6 +178,22 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	}
 	if fields[fieldProject], err = value.RefOf(project.Any()); err != nil {
 		return WriteOut{}, err
+	}
+	// 6.2.3 / CQ12: --scope picks the store, repo and folder.
+	st, err := opsscope.ForWrite(ctx, o.env, in.Scope, in.To, in.Repo, false)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if st.To != "" {
+		in.To = st.To
+	}
+	if st.Repo != "" {
+		in.Repo = st.Repo
+	}
+	if st.ScopeID != "" {
+		if fields[schema.FieldScope], err = scopeRef(st.ScopeID); err != nil {
+			return WriteOut{}, err
+		}
 	}
 	if in.Repo != "" {
 		repo, rerr := o.env.RepoID(ctx, in.Repo)
@@ -404,6 +421,24 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
+	st, err := opsscope.ForWrite(ctx, o.env, in.Scope, "", "", true)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if st.Given() {
+		if in.RebindRepo != "" || in.RebindMaster {
+			return WriteOut{}, errs.New(errs.InvalidInput, "memory edit: give --scope or --rebind-repo/--rebind-master, not both")
+		}
+		in.RebindRepo, in.RebindMaster = st.Repo, st.Master
+		if st.ClearScope {
+			patch[schema.FieldScope] = value.Null{}
+		}
+		if st.ScopeID != "" {
+			if patch[schema.FieldScope], err = scopeRef(st.ScopeID); err != nil {
+				return WriteOut{}, err
+			}
+		}
+	}
 	switch {
 	case in.RebindRepo != "" && in.RebindMaster:
 		return WriteOut{}, errs.New(errs.InvalidInput, "memory edit: give --rebind-repo or --rebind-master, not both")
@@ -427,7 +462,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	}
 	if len(patch) == 0 {
 		return WriteOut{}, errs.New(errs.InvalidInput, "memory edit: nothing to change").
-			WithHint("give at least one of --body, --kind, --source, --source-ref, --rebind-repo, --rebind-master, --tag, --untag")
+			WithHint("give at least one of --body, --kind, --source, --source-ref, --scope, --rebind-repo, --rebind-master, --tag, --untag")
 	}
 	return withLine(o.patch(ctx, id, patch))("updated")
 }
@@ -603,4 +638,13 @@ func withLine(out WriteOut, err error) func(verb string) (WriteOut, error) {
 		out.Human = mark + " " + out.ID + " " + verb + "\n"
 		return out, nil
 	}
+}
+
+// scopeRef is a scp_ id as a ref value.
+func scopeRef(id string) (value.Value, error) {
+	sid, err := ids.ParseAny(id)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "memory: scope id", err)
+	}
+	return value.RefOf(sid)
 }

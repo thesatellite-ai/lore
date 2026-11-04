@@ -136,6 +136,7 @@ memories.kind text required
 memories.last_validated_at datetime
 memories.project_id ref required
 memories.repo_id ref
+memories.scope_id ref
 memories.source_kind text required
 memories.source_ref text
 memories.superseded_by_id ref

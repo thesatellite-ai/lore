@@ -46,6 +46,9 @@ type AddIn struct {
 	// Repo scopes the memory to one repo of the project (mount name or
 	// rep_ id); empty is the project-wide ("master") scope.
 	Repo string `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id; default project-wide)"`
+	// Scope is --scope (CONTEXT_BUDGET 6.2.3, CQ12): a folder scope ranks
+	// the memory in lore context only.
+	Scope string `json:"scope,omitempty" flag:"scope" desc:"where it attaches: global | project | repo | dir:<path> (folder scopes rank it in lore context)"`
 	// Project picks the project when the repo store holds several
 	// (v0.1.17 --project: a prj_ id or a project name).
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
@@ -185,6 +188,8 @@ type EditIn struct {
 	// scope.
 	RebindRepo   string `json:"rebind_repo,omitempty" flag:"rebind-repo" desc:"move this memory to repo <mount> (sets repo_id)"`
 	RebindMaster bool   `json:"rebind_master,omitempty" flag:"rebind-master" desc:"move this memory to the project-wide scope (clears repo_id)"`
+	// Scope moves the memory to another scope (6.2.3, CQ12).
+	Scope string `json:"scope,omitempty" flag:"scope" desc:"move to another scope: project | repo | dir:<path>"`
 	// Tags adds and Untags removes tags by name (repeatable).
 	Tags   []string `json:"tags,omitempty" flag:"tag" desc:"add this tag (repeatable; the tag must exist)"`
 	Untags []string `json:"untags,omitempty" flag:"untag" desc:"remove this tag (repeatable)"`

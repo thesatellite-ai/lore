@@ -172,6 +172,9 @@ func coreDefs() []TableDef {
 		Table(TableMemories, ids.PrefixMemory, Synced(), FTS("body", "source_ref", fieldKind, "source_kind"), Description("free-form learned notes"),
 			Ref("project_id", TableProjects, Required()),
 			Ref("repo_id", TableRepos),
+			// CQ12: a folder scope ranks the memory in lore context only;
+			// memories are never written into a generated file.
+			Ref(FieldScope, TableScopes),
 			Text(fieldKind, Required(), OneOf(MemoryKinds()...)),
 			Text("body", Required(), WithWidget(WidgetMarkdown)),
 			DateTime("valid_at"),
@@ -192,6 +195,7 @@ func coreDefs() []TableDef {
 			IndexOn("superseded_by_id"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 			BelongsToRel("repo", "repo_id", TableRepos, SetNull),
+			BelongsToRel("scope", FieldScope, TableScopes, SetNull),
 			BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
 			BelongsToRel("validated_by", "validated_by_actor_id", TableActors, TombstoneOnly),
 			SelfRel("superseded_by", "superseded_by_id", SetNull),

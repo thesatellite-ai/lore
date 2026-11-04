@@ -255,3 +255,41 @@ func TestSelect(t *testing.T) {
 		t.Errorf("Unknown = %v", u)
 	}
 }
+
+func TestDirTargets(t *testing.T) {
+	want := map[string]struct {
+		file string
+		kind DirKind
+	}{
+		NameClaudeCode: {"src/a/CLAUDE.md", DirAt},
+		NameCodex:      {"src/a/AGENTS.md", DirInline},
+		NameCursor:     {".cursor/rules/lore-dir-src--a.mdc", DirGlobRule},
+		NameGeminiCLI:  {"src/a/GEMINI.md", DirAt},
+		NameCopilot:    {"", DirNone},
+		NameGeneric:    {"", DirNone},
+	}
+	for _, p := range Builtins() {
+		f, k := p.DirTarget("src/a", "src--a")
+		if w := want[p.Name]; f != w.file || k != w.kind {
+			t.Errorf("%s: %q %s, want %q %s", p.Name, f, k, w.file, w.kind)
+		}
+	}
+	cc := Builtins()[0]
+	hand := "# my notes\n"
+	got := cc.DirContent(DirAt, hand, "src/a", "")
+	if !strings.Contains(got, "@LORE.md") || !strings.HasSuffix(got, hand) {
+		t.Fatalf("DirAt: %q", got)
+	}
+	if again := cc.DirContent(DirAt, got, "src/a", ""); again != got {
+		t.Fatal("DirAt not idempotent")
+	}
+	rest, empty := DirStrip(got)
+	if empty || rest != hand {
+		t.Fatalf("strip hand file: %q %v", rest, empty)
+	}
+	codex := Builtins()[1]
+	in := codex.DirContent(DirInline, "", "src/a", "# body\n")
+	if _, empty := DirStrip(in); !empty {
+		t.Fatalf("lore-only inline file not empty after strip: %q", in)
+	}
+}
