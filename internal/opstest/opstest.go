@@ -240,10 +240,23 @@ func (h *H) Field(res op.Result, key string) string {
 	return s
 }
 
-// ID is the "id" field of a write output.
+// ID is the id of a write output: its top-level "id", else data.id (the
+// show envelope some adds print). An output with neither fails the test,
+// so a test never goes on with an empty id that silently matches nothing.
 func (h *H) ID(res op.Result) string {
 	h.T.Helper()
-	return h.Field(res, "id")
+	if id := h.Field(res, "id"); id != "" {
+		return id
+	}
+	var env struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(h.JSON(res)), &env); err != nil || env.Data.ID == "" {
+		h.T.Fatalf("no id in %s", h.JSON(res))
+	}
+	return env.Data.ID
 }
 
 // Quote JSON-encodes s, for building inputs by hand.
