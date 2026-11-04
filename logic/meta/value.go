@@ -49,7 +49,7 @@ func Coerce(t Type, raw string) (Coerced, error) {
 		return Coerced{Raw: arr, Notes: notes}, nil
 	case value.KindJSON:
 		return CoerceJSON(t, []byte(raw))
-	case value.KindText, value.KindNumber, value.KindBool, value.KindDate, value.KindDateTime, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef, value.KindNull:
+	case value.KindText, value.KindNumber, value.KindBool, value.KindDate, value.KindDateTime, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef, value.KindSecretRef, value.KindNull:
 	}
 	return scalar(t.Kind, raw)
 }
@@ -270,7 +270,7 @@ func CoerceJSON(t Type, raw []byte) (Coerced, error) {
 			return Coerced{}, errs.Wrap(errs.Internal, "meta: build a list", err)
 		}
 		return Coerced{Raw: arr, Notes: notes}, nil
-	case value.KindText, value.KindNumber, value.KindBool, value.KindDate, value.KindDateTime, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef, value.KindNull:
+	case value.KindText, value.KindNumber, value.KindBool, value.KindDate, value.KindDateTime, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef, value.KindSecretRef, value.KindNull:
 	}
 	switch canon.KindOf(c) {
 	case canon.KindString:

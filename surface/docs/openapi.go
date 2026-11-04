@@ -396,7 +396,7 @@ func valueSchema(k, elem value.Kind) *jsonSchema {
 	case value.KindJSON, value.KindNull:
 		// any JSON value: the empty schema.
 		return &jsonSchema{}
-	case value.KindText, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindRef:
+	case value.KindText, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindRef, value.KindSecretRef:
 	}
 	return &jsonSchema{Type: jsonString}
 }

@@ -34,21 +34,22 @@ func TestRoundTripEveryKind(t *testing.T) {
 	}
 	f, ferr := Float(1.5)
 	cases := map[Kind]Value{
-		KindText:     must(TextOf("Retry <twice> & \"log\"")),
-		KindNumber:   must(f, ferr),
-		KindBool:     BoolOf(true),
-		KindDate:     must(DateOf("2026-12-01")),
-		KindDateTime: must(DateTimeOf("2026-11-04T11:42:07.123+01:00")),
-		KindDuration: must(DurationOf("1.5h")),
-		KindIP:       ip,
-		KindCIDR:     must(CIDROf("10.0.0.0/8")),
-		KindDNS:      must(DNSOf("DB.Hub.acme.example.")),
-		KindURL:      must(URLOf("https://hub.acme.example/x?y=1")),
-		KindEmail:    must(EmailOf("dev@acme.example")),
-		KindJSON:     must(JSONOf([]byte(`{"b":[1,2],"a":null}`))),
-		KindList:     list,
-		KindRef:      must(RefOf(ref)),
-		KindNull:     Null{},
+		KindText:      must(TextOf("Retry <twice> & \"log\"")),
+		KindNumber:    must(f, ferr),
+		KindBool:      BoolOf(true),
+		KindDate:      must(DateOf("2026-12-01")),
+		KindDateTime:  must(DateTimeOf("2026-11-04T11:42:07.123+01:00")),
+		KindDuration:  must(DurationOf("1.5h")),
+		KindIP:        ip,
+		KindCIDR:      must(CIDROf("10.0.0.0/8")),
+		KindDNS:       must(DNSOf("DB.Hub.acme.example.")),
+		KindURL:       must(URLOf("https://hub.acme.example/x?y=1")),
+		KindEmail:     must(EmailOf("dev@acme.example")),
+		KindJSON:      must(JSONOf([]byte(`{"b":[1,2],"a":null}`))),
+		KindList:      list,
+		KindRef:       must(RefOf(ref)),
+		KindSecretRef: must(SecretRefOf("gopass://acme/hub_prod/ssh_deploy")),
+		KindNull:      Null{},
 	}
 	for _, k := range Kinds() {
 		v, ok := cases[k]

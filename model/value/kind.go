@@ -49,7 +49,7 @@ func Kinds() []Kind {
 	return []Kind{
 		KindText, KindNumber, KindBool, KindDate, KindDateTime, KindDuration,
 		KindIP, KindCIDR, KindDNS, KindURL, KindEmail, KindJSON, KindList,
-		KindRef, KindNull,
+		KindRef, KindSecretRef, KindNull,
 	}
 }
 

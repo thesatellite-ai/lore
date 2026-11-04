@@ -56,6 +56,8 @@ func Parse(k Kind, raw []byte) (Value, error) {
 		return parseString(k, raw, func(s string) (Value, error) { return URLOf(s) })
 	case KindEmail:
 		return parseString(k, raw, func(s string) (Value, error) { return EmailOf(s) })
+	case KindSecretRef:
+		return parseString(k, raw, func(s string) (Value, error) { return SecretRefOf(s) })
 	case KindJSON:
 		return JSONOf(raw)
 	case KindList:

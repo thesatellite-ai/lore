@@ -143,7 +143,7 @@ func rawFor(k value.Kind, s string) []byte {
 		return []byte(s)
 	case value.KindText, value.KindDate, value.KindDateTime, value.KindDuration, value.KindIP,
 		value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef,
-		value.KindList, value.KindNull:
+		value.KindSecretRef, value.KindList, value.KindNull:
 	}
 	return canon.String(s)
 }

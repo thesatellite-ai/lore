@@ -200,7 +200,7 @@ func bound(k value.Kind, s string) (orderedValue, error) {
 		t, err := time.Parse(time.RFC3339Nano, s)
 		return orderedValue{t: t}, err
 	case value.KindText, value.KindBool, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL,
-		value.KindEmail, value.KindRef, value.KindJSON, value.KindList, value.KindNull:
+		value.KindEmail, value.KindRef, value.KindSecretRef, value.KindJSON, value.KindList, value.KindNull:
 	}
 	return orderedValue{}, errs.New(errs.InvalidInput, "not an ordered type")
 }

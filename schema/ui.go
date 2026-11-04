@@ -86,7 +86,7 @@ func DefaultWidget(k value.Kind, sensitive, hasValues bool) Widget {
 	case value.KindJSON, value.KindList:
 		return WidgetJSON
 	case value.KindText, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS,
-		value.KindURL, value.KindEmail, value.KindRef, value.KindNull:
+		value.KindURL, value.KindEmail, value.KindRef, value.KindSecretRef, value.KindNull:
 	}
 	return WidgetText
 }

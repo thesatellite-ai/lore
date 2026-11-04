@@ -584,7 +584,7 @@ func parseOrdered(k value.Kind, s string) (ordered, error) {
 		o.d, err = time.ParseDuration(s)
 		return o, err
 	case value.KindText, value.KindBool, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL,
-		value.KindEmail, value.KindRef, value.KindJSON, value.KindList, value.KindNull:
+		value.KindEmail, value.KindRef, value.KindSecretRef, value.KindJSON, value.KindList, value.KindNull:
 	}
 	return ordered{}, errs.New(errs.InvalidInput, "not an ordered type")
 }

@@ -311,6 +311,7 @@ var sampleJSON = map[value.Kind]string{
 	value.KindDuration: `"1h"`, value.KindIP: `"10.0.0.1"`, value.KindCIDR: `"10.0.0.0/8"`,
 	value.KindDNS: `"example.com"`, value.KindURL: `"https://example.com"`,
 	value.KindEmail: `"a@example.com"`, value.KindJSON: `{}`,
+	value.KindSecretRef: `"gopass://acme/sample"`,
 }
 
 // Seed writes a row of table into the repo store through the engine and

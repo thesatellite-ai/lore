@@ -244,7 +244,8 @@ func valueCell(v value.Value) json.RawMessage {
 		}
 		return canon.String(string(raw))
 	case value.KindText, value.KindDate, value.KindDateTime, value.KindDuration,
-		value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef:
+		value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef,
+		value.KindSecretRef: // the entry name as TEXT (RESOURCES 4); never a secret value
 		return canon.String(v.String())
 	}
 	return canon.String(v.String())

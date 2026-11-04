@@ -513,6 +513,13 @@ func (o ops) fieldValue(ctx context.Context, d kindDef, name string, def located
 		}
 		return ref(target.Row.ID)
 	}
+	if k == value.KindSecretRef {
+		sr, serr := secretRefValue(raw)
+		if serr != nil {
+			return nil, errs.Wrap(errs.CodeOf(serr), d.name()+" "+name+": field "+fname, serr)
+		}
+		return sr, nil
+	}
 	v, err := parseAs(k, raw)
 	if err != nil {
 		return nil, invalid(d, name, fname+" "+quote(raw)+" is not a "+string(k))

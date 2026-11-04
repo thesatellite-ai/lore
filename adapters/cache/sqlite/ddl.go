@@ -138,7 +138,7 @@ func affinity(k value.Kind) (string, error) {
 	switch k {
 	case value.KindText, value.KindDate, value.KindDateTime, value.KindDuration,
 		value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail,
-		value.KindRef, value.KindJSON, value.KindList:
+		value.KindRef, value.KindSecretRef, value.KindJSON, value.KindList:
 		return sqlText, nil
 	case value.KindNumber:
 		return sqlNumeric, nil

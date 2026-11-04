@@ -93,10 +93,11 @@ type KindsIn struct{}
 type FieldAddIn struct {
 	Kind        string `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Field       string `json:"field" arg:"1" desc:"the field name (snake_case)"`
-	Type        string `json:"type" flag:"type" desc:"the value type (text, number, bool, date, datetime, duration, ip, cidr, dns, url, email, json, list, ref)"`
+	Type        string `json:"type" flag:"type" desc:"the value type (text, number, bool, date, datetime, duration, ip, cidr, dns, url, email, json, list, ref, secret_ref)"`
 	Required    bool   `json:"required,omitempty" flag:"required" desc:"a resource of this kind must set it"`
 	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"printed as ••• unless --show-sensitive"`
 	Internal    bool   `json:"internal,omitempty" flag:"internal" desc:"never reaches a client repo"`
+	NoInternal  bool   `json:"no_internal,omitempty" flag:"no-internal" desc:"with --type secret_ref: not internal (a secret_ref is internal by default)"`
 	RefKind     string `json:"ref_kind,omitempty" flag:"ref-kind" desc:"with --type ref: the kind the value points at"`
 	Values      string `json:"values,omitempty" flag:"values" desc:"allowed values, comma separated (a closed set)"`
 	Description string `json:"description,omitempty" flag:"description" desc:"what the field means"`
@@ -457,7 +458,15 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 	}
 	if _, err := value.ParseKind(in.Type); err != nil || in.Type == string(value.KindNull) {
 		return RowOut{}, errs.New(errs.InvalidInput, "--type "+quote(in.Type)+" is not a value type").
-			WithHint("one of text, number, bool, date, datetime, duration, ip, cidr, dns, url, email, json, list, ref")
+			WithHint("one of text, number, bool, date, datetime, duration, ip, cidr, dns, url, email, json, list, ref, secret_ref")
+	}
+	isSecretRef := in.Type == string(value.KindSecretRef)
+	if err := credentialName(in.Field, isSecretRef); err != nil {
+		return RowOut{}, err
+	}
+	internal, err := secretRefInternal(isSecretRef, in.Internal, in.NoInternal)
+	if err != nil {
+		return RowOut{}, err
 	}
 	k, err := o.kindByName(ctx, in.Kind)
 	if err != nil {
@@ -466,7 +475,7 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 	if _, err = o.fieldByName(ctx, k, in.Field); err == nil {
 		return RowOut{}, errs.New(errs.InvalidInput, "kind "+in.Kind+" already has a field "+quote(in.Field))
 	}
-	fields := map[string]value.Value{fRequired: value.BoolOf(in.Required), fSensitive: value.BoolOf(in.Sensitive), fInternal: value.BoolOf(in.Internal)}
+	fields := map[string]value.Value{fRequired: value.BoolOf(in.Required), fSensitive: value.BoolOf(in.Sensitive), fInternal: value.BoolOf(internal)}
 	if err = optTexts(fields, map[string]string{kName: in.Field, fType: in.Type, fLabel: in.Label, fDescription: in.Description}); err != nil {
 		return RowOut{}, err
 	}
@@ -499,7 +508,7 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(k.Src),
-		Human: fmt.Sprintf("added field %s %s.%s (%s)\n", short(w.Row.ID), text(k.Row, kName), in.Field, in.Type)}, nil
+		Human: fmt.Sprintf("added field %s %s.%s (%s)%s\n", short(w.Row.ID), text(k.Row, kName), in.Field, in.Type, secretRefNote(isSecretRef, internal))}, nil
 }
 
 // triState folds a --x / --no-x pair into the patch.
