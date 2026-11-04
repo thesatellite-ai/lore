@@ -170,6 +170,9 @@ type SearchIn struct {
 	Query   string `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
 	Limit   int    `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"only plans of this project (prj_ id or name)"`
+	// Columns restricts the match to some full-text fields (v0.1.17
+	// --column).
+	Columns []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable; plans have: title, body, status)"`
 }
 
 // Ops returns every plan operation bound to env.
@@ -328,5 +331,5 @@ func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
 
 // search matches plans by title, body and status.
 func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, error) {
-	return work.SearchTable(ctx, o.env, table, KindSearch, in.Query, in.Limit, in.Project, false, work.FieldTitle, work.FieldBody, fieldStatus)
+	return work.SearchTable(ctx, o.env, table, KindSearch, in.Query, in.Limit, in.Project, in.Columns, false, work.FieldTitle, work.FieldBody, fieldStatus)
 }

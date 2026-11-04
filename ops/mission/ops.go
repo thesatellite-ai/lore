@@ -401,5 +401,5 @@ func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
 
 // search matches missions by title, body and status.
 func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, error) {
-	return work.SearchTable(ctx, o.env, table, KindSearch, in.Query, in.Limit, in.Project, true, work.FieldTitle, work.FieldBody, work.FieldStatus)
+	return work.SearchTable(ctx, o.env, table, KindSearch, in.Query, in.Limit, in.Project, in.Columns, true, work.FieldTitle, work.FieldBody, work.FieldStatus)
 }

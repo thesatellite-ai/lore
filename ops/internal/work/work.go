@@ -555,8 +555,9 @@ func InScope(got, want string, noInherit, masterOnly, allRepos bool) bool {
 // SearchTable is the whole search of a noun without extra filters: the
 // query over table, live hits of project ("" = any), cut at limit (0 =
 // DefaultSearchLimit), each hit carrying cols; withStatus picks the human
-// line (see HitOf).
-func SearchTable(ctx context.Context, env Env, table row.Table, kind, query string, limit int, projectFlag string, withStatus bool, cols ...string) (SearchEnvelope, error) {
+// line (see HitOf). columns is `search --column` (nil = every full-text
+// field; see SearchColumns).
+func SearchTable(ctx context.Context, env Env, table row.Table, kind, query string, limit int, projectFlag string, columns []string, withStatus bool, cols ...string) (SearchEnvelope, error) {
 	limit, err := Limit(limit)
 	if err != nil {
 		return SearchEnvelope{}, err
@@ -565,7 +566,7 @@ func SearchTable(ctx context.Context, env Env, table row.Table, kind, query stri
 	if err != nil {
 		return SearchEnvelope{}, err
 	}
-	hits, err := Search(ctx, env, table, query, MaxSearchLimit)
+	hits, err := SearchColumns(ctx, env, string(table), table, query, columns, MaxSearchLimit)
 	if err != nil {
 		return SearchEnvelope{}, err
 	}
