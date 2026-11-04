@@ -74,7 +74,7 @@ func TestAuditFileFallback(t *testing.T) {
 		t.Fatalf("audit file mode %v, want %v", fi.Mode().Perm(), os.FileMode(auditFileMode))
 	}
 	raw := string(mustRead(t, path))
-	if strings.Contains(raw, auditSecretName) || strings.Contains(raw, auditRenamed) {
+	if strings.Contains(raw, auditProjectName) || strings.Contains(raw, auditRenamed) {
 		t.Fatal("the audit file carries a field value")
 	}
 	var got []string
@@ -92,11 +92,11 @@ func TestAuditFileFallback(t *testing.T) {
 	}
 }
 
-// auditSecretName and auditRenamed are field values that must never reach
+// auditProjectName and auditRenamed are field values that must never reach
 // an audit record.
 const (
-	auditSecretName = "audit-name-ü-7731"
-	auditRenamed    = "audit-renamed-9112"
+	auditProjectName = "audit-name-ü-7731"
+	auditRenamed     = "audit-renamed-9112"
 )
 
 // auditWrites creates, updates and deletes one repo project through the
@@ -104,7 +104,7 @@ const (
 func auditWrites(t *testing.T, a *App) ids.AnyID {
 	t.Helper()
 	ctx := background()
-	n, err := value.TextOf(auditSecretName)
+	n, err := value.TextOf(auditProjectName)
 	if err != nil {
 		t.Fatal(err)
 	}
