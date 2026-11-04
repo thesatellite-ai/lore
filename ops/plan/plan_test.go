@@ -72,7 +72,7 @@ func TestPlanLifecycle(t *testing.T) {
 	if strings.Contains(opstest.Text(h.Must("plan.list", ``)), id) {
 		t.Fatal("deleted plan listed")
 	}
-	h.Fails("plan.show", `{"id":"`+id+`"}`, errs.NotFound)
+	h.Fails("plan.show", `{"id":"`+id+`"}`, errs.InTrash)
 }
 
 // TestPlanAddEditRefusals: title and body required, body given once, the

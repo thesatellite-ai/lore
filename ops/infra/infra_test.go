@@ -180,10 +180,10 @@ func TestRepoDeleteIsATombstone(t *testing.T) {
 	id := h.ID(h.Must(infra.OpRepoAdd, `{"mount_name":"api"}`))
 	h.Fails(infra.OpRepoDelete, `{"id":"`+id+`"}`, errs.NeedsConfirm)
 	h.MustYes(infra.OpRepoDelete, `{"id":"`+id+`"}`)
-	if _, err := h.RunYes(infra.OpRepoDelete, `{"id":"`+id+`"}`); !errs.Has(err, errs.NotFound) {
+	if _, err := h.RunYes(infra.OpRepoDelete, `{"id":"`+id+`"}`); !errs.Has(err, errs.InTrash) {
 		t.Errorf("second delete: %v", err)
 	}
-	h.Fails(infra.OpRepoArchive, `{"id":"`+id+`"}`, errs.NotFound)
+	h.Fails(infra.OpRepoArchive, `{"id":"`+id+`"}`, errs.InTrash)
 	again := h.ID(h.Must(infra.OpRepoAdd, `{"mount_name":"api"}`))
 	if again == id {
 		t.Errorf("re-added repo reused the tombstoned id %s", id)

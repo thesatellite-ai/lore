@@ -741,3 +741,37 @@ func (e *Engine) rehome(ctx context.Context, res TrashResult, set map[ids.AnyID]
 	}
 	return res, nil
 }
+
+// InTrash is E_IN_TRASH when the row ref names is in the trash of an
+// attached store, else nil (DELETION 3.2: a show, edit or delete of a
+// trashed row says where it is and how to bring it back). Reads read a
+// trashed row as a tombstone (hideTrashed); a noun that got one from Get
+// asks here before answering "not found". A purged id is never in the
+// trash (rawTrashed hides it).
+func (e *Engine) InTrash(ctx context.Context, ref Ref) error {
+	table := ref.Table
+	if table == "" {
+		def, ok := e.reg.ByPrefix(ref.ID.Prefix())
+		if !ok {
+			return nil
+		}
+		table = def.Name
+	}
+	names := e.order
+	if ref.Store != "" {
+		names = []store.Source{ref.Store}
+	}
+	for _, name := range names {
+		if _, ok := e.stores[name]; !ok {
+			continue
+		}
+		r, ok, err := e.rawTrashed(ctx, name, table, ref.ID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return inTrashErr(r)
+		}
+	}
+	return nil
+}

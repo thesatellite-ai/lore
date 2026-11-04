@@ -187,7 +187,7 @@ func TestTagBindRefusals(t *testing.T) {
 	h.Fails("tag.attach", `{"on_table":"tasks","on_id":"`+mem+`","tag":"other"}`, errs.NotFound)
 	h.Fails("tag.attach", `{"on_table":"tasks","on_id":"tsk_01a1a67b1b617dc7acc5f1af36e0e000","tag":"other"}`, errs.NotFound)
 	h.MustYes("task.delete", `{"id":"`+task+`"}`)
-	if msg := h.Fails("tag.attach", `{"on_table":"tasks","on_id":"`+task+`","tag":"other"}`, errs.NotFound); !strings.Contains(msg, "deleted") {
+	if msg := h.Fails("tag.attach", `{"on_table":"tasks","on_id":"`+task+`","tag":"other"}`, errs.InTrash); !strings.Contains(msg, "in the trash") {
 		t.Fatalf("deleted row: %s", msg)
 	}
 }

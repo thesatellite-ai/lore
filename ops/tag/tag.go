@@ -444,8 +444,8 @@ func (o ops) bind(ctx context.Context, in BindIn, mustExist bool) (engine.Ref, r
 		return engine.Ref{}, row.Row{}, nil, lookup.BadID("tag: --on-id "+quote(in.OnID)+" is not an id of "+string(table)+" ("+string(def.Prefix)+"_…)", nil)
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id})
-	if err == nil && r.Deleted {
-		err = errs.New(errs.NotFound, "tag: "+id.String()+" is deleted")
+	if err == nil && r.Deleted { // DELETION 3.2: E_IN_TRASH for a trashed target
+		err = lookup.Gone(ctx, o.env, engine.Ref{Table: table, ID: id}, errs.New(errs.NotFound, "tag: "+id.String()+" is deleted"))
 	}
 	if err != nil {
 		return engine.Ref{}, row.Row{}, nil, err

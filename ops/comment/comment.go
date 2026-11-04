@@ -331,8 +331,8 @@ func (o ops) target(ctx context.Context, to store.Source, rawTable, rawID string
 		return "", ids.AnyID{}, lookup.BadID("comment: "+id.String()+" is not an id of "+string(tbl)+" ("+string(def.Prefix)+"_…)", nil)
 	}
 	_, r, err := o.env.Get(ctx, engine.Ref{Table: tbl, ID: id})
-	if err == nil && r.Deleted {
-		err = errs.New(errs.NotFound, "comment: "+id.String()+" is deleted")
+	if err == nil && r.Deleted { // DELETION 3.2: E_IN_TRASH for a trashed target
+		err = lookup.Gone(ctx, o.env, engine.Ref{Table: tbl, ID: id}, errs.New(errs.NotFound, "comment: "+id.String()+" is deleted"))
 	}
 	if err != nil {
 		return "", ids.AnyID{}, err

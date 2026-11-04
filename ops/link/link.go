@@ -369,8 +369,8 @@ func (o ops) entity(ctx context.Context, raw string) (row.Table, ids.AnyID, bool
 	}
 	if core {
 		_, r, gerr := o.env.Get(ctx, engine.Ref{Table: name, ID: id})
-		if gerr == nil && r.Deleted {
-			gerr = errs.New(errs.NotFound, "entity "+id.String()+" is deleted")
+		if gerr == nil && r.Deleted { // DELETION 3.2: E_IN_TRASH for a trashed end
+			gerr = lookup.Gone(ctx, o.env, engine.Ref{Table: name, ID: id}, errs.New(errs.NotFound, "entity "+id.String()+" is deleted"))
 		}
 		if gerr != nil {
 			return "", ids.AnyID{}, false, gerr

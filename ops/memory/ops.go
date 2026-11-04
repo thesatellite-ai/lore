@@ -416,8 +416,8 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	if r.Deleted {
-		return ShowOut{}, errs.New(errs.NotFound, "memory "+id.String()+" is deleted")
+	if r.Deleted { // DELETION 3.2: E_IN_TRASH for a trashed memory
+		return ShowOut{}, lookup.Gone(ctx, o.env, engine.Ref{Store: src, Table: table, ID: id.Any()}, errs.New(errs.NotFound, "memory "+id.String()+" is deleted"))
 	}
 	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(LabelerOf(o.env), src, r)}, nil
 }

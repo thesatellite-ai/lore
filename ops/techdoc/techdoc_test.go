@@ -107,9 +107,9 @@ func TestTechdoc(t *testing.T) {
 	if got, want := opstest.Text(h.MustYes("techdoc.delete", `{"id":"`+ids[0]+`"}`)), "✓ "+ids[0]+" deleted (hard)\n"; got != want {
 		t.Errorf("delete line %q", got)
 	}
-	msg := h.Fails("techdoc.show", `{"id":"`+ids[0]+`"}`, errs.NotFound)
-	if !strings.Contains(msg, `techdoc "`+ids[0]+`" not found`) {
-		t.Errorf("not found message %q", msg)
+	msg := h.Fails("techdoc.show", `{"id":"`+ids[0]+`"}`, errs.InTrash) // DELETION 3.2
+	if !strings.Contains(msg, ids[0]+` is in the trash`) {
+		t.Errorf("in-trash message %q", msg)
 	}
 	if strings.Contains(h.JSON(h.Must("techdoc.search", `{"query":"spec"}`)), ids[0]) {
 		t.Error("search finds a deleted techdoc")

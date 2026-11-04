@@ -81,7 +81,7 @@ func TestReminderLifecycle(t *testing.T) {
 	if strings.Contains(opstest.Text(h.Must("reminder.list", ``)), rfc) {
 		t.Fatal("deleted reminder listed")
 	}
-	h.Fails("reminder.done", `{"id":"`+rfc+`"}`, errs.NotFound)
+	h.Fails("reminder.done", `{"id":"`+rfc+`"}`, errs.InTrash)
 	if got := opstest.Text(h.Must("reminder.list", `{"store":"repo","done":true}`)); !strings.Contains(got, pid) {
 		t.Fatalf("--store repo: %q", got)
 	}

@@ -390,7 +390,11 @@ func Show(ctx context.Context, env Env, n Noun, raw string) (Item, error) {
 	}
 	src, r, err := env.Get(ctx, engine.Ref{Table: n.Table, ID: id})
 	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
-		return Item{}, errs.New(errs.NotFound, n.Name+" "+Quote(raw)+" not found")
+		notFound := errs.New(errs.NotFound, n.Name+" "+Quote(raw)+" not found")
+		if err == nil {
+			return Item{}, lookup.Gone(ctx, env, engine.Ref{Table: n.Table, ID: id}, notFound) // DELETION 3.2: E_IN_TRASH
+		}
+		return Item{}, notFound
 	}
 	if err != nil {
 		return Item{}, err

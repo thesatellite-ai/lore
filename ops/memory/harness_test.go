@@ -79,7 +79,7 @@ func TestDeleteIsATombstone(t *testing.T) {
 	id := h.ID(h.Must(memory.OpAdd, `{"body":"ephemeral gateway"}`))
 	h.Fails(memory.OpDelete, `{"id":"`+id+`"}`, errs.NeedsConfirm)
 	h.MustYes(memory.OpDelete, `{"id":"`+id+`"}`)
-	h.Fails(memory.OpShow, `{"id":"`+id+`"}`, errs.NotFound)
+	h.Fails(memory.OpShow, `{"id":"`+id+`"}`, errs.InTrash) // DELETION 3.2: says where it is
 	if got := opstest.Text(h.Must(memory.OpList, ``)); got != "(no memories)\n" {
 		t.Fatalf("list %q", got)
 	}

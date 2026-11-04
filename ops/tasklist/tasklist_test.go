@@ -67,7 +67,7 @@ func TestTasklistLifecycle(t *testing.T) {
 	if strings.Contains(opstest.Text(h.Must("tasklist.list", ``)), id) {
 		t.Fatal("deleted tasklist listed")
 	}
-	h.Fails("tasklist.show", `{"id":"`+id+`"}`, errs.NotFound)
+	h.Fails("tasklist.show", `{"id":"`+id+`"}`, errs.InTrash)
 }
 
 // TestTasklistRefusals: title and body required (v0.1.17 "body required"),

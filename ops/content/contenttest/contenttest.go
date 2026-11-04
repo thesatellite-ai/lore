@@ -666,9 +666,9 @@ func checkDelete(t *testing.T, s Spec, r Runner) {
 		t.Errorf("delete text %q, want %q", got, want)
 	}
 	_, err = r.Run(s.Noun+".show", `{"id":"`+id+`"}`)
-	Fails(t, "show deleted", err, errs.NotFound)
+	Fails(t, "show deleted", err, errs.InTrash) // DELETION 3.2: says where it is
 	_, err = r.RunYes(s.Noun+".delete", `{"id":"`+id+`"}`)
-	Fails(t, "delete twice", err, errs.NotFound)
+	Fails(t, "delete twice", err, errs.InTrash)
 	list := Text(must(t, r, s.Noun+".list", ""))
 	if strings.Contains(list, id) || !strings.Contains(list, keep) {
 		t.Errorf("list after delete: %q", list)
@@ -678,6 +678,6 @@ func checkDelete(t *testing.T, s Spec, r Runner) {
 	}
 	if s.EditWord != "" {
 		_, err = r.Run(s.Noun+".edit", s.EditTitle(id, "x"))
-		Fails(t, "edit deleted", err, errs.NotFound)
+		Fails(t, "edit deleted", err, errs.InTrash)
 	}
 }

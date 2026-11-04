@@ -200,9 +200,9 @@ func TestIDErrors(t *testing.T) {
 	}
 	h.MustYes(rule.OpDelete, `{"id":"`+id+`"}`)
 	for _, name := range []string{rule.OpShow, rule.OpArchive} {
-		h.Fails(name, `{"id":"`+id+`"}`, errs.NotFound)
+		h.Fails(name, `{"id":"`+id+`"}`, errs.InTrash)
 	}
-	h.Fails(rule.OpEdit, `{"id":"`+id+`","body":"y"}`, errs.NotFound)
+	h.Fails(rule.OpEdit, `{"id":"`+id+`","body":"y"}`, errs.InTrash)
 }
 
 // TestDeleteAsksFirst: delete always asks (v0.1.17 wanted --confirm); a

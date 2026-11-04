@@ -134,7 +134,7 @@ func TestIDErrors(t *testing.T) {
 	id := add(t, h, `{"title":"A","body":"a"}`)
 	h.Fails(decision.OpDelete, `{"id":"`+id+`"}`, errs.NeedsConfirm)
 	h.MustYes(decision.OpDelete, `{"id":"`+id+`"}`)
-	h.Fails(decision.OpShow, `{"id":"`+id+`"}`, errs.NotFound)
+	h.Fails(decision.OpShow, `{"id":"`+id+`"}`, errs.InTrash)
 }
 
 // TestTagFilterCold: a tagged decision read back cold (every row decoded

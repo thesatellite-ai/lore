@@ -50,6 +50,6 @@ func TestTaskTreeRules(t *testing.T) {
 	h.Fails(opstask.OpDelete, `{"id":"`+a+`"}`, errs.NeedsConfirm)
 	h.MustYes(opstask.OpDelete, `{"id":"`+a+`"}`)
 	for _, id := range []string{a, b, c, d} {
-		h.Fails(opstask.OpShow, `{"id":"`+id+`"}`, errs.NotFound)
+		h.Fails(opstask.OpShow, `{"id":"`+id+`"}`, errs.InTrash) // the subtree went to the trash with a
 	}
 }

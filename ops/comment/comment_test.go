@@ -113,7 +113,7 @@ func TestCommentTargets(t *testing.T) {
 		t.Fatalf("non-core target: %q", got)
 	}
 	h.MustYes("task.delete", `{"id":"`+task+`"}`)
-	if msg := h.Fails("comment.add", `{"on_table":"tasks","on_id":"`+task+`","body":"hi"}`, errs.NotFound); !strings.Contains(msg, "deleted") {
+	if msg := h.Fails("comment.add", `{"on_table":"tasks","on_id":"`+task+`","body":"hi"}`, errs.InTrash); !strings.Contains(msg, "in the trash") {
 		t.Fatalf("deleted target: %s", msg)
 	}
 }

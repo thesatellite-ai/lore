@@ -101,8 +101,8 @@ func TestMissionDeleteClearsTasks(t *testing.T) {
 	child := h.Seed(schema.TableTasks, map[string]string{"mission_id": opstest.Quote(id)})
 	h.Fails("mission.delete", `{"id":"`+id+`"}`, errs.NeedsConfirm)
 	h.MustYes("mission.delete", `{"id":"`+id+`"}`)
-	h.Fails("mission.show", `{"id":"`+id+`"}`, errs.NotFound)
-	h.Fails("task.show", `{"id":"`+child+`"}`, errs.NotFound)
+	h.Fails("mission.show", `{"id":"`+id+`"}`, errs.InTrash)
+	h.Fails("task.show", `{"id":"`+child+`"}`, errs.InTrash) // DELETION 3.4: its tasks went to the trash with it
 }
 
 // TestMissionRefusals: empty title, bad target date, the status closed

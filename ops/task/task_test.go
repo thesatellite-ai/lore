@@ -108,6 +108,12 @@ func TestNotFoundAndBadIDs(t *testing.T) {
 				in = `{"id":"` + id + `"}`
 			}
 			_, err := h.RunYes(name, in)
+			if id == gone { // DELETION 3.2: a trashed task says where it is
+				if !errs.Has(err, errs.InTrash) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore "+id) {
+					t.Errorf("%s %s: %v, want E_IN_TRASH", name, id, err)
+				}
+				continue
+			}
 			if !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), `task "`+id+`" not found`) {
 				t.Errorf("%s %s: %v", name, id, err)
 			}

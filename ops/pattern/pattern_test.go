@@ -135,7 +135,7 @@ func TestSupersedes(t *testing.T) {
 	if len(f.deleted) != 1 {
 		t.Fatalf("rollback deleted %v, want the new pattern", f.deleted)
 	}
-	if _, err := h.Run("pattern.show", `{"id":"`+f.deleted[0]+`"}`); !errs.Has(err, errs.NotFound) {
+	if _, err := h.Run("pattern.show", `{"id":"`+f.deleted[0]+`"}`); !errs.Has(err, errs.InTrash) {
 		t.Errorf("the rolled-back pattern is still live: %v", err)
 	}
 	if got := contenttest.Str(t, h.JSON(h.Must("pattern.show", `{"id":"`+next+`"}`)), "data", "superseded_by_id"); got != "" {

@@ -255,7 +255,11 @@ func Out(src store.Source, w engine.Written, human string) WriteOut {
 func Get(ctx context.Context, env Env, noun string, table row.Table, id ids.AnyID) (store.Source, row.Row, error) {
 	src, r, err := env.Get(ctx, engine.Ref{Table: table, ID: id})
 	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
-		return "", row.Row{}, errs.New(errs.NotFound, noun+" "+Quote(id.String())+" not found")
+		notFound := errs.New(errs.NotFound, noun+" "+Quote(id.String())+" not found")
+		if err == nil {
+			return "", row.Row{}, lookup.Gone(ctx, env, engine.Ref{Table: table, ID: id}, notFound) // DELETION 3.2: E_IN_TRASH
+		}
+		return "", row.Row{}, notFound
 	}
 	return src, r, err
 }

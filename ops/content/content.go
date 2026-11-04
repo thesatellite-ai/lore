@@ -277,7 +277,11 @@ func (o Ops) Live(ctx context.Context, raw string) (ids.AnyID, store.Source, row
 	}
 	src, r, err := o.Env.Get(ctx, engine.Ref{Table: o.Table, ID: id})
 	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
-		return ids.AnyID{}, "", row.Row{}, errs.New(errs.NotFound, o.Noun+" "+QuoteID(raw)+" not found")
+		notFound := errs.New(errs.NotFound, o.Noun+" "+QuoteID(raw)+" not found")
+		if err == nil {
+			return ids.AnyID{}, "", row.Row{}, lookup.Gone(ctx, o.Env, engine.Ref{Table: o.Table, ID: id}, notFound) // DELETION 3.2
+		}
+		return ids.AnyID{}, "", row.Row{}, notFound
 	}
 	if err != nil {
 		return ids.AnyID{}, "", row.Row{}, err

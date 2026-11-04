@@ -151,8 +151,8 @@ func TestAddLinesAndText(t *testing.T) {
 	if got, want := opstest.Text(h.MustYes("handoff.delete", `{"id":"`+id+`"}`)), "✓ "+id+" deleted (hard)\n"; got != want {
 		t.Errorf("delete line %q", got)
 	}
-	h.Fails("handoff.show", `{"id":"`+id+`"}`, errs.NotFound)
-	h.Fails("handoff.ack", `{"id":"`+id+`"}`, errs.NotFound)
+	h.Fails("handoff.show", `{"id":"`+id+`"}`, errs.InTrash)
+	h.Fails("handoff.ack", `{"id":"`+id+`"}`, errs.InTrash)
 }
 
 // TestTaskFillsMission: --task records the task and its mission; a task

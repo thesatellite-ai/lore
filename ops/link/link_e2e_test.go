@@ -176,7 +176,7 @@ func TestLinkEntityChecks(t *testing.T) {
 	if _, err := h.App.Delete(context.Background(), refOf(tid)); err != nil {
 		t.Fatal(err)
 	}
-	if msg := h.Fails("link.add", `{"entity":"`+v017Task+`","commit":"`+v017SHA+`"}`, errs.NotFound); !strings.Contains(msg, "deleted") {
+	if msg := h.Fails("link.add", `{"entity":"`+v017Task+`","commit":"`+v017SHA+`"}`, errs.InTrash); !strings.Contains(msg, "in the trash") {
 		t.Fatalf("deleted target: %s", msg)
 	}
 	if msg := h.Fails("link.add", `{"entity":"xyz_01a1a67b1b617dc7acc5f1af36e0e979","commit":"`+v017SHA+`"}`, errs.InvalidInput); !strings.Contains(msg, "unknown ID prefix") {

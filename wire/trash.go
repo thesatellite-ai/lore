@@ -32,6 +32,16 @@ func (a *App) TrashTarget(ctx context.Context, target string) (engine.TrashResul
 	return eng.TrashTarget(ctx, target)
 }
 
+// InTrash implements the lookup.Trasher upgrade (DELETION 3.2): E_IN_TRASH
+// for a row in the trash of an attached store, else nil.
+func (a *App) InTrash(ctx context.Context, ref engine.Ref) error {
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return err
+	}
+	return eng.InTrash(ctx, ref)
+}
+
 // TableSchema implements opstrash.Env.
 func (a *App) TableSchema(ctx context.Context, table row.Table) (schema.TableDef, bool) {
 	eng, err := a.Engine(ctx)
