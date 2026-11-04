@@ -334,7 +334,11 @@ func pickLinkStore(ctx context.Context, m *stores.Manager, org *lorecfg.Org, pla
 		if err != nil {
 			return nil, err
 		}
-		fr, err := st.Fetch(ctx, false)
+		// Always fetch now (not after live.fetch_ttl): a link is a rare,
+		// deliberate change to the team's guards, and a clone fetched a
+		// moment before the store got its first commit (a `lore store
+		// init` just pushed it) would otherwise report "no branch".
+		fr, err := st.Fetch(ctx, true)
 		if err != nil {
 			return nil, err
 		}

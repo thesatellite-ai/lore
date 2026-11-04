@@ -12,8 +12,18 @@ import (
 // Folder names under ~/.lore (§1 "Files and folders", §5.3). Named once so
 // doctor, forget, prune and the tests agree on where things are.
 const (
-	// ClonesDir holds one bare clone per store URL.
-	ClonesDir = "clones"
+	// ClonesDir holds this package's bare clone per store URL. It is NOT
+	// the 0.1.18 core's folder (adapters/backend/git ClonesDir = "clones"):
+	// the core checks the store branch out in <clone>/work, and this
+	// package moves refs/heads/<branch> of its bare clone directly, which
+	// git refuses for a branch checked out in a worktree ("refusing to move
+	// a checked-out branch"). So the two never share a clone; both push to
+	// the same remote and reconcile through it (this package replays on a
+	// rejected push, the core merges on sync). A v0.1.17 clone left at
+	// ~/.lore/clones/<host>/<owner>/<repo>.git is adopted by the core,
+	// unpushed branch commits included (its worktree starts on the existing
+	// local branch).
+	ClonesDir = "clones-v017"
 	// WorktreesDir holds optional browsing worktrees (`lore store open`).
 	WorktreesDir = "worktrees"
 	// CacheDir holds per-project caches, link indexes and store project
