@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -460,4 +462,96 @@ func (r renderReport) reportText() string {
 // reportJSON is the --report --json body.
 func (r renderReport) reportJSON() ([]byte, error) {
 	return json.MarshalIndent(map[string]renderReport{"data": r}, "", "  ")
+}
+
+// contextDoctor is lore doctor's context rows (6.11, CQ7): the size of
+// .lore/LORE.md against its budget (a warning above warn_at, and over the
+// budget), and for each Claude Code-style target the launch set: every
+// file that tool loads at start, the user-level ~/.claude/CLAUDE.md
+// reported with its share (lore never edits it). The CQ8 measurement of
+// the tool's real warning is a release checklist step, not built here.
+func contextDoctor(ctx context.Context, root string) (warnings, notes []string) {
+	pick, err := resolveTargets(ctx, root, nil, coreContextTargets)
+	if err != nil {
+		return nil, []string{"context: targets not resolved: " + err.Error()}
+	}
+	profiles := make([]toolprofile.Profile, 0, len(pick.targets))
+	for _, t := range pick.targets {
+		profiles = append(profiles, t.profile)
+	}
+	cs := loadContextSettings(ctx, profiles)
+	lore := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
+	size := fileSize(lore)
+	if size < 0 {
+		return nil, []string{"context: " + toolprofile.CanonicalOutput + " not rendered yet (lore render)"}
+	}
+	line := fmt.Sprintf("context: %s %d of %d bytes (%d%%, profile %s); warn at %d%%",
+		toolprofile.CanonicalOutput, size, cs.Budget, size*percent/max(cs.Budget, 1), cs.Profile, cs.WarnPct)
+	if size*percent > cs.Budget*cs.WarnPct {
+		warnings = append(warnings, line+" — lore render --report, lore lint --context")
+	} else {
+		notes = append(notes, line)
+	}
+	for _, t := range pick.targets {
+		if t.profile.Import != toolprofile.ImportAt || !t.profile.HasPointerFile() {
+			continue
+		}
+		notes = append(notes, launchSet(root, t.profile, size))
+	}
+	return warnings, notes
+}
+
+// launchSet adds up the files a @import tool loads at start (6.11, CQ7).
+func launchSet(root string, p toolprofile.Profile, loreSize int) string {
+	parts := []string{}
+	total := loreSize
+	if home, err := os.UserHomeDir(); err == nil && p.Name == toolprofile.NameClaudeCode {
+		if n := fileSize(filepath.Join(home, ".claude", "CLAUDE.md")); n >= 0 {
+			total += n
+			parts = append(parts, fmt.Sprintf("~/.claude/CLAUDE.md %d (not edited by lore)", n))
+		}
+	}
+	if n := fileSize(filepath.Join(root, filepath.FromSlash(p.PointerFile))); n >= 0 {
+		total += n
+		parts = append(parts, fmt.Sprintf("%s %d", p.PointerFile, n))
+	}
+	parts = append(parts, fmt.Sprintf("%s %d", toolprofile.CanonicalOutput, loreSize))
+	local := strings.TrimSuffix(p.PointerFile, ".md") + ".local.md"
+	if data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(local))); err == nil {
+		total += len(data)
+		parts = append(parts, fmt.Sprintf("%s %d", local, len(data)))
+		priv, privBytes := 0, 0
+		for _, l := range strings.Split(string(data), "\n") {
+			if f, ok := strings.CutPrefix(strings.TrimSpace(l), "@"); ok {
+				if n := fileSize(expandHome(f)); n >= 0 {
+					priv++
+					privBytes += n
+				}
+			}
+		}
+		if priv > 0 {
+			total += privBytes
+			parts = append(parts, fmt.Sprintf("%d private store files %d", priv, privBytes))
+		}
+	}
+	return fmt.Sprintf("context: launch set for %s: %s = %d bytes", p.Name, strings.Join(parts, " + "), total)
+}
+
+// fileSize is a file's size, -1 when it cannot be read.
+func fileSize(path string) int {
+	st, err := os.Stat(path)
+	if err != nil || st.IsDir() {
+		return -1
+	}
+	return int(st.Size())
+}
+
+// expandHome turns a leading "~/" into the home directory.
+func expandHome(p string) string {
+	if rest, ok := strings.CutPrefix(p, "~/"); ok {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, rest)
+		}
+	}
+	return p
 }
