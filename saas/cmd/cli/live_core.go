@@ -244,7 +244,15 @@ func (b *liveBackend) landedOnDefault(ctx context.Context, s *liveSession, k liv
 	if err != nil || strings.TrimSpace(string(head)) != branch {
 		return store.Row{}, false
 	}
-	raw, ok, err := s.repo.ReadFile(ctx, "refs/remotes/"+s.ref.RemoteName+"/"+branch, mainDataPath(b.folder, k.Table+"/"+k.ID+storeRowFileExt))
+	path := mainDataPath(b.folder, k.Table+"/"+k.ID+storeRowFileExt)
+	// A row this checkout's own commit holds was deleted here on purpose
+	// (git rm, or the file removed): it did not "land and wait to be
+	// pulled", so it is not read through (fixbatch A1: an edit of it then
+	// failed with E_STALE instead of E_NOT_FOUND).
+	if _, inHead, herr := s.repo.ReadFile(ctx, "HEAD", path); herr != nil || inHead {
+		return store.Row{}, false
+	}
+	raw, ok, err := s.repo.ReadFile(ctx, "refs/remotes/"+s.ref.RemoteName+"/"+branch, path)
 	if err != nil || !ok {
 		return store.Row{}, false
 	}
@@ -354,6 +362,16 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 			place = rowroute.PlaceLive
 		}
 		if place != rowroute.PlaceLive {
+			if !inBranch && !inLive && !ch.Expect.IsZero() {
+				// An edit of a row Get served from origin/<default>
+				// (landedOnDefault): the edit materialises that copy
+				// into .lore/data, so the branch file it expects is
+				// "none" — but only when the caller read exactly that
+				// copy (its HLC), never a stale one.
+				if landed, ok := b.landedOnDefault(ctx, s, k); ok && landed.HLC.Compare(ch.Expect) == 0 {
+					ch.Expect = hlc.HLC{}
+				}
+			}
 			branch = append(branch, ch)
 			continue
 		}
