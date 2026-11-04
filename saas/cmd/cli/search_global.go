@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"saas/pkg/constants"
+	"slices"
 	"sort"
 	"strings"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opssql "github.com/thesatellite-ai/lore/ops/sql"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -106,6 +108,8 @@ var globalSearchTargets = []globalSearchTarget{
 	{entity: "plan", table: schema.TablePlans, label: searchLabel{field: "title"}, hasProject: true},
 	{entity: "playbook", table: schema.TablePlaybooks, label: searchLabel{field: "name"}, hasProject: true, hasArchived: true},
 	{entity: "prompt", table: schema.TablePrompts, label: searchLabel{field: "name"}, hasProject: true, hasArchived: true},
+	// resources (RES 3.12, R8): name, kind name and non-sensitive field values (the cache's resources FTS)
+	{entity: searchEntityResource, table: schema.TableResources, label: searchLabel{field: "name"}, hasArchived: true},
 	{entity: "rule", table: schema.TableRules, label: searchLabel{field: "body", trunc: true}, hasProject: true, hasRepo: true, hasArchived: true},
 	{entity: "snapshot", table: schema.TableSnapshots, label: searchLabel{field: "title"}, hasProject: true, hasArchived: true},
 	{entity: "suggestion", table: schema.TableSuggestions, label: searchLabel{field: "title"}, hasProject: true},
@@ -217,11 +221,29 @@ you want to scope to one type. This is the cross-entity hammer.`,
 				return err
 			}
 
+			// field:value terms naming a resource field are typed conditions
+			// (RES 3.12); the rest is the full-text query.
+			conds, text, err := resourceFieldTerms(ctx, query)
+			if err != nil {
+				return err
+			}
+
 			// RRF merge. Per-table rank 0 is best; score = sum(1 / (k + rank)).
 			merged := make([]globalSearchHit, 0, limit)
 			matchedTables := 0
 			for _, t := range targets {
-				hits, err := searchCoreTable(ctx, eng, t, query, sc, perTableLimit)
+				var hits []globalSearchHit
+				var err error
+				switch {
+				case len(conds) > 0 && t.entity == searchEntityResource:
+					hits, err = searchResourceFields(ctx, eng, t, conds, text, sc, perTableLimit)
+				case len(conds) > 0 && text == "":
+					continue // only field conditions: nothing for other tables
+				case len(conds) > 0:
+					hits, err = searchCoreTable(ctx, eng, t, text, sc, perTableLimit)
+				default:
+					hits, err = searchCoreTable(ctx, eng, t, query, sc, perTableLimit)
+				}
 				if err != nil {
 					return err
 				}
@@ -471,3 +493,114 @@ var snippetMarks = strings.NewReplacer("<b>", "", "</b>", "")
 
 // plainSnippet is a snippet as the terminal shows it.
 func plainSnippet(s string) string { return snippetMarks.Replace(s) }
+
+// searchEntityResource is the resources entry of the fan-out.
+const searchEntityResource = "resource"
+
+// resourceCond is one field:value term of a search: a resource field name
+// and the value it must equal (case-insensitive, as text).
+type resourceCond struct {
+	field, value string
+}
+
+// resourceFieldTerms splits query (RES 3.12: "field:value in a search
+// matches resource fields") into conditions, for every term name:value or
+// name=value whose name is a field of some kind in this repo's view, and
+// the remaining free text. With no such term it returns no conditions and
+// the query unchanged. Sensitive values are masked in the lens, so a
+// condition on a sensitive field never matches (fail closed).
+func resourceFieldTerms(ctx context.Context, query string) ([]resourceCond, string, error) {
+	rest := strings.Fields(query)
+	if !slices.ContainsFunc(rest, func(w string) bool { i := strings.IndexAny(w, ":="); return i > 0 && i < len(w)-1 }) {
+		return nil, query, nil
+	}
+	known, err := resourceFieldNames(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	var conds []resourceCond
+	text := rest[:0:0]
+	for _, w := range rest {
+		i := strings.IndexAny(w, ":=")
+		if i > 0 && i < len(w)-1 && known[w[:i]] {
+			conds = append(conds, resourceCond{field: w[:i], value: strings.Trim(w[i+1:], `"'`)})
+			continue
+		}
+		text = append(text, w)
+	}
+	return conds, strings.Join(text, " "), nil
+}
+
+// resourceFieldNames is every kind field name in this repo's lens.
+func resourceFieldNames(ctx context.Context) (map[string]bool, error) {
+	res, err := coreApp.SQL(ctx, opssql.Request{Query: `SELECT DISTINCT name FROM kind_fields_all`, Timeout: opssql.DefaultTimeout})
+	if err != nil {
+		if errs.Has(err, errs.InvalidInput) {
+			return map[string]bool{}, nil // no kinds table in this cache yet
+		}
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, r := range res.Rows {
+		if len(r) > 0 {
+			out[r[0].String()] = true
+		}
+	}
+	return out, nil
+}
+
+// sqlText is s as a SQL string literal.
+func sqlText(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
+// searchResourceFields is the resources entry when the query has field
+// conditions: resources of this repo whose fields equal every condition
+// (case-insensitive), narrowed to the full-text hits of text when text is
+// not empty. Each hit's snippet names the matched fields.
+func searchResourceFields(ctx context.Context, eng *engine.Engine, t globalSearchTarget, conds []resourceCond, text string, sc globalSearchScope, perTable int) ([]globalSearchHit, error) {
+	q := `SELECT r.id FROM resources_all r WHERE r.source = ` + sqlText(string(store.SourceRepo))
+	var said []string
+	for _, c := range conds {
+		q += ` AND EXISTS (SELECT 1 FROM kind_fields_all f WHERE f.kind_id = r.kind AND f.name = ` + sqlText(c.field) +
+			` AND lower(CAST(json_extract(r.fields, '$."' || f.id || '".v') AS TEXT)) = lower(` + sqlText(c.value) + `))`
+		said = append(said, c.field+": "+c.value)
+	}
+	q += ` ORDER BY r.name`
+	res, err := coreApp.SQL(ctx, opssql.Request{Query: q, Timeout: opssql.DefaultTimeout})
+	if err != nil {
+		return nil, err
+	}
+	var only map[string]bool
+	if text != "" {
+		ft, err := coreApp.Search(ctx, t.table, quoteSearchTerms(text), searchFetch)
+		if err != nil {
+			return nil, err
+		}
+		only = map[string]bool{}
+		for _, h := range ft {
+			only[h.ID.String()] = true
+		}
+	}
+	list, err := eng.List(ctx, store.SourceRepo, t.table)
+	if err != nil {
+		return nil, err
+	}
+	rows := make(map[string]row.Row, len(list))
+	for _, r := range list {
+		rows[r.ID.String()] = r
+	}
+	out := make([]globalSearchHit, 0, perTable)
+	for _, cells := range res.Rows {
+		if len(out) == perTable || len(cells) == 0 {
+			break
+		}
+		id := cells[0].String()
+		r, ok := rows[id]
+		if !ok || !sc.keeps(t, r) || (only != nil && !only[id]) {
+			continue
+		}
+		h := globalHitOf(t, id, "", r)
+		h.Body = searchField(r, "name") + "  (field " + strings.Join(said, ", ") + ")"
+		out = append(out, h)
+	}
+	return out, nil
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -99,7 +100,24 @@ func (c *Cache) upsertKind(ctx context.Context, tx *sql.Tx, st state, kind ids.I
 			}
 		}
 	}
-	return c.upsertTyped(ctx, tx, st.plans[info.table], source, r, vals)
+	if err := c.upsertTyped(ctx, tx, st.plans[info.table], source, r, vals); err != nil {
+		return err
+	}
+	// Re-index now that the kind is known (see indexResource). During a
+	// table sync the kind table may be refilled before the resources FTS
+	// table exists; the resources refill indexes everything then.
+	rp, hasRes := st.plans[schema.TableResources]
+	if !hasRes || rp.fts == "" {
+		return nil
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE name = ?`, rp.fts).Scan(&n); err != nil {
+		return dbErr("find resources fts", err)
+	}
+	if n == 0 {
+		return nil
+	}
+	return indexResource(ctx, tx, rp, source, r, ftsInfoOf(info))
 }
 
 // entryValue reads the "v" of one resources.fields entry as f's kind,
@@ -138,8 +156,20 @@ func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 	if _, err = tx.ExecContext(ctx, p.sql.insert, string(arr)); err != nil {
 		return dbErr("upsert "+p.def.Name.String(), err)
 	}
-	if err := upsertFTS(ctx, tx, p, source, r.ID, vals); err != nil {
-		return err
+	ftsErr := error(nil)
+	if p.def.Name == schema.TableResources {
+		info := resFTSInfo{}
+		if kind := kindOf(r); !kind.IsZero() {
+			if info, ftsErr = ftsInfoFromTables(ctx, tx, kind); ftsErr != nil {
+				return ftsErr
+			}
+		}
+		ftsErr = indexResource(ctx, tx, p, source, r, info)
+	} else {
+		ftsErr = upsertFTS(ctx, tx, p, source, r.ID, vals)
+	}
+	if ftsErr != nil {
+		return ftsErr
 	}
 	if err := fillJoins(ctx, tx, p, source, r.ID, vals); err != nil {
 		return err
@@ -394,4 +424,118 @@ func (c *Cache) expandField(ctx context.Context, tx *sql.Tx, table row.Table, id
 		return dbErr("record expansion", err)
 	}
 	return nil
+}
+
+// resFTSInfo is what indexing one resource needs from its kind: the kind
+// name and, per fld_ id, whether its value may be indexed (known, not
+// sensitive, not a secret_ref: a locator is not text to find).
+type resFTSInfo struct {
+	kindName  string
+	indexable map[string]bool
+}
+
+// ftsInfoOf reads it from the kind's state (upsertKind: always current,
+// built from `_rows` before the batch is projected).
+func ftsInfoOf(info kindInfo) resFTSInfo {
+	out := resFTSInfo{kindName: strings.TrimPrefix(info.table.String(), schema.KindTablePrefix), indexable: map[string]bool{}}
+	for id, f := range info.fields {
+		out.indexable[id] = !f.Sensitive && f.Kind != value.KindSecretRef
+	}
+	return out
+}
+
+// The fixed statements of ftsInfoFromTables (constant identifiers only).
+const (
+	kindNameQuery      = `SELECT "` + fieldName + `" FROM "` + schema.TableKinds + `" WHERE id = ? ORDER BY "` + colSource + `" LIMIT 1`
+	kindFieldsFTSQuery = `SELECT id, "type", MAX(COALESCE("` + fieldSensitive + `", 0)) FROM "` + schema.TableKindFields + `" WHERE "` + fieldKindID + `" = ? GROUP BY id, "type"`
+)
+
+// ftsInfoFromTables reads it from the kinds / kind_fields tables (the
+// resources upsert and refill, which have no state; both tables sort
+// before `resources`, so a refill finds them filled). Rows of a kind in
+// the batch being applied are not there yet: upsertKind re-indexes those
+// resources when the kind's table is filled. Any copy calling a field
+// sensitive hides it (the safe answer when two sources disagree).
+func ftsInfoFromTables(ctx context.Context, tx *sql.Tx, kind ids.ID[ids.Kind]) (resFTSInfo, error) {
+	out := resFTSInfo{indexable: map[string]bool{}}
+	var name sql.NullString
+	err := tx.QueryRowContext(ctx, kindNameQuery, kind.String()).Scan(&name)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return out, dbErr("read kind name", err)
+	}
+	out.kindName = name.String
+	rs, err := tx.QueryContext(ctx, kindFieldsFTSQuery, kind.String())
+	if err != nil {
+		return out, dbErr("read kind fields", err)
+	}
+	for rs.Next() {
+		var id, typ string
+		var sensitive int
+		if err := rs.Scan(&id, &typ, &sensitive); err != nil {
+			return out, errors.Join(dbErr("read kind fields", err), rs.Close())
+		}
+		out.indexable[id] = sensitive == 0 && typ != string(value.KindSecretRef)
+	}
+	if err := errors.Join(rs.Err(), rs.Close()); err != nil {
+		return out, dbErr("read kind fields", err)
+	}
+	return out, nil
+}
+
+// indexResource writes resource r's full-text row (RES 3.12, R8): its
+// name, its kind's name and every field value info marks indexable. A
+// value whose field is unknown is left out (fail closed: it might be
+// sensitive).
+func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row.Row, info resFTSInfo) error {
+	vals := map[string]value.Value{}
+	if v, ok := r.Fields[fieldName]; ok {
+		vals[fieldName] = v
+	}
+	if t, err := value.TextOf(info.kindName); err == nil && info.kindName != "" {
+		vals[ftsResKind] = t
+	}
+	text, err := resourceValueText(r, info.indexable)
+	if err != nil {
+		return err
+	}
+	if t, terr := value.TextOf(text); terr == nil && text != "" {
+		vals[ftsResValues] = t
+	}
+	return upsertFTS(ctx, tx, p, source, r.ID, vals)
+}
+
+// resourceValueText is the searchable text of r's indexable field values,
+// separated by spaces (a JSON string as its text, anything else as its
+// canonical JSON, whose string and number leaves the tokenizer splits).
+func resourceValueText(r row.Row, indexable map[string]bool) (string, error) {
+	raw, ok := value.ObjectForm(r.Fields[fieldResVals])
+	if !ok {
+		return "", nil
+	}
+	members, err := canon.Members(raw.Raw())
+	if err != nil {
+		return "", errs.Wrap(errs.DBCorrupt, "sqlite cache: resource "+r.ID.String()+" fields", err)
+	}
+	var parts []string
+	for _, m := range members {
+		if !indexable[m.Key] {
+			continue
+		}
+		entry, err := canon.Members(m.Raw)
+		if err != nil {
+			continue // a broken entry: the validator reports it
+		}
+		for _, e := range entry {
+			if e.Key != resValueKey {
+				continue
+			}
+			var s string
+			if json.Unmarshal(e.Raw, &s) == nil {
+				parts = append(parts, s)
+			} else if string(e.Raw) != "null" {
+				parts = append(parts, string(e.Raw))
+			}
+		}
+	}
+	return strings.Join(parts, " "), nil
 }

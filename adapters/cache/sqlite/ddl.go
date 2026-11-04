@@ -153,6 +153,9 @@ func affinity(k value.Kind) (string, error) {
 // planFor builds the DDL of def. view is the stable view name of a kind
 // table ("" for built-ins).
 func planFor(def schema.TableDef, view string) (plan, error) {
+	if def.Name == schema.TableResources && len(def.FTS) == 0 {
+		def = resourceFTSDef(def)
+	}
 	p := plan{def: def, view: view}
 	tq, err := ident(def.Name.String())
 	if err != nil {
@@ -224,7 +227,17 @@ func planFor(def schema.TableDef, view string) (plan, error) {
 		p.create = append(p.create, "CREATE VIEW "+vq+" AS SELECT * FROM "+tq)
 		p.objects = append(p.objects, dbObject{Type: objView, Name: view})
 	}
-	sum := sha256.Sum256([]byte("layout " + strconv.Itoa(layoutVersion) + "\n" + strings.Join(p.create, ";\n")))
+	// A kind field turning sensitive must refill the kind table, because
+	// that refill (upsertKind → indexResource) is what drops its values
+	// from the resources full-text index (RES 3.12: sensitive values are
+	// never indexed); the DDL alone does not change.
+	var sensitive []string
+	for _, f := range def.Fields {
+		if f.Sensitive {
+			sensitive = append(sensitive, f.Name)
+		}
+	}
+	sum := sha256.Sum256([]byte("layout " + strconv.Itoa(layoutVersion) + "\n" + strings.Join(p.create, ";\n") + "\nsensitive " + strings.Join(sensitive, ",")))
 	p.fingerprint = hex.EncodeToString(sum[:])
 	return p, nil
 }
@@ -378,4 +391,24 @@ func dropStatement(o dbObject) (string, error) {
 		return "DROP TABLE IF EXISTS " + q, nil
 	}
 	return "", errs.New(errs.DBCorrupt, "sqlite cache: unknown object type "+quoteText(string(o.Type)))
+}
+
+// Resource full text (RESOURCES 3.12, R8): the `resources` table gets an
+// FTS table over its name plus two cache-only columns, the kind's name and
+// the resource's non-sensitive field values (indexResource fills them).
+// The schema declares no FTS for resources because the values live inside
+// the `fields` object, which only the cache unpacks.
+const (
+	ftsResKind   = "kind_name"
+	ftsResValues = "field_values"
+	// ftsWeightResValues ranks a value hit between the name (4) and the
+	// kind word (1), like the meta column's weight 2 (METADATA 3.17).
+	ftsWeightResValues = 2
+)
+
+// resourceFTSDef is def (the resources table) with its full-text columns.
+func resourceFTSDef(def schema.TableDef) schema.TableDef {
+	def.FTS = []string{fieldName, ftsResKind, ftsResValues}
+	def.FTSWeights = map[string]float64{ftsResValues: ftsWeightResValues}
+	return def
 }

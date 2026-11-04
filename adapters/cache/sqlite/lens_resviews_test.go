@@ -61,3 +61,29 @@ func TestLensResourceViews(t *testing.T) {
 		t.Fatalf("masked res__edges = %s, want only runs_on", got)
 	}
 }
+
+// TestResourceFullText (RES 3.12, R8): a resource is found by its name,
+// its kind's name and a field value; a sensitive value is never indexed,
+// even for a resource applied before its kind.
+func TestResourceFullText(t *testing.T) {
+	f := newFixture(t)
+	c := f.open("repo.db")
+	kind, host, label := must(ids.New[ids.Kind]()), must(ids.New[ids.KindField]()), must(ids.New[ids.KindField]())
+	res := must(ids.New[ids.Resource]())
+	f.apply(c, store.SourceRepo, "1", f.resource(res, kind, "vault_prod", map[ids.ID[ids.KindField]][2]string{
+		host: {"host", `"` + maskProbeIP + `"`}, label: {"label", `"frankfurt primary"`},
+	}))
+	f.apply(c, store.SourceRepo, "2",
+		f.kindRow(kind, "vault"),
+		f.live(schema.TableKindFields, host.Any(), map[string]value.Value{
+			fieldKindID: text(t, kind.String()), fieldName: text(t, "host"), "type": text(t, "ip"), fieldSensitive: value.BoolOf(true),
+		}),
+		f.fieldRow(label, kind, "label", "text", ids.ID[ids.Kind]{}),
+	)
+	for match, want := range map[string]int{`vault_prod`: 1, `vault`: 1, `frankfurt`: 1, `"` + maskProbeIP + `"`: 0, `"198"`: 0} {
+		got := must(c.Search(context.Background(), schema.TableResources, match, 10))
+		if len(got) != want {
+			t.Errorf("search %s = %v, want %d hits", match, got, want)
+		}
+	}
+}

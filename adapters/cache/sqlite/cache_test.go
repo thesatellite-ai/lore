@@ -42,7 +42,8 @@ func TestDDLEveryBuiltin(t *testing.T) {
 			}
 		}
 		fts := count(t, c, `SELECT COUNT(*) FROM sqlite_master WHERE name = ?`, ftsPrefix+def.Name.String())
-		if (fts == 1) != (len(def.FTS) > 0) {
+		wantFTS := len(def.FTS) > 0 || def.Name == schema.TableResources // resources: cache-only FTS (resourceFTSDef)
+		if (fts == 1) != wantFTS {
 			t.Errorf("%s: fts table present=%v, FTS fields %v", def.Name, fts == 1, def.FTS)
 		}
 	}
