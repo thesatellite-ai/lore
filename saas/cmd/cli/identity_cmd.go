@@ -17,6 +17,7 @@ import (
 	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/style"
+	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
 )
@@ -33,8 +34,20 @@ func newIdentityCommand() *cobra.Command {
 	return cmd
 }
 
+// identityShowOut is `lore identity show --json` (CLI_REFERENCE 3.22).
+type identityShowOut struct {
+	Org         string   `json:"org,omitempty"`
+	StableKey   string   `json:"stable_key"`
+	DisplayName string   `json:"display_name"`
+	Kind        string   `json:"kind"`
+	Source      string   `json:"source"`
+	Stable      bool     `json:"stable"`
+	Notes       []string `json:"notes"`
+}
+
 func newIdentityShowCommand() *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show the resolved actor identity + which step matched",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -42,6 +55,15 @@ func newIdentityShowCommand() *cobra.Command {
 			r, err := resolveIdentityHere(cmd.Context())
 			if err != nil {
 				return err
+			}
+			if jsonOut {
+				notes := r.Notes
+				if notes == nil {
+					notes = []string{}
+				}
+				printJSON(constants.KindIdentityShow, identityShowOut{Org: r.Org, StableKey: r.StableKey, DisplayName: r.DisplayName,
+					Kind: r.Kind, Source: r.Step.String(), Stable: r.Step.Stable(), Notes: notes}, 1)
+				return nil
 			}
 			if r.Org != "" {
 				fmt.Printf("org:         %s\n", r.Org)
@@ -61,6 +83,8 @@ func newIdentityShowCommand() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
+	return cmd
 }
 
 func newIdentitySetCommand() *cobra.Command {

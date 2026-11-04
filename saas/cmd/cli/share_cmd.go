@@ -94,6 +94,15 @@ type sharedRow struct {
 	project *externalProject
 }
 
+// shareTarget is the --to of the share refusal hint: the given target,
+// else the placeholder CLI_REFERENCE 2.6 prints (never a blank `--to `).
+func shareTarget(to string) string {
+	if to == "" {
+		return "<target>"
+	}
+	return to
+}
+
 func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 	if table, ok := coreTableOf(id); ok {
 		// Core-owned rows are written only by the 0.1.18 core: a move
@@ -101,7 +110,7 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 		// copies).
 		if !move {
 			return errcodes.New(errcodes.Unsupported, "lore share is removed for "+string(table)+" (decision BATCH 2: a row has one home, no copies)").
-				WithHint("move it instead: `lore move " + id + " --to " + f.to.To + "`")
+				WithHint("move it instead: `lore move " + id + " --to " + shareTarget(f.to.To) + "`")
 		}
 		return runCoreMove(ctx, table, id, f)
 	}

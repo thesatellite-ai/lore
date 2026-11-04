@@ -115,6 +115,11 @@ const (
 	KindQueryLogList = "queryLog.list"
 	KindRenderList   = "renderHistory.list"
 	KindConfigList   = "config.list"
+	// CLI_REFERENCE 3.22: every config/identity command takes --json.
+	KindConfigGet    = "config.get"
+	KindConfigSet    = "config.set"
+	KindConfigCheck  = "config.check"
+	KindIdentityShow = "identity.show"
 
 	KindProjectSharedInit = "project.shared-init"
 	KindProjectSharedList = "project.shared-list"

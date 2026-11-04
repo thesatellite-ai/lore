@@ -250,7 +250,7 @@ func liveFetchAge(s *liveSession) string {
 // landed on main while this branch is older).
 func explainLiveNotFound(ctx context.Context, cmd *cobra.Command, args []string, err error) error {
 	var cli *errcodes.CLIError
-	if err == nil || !errors.As(err, &cli) || cli.Code != errcodes.NotFound || len(args) == 0 {
+	if err == nil || !errors.As(err, &cli) || cli.Code != errcodes.NotFound || len(args) == 0 || !looksLikeRowID(args[0]) {
 		return err
 	}
 	var miss *handleMissError
@@ -265,6 +265,29 @@ func explainLiveNotFound(ctx context.Context, cmd *cobra.Command, args []string,
 		return errcodes.New(errcodes.NotFound, why)
 	}
 	return cli.WithHint(hint)
+}
+
+// looksLikeRowID reports whether s has the shape of a row id or id prefix
+// (<prefix>_<hex…>). Only such an argument gets the live answer: a missing
+// config key (`lore config get nope`), a name or a path is not a row that
+// could have landed on main, so the peek hint would mislead (CLI_REFERENCE
+// 1.4: an error names its exact reason).
+func looksLikeRowID(s string) bool {
+	p, hex, ok := strings.Cut(strings.TrimSpace(s), "_")
+	if !ok || p == "" || hex == "" {
+		return false
+	}
+	for _, r := range p {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	for _, r := range hex {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // liveMissingExplain is the F1 answer for an id a command did not find:

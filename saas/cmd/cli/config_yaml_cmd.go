@@ -156,7 +156,8 @@ func configUnknownKey(raw []byte) string {
 }
 
 func newConfigGetCommand() *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+	cmd := &cobra.Command{
 		Use: "get <key>", Short: "Get a key of ~/.lore/config.yaml (a dotted path, e.g. live.autopush)",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -179,14 +180,21 @@ func newConfigGetCommand() *cobra.Command {
 						WithHint("`lore config list` shows the keys set in " + path)
 				}
 			}
+			if jsonOut { // CLI_REFERENCE 3.22
+				printJSON(constants.KindConfigGet, configEntry{Key: args[0], Value: configScalarText(n)}, 1)
+				return nil
+			}
 			fmt.Println(configScalarText(n))
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
+	return cmd
 }
 
 func newConfigSetCommand() *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+	cmd := &cobra.Command{
 		Use: "set <key> <value>", Short: "Set a key of ~/.lore/config.yaml (keeps comments and order)",
 		Example: `  lore config set live.autopush false
   lore config set lease.ttl 45m`,
@@ -235,10 +243,16 @@ func newConfigSetCommand() *cobra.Command {
 			if err := atomicWriteFile(path, buf.Bytes(), perm); err != nil {
 				return errcodes.New(errcodes.Internal, "write "+path).WithCause(err)
 			}
+			if jsonOut { // CLI_REFERENCE 3.22
+				printJSON(constants.KindConfigSet, configEntry{Key: key, Value: val}, 1)
+				return nil
+			}
 			fmt.Printf("✓ %s = %s (%s)\n", key, val, redactIfQuiet(path))
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
+	return cmd
 }
 
 // configSetNode sets the scalar at parts under mapping m, creating the

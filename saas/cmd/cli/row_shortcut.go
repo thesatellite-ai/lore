@@ -5,6 +5,9 @@
 //
 //	lore show <id> [--origin] ─► row show (same flags, one implementation)
 //	lore lint [--code c]      ─► lint run
+//	lore machines [show <id>] ─► machine list | machine show (CLI 3.8)
+//	lore trash [--type …]     ─► trash list (CLI 3.9)
+//	lore plan apply …         ─► refused, hint: lore mission apply (2.15)
 //	lore move <id> --to t     ─► runCoreMove: preview + F16 leak check,
 //	                             confirm, then row.move (same id, PROV5)
 package main
@@ -12,6 +15,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -24,11 +28,15 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslint "github.com/thesatellite-ai/lore/ops/lint"
+	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsrow "github.com/thesatellite-ai/lore/ops/row"
+	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/store"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Flags of `lore move` beyond --to / --yes (CLI_REFERENCE 2.7).
@@ -37,26 +45,55 @@ const (
 	flagWithTime     = "with-time"
 	rowShowVerb      = "show"
 	lintRunVerb      = "run"
+	machineListVerb  = "list"
+	trashListVerb    = "list"
+	planApplyVerb    = "apply"
 )
 
-// mountRowShortcuts adds `lore show <id>` and makes bare `lore lint` run
-// `lore lint run`. Nothing is added when the core commands are missing.
+// mountRowShortcuts adds `lore show <id>`, makes bare `lore lint` run
+// `lore lint run` and bare `lore machine(s)` run `lore machine list`. Nothing is added when the core commands are missing.
 func mountRowShortcuts(root *cobra.Command) {
 	if show, _, err := root.Find([]string{opsrow.Noun, rowShowVerb}); err == nil && show.Name() == rowShowVerb && show.RunE != nil {
 		root.AddCommand(shortcutOf(show, "show <id>", "Show any row by id (--origin: where it came from)"))
 	}
-	g, _, err := root.Find([]string{opslint.Noun})
-	if err != nil || g.Name() != opslint.Noun {
-		return
+	defaultVerb(root, opslint.Noun, lintRunVerb)
+	// CLI_REFERENCE 3.8: `lore machines [--json]` lists the profiles and
+	// `lore machines show <m_id>` shows one; the registry noun is
+	// `machine`, so the plural is an alias and the bare word runs list.
+	if g := defaultVerb(root, opsinfra.NounMachine, machineListVerb); g != nil {
+		g.Aliases = append(g.Aliases, opsinfra.NounMachine+"s")
 	}
-	run, _, err := g.Find([]string{lintRunVerb})
+	// CLI_REFERENCE 3.9: bare `lore trash [--type …]` lists the trash.
+	defaultVerb(root, opstrash.Noun, trashListVerb)
+	// CLI_REFERENCE 2.15 (TSQ9): `lore plan apply` is gone; it answers as
+	// an unknown command but names the new spelling.
+	if g, _, err := root.Find([]string{opsplan.Noun}); err == nil && g.Name() == opsplan.Noun {
+		g.AddCommand(&cobra.Command{
+			Use: planApplyVerb, Hidden: true, Args: cobra.ArbitraryArgs, DisableFlagParsing: true,
+			RunE: func(_ *cobra.Command, args []string) error {
+				return errcodes.New(errcodes.InvalidInput, `unknown command "`+planApplyVerb+`" for "lore `+opsplan.Noun+`"`).
+					WithHint(strings.TrimSpace("use lore mission apply " + strings.Join(args, " ")))
+			},
+		})
+	}
+}
+
+// defaultVerb makes bare `lore <noun>` run `lore <noun> <verb>` (other
+// verbs stay subcommands) and returns the group; nil when either is missing.
+func defaultVerb(root *cobra.Command, noun, verb string) *cobra.Command {
+	g, _, err := root.Find([]string{noun})
+	if err != nil || g.Name() != noun {
+		return nil
+	}
+	run, _, err := g.Find([]string{verb})
 	if err != nil || run == g || run.RunE == nil {
-		return
+		return nil
 	}
 	g.Short = run.Short
 	g.Args = cobra.ArbitraryArgs
 	g.DisableFlagParsing = true
 	g.RunE = forward(run)
+	return g
 }
 
 // shortcutOf is a top-level command that parses its arguments with target's
@@ -76,6 +113,11 @@ func forward(target *cobra.Command) func(*cobra.Command, []string) error {
 		target.SetOut(cmd.OutOrStdout())
 		target.SetErr(cmd.ErrOrStderr())
 		if err := target.ParseFlags(args); err != nil {
+			// `lore show --help` (CLI_REFERENCE 2.13): pflag answers -h with
+			// ErrHelp, which is a request for the target's help, not an error.
+			if errors.Is(err, pflag.ErrHelp) {
+				return target.Help()
+			}
 			return target.FlagErrorFunc()(target, err)
 		}
 		if h, _ := target.Flags().GetBool("help"); h {
