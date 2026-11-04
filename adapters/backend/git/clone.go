@@ -115,6 +115,7 @@ func OpenClone(ctx context.Context, remote, base, folder string, o store.OpenOpt
 	if b.folder, err = b.root.Folder(folder); err != nil {
 		return nil, err
 	}
+	b.folder.SetMetaSource(b.sharedFile)
 	if err := b.checkMarker(ctx); err != nil {
 		return nil, err
 	}
@@ -476,4 +477,23 @@ func branchOf(u *url.URL) (string, *url.URL, error) {
 	rest := *u
 	rest.RawQuery = q.Encode()
 	return vals[0], &rest, nil
+}
+
+// sharedFile is the folder's rowfs.MetaSource in clone mode: before a
+// folder's first write creates its _meta.json, fetch (best effort: offline
+// reads what was fetched last) and return the remote branch's copy of rel,
+// so this clone adopts the file `lore org link` or another clone already
+// pushed instead of creating a second one. Called from Write, which holds
+// the store lock.
+func (b *Backend) sharedFile(ctx context.Context, rel string) ([]byte, bool, error) {
+	if ferr := b.fetch(ctx, b.work); ferr != nil && !isOffline(ferr) {
+		return nil, false, ferr
+	}
+	name := trackingRefNS + b.branch + ":" + rel
+	got, err := b.readBlobs(ctx, []string{name})
+	if err != nil {
+		return nil, false, err
+	}
+	doc, ok := got[name]
+	return doc, ok, nil
 }

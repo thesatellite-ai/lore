@@ -27,7 +27,21 @@ type Folder struct {
 	name    string // clean folder name, FolderRoot for the root
 	rel     string // data dir relative to the root, slash-separated
 	dataDir string // absolute data dir
+	// metaSource, when set, is asked for the shared copy of the folder's
+	// _meta.json before a first write creates one (SetMetaSource).
+	metaSource MetaSource
 }
+
+// MetaSource returns the shared (remote) copy of a store file, by its path
+// relative to the store root; found=false when the shared side has none.
+// A git backend sets one so a folder's first write in this clone adopts
+// the _meta.json another clone or `lore org link` already pushed, instead
+// of creating a second one that can never merge cleanly.
+type MetaSource func(ctx context.Context, rel string) (doc []byte, found bool, err error)
+
+// SetMetaSource installs src (nil removes it). Not safe to call while the
+// folder is being written; backends call it once at open.
+func (f *Folder) SetMetaSource(src MetaSource) { f.metaSource = src }
 
 // Name is the clean folder name (FolderRoot for the root folder).
 func (f *Folder) Name() string { return f.name }
@@ -401,7 +415,7 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 			prevs[i] = cur.Doc
 		}
 	}
-	if err := f.ensureMeta(a); err != nil {
+	if err := f.ensureMeta(ctx, a); err != nil {
 		return nil, errors.Join(err, a.Undo())
 	}
 	for i, c := range changes {
@@ -422,18 +436,23 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 	return a, nil
 }
 
-// ensureMeta gives a non-root folder its _meta.json with a new prj_ id
-// when the batch is the folder's first write (the file is missing), as
-// part of the batch: undone with it, and in a.Paths so a git store
-// commits it with the rows. An existing _meta.json (written by `lore org
-// link`, or by another lore) is never touched. The root folder's identity
-// is lore-store.yaml, so it gets none.
-func (f *Folder) ensureMeta(a *Applied) error {
+// ensureMeta gives a non-root folder its _meta.json when the batch is the
+// folder's first write here (the file is missing), as part of the batch:
+// undone with it, and in a.Paths so a git store commits it with the rows.
+// It adopts the shared copy when the MetaSource has one (written by
+// `lore org link`, v0.1.17, or another clone), byte for byte, so the two
+// sides hold the same file. Otherwise the project id is natural (ids.Natural
+// over the store's sto_ id, "projects" and the folder name), so two clones
+// creating the same folder independently write the same bytes. An existing
+// local _meta.json is never touched. The root folder's identity is
+// lore-store.yaml, so it gets none.
+func (f *Folder) ensureMeta(ctx context.Context, a *Applied) error {
 	if f.name == FolderRoot {
 		return nil
 	}
 	full := filepath.Join(f.dataDir, MetaFileName)
-	if err := checkChain(f.root.dir, f.rel+"/"+MetaFileName); err != nil {
+	rel := f.rel + "/" + MetaFileName
+	if err := checkChain(f.root.dir, rel); err != nil {
 		return err
 	}
 	if _, err := os.Lstat(full); err == nil {
@@ -441,24 +460,54 @@ func (f *Folder) ensureMeta(a *Applied) error {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return errs.Wrap(errs.Internal, "rowfs: stat "+MetaFileName, err)
 	}
-	id, err := ids.New[ids.Project]()
+	doc, err := f.newMeta(ctx, rel)
 	if err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: new project id", err)
-	}
-	raw, err := json.Marshal(folderMeta{ProjectID: id.String(), Version: row.FormatVersion})
-	if err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: encode "+MetaFileName, err)
-	}
-	doc, err := canon.Document(raw)
-	if err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: encode "+MetaFileName, err)
+		return err
 	}
 	if err := writeAtomic(full, doc); err != nil {
 		return err
 	}
 	a.undo = append(a.undo, undoStep{full: full})
-	a.Paths = append(a.Paths, f.rel+"/"+MetaFileName)
+	a.Paths = append(a.Paths, rel)
 	return nil
+}
+
+// metaNamespaceTable is the table part of a folder project's natural id
+// (as engine natural ids hash namespace, table, key).
+const metaNamespaceTable = "projects"
+
+// newMeta is the _meta.json bytes a first write creates: the shared copy
+// when there is one, else a natural project id.
+func (f *Folder) newMeta(ctx context.Context, rel string) ([]byte, error) {
+	if f.metaSource != nil {
+		shared, found, err := f.metaSource(ctx, rel)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			if _, err := canon.Document(shared); err != nil {
+				return nil, errs.Wrap(errs.InvalidInput, "rowfs: the shared "+rel+" is not JSON", err)
+			}
+			return shared, nil
+		}
+	}
+	parts := []string{metaNamespaceTable, f.name}
+	if m, err := ReadMarker(f.root.dir); err == nil && !m.ID.IsZero() {
+		parts = append([]string{m.ID.String()}, parts...)
+	}
+	id, err := ids.Natural(ids.PrefixProject, parts...)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "rowfs: folder project id", err)
+	}
+	raw, err := json.Marshal(folderMeta{ProjectID: id.String(), Version: row.FormatVersion})
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "rowfs: encode "+MetaFileName, err)
+	}
+	doc, err := canon.Document(raw)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "rowfs: encode "+MetaFileName, err)
+	}
+	return doc, nil
 }
 
 // folderMeta is the _meta.json a folder's first write creates (spec 6.1: "a

@@ -250,6 +250,12 @@ func (b *Backend) threeWay(ctx context.Context, remote string) ([]ids.AnyID, []s
 	var merged []ids.AnyID
 	var refused []store.Refusal
 	for _, p := range paths {
+		if rowfs.IsFolderFile(p) {
+			if ferr := b.resolveFolderFile(ctx, p); ferr != nil {
+				return nil, nil, errors.Join(ferr, b.abortMerge(ctx))
+			}
+			continue
+		}
 		id, refusal, rerr := b.resolveRow(ctx, p)
 		if rerr != nil {
 			return nil, nil, errors.Join(rerr, b.abortMerge(ctx))
@@ -447,4 +453,26 @@ func quotePath(p string) string {
 		p = p[:maxQuotedPath] + "…"
 	}
 	return `"` + p + `"`
+}
+
+// resolveFolderFile merges a folder's _meta.json or _purged.json both
+// sides changed (rowfs.MergeFolderFile: links and purged ids are unions,
+// the first project_id wins), writes and stages the result. These files
+// are never refused: a store must always be able to sync.
+func (b *Backend) resolveFolderFile(ctx context.Context, path string) error {
+	stages, err := b.readBlobs(ctx, []string{stageBase + path, stageOurs + path, stageTheirs + path})
+	if err != nil {
+		return err
+	}
+	merged, err := rowfs.MergeFolderFile(path, stages[stageBase+path], stages[stageOurs+path], stages[stageTheirs+path])
+	if err != nil {
+		return err
+	}
+	if err := b.root.WriteFile(path, merged); err != nil {
+		return err
+	}
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"add", "--", path}}); err != nil {
+		return errs.Wrap(errs.Internal, "git: stage a merged "+path, err)
+	}
+	return nil
 }
