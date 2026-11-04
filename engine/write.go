@@ -103,6 +103,9 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err != nil {
 		return Written{}, err
 	}
+	if err = enforceRow(sc.pol, def, sc.fields); err != nil {
+		return Written{}, err
+	}
 	origin, err := originOf(cl.op, target)
 	if err != nil {
 		return Written{}, err
@@ -217,6 +220,9 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	}
 	sc, err := e.screen(ctx, cl, src, cur.ID, whole, names)
 	if err != nil {
+		return Written{}, err
+	}
+	if err = enforceRow(sc.pol, def, sc.fields); err != nil {
 		return Written{}, err
 	}
 	actor := e.actorOf(cl)

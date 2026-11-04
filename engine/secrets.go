@@ -22,6 +22,9 @@ type screened struct {
 	accepted []scan.Finding
 	redacted []scan.Finding
 	warnings []Warning
+	// pol is the effective policy the scan read, kept for the POLICY step
+	// that follows it (enforceRow), so one write reads the settings once.
+	pol policy.Set
 }
 
 // screen scans the named fields of a write (text, every text item of a
@@ -31,11 +34,23 @@ type screened struct {
 // with ${secret:unstored}. Rules turned off at any level and allow entries
 // for rowID are honoured first (D2/D9, secret_allows).
 func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID ids.AnyID, fields map[string]value.Value, names []string) (screened, error) {
-	out := screened{fields: fields}
+	if rs, ok := e.scanner.(RefreshingScanner); ok {
+		// rules are settings rows: a rule added since the last write
+		// (a long-lived `lore api`) applies to this one
+		if err := rs.Refresh(ctx); err != nil {
+			return screened{}, err
+		}
+	}
 	pol, rules, err := e.settings.Policy(target)
 	if err != nil {
 		return screened{}, err
 	}
+	out := screened{fields: fields, pol: pol}
+	// BATCH 8: a rule the personal store turned off covers only that
+	// person's own captures, i.e. a write stamped as the engine's own actor
+	// (the person whose personal store is attached). A write a surface
+	// stamps as someone else (a shared `lore api`) keeps the rule.
+	own := e.actorOf(cl) == e.actor
 	allows, err := e.settings.Allows(target)
 	if err != nil {
 		return screened{}, err
@@ -53,7 +68,7 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		}
 		var kept []scan.Finding
 		for _, f := range found {
-			if !rules.IsOff(f.RuleID, true) {
+			if !rules.IsOff(f.RuleID, own) {
 				kept = append(kept, f)
 			}
 		}
@@ -116,6 +131,15 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	case policy.OnDetectRefuse:
 	}
 	return screened{}, secretErr(all)
+}
+
+// RefreshingScanner is a scanner whose rules come from settings rows: the
+// engine calls Refresh before each write's scan, so rules added while a
+// long-lived process runs apply to the next write. Refresh must be cheap
+// when nothing changed and safe for concurrent use.
+type RefreshingScanner interface {
+	scan.Scanner
+	Refresh(ctx context.Context) error
 }
 
 // scanText runs the scanner, turning a degraded scan into a warning.
