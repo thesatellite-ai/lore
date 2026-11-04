@@ -151,7 +151,7 @@ func finishSyncSessions(ctx context.Context) error {
 		} else {
 			o.DirtyOnly = true
 		}
-		rep, err := lsync.Reconcile(ctx, o)
+		rep, err := reconcileCheckout(ctx, o, s.root)
 		if err != nil {
 			_ = db.Close() // the pass error is the one to report
 			fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+err.Error()))
@@ -183,14 +183,14 @@ func finishSyncSessions(ctx context.Context) error {
 // runSyncPass runs one pass that exports the running command's own writes
 // (audited as lore writes).
 func runSyncPass(ctx context.Context, db *sql.DB, root, dataDir string) (lsync.Report, error) {
-	return lsync.Reconcile(ctx, syncOptions(db, root, dataDir, lsync.ChangeLocal))
+	return reconcileCheckout(ctx, syncOptions(db, root, dataDir, lsync.ChangeLocal), root)
 }
 
 // runCatchUpPass runs the start-of-command pass: whatever changed in the DB
 // since the last lore command was written by something else (sqlite3, a
 // script) and is audited as an external write.
 func runCatchUpPass(ctx context.Context, db *sql.DB, root, dataDir string) (lsync.Report, error) {
-	return lsync.Reconcile(ctx, syncOptions(db, root, dataDir, lsync.ChangeExternal))
+	return reconcileCheckout(ctx, syncOptions(db, root, dataDir, lsync.ChangeExternal), root)
 }
 
 func syncOptions(db *sql.DB, root, dataDir string, kind lsync.ChangeKind) lsync.Options {

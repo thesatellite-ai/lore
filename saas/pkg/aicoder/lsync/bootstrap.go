@@ -205,6 +205,21 @@ func (e *engine) adoptProjectID(ctx context.Context, shared string) error {
 		if err := rewriteIDEverywhere(ctx, e.tx, pid, shared); err != nil {
 			return err
 		}
+		if !e.o.StoreMirror {
+			// lore.db is rewritten above, but the core-owned row files
+			// still name pid and lsync must not write them (owned.go): the
+			// caller re-points them through the core and then clears the
+			// mark (PendingProjectAdoptions). Recorded in this pass's
+			// transaction, so a crash before the caller runs leaves the
+			// mark for the next command instead of losing the rewrite.
+			if err := addProjectAdoption(ctx, e.tx, ProjectAdoption{Local: pid, Shared: shared}); err != nil {
+				return err
+			}
+			if e.adoptedLocal == nil {
+				e.adoptedLocal = map[string]bool{}
+			}
+			e.adoptedLocal[pid] = true
+		}
 		e.rep.Warnings = append(e.rep.Warnings, fmt.Sprintf("local project %s adopted as shared project %s", pid, shared))
 	}
 	return nil

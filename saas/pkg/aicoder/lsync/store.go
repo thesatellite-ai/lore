@@ -186,6 +186,10 @@ func findByNaturalKey(ctx context.Context, q execer, t *Table, key []string, ra 
 	return id, nil
 }
 
+// auditLogsTable is the hash-chained audit trail rewriteIDEverywhere
+// never rewrites (saas/pkg/aicoder/audit owns it).
+const auditLogsTable = "audit_logs"
+
 // rewriteIDEverywhere replaces every occurrence of oldID with newID in every
 // text column of every table (synced and local), so references survive a
 // natural-key merge or a project-id adoption.
@@ -194,6 +198,11 @@ func findByNaturalKey(ctx context.Context, q execer, t *Table, key []string, ra 
 // (a dirty mark for the loser id is what removes the loser's file) and
 // history (trash and conflict copies must keep the ids rows had when they
 // were set aside, so a restore puts back exactly what was removed).
+// audit_logs is excluded for the same reason, and because it is a hash
+// chain: each entry's hash covers its target_id, so rewriting a past
+// entry (the adopted local project's projects.write) made `lore audit
+// verify` report E_AUDIT_CHAIN_BROKEN on every adopted clone. An audit
+// entry records the id the row had when it was written.
 //
 // Why a blunt replace is safe: lore ids are "<prefix>_<32 hex>", globally
 // unique random strings; a 36-character id cannot appear by accident inside
@@ -202,8 +211,8 @@ func findByNaturalKey(ctx context.Context, q execer, t *Table, key []string, ra 
 func rewriteIDEverywhere(ctx context.Context, q execer, oldID, newID string) error {
 	rows, err := q.QueryContext(ctx, `SELECT m.name, p.name FROM sqlite_master m JOIN pragma_table_info(m.name) p
 		WHERE m.type = 'table' AND m.name NOT LIKE '%_fts%' AND m.name NOT LIKE 'sqlite_%'
-		AND m.name NOT LIKE '\_lore\_sync\_%' ESCAPE '\'
-		AND (upper(p.type) LIKE '%TEXT%' OR upper(p.type) LIKE '%CHAR%' OR p.type = '')`)
+		AND m.name NOT LIKE '\_lore\_sync\_%' ESCAPE '\' AND m.name <> ?
+		AND (upper(p.type) LIKE '%TEXT%' OR upper(p.type) LIKE '%CHAR%' OR p.type = '')`, auditLogsTable)
 	if err != nil {
 		return fmt.Errorf("lsync: list text columns: %w", err)
 	}

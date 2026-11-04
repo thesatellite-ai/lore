@@ -235,6 +235,9 @@ type engine struct {
 	// blocked file, secret refusal). They stay dirty for the NEXT pass but
 	// later drain rounds of this pass skip them, so each is reported once.
 	deferred map[rowKey]bool
+	// adoptedLocal holds the local project ids this ADOPT pass replaced by
+	// the shared one (adoptProjectID), for warnMultipleProjects.
+	adoptedLocal map[string]bool
 	// coreSkipped dedupes the per-pass warning for core-owned rows whose
 	// lore.db change was not exported (owned.go).
 	coreSkipped map[string]bool
@@ -1322,9 +1325,17 @@ func (e *engine) countPending(ctx context.Context) error {
 	return nil
 }
 
-// warnMultipleProjects flags E1: two bootstraps that met in a merge.
+// warnMultipleProjects flags E1: two bootstraps that met in a merge. A
+// local project this ADOPT pass just replaced (adoptedLocal) is not one:
+// its live file is left for the caller to delete through the core
+// (ProjectAdoption), so it is not counted.
 func (e *engine) warnMultipleProjects() {
 	n := CountRowFiles(e.o.DataDir, projectsTable)
+	for pid := range e.adoptedLocal {
+		if _, err := os.Stat(filepath.Join(e.o.DataDir, filepath.FromSlash(relPath(projectsTable, pid)))); err == nil {
+			n--
+		}
+	}
 	if n > 1 {
 		e.rep.Warnings = append(e.rep.Warnings, fmt.Sprintf(
 			"%d project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`", n))
@@ -1345,18 +1356,30 @@ func sortedKeys(m map[rowKey]bool) []rowKey {
 	return out
 }
 
-// CountRowFiles counts row files of one table on disk (in-flight tmp files
-// excluded). Doctor uses it to flag several project files (E1).
+// CountRowFiles counts the live row files of one table on disk (in-flight
+// tmp files and the 0.1.18 core's tombstones excluded). Doctor uses it to
+// flag several project files (E1). A tombstone is not a row: an adopted
+// clone's local project is deleted through the core (core_adopt.go), which
+// leaves its file as a "_deleted" tombstone forever, and counting it would
+// ask for `lore sync fix-projects` on a checkout with one project. A file
+// that cannot be read or parsed still counts (it may be a live row).
 func CountRowFiles(dataDir, table string) int {
-	entries, err := os.ReadDir(filepath.Join(dataDir, table))
+	dir := filepath.Join(dataDir, table)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
 	}
 	n := 0
 	for _, en := range entries {
-		if strings.HasSuffix(en.Name(), rowFileExt) && !strings.HasPrefix(en.Name(), tmpPrefix) {
-			n++
+		if !strings.HasSuffix(en.Name(), rowFileExt) || strings.HasPrefix(en.Name(), tmpPrefix) {
+			continue
 		}
+		if b, rerr := os.ReadFile(filepath.Join(dir, en.Name())); rerr == nil {
+			if doc, derr := decodeDoc(b); derr == nil && doc == nil { // a v2 tombstone decodes as no document (upcast)
+				continue
+			}
+		}
+		n++
 	}
 	return n
 }
