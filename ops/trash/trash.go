@@ -22,10 +22,13 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Operation names (`lore trash …`, REST /v1/trash).
@@ -59,11 +62,11 @@ type Env interface {
 
 // ListIn is the input of trash.list.
 type ListIn struct {
-	Type   string `json:"type,omitempty" flag:"type" desc:"only rows of this table (tasks, memories, …)"`
-	By     string `json:"by,omitempty" flag:"by" desc:"only rows deleted by this actor (act_ id)"`
-	Since  string `json:"since,omitempty" flag:"since" desc:"only rows deleted since a date (YYYY-MM-DD) or a duration (36h, 7d)"`
-	Reason string `json:"reason,omitempty" flag:"reason" desc:"only rows whose delete reason holds this text"`
-	Batch  string `json:"batch,omitempty" flag:"batch" desc:"only rows of this batch (bat_…)"`
+	Type   string      `json:"type,omitempty" flag:"type" desc:"only rows of this table (tasks, memories, …)"`
+	By     op.ActorRef `json:"by,omitempty" flag:"by" desc:"only rows deleted by this actor (@handle, stable key or act_ id)"`
+	Since  string      `json:"since,omitempty" flag:"since" desc:"only rows deleted since a date (YYYY-MM-DD) or a duration (36h, 7d)"`
+	Reason string      `json:"reason,omitempty" flag:"reason" desc:"only rows whose delete reason holds this text"`
+	Batch  string      `json:"batch,omitempty" flag:"batch" desc:"only rows of this batch (bat_…)"`
 }
 
 // ShowIn is the input of trash.show.
@@ -147,6 +150,10 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
+	by, err := o.actorOf(ctx, string(in.By))
+	if err != nil {
+		return ListOut{}, err
+	}
 	all, err := o.env.Trashed(ctx)
 	if err != nil {
 		return ListOut{}, err
@@ -156,7 +163,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		it := itemOf(t)
 		switch {
 		case in.Type != "" && it.Table != in.Type && strings.TrimSuffix(it.Table, "s") != in.Type:
-		case in.By != "" && it.DeletedBy != strings.TrimSpace(in.By):
+		case by != "" && it.DeletedBy != by:
 		case in.Batch != "" && it.Batch != strings.TrimSpace(in.Batch):
 		case in.Reason != "" && !strings.Contains(strings.ToLower(it.Reason), strings.ToLower(in.Reason)):
 		case !since.IsZero() && it.at.Before(since):
@@ -255,6 +262,59 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		return resultOf("would purge", res, true), nil
 	}
 	return resultOf("purged", res, false), nil
+}
+
+// Actors is the optional Env upgrade --by uses to find an actor by handle,
+// display name or stable key (wire.App has it); without it --by takes an
+// act_ id only (XQ8: --by always names an actor).
+type Actors interface {
+	List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error)
+	Stores() []store.Source
+}
+
+// Actor fields --by matches.
+const (
+	handleSign = "@"
+	fieldHand  = "handle"
+	fieldName  = "display_name"
+	fieldKey   = "stable_key"
+)
+
+// actorOf resolves --by to an act_ id string ("" = no filter).
+func (o ops) actorOf(ctx context.Context, by string) (string, error) {
+	by = strings.TrimSpace(by)
+	if by == "" {
+		return "", nil
+	}
+	if id, err := ids.Parse[ids.Actor](by); err == nil {
+		return id.String(), nil
+	}
+	a, ok := upgrade.As[Actors](o.env)
+	if !ok {
+		return "", errs.New(errs.InvalidInput, "trash list: --by "+by+": pass the act_ id")
+	}
+	name := strings.TrimPrefix(by, handleSign)
+	for _, src := range a.Stores() {
+		rows, err := a.List(ctx, src, schema.TableActors)
+		if err != nil {
+			return "", err
+		}
+		for _, r := range rows {
+			if fieldText(r, fieldHand) == name || fieldText(r, fieldName) == name || fieldText(r, fieldKey) == by {
+				return r.ID.String(), nil
+			}
+		}
+	}
+	return "", errs.New(errs.NotFound, "trash list: no actor "+by+" in the attached stores").WithHint("lore actor list")
+}
+
+// fieldText reads a text field ("" when absent).
+func fieldText(r row.Row, name string) string {
+	v, ok := r.Fields[name]
+	if !ok || v == nil || v.Kind() == value.KindNull {
+		return ""
+	}
+	return v.String()
 }
 
 // needsConfirm is E_NEEDS_CONFIRM naming --confirm (DQ2: --yes never purges).
