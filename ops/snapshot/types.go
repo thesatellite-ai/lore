@@ -1,0 +1,148 @@
+package snapshot
+
+import (
+	"strings"
+	"time"
+)
+
+// Input and output structs of the snapshot operations. Struct tags are the
+// op contract (op/fields.go). --json outputs keep v0.1.17's envelope
+// (`{schema_version, kind, count, data}`; search adds `query`).
+
+// Envelope kinds (v0.1.17 saas/pkg/constants KindSnapshot*).
+const (
+	KindList   = "snapshot.list"
+	KindShow   = "snapshot.show"
+	KindSearch = "snapshot.search"
+)
+
+// dayLayout is the taken_at date v0.1.17's list line prints.
+const dayLayout = "2006-01-02"
+
+// AddIn is the input of snapshot.add.
+type AddIn struct {
+	Title   string `json:"title" flag:"title" desc:"snapshot title (required)"`
+	Body    string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
+	Text    string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
+	Source  string `json:"source,omitempty" flag:"source" desc:"where the snapshot came from: manual | learn-from | agent-proposal | plugin | imported | migrated (default manual)"`
+	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
+	To      string `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+}
+
+// ListIn is the input of snapshot.list (archived snapshots are hidden, as
+// in v0.1.17).
+type ListIn struct {
+	Project string `json:"project,omitempty" flag:"project" desc:"only snapshots of this project (prj_ id or name)"`
+	Store   string `json:"store,omitempty" flag:"store" desc:"only snapshots of this store (default every attached store)"`
+}
+
+// ListOut is v0.1.17's list envelope.
+type ListOut struct {
+	SchemaVersion int      `json:"schema_version"`
+	Kind          string   `json:"kind"`
+	Count         int      `json:"count,omitempty"`
+	Data          []Record `json:"data"`
+}
+
+// Text prints v0.1.17's "<id> <title>   (<taken day>)" lines, or
+// "(no snapshots)".
+func (o ListOut) Text() string {
+	if len(o.Data) == 0 {
+		return "(no snapshots)\n"
+	}
+	var b strings.Builder
+	for _, r := range o.Data {
+		b.WriteString(r.ID + " " + r.Title + "   (" + r.TakenAt.Format(dayLayout) + ")\n")
+	}
+	return b.String()
+}
+
+// Record is one snapshot in v0.1.17's --json form: ent Snapshot's keys in
+// its order (LifecycleMixin first). TagIDs (O11) and Store (`_source`) are
+// 0.1.18 additions.
+type Record struct {
+	ID               string    `json:"id,omitempty"`
+	CreatedAt        time.Time `json:"created_at,omitempty"`
+	UpdatedAt        time.Time `json:"updated_at,omitempty"`
+	TrustScore       float64   `json:"trust_score,omitempty"`
+	Confidence       float64   `json:"confidence,omitempty"`
+	LastValidatedAt  time.Time `json:"last_validated_at,omitempty,omitzero"`
+	ArchivedAt       time.Time `json:"archived_at,omitempty,omitzero"`
+	SourceKind       string    `json:"source_kind,omitempty"`
+	SourceRef        string    `json:"source_ref,omitempty"`
+	ProjectID        string    `json:"project_id,omitempty"`
+	RepoID           string    `json:"repo_id,omitempty"`
+	Title            string    `json:"title,omitempty"`
+	Body             string    `json:"body,omitempty"`
+	TakenAt          time.Time `json:"taken_at,omitempty"`
+	CreatedByActorID string    `json:"created_by_actor_id,omitempty"`
+	TagIDs           []string  `json:"tag_ids,omitempty"`
+	Store            string    `json:"_source,omitempty"`
+}
+
+// IDIn is the input of the operations that take one snapshot id.
+type IDIn struct {
+	ID string `json:"id" arg:"0" desc:"the snapshot id (snp_…)"`
+}
+
+// ShowOut is v0.1.17's show envelope.
+type ShowOut struct {
+	SchemaVersion int    `json:"schema_version"`
+	Kind          string `json:"kind"`
+	Data          Record `json:"data"`
+}
+
+// Text prints v0.1.17's id, title, taken_at (RFC 3339) and body.
+func (o ShowOut) Text() string {
+	d := o.Data
+	return d.ID + "\n  title:    " + d.Title + "\n  taken_at: " + d.TakenAt.Format(time.RFC3339) + "\n\n" + d.Body + "\n"
+}
+
+// SearchIn is the input of snapshot.search (v0.1.17 entitySearchFlags).
+type SearchIn struct {
+	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
+	Columns         []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these FTS5 columns (repeatable; not supported on 0.1.18 yet)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
+	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"search across every repo (ignore --repo)"`
+	MasterOnly      bool     `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`
+	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope: --repo only, no master inheritance"`
+	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
+	Project         string   `json:"project,omitempty" flag:"project" desc:"only snapshots of this project (prj_ id or name)"`
+}
+
+// SearchOut is v0.1.17's search envelope (count always printed).
+type SearchOut struct {
+	SchemaVersion int         `json:"schema_version"`
+	Kind          string      `json:"kind"`
+	Query         string      `json:"query"`
+	Count         int         `json:"count"`
+	Data          []SearchHit `json:"data"`
+}
+
+// Text prints v0.1.17's "<id> <title>" lines, or "(no matches)".
+func (o SearchOut) Text() string {
+	if len(o.Data) == 0 {
+		return "(no matches)\n"
+	}
+	var b strings.Builder
+	for _, h := range o.Data {
+		b.WriteString(h.ID + " " + h.Row.Title + "\n")
+	}
+	return b.String()
+}
+
+// SearchHit is one v0.1.17 search hit.
+type SearchHit struct {
+	ID      string  `json:"id"`
+	Score   float64 `json:"score"`
+	Snippet string  `json:"snippet,omitempty"`
+	Row     HitRow  `json:"row"`
+	Store   string  `json:"_source,omitempty"`
+}
+
+// HitRow is v0.1.17's snapshot hit row (keys sorted).
+type HitRow struct {
+	Body  string `json:"body"`
+	Title string `json:"title"`
+}
