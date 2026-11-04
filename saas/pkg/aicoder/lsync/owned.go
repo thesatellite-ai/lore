@@ -50,6 +50,18 @@ var coreOwned = map[string]bool{
 	"reminders":          true,
 	"knowledge_refs":     true,
 	"rule_verifier_refs": true,
+	"architecture_notes": true,
+	"behaviours":         true,
+	"cookbook_recipes":   true,
+	"incidents":          true,
+	"suggestions":        true,
+	"taste_prefs":        true,
+	"workflows":          true,
+	"workspaces":         true,
+	"handoffs":           true,
+	"snapshots":          true,
+	"tech_docs":          true,
+	"external_sources":   true,
 }
 
 // CoreOwned reports whether the new core owns table's row files.

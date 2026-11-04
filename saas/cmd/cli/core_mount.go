@@ -34,9 +34,14 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	opsarchitecturenote "github.com/thesatellite-ai/lore/ops/architecturenote"
+	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
 	opscomment "github.com/thesatellite-ai/lore/ops/comment"
+	opscookbookrecipe "github.com/thesatellite-ai/lore/ops/cookbookrecipe"
 	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
+	opshandoff "github.com/thesatellite-ai/lore/ops/handoff"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
+	opsincident "github.com/thesatellite-ai/lore/ops/incident"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -47,9 +52,15 @@ import (
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
+	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
+	opssuggestion "github.com/thesatellite-ai/lore/ops/suggestion"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	opstasklist "github.com/thesatellite-ai/lore/ops/tasklist"
+	opstastepref "github.com/thesatellite-ai/lore/ops/tastepref"
+	opstechdoc "github.com/thesatellite-ai/lore/ops/techdoc"
+	opsworkflow "github.com/thesatellite-ai/lore/ops/workflow"
+	opsworkspace "github.com/thesatellite-ai/lore/ops/workspace"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/surface/cli"
@@ -169,7 +180,14 @@ var coreNouns = []string{
 	opstask.Noun, opstasklist.Noun, opsmission.Noun, opsplan.Noun,
 	opsreminder.Noun,
 	opsinfra.NounActor, opsinfra.NounProject, opsinfra.NounRepo,
+	opsarchitecturenote.Noun, opsbehaviour.Noun, opscookbookrecipe.Noun, opsincident.Noun,
+	opssuggestion.Noun, opstastepref.Noun, opsworkflow.Noun, opsworkspace.Noun,
+	opshandoff.Noun, opssnapshot.Noun, opstechdoc.Noun, externalSourceNoun,
 }
+
+// externalSourceNoun is the CLI spelling of opsexternalsource.Noun
+// ("external_source").
+const externalSourceNoun = "external-source"
 
 // v0.1.17 flags every `lore memory …` command still accepts on the core
 // (CLI parity, phase 3). --read-only and --project keep working; --db and

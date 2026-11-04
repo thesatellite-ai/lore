@@ -41,10 +41,16 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	opsarchitecturenote "github.com/thesatellite-ai/lore/ops/architecturenote"
+	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
 	opscomment "github.com/thesatellite-ai/lore/ops/comment"
 	opscontent "github.com/thesatellite-ai/lore/ops/content"
+	opscookbookrecipe "github.com/thesatellite-ai/lore/ops/cookbookrecipe"
 	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
+	opsexternalsource "github.com/thesatellite-ai/lore/ops/externalsource"
+	opshandoff "github.com/thesatellite-ai/lore/ops/handoff"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
+	opsincident "github.com/thesatellite-ai/lore/ops/incident"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -57,10 +63,16 @@ import (
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
+	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
+	opssuggestion "github.com/thesatellite-ai/lore/ops/suggestion"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	opstasklist "github.com/thesatellite-ai/lore/ops/tasklist"
+	opstastepref "github.com/thesatellite-ai/lore/ops/tastepref"
+	opstechdoc "github.com/thesatellite-ai/lore/ops/techdoc"
+	opsworkflow "github.com/thesatellite-ai/lore/ops/workflow"
+	opsworkspace "github.com/thesatellite-ai/lore/ops/workspace"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -198,6 +210,18 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
 	entries = append(entries, opsinfra.Ops(a)...)
+	entries = append(entries, opsarchitecturenote.Ops(a)...)
+	entries = append(entries, opsbehaviour.Ops(a)...)
+	entries = append(entries, opscookbookrecipe.Ops(a)...)
+	entries = append(entries, opsincident.Ops(a)...)
+	entries = append(entries, opssuggestion.Ops(a)...)
+	entries = append(entries, opstastepref.Ops(a)...)
+	entries = append(entries, opsworkflow.Ops(a)...)
+	entries = append(entries, opsworkspace.Ops(a)...)
+	entries = append(entries, opshandoff.Ops(a)...)
+	entries = append(entries, opssnapshot.Ops(a)...)
+	entries = append(entries, opstechdoc.Ops(a)...)
+	entries = append(entries, opsexternalsource.Ops(a)...)
 	entries = append(entries, opsreminder.Ops(a)...)
 	return op.NewRegistry(entries...)
 }

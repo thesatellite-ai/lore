@@ -26,7 +26,6 @@ import (
 // entity groups are registered, so the group exists.
 func addCoordCommands(root *cobra.Command) {
 	root.AddCommand(newAgentCommand(), newHoldCommand(), newGateCommand(), newFindingCommand(), newInboxCommand())
-	attachToGroup(root, handoffGroupName, "Hand work to another actor", newHandoffForCommand())
 }
 
 // attachToGroup adds sub under the existing top-level group name (one
