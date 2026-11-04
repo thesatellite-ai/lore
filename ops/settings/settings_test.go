@@ -166,7 +166,7 @@ func TestResourcesMatrix(t *testing.T) {
 		{settings.OpResAdd, `{"kind":"nope","name":"x"}`, errs.KindUnknown, ""},
 		{settings.OpResEdit, `{"id":"web1.example.com"}`, errs.InvalidInput, "nothing to change"},
 		{settings.OpResEdit, `{"id":"web1.example.com","unset":["ip"]}`, errs.ResourceInvalid, "required field ip is missing"},
-		{settings.OpResList, `{"kind":"server","where":["env"]}`, errs.InvalidInput, "want field=value"},
+		{settings.OpResList, `{"kind":"server","where":["env"]}`, errs.InvalidInput, "no operator; want <key><op><value>"}, // XQ7: the one filter grammar words it
 		{settings.OpResShow, `{"id":"nope"}`, errs.NotFound, ""},
 	})
 	// a ref field resolves by name and is stored as the row id; a list

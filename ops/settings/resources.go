@@ -11,6 +11,9 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/filter"
+	"github.com/thesatellite-ai/lore/logic/sortspec"
+	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -91,7 +94,8 @@ type ResNameIn struct {
 // ResListIn is the input of resource.list.
 type ResListIn struct {
 	Kind          string   `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
-	Where         []string `json:"where,omitempty" flag:"where" desc:"field=value filter (repeatable; all must match)"`
+	Where         []string `json:"where,omitempty" flag:"where" desc:"filter on a field: = != ~= > >= < <= ? !? or field:a,b (repeatable; all must match)"`
+	Sort          []string `json:"sort,omitempty" flag:"sort" desc:"sort by name, last_checked, archived_at or a field: <key>, <key>:asc or <key>:desc (repeatable; default name)"`
 	Archived      bool     `json:"archived,omitempty" flag:"archived" desc:"include archived resources"`
 	ShowSensitive bool     `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
 }
@@ -623,43 +627,162 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	if err != nil {
 		return ResListOut{}, err
 	}
-	filters := map[string]string{}
-	for _, w := range in.Where {
-		f, v, ok := strings.Cut(w, setSep)
-		if !ok {
-			return ResListOut{}, errs.New(errs.InvalidInput, "--where "+quote(w)+": want field=value")
-		}
-		if _, known := d.byName[f]; !known {
-			return ResListOut{}, invalid(d, "--where", "unknown field "+f)
-		}
-		filters[f] = v
+	m, err := resourceMatcher(d, in.Where)
+	if err != nil {
+		return ResListOut{}, err
+	}
+	specs, err := resourceSort(d, in.Sort)
+	if err != nil {
+		return ResListOut{}, err
 	}
 	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
 	if err != nil {
 		return ResListOut{}, err
 	}
 	out := ResListOut{Data: []Resource{}, columns: d.fieldNames()}
+	type hit struct {
+		res Resource
+		row located
+		got resValues
+	}
+	var hits []hit
 	for _, r := range where(rows, map[string]string{rKind: d.kind.Row.ID.String()}) {
 		if text(r.Row, rArchivedAt) != "" && !in.Archived {
+			continue
+		}
+		stored, derr := decodeValues(r)
+		if derr != nil {
+			return ResListOut{}, derr
+		}
+		// XQ7: the one --where grammar; values compare as stored (a
+		// sensitive field still matches, it only prints masked: RES 3.12).
+		if !m.Match(o.resourceGetter(ctx, d, stored)) {
 			continue
 		}
 		v, verr := o.view(ctx, r, in.ShowSensitive)
 		if verr != nil {
 			return ResListOut{}, verr
 		}
-		keep := true
-		for f, want := range filters {
-			if v.Values[f] != want {
-				keep = false
-			}
-		}
-		if keep {
-			out.Data = append(out.Data, v)
-		}
+		hits = append(hits, hit{res: v, row: r, got: stored})
 	}
-	slices.SortFunc(out.Data, func(a, b Resource) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(hits, func(a, b hit) int { return strings.Compare(a.res.Name, b.res.Name) })
+	// XQ10: --sort key[:asc|:desc]; ties keep the name order (stable).
+	slices.SortStableFunc(hits, func(a, b hit) int {
+		return sortspec.Compare(specs, resourceSortValue(d, a.row, a.got), resourceSortValue(d, b.row, b.got))
+	})
+	for _, h := range hits {
+		out.Data = append(out.Data, h.res)
+	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// resourceMatcher binds --where to a kind's fields (XQ7): the key part of
+// a resource filter is a field name of the kind (CLI_REFERENCE 4.3); a
+// metadata key is --meta's job, so meta.<key> is an unknown field here.
+// Exported to the bulk ops of this package (resource delete --where).
+func resourceMatcher(d kindDef, where []string) (filter.Matcher, error) {
+	f, err := filter.Parse(where)
+	if err != nil {
+		return filter.Matcher{}, err
+	}
+	return f.Bind(func(k filter.Key) (filter.Field, error) {
+		def, ok := d.byName[k.Name]
+		if !ok || k.Meta {
+			return filter.Field{}, invalid(d, "--where", "unknown field "+k.String()+" (fields: "+strings.Join(d.fieldNames(), ", ")+")")
+		}
+		kind, perr := value.ParseKind(text(def.Row, fType))
+		if perr != nil {
+			return filter.Field{}, errs.Wrap(errs.ConfigInvalid, "kind field "+def.Row.ID.String()+" has an unknown type", perr)
+		}
+		return filter.Field{Kind: kind, Elem: value.KindText, Values: texts(def.Row, fValues)}, nil
+	})
+}
+
+// resourceGetter reads a resource's stored values for the matcher: a list
+// gives its items, a ref gives the target id and, when it resolves, the
+// target name (a ref filter takes a resource name or res_ id).
+func (o ops) resourceGetter(ctx context.Context, d kindDef, stored resValues) filter.Getter {
+	return func(k filter.Key) []string {
+		def := d.byName[k.Name]
+		raw, ok := stored.vals[def.Row.ID.String()]
+		if !ok {
+			return nil
+		}
+		v := fromJSONRaw(raw)
+		if v == nil || v.Kind() == value.KindNull {
+			return nil
+		}
+		if b, isJSON := value.JSONForm(v); isJSON && canon.KindOf(b) == canon.KindArray {
+			return value.ItemStrings(v)
+		}
+		s := display(v)
+		if text(def.Row, fType) == string(value.KindRef) {
+			if r, err := o.resourceByName(ctx, s, ""); err == nil {
+				return []string{s, text(r.Row, rName)}
+			}
+		}
+		return []string{s}
+	}
+}
+
+// Resource sort keys besides the kind's fields.
+const (
+	sortName = "name"
+)
+
+// resourceSortKeys are the keys resource list --sort accepts.
+func resourceSortKeys(d kindDef) []string {
+	return append([]string{sortName, rLastChecked, rArchivedAt}, d.fieldNames()...)
+}
+
+// resourceSort parses and checks --sort (XQ10).
+func resourceSort(d kindDef, raw []string) ([]sortspec.Spec, error) {
+	specs, err := sortspec.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	return specs, sortspec.Check(specs, resourceSortKeys(d))
+}
+
+// resourceSortValue types a resource's value for sorting: numbers
+// numerically, dates and datetimes by instant, the rest as text.
+func resourceSortValue(d kindDef, r located, stored resValues) func(string) sortspec.Value {
+	return func(key string) sortspec.Value {
+		switch key {
+		case sortName:
+			return sortspec.Text(text(r.Row, rName))
+		case rLastChecked, rArchivedAt:
+			t, _ := time.Parse(time.RFC3339Nano, text(r.Row, key))
+			return sortspec.Time(t)
+		}
+		def := d.byName[key]
+		raw, ok := stored.vals[def.Row.ID.String()]
+		if !ok {
+			return sortspec.Missing
+		}
+		v := fromJSONRaw(raw)
+		if v == nil {
+			return sortspec.Missing
+		}
+		s := display(v)
+		switch value.Kind(text(def.Row, fType)) {
+		case value.KindNumber:
+			if n, err := strconv.ParseFloat(s, 64); err == nil {
+				return sortspec.Number(n)
+			}
+		case value.KindDate, value.KindDateTime:
+			if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+				return sortspec.Time(t)
+			}
+			if t, err := time.Parse(dateOnly, s); err == nil {
+				return sortspec.Time(t)
+			}
+		default:
+			// text and text-like kinds sort as shown.
+		}
+		return sortspec.Text(s)
+	}
 }
 
 func (o ops) resDelete(ctx context.Context, in ResDeleteIn) (RowOut, error) {
