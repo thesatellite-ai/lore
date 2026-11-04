@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
@@ -351,7 +352,9 @@ func (o ops) machineList(ctx context.Context, in MachineListIn) (MachineListOut,
 func (o ops) machineShow(ctx context.Context, in MachineShowIn) (MachineShowOut, error) {
 	q := strings.TrimSpace(in.ID)
 	if !strings.HasPrefix(q, ids.MachinePrefix) || len(q) < minMachinePrefix {
-		return MachineShowOut{}, errs.New(errs.InvalidInput, "machine: "+work.Quote(q)+" is not a machine id: give mch_ and at least 8 hex characters").
+		// The one lookup rule (ops/internal/lookup): a value that cannot
+		// name a machine answers E_NOT_FOUND like an unknown id does.
+		return MachineShowOut{}, lookup.BadID("machine: "+work.Quote(q)+" is not a machine id: give mch_ and at least 8 hex characters", nil).
 			WithHint("run `lore machine list` to see the ids")
 	}
 	list, err := o.machineList(ctx, MachineListIn{})

@@ -22,7 +22,7 @@ func TestResourceSecretRef(t *testing.T) {
 	if s := opstest.Text(h.Must(settings.OpKindShow, `{"id":"host"}`)); !strings.Contains(s, "internal") {
 		t.Fatalf("kind show %q", s)
 	}
-	if _, err := h.RunYes(settings.OpFieldAdd, `{"kind":"host","field":"db_password","type":"text"}`); !errs.Has(err, errs.ResourceInvalid) {
+	if _, err := h.RunYes(settings.OpFieldAdd, `{"kind":"host","field":"db_password","type":"text"}`); !errs.Has(err, errs.ResourceName) {
 		t.Fatalf("credential name as text: %v", err)
 	}
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"keys","type":"secret_ref","no_internal":true,"sensitive":true}`)

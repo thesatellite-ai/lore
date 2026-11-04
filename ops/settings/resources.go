@@ -257,7 +257,7 @@ func dayOf(s string) string {
 func (o ops) resourceOps() []op.Entry {
 	return append([]op.Entry{
 		op.Define(op.Spec{Name: OpResAdd, Summary: "Add a resource of a kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown, errs.ResourcePlace), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.ResourcePlace), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "add a host", CLI: "lore resource add host hub_prod --set provider=hetzner", Want: "res_"}}}, o.resAdd),
 		op.Define(op.Spec{Name: OpResEdit, Summary: "Edit a resource's values (stamps last_checked)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true},
@@ -544,9 +544,15 @@ func requireFields(d kindDef, name string, vals map[string]json.RawMessage) erro
 	return nil
 }
 
+// nameRefusal is invalid's twin for a resource name that breaks its
+// format: E_RESOURCE_NAME (RES 3.1, error table), not E_RESOURCE_INVALID.
+func nameRefusal(d kindDef, name, msg string) error {
+	return errs.New(errs.ResourceName, d.name()+" "+name+": "+msg).WithHint("lore resource kind show " + d.name())
+}
+
 func checkResourceName(d kindDef, name string) error {
 	if len(name) > maxResourceName {
-		return invalid(d, name, "a name has at most "+strconv.Itoa(maxResourceName)+" characters")
+		return nameRefusal(d, name, "a name has at most "+strconv.Itoa(maxResourceName)+" characters")
 	}
 	var err error
 	switch text(d.kind.Row, kNameFormat) {
@@ -562,7 +568,7 @@ func checkResourceName(d kindDef, name string) error {
 		}
 	}
 	if err != nil {
-		return invalid(d, name, "the name does not fit the kind's name format")
+		return nameRefusal(d, name, "the name does not fit the kind's name format")
 	}
 	return nil
 }

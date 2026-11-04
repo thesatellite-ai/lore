@@ -36,7 +36,8 @@ func credentialName(field string, isSecretRef bool) error {
 	}
 	for _, p := range credentialParts {
 		if strings.Contains(field, p) {
-			return errs.New(errs.ResourceInvalid, "field "+quote(field)+" looks like a credential ("+p+"); lore never stores a secret").
+			// E_RESOURCE_NAME: a credential-looking name is a name refusal (RES 3.1).
+			return errs.New(errs.ResourceName, "field "+quote(field)+" looks like a credential ("+p+"); lore never stores a secret").
 				WithHint("store it in a secret manager and add the field with --type secret_ref (it holds the entry name)")
 		}
 	}

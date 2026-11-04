@@ -241,26 +241,30 @@ func (o KindsOut) Text() string {
 }
 
 // kindOps returns the kind and field operations.
+// nameErrors are the write errors of an op that takes a kind or field
+// name: a bad one is E_RESOURCE_NAME (RES 3.1).
+var nameErrors = append(slices.Clone(writeErrors), errs.ResourceName)
+
 func (o ops) kindOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpKindAdd, Summary: "Add a resource kind (a kinds settings row)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "add a kind", CLI: `lore resource kind add host --description "a server"`, Want: "knd_"}}}, o.kindAdd),
 		op.Define(op.Spec{Name: OpKindEdit, Summary: "Edit a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.kindEdit),
 		op.Define(op.Spec{Name: OpKindShow, Summary: "Show a resource kind and its fields", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.kindShow),
 		op.Define(op.Spec{Name: OpKindRename, Summary: "Rename a resource kind (a label change; ids stay)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors}, o.kindRename),
+			Errors: nameErrors}, o.kindRename),
 		op.Define(op.Spec{Name: OpKinds, Summary: "List resource kinds with their fields and row counts", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.kindList),
 		op.Define(op.Spec{Name: OpFieldAdd, Summary: "Add a field to a resource kind (a kind_fields settings row)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "closed set", CLI: "lore resource field add host provider --type text --required --values hetzner,aws", Want: "fld_"}}}, o.fieldAdd),
 		op.Define(op.Spec{Name: OpFieldEdit, Summary: "Edit a field of a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldEdit),
 		op.Define(op.Spec{Name: OpFieldRename, Summary: "Rename a field (a label change: rows key values by fld_ id)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors}, o.fieldRename),
+			Errors: nameErrors}, o.fieldRename),
 		op.Define(op.Spec{Name: OpFieldRemove, Summary: "Remove a field from a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.fieldRemove),
 	}
@@ -299,9 +303,11 @@ func (o ops) fieldByName(ctx context.Context, k located, name string) (located, 
 		WithHint("lore resource kind show " + text(k.Row, kName))
 }
 
+// checkName is the kind and field name format: E_RESOURCE_NAME (RES 3.1,
+// CLI_REFERENCE 3.2 errors).
 func checkName(what, s string) error {
 	if !snakeName.MatchString(s) {
-		return errs.New(errs.InvalidInput, what+" "+quote(s)+" is not snake_case (a-z, 0-9, _; starting with a letter)")
+		return errs.New(errs.ResourceName, what+" "+quote(s)+" is not snake_case (a-z, 0-9, _; starting with a letter)")
 	}
 	return nil
 }
