@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -29,7 +28,6 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
 	"github.com/pelletier/go-toml/v2"
@@ -64,15 +62,8 @@ func retiredModeBCommand(use, short string) *cobra.Command {
 		Short: short,
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(*cobra.Command, []string) error {
-			// `project` is a core noun: core_mount wraps every command of
-			// the group as if the surface had printed its error, so main
-			// would exit silently. Print the refusal here, as main does.
-			err := errcodes.New(errcodes.Unsupported, "lore project "+use+" was removed in 0.1.18").
+			return errcodes.New(errcodes.Unsupported, "lore project "+use+" was removed in 0.1.18").
 				WithHint(modeBReplacement)
-			fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+err.Error())
-			fmt.Fprintln(os.Stderr, hintPrefix+errorHint(err))
-			os.Exit(exitStatus(err))
-			return err // unreachable: os.Exit does not return
 		},
 	}
 	var ignored string
