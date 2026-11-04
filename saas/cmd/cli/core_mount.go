@@ -90,7 +90,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite})
+	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: &coreAuditSink{}})
 	if err != nil {
 		panic(err)
 	}

@@ -16,8 +16,8 @@ import (
 // in .lore/state/, which `lore init` git-ignores (the audit log is local
 // history, not shared knowledge).
 //
-// Gap (phase 2): the audit table of spec 4.3 is not migrated; this file is
-// the engine's AuditSink until it is.
+// It is the fallback sink: when Options.Audit is set (the old binary's
+// sink appending the v0.1.17 audit_logs hash chain) nothing is written here.
 const AuditFile = ".lore/state/audit-v2.jsonl"
 
 // Modes of the audit file and its folder (owner only).

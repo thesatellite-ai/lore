@@ -145,7 +145,10 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err != nil {
 		return fail(err)
 	}
-	st.audit = &fileAudit{path: filepath.Join(st.repoTop, filepath.FromSlash(AuditFile))}
+	st.audit = opts.Audit
+	if st.audit == nil {
+		st.audit = &fileAudit{path: filepath.Join(st.repoTop, filepath.FromSlash(AuditFile))}
+	}
 
 	engOpts := []engine.Option{
 		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repo}),

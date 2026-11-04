@@ -16,7 +16,7 @@
 //     <home>/cache/stores/<store id>/<branch>/<folder>.db for the others;
 //  4. the gitleaks scanner built from its defaults plus the secret_rules
 //     rows the stores hold; logic/refs as the cache's reference expander;
-//     an append-only audit file; the HLC clock and the caller's actor;
+//     the audit sink (Options.Audit, else an append-only file); the HLC clock and the caller's actor;
 //  5. the engine, then a Refresh of every attached store's cache, so rows
 //     written outside lore (a git pull, a hand edit) are seen at once.
 //
@@ -95,6 +95,11 @@ type Options struct {
 	// must not receive internal knowledge: F10 E_LINK_UNKNOWN, the F16
 	// leak check) until the store noun migrates. Nil allows every write.
 	GuardRepoWrite func(ctx context.Context, table row.Table, text string, explicit bool) error
+	// Audit, when set, receives every core write's audit event in place of
+	// AuditFile (the old binary passes a sink that appends the v0.1.17
+	// audit_logs hash chain, so `lore audit log|verify` see core writes).
+	// Nil keeps the append-only AuditFile.
+	Audit engine.AuditSink
 }
 
 // App is one opened (or openable) core: the registry every surface mounts,
@@ -129,7 +134,7 @@ type state struct {
 	// format is the DOCS O6 answer computed at open: whether the first
 	// 0.1.18 write must ask (see format.go). Guarded by App.mu.
 	format formatState
-	audit  *fileAudit
+	audit  engine.AuditSink
 	// who is the resolved identity (zero when Options set the actor).
 	who identity.Resolved
 	// defaultTarget is the engine's default write target.
