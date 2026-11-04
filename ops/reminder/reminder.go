@@ -237,8 +237,8 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 		return work.WriteOut{}, err
 	}
 	fields[schema.FieldReminderDueAt] = value.DateTimeFrom(due)
-	if err := o.checkTarget(ctx, store.Source(in.To), in.OnID); err != nil {
-		return work.WriteOut{}, err
+	if terr := o.checkTarget(ctx, store.Source(in.To), in.OnID); terr != nil {
+		return work.WriteOut{}, terr
 	}
 	project, err := o.env.Project(ctx)
 	if err != nil {
@@ -247,8 +247,8 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return work.WriteOut{}, err
 	}
-	if v, err := work.RefTo(Noun, "created-by", ids.PrefixActor, in.CreatedBy); err != nil {
-		return work.WriteOut{}, err
+	if v, rerr := work.RefTo(Noun, "created-by", ids.PrefixActor, in.CreatedBy); rerr != nil {
+		return work.WriteOut{}, rerr
 	} else if v != nil {
 		fields[work.FieldCreatedBy] = v
 	} else if v := o.currentActor(ctx); v != nil {
@@ -353,9 +353,9 @@ func (o ops) done(ctx context.Context, in IDIn) (DoneOut, error) {
 				WithHint("fix it with a recurrence of: " + strings.Join(schema.ReminderRecurrences(), " | "))
 		}
 		human := work.Success + " rescheduled to " + next.UTC().Format(work.DateLayout) + "\n"
-		w, err := work.Patch(ctx, o.env, Noun, table, id, map[string]value.Value{schema.FieldReminderDueAt: value.DateTimeFrom(next)}, human)
-		if err != nil {
-			return DoneOut{}, err
+		w, perr := work.Patch(ctx, o.env, Noun, table, id, map[string]value.Value{schema.FieldReminderDueAt: value.DateTimeFrom(next)}, human)
+		if perr != nil {
+			return DoneOut{}, perr
 		}
 		return doneOut(w, next.UTC().Format(work.DateLayout)), nil
 	}
