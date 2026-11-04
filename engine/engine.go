@@ -206,6 +206,10 @@ func New(opts ...Option) (*Engine, error) {
 // Stores lists the attached store names in precedence order.
 func (e *Engine) Stores() []store.Source { return slices.Clone(e.order) }
 
+// IsClient reports whether the attached store name is a client repo
+// (Attached.Client); false for an unknown name.
+func (e *Engine) IsClient(name store.Source) bool { return e.stores[name].Client }
+
 // Registry returns the table definitions the engine validates against.
 func (e *Engine) Registry() *schema.Registry { return e.reg }
 

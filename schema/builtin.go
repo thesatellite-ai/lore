@@ -113,7 +113,9 @@ func coreDefs() []TableDef {
 		Table(TableActors, ids.PrefixActor, Synced(), Description("people and agents that write rows"),
 			Text(fieldKind, Required(), OneOf(ActorKinds()...)),
 			Text("display_name", Required()),
-			Text("stable_key", Required(), Internal()),
+			// stable_key is absent from the F18 projection (repo and client
+			// stores get id, display_name, kind only: wire fullActorRow).
+			Text("stable_key", Internal()),
 			Ref("owner_actor_id", TableActors, Internal()),
 			Text("label"),
 			Text("handle"),

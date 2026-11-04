@@ -37,6 +37,17 @@ func resolveIdentity(ctx context.Context, opts Options) (identity.Resolved, erro
 	return identity.Resolve(ctx, in)
 }
 
+// fullActorRow reports whether the caller's actor row written into target
+// may carry the identity's stable key (an email) and handle. Only an
+// attached store that is not a client repo may: the repo store always gets
+// v0.1.17's F18 projection (id, display_name, kind), fail closed, because
+// wire cannot yet tell an org's own repo from a client repo (Attached.Client
+// is never set for the repo store), and a teammate's email must never land
+// in a customer org's repository.
+func fullActorRow(st *state, target store.Source) bool {
+	return target != store.SourceRepo && !st.eng.IsClient(target)
+}
+
 // ensureActor writes the caller's actor row into target on its first write
 // there (through the engine, so it is scanned, stamped and audited like any
 // row), the repo store included: an identity that only runs core commands
@@ -64,8 +75,11 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		return err
 	}
 	fields := map[string]value.Value{}
-	for k, v := range map[string]string{actorFieldKind: st.who.Kind, actorFieldDisplay: st.who.DisplayName,
-		actorFieldKey: st.who.StableKey, actorFieldHandle: st.who.Handle} {
+	vals := map[string]string{actorFieldKind: st.who.Kind, actorFieldDisplay: st.who.DisplayName}
+	if fullActorRow(st, target) {
+		vals[actorFieldKey], vals[actorFieldHandle] = st.who.StableKey, st.who.Handle
+	}
+	for k, v := range vals {
 		if v == "" {
 			continue
 		}
