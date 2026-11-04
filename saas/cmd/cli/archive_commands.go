@@ -509,20 +509,6 @@ var workspaceDeleteTarget = archiveTarget{
 	},
 }
 
-var commentDeleteTarget = archiveTarget{
-	label: "comment",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.Comment.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.ID, nil
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Comment.DeleteOneID(id).Exec(ctx)
-	},
-}
-
 var handoffDeleteTarget = archiveTarget{
 	label: "handoff",
 	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {

@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -132,7 +133,23 @@ func Mount(root *cobra.Command, reg *op.Registry, runner op.Runner, opts ...Opti
 		}
 		parent.AddCommand(command(e, path[len(path)-1], runner, cfg))
 	}
+	hideEmptyGroups(root)
 	return nil
+}
+
+// hideEmptyGroups hides every group this package made whose subcommands
+// are all hidden. A group is runnable (it refuses an unknown sub-word), so
+// cobra would otherwise list it in help even with nothing to offer.
+func hideEmptyGroups(c *cobra.Command) {
+	for _, s := range c.Commands() {
+		if !ours(s) || !s.HasSubCommands() {
+			continue
+		}
+		hideEmptyGroups(s)
+		if !s.HasAvailableSubCommands() {
+			s.Hidden = true
+		}
+	}
 }
 
 // checkMount verifies e can be mounted under root without a clash.
@@ -183,6 +200,16 @@ func group(parent *cobra.Command, name string) *cobra.Command {
 		Annotations:   map[string]string{annotationOwner: annotationValue},
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// A group is runnable only to refuse a word that names none of its
+		// subcommands (cobra would print the group's help with exit 0):
+		// bare, it prints help as before.
+		Args: cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
+		},
 	}
 	parent.AddCommand(g)
 	return g

@@ -19,7 +19,6 @@ import (
 	"dbent/gen/ent"
 	entArchitectureNote "dbent/gen/ent/architecturenote"
 	entBehaviour "dbent/gen/ent/behaviour"
-	entComment "dbent/gen/ent/comment"
 	entCookbookRecipe "dbent/gen/ent/cookbookrecipe"
 	entHandoff "dbent/gen/ent/handoff"
 	entIncident "dbent/gen/ent/incident"
@@ -336,39 +335,6 @@ func newSnapshotSearchCommand() *cobra.Command {
 }
 
 // ── comment ──────────────────────────────────────────────────────────────
-
-func newCommentSearchCommand() *cobra.Command {
-	var f entitySearchFlags
-	cmd := &cobra.Command{
-		Use: "search <query>", Short: "FTS5 search across comment body",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return genericSearchRunE(cmd, args, &f, constants.EntityComment.FTSEntity(), constants.EntityComment.SearchKind(),
-				func(c *ent.Client, ids []string) ([]entitySearchHit, error) {
-					rows, err := c.Comment.Query().Where(entComment.IDIn(ids...)).All(cmd.Context())
-					if err != nil {
-						return nil, errcodes.New(errcodes.Internal, "fetch comment").WithCause(err)
-					}
-					out := make([]entitySearchHit, 0, len(rows))
-					for _, r := range rows {
-						out = append(out, entitySearchHit{
-							ID: r.ID,
-							Row: map[string]any{
-								"body": r.Body, "entity_table": r.EntityTable, "entity_id": r.EntityID,
-							},
-						})
-					}
-					return out, nil
-				},
-				func(h entitySearchHit) string {
-					row := h.Row.(map[string]any)
-					return fmt.Sprintf("%s [%s/%s] %s", h.ID, row["entity_table"], row["entity_id"], trunc(row["body"].(string), 80))
-				})
-		},
-	}
-	bindEntitySearchFlags(cmd, &f)
-	return cmd
-}
 
 // ── handoff ──────────────────────────────────────────────────────────────
 
