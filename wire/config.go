@@ -166,6 +166,100 @@ func setTopIdentity(home string, e identity.Entry) error {
 	})
 }
 
+// configKeyOrgs / configKeyName address one org entry (`orgs[].name`).
+const (
+	configKeyOrgs = "orgs"
+	configKeyName = "name"
+	// LegacyMigratedSuffix is appended to a v0.1.17 identity.yaml once
+	// `lore identity set|unset` has moved who you are into config.yaml
+	// (CFG9): the file is kept, renamed, so nothing a person wrote is lost
+	// and no resolver reads it again.
+	LegacyMigratedSuffix = ".migrated"
+)
+
+// SetIdentity writes the top-level `identity:` of ~/.lore/config.yaml
+// (CFG9: config.yaml is the only home of who you are) and moves a v0.1.17
+// identity.yaml aside (LegacyMigratedSuffix). It returns the config path
+// and the migrated file's new path ("" when there was none).
+//
+//	lore identity set ─► SetIdentity ─► setTopIdentity (node edit, 0600)
+//	                                  └► retireLegacyIdentity (rename)
+func SetIdentity(home string, e identity.Entry) (path, migrated string, err error) {
+	if err = setTopIdentity(home, e); err != nil {
+		return "", "", err
+	}
+	migrated, err = retireLegacyIdentity(home)
+	return configPath(home), migrated, err
+}
+
+// UnsetIdentity clears the top-level `identity:` (org == "") or
+// `orgs[].identity` of the org named org, and moves a v0.1.17 identity.yaml
+// aside on the top-level form so the chain does not fall back to it. found
+// is false when there was nothing to clear; an unknown org is E_NOT_FOUND.
+func UnsetIdentity(home, org string) (found bool, migrated string, err error) {
+	if err = editMachineConfig(home, func(root *yaml.Node) error {
+		target := root
+		if org != "" {
+			target = orgEntry(root, org)
+			if target == nil {
+				return errs.New(errs.NotFound, "identity unset: ~/.lore/"+ConfigFile+" has no org "+strconv.Quote(org)).
+					WithHint("lore config list shows the org entries")
+			}
+		}
+		found = mapDelete(target, configKeyIdentity)
+		return nil
+	}); err != nil {
+		return false, "", err
+	}
+	if org == "" {
+		migrated, err = retireLegacyIdentity(home)
+		found = found || migrated != ""
+	}
+	return found, migrated, err
+}
+
+// orgEntry is the mapping of `orgs[]` whose name is org, nil when absent.
+func orgEntry(root *yaml.Node, org string) *yaml.Node {
+	seq := mapGet(root, configKeyOrgs)
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return nil
+	}
+	for _, m := range seq.Content {
+		if m.Kind == yaml.MappingNode {
+			if n := mapGet(m, configKeyName); n != nil && n.Value == org {
+				return m
+			}
+		}
+	}
+	return nil
+}
+
+// mapDelete removes key from mapping m; false when it was absent.
+func mapDelete(m *yaml.Node, key string) bool {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			m.Content = append(m.Content[:i], m.Content[i+2:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// retireLegacyIdentity renames <home>/identity.yaml to
+// identity.yaml.migrated (an existing .migrated is replaced); "" when there
+// is no legacy file.
+func retireLegacyIdentity(home string) (string, error) {
+	from := filepath.Join(home, identity.LegacyFile)
+	if _, err := os.Stat(from); errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	to := from + LegacyMigratedSuffix
+	if err := os.Rename(from, to); err != nil {
+		return "", errs.Wrap(errs.Internal, "wire: move "+identity.LegacyFile+" aside", err)
+	}
+	return to, nil
+}
+
 // writeFileAtomic writes b to path through a temporary file and a rename.
 func writeFileAtomic(path string, b []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)

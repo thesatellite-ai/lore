@@ -186,7 +186,9 @@ func resolveChain(in Inputs, skip func(key string) bool) (Resolved, []Resolved) 
 
 	// Step 3: ~/.lore/identity.yaml
 	if r, ok := tryIdentityFile(context.Background()); ok {
-		r.Step = StepIdentityFile
+		if r.Step == StepUnresolved {
+			r.Step = StepIdentityFile // StepTopConfig when config.yaml answered
+		}
 		if take(r) {
 			return r, skipped
 		}
@@ -232,13 +234,25 @@ func resolveChain(in Inputs, skip func(key string) bool) (Resolved, []Resolved) 
 	}, skipped
 }
 
-// tryIdentityFile reads ~/.lore/identity.yaml (see File). A file that cannot
+// tryIdentityFile reads the top-level identity: of ~/.lore/config.yaml
+// (CFG9), else ~/.lore/identity.yaml (see File). A file that cannot
 // be read falls through to the next step, as the TOML reader always did, but
 // never silently: lorecfg prints that the file is skipped and why (F19).
 func tryIdentityFile(ctx context.Context) (Resolved, bool) {
 	dir, err := Dir()
 	if err != nil {
 		return Resolved{}, false
+	}
+	// CFG9: the top-level identity: of ~/.lore/config.yaml is the home of who
+	// you are (lore identity set writes it); identity.yaml is v0.1.17's copy.
+	if cfg, _, cerr := lorecfg.LoadTeam(ctx, dir, lorecfg.Options{}); cerr == nil && cfg != nil {
+		if k := strings.TrimSpace(cfg.Identity.Key); k != "" {
+			display := strings.TrimSpace(cfg.Identity.Name)
+			if display == "" {
+				display = extractDisplayName(k)
+			}
+			return Resolved{StableKey: k, DisplayName: display, Kind: kindFromKey(k), Handle: cfg.Identity.Handle, Step: StepTopConfig}, true
+		}
 	}
 	loc, err := lorecfg.Locate(ctx, dir, FileBase, lorecfg.Options{})
 	if err != nil || !loc.Exists {
