@@ -30,6 +30,7 @@ import (
 	"saas/pkg/aicoder/style"
 
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
 
 	"github.com/spf13/cobra"
 )
@@ -258,6 +259,8 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	doctorCaches(ctx, repoTop, home, r)
 	// 9. Repo addresses (PROV2, Q5).
 	doctorRepoAddresses(ctx, r)
+	// 10. Duplicate imports (PROV9).
+	doctorDuplicateImports(ctx, r)
 
 	r.OK = r.Status == doctorHealthy
 	return r, nil
@@ -543,6 +546,29 @@ func doctorRepoAddresses(ctx context.Context, r *doctorReport) {
 	}
 	if rep.Mismatch != "" {
 		r.Warnings = append(r.Warnings, rep.Mismatch+"; if this clone is the fork, restore the fork's .lore/data/_meta.json (git checkout <fork commit> -- .lore/data/_meta.json) or run `lore repo fork`")
+		degrade(r)
+	}
+}
+
+// doctorDuplicateImports is the PROV9 check duplicate_import: two live tasks
+// imported under one external id (two clones importing the same source
+// before either synced, or the same file imported twice). PROV9: reported,
+// never merged on their own, because the copies may have been edited
+// differently; until a merge command exists (Q-R3-1) the fix keeps the
+// oldest and deletes the newer copies.
+func doctorDuplicateImports(ctx context.Context, r *doctorReport) {
+	if coreApp == nil {
+		return
+	}
+	dups, err := opstask.FindDuplicateImports(ctx, coreApp)
+	if err != nil {
+		r.Warnings = append(r.Warnings, "duplicate_import: the tasks could not be read: "+err.Error())
+		degrade(r)
+		return
+	}
+	for _, d := range dups {
+		r.Warnings = append(r.Warnings, "duplicate_import "+d.Source+" "+d.ExtID+": "+strings.Join(d.IDs, ", ")+
+			"; keep the oldest: "+strings.Join(d.FixCommand(), "; "))
 		degrade(r)
 	}
 }
