@@ -825,6 +825,20 @@ func wireGit(ctx context.Context, db *sql.DB, root string) {
 		}
 		return
 	}
+	reportGitWiring(root, res, true)
+	paths := wiredPaths(root, res)
+	if err := lsync.SetState(ctx, db, stateGitPaths, strings.Join(paths, "\n")); err == nil {
+		_ = lsync.SetState(ctx, db, stateGitFingerprint, wiringFingerprint(paths)) // cache only; recomputed next time if lost
+	}
+}
+
+// reportGitWiring mentions, once, what ensureGitWiring changed in the
+// project at root (the same lines for the lore.db path, wireGit, and the
+// core commands, ensureCoreGitSetup). ignoredNote adds the "a whole folder
+// hides .lore/data" warning, which only the lore.db path can show once per
+// state of the ignore files (its fingerprint); the core path, which has no
+// such cache, leaves it to `lore sync` so it does not repeat on every command.
+func reportGitWiring(root string, res gitWiringResult, ignoredNote bool) {
 	if (res.Attributes || len(res.Config) > 0 || len(res.Hooks) > 0) && os.Getenv(envSyncQuiet) != envValueOn {
 		fmt.Fprintf(os.Stderr, "%sconfigured git for lore data (merge driver, .gitattributes, hooks in %s)\n", syncLogPrefix, res.HooksDir)
 	}
@@ -838,16 +852,12 @@ func wireGit(ctx context.Context, db *sql.DB, root string) {
 		// Shown once per state of the file (it is a watched path).
 		fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+displayPath(root, w.Path)+": "+w.Note))
 	}
-	if len(res.IgnoredData) > 0 {
+	if ignoredNote && len(res.IgnoredData) > 0 {
 		// Never quiet. Shown once per state of the ignore files: what is
 		// left is a whole excluded folder, often a deliberate choice to keep
 		// lore private, so repeating it on every command would be noise.
 		// Editing any .gitignore in wiredPaths re-runs the check.
 		fmt.Fprintln(os.Stderr, style.Warn(ignoredDataMessage(res.IgnoredData)))
-	}
-	paths := wiredPaths(root, res)
-	if err := lsync.SetState(ctx, db, stateGitPaths, strings.Join(paths, "\n")); err == nil {
-		_ = lsync.SetState(ctx, db, stateGitFingerprint, wiringFingerprint(paths)) // cache only; recomputed next time if lost
 	}
 }
 

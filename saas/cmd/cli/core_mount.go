@@ -71,10 +71,12 @@ import (
 	"github.com/thesatellite-ai/lore/wire"
 
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/projresolve"
 	oldstores "saas/pkg/aicoder/stores"
+	"saas/pkg/aicoder/style"
 )
 
 // coreApp is the lazily opened 0.1.18 core of this process: built at
@@ -107,7 +109,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}, Notice: coreNotice})
+	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend})
 	if err != nil {
 		panic(err)
 	}
@@ -335,7 +337,28 @@ func ensureCoreGitignore(ctx context.Context) error {
 	if err := ensureGitignore(ctx, pctx.ProjectRoot); err != nil {
 		return errcodes.New(errcodes.Internal, "update .gitignore").WithCause(err)
 	}
+	ensureCoreGitSetup(ctx, pctx.ProjectRoot)
 	return nil
+}
+
+// ensureCoreGitSetup wires git for lore data (merge driver, .gitattributes,
+// the hooks) in the project at root, as v0.1.17's per-command sync did.
+//
+// Why: the core never runs that sync, so a clone where only core commands
+// ran (a teammate's fresh checkout of a client repo) had no pre-commit /
+// commit-msg / pre-push hooks at all, and the F16 leak check that lives in
+// them never ran: internal text and full actor rows committed silently.
+// Not a git repo, or no git, is fine (rows still work on files); another
+// failure is a warning, never a refused command.
+func ensureCoreGitSetup(ctx context.Context, root string) {
+	res, err := ensureGitWiring(ctx, root)
+	if err != nil {
+		if !errors.Is(err, gitsetup.ErrNotRepo) && !errors.Is(err, gitsetup.ErrNoGit) {
+			fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"git wiring: "+err.Error()))
+		}
+		return
+	}
+	reportGitWiring(root, res, false)
 }
 
 // gitignoreChecked records that ensureCoreGitignore ran (one command per

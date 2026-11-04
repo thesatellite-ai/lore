@@ -144,7 +144,9 @@ func newCheckPRBodyCommand() *cobra.Command {
 
 // leakIndexFor builds the index for the project at root: every external
 // row for a client repo; personal rows only for a repo with no org; nil for
-// the org's own repo (nothing there is read by a client). Fails closed.
+// the org's own repo (nothing there is read by a client). External rows are
+// the v0.1.17 cache's plus the core's attached stores (coreLeakRows).
+// Fails closed.
 func leakIndexFor(ctx context.Context, root string) (*leakcheck.Index, string, bool, error) {
 	s, err := gatherOrgSituation(ctx, root)
 	if err != nil {
@@ -182,6 +184,12 @@ func leakIndexFor(ctx context.Context, root string) (*leakcheck.Index, string, b
 		}
 		ir = append(ir, leakcheck.IndexRow{ID: r.ID, Table: r.Table, Label: r.Label, Source: r.Source, Texts: []string{r.Title, r.Body}, SharedAs: sharedCopies(r.Doc)})
 	}
+	// The 0.1.18 core's stores: their rows never reach the v0.1.17 cache.
+	coreRows, err := coreLeakRows(ctx, client)
+	if err != nil {
+		return nil, "", false, err
+	}
+	ir = append(ir, coreRows...)
 	return leakcheck.NewIndex(ir, projects), s.ProjectID, client, nil
 }
 
