@@ -126,7 +126,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore cache` … | Maintain lore's caches outside the checkout (~/.lore/cache, ~/.lore/render) | — |
-| `lore cache prune` | Remove caches and internal renders of projects not used for --older-than (default 90d) | [team/identity-and-stores › Step 8 — Clean up old caches: lore cache prune](../../docs/team/identity-and-stores.md#step-8--clean-up-old-caches-lore-cache-prune) |
+| `lore cache prune` | Remove cache files of stores no repo on this machine attaches any more (lists them and asks first) | [team/identity-and-stores › Step 8 — Clean up old caches: lore cache prune](../../docs/team/identity-and-stores.md#step-8--clean-up-old-caches-lore-cache-prune) |
 
 ### lore check
 

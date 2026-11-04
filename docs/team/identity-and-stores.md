@@ -223,13 +223,13 @@ $ lore store forget git@github.com:agency/notes
 
 ## Step 8 — Clean up old caches: `lore cache prune`
 
-Lore keeps a small cache per project in `~/.lore`. `lore cache prune` removes the ones you have not used for a while (90 days by default):
+Lore keeps a cache file per attached store in `~/.lore/cache`. `lore cache prune` removes the cache files of stores that no repo on this machine attaches any more (a removed checkout, a `lore store remove`). It lists each file with its size and asks before deleting anything: `--dry-run` only lists, `--yes` deletes without asking, and without a terminal it refuses with `E_NEEDS_CONFIRM` unless you pass `--yes`. It never touches row files or anything outside `~/.lore/cache`; a store you attach again rebuilds its cache on the next command.
 
 <!-- example: people#cache-prune -->
 ```console
 # alice, in ~
-$ lore cache prune --older-than 30d
-0 removed, 1 kept (used within 720h0m0s)
+$ lore cache prune --dry-run
+nothing to prune: every cache file belongs to a store a repo on this machine attaches
 ```
 <!-- /example -->
 

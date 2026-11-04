@@ -131,5 +131,5 @@ bob$ lore store forget git@github.com:agency/notes
 ✓ forgot <redacted> (removed ~/.lore/clones/github.com/agency/notes.git; the next command that needs it clones it again)
 
 ### cache prune
-alice$ lore cache prune --older-than 30d
-0 removed, 1 kept (used within 720h0m0s)
+alice$ lore cache prune --dry-run
+nothing to prune: every cache file belongs to a store a repo on this machine attaches

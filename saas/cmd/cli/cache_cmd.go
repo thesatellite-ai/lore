@@ -21,6 +21,7 @@ import (
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/stores"
+	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
@@ -273,8 +274,8 @@ func removeV017Cache(root, name string) error {
 	return nil
 }
 
-// pruneDeadRecords removes the use records of repos that are gone; with
-// dryRun it only says how many there are.
+// pruneDeadRecords removes the use records of repos that are gone and
+// prints how many; with dryRun it removes and prints nothing.
 func pruneDeadRecords(root string, dead []sqlite.RecordFile, dryRun bool) error {
 	if len(dead) == 0 || dryRun {
 		return nil
@@ -284,6 +285,10 @@ func pruneDeadRecords(root string, dead []sqlite.RecordFile, dryRun bool) error 
 			return err
 		}
 	}
+	// FLAG3 (coordinator answer, round 2): a gone repo's record is removed
+	// without asking (it is lore's own bookkeeping inside the cache
+	// folder), but never silently: one muted line says how many.
+	fmt.Println(style.Muted(fmt.Sprintf("removed %d cache use record(s) of repos no longer on this machine", len(dead))))
 	return nil
 }
 

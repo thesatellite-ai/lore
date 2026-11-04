@@ -564,18 +564,20 @@ Flags:
 ### `lore cache prune`
 
 <!-- help: cache prune -->
-Remove caches and internal renders of projects not used for --older-than (default 90d)
+Remove cache files of stores no repo on this machine attaches any more (lists them and asks first)
 
 ```text
 Usage:
   lore cache prune
 
 Examples:
+  lore cache prune --dry-run
   lore cache prune
-  lore cache prune --older-than 30d
+  lore cache prune --yes
 
 Flags:
-      --older-than string   idle time before a cache is removed (e.g. 30d, 2160h); default 90d
+      --dry-run   list the cache files prune would delete, delete nothing
+      --yes       delete without asking
 ```
 <!-- /help -->
 

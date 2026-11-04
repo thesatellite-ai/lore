@@ -852,7 +852,7 @@ Y
   on bob . "lore store forget git@github.com:agency/notes"
 
   note "cache prune"
-  on alice . "lore cache prune --older-than 30d"
+  on alice . "lore cache prune --dry-run"
 }
 
 # ---------------------------------------------------------------------------
