@@ -56,6 +56,8 @@ const (
 	LockHeld    Code = "E_LOCK_HELD"
 	ReadOnly    Code = "E_READ_ONLY"
 	BusyTimeout Code = "E_BUSY_TIMEOUT"
+	SQLRefused  Code = "E_SQL_REFUSED"
+	SQLTimeout  Code = "E_SQL_TIMEOUT"
 
 	AuditChainBroken Code = "E_AUDIT_CHAIN_BROKEN"
 
@@ -243,6 +245,8 @@ var table = map[Code]entry{
 	LockHeld:              {class: ClassRefused, desc: "another lore process is holding the project flock"},
 	ReadOnly:              {class: ClassRefused, desc: "command requires write access but read-only mode is active"},
 	BusyTimeout:           {class: ClassRefused, desc: "DB busy timeout exceeded"},
+	SQLRefused:            {class: ClassBadInput, desc: "lore sql refused the statement: not one read-only SELECT/WITH/VALUES, or a denied name"},
+	SQLTimeout:            {class: ClassRefused, desc: "lore sql ran past --timeout"},
 	AuditChainBroken:      {class: ClassRefused, desc: "audit log hash chain integrity verification failed"},
 	SyncDataIgnored:       {class: ClassRefused, desc: "git ignores files under .lore/data, so teammates would not receive them"},
 	NotFound:              {class: ClassNotFound, desc: "no such row, resource, variable or other thing here"},

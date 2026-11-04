@@ -18,7 +18,7 @@ func allConstants() []Code {
 		MountNameTaken, IdentityFailed, BadPath, AlreadyInitialized,
 		InvalidID, InvalidInput, EmptyBody, InvalidUTF8, BodyTooLarge, InvalidIdentifier,
 		SecretDetected, RootRefused, SymlinkDB, SymlinkLoop, UIDMismatch,
-		LockHeld, ReadOnly, BusyTimeout, AuditChainBroken, SyncDataIgnored,
+		LockHeld, ReadOnly, BusyTimeout, SQLRefused, SQLTimeout, AuditChainBroken, SyncDataIgnored,
 		NotFound, Internal, NotImplemented, Unsupported, HasDependents,
 		NoWork, Contended, LostClaim, Cancelled, Reassigned, Offline, AmbiguousID,
 		OrgAmbiguous, OrgDisagrees, LinkUnknown, NotAStore, LeakBlocked, Cycle, OldLore,
