@@ -95,6 +95,15 @@ func (s storeSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
 	return set, policy.ResolveRules(rules), nil
 }
 
+// Policy is the effective policy set a write to target sees: the same
+// Settings source the write path reads (WithSettings, else every attached
+// store's policies rows at their levels). A malformed row fails closed
+// (E_CONFIG_INVALID naming it).
+func (e *Engine) Policy(target store.Source) (policy.Set, error) {
+	set, _, err := e.settings.Policy(target)
+	return set, err
+}
+
 // Allows implements Settings: every secret_allows row of every store. A
 // malformed row fails closed (E_CONFIG_INVALID naming it).
 func (s storeSettings) Allows(store.Source) ([]scan.Allow, error) {

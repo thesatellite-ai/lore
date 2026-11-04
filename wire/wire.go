@@ -108,7 +108,16 @@ type Options struct {
 	// v0.1.17's routing refusals (a client repo linked to an org store
 	// must not receive internal knowledge: F10 E_LINK_UNKNOWN, the F16
 	// leak check) until the store noun migrates. Nil allows every write.
-	GuardRepoWrite func(ctx context.Context, table row.Table, text string, explicit bool) error
+	GuardRepoWrite func(ctx context.Context, q WriteQuery, explicit bool) error
+	// DefaultTarget, when set, is asked before every create that names no
+	// target (CONFIG_GUIDE default-target rules): it returns the store the
+	// row goes to (a name the engine attached, such as the org store the
+	// repo is linked to), or "" / repo to keep the engine's default target,
+	// after which GuardRepoWrite still runs. An error refuses the write.
+	// v0.1.17 routed a client repo's internal kinds (memories, rules,
+	// decisions, …) to the org store this way (routeWrite, F14); the old
+	// binary keeps that rule here until the org noun migrates.
+	DefaultTarget func(ctx context.Context, q WriteQuery) (store.Source, error)
 	// ModeB reads a retired v0.1.17 Mode B project (shared lore.db) for
 	// `lore migrate run` (wire/migrate_modeb.go); nil = such a repo is
 	// refused but cannot be converted.
@@ -139,6 +148,20 @@ type Options struct {
 	// already uses is skipped (the committed file wins). Nil, or an error,
 	// attaches nothing (fail closed: an internal store is never guessed).
 	OrgStores func(ctx context.Context) ([]attach.Store, error)
+}
+
+// WriteQuery is what the write hooks (Options.GuardRepoWrite,
+// Options.DefaultTarget) learn about one create.
+type WriteQuery struct {
+	// Table is the row's table.
+	Table row.Table
+	// Text is every text value the row writes, sorted by field and joined
+	// by newlines (for a leak check).
+	Text string
+	// Routes is the effective policy.KeyClientRoutes (kind → target) of
+	// every attached store's policies rows (CFG8: the team's client-repo
+	// defaults); empty when none is set.
+	Routes map[string]string
 }
 
 // App is one opened (or openable) core: the registry every surface mounts,

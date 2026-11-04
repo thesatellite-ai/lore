@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"saas/pkg/constants"
@@ -106,7 +107,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}})
+	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}})
 	if err != nil {
 		panic(err)
 	}
@@ -274,7 +275,15 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 		}
 		asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON)
 		if !asJSON {
-			return inner(cmd, args)
+			if err := inner(cmd, args); err != nil {
+				return err
+			}
+			if coreRouted != "" {
+				// v0.1.17 printRoute: where a routed write went and why.
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "  filed: %s\n", coreRouted)
+				return err
+			}
+			return nil
 		}
 		var buf bytes.Buffer
 		out := cmd.OutOrStdout()
@@ -345,8 +354,8 @@ var coreRouteKinds = map[row.Table]string{
 //
 // explicit is `--to repo`: the person chose this repo, which v0.1.17
 // accepted (the leak check still runs).
-func guardCoreRepoWrite(ctx context.Context, table row.Table, text string, explicit bool) error {
-	kind, ok := coreRouteKinds[table]
+func guardCoreRepoWrite(ctx context.Context, q wire.WriteQuery, explicit bool) error {
+	kind, ok := coreRouteKinds[q.Table]
 	if !ok {
 		return nil
 	}
@@ -354,32 +363,95 @@ func guardCoreRepoWrite(ctx context.Context, table row.Table, text string, expli
 	if explicit {
 		to.To = toRepo
 	}
-	wt, err := resolveWriteTarget(ctx, to, text)
+	wt, dec, err := coreRouteDecision(ctx, to, kind, q)
 	if err != nil {
-		return coreErr(err)
-	}
-	in, err := targetInputs(ctx, wt.Situation, wt.Target, kind)
-	if err != nil {
-		return coreErr(err)
-	}
-	dec, err := oldstores.ResolveTarget(in)
-	if err != nil {
-		return coreErr(targetCLIError(err))
+		return err
 	}
 	if wt.Personal != nil || !dec.Repo {
-		// The org store is attached to the core under the org's name at
-		// the linked folder (coreOrgStores), so the explicit target is
-		// named; the core does not pick a non-repo default by itself yet.
+		// coreDefaultTarget sends this row to the org store when that
+		// folder is attached; reaching here means it is not.
 		hint := "write it to a store listed in .lore/stores.yaml with --to <name>, or choose this repo with --to repo"
 		if wt.Personal == nil && wt.Situation != nil && wt.Situation.Result.Org != nil {
 			org := wt.Situation.Result.Org.Name
-			hint = "write it to " + org + "'s store with --to " + org + " (the linked folder " + dec.Folder + "/), or choose this repo with --to repo"
+			hint = "write it to " + org + "'s store with --to " + org + "/" + dec.Folder + " (the folder " + dec.Folder + "/), or choose this repo with --to repo"
 		}
-		return errs.New(errs.Unsupported, "this repository's lore routing sends a "+kind+" to a store ("+dec.Rule+"); name the target with --to").
+		return errs.New(errs.Unsupported, "this repository's lore routing sends a "+kind+" to a store folder lore has not attached ("+dec.Rule+"); name the target with --to").
 			WithHint(hint)
 	}
-	return coreErr(leakCheckRouteWrite(ctx, writeRoute{Repo: true, Rule: dec.Rule, Situation: wt.Situation}, kind, text))
+	return coreErr(leakCheckRouteWrite(ctx, writeRoute{Repo: true, Rule: dec.Rule, Situation: wt.Situation}, kind, q.Text))
 }
+
+// coreRouteDecision is v0.1.17's F14 target decision (routeWrite) for one
+// core create of kind: the org situation, the --to given, the team's
+// client-repo defaults from lore-org.yaml (until `lore migrate run` moves
+// them) joined with the routing.client_repos policy rows (CFG8; per kind a
+// store target beats repo, as v0.1.17's effectiveDefault).
+func coreRouteDecision(ctx context.Context, to toFlags, kind string, q wire.WriteQuery) (writeTarget, oldstores.TargetDecision, error) {
+	wt, err := resolveWriteTarget(ctx, to, q.Text)
+	if err != nil {
+		return writeTarget{}, oldstores.TargetDecision{}, coreErr(err)
+	}
+	in, err := targetInputs(ctx, wt.Situation, wt.Target, kind)
+	if err != nil {
+		return writeTarget{}, oldstores.TargetDecision{}, coreErr(err)
+	}
+	if len(q.Routes) > 0 {
+		merged := maps.Clone(in.StoreDefaults)
+		if merged == nil {
+			merged = map[string]string{}
+		}
+		for k, v := range q.Routes {
+			if cur, seen := merged[k]; !seen || (cur == oldstores.DefaultRepo && v != oldstores.DefaultRepo) {
+				merged[k] = v
+			}
+		}
+		in.StoreDefaults = merged
+	}
+	dec, err := oldstores.ResolveTarget(in)
+	if err != nil {
+		return writeTarget{}, oldstores.TargetDecision{}, coreErr(targetCLIError(err))
+	}
+	return wt, dec, nil
+}
+
+// coreDefaultTarget is wire.Options.DefaultTarget for this binary: a
+// create of a routed kind (coreRouteKinds) that names no --to goes where
+// v0.1.17's routeWrite sent it. In a client repo that is the org store's
+// linked folder (attached as the org's name by coreOrgStores), or the
+// folder a client-repo default names ("<org>/<folder>", the org folder
+// attached as such); in the org's own repo, or with no org, the repo
+// store (""), where guardCoreRepoWrite still runs the leak check. A folder
+// the core has not attached answers "" too, so the guard refuses it with
+// the explicit --to to use (fail closed). The decision's rule is kept in
+// coreRouted for the "filed:" line v0.1.17 printed.
+func coreDefaultTarget(ctx context.Context, q wire.WriteQuery) (store.Source, error) {
+	kind, ok := coreRouteKinds[q.Table]
+	if !ok {
+		return "", nil
+	}
+	wt, dec, err := coreRouteDecision(ctx, toFlags{}, kind, q)
+	if err != nil {
+		return "", err
+	}
+	if wt.Personal != nil || dec.Repo || wt.Situation == nil || wt.Situation.Result.Org == nil {
+		return "", nil
+	}
+	attached, err := coreOrgStores(ctx)
+	if err != nil {
+		return "", coreErr(err)
+	}
+	for _, s := range attached {
+		if s.Folder == dec.Folder {
+			coreRouted = dec.Rule
+			return s.Name, nil
+		}
+	}
+	return "", nil
+}
+
+// coreRouted is the F14 rule of the routed create this process made (one
+// command per process); printed as v0.1.17's "  filed: <rule>" line.
+var coreRouted string
 
 // coreRepoIsClient is wire.Options.RepoIsClient for this binary: the repo
 // is a client repo when org resolution (F10, gatherOrgSituation) says its

@@ -27,8 +27,21 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 	if err != nil {
 		return engine.Written{}, err
 	}
+	q, err := a.writeQuery(st, table, fields)
+	if err != nil {
+		return engine.Written{}, err
+	}
+	if target == "" && a.opts.DefaultTarget != nil {
+		to, derr := a.opts.DefaultTarget(ctx, q)
+		if derr != nil {
+			return engine.Written{}, derr
+		}
+		if to != store.SourceRepo {
+			target = to
+		}
+	}
 	if target == "" || target == store.SourceRepo {
-		if gerr := a.guard(ctx, table, fields, target == store.SourceRepo); gerr != nil {
+		if gerr := a.guard(ctx, q, target == store.SourceRepo); gerr != nil {
 			return engine.Written{}, gerr
 		}
 	}
@@ -147,11 +160,21 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 		WithHint("run `lore project list` and archive the ones you do not use")
 }
 
-// guard asks Options.GuardRepoWrite about a create in the repo store,
-// passing every text value it writes (sorted by field, newline-joined).
-func (a *App) guard(ctx context.Context, table row.Table, fields map[string]value.Value, explicit bool) error {
+// guard asks Options.GuardRepoWrite about a create in the repo store.
+func (a *App) guard(ctx context.Context, q WriteQuery, explicit bool) error {
 	if a.opts.GuardRepoWrite == nil {
 		return nil
+	}
+	return a.opts.GuardRepoWrite(ctx, q, explicit)
+}
+
+// writeQuery describes a create for the write hooks: every text value it
+// writes (sorted by field, newline-joined) and, only when a hook needs it,
+// the effective client-repo routes from the policies rows.
+func (a *App) writeQuery(st *state, table row.Table, fields map[string]value.Value) (WriteQuery, error) {
+	q := WriteQuery{Table: table}
+	if a.opts.GuardRepoWrite == nil && a.opts.DefaultTarget == nil {
+		return q, nil
 	}
 	var texts []string
 	for _, k := range slices.Sorted(maps.Keys(fields)) {
@@ -159,7 +182,13 @@ func (a *App) guard(ctx context.Context, table row.Table, fields map[string]valu
 			texts = append(texts, t.String())
 		}
 	}
-	return a.opts.GuardRepoWrite(ctx, table, strings.Join(texts, "\n"), explicit)
+	q.Text = strings.Join(texts, "\n")
+	set, err := st.eng.Policy(st.defaultTarget)
+	if err != nil {
+		return WriteQuery{}, err
+	}
+	q.Routes = set.ClientRoutes()
+	return q, nil
 }
 
 // repoMountField is the repos field a --repo value names.
