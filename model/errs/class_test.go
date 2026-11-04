@@ -30,7 +30,7 @@ func allConstants() []Code {
 		MetaUnknown, MetaUnregistered, MetaStale, MetaInUse, MetaConflict, MetaRetired, MetaQuarantined,
 		MetaInternal, MetaForeignKey, MetaStoreUnreadable,
 		ResourceInUse, KindConflict, NameTaken, MetaTaken, Purged, Refused,
-		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth, OpenItems,
+		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth, OpenItems, HasOpenChildren, Date,
 		DurationBad, TimeTooLong, UpgradePermission, UpgradeChecksum, UpgradePinned,
 		RefSyntax, RefScheme, RefCycle, RefDepth, RefLimit, RefDangling, RefRequired,
 		InTrash, ParentDeleted, ParentPurged, ReasonRequired, MigrateRollbackLoses,

@@ -95,14 +95,16 @@ const (
 	LeakBlocked  Code = "E_LEAK_BLOCKED"
 	Cycle        Code = "E_CYCLE"
 	// Task tree refusals (TASK_SYSTEM_DESIGN 6.4-6.7, 24; CLI_REFERENCE 5.6: exit 23, 409).
-	OpenChildren  Code = "E_OPEN_CHILDREN"
-	ParentClosed  Code = "E_PARENT_CLOSED"
-	ParentMission Code = "E_PARENT_MISSION"
-	ParentProject Code = "E_PARENT_PROJECT"
-	TreeDepth     Code = "E_TREE_DEPTH"
-	OpenItems     Code = "E_OPEN_ITEMS"
-	OldLore       Code = "E_OLD_LORE"
-	ConfigInvalid Code = "E_CONFIG_INVALID"
+	OpenChildren    Code = "E_OPEN_CHILDREN"
+	ParentClosed    Code = "E_PARENT_CLOSED"
+	ParentMission   Code = "E_PARENT_MISSION"
+	ParentProject   Code = "E_PARENT_PROJECT"
+	TreeDepth       Code = "E_TREE_DEPTH"
+	HasOpenChildren Code = "E_HAS_OPEN_CHILDREN"
+	Date            Code = "E_DATE"
+	OpenItems       Code = "E_OPEN_ITEMS"
+	OldLore         Code = "E_OLD_LORE"
+	ConfigInvalid   Code = "E_CONFIG_INVALID"
 	// Time tracking input errors (TIME_TRACKING_DESIGN, CLI_REFERENCE 5: exit 20).
 	DurationBad Code = "E_DURATION_BAD"
 	TimeTooLong Code = "E_TIME_TOO_LONG"
@@ -262,6 +264,8 @@ var table = map[Code]entry{
 	ParentMission:         {class: ClassRefused, desc: "a sub-task's mission differs from its parent's"},
 	ParentProject:         {class: ClassRefused, desc: "the parent task is in another project"},
 	TreeDepth:             {class: ClassRefused, desc: "the sub-task tree would be deeper than tasks.max_depth"},
+	HasOpenChildren:       {class: ClassRefused, desc: "claim of a parent task with open sub-tasks without --coordinate"},
+	Date:                  {class: ClassBadInput, desc: "a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days"},
 	OpenItems:             {class: ClassRefused, desc: "done of a task with unticked checklist items without --tick-all or --force (TSQ14)"},
 	DurationBad:           {class: ClassBadInput, desc: "a duration lore does not accept (0, negative, a day unit); give e.g. 45m, 1h30m, 1.5h"},
 	TimeTooLong:           {class: ClassBadInput, desc: "a manual time entry over time.max_entry (default 24h); split it into one entry per day"},
