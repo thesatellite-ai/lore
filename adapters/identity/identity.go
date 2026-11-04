@@ -160,7 +160,8 @@ type Inputs struct {
 	Dir string
 }
 
-// ErrOrgIdentityMissing: the resolved org entry has no identity key.
+// ErrOrgIdentityMissing is returned when the resolved org entry has no
+// identity key.
 var ErrOrgIdentityMissing = errors.New("identity: the resolved org entry has no identity")
 
 // Resolve runs the chain. It fails only inside an org whose entry has no
@@ -377,7 +378,7 @@ func osUser(getenv func(string) string) (Resolved, bool) {
 // machineID hashes the Linux machine id into auto:<12 hex>.
 func machineID() (Resolved, bool) {
 	for _, p := range machineIDFiles {
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(filepath.Clean(p))
 		if err != nil {
 			continue
 		}
