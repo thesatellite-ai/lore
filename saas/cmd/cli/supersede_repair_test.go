@@ -13,6 +13,9 @@ import (
 
 	"dbent/gen/ent"
 	entDecision "dbent/gen/ent/decision"
+
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 func TestPlanSupersedeRepair(t *testing.T) {
@@ -120,60 +123,59 @@ func supersedeLinks(t *testing.T, c *ent.Client) map[string]string {
 	return out
 }
 
+// The repair on real core rows (rules, memories, hotfixes, patterns and
+// decisions are core-owned in 0.1.18): rows are added through the binary,
+// the old shape (the NEW row carries the link to the old one, as an older
+// `--supersedes` wrote it) is written through the core, and the repair runs
+// twice to show the second run changes nothing. Memories are back in the
+// fixture (they had been swapped for rules while the core had no memory
+// writes).
 func TestRepairSupersedesOldShapeRowsTwice(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
-	c := openTestClient(t)
-	const project = "prj_01a10237c9a279ee94a32b8450dfb6f9"
-	t0 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
-
-	// Old shape (rules stand in for memories, which the 0.1.18 core now
-	// writes), as an older `rule add --supersedes` wrote it: the NEW
-	// rule carries the link to the old one; the old one has none.
-	oldMem, err := c.Rule.Create().SetProjectID(project).SetBody("the printer is downstairs").SetSourceKind("manual").SetCreatedAt(t0).Save(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	newMem, err := c.Rule.Create().SetProjectID(project).SetBody("the printer is upstairs").SetSourceKind("manual").SetCreatedAt(t0.Add(time.Hour)).SetSupersededByID(oldMem.ID).Save(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cf := newCoreFixture(t)
+	oldMem := cf.addID("memory", "add", "--body", "the printer is downstairs")
+	newMem := cf.addID("memory", "add", "--body", "the printer is upstairs")
+	oldRule := cf.addID("rule", "add", "--body", "deploy on fridays")
+	newRule := cf.addID("rule", "add", "--body", "never deploy on fridays")
 	// Decisions: an accepted old one (moves to superseded) and a
 	// deprecated old one (status kept).
-	mkDec := func(title string, at time.Time, st entDecision.Status, by string) *ent.Decision {
-		cr := c.Decision.Create().SetProjectID(project).SetTitle(title).SetBody(title).SetStatus(st).SetSourceKind("manual").SetCreatedAt(at)
-		if by != "" {
-			cr.SetSupersededByID(by)
-		}
-		d, err := cr.Save(ctx)
-		if err != nil {
+	oldDec := cf.addID("decision", "add", "--title", "Payments: PayPal", "--body", "Payments: PayPal")
+	newDec := cf.addID("decision", "add", "--title", "Payments: Stripe", "--body", "Payments: Stripe")
+	deprDec := cf.addID("decision", "add", "--title", "Queue: SQS", "--body", "Queue: SQS", "--status", string(entDecision.StatusDeprecated))
+	replDec := cf.addID("decision", "add", "--title", "Queue: NATS", "--body", "Queue: NATS")
+	cf.mount()
+	c := openTestClient(t) // the callers' lore.db client; the repair reads and writes the core
+	for _, l := range []struct {
+		table          row.Table
+		newer, olderID string
+	}{
+		{schema.TableMemories, newMem, oldMem}, {schema.TableRules, newRule, oldRule},
+		{schema.TableDecisions, newDec, oldDec}, {schema.TableDecisions, replDec, deprDec},
+	} {
+		if err := coreSetSuccessor(ctx, l.table, l.newer, l.olderID, ""); err != nil {
 			t.Fatal(err)
 		}
-		return d
 	}
-	oldDec := mkDec("Payments: PayPal", t0, entDecision.StatusAccepted, "")
-	newDec := mkDec("Payments: Stripe", t0.Add(time.Hour), entDecision.StatusAccepted, oldDec.ID)
-	deprDec := mkDec("Queue: SQS", t0, entDecision.StatusDeprecated, "")
-	replDec := mkDec("Queue: NATS", t0.Add(time.Hour), entDecision.StatusAccepted, deprDec.ID)
 
 	found, err := repairSupersedes(ctx, c, false)
-	if err != nil || len(found.fixes) != 3 {
+	if err != nil || len(found.fixes) != 4 {
 		t.Fatalf("report: %+v %v", found, err)
 	}
-	if got := supersedeLinks(t, c); got[newMem.ID] != oldMem.ID {
+	if got := supersedeLinks(t, c); got[newMem] != oldMem {
 		t.Fatalf("a report-only run changed rows: %v", got)
 	}
 
 	res, err := repairSupersedes(ctx, c, true)
-	if err != nil || len(res.fixes) != 3 || len(res.skips) != 0 {
+	if err != nil || len(res.fixes) != 4 || len(res.skips) != 0 {
 		t.Fatalf("repair: %+v %v", res, err)
 	}
 	want := map[string]string{
-		oldMem.ID: newMem.ID, newMem.ID: "",
-		oldDec.ID: newDec.ID, oldDec.ID + "#status": string(entDecision.StatusSuperseded),
-		newDec.ID: "", newDec.ID + "#status": string(entDecision.StatusAccepted),
-		deprDec.ID: replDec.ID, deprDec.ID + "#status": string(entDecision.StatusDeprecated),
-		replDec.ID: "", replDec.ID + "#status": string(entDecision.StatusAccepted),
+		oldMem: newMem, newMem: "",
+		oldRule: newRule, newRule: "",
+		oldDec: newDec, oldDec + "#status": string(entDecision.StatusSuperseded),
+		newDec: "", newDec + "#status": string(entDecision.StatusAccepted),
+		deprDec: replDec, deprDec + "#status": string(entDecision.StatusDeprecated),
+		replDec: "", replDec + "#status": string(entDecision.StatusAccepted),
 	}
 	first := supersedeLinks(t, c)
 	if !reflect.DeepEqual(first, want) {

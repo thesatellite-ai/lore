@@ -391,31 +391,41 @@ func newBenchFixture(t *testing.T) benchFixture {
 	return f
 }
 
+// The rows a bench task links to are core-owned (0.1.18): they are written
+// through the core (the built binary, as a user would) and read back
+// through coreApp; lore.db only holds a bridge copy.
 func TestUC_BenchLookupBodies(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
-	f := newBenchFixture(t)
-	if body, id := lookupHotfixBody(ctx, f.client, f.project, f.hotfix); body != "ent regen wipes resolver helpers" || id != f.hotfix {
+	cf := newCoreFixture(t)
+	hotfix := cf.addID("hotfix", "add", "--title", "ent regen", "--body", "ent regen wipes resolver helpers")
+	decision := cf.addID("decision", "add", "--title", "Use JWT", "--body", "sessions do not scale")
+	memory := cf.addID("memory", "add", "--body", "cache for 5 minutes")
+	// A decision always has a body (the core refuses an empty one), so the
+	// title-only branch of lookupDecisionBody cannot be reached.
+	if r := cf.run(e2eBin, "decision", "add", "--title", "t", "--json"); r.code == 0 || !strings.Contains(r.stdout+r.stderr, "E_EMPTY_BODY") {
+		t.Fatalf("the core now accepts an empty decision body: cover lookupDecisionBody's title-only branch: %+v", r)
+	}
+	cf.mount()
+	project := cf.projectID()
+	const other = "prj_01a1a681c07e7dfe8ec01fc44d487e86"
+	client := openTestClient(t) // the lore.db fallback; unused while the core is mounted
+	if body, id := lookupHotfixBody(ctx, client, project, hotfix); body != "ent regen wipes resolver helpers" || id != hotfix {
 		t.Fatalf("hotfix: %q %q", body, id)
 	}
-	if body, id := lookupDecisionBody(ctx, f.client, f.project, f.decision); body != "Use JWT\n\nsessions do not scale" || id != f.decision {
+	if body, id := lookupDecisionBody(ctx, client, project, decision); body != "Use JWT\n\nsessions do not scale" || id != decision {
 		t.Fatalf("decision = title + body: %q %q", body, id)
 	}
-	// A decision always has a body (ent rejects an empty one), so the
-	// title-only branch of lookupDecisionBody cannot be reached.
-	if _, err := f.client.Decision.Create().SetProjectID(f.project).SetTitle("t").SetBody("").SetSourceKind("manual").Save(ctx); err == nil {
-		t.Fatal("ent now accepts an empty decision body: cover lookupDecisionBody's title-only branch")
-	}
-	if body, id := lookupMemoryBody(ctx, f.client, f.project, f.memory); body != "cache for 5 minutes" || id != f.memory {
+	if body, id := lookupMemoryBody(ctx, client, project, memory); body != "cache for 5 minutes" || id != memory {
 		t.Fatalf("memory: %q %q", body, id)
 	}
 	// Another project's row, or an unknown id, resolves to nothing.
 	for name, got := range map[string][2]string{
-		"hotfix other project":   pair(lookupHotfixBody(ctx, f.client, f.other, f.hotfix)),
-		"decision other project": pair(lookupDecisionBody(ctx, f.client, f.other, f.decision)),
-		"memory other project":   pair(lookupMemoryBody(ctx, f.client, f.other, f.memory)),
-		"unknown hotfix":         pair(lookupHotfixBody(ctx, f.client, f.project, "hfx_00000000000070008000000000000000")),
-		"unknown memory":         pair(lookupMemoryBody(ctx, f.client, f.project, "nope")),
+		"hotfix other project":   pair(lookupHotfixBody(ctx, client, other, hotfix)),
+		"decision other project": pair(lookupDecisionBody(ctx, client, other, decision)),
+		"memory other project":   pair(lookupMemoryBody(ctx, client, other, memory)),
+		"unknown hotfix":         pair(lookupHotfixBody(ctx, client, project, "hfx_00000000000070008000000000000000")),
+		"unknown memory":         pair(lookupMemoryBody(ctx, client, project, "nope")),
+		"hotfix id as decision":  pair(lookupDecisionBody(ctx, client, project, hotfix)),
 	} {
 		if got != [2]string{"", ""} {
 			t.Fatalf("%s must resolve to nothing: %v", name, got)

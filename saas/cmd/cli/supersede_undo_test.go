@@ -1,113 +1,135 @@
 package main
 
 // The --supersedes undo path: when marking the old row fails after the new
-// row was saved, finishSupersedes deletes the new row again, so the
-// database is exactly as it was before the add, and the command reports the
-// marking error instead of success. The failure is injected into the mark
-// step itself (an update hook), with the old row present.
+// row was saved, finishSupersedes deletes the new row again, so the rows
+// are exactly as they were before the add, and the command reports the
+// marking error instead of success. Rules are core-owned (0.1.18): the rows
+// are real core rows, and the failure is injected into the mark step's core
+// write itself (the rules folder is made read-only), with the old row
+// present.
 
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
-	entgo "entgo.io/ent"
-
-	"dbent/gen/ent"
 	"saas/pkg/aicoder/errcodes"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
-// errInjectedMark is the failure the hook puts into the mark step.
-var errInjectedMark = errors.New("injected: mark step failed")
+// Folder modes of the injected failure: read-only blocks the core's file
+// write (it writes a temp file beside the row), writable puts it back.
+const (
+	rulesDirReadOnly fs.FileMode = 0o555
+	rulesDirWritable fs.FileMode = 0o750
+)
 
-// failRuleUpdates makes every single-row rule update fail (the mark
-// step of a rule --supersedes; memories are written by the 0.1.18 core, which has no --supersedes); creates and deletes still work.
-func failRuleUpdates(c *ent.Client) {
-	c.Rule.Use(func(next ent.Mutator) ent.Mutator {
-		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-			if m.Op().Is(entgo.OpUpdateOne) {
-				return nil, errInjectedMark
-			}
-			return next.Mutate(ctx, m)
-		})
-	})
-}
-
-// ruleState is every rule row's id and link, the state a failed
-// --supersedes must leave untouched.
-func ruleState(t *testing.T, c *ent.Client) map[string]string {
+// coreRuleState is every live rule's id and link, read through the core:
+// the state a failed --supersedes must leave untouched.
+func coreRuleState(t *testing.T) map[string]string {
 	t.Helper()
-	rows, err := c.Rule.Query().All(context.Background())
+	rows, err := coreApp.List(context.Background(), store.SourceRepo, schema.TableRules)
 	if err != nil {
 		t.Fatal(err)
 	}
 	out := make(map[string]string, len(rows))
 	for _, r := range rows {
-		out[r.ID] = derefStr(r.SupersededByID) + "|" + r.Body
+		if r.Deleted {
+			continue
+		}
+		next := ""
+		if v, ok := r.Fields[supersedeFieldNext]; ok && v != nil && v.Kind() != value.KindNull {
+			next = v.String()
+		}
+		body := ""
+		if v, ok := r.Fields["body"]; ok && v != nil {
+			body = v.String()
+		}
+		out[r.ID.String()] = next + "|" + body
 	}
 	return out
 }
 
 func TestFinishSupersedesUndoAfterFailedMark(t *testing.T) {
-	t.Parallel()
-	const project = "prj_01a10237c9a279ee94a32b8450dfb6f9"
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the read-only folder that injects the failure")
+	}
 	for _, tc := range []struct {
 		name     string
 		undoFail bool
 	}{
-		{name: "undo removes the new row: DB as before"},
+		{name: "undo removes the new row: rows as before"},
 		{name: "undo fails too: error names the row to delete", undoFail: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			ctx := context.Background()
-			c := openTestClient(t)
-			old, err := c.Rule.Create().SetProjectID(project).SetBody("the printer is downstairs").SetSourceKind("manual").Save(ctx)
-			if err != nil {
+			cf := newCoreFixture(t)
+			old := cf.addID("rule", "add", "--body", "the printer is downstairs")
+			// The add saves the new row (the mark step comes after it).
+			repl := cf.addID("rule", "add", "--body", "the printer is upstairs")
+			cf.mount()
+			project := cf.projectID()
+			c := openTestClient(t) // the callers' lore.db client; supersede reads and writes the core
+			if err := checkSupersedes(ctx, c, supersedeRule, project, old); err != nil {
 				t.Fatal(err)
 			}
-			if err := checkSupersedes(ctx, c, supersedeRule, project, old.ID); err != nil {
-				t.Fatal(err)
-			}
-			before := ruleState(t, c)
+			before := coreRuleState(t)
+			delete(before, repl) // the state before the add
 
-			// The add saves the new row, then the mark step fails.
-			repl, err := c.Rule.Create().SetProjectID(project).SetBody("the printer is upstairs").SetSourceKind("manual").Save(ctx)
-			if err != nil {
-				t.Fatal(err)
+			dir := filepath.Join(cf.dir, ".lore", "data", string(schema.TableRules))
+			chmod := func(m fs.FileMode) {
+				if err := os.Chmod(dir, m); err != nil {
+					t.Fatal(err)
+				}
 			}
-			failRuleUpdates(c)
+			chmod(rulesDirReadOnly)
+			t.Cleanup(func() { chmod(rulesDirWritable) })
 			undoCalls := 0
 			undo := func(ctx context.Context) error {
 				undoCalls++
 				if tc.undoFail {
 					return errors.New("injected: undo failed")
 				}
-				return c.Rule.DeleteOneID(repl.ID).Exec(ctx)
+				chmod(rulesDirWritable)
+				rid, err := ids.ParseAny(repl)
+				if err != nil {
+					return err
+				}
+				_, err = coreApp.Delete(ctx, engine.Ref{Table: schema.TableRules, ID: rid})
+				return err
 			}
-			err = finishSupersedes(ctx, c, supersedeRule, old.ID, repl.ID, undo)
+			err := finishSupersedes(ctx, c, supersedeRule, old, repl, undo)
 
 			var ce *errcodes.CLIError
-			if !errors.As(err, &ce) || ce.Code != errcodes.Internal || !errors.Is(err, errInjectedMark) {
+			if !errors.As(err, &ce) || ce.Code != errcodes.Internal || !errors.Is(err, fs.ErrPermission) {
 				t.Fatalf("want E_INTERNAL wrapping the mark failure, got %v", err)
 			}
 			if undoCalls != 1 {
 				t.Fatalf("undo ran %d times, want 1", undoCalls)
 			}
-			after := ruleState(t, c)
+			chmod(rulesDirWritable)
+			after := coreRuleState(t)
 			if tc.undoFail {
-				if !strings.Contains(ce.Hint, "lore rule delete "+repl.ID) {
+				if !strings.Contains(ce.Hint, "lore rule delete "+repl) {
 					t.Fatalf("hint must name the leftover row: %q", ce.Hint)
 				}
-				if _, left := after[repl.ID]; !left || after[old.ID] != before[old.ID] {
+				if _, left := after[repl]; !left || after[old] != before[old] {
 					t.Fatalf("undo failure: old row must be untouched, new row left for the user: %v", after)
 				}
 				return
 			}
 			if !reflect.DeepEqual(after, before) {
-				t.Fatalf("DB after a failed --supersedes:\n got  %v\n want %v", after, before)
+				t.Fatalf("rules after a failed --supersedes:\n got  %v\n want %v", after, before)
 			}
 		})
 	}

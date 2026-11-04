@@ -168,7 +168,7 @@ func TestFix_SupersedesMarksTheOldRow(t *testing.T) {
 	cases := []kindCase{
 		{"decision", "dec", add("decision", "dec", "--title", "Payments", "--body", "Stripe.")},
 		{"rule", "rul", add("rule", "rul", "--body", "Run the tests")},
-		// memories are written by the 0.1.18 core, which has no --supersedes.
+		{"memory", "mem", add("memory", "mem", "--body", "The printer is downstairs")},
 		{"hotfix", "hfx", add("hotfix", "hfx", "--title", "Pin the driver", "--body", "v1.2 crashes")},
 		{"pattern", "pat", add("pattern", "pat", "--title", "Retry", "--body", "Back off")},
 	}
@@ -197,7 +197,8 @@ func TestFix_SupersedesMarksTheOldRow(t *testing.T) {
 		before := strings.Count(c.lore(kc.kind, "list", "--json").stdout, `"id"`)
 		for _, bad := range []struct{ id, code string }{
 			{old, "E_INVALID_INPUT"},
-			{kc.prefix + "_00000000000000000000000000000000", "E_NOT_FOUND"},
+			{kc.prefix + "_00000000000000000000000000000000", "E_NOT_FOUND"}, // unparseable: v0.1.17 says not found
+			{kc.prefix + "_01a1a681c07e7dfe8ec01fc44d487e86", "E_NOT_FOUND"}, // well-formed, unknown
 		} {
 			r := c.w.run(c.dir, c.env, e2eBin, append(supersedeArgs(kc.kind), "--supersedes", bad.id)...)
 			if r.code == 0 || !strings.Contains(r.stderr, bad.code) {
@@ -280,14 +281,23 @@ func TestFix_IdentitySetRefusesABareName(t *testing.T) {
 func TestFix_DoctorForgetsTheSecretOfADeletedRow(t *testing.T) {
 	_, c := initProject(t)
 	const secretBody = "Deploy key for staging: AKIAIOSFODNN7EXAMPLE"
-	// A rule: the export refusal lives in the old lore.db → .lore/data path;
-	// memories are written by the 0.1.18 core, which never stores a
-	// refused secret in the first place.
-	id := idOf(t, c.lore("rule", "add", "--allow-secrets", "--body", secretBody).stdout, "rul")
-	if out := c.loreAny("doctor").stdout; !strings.Contains(out, "rules/"+id+".json") {
-		t.Fatalf("doctor must report the refused export while the row exists:\n%s", out)
+	// 0.1.18 (O12a): rules are written by the core, which scans at write
+	// time; --allow-secrets is gone. Without --yes the add is refused
+	// (E_NEEDS_CONFIRM) and nothing is written.
+	before := strings.Count(c.lore("rule", "list", "--json").stdout, `"id"`)
+	if r := c.loreAny("rule", "add", "--body", secretBody); r.code == 0 || !strings.Contains(r.stderr, "E_NEEDS_CONFIRM") {
+		t.Fatalf("a secret-looking body must ask first: %d %s", r.code, r.stderr)
 	}
-	c.lore("rule", "delete", id, "--confirm")
+	if after := strings.Count(c.lore("rule", "list", "--json").stdout, `"id"`); after != before {
+		t.Fatalf("a refused add wrote a row (%d -> %d)", before, after)
+	}
+	// --yes stores it as not a secret: doctor has nothing to report while
+	// the row exists, and nothing after it is deleted.
+	id := idOf(t, c.lore("rule", "add", "--yes", "--body", secretBody).stdout, "rul")
+	if out := c.loreAny("doctor").stdout; strings.Contains(out, "credential pattern") {
+		t.Fatalf("doctor warns about a row marked not a secret:\n%s", out)
+	}
+	c.lore("rule", "delete", id, "--yes")
 	if out := c.loreAny("doctor").stdout; strings.Contains(out, id) || strings.Contains(out, "credential pattern") {
 		t.Fatalf("doctor still warns about the deleted row:\n%s", out)
 	}
