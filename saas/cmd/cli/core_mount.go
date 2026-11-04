@@ -42,7 +42,6 @@ import (
 	"github.com/thesatellite-ai/lore/wire"
 
 	"saas/pkg/aicoder/errcodes"
-	oldids "saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/projresolve"
 	oldstores "saas/pkg/aicoder/stores"
 )
@@ -77,7 +76,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, ResolveActor: resolveCoreActor, GuardRepoWrite: guardCoreRepoWrite})
+	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite})
 	if err != nil {
 		panic(err)
 	}
@@ -122,6 +121,9 @@ type compatRunner struct {
 func (r *compatRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
 	if r.pending != nil {
 		return op.Result{}, r.pending
+	}
+	if err := ensureCoreGitignore(ctx); err != nil {
+		return op.Result{}, coreErr(err)
 	}
 	if e.Spec().Access == op.AccessWrite && (r.readOnly || os.Getenv(envReadOnly) == envValueOn) {
 		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
@@ -195,32 +197,30 @@ func writeIndented(w io.Writer, b []byte) error {
 	return err
 }
 
-// resolveCoreActor is the actor of the core's writes: the v0.1.17
-// identity chain of this binary (org entry, identity file, git email, …)
-// turned into the actor's natural id (ids.Deterministic over the stable
-// key, the id v0.1.17 gives the actor row), WITHOUT opening lore.db or
-// writing an actor row: a read like `lore memory list` must leave a fresh
-// clone clean, and the row envelope's created_by is not a reference the
-// engine checks.
-//
-// It also makes sure .gitignore lists the core's local files (cache,
-// lock), which `lore init` of v0.1.17 did not know about.
-func resolveCoreActor(ctx context.Context) (ids.ID[ids.Actor], error) {
-	r, err := resolveIdentityHere(ctx)
-	if err != nil {
-		return ids.ID[ids.Actor]{}, coreErr(err)
+// ensureCoreGitignore makes sure the repo's .gitignore lists the core's
+// local files (cache, lock), which `lore init` of v0.1.17 did not know
+// about. It runs once per process, on the first core command (never at
+// mount: unrelated commands and folders outside a project are left alone),
+// and not in read-only mode. The actor itself is resolved by wire's
+// identity port (wire.Options.Org).
+func ensureCoreGitignore(ctx context.Context) error {
+	if gitignoreChecked {
+		return nil
 	}
-	if pctx, perr := projresolve.Resolve(projresolve.Inputs{}); perr == nil && os.Getenv(envReadOnly) != envValueOn {
-		if gerr := ensureGitignore(ctx, pctx.ProjectRoot); gerr != nil {
-			return ids.ID[ids.Actor]{}, errcodes.New(errcodes.Internal, "update .gitignore").WithCause(gerr)
-		}
+	gitignoreChecked = true
+	pctx, perr := projresolve.Resolve(projresolve.Inputs{})
+	if perr != nil || os.Getenv(envReadOnly) == envValueOn {
+		return nil
 	}
-	id, err := oldids.Deterministic(oldids.PrefixActor, r.StableKey)
-	if err != nil {
-		return ids.ID[ids.Actor]{}, errcodes.New(errcodes.IdentityFailed, "derive the actor id").WithCause(err)
+	if err := ensureGitignore(ctx, pctx.ProjectRoot); err != nil {
+		return errcodes.New(errcodes.Internal, "update .gitignore").WithCause(err)
 	}
-	return ids.Parse[ids.Actor](id)
+	return nil
 }
+
+// gitignoreChecked records that ensureCoreGitignore ran (one command per
+// process, like rootCmd).
+var gitignoreChecked bool
 
 // coreRouteKinds maps a core table to the kind name v0.1.17's routing
 // rules (defaults.client_repos, F14) use for it.
@@ -304,6 +304,9 @@ func coreAddMemory(ctx context.Context, body, sourceKind, sourceRef string) (str
 	in, err := json.Marshal(opsmemory.AddIn{Body: body, Source: sourceKind, SourceRef: sourceRef})
 	if err != nil {
 		return "", errcodes.New(errcodes.Internal, "encode memory").WithCause(err)
+	}
+	if err := ensureCoreGitignore(ctx); err != nil {
+		return "", coreErr(err)
 	}
 	res, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY()})
 	if err != nil {
@@ -484,6 +487,9 @@ func coreMoveMemory(ctx context.Context, id, to string, yes bool) error {
 	in, err := json.Marshal(opsmemory.MoveIn{ID: id, To: to})
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "encode the move").WithCause(err)
+	}
+	if err := ensureCoreGitignore(ctx); err != nil {
+		return coreErr(err)
 	}
 	if _, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY(), Yes: true}); err != nil {
 		return err
