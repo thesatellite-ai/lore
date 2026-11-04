@@ -29,7 +29,7 @@ func allConstants() []Code {
 		MetaKey, MetaReserved, MetaValue, MetaShape, MetaSize, MetaDepth, MetaOp, MetaTable, MetaRequired,
 		MetaUnknown, MetaUnregistered, MetaStale, MetaInUse, MetaConflict, MetaRetired, MetaQuarantined,
 		MetaInternal, MetaForeignKey, MetaStoreUnreadable,
-		ResourceInUse, KindConflict, NameTaken, MetaTaken, Purged, Refused,
+		ResourceInUse, KindConflict, ResourceStale, NameTaken, MetaTaken, Purged, Refused,
 		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth, OpenItems, HasOpenChildren, Date, Recur, Template,
 		DurationBad, TimeTooLong, UpgradePermission, UpgradeChecksum, UpgradePinned,
 		RefSyntax, RefScheme, RefCycle, RefDepth, RefLimit, RefDangling, RefRequired,

@@ -74,6 +74,9 @@ const (
 	// KindConflict is a kind definition that clashes with another level's
 	// definition of the same kind (CLI_REFERENCE 1.5 class definition).
 	KindConflict Code = "E_KIND_CONFLICT"
+	// ResourceStale refuses a write that needs store kind rows that are not
+	// available (store unreachable / never synced; RES 3.6).
+	ResourceStale Code = "E_RESOURCE_STALE"
 	// NameTaken refuses a create or rename onto a name a live settings row
 	// of that place already uses (a var, a kind, a resource).
 	NameTaken Code = "E_NAME_TAKEN"
@@ -249,6 +252,7 @@ var table = map[Code]entry{
 	HasDependents:         {class: ClassRefused, desc: "a delete refused while restrict relations still have live pointing rows"},
 	ResourceInUse:         {class: ClassRefused, desc: "a kind field or value is still used by resources"},
 	KindConflict:          {class: ClassDefinition, desc: "a kind definition clashes with another level's definition"},
+	ResourceStale:         {class: ClassDefinition, desc: "store kind rows needed for this write are not available; run lore sync or write with --to repo"},
 	NameTaken:             {class: ClassRefused, desc: "that name is already used by a live row in this place"},
 	MetaTaken:             {class: ClassRefused, desc: "that metadata key or value name is already taken in this place"},
 	NoWork:                {class: ClassCoordination, exit: 10, desc: "no ready task"},
