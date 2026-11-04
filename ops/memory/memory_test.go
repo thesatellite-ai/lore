@@ -29,6 +29,11 @@ type fakeEnv struct {
 	next    int
 	created map[string]value.Value
 	patched map[string]value.Value
+	// failUpdate / failDelete, when set, make Update / Delete fail (the
+	// supersede rollback paths); deleted records every tombstoned id.
+	failUpdate error
+	failDelete error
+	deleted    []string
 }
 
 func newFakeEnv(t *testing.T) *fakeEnv {
@@ -48,6 +53,8 @@ func newFakeEnv(t *testing.T) *fakeEnv {
 var fakeIDs = []string{
 	"mem_01a1a5aca7f57659be7320c5f4b70011", "mem_01a1a5aca7f57659be7320c5f4b70012",
 	"mem_01a1a5aca7f57659be7320c5f4b70013", "mem_01a1a5aca7f57659be7320c5f4b70014",
+	"mem_01a1a5aca7f57659be7320c5f4b70015", "mem_01a1a5aca7f57659be7320c5f4b70016",
+	"mem_01a1a5aca7f57659be7320c5f4b70017", "mem_01a1a5aca7f57659be7320c5f4b70018",
 }
 
 func (f *fakeEnv) Create(_ context.Context, target store.Source, table row.Table, fields map[string]value.Value) (engine.Written, error) {
@@ -69,6 +76,9 @@ func (f *fakeEnv) Create(_ context.Context, target store.Source, table row.Table
 }
 
 func (f *fakeEnv) Update(_ context.Context, ref engine.Ref, patch map[string]value.Value) (engine.Written, error) {
+	if f.failUpdate != nil {
+		return engine.Written{}, f.failUpdate
+	}
 	r := f.rows[ref.Store][ref.ID.String()]
 	f.patched = maps.Clone(patch)
 	next := maps.Clone(r.Fields)
@@ -85,10 +95,14 @@ func (f *fakeEnv) Update(_ context.Context, ref engine.Ref, patch map[string]val
 }
 
 func (f *fakeEnv) Delete(_ context.Context, ref engine.Ref) (engine.Written, error) {
+	if f.failDelete != nil {
+		return engine.Written{}, f.failDelete
+	}
 	src, r, err := f.Get(context.Background(), ref)
 	if err != nil {
 		return engine.Written{}, err
 	}
+	f.deleted = append(f.deleted, ref.ID.String())
 	r.Deleted, r.Fields = true, nil
 	f.rows[src][ref.ID.String()] = r
 	return engine.Written{Row: r}, nil
@@ -106,10 +120,10 @@ func (f *fakeEnv) Get(_ context.Context, ref engine.Ref) (store.Source, row.Row,
 	return "", row.Row{}, errs.New(errs.NotFound, "no row "+ref.ID.String())
 }
 
-func (f *fakeEnv) List(_ context.Context, source store.Source, _ row.Table) ([]row.Row, error) {
+func (f *fakeEnv) List(_ context.Context, source store.Source, table row.Table) ([]row.Row, error) {
 	var out []row.Row
 	for _, k := range slices.Sorted(maps.Keys(f.rows[source])) {
-		if r := f.rows[source][k]; !r.Deleted {
+		if r := f.rows[source][k]; !r.Deleted && r.Table == table {
 			out = append(out, r)
 		}
 	}
