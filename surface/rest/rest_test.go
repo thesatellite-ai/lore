@@ -254,8 +254,16 @@ func TestCaller(t *testing.T) {
 	if r := call(h, http.MethodGet, "/v1/memories", "", testToken, HeaderAgent, "codex"); r.status != http.StatusOK {
 		t.Fatal(r.body)
 	}
-	if c := f.lastCaller(); c.Agent != "codex" || c.Actor != actor || c.Interactive {
+	if c := f.lastCaller(); c.Agent != "codex" || !c.AgentFixed || c.Actor != actor || c.Interactive {
 		t.Fatalf("caller %+v", c)
+	}
+	// OV3/REST: no header means no agent, fixed, so the runner never
+	// substitutes the server process's own detection.
+	if r := call(h, http.MethodGet, "/v1/memories", "", testToken); r.status != http.StatusOK {
+		t.Fatal(r.body)
+	}
+	if c := f.lastCaller(); c.Agent != "" || !c.AgentFixed {
+		t.Fatalf("headerless caller %+v", c)
 	}
 	for _, a := range []string{"bad\x01agent", strings.Repeat("a", MaxAgentLen+1)} {
 		if r := call(h, http.MethodGet, "/v1/memories", "", testToken, HeaderAgent, a); r.status != http.StatusBadRequest {

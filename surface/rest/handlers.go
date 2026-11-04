@@ -46,7 +46,9 @@ func (h *handlers) operation(e op.Entry, rt op.Route) http.Handler {
 			writeError(w, err)
 			return
 		}
-		caller := op.Caller{Actor: h.opts.Actor, Agent: agent, Interactive: false, Yes: yes}
+		// OV3/REST: the agent is the HTTP client's (X-Lore-Agent or none), never
+		// the `lore api` server process's own detection (AgentFixed).
+		caller := op.Caller{Actor: h.opts.Actor, Agent: agent, AgentFixed: true, Interactive: false, Yes: yes}
 		res, err := h.runner.Run(r.Context(), e, op.JSONDecoder{Body: body}, caller)
 		if err != nil {
 			writeError(w, err)

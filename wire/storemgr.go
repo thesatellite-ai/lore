@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -278,7 +279,12 @@ func storeKey(raw string) (string, bool) {
 // signed by its org identity (Q-R2-1).
 func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options) (*store.Openers, error) {
 	who := storeIdentityFunc(opts)
-	return newOpeners(reg, origins, git.WithIdentity(who.fallback), who.owner)
+	// OV6/OV3 (FQ7): the commits lore makes itself in a git store carry
+	// Lore-Version and, in CI, Lore-CI-Run. Only store clones get here: the
+	// repo store is the folder backend (no commits), and a person's commits
+	// are never touched. An empty Version adds no trailer.
+	trailers := git.WithTrailers(gitcommit.OwnCommitTrailers(opts.Version, os.Getenv)...)
+	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), trailers), who.owner)
 }
 
 // openStore opens the store at a canonical url with this App's backends.
