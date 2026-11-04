@@ -9,8 +9,21 @@
 // for a keyed, application-specific hash. Sources: Linux /etc/machine-id
 // (then /var/lib/dbus/machine-id), macOS IOPlatformUUID (read with
 // /usr/sbin/ioreg: no pure-Go path exists and CGO is banned), Windows
-// HKLM\SOFTWARE\Microsoft\Cryptography MachineGuid. No cache file: the id
-// is derived again on every call (no hidden state), which is cheap.
+// HKLM\SOFTWARE\Microsoft\Cryptography MachineGuid.
+//
+// CFG11: Load caches the fingerprint (never the raw id) in
+// ~/.lore/machine.json on every OS, so the macOS ioreg runs once; a
+// missing or broken file is recomputed, so deleting it is always safe.
+// With no OS id (many containers) Load makes a random id once (id_source
+// random); an ephemeral runtime (CI, Lambda, Cloud Run) gets the
+// fingerprint of its runtime key instead (6.8), never cached.
+//
+//	Load(home, getenv)
+//	  ├─ RuntimeKey(getenv) != "" → Derive(key), runtime_key
+//	  ├─ ~/.lore/machine.json parses → cached id
+//	  ├─ ID() (OS id) → os_machine_id, write cache
+//	  └─ 32 random bytes → random, write cache
+//	Collect(getenv, fsys) → Profile (profile.go, per-OS readers)
 package machine
 
 import (

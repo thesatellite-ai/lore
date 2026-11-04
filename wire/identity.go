@@ -2,8 +2,22 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"slices"
+	"strconv"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/machine"
+	"github.com/thesatellite-ai/lore/adapters/procwalk"
+	"github.com/thesatellite-ai/lore/logic/agentdetect"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/value"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -48,3 +62,138 @@ func (a *App) StoreIdentities(ctx context.Context) ([]StoreIdentity, error) {
 	}
 	return out, nil
 }
+
+// ---- agent detection (AGENT_IDENTITY_DESIGN 3, R11 B+) ----
+
+// DetectAgent is the real detection the identity chain runs: the
+// allowlisted environment (os.Getenv is only called with names from the
+// agentdetect table, 6.3), whether stdin is a terminal (OQ11), the
+// ancestor walk (adapters/procwalk) and the package.json reader for the
+// tool version (OQ12). Plugin detectors (PQ1) are not wired yet.
+func DetectAgent() (agentdetect.Result, error) {
+	return agentdetect.Detect(agentdetect.Inputs{Getenv: os.Getenv, TTY: stdinTTY(), Procs: procwalk.New(), Files: machine.OSFiles{}})
+}
+
+// stdinTTY reports whether stdin is a character device (a terminal).
+func stdinTTY() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// Who is the App's resolved identity (zero when Options named the actor).
+func (a *App) Who(ctx context.Context) (identity.Resolved, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return identity.Resolved{}, err
+	}
+	return st.who, nil
+}
+
+// CallerAgent is the agent name the CLI puts on op.Caller.Agent so
+// agents.person_only also fires on the CLI (8.2): the stable key of an
+// agent identity (detected or LORE_ACTOR=agent:…), "" for a person, the
+// CI actor, or an App whose actor was set by Options.
+func (a *App) CallerAgent(ctx context.Context) string {
+	who, err := a.Who(ctx)
+	if err != nil {
+		return ""
+	}
+	return who.Agent
+}
+
+// ---- machine profile (AGENT_IDENTITY_DESIGN 6.8, CFG11) ----
+
+// ThisMachine reads this machine's id (the ~/.lore/machine.json cache,
+// CFG11) and its profile now, as machines-row fields (ops/infra.Machines).
+func (a *App) ThisMachine(context.Context) (opsinfra.ThisMachine, error) {
+	id, src, err := machine.Load(a.opts.Home, os.Getenv)
+	if err != nil {
+		return opsinfra.ThisMachine{}, err
+	}
+	rowID, err := identity.Deterministic(ids.PrefixMachine, id.String())
+	if err != nil {
+		return opsinfra.ThisMachine{}, err
+	}
+	p := machine.Collect(os.Getenv, machine.OSFiles{})
+	fields := map[string]value.Value{}
+	put := func(k, s string) error {
+		if s == "" {
+			return nil
+		}
+		t, terr := value.TextOf(s)
+		if terr != nil {
+			return errs.Wrap(errs.InvalidInput, "wire: machine profile field "+k, terr)
+		}
+		fields[k] = t
+		return nil
+	}
+	putJSON := func(k string, b []byte, merr error) error {
+		if merr != nil {
+			return errs.Wrap(errs.Internal, "wire: encode machine profile field "+k, merr)
+		}
+		if string(b) == "{}" {
+			return nil
+		}
+		j, jerr := value.JSONOf(b)
+		if jerr != nil {
+			return errs.Wrap(errs.Internal, "wire: machine profile field "+k, jerr)
+		}
+		fields[k] = j
+		return nil
+	}
+	for _, kv := range [][2]string{{schema.FieldMachineID, id.String()}, {"id_source", string(src)}, {"hostname", p.Hostname},
+		{"arch", p.Arch}, {"os_user", p.OSUser}, {"install_method", p.InstallMethod}} {
+		if err := put(kv[0], kv[1]); err != nil {
+			return opsinfra.ThisMachine{}, err
+		}
+	}
+	osB, e1 := json.Marshal(p.OS)
+	kerB, e2 := json.Marshal(p.Kernel)
+	libB, e3 := json.Marshal(p.Libc)
+	cpuB, e4 := json.Marshal(p.CPU)
+	rtB, e5 := json.Marshal(p.Runtime)
+	if err := errors.Join(putJSON("os", osB, e1), putJSON("kernel", kerB, e2), putJSON("libc", libB, e3), putJSON("cpu", cpuB, e4), putJSON("runtime", rtB, e5)); err != nil {
+		return opsinfra.ThisMachine{}, err
+	}
+	if p.RAMMB > 0 {
+		n, nerr := value.NumberOf(strconv.FormatInt(p.RAMMB, 10))
+		if nerr != nil {
+			return opsinfra.ThisMachine{}, errs.Wrap(errs.Internal, "wire: machine ram_mb", nerr)
+		}
+		fields["ram_mb"] = n
+	}
+	return opsinfra.ThisMachine{RowID: rowID, ID: id, Fields: fields}, nil
+}
+
+// MachineTarget is where this machine's profile is written: to when it
+// names an attached own store, else the first attached store that is
+// neither the code repo nor client-readable. Machine data never goes into
+// a code repo (Q-R3-9) nor a client repo (MACHINE PROFILE).
+func (a *App) MachineTarget(ctx context.Context, to string) (store.Source, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return "", err
+	}
+	refuse := func(why string) (store.Source, error) {
+		return "", errs.New(errs.Refused, "machine profiles live in our own stores, never in a code or client repo: "+why).
+			WithHint("attach an org or personal store (lore store add), or pass --to <store>")
+	}
+	if to != "" {
+		name := store.Source(to)
+		if !slices.Contains(st.eng.Stores(), name) {
+			return "", errs.New(errs.NotFound, "store "+to+" is not attached")
+		}
+		if name == store.SourceRepo || st.eng.IsClient(name) {
+			return refuse("store " + to + " is a repo or client-readable")
+		}
+		return name, nil
+	}
+	for _, name := range st.eng.Stores() {
+		if name != store.SourceRepo && !st.eng.IsClient(name) {
+			return name, nil
+		}
+	}
+	return refuse("no own store is attached")
+}
+
+var _ opsinfra.Machines = (*App)(nil)

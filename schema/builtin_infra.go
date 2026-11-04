@@ -22,6 +22,18 @@ const (
 	// JoinTeamMembers is the cache-only join table filled from
 	// FieldTeamMembers (O11).
 	JoinTeamMembers = "team_members"
+
+	// TableMachines is the machine profiles (AGENT_IDENTITY_DESIGN 6.8,
+	// MACHINE PROFILE): one row per machine, in our own shared data only
+	// (org and personal stores), never in a code repo (Q-R3-9) nor a
+	// client repo. The row id is the deterministic mch_<32 hex> of the
+	// full machine id (row ids are UUIDv7-shaped); FieldMachineID holds
+	// the full mch_<64 hex> the _w.m stamp names.
+	TableMachines = "machines"
+	// FieldMachineID is the full machine id (mch_ + 64 hex, PROV4).
+	FieldMachineID = "machine_id"
+	// FieldMachineLabel is the synced label (`lore whoami --machine-label`).
+	FieldMachineLabel = "label"
 )
 
 // infraDefs returns the built-in infra tables beyond coreDefs. The columns
@@ -40,6 +52,20 @@ func infraDefs() []TableDef {
 			IndexOn("handle"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 			ManyToManyRel(RelTeamMembers, FieldTeamMembers, TableActors, JoinTeamMembers, Cascade),
+		),
+		Table(TableMachines, ids.PrefixMachine, Synced(), GlobalKey(), Description("machine profiles: what each machine that writes rows is"),
+			Text(FieldMachineID, Required(), Describe("the full machine id, mch_ + 64 hex (the _w.m stamp)")),
+			Text("id_source", OneOf("os_machine_id", "runtime_key", "random")),
+			Text(FieldMachineLabel, Describe("one-line label shown for the machine")),
+			Text("hostname"),
+			JSON("os"), JSON("kernel"), JSON("libc"),
+			Text("arch"),
+			JSON("cpu"),
+			Number("ram_mb"),
+			Text("os_user"),
+			Text("install_method"),
+			JSON("runtime"),
+			UniqueOn(FieldMachineID),
 		),
 	}
 }

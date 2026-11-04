@@ -17,6 +17,16 @@
 //  5. git config user.email, $USER@host, the machine id, the persisted
 //     random ~/.lore/identity file, and last an ephemeral key (noted).
 //
+// Agent detection (AGENT_IDENTITY_DESIGN section 3, R11 B+) wraps that
+// chain when Inputs.Detect is set (agent.go):
+//
+//	Resolve → resolveChain (the person, steps above)
+//	  ├─ LORE_ACTOR / --actor answered → it wins; detection recorded only
+//	  ├─ LORE_HUMAN=1 → the person, declared_human (+ markers flagged)
+//	  ├─ a tool detected → agent:auto/<tool>/<owner short> (OQ8, OQ9)
+//	  ├─ CI, no tool → ci:<provider>/<repo>, kind system (OQ13)
+//	  └─ else the person
+//
 // When orgs exist but none resolved, every candidate equal to an org's key
 // is skipped (F10 rule 6: a personal repo is never stamped with the work
 // identity). The actor id is ActorID: the v0.1.17 deterministic id of the
@@ -37,6 +47,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -46,13 +57,16 @@ const (
 	EnvActor = "LORE_ACTOR"
 	// EnvSession is the agent session id (`lore agent start`).
 	EnvSession = "LORE_SESSION"
+	// EnvHuman=1 marks a person's terminal (R11; only "1" counts).
+	EnvHuman = "LORE_HUMAN"
 )
 
 // Actor kinds, the prefix of a stable key ("human:alice@x").
 const (
-	KindHuman = "human"
-	KindAgent = "agent"
-	KindAuto  = "auto"
+	KindHuman  = "human"
+	KindAgent  = "agent"
+	KindAuto   = "auto"
+	KindSystem = "system"
 )
 
 // knownKinds are the stable-key prefixes that name an actors.kind value
@@ -97,6 +111,9 @@ const (
 	StepMachine   Step = "machine-id"
 	StepSalt      Step = "persisted salt"
 	StepEphemeral Step = "ephemeral salt"
+	StepHuman     Step = EnvHuman
+	StepDetected  Step = "agent detection"
+	StepCI        Step = "CI"
 )
 
 // Entry is one identity block of config.yaml (`identity:` or
@@ -136,6 +153,19 @@ type Resolved struct {
 	Handle string
 	// Notes are one-line warnings worth printing (never fatal).
 	Notes []string
+	// Agent is the agent name policy checks see (Caller.Agent): the stable
+	// key of an agent identity, "" for a person or the CI actor.
+	Agent string
+	// Label is the actors.label: the tool slug of a detected agent, the
+	// provider of the CI actor.
+	Label string
+	// Owner is the person a detected agent acts for (zero otherwise).
+	Owner *Resolved
+	// Detection is what agent detection saw (nil when it did not run).
+	// Machine-local: never written into a row (R11, OQ14).
+	Detection *agentdetect.Result
+	// DeclaredHuman is true when LORE_HUMAN=1 decided.
+	DeclaredHuman bool
 }
 
 // Stable reports whether the next run on this machine gets the same key.
@@ -186,15 +216,19 @@ type Inputs struct {
 	GitEmail func(ctx context.Context) string
 	// Dir is the folder git runs in when GitEmail is nil.
 	Dir string
+	// Detect runs agent detection (wire passes the real one); nil means
+	// no detection, so a caller that never asks gets today's chain.
+	Detect func() (agentdetect.Result, error)
 }
 
 // ErrOrgIdentityMissing is returned when the resolved org entry has no
 // identity key.
 var ErrOrgIdentityMissing = errors.New("identity: the resolved org entry has no identity")
 
-// Resolve runs the chain. It fails only inside an org whose entry has no
-// key (fail closed: an org repo is never stamped with a guessed identity).
-func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
+// resolveChain runs the person chain. It fails only inside an org whose
+// entry has no key (fail closed: an org repo is never stamped with a
+// guessed identity).
+func resolveChain(ctx context.Context, in Inputs) (Resolved, error) {
 	getenv := in.Getenv
 	if getenv == nil {
 		getenv = os.Getenv

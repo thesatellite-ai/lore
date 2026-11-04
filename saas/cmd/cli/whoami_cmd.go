@@ -5,6 +5,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -19,8 +21,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	coreidentity "github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/machine"
 	coreids "github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/op"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // flagExplain is whoami's switch for the full rule trace.
@@ -42,8 +48,41 @@ type whoamiJSON struct {
 	Warnings   []string               `json:"warnings"`
 	Error      string                 `json:"error,omitempty"`
 	// Machine is this machine's full id (PROV4: mch_ + 64 hex keyed
-	// fingerprint of the OS machine id); "" when the OS has none.
+	// fingerprint of the OS machine id, cached in ~/.lore/machine.json,
+	// CFG11); "" when it cannot be read.
 	Machine string `json:"machine,omitempty"`
+	// Agent is what agent detection saw (R11): tool, version, model and
+	// the deciding signal. The tool session id is left out on purpose
+	// (internal-only, OQ14; redaction is a later batch).
+	Agent *whoamiAgentJSON `json:"agent,omitempty"`
+}
+
+// whoamiAgentJSON is the agent block of `lore whoami --json`.
+type whoamiAgentJSON struct {
+	Tool          string            `json:"tool,omitempty"`
+	Version       string            `json:"tool_version,omitempty"`
+	Model         string            `json:"model,omitempty"`
+	Signal        string            `json:"signal,omitempty"`
+	Outer         []string          `json:"outer_tools,omitempty"`
+	CI            string            `json:"ci,omitempty"`
+	DeclaredHuman bool              `json:"declared_human,omitempty"`
+	Flags         []string          `json:"flags,omitempty"`
+	Sources       map[string]string `json:"sources,omitempty"`
+}
+
+// whoamiAgent runs agent detection (wire.DetectAgent) for whoami's agent
+// lines; LORE_HUMAN=1 is shown as declared_human (R11).
+func whoamiAgent() *whoamiAgentJSON {
+	det, err := wire.DetectAgent()
+	if err != nil {
+		return nil
+	}
+	a := &whoamiAgentJSON{Tool: det.Tool, Version: det.Version, Model: det.Model, Signal: det.Signal, Outer: det.Outer,
+		Flags: det.Flags, Sources: det.Sources, DeclaredHuman: os.Getenv(coreidentity.EnvHuman) == "1"}
+	if det.CI != nil {
+		a.CI = det.CI.ActorKey()
+	}
+	return a
 }
 
 type whoamiIdentityJSON struct {
@@ -57,15 +96,20 @@ type whoamiIdentityJSON struct {
 
 func newWhoamiCommand() *cobra.Command {
 	var asJSON, explain, share bool
+	var machineLabel string
 	cmd := &cobra.Command{
 		Use:   "whoami",
 		Short: "Show the resolved org, what decided it, your identity and what loads here",
 		Example: `  lore whoami
   lore whoami --explain        # every org rule with hit or miss
   LORE_ORG=agency-stag lore whoami
-  lore whoami --json`,
+  lore whoami --json
+  lore whoami --machine-label "tomas desktop"   # synced label of this machine ("" clears)`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if cmd.Flags().Changed(flagMachineLabel) {
+				return setMachineLabel(cmd.Context(), machineLabel, asJSON)
+			}
 			dir, err := os.Getwd()
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
@@ -90,13 +134,56 @@ func newWhoamiCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "machine-readable output")
 	cmd.Flags().BoolVar(&explain, flagExplain, false, "print every org rule with hit or miss and why")
 	cmd.Flags().BoolVar(&share, flagShare, false, "on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)")
+	cmd.Flags().StringVar(&machineLabel, flagMachineLabel, "", "set this machine's label, synced with its profile to our own stores (MACHINE LABEL)")
 	return cmd
 }
 
-// whoamiMachine is this machine's id (adapters/machine); zero when the OS
-// has no readable machine id.
+// flagMachineLabel sets the synced machine label (MACHINE LABEL).
+const flagMachineLabel = "machine-label"
+
+// setMachineLabel runs the core's machine.label (profile + label into our
+// own store, never a code or client repo, Q-R3-9).
+func setMachineLabel(ctx context.Context, label string, asJSON bool) error {
+	if coreApp == nil {
+		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
+	}
+	e, ok := coreApp.Registry().Lookup(opsinfra.OpMachineLabel)
+	if !ok {
+		return errcodes.New(errcodes.Internal, opsinfra.OpMachineLabel+" is not registered")
+	}
+	in, err := json.Marshal(opsinfra.MachineLabelIn{Label: label})
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "encode the machine label").WithCause(err)
+	}
+	res, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY()})
+	if err != nil {
+		return err
+	}
+	raw, err := res.JSON()
+	if err != nil {
+		return err
+	}
+	if asJSON {
+		fmt.Println(string(raw))
+		return nil
+	}
+	var out opsinfra.MachineLabelOut
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return errcodes.New(errcodes.Internal, "decode machine.label result").WithCause(err)
+	}
+	fmt.Print(out.Text())
+	return nil
+}
+
+// whoamiMachine is this machine's id (adapters/machine.Load: the
+// ~/.lore/machine.json cache, the OS id, a random id once, or a runtime
+// key in CI, CFG11); zero when none can be had.
 func whoamiMachine() coreids.MachineID {
-	m, err := machine.ID()
+	home, err := loreHome()
+	if err != nil {
+		return coreids.MachineID{}
+	}
+	m, _, err := machine.Load(home, os.Getenv)
 	if err != nil {
 		return coreids.MachineID{}
 	}
@@ -135,7 +222,7 @@ func whoamiData(s *orgSituation, id identity.Resolved, idErr error, red whoamiRe
 		Org: r.OrgName(), MatchedBy: red.str(r.MatchedBy), Rule: int(r.Step), RepoRole: r.Role,
 		ProjectID: s.ProjectID, Remotes: nonNil(s.Remotes), Personal: personalFolders(r.OrgName()),
 		LinkStatus: r.LinkStatus.String(), Trace: red.trace(r.Trace), Warnings: nonNil(red.strs(whoamiWarnings(s, id))),
-		Stores: []lorecfg.Store{}, Machine: whoamiMachine().String(),
+		Stores: []lorecfg.Store{}, Machine: whoamiMachine().String(), Agent: whoamiAgent(),
 	}
 	if r.Org != nil {
 		out.Stores = red.stores(r.Org.Stores)
@@ -246,6 +333,7 @@ func printWhoami(s *orgSituation, id identity.Resolved, idErr error, explain boo
 	} else {
 		printWhoamiRow("machine", m.Short()+"  "+style.Muted("("+m.String()+")"))
 	}
+	printWhoamiAgent(whoamiAgent())
 	project := s.ProjectID
 	if project == "" {
 		project = style.Muted("(no .lore/data/_meta.json here)")
@@ -326,4 +414,32 @@ func printOrgTrace(trace []orgresolve.RuleTrace) {
 		}
 		fmt.Printf("  %s %d. %-16s %s\n", mark, int(t.Step), t.Step.String(), t.Reason)
 	}
+}
+
+// printWhoamiAgent prints the tool, version and model lines (R11).
+func printWhoamiAgent(a *whoamiAgentJSON) {
+	switch {
+	case a == nil:
+		return
+	case a.Tool == "":
+		v := "none  " + style.Muted("(no coding agent detected)")
+		if a.CI != "" {
+			v = a.CI + "  " + style.Muted("(CI actor)")
+		}
+		printWhoamiRow("agent", v)
+		return
+	}
+	v := a.Tool + "  " + style.Muted("(from: "+a.Signal+")")
+	if a.DeclaredHuman {
+		v += "  " + style.Muted("LORE_HUMAN=1: writes stay yours")
+	}
+	printWhoamiRow("agent", v)
+	if a.Version != "" {
+		printWhoamiRow("tool version", a.Version+"  "+style.Muted("(from: "+a.Sources["tool_version"]+")"))
+	}
+	model := style.Muted("(not exposed by the tool)")
+	if a.Model != "" {
+		model = a.Model + "  " + style.Muted("(from config)")
+	}
+	printWhoamiRow("model", model)
 }
