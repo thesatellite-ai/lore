@@ -1,0 +1,538 @@
+// Package link defines the commit-link operations (layer L5): `lore link
+// add|list|remove` and `lore commit show` (v0.1.17 `lore commit-show`),
+// with v0.1.17's flag spellings.
+//
+// A commit link anchors "this work shipped as <sha>" on any row through the
+// polymorphic (entity_table, entity_id) pair. Its id is the natural id of
+// (entity_table, entity_id, sha), the same bytes v0.1.17 wrote, so linking
+// one commit twice is refused rather than duplicated.
+package link
+
+import (
+	"context"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// Operation names (`lore link …`, REST /v1/links; `lore commit show`,
+// GET /v1/commits/{id}).
+const (
+	Noun       = "link"
+	CommitNoun = "commit"
+	OpAdd      = "link.add"
+	OpList     = "link.list"
+	OpRemove   = "link.remove"
+	OpShow     = "commit.show"
+)
+
+// Envelope values of v0.1.17's --json.
+const (
+	SchemaVersion = 1
+	KindList      = "link.list"
+	KindShow      = "commit.show"
+)
+
+// --commit values that mean "the current HEAD, with its message, author
+// and time filled in" (v0.1.17).
+const (
+	commitHEAD = "HEAD"
+	commitAuto = "auto"
+)
+
+// Display limits (v0.1.17): short sha width, message excerpt 60 (cut at
+// 57 + "...").
+const (
+	shortSHA  = 8
+	msgMax    = 60
+	msgCut    = 57
+	ellipsis  = "..."
+	minSHAHex = 7
+	maxSHAHex = 40
+	maxQuoted = 48
+)
+
+// Link field names.
+const (
+	fieldProject     = "project_id"
+	fieldSHA         = "sha"
+	fieldMessage     = "message"
+	fieldRepoPath    = "repo_path"
+	fieldAuthor      = "author"
+	fieldCommittedAt = "committed_at"
+	fieldCreatedBy   = "created_by_actor_id"
+)
+
+// table is the commit_links table.
+const table row.Table = schema.TableCommitLinks
+
+// Env is what the link operations use; *wire.App implements it.
+//
+// Invariant: every write goes through Create or Delete (the engine's one
+// write path).
+type Env interface {
+	Create(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (engine.Written, error)
+	Delete(ctx context.Context, ref engine.Ref) (engine.Written, error)
+	Get(ctx context.Context, ref engine.Ref) (store.Source, row.Row, error)
+	List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error)
+	Stores() []store.Source
+	// Project is the repo's own project (links are per project).
+	Project(ctx context.Context) (ids.ID[ids.Project], error)
+}
+
+// CommitResolver reads git for --commit (adapters/gitcommit runs the git
+// program). dir is --repo-path ("" = the working directory).
+type CommitResolver interface {
+	// RevParse returns the full sha of ref.
+	RevParse(ctx context.Context, dir, ref string) (string, error)
+	// Describe returns a commit's subject, author and commit time.
+	Describe(ctx context.Context, dir, sha string) (subject, author, committedAt string, err error)
+}
+
+// AddIn is the input of link.add.
+type AddIn struct {
+	Entity      string `json:"entity" flag:"entity" desc:"entity to link to (opaque id: tsk_…, mem_…, dec_…)"`
+	Commit      string `json:"commit" flag:"commit" desc:"git commit sha (or HEAD / auto for current HEAD)"`
+	Message     string `json:"message,omitempty" flag:"message" desc:"commit message (auto-filled from git log when --commit=HEAD)"`
+	RepoPath    string `json:"repo_path,omitempty" flag:"repo-path" desc:"path to git repo on disk (default: cwd; distinct from --repo scope flag)"`
+	Author      string `json:"author,omitempty" flag:"author" desc:"commit author (auto-filled from git)"`
+	CommittedAt string `json:"committed_at,omitempty" flag:"committed-at" desc:"commit timestamp (auto-filled from git)"`
+	To          string `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+}
+
+// AddOut is the output of link.add.
+type AddOut struct {
+	ID          string `json:"id"`
+	Store       string `json:"store"`
+	SHA         string `json:"sha"`
+	EntityTable string `json:"entity_table"`
+	EntityID    string `json:"entity_id"`
+	Message     string `json:"message,omitempty"`
+}
+
+// Text is v0.1.17's two lines.
+func (o AddOut) Text() string {
+	s := fmt.Sprintf("✓ linked %s → %s/%s  (%s)\n", short(o.SHA), o.EntityTable, o.EntityID, o.ID)
+	if o.Message != "" {
+		s += "  message: " + excerpt(o.Message) + "\n"
+	}
+	return s
+}
+
+// ListIn is the input of link.list.
+type ListIn struct {
+	Entity string `json:"entity,omitempty" flag:"entity" desc:"filter by entity (opaque id)"`
+	Commit string `json:"commit,omitempty" flag:"commit" desc:"filter by sha"`
+}
+
+// ListOut is the output of link.list and commit.show: v0.1.17's envelope.
+type ListOut struct {
+	SchemaVersion int      `json:"schema_version"`
+	Kind          string   `json:"kind"`
+	Count         int      `json:"count,omitempty"`
+	Data          []Record `json:"data"`
+}
+
+// Text is v0.1.17's link list.
+func (o ListOut) Text() string {
+	if len(o.Data) == 0 {
+		return "(no links)\n"
+	}
+	var b strings.Builder
+	for _, r := range o.Data {
+		msg := ""
+		if r.Message != "" {
+			msg = " — " + excerpt(r.Message)
+		}
+		fmt.Fprintf(&b, "%s  %s → %s/%s%s\n", r.ID, short(r.SHA), r.EntityTable, r.EntityID, msg)
+	}
+	return b.String()
+}
+
+// Record is one link in v0.1.17's --json form (the ent CommitLink struct).
+type Record struct {
+	ID               string `json:"id"`
+	CreatedAt        string `json:"created_at,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty"`
+	ProjectID        string `json:"project_id"`
+	EntityTable      string `json:"entity_table"`
+	EntityID         string `json:"entity_id"`
+	SHA              string `json:"sha"`
+	Message          string `json:"message,omitempty"`
+	RepoPath         string `json:"repo_path,omitempty"`
+	Author           string `json:"author,omitempty"`
+	CommittedAt      string `json:"committed_at,omitempty"`
+	CreatedByActorID string `json:"created_by_actor_id,omitempty"`
+	Store            string `json:"_source,omitempty"`
+}
+
+// ShowIn is the input of commit.show (the sha is the path id in REST).
+type ShowIn struct {
+	ID string `json:"id" arg:"0" desc:"the commit sha"`
+}
+
+// ShowOut is the output of commit.show.
+type ShowOut struct {
+	ListOut
+	// SHA is the asked sha, for the human header.
+	SHA string `json:"-"`
+}
+
+// Text is v0.1.17's commit-show output.
+func (o ShowOut) Text() string {
+	if len(o.Data) == 0 {
+		return "(no entities linked to this commit)\n"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Commit %s — %d linked entities:\n", o.SHA, len(o.Data))
+	for _, r := range o.Data {
+		fmt.Fprintf(&b, "  %s/%s\n", r.EntityTable, r.EntityID)
+	}
+	return b.String()
+}
+
+// RemoveIn is the input of link.remove.
+type RemoveIn struct {
+	ID string `json:"id" arg:"0" desc:"the link id (cml_…)"`
+}
+
+// RemoveOut is the output of link.remove.
+type RemoveOut struct {
+	ID    string `json:"id"`
+	Store string `json:"store"`
+}
+
+// Text is v0.1.17's line.
+func (o RemoveOut) Text() string { return "✓ link " + o.ID + " removed\n" }
+
+// writeErrors are the codes a link write can return.
+var writeErrors = []errs.Code{
+	errs.InvalidInput, errs.InvalidID, errs.NotFound, errs.AmbiguousID,
+	errs.SecretDetected, errs.NeedsConfirm, errs.Cancelled, errs.PolicyDenied, errs.ConfigInvalid,
+	errs.Stale, errs.StoreReadOnly, errs.StoreLocked, errs.StoreUnreachable, errs.OldLore, errs.Internal,
+}
+
+// readErrors are the codes a link read can return.
+var readErrors = []errs.Code{errs.InvalidInput, errs.InvalidID, errs.NotFound, errs.StoreUnreachable, errs.OldLore, errs.Internal}
+
+// Ops returns every link operation bound to env; git reads --commit.
+func Ops(env Env, git CommitResolver) []op.Entry {
+	o := ops{env: env, git: git}
+	return []op.Entry{
+		op.Define(op.Spec{
+			Name: OpAdd, Summary: "Link a git commit to an entity (--entity=tsk_… --commit=<sha>)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
+			Confirm:  op.ConfirmRule{MayAsk: true},
+			Examples: []op.Example{{Title: "link the current commit", CLI: "lore link add --entity=tsk_<id> --commit=HEAD", Want: "✓ linked"}},
+		}, o.add),
+		op.Define(op.Spec{
+			Name: OpList, Summary: "List commit links (filter by --entity or --commit)",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
+		}, o.list),
+		op.Define(op.Spec{
+			Name: OpRemove, Summary: "Remove a commit link by its ID (a tombstone is kept)",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
+			Confirm:  op.ConfirmRule{Always: true},
+			Examples: []op.Example{{Title: "remove without a terminal", CLI: "lore link remove cml_<id> --yes", Want: "removed"}},
+		}, o.remove),
+		op.Define(op.Spec{
+			Name: OpShow, Summary: "Show every entity linked to a given git commit",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
+		}, o.show),
+	}
+}
+
+// ops binds the run functions to one Env and resolver.
+type ops struct {
+	env Env
+	git CommitResolver
+}
+
+// add resolves the entity and the commit, then writes the link.
+func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
+	if in.Entity == "" || in.Commit == "" {
+		return AddOut{}, errs.New(errs.InvalidInput, "--entity and --commit are required").
+			WithHint("example: lore link add --entity=tsk_<id> --commit=HEAD")
+	}
+	tbl, id, err := o.entity(ctx, in.Entity)
+	if err != nil {
+		return AddOut{}, err
+	}
+	sha, msg, author, when, err := o.resolve(ctx, in.Commit, in.RepoPath)
+	if err != nil {
+		return AddOut{}, err
+	}
+	msg, author, when = orElse(in.Message, msg), orElse(in.Author, author), orElse(in.CommittedAt, when)
+	project, err := o.env.Project(ctx)
+	if err != nil {
+		return AddOut{}, err
+	}
+	fields := map[string]value.Value{}
+	if fields[fieldProject], err = value.RefOf(project.Any()); err != nil {
+		return AddOut{}, err
+	}
+	if fields[schema.FieldEntityID], err = value.RefOf(id); err != nil {
+		return AddOut{}, err
+	}
+	for k, v := range map[string]string{
+		schema.FieldEntityTable: string(tbl), fieldSHA: sha, fieldMessage: msg,
+		fieldRepoPath: in.RepoPath, fieldAuthor: author, fieldCommittedAt: when,
+	} {
+		if v == "" {
+			continue
+		}
+		if fields[k], err = value.TextOf(v); err != nil {
+			return AddOut{}, errs.Wrap(errs.CodeOf(err), "link add: field "+k, err)
+		}
+	}
+	natural, err := engine.NaturalID(ids.PrefixCommitLink, string(tbl), id.String(), sha)
+	if err != nil {
+		return AddOut{}, err
+	}
+	if _, r, gerr := o.env.Get(ctx, engine.Ref{Table: table, ID: natural}); gerr == nil && !r.Deleted {
+		return AddOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("commit %s already linked to %s/%s", short(sha), tbl, id))
+	}
+	w, err := o.env.Create(ctx, store.Source(in.To), table, fields)
+	if err != nil {
+		return AddOut{}, err
+	}
+	return AddOut{
+		ID: w.Row.ID.String(), Store: o.storeOf(ctx, w.Row.ID, store.Source(in.To)),
+		SHA: sha, EntityTable: string(tbl), EntityID: id.String(), Message: msg,
+	}, nil
+}
+
+// resolve handles --commit=<sha> | HEAD | auto as v0.1.17 did: HEAD/auto
+// resolve and fill message, author and time; another ref resolves to its
+// sha only; a ref git cannot resolve is kept when it looks like a sha.
+func (o ops) resolve(ctx context.Context, arg, dir string) (sha, msg, author, when string, err error) {
+	ref, fill := arg, false
+	if arg == commitHEAD || arg == commitAuto {
+		ref, fill = commitHEAD, true
+	}
+	sha, gerr := o.git.RevParse(ctx, dir, ref)
+	if gerr != nil {
+		if likelySHA(arg) {
+			return arg, "", "", "", nil
+		}
+		return "", "", "", "", errs.New(errs.InvalidInput, fmt.Sprintf("could not resolve %q via git rev-parse — use a full sha or run from inside a git repo", arg))
+	}
+	if !fill {
+		return sha, "", "", "", nil
+	}
+	msg, author, when, derr := o.git.Describe(ctx, dir, sha)
+	if derr != nil {
+		return sha, "", "", "", nil // v0.1.17 ignored a failed git log
+	}
+	return sha, msg, author, when, nil
+}
+
+// entity resolves --entity to its table (by id prefix) and id. A table on
+// the core must hold the id as a live row; a table not on the core yet is
+// accepted, as v0.1.17 accepted it.
+func (o ops) entity(ctx context.Context, raw string) (row.Table, ids.AnyID, error) {
+	id, err := ids.ParseAny(strings.TrimSpace(raw))
+	if err != nil {
+		return "", ids.AnyID{}, errs.New(errs.NotFound, "entity "+quote(raw)+" not found").
+			WithHint("use the opaque id (tsk_…, mem_…); `lore <kind> list` shows them")
+	}
+	reg, err := schema.NewRegistry(schema.Builtin()...)
+	if err != nil {
+		return "", ids.AnyID{}, errs.Wrap(errs.Internal, "link: built-in schema", err)
+	}
+	if def, ok := reg.ByPrefix(id.Prefix()); ok {
+		_, r, gerr := o.env.Get(ctx, engine.Ref{Table: def.Name, ID: id})
+		if gerr == nil && r.Deleted {
+			gerr = errs.New(errs.NotFound, "entity "+id.String()+" is deleted")
+		}
+		if gerr != nil {
+			return "", ids.AnyID{}, gerr
+		}
+		return def.Name, id, nil
+	}
+	name, ok := legacyTables[id.Prefix()]
+	if !ok {
+		return "", ids.AnyID{}, errs.New(errs.InvalidInput, fmt.Sprintf("unknown ID prefix %q — cannot derive entity table", id.Prefix()))
+	}
+	return name, id, nil
+}
+
+// legacyTables is v0.1.17's prefix → table map (tableForOpaqueID) for the
+// tables not on the core yet; a table on the core is found in the schema.
+var legacyTables = map[ids.Prefix]row.Table{
+	"tsk": "tasks", "mem": "memories", "msn": "missions", "tlt": "task_lists", "pln": "plans",
+	"dec": "decisions", "rul": "rules", "hfx": "hotfixes", "pat": "patterns", "pbk": "playbooks",
+	"prm": "prompts", "ann": "architecture_notes", "bhv": "behaviours", "ckr": "cookbook_recipes",
+	"inc": "incidents", "sgg": "suggestions", "tpr": "taste_prefs", "snp": "snapshots",
+	"wfl": "workflows", "wsp": "workspaces", "hnd": "handoffs", "rem": "reminders", "run": "runs",
+	"tdc": "tech_docs", "cmt": "comments",
+}
+
+// list returns the project's live links, filtered.
+func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	if in.Entity != "" {
+		if _, err := ids.ParseAny(strings.TrimSpace(in.Entity)); err != nil {
+			return ListOut{}, errs.New(errs.NotFound, "entity "+quote(in.Entity)+" not found")
+		}
+	}
+	rows, err := o.links(ctx, func(r row.Row) bool {
+		return (in.Entity == "" || field(r, schema.FieldEntityID) == strings.TrimSpace(in.Entity)) &&
+			(in.Commit == "" || field(r, fieldSHA) == in.Commit)
+	})
+	if err != nil {
+		return ListOut{}, err
+	}
+	return ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Count: len(rows), Data: rows}, nil
+}
+
+// show returns every link of one sha.
+func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
+	sha := strings.TrimSpace(in.ID)
+	if sha == "" {
+		return ShowOut{}, errs.New(errs.InvalidInput, "commit show: the sha is empty")
+	}
+	rows, err := o.links(ctx, func(r row.Row) bool { return field(r, fieldSHA) == sha })
+	if err != nil {
+		return ShowOut{}, err
+	}
+	return ShowOut{ListOut: ListOut{SchemaVersion: SchemaVersion, Kind: KindShow, Count: len(rows), Data: rows}, SHA: sha}, nil
+}
+
+// links lists the live links of the current project in every attached
+// store that keep says to keep, oldest first.
+func (o ops) links(ctx context.Context, keep func(row.Row) bool) ([]Record, error) {
+	project, err := o.env.Project(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := []Record{}
+	for _, src := range o.env.Stores() {
+		rows, err := o.env.List(ctx, src, table)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			if r.Deleted || field(r, fieldProject) != project.String() || !keep(r) {
+				continue
+			}
+			out = append(out, recordOf(src, r))
+		}
+	}
+	slices.SortStableFunc(out, func(a, b Record) int { return strings.Compare(a.CreatedAt, b.CreatedAt) })
+	return out, nil
+}
+
+// remove writes the link's tombstone.
+func (o ops) remove(ctx context.Context, in RemoveIn) (RemoveOut, error) {
+	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
+	if err != nil || id.Prefix() != ids.PrefixCommitLink {
+		return RemoveOut{}, errs.New(errs.InvalidID, "link: "+quote(in.ID)+" is not a link id (cml_…)")
+	}
+	src := o.storeOf(ctx, id, "")
+	w, err := o.env.Delete(ctx, engine.Ref{Table: table, ID: id})
+	if err != nil {
+		return RemoveOut{}, err
+	}
+	return RemoveOut{ID: w.Row.ID.String(), Store: src}, nil
+}
+
+// storeOf names the store holding id after a write.
+func (o ops) storeOf(ctx context.Context, id ids.AnyID, requested store.Source) string {
+	if requested != "" {
+		return string(requested)
+	}
+	src, _, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id})
+	if err != nil {
+		return ""
+	}
+	return string(src)
+}
+
+// recordOf is the v0.1.17 --json form of a link row.
+func recordOf(src store.Source, r row.Row) Record {
+	rec := Record{
+		ID: r.ID.String(), CreatedAt: timeText(r.CreatedAt), UpdatedAt: timeText(r.UpdatedAt),
+		ProjectID: field(r, fieldProject), EntityTable: field(r, schema.FieldEntityTable), EntityID: field(r, schema.FieldEntityID),
+		SHA: field(r, fieldSHA), Message: field(r, fieldMessage), RepoPath: field(r, fieldRepoPath),
+		Author: field(r, fieldAuthor), CommittedAt: field(r, fieldCommittedAt), CreatedByActorID: field(r, fieldCreatedBy),
+	}
+	if rec.CreatedByActorID == "" && !r.CreatedBy.IsZero() {
+		rec.CreatedByActorID = r.CreatedBy.String()
+	}
+	if src != store.SourceRepo {
+		rec.Store = string(src)
+	}
+	return rec
+}
+
+// likelySHA reports whether s looks like a (short or full) hex sha.
+func likelySHA(s string) bool {
+	if len(s) < minSHAHex || len(s) > maxSHAHex {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// short is the first 8 characters of a sha (the whole of a shorter one).
+func short(sha string) string {
+	if len(sha) > shortSHA {
+		return sha[:shortSHA]
+	}
+	return sha
+}
+
+// excerpt cuts a message for display (v0.1.17: 60, cut at 57 + "...").
+func excerpt(m string) string {
+	if len(m) > msgMax {
+		return m[:msgCut] + ellipsis
+	}
+	return m
+}
+
+// orElse returns a, or b when a is empty.
+func orElse(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// field returns the text form of a row field ("" when absent or null).
+func field(r row.Row, name string) string {
+	v, ok := r.Fields[name]
+	if !ok || v.Kind() == value.KindNull {
+		return ""
+	}
+	return v.String()
+}
+
+// timeText renders an envelope time as v0.1.17's JSON did.
+func timeText(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
+// quote renders a user value for an error, truncated.
+func quote(s string) string {
+	if len(s) > maxQuoted {
+		s = s[:maxQuoted] + ellipsis
+	}
+	return `"` + s + `"`
+}
