@@ -321,6 +321,7 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		return err
 	}
 	req := rowroute.Request{Defaults: liveKinds(s)}
+	col := liveCollectorFrom(ctx)
 	var branch []store.Change
 	liveRows := map[live.RowKey]live.File{}
 	now := s.clk.Now()
@@ -331,12 +332,23 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		}
 		k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
 		prev, inLive := files[k]
+		if col != nil {
+			if f, staged := col.rows[k]; staged {
+				prev, inLive = f, true
+			}
+		}
 		branchRow, berr := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID)
 		if berr != nil && !errors.Is(berr, store.ErrNotFound) {
 			return berr
 		}
 		inBranch := berr == nil
 		place := rowroute.Decide(req, rowroute.Row{Table: k.Table, ID: k.ID, InLive: inLive, InBranch: inBranch, Deleted: ch.Row.Deleted}).Place
+		if col != nil {
+			// A fenced coordination write takes its row live, as v0.1.17's
+			// stagedLiveRows did: only the live ref can join the atomic
+			// push with the signals ref.
+			place = rowroute.PlaceLive
+		}
 		if place != rowroute.PlaceLive {
 			branch = append(branch, ch)
 			continue
@@ -344,9 +356,9 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		cur := store.Row{}
 		switch {
 		case inLive:
-			lr, err := liveStoreRow(k, prev)
-			if err != nil {
-				return err
+			lr, lerr := liveStoreRow(k, prev)
+			if lerr != nil {
+				return lerr
 			}
 			cur = lr
 			if inBranch {
@@ -358,14 +370,14 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		if cur.HLC.Compare(ch.Expect) != 0 {
 			return errs.Wrap(errs.Stale, "live row "+k.Table+"/"+k.ID+" changed since it was read", store.ErrStale)
 		}
-		f, err := liveFileFor(ctx, ch.Row, prevPtr(prev, inLive), now)
-		if err != nil {
-			return err
+		f, ferr := liveFileFor(ctx, ch.Row, prevPtr(prev, inLive), now)
+		if ferr != nil {
+			return ferr
 		}
 		liveRows[k] = f
 	}
 	if len(branch) > 0 {
-		if err := b.inner.Write(ctx, branch); err != nil {
+		if err = b.inner.Write(ctx, branch); err != nil {
 			return err
 		}
 	}
@@ -374,6 +386,11 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	}
 	if s.blocked != nil {
 		return errs.Wrap(errs.StoreReadOnly, "the remote live ref was rewritten; lore stopped writing to it", s.blocked)
+	}
+	if col != nil {
+		col.s, col.folder = s, b.folder
+		maps.Copy(col.rows, liveRows)
+		return nil
 	}
 	res, err := s.ref.Write(ctx, live.WriteRequest{Folder: b.folder, Rows: liveRows, BinaryVersion: version})
 	if err != nil {
@@ -470,3 +487,28 @@ func (b *liveBackend) Close() error { return b.inner.Close() }
 // Unwrap implements wire.Unwrapper: wire reads the store's marker, branch
 // and clone through the concrete backend.
 func (b *liveBackend) Unwrap() store.Backend { return b.inner }
+
+// liveCollector gathers the live rows of one fenced coordination write
+// (coreLiveCompanion) instead of committing them: they become one staged
+// commit pushed atomically with the signals ref, applied only once the
+// remote confirmed both (F7, TEAM-036), so a holder that lost its lease
+// never publishes its row change.
+type liveCollector struct {
+	s      *liveSession
+	folder string
+	rows   map[live.RowKey]live.File
+}
+
+// liveCollectorKey carries a *liveCollector in a context.
+type liveCollectorKey struct{}
+
+// withLiveCollector makes liveBackend.Write collect into c.
+func withLiveCollector(ctx context.Context, c *liveCollector) context.Context {
+	return context.WithValue(ctx, liveCollectorKey{}, c)
+}
+
+// liveCollectorFrom is the context's collector (nil = commit as usual).
+func liveCollectorFrom(ctx context.Context) *liveCollector {
+	c, _ := ctx.Value(liveCollectorKey{}).(*liveCollector)
+	return c
+}

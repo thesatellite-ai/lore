@@ -142,7 +142,7 @@ func openRepoTarget(ctx context.Context, w *coordWorld) (coordTarget, error) {
 		return coordTarget{}, err
 	}
 	db := dbent.InitDB(rctx.DBPath)
-	if err := dbent.ApplyPragmas(db); err != nil {
+	if err = dbent.ApplyPragmas(db); err != nil {
 		_ = client.Close() // the pragma error is the one to report
 		_ = db.Close()     // the pragma error is the one to report
 		return coordTarget{}, errcodes.New(errcodes.Internal, "open lore.db").WithCause(err)
@@ -211,8 +211,15 @@ func (r *liveRows) refresh(ctx context.Context) (string, live.Tree, error) {
 // means deleted), else the branch row from lore.db.
 func (r *liveRows) Get(ctx context.Context, id string) (coord.Doc, bool, error) {
 	if coreRowTable(tableOf(id)) {
-		// The core owns the row (task_corerows.go): its row file is the
-		// only copy that counts.
+		// The core owns the row (task_corerows.go); with live mode on, its
+		// live copy is read through the core's live overlay (live_core.go)
+		// after a fresh fetch + integrate: a decision on a stale row would
+		// overwrite a teammate's edit.
+		if r.s != nil {
+			if _, _, err := r.refresh(ctx); err != nil {
+				return nil, false, err
+			}
+		}
 		return coreDoc(ctx, tableOf(id), id)
 	}
 	_, tree, err := r.refresh(ctx)
@@ -320,7 +327,15 @@ func (r *liveRows) Stage(_ context.Context, rows ...coord.RowWrite) ([]signals.C
 		out = append(out, &stagedLiveRows{spot: r.spot(), rows: live})
 	}
 	if len(core) > 0 {
-		out = append(out, &coreCompanion{rows: core})
+		if r.s != nil && r.s.ref.Remote != nil && !liveDisabled() {
+			// Live mode: the rows join the signals push (same remote).
+			out = append(out, &coreLiveCompanion{rows: core, refresh: func(ctx context.Context) error {
+				_, _, err := r.refresh(ctx)
+				return err
+			}})
+		} else {
+			out = append(out, &coreCompanion{rows: core})
+		}
 	}
 	return out, nil
 }
@@ -370,14 +385,14 @@ func (p *stagedLiveRows) Prepare(ctx context.Context) (gitremote.RefUpdate, erro
 			prev = &f
 		}
 		f := live.NewVersion(prev, map[string]any(w.Doc), sp.clk.Now(), sp.actor)
-		b, err := f.Encode()
-		if err != nil {
-			return gitremote.RefUpdate{}, err
+		b, encErr := f.Encode()
+		if encErr != nil {
+			return gitremote.RefUpdate{}, encErr
 		}
 		ch.Put[live.RowPath(sp.folder, key.Table, key.ID)] = b
 		names = append(names, key.String())
 	}
-	if err := addFirstWriteFiles(tree, ch); err != nil {
+	if err = addFirstWriteFiles(tree, ch); err != nil {
 		return gitremote.RefUpdate{}, err
 	}
 	sig := sp.ref.Signature

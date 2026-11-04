@@ -37,6 +37,7 @@ import (
 	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitremote"
+	"saas/pkg/aicoder/live"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
@@ -101,22 +102,40 @@ func coreDoc(ctx context.Context, table, id string) (coord.Doc, bool, error) {
 	if coreApp == nil {
 		return nil, false, errcodes.New(errcodes.Internal, "the core is not mounted")
 	}
-	aid, err := ids.ParseAny(id)
-	if err != nil {
-		return nil, false, nil
-	}
-	_, r, err := coreApp.Get(ctx, engine.Ref{Table: row.Table(table), ID: aid})
-	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, coreErr(err)
+	_, r, found, err := coreLocate(ctx, table, id)
+	if err != nil || !found {
+		return nil, false, err
 	}
 	d, err := coreDocOf(r)
 	if err != nil {
 		return nil, false, errcodes.New(errcodes.Internal, "read "+id).WithCause(err)
 	}
 	return d, true, nil
+}
+
+// coreLocate finds one row and the store holding it. A row present in
+// several stores under the same id (an actor's natural id is the same in
+// the repo and in the org folder) is the repo store's copy: coordination
+// writes a repo task's supporting rows (an owner projection) there.
+// found=false for an unknown id, a non-id or a tombstone.
+func coreLocate(ctx context.Context, table, id string) (store.Source, row.Row, bool, error) {
+	aid, err := ids.ParseAny(id)
+	if err != nil {
+		return "", row.Row{}, false, nil
+	}
+	ref := engine.Ref{Table: row.Table(table), ID: aid}
+	src, r, err := coreApp.Get(ctx, ref)
+	if errs.Has(err, errs.AmbiguousID) {
+		ref.Store = store.SourceRepo
+		src, r, err = coreApp.Get(ctx, ref)
+	}
+	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+		return "", row.Row{}, false, nil
+	}
+	if err != nil {
+		return "", row.Row{}, false, coreErr(err)
+	}
+	return src, r, true, nil
 }
 
 // coreDocs lists the live rows of table in every attached store.
@@ -206,9 +225,15 @@ func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool)
 	if err != nil {
 		return errcodes.New(errcodes.InvalidID, id+" is not an id").WithCause(err)
 	}
-	cur, found, err := coreDoc(ctx, table, id)
+	src, curRow, found, err := coreLocate(ctx, table, id)
 	if err != nil {
 		return err
+	}
+	var cur coord.Doc
+	if found {
+		if cur, err = coreDocOf(curRow); err != nil {
+			return errcodes.New(errcodes.Internal, "read "+id).WithCause(err)
+		}
 	}
 	patch := map[string]value.Value{}
 	for _, f := range def.Fields {
@@ -243,7 +268,7 @@ func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool)
 		// envelope's created_by records the writer instead of the write
 		// being refused after the signals push.
 		if a, ok := patch[fieldCreatedByActor].(value.Ref); ok {
-			if _, _, gerr := coreApp.Get(ctx, engine.Ref{Table: schema.TableActors, ID: a.ID()}); gerr != nil {
+			if _, _, known, gerr := coreLocate(ctx, string(schema.TableActors), a.ID().String()); gerr != nil || !known {
 				delete(patch, fieldCreatedByActor)
 			}
 		}
@@ -253,7 +278,7 @@ func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool)
 	if len(patch) == 0 {
 		return nil
 	}
-	_, err = coreApp.Update(ctx, engine.Ref{Table: row.Table(table), ID: aid}, patch)
+	_, err = coreApp.Update(ctx, engine.Ref{Table: row.Table(table), ID: aid, Store: src}, patch)
 	return coreErr(err)
 }
 
@@ -276,4 +301,69 @@ func docValue(f schema.FieldDef, v any) (value.Value, error) {
 		return value.ParseList(f.Elem, raw)
 	}
 	return value.Parse(f.Kind, raw)
+}
+
+// coreLiveCompanion is coreCompanion for a repo whose rows are live and
+// whose live ref is on the signals ref's remote: Prepare runs the engine
+// writes with a liveCollector, so every live-kind row becomes part of ONE
+// staged live commit (live.Ref.Stage) that joins the atomic signals push;
+// Finalize applies it after the remote confirmed both. Nothing reaches the
+// live ref or the remote when the lease was lost (v0.1.17's
+// stagedLiveRows, F7). Rows of other tables (none today) are written by
+// the engine in Prepare.
+type coreLiveCompanion struct {
+	rows []coord.RowWrite
+	// refresh fetches and integrates the live ref before staging, so the
+	// staged commit fast-forwards the remote tip after a lost race.
+	refresh func(ctx context.Context) error
+	staged  live.Staged
+	s       *liveSession
+}
+
+var _ signals.Companion = (*coreLiveCompanion)(nil)
+
+// Prepare implements signals.Companion. It is re-run after a lost race,
+// from a fresh integrate: nothing of an earlier attempt was applied.
+func (c *coreLiveCompanion) Prepare(ctx context.Context) (gitremote.RefUpdate, error) {
+	if c.refresh != nil {
+		if err := c.refresh(ctx); err != nil {
+			return gitremote.RefUpdate{}, err
+		}
+	}
+	col := &liveCollector{rows: map[live.RowKey]live.File{}}
+	cctx := withLiveCollector(ctx, col)
+	for _, w := range c.rows {
+		if _, ok := coreTableDef(coreTableFor(w)); !ok {
+			return gitremote.RefUpdate{}, fmt.Errorf("core rows: unknown table %q", coreTableFor(w))
+		}
+		if err := coreWriteDoc(cctx, coreTableFor(w), w.ID, w.Doc); err != nil {
+			return gitremote.RefUpdate{}, err
+		}
+	}
+	c.staged, c.s = live.Staged{}, col.s
+	if col.s == nil || len(col.rows) == 0 {
+		return gitremote.RefUpdate{}, nil
+	}
+	st, err := col.s.ref.Stage(ctx, live.WriteRequest{Folder: col.folder, Rows: col.rows, BinaryVersion: version})
+	if err != nil {
+		return gitremote.RefUpdate{}, fmt.Errorf("stage the live rows: %w", err)
+	}
+	c.staged = st
+	if st.New == st.Old {
+		return gitremote.RefUpdate{}, nil
+	}
+	return st.Update(col.s.ref.Name), nil
+}
+
+// Finalize implements signals.Companion: the remote holds the staged
+// commit; move the local live ref (and its tracking copy) to it.
+func (c *coreLiveCompanion) Finalize(ctx context.Context) error {
+	if c.s == nil || c.staged.New == c.staged.Old {
+		return nil
+	}
+	if err := c.s.ref.CommitStaged(ctx, c.staged); err != nil {
+		return fmt.Errorf("move %s: %w", c.s.ref.Name, err)
+	}
+	c.s.wrote += len(c.staged.Written)
+	return nil
 }

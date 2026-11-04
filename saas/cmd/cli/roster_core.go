@@ -95,18 +95,34 @@ func (r *coreRoster) handleTaken(ctx context.Context, handle, stableKey string) 
 // resolveHandle finds an active actor by @handle.
 func (r *coreRoster) resolveHandle(ctx context.Context, h string) (wire.RosterActor, error) {
 	h = strings.TrimPrefix(h, handlePrefix)
-	actors, err := r.app.RosterActors(ctx, r.target)
-	if err != nil {
-		return wire.RosterActor{}, coreErr(err)
-	}
-	for _, a := range actors {
-		if a.Active && a.Handle == h {
-			return a, nil
+	// A miss re-reads the roster once from the store's remote (v0.1.17's
+	// refreshOnMiss): a teammate who just ran `lore actor register` on
+	// another machine pushed their row, and this machine's copy of the
+	// store may predate it. A failed sync keeps the copy (the miss stands,
+	// with the `lore sync` hint).
+	for attempt := 0; attempt < rosterLookups; attempt++ {
+		if attempt > 0 && r.target != store.SourceRepo {
+			if _, err := r.app.Sync(ctx, r.target); err != nil {
+				break
+			}
+		}
+		actors, err := r.app.RosterActors(ctx, r.target)
+		if err != nil {
+			return wire.RosterActor{}, coreErr(err)
+		}
+		for _, a := range actors {
+			if a.Active && a.Handle == h {
+				return a, nil
+			}
 		}
 	}
 	return wire.RosterActor{}, errcodes.New(errcodes.InvalidInput, "no one is @"+h+" on "+r.where+"'s roster").
 		WithHint(r.missHint())
 }
+
+// rosterLookups bounds a handle lookup: the cached store copy, then once
+// more after syncing the roster's store.
+const rosterLookups = 2
 
 // missHint is the hint for a handle missing from this roster: the repo's
 // own roster (no org) has no store copy to be stale, so the person has not
