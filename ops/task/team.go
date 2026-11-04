@@ -154,7 +154,7 @@ func (o ops) teamList(ctx context.Context, in ListIn) (teamView, error) {
 	}
 	return teamView{board: board, keep: func(r row.Row) bool {
 		h, claimed, active := board.Claim(r.ID.String())
-		if holder != "" && !(claimed && active && h == holder) {
+		if holder != "" && (!claimed || !active || h != holder) {
 			return false
 		}
 		if in.Mine {
