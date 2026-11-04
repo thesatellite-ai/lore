@@ -71,6 +71,9 @@ type auditLine struct {
 	Accepted int    `json:"secrets_accepted,omitempty"`
 	Redacted int    `json:"secrets_redacted,omitempty"`
 	Cascade  string `json:"cascade,omitempty"`
+	// Batch and BatchKind name the bulk action the write belongs to (XQ1).
+	Batch     string `json:"batch,omitempty"`
+	BatchKind string `json:"batch_kind,omitempty"`
 }
 
 // fileAudit is the engine.AuditSink writing AuditFile.
@@ -105,6 +108,7 @@ func encodeAuditLine(ev engine.Event) ([]byte, error) {
 		Op: ev.Op, Action: string(ev.Action), Store: string(ev.Store), Table: ev.Table.String(), ID: ev.ID.String(),
 		HLC: ev.HLC.String(), Actor: ev.Actor.String(), Merged: ev.Merged,
 		Accepted: len(ev.SecretsAccepted), Redacted: len(ev.SecretsRedacted), Cascade: ev.Cascade.String(),
+		Batch: ev.Batch.ID.String(), BatchKind: ev.Batch.Kind,
 	})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "wire: encode an audit event", err)
@@ -173,6 +177,15 @@ func (r *routedAudit) stem(name store.Source) string {
 
 // Record implements engine.AuditSink.
 func (r *routedAudit) Record(ctx context.Context, ev engine.Event) error {
+	// XQ1: every event of a bulk action, of every store, also goes to the
+	// one machine-local batch log `lore batch list|show` read (Q-R3-8:
+	// batches are visible on the machine that ran them in 0.1.18).
+	r.mu.Lock()
+	berr := recordBatch(batchDirOf(r.dir), ev)
+	r.mu.Unlock()
+	if berr != nil {
+		return berr
+	}
 	if ev.Store != store.SourceRepo {
 		line, err := encodeAuditLine(ev)
 		if err != nil {
