@@ -23,7 +23,7 @@ func GuardCoreOwned(client *ent.Client) {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
 			if table := tableOfType(m.Type()); lsync.CoreOwned(table) {
 				return nil, errcodes.New(errcodes.Unsupported, table+" are written by the 0.1.18 core; the TUI shows them read-only").
-					WithHint("use the CLI: `lore " + nounOfType(m.Type()) + " add|edit|delete …`")
+					WithHint(hintOfType(m.Type()))
 			}
 			return next.Mutate(ctx, m)
 		})
@@ -44,13 +44,30 @@ func tableOfType(t string) string {
 	return s + "s"
 }
 
-// nounOfType is the CLI noun of a type (TaskList → tasklist, CommitLink →
-// link).
-func nounOfType(t string) string {
-	if t == "CommitLink" {
-		return "link"
+// cliHintOverrides names the real CLI command for the core-owned types whose
+// command is not `lore <lowercased type> add|edit|delete` (the default of
+// hintOfType). Keys are ent type names (ent.Type*); each value is the whole
+// hint. Checked against the command tree by the tuigen tests, so a renamed
+// command shows up as a failing case instead of a hint naming nothing.
+var cliHintOverrides = map[string]string{
+	"Actor":           "use the CLI: `lore actor register|deactivate …`",
+	"CommitLink":      "use the CLI: `lore link …`",
+	"ExternalSource":  "use the CLI: `lore external-source add|edit|delete …`",
+	"KnowledgeRef":    "use the CLI: `lore task add|edit --ref …`",
+	"Project":         "use the CLI: `lore project …`",
+	"Repo":            "use the CLI: `lore repo add|archive|delete …`",
+	"RuleVerifierRef": "no lore command writes rule verifier refs; they arrive with the rule's row files",
+	"Team":            "use the CLI: `lore team add …`",
+}
+
+// hintOfType is the refusal hint for a core-owned type: the CLI command that
+// writes it (TaskList → `lore tasklist add|edit|delete …`, overrides in
+// cliHintOverrides).
+func hintOfType(t string) string {
+	if h, ok := cliHintOverrides[t]; ok {
+		return h
 	}
-	return strings.ToLower(t)
+	return "use the CLI: `lore " + strings.ToLower(t) + " add|edit|delete …`"
 }
 
 // snake turns CamelCase into snake_case.
