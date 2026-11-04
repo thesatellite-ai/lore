@@ -120,26 +120,29 @@ func (a *App) RefuseRetiredModeB(ctx context.Context) error {
 // the pointer file is renamed to <file>.migrated. It returns one step line
 // per row and per change; under dryRun it changes nothing. A repo with no
 // pointer returns nothing, so a second run is a no-op. A run cut short is
-// resumed: rows already in the store are skipped, never overwritten.
-func (a *App) MigrateModeB(ctx context.Context, dryRun bool) ([]string, error) {
+// resumed: rows already in the store are skipped, never overwritten. The
+// int is the rows written into the store: every exported row under
+// dryRun, the ones the store did not hold yet otherwise (a fresh run
+// writes them all, so the two agree).
+func (a *App) MigrateModeB(ctx context.Context, dryRun bool) ([]string, int, error) {
 	top, err := a.repoTop(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	pointer, ok := FindModeBPointer(top)
 	if !ok {
-		return nil, nil
+		return nil, 0, nil
 	}
 	if a.opts.ModeB == nil {
-		return nil, errs.New(errs.Unsupported, "migrate: "+RetiredModeBMessage(pointer)+", but this build cannot read the shared lore.db")
+		return nil, 0, errs.New(errs.Unsupported, "migrate: "+RetiredModeBMessage(pointer)+", but this build cannot read the shared lore.db")
 	}
 	exp, err := a.opts.ModeB.ExportModeB(ctx, pointer)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	changes, err := modeBChanges(exp)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	dir := filepath.Join(filepath.Dir(exp.DBPath), modeBStoresDir, exp.ProjectName)
 	raw := (&url.URL{Scheme: folder.Scheme, Path: filepath.ToSlash(dir)}).String()
@@ -151,23 +154,24 @@ func (a *App) MigrateModeB(ctx context.Context, dryRun bool) ([]string, error) {
 		modeBStepPrefix+attach.FileName+": add store "+ModeBStoreName+" "+raw,
 		modeBStepPrefix+modeBDir+"/"+filepath.Base(pointer)+" → "+modeBDir+"/"+filepath.Base(pointer)+ModeBMigratedSuffix+" (kept)")
 	if dryRun {
-		return steps, nil
+		return steps, len(changes), nil
 	}
-	if err := a.writeModeBStore(ctx, raw, changes); err != nil {
-		return nil, err
+	written, err := a.writeModeBStore(ctx, raw, changes)
+	if err != nil {
+		return nil, 0, err
 	}
 	if err := a.attachModeBStore(ctx, top, raw); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	dst := pointer + ModeBMigratedSuffix
 	if _, err := os.Lstat(dst); err == nil {
-		return nil, errs.New(errs.AlreadyInitialized, "migrate: "+dst+" already exists; the pointer "+pointer+" was left in place").
+		return nil, 0, errs.New(errs.AlreadyInitialized, "migrate: "+dst+" already exists; the pointer "+pointer+" was left in place").
 			WithHint("move one of the two files aside, then run `lore migrate run` again")
 	}
 	if err := os.Rename(pointer, dst); err != nil {
-		return nil, errs.Wrap(errs.Internal, "migrate: keep the pointer as "+dst, err)
+		return nil, 0, errs.Wrap(errs.Internal, "migrate: keep the pointer as "+dst, err)
 	}
-	return steps, nil
+	return steps, written, nil
 }
 
 // modeBChanges decodes the exported v0.1.17 documents (model/row upcasts
@@ -248,27 +252,27 @@ func modeBChanges(exp ModeBExport) ([]store.Change, error) {
 
 // writeModeBStore makes the folder store at raw (a v2 marker, as `lore
 // store init` writes) unless it exists, and writes the rows it does not
-// hold yet.
-func (a *App) writeModeBStore(ctx context.Context, raw string, changes []store.Change) error {
+// hold yet, returning how many it wrote.
+func (a *App) writeModeBStore(ctx context.Context, raw string, changes []store.Change) (int, error) {
 	canon, err := canonical(attach.Store{URL: raw})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	id, err := ids.New[ids.Store]()
 	if err != nil {
-		return errs.Wrap(errs.Internal, "migrate: new store id", err)
+		return 0, errs.Wrap(errs.Internal, "migrate: new store id", err)
 	}
 	m := rowfs.Marker{ID: id, Visibility: rowfs.VisibilityInternal, Created: a.opts.Wall().UTC().Format(markerDateLayout), OrgFolder: defaultOrgFolder}
 	if _, _, err = a.makeStore(ctx, canon, m); err != nil {
-		return err
+		return 0, err
 	}
 	b, err := a.openStore(ctx, canon)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	have, _, err := b.Read(ctx, "")
 	if err != nil {
-		return errors.Join(err, b.Close())
+		return 0, errors.Join(err, b.Close())
 	}
 	held := make(map[store.Key]bool, len(have))
 	for _, sr := range have {
@@ -285,9 +289,9 @@ func (a *App) writeModeBStore(ctx context.Context, raw string, changes []store.C
 		werr = b.Write(ctx, todo)
 	}
 	if err := errors.Join(werr, b.Close()); err != nil {
-		return errs.Wrap(errs.CodeOf(err), "migrate: write the shared store", err)
+		return 0, errs.Wrap(errs.CodeOf(err), "migrate: write the shared store", err)
 	}
-	return nil
+	return len(todo), nil
 }
 
 // attachModeBStore adds the store to .lore/stores.yaml unless an entry of

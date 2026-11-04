@@ -152,53 +152,102 @@ func personalFoldersV017(dir string) ([]string, error) {
 // personal store. Rows are copied to the root first (a row already there
 // is skipped), then tombstoned in their folder, and only then config.yaml
 // is switched (kept as config.yaml.migrated), so an interrupted run
-// resumes on the next one and a second run changes nothing.
-func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, error) {
+// resumes on the next one and a second run changes nothing. The int is
+// the rows moved (to be moved, under dryRun: pendingFlatten).
+func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, int, error) {
 	mc, err := readMachineConfig(a.opts.Home)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	dir := mc.localPersonalV017(a.opts.Home)
 	if dir == "" {
-		return nil, nil
+		return nil, 0, nil
 	}
 	folders, err := personalFoldersV017(dir)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	u := fileURL(dir)
 	steps := []string{StepPersonalStoreFlatten + ": ~/.lore/" + personalDirV017 + " (v0.1.17 local) becomes personal.store " + u +
 		" (rows of " + strings.Join(folders, ", ") + " move to its root; " + ConfigFile + " kept as " + ConfigFile + migratedSuffix + ")"}
 	if dryRun {
-		return steps, nil
+		total := 0
+		for _, f := range folders {
+			n, perr := pendingFlatten(ctx, dir, f, a.opts.rowfsOptions()...)
+			if perr != nil {
+				return nil, 0, errs.Wrap(errs.CodeOf(perr), "migrate: personal folder "+f, perr)
+			}
+			total += n
+			steps = append(steps, StepPersonalStoreFlatten+": "+f+"/: "+strconv.Itoa(n)+" row(s) to move to the root")
+		}
+		return steps, total, nil
 	}
+	moved := 0
 	if err = ensureLocalMarker(dir, a.opts.Wall(), a.opts.rowfsOptions()...); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	root, err := folder.Open(dir, rowfs.FolderRoot, a.opts.openOptions())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() { _ = root.Close() }()
 	for _, f := range folders {
 		n, err := flattenFolder(ctx, dir, f, root, a.opts.openOptions())
 		if err != nil {
-			return nil, errs.Wrap(errs.CodeOf(err), "migrate: personal folder "+f, err)
+			return nil, 0, errs.Wrap(errs.CodeOf(err), "migrate: personal folder "+f, err)
 		}
 		steps = append(steps, StepPersonalStoreFlatten+": "+f+"/: "+strconv.Itoa(n)+" row(s) moved to the root")
+		moved += n
 	}
 	cfg := configPath(a.opts.Home)
 	if b, rerr := os.ReadFile(filepath.Clean(cfg)); rerr == nil {
 		if _, serr := os.Stat(cfg + migratedSuffix); errors.Is(serr, fs.ErrNotExist) {
 			if err := writeFileAtomic(cfg+migratedSuffix, b, configFileMode); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 		}
 	}
 	if err := setPersonalStore(a.opts.Home, u); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return steps, nil
+	return steps, moved, nil
+}
+
+// pendingFlatten counts the rows flattenFolder would move from folder f of
+// the store at dir: its live rows the root does not hold yet. It only
+// reads (no marker needed, nothing written), so --dry-run can report the
+// same count the run will.
+func pendingFlatten(ctx context.Context, dir, f string, opts ...rowfs.Option) (int, error) {
+	r, err := rowfs.Open(dir, opts...)
+	if err != nil {
+		return 0, err
+	}
+	src, err := r.Folder(f)
+	if err != nil {
+		return 0, err
+	}
+	root, err := r.Folder(rowfs.FolderRoot)
+	if err != nil {
+		return 0, err
+	}
+	rows, _, err := src.Read(ctx, "")
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, sr := range rows {
+		if sr.Deleted {
+			continue
+		}
+		_, gerr := root.Get(sr.Table, sr.ID)
+		switch {
+		case errors.Is(gerr, store.ErrNotFound):
+			n++
+		case gerr != nil:
+			return n, gerr
+		}
+	}
+	return n, nil
 }
 
 // flattenFolder moves the live rows of folder f of the store at dir into

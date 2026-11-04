@@ -94,26 +94,35 @@ func (a *App) LockMigration(ctx context.Context) (func() error, error) {
 	return func() error { return os.Remove(path) }, nil
 }
 
-// MigrateSettings implements opsmigrate.Rewriter: CFG9 identity and the
-// v1 store markers of every attached store.
-func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error) {
-	steps, err := a.MigrateModeB(ctx, dryRun)
+// MigrateSettings implements opsmigrate.Rewriter: Mode B, the personal
+// store flatten, CFG9 identity, the v1 store markers of every attached
+// store, the org and the entity_tags links. Rows counts every row those
+// steps write or move (opsmigrate.Settings), so `count:` never says 0
+// for a run that moved rows.
+func (a *App) MigrateSettings(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
+	steps, rows, err := a.migrateSettings(ctx, dryRun)
+	return opsmigrate.Settings{Steps: steps, Rows: rows}, err
+}
+
+// migrateSettings is MigrateSettings returning its steps and row count.
+func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, error) {
+	steps, rows, err := a.MigrateModeB(ctx, dryRun)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	personal, err := a.migrateLocalPersonal(ctx, dryRun)
+	personal, n, err := a.migrateLocalPersonal(ctx, dryRun)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	steps = append(steps, personal...)
+	steps, rows = append(steps, personal...), rows+n
 	legacy, ok, err := identity.ReadLegacy(a.opts.Home)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if ok {
 		mc, cerr := readMachineConfig(a.opts.Home)
 		if cerr != nil {
-			return nil, cerr
+			return nil, 0, cerr
 		}
 		step := "identity: ~/.lore/" + identity.LegacyFile + " moved into ~/.lore/" + ConfigFile
 		if mc.Identity.Key != "" {
@@ -123,38 +132,38 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) ([]string, error
 		if !dryRun {
 			if mc.Identity.Key == "" {
 				if err = setTopIdentity(a.opts.Home, legacy); err != nil {
-					return nil, err
+					return nil, 0, err
 				}
 			}
 			if err = os.Remove(filepath.Join(a.opts.Home, identity.LegacyFile)); err != nil {
-				return nil, errs.Wrap(errs.Internal, "wire: remove "+identity.LegacyFile, err)
+				return nil, 0, errs.Wrap(errs.Internal, "wire: remove "+identity.LegacyFile, err)
 			}
 		}
 	}
 	list, err := a.ListStores(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	seen := map[string]bool{}
 	for _, e := range list {
 		step, serr := a.migrateStoreMarker(ctx, e, seen, dryRun)
 		if serr != nil {
-			return nil, serr
+			return nil, 0, serr
 		}
 		if step != "" {
 			steps = append(steps, step)
 		}
 	}
-	orgSteps, err := a.migrateOrg(ctx, dryRun, seen)
+	orgSteps, n, err := a.migrateOrg(ctx, dryRun, seen)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	steps = append(steps, orgSteps...)
-	tagSteps, err := a.migrateTags(ctx, dryRun)
+	steps, rows = append(steps, orgSteps...), rows+n
+	tagSteps, n, err := a.migrateTags(ctx, dryRun)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return append(steps, tagSteps...), nil
+	return append(steps, tagSteps...), rows + n, nil
 }
 
 // rosterTables are the org roster's tables (LORE_TEAM_SPEC F18): not in
@@ -188,24 +197,25 @@ const orgDefaultsKey = "defaults"
 // old text is kept beside it as lore-org.yaml.migrated. A folder that
 // already holds the policy row only gets the file rewrite (run twice =
 // no second row). The routing reads the row from then on
-// (policy.Set.ClientRoutes).
-func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store, dir string, dryRun bool) ([]string, error) {
+// (policy.Set.ClientRoutes). The int is the policy rows written (would be,
+// under dryRun): 1, or 0 when the folder already holds the row.
+func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store, dir string, dryRun bool) ([]string, int, error) {
 	rel := filepath.Join(filepath.FromSlash(s.Folder), rowfs.LoreDir, orgDefaultsFile)
 	// The folder comes from the org's link, so every file access goes
 	// through an os.Root on the store clone: a folder such as ../x can
 	// never read or write outside it.
 	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "migrate: open org store clone "+string(s.Name), err)
+		return nil, 0, errs.Wrap(errs.Internal, "migrate: open org store clone "+string(s.Name), err)
 	}
 	defer func() { _ = root.Close() }() // read-only handle on a directory: nothing to flush
 	b, err := root.ReadFile(rel)
 	if err != nil {
-		return nil, nil // no lore-org.yaml in this folder (or a folder outside the clone): nothing to move
+		return nil, 0, nil // no lore-org.yaml in this folder (or a folder outside the clone): nothing to move
 	}
 	var p orgDefaultsProbe
 	if yaml.Unmarshal(b, &p) != nil || len(p.Defaults.ClientRepos) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 	items := make([]string, 0, len(p.Defaults.ClientRepos))
 	for _, k := range slices.Sorted(maps.Keys(p.Defaults.ClientRepos)) {
@@ -213,32 +223,38 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 	}
 	step := StepOrgDefaultsToPolicy + ": org store " + string(s.Name) + ": " + orgDefaultsFile + " defaults.client_repos → policy " +
 		string(policy.KeyClientRoutes) + " = " + strings.Join(items, ",") + " (file kept as " + orgDefaultsFile + migratedSuffix + ")"
+	has := false
+	if _, attached := st.byName[s.Name]; attached {
+		rows, lerr := st.eng.List(ctx, s.Name, schema.TablePolicies)
+		if lerr != nil {
+			return nil, 0, lerr
+		}
+		has = slices.ContainsFunc(rows, func(r row.Row) bool {
+			k, ok := r.Fields[policyFieldKey].(value.Text)
+			return !r.Deleted && ok && k.String() == string(policy.KeyClientRoutes)
+		})
+	} else if !dryRun {
+		return []string{StepOrgDefaultsToPolicy + ": org store " + string(s.Name) + " is not attached; " + orgDefaultsFile + " left as it is"}, 0, nil
+	}
+	written := 1
+	if has {
+		written = 0 // the row is there already: only the file is rewritten
+	}
 	if dryRun {
-		return []string{step}, nil
+		return []string{step}, written, nil
 	}
-	if _, ok := st.byName[s.Name]; !ok {
-		return []string{StepOrgDefaultsToPolicy + ": org store " + string(s.Name) + " is not attached; " + orgDefaultsFile + " left as it is"}, nil
-	}
-	rows, err := st.eng.List(ctx, s.Name, schema.TablePolicies)
-	if err != nil {
-		return nil, err
-	}
-	has := slices.ContainsFunc(rows, func(r row.Row) bool {
-		k, ok := r.Fields[policyFieldKey].(value.Text)
-		return !r.Deleted && ok && k.String() == string(policy.KeyClientRoutes)
-	})
 	if !has {
 		fields, ferr := clientRoutesPolicy(items, s.Folder)
 		if ferr != nil {
-			return nil, ferr
+			return nil, 0, ferr
 		}
 		if _, err = st.eng.Create(ctx, s.Name, schema.TablePolicies, fields); err != nil {
-			return nil, errs.Wrap(errs.CodeOf(err), "migrate: write the routing policy into "+string(s.Name), err)
+			return nil, 0, errs.Wrap(errs.CodeOf(err), "migrate: write the routing policy into "+string(s.Name), err)
 		}
 	}
 	var doc yaml.Node
 	if err = yaml.Unmarshal(b, &doc); err != nil || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil, errs.New(errs.ConfigInvalid, "migrate: "+orgDefaultsFile+" of "+string(s.Name)+" is not a mapping")
+		return nil, 0, errs.New(errs.ConfigInvalid, "migrate: "+orgDefaultsFile+" of "+string(s.Name)+" is not a mapping")
 	}
 	m := doc.Content[0]
 	for i := 0; i+1 < len(m.Content); i += 2 {
@@ -249,21 +265,21 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 	}
 	out, err := yaml.Marshal(&doc)
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "migrate: encode "+orgDefaultsFile, err)
+		return nil, 0, errs.Wrap(errs.Internal, "migrate: encode "+orgDefaultsFile, err)
 	}
 	if err = root.WriteFile(rel+migratedSuffix, b, orgFileMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "migrate: keep "+orgDefaultsFile+migratedSuffix, err)
+		return nil, 0, errs.Wrap(errs.Internal, "migrate: keep "+orgDefaultsFile+migratedSuffix, err)
 	}
 	if err = root.WriteFile(rel, out, orgFileMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "migrate: rewrite "+orgDefaultsFile, err)
+		return nil, 0, errs.Wrap(errs.Internal, "migrate: rewrite "+orgDefaultsFile, err)
 	}
 	if !strings.HasPrefix(s.URL, folder.Scheme+"://") {
 		slash := filepath.ToSlash(rel)
 		if err = gitCommitFiles(ctx, dir, a.opts.Wall(), migrateOrgSubject, slash, slash+migratedSuffix); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
-	return []string{step}, nil
+	return []string{step}, written, nil
 }
 
 // Policies row fields the migration writes (schema.Builtin policies).
@@ -297,16 +313,18 @@ type orgDefaultsProbe struct {
 // defaults.client_repos becomes a routing.client_repos policy row (step
 // org_defaults_to_policy, orgDefaultsToPolicy; the original file is kept as
 // lore-org.yaml.migrated). seen lists store folders whose marker was
-// already handled. Commits wait in the store clone for `lore sync`.
-func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool) ([]string, error) {
+// already handled. Commits wait in the store clone for `lore sync`. The
+// int counts the rows written: roster rows rewritten and policy rows.
+func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool) ([]string, int, error) {
 	org := a.orgStoresHere(ctx)
 	if len(org) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 	var steps []string
+	rows := 0
 	st, err := a.state(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if !dryRun {
 		// Convert what the team has, not a stale copy: bring each org
@@ -317,16 +335,16 @@ func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool)
 				continue
 			}
 			if _, err := st.eng.Sync(ctx, s.Name); err != nil {
-				return nil, errs.Wrap(errs.CodeOf(err), "migrate: sync org store "+string(s.Name)+" first", err)
+				return nil, 0, errs.Wrap(errs.CodeOf(err), "migrate: sync org store "+string(s.Name)+" first", err)
 			}
 		}
 	}
 	for _, s := range org {
-		got, oerr := a.migrateOrgStore(ctx, st, s, seen, dryRun)
+		got, n, oerr := a.migrateOrgStore(ctx, st, s, seen, dryRun)
 		if oerr != nil {
-			return nil, oerr
+			return nil, 0, oerr
 		}
-		steps = append(steps, got...)
+		steps, rows = append(steps, got...), rows+n
 	}
 	for _, s := range org {
 		b, ok := st.byName[s.Name]
@@ -336,22 +354,23 @@ func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool)
 		for _, t := range rosterTables {
 			got, err := rewriteStore(ctx, b, t, dryRun)
 			if err != nil {
-				return nil, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
+				return nil, 0, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
 			}
 			if len(got) > 0 {
 				steps = append(steps, fmt.Sprintf("org store %s: %d %s row(s) _v: 1 → _v: 2", s.Name, len(got), t))
+				rows += len(got)
 			}
 		}
 		if !dryRun {
 			if _, err := st.eng.Refresh(ctx, s.Name); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 		}
 	}
 	if !dryRun && len(steps) > 0 {
 		steps = append(steps, "org: run `lore sync` to push the org store changes")
 	}
-	return steps, nil
+	return steps, rows, nil
 }
 
 // entityTagsTable is v0.1.17's join table of tags (dbent entity_tag.go).
@@ -369,19 +388,20 @@ type v1TagLink struct {
 // tag_ids of every row they tag (O11), for every table whose definition
 // carries tag_ids (one pass, not per noun), written through the engine
 // (refs checked: a tag that does not exist is refused, fail closed). The
-// entity_tags files stay for the v0.1.17 readers of the other nouns.
-func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, error) {
+// entity_tags files stay for the v0.1.17 readers of the other nouns. The
+// int is the rows whose tag_ids are set (would be, under dryRun).
+func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, int, error) {
 	st, err := a.state(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	reg, err := builtinRegistry()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	rows, _, err := st.backends[0].Read(ctx, "")
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var links []opsmemory.TagLink
 	for _, sr := range rows {
@@ -390,12 +410,12 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, error) {
 		}
 		var l v1TagLink
 		if err := json.Unmarshal(sr.Doc, &l); err != nil {
-			return nil, errs.Wrap(errs.InvalidInput, "migrate: entity_tags/"+sr.ID.String()+" is not a v0.1.17 row", err)
+			return nil, 0, errs.Wrap(errs.InvalidInput, "migrate: entity_tags/"+sr.ID.String()+" is not a v0.1.17 row", err)
 		}
 		links = append(links, opsmemory.TagLink{EntityTable: l.EntityTable, EntityID: l.EntityID, TagID: l.TagID})
 	}
 	if len(links) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 	merged, skipped := mergeTagLinks(reg, links, func(t row.Table, id ids.AnyID) []string {
 		if _, r, gerr := st.eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: t, ID: id}); gerr == nil {
@@ -419,24 +439,24 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, error) {
 		for _, t := range m {
 			tid, err := ids.ParseAny(t)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 			r, err := value.RefOf(tid)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 			items = append(items, r)
 		}
 		list, err := value.ListOf(value.KindRef, items...)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		ref := engine.Ref{Store: store.SourceRepo, Table: key.table, ID: key.id}
 		if _, err := st.eng.Update(ctx, ref, map[string]value.Value{schema.FieldTagIDs: list}); err != nil {
-			return nil, errs.Wrap(errs.CodeOf(err), "migrate: tags of "+key.id.String(), err)
+			return nil, 0, errs.Wrap(errs.CodeOf(err), "migrate: tags of "+key.id.String(), err)
 		}
 	}
-	return steps, nil
+	return steps, len(keys), nil
 }
 
 // taggedRow names one row migrateTags writes tag_ids on.
@@ -498,8 +518,15 @@ func (a *App) RewriteV1(ctx context.Context, table row.Table, dryRun bool) ([]id
 		return nil, err
 	}
 	names := st.eng.Stores()
+	skip, err := a.flattenedUnderDryRun(dryRun)
+	if err != nil {
+		return nil, err
+	}
 	var found []ids.AnyID
 	for i, b := range st.backends {
+		if skip[names[i]] {
+			continue
+		}
 		got, err := rewriteStore(ctx, b, table, dryRun)
 		if err != nil {
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: store "+string(names[i]), err)
@@ -516,6 +543,36 @@ func (a *App) RewriteV1(ctx context.Context, table row.Table, dryRun bool) ([]id
 		}
 	}
 	return found, nil
+}
+
+// flattenedUnderDryRun names the stores a dry run must not count v1 rows
+// in: the v0.1.17 local personal store's `me` attachments, whose rows the
+// personal_store_flatten step (run before the rewrites) moves to the
+// store root as `_v: 2` and counts there. The real run finds them
+// tombstoned by then, so without this a dry run counted each such row
+// twice and its count disagreed with the run's. Empty outside a dry run
+// and when no v0.1.17 local personal store is configured (a 0.1.18 `me`
+// is rewritten like any store).
+func (a *App) flattenedUnderDryRun(dryRun bool) (map[store.Source]bool, error) {
+	if !dryRun {
+		return nil, nil
+	}
+	mc, err := readMachineConfig(a.opts.Home)
+	if err != nil || mc.localPersonalV017(a.opts.Home) == "" {
+		return nil, err
+	}
+	dir := mc.localPersonalV017(a.opts.Home)
+	folders, err := personalFoldersV017(dir)
+	if err != nil {
+		return nil, err
+	}
+	skip := map[store.Source]bool{}
+	for _, name := range a.Stores() {
+		if string(name) == attach.ReservedMe || strings.HasPrefix(string(name), attach.ReservedMe+targetSep) {
+			skip[name] = len(folders) > 0
+		}
+	}
+	return skip, nil
 }
 
 // formatSteps are the per-table field changes a `_v: 1` → `_v: 2` rewrite
@@ -629,27 +686,28 @@ func (a *App) upgradeMarker(ctx context.Context, dir, rawURL string, m rowfs.Mar
 // its folder's lore-org.yaml defaults become a policy row
 // (org_defaults_to_policy), then its v1 marker becomes v2 unless seen
 // already lists the folder.
-func (a *App) migrateOrgStore(ctx context.Context, st *state, s attach.Store, seen map[string]bool, dryRun bool) ([]string, error) {
+func (a *App) migrateOrgStore(ctx context.Context, st *state, s attach.Store, seen map[string]bool, dryRun bool) ([]string, int, error) {
 	dir, err := a.storeDir(ctx, s)
 	if err != nil {
-		return nil, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
+		return nil, 0, errs.Wrap(errs.CodeOf(err), "migrate: org store "+string(s.Name), err)
 	}
 	var steps []string
+	rows := 0
 	if s.Folder != "" {
-		if steps, err = a.orgDefaultsToPolicy(ctx, st, s, dir, dryRun); err != nil {
-			return nil, err
+		if steps, rows, err = a.orgDefaultsToPolicy(ctx, st, s, dir, dryRun); err != nil {
+			return nil, 0, err
 		}
 	}
 	m, err := rowfs.ReadMarker(dir)
 	if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {
-		return steps, nil
+		return steps, rows, nil
 	}
 	seen[dir] = true
 	steps = append(steps, "org store "+string(s.Name)+": "+rowfs.MarkerFile+" v1 → v2 (new sto_ id, visibility internal); its roster moves to the core")
 	if dryRun {
-		return steps, nil
+		return steps, rows, nil
 	}
-	return steps, a.upgradeMarker(ctx, dir, s.URL, m)
+	return steps, rows, a.upgradeMarker(ctx, dir, s.URL, m)
 }
 
 // clientRoutesPolicy builds the fields of the routing.client_repos policy

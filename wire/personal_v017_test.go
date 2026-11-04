@@ -102,8 +102,17 @@ func TestV017LocalPersonalStore(t *testing.T) {
 	if got := string(mustRead(t, filepath.Join(home, ConfigFile))); got != cfg {
 		t.Fatalf("a dry run changed config.yaml: %q", got)
 	}
-	if _, err = run(t, a, opsmigrate.OpRun, `{}`, true); err != nil {
+	// everywhere/ holds the project row and two memories: the dry run
+	// counts them and the run reports the same count (it moved them)
+	const movedRows = 3
+	if dry := migrateOut(t, out); dry.Count != movedRows {
+		t.Fatalf("dry run count %d, want %d: %s", dry.Count, movedRows, out)
+	}
+	if out, err = run(t, a, opsmigrate.OpRun, `{}`, true); err != nil {
 		t.Fatal(err)
+	}
+	if done := migrateOut(t, out); done.Count != movedRows {
+		t.Fatalf("run count %d, want %d (what the dry run listed): %s", done.Count, movedRows, out)
 	}
 	for _, id := range []string{v017PersonalMem, newID} {
 		raw := string(mustRead(t, filepath.Join(home, personalDirV017, ".lore", "data", schema.TableMemories, id+".json")))
@@ -129,7 +138,7 @@ func TestV017LocalPersonalStore(t *testing.T) {
 		t.Fatalf("after migrate, memory list --store me: %s %v", out, err)
 	}
 	out, err = run(t, b, opsmigrate.OpRun, `{}`, true)
-	if err != nil || strings.Contains(out, StepPersonalStoreFlatten) {
+	if err != nil || strings.Contains(out, StepPersonalStoreFlatten) || migrateOut(t, out).Count != 0 {
 		t.Fatalf("second run: %s %v", out, err)
 	}
 }

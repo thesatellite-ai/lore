@@ -22,6 +22,7 @@ type fakeRewriter struct {
 	tables   []row.Table
 	v1       map[row.Table][]ids.AnyID
 	steps    []string
+	setRows  int // rows the settings steps report
 	live     []string
 	lockErr  error
 	failAt   string // "settings", "live", or a table name
@@ -40,12 +41,12 @@ func (f *fakeRewriter) RewriteV1(_ context.Context, table row.Table, dryRun bool
 	return f.v1[table], nil
 }
 
-func (f *fakeRewriter) MigrateSettings(_ context.Context, dryRun bool) ([]string, error) {
+func (f *fakeRewriter) MigrateSettings(_ context.Context, dryRun bool) (Settings, error) {
 	f.calls, f.dryRuns = append(f.calls, "settings"), append(f.dryRuns, dryRun)
 	if f.failAt == "settings" {
-		return nil, errs.New(errs.ConfigInvalid, "bad config")
+		return Settings{}, errs.New(errs.ConfigInvalid, "bad config")
 	}
-	return f.steps, nil
+	return Settings{Steps: f.steps, Rows: f.setRows}, nil
 }
 
 func (f *fakeRewriter) MigrateLive(_ context.Context, dryRun bool) ([]string, error) {
@@ -132,6 +133,48 @@ func TestRunOrderAndOutput(t *testing.T) {
 	empty, err := runOp(t, &fakeRewriter{}, `{}`)
 	if err != nil || empty.Rows == nil || empty.Steps == nil || empty.Count != 0 {
 		t.Fatalf("empty run: %+v %v", empty, err)
+	}
+}
+
+// TestRunCountsEveryRow: count is every row the run wrote or moved, the
+// Rows lines plus the rows the settings steps report (Mode B, personal
+// flatten, org roster, policy, tags), in a dry run and a real one alike;
+// steps that move no rows (identity, markers) add nothing. Found by the
+// docs example: a Mode B migration of two rows printed `count: 0`.
+func TestRunCountsEveryRow(t *testing.T) {
+	mem, err := ids.ParseAny(fixedMem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name    string
+		v1      []ids.AnyID
+		live    []string
+		steps   []string
+		setRows int
+		want    int
+	}{
+		{"nothing", nil, nil, nil, 0, 0},
+		{"settings only, no rows", nil, nil, []string{"identity: moved"}, 0, 0},
+		{"mode b rows only", nil, nil, []string{"mode-b: memories/x", "mode-b: rules/y", "mode-b: stores.yaml"}, 2, 2},
+		{"rewrites and live", []ids.AnyID{mem}, []string{"tasks/tsk_x"}, nil, 0, 2},
+		{"every kind", []ids.AnyID{mem}, []string{"tasks/tsk_x", "tasks/tsk_y"}, []string{"a", "b"}, 5, 8},
+	}
+	for _, c := range cases {
+		for _, dry := range []bool{false, true} {
+			f := &fakeRewriter{tables: []row.Table{"memories"}, v1: map[row.Table][]ids.AnyID{"memories": c.v1}, live: c.live, steps: c.steps, setRows: c.setRows}
+			input := `{}`
+			if dry {
+				input = `{"dry_run":true}`
+			}
+			out, rerr := runOp(t, f, input)
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			if out.Count != c.want || len(out.Rows) != len(c.v1)+len(c.live) || len(out.Steps) != len(c.steps) {
+				t.Fatalf("%s (dry %v): %+v, want count %d", c.name, dry, out, c.want)
+			}
+		}
 	}
 }
 

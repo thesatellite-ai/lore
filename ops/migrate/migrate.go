@@ -44,10 +44,13 @@ type Rewriter interface {
 	// is not overwritten (the backend's Expect check): the call fails with
 	// E_STALE and can be rerun.
 	RewriteV1(ctx context.Context, table row.Table, dryRun bool) ([]ids.AnyID, error)
-	// MigrateSettings converts the v0.1.17 settings files (identity.yaml,
-	// v1 store markers) and returns one line per change (made, or that
-	// would be made under dryRun).
-	MigrateSettings(ctx context.Context, dryRun bool) ([]string, error)
+	// MigrateSettings converts the v0.1.17 settings and stores that are
+	// not plain row rewrites (Mode B, the personal store flatten,
+	// identity.yaml, v1 store markers, the org roster and defaults, the
+	// entity_tags links) and returns one line per change plus how many
+	// rows those changes write or move (made, or that would be made under
+	// dryRun).
+	MigrateSettings(ctx context.Context, dryRun bool) (Settings, error)
 	// MigrateLive brings the v0.1.17 live ref's rows of core-owned tables
 	// (open tasks and the like, never landed in .lore/data) into the repo
 	// store as `_v: 2` rows with the same id and stamp, and returns
@@ -58,6 +61,17 @@ type Rewriter interface {
 	LockMigration(ctx context.Context) (func() error, error)
 }
 
+// Settings is what Rewriter.MigrateSettings did (or would do).
+type Settings struct {
+	// Steps are the human lines, one per change.
+	Steps []string
+	// Rows counts every row the steps wrote or moved (a Mode B row copied
+	// into its store, a personal row moved to the root, an org roster row
+	// rewritten, a routing policy row written, a row whose tag_ids were
+	// set). A file that is not a row (a marker, config.yaml) counts 0.
+	Rows int
+}
+
 // RunIn is the input of migrate.run.
 type RunIn struct {
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"list the files that would be rewritten; change nothing"`
@@ -65,9 +79,12 @@ type RunIn struct {
 
 // RunOut is the output of migrate.run.
 type RunOut struct {
-	DryRun bool     `json:"dry_run,omitempty"`
-	Count  int      `json:"count"`
-	Rows   []string `json:"rows"`
+	DryRun bool `json:"dry_run,omitempty"`
+	// Count is every row the run wrote or moved (would, under dry_run):
+	// the Rows lines plus the rows counted by the settings Steps, so a
+	// run that moved rows never reports 0.
+	Count int      `json:"count"`
+	Rows  []string `json:"rows"`
 	// Steps are the settings changes (identity, store markers).
 	Steps []string `json:"steps"`
 }
@@ -90,11 +107,11 @@ func Ops(rw Rewriter) []op.Entry {
 				return RunOut{}, err
 			}
 			defer func() { _ = unlock() }() // a failed release leaves a lock file `lore migrate run` reports next time
-			steps, err := rw.MigrateSettings(ctx, in.DryRun)
+			settings, err := rw.MigrateSettings(ctx, in.DryRun)
 			if err != nil {
 				return RunOut{}, err
 			}
-			out.Steps = append(out.Steps, steps...)
+			out.Steps = append(out.Steps, settings.Steps...)
 			live, err := rw.MigrateLive(ctx, in.DryRun)
 			if err != nil {
 				return RunOut{}, err
@@ -109,7 +126,7 @@ func Ops(rw Rewriter) []op.Entry {
 					out.Rows = append(out.Rows, t.String()+"/"+id.String())
 				}
 			}
-			out.Count = len(out.Rows)
+			out.Count = len(out.Rows) + settings.Rows
 			return out, nil
 		}),
 	}
