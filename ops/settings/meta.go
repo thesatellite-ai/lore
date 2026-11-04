@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -617,7 +618,9 @@ func (o MetaGetOut) Text() string {
 func rowID(s string) (ids.AnyID, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(s))
 	if err != nil {
-		return ids.AnyID{}, errs.Wrap(errs.InvalidID, quote(s)+" is not a row id", err)
+		// The one lookup rule (ops/internal/lookup): a value that cannot be
+		// the id of an existing row is E_NOT_FOUND, never E_INVALID_ID.
+		return ids.AnyID{}, lookup.BadID("meta: "+quote(s)+" is not a row id", err)
 	}
 	return id, nil
 }
