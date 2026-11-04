@@ -111,6 +111,19 @@ knowledge_refs.dst_table text required
 knowledge_refs.relation text required
 knowledge_refs.src_id ref required
 knowledge_refs.src_table text required
+machines.arch text
+machines.cpu json
+machines.hostname text
+machines.id_source text
+machines.install_method text
+machines.kernel json
+machines.label text
+machines.libc json
+machines.machine_id text required
+machines.os json
+machines.os_user text
+machines.ram_mb number
+machines.runtime json
 memories.archived_at datetime
 memories.body text required
 memories.confidence number
@@ -289,6 +302,7 @@ tasks.blocked_by json
 tasks.body text
 tasks.claim_epoch number
 tasks.claim_log json
+tasks.close_reason text
 tasks.commitment text required
 tasks.completed_at datetime
 tasks.created_by_actor_id ref
@@ -301,9 +315,11 @@ tasks.gate text
 tasks.idempotency_key text
 tasks.merged_at datetime
 tasks.mission_id ref
+tasks.parent_id ref
 tasks.plan_id ref
 tasks.priority text required
 tasks.project_id ref required
+tasks.rank text
 tasks.repo_id ref
 tasks.role text
 tasks.started_at datetime
