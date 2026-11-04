@@ -264,8 +264,9 @@ func leakBlockedError(fs []leakcheck.Finding, explain bool, lc leakContext) erro
 	for _, fix := range fixes {
 		b.WriteString(fix + "\n")
 	}
-	if lc.action != leakActionShare {
-		b.WriteString("To give the client an internal note on purpose: lore share <id> --to repo (a new copy; it shows the text and asks)\n")
+	if lc.action != leakActionShare && lc.action != leakActionMove {
+		// BATCH 2: share is removed; a move hands the row over, same id.
+		b.WriteString("To give the client an internal note on purpose: lore move <id> --to repo (it keeps the id; it shows the text and asks)\n")
 	}
 	b.WriteString("(a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)")
 	if inCI() {
@@ -296,6 +297,9 @@ const (
 	leakActionShare
 	// leakActionLive: a live write or landing commit to this repo's refs.
 	leakActionLive
+	// leakActionMove: `lore move <id> --to repo` in a client repo; the row
+	// quotes text of an internal row other than itself. Nothing written.
+	leakActionMove
 )
 
 // leakContext says what a leak check guards, for its block message.
@@ -303,7 +307,8 @@ type leakContext struct {
 	action leakAction
 	// what names the refused thing in the first line ("this commit").
 	what string
-	// source is the row being shared (leakActionShare only).
+	// source is the row being shared or moved (leakActionShare,
+	// leakActionMove).
 	source string
 }
 
@@ -319,6 +324,11 @@ func leakFix(f leakcheck.Finding, lc leakContext) string {
 			return "Not shared: the copy breaks a leak rule that sharing does not lift; nothing written"
 		}
 		return fmt.Sprintf("Not shared: %s also carries text of internal note %s, which stays internal. Remove that part from %s, then share it again; nothing written", lc.source, f.RowID, lc.source)
+	case leakActionMove:
+		if f.RowID == "" || f.RowID == lc.source {
+			return "Not moved: the row breaks a leak rule that a move does not lift; nothing written"
+		}
+		return fmt.Sprintf("Not moved: %s also carries text of internal note %s, which stays internal. Remove that part from %s, then move it again; nothing written", lc.source, f.RowID, lc.source)
 	case leakActionWrite:
 		return "Nothing written. Keep it internal: write it with --to <org> instead of --to repo, or leave out the internal text"
 	case leakActionText:

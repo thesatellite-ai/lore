@@ -86,8 +86,10 @@ func TestLeak_TrialF11_ShareLongNoteToRepo(t *testing.T) {
 
 // The trial's F11 refusal: a note quoting ANOTHER internal note must not
 // reach the client repo whole. With share removed (BATCH 2) the transfer is
-// `lore move`; moving the quoting note and committing it is blocked by the
-// leak hook naming the quoted note, while the share is refused outright.
+// `lore move`, and a move is a write (coordinator decision, fail closed):
+// the leak check runs before anything is asked or written, naming the
+// quoted note, exactly as the old share refusal did (exit 19, no success
+// line, no row in the client repo, the row still in its store).
 func TestLeak_TrialF11_ShareQuotingAnotherNoteRefused(t *testing.T) {
 	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
 	other := a.storeMem(t, leakOther)
@@ -97,9 +99,18 @@ func TestLeak_TrialF11_ShareQuotingAnotherNoteRefused(t *testing.T) {
 	if rows := repoRows(t, a.aliceApp, tblMemories); len(rows) != 0 {
 		t.Fatalf("a refused share writes nothing: %v", rows)
 	}
-	a.aliceApp.MustLore("move", mem, "--to", "repo", "--yes")
+	m := a.aliceApp.Lore("move", mem, "--to", "repo", "--yes")
+	m.Fails(t, 19, "E_LEAK_BLOCKED", other, "Remove that part from "+mem)
+	m.Never(t, "✓", "This becomes visible")
+	if rows := repoRows(t, a.aliceApp, tblMemories); len(rows) != 0 {
+		t.Fatalf("a refused move writes nothing: %v", rows)
+	}
+	a.aliceApp.MustLore("memory", "show", mem).Says(t, leakOther)
+	// The commit hook still guards a hand-made copy.
+	a.aliceApp.WriteFile(filepath.Join(".lore", "data", tblMemories, "mem_01a1a67a33b7777587cca0cfc9e5d8ee.json"),
+		`{"_table":"memories","_v":2,"id":"mem_01a1a67a33b7777587cca0cfc9e5d8ee","body":"`+leakOther+`"}`)
 	a.aliceApp.Git("add", "-A")
-	c := a.aliceApp.TryGit("commit", "-m", "move a note that quotes another")
+	c := a.aliceApp.TryGit("commit", "-m", "a note that quotes another")
 	if c.Code == 0 || !strings.Contains(c.Out(), "E_LEAK_BLOCKED") || !strings.Contains(c.Out(), other) {
 		t.Fatalf("the quoted internal note must block the commit, naming %s: %s", other, c.Out())
 	}

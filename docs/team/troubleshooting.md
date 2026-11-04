@@ -192,7 +192,7 @@ $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
   src/notes.ts:1                           matches internal note mem_54fe…28f2 (10 words)
 Remove the internal text from src/notes.ts
-To give the client an internal note on purpose: lore share <id> --to repo (a new copy; it shows the text and asks)
+To give the client an internal note on purpose: lore move <id> --to repo (it keeps the id; it shows the text and asks)
 (a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
 (exit 1)
 ```

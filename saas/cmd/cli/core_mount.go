@@ -109,7 +109,7 @@ func mountCore(root *cobra.Command) {
 	if herr != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend})
+	app, err := wire.New(wire.Options{RepoDir: cwd, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, Audit: &coreAuditSink{}, ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn})
 	if err != nil {
 		panic(err)
 	}
@@ -833,7 +833,22 @@ func coreMoveRow(ctx context.Context, table row.Table, id, to string, yes bool) 
 		}
 	}
 	if store.Source(to) == store.SourceRepo {
-		if cwd, werr := os.Getwd(); werr == nil && repoIsClient(ctx, cwd) {
+		cwd, werr := os.Getwd()
+		if werr != nil {
+			return errcodes.New(errcodes.Internal, "getwd").WithCause(werr)
+		}
+		// A move is a write (coordinator decision): the F16 check runs
+		// now, before anything is asked or written, not only at commit.
+		var texts []string
+		for _, f := range leakTextFields {
+			if s := renderField(r, f); s != "" {
+				texts = append(texts, s)
+			}
+		}
+		if lerr := leakCheckMove(ctx, cwd, id, texts); lerr != nil {
+			return lerr
+		}
+		if repoIsClient(ctx, cwd) {
 			var found []string
 			for _, ref := range refs.References(body) {
 				if ref.Scheme == refs.SchemeSecret {

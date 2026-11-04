@@ -71,3 +71,27 @@ func leakCheckRouteWrite(ctx context.Context, route writeRoute, kind, text strin
 	}
 	return runLeakCheck(ctx, root, []leakcheck.Item{it}, false, lc)
 }
+
+// leakCheckMove is the F16 write-time check of `lore move <id> --to repo`
+// (coordinator decision: a move is a write, checked before anything is
+// written or asked, fail closed). texts are the moved row's prose fields.
+// The row's own text is allowed (moving it is the deliberate transfer, and
+// after the move its store copy is a tombstone the index no longer holds);
+// text of every OTHER internal row it quotes blocks, as do the id,
+// reference and secret rules. Only a client repo (or one whose link status
+// is unknown) is checked; dir is the repo root.
+func leakCheckMove(ctx context.Context, dir, id string, texts []string) error {
+	s, err := gatherOrgSituation(ctx, dir)
+	if err != nil {
+		return err
+	}
+	if s.ResolveErr != nil {
+		return orgResolveCLIError(s.ResolveErr)
+	}
+	content := strings.TrimSpace(strings.Join(texts, "\n"))
+	if content == "" || !writeNeedsLeakCheck(s) {
+		return nil
+	}
+	it := leakcheck.Item{Where: "move " + id, Content: []byte(content), AllowRows: []string{id}}
+	return runLeakCheck(ctx, dir, []leakcheck.Item{it}, false, leakContext{action: leakActionMove, what: "this move", source: id})
+}
