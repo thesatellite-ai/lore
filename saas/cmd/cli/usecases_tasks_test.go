@@ -68,6 +68,9 @@ func ucTasklist(t *testing.T, c *clone) string {
 func ucRowField(t *testing.T, c *clone, table, id, field string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(c.dir, ".lore", "data", table, id+".json"))
+	if os.IsNotExist(err) {
+		b, err = ucLiveRowFile(t, c, id)
+	}
 	if err != nil {
 		t.Fatalf("read %s/%s: %v", table, id, err)
 	}
@@ -83,6 +86,21 @@ func ucRowField(t *testing.T, c *clone, table, id, field string) string {
 		return ""
 	}
 	return fmt.Sprint(v)
+}
+
+// ucLiveRowFile finds a row that lives on the repo's live ref
+// (refs/lore/live/*, tasks in a checkout with a remote) rather than in the
+// work tree, and returns its file.
+func ucLiveRowFile(t *testing.T, c *clone, id string) ([]byte, error) {
+	t.Helper()
+	for _, ref := range strings.Fields(c.git("for-each-ref", "--format=%(refname)", "refs/lore/live")) {
+		for _, path := range strings.Split(c.git("ls-tree", "-r", "--name-only", ref), "\n") {
+			if strings.HasSuffix(path, "/"+id+".json") {
+				return []byte(c.git("show", ref+":"+path)), nil
+			}
+		}
+	}
+	return nil, os.ErrNotExist
 }
 
 // Creator fields: the old column name the tests ask for, and the core
