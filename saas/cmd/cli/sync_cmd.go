@@ -44,6 +44,12 @@ type syncTarget struct {
 // openSyncTarget resolves the project and opens its DB WITHOUT the
 // automatic pass (the subcommand decides what to run).
 func openSyncTarget(c *commonFlags) (*syncTarget, error) {
+	// A fresh clone where only core commands ran has .lore/data and no
+	// lore.db (it is gitignored): build it first, as resolveContext does,
+	// instead of answering "not a lore project".
+	if err := maybeMaterialize(context.Background(), c); err != nil {
+		return nil, materializeError(err)
+	}
 	rctx, err := projresolve.Resolve(projresolve.Inputs{FlagDB: c.flagDB, FlagProject: c.flagProject})
 	if err != nil {
 		return nil, mapResolveError(err)

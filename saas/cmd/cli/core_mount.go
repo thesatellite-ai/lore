@@ -70,6 +70,7 @@ import (
 	"github.com/thesatellite-ai/lore/surface/rest"
 	"github.com/thesatellite-ai/lore/wire"
 
+	"dbent"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/lorecfg"
@@ -258,8 +259,12 @@ func (r *compatRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	if r.pending != nil {
 		return op.Result{}, r.pending
 	}
-	if err := ensureCoreGitignore(ctx); err != nil {
-		return op.Result{}, coreErr(err)
+	// --read-only writes nothing, not even the .gitignore lines or the git
+	// wiring (v0.1.17: a read-only command leaves the checkout untouched).
+	if !r.readOnly {
+		if err := ensureCoreGitignore(ctx); err != nil {
+			return op.Result{}, coreErr(err)
+		}
 	}
 	if e.Spec().Access == op.AccessWrite && (r.readOnly || os.Getenv(envReadOnly) == envValueOn) {
 		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
@@ -443,6 +448,20 @@ func coreProjectRoot() string {
 // Not a git repo, or no git, is fine (rows still work on files); another
 // failure is a warning, never a refused command.
 func ensureCoreGitSetup(ctx context.Context, root string) {
+	// With the lore.db read copy present, wire through v0.1.17's wireGit:
+	// its fingerprint of the watched files (git config, .gitattributes, the
+	// ignore files, hooks) skips the git calls while nothing changed and
+	// re-checks after an edit, so "git ignores lore data" is said once per
+	// state of the ignore files, as every v0.1.17 command did.
+	dbPath := filepath.Join(root, projresolve.MarkerDir, projresolve.ModeAFile)
+	if fi, serr := os.Lstat(dbPath); serr == nil && fi.Mode().IsRegular() {
+		db := dbent.InitDB(dbPath)
+		defer func() { _ = db.Close() }() // a read-mostly state cache; nothing to recover on close
+		if dbent.ApplyPragmas(db) == nil {
+			wireGit(ctx, db, root)
+			return
+		}
+	}
 	res, err := ensureGitWiring(ctx, root)
 	if err != nil {
 		if !errors.Is(err, gitsetup.ErrNotRepo) && !errors.Is(err, gitsetup.ErrNoGit) {
