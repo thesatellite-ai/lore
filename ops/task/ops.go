@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -1069,6 +1070,19 @@ func (o ops) actorRef(ctx context.Context, raw string) (string, error) {
 			byKey = append(byKey, id)
 		case strings.EqualFold(work.Field(s.Row, fieldDisplay), ref) || strings.EqualFold(short, ref):
 			byName = append(byName, id)
+		}
+	}
+	if len(byKey) == 0 && strings.Contains(ref, stableKeySep) {
+		// A repo store holds actors as the F18 projection {id,
+		// display_name, kind}: no stable_key to compare. The actor id is
+		// derived from the stable key (v0.1.17's id), so match by that.
+		if want, kerr := identity.ActorID(ref); kerr == nil {
+			for _, s := range all {
+				if s.Row.ID.String() == want.String() {
+					byKey = append(byKey, want.String())
+					break
+				}
+			}
 		}
 	}
 	switch {
