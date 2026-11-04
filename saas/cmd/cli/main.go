@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"saas/pkg/aicoder/errcodes"
@@ -57,6 +58,9 @@ Documentation: docs/README.md in the lore repository.`,
 		if err := guard.CheckRoot(geteuid(), allowed); err != nil {
 			return errcodes.New(errcodes.RootRefused, "lore refuses to run as root").
 				WithHint("run as your normal user, or set " + envAllowRoot + "=1 if you really mean it")
+		}
+		if runtime.GOOS == goosWindows {
+			removeOldWindowsBinary() // leftover lore.exe.old of an upgrade (FORMAT_EVOLUTION 8.3)
 		}
 		return nil
 	},
@@ -127,6 +131,7 @@ func init() {
 	rootCmd.AddCommand(newConfigCommand())
 	rootCmd.AddCommand(newSearchAdminCommand())
 	rootCmd.AddCommand(newSetupCommand())
+	rootCmd.AddCommand(newUpgradeCommand()) // FORMAT_EVOLUTION 8
 	rootCmd.AddCommand(buildTUICommand())
 	rootCmd.AddCommand(newSyncCommand())
 	rootCmd.AddCommand(newMergeDriverCommand())
@@ -231,8 +236,13 @@ func main() {
 	if code, printed := coreExitCode(err); printed {
 		os.Exit(code) // a core command already printed its error
 	}
+	if err == nil {
+		maybeUpgradeNotice(os.Args[1:]) // once-a-day notice / opt-in auto_upgrade, after the output (FORMAT_EVOLUTION 8.6, 8.7)
+	}
 	if err != nil {
-		err = explainStorageError(err)
+		// FORMAT_EVOLUTION 8.11: "no such column/table" from an old lore.db is
+		// E_SCHEMA_OLD with the `lore setup` hint.
+		err = explainSchemaError(explainStorageError(err))
 		fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+err.Error())
 		if hint := errorHint(err); hint != "" {
 			fmt.Fprintln(os.Stderr, hintPrefix+hint)

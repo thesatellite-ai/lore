@@ -187,6 +187,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 		}
 		if r.DBOK {
 			doctorMigrations(ctx, db, r)
+			doctorSchemaDrift(ctx, db, r) // FORMAT_EVOLUTION 8.11
 		}
 		if r.DBOK && syncApplies(rctx) {
 			doctorSync(ctx, rctx, db, r)
@@ -257,6 +258,8 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	}
 	home, _ := loreHome()
 	doctorCaches(ctx, repoTop, home, r)
+	doctorTeamVersions(ctx, repoTop, r) // OQ7 Team versions
+	doctorVersionPin(r)                 // FORMAT_EVOLUTION 8.8: a pin below the floor
 	// 9. Repo addresses (PROV2, Q5).
 	doctorRepoAddresses(ctx, r)
 	// 10. Duplicate imports (PROV9).
