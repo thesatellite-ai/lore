@@ -275,7 +275,9 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 	}
 	if !strings.HasPrefix(s.URL, folder.Scheme+"://") {
 		slash := filepath.ToSlash(rel)
-		if err = gitCommitFiles(ctx, dir, a.opts.Wall(), migrateOrgSubject, slash, slash+migratedSuffix); err != nil {
+		// FLAG4: the migration commit is signed by the lore identity only when
+		// git has none for this clone; an existing git identity wins.
+		if err = gitCommitFilesAs(ctx, dir, a.opts.Wall(), storeIdentityFunc(a.opts), migrateOrgSubject, slash, slash+migratedSuffix); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -679,7 +681,8 @@ func (a *App) upgradeMarker(ctx context.Context, dir, rawURL string, m rowfs.Mar
 	if strings.HasPrefix(rawURL, folder.Scheme+"://") {
 		return nil
 	}
-	return gitCommitMarker(ctx, dir, a.opts.Wall())
+	// FLAG4: same signing rule as every store commit (git identity wins).
+	return gitCommitMarkerAs(ctx, dir, a.opts.Wall(), storeIdentityFunc(a.opts))
 }
 
 // migrateOrgStore runs the per-store steps of migrateOrg for one org store:

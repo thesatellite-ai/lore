@@ -146,28 +146,18 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 	return m, false, nil
 }
 
-// gitCommitMarker commits lore-store.yaml in a lore-owned store worktree
+// gitCommitMarkerAs commits lore-store.yaml in a lore-owned store worktree
 // (the git adapter has no "commit a control file" call; this is the one
-// non-row commit lore makes, so it lives here beside the marker logic).
-func gitCommitMarker(ctx context.Context, dir string, now time.Time) error {
-	return gitCommitMarkerAs(ctx, dir, now, nil)
-}
-
-// gitCommitMarkerAs is gitCommitMarker signed, when git has no identity,
-// as who (storeIdentityFunc; nil = git.DefaultAuthor).
+// non-row commit lore makes, so it lives here beside the marker logic),
+// signed, when git has no identity, as who (storeIdentityFunc; nil =
+// git.DefaultAuthor).
 func gitCommitMarkerAs(ctx context.Context, dir string, now time.Time, who func(context.Context) git.Signature) error {
 	return gitCommitFilesAs(ctx, dir, now, who, initSubject, rowfs.MarkerFile)
 }
 
-// gitCommitFiles commits paths (slash-separated, relative to dir) of a git
-// store's worktree, hooks off, signing off; when git has no identity it is
-// signed as git.DefaultAuthor (gitCommitFilesAs).
-func gitCommitFiles(ctx context.Context, dir string, now time.Time, subject string, paths ...string) error {
-	return gitCommitFilesAs(ctx, dir, now, nil, subject, paths...)
-}
-
-// gitCommitFilesAs is gitCommitFiles with the lore identity who as the
-// fallback signer. FLAG4: the person's git identity, when git has one,
+// gitCommitFilesAs commits paths (slash-separated, relative to dir) of a
+// git store's worktree, hooks off, signing off, with the lore identity who
+// as the fallback signer. FLAG4: the person's git identity, when git has one,
 // signs the commit; only without it is who passed (as GIT_AUTHOR_* /
 // GIT_COMMITTER_* on these git calls, never into git config).
 func gitCommitFilesAs(ctx context.Context, dir string, now time.Time, who func(context.Context) git.Signature, subject string, paths ...string) error {

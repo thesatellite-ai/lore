@@ -146,7 +146,9 @@ func externalTaskJSON(tasks []externalTask) []map[string]any {
 			continue
 		}
 		delete(doc, "_live")
-		doc[jsonKeySource], doc[jsonKeyLabel], doc[jsonKeyLive] = et.row.Source, et.row.Label, et.row.Live
+		// FLAG1: _source is the {store, store_id, folder, folder_id} object
+		// (names only on this old path), _label the human [store/folder].
+		doc[jsonKeySource], doc[jsonKeyLabel], doc[jsonKeyLive] = externalSource(et.row.Source), et.row.Label, et.row.Live
 		out = append(out, doc)
 	}
 	return out
