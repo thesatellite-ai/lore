@@ -44,7 +44,7 @@ func coreSeedProject(ctx context.Context, root, projectID, name, originURL strin
 	if err != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite})
+	app, err := wire.New(wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: &coreAuditSink{}})
 	if err != nil {
 		return err
 	}
