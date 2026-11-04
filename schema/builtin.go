@@ -96,6 +96,19 @@ const (
 // are left out on purpose: they never travel in a row (lsync volatile
 // columns). id, created_at and updated_at are envelope fields.
 func Builtin() []TableDef {
+	defs := coreDefs()
+	// Each noun group owns one file (builtin_<group>.go) so the parallel
+	// migrations never edit the same file; the order here is stable so the
+	// registry and the written docs stay deterministic.
+	for _, group := range [][]TableDef{knowledgeDefs(), contentDefs(), workDefs(), linkDefs(), settingsDefs()} {
+		defs = append(defs, group...)
+	}
+	return defs
+}
+
+// coreDefs are the tables the core itself needs: actors, projects, repos,
+// memories, tags, every settings table and resources.
+func coreDefs() []TableDef {
 	return []TableDef{
 		Table(TableActors, ids.PrefixActor, Synced(), Description("people and agents that write rows"),
 			Text(fieldKind, Required(), OneOf(ActorKinds()...)),
