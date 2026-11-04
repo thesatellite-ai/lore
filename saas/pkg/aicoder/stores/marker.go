@@ -1,6 +1,7 @@
 package stores
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path"
@@ -81,6 +82,22 @@ func ParseMarker(b []byte) (Marker, error) {
 		return Marker{}, fmt.Errorf("stores: %s: lore_store must be a positive version", MarkerFile)
 	}
 	return m, nil
+}
+
+// FormatAt is the lore-store.yaml version at rev (a branch, tracking ref or
+// commit): 1 for a v0.1.17 store, NewFormatMarkerVersion or later for a
+// 0.1.18 one; 0 when rev or the marker cannot be read (callers keep their
+// v0.1.17 behaviour then, and the existing store checks report it).
+func (s *Store) FormatAt(ctx context.Context, rev string) int {
+	b, found, err := s.Repo.ReadFile(ctx, rev, MarkerFile)
+	if err != nil || !found {
+		return 0
+	}
+	m, err := ParseMarker(b)
+	if err != nil {
+		return 0
+	}
+	return m.LoreStore
 }
 
 // ErrNotAStore is the sentinel inside every *NotAStoreError

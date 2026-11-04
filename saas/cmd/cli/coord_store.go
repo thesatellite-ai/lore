@@ -21,8 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
-
 	"encoding/json"
 	"strconv"
 
@@ -384,8 +382,8 @@ func (r *storeRows) RepoName(repoID string) string {
 
 // Stage implements coord.Rows: one commit on the store's live ref, pushed
 // atomically with the store's signals ref (same remote).
-func (r *storeRows) Stage(_ context.Context, rows ...coord.RowWrite) ([]signals.Companion, error) {
-	if err := refuseNewFormatStore(r.sp.st.Dir); err != nil {
+func (r *storeRows) Stage(ctx context.Context, rows ...coord.RowWrite) ([]signals.Companion, error) {
+	if err := refuseNewFormatStore(ctx, r.sp.st, r.sp.branch); err != nil {
 		return nil, err
 	}
 	return []signals.Companion{&stagedLiveRows{spot: r.spot(), rows: rows}}, nil
@@ -395,9 +393,12 @@ func (r *storeRows) Stage(_ context.Context, rows ...coord.RowWrite) ([]signals.
 // still in the v0.1.17 format: once `lore migrate run` made the store's
 // marker v2, its task rows belong to the 0.1.18 core (`_v: 2` files), and
 // a v1 document staged here would bypass the core's write path.
-func refuseNewFormatStore(dir string) error {
-	m, err := rowfs.ReadMarker(dir)
-	if err != nil || m.Version < rowfs.MarkerVersion {
+//
+// The marker is read from the store branch as last fetched (the clone is
+// bare: there is no lore-store.yaml file on disk to read, which made the
+// first version of this check a no-op).
+func refuseNewFormatStore(ctx context.Context, st *stores.Store, branch string) error {
+	if st.FormatAt(ctx, stores.TrackingBranch(branch)) < stores.NewFormatMarkerVersion {
 		return nil // no marker or a v1 one: the v0.1.17 store this path serves
 	}
 	return errcodes.New(errcodes.Unsupported, "this store is in the 0.1.18 format: its task rows are written by the core, not through the v0.1.17 store live ref").

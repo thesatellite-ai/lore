@@ -229,7 +229,7 @@ func (s *Store) reconcile(ctx context.Context, branch string, sig gitref.Signatu
 	}
 	switch {
 	case !lok && !tok:
-		return "", fmt.Errorf("%w: %s has no branch %s; create it with `lore store init %s --branch %s`", ErrNoBranch, s.Norm, branch, s.URL, branch)
+		return "", fmt.Errorf("%w: %s has no branch %s (0.1.18 makes a store with `lore store init <name> <url>`; v0.1.17 stores branches are no longer created)", ErrNoBranch, s.Norm, branch)
 	case !tok:
 		return local, nil
 	case !lok:

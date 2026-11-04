@@ -29,7 +29,7 @@ import (
 const envStoreAutopush = "LORE_LIVE_AUTOPUSH"
 
 // storeHintInit is the one way to make a repo a store (F12).
-const storeHintInit = "create one with `lore store init <url>` in a new empty repo"
+const storeHintInit = "create one with `lore store init <name> <url>` in a new empty repo (0.1.18); a v0.1.17 store is converted with `lore migrate run`"
 
 // loreHome returns ~/.lore (identity.Dir honours HOME and the test env).
 func loreHome() (string, error) {
@@ -141,7 +141,7 @@ func storeCLIError(err error, what string) error {
 		return errcodes.New(errcodes.NotAStore, redactIfQuiet(err.Error())).WithHint(storeHintInit)
 	case errors.Is(err, stores.ErrNoBranch):
 		return errcodes.New(errcodes.InvalidInput, err.Error()).
-			WithHint("a store branch is created only on purpose: `lore store init <url> --branch <branch>`")
+			WithHint("a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: `lore migrate run`)")
 	case errors.Is(err, stores.ErrOffline):
 		return errcodes.New(errcodes.Offline, err.Error()).WithHint("retry when the store is reachable")
 	case errors.Is(err, stores.ErrNotAProject), errors.Is(err, stores.ErrFolderMissing), errors.Is(err, stores.ErrFolderElsewhere):

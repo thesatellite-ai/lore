@@ -208,6 +208,9 @@ func openStoreProject(ctx context.Context, cfg *lorecfg.Config, ref storeProject
 	if err != nil {
 		return nil, storeCLIError(err, "fetch the store")
 	}
+	if err := refuseNewFormatProject(ctx, st, ref, branch); err != nil {
+		return nil, err
+	}
 	files, stored, projectID, err := readStoreFolder(ctx, st, ref, branch)
 	if err != nil {
 		return nil, err
@@ -276,7 +279,7 @@ func readStoreFolder(ctx context.Context, st *stores.Store, ref storeProjectRef,
 	if _, ok, err := st.Tip(ctx, branch); err != nil {
 		return nil, nil, "", storeCLIError(err, "read the store")
 	} else if !ok {
-		return nil, nil, "", storeCLIError(fmt.Errorf("%w: %s has no branch %s; create it with `lore store init %s --branch %s`", stores.ErrNoBranch, st.Norm, branch, ref.Store.URL, branch), "open")
+		return nil, nil, "", storeCLIError(fmt.Errorf("%w: %s has no branch %s; a store branch is made only by the store's own lore (0.1.18: `lore store init <name> <url>` makes a new store)", stores.ErrNoBranch, st.Norm, branch), "open")
 	}
 	if err := st.Check(ctx, branch); err != nil {
 		return nil, nil, "", storeCLIError(err, "check the store")
@@ -737,4 +740,36 @@ func useExternalProject(c *commonFlags, p *externalProject) {
 	c.flagDB = p.DBPath
 	c.flagProject = p.ProjectID
 	c.flagRepo = ""
+}
+
+// refuseNewFormatProject stops the v0.1.17 store-project code (a row
+// mirror that writes `_v: 1` files) at a 0.1.18 store (lore-store.yaml
+// version 2, made by `lore store init <name> <url>` or converted by `lore
+// migrate run`): v0.1.17 readers cannot load its `_v: 2` rows and its
+// writes would mix formats. The commands that reach this are the ones not
+// yet on the 0.1.18 core, so the refusal names the 0.1.18 ways in. A store
+// whose marker cannot be read is left to the existing checks.
+func refuseNewFormatProject(ctx context.Context, st *stores.Store, ref storeProjectRef, branch string) error {
+	tip, ok, err := st.Tip(ctx, branch)
+	if err != nil || !ok {
+		return nil
+	}
+	v := st.FormatAt(ctx, tip)
+	if v < stores.NewFormatMarkerVersion {
+		return nil
+	}
+	org := ""
+	if ref.Org != nil {
+		org = ref.Org.Name
+	}
+	return errcodes.New(errcodes.Unsupported, fmt.Sprintf("%s is a 0.1.18 store (lore-store.yaml version %d); this command still runs on the v0.1.17 store code, which cannot read or write it", redactIfQuiet(st.Norm), v)).
+		WithHint(fmt.Sprintf("use the 0.1.18 commands: write with --to %s (the linked folder) or --to %s/<folder>, roster with `lore actor register` / `lore team add`, links with `lore org link`; a v0.1.17 store is converted with `lore migrate run`", orgOr(org), orgOr(org)))
+}
+
+// orgOr is name, or a placeholder for messages when no org is known.
+func orgOr(name string) string {
+	if name == "" {
+		return "<store>"
+	}
+	return name
 }
