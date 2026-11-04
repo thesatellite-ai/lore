@@ -58,37 +58,50 @@ func repoRows(t *testing.T, c *th.Clone, table string) []string {
 	return out
 }
 
+// BATCH 2 (owner): `lore share` is removed for `lore move` (same id, one
+// home). The trial's F11 finding was that a long shared note must pass the
+// commit and push checks once it is deliberately in the client repo; the
+// same holds for the moved row. Share itself is refused naming the move.
 func TestLeak_TrialF11_ShareLongNoteToRepo(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"))
+	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
 	mem := a.storeMem(t, leakShared)
-	out := a.aliceApp.MustLore("share", mem, "--to", "repo", "--yes").Out()
-	cp := mustID(t, th.Result{Stdout: strings.SplitN(out, "✓", 2)[1]}, "mem")
-	body, ok := a.aliceApp.ReadFile(filepath.Join(".lore", "data", tblMemories, cp+".json"))
-	if !ok || !strings.Contains(body, leakShared) || strings.Contains(body, mem) {
-		t.Fatalf("the copy %s must hold the text and no pointer back: %v %s", cp, ok, body)
+	a.aliceApp.Lore("share", mem, "--to", "repo", "--yes").Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+mem)
+	a.aliceApp.MustLore("move", mem, "--to", "repo", "--yes")
+	body, ok := a.aliceApp.ReadFile(filepath.Join(".lore", "data", tblMemories, mem+".json"))
+	if !ok || !strings.Contains(body, leakShared) {
+		t.Fatalf("the moved row %s must hold the text in the client repo: %v %s", mem, ok, body)
 	}
 	a.aliceApp.Git("switch", "-q", "-c", "chore/share")
 	a.aliceApp.Git("add", "-A")
-	if r := a.aliceApp.TryGit("commit", "-m", "share the staging note"); r.Code != 0 {
-		t.Fatalf("the shared copy must pass the commit hooks: %s", r.Out())
+	if r := a.aliceApp.TryGit("commit", "-m", "move the staging note"); r.Code != 0 {
+		t.Fatalf("the moved row must pass the commit hooks: %s", r.Out())
 	}
 	if r := a.aliceApp.TryGit("push", "-q", "origin", "chore/share"); r.Code != 0 {
-		t.Fatalf("the shared copy must pass the pre-push check: %s", r.Out())
+		t.Fatalf("the moved row must pass the pre-push check: %s", r.Out())
 	}
 	if !a.app.Has("refs/heads/chore/share") {
 		t.Fatal("the push did not reach origin")
 	}
 }
 
+// The trial's F11 refusal: a note quoting ANOTHER internal note must not
+// reach the client repo whole. With share removed (BATCH 2) the transfer is
+// `lore move`; moving the quoting note and committing it is blocked by the
+// leak hook naming the quoted note, while the share is refused outright.
 func TestLeak_TrialF11_ShareQuotingAnotherNoteRefused(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"))
+	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
 	other := a.storeMem(t, leakOther)
 	mem := a.storeMem(t, leakShared+"; as noted, "+leakOther)
 	r := a.aliceApp.Lore("share", mem, "--to", "repo", "--yes")
-	r.Fails(t, 19, "E_LEAK_BLOCKED", other, "Remove that part from "+mem)
-	r.Never(t, "lore share "+mem, "✓")
+	r.Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+mem)
 	if rows := repoRows(t, a.aliceApp, tblMemories); len(rows) != 0 {
 		t.Fatalf("a refused share writes nothing: %v", rows)
+	}
+	a.aliceApp.MustLore("move", mem, "--to", "repo", "--yes")
+	a.aliceApp.Git("add", "-A")
+	c := a.aliceApp.TryGit("commit", "-m", "move a note that quotes another")
+	if c.Code == 0 || !strings.Contains(c.Out(), "E_LEAK_BLOCKED") || !strings.Contains(c.Out(), other) {
+		t.Fatalf("the quoted internal note must block the commit, naming %s: %s", other, c.Out())
 	}
 }
 

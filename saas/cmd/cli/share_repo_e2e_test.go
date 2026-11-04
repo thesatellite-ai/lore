@@ -42,9 +42,14 @@ func mustProjection(t *testing.T, c *th.Clone, rel string) {
 	if err := json.Unmarshal([]byte(body), &doc); err != nil {
 		t.Fatalf("%s: %v", rel, err)
 	}
-	allowed := map[string]bool{"_table": true, "_v": true, "id": true, "display_name": true, "kind": true}
+	// created_at/updated_at: v2 envelope timestamps (the leak guard allows them too).
+	allowed := map[string]bool{"_table": true, "_v": true, "id": true, "display_name": true, "kind": true, "created_at": true, "updated_at": true}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &raw); err != nil {
+		t.Fatalf("%s: %v", rel, err)
+	}
 	for k, v := range doc {
-		if allowed[k] || v == nil || v == "" || v == false {
+		if allowed[k] || v == nil || v == "" || v == false || clientActorEnvelopeOK(k, raw[k]) {
 			continue
 		}
 		t.Fatalf("%s holds %s=%v; a client copy is only {id, display name, kind}", rel, k, v)
@@ -54,36 +59,33 @@ func mustProjection(t *testing.T, c *th.Clone, rel string) {
 	}
 }
 
+// BATCH 2 (owner): `lore share` is removed; `lore move` is the one way to
+// give a row to another place, keeping its id (a row has one home, no
+// copies). Before BATCH 2 this test pinned share's unlinked copy; it now
+// pins the refusal and the move that replaces it: the row lands in the
+// client repo under the same id with its text, the store keeps only a
+// tombstone, and the deliberate transfer passes the leak hook.
 func TestLeak_ShareToRepoWritesAnUnlinkedCopy(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"))
+	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
 	mem := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", sharedBody), "mem")
-	if _, ok := a.aliceApp.ReadFile(filepath.Join(".lore", "data", tblMemories, mem+".json")); ok {
+	rel := filepath.Join(".lore", "data", tblMemories, mem+".json")
+	if _, ok := a.aliceApp.ReadFile(rel); ok {
 		t.Fatalf("precondition: the memory must go to the store, not the repo")
 	}
-	out := a.aliceApp.MustLore("share", mem, "--to", "repo", "--yes").Out()
-	cp := mustID(t, th.Result{Stdout: strings.SplitN(out, "✓", 2)[1]}, "mem")
-	if cp == mem {
-		t.Fatalf("the copy must get a new id: %s", out)
+	a.aliceApp.Lore("share", mem, "--to", "repo", "--yes").Fails(t, th.ExitError, "E_UNSUPPORTED", "lore move "+mem)
+	if _, ok := a.aliceApp.ReadFile(rel); ok {
+		t.Fatal("a refused share writes nothing")
 	}
-	body, ok := a.aliceApp.ReadFile(filepath.Join(".lore", "data", tblMemories, cp+".json"))
-	if !ok {
-		t.Fatalf("no copy %s in the client's .lore/data: %s", cp, out)
-	}
-	if strings.Contains(body, mem) || !strings.Contains(body, sharedBody) {
-		t.Fatalf("the copy must hold the text and no pointer back to %s: %s", mem, body)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal([]byte(body), &doc); err != nil {
-		t.Fatal(err)
+	a.aliceApp.MustLore("move", mem, "--to", "repo", "--yes")
+	body, ok := a.aliceApp.ReadFile(rel)
+	if !ok || !strings.Contains(body, sharedBody) {
+		t.Fatalf("the moved row keeps its id and text in the client's .lore/data: %v %s", ok, body)
 	}
 	alice := actorIDFor(aliceKey)
-	if doc["created_by_actor_id"] != alice {
-		t.Fatalf("the copy is the sharer's (%s): %v", alice, doc["created_by_actor_id"])
-	}
 	mustProjection(t, a.aliceApp, actorFile(alice))
 	a.aliceApp.Git("add", "-A")
-	if r := a.aliceApp.TryGit("commit", "-m", "share a note"); r.Code != 0 {
-		t.Fatalf("the shared copy must pass the leak hook: %s", r.Out())
+	if r := a.aliceApp.TryGit("commit", "-m", "move a note to the client"); r.Code != 0 {
+		t.Fatalf("the moved row must pass the leak hook: %s", r.Out())
 	}
 }
 
