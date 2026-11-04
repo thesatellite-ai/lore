@@ -460,12 +460,34 @@ var gitAttributeLines = []string{
 // define it, which wireGit does on every command (idempotent).
 // ds:def id=sync-mergedriver-config-bur8yta8 owner=@khanakia stability=stable desc="per-clone merge driver config"
 func mergeDriverConfig() [][2]string {
+	bin := mergeDriverBinary()
 	return [][2]string{
 		{"merge." + mergeDriverLore + ".name", "lore field-level row merge"},
-		{"merge." + mergeDriverLore + ".driver", BinaryName + " merge-driver %O %A %B %P"},
+		{"merge." + mergeDriverLore + ".driver", bin + " merge-driver %O %A %B %P"},
 		{"merge." + mergeDriverKeepOurs + ".name", "lore: keep ours, re-render after merge"},
-		{"merge." + mergeDriverKeepOurs + ".driver", BinaryName + " merge-driver --keep-ours %O %A %B %P"},
+		{"merge." + mergeDriverKeepOurs + ".driver", bin + " merge-driver --keep-ours %O %A %B %P"},
 	}
+}
+
+// mergeDriverBinary is the program the per-clone merge driver runs: the
+// absolute path of the lore that wrote the config (single-quoted for the
+// shell git runs it with), so a merge never falls to an older lore first
+// on PATH that cannot read `_v: 2` rows. The config is per clone (never
+// committed) and rewritten by every command's wiring check, so a moved
+// binary is fixed by the next lore command; BinaryName (PATH) when the
+// path cannot be resolved or holds a quote.
+func mergeDriverBinary() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return BinaryName
+	}
+	if r, rerr := filepath.EvalSymlinks(exe); rerr == nil {
+		exe = r
+	}
+	if strings.ContainsRune(exe, '\'') {
+		return BinaryName
+	}
+	return "'" + filepath.ToSlash(exe) + "'"
 }
 
 // hookLines returns the block chained into each git hook. Every block is a
@@ -486,6 +508,12 @@ func hookLines(projectRel string) map[string][]string {
 	// for the command keeps their commits working; they get a note instead.
 	probe := BinaryName + " sync hook --help >/dev/null 2>&1"
 	tooOld := `echo "` + BinaryName + `: installed ` + BinaryName + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`
+	// A lore older than 0.1.18 (no `migrate`) refuses `_v: 2` rows with a
+	// misleading message: when the data holds any, say what is wrong and
+	// refuse the commit plainly.
+	coreProbe := BinaryName + " migrate --help >/dev/null 2>&1"
+	hasV2 := `grep -rqsE '"_v": *2' .lore/data`
+	needsCore := `echo "` + BinaryName + `: .lore/data holds lore 0.1.18 rows but the ` + BinaryName + ` on PATH is older; install lore 0.1.18 or newer to commit" >&2; exit 1`
 	// post-commit and pre-push carry live rows to a protected main (F6).
 	// They are repo-wide (one ride-along commit covers every project of a
 	// monorepo), so their block has one marker per repo (liveHookMarker)
@@ -493,7 +521,7 @@ func hookLines(projectRel string) map[string][]string {
 	// hook names must not refuse a push, so both probe first.
 	rideProbe := BinaryName + " land --help >/dev/null 2>&1"
 	hooks := map[string][]string{
-		"pre-commit":    {"( " + cd + "if command -v " + BinaryName + " >/dev/null 2>&1; then if " + probe + "; then " + BinaryName + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"},
+		"pre-commit":    {"( " + cd + "if command -v " + BinaryName + " >/dev/null 2>&1; then if ! " + coreProbe + " && " + hasV2 + "; then " + needsCore + "; elif " + probe + "; then " + BinaryName + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"},
 		"post-checkout": refresh,
 		"post-merge":    refresh,
 		"post-rewrite":  refresh,
