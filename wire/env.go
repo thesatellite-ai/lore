@@ -54,6 +54,9 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 	if aerr := a.ensureActor(ctx, st, target); aerr != nil {
 		return engine.Written{}, aerr
 	}
+	if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
+		return engine.Written{}, aerr
+	}
 	w, err := st.eng.Create(ctx, target, table, fields)
 	a.wroteTo(target, err)
 	return w, err
@@ -73,6 +76,9 @@ func (a *App) Update(ctx context.Context, ref engine.Ref, patch map[string]value
 		return engine.Written{}, ferr
 	}
 	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
+		return engine.Written{}, aerr
+	}
+	if aerr := a.ensureNamedActors(ctx, st, src, ref.Table, patch); aerr != nil {
 		return engine.Written{}, aerr
 	}
 	w, err := st.eng.Update(ctx, ref, patch)
@@ -426,6 +432,9 @@ func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.T
 		return engine.Written{}, ferr
 	}
 	if aerr := a.ensureActor(ctx, st, target); aerr != nil {
+		return engine.Written{}, aerr
+	}
+	if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
 		return engine.Written{}, aerr
 	}
 	w, err := st.eng.CreateWithID(ctx, target, table, id, fields)

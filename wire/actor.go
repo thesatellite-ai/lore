@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -190,4 +191,173 @@ func agentOwnerOf(ctx context.Context, st *state) (ids.ID[ids.Actor], string, er
 		}
 	}
 	return ids.ID[ids.Actor]{}, "", nil
+}
+
+// ensureNamedActors writes, into a client repo store, the minimal actor row
+// of every actor a row being written there names: each actor-ref field of
+// table's schema (a ref to actors, an any-table ref holding an act_ id, or
+// a list of either), not only the caller (ensureActor).
+//
+// FLAG6 (owner A): when a client-visible row names an actor (assignee,
+// done_by, claimed_by, reviewer, ...), lore writes that actor's minimal row
+// {id, display_name, kind} — never stable_key, handle or email — into the
+// client repo with the row, so every clone of the client repo can resolve
+// the name. The engine write lands in the same backend write set as the
+// row: in a live repo the actor row is held and rides in the row's live
+// commit (saas/cmd/cli live_core.go holdActorCompanions), otherwise both
+// files sit in .lore/data for the same code commit. It is the projection
+// v0.1.17 recorded as ClientActorProjection (saas/pkg/aicoder/stores, which
+// this module cannot import), rebuilt here from the actor's row in the
+// first attached store that has it:
+//   - an actor already in the client repo with the same display_name and
+//     kind is skipped; a different one is updated to the projection;
+//   - the caller and the agent owner are ensureActor's (skipped here);
+//   - an agent while agent_details is internal is skipped: its projection
+//     would be its owner under another id, and the row names the agent;
+//   - an actor no attached store knows is skipped (nothing to project).
+//
+// Non-client stores are untouched (fullActorRow keeps its behaviour).
+func (a *App) ensureNamedActors(ctx context.Context, st *state, target store.Source, table row.Table, fields map[string]value.Value) error {
+	if target == "" {
+		target = st.defaultTarget
+	}
+	if table == schema.TableActors || !st.eng.IsClient(target) {
+		return nil
+	}
+	def, ok := st.eng.Registry().Table(table)
+	if !ok {
+		return nil // the write itself reports the unknown table
+	}
+	named := namedActors(def, fields)
+	if len(named) == 0 {
+		return nil
+	}
+	details := ""
+	for _, id := range named {
+		if id == st.actor || (!st.agentOwner.IsZero() && id == st.agentOwner) {
+			continue
+		}
+		src, ok, err := actorRowElsewhere(ctx, st, target, id)
+		if err != nil || !ok {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		kind, display := fieldText(src, actorFieldKind), fieldText(src, actorFieldDisplay)
+		if kind == schema.ActorKindAgent {
+			if details == "" {
+				if details, err = agentDetailsOf(a.opts.Home, st.who.Org); err != nil {
+					return err
+				}
+			}
+			if details != AgentDetailsClient {
+				continue
+			}
+		}
+		if err := writeClientActor(ctx, st, target, id, actorKindOf(kind), display); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// namedActors lists, once each in field order, the actor ids fields holds
+// in def's actor-ref fields.
+func namedActors(def schema.TableDef, fields map[string]value.Value) []ids.ID[ids.Actor] {
+	var out []ids.ID[ids.Actor]
+	seen := map[ids.ID[ids.Actor]]bool{}
+	add := func(v value.Value) {
+		if v == nil || v.Kind() != value.KindRef {
+			return
+		}
+		id, err := ids.Parse[ids.Actor](v.String())
+		if err != nil || id.IsZero() || seen[id] {
+			return
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	for _, f := range def.Fields {
+		if f.RefTable != "" && f.RefTable != schema.TableActors {
+			continue
+		}
+		v, ok := fields[f.Name]
+		if !ok || v == nil {
+			continue
+		}
+		switch {
+		case f.Kind == value.KindRef:
+			add(v)
+		case f.Kind == value.KindList && f.Elem == value.KindRef:
+			if l, isList := v.(value.List); isList {
+				for _, it := range l.Items() {
+					add(it)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// actorRowElsewhere is the live actors row id in the first attached store,
+// in precedence order, other than target (ok=false when none has one).
+func actorRowElsewhere(ctx context.Context, st *state, target store.Source, id ids.ID[ids.Actor]) (row.Row, bool, error) {
+	for _, name := range st.eng.Stores() {
+		if name == target {
+			continue
+		}
+		_, r, err := st.eng.Get(ctx, engine.Ref{Store: name, Table: schema.TableActors, ID: id.Any()})
+		if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+			continue
+		}
+		if err != nil {
+			return row.Row{}, false, err
+		}
+		return r, true, nil
+	}
+	return row.Row{}, false, nil
+}
+
+// writeClientActor makes target's actors row id the projection {kind,
+// display_name}: created when absent, updated when it differs, left when
+// it matches.
+func writeClientActor(ctx context.Context, st *state, target store.Source, id ids.ID[ids.Actor], kind, display string) error {
+	want := map[string]value.Value{}
+	for k, v := range map[string]string{actorFieldKind: kind, actorFieldDisplay: display} {
+		if v == "" {
+			continue
+		}
+		t, err := value.TextOf(v)
+		if err != nil {
+			return errs.Wrap(errs.InvalidInput, "wire: actor "+id.String()+" field "+k, err)
+		}
+		want[k] = t
+	}
+	if _, ok := want[actorFieldDisplay]; !ok {
+		return nil // display_name is required: an actor with none cannot be projected
+	}
+	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: id.Any()}
+	_, cur, err := st.eng.Get(ctx, ref)
+	switch {
+	case errs.Has(err, errs.NotFound) || (err == nil && cur.Deleted):
+		_, err = st.eng.CreateWithID(ctx, target, schema.TableActors, id.Any(), want)
+		if err != nil && !errs.Has(err, errs.Stale) {
+			return errs.Wrap(errs.CodeOf(err), "wire: write the actor row "+id.String()+" to store "+string(target), err)
+		}
+		return nil
+	case err != nil:
+		return err
+	}
+	patch := map[string]value.Value{}
+	for k, v := range want {
+		if fieldText(cur, k) != v.String() {
+			patch[k] = v
+		}
+	}
+	if len(patch) == 0 {
+		return nil
+	}
+	_, err = st.eng.Update(ctx, ref, patch)
+	return err
 }
