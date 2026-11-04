@@ -12,6 +12,12 @@
 // owns (STORE_SERVER_SPEC 13): ~/.lore/identity.yaml into `identity:` of
 // ~/.lore/config.yaml (CFG9) and v1 lore-store.yaml markers into v2 (a
 // permanent sto_ id). The run holds the migration lock (E_MIGRATE_LOCKED).
+//
+// `lore migrate enable <feature>` (FORMAT_EVOLUTION rule 2) declares a
+// format feature in .lore/data/_meta.json before its first use:
+//
+//	enable ─► Rewriter.EnableFeature ─► (O6 open and no --yes: E_NEEDS_CONFIRM)
+//	       ─► rowfs.DeclareRepo ─► features ∪ {name}, min_lore_version = max(floor, Since)
 package migrate
 
 import (
@@ -56,6 +62,11 @@ type Rewriter interface {
 	// store as `_v: 2` rows with the same id and stamp, and returns
 	// "table/id" per row (made, or that would be made under dryRun).
 	MigrateLive(ctx context.Context, dryRun bool) ([]string, error)
+	// EnableFeature declares a known format feature in the repo's
+	// _meta.json before its first use (`lore migrate enable`); it answers
+	// E_NEEDS_CONFIRM when teammates would become read-only and the caller
+	// has not confirmed.
+	EnableFeature(ctx context.Context, name string) (EnableOut, error)
 	// LockMigration takes the migration lock (E_MIGRATE_LOCKED when held);
 	// the returned func releases it.
 	LockMigration(ctx context.Context) (func() error, error)
@@ -87,6 +98,23 @@ type RunOut struct {
 	Rows  []string `json:"rows"`
 	// Steps are the settings changes (identity, store markers).
 	Steps []string `json:"steps"`
+}
+
+// OpEnable is `lore migrate enable <feature>`, POST /v1/migrate/enable.
+const OpEnable = "migrate.enable"
+
+// EnableIn is the input of migrate.enable.
+type EnableIn struct {
+	Feature string `json:"feature" arg:"0" desc:"the feature to declare (hlc, meta, policy, resources, …; required)"`
+}
+
+// EnableOut is the output of migrate.enable.
+type EnableOut struct {
+	Feature string `json:"feature"`
+	// Added is false when the project already declared it.
+	Added          bool     `json:"added"`
+	Features       []string `json:"features"`
+	MinLoreVersion string   `json:"min_lore_version,omitempty"`
 }
 
 // Ops returns the migration operations bound to rw.
@@ -128,6 +156,24 @@ func Ops(rw Rewriter) []op.Entry {
 			}
 			out.Count = len(out.Rows) + settings.Rows
 			return out, nil
+		}),
+		// migrate.enable (FORMAT_EVOLUTION rule 2): declare → (ask while
+		// teammates on v0.1.17 wrote the rows: E_NEEDS_CONFIRM, FQ2 as
+		// changed by the agents override) → raise features and
+		// min_lore_version in .lore/data/_meta.json. Writes no row.
+		op.Define(op.Spec{
+			Name: OpEnable, Summary: "Declare a format feature before its first use (raises min_lore_version)",
+			Permission: op.PermAdmin, Access: op.AccessWrite, RESTNoun: restNoun,
+			Confirm: op.ConfirmRule{MayAsk: true},
+			Errors:  []errs.Code{errs.InvalidInput, errs.NeedsConfirm, errs.OldLore, errs.NotFound, errs.Internal},
+			Examples: []op.Example{
+				{Title: "declare the 0.1.18 row format once the team has upgraded", CLI: "lore migrate enable hlc --yes", Want: "feature:"},
+			},
+		}, func(ctx context.Context, in EnableIn) (EnableOut, error) {
+			if in.Feature == "" {
+				return EnableOut{}, errs.New(errs.InvalidInput, "migrate: name the feature to enable").WithHint("lore migrate enable <feature>")
+			}
+			return rw.EnableFeature(ctx, in.Feature)
 		}),
 	}
 }

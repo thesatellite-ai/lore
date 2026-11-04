@@ -1,6 +1,7 @@
 package row
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -60,7 +61,7 @@ func TestSpecExamplesRoundTripByteExact(t *testing.T) {
 		if string(out) != doc {
 			t.Errorf("%s: re-encode differs\n%s", name, out)
 		}
-		if r.SourceVersion != FormatVersion {
+		if r.SourceVersion != hlcVersion {
 			t.Errorf("%s: source version %d", name, r.SourceVersion)
 		}
 	}
@@ -120,7 +121,7 @@ func TestDecodeRefuses(t *testing.T) {
 		doc  string
 		code errs.Code
 	}{
-		"newer":         {`{"_v":3,` + base + `}`, errs.OldLore},
+		"newer":         {`{"_v":` + strconv.Itoa(FormatVersion+1) + `,` + base + `}`, errs.OldLore},
 		"no version":    {`{` + base + `}`, errs.InvalidInput},
 		"v0":            {`{"_v":0,` + base + `}`, errs.InvalidInput},
 		"v2 no hlc":     {`{"_v":2,"_table":"memories","id":"mem_01936f2a7c4b7e1d8a3f5b6c7d8e9f00"}`, errs.InvalidInput},

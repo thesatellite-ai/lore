@@ -432,6 +432,9 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 		if err != nil {
 			return Written{}, err
 		}
+		if err = e.gate(ctx, st, stepRows(steps)...); err != nil {
+			return Written{}, err // FORMAT_EVOLUTION rule 2
+		}
 		changes := make([]store.Change, 0, len(steps))
 		rows := make([]store.Row, 0, len(steps))
 		events := make([]Event, 0, len(steps))
@@ -562,6 +565,15 @@ func (e *Engine) planDelete(ctx context.Context, src store.Source, root row.Row)
 		p.byStore[name] = mergeClears(keep)
 	}
 	return p, nil
+}
+
+// stepRows is the rows a delete plan's steps touch (for the format gate).
+func stepRows(steps []step) []row.Row {
+	out := make([]row.Row, 0, len(steps))
+	for _, s := range steps {
+		out = append(out, s.row)
+	}
+	return out
 }
 
 // mergeClears folds several set_null steps of one row into one step per
@@ -769,6 +781,9 @@ func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC, extra ...row.Row) (stored, error) {
 	if err := refusePurged(ctx, st, r.Table, r.ID, r.Deleted); err != nil {
 		return stored{}, err // every live write (create, update, merge, move) passes here
+	}
+	if err := e.gate(ctx, st, append([]row.Row{r}, extra...)...); err != nil {
+		return stored{}, err // FORMAT_EVOLUTION rule 2: read-only for a format this lore cannot write
 	}
 	r = stampAs(st, r)
 	r, err := e.stampWrite(st, r)

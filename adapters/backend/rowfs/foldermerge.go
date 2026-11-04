@@ -160,6 +160,11 @@ func mergeMeta(out, b, o, t object) error {
 	if err := mergeList(out, metaKeyLinks, b, o, t, linkKey); err != nil {
 		return err
 	}
+	// FORMAT_EVOLUTION rule 2: features is a set, min_lore_version the
+	// higher version.
+	if err := mergeFormat(out, o, t); err != nil {
+		return err
+	}
 	// Q5 (PROV1): a store folder's _meta.json may carry a repo identity
 	// too; its keys merge by ResolveRepoIdentity (keep ours on a fork merge,
 	// older id + alias on a race), never by the generic "larger value".

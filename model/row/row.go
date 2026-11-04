@@ -24,10 +24,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 )
 
-// FormatVersion is the "_v" this code writes. v0.1.17 wrote 1. A reader
-// refuses a higher number (E_OLD_LORE) and upcasts lower ones in memory.
-const FormatVersion = 2
-
 // formatV1 is the v0.1.17 row format, the only older one.
 const formatV1 = 1
 
@@ -119,7 +115,7 @@ type Row struct {
 	// "_w" for instance), kept so decode → encode loses nothing.
 	Reserved map[string]value.Value
 	// SourceVersion is the "_v" the decoded bytes had (0 for a Row built in
-	// code). Encode always writes FormatVersion; this only tells the caller
+	// code). Encode writes writeVersion (steps.go); this only tells the caller
 	// that a v1 row was upcast and should be rewritten.
 	SourceVersion int
 }

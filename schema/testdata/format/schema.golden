@@ -1,0 +1,346 @@
+actors.active bool
+actors.display_name text required
+actors.handle text
+actors.kind text required
+actors.label text
+actors.left_at datetime
+actors.owner_actor_id ref
+actors.stable_key text
+actors.tag_ids list[ref]
+architecture_notes.body text required
+architecture_notes.created_by_actor_id ref
+architecture_notes.project_id ref required
+architecture_notes.repo_id ref
+architecture_notes.tag_ids list[ref]
+architecture_notes.title text required
+behaviours.body text required
+behaviours.created_by_actor_id ref
+behaviours.name text required
+behaviours.project_id ref required
+behaviours.tag_ids list[ref]
+comments.body text required
+comments.created_by_actor_id ref
+comments.entity_id ref required
+comments.entity_project_id ref
+comments.entity_table text required
+commit_links.author text
+commit_links.committed_at text
+commit_links.created_by_actor_id ref
+commit_links.entity_id ref required
+commit_links.entity_table text required
+commit_links.message text
+commit_links.project_id ref required
+commit_links.repo_path text
+commit_links.sha text required
+cookbook_recipes.body text required
+cookbook_recipes.created_by_actor_id ref
+cookbook_recipes.language text
+cookbook_recipes.project_id ref required
+cookbook_recipes.tag_ids list[ref]
+cookbook_recipes.title text required
+decisions.archived_at datetime
+decisions.body text required
+decisions.confidence number
+decisions.created_by_actor_id ref
+decisions.last_validated_at datetime
+decisions.project_id ref required
+decisions.repo_id ref
+decisions.source_kind text required
+decisions.source_ref text
+decisions.status text required
+decisions.superseded_by_id ref
+decisions.tag_ids list[ref]
+decisions.title text required
+decisions.trust_score number
+external_sources.config_json text
+external_sources.enabled bool
+external_sources.kind text required
+external_sources.name text required
+external_sources.project_id ref required
+external_sources.tag_ids list[ref]
+handoffs.body text required
+handoffs.from_actor_id ref
+handoffs.mission_id ref
+handoffs.project_id ref required
+handoffs.status_str text required
+handoffs.tag_ids list[ref]
+handoffs.task_id ref
+handoffs.to_actor_id ref
+hotfixes.archived_at datetime
+hotfixes.body text required
+hotfixes.confidence number
+hotfixes.created_by_actor_id ref
+hotfixes.last_validated_at datetime
+hotfixes.project_id ref required
+hotfixes.repo_id ref
+hotfixes.severity text required
+hotfixes.source_kind text required
+hotfixes.source_ref text
+hotfixes.superseded_by_id ref
+hotfixes.tag_ids list[ref]
+hotfixes.title text required
+hotfixes.trust_score number
+incidents.body text required
+incidents.created_by_actor_id ref
+incidents.project_id ref required
+incidents.resolved_at datetime
+incidents.severity_str text
+incidents.tag_ids list[ref]
+incidents.title text required
+kind_fields.description text
+kind_fields.in_list bool
+kind_fields.internal bool
+kind_fields.kind_id ref required
+kind_fields.label text
+kind_fields.name text required
+kind_fields.ref_kind ref
+kind_fields.required bool
+kind_fields.sensitive bool
+kind_fields.type text required
+kind_fields.values list[text]
+kind_fields.widget text
+kinds.description text
+kinds.name text required
+kinds.name_format text
+kinds.origin json
+kinds.render text
+knowledge_refs.confidence text required
+knowledge_refs.dst_id ref required
+knowledge_refs.dst_project_id ref
+knowledge_refs.dst_table text required
+knowledge_refs.relation text required
+knowledge_refs.src_id ref required
+knowledge_refs.src_table text required
+memories.archived_at datetime
+memories.body text required
+memories.confidence number
+memories.created_by_actor_id ref
+memories.kind text required
+memories.last_validated_at datetime
+memories.project_id ref required
+memories.repo_id ref
+memories.source_kind text required
+memories.source_ref text
+memories.superseded_by_id ref
+memories.tag_ids list[ref]
+memories.trust_score number
+memories.tx_at datetime
+memories.valid_at datetime
+memories.valid_until datetime
+memories.validated_by_actor_id ref
+meta_keys.description text
+meta_keys.internal bool
+meta_keys.name text required
+meta_keys.scope text required
+meta_keys.sensitive bool
+meta_keys.strict bool
+meta_keys.type text required
+meta_values.key_id ref required
+meta_values.label text
+meta_values.name text required
+missions.approvers list[text]
+missions.body text
+missions.completed_at datetime
+missions.created_by_actor_id ref
+missions.idempotency_key text
+missions.plan_id ref
+missions.project_id ref required
+missions.status text required
+missions.tag_ids list[ref]
+missions.target_date datetime
+missions.title text required
+patterns.archived_at datetime
+patterns.body text required
+patterns.confidence number
+patterns.created_by_actor_id ref
+patterns.language text
+patterns.last_validated_at datetime
+patterns.project_id ref required
+patterns.repo_id ref
+patterns.source_kind text required
+patterns.source_ref text
+patterns.superseded_by_id ref
+patterns.tag_ids list[ref]
+patterns.title text required
+patterns.trust_score number
+plans.body text required
+plans.created_by_actor_id ref
+plans.project_id ref required
+plans.status text
+plans.status_str text
+plans.tag_ids list[ref]
+plans.title text required
+playbooks.archived_at datetime
+playbooks.body text required
+playbooks.composes text
+playbooks.confidence number
+playbooks.created_by_actor_id ref
+playbooks.description text required
+playbooks.last_validated_at datetime
+playbooks.name text required
+playbooks.project_id ref
+playbooks.source_kind text required
+playbooks.source_ref text
+playbooks.tag_ids list[ref]
+playbooks.trust_score number
+policies.key text required
+policies.scope text required
+policies.value json required
+projects.archived_at datetime
+projects.name text required
+projects.origin_url text
+projects.tag_ids list[ref]
+prompts.archived_at datetime
+prompts.args_schema text
+prompts.body text required
+prompts.created_by_actor_id ref
+prompts.description text required
+prompts.name text required
+prompts.project_id ref required
+prompts.tag_ids list[ref]
+reminders.created_by_actor_id ref
+reminders.done_at datetime
+reminders.due_at datetime required
+reminders.message text required
+reminders.project_id ref required
+reminders.recurrence text
+reminders.target_id text
+reminders.target_table text
+repos.archived_at datetime
+repos.display_name text
+repos.forked_from ref
+repos.mount_name text required
+repos.origin_url text
+repos.project_id ref required
+repos.split_from ref
+repos.tag_ids list[ref]
+repos.urls json
+resources.archived_at datetime
+resources.fields json
+resources.kind ref required
+resources.last_checked datetime
+resources.name text required
+rule_verifier_refs.notes text
+rule_verifier_refs.rule_id ref required
+rule_verifier_refs.verifier_kind text required
+rule_verifier_refs.verifier_ref text required
+rules.activation text required
+rules.applies_to_description text
+rules.archived_at datetime
+rules.body text required
+rules.confidence number
+rules.created_by_actor_id ref
+rules.globs text
+rules.last_validated_at datetime
+rules.project_id ref
+rules.repo_id ref
+rules.severity text required
+rules.source_kind text required
+rules.source_ref text
+rules.superseded_by_id ref
+rules.tag_ids list[ref]
+rules.trust_score number
+secret_allows.field text required
+secret_allows.match_hash number required
+secret_allows.reason text
+secret_allows.row_id ref required
+secret_allows.rule_id text required
+secret_rules.description text
+secret_rules.entropy number
+secret_rules.keywords list[text]
+secret_rules.reason text
+secret_rules.regex text
+secret_rules.rule_id text required
+secret_rules.state text required
+snapshots.archived_at datetime
+snapshots.body text required
+snapshots.confidence number
+snapshots.created_by_actor_id ref
+snapshots.last_validated_at datetime
+snapshots.project_id ref required
+snapshots.repo_id ref
+snapshots.source_kind text required
+snapshots.source_ref text
+snapshots.tag_ids list[ref]
+snapshots.taken_at datetime required
+snapshots.title text required
+snapshots.trust_score number
+suggestions.body text required
+suggestions.created_by_actor_id ref
+suggestions.project_id ref required
+suggestions.status_str text required
+suggestions.tag_ids list[ref]
+suggestions.title text required
+tags.color text
+tags.name text required
+tags.project_id ref required
+task_lists.body text
+task_lists.project_id ref required
+task_lists.status_str text required
+task_lists.tag_ids list[ref]
+task_lists.title text required
+tasks.approved_at datetime
+tasks.approved_by text
+tasks.approved_hash text
+tasks.assigned_team text
+tasks.assigned_to_actor_id ref
+tasks.attempts number
+tasks.blocked_by json
+tasks.body text
+tasks.claim_epoch number
+tasks.claim_log json
+tasks.commitment text required
+tasks.completed_at datetime
+tasks.created_by_actor_id ref
+tasks.deferred_until datetime
+tasks.done_by text
+tasks.done_commit text
+tasks.done_pr number
+tasks.due_at datetime
+tasks.gate text
+tasks.idempotency_key text
+tasks.merged_at datetime
+tasks.mission_id ref
+tasks.plan_id ref
+tasks.priority text required
+tasks.project_id ref required
+tasks.repo_id ref
+tasks.role text
+tasks.started_at datetime
+tasks.status text required
+tasks.tag_ids list[ref]
+tasks.tasklist_id ref
+tasks.time_entries json
+tasks.timebox_seconds number
+tasks.title text required
+tasks.work_branch text
+taste_prefs.body text required
+taste_prefs.created_by_actor_id ref
+taste_prefs.project_id ref required
+taste_prefs.scope text
+taste_prefs.tag_ids list[ref]
+teams.active bool
+teams.display_name text
+teams.handle text required
+teams.left_at datetime
+teams.member_actor_ids list[ref]
+teams.project_id ref required
+tech_docs.base_url text
+tech_docs.description text
+tech_docs.name text required
+tech_docs.project_id ref required
+tech_docs.tag_ids list[ref]
+vars.aliases list[text]
+vars.description text
+vars.name text required
+vars.shareable bool
+vars.type text required
+vars.value json required
+workflows.body text required
+workflows.name text required
+workflows.project_id ref required
+workflows.tag_ids list[ref]
+workspaces.body text
+workspaces.name text required
+workspaces.project_id ref required
+workspaces.tag_ids list[ref]

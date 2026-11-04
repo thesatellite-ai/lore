@@ -418,6 +418,11 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 	if err := f.ensureMeta(ctx, a); err != nil {
 		return nil, errors.Join(err, a.Undo())
 	}
+	// FORMAT_EVOLUTION rule 2: the features the rows use are declared in the
+	// same batch (same commit) as the rows.
+	if err := f.declare(a, changes); err != nil {
+		return nil, errors.Join(err, a.Undo())
+	}
 	for i, c := range changes {
 		if err := ctx.Err(); err != nil {
 			return nil, errors.Join(err, a.Undo())

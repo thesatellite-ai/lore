@@ -57,6 +57,11 @@ func (f *fakeRewriter) MigrateLive(_ context.Context, dryRun bool) ([]string, er
 	return f.live, nil
 }
 
+func (f *fakeRewriter) EnableFeature(_ context.Context, name string) (EnableOut, error) {
+	f.calls = append(f.calls, "enable "+name)
+	return EnableOut{Feature: name, Added: true, Features: []string{name}}, nil
+}
+
 func (f *fakeRewriter) LockMigration(context.Context) (func() error, error) {
 	f.calls = append(f.calls, "lock")
 	if f.lockErr != nil {

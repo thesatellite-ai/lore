@@ -1,9 +1,14 @@
 package schema
 
 import (
+	"flag"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -258,5 +263,81 @@ func TestKnowledgeRefsDanglingProject(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Errorf("relations missing: %v", want)
+	}
+}
+
+// updateFormat rewrites the format snapshots:
+// go test ./schema -run 'Format|Enum' -update-format
+var updateFormat = flag.Bool("update-format", false, "rewrite testdata/format/*.golden")
+
+// formatSnapshot is the synced columns per table (name, kind, element
+// kind, required), one line per column, sorted — the file format of every
+// synced row (FORMAT_EVOLUTION rule 5).
+func formatSnapshot(t *testing.T, enums bool) string {
+	t.Helper()
+	var lines []string
+	for _, d := range Builtin() {
+		if !d.Synced {
+			continue
+		}
+		for _, f := range d.Fields {
+			if enums {
+				if len(f.Values) > 0 {
+					lines = append(lines, d.Name.String()+"."+f.Name+" "+strings.Join(f.Values, ","))
+				}
+				continue
+			}
+			l := d.Name.String() + "." + f.Name + " " + string(f.Kind)
+			if f.Elem != "" {
+				l += "[" + string(f.Elem) + "]"
+			}
+			if f.Required {
+				l += " required"
+			}
+			lines = append(lines, l)
+		}
+	}
+	slices.Sort(lines)
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// checkGolden compares got with testdata/format/<name>.
+func checkGolden(t *testing.T, name, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", "format", name)
+	if *updateFormat {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(got), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(want) != got {
+		t.Fatalf("format change not classified: a synced column or enum value changed (%s).\n"+
+			"Classify it (FORMAT_EVOLUTION rule 5: additive, or a Step in model/row/steps.go with a feature), "+
+			"then run: go test ./schema -run 'Format|Enum' -update-format", path)
+	}
+}
+
+// TestFormatSchemaSnapshot: every synced column change is seen (rule 5).
+func TestFormatSchemaSnapshot(t *testing.T) {
+	checkGolden(t, "schema.golden", formatSnapshot(t, false))
+}
+
+// TestEnumSnapshot: every new value of a synced closed set is seen (an old
+// lore that checks the set would refuse it, rule 5).
+func TestEnumSnapshot(t *testing.T) { checkGolden(t, "enum.golden", formatSnapshot(t, true)) }
+
+// TestFormatgateTableNames: logic/formatgate pins these table names
+// (it cannot import schema at the same layer rank).
+func TestFormatgateTableNames(t *testing.T) {
+	if formatgate.TablePolicies != TablePolicies || formatgate.TablePlans != TablePlans || formatgate.KindTablePrefix != KindTablePrefix {
+		t.Fatal("formatgate table names drifted from schema")
 	}
 }

@@ -2,12 +2,16 @@ package wire
 
 import (
 	"context"
+	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -81,8 +85,17 @@ func readStoreFormats(ctx context.Context, opts Options, top string, byName map[
 	return out, nil
 }
 
-// readFormat computes the format state from the repo store's rows.
+// readFormat computes the format state from the repo store's rows. A
+// _meta.json that already declares hlc (the 0.1.18 row format, written by
+// the first 0.1.18 write or by `lore migrate enable hlc --yes`) has had
+// the question answered: the file records it, so every clone agrees.
 func readFormat(ctx context.Context, repo store.Backend, caller ids.ID[ids.Actor]) (formatState, error) {
+	if fr, ok := concrete(repo).(engine.FormatReader); ok {
+		d, err := fr.Format(ctx)
+		if err == nil && slices.Contains(d.Features, formatgate.HLC) {
+			return formatState{}, nil
+		}
+	}
 	rows, _, err := repo.Read(ctx, "")
 	if err != nil {
 		return formatState{}, err
@@ -100,3 +113,53 @@ func readFormat(ctx context.Context, repo store.Backend, caller ids.ID[ids.Actor
 	}
 	return formatState{ask: engine.HasOtherWriter(v1, caller)}, nil
 }
+
+// EnableFeature implements opsmigrate.Rewriter (`lore migrate enable`,
+// FORMAT_EVOLUTION rule 2): declare a known feature in the checkout's
+// .lore/data/_meta.json before its first use, raising min_lore_version to
+// its Since. It asks first (E_NEEDS_CONFIRM unless --yes) while the O6
+// question is open — rows written by teammates on v0.1.17 and no 0.1.18
+// write yet — because those teammates become read-only. Nothing else is
+// written; the person commits the file with their code.
+func (a *App) EnableFeature(ctx context.Context, name string) (opsmigrate.EnableOut, error) {
+	f, ok := formatgate.Lookup(name)
+	if !ok {
+		names := make([]string, 0, len(formatgate.Known()))
+		for _, k := range formatgate.Known() {
+			names = append(names, k.Name)
+		}
+		return opsmigrate.EnableOut{}, errs.New(errs.InvalidInput, "migrate: "+strconvQuote(name)+" is not a feature this lore knows").
+			WithHint("known features: " + strings.Join(names, ", "))
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return opsmigrate.EnableOut{}, err
+	}
+	a.mu.Lock()
+	ask := st.format.ask && !st.format.written
+	a.mu.Unlock()
+	if ask && !engine.Confirmed(ctx) {
+		return opsmigrate.EnableOut{}, errs.New(errs.NeedsConfirm, "migrate: enabling "+strconvQuote(name)+" makes this repository need lore "+f.Since+
+			" or later to write; teammates who wrote its rows with lore 0.1.17 become read-only until they upgrade").
+			WithQuestion("has everyone who shares this repository upgraded to lore " + f.Since + "?").
+			WithHint("ask the person, then rerun with --yes").
+			WithNext("lore migrate enable " + name + " --yes")
+	}
+	added, err := rowfs.DeclareRepo(st.repoTop, []string{name})
+	if err != nil {
+		return opsmigrate.EnableOut{}, err
+	}
+	d, _, err := rowfs.ReadRepoFormat(st.repoTop)
+	if err != nil {
+		return opsmigrate.EnableOut{}, err
+	}
+	if len(added) > 0 && name == formatgate.HLC {
+		a.mu.Lock()
+		st.format.written = true // the question is answered for this App too
+		a.mu.Unlock()
+	}
+	return opsmigrate.EnableOut{Feature: name, Added: len(added) > 0, Features: d.Features, MinLoreVersion: d.MinLoreVersion}, nil
+}
+
+// strconvQuote quotes a user-given name for a message.
+func strconvQuote(s string) string { return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"` }

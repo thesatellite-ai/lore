@@ -15,7 +15,9 @@ import (
 const orgMeta = rowfs.FolderOrg + "/.lore/data/" + rowfs.MetaFileName
 
 // linkedMeta is a v0.1.17 `lore org link` _meta.json (v1, links[]).
-const linkedMeta = `{"_v":1,"links":[{"project_id":"prj_01936f0000007a1b8c2d3e4f5a6b7c01","remote":"git@example.invalid:client/app.git"}],"project_id":"prj_01936f0000007a1b8c2d3e4f5a6b7c00"}` + "\n"
+// It already declares the 0.1.18 row format (hlc), so the first core
+// write has nothing to raise and adopts it byte for byte.
+const linkedMeta = `{"_v":1,"features":["hlc"],"links":[{"project_id":"prj_01936f0000007a1b8c2d3e4f5a6b7c01","remote":"git@example.invalid:client/app.git"}],"min_lore_version":"0.1.18","project_id":"prj_01936f0000007a1b8c2d3e4f5a6b7c00"}` + "\n"
 
 // pushFile commits one file to remote's branch from a scratch clone, as
 // v0.1.17's store code (or another tool) would.

@@ -20,7 +20,7 @@ func Encode(r Row) ([]byte, error) {
 		return nil, err
 	}
 	ms := []canon.Member{
-		{Key: KeyVersion, Raw: []byte(strconv.Itoa(FormatVersion))},
+		{Key: KeyVersion, Raw: []byte(strconv.Itoa(writeVersion(r)))},
 		{Key: KeyTable, Raw: canon.String(string(r.Table))},
 		{Key: KeyID, Raw: canon.String(r.ID.String())},
 		{Key: KeyHLC, Raw: canon.String(r.HLC.String())},
@@ -99,8 +99,9 @@ func (r Row) check() error {
 
 // Decode parses a row document. It refuses a "_v" newer than FormatVersion
 // with E_OLD_LORE (writes must never round-trip data this binary cannot
-// represent) and upcasts v1 in memory: "_hlc" is built from updated_at,
-// counter 0 and updated_by (spec 12).
+// represent) and upcasts older versions in memory through the step
+// registry (steps.go): v1 gets "_hlc" from updated_at, counter 0 and
+// updated_by (spec 12).
 func Decode(b []byte) (Row, error) {
 	ms, err := canon.Members(b)
 	if err != nil {
@@ -114,17 +115,17 @@ func Decode(b []byte) (Row, error) {
 	if r.SourceVersion, err = decodeVersion(by[KeyVersion]); err != nil {
 		return Row{}, err
 	}
-	if err := r.decodeHeader(by); err != nil {
+	if err = r.decodeHeader(by); err != nil {
 		return Row{}, err
 	}
-	if err := r.decodeAudit(by); err != nil {
+	if err = r.decodeAudit(by); err != nil {
 		return Row{}, err
 	}
-	if err := r.decodeBody(ms); err != nil {
+	if err = r.decodeBody(ms); err != nil {
 		return Row{}, err
 	}
-	if r.SourceVersion == formatV1 && r.HLC.IsZero() {
-		r.HLC = upcastHLC(r)
+	if r, err = upcast(r, r.SourceVersion); err != nil {
+		return Row{}, err
 	}
 	if err := r.check(); err != nil {
 		return Row{}, err
@@ -163,7 +164,7 @@ func (r *Row) decodeHeader(by map[string][]byte) error {
 	if r.ID, err = ids.ParseAny(s); err != nil {
 		return err
 	}
-	if s, err = str(by, KeyHLC, r.SourceVersion >= FormatVersion); err != nil {
+	if s, err = str(by, KeyHLC, r.SourceVersion >= hlcVersion); err != nil {
 		return err
 	}
 	if r.HLC, err = hlc.Parse(s); err != nil {

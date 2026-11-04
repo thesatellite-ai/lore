@@ -287,7 +287,7 @@ func TestFirstWriteCreatesMeta(t *testing.T) {
 	}
 	// Second write: file untouched, not in the batch.
 	f := folder(t, r1, "org")
-	if err := os.WriteFile(filepath.Join(f.dataDir, MetaFileName), []byte(`{"_v":1,"project_id":"`+prjBase+`","links":[]}`+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(f.dataDir, MetaFileName), []byte(`{"_v":1,"features":["hlc"],"min_lore_version":"0.1.18","project_id":"`+prjBase+`","links":[]}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	a := apply(t, f, store.Change{Row: g.row(newID(t), "y", hlc.HLC{})})
@@ -321,7 +321,8 @@ func TestFirstWriteCreatesMeta(t *testing.T) {
 func TestFirstWriteAdoptsSharedMeta(t *testing.T) {
 	t.Parallel()
 	g := newGen(t)
-	shared := `{"_v":1,"links":[{"project_id":"` + prjLow + `","remote":"git@x:c/app"}],"project_id":"` + prjBase + `"}` + "\n"
+	// The shared copy already declares hlc, so adopting it raises nothing.
+	shared := `{"_v":1,"features":["hlc"],"links":[{"project_id":"` + prjLow + `","remote":"git@x:c/app"}],"min_lore_version":"0.1.18","project_id":"` + prjBase + `"}` + "\n"
 	cases := []struct {
 		name    string
 		src     MetaSource
