@@ -178,7 +178,7 @@ func TestImport_EditAddDeleteFromFiles(t *testing.T) {
 	if err != nil || len(trash) != 1 || trash[0].RowID != newID {
 		t.Fatalf("trash = %+v err %v", trash, err)
 	}
-	if err := RestoreTrash(context.Background(), e.db, trash[0].ID); err != nil {
+	if err := RestoreTrash(context.Background(), e.db, trash[0].ID, withCoreOwned(legacyNoCoreOwned)); err != nil {
 		t.Fatal(err)
 	}
 	e.reconcile()
@@ -241,7 +241,7 @@ func TestBothChanged_SameTextFileWinsWithConflictCopy(t *testing.T) {
 		t.Fatalf("conflict copy = %+v err %v", cs, err)
 	}
 	// Resolve by taking the local version: it flows back into the file.
-	if err := ResolveConflict(context.Background(), e.db, cs[0].ID, TakeOther); err != nil {
+	if err := ResolveConflict(context.Background(), e.db, cs[0].ID, TakeOther, withCoreOwned(legacyNoCoreOwned)); err != nil {
 		t.Fatal(err)
 	}
 	e.reconcile()

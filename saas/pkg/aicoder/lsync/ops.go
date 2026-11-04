@@ -113,10 +113,58 @@ const (
 // ErrNotFound is returned for an unknown conflict or trash id.
 var ErrNotFound = errors.New("lsync: not found")
 
+// ErrCoreOwned is returned by the commands that would change a row only in
+// lore.db (trash restore, resolve --take other, merge-rows) when the row's
+// table is core-owned: lore.db is only the mirror of those files, so the
+// change would be reported as done and then never reach a file (the docs
+// run printed "✓ restored" / "✓ merged" and nothing changed). The error
+// text names the way that does work.
+var ErrCoreOwned = errors.New("lsync: owned by the 0.1.18 core")
+
+// dbOnlyOpt adjusts a lore.db-only command (MergeRows, RestoreTrash,
+// ResolveConflict). Unexported on purpose: production callers always get
+// the real core-owned set; only this package's tests narrow it, the same
+// override Options.coreOwned gives the sync pass (the generic v1 engine
+// tests use memories as their sample table).
+type dbOnlyOpt func(*dbOnlyCfg)
+
+// dbOnlyCfg is what a dbOnlyOpt sets.
+type dbOnlyCfg struct {
+	coreOwned map[string]bool // nil = CoreOwned
+}
+
+// withCoreOwned replaces the core-owned set for one call.
+func withCoreOwned(set map[string]bool) dbOnlyOpt {
+	return func(c *dbOnlyCfg) { c.coreOwned = set }
+}
+
+// refuseCoreOwned returns ErrCoreOwned for table with how, the command that
+// does the job on the files, or nil when table is not core-owned.
+func refuseCoreOwned(opts []dbOnlyOpt, table, what, how string) error {
+	var cfg dbOnlyCfg
+	for _, o := range opts {
+		o(&cfg)
+	}
+	owned := CoreOwned(table)
+	if cfg.coreOwned != nil {
+		owned = cfg.coreOwned[table]
+	}
+	if !owned {
+		return nil
+	}
+	return fmt.Errorf("%w: %s %s is not done in lore.db (the row files are the truth): %s", ErrCoreOwned, what, table, how)
+}
+
+// restoreFileHow is the way to bring back a deleted core-owned row file.
+func restoreFileHow(table, id string) string {
+	p := ".lore/data/" + table + "/" + id + ".json"
+	return "restore the file from git (`git checkout HEAD -- " + p + "`, or from the commit before the one that deleted it: `git log --diff-filter=D -- " + p + "`)"
+}
+
 // ResolveConflict closes a conflict. With TakeOther the saved copy is
 // written back into the DB; the change triggers export it on the next
 // Reconcile, so the decision reaches git like any other edit.
-func ResolveConflict(ctx context.Context, db *sql.DB, id int64, take ResolveTake) error {
+func ResolveConflict(ctx context.Context, db *sql.DB, id int64, take ResolveTake, opts ...dbOnlyOpt) error {
 	var c ConflictRecord
 	err := db.QueryRowContext(ctx, `SELECT table_name, row_id, other_doc FROM `+tblConflicts+` WHERE id = ? AND resolved = 0`, id).
 		Scan(&c.Table, &c.RowID, &c.OtherDoc)
@@ -127,6 +175,9 @@ func ResolveConflict(ctx context.Context, db *sql.DB, id int64, take ResolveTake
 		return fmt.Errorf("lsync: load conflict: %w", err)
 	}
 	if take == TakeOther {
+		if err := refuseCoreOwned(opts, c.Table, "resolve --take other of", "edit the row with its lore command (or edit .lore/data/"+c.Table+"/"+c.RowID+".json) to the version you want"); err != nil {
+			return err
+		}
 		if err := writeDocToDB(ctx, db, c.Table, c.OtherDoc); err != nil {
 			return err
 		}
@@ -171,14 +222,17 @@ func ListTrash(ctx context.Context, db *sql.DB) ([]TrashRecord, error) {
 
 // RestoreTrash puts a trashed row back. The next Reconcile exports it, which
 // recreates its file — i.e. restoring is an ordinary, reviewable edit.
-func RestoreTrash(ctx context.Context, db *sql.DB, id int64) error {
+func RestoreTrash(ctx context.Context, db *sql.DB, id int64, opts ...dbOnlyOpt) error {
 	var r TrashRecord
-	err := db.QueryRowContext(ctx, `SELECT table_name, doc FROM `+tblTrash+` WHERE id = ?`, id).Scan(&r.Table, &r.Doc)
+	err := db.QueryRowContext(ctx, `SELECT table_name, row_id, doc FROM `+tblTrash+` WHERE id = ?`, id).Scan(&r.Table, &r.RowID, &r.Doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%w: trash entry %d", ErrNotFound, id)
 	}
 	if err != nil {
 		return fmt.Errorf("lsync: load trash: %w", err)
+	}
+	if err := refuseCoreOwned(opts, r.Table, "a trash restore of", restoreFileHow(r.Table, r.RowID)); err != nil {
+		return err
 	}
 	if err := writeDocToDB(ctx, db, r.Table, r.Doc); err != nil {
 		return err

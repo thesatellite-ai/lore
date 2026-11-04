@@ -54,7 +54,7 @@ func TestFindDuplicatesAndMergeRows(t *testing.T) {
 	if len(groups) != 1 || groups[0].Table != "memories" || len(groups[0].IDs) != 2 {
 		t.Fatalf("groups = %+v", groups)
 	}
-	if err := MergeRows(ctx, e.db, "memories", a, b); err != nil {
+	if err := MergeRows(ctx, e.db, "memories", a, b, withCoreOwned(legacyNoCoreOwned)); err != nil {
 		t.Fatal(err)
 	}
 	e.reconcile()

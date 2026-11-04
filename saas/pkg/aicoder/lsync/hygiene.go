@@ -174,9 +174,12 @@ func normaliseText(s string) string {
 // MergeRows folds row drop into row keep (same table): every reference to
 // drop is rewritten to keep, drop goes to the trash and is deleted. The
 // next Reconcile exports the rewritten rows and removes drop's file.
-func MergeRows(ctx context.Context, db *sql.DB, table, keep, drop string) error {
+func MergeRows(ctx context.Context, db *sql.DB, table, keep, drop string, opts ...dbOnlyOpt) error {
 	if keep == drop {
 		return fmt.Errorf("lsync: keep and drop are the same row")
+	}
+	if err := refuseCoreOwned(opts, table, "merge-rows of", "keep "+keep+" (edit it with its lore command if it should carry the other's text), then delete "+drop+" with its lore command"); err != nil {
+		return err
 	}
 	reg, _ := NewRegistry()
 	t, ok := reg.Table(table)
