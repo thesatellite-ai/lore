@@ -131,6 +131,9 @@ func UniqueOn(fields ...string) Item {
 	return itemFunc(func(t *TableDef) { t.Indexes = append(t.Indexes, Index{Fields: fields, Unique: true}) })
 }
 
+// GlobalKey makes the table's natural id the same in every store.
+func GlobalKey() Item { return itemFunc(func(t *TableDef) { t.GlobalKey = true }) }
+
 // Description sets the table's one-line description.
 func Description(s string) Item { return itemFunc(func(t *TableDef) { t.Description = s }) }
 

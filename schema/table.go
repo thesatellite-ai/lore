@@ -36,6 +36,9 @@ type TableDef struct {
 	// in the `resources` table with `kind` = this id, and Name is the typed
 	// cache table "res_<kind name>" built from them (spec 4.4).
 	Kind ids.ID[ids.Kind]
+	// GlobalKey: the natural id ignores the store (engine naturalParts), so
+	// a row with the same key has one id in every store (actors).
+	GlobalKey bool
 }
 
 // Field returns the field named name.

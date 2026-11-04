@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -332,6 +333,12 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		sources = []store.Source{store.Source(in.Store)}
 	}
 	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}}
+	var idx tagref.Index
+	if len(in.Tags) > 0 {
+		if idx, err = tagref.Load(ctx, o.env); err != nil {
+			return ListOut{}, err
+		}
+	}
 	for _, src := range sources {
 		rows, err := o.env.List(ctx, src, table)
 		if err != nil {
@@ -340,7 +347,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		for _, r := range rows {
 			archived := field(r, fieldArchivedAt) != ""
 			if (archived && !in.Archived) || (in.Kind != "" && field(r, fieldKind) != in.Kind) ||
-				!sc.keeps(repoOf(r), repo) || (project != "" && field(r, fieldProject) != project) || !hasTags(r, in.Tags) {
+				!sc.keeps(repoOf(r), repo) || (project != "" && field(r, fieldProject) != project) || !hasTags(idx, r, in.Tags) {
 				continue
 			}
 			out.Data = append(out.Data, recordOf(src, r))
@@ -420,11 +427,11 @@ func (o ops) retagPatch(ctx context.Context, id ids.ID[ids.Memory], add, drop []
 	}
 	dropIDs := make([]ids.AnyID, 0, len(drop))
 	for _, n := range drop {
-		t, terr := tagID(project, strings.TrimSpace(n))
+		t, terr := tagref.Droppable(ctx, o.env, project, strings.TrimSpace(n))
 		if terr != nil {
 			return nil, terr
 		}
-		dropIDs = append(dropIDs, t)
+		dropIDs = append(dropIDs, t...)
 	}
 	return tagList(retag(r, addIDs, dropIDs))
 }

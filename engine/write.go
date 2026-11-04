@@ -92,7 +92,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	case !pin.IsZero():
 		id, natural = pin, false
 	case natural:
-		id, err = NaturalID(def.Prefix, keyParts...)
+		id, err = NaturalID(def.Prefix, naturalParts(st, def, keyParts)...)
 	default:
 		id, err = e.ids.NewID(def.Prefix)
 	}

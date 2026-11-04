@@ -300,11 +300,14 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 			return AddOut{}, errs.Wrap(errs.CodeOf(err), "link add: field "+k, err)
 		}
 	}
-	natural, err := engine.NaturalID(ids.PrefixCommitLink, string(tbl), id.String(), sha)
+	// Natural ids are per store: an existing link is found by its key.
+	have, err := engine.FindByKey(ctx, o.env, table, map[string]string{
+		schema.FieldEntityTable: string(tbl), schema.FieldEntityID: id.String(), fieldSHA: sha,
+	})
 	if err != nil {
 		return AddOut{}, err
 	}
-	if _, r, gerr := o.env.Get(ctx, engine.Ref{Table: table, ID: natural}); gerr == nil && !r.Deleted {
+	if len(have) > 0 {
 		return AddOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("commit %s already linked to %s/%s", short(sha), tbl, id))
 	}
 	w, err := o.env.Create(ctx, store.Source(in.To), table, fields)

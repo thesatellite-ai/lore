@@ -5,23 +5,18 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Tags are a list-of-ref field on the memory (decision O11): tag_ids holds
-// tag row ids; a tag row is per project, keyed (project_id, name), so its
-// id is the v0.1.17 natural id (engine.NaturalID) and a name resolves to an
-// id without a lookup.
-
-// tagID is the id of the tag named name in project.
-func tagID(project, name string) (ids.AnyID, error) {
-	return engine.NaturalID(ids.PrefixTag, project, name)
-}
+// tag row ids; a tag row is per project, keyed (project_id, name). Natural
+// ids are per store, so a name is resolved by key (ops/internal/tagref),
+// nearest store first.
 
 // tagRefs resolves tag names of project to their ids. As v0.1.17's `lore
 // tag attach`, a tag must exist (create it with `lore tag add`): a typo
@@ -33,18 +28,15 @@ func (o ops) tagRefs(ctx context.Context, project string, names []string) ([]ids
 		if n == "" {
 			return nil, errs.New(errs.InvalidInput, "memory: an empty --tag")
 		}
-		id, err := tagID(project, n)
+		found, err := tagref.Find(ctx, o.env, project, n)
 		if err != nil {
 			return nil, err
 		}
-		_, r, err := o.env.Get(ctx, engine.Ref{Table: schema.TableTags, ID: id})
-		if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+		if len(found) == 0 {
 			return nil, errs.New(errs.NotFound, "memory: tag "+quoteID(n)+" not found in this project").
 				WithHint("create it with `lore tag add --name=" + n + "`")
 		}
-		if err != nil {
-			return nil, err
-		}
+		id := found[0]
 		if !slices.Contains(out, id) {
 			out = append(out, id)
 		}
@@ -82,13 +74,12 @@ func tagsOf(r row.Row) []string {
 	return out
 }
 
-// hasTags reports whether r carries every tag named in names (by the tag
-// ids of the row's own project).
-func hasTags(r row.Row, names []string) bool {
+// hasTags reports whether r carries every tag named in names (any tag of
+// that name in the row's own project, idx loaded once per read).
+func hasTags(idx tagref.Index, r row.Row, names []string) bool {
 	have := tagsOf(r)
 	for _, n := range names {
-		id, err := tagID(field(r, fieldProject), strings.TrimSpace(n))
-		if err != nil || !slices.Contains(have, id.String()) {
+		if !idx.Has(have, field(r, fieldProject), strings.TrimSpace(n)) {
 			return false
 		}
 	}

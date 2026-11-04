@@ -46,6 +46,18 @@ func NaturalID(p ids.Prefix, parts ...string) (ids.AnyID, error) {
 	return ids.ParseAny(string(p) + idSep + hex.EncodeToString(sum))
 }
 
+// naturalParts is what a natural id of def in store st hashes: the key
+// parts alone (v0.1.17's bytes) for a store without a namespace or a table
+// keyed globally (actors: one id per person everywhere), else the store's
+// namespace, the table and the key parts. Rows already on disk keep the
+// ids they were written with; lookups go by key (FindByKey).
+func naturalParts(st Attached, def schema.TableDef, keyParts []string) []string {
+	if st.KeyNamespace == "" || def.GlobalKey {
+		return keyParts
+	}
+	return append([]string{st.KeyNamespace, string(def.Name)}, keyParts...)
+}
+
 // naturalKey returns the first unique index of def and the values of its
 // fields in fields; ok is false when the table has none or a key field is
 // unset (the row then gets a random id).

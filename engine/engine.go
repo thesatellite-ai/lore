@@ -46,6 +46,12 @@ type Attached struct {
 	// never land in it): Move refuses rows holding secret references into
 	// it (BATCH 5) and writes no `moves` entry there.
 	Client bool
+	// KeyNamespace is hashed into the natural id of every row created in
+	// this store (the store's sto_ id, plus "/<folder>" for a folder
+	// target), so the same key in two stores is two rows with two ids.
+	// Empty keeps v0.1.17's bytes: the repo store, whose rows must keep
+	// converging with v0.1.17 writers of the same repository.
+	KeyNamespace string
 }
 
 // IDSource issues permanent row ids. The default makes UUIDv7 ids (the

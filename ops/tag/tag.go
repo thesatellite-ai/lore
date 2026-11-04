@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -368,10 +369,11 @@ func (o ops) usage(ctx context.Context) (map[string]Usage, error) {
 // attach adds the tag to the row's tag_ids (already there: nothing to
 // write, same answer).
 func (o ops) attach(ctx context.Context, in BindIn) (AttachOut, error) {
-	ref, r, tag, err := o.bind(ctx, in, true)
+	ref, r, tags, err := o.bind(ctx, in, true)
 	if err != nil {
 		return AttachOut{}, err
 	}
+	tag := tags[0]
 	out := AttachOut{Tag: in.Tag, TagID: tag.String(), OnTable: in.OnTable, OnID: in.OnID}
 	have := tagsOf(r)
 	if slices.Contains(have, tag.String()) {
@@ -389,12 +391,14 @@ func (o ops) attach(ctx context.Context, in BindIn) (AttachOut, error) {
 
 // detach removes the tag from the row's tag_ids; 0 when it was not there.
 func (o ops) detach(ctx context.Context, in BindIn) (DetachOut, error) {
-	ref, r, tag, err := o.bind(ctx, in, false)
+	ref, r, tags, err := o.bind(ctx, in, false)
 	if err != nil {
 		return DetachOut{}, err
 	}
 	have := tagsOf(r)
-	keep := slices.DeleteFunc(slices.Clone(have), func(s string) bool { return s == tag.String() })
+	keep := slices.DeleteFunc(slices.Clone(have), func(s string) bool {
+		return slices.ContainsFunc(tags, func(t ids.AnyID) bool { return t.String() == s })
+	})
 	if len(keep) == len(have) {
 		return DetachOut{}, nil
 	}
@@ -409,53 +413,54 @@ func (o ops) detach(ctx context.Context, in BindIn) (DetachOut, error) {
 }
 
 // bind resolves an attach/detach: the target row (its table must carry
-// tags), and the tag id in the current project. For attach the tag row
-// must exist (a typo never mints a tag); detach only needs the name.
-func (o ops) bind(ctx context.Context, in BindIn, mustExist bool) (engine.Ref, row.Row, ids.AnyID, error) {
+// tags), and the tag ids of the name in the current project, found by key
+// (natural ids are per store): for attach the live tags, nearest store
+// first, at least one (a typo never mints a tag); for detach every live
+// tag of the name plus the v0.1.17 id (the tag may be deleted already).
+func (o ops) bind(ctx context.Context, in BindIn, mustExist bool) (engine.Ref, row.Row, []ids.AnyID, error) {
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
-		return engine.Ref{}, row.Row{}, ids.AnyID{}, errs.Wrap(errs.Internal, "tag: built-in schema", err)
+		return engine.Ref{}, row.Row{}, nil, errs.Wrap(errs.Internal, "tag: built-in schema", err)
 	}
 	table, err := row.ParseTable(strings.TrimSpace(in.OnTable))
 	if err != nil {
-		return engine.Ref{}, row.Row{}, ids.AnyID{}, errs.Wrap(errs.InvalidInput, "tag: --on-table "+quote(in.OnTable)+" is not a table name", err)
+		return engine.Ref{}, row.Row{}, nil, errs.Wrap(errs.InvalidInput, "tag: --on-table "+quote(in.OnTable)+" is not a table name", err)
 	}
 	def, ok := reg.Table(table)
 	if !ok || !carriesTags(def) {
-		return engine.Ref{}, row.Row{}, ids.AnyID{}, errs.New(errs.Unsupported, "tag: rows of "+string(table)+" do not carry tags on the 0.1.18 core yet").
+		return engine.Ref{}, row.Row{}, nil, errs.New(errs.Unsupported, "tag: rows of "+string(table)+" do not carry tags on the 0.1.18 core yet").
 			WithHint("tables with tags: " + strings.Join(tagTables(reg), ", "))
 	}
 	id, err := ids.ParseAny(strings.TrimSpace(in.OnID))
 	if err != nil || id.Prefix() != def.Prefix {
-		return engine.Ref{}, row.Row{}, ids.AnyID{}, errs.New(errs.InvalidID, "tag: --on-id "+quote(in.OnID)+" is not an id of "+string(table)+" ("+string(def.Prefix)+"_…)")
+		return engine.Ref{}, row.Row{}, nil, errs.New(errs.InvalidID, "tag: --on-id "+quote(in.OnID)+" is not an id of "+string(table)+" ("+string(def.Prefix)+"_…)")
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id})
 	if err == nil && r.Deleted {
 		err = errs.New(errs.NotFound, "tag: "+id.String()+" is deleted")
 	}
 	if err != nil {
-		return engine.Ref{}, row.Row{}, ids.AnyID{}, err
+		return engine.Ref{}, row.Row{}, nil, err
 	}
 	project, err := o.env.Project(ctx)
 	if err != nil {
-		return engine.Ref{}, row.Row{}, ids.AnyID{}, err
+		return engine.Ref{}, row.Row{}, nil, err
 	}
 	name := strings.TrimSpace(in.Tag)
-	tag, err := engine.NaturalID(ids.PrefixTag, project.String(), name)
-	if err != nil {
-		return engine.Ref{}, row.Row{}, ids.AnyID{}, err
-	}
+	var tags []ids.AnyID
 	if mustExist {
-		_, t, terr := o.env.Get(ctx, engine.Ref{Table: schema.TableTags, ID: tag})
-		if errs.Has(terr, errs.NotFound) || (terr == nil && t.Deleted) {
-			return engine.Ref{}, row.Row{}, ids.AnyID{}, errs.New(errs.NotFound,
-				fmt.Sprintf("tag %q not found in project; create with `lore tag add --name=%s`", name, name))
-		}
-		if terr != nil {
-			return engine.Ref{}, row.Row{}, ids.AnyID{}, terr
-		}
+		tags, err = tagref.Find(ctx, o.env, project.String(), name)
+	} else {
+		tags, err = tagref.Droppable(ctx, o.env, project.String(), name)
 	}
-	return engine.Ref{Store: src, Table: table, ID: id}, r, tag, nil
+	if err != nil {
+		return engine.Ref{}, row.Row{}, nil, err
+	}
+	if mustExist && len(tags) == 0 {
+		return engine.Ref{}, row.Row{}, nil, errs.New(errs.NotFound,
+			fmt.Sprintf("tag %q not found in project; create with `lore tag add --name=%s`", name, name))
+	}
+	return engine.Ref{Store: src, Table: table, ID: id}, r, tags, nil
 }
 
 // carriesTags reports whether def declares the tags many-to-many.

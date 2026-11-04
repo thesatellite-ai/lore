@@ -110,7 +110,7 @@ func Builtin() []TableDef {
 // memories, tags, every settings table and resources.
 func coreDefs() []TableDef {
 	return []TableDef{
-		Table(TableActors, ids.PrefixActor, Synced(), Description("people and agents that write rows"),
+		Table(TableActors, ids.PrefixActor, Synced(), GlobalKey(), Description("people and agents that write rows"),
 			Text(fieldKind, Required(), OneOf(ActorKinds()...)),
 			Text("display_name", Required()),
 			// stable_key is absent from the F18 projection (repo and client

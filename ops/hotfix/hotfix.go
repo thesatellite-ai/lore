@@ -297,8 +297,12 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 
 // list returns the hotfixes in scope (archived included, as v0.1.17).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	keep, err := kn.HasTags(ctx, o.env, in.Tags)
+	if err != nil {
+		return ListOut{}, err
+	}
 	items, err := kn.List(ctx, o.env, noun, kn.Scope{Repo: in.Repo, NoInherit: in.NoInherit, MasterOnly: in.MasterOnly, AllRepos: in.AllRepos, Project: in.Project},
-		true, store.Source(in.Store), kn.HasTags(in.Tags))
+		true, store.Source(in.Store), keep)
 	if err != nil {
 		return ListOut{}, err
 	}

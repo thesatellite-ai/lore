@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
@@ -156,7 +157,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 	}
 	for _, o := range attached {
-		engOpts = append(engOpts, engine.WithStore(o.Attached))
+		a := o.Attached
+		a.KeyNamespace = keyNamespace(a)
+		engOpts = append(engOpts, engine.WithStore(a))
 	}
 	st.defaultTarget = store.SourceRepo
 	if st.eng, err = engine.New(engOpts...); err != nil {
@@ -331,4 +334,23 @@ func combinedCachePath(home, repoTop string) (string, error) {
 		return "", errs.Wrap(errs.Internal, "wire: create the cache folder", err)
 	}
 	return filepath.Join(dir, hex.EncodeToString(sum[:])+cacheExt), nil
+}
+
+// markerBackend is a backend that knows its store marker (folder and git
+// backends).
+type markerBackend interface{ Marker() rowfs.Marker }
+
+// keyNamespace is an attached store's natural-id namespace: its marker's
+// sto_ id, plus "/<folder>" for a `<store>/<folder>` target ("" when the
+// backend has no marker id: such a store keeps v0.1.17's ids).
+func keyNamespace(a engine.Attached) string {
+	mb, ok := a.Backend.(markerBackend)
+	if !ok || mb.Marker().ID.IsZero() {
+		return ""
+	}
+	ns := mb.Marker().ID.String()
+	if _, folder, has := strings.Cut(string(a.Name), "/"); has {
+		ns += "/" + folder
+	}
+	return ns
 }

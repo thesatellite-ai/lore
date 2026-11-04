@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/ops/internal/tagref"
+
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -198,12 +200,6 @@ func Warnings(w engine.Written) []Warning {
 	return out
 }
 
-// tagID is the id of the tag named name in project (engine.NaturalID of
-// the tags table's natural key, as ops/memory resolves it).
-func tagID(project, name string) (ids.AnyID, error) {
-	return engine.NaturalID(ids.PrefixTag, project, name)
-}
-
 // TagRefs resolves tag names of project to their ids; each must exist (a
 // typo never mints a tag).
 func TagRefs(ctx context.Context, env Env, n Noun, project string, names []string) ([]ids.AnyID, error) {
@@ -213,18 +209,15 @@ func TagRefs(ctx context.Context, env Env, n Noun, project string, names []strin
 		if nm == "" {
 			return nil, errs.New(errs.InvalidInput, n.Name+": an empty --tag")
 		}
-		id, err := tagID(project, nm)
+		found, err := tagref.Find(ctx, env, project, nm)
 		if err != nil {
 			return nil, err
 		}
-		_, r, err := env.Get(ctx, engine.Ref{Table: schema.TableTags, ID: id})
-		if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+		if len(found) == 0 {
 			return nil, errs.New(errs.NotFound, n.Name+": tag "+Quote(nm)+" not found in this project").
 				WithHint("create it with `lore tag add --name=" + nm + "`")
 		}
-		if err != nil {
-			return nil, err
-		}
+		id := found[0]
 		if !slices.Contains(out, id) {
 			out = append(out, id)
 		}
@@ -261,21 +254,26 @@ func TagsOf(r row.Row) []string {
 	return out
 }
 
-// HasTags is a List keep func: the row carries every named tag.
-func HasTags(names []string) func(row.Row) bool {
+// HasTags is a List keep func: the row carries every named tag (any tag
+// of that name in the row's project, in any attached store; nil when no
+// names are given).
+func HasTags(ctx context.Context, env Env, names []string) (func(row.Row) bool, error) {
 	if len(names) == 0 {
-		return nil
+		return nil, nil
+	}
+	idx, err := tagref.Load(ctx, env)
+	if err != nil {
+		return nil, err
 	}
 	return func(r row.Row) bool {
 		have := TagsOf(r)
 		for _, nm := range names {
-			id, err := tagID(Field(r, FieldProject), strings.TrimSpace(nm))
-			if err != nil || !slices.Contains(have, id.String()) {
+			if !idx.Has(have, Field(r, FieldProject), strings.TrimSpace(nm)) {
 				return false
 			}
 		}
 		return true
-	}
+	}, nil
 }
 
 // retagPatch is r's new tag_ids: its tags plus add, minus drop.
@@ -287,11 +285,11 @@ func retagPatch(ctx context.Context, env Env, n Noun, r row.Row, add, drop []str
 	}
 	dropIDs := make([]ids.AnyID, 0, len(drop))
 	for _, nm := range drop {
-		t, terr := tagID(project, strings.TrimSpace(nm))
+		t, terr := tagref.Droppable(ctx, env, project, strings.TrimSpace(nm))
 		if terr != nil {
 			return nil, terr
 		}
-		dropIDs = append(dropIDs, t)
+		dropIDs = append(dropIDs, t...)
 	}
 	var out []ids.AnyID
 	for _, s := range TagsOf(r) {
