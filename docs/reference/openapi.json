@@ -7841,7 +7841,7 @@
                   },
                   "title": {
                     "type": "string",
-                    "description": "the mission title"
+                    "description": "the mission title (several words are joined)"
                   },
                   "to": {
                     "type": "string",
@@ -15422,7 +15422,7 @@
                   },
                   "message": {
                     "type": "string",
-                    "description": "the reminder text"
+                    "description": "the reminder text (several words are joined)"
                   },
                   "on_id": {
                     "type": "string",
@@ -23983,7 +23983,7 @@
                   },
                   "title": {
                     "type": "string",
-                    "description": "the task title"
+                    "description": "the task title (several words are joined)"
                   },
                   "to": {
                     "type": "string",

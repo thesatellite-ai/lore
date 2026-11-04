@@ -20,7 +20,7 @@ const (
 type AddIn struct {
 	// Title is v0.1.17's positional <title> (quote a title of several
 	// words: an op argument is one value).
-	Title      string `json:"title" arg:"0" desc:"the task title"`
+	Title      string `json:"title" arg:"0" rest:"true" desc:"the task title (several words are joined)"`
 	Body       string `json:"body,omitempty" flag:"body" desc:"longer description" ui:"widget=markdown"`
 	Priority   string `json:"priority,omitempty" flag:"priority" desc:"low | medium | high | urgent (default medium)"`
 	Commitment string `json:"commitment,omitempty" flag:"commitment" desc:"accepted | proposed | someday (default accepted)"`

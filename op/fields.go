@@ -43,7 +43,7 @@ type FieldInfo struct {
 	Type FieldType
 	// Arg is the positional CLI argument index, or NoArg.
 	Arg int
-	// Rest marks the last positional text argument that takes every
+	// Rest marks the last positional string argument that takes every
 	// remaining argument joined by single spaces (`rest:"true"`), as
 	// v0.1.17 joined `lore reminder add --due X hello world`.
 	Rest bool
@@ -186,8 +186,8 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		f.Arg = n
 	}
 	if r, ok := sf.Tag.Lookup(tagRest); ok {
-		if r != "true" || f.Arg == NoArg || f.Type != TypeText {
-			panic(tagError{where + `: rest:"true" goes on a positional text argument`})
+		if r != "true" || f.Arg == NoArg || f.Type != TypeString {
+			panic(tagError{where + `: rest:"true" goes on a positional string argument`})
 		}
 		f.Rest = true
 	}

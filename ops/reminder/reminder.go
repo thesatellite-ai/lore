@@ -90,7 +90,7 @@ func bumpRecurrence(from time.Time, pattern string) (time.Time, bool) {
 
 // AddIn is the input of reminder.add.
 type AddIn struct {
-	Message    string `json:"message" arg:"0" desc:"the reminder text"`
+	Message    string `json:"message" arg:"0" rest:"true" desc:"the reminder text (several words are joined)"`
 	Due        string `json:"due" flag:"due" desc:"due date YYYY-MM-DD or RFC3339 (required)"`
 	Recurrence string `json:"recurrence,omitempty" flag:"recurrence" desc:"recurrence: 7d | 30d | 1m | 3m | 6m | 1y"`
 	OnTable    string `json:"on_table,omitempty" flag:"on-table" desc:"optional target entity table"`

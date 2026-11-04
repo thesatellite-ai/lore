@@ -20,7 +20,7 @@ const (
 
 // AddIn is the input of mission.add.
 type AddIn struct {
-	Title     string `json:"title" arg:"0" desc:"the mission title"`
+	Title     string `json:"title" arg:"0" rest:"true" desc:"the mission title (several words are joined)"`
 	Body      string `json:"body,omitempty" flag:"body" desc:"longer description" ui:"widget=markdown"`
 	Target    string `json:"target,omitempty" flag:"target" desc:"target completion date (YYYY-MM-DD)"`
 	CreatedBy string `json:"created_by,omitempty" flag:"created-by" desc:"actor_id (act_*); default: the row's created_by is the current identity"`
