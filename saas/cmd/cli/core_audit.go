@@ -44,7 +44,17 @@ var _ engine.AuditSink = (*coreAuditSink)(nil)
 
 // Record implements engine.AuditSink. The entry carries names and ids only
 // (engine.Event never holds a field value), so no secret reaches the log.
+//
+// Only the repo store's own writes are appended: lore.db sits inside the
+// checkout and holds ONLY the repo's rows (CONFIG_GUIDE, F20/E11). A write
+// to an attached store (a company store, the personal "me" store) names an
+// id that must never sit in a client folder, so it is not chained here;
+// the store's row file and its cache under ~/.lore/cache/stores/ are its
+// record.
 func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
+	if ev.Store != store.SourceRepo {
+		return nil
+	}
 	s.once.Do(func() { s.db, s.err = openCoreAuditDB(ctx) })
 	if s.err != nil {
 		return s.err
