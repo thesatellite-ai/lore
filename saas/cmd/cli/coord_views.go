@@ -21,13 +21,11 @@ import (
 	entMission "dbent/gen/ent/mission"
 	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/queue"
 	"saas/pkg/aicoder/rowroute"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
-	"saas/pkg/aicoder/textnorm"
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
@@ -101,83 +99,6 @@ Example:
 // handoffGroupName is the generated `lore handoff` group `add` replaces
 // its generated add in (spec form: `handoff add --for @x [--task id]`).
 const handoffGroupName = "handoff"
-
-func newHandoffForCommand() *cobra.Command {
-	var forActor, task, bodyFlag, legacyTo string
-	add := &cobra.Command{
-		Use:   "add --for <@handle> [--task <id>] <text>",
-		Short: "Leave a handoff for someone (shows in their inbox)",
-		Long: `Add leaves a handoff for a person or agent on the roster; it shows in their inbox,
-grouped under the task's mission.
-
-Example:
-  lore handoff add --for @agent-frontend --task tsk_31 "form is half done; tests in invite.test.tsx"`,
-		Args: cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			if forActor == "" {
-				forActor = legacyTo
-			}
-			if forActor == "" {
-				return errcodes.New(errcodes.InvalidInput, "--for @handle is required")
-			}
-			text := strings.Join(args, " ")
-			if text == "" {
-				text = bodyFlag
-			}
-			body, err := textnorm.Normalize(text)
-			if err != nil {
-				return errcodes.New(errcodes.EmptyBody, err.Error())
-			}
-			if err := refuseSecrets(body); err != nil {
-				return err
-			}
-			to := forActor
-			if ids.Validate(forActor, ids.PrefixActor) != nil {
-				if to, err = resolveHandleActor(ctx, forActor); err != nil {
-					return err
-				}
-			}
-			var f commonFlags
-			rctx, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
-			if err != nil {
-				return err
-			}
-			from, err := resolveCurrentActorID(ctx, client)
-			if err != nil {
-				return err
-			}
-			create := client.Handoff.Create().SetProjectID(projectID).SetFromActorID(from).SetToActorID(to).
-				SetBody(body).SetStatusStr(handoffOpen)
-			if task != "" {
-				create.SetTaskID(task)
-				if t, err := client.Task.Get(ctx, task); err == nil && t.MissionID != nil {
-					create.SetMissionID(*t.MissionID)
-				}
-			}
-			h, err := create.Save(ctx)
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "create handoff").WithCause(err)
-			}
-			fmt.Printf("%s handoff %s for %s\n", style.Success("✓"), h.ID, forActor)
-			return nil
-		},
-	}
-	add.Flags().StringVar(&forActor, flagFor, "", "who the handoff is for (@handle)")
-	add.Flags().StringVar(&task, flagTask, "", "the task it is about")
-	add.Flags().StringVar(&bodyFlag, constants.FlagBody, "", "the handoff text (instead of the positional text)")
-	// --to <actor> is the generated command's flag, kept so existing
-	// scripts and docs work; --to elsewhere names a project, so new usage
-	// is --for.
-	add.Flags().StringVar(&legacyTo, legacyHandoffTo, "", "deprecated alias of --for")
-	_ = add.Flags().MarkHidden(legacyHandoffTo)
-	return add
-}
 
 // ---------------------------------------------------------------- shared view
 
