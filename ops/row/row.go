@@ -65,7 +65,7 @@ type MoveIn struct {
 	ID           string `json:"id" arg:"0" desc:"any row id"`
 	To           string `json:"to" flag:"to" desc:"the target store: repo | me | <store>[/<folder>]"`
 	DropInternal bool   `json:"drop_internal,omitempty" flag:"drop-internal" desc:"into a client repo: remove the row's internal metadata values instead of refusing (MQ11, BATCH 7)"`
-	WithTime     string `json:"with_time,omitempty" flag:"with-time" desc:"totals | none (default none): per-worker time totals for a task moved into a client repo (TQ3; totals not built yet)"`
+	WithTime     string `json:"with_time,omitempty" flag:"with-time" desc:"totals | none: per-worker time totals for a task moved into a client repo (TQ3; default: the time.client_share policy, none)"`
 }
 
 // Actor is an actor as show names it.
@@ -177,12 +177,18 @@ type MoveOut struct {
 	Table    string   `json:"table"`
 	To       string   `json:"to"`
 	Warnings []string `json:"warnings,omitempty"`
+	// Notes are the client-move lines of TQ3 ("kept back: time (12
+	// entries)", "time: totals only (…)"): expected, not warnings.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text is the human form of a move.
 func (o MoveOut) Text() string {
 	var b strings.Builder
 	b.WriteString("✓ " + o.ID + " moved to store " + o.To + " (same id; the old copy is tombstoned)\n")
+	for _, n := range o.Notes {
+		b.WriteString("  " + n + "\n")
+	}
 	for _, w := range o.Warnings {
 		b.WriteString("  warning: " + w + "\n")
 	}
@@ -515,7 +521,12 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 	}
 	out := MoveOut{ID: id.String(), Table: string(w.Row.Table), To: to}
 	for _, wn := range w.Warnings {
-		out.Warnings = append(out.Warnings, wn.Message)
+		switch wn.Code {
+		case engine.WarnTimeKeptBack, engine.WarnInternalKeptBack, engine.WarnTimeTotals:
+			out.Notes = append(out.Notes, wn.Message) // TQ3 lines (design 8)
+		default:
+			out.Warnings = append(out.Warnings, wn.Message)
+		}
 	}
 	return out, nil
 }

@@ -61,8 +61,8 @@ func TestMoveInternalMetaIntoClient(t *testing.T) {
 	if _, err = w.eng.Move(ctx, Ref{ID: id}, store.SourceRepo); !errs.Has(err, errs.MetaInternal) {
 		t.Fatalf("plain move: want E_META_INTERNAL, got %v", err)
 	}
-	if _, err = w.eng.MoveWith(ctx, Ref{ID: id}, store.SourceRepo, MoveOptions{WithTime: TimeTotals}); !errs.Has(err, errs.NotImplemented) {
-		t.Fatalf("--with-time totals: want E_NOT_IMPLEMENTED, got %v", err)
+	if _, err = w.eng.MoveWith(ctx, Ref{ID: id}, store.SourceRepo, MoveOptions{WithTime: "full"}); !errs.Has(err, errs.InvalidInput) {
+		t.Fatalf("--with-time full: want E_INVALID_INPUT, got %v", err)
 	}
 	got, err := w.eng.MoveWith(ctx, Ref{ID: id}, store.SourceRepo, MoveOptions{DropInternal: true})
 	if err != nil {

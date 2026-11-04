@@ -2,18 +2,22 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/logic/timecalc"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -73,9 +77,9 @@ type MoveOptions struct {
 	// move into a client repo (MQ11, BATCH 7); without it such a move is
 	// refused with E_META_INTERNAL. The dropped keys come back as warnings.
 	DropInternal bool
-	// WithTime is the hook for --with-time (TQ3): "" and TimeNone carry no
-	// time; TimeTotals is refused until time reporting (batch B3) builds the
-	// per-worker totals and the time.client_share policy check.
+	// WithTime is --with-time (TQ3): "" follows the target's
+	// time.client_share policy (default none), TimeNone carries no time for
+	// this move, TimeTotals writes the time_totals projection.
 	WithTime TimeShare
 }
 
@@ -89,12 +93,7 @@ const WarnMetaDropped WarnCode = "W_META_DROPPED"
 //	─► write at to (+ moves entry, or the client _o) ─► tombstone at src
 func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt MoveOptions) (Written, error) {
 	switch opt.WithTime {
-	case "", TimeNone:
-	case TimeTotals:
-		// TQ3: totals need time.client_share=totals and the time reports
-		// (batch B3); never pretend to carry them.
-		return Written{}, errs.New(errs.NotImplemented, "engine: --with-time totals is not built yet; nothing written").
-			WithHint("move without --with-time (the client repo gets no time data, TQ3)")
+	case "", TimeNone, TimeTotals:
 	default:
 		return Written{}, errs.New(errs.InvalidInput, "engine: --with-time takes totals or none, not "+strconv.Quote(string(opt.WithTime)))
 	}
@@ -152,6 +151,13 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 			if cur.Meta, dropped, err = e.internalMeta(ctx, cur, opt.DropInternal); err != nil {
 				return Written{}, err
 			}
+			// TQ3: internal fields (time_entries, time_open, claim state)
+			// never reach a client; time may travel as totals only.
+			var kept []Warning
+			if typed, kept, err = e.clientTime(ctx, def, to, typed, opt.WithTime); err != nil {
+				return Written{}, err
+			}
+			dropped = append(dropped, kept...)
 		}
 		names := slices.Sorted(maps.Keys(typed))
 		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {
@@ -413,4 +419,197 @@ func (e *Engine) placeOf(name store.Source) string {
 		return p
 	}
 	return string(name)
+}
+
+// Time fields of a task row the client projection reads and writes
+// (schema tasks; TIME_TRACKING_DESIGN 8).
+const (
+	fieldTimeEntries = "time_entries"
+	fieldTimeOpen    = "time_open"
+	fieldTimeTotals  = "time_totals"
+	fieldDisplayName = "display_name"
+	fieldActorKind   = "kind"
+	// unknownWorker labels a worker whose actor row is not readable: the
+	// actor id itself must not reach the client.
+	unknownWorker = "unknown"
+)
+
+// Warnings of a move into a client repo (TQ3).
+const (
+	// WarnTimeKeptBack: the task's time entries stayed behind.
+	WarnTimeKeptBack WarnCode = "W_TIME_KEPT_BACK"
+	// WarnInternalKeptBack: other internal fields stayed behind.
+	WarnInternalKeptBack WarnCode = "W_INTERNAL_KEPT_BACK"
+	// WarnTimeTotals: the move carried totals only.
+	WarnTimeTotals WarnCode = "W_TIME_TOTALS"
+)
+
+// TimeTotalsDoc is the time_totals object (design 8 point 4): per worker
+// label and kind (display name only, the client projection), seconds, and
+// the date range; no spans, no sessions, no notes.
+type TimeTotalsDoc struct {
+	From          string        `json:"from,omitempty"`
+	To            string        `json:"to,omitempty"`
+	Workers       []TotalWorker `json:"workers"`
+	EffortSeconds int64         `json:"effort_seconds"`
+}
+
+// TotalWorker is one worker line of TimeTotalsDoc.
+type TotalWorker struct {
+	Label   string `json:"label"`
+	Kind    string `json:"kind"`
+	Seconds int64  `json:"seconds"`
+}
+
+// clientTime strips def's internal fields from a row moving into the
+// client repo to (FieldDef.Internal: never written into a client repo) and,
+// when the share is totals, writes time_totals (TQ3):
+//
+//	share = --with-time, else to's time.client_share (default none)
+//	internal fields → dropped, one warning each ("kept back: time (12 entries)")
+//	share totals and any time → time_totals from timecalc per actor
+func (e *Engine) clientTime(ctx context.Context, def schema.TableDef, to store.Source, fields map[string]value.Value, opt TimeShare) (map[string]value.Value, []Warning, error) {
+	share := opt
+	fromPolicy := false
+	if share == "" {
+		pol, err := e.Policy(to)
+		if err != nil {
+			return nil, nil, err
+		}
+		share = TimeNone
+		if ef, set := pol.Get(policy.KeyTimeClientShare); set && ef.Value != nil && ef.Value.String() == string(TimeTotals) {
+			share, fromPolicy = TimeTotals, true
+		}
+	}
+	entries, open := decodeTime(fields)
+	out := maps.Clone(fields)
+	var warns []Warning
+	var other []string
+	for _, f := range def.Fields {
+		if !f.Internal {
+			continue
+		}
+		if _, ok := out[f.Name]; !ok {
+			continue
+		}
+		delete(out, f.Name)
+		if f.Name != fieldTimeEntries && f.Name != fieldTimeOpen {
+			other = append(other, f.Name)
+		}
+	}
+	// a stale time_totals of an earlier move never survives a new one
+	delete(out, fieldTimeTotals)
+	if n := len(entries) + len(open); n > 0 {
+		warns = append(warns, Warning{Code: WarnTimeKeptBack, Field: fieldTimeEntries, Message: "kept back: time (" + strconv.Itoa(n) + " entries)"})
+	}
+	if len(other) > 0 {
+		warns = append(warns, Warning{Code: WarnInternalKeptBack, Message: "kept back: internal fields (" + strings.Join(other, ", ") + ")"})
+	}
+	if share != TimeTotals || len(entries)+len(open) == 0 {
+		return out, warns, nil
+	}
+	tt := e.timeTotals(ctx, entries, open)
+	raw, err := json.Marshal(tt)
+	if err != nil {
+		return nil, nil, errs.Wrap(errs.Internal, "engine: build time_totals", err)
+	}
+	j, err := value.JSONOf(raw)
+	if err != nil {
+		return nil, nil, errs.Wrap(errs.Internal, "engine: build time_totals", err)
+	}
+	out[fieldTimeTotals] = j
+	parts := make([]string, 0, len(tt.Workers))
+	for _, w := range tt.Workers {
+		parts = append(parts, w.Label+" "+timeentry.FormatSeconds(w.Seconds))
+	}
+	msg := "time: totals only (" + strings.Join(parts, ", ") + "; " + tt.From + " to " + tt.To + ")"
+	if fromPolicy {
+		msg = "time: totals only (policy time.client_share = totals)"
+	}
+	return out, append(warns, Warning{Code: WarnTimeTotals, Field: fieldTimeTotals, Message: msg}), nil
+}
+
+// decodeTime reads the live time entries and open spans of a row's fields
+// (a field that does not decode counts as none: lint reports it).
+func decodeTime(fields map[string]value.Value) ([]timeentry.Entry, []timeentry.Open) {
+	var entries []timeentry.Entry
+	if v := fields[fieldTimeEntries]; v != nil {
+		if raw, err := v.MarshalJSON(); err == nil {
+			if list, derr := timeentry.Decode(raw); derr == nil {
+				for _, en := range list {
+					if !en.Deleted() {
+						entries = append(entries, en)
+					}
+				}
+			}
+		}
+	}
+	var open []timeentry.Open
+	if v := fields[fieldTimeOpen]; v != nil && v.Kind() != value.KindNull {
+		if raw, err := v.MarshalJSON(); err == nil {
+			open, _ = timeentry.DecodeOpen(raw)
+		}
+	}
+	return entries, open
+}
+
+// timeTotals computes the per-actor totals (overlap of one actor counted
+// once, timecalc 5.1; sessions folded, the client sees no sessions). Open
+// spans count up to now.
+func (e *Engine) timeTotals(ctx context.Context, entries []timeentry.Entry, open []timeentry.Open) TimeTotalsDoc {
+	now := e.wall().UTC()
+	var spans []timecalc.Span
+	var tt TimeTotalsDoc
+	day := func(d string) {
+		if d == "" {
+			return
+		}
+		if tt.From == "" || d < tt.From {
+			tt.From = d
+		}
+		if d > tt.To {
+			tt.To = d
+		}
+	}
+	for _, en := range entries {
+		a := en.ActorID.String()
+		spans = append(spans, timecalc.Span{Worker: timecalc.Worker{Actor: a}, Owner: a, Start: en.StartTime(), End: en.EndTime(), Seconds: en.Seconds, Manual: en.Source == timeentry.SourceManual})
+		day(en.Day)
+	}
+	for _, o := range open {
+		a := o.ActorID.String()
+		spans = append(spans, timecalc.Span{Worker: timecalc.Worker{Actor: a}, Owner: a, Start: o.StartTime(), End: now, Open: true})
+		day(o.StartTime().Format(timeentry.DayLayout))
+		day(now.Format(timeentry.DayLayout))
+	}
+	res := timecalc.Compute(spans)
+	tt.EffortSeconds = res.Effort
+	tt.Workers = make([]TotalWorker, 0, len(res.Workers))
+	for _, w := range res.Workers {
+		label, kind := e.workerOf(ctx, w.Worker.Actor)
+		tt.Workers = append(tt.Workers, TotalWorker{Label: label, Kind: kind, Seconds: w.Total()})
+	}
+	slices.SortStableFunc(tt.Workers, func(a, b TotalWorker) int { return strings.Compare(a.Label, b.Label) })
+	return tt
+}
+
+// workerOf is an actor's display name and kind for the client projection
+// (unknownWorker / human when the actor row cannot be read).
+func (e *Engine) workerOf(ctx context.Context, actor string) (string, string) {
+	id, err := ids.ParseAny(actor)
+	if err != nil {
+		return unknownWorker, schema.ActorKindHuman
+	}
+	_, r, err := e.Get(ctx, Ref{Table: schema.TableActors, ID: id})
+	if err != nil || r.Deleted {
+		return unknownWorker, schema.ActorKindHuman
+	}
+	label, kind := unknownWorker, schema.ActorKindHuman
+	if v := r.Fields[fieldDisplayName]; v != nil && v.String() != "" {
+		label = v.String()
+	}
+	if v := r.Fields[fieldActorKind]; v != nil && v.String() != "" {
+		kind = v.String()
+	}
+	return label, kind
 }

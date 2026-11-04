@@ -194,6 +194,8 @@ type ops struct {
 	deco func(*Brief, row.Row)
 	// meta is list's metadata filter (METADATA 3.7), set per call.
 	meta work.MetaFlags
+	// withDeleted is list's --include-deleted (DQ10), set per call.
+	withDeleted bool
 }
 
 // notYet refuses a v0.1.17 team flag on a surface that supplies no
@@ -754,6 +756,13 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
+	// TIME 10: time_spent / elapsed sort keys and the time filters.
+	tq, fieldSort, err := o.timeQueryOf(ctx, in, fieldSort)
+	if err != nil {
+		return ListOut{}, err
+	}
+	timeOf := o.timeIndex(ctx, tq)
+	o.withDeleted = in.IncludeDeleted
 	// XQ10: --sort key[:asc|:desc]; ties keep the default order (stable).
 	specs, err := listSort(fieldSort, keys)
 	if err != nil {
@@ -773,6 +782,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if len(specs) > 0 {
 		order = func(a, b row.Row) int { return sortspec.Compare(specs, sortValue(keys, a), sortValue(keys, b)) }
 	}
+	if len(tq.sort) > 0 {
+		order = tq.timeOrder(timeOf, order)
+	}
 	if urg != 0 {
 		if order, err = o.urgencyOrder(ctx, f, now, urg, order); err != nil {
 			return ListOut{}, err
@@ -788,6 +800,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		b.Estimate, b.EstimateUnit, b.EstimateSubtree, b.Unestimated = e.Estimate, e.Unit, e.Subtree, e.Unestimated
 		b.Lead = work.Field(r, fieldAssigned)
 		b.SLA = sla(r)
+		if tq.active() {
+			tq.timeColumns(b, timeOf(r))
+		}
 	}
 	return o.viewWith(ctx, in.Store, project, team.state, order, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
@@ -801,7 +816,8 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			in.Assignee != "" && !assignedTo(r, in.Assignee),
 			in.Lead != "" && !leadIs(r, in.Lead),
 			in.Series != "" && !inSeries(r, in.Series),
-			team.keep != nil && !team.keep(r):
+			team.keep != nil && !team.keep(r),
+			tq.active() && !tq.keepTime(timeOf(r)):
 			return false
 		case in.All:
 			return true
@@ -827,6 +843,18 @@ func (o ops) viewWith(ctx context.Context, only, project string, state func(row.
 	if err != nil {
 		return ListOut{}, err
 	}
+	// DQ10: --include-deleted adds the tasks in the trash.
+	trashed := map[string]bool{}
+	if o.withDeleted {
+		del, derr := o.trashedTasks(ctx, only)
+		if derr != nil {
+			return ListOut{}, derr
+		}
+		for _, d := range del {
+			trashed[d.Row.ID.String()] = true
+		}
+		all = append(all, del...)
+	}
 	if order != nil {
 		slices.SortStableFunc(all, func(a, b work.Sourced) int { return order(a.Row, b.Row) })
 	}
@@ -846,6 +874,9 @@ func (o ops) viewWith(ctx context.Context, only, project string, state func(row.
 		}
 		if state != nil {
 			b = withState(b, state(s.Row))
+		}
+		if trashed[s.Row.ID.String()] {
+			b.Trashed, b.Line = true, b.Line+trashMark
 		}
 		out.Data = append(out.Data, b)
 	}

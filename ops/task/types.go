@@ -137,6 +137,10 @@ type Brief struct {
 	Lead string `json:"lead,omitempty"`
 	// SLA is ok | at_risk | breached when the priority has an SLA (18.4).
 	SLA string `json:"sla,omitempty"`
+	// Time is the task's time when a time flag is given (design 10).
+	Time TimeBrief `json:"time,omitzero"`
+	// Trashed marks a task listed by --include-deleted (DQ10).
+	Trashed bool `json:"trashed,omitempty"`
 	// Store is set for a task of a store other than the repo's own.
 	Store store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
@@ -253,7 +257,7 @@ type ListIn struct {
 	// with every flag above, and --all/--include-* still pick the base set.
 	Where []string `json:"where,omitempty" flag:"where" desc:"filter on a task field: status:todo,in_progress priority>=high due_at<2026-12-01 (= != ~= > >= < <= ? !?; repeatable, all must match)"`
 	// Sort is the one sort grammar (XQ10, logic/sortspec).
-	Sort []string `json:"sort,omitempty" flag:"sort" desc:"sort by a task field: <key>, <key>:asc or <key>:desc (repeatable; ties keep the default order)"`
+	Sort []string `json:"sort,omitempty" flag:"sort" desc:"sort by a task field, urgency, time_spent or elapsed: <key>, <key>:asc or <key>:desc (repeatable; ties keep the default order)"`
 	// Tree filters (TASK 6.3).
 	Parent string `json:"parent,omitempty" flag:"parent" desc:"only the direct sub-tasks of this task (tsk_…)"`
 	Under  string `json:"under,omitempty" flag:"under" desc:"only the whole subtree under this task (tsk_…)"`
@@ -270,6 +274,14 @@ type ListIn struct {
 	// View applies a saved view (TASK 16.2): its where ANDs with --where,
 	// its sort is used unless --sort is given.
 	View string `json:"view,omitempty" flag:"view" desc:"apply a saved task view (name or tvw_ id; lore task view list)"`
+	// Time reporting (TIME_TRACKING_DESIGN 10, DQ10); time_list.go.
+	WorkedBy       string   `json:"worked_by,omitempty" flag:"worked-by" desc:"only tasks with time by this actor (@me, act_ id, key or name); add +agents for their agents too"`
+	WorkedSince    string   `json:"worked_since,omitempty" flag:"worked-since" desc:"only tasks with time on or after this day (YYYY-MM-DD or a date phrase); TIME shows that range"`
+	WorkedUntil    string   `json:"worked_until,omitempty" flag:"worked-until" desc:"only tasks with time on or before this day; TIME shows that range"`
+	MinTime        string   `json:"min_time,omitempty" flag:"min-time" desc:"only tasks with at least this effort (e.g. 2h)"`
+	MaxTime        string   `json:"max_time,omitempty" flag:"max-time" desc:"only tasks with at most this effort (e.g. 30m)"`
+	Columns        []string `json:"columns,omitempty" flag:"columns" desc:"extra columns: +time, +elapsed (comma-separated or repeated)"`
+	IncludeDeleted bool     `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also list tasks in the trash (their time counts too)"`
 }
 
 // ViewIn is the input of the triage, someday and deferred views.

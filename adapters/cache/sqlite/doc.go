@@ -87,5 +87,12 @@
 // with OpenLensCombined, whose `source` column is each row's _source
 // (CFG3 fallback, O10).
 //
+// # Time spent
+//
+// The lens also builds TEMP TABLE task_time_spans and TEMP VIEW time_spent
+// (timespans.go, TIME_TRACKING_DESIGN 7.4 and 9) from the tasks' time
+// fields at open: tasks_all → spans (open ones end now) → counted seconds
+// per worker and per owner → view joined to tasks, projects, actors.
+//
 // Layer L3: imports model, schema and store, never the engine.
 package sqlite

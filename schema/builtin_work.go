@@ -205,6 +205,9 @@ func workDefs() []TableDef {
 			// (TIME_TRACKING_DESIGN 4.1, D2); same union-by-id merge, internal (TQ3).
 			JSON("time_open", Internal(), MergeBy(MergeListByID),
 				Describe("open status spans [{id, source, actor_id, start}] (TIME_TRACKING_DESIGN 4.1)")),
+			// time_totals: the opt-in client projection of a task's time (TQ3,
+			// lore move --with-time totals); not internal: it is what a client may see.
+			JSON("time_totals", Describe("time totals carried into a client repo: {from, to, workers: [{label, kind, seconds}], effort_seconds} (TIME_TRACKING_DESIGN 8)")),
 			Number("timebox_seconds"),
 			Text("gate", OneOf(TaskGates()...)),
 			Text("approved_by"),

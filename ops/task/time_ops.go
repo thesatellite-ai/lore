@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -44,6 +45,11 @@ const (
 	groupPerson = "person"
 	groupSource = "source"
 	groupDay    = "day"
+	// groupWeek keys by ISO week ("2026-W45"), groupSession by the lore
+	// session of an agent span ("(none)" for person and manual time).
+	groupWeek    = "week"
+	groupSession = "session"
+	noSession    = "(none)"
 )
 
 // noteMax is the longest --note (design 6.1, R12 text rules).
@@ -54,7 +60,7 @@ type TimeShowIn struct {
 	ID      string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	Entries bool   `json:"entries,omitempty" flag:"entries" desc:"list every entry"`
 	Deleted bool   `json:"deleted,omitempty" flag:"deleted" desc:"with --entries, list removed entries too"`
-	GroupBy string `json:"group_by,omitempty" flag:"group-by" desc:"worker (default) | person | source | day"`
+	GroupBy string `json:"group_by,omitempty" flag:"group-by" desc:"worker (default) | person | source | day | week | session"`
 	Since   string `json:"since,omitempty" flag:"since" desc:"only entries on or after this day (YYYY-MM-DD or a date phrase: today, mon, in 3d, …)"`
 	Until   string `json:"until,omitempty" flag:"until" desc:"only entries on or before this day (YYYY-MM-DD or a date phrase)"`
 	TZ      string `json:"tz,omitempty" flag:"tz" desc:"time zone for display (e.g. Europe/Prague; default local)"`
@@ -168,7 +174,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		return TimeOut{}, err
 	}
 	group := orDefault(in.GroupBy, groupWorker)
-	if err = work.OneOf(Noun, "group-by", group, []string{groupWorker, groupPerson, groupSource, groupDay}); err != nil {
+	if err = work.OneOf(Noun, "group-by", group, []string{groupWorker, groupPerson, groupSource, groupDay, groupWeek, groupSession}); err != nil {
 		return TimeOut{}, err
 	}
 	loc := time.Local
@@ -223,6 +229,13 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 			return string(source)
 		case groupDay:
 			return day
+		case groupWeek:
+			return isoWeek(day)
+		case groupSession:
+			if w.Session == "" {
+				return noSession
+			}
+			return w.Session
 		case groupPerson:
 			return ownerOf(w.Actor)
 		}
@@ -314,6 +327,17 @@ func foldPersons(ws []TimeWorker, incl map[string]int64, name func(string) strin
 		out = append(out, *by[k])
 	}
 	return out
+}
+
+// isoWeek is the ISO week of a day ("2026-W45"); the day itself when it
+// does not parse.
+func isoWeek(day string) string {
+	t, err := time.Parse(timeentry.DayLayout, day)
+	if err != nil {
+		return day
+	}
+	y, w := t.ISOWeek()
+	return strconv.Itoa(y) + "-W" + fmt.Sprintf("%02d", w)
 }
 
 // slicesSorted returns the sorted keys of m.
