@@ -20,12 +20,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"dbent/gen/ent"
 	"saas/pkg/aicoder/errcodes"
 
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -50,7 +55,7 @@ func checkSupersedes(ctx context.Context, db *ent.Client, kind supersedeKind, pr
 		return nil
 	}
 	old, err := loadSupersedeRow(ctx, db, kind, oldID)
-	if ent.IsNotFound(err) || (err == nil && old.projectID != projectID) {
+	if errors.Is(err, errSupersedeRowMissing) || (err == nil && old.projectID != projectID) {
 		return errcodes.New(errcodes.NotFound,
 			fmt.Sprintf("--supersedes %s: no %s with that id in this project", oldID, kind)).
 			WithHint(fmt.Sprintf("run `lore %s list` to see the ids", kind))
@@ -91,42 +96,48 @@ type supersedeRow struct {
 	supersededBy *string
 }
 
-// loadSupersedeRow reads the old row of kind; a missing row is ent's
-// not-found error, which the caller turns into E_NOT_FOUND.
-func loadSupersedeRow(ctx context.Context, db *ent.Client, kind supersedeKind, id string) (supersedeRow, error) {
-	switch kind {
-	case supersedeRule:
-		r, err := db.Rule.Get(ctx, id)
-		if err != nil {
-			return supersedeRow{}, err
-		}
-		return supersedeRow{projectID: derefStr(r.ProjectID), supersededBy: r.SupersededByID}, nil
-	case supersedeMemory:
-		m, err := db.Memory.Get(ctx, id)
-		if err != nil {
-			return supersedeRow{}, err
-		}
-		return supersedeRow{projectID: m.ProjectID, supersededBy: m.SupersededByID}, nil
-	case supersedeDecision:
-		d, err := db.Decision.Get(ctx, id)
-		if err != nil {
-			return supersedeRow{}, err
-		}
-		return supersedeRow{projectID: d.ProjectID, supersededBy: d.SupersededByID}, nil
-	case supersedeHotfix:
-		h, err := db.Hotfix.Get(ctx, id)
-		if err != nil {
-			return supersedeRow{}, err
-		}
-		return supersedeRow{projectID: h.ProjectID, supersededBy: h.SupersededByID}, nil
-	case supersedePattern:
-		p, err := db.Pattern.Get(ctx, id)
-		if err != nil {
-			return supersedeRow{}, err
-		}
-		return supersedeRow{projectID: p.ProjectID, supersededBy: p.SupersededByID}, nil
+// errSupersedeRowMissing is loadSupersedeRow's "no such live row" answer,
+// which checkSupersedes turns into E_NOT_FOUND.
+var errSupersedeRowMissing = errors.New("supersede: no such row")
+
+// Fields of a row with a replacement chain.
+const (
+	supersedeFieldProject = "project_id"
+	supersedeFieldNext    = "superseded_by_id"
+)
+
+// loadSupersedeRow reads the old row of kind through the core (every kind
+// with a replacement chain is core-owned, so lore.db is never asked); a
+// missing or deleted row is errSupersedeRowMissing. db is kept for the
+// callers' shape.
+func loadSupersedeRow(ctx context.Context, _ *ent.Client, kind supersedeKind, id string) (supersedeRow, error) {
+	t, ok := supersedeTables[kind]
+	if !ok {
+		return supersedeRow{}, fmt.Errorf("supersede: unknown kind %q", kind)
 	}
-	return supersedeRow{}, fmt.Errorf("supersede: unknown kind %q", kind)
+	if coreApp == nil {
+		return supersedeRow{}, errcodes.New(errcodes.Internal, "the core is not mounted")
+	}
+	aid, err := ids.ParseAny(id)
+	if err != nil {
+		return supersedeRow{}, errSupersedeRowMissing
+	}
+	_, r, err := coreApp.Get(ctx, engine.Ref{Table: t, ID: aid})
+	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+		return supersedeRow{}, errSupersedeRowMissing
+	}
+	if err != nil {
+		return supersedeRow{}, coreErr(err)
+	}
+	out := supersedeRow{}
+	if v, ok := r.Fields[supersedeFieldProject]; ok && v != nil {
+		out.projectID = v.String()
+	}
+	if v, ok := r.Fields[supersedeFieldNext]; ok && v != nil && v.Kind() != value.KindNull && v.String() != "" {
+		next := v.String()
+		out.supersededBy = &next
+	}
+	return out, nil
 }
 
 // supersedeTables maps each kind to its core table: every kind with a
