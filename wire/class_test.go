@@ -198,3 +198,18 @@ func projectIn(t *testing.T, a *App, n store.Source) string {
 	}
 	return rows[0].ID.String()
 }
+
+// TestActorKindOf: actors.kind is a closed set; an identity of kind auto
+// (machine id, session salt) or any unknown kind is written as human, as
+// v0.1.17 did, so `lore init` works with no USER and no git email.
+func TestActorKindOf(t *testing.T) {
+	for in, want := range map[string]string{
+		schema.ActorKindHuman: schema.ActorKindHuman, schema.ActorKindAgent: schema.ActorKindAgent,
+		schema.ActorKindSystem: schema.ActorKindSystem, identity.KindAuto: schema.ActorKindHuman,
+		"": schema.ActorKindHuman, "Agent": schema.ActorKindHuman, "robot": schema.ActorKindHuman,
+	} {
+		if got := actorKindOf(in); got != want {
+			t.Errorf("actorKindOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

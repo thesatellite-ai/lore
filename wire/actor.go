@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"slices"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
@@ -97,7 +98,7 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		return err
 	}
 	fields := map[string]value.Value{}
-	vals := map[string]string{actorFieldKind: st.who.Kind, actorFieldDisplay: st.who.DisplayName}
+	vals := map[string]string{actorFieldKind: actorKindOf(st.who.Kind), actorFieldDisplay: st.who.DisplayName}
 	if fullActorRow(st, target) {
 		vals[actorFieldKey], vals[actorFieldHandle] = st.who.StableKey, st.who.Handle
 	}
@@ -117,4 +118,15 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	}
 	st.actorDone[target] = true
 	return nil
+}
+
+// actorKindOf maps an identity kind to actors.kind, a closed set
+// (schema.ActorKinds) that refuses identity.KindAuto: a machine or
+// session-salt identity, and any unknown kind, is written as human, as
+// v0.1.17's actorKind (saas/cmd/cli/init.go) did.
+func actorKindOf(k string) string {
+	if slices.Contains(schema.ActorKinds(), k) {
+		return k
+	}
+	return schema.ActorKindHuman
 }
