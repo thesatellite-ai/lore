@@ -76,7 +76,7 @@ func warnIfSetupStale(ctx context.Context, db *sql.DB) {
 
 func newSetupCommand() *cobra.Command {
 	var f commonFlags
-	var schemaOnly, agentHooks, hooksRemove, hooksDry, hooksYes bool
+	var schemaOnly, agentHooks, hooksRemove, hooksDry, hooksYes, promptSearch bool
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Run one-time migrations after install/upgrade (FTS index + future migrations)",
@@ -92,14 +92,17 @@ need to run this manually unless upgrading.
 
 --agent-hooks installs (or with --remove takes out) the optional session-hook
 snippet of each tool set up here that has a confirmed hook, so lore records
-the model the tool reports (` + "`lore agent start --tool …`" + `). It asks first.`,
+the model the tool reports (` + "`lore agent start --tool …`" + `), plus the
+per-file context hook (` + "`lore context --hook <tool> --hook-stdin`" + ` on
+Read/Edit/Write, in the tool's local settings file); the per-prompt search
+hook only with context.hooks.prompt_search on or --prompt-search. It asks first.`,
 		Example: `  lore setup
   lore setup --agent-hooks --dry-run
   lore setup --agent-hooks --yes
   lore setup --agent-hooks --remove`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if agentHooks {
-				return runAgentHooksSetup(hooksRemove, hooksDry, hooksYes) // 6.4
+				return runAgentHooksSetup(cmd.Context(), hooksRemove, hooksDry, hooksYes, promptSearch) // 6.4, CONTEXT_BUDGET 6.9
 			}
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
@@ -130,6 +133,7 @@ the model the tool reports (` + "`lore agent start --tool …`" + `). It asks fi
 	cmd.Flags().BoolVar(&hooksRemove, flagHooksRm, false, "with --agent-hooks: take the snippets out again")
 	cmd.Flags().BoolVar(&hooksDry, flagHooksDry, false, "with --agent-hooks: only show the changes")
 	cmd.Flags().BoolVar(&hooksYes, flagHooksYes, false, "with --agent-hooks: write without asking")
+	cmd.Flags().BoolVar(&promptSearch, flagPromptSearch, false, "with --agent-hooks: also install the per-prompt search hook on this machine (CQ5)")
 	return cmd
 }
 

@@ -151,7 +151,7 @@ func loadTopicIndex(ctx context.Context) ([]topicLine, error) {
 			return nil, err
 		}
 		for _, r := range rows {
-			ids := renderList(r.Row, schema.FieldTagIDs)
+			ids := renderTagIDs(r.Row)
 			tagged := false
 			for _, id := range ids {
 				if n := names[id]; n != "" {

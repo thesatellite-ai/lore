@@ -14,6 +14,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -24,8 +25,10 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
 
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/value"
 )
 
 // Setup --agent-hooks flags.
@@ -34,6 +37,8 @@ const (
 	flagHooksRm    = "remove"
 	flagHooksDry   = "dry-run"
 	flagHooksYes   = "yes"
+	// flagPromptSearch installs the per-prompt hook on this machine (CQ5).
+	flagPromptSearch = "prompt-search"
 )
 
 // hookSettingsMode is the mode of a settings file lore creates.
@@ -50,13 +55,25 @@ type hookPlan struct {
 }
 
 // runAgentHooksSetup is the --agent-hooks mode of `lore setup`.
-func runAgentHooksSetup(remove, dryRun, yes bool) error {
+func runAgentHooksSetup(ctx context.Context, remove, dryRun, yes, promptSearch bool) error {
 	top, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return errcodes.New(errcodes.InvalidInput, "lore setup --agent-hooks runs inside a git work tree")
 	}
 	root := strings.TrimSpace(string(top))
-	plans, err := planAgentHooks(root, remove)
+	// CQ5: the per-prompt search hook only when the policy (or
+	// --prompt-search for this machine) turns it on.
+	if set, ok := policySet(ctx); ok {
+		if e, found := set.Get(policy.KeyContextPromptSearch); found {
+			if b, isBool := e.Value.(value.Bool); isBool && b.Bool() {
+				promptSearch = true
+			}
+		}
+	}
+	if remove {
+		promptSearch = true // --remove takes out every lore hook
+	}
+	plans, err := planAgentHooks(root, remove, promptSearch)
 	if err != nil {
 		return err
 	}
@@ -103,7 +120,7 @@ func runAgentHooksSetup(remove, dryRun, yes bool) error {
 }
 
 // planAgentHooks lists what --agent-hooks would do per built-in profile.
-func planAgentHooks(root string, remove bool) ([]hookPlan, error) {
+func planAgentHooks(root string, remove, promptSearch bool) ([]hookPlan, error) {
 	var out []hookPlan
 	for _, prof := range toolprofile.Builtins() {
 		h, ok := toolprofile.SessionHookFor(prof.Name)
@@ -114,29 +131,40 @@ func planAgentHooks(root string, remove bool) ([]hookPlan, error) {
 			out = append(out, hookPlan{tool: prof.Name, file: "no confirmed session hook", note: "nothing to install (model stays \"not exposed\")"})
 			continue
 		}
-		path := filepath.Join(root, filepath.FromSlash(h.ConfigFile))
-		if _, err := os.Stat(filepath.Dir(path)); err != nil {
-			out = append(out, hookPlan{tool: prof.Name, file: h.ConfigFile, note: "not set up here (" + filepath.ToSlash(filepath.Dir(h.ConfigFile)) + "/ missing)"})
-			continue
+		// CONTEXT_BUDGET 6.9: the session hook, then the tool's context hooks.
+		for _, hk := range append([]toolprofile.SessionHook{h}, toolprofile.ContextHooksFor(prof.Name, promptSearch)...) {
+			p, err := planOneHook(root, prof.Name, hk, remove)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, p)
 		}
-		has, err := hookInstalled(path, h)
-		if err != nil {
-			return nil, err
-		}
-		p := hookPlan{tool: prof.Name, file: h.ConfigFile, hook: h}
-		switch {
-		case remove && has:
-			p.note, p.change = "remove "+h.Event+" hook: "+h.Command(), true
-		case remove:
-			p.note = "no lore hook installed"
-		case has:
-			p.note = "already installed"
-		default:
-			p.note, p.change = "add "+h.Event+" hook: "+h.Command(), true
-		}
-		out = append(out, p)
 	}
 	return out, nil
+}
+
+// planOneHook plans one hook of one tool.
+func planOneHook(root, tool string, h toolprofile.SessionHook, remove bool) (hookPlan, error) {
+	path := filepath.Join(root, filepath.FromSlash(h.ConfigFile))
+	if _, err := os.Stat(filepath.Dir(path)); err != nil {
+		return hookPlan{tool: tool, file: h.ConfigFile, note: "not set up here (" + filepath.ToSlash(filepath.Dir(h.ConfigFile)) + "/ missing)"}, nil
+	}
+	has, err := hookInstalled(path, h)
+	if err != nil {
+		return hookPlan{}, err
+	}
+	p := hookPlan{tool: tool, file: h.ConfigFile, hook: h}
+	switch {
+	case remove && has:
+		p.note, p.change = "remove "+h.Event+" hook: "+h.Command(), true
+	case remove:
+		p.note = "no lore hook installed"
+	case has:
+		p.note = "already installed"
+	default:
+		p.note, p.change = "add "+h.Event+" hook: "+h.Command(), true
+	}
+	return p, nil
 }
 
 // settingsDoc is a tool settings file kept key by key, so every key lore
@@ -263,7 +291,12 @@ func writeHookFile(path string, h toolprofile.SessionHook, remove bool) error {
 		if merr != nil {
 			return errcodes.New(errcodes.Internal, "encode the hook").WithCause(merr)
 		}
-		groups = append(groups, hookGroup{"hooks": entries})
+		g := hookGroup{"hooks": entries}
+		if h.Matcher != "" {
+			m, _ := json.Marshal(h.Matcher)
+			g["matcher"] = m
+		}
+		groups = append(groups, g)
 	}
 	if len(groups) == 0 {
 		delete(hooks, h.Event)

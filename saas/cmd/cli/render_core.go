@@ -207,7 +207,7 @@ func loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]
 			TrustScore: renderTrust(r.Row), Body: renderField(r.Row, renderFieldBody),
 			Summary: renderField(r.Row, schema.FieldSummary), Activation: act,
 			Globs: renderField(r.Row, renderFieldGlobs), Updated: renderUpdated(r.Row),
-			TagIDs: renderList(r.Row, schema.FieldTagIDs),
+			TagIDs: renderTagIDs(r.Row),
 		})
 	}
 	return out, nil
@@ -221,9 +221,9 @@ func renderUpdated(r row.Row) time.Time {
 	return r.CreatedAt
 }
 
-// renderList is a list field's items as text (nil when absent).
-func renderList(r row.Row, name string) []string {
-	l, ok := r.Fields[name].(value.List)
+// renderTagIDs is a row's tag ids as text (nil when absent).
+func renderTagIDs(r row.Row) []string {
+	l, ok := r.Fields[schema.FieldTagIDs].(value.List)
 	if !ok {
 		return nil
 	}
@@ -256,7 +256,7 @@ func loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) 
 		out = append(out, pinnedHotfix{
 			ID: r.ID.String(), Severity: sev,
 			Title: renderField(r.Row, renderFieldTitle), Body: renderField(r.Row, renderFieldBody),
-			Summary: renderField(r.Row, schema.FieldSummary), TagIDs: renderList(r.Row, schema.FieldTagIDs),
+			Summary: renderField(r.Row, schema.FieldSummary), TagIDs: renderTagIDs(r.Row),
 		})
 	}
 	return out, nil

@@ -36,12 +36,23 @@ type SessionHook struct {
 	Event string
 	// Source documents where the input names were confirmed.
 	Source string
-	// Parse reads the tool's hook JSON from stdin.
+	// Parse reads the tool's hook JSON from stdin (session hooks only).
 	Parse func([]byte) (HookInput, error)
+	// Matcher limits the hook to some tool calls ("Read|Edit|Write"); ""
+	// for every call.
+	Matcher string
+	// Cmd overrides the command line (the context hooks); "" means
+	// HookCommand(Tool).
+	Cmd string
 }
 
 // Command is the snippet's command line (6.4).
-func (h SessionHook) Command() string { return HookCommand(h.Tool) }
+func (h SessionHook) Command() string {
+	if h.Cmd != "" {
+		return h.Cmd
+	}
+	return HookCommand(h.Tool)
+}
 
 // HookCommand is `lore agent start --tool <tool> --hook-stdin`.
 func HookCommand(tool string) string {
@@ -80,4 +91,34 @@ func SessionHookFor(tool string) (SessionHook, bool) {
 		}
 	}
 	return SessionHook{}, false
+}
+
+// ContextHooks are the context hooks (CONTEXT_BUDGET 6.9): `lore context --hook <tool>
+// --hook-stdin` on each file the agent reads or edits (always installed
+// with the hooks), and on each prompt only when promptSearch is on (CQ5,
+// context.hooks.prompt_search). They go in the tool's LOCAL settings file,
+// so a teammate without lore is not affected. Only tools whose hook output
+// field (additionalContext) is confirmed get a row; Codex needs trusted
+// hooks and Gemini CLI's output field is unverified, so neither has one yet.
+func ContextHooks(promptSearch bool) []SessionHook {
+	const src = "https://code.claude.com/docs/en/hooks"
+	cmd := "lore context --hook " + NameClaudeCode + " --hook-stdin"
+	out := []SessionHook{{Tool: NameClaudeCode, ConfigFile: ".claude/settings.local.json", Event: "PreToolUse",
+		Matcher: "Read|Edit|Write", Cmd: cmd, Source: src}}
+	if promptSearch {
+		out = append(out, SessionHook{Tool: NameClaudeCode, ConfigFile: ".claude/settings.local.json",
+			Event: "UserPromptSubmit", Cmd: cmd, Source: src})
+	}
+	return out
+}
+
+// ContextHooksFor returns tool's context hooks.
+func ContextHooksFor(tool string, promptSearch bool) []SessionHook {
+	var out []SessionHook
+	for _, h := range ContextHooks(promptSearch) {
+		if h.Tool == tool {
+			out = append(out, h)
+		}
+	}
+	return out
 }
