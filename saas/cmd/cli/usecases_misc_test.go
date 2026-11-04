@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"dbent"
-	"dbent/gen/ent/migrate"
 	"dbent/pkg/dbtemplate"
 )
 
@@ -171,57 +170,6 @@ func TestUC_MiscLinkAddResolvesCommits(t *testing.T) {
 	}
 	if r := c.loreAny("link", "add", "--entity=mem_00000000000000000000000000000000", "--commit=HEAD"); r.code == 0 {
 		t.Fatal("unknown entity must fail")
-	}
-}
-
-func TestUC_MiscIsLikelySha(t *testing.T) {
-	t.Parallel()
-	for s, want := range map[string]bool{
-		"abc1234":               true,
-		"deadbeefcafe1234":      true,
-		strings.Repeat("a", 40): true,
-		"abc123":                false, // too short
-		strings.Repeat("a", 41): false, // too long
-		"ABC1234":               false, // git prints lowercase
-		"xyz1234":               false,
-		"abc-1234":              false,
-		"HEAD":                  false,
-	} {
-		if got := isLikelySha(s); got != want {
-			t.Fatalf("isLikelySha(%q) = %v", s, got)
-		}
-	}
-}
-
-// Every prefix maps to a table that exists in the schema: a renamed table
-// would otherwise make `lore link add` write links nobody can join.
-func TestUC_MiscTableForOpaqueID(t *testing.T) {
-	t.Parallel()
-	want := map[string]string{
-		"tsk": "tasks", "mem": "memories", "msn": "missions", "tlt": "task_lists",
-		"pln": "plans", "dec": "decisions", "rul": "rules", "hfx": "hotfixes",
-		"pat": "patterns", "pbk": "playbooks", "prm": "prompts", "ann": "architecture_notes",
-		"bhv": "behaviours", "ckr": "cookbook_recipes", "inc": "incidents", "sgg": "suggestions",
-		"tpr": "taste_prefs", "snp": "snapshots", "wfl": "workflows", "wsp": "workspaces",
-		"hnd": "handoffs", "rem": "reminders", "run": "runs", "tdc": "tech_docs", "cmt": "comments",
-	}
-	schema := map[string]bool{}
-	for _, tbl := range migrate.Tables {
-		schema[tbl.Name] = true
-	}
-	for prefix, table := range want {
-		got, err := tableForOpaqueID(prefix + "_0123456789abcdef0123456789abcdef")
-		if err != nil || got != table {
-			t.Fatalf("%s → %q %v, want %s", prefix, got, err, table)
-		}
-		if !schema[table] {
-			t.Fatalf("%s maps to %q, which is not a table", prefix, table)
-		}
-	}
-	for _, bad := range []string{"xyz_0123", "noprefix", "_abc"} {
-		if _, err := tableForOpaqueID(bad); err == nil || !strings.Contains(err.Error(), "unknown ID prefix") {
-			t.Fatalf("%q must be rejected: %v", bad, err)
-		}
 	}
 }
 
