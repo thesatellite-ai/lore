@@ -187,7 +187,7 @@ tasks:
       # (pipefail so a build failure of the test binary is not swallowed by the pipe).
       - |
         set -o pipefail
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
           | go run ./saas/cmd/cli/internal/teamharness/matrix
 
   trial:github:

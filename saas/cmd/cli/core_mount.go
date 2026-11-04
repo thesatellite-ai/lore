@@ -85,6 +85,16 @@ import (
 // not be read, in which case mounting reported it.
 var coreApp *wire.App
 
+// coreRunner is the one op.Runner of this process: the CLI's generated
+// commands and `lore api`'s REST routes both run through it (spec 9.2: one
+// Run path for every surface), so the alias handling, the --to
+// <store>/<folder> attach, the Mode B refusal, the client-repo stores.yaml
+// confirm (CFG7) and the repo-write guards apply to REST exactly as to the
+// CLI. Its CLI-only state (compat flag refusals, --read-only, the running
+// command for the not-found explanation) is never set while `lore api`
+// serves, so a REST request sees only the shared path.
+var coreRunner *compatRunner
+
 // Defaults of the generated reference (`lore spec`), relative to the
 // directory the command runs in (the repo root when regenerating).
 const (
@@ -125,6 +135,7 @@ func mountCore(root *cobra.Command) {
 	}
 	coreApp = app
 	runner := &compatRunner{app: app}
+	coreRunner = runner
 	if err := cli.Mount(root, app.Registry(), runner,
 		cli.WithInteractive(func() bool { return stdinIsTTY() }),
 	); err != nil {
@@ -225,8 +236,8 @@ const (
 // compatRunner is the core's Runner as the old binary mounts it: it adds
 // v0.1.17's read-only mode (--read-only, LORE_READ_ONLY=1: a write
 // operation is refused with E_READ_ONLY before it runs) and returns the
-// refusal a compat flag set for this run. REST (`lore api`) uses the App
-// directly, without these CLI-only flags.
+// refusal a compat flag set for this run. REST (`lore api`) runs through
+// the same runner (coreRunner); the CLI-only flags are never set there.
 type compatRunner struct {
 	app *wire.App
 	// pending is the refusal of the running command's compat flags (one
@@ -723,8 +734,9 @@ func newAPICommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			eng, err := coreApp.Engine(ctx)
-			if err != nil {
+			// Open the core now so a broken store fails at start, not on
+			// the first request.
+			if _, err := coreApp.Engine(ctx); err != nil {
 				return err
 			}
 			defer func() { _ = coreApp.Close() }() // the server's error is what the caller needs
@@ -736,7 +748,7 @@ func newAPICommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			srv, err := rest.New(coreApp.Registry(), eng, rest.Options{Token: tok, Actor: actor, LoreVersion: version})
+			srv, err := rest.New(coreApp.Registry(), coreRunner, rest.Options{Token: tok, Actor: actor, LoreVersion: version})
 			if err != nil {
 				return err
 			}

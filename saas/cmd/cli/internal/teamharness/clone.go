@@ -134,3 +134,13 @@ func (c *Clone) Prepare(args ...string) *Pending {
 	p.cmd.Stdout, p.cmd.Stderr = &p.out, &p.errb
 	return p
 }
+
+// Command builds a lore command in the clone with the actor's environment,
+// for a long-running process the test drives itself (`lore api`). The
+// caller starts it and must stop it (Process.Kill in t.Cleanup).
+func (c *Clone) Command(args ...string) *exec.Cmd {
+	cmd := exec.Command(c.A.w.Bin, args...)
+	cmd.Dir = c.Dir
+	cmd.Env = c.A.environ(c.extra)
+	return cmd
+}
