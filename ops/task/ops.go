@@ -670,12 +670,18 @@ func (o ops) deferred(ctx context.Context, in ViewIn) (ListOut, error) {
 }
 
 // show returns one task, from whichever attached store holds it.
-func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
+func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	id, err := taskID(in.ID)
 	if err != nil {
 		return ShowOut{}, err
 	}
-	src, r, err := work.Get(ctx, o.env, Noun, table, id)
+	var src store.Source
+	var r row.Row
+	if in.From == "" {
+		src, r, err = work.Get(ctx, o.env, Noun, table, id)
+	} else {
+		src, r, err = o.getFrom(ctx, in.From, id)
+	}
 	if err != nil {
 		return ShowOut{}, err
 	}
@@ -703,6 +709,43 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 		}
 	}
 	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: full}, nil
+}
+
+// fromRepo is the --from value naming the repo's own store.
+const fromRepo = "repo"
+
+// getFrom reads task id from the source --from names (fixed rule 5): repo,
+// an attached store's name (an org entry), or its label <org>/<folder> (the
+// name a linked store is shown under: the store "northwind" attached at
+// globex is northwind/globex). A source no attached store answers to is
+// v0.1.17's refusal; an id the source does not hold is E_NOT_FOUND.
+func (o ops) getFrom(ctx context.Context, from string, id ids.AnyID) (store.Source, row.Row, error) {
+	src, ok := o.sourceNamed(from)
+	if !ok {
+		name, _, _ := strings.Cut(from, "/")
+		return "", row.Row{}, errs.New(errs.InvalidInput, "--from "+from+": no org entry named "+name).
+			WithHint("use repo, an org entry name, or <org>/<folder>")
+	}
+	got, r, err := o.env.Get(ctx, engine.Ref{Store: src, Table: table, ID: id})
+	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+		return "", row.Row{}, errs.New(errs.NotFound, Noun+" "+work.Quote(id.String())+" not found in "+from)
+	}
+	return got, r, err
+}
+
+// sourceNamed maps a --from value to the attached store it names: its
+// store name, or its label (Labeler); "repo" is the repo store.
+func (o ops) sourceNamed(from string) (store.Source, bool) {
+	if from == fromRepo {
+		return store.SourceRepo, true
+	}
+	lab := work.LabelerOf(o.env)
+	for _, s := range o.env.Stores() {
+		if string(s) == from || (lab != nil && lab.StoreLabel(s) == from) {
+			return s, true
+		}
+	}
+	return "", false
 }
 
 // notesOn is v0.1.17's printTaskNotes: the task's notes (comments on it)

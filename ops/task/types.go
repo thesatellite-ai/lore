@@ -174,6 +174,14 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 }
 
+// ShowIn is the input of task.show. From is v0.1.17's `task show --from`:
+// read the row from one source instead of whichever attached store holds
+// it (an id found in several, or a store task read from a client repo).
+type ShowIn struct {
+	ID   string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+	From string `json:"from,omitempty" flag:"from" desc:"the source of the id: repo | <org> | <org>/<folder>"`
+}
+
 // ShowOut is the output of task.show.
 type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
