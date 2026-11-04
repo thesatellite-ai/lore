@@ -270,11 +270,74 @@ func (r *compatRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
 			WithHint("unset --read-only and LORE_READ_ONLY")
 	}
+	if err := coreOrgWriteCheck(ctx, e, d); err != nil {
+		return op.Result{}, err
+	}
 	res, err := r.app.Run(ctx, e, d, c)
 	if err != nil {
 		return res, r.explainNotFound(ctx, err)
 	}
 	return res, nil
+}
+
+// coreOrgWriteCheck runs v0.1.17's org checks on a write that takes --to
+// (an op with a `to` input), before the core opens or guards anything:
+//
+//   - no --to while LORE_ORG / `lore org use` names another org than the
+//     store link (F10): E_ORG_DISAGREES. It comes first so an unreachable
+//     store of the wrongly chosen org never hides it behind E_LINK_UNKNOWN;
+//     naming the target with --to is the way through (DisagreesHint).
+//   - --to <org> (or team) while the repo has several links to that org
+//     and none is the default (TEAM-032): refused with the candidates.
+//     The core attaches the org under one linked folder for reads; without
+//     this check the write landed silently in whichever link came first.
+//
+// Anything it cannot decide (decode error, org resolution failure) is left
+// to the normal path, which reports it.
+func coreOrgWriteCheck(ctx context.Context, e op.Entry, d op.Decoder) error {
+	if e.Spec().Access != op.AccessWrite {
+		return nil
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return nil // the engine's Run reports the decode error itself
+	}
+	to, takesTo := "", false
+	for _, tv := range in.Texts() {
+		if tv.Field == engine.InputTarget {
+			to, takesTo = tv.Text, true
+		}
+	}
+	if !takesTo {
+		return nil
+	}
+	s, err := coreSituationOnce(ctx)
+	if err != nil || s == nil || s.ResolveErr != nil {
+		return nil
+	}
+	r := s.Result
+	if to == "" {
+		if r.Disagreement != nil {
+			return coreErr(orgResolveCLIError(&orgresolve.Error{Kind: orgresolve.KindDisagrees, Message: r.Disagreement.Message, Hint: orgresolve.DisagreesHint}))
+		}
+		return nil
+	}
+	if r.Org == nil || (to != r.Org.Name && to != attach.ReservedTeam) {
+		return nil
+	}
+	ti := oldstores.TargetInputs{To: oldstores.ToOrg, Org: r.Org.Name}
+	for _, l := range r.Links {
+		if l.Entry == r.Org.Name {
+			ti.Links = append(ti.Links, oldstores.TargetLink{Folder: l.Folder, Default: l.Default, Own: l.Own})
+		}
+	}
+	if len(ti.Links) < 2 {
+		return nil
+	}
+	if _, rerr := oldstores.ResolveTarget(ti); errors.Is(rerr, oldstores.ErrTwoLinksNoDefault) {
+		return coreErr(targetCLIError(rerr))
+	}
+	return nil
 }
 
 // addCompatFlags gives one mounted memory command v0.1.17's common flags
@@ -723,13 +786,30 @@ func coreOrgStores(ctx context.Context) ([]attach.Store, error) {
 	}
 	for i := range org.Stores {
 		sc := &org.Stores[i]
-		if sc.OrgFolder == "" || sc.OrgFolder == oldstores.RootFolder || !attachable(sc) {
+		if sc.OrgFolder == "" || !attachable(sc) {
 			continue
 		}
-		out = append(out, attach.Store{Name: store.Source(org.Name + "/" + sc.OrgFolder), URL: sc.URL, Folder: sc.OrgFolder, Branch: branchOf(sc)})
+		company := attach.Store{Name: store.Source(org.Name + "/" + sc.OrgFolder), URL: sc.URL, Folder: sc.OrgFolder, Branch: branchOf(sc)}
+		// org_folder "." is a dedicated company store (F13): its root is
+		// the company folder, attached as "<org>/." so company rules
+		// (`--to <org>/.`) land there and every teammate listing that
+		// store reads them. It is skipped only when the linked-folder
+		// entry above already attaches that same root (no link, first
+		// store): one store folder keeps one name.
+		if sc.OrgFolder == oldstores.RootFolder && slices.ContainsFunc(out, func(o attach.Store) bool { return sameStoreRoot(o, company) }) {
+			break
+		}
+		out = append(out, company)
 		break // one org folder per entry (F13)
 	}
 	return out, nil
+}
+
+// sameStoreRoot reports whether a and b both attach the root folder of the
+// same store url on the same branch.
+func sameStoreRoot(a, b attach.Store) bool {
+	isRoot := func(f string) bool { f = strings.Trim(f, "/"); return f == "" || f == oldstores.RootFolder }
+	return a.URL == b.URL && a.Branch == b.Branch && isRoot(a.Folder) && isRoot(b.Folder)
 }
 
 // coreSituationOnce is gatherOrgSituation for the working directory,
