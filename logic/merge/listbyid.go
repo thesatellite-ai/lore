@@ -73,11 +73,13 @@ func listItems(v value.Value) ([]listItem, error) {
 	if _, null := v.(value.Null); null {
 		return nil, nil
 	}
-	j, ok := v.(value.JSON)
-	if !ok {
-		return nil, errs.New(errs.InvalidInput, "merge: a list-by-id field holds "+string(v.Kind())+", not json")
+	// A row decoded from a file holds the array as a generic list value,
+	// one written by the engine as value.JSON: read either as JSON.
+	raw, err := v.MarshalJSON()
+	if err != nil {
+		return nil, errs.Wrap(errs.InvalidInput, "merge: a list-by-id field does not encode as json", err)
 	}
-	elems, err := canon.Elements(j.Raw())
+	elems, err := canon.Elements(raw)
 	if err != nil {
 		return nil, errs.Wrap(errs.InvalidInput, "merge: a list-by-id field is not a json list", err)
 	}

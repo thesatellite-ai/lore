@@ -14,11 +14,18 @@ const FieldTimeEntries = "time_entries"
 // the field, or with a value that is not a list of entries, has none: a
 // read never fails on a bad time list (the merge and lint report it).
 func TimeEntries(r row.Row) []timeentry.Entry {
-	j, ok := r.Fields[FieldTimeEntries].(value.JSON)
-	if !ok {
+	// A row decoded from a file holds the array as a generic value (a
+	// list), one built by the engine as value.JSON: read either through
+	// its JSON form.
+	v := r.Fields[FieldTimeEntries]
+	if v == nil {
 		return nil
 	}
-	list, err := timeentry.Decode(j.Raw())
+	raw, err := v.MarshalJSON()
+	if err != nil {
+		return nil
+	}
+	list, err := timeentry.Decode(raw)
 	if err != nil {
 		return nil
 	}
