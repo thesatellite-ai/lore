@@ -52,7 +52,7 @@ func (f formatState) checkStore(name store.Source) error {
 	}
 	return errs.New(errs.NeedsConfirm, "wire: store "+string(name)+" is still a lore 0.1.17 store whose rows teammates wrote; "+
 		"the first 0.1.18 write there changes the file format they would need 0.1.18 to read").
-		WithQuestion("has everyone who shares store "+string(name)+" upgraded to lore 0.1.18?").
+		WithQuestion("has everyone who shares store " + string(name) + " upgraded to lore 0.1.18?").
 		WithHint("once they have, run `" + MigrateCommand + "` (it converts the org store), then retry").
 		WithNext(MigrateCommand)
 }
