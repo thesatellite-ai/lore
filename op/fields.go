@@ -53,6 +53,9 @@ type FieldInfo struct {
 	UI       schema.UI
 	// Fields are the children of an object or list-of-object output field.
 	Fields []FieldInfo
+	// Nullable marks an op.Null output field: printed as JSON null when
+	// unset (Type and Fields describe the value when set).
+	Nullable bool
 
 	index []int
 }
@@ -156,7 +159,14 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		panic(tagError{where + ": json tag has no name"})
 	}
 	f := FieldInfo{Name: name, Arg: NoArg, Desc: sf.Tag.Get(tagDesc)}
-	f.Type, f.Fields = typeOf(op, where, sf.Type, dir)
+	ft := sf.Type
+	if n, ok := reflect.Zero(ft).Interface().(nullable); ok {
+		if dir == dirInput {
+			panic(tagError{where + ": op.Null is an output type"})
+		}
+		ft, f.Nullable = n.nullElem(), true
+	}
+	f.Type, f.Fields = typeOf(op, where, ft, dir)
 	f.Required = !strings.Contains(opts, "omitempty") && f.Type != TypeBool
 	if a, ok := sf.Tag.Lookup(tagArg); ok {
 		n, err := strconv.Atoi(a)

@@ -921,9 +921,9 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 		hit := work.HitOf(h, true, work.FieldTitle, work.FieldBody, work.FieldStatus, fieldPriority)
 		hit.Row[fieldDue] = work.TimeText(r, fieldDue)
 		hit.Relations = work.Relations{
-			Tasklist: work.BriefOf(ctx, o.env, schema.TableTasklists, work.Field(r, work.FieldTasklist), false),
-			Mission:  work.BriefOf(ctx, o.env, schema.TableMissions, work.Field(r, work.FieldMission), true),
-			Plan:     work.BriefOf(ctx, o.env, schema.TablePlans, work.Field(r, work.FieldPlan), false),
+			Tasklist: op.SomeIf(work.BriefOf(ctx, o.env, schema.TableTasklists, work.Field(r, work.FieldTasklist), false)),
+			Mission:  op.SomeIf(work.BriefOf(ctx, o.env, schema.TableMissions, work.Field(r, work.FieldMission), true)),
+			Plan:     op.SomeIf(work.BriefOf(ctx, o.env, schema.TablePlans, work.Field(r, work.FieldPlan), false)),
 		}
 		out.Data = append(out.Data, hit)
 	}

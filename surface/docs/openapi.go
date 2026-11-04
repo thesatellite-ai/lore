@@ -49,6 +49,7 @@ const (
 	jsonNumber  = "number"
 	jsonArray   = "array"
 	jsonObject  = "object"
+	jsonNull    = "null"
 
 	formatDurationNS = "duration-ns"
 	formatDate       = "date"
@@ -141,6 +142,9 @@ type jsonSchema struct {
 	Properties           map[string]*jsonSchema `json:"properties,omitempty"`
 	Required             []string               `json:"required,omitempty"`
 	AdditionalProperties *additional            `json:"additionalProperties,omitempty"`
+	// AnyOf carries an op.Null output field as OpenAPI 3.1 writes a
+	// nullable value: anyOf [the value's schema, {"type": "null"}].
+	AnyOf []*jsonSchema `json:"anyOf,omitempty"`
 }
 
 // additional is JSON Schema's additionalProperties: either `false` (closed
@@ -295,6 +299,15 @@ func objectSchema(fields []op.FieldInfo, closed bool) *jsonSchema {
 
 // fieldSchema maps one operation field type to JSON Schema.
 func fieldSchema(f op.FieldInfo) *jsonSchema {
+	s := typeSchema(f)
+	if !f.Nullable {
+		return s
+	}
+	return &jsonSchema{Description: f.Desc, AnyOf: []*jsonSchema{s, {Type: jsonNull}}}
+}
+
+// typeSchema is fieldSchema without the nullable mark.
+func typeSchema(f op.FieldInfo) *jsonSchema {
 	s := &jsonSchema{Description: f.Desc}
 	switch f.Type {
 	case op.TypeString, op.TypeText:

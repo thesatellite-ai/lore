@@ -21,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -462,12 +463,12 @@ type SearchHit struct {
 }
 
 // Relations is the task search hit's eager-loaded references; each is
-// omitted when the task does not point at one (v0.1.17 printed null; op
-// output fields cannot be pointers).
+// JSON null when the task does not point at one, as v0.1.17 printed it
+// (op.Null: op output fields hold no pointers).
 type Relations struct {
-	Tasklist Brief `json:"tasklist,omitzero"`
-	Mission  Brief `json:"mission,omitzero"`
-	Plan     Brief `json:"plan,omitzero"`
+	Tasklist op.Null[Brief] `json:"tasklist"`
+	Mission  op.Null[Brief] `json:"mission"`
+	Plan     op.Null[Brief] `json:"plan"`
 }
 
 // Brief is a referenced row's id and title (and status for a mission).
