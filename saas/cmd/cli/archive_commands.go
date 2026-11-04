@@ -418,20 +418,6 @@ var handoffDeleteTarget = archiveTarget{
 	},
 }
 
-var reminderDeleteTarget = archiveTarget{
-	label: "reminder",
-	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
-		r, err := c.Reminder.Get(ctx, id)
-		if err != nil {
-			return "", "", err
-		}
-		return r.ID, r.ID, nil
-	},
-	del: func(ctx context.Context, c *ent.Client, id string) error {
-		return c.Reminder.DeleteOneID(id).Exec(ctx)
-	},
-}
-
 var techDocDeleteTarget = archiveTarget{
 	label: "techdoc",
 	get: func(ctx context.Context, c *ent.Client, id string) (string, string, error) {
