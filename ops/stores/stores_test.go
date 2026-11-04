@@ -31,3 +31,17 @@ func TestCheckName(t *testing.T) {
 		}
 	}
 }
+
+// BATCH2 #9: store init without a url is E_INVALID_INPUT naming the
+// missing url and the usage; only `me` has a default url.
+func TestMissingInitURL(t *testing.T) {
+	err := MissingInitURL("agency")
+	if !errs.Has(err, errs.InvalidInput) {
+		t.Fatalf("code %s, want E_INVALID_INPUT", errs.CodeOf(err))
+	}
+	for _, want := range []string{"store init agency", "url is missing", "lore store init <name> <url>"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%q lacks %q", err.Error(), want)
+		}
+	}
+}

@@ -124,3 +124,23 @@ func TestResolveOrg(t *testing.T) {
 		t.Errorf("org key skipped: %+v %v", r, err)
 	}
 }
+
+// FLAG4: the signature a store commit gets when git has no identity.
+func TestCommitSignature(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		in          Resolved
+		name, email string
+	}{
+		{Resolved{StableKey: "human:alice@example.com", DisplayName: "Alice"}, "Alice", "alice@example.com"},
+		{Resolved{StableKey: "human:alice@example.com"}, "alice@example.com", "alice@example.com"},
+		{Resolved{StableKey: "agent:ci", DisplayName: "CI"}, "CI", "agent.ci@lore.invalid"},
+		{Resolved{StableKey: "human:bob"}, "bob", "human.bob@lore.invalid"},
+		{Resolved{StableKey: "carol@example.com"}, "carol@example.com", "carol@example.com"},
+		{Resolved{}, "", ""},
+	} {
+		if n, e := c.in.CommitSignature(); n != c.name || e != c.email {
+			t.Errorf("%+v: got %q %q, want %q %q", c.in, n, e, c.name, c.email)
+		}
+	}
+}

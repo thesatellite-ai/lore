@@ -224,20 +224,27 @@ func (b *Backend) mergeRemote(ctx context.Context, remote string) ([]ids.AnyID, 
 			return nil, nil, err
 		}
 	}
+	// FLAG4: git merge asks for a committer identity before it starts,
+	// even for a fast-forward or --no-commit, so every merge gets the
+	// commit environment (lore's identity only when git has none).
+	env, err := b.commitEnv(ctx, Signature{})
+	if err != nil {
+		return nil, nil, err
+	}
 	if ff {
-		if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge", "--ff-only", "--quiet", remote}}); err != nil {
+		if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge", "--ff-only", "--quiet", remote}, env: env}); err != nil {
 			return nil, nil, errs.Wrap(errs.Internal, "git: fast-forward to the remote", err)
 		}
 		return nil, nil, nil
 	}
-	return b.threeWay(ctx, remote)
+	return b.threeWay(ctx, remote, env)
 }
 
 // threeWay runs the three-way merge of remote. Row files are marked
 // -merge (rowAttributes), so every row both sides changed is left
 // conflicted with ours in the worktree, and resolved here.
-func (b *Backend) threeWay(ctx context.Context, remote string) ([]ids.AnyID, []store.Refusal, error) {
-	_, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge", "--no-ff", "--no-commit", "--no-verify", "--quiet", "-s", "ort", "-X", "no-renames", remote}})
+func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]ids.AnyID, []store.Refusal, error) {
+	_, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge", "--no-ff", "--no-commit", "--no-verify", "--quiet", "-s", "ort", "-X", "no-renames", remote}, env: env})
 	if err != nil {
 		if code, ran := exitCode(err); !ran || code != 1 {
 			return nil, nil, errors.Join(errs.Wrap(errs.Internal, "git: merge the remote", err), b.abortMerge(ctx))
@@ -269,7 +276,7 @@ func (b *Backend) threeWay(ctx context.Context, remote string) ([]ids.AnyID, []s
 	if len(refused) > 0 {
 		return nil, refused, b.abortMerge(ctx)
 	}
-	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", mergeSubject}, env: b.commitEnv(b.cfg.author)}); err != nil {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", mergeSubject}, env: env}); err != nil {
 		return nil, nil, errors.Join(errs.Wrap(errs.Internal, "git: commit the merge", err), b.abortMerge(ctx))
 	}
 	return merged, nil, nil

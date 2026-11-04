@@ -52,6 +52,12 @@ type storePushBackend struct {
 	stateDir string
 	// fetched: the once-per-command read sync has been decided.
 	fetched bool
+	// pushFailed: a push of this command already failed and said so.
+	// FLAG4: the "not pushed yet" note is printed once; one command's
+	// later writes (the actor row, then the row itself) commit locally
+	// without retrying a push that just failed, and `lore sync` pushes
+	// them all, as the note says.
+	pushFailed bool
 }
 
 var (
@@ -132,7 +138,7 @@ func (b *storePushBackend) Write(ctx context.Context, changes []store.Change) er
 // pushAfterWrite pushes the commit a write just made, when autopush is on;
 // a failed push is a note (the commit waits for `lore sync`).
 func (b *storePushBackend) pushAfterWrite(ctx context.Context) {
-	if !b.autopush(ctx) {
+	if b.pushFailed || !b.autopush(ctx) {
 		return
 	}
 	rep, err := b.inner.Sync(ctx)
@@ -143,7 +149,10 @@ func (b *storePushBackend) pushAfterWrite(ctx context.Context) {
 		b.note("the store is unreachable")
 	case len(rep.Refused) > 0:
 		b.note("the store refused " + strconv.Itoa(len(rep.Refused)) + " row(s)")
+	default:
+		return
 	}
+	b.pushFailed = true
 }
 
 // note says the write waits in the local store clone.

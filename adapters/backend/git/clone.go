@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -336,14 +335,16 @@ func (b *Backend) checkMarker(ctx context.Context) error {
 // commitBatch stages the applied files and makes one commit; on failure it
 // restores the files and the index, so the batch is none.
 func (b *Backend) commitBatch(ctx context.Context, batch Batch, changes []store.Change, applied *rowfs.Applied) error {
-	author := batch.Author
-	if author.IsZero() {
-		author = b.cfg.author
-	}
 	add := append([]string{"add", "--"}, applied.Paths...)
 	_, err := b.git.run(ctx, call{dir: b.work, args: add})
+	var env []string
 	if err == nil {
-		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", subject(batch.Op, changes)}, env: b.commitEnv(author)})
+		// FLAG4: the person's git identity signs the commit when git has
+		// one; only without it does lore pass its own (commitEnv).
+		env, err = b.commitEnv(ctx, batch.Author)
+	}
+	if err == nil {
+		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", subject(batch.Op, changes)}, env: env})
 	}
 	if err == nil {
 		return nil
@@ -352,15 +353,6 @@ func (b *Backend) commitBatch(ctx context.Context, batch Batch, changes []store.
 	restage := append([]string{"add", "-A", "--"}, applied.Paths...)
 	_, stageErr := b.git.run(ctx, call{dir: b.work, args: restage})
 	return errs.Wrap(errs.Internal, "git: commit the batch", errors.Join(err, undoErr, stageErr))
-}
-
-// commitEnv signs a commit as author at the configured clock.
-func (b *Backend) commitEnv(s Signature) []string {
-	date := "@" + strconv.FormatInt(b.cfg.now().Unix(), 10) + " +0000"
-	return []string{
-		"GIT_AUTHOR_NAME=" + s.Name, "GIT_AUTHOR_EMAIL=" + s.Email, "GIT_AUTHOR_DATE=" + date,
-		"GIT_COMMITTER_NAME=" + s.Name, "GIT_COMMITTER_EMAIL=" + s.Email, "GIT_COMMITTER_DATE=" + date,
-	}
 }
 
 // commitIDPattern is a full sha-1 or sha-256 commit id: the only cursor

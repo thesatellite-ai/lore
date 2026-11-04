@@ -344,7 +344,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		}
 		raws = append(raws, s.URL)
 	}
-	openers, err := newOpeners(reg, originsOf(raws...))
+	openers, err := newOpeners(reg, originsOf(raws...), storeIdentity(opts))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -492,13 +492,14 @@ func originsOf(raws ...string) map[string]string {
 // newOpeners registers the 0.1.18 backends: folder for file://, git for
 // ssh, https and http with logic/merge as the row merger (spec 11 rule 5:
 // the same merge the engine runs). origins is originsOf the store urls as
-// written: each git clone's origin spelling.
-func newOpeners(reg *schema.Registry, origins map[string]string) (*store.Openers, error) {
+// written: each git clone's origin spelling. who is the lore identity a
+// git clone signs commits with when git has none (FLAG4, storeIdentity).
+func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option) (*store.Openers, error) {
 	o := store.NewOpeners()
 	if err := o.Register(folder.Scheme, folder.NewOpener()); err != nil {
 		return nil, err
 	}
-	gitOpen := git.NewOpener(git.WithMerger(merge.Driver{Registry: reg}), git.WithOrigins(origins))
+	gitOpen := git.NewOpener(git.WithMerger(merge.Driver{Registry: reg}), git.WithOrigins(origins), who)
 	for _, s := range git.Schemes {
 		if err := o.Register(s, gitOpen); err != nil {
 			return nil, err

@@ -52,6 +52,9 @@ const (
 // InitStore implements opsstores.Manager.
 func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.InitOut, error) {
 	raw := in.URL
+	if raw == "" && in.Name != opsstores.PersonalName {
+		return opsstores.InitOut{}, opsstores.MissingInitURL(in.Name) // BATCH2 #9, also for callers past the op
+	}
 	if raw == "" {
 		dir := filepath.Join(a.opts.Home, personalStoresDir, opsstores.PersonalName)
 		raw = (&url.URL{Scheme: folder.Scheme, Path: filepath.ToSlash(dir)}).String()
@@ -130,7 +133,7 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 	if err = rowfs.WriteMarker(gb.Dir(), m); err != nil {
 		return rowfs.Marker{}, false, err
 	}
-	if err = gitCommitMarker(ctx, gb.Dir(), a.opts.Wall()); err != nil {
+	if err = gitCommitMarkerAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts)); err != nil {
 		return rowfs.Marker{}, false, err
 	}
 	rep, err := gb.Sync(ctx)
@@ -147,16 +150,34 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 // (the git adapter has no "commit a control file" call; this is the one
 // non-row commit lore makes, so it lives here beside the marker logic).
 func gitCommitMarker(ctx context.Context, dir string, now time.Time) error {
-	return gitCommitFiles(ctx, dir, now, initSubject, rowfs.MarkerFile)
+	return gitCommitMarkerAs(ctx, dir, now, nil)
+}
+
+// gitCommitMarkerAs is gitCommitMarker signed, when git has no identity,
+// as who (storeIdentityFunc; nil = git.DefaultAuthor).
+func gitCommitMarkerAs(ctx context.Context, dir string, now time.Time, who func(context.Context) git.Signature) error {
+	return gitCommitFilesAs(ctx, dir, now, who, initSubject, rowfs.MarkerFile)
 }
 
 // gitCommitFiles commits paths (slash-separated, relative to dir) of a git
-// store's worktree as lore's own author, hooks off, signing off.
+// store's worktree, hooks off, signing off; when git has no identity it is
+// signed as git.DefaultAuthor (gitCommitFilesAs).
 func gitCommitFiles(ctx context.Context, dir string, now time.Time, subject string, paths ...string) error {
+	return gitCommitFilesAs(ctx, dir, now, nil, subject, paths...)
+}
+
+// gitCommitFilesAs is gitCommitFiles with the lore identity who as the
+// fallback signer. FLAG4: the person's git identity, when git has one,
+// signs the commit; only without it is who passed (as GIT_AUTHOR_* /
+// GIT_COMMITTER_* on these git calls, never into git config).
+func gitCommitFilesAs(ctx context.Context, dir string, now time.Time, who func(context.Context) git.Signature, subject string, paths ...string) error {
+	ident, err := git.IdentityEnv(ctx, dir, who)
+	if err != nil {
+		return err
+	}
 	env := append(os.Environ(),
-		"GIT_AUTHOR_NAME="+git.DefaultAuthor.Name, "GIT_AUTHOR_EMAIL="+git.DefaultAuthor.Email,
-		"GIT_COMMITTER_NAME="+git.DefaultAuthor.Name, "GIT_COMMITTER_EMAIL="+git.DefaultAuthor.Email,
 		"GIT_AUTHOR_DATE="+now.UTC().Format(time.RFC3339), "GIT_COMMITTER_DATE="+now.UTC().Format(time.RFC3339))
+	env = append(env, ident...)
 	for _, args := range [][]string{
 		append([]string{"add", "--"}, paths...),
 		append([]string{"-c", "commit.gpgsign=false", "commit", "--quiet", "--no-verify", "-m", subject, "--"}, paths...),
@@ -168,6 +189,28 @@ func gitCommitFiles(ctx context.Context, dir string, now time.Time, subject stri
 	return nil
 }
 
+// storeIdentity is the git option that signs store commits and merges
+// with the lore identity (storeIdentityFunc).
+func storeIdentity(opts Options) git.Option { return git.WithIdentity(storeIdentityFunc(opts)) }
+
+// storeIdentityFunc answers the lore identity (`lore whoami`: display name
+// + the identity key's e-mail) as a commit signature. FLAG4: it is used
+// only when git has no user.name/user.email for the clone, an existing git
+// identity always wins, and git config is never changed (it is passed as
+// GIT_AUTHOR_*/GIT_COMMITTER_* on that one call). It resolves lazily, so a
+// machine where git knows the person never pays for the resolution; a
+// failed resolution leaves git.DefaultAuthor rather than failing the write.
+func storeIdentityFunc(opts Options) func(context.Context) git.Signature {
+	return func(ctx context.Context) git.Signature {
+		who, err := resolveIdentity(ctx, opts)
+		if err != nil {
+			return git.Signature{}
+		}
+		name, email := who.CommitSignature()
+		return git.Signature{Name: name, Email: email}
+	}
+}
+
 // openStore opens the store at a canonical url with this App's backends.
 // raw is the url as the person wrote it (canonical's input): a git clone's
 // origin keeps that spelling (originsOf).
@@ -176,7 +219,7 @@ func (a *App) openStore(ctx context.Context, canon, raw string) (store.Backend, 
 	if err != nil {
 		return nil, err
 	}
-	o, err := newOpeners(reg, originsOf(raw))
+	o, err := newOpeners(reg, originsOf(raw), storeIdentity(a.opts))
 	if err != nil {
 		return nil, err
 	}

@@ -141,6 +141,34 @@ type Resolved struct {
 // Stable reports whether the next run on this machine gets the same key.
 func (r Resolved) Stable() bool { return r.Step != StepEphemeral && r.StableKey != "" }
 
+// commitEmailDomain is the non-routable domain of a commit e-mail made for
+// a key that holds no address (agent:<label>, a machine key).
+const commitEmailDomain = "lore.invalid"
+
+// CommitSignature is the name and e-mail that sign a store commit as this
+// identity when git has none of its own (FLAG4): the display name (the
+// key's value when unset) and the key's e-mail for a human:<email> key,
+// else the key made into a non-routable address (agent:ci becomes
+// agent.ci@lore.invalid, as v0.1.17's signatureEmail did). Both are ""
+// for an empty key.
+func (r Resolved) CommitSignature() (name, email string) {
+	if r.StableKey == "" {
+		return "", ""
+	}
+	kind, value, ok := strings.Cut(r.StableKey, kindSep)
+	if !ok {
+		kind, value = KindHuman, r.StableKey
+	}
+	name = r.DisplayName
+	if name == "" {
+		name = value
+	}
+	if kind == KindHuman && strings.Contains(value, "@") {
+		return name, value
+	}
+	return name, strings.ReplaceAll(r.StableKey, kindSep, ".") + "@" + commitEmailDomain
+}
+
 // Inputs is everything Resolve reads; every field is a seam.
 type Inputs struct {
 	// Home is the lore home (~/.lore). Required.

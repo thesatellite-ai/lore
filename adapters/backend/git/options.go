@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"time"
 )
 
@@ -42,8 +43,10 @@ const DefaultBinary = "git"
 
 // config holds the options of one opener (or one direct Open).
 type config struct {
-	merger      Merger
-	author      Signature
+	merger Merger
+	author Signature
+	// identity is the lazy lore identity (WithIdentity); nil uses author.
+	identity    func(context.Context) Signature
 	now         func() time.Time
 	bin         string
 	branch      string
@@ -62,6 +65,14 @@ func WithMerger(m Merger) Option { return func(c *config) { c.merger = m } }
 
 // WithAuthor sets the default commit author (default DefaultAuthor).
 func WithAuthor(s Signature) Option { return func(c *config) { c.author = s } }
+
+// WithIdentity sets the lore identity that signs a commit or merge when
+// git has no identity of its own for the clone (FLAG4). It is called only
+// then, so resolving it costs nothing on a machine where git knows the
+// person; a zero or unusable answer falls back to the WithAuthor author.
+func WithIdentity(f func(context.Context) Signature) Option {
+	return func(c *config) { c.identity = f }
+}
 
 // WithClock replaces time.Now for commit dates and the stat cursor.
 func WithClock(now func() time.Time) Option { return func(c *config) { c.now = now } }

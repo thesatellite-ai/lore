@@ -138,6 +138,15 @@ func quote(s string) string { return "`" + s + "`" }
 var storeErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInvalid, errs.StoreScheme, errs.URLUserinfo,
 	errs.NotAStore, errs.StoreUnreachable, errs.OldLore, errs.NeedsConfirm, errs.Internal}
 
+// MissingInitURL is the refusal of `lore store init <name>` without a url.
+// BATCH2 #9: every store but `me` needs a url (me keeps its default,
+// file://~/.lore/stores/me, per O7), and the error names exactly what is
+// missing and the usage (owner rule: exact errors), exit 20.
+func MissingInitURL(name string) error {
+	return errs.New(errs.InvalidInput, "store init "+name+": the store url is missing; usage: lore store init <name> <url> (only `"+PersonalName+"` has a default url)").
+		WithHint("e.g. lore store init " + name + " git@github.com:<owner>/<repo>, or a file:///path/to/folder")
+}
+
 // Ops returns the store operations bound to m.
 func Ops(m Manager) []op.Entry {
 	return []op.Entry{
@@ -156,7 +165,7 @@ func Ops(m Manager) []op.Entry {
 				return InitOut{}, err
 			}
 			if in.URL == "" && in.Name != PersonalName {
-				return InitOut{}, errs.New(errs.InvalidInput, "store init: a url is required (only `me` has a default)")
+				return InitOut{}, MissingInitURL(in.Name)
 			}
 			if in.Visibility != "" && in.Visibility != VisibilityInternal && in.Visibility != VisibilityShareable {
 				return InitOut{}, errs.New(errs.InvalidInput, "store init: --visibility must be internal or shareable")
