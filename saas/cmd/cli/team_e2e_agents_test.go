@@ -442,18 +442,18 @@ func TestF07_NextWriterDropsExpiredSignals(t *testing.T) {
 
 // §7.2 resource holds: same lease machinery, exclusive, fail closed offline.
 func TestF07_ResourceHoldExclusiveAndFailsClosed(t *testing.T) {
-	cr := newCrew(t, th.Cmd("resource", "claim"), th.Cmd("resource", "release"))
+	cr := newCrew(t, th.Cmd("hold", "claim"), th.Cmd("hold", "release"))
 	_, ac := cr.agent(t, "tester-1")
 	_, bc := cr.agent(t, "tester-2")
-	ac.MustLore("resource", "claim", "full-suite", "--ttl", "30m")
+	ac.MustLore("hold", "claim", "full-suite", "--ttl", "30m")
 	if _, ok := readSignal(t, cr.tools, refSignals, rootFolder+"/"+resourcesDir+"/full-suite.json"); !ok {
 		t.Fatalf("resource hold must be a signal file: %v", cr.tools.Files(refSignals))
 	}
-	bc.Lore("resource", "claim", "full-suite", "--ttl", "30m").Refused(t)
-	ac.MustLore("resource", "release", "full-suite")
-	bc.MustLore("resource", "claim", "full-suite", "--ttl", "30m")
+	bc.Lore("hold", "claim", "full-suite", "--ttl", "30m").Refused(t)
+	ac.MustLore("hold", "release", "full-suite")
+	bc.MustLore("hold", "claim", "full-suite", "--ttl", "30m")
 	cr.alice.Offline()
-	bc.Lore("resource", "release", "full-suite").Fails(t, th.ExitOffline, "E_OFFLINE")
+	bc.Lore("hold", "release", "full-suite").Fails(t, th.ExitOffline, "E_OFFLINE")
 }
 
 // ---------------------------------------------------------------- §7.3 ready queue
