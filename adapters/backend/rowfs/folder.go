@@ -422,7 +422,6 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 	return a, nil
 }
 
-
 // ensureMeta gives a non-root folder its _meta.json with a new prj_ id
 // when the batch is the folder's first write (the file is missing), as
 // part of the batch: undone with it, and in a.Paths so a git store
