@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/mergewatch"
 	"github.com/thesatellite-ai/lore/adapters/signals"
@@ -121,37 +122,50 @@ func (a *App) mergeCandidates(ctx context.Context, w *coordWorld) []mergewatch.C
 
 // stampMerged records merged_at = the finding's time on the task, once,
 // where the task is coordinated (openWorldFor: the repo's own signals ref
-// or the linked store's). The row is read and staged inside the signals
-// write's decision, so a lost race re-reads the fresh row: a teammate who
-// stamped the same merge first leaves nothing to do (recorded false, nil
-// error). Only merged_at changes; updated_at stays as it was, so two
-// clones that find the same merge stage the same row (v0.1.17 stampMerged).
+// or the linked store's), through stampMergedRow.
 func (h standaloneCoord) stampMerged(ctx context.Context, f mergewatch.Found) (recorded bool, err error) {
 	w, err := h.openWorldFor(ctx, f.TaskID)
 	if err != nil {
 		return false, err
 	}
 	env := w.env(ctx)
-	_, err = env.Signals.Write(ctx, func(signals.View) (signals.Change, error) {
+	return stampMergedRow(ctx, env.Rows, env.Signals, f.TaskID, f.Finding.At)
+}
+
+// signalsWriter is the one signals.Store call the stamp makes (a seam for
+// the decision tests).
+type signalsWriter interface {
+	Write(ctx context.Context, decide signals.Decide) (signals.Result, error)
+}
+
+// stampMergedRow is the stamp's decision. The row is read and staged inside
+// the signals write's decision, so a lost race re-reads the fresh row: a
+// teammate who stamped the same merge first leaves nothing to do (recorded
+// false, nil error). Only merged_at changes; updated_at stays as it was, so
+// two clones that find the same merge stage the same row (v0.1.17
+// stampMerged). A failed read, stage or write is returned and recorded is
+// false (the caller's line then says it could not be recorded).
+func stampMergedRow(ctx context.Context, rows coord.Rows, sig signalsWriter, id string, at time.Time) (recorded bool, err error) {
+	_, err = sig.Write(ctx, func(signals.View) (signals.Change, error) {
 		recorded = false
-		d, ok, gerr := env.Rows.Get(ctx, f.TaskID)
+		d, ok, gerr := rows.Get(ctx, id)
 		if gerr != nil {
-			return signals.Change{}, fmt.Errorf("read %s: %w", f.TaskID, gerr)
+			return signals.Change{}, fmt.Errorf("read %s: %w", id, gerr)
 		}
 		if !ok || !unmerged(d) {
 			return signals.Change{}, nil // gone, reopened, or already stamped
 		}
 		next := d.Clone()
-		next.SetTime(fieldMergedAt, f.Finding.At)
-		comps, serr := env.Rows.Stage(ctx, coord.RowWrite{ID: f.TaskID, Doc: next})
+		next.SetTime(fieldMergedAt, at)
+		comps, serr := rows.Stage(ctx, coord.RowWrite{ID: id, Doc: next})
 		if serr != nil {
-			return signals.Change{}, fmt.Errorf("stage %s: %w", f.TaskID, serr)
+			return signals.Change{}, fmt.Errorf("stage %s: %w", id, serr)
 		}
 		recorded = true
 		return signals.Change{Companions: comps}, nil
 	})
 	if err != nil {
-		return false, fmt.Errorf("write %s: %w", f.TaskID, err)
+		return false, fmt.Errorf("write %s: %w", id, err)
 	}
 	return recorded, nil
 }
