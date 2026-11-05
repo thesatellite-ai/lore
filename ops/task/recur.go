@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
@@ -183,7 +184,8 @@ func (o ops) setRecur(ctx context.Context, target store.Source, fields map[strin
 }
 
 // instanceFields are the fields a next instance copies (10.4). Not
-// copied: claims, time, history, comments, relations, dependencies.
+// copied: claims, time, history, comments, relations; metadata, dates and
+// in-subtree dependencies are handled by instance (OV15c).
 var instanceFields = []string{
 	work.FieldTitle, work.FieldBody, fieldPriority, fieldCommitment, work.FieldProject, work.FieldRepo,
 	work.FieldMission, work.FieldTasklist, work.FieldPlan, fieldAssigned, fieldAssignees, fieldWatchers,
@@ -235,17 +237,28 @@ func (o ops) spawnNext(ctx context.Context, f forest, src store.Source, cur row.
 	}
 	rc.Index = idx
 	out := RecurNext{Due: next.Format(dates.DayLayout), Series: rc.Series, Index: idx, Skipped: skipped}
-	id, existed, err := o.instance(ctx, creator, src, cur, rc, "", "", next)
+	// OV15c: the instance moves its dates by the root's shift (due, or the
+	// creation day when the root had none) and keeps the dependencies
+	// between tasks of its own subtree, re-pointed at the new ids.
+	anchor := due
+	if anchor.IsZero() {
+		anchor = recur.Day(cur.CreatedAt)
+	}
+	plan := spawnPlan{rc: rc, shift: next.Sub(anchor), paths: subtreePaths(f, cur.ID.String()), notes: &noteList{}}
+	id, existed, err := o.instance(ctx, creator, src, cur, plan, "", "", next)
 	if err != nil {
 		return RecurNext{}, "", err
 	}
 	out.ID, out.Existed = id.String(), existed
 	if !existed {
-		if out.Children, err = o.copySubtree(ctx, creator, f, src, cur.ID.String(), id.String(), rc, ""); err != nil {
+		if out.Children, err = o.copySubtree(ctx, creator, f, src, cur.ID.String(), id.String(), plan, ""); err != nil {
 			return RecurNext{}, "", err
 		}
 	}
 	human := "  " + rule.Raw + " " + counted + "\n"
+	for _, n := range plan.notes.lines {
+		human += "  " + n + "\n"
+	}
 	if skipped > 0 {
 		human += "  skipped " + strconv.Itoa(skipped) + " past dates\n"
 	}
@@ -259,14 +272,69 @@ func (o ops) spawnNext(ctx context.Context, f forest, src store.Source, cur row.
 	return out, human + "\n", nil
 }
 
-// instance writes one task of the next instance rc.Index: path "" is its
-// root (recur and due set), else the child at that tree path under parent.
-func (o ops) instance(ctx context.Context, c IDCreator, src store.Source, from row.Row, rc Recur, path, parent string, due time.Time) (ids.AnyID, bool, error) {
+// spawnPlan is what every task of one next instance shares (OV15c).
+type spawnPlan struct {
+	rc Recur
+	// shift moves due_at / deferred_until of every copied task: the new
+	// root due minus the old root due (or its creation day).
+	shift time.Duration
+	// paths maps each old task of the subtree to its tree path ("" for
+	// the root), so a dependency between two of them is re-pointed at the
+	// new instance's derived ids.
+	paths map[string]string
+	// notes collects lines for the done output (a metadata carry that the
+	// key rules of today refused).
+	notes *noteList
+}
+
+// noteList is a shared, appendable list of output lines.
+type noteList struct{ lines []string }
+
+// instanceID is the derived id of the task at path in instance rc.Index
+// (TSQ12: series, index and tree path).
+func instanceID(rc Recur, path string) (ids.AnyID, error) {
 	parts := []string{rc.Series, strconv.Itoa(rc.Index)}
 	if path != "" {
 		parts = append(parts, path)
 	}
-	id, err := ids.Natural(ids.PrefixTask, parts...)
+	return ids.Natural(ids.PrefixTask, parts...)
+}
+
+// subtreePaths is old root's subtree as id → tree path, built the same way
+// copySubtree numbers the children (rank order, deleted children skipped
+// but still counted, as copySubtree does).
+func subtreePaths(f forest, root string) map[string]string {
+	out := map[string]string{root: ""}
+	var walk func(id, path string)
+	walk = func(id, path string) {
+		for i, kid := range f.tree.Children(id) {
+			if f.row(kid).Row.Deleted {
+				continue
+			}
+			p := strconv.Itoa(i)
+			if path != "" {
+				p = path + "." + p
+			}
+			out[kid] = p
+			walk(kid, p)
+		}
+	}
+	walk(root, "")
+	return out
+}
+
+// instance writes one task of the next instance plan.rc.Index: path "" is
+// its root (recur and due set), else the child at that tree path under
+// parent. 10.4: metadata is copied (checked against today's key rules; a
+// refusal writes the task without it and says so), dates move by
+// plan.shift, and only dependencies inside the subtree are kept.
+func (o ops) instance(ctx context.Context, c IDCreator, src store.Source, from row.Row, plan spawnPlan, path, parent string, due time.Time) (ids.AnyID, bool, error) {
+	rc := plan.rc
+	parts := []string{rc.Series, strconv.Itoa(rc.Index)}
+	if path != "" {
+		parts = append(parts, path)
+	}
+	id, err := instanceID(rc, path)
 	if err != nil {
 		return ids.AnyID{}, false, err
 	}
@@ -275,6 +343,10 @@ func (o ops) instance(ctx context.Context, c IDCreator, src store.Source, from r
 		if v, ok := from.Fields[k]; ok && v != nil && v.Kind() != value.KindNull {
 			fields[k] = v
 		}
+	}
+	plan.shiftDates(from, fields, path == "")
+	if err = plan.innerDeps(from, fields); err != nil {
+		return ids.AnyID{}, false, err
 	}
 	if _, err = o.setStatus(ctx, "", row.Row{}, schema.TaskStatusTodo, false, fields); err != nil {
 		return ids.AnyID{}, false, err
@@ -300,7 +372,19 @@ func (o ops) instance(ctx context.Context, c IDCreator, src store.Source, from r
 	if err = o.freshChecklist(ctx, fields, from, parts); err != nil {
 		return ids.AnyID{}, false, err
 	}
-	if _, err = c.CreateWithID(ctx, src, table, id, fields); err != nil {
+	carry, err := metalist.PlanCarry(from, table, engine.MetaFlags{}, false)
+	if err != nil {
+		plan.note(from, err)
+		carry = metalist.Carry{}
+	}
+	_, err = c.CreateWithID(carry.Before(ctx), src, table, id, fields)
+	if err != nil && carry.Count > 0 && isMetaRefusal(err) {
+		// 10.4 + 3.19: a carried value today's key rules refuse must not
+		// block closing the instance; write it without metadata, say so.
+		plan.note(from, err)
+		_, err = c.CreateWithID(ctx, src, table, id, fields)
+	}
+	if err != nil {
 		if errs.Has(err, errs.Stale) {
 			return id, true, nil // 10.4: the same instance, created elsewhere
 		}
@@ -309,10 +393,68 @@ func (o ops) instance(ctx context.Context, c IDCreator, src store.Source, from r
 	return id, false, nil
 }
 
+// note records a metadata carry that was refused for from.
+func (p spawnPlan) note(from row.Row, err error) {
+	if p.notes != nil {
+		p.notes.lines = append(p.notes.lines, "metadata of "+from.ID.String()+" not carried: "+err.Error())
+	}
+}
+
+// isMetaRefusal reports a metadata-rule refusal (an E_META_* code).
+func isMetaRefusal(err error) bool {
+	return strings.HasPrefix(string(errs.CodeOf(err)), metaCodePrefix)
+}
+
+// metaCodePrefix starts every metadata error code (model/errs).
+const metaCodePrefix = "E_META"
+
+// shiftDates moves from's due_at / deferred_until by p.shift into fields
+// (the root's due is set by the caller from the rule; root=true skips it).
+func (p spawnPlan) shiftDates(from row.Row, fields map[string]value.Value, root bool) {
+	for _, k := range []string{fieldDue, fieldDeferred} {
+		if root && k == fieldDue {
+			continue
+		}
+		t := work.Time(from, k)
+		if t.IsZero() {
+			continue
+		}
+		fields[k] = value.DateTimeFrom(t.Add(p.shift))
+	}
+}
+
+// innerDeps keeps from's dependencies on tasks of the same subtree,
+// re-pointed at the new instance's ids; edges leaving the subtree are
+// relations to other work and are not copied (10.4).
+func (p spawnPlan) innerDeps(from row.Row, fields map[string]value.Value) error {
+	var keep []dep
+	for _, d := range depsOf(from) {
+		path, ok := p.paths[d.TaskID]
+		if !ok {
+			continue
+		}
+		nid, err := instanceID(p.rc, path)
+		if err != nil {
+			return err
+		}
+		d.TaskID = nid.String()
+		keep = append(keep, d)
+	}
+	if len(keep) == 0 {
+		return nil
+	}
+	v, err := depsValue(keep)
+	if err != nil {
+		return err
+	}
+	fields[fieldBlockedBy] = v
+	return nil
+}
+
 // copySubtree re-creates the children of old under new (TSQ12): each
 // child's id comes from the series, the index and its tree path, statuses
 // reset; children are ordered by rank, ties by id (tasktree).
-func (o ops) copySubtree(ctx context.Context, c IDCreator, f forest, src store.Source, old, parent string, rc Recur, path string) (int, error) {
+func (o ops) copySubtree(ctx context.Context, c IDCreator, f forest, src store.Source, old, parent string, plan spawnPlan, path string) (int, error) {
 	n := 0
 	for i, kid := range f.tree.Children(old) {
 		s := f.row(kid)
@@ -323,7 +465,7 @@ func (o ops) copySubtree(ctx context.Context, c IDCreator, f forest, src store.S
 		if path != "" {
 			p = path + "." + p
 		}
-		kidID, existed, err := o.instance(ctx, c, src, s.Row, rc, p, parent, time.Time{})
+		kidID, existed, err := o.instance(ctx, c, src, s.Row, plan, p, parent, time.Time{})
 		if err != nil {
 			return n, err
 		}
@@ -331,7 +473,7 @@ func (o ops) copySubtree(ctx context.Context, c IDCreator, f forest, src store.S
 			continue
 		}
 		n++
-		m, err := o.copySubtree(ctx, c, f, src, kid, kidID.String(), rc, p)
+		m, err := o.copySubtree(ctx, c, f, src, kid, kidID.String(), plan, p)
 		if err != nil {
 			return n, err
 		}
