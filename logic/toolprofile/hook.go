@@ -104,7 +104,10 @@ func ContextHooks(promptSearch bool) []SessionHook {
 	const src = "https://code.claude.com/docs/en/hooks"
 	cmd := "lore context --hook " + NameClaudeCode + " --hook-stdin"
 	out := []SessionHook{{Tool: NameClaudeCode, ConfigFile: ".claude/settings.local.json", Event: "PreToolUse",
-		Matcher: "Read|Edit|Write", Cmd: cmd, Source: src}}
+		Matcher: "Read|Edit|Write", Cmd: cmd, Source: src},
+		// CONTEXT_BUDGET 6.9: the SessionStart context hook.
+		{Tool: NameClaudeCode, ConfigFile: ".claude/settings.local.json", Event: "SessionStart",
+			Cmd: cmd + " --session-start", Source: src}}
 	if promptSearch {
 		out = append(out, SessionHook{Tool: NameClaudeCode, ConfigFile: ".claude/settings.local.json",
 			Event: "UserPromptSubmit", Cmd: cmd, Source: src})
