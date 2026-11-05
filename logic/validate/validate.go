@@ -5,7 +5,11 @@
 // here, so "203.0.113.10" becomes an ip for an ip field and stays text for a
 // text field.
 //
-// Layer L1: pure, no I/O; imports model and schema only.
+// Every text value (a text field, or each text item of a list) is cleaned
+// by logic/textnorm before it is stored (P3-TEXT-1): bidi controls and
+// zero-width characters dropped, CRLF to LF, NFC; a NUL byte is refused.
+//
+// Layer L1: pure, no I/O; imports model, schema and logic/textnorm only.
 //
 // Invariant: no error from this package ever repeats a value, only field
 // names and kinds, because the field may be sensitive and errors are printed
@@ -13,9 +17,11 @@
 package validate
 
 import (
+	"errors"
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/textnorm"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -91,6 +97,10 @@ func Value(f schema.FieldDef, v value.Value) (value.Value, error) {
 	typed, err := convert(f.Kind, f.Elem, v)
 	if err != nil {
 		return nil, fieldErr{"field " + f.Name + ": want " + want(f)}
+	}
+	typed, err = cleanText(typed)
+	if err != nil {
+		return nil, fieldErr{"field " + f.Name + ": " + textProblem(err)}
 	}
 	if len(f.Values) > 0 && !slices.Contains(f.Values, typed.String()) {
 		return nil, fieldErr{"field " + f.Name + ": want one of " + strings.Join(f.Values, ", ")}
@@ -174,4 +184,51 @@ func sortedKeys(m map[string]value.Value) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// cleanText runs textnorm.Clean over a text value, or over every text item
+// of a list; any other kind is returned as is. Fail closed: text that
+// cannot be cleaned (a NUL byte) is an error, never stored.
+func cleanText(v value.Value) (value.Value, error) {
+	switch t := v.(type) {
+	case value.Text:
+		c, err := textnorm.Clean(t.String())
+		if err != nil {
+			return nil, err
+		}
+		if c == t.String() {
+			return v, nil
+		}
+		return value.TextOf(c)
+	case value.List:
+		items := t.Items()
+		changed := false
+		for i, it := range items {
+			txt, isText := it.(value.Text)
+			if !isText {
+				continue // lists hold scalar items; only text is cleaned
+			}
+			c, err := cleanText(txt)
+			if err != nil {
+				return nil, err
+			}
+			if c.String() != txt.String() {
+				items[i], changed = c, true
+			}
+		}
+		if !changed {
+			return v, nil
+		}
+		return value.ListOf(t.Elem(), items...)
+	}
+	return v, nil
+}
+
+// textProblem is the value-free reason textnorm refused a text.
+func textProblem(err error) string {
+	var e *errs.Error
+	if errors.As(err, &e) {
+		return e.Message
+	}
+	return "text cannot be stored"
 }
