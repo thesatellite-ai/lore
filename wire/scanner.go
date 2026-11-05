@@ -69,6 +69,39 @@ type liveScanner struct {
 	mu      sync.Mutex
 	key     string // the rule rows' ids and HLCs the current scanner was built from
 	cur     *gitleaks.Scanner
+	// sessions reads the raw tool session ids known on this machine
+	// (OV11, AGENT_IDENTITY 9 / OQ14); nil: no session-id rule. ids is
+	// the set read at the last Refresh.
+	sessions ToolSessionSource
+	ids      []string
+}
+
+// ToolSessionSource is an optional capability of the repo audit sink
+// (Options.Audit): the raw tool session ids this machine knows (the old
+// binary's lore.db sessions table, machine-local). The scanner refuses
+// any of them in row text at write time (RuleSessionID), so a session id
+// never reaches a row file and git, not only at commit and push.
+type ToolSessionSource interface {
+	ToolSessionIDs(ctx context.Context) ([]string, error)
+}
+
+// RuleSessionID is the finding rule of a known tool session id in row
+// text (OV11; same id as the old leak check's session-id rule). It goes
+// through secrets.on_detect like any secret finding (DECISION P2-CTX-2).
+const RuleSessionID = "session-id"
+
+// minSessionIDLen is the shortest session id the rule looks for: a
+// shorter one would match ordinary text (same floor as the leak check).
+const minSessionIDLen = 8
+
+// withToolSessions makes the scanner refuse known tool session ids when
+// src (the repo audit sink) offers them; any other value adds nothing.
+func withToolSessions(src engine.AuditSink) scannerOption {
+	return func(s *liveScanner) {
+		if ts, ok := src.(ToolSessionSource); ok {
+			s.sessions = ts
+		}
+	}
 }
 
 var _ engine.RefreshingScanner = (*liveScanner)(nil)
@@ -112,6 +145,9 @@ func newScanner(ctx context.Context, backends map[store.Source]store.Backend, op
 
 // Refresh implements engine.RefreshingScanner.
 func (s *liveScanner) Refresh(ctx context.Context) error {
+	if err := s.refreshSessions(ctx); err != nil {
+		return err
+	}
 	entries, key, err := ruleRows(ctx, s.backends, s.folders)
 	if err != nil {
 		return err
@@ -195,11 +231,60 @@ func (s *liveScanner) scanner() *gitleaks.Scanner {
 }
 
 // Scan implements scan.Scanner.
-func (s *liveScanner) Scan(field, text string) []scan.Finding { return s.scanner().Scan(field, text) }
+func (s *liveScanner) Scan(field, text string) []scan.Finding {
+	return s.ScanReport(field, text).Findings
+}
 
 // ScanReport implements scan.Reporter (the engine surfaces a degraded scan).
 func (s *liveScanner) ScanReport(field, text string) scan.Report {
-	return s.scanner().ScanReport(field, text)
+	rep := s.scanner().ScanReport(field, text)
+	rep.Findings = append(rep.Findings, s.sessionHits(field, text)...)
+	return rep
+}
+
+// refreshSessions re-reads the known tool session ids (a new session may
+// have started since the last write of a long-lived App). A read error
+// fails the write closed.
+func (s *liveScanner) refreshSessions(ctx context.Context) error {
+	if s.sessions == nil {
+		return nil
+	}
+	got, err := s.sessions.ToolSessionIDs(ctx)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: read the known tool session ids", err)
+	}
+	var keep []string
+	for _, id := range got {
+		if len(id) >= minSessionIDLen {
+			keep = append(keep, id)
+		}
+	}
+	s.mu.Lock()
+	s.ids = keep
+	s.mu.Unlock()
+	return nil
+}
+
+// sessionHits finds every known tool session id in text, masked like any
+// secret finding (the id itself is never printed).
+func (s *liveScanner) sessionHits(field, text string) []scan.Finding {
+	s.mu.Lock()
+	ids := s.ids
+	s.mu.Unlock()
+	var out []scan.Finding
+	for _, id := range ids {
+		for from := 0; ; {
+			i := strings.Index(text[from:], id)
+			if i < 0 {
+				break
+			}
+			off := from + i
+			out = append(out, scan.Finding{RuleID: RuleSessionID, Field: field, Line: strings.Count(text[:off], "\n") + 1,
+				Offset: off, Length: len(id), Preview: scan.Mask(id), MatchHash: scan.HashMatch(id)})
+			from = off + len(id)
+		}
+	}
+	return out
 }
 
 // ruleEntry is one live secret_rules row and the level of its store.
