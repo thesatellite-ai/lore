@@ -47,6 +47,10 @@ type globalSearchHit struct {
 	Score       float64 `json:"score"`
 	Snippet     string  `json:"snippet,omitempty"`
 	Body        string  `json:"body,omitempty"` // short body excerpt for plain-text rendering
+	// Source is the `_source` object of a hit from an attached store
+	// (FLAG1: {store, store_id, folder, folder_id}); zero for a repo hit,
+	// so repo hits' --json bytes are unchanged (r2-source).
+	Source store.SourceRef `json:"_source,omitzero"`
 	// fallback is the terminal text when neither Snippet nor Body is set
 	// (a cache that gave no snippet); never in --json, so the v0.1.17
 	// envelope is unchanged.
@@ -282,18 +286,25 @@ you want to scope to one type. This is the cross-entity hammer.`,
 			// personal; F20) are matched as plain text and listed after the
 			// repo's hits, each with its source label.
 			extText := plainSearchText(query)
+			// Store rows the core already listed are not listed twice.
+			listed := map[string]bool{}
+			for _, h := range merged {
+				if h.Source.Store != "" {
+					listed[h.ID] = true
+				}
+			}
 			if jsonOut {
 				printJSON(constants.KindSearchGlobal, map[string]any{
 					"query":    query,
 					"count":    len(merged),
 					"hits":     merged,
-					"external": externalJSONRows(ctx, "", extText),
+					"external": externalJSONRowsExcept(ctx, "", extText, listed),
 				}, len(merged))
 				return nil
 			}
 			if len(merged) == 0 {
 				var ext strings.Builder
-				if printExternalRows(ctx, &ext, "", extText) > 0 {
+				if printExternalRowsExcept(ctx, &ext, "", extText, listed) > 0 {
 					fmt.Printf("No hits in this repo; outside this checkout:\n\n%s", ext.String())
 					return nil
 				}
@@ -302,7 +313,7 @@ you want to scope to one type. This is the cross-entity hammer.`,
 			}
 			defer func() {
 				var ext strings.Builder
-				if printExternalRows(ctx, &ext, "", extText) > 0 {
+				if printExternalRowsExcept(ctx, &ext, "", extText, listed) > 0 {
 					fmt.Printf("\nOutside this checkout:\n\n%s", ext.String())
 				}
 			}()
@@ -322,6 +333,9 @@ you want to scope to one type. This is the cross-entity hammer.`,
 				}
 				if len(body) > 100 {
 					body = body[:97] + "..."
+				}
+				if h.Source.Store != "" {
+					body += "  " + style.Muted(storeHitLabel(h.Source))
 				}
 				fmt.Printf("%s %-7s %s  (score=%.3f)\n", style.Code(kindTag), pretty, body, h.Score)
 			}
@@ -426,32 +440,65 @@ func searchCoreTable(ctx context.Context, eng *engine.Engine, t globalSearchTarg
 		}
 		return nil, err
 	}
-	var rows map[ids.AnyID]row.Row // loaded on the first repo hit
+	rows := map[store.Source]map[ids.AnyID]row.Row{} // per store, loaded on its first hit
 	out := make([]globalSearchHit, 0, perTable)
 	for _, h := range hits {
 		if len(out) == perTable {
 			break
 		}
-		if h.Source != store.SourceRepo {
-			continue // listed under "outside this checkout"
-		}
-		if rows == nil {
-			list, err := eng.List(ctx, store.SourceRepo, t.table)
+		byID, ok := rows[h.Source]
+		if !ok {
+			list, err := eng.List(ctx, h.Source, t.table)
 			if err != nil {
 				return nil, err
 			}
-			rows = make(map[ids.AnyID]row.Row, len(list))
+			byID = make(map[ids.AnyID]row.Row, len(list))
 			for _, r := range list {
-				rows[r.ID] = r
+				byID[r.ID] = r
 			}
+			rows[h.Source] = byID
 		}
-		r, ok := rows[h.ID]
-		if !ok || !sc.keeps(t, r) {
-			continue // gone since the cache was refreshed, or out of scope
+		r, ok := byID[h.ID]
+		if !ok {
+			continue // gone since the cache was refreshed
 		}
-		out = append(out, globalHitOf(t, h.ID.String(), h.Snippet, r))
+		if h.Source == store.SourceRepo {
+			if !sc.keeps(t, r) {
+				continue // out of scope
+			}
+			out = append(out, globalHitOf(t, h.ID.String(), h.Snippet, r))
+			continue
+		}
+		// r2-source: a row of an attached store (an org store folder, me,
+		// team) is a hit too, labelled with its FLAG1 _source; the repo's
+		// project/repo scope does not apply to another store's rows, the
+		// deleted and archived filters do.
+		if !sc.keepsStoreRow(t, r) {
+			continue
+		}
+		hit := globalHitOf(t, h.ID.String(), h.Snippet, r)
+		hit.Source = coreApp.DescribeSource(h.Source)
+		out = append(out, hit)
 	}
 	return out, nil
+}
+
+// storeHitLabel is the bracketed store label of a store hit ("[agency]",
+// "[agency/acme-hub]").
+func storeHitLabel(src store.SourceRef) string {
+	if src.Folder != "" {
+		return "[" + src.Store + "/" + src.Folder + "]"
+	}
+	return "[" + src.Store + "]"
+}
+
+// keepsStoreRow is keeps for a row of an attached store: deleted rows and
+// (without --include-archived) archived rows are left out.
+func (sc globalSearchScope) keepsStoreRow(t globalSearchTarget, r row.Row) bool {
+	if r.Deleted {
+		return false
+	}
+	return !t.hasArchived || sc.includeArchived || searchField(r, searchFieldArchived) == ""
 }
 
 // globalHitOf is a hit labelled like v0.1.17's hydrateGlobalHits: pretty =

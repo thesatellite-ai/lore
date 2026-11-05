@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"strings"
 
@@ -36,7 +37,14 @@ const (
 // printExternalRows prints external rows of table (or matching text; ""
 // = no filter) as "id  text  [label]" lines. Returns how many it printed.
 func printExternalRows(ctx context.Context, w io.Writer, table, text string) int {
+	return printExternalRowsExcept(ctx, w, table, text, nil)
+}
+
+// printExternalRowsExcept is printExternalRows leaving out the ids in skip
+// (rows the caller already listed from the core, r2-source).
+func printExternalRowsExcept(ctx context.Context, w io.Writer, table, text string, skip map[string]bool) int {
 	rows, notes := externalRowsHere(ctx, cachedb.Query{Table: table, Text: text})
+	rows = slices.DeleteFunc(rows, func(r cachedb.Row) bool { return skip[r.ID] })
 	for _, n := range notes {
 		fmt.Fprintln(os.Stderr, style.Muted("lore: "+n))
 	}
@@ -62,7 +70,13 @@ func printExternalRows(ctx context.Context, w io.Writer, table, text string) int
 // externalJSONRows returns external rows as JSON objects (the row's own
 // fields plus _source, _label, _live_row) for --json list output.
 func externalJSONRows(ctx context.Context, table, text string) []map[string]any {
+	return externalJSONRowsExcept(ctx, table, text, nil)
+}
+
+// externalJSONRowsExcept is externalJSONRows leaving out the ids in skip.
+func externalJSONRowsExcept(ctx context.Context, table, text string, skip map[string]bool) []map[string]any {
 	rows, _ := externalRowsHere(ctx, cachedb.Query{Table: table, Text: text})
+	rows = slices.DeleteFunc(rows, func(r cachedb.Row) bool { return skip[r.ID] })
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		var doc map[string]any
