@@ -749,10 +749,6 @@ func cleanStoresFileURLs(top string, cfg attach.Config) error {
 	}
 	// The composition root is the one layer that may talk to the terminal.
 	fmt.Fprintf(os.Stderr, "lore: %s: a credential was in the url of store %s; lore removed it from %s (use your git credential helper; rotate it if it was ever committed)\n",
-		urlCredentialsWarn, strings.Join(names, ", "), attach.FileName)
+		engine.WarnURLUserinfo, strings.Join(names, ", "), attach.FileName)
 	return nil
 }
-
-// urlCredentialsWarn is the warning code of a removed URL credential
-// (SECRETS 14.4, the same code engine writes use).
-const urlCredentialsWarn = "W_URL_CREDENTIALS"
