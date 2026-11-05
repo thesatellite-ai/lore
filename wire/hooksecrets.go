@@ -186,11 +186,12 @@ func fieldTexts(v value.Value) []string {
 		return []string{v.String()}
 	case value.KindList:
 		return value.ItemStrings(v)
+	default: // every other kind is scanned in its JSON form, else its text
+		if b, ok := value.JSONForm(v); ok {
+			return []string{string(b)}
+		}
+		return []string{v.String()}
 	}
-	if b, ok := value.JSONForm(v); ok {
-		return []string{string(b)}
-	}
-	return []string{v.String()}
 }
 
 // lineOfField is the 1-based line of a field's key in a row file.

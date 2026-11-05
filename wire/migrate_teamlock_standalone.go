@@ -47,7 +47,7 @@ var _ opsmigrate.TeamLock = migrateTeamLock{}
 // open is the coordination world and its signals store; ok is false when
 // the repo has no remote (a solo repo: nobody to race, cookbook 1).
 func (l migrateTeamLock) open(ctx context.Context) (*coordWorld, *signals.Store, bool, error) {
-	w, err := standaloneCoord{a: l.a}.openWorld(ctx)
+	w, err := standaloneCoord(l).openWorld(ctx)
 	if err != nil {
 		return nil, nil, false, err
 	}
