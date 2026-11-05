@@ -820,3 +820,43 @@ func liveCollectorFrom(ctx context.Context) *liveCollector {
 	c, _ := ctx.Value(liveCollectorKey{}).(*liveCollector)
 	return c
 }
+		case !ch.Expect.IsZero():
+			// r2-regress: a row that landed on origin/<default> and left
+			// live is read through landedOnDefault (Get); a fenced
+			// coordination write of it (the merged_at stamp) is forced
+			// live above, so its expected copy is that landed one, not
+			// "none" (it was E_STALE on every lazy merged check).
+			if landed, ok := b.landedOnDefault(ctx, s, k); ok {
+				cur = landed
+			}
+
+var _ store.AuditJournal = (*liveBackend)(nil)
+
+// WriteAudited implements store.AuditJournal (CLEANUP Qs): without a live
+// session every change goes to the repo store, so the rows and their audit
+// records are written in one batch there; with a session (some rows may go
+// to the live ref) it is a plain Write and the engine records the audit
+// after it, as before.
+func (b *liveBackend) WriteAudited(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
+	j, ok := b.inner.(store.AuditJournal)
+	if !ok || b.session(ctx) != nil {
+		return b.Write(ctx, changes)
+	}
+	return j.WriteAudited(ctx, changes, recs)
+}
+
+// PendingAudit implements store.AuditJournal (the repo store's journal).
+func (b *liveBackend) PendingAudit(ctx context.Context) ([]store.AuditRecord, error) {
+	if j, ok := b.inner.(store.AuditJournal); ok {
+		return j.PendingAudit(ctx)
+	}
+	return nil, nil
+}
+
+// AckAudit implements store.AuditJournal (the repo store's journal).
+func (b *liveBackend) AckAudit(ctx context.Context, recs []store.AuditRecord) error {
+	if j, ok := b.inner.(store.AuditJournal); ok {
+		return j.AckAudit(ctx, recs)
+	}
+	return nil
+}
