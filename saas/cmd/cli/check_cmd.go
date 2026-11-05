@@ -207,13 +207,22 @@ func sharedCopies(doc []byte) []string {
 }
 
 // runLeakCheck checks items and prints a block report (E_LEAK_BLOCKED).
+//
+// Secrets go through the one core scanner with the committed allow entries
+// (D4, secret_scanner.go); a finding always refuses (D3: no switch turns
+// the scan off). A scanner that cannot be built refuses too.
 func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, explain bool, lc leakContext) error {
+	warnRemovedSyncAllow()
+	secrets, err := checkSecretScan(ctx, root)
+	if err != nil {
+		return err
+	}
 	idx, pid, client, err := leakIndexFor(ctx, root)
 	if err != nil {
 		if !leakcheck.NeedsIndex(items) {
 			// Nothing here could match an internal row (no file, too few
 			// words, no id): the check is decided without the store.
-			fs := leakcheck.Blocking(leakcheck.Check(items, nil, leakcheck.Options{Secrets: true, SessionIDs: knownSessionIDs(ctx)}))
+			fs := leakcheck.Blocking(leakcheck.Check(items, nil, leakcheck.Options{Secrets: true, SecretScan: secrets, SessionIDs: knownSessionIDs(ctx)}))
 			if len(fs) == 0 {
 				return nil
 			}
@@ -221,7 +230,7 @@ func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, expl
 		}
 		return err
 	}
-	fs := leakcheck.Check(items, idx, leakcheck.Options{Secrets: true, RepoProjectID: pid, ClientRepo: client, DataPrefix: projectDataPrefix(ctx, root), SessionIDs: knownSessionIDs(ctx)})
+	fs := leakcheck.Check(items, idx, leakcheck.Options{Secrets: true, SecretScan: secrets, RepoProjectID: pid, ClientRepo: client, DataPrefix: projectDataPrefix(ctx, root), SessionIDs: knownSessionIDs(ctx)})
 	for _, f := range fs {
 		if f.Warn {
 			fmt.Fprintf(os.Stderr, "lore: warning: %s: %s\n", f.Where, f.Detail)
@@ -312,11 +321,27 @@ type leakContext struct {
 	source string
 }
 
+// secretAllowFix is the 19.4 fix of a secret finding in a repo row field:
+// the vault, or an allow entry committed with the row ("" for any other
+// finding). The hooks honour only committed entries, so the sal_ file must
+// be in the same commit.
+func secretAllowFix(f leakcheck.Finding) string {
+	id, _, ok := repoRowOf(f.Path)
+	if f.Rule != leakcheck.RuleSecret || f.Secret.Field == "" || !ok {
+		return ""
+	}
+	return fmt.Sprintf("Store the value in your vault and write ${secret:…} in %s. If it is not a secret: lore secrets allow %s --rule %s --field %s --match-hash %d --reason \"<why>\", add the new .lore/data/secret_allows file, then commit again",
+		id, id, f.Secret.Rule, f.Secret.Field, f.Secret.Hash)
+}
+
 // leakFix is the one-line fix for a finding, or "" when the finding needs
 // none beyond the listing (the same fix is printed once).
 func leakFix(f leakcheck.Finding, lc leakContext) string {
 	if f.Rule == leakcheck.RuleActor {
 		return ""
+	}
+	if fix := secretAllowFix(f); fix != "" {
+		return fix
 	}
 	switch lc.action {
 	case leakActionShare:

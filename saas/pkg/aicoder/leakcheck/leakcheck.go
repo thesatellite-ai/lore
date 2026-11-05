@@ -185,6 +185,9 @@ type Finding struct {
 	// Warn marks a finding that is reported but does not block (see
 	// StableKeyBlocks).
 	Warn bool
+	// Secret is set on a secret-rule finding of a row field (19.4): what
+	// a `lore secrets allow` entry for it names. Zero otherwise.
+	Secret SecretHit
 }
 
 // StableKeyBlocks records that a person's stable_key, handle or email in a
@@ -213,9 +216,12 @@ func Blocking(fs []Finding) []Finding {
 
 // Options tune Check.
 type Options struct {
-	// Secrets runs the secret rule (nil scanner = security.NewScanner()).
-	Secrets bool
-	Scanner *security.Scanner
+	// Secrets runs the secret rule. SecretScan is the scanner (D4: the
+	// CLI passes the core scanner with the committed allow entries,
+	// saas/cmd/cli/secret_scanner.go); nil = security.NewScanner(), kept
+	// only for callers with no core (v0.1.17 unit tests).
+	Secrets    bool
+	SecretScan SecretScan
 	// ClientRepo turns on the actor projection rule: in a client repo an
 	// actor file may hold only {id, display name, kind} (F18 client copy);
 	// in any other repo actor files are the repo's own business.
@@ -235,6 +241,23 @@ type Options struct {
 	// prints the id.
 	SessionIDs []string
 }
+
+// SecretHit is one secret finding in an item, safe to print: the rule id
+// and a masked preview, never the value. Line is 1-based in the item.
+type SecretHit struct {
+	Line    int
+	Rule    string
+	Preview string
+	// Field names the row field of a row file ("" for other text), and
+	// Hash is the match hash (scan.HashMatch; safe to print, it does not
+	// reveal the value), so the fix can name the `lore secrets allow`
+	// entry that would cover it.
+	Field string
+	Hash  uint32
+}
+
+// SecretScan scans one item for secrets (Options.SecretScan).
+type SecretScan func(it Item) []SecretHit
 
 // idRe finds lore row ids in any text (prefix_ + 32 hex, ids.go).
 var idRe = regexp.MustCompile(`\b[a-z]{3}_[0-9a-f]{32}\b`)
@@ -413,9 +436,12 @@ func actorExtraKeys(doc map[string]any) []string {
 // (then only the secret and project-id rules run).
 func Check(items []Item, idx *Index, o Options) []Finding {
 	var out []Finding
-	scanner := o.Scanner
-	if o.Secrets && scanner == nil {
-		scanner = security.NewScanner()
+	secrets := o.SecretScan
+	if o.Secrets && secrets == nil {
+		secrets = legacySecretScan(security.NewScanner())
+	}
+	if !o.Secrets {
+		secrets = nil
 	}
 	for _, it := range items {
 		start := len(out)
@@ -429,10 +455,17 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 			out = append(out, textHits(it, content, idx, allowedRows(it, idx))...)
 		}
 		out = append(out, sessionHits(it, content, o.SessionIDs)...)
-		if scanner != nil {
-			for _, s := range scanner.Scan(content) {
-				out = append(out, Finding{Rule: RuleSecret, Where: it.Where, Line: lineOf(content, s.Offset),
-					Detail: "credential pattern " + s.PatternName + " (" + s.Preview + ")"})
+		if secrets != nil {
+			for _, h := range secrets(it) {
+				detail := "credential pattern " + h.Rule + " (" + h.Preview + ")"
+				if h.Field != "" {
+					detail = "credential pattern " + h.Rule + " in field " + h.Field + " (" + h.Preview + ")"
+				}
+				f := Finding{Rule: RuleSecret, Where: it.Where, Line: h.Line, Detail: detail}
+				if h.Field != "" {
+					f.Secret = h
+				}
+				out = append(out, f)
 			}
 		}
 		for i := start; i < len(out); i++ {
@@ -441,6 +474,18 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 	}
 	sortFindings(out)
 	return out
+}
+
+// legacySecretScan is the v0.1.17 scanner as a SecretScan (whole content).
+func legacySecretScan(sc *security.Scanner) SecretScan {
+	return func(it Item) []SecretHit {
+		content := string(it.Content)
+		var out []SecretHit
+		for _, m := range sc.Scan(content) {
+			out = append(out, SecretHit{Line: lineOf(content, m.Offset), Rule: m.PatternName, Preview: m.Preview})
+		}
+		return out
+	}
 }
 
 // sessionHits finds every known tool session id in content (section 9).

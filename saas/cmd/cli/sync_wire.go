@@ -218,9 +218,15 @@ func syncOptions(db *sql.DB, root, dataDir string, kind lsync.ChangeKind) lsync.
 }
 
 // secretCheck returns the credential scanner used for every file that may
-// reach git (export and pre-commit). It is never nil: D3 removed
+// reach git (the sync export). It is never nil: D3 removed
 // LORE_SYNC_ALLOW_SECRETS, so the hooks always scan and always refuse.
 func secretCheck() func([]byte) string {
+	warnRemovedSyncAllow()
+	if coreApp != nil {
+		// D4: the core scanner, with the committed allow entries
+		// (secret_scanner.go); the old patterns only without a core.
+		return exportSecretCheck()
+	}
 	scanner, err := secretScanner()
 	if err != nil {
 		// Fail closed: a pattern the user wrote must not silently stop
