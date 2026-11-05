@@ -747,6 +747,17 @@ func (r *clientRows) Stage(ctx context.Context, rows ...coord.RowWrite) ([]signa
 		// stays (nothing is lost, the old readers see it).
 		if newFormatStore(ctx, r.store.st, r.store.branch) {
 			if src, ok := coreSourceForProject(r.storeProjectID(ctx)); ok {
+				// P2B-OLD-1: through the core the linked task names the
+				// client repo's project, as core `task add --to <store>`
+				// does (work.Project). The store folder's _meta.json id has
+				// no projects row, so engine.checkRefs refused the claim.
+				for i := range internal {
+					if internal[i].Table == tableTasks {
+						d := internal[i].Doc.Clone()
+						d["project_id"] = r.inner.projectID
+						internal[i].Doc = d
+					}
+				}
 				out = append(out, &coreCompanion{rows: internal, target: src})
 				internal = nil
 			}
