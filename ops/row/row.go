@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -261,13 +262,25 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		}
 		out.Fields[k] = v.String()
 	}
-	for _, j := range r.Meta {
-		if name, val, ok := metaPair(j); ok {
-			if out.Meta == nil {
-				out.Meta = map[string]string{}
-			}
-			out.Meta[name] = val
+	for kid, j := range r.Meta {
+		en, derr := meta.DecodeEntry(j)
+		if derr != nil || en.Name == "" {
+			continue
 		}
+		// METADATA 3.20 "one masker": the entry's label OR the key row's
+		// flag, whichever says sensitive (an entry written before the key
+		// turned sensitive carries no label)
+		if !en.Sensitive {
+			if _, k, kerr := o.env.Get(ctx, engine.Ref{Table: schema.TableMetaKeys, ID: kid.Any()}); kerr == nil {
+				if b, ok := k.Fields["sensitive"].(value.Bool); ok && b.Bool() {
+					en.Sensitive = true
+				}
+			}
+		}
+		if out.Meta == nil {
+			out.Meta = map[string]string{}
+		}
+		out.Meta[en.Name] = meta.Show(en)
 	}
 	if in.Force && !in.Reveal {
 		return ShowOut{}, errs.New(errs.InvalidInput, "--force goes with --reveal")
@@ -305,22 +318,6 @@ func (o ops) expand(ctx context.Context, r row.Row, rf expand.RevealFlag, out *S
 	out.Expanded, out.Refs = b.Expanded, b.Refs
 	out.Revealed, out.Forced, out.Warning = b.Revealed, b.Forced, b.Warning
 	return nil
-}
-
-// metaPair is one meta entry's name and value text ({name, v, …}).
-func metaPair(j value.JSON) (string, string, bool) {
-	var e struct {
-		Name string          `json:"name"`
-		V    json.RawMessage `json:"v"`
-	}
-	if j.IsZero() || json.Unmarshal(j.Raw(), &e) != nil || e.Name == "" {
-		return "", "", false
-	}
-	var s string
-	if json.Unmarshal(e.V, &s) == nil {
-		return e.Name, s, true
-	}
-	return e.Name, string(e.V), true
 }
 
 // rawOrigin is `_o` narrowed at the JSON boundary (logic/origin's keys).
