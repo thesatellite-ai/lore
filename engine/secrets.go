@@ -72,6 +72,7 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		findings []scan.Finding
 	}
 	var hits []hit
+	loreRec := e.loreRecordFields(rowID)
 	look := func(field string, item int, text string) {
 		found, warn := e.scanText(field, text)
 		if warn != nil {
@@ -79,6 +80,11 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		}
 		var kept []scan.Finding
 		for _, f := range found {
+			// BUG-T7: a session id in lore's own structured record
+			// (claim_log) is bookkeeping, not a leak; free text keeps the rule
+			if f.RuleID == scan.RuleSessionID && loreRec[field] {
+				continue
+			}
 			if !rules.IsOff(f.RuleID, own) {
 				kept = append(kept, f)
 			}
@@ -181,6 +187,29 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	case policy.OnDetectRefuse:
 	}
 	return screened{}, secretErr(all)
+}
+
+// loreRecordFields names the fields of rowID's table marked schema
+// LoreRecord (structured records only lore writes); the session-id rule
+// skips them. An id of no stored table (a kind resource) has none.
+func (e *Engine) loreRecordFields(rowID ids.AnyID) map[string]bool {
+	if rowID.IsZero() {
+		return nil
+	}
+	def, ok := e.reg.ByPrefix(rowID.Prefix())
+	if !ok {
+		return nil
+	}
+	var out map[string]bool
+	for _, f := range def.Fields {
+		if f.LoreRecord {
+			if out == nil {
+				out = map[string]bool{}
+			}
+			out[f.Name] = true
+		}
+	}
+	return out
 }
 
 // RefreshingScanner is a scanner whose rules come from settings rows: the

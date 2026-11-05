@@ -86,10 +86,10 @@ type ToolSessionSource interface {
 	ToolSessionIDs(ctx context.Context) ([]string, error)
 }
 
-// RuleSessionID is the finding rule of a known tool session id in row
-// text (OV11; same id as the old leak check's session-id rule). It goes
-// through secrets.on_detect like any secret finding (DECISION P2-CTX-2).
-const RuleSessionID = "session-id"
+// RuleSessionID is scan.RuleSessionID, kept here for wire's callers. It
+// goes through secrets.on_detect like any secret finding (DECISION
+// P2-CTX-2); the engine skips it on schema LoreRecord fields (BUG-T7).
+const RuleSessionID = scan.RuleSessionID
 
 // minSessionIDLen is the shortest session id the rule looks for: a
 // shorter one would match ordinary text (same floor as the leak check).

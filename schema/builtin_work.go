@@ -196,14 +196,16 @@ func workDefs() []TableDef {
 			JSON("blocked_by", MergeBy(MergeSetUnion), Describe("--after edges: [{task_id, project_id?, until}]")),
 			Number("claim_epoch", Internal()),
 			Number("attempts", Internal()),
-			JSON("claim_log", Internal()),
+			JSON("claim_log", Internal(), LoreRecord()), // its session ids are lore's own (BUG-T7)
 			// time_entries: closed spans of work (model/timeentry), union-merged
 			// by entry id; internal so client repos get no time data (TQ3).
 			JSON("time_entries", Internal(), MergeBy(MergeListByID),
 				Describe("closed time spans [{id, kind, source, actor_id, start, end, seconds, …}] (TIME_TRACKING_DESIGN 6.2)")),
 			// time_open: open status spans, one per person working on the task
 			// (TIME_TRACKING_DESIGN 4.1, D2); same union-by-id merge, internal (TQ3).
-			JSON("time_open", Internal(), MergeBy(MergeListByID),
+			// LoreRecord: open spans are written only by lore (no note field);
+			// time_entries is not, its note is free text (BUG-T7 sweep).
+			JSON("time_open", Internal(), LoreRecord(), MergeBy(MergeListByID),
 				Describe("open status spans [{id, source, actor_id, start}] (TIME_TRACKING_DESIGN 4.1)")),
 			// time_totals: the opt-in client projection of a task's time (TQ3,
 			// lore move --with-time totals); not internal: it is what a client may see.

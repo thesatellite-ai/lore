@@ -98,6 +98,12 @@ type FieldDef struct {
 	Required  bool
 	Sensitive bool // hidden from agents and sql output
 	Internal  bool // never written into a client repo
+	// LoreRecord marks a structured record only lore itself writes
+	// (tasks.claim_log). Its session ids are lore's own bookkeeping, so the
+	// session-id rule (scan.RuleSessionID) does not apply to it; every
+	// other secret rule still does. Free text people write never carries
+	// it (BUG-T7).
+	LoreRecord bool
 	// Merge is the field's merge strategy (MergeDefault when empty).
 	Merge       MergeStrategy
 	Description string

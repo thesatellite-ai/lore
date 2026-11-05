@@ -85,6 +85,10 @@ func Sensitive() FieldOption { return func(f *FieldDef) { f.Sensitive = true } }
 // Internal keeps the field out of client repos.
 func Internal() FieldOption { return func(f *FieldDef) { f.Internal = true } }
 
+// LoreRecord marks the field as a structured record only lore writes: the
+// session-id rule skips it (FieldDef.LoreRecord).
+func LoreRecord() FieldOption { return func(f *FieldDef) { f.LoreRecord = true } }
+
 // MergeBy sets the field's merge strategy (logic/merge).
 func MergeBy(s MergeStrategy) FieldOption { return func(f *FieldDef) { f.Merge = s } }
 

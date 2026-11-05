@@ -29,6 +29,12 @@ const (
 	SourceStore    Source = "store"    // a secret_rules row
 )
 
+// RuleSessionID is the finding rule of a known tool session id in row text
+// (OV11; same id as the old leak check's session-id rule). The engine never
+// applies it to a field marked schema LoreRecord (lore's own structured
+// session records, BUG-T7).
+const RuleSessionID = "session-id"
+
 // Sources lists every source.
 func Sources() []Source { return []Source{SourceBuiltin, SourceGitleaks, SourceStore} }
 
