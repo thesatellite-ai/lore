@@ -118,6 +118,11 @@ func run(ctx context.Context, args []string) int {
 	hooks = append(hooks, hosthooks.ReadOnlyNoticeHook(os.Stderr, func(ctx context.Context) string { return app.ReadOnlyNotice(ctx) }))
 	// render, why-context, context and setup (wire/renderhost) over the app built below.
 	rend := &lateRender{}
+	// after `lore doctor`: the context rows (size, launch set, Claude Code
+	// startup levels, double loads, folder files, target suggestions; doctorrender.go).
+	hooks = append(hooks, doctorRenderHook(rend, wd))
+	// after `lore sync`: private renders rebuilt, scope rename hints (syncrender.go).
+	hooks = append(hooks, syncRenderHook(rend, wd))
 	base.Context.Render, base.Context.RenderHistory, base.Context.Fetch, base.Context.Setup = rend, rend, rend, &lateSetup{r: rend}
 	app, err := wire.New(hosthooks.Options(base, hooks))
 	if err != nil {
