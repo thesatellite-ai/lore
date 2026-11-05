@@ -50,6 +50,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 
@@ -189,7 +190,20 @@ func liveRequest(ctx context.Context, s *liveSession) rowroute.Request {
 // with them. Without it another clone saw the row name an act_ id while
 // its actor row waited on the live ref or on a fetched, unpulled main.
 func liveReadable(s *liveSession, table row.Table) bool {
-	return isLiveKind(s, table) || string(table) == tableActors || liveFlagTables[table]
+	return isLiveKind(s, table) || companionTables[string(table)] || liveFlagTables[table]
+}
+
+// companionTables are the supporting tables whose NEW rows ride live as
+// companions of the content row that needs them (holdActorCompanions):
+// actors (FLAG6) and the metadata key and value rows a live write
+// registers on first use (PASS3-A-1, METADATA 3.10). Without the meta
+// tables a `task add --live --meta newkey=x` sent the task live while its
+// new key row sat uncommitted in the work tree's .lore/data, so every
+// other clone saw a value under a key it did not know.
+var companionTables = map[string]bool{
+	tableActors:            true,
+	schema.TableMetaKeys:   true,
+	schema.TableMetaValues: true,
 }
 
 // liveFiles is the live folder of the local live ref: its commit ("" when
@@ -682,7 +696,8 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 
 // ---------------------------------------------------------------- actor companions (FLAG6)
 
-// holdActorCompanions takes every NEW actors row out of changes and holds
+// holdActorCompanions takes every NEW row of a companion table (actors;
+// meta_keys and meta_values since PASS3-A-1) out of changes and holds
 // it on the session (liveSession.actorCompanions) until the command's next
 // content write, which carries it (Write; flushActorCompanions at the end
 // of the command writes what no content row took).
@@ -702,8 +717,8 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 func (b *liveBackend) holdActorCompanions(ctx context.Context, s *liveSession, col *liveCollector, files map[live.RowKey]live.File, changes []store.Change) ([]store.Change, error) {
 	kept := changes[:0:0]
 	for _, ch := range changes {
-		if string(ch.Row.Table) != tableActors || ch.Row.Deleted || liveChoiceFor(ctx, ch.Row.Table) {
-			kept = append(kept, ch) // an explicitly live actors row is written live on its own (BUG-T1)
+		if !companionTables[string(ch.Row.Table)] || ch.Row.Deleted || liveChoiceFor(ctx, ch.Row.Table) {
+			kept = append(kept, ch) // an explicitly live supporting row is written live on its own (BUG-T1)
 			continue
 		}
 		k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
@@ -1065,7 +1080,7 @@ func (b *liveBackend) wholeBatchToBranch(ctx context.Context, s *liveSession, ch
 	}
 	req := liveRequest(ctx, s)
 	for _, ch := range changes {
-		if string(ch.Row.Table) == tableActors {
+		if companionTables[string(ch.Row.Table)] {
 			return false, nil
 		}
 		k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}

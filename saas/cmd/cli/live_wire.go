@@ -881,7 +881,7 @@ func (s *liveSession) finish(ctx context.Context, folder string) {
 	}
 	s.finished = true
 	if err := s.flushActorCompanions(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+"actor rows were not written: "+err.Error()))
+		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+"supporting rows (actors, metadata keys) were not written: "+err.Error()))
 	}
 	if !s.push(ctx, true) {
 		return
