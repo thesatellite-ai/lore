@@ -14,49 +14,42 @@ import (
 
 	"saas/pkg/aicoder/errcodes"
 
+	"github.com/thesatellite-ai/lore/adapters/machine"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
-// installMethod is the closed set of ways lore can be installed (8.1).
-type installMethod string
+// installMethod is the closed set of ways lore can be installed (8.1). The
+// one detection lives in adapters/machine (also the machine profile's
+// install_method, OV28 "one shared install-method detection"); these names
+// keep the upgrade code readable.
+type installMethod machine.InstallMethod
 
 const (
-	installBrew   installMethod = "Homebrew"
-	installScript installMethod = "script"
-	installSource installMethod = "source"
+	installBrew   = installMethod(machine.InstallHomebrew)
+	installScript = installMethod(machine.InstallScript)
+	installSource = installMethod(machine.InstallSource)
 	// installOther is a version manager's folder: lore changes nothing.
-	installOther installMethod = "other"
+	installOther = installMethod(machine.InstallOther)
 )
 
-// brewCellarMarker is the path piece of a Homebrew-installed lore
-// (<prefix>/Cellar/lore/<version>/bin/lore, every prefix).
-const brewCellarMarker = "/Cellar/" + BinaryName + "/"
+// String is how `lore upgrade` names the method to a person ("installed by
+// Homebrew"); the profile keeps the lowercase stored value.
+func (m installMethod) String() string {
+	if m == installBrew {
+		return "Homebrew"
+	}
+	return string(m)
+}
 
 // brewFormula is the formula .goreleaser.yml publishes under brews.
 const brewFormula = "thesatellite-ai/tap/" + BinaryName
 
-// versionManagerMarkers are folders of tools that own the binary themselves.
-var versionManagerMarkers = []string{"/.asdf/", "/mise/installs/", "/.local/share/aquaproj", "/nix/store/", "/.proto/tools/"}
-
-// detectInstall decides the install method from the resolved binary path
-// and the stamped version. A non-writable script install stays "script":
-// the swap then answers E_UPGRADE_PERMISSION with the sudo hint (8.3),
-// which says more than "changes nothing" (DECISION UPG-RO).
+// detectInstall is machine.DetectInstall. A non-writable script install
+// stays "script": the swap then answers E_UPGRADE_PERMISSION with the sudo
+// hint (8.3), which says more than "changes nothing" (DECISION UPG-RO).
 func detectInstall(exe, ver string) installMethod {
-	p := filepath.ToSlash(exe)
-	switch {
-	case strings.Contains(p, brewCellarMarker):
-		return installBrew
-	case isDevBuild(ver) || ver == "":
-		return installSource
-	}
-	for _, m := range versionManagerMarkers {
-		if strings.Contains(p, m) {
-			return installOther
-		}
-	}
-	return installScript
+	return installMethod(machine.DetectInstall(exe, ver))
 }
 
 // resolvedExe is os.Executable with symlinks resolved.
