@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // OpSplit is `lore task split` (TASK 6.3).
@@ -55,6 +56,15 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 	probe := AddIn{Parent: id.String()}
 	par, err := o.addParent(ctx, &probe, project)
 	if err != nil {
+		return SplitOut{}, err
+	}
+	// 6.4: every piece must fit tasks.max_children before the first add,
+	// so a split never stops half way on E_TREE_WIDTH.
+	f, err := o.forest(ctx, project)
+	if err != nil {
+		return SplitOut{}, err
+	}
+	if err = o.checkWidth(ctx, f, store.Source(probe.To), id.String(), len(pieces)); err != nil {
 		return SplitOut{}, err
 	}
 	out := SplitOut{ParentID: id.String(), Inherited: par.inh, DryRun: in.DryRun}

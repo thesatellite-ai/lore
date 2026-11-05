@@ -252,6 +252,24 @@ func (t *Tree) CheckMove(id, parent string, maxDepth int) error {
 	return nil
 }
 
+// CheckWidth checks adding n direct sub-tasks under parent: every live
+// child counts, open or closed, and the result may be at most maxChildren
+// (E_TREE_WIDTH, TASK 6.4, FA-TASK-1). parent "" (top level) always passes;
+// maxChildren <= 0 means no limit.
+func (t *Tree) CheckWidth(parent string, n, maxChildren int) error {
+	if parent == "" || maxChildren <= 0 || n <= 0 {
+		return nil
+	}
+	have := len(t.children[parent])
+	if have+n <= maxChildren {
+		return nil
+	}
+	chain := append(reversed(t.Ancestors(parent)), parent)
+	return errs.New(errs.TreeWidth, "task "+parent+" would have "+strconv.Itoa(have+n)+" sub-tasks, over tasks.max_children "+
+		strconv.Itoa(maxChildren)+": "+strings.Join(chain, " → ")).
+		WithHint("group the sub-tasks under intermediate tasks, or raise the policy: lore policy set tasks.max_children <n> (at most 1000)")
+}
+
 // pathDown is the ids from below id down to target (target included),
 // target being a descendant of id, listed bottom up.
 func (t *Tree) pathDown(id, target string) []string {

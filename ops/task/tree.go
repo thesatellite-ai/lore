@@ -26,6 +26,8 @@ import (
 //
 //	op ──► o.forest(project) ──► tasktree.Build ──► checks / rollup
 //	   └─► o.treePolicy(src) ──► tasks.max_depth, tasks.parent_autoclose
+//	   └─► o.treeLimits(src) ──► tasks.max_children (E_TREE_WIDTH),
+//	                             tasks.auto_start_parent
 
 // Tree fields of a task row.
 const (
@@ -44,8 +46,10 @@ const (
 // Defaults used when the Env offers no policy (logic/policy holds the same
 // values as the keys' defaults).
 const (
-	defaultMaxDepth  = 4 // TSQ1
-	defaultAutoclose = autocloseSuggest
+	defaultMaxDepth = 4 // TSQ1
+	// defaultMaxChildren is tasks.max_children's default (FA-TASK-1).
+	defaultMaxChildren = 200
+	defaultAutoclose   = autocloseSuggest
 	// confirmListed is how many titles a subtree-delete question lists (6.12).
 	confirmListed = 10
 )
@@ -128,6 +132,103 @@ func (o ops) treePolicy(ctx context.Context, target store.Source) (maxDepth int,
 		autoclose = e.Value.String()
 	}
 	return maxDepth, autoclose, nil
+}
+
+// treeLimits is the effective tasks.max_children and
+// tasks.auto_start_parent for target (FA-TASK-1, FA-TASK-2; the defaults
+// when the Env has no policy reader).
+func (o ops) treeLimits(ctx context.Context, target store.Source) (maxChildren int, autoStart bool, err error) {
+	maxChildren = defaultMaxChildren
+	p, ok := upgrade.As[bulk.Policier](o.env)
+	if !ok {
+		return maxChildren, false, nil
+	}
+	set, err := p.Policy(ctx, target)
+	if err != nil {
+		return 0, false, err
+	}
+	if n, isSet := set.Limit(policy.KeyTasksMaxChildren); isSet {
+		maxChildren = int(n)
+	}
+	if e, isSet := set.Get(policy.KeyTasksAutoStartParent); isSet && e.Value != nil {
+		autoStart = e.Value.String() == "true"
+	}
+	return maxChildren, autoStart, nil
+}
+
+// checkWidth refuses adding n sub-tasks under parent past the target's
+// tasks.max_children (E_TREE_WIDTH, TASK 6.4).
+func (o ops) checkWidth(ctx context.Context, f forest, src store.Source, parent string, n int) error {
+	maxChildren, _, err := o.treeLimits(ctx, src)
+	if err != nil {
+		return err
+	}
+	return f.tree.CheckWidth(parent, n, maxChildren)
+}
+
+// fieldClaimEpoch is the task's fencing counter (TEAM §7, internal field).
+const fieldClaimEpoch = "claim_epoch"
+
+// fenceClaimed raises claim_epoch on each claimed task of a subtree
+// delete (TASK 6.9/6.12, FA-TASK-3), in the caller's batch, so a holder's
+// next write with its old epoch is refused by the claim check.
+func (o ops) fenceClaimed(ctx context.Context, f forest, claimed []string) error {
+	for _, c := range claimed {
+		s := f.row(c)
+		epoch := int64(0)
+		if v, ok := s.Row.Fields[fieldClaimEpoch]; ok && v.Kind() != value.KindNull {
+			if n, err := strconv.ParseInt(v.String(), 10, 64); err == nil {
+				epoch = n
+			}
+		}
+		patch := map[string]value.Value{fieldClaimEpoch: value.Int(epoch + 1)}
+		if _, err := o.hist().Update(ctx, engine.Ref{Store: s.Source, Table: table, ID: s.Row.ID}, patch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// autoStartParent applies tasks.auto_start_parent once child started
+// (TASK 6.7, FA-TASK-2): when the policy of the parent's store is on and
+// the parent is still todo, the parent becomes in_progress in a second
+// write. Like --reopen-parent it opens no time span on the parent (OV7-3:
+// the work is on the child). It returns the human line ("" = nothing done).
+func (o ops) autoStartParent(ctx context.Context, child row.Row) (string, error) {
+	parent := work.Field(child, fieldParent)
+	if parent == "" {
+		return "", nil
+	}
+	pid, err := ids.ParseAny(parent)
+	if err != nil {
+		return "", err
+	}
+	src, pr, err := work.Get(ctx, o.env, Noun, table, pid)
+	// a parent not attached here or in the trash is not started
+	if errs.Has(err, errs.NotFound) || errs.Has(err, errs.InTrash) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if work.Field(pr, work.FieldStatus) != schema.TaskStatusTodo {
+		return "", nil
+	}
+	_, on, err := o.treeLimits(ctx, src)
+	if err != nil || !on {
+		return "", err
+	}
+	patch := map[string]value.Value{}
+	if _, err = o.setStatus(ctx, src, pr, schema.TaskStatusInProgress, true, patch); err != nil {
+		return "", err
+	}
+	if work.Time(pr, fieldStarted).IsZero() {
+		patch[fieldStarted] = work.Now(o.env)
+	}
+	if _, err = o.hist().Update(ctx, engine.Ref{Store: src, Table: table, ID: pr.ID}, patch); err != nil {
+		return "", err
+	}
+	return "  parent " + parent + " " + work.Field(pr, work.FieldTitle) + " started too (tasks.auto_start_parent: on)\n", nil
 }
 
 // lastRank is the rank after the last child of parent ("" = top level).
@@ -311,10 +412,11 @@ func (o ops) afterClose(ctx context.Context, f forest, id string) (ParentNote, N
 }
 
 // subtreeQuestion is the TSQ3 question of deleting id with children: the
-// counts, the first titles and every claimed child with its holder.
+// counts, the first titles and every claimed child with its holder. It
+// also returns the claimed children's ids (fenced by fenceClaimed).
 func (o ops) subtreeQuestion(ctx context.Context, f forest, id string) (string, []string, error) {
 	desc := f.tree.Descendants(id)
-	var claimed []string
+	var claimed, holders []string
 	if t, ok := work.TeamFrom(ctx); ok {
 		board, err := t.Claims(ctx)
 		if err != nil {
@@ -322,7 +424,8 @@ func (o ops) subtreeQuestion(ctx context.Context, f forest, id string) (string, 
 		}
 		for _, d := range desc {
 			if holder, isClaimed, active := board.Claim(d); isClaimed && active {
-				claimed = append(claimed, d+" ("+holder+")")
+				claimed = append(claimed, d)
+				holders = append(holders, d+" ("+holder+")")
 			}
 		}
 	}
@@ -340,7 +443,7 @@ func (o ops) subtreeQuestion(ctx context.Context, f forest, id string) (string, 
 		b.WriteString(" " + d + " " + f.title(d) + ";")
 	}
 	if len(claimed) > 0 {
-		b.WriteString(" claimed children: " + strings.Join(claimed, ", ") + ";")
+		b.WriteString(" claimed children: " + strings.Join(holders, ", ") + " (their holders' next write fails);")
 	}
 	b.WriteString(" delete all " + strconv.Itoa(len(desc)+1) + "?")
 	return b.String(), claimed, nil
@@ -489,6 +592,11 @@ func (o ops) addParent(ctx context.Context, in *AddIn, project string) (*addPare
 	if err = f.tree.CheckMove(newTaskNode, pid.String(), maxDepth); err != nil {
 		return nil, err
 	}
+	// 6.4: one more direct child must fit tasks.max_children (split checks
+	// all its pieces before the first add).
+	if err = o.checkWidth(ctx, f, src, pid.String(), 1); err != nil {
+		return nil, err
+	}
 	p := &addParent{id: pid.String(), title: work.Field(pr, work.FieldTitle), rank: f.lastRank(pid.String())}
 	if stateOf(pr) != tasktree.Open {
 		if !in.ReopenParent {
@@ -601,6 +709,10 @@ func (o ops) editTree(ctx context.Context, in EditIn, src store.Source, cur row.
 			return te, perr
 		}
 		if err = f.tree.CheckMove(id, parent, maxDepth); err != nil {
+			return te, err
+		}
+		// 6.8: the width of the new parent (FA-TASK-1).
+		if err = o.checkWidth(ctx, f, src, parent, 1); err != nil {
 			return te, err
 		}
 	}

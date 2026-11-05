@@ -188,7 +188,7 @@ func Ops(env work.Env) []op.Entry {
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
-var treeAddErrors = []errs.Code{errs.Cycle, errs.ParentClosed, errs.ParentMission, errs.ParentProject, errs.TreeDepth}
+var treeAddErrors = []errs.Code{errs.Cycle, errs.ParentClosed, errs.ParentMission, errs.ParentProject, errs.TreeDepth, errs.TreeWidth}
 
 // ops binds the run functions to one Env. deco, set per call on the value
 // copy (list), adds the tree columns to each brief.
@@ -1235,7 +1235,20 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: nothing to change").
 			WithHint("give at least one flag, e.g. --title, --status, --priority, --due")
 	}
-	return work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+noteLines(dateNotes)+timeHint)
+	out, err := work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+noteLines(dateNotes)+timeHint)
+	if err != nil || in.Status != schema.TaskStatusInProgress {
+		return out, err
+	}
+	// TASK 6.7: tasks.auto_start_parent, under the parent the edit leaves
+	// the task in (FA-TASK-2).
+	moved := cur
+	if v, ok := te.patch[fieldParent]; ok {
+		moved.Fields = maps.Clone(cur.Fields)
+		moved.Fields[fieldParent] = v
+	}
+	line, err := o.autoStartParent(ctx, moved)
+	out.Human += line
+	return out, err
 }
 
 // start marks a task in_progress; starting work also commits it and
@@ -1257,7 +1270,14 @@ func (o ops) start(ctx context.Context, in IDIn) (work.WriteOut, error) {
 	if !work.Time(cur, fieldStarted).IsZero() {
 		delete(patch, fieldStarted)
 	}
-	return work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" started\n"+hint)
+	out, err := work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" started\n"+hint)
+	if err != nil {
+		return out, err
+	}
+	// TASK 6.7: tasks.auto_start_parent (FA-TASK-2).
+	line, err := o.autoStartParent(ctx, cur)
+	out.Human += line
+	return out, err
 }
 
 // statusPatch sets status through setStatus (D2), stamps the time field,
@@ -1473,8 +1493,9 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	}
 	desc := f.tree.Descendants(id.String())
 	question := "delete task " + id.String() + " " + work.Field(cur, work.FieldTitle) + "?"
+	var claimed []string
 	if len(desc) > 0 {
-		if question, _, err = o.subtreeQuestion(ctx, f, id.String()); err != nil {
+		if question, claimed, err = o.subtreeQuestion(ctx, f, id.String()); err != nil {
 			return work.WriteOut{}, err
 		}
 	}
@@ -1485,9 +1506,16 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
+	// 6.12: claimed children are fenced before the tombstones (FA-TASK-3).
+	if err = o.fenceClaimed(bctx, f, claimed); err != nil {
+		return work.WriteOut{}, err
+	}
 	human := trashline.Moved(id.String(), id.String())
 	if len(desc) > 0 {
 		human = trashline.MovedBatch(strconv.Itoa(len(desc)+1)+" tasks ("+id.String()+" and its sub-tasks)", batch.String())
+	}
+	if len(claimed) > 0 {
+		human += "  fenced " + strconv.Itoa(len(claimed)) + " claimed sub-task(s): their holders' next write fails\n"
 	}
 	return work.Delete(bctx, o.env, Noun, table, id, human)
 }
