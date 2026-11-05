@@ -220,6 +220,7 @@ func loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]
 		return nil, err
 	}
 	var out []pinnedRule
+	mk := newRenderMetaKeys() // MQ13: metadata values on rendered rows
 	for _, r := range rows {
 		if renderField(r.Row, renderFieldSeverity) != renderRuleSeverityMust {
 			continue
@@ -242,7 +243,7 @@ func loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]
 		}
 		out = append(out, pinnedRule{
 			ID: r.ID.String(), Severity: renderRuleSeverityMust,
-			TrustScore: renderTrust(r.Row), Body: renderField(r.Row, renderFieldBody),
+			TrustScore: renderTrust(r.Row), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),
 			Summary: renderField(r.Row, schema.FieldSummary), Activation: act,
 			Globs: renderField(r.Row, renderFieldGlobs), Updated: renderUpdated(r.Row),
 			TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope), OverridesID: repoScope(r, schema.FieldOverrides),
@@ -297,6 +298,7 @@ func loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) 
 		return nil, err
 	}
 	var out []pinnedHotfix
+	mk := newRenderMetaKeys() // MQ13: metadata values on rendered rows
 	for _, r := range rows {
 		sev := renderField(r.Row, renderFieldSeverity)
 		if sev != renderHotfixSeverityCritical && sev != renderHotfixSeverityHigh {
@@ -312,7 +314,7 @@ func loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) 
 		}
 		out = append(out, pinnedHotfix{
 			ID: r.ID.String(), Severity: sev,
-			Title: renderField(r.Row, renderFieldTitle), Body: renderField(r.Row, renderFieldBody),
+			Title: renderField(r.Row, renderFieldTitle), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),
 			Summary: renderField(r.Row, schema.FieldSummary), TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope),
 			Pin: renderPin(r.Row),
 		})
