@@ -218,7 +218,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.done),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a reminder (a tombstone is kept so old copies never return)",
+			Name: OpDelete, Summary: "Delete a reminder (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
 			Confirm:  op.ConfirmRule{Always: true},
 			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore reminder delete rmd_<id> --yes", Want: "moved to the trash"}},

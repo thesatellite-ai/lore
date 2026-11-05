@@ -87,7 +87,7 @@ func Ops(env content.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Unarchive(ctx, in.ID) }),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a snapshot (archive is usually what you want; a tombstone keeps old copies from returning)",
+			Name: OpDelete, Summary: "Delete a snapshot (to the trash; archive is usually what you want)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {

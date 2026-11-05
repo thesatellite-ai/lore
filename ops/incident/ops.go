@@ -72,7 +72,7 @@ func Ops(env content.Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a incident (a tombstone keeps old copies from returning)",
+			Name: OpDelete, Summary: "Delete a incident (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {

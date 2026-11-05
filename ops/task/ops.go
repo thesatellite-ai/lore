@@ -160,7 +160,7 @@ func Ops(env work.Env) []op.Entry {
 			Examples: []op.Example{{Title: "preview a split", CLI: `lore task split tsk_<id> --title "Export query" --title "Download button" --dry-run`, Want: "would add"}},
 		}, o.split),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a task and its sub-tasks (a tombstone is kept so old copies never return)",
+			Name: OpDelete, Summary: "Delete a task and its sub-tasks (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
 			// TSQ3: the op asks itself, so the question can list the subtree
 			// and its claimed children (bulk.Ask); it always asks.

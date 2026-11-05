@@ -3,6 +3,7 @@ decisions.status proposed,accepted,superseded,deprecated
 hotfixes.severity low,medium,high,critical
 kind_fields.type text,number,bool,date,datetime,duration,ip,cidr,dns,url,email,json,list,ref,secret_ref
 kind_fields.widget text,markdown,code,secret,select,date,number,bool,json
+kinds.added_by person,agent
 knowledge_refs.confidence extracted,inferred,ambiguous
 machines.id_source os_machine_id,runtime_key,random
 memories.kind core,retrieved,episodic,procedural,archival

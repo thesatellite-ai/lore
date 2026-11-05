@@ -123,7 +123,7 @@ func Ops(env Env) []op.Entry {
 			Examples: []op.Example{{Title: "change the body", CLI: `lore memory edit mem_<id> --body "Retry three times"`, Want: "id: mem_"}},
 		}, o.edit),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a memory (a tombstone is kept so old copies never return)",
+			Name: OpDelete, Summary: "Delete a memory (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.HasDependents),
 			Confirm:  op.ConfirmRule{Always: true},
 			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore memory delete mem_<id> --yes", Want: "id: mem_"}},

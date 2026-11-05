@@ -113,7 +113,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: OpProjectShow, Summary: "Show project details (with attached repos)", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors}, o.projectShow),
 		op.Define(op.Spec{Name: OpProjectArchive, Summary: "Archive a project (soft-delete via archived_at)", Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors}, o.projectArchive),
 		op.Define(op.Spec{Name: OpProjectUnarchive, Summary: "Unarchive a project (clear archived_at)", Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors}, o.projectUnarchive),
-		op.Define(op.Spec{Name: OpProjectDelete, Summary: "Delete a project (a tombstone; archive is usually what you want)", Permission: op.PermWrite, Access: op.AccessWrite,
+		op.Define(op.Spec{Name: OpProjectDelete, Summary: "Delete a project (to the trash; archive is usually what you want)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: deleteErrors, Confirm: op.ConfirmRule{Always: true}}, o.projectDelete),
 		op.Define(op.Spec{Name: OpRepoAdd, Summary: "Register a repo within the current project", Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true},
@@ -121,7 +121,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: OpRepoList, Summary: "List repos in the current project", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors}, o.repoList),
 		op.Define(op.Spec{Name: OpRepoArchive, Summary: "Archive a repo (soft-delete via archived_at)", Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors}, o.repoArchive),
 		op.Define(op.Spec{Name: OpRepoUnarchive, Summary: "Unarchive a repo (clear archived_at)", Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors}, o.repoUnarchive),
-		op.Define(op.Spec{Name: OpRepoDelete, Summary: "Delete a repo (a tombstone; archive is usually what you want)", Permission: op.PermWrite, Access: op.AccessWrite,
+		op.Define(op.Spec{Name: OpRepoDelete, Summary: "Delete a repo (to the trash; archive is usually what you want)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: deleteErrors, Confirm: op.ConfirmRule{Always: true}}, o.repoDelete),
 	}
 	// PROV1/PROV2: the repo identity verbs need the checkout's files and

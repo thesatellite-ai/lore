@@ -267,6 +267,11 @@ func coreDefs() []TableDef {
 			Text("render"),
 			// secret_manager is the manager a bare secret_ref path means for this kind (RES 3.1 --secret-manager); empty = the policy default.
 			Text("secret_manager"),
+			// added_by/reviewed: a kind an agent added waits for a person's
+			// review (`resource kinds --unreviewed`), as meta keys do (MQ7);
+			// absent on older rows = reviewed.
+			Text("added_by", OneOf(MetaAddedByPerson, MetaAddedByAgent)),
+			Bool("reviewed"),
 			JSON("origin"),
 			// copies: the client repos' own kinds made from this one, as
 			// "<client place>=<knd id>" (MQ15, R2-Q1: the link kept both ways;
@@ -280,6 +285,10 @@ func coreDefs() []TableDef {
 			Text(fieldName, Required()),
 			// values is the closed set a field accepts (`field add --values`).
 			List("values", value.KindText),
+			// value_ids gives each allowed value a permanent val_ id and an
+			// optional label: [{id, name, label}] (OQ-AV, FA-RES-OQAV); rows
+			// still hold the value name in 0.1.18.
+			JSON("value_ids"),
 			Text("description"),
 			Text("type", Required(), OneOf(kindWords()...)),
 			Bool("required"),

@@ -1010,7 +1010,9 @@ type RepoMergeIDsOut struct {
 	Aliases []string    `json:"aliases"`
 	Rows    []MergedRow `json:"rows"`
 	DryRun  bool        `json:"dry_run,omitempty"`
-	human   string
+	// Batch is the bat_ id every rewrite of the run carries (PROV 11.9).
+	Batch string `json:"batch,omitempty"`
+	human string
 }
 
 // Text implements op.Texter.
@@ -1072,6 +1074,14 @@ func repoMergeIDs(ctx context.Context, env Env, files RepoFiles, rw OriginRewrit
 			WithHint("check the rows (lore repo merge-ids --dry-run), then rerun with --yes")
 	}
 	winner := canon.String(out.RepoID)
+	// MERGEIDS-SCOPE (PROV 11.9): every rewrite of this run is one bat_
+	// batch (audit events and commit trailers carry it).
+	bid, berr := ids.New[ids.Batch]()
+	if berr != nil {
+		return RepoMergeIDsOut{}, berr
+	}
+	ctx = engine.WithBatch(ctx, engine.Batch{ID: bid, Kind: engine.OpRepoMergeIDs})
+	out.Batch = bid.String()
 	for _, m := range out.Rows {
 		rid, perr := ids.ParseAny(m.ID)
 		if perr != nil {

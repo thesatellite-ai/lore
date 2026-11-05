@@ -97,7 +97,7 @@ func Ops(env kn.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 		}, o.unarchive),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a rule (a tombstone is kept so old copies never return)",
+			Name: OpDelete, Summary: "Delete a rule (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, o.delete),

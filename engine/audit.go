@@ -35,12 +35,18 @@ const (
 	ActionSecretEntryRenamed Action = "secret.entry_renamed"
 	ActionSecretLinked       Action = "secret.linked"
 	ActionSecretRelabeled    Action = "secret.relabeled"
+	// Allow entries and rule rows (16, FA-AGENT-4): emitted by the ops
+	// after their row write, carrying names and ids only.
+	ActionSecretAllowAdded   Action = "secret.allow_added"
+	ActionSecretAllowRemoved Action = "secret.allow_removed"
+	ActionSecretRuleChanged  Action = "secret.rule_changed"
 )
 
 // SecretActions lists the secret.* actions (16).
 func SecretActions() []Action {
 	return []Action{ActionSecretRevealed, ActionSecretRevealFailed, ActionSecretVerified, ActionVaultRefsMoved,
-		ActionSecretEntryRenamed, ActionSecretLinked, ActionSecretRelabeled}
+		ActionSecretEntryRenamed, ActionSecretLinked, ActionSecretRelabeled,
+		ActionSecretAllowAdded, ActionSecretAllowRemoved, ActionSecretRuleChanged}
 }
 
 // ForcedBy says why a reveal had no person's answer (16, SQ10).

@@ -491,6 +491,9 @@ back. Run it on main and commit the result. Rows go to the local trash first.
   lore sync purge --archived-before 2026-01-01 --confirm`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// DELETION Q8 (FA-DEL-4): the old spelling keeps working for one
+			// release and points at the new one, like lore sync trash.
+			fmt.Fprintln(os.Stderr, "note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release")
 			cutoff, err := parseCutoff(before, cliClock().Now())
 			if err != nil {
 				return errcodes.New(errcodes.InvalidInput, "bad --archived-before").WithCause(err)

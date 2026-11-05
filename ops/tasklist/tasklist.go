@@ -197,7 +197,7 @@ func Ops(env work.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a tasklist and its tasks, with their sub-tasks (one batch; a tombstone is kept)",
+			Name: OpDelete, Summary: "Delete a tasklist and its tasks, with their sub-tasks (one batch, to the trash)",
 			// DQ6: the op asks itself, so the question names what goes with
 			// the list; it always asks.
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors, Confirm: op.ConfirmRule{MayAsk: true},

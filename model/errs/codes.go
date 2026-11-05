@@ -83,6 +83,18 @@ const (
 	ResourceInternal Code = "E_RESOURCE_INTERNAL"
 	// ResourceQuarantined: move of a resource with quarantined values (RES 3.19).
 	ResourceQuarantined Code = "E_RESOURCE_QUARANTINED"
+	// ResourceAmbiguous: a bare resource name matches rows at two levels or in two kinds (RES 3.4).
+	ResourceAmbiguous Code = "E_RESOURCE_AMBIGUOUS"
+	// ResourceTaken: a resource name, rename or field rename onto a name already used at that level, archived and trashed rows included (RES 3.3, 3.23).
+	ResourceTaken Code = "E_RESOURCE_TAKEN"
+	// ResourceArchived: a new ref to an archived resource (RES 3.4).
+	ResourceArchived Code = "E_RESOURCE_ARCHIVED"
+	// ResourceBatch: an import that fails validation as a whole (RES 3.20).
+	ResourceBatch Code = "E_RESOURCE_BATCH"
+	// ResourceConflict: a store push after a lost race hits a strict or kind/field conflict (RES 3.13).
+	ResourceConflict Code = "E_RESOURCE_CONFLICT"
+	// KindLimit: a place's kinds, an effective kind's fields or a field's allowed values go over a cap (RES 3.1).
+	KindLimit Code = "E_KIND_LIMIT"
 	// NameTaken refuses a create or rename onto a name a live settings row
 	// of that place already uses (a var, a kind, a resource).
 	NameTaken Code = "E_NAME_TAKEN"
@@ -317,6 +329,12 @@ var table = map[Code]entry{
 	ResourceName:          {class: ClassBadInput, desc: "a kind, field or resource name breaks its format, is reserved, or looks like a credential (RES 3.1)"},
 	ResourceType:          {class: ClassBadInput, desc: "field retype found values that do not fit the new type (RES 3.14)"},
 	ResourceKindMismatch:  {class: ClassBadInput, desc: "merge across resource kinds (RES 3.6)"},
+	ResourceAmbiguous:     {class: ClassAmbiguous, desc: "a bare resource name matches rows at two levels or in two kinds"},
+	ResourceTaken:         {class: ClassRefused, desc: "that resource name is already used at this level (archived and trashed rows included)"},
+	ResourceArchived:      {class: ClassRefused, desc: "a new ref to an archived resource; ref its replaced_by or unarchive it"},
+	ResourceBatch:         {class: ClassRefused, desc: "the import failed validation as a whole; nothing written"},
+	ResourceConflict:      {class: ClassRefused, desc: "a store push hit a strict or kind/field conflict; settle it first"},
+	KindLimit:             {class: ClassBadInput, desc: "over a resource kind cap (kinds per place, fields per kind, values per field)"},
 	SchemaOld:             {class: ClassUpgrade, desc: "the local database is older than this binary"},
 	NeedsConfirm:          {class: ClassNeedsConfirmation, desc: "the command asks first and ran with no terminal and no --yes"},
 	PolicyDenied:          {class: ClassRefused, desc: "a team policy refuses this"},

@@ -114,14 +114,17 @@ kind_fields.sensitive bool
 kind_fields.strict bool
 kind_fields.type text required
 kind_fields.type_history json
+kind_fields.value_ids json
 kind_fields.values list[text]
 kind_fields.widget text
+kinds.added_by text
 kinds.copies list[text]
 kinds.description text
 kinds.name text required
 kinds.name_format text
 kinds.origin json
 kinds.render text
+kinds.reviewed bool
 kinds.secret_manager text
 knowledge_refs.confidence text required
 knowledge_refs.dst_id ref required
