@@ -333,7 +333,12 @@ func TestSecretAskNeedsConfirmThenAccepted(t *testing.T) {
 	if _, err = f.eng.Create(ctx, "", schema.TableMemories, f.memFields(body)); !errs.Has(err, errs.NeedsConfirm) {
 		t.Fatalf("direct write outside Run must ask too: %v", err)
 	}
-	res, err := f.eng.Run(ctx, o, op.ArgsDecoder{Args: []string{body}}, op.Caller{Actor: testActor, Yes: true})
+	// FB-SEC-1: a bare --yes is no choice; it still asks.
+	if _, err = f.eng.Run(ctx, o, op.ArgsDecoder{Args: []string{body}}, op.Caller{Actor: testActor, Yes: true}); !errs.Has(err, errs.NeedsConfirm) {
+		t.Fatalf("bare --yes must still ask: %v", err)
+	}
+	res, err := f.eng.Run(ctx, o, op.ArgsDecoder{Args: []string{body}}, op.Caller{Actor: testActor, Yes: true,
+		Secret: op.SecretChoice{NotASecret: true, Reason: "aws docs sample"}})
 	if err != nil {
 		t.Fatal(err)
 	}

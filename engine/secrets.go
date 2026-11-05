@@ -60,8 +60,8 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	// 14.4 / FA-AGENT-7: url.credentials_stripped names the field, the row
 	// and the clean URL (in the warning), never the removed text.
 	for _, w := range urlWarns {
-		if err := e.AuditSecret(ctx, ActionURLCredentialsStripped, SecretAudit{Command: cl.op, Row: rowID, Result: "field=" + w.Field + " " + w.Message}); err != nil {
-			return screened{}, err
+		if aerr := e.AuditSecret(ctx, ActionURLCredentialsStripped, SecretAudit{Command: cl.op, Row: rowID, Result: "field=" + w.Field + " " + w.Message}); aerr != nil {
+			return screened{}, aerr
 		}
 	}
 	mode := string(pol.OnDetect())
@@ -69,9 +69,9 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	// field, rule, mode and the choice; never the value or a preview.
 	detected := func(choice string, fs []scan.Finding) error {
 		for _, f := range fs {
-			if err := e.AuditSecret(ctx, ActionSecretDetected, SecretAudit{Command: cl.op, Row: rowID,
-				Result: "field=" + f.Field + " rule=" + f.RuleID + " mode=" + mode + " choice=" + choice}); err != nil {
-				return err
+			if aerr := e.AuditSecret(ctx, ActionSecretDetected, SecretAudit{Command: cl.op, Row: rowID,
+				Result: "field=" + f.Field + " rule=" + f.RuleID + " mode=" + mode + " choice=" + choice}); aerr != nil {
+				return aerr
 			}
 		}
 		return nil
@@ -211,21 +211,17 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	}
 	switch pol.OnDetect() {
 	case policy.OnDetectAsk:
-		if err := e.confirm(ctx, cl, describe(all)+": store it anyway as not a secret?"); err != nil {
-			if derr := detected(choiceCancelled, all); derr != nil {
-				return screened{}, derr
-			}
-			var ee *errs.Error
-			if errors.As(err, &ee) && ee.Code == errs.NeedsConfirm {
-				return screened{}, ee.WithHint("store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret")
-			}
-			return screened{}, err
+		// ask needs a choice (SECRETS 2.1, 2.5, 4; SQ2, D12): --yes only
+		// confirms a choice already given by flags, and "not a secret"
+		// needs a typed reason, which a yes/no prompt cannot carry. So a
+		// write with findings and no choice flag stores nothing and
+		// records no allow entry, with or without --yes or a terminal; it
+		// answers E_NEEDS_CONFIRM naming the masked findings and the flag
+		// sets to re-run with (DECISION FB-SEC-1).
+		if derr := detected(choiceCancelled, all); derr != nil {
+			return screened{}, derr
 		}
-		if err := detected(choiceNotASecret, all); err != nil {
-			return screened{}, err
-		}
-		out.accepted = all
-		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
+		return screened{}, askErr(all)
 	case policy.OnDetectRedact:
 		red := make(map[string]value.Value, len(fields))
 		for k, v := range fields {
@@ -385,8 +381,8 @@ type RefreshingScanner interface {
 // --not-a-secret --reason answer puts the typed reason first.
 const allowReasonPrefix = "confirmed not a secret by "
 
-// allowRows turns the findings a caller accepted as not secrets (on_detect
-// ask, then --yes or a terminal yes) into secret_allows rows for rowID
+// allowRows turns the findings a caller accepted as not secrets (only
+// --not-a-secret --reason, confirmed by --yes or a terminal yes) into secret_allows rows for rowID
 // (SQ2): one per distinct (field, rule, match hash), so scan.Filter drops
 // exactly that match on every later write and the commit hook can read
 // them, while a different match in the same row still asks. A zero rowID
@@ -551,6 +547,17 @@ func checkChoice(ch op.SecretChoice, n int) error {
 		}
 	}
 	return nil
+}
+
+// askFlagSets is the hint of an on_detect ask answer: the flag sets a
+// caller re-runs its own command with (SECRETS 2.5), never the text.
+const askFlagSets = `re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes`
+
+// askErr is the E_NEEDS_CONFIRM answer of on_detect ask when no choice
+// was given: the masked findings and the flag sets, nothing written.
+func askErr(fs []scan.Finding) *errs.Error {
+	q := describe(fs) + ": redact it with a reference, mark it unstored, mark it not a secret, or cancel?"
+	return errs.New(errs.NeedsConfirm, "engine: "+q).WithQuestion(q).WithHint(askFlagSets)
 }
 
 // describe names findings for a message: field, rule, line, masked preview.

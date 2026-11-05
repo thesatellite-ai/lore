@@ -341,7 +341,8 @@ func TestConfirmedFindingBecomesAnAllowEntry(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	o := memAddOp(f, op.ConfirmRule{})
-	res, err := f.eng.Run(ctx, o, op.ArgsDecoder{Args: []string{"key " + fakeKey}}, op.Caller{Actor: testActor, Yes: true})
+	res, err := f.eng.Run(ctx, o, op.ArgsDecoder{Args: []string{"key " + fakeKey}}, op.Caller{Actor: testActor, Yes: true,
+		Secret: op.SecretChoice{NotASecret: true, Reason: "docs sample"}}) // FB-SEC-1: only a typed reason accepts
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +360,7 @@ func TestConfirmedFindingBecomesAnAllowEntry(t *testing.T) {
 		a.Fields[allowHash].String() != value.Int(int64(scan.HashMatch(fakeKey))).String() {
 		t.Fatalf("allow row fields: %v (row %s)", a.Fields, memID)
 	}
-	if !strings.HasPrefix(textOf(a, allowReason), allowReasonPrefix) || strings.Contains(textOf(a, allowReason), fakeKey) {
+	if !strings.HasPrefix(textOf(a, allowReason), "docs sample ("+allowReasonPrefix) || strings.Contains(textOf(a, allowReason), fakeKey) {
 		t.Fatalf("reason: %q", textOf(a, allowReason))
 	}
 	id, err := ids.ParseAny(memID)

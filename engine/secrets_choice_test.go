@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -165,5 +166,105 @@ func TestSecretChoiceInteractive(t *testing.T) {
 	}
 	if allows, _ := f.eng.List(ctx, store.SourceRepo, schema.TableSecretAllows); len(allows) != 1 {
 		t.Fatalf("allow rows = %d", len(allows))
+	}
+}
+
+// TestSecretAskNeedsAChoice (SECRETS 2.1, 2.5, 4; SQ2, D12; FB-SEC-1): the
+// decision table of a write with one finding over on_detect × terminal ×
+// answer flags. --yes only confirms a choice given by flags: a bare --yes
+// (terminal or not) stores nothing and records no allow entry under ask;
+// "not a secret" needs a typed reason, then --yes or a terminal yes, in
+// every mode; only that path writes an allow entry.
+func TestSecretAskNeedsAChoice(t *testing.T) {
+	body := "key " + fakeKey + " end"
+	reason := "sample key from the aws docs"
+	type outcome int
+	const (
+		kept     outcome = iota // stored as written, one allow entry
+		redacted                // stored as ${secret:unstored}, no allow entry
+	)
+	flagSets := []struct {
+		name   string
+		yes    bool
+		choice op.SecretChoice
+	}{
+		{name: "no flags"},
+		{name: "--yes", yes: true},
+		{name: "--not-a-secret no reason", choice: op.SecretChoice{NotASecret: true}},
+		{name: "--not-a-secret no reason --yes", yes: true, choice: op.SecretChoice{NotASecret: true}},
+		{name: "--not-a-secret --reason", choice: op.SecretChoice{NotASecret: true, Reason: reason}},
+		{name: "--not-a-secret --reason --yes", yes: true, choice: op.SecretChoice{NotASecret: true, Reason: reason}},
+	}
+	// want returns the refusal code ("" = stored) and, when stored, how.
+	want := func(mode policy.OnDetect, terminal bool, fs int) (errs.Code, outcome) {
+		switch fs {
+		case 0, 1: // no choice: the mode decides; --yes changes nothing
+			switch mode {
+			case policy.OnDetectAsk:
+				return errs.NeedsConfirm, 0
+			case policy.OnDetectRedact:
+				return "", redacted
+			default:
+				return errs.SecretDetected, 0
+			}
+		case 2, 3:
+			return errs.InvalidInput, 0
+		case 4:
+			if !terminal {
+				return errs.NeedsConfirm, 0
+			}
+		}
+		return "", kept
+	}
+	for _, mode := range []policy.OnDetect{policy.OnDetectAsk, policy.OnDetectRedact, policy.OnDetectRefuse} {
+		for _, terminal := range []bool{false, true} {
+			for i, fl := range flagSets {
+				name := string(mode) + "/terminal=" + strconv.FormatBool(terminal) + "/" + fl.name
+				t.Run(name, func(t *testing.T) {
+					conf := &yesConfirmer{answer: true}
+					f := setup(t, onDetect(t, mode), WithConfirmer(conf), WithRedactHook(func(context.Context, RedactedWrite) error { return nil }))
+					ctx := context.Background()
+					caller := op.Caller{Actor: testActor, Yes: fl.yes, Interactive: terminal, Secret: fl.choice}
+					_, err := f.eng.Run(ctx, memAddOp(f, op.ConfirmRule{}), op.ArgsDecoder{Args: []string{body}}, caller)
+					mems, lerr := f.eng.List(ctx, store.SourceRepo, schema.TableMemories)
+					if lerr != nil {
+						t.Fatal(lerr)
+					}
+					allows, lerr := f.eng.List(ctx, store.SourceRepo, schema.TableSecretAllows)
+					if lerr != nil {
+						t.Fatal(lerr)
+					}
+					code, how := want(mode, terminal, i)
+					if code != "" {
+						if !errs.Has(err, code) || strings.Contains(err.Error(), fakeKey) {
+							t.Fatalf("err = %v, want %s without the secret", err, code)
+						}
+						if len(mems) != 0 || len(allows) != 0 {
+							t.Fatalf("a refused write stored %d rows, %d allow entries", len(mems), len(allows))
+						}
+						if code == errs.NeedsConfirm && i < 2 && !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "--not-a-secret --reason") {
+							t.Fatalf("the answer must name the flag sets: %+v", errs.EnvelopeOf(err).Error)
+						}
+						return
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(mems) != 1 {
+						t.Fatalf("stored %d rows", len(mems))
+					}
+					switch how {
+					case kept:
+						if mems[0].Fields["body"].String() != body || len(allows) != 1 || !strings.HasPrefix(textOf(allows[0], allowReason), reason+" (") {
+							t.Fatalf("kept: body %q, allows %v", mems[0].Fields["body"].String(), allows)
+						}
+					case redacted:
+						if mems[0].Fields["body"].String() != "key "+refs.Unstored+" end" || len(allows) != 0 {
+							t.Fatalf("redacted: body %q, allows %v", mems[0].Fields["body"].String(), allows)
+						}
+					}
+				})
+			}
+		}
 	}
 }
