@@ -284,6 +284,10 @@ var contextKinds = []struct {
 	{schema.TableHotfixes, "hotfix", groupHotfixes},
 	{schema.TableMemories, "memory", groupNotes},
 	{schema.TableDecisions, "decision", groupNotes},
+	// CONTEXT_BUDGET 6.2.1 / CQ12, OV53-NOTES: patterns and architecture notes
+	// carry --scope too, so their folder scope ranks them like memories.
+	{schema.TablePatterns, "pattern", groupNotes},
+	{schema.TableArchitectureNotes, "architecture-note", groupNotes},
 }
 
 // loadKnowledge lists the live, not superseded rows of every context
