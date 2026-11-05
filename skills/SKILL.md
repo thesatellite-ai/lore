@@ -596,12 +596,12 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 | "what knowledge is on branch X?" | `lore sync peek origin/X [table]` (read-only, nothing imported) |
 | "make this rule apply on main now" | `lore sync promote <id> --to main` (local commit on main, never pushes; confirm with the user first) |
 | "lore says conflict" | `lore sync conflicts` → show both versions → `lore sync resolve <n> --take kept\|other` after the user chooses |
-| "I lost a memory after git clean / revert" | `lore sync trash` → `lore sync trash restore <n>` |
-| "same fact recorded twice" | `lore sync dupes` → `lore sync merge-rows <table> --keep <id> --drop <id>` |
-| ".lore/data got deleted" | `lore sync export --all` |
+| "I lost a memory after git clean / revert" | `lore trash list --local` → `git checkout HEAD -- .lore/data/<table>/<id>.json` (core rows come back from git) |
+| "same fact recorded twice" | `lore search "<text>"` → keep one, `lore <kind> delete <other-id>` |
+| ".lore/data got deleted" | `git checkout HEAD -- .lore/data` (the files are the truth) |
 | "two project ids after a merge" | `lore sync fix-projects` |
-| "remove archived stuff for good" | `lore sync purge --archived-before 90d --dry-run`, then `--confirm` with user OK |
-| "set up git for lore" | automatic; `lore sync install-git` to see what it does |
+| "remove archived stuff for good" | `lore trash purge --archived-before 90d --dry-run`, then `--confirm` with user OK |
+| "set up git for lore" | automatic after every lore command; nothing to run |
 | "GitHub says the PR has conflicts in .lore/data" | on the branch: `git pull origin main` (lore's driver merges there), settle any same-text conflict as below, push. Or `lore sync ci-merge --base origin/main` to see whether lore can settle it unattended |
 | "fix lore conflicts in PRs automatically" | `lore sync install-action` (opt-in GitHub workflow; runs only when started by hand, `--auto` to run on every PR that changes lore data, which uses Actions time) — confirm with the user, then they commit the file |
 | "restored a backup, which side wins?" | `lore restore <file> --confirm --prefer db\|files\|newest` — `db` (default) rolls back: files of rows not in the backup are removed (review the git diff) |
@@ -933,7 +933,7 @@ Quick reactions:
 | Calling `repair --tier=3` first | Destroys data | Try `--tier=1`, then `--tier=2`. Tier 3 is the LAST resort. |
 | Committing code but leaving `.lore/data/` out | The knowledge never reaches teammates or `main` | `git add .lore/data .gitattributes` with the change |
 | Resolving a `.lore/data` conflict by taking a whole file side | Silently drops the other side's edits | Edit the marked value; let lore merge the rest |
-| Deleting `.lore/data/` to "reset" | lore keeps the DB and warns; teammates lose rows when it is committed | `lore sync export --all` to rebuild it from the DB |
+| Deleting `.lore/data/` to "reset" | lore keeps the DB and warns; teammates lose rows when it is committed | `git checkout HEAD -- .lore/data` to bring it back |
 
 ---
 

@@ -18,18 +18,12 @@ lore sets both up on its first command in a clone and checks them, quickly, afte
 
 ## Step 1 — See what lore set up
 
-`lore sync install-git` does the set-up now and prints what it found (on a repo that is already set up, nothing changes). The hooks are in `.git/hooks`, and the driver is in the clone's own git config:
+lore does the set-up after every lore command, so there is no command to run for it; on a repo that is already set up, nothing changes. Any command will do, here `lore sync status`. The hooks are in `.git/hooks`, and the driver is in the clone's own git config:
 
 <!-- example: sync#hooks only=1,2,3 -->
 ```console
 # alice, in website
-$ lore sync install-git
-✓ git wired for lore data
-  hooks dir:   ~/work/website/.git/hooks
-  attributes:  changed=false
-  gitignore:   changed=false
-  config:      unchanged
-  hooks:       unchanged
+$ lore sync status >/dev/null
 $ ls .git/hooks | grep -v sample
 commit-msg
 post-checkout
@@ -96,7 +90,7 @@ $ git checkout -q HEAD -- .lore/data && git status --short
 ## Pitfalls
 
 - **lore never changes `core.hooksPath`** (the git setting that says which folder holds the hooks). When a hook manager owns the hooks folder, lore adds its block to the scripts there. Its block goes right after the first line, so an early `exit 0` in your own script cannot skip it.
-- **A fresh clone has no hooks until lore runs.** git does not copy hooks when you clone. Run any lore command (or `lore sync install-git`) once; until then, a merge in that clone uses plain line merging.
+- **A fresh clone has no hooks until lore runs.** git does not copy hooks when you clone. Run `lore sync` once; until then, a merge in that clone uses plain line merging.
 - **`LORE_SYNC_GIT=0` leaves git alone.** With it set, lore still syncs files but never adds hooks, the driver or `.gitattributes` lines. Use it on build machines where you do not want lore to change the clone.
 - **The hint after a refused commit talks about markers even for broken JSON.** If the message says "invalid JSON", the file is not valid JSON at all: restore it from git (`git checkout HEAD -- <file>`) or fix the text.
 - **Removing lore's block by hand is undone.** lore checks the set-up after every command and puts the block back. To stop it, set `LORE_SYNC_GIT=0`.

@@ -1019,17 +1019,13 @@ lore sync --json                   # {pass, imported[], exported[], removed_file
 lore sync status --json            # {baselined, data_dir_present, tracked_files, pending_exports, open_conflicts, trash_rows, errors[], uncommitted[]}
 lore sync conflicts [--all] [--json]
 lore sync resolve <n> --take kept|other
-lore sync trash [--json]           # rows removed because their file disappeared
-lore sync trash restore <n>
+lore trash list --local [--json]   # rows sync removed because their file disappeared (this machine)
+lore trash restore <n> --local     # core rows refuse and name the `git checkout` that brings the file back
 lore sync peek <git-ref> [table] [--json]          # rows on another branch, nothing imported
 lore sync promote <id>... --to <branch> [--dry-run]  # new local commit on <branch>; never pushes; not the current branch
-lore sync dupes [--json]
-lore sync merge-rows <table> --keep <id> --drop <id>
-lore sync export --all [--json]    # rewrite every file from the DB
-lore sync purge --archived-before <date|90d|720h> (--dry-run | --confirm)
+lore sync merge-rows <table> --keep <id> --drop <id>   # core rows: keep one, delete the other with its command
+lore trash purge --archived-before <date|90d|720h> (--dry-run | --confirm)
 lore sync fix-projects [--keep <prj_id>] [--dry-run]
-lore sync install-git [--json]     # merge driver, .gitattributes block, hook blocks, .gitignore exceptions
-                                   # for .lore/data (normally automatic); E_SYNC_DATA_IGNORED if git still ignores it
 lore sync ci-merge --base <ref> [--dry-run] [--json]
                                    # merge <ref> in with lore's driver and commit, ONLY when the host would see a
                                    # conflict, every conflict is in .lore/data or .lore/LORE.md, and lore settles all
@@ -1044,8 +1040,8 @@ lore sync install-action [--auto] [--branch <b>]... [--manual] [--lore-version v
                                    # --json adds manual (bool) and auto (bool). Without
                                    # --lore-version the pin follows lore upgrades: a newer lore release rewrites
                                    # it on its next command ("commit it"); --lore-version freezes it
-lore sync uninstall-action [--force] [--json]   # delete that workflow (only if lore generated it)
-lore restore <backup> --confirm --prefer db|files|newest
+# to remove the workflow: delete .github/workflows/lore-sync-merge.yml and commit
+# merge driver, .gitattributes, hook blocks and .gitignore exceptions are wired after every command (no command)
 ```
 
 Environment: `LORE_SYNC=0` (off), `LORE_SYNC_GIT=0` (no git wiring), `LORE_SYNC_QUIET=1`, `LORE_SYNC_ALLOW_SECRETS=1` (ignored since 0.1.18, warns).

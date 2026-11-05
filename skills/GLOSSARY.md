@@ -95,7 +95,7 @@ Local DB mode. One `.lore/lore.db` per project root. The default. Mode A project
 The first sync pass. **Bootstrap** (no `.lore/data` yet): back up `lore.db`, export every shared row, write `_meta.json`. **Adopt** (`.lore/data` exists but this DB never synced — a teammate's pull, a fresh clone, a restore): switch to the shared project id, import files, export private rows, keep losing versions of clashing rows as conflicts.
 
 ## Sync trash
-Rows deleted because their file disappeared (revert, `git clean`, stash) are copied to the trash first; `lore sync trash restore <n>` undoes it.
+Rows deleted because their file disappeared (revert, `git clean`, stash) are copied to the trash first; `lore trash list --local` lists them; core rows come back from git (`git checkout HEAD -- <file>`).
 
 ## Merge driver
 A program git runs instead of its line-by-line merge for files `.gitattributes` assigns to it. lore's (`lore merge-driver`) merges row files field by field: a field changed on one side takes that side, `updated_at` takes the later time, a status / priority / date / reference changed both ways takes the newer edit (and says so), and text changed both ways becomes a real conflict with markers inside that one value. Configured in each clone automatically; host merge buttons (GitHub, GitLab) never run it.

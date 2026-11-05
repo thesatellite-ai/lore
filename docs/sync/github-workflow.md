@@ -99,7 +99,7 @@ Commit `.github/workflows/lore-sync-merge.yml` to enable it. When started by han
 
 ## Step 4 — Or let it run by itself, or remove it
 
-`--auto` adds the automatic triggers: the workflow then runs whenever lore data changes on a pull request or on a pushed branch. `--branch` picks the branches whose pushes start it (repeat it for several, e.g. `--auto --branch main --branch staging`). `lore sync uninstall-action` deletes the file if lore wrote it; commit the deletion to turn the workflow off:
+`--auto` adds the automatic triggers: the workflow then runs whenever lore data changes on a pull request or on a pushed branch. `--branch` picks the branches whose pushes start it (repeat it for several, e.g. `--auto --branch main --branch staging`). To remove it, delete `.github/workflows/lore-sync-merge.yml` and commit the deletion:
 
 <!-- example: sync#workflow-automatic keep=^(✓|on:|\s+(runs|commit|pull_request|push|workflow_dispatch|types|paths|branches)) -->
 ```console
@@ -118,8 +118,7 @@ on:
     branches: ["main"]
     paths: [".lore/data/**"]
   workflow_dispatch:
-$ lore sync uninstall-action
-✓ removed ~/work/website/.github/workflows/lore-sync-merge.yml — commit the deletion to disable it
+$ rm .github/workflows/lore-sync-merge.yml
 ```
 <!-- /example -->
 

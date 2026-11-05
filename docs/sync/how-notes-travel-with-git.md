@@ -95,7 +95,7 @@ $ cat .lore/data/rules/rul_2ad3…f891.json
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "86c769adaead",
+      "commit": "466cc836cfd2",
       "state": "branch"
     },
     "repo": "rep_54fe…28f2",
@@ -177,7 +177,7 @@ live rows:        0 (_root)
 |---|---|
 | `pending exports` | rows changed in the database that are not written to files yet (normally 0: the pass after each command writes them) |
 | `open conflicts` | rows where the file and the database both changed; see [Conflicts and duplicates](conflicts-and-duplicates.md) |
-| `trash rows` | rows removed because their file disappeared; see [Trash, export and purge](trash-and-purge.md) |
+| `trash rows` | rows removed because their file disappeared; see [Trash, restore from git and purge](trash-and-purge.md) |
 | `uncommitted` | files in `.lore/data` that git has not committed yet |
 | `live rows` | rows on the live list (tasks and other live rows, see [Lore for teams](../team/README.md)) |
 
@@ -279,7 +279,7 @@ The database remembers which rows still need a file, so a row written with sync 
 ## Pitfalls
 
 - **Forgetting to commit `.lore/data`.** A note that is only on your machine is not shared. Every command that writes a row file prints `N file(s) in .lore/data not committed`; `lore sync status` always shows the count. Commit the files with your change.
-- **Deleting `.lore/data` by mistake.** lore leaves the database alone and tells you; `lore sync export --all` writes every file again. See [Trash, export and purge](trash-and-purge.md#step-2--rebuild-loredata-from-the-database).
+- **Deleting `.lore/data` by mistake.** lore leaves the database alone and tells you; `git checkout HEAD -- .lore/data` brings the files back. See [Trash, restore from git and purge](trash-and-purge.md#step-2--get-back-a-deleted-loredata).
 - **Editing a row file by hand.** It works (the next pass reads it in), but a broken file (bad JSON, conflict markers) is skipped and reported on every command until you fix it, and the pre-commit hook refuses to commit it.
 - <!-- ds:block id=sync-maxfilesize-zk9m2syn --> **Very large rows.** A row file larger than 4 MiB is refused on read and reported, never imported. Keep long logs out of notes.
 - <!-- ds:block id=sync-locktimeout-rh9uf4cq --> **Two lore commands at once** (for example two agents in one repo) take turns. Each one puts a lock on the database, like a "busy" sign on a door. A pass waits up to 15 seconds for the other one's lock, then gives up with an error. Run the command again.

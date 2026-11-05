@@ -276,22 +276,20 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 
 ### Sharing through git
 
-A sync pass runs automatically before and after every command; these subcommands expose it. `lore sync`, `status`, `conflicts`, `trash`, `peek`, `dupes`, `export` and `install-git` accept `--json`.
+A sync pass runs automatically before and after every command; these subcommands expose it. `lore sync`, `status`, `conflicts`, `peek` and `install-action` accept `--json`.
 
 | Command | Use case |
 |---|---|
 | `lore sync` | Run a pass now: import what git changed, export what the DB changed |
 | `lore sync status` | Baseline, pending exports, open conflicts, broken files, uncommitted files |
 | `lore sync conflicts` / `lore sync resolve <id> --take kept\|other` | Versions kept aside when both sides edited the same row, and how to settle them |
-| `lore sync trash` / `lore sync trash restore <id>` | Rows removed because their file disappeared (revert, `git clean`, stash) — undoable |
+| `lore trash list --local` | Rows removed because their file disappeared (revert, `git clean`, stash); the file comes back with `git checkout` |
 | `lore sync peek <ref> [table]` | Read another branch's rows without checking it out (`origin/feature/x`) |
 | `lore sync promote <id> --to <branch>` | Commit a row onto another local branch (an urgent rule onto `main`) — never pushes |
-| `lore sync dupes` / `lore sync merge-rows <table> --keep <id> --drop <id>` | Find and fold rows two clones recorded independently |
-| `lore sync export --all` | Rewrite every file from the DB (recreate a deleted `.lore/data`) |
-| `lore sync purge --archived-before 90d --confirm` | Durably remove archived rows; records them in `_purged.json` so old clones never resurrect them |
+| `lore sync merge-rows <table> --keep <id> --drop <id>` | Fold rows two clones recorded independently |
+| `lore trash purge --archived-before 90d --confirm` | Durably remove archived rows; records them in `_purged.json` so old clones never resurrect them |
 | `lore sync fix-projects` | Collapse duplicate project ids after two people bootstrapped in parallel |
-| `lore sync install-git` | Install the merge driver, `.gitattributes` rules and hook blocks now (otherwise automatic); fails with `E_SYNC_DATA_IGNORED` when git ignores `.lore/data` |
-| `lore sync install-action` / `uninstall-action` | Opt in to (or remove) a GitHub workflow that settles lore-data conflicts in pull requests; runs only by hand unless `--auto`; `--branch`, `--dry-run` |
+| `lore sync install-action` | Opt in to a GitHub workflow that settles lore-data conflicts in pull requests; runs only by hand unless `--auto`; `--branch`, `--dry-run`; delete the file to remove it |
 | `lore sync ci-merge --base origin/main` | Merge a base branch in when only lore data conflicts and lore settles it all (what that workflow runs; never pushes) |
 
 ### Teams, stores and agents
@@ -339,7 +337,7 @@ lore keeps a fast SQLite cache in `.lore/lore.db` (gitignored) and writes every 
 <!-- ds:block id=sync-strategyfor-ycedma28 -->
 **Merges.** One file per row means two people adding knowledge never conflict. Editing *different fields* of the same row merges cleanly through lore's git merge driver; editing the *same text* on two branches is a real conflict that a person settles. List fields that are sets (labels, approvers, team members, project links) merge both sides' additions and never conflict, and an edit beats a delete. Details, and what happens in pull requests, in [Merges and pull requests](#merges-and-pull-requests).
 
-**Every write is captured.** Database triggers record every change to a shared table, so `lore tui`, raw SQL and `sqlite3` edits are exported too. A row whose file disappears goes to `lore sync trash` first, so a `git clean` or a stash is always recoverable.
+**Every write is captured.** Database triggers record every change to a shared table, so `lore tui`, raw SQL and `sqlite3` edits are exported too. A row whose file disappears goes to `lore trash list --local` first, and its file is still in git, so a `git clean` or a stash is always recoverable.
 
 **Existing projects.** The first command of the new version backs up `lore.db` and exports everything to `.lore/data` ("bootstrap"). A teammate who pulls that adopts it: their project id is switched to the shared one, their private rows are exported onto their branch, and any row both sides changed keeps the newer version with the other saved under `lore sync conflicts`. Roll out by having one person bootstrap on `main` first; everyone else pulls and runs any lore command.
 
@@ -378,7 +376,7 @@ A second driver, `lore-keep-ours`, handles `.lore/LORE.md`: it keeps your copy, 
 lore sync install-action            # writes .github/workflows/lore-sync-merge.yml (runs only when started from the Actions tab) — commit it
 lore sync install-action --auto     # same, but it also runs by itself when lore data changes (spends Actions time)
 lore sync install-action --dry-run  # print it, write nothing
-lore sync uninstall-action          # remove it (commit the deletion)
+rm .github/workflows/lore-sync-merge.yml   # remove it (commit the deletion)
 ```
 
 Installed with `--auto`, the workflow runs when lore data changes on a pull request or on the default branch (`--branch` to choose others); without it, it runs only when started by hand. Re-running `install-action` without `--auto` or `--manual` keeps the triggers the file already has, and the automatic version updates below never change them. For each open pull request it runs `lore sync ci-merge --base origin/<base>`, which merges the base branch in with lore's driver and commits, but only when GitHub would report a conflict, every conflict is in `.lore/data` or `.lore/LORE.md`, and the driver settles all of them; then it pushes that merge to the pull request branch. A code conflict, or the same text edited on both sides, is left alone and listed in the run summary for a person. Things to know:
@@ -439,7 +437,7 @@ Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses 
 
 **What happens when two people edit the same rule on different branches?** Different fields merge automatically through lore's merge driver. The same text edited twice is a real conflict: git stops, the conflict markers sit inside the JSON value, and lore shows both versions but will not let you commit the file until you pick one with `lore <entity> edit`.
 
-**I accidentally ran `git clean` / reverted a commit — is the knowledge gone?** No. Rows whose file disappears are copied to `lore sync trash` before they leave the cache; `lore sync trash restore <id>` brings one back.
+**I accidentally ran `git clean` / reverted a commit — is the knowledge gone?** No. Rows whose file disappears are copied to `lore trash list --local` before they leave the cache, and the file itself is still in git history: `git checkout HEAD -- <file>` (or the commit before the one that deleted it) brings it back.
 
 **Is capture and recall really automatic?** With the bundled lore skill, the agent captures decisions, rules, and corrections and recalls relevant knowledge on its own. You can also drive everything by hand with the CLI.
 

@@ -15,7 +15,7 @@ The examples follow Alice and Bob (two agency developers) in the client's repo `
 | [How notes travel with git](how-notes-travel-with-git.md) | You want the big picture: what `lore init` adds, what to commit, what `lore sync` does, and how a teammate gets your notes. Start here. |
 | [Branches: peek and promote](branches-peek-promote.md) | You want to see a teammate's notes on their branch without switching to it, or move one urgent rule onto main now. |
 | [Conflicts and duplicates](conflicts-and-duplicates.md) | Two people changed the same note, the same fact was written twice, or two people set up lore on separate branches. |
-| [Trash, export and purge](trash-and-purge.md) | A note disappeared, `.lore/data` was deleted, or you want old archived notes gone for good. |
+| [Trash, restore from git and purge](trash-and-purge.md) | A note disappeared, `.lore/data` was deleted, or you want old archived notes gone for good. |
 | [Hooks and the merge driver](hooks-and-merge-driver.md) | You want to know what lore adds to `.git/hooks` and `.gitattributes`, and why a commit was refused. |
 | [The GitHub workflow](github-workflow.md) | Pull requests on GitHub show a conflict in `.lore/data` that lore could have merged. |
 | [Projects and repos](multi-repo-projects.md) | You want notes that apply to one part of the code only, or you want to see and tidy the projects in a database. |

@@ -138,21 +138,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | `E_AUDIT_CHAIN_BROKEN` | 1 | `lore audit verify` found an audit entry that was edited or deleted | restore `lore.db` from a backup to look into it |
 | `E_SYNC_DATA_IGNORED` | 1 | git ignores `.lore/data`, so teammates would never get your notes | remove the line that ignores it from `.gitignore` |
 
-lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. A rule it cannot override, such as a `.gitignore` inside `.lore/data`, stops it with `E_SYNC_DATA_IGNORED`:
-
-<!-- example: reference#sync-data-ignored only=2 -->
-```console
-# alice, in website
-$ lore sync install-git
-lore sync: git ignores lore data, so teammates will not receive it:
-  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
-change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
-ERROR: [E_SYNC_DATA_IGNORED] lore sync: git ignores lore data, so teammates will not receive it:
-  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
-change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
-(exit 23)
-```
-<!-- /example -->
+lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. A rule it cannot override, such as a `.gitignore` inside `.lore/data`, stops it with `E_SYNC_DATA_IGNORED`.
 
 ### General
 

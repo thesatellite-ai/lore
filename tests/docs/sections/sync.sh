@@ -90,7 +90,7 @@ on bob work/website "git pull -q --no-rebase origin main"
 on alice work/website "lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main"
 on bob work/website "lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'"
 on bob work/website "git pull -q --no-rebase origin main"
-on bob work/website "lore sync dupes"
+on bob work/website "lore memory list | grep -i invoice"
 local m_a m_b
 m_a=$(grep -o 'mem_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 1p)
 m_b=$(grep -o 'mem_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 2p)
@@ -115,33 +115,34 @@ on alice work/website "git add -A && git commit -qm 'lore: whatsapp wording' && 
 note "trash"
 on alice work/website "git rm -q .lore/data/memories/$m_whatsapp.json"
 on alice work/website "lore memory list"
-on alice work/website "lore sync trash"
+on alice work/website "lore trash list --local"
 local t_no; t_no=$(grep -o '^#[0-9]*' <<<"$LAST_OUT" | head -1 | tr -d '#')
 # Core-owned rows come back from git, not from the trash: restore refuses and names
 # the git command (a63c6f8).
-on! alice work/website "lore sync trash restore $t_no"
+on! alice work/website "lore trash restore $t_no --local"
 on alice work/website "git checkout HEAD -- .lore/data/memories/$m_whatsapp.json"
 on alice work/website "lore memory list"
 on alice work/website "git add -A && git status --short"
 
 note "export"
 on alice work/website "rm -rf .lore/data && lore sync status"
-# export --all writes the rows lore.db owns; core-owned rows (rules, memories, …) are
-# skipped because their files are the truth, so they come back from git (cf0f486).
-on alice work/website "lore sync export --all"
+# The row files are the truth (STORE_SERVER_SPEC 3): a deleted .lore/data comes back
+# from git, and nothing is lost.
 on alice work/website "git checkout -q HEAD -- .lore/data && git status --short"
 
 note "purge"
 on alice work/website "lore memory archive $m_whatsapp && git commit -qam 'lore: archive whatsapp memory'"
-on alice work/website "lore sync purge --archived-before 0d --dry-run"
-on! alice work/website "lore sync purge --archived-before 0d"
-on alice work/website "lore sync purge --archived-before 0d --confirm"
+on alice work/website "lore trash purge --archived-before 0d --dry-run"
+on! alice work/website "lore trash purge --archived-before 0d"
+on alice work/website "lore trash purge --archived-before 0d --confirm"
 on alice work/website "cat .lore/data/_purged.json"
 on alice work/website "git add -A && git status --short && git commit -qm 'lore: purge archived rows' && git push -q origin main"
 
 # --- docs/sync/hooks-and-merge-driver.md ------------------------------------------------
 note "hooks"
-on alice work/website "lore sync install-git"
+# lore wires the hooks, the merge driver and .gitattributes after every command; there
+# is no command to run for it.
+on alice work/website "lore sync status >/dev/null"
 on alice work/website "ls .git/hooks | grep -v sample"
 # The driver line names the lore binary by its full path; shortened here.
 on alice work/website "git config --get-regexp '^merge\\.lore' | sed \"s|'/[^']*'|/path/to/lore|\""
@@ -163,7 +164,7 @@ on alice work/website "grep -A 6 '^on:' .github/workflows/lore-sync-merge.yml"
 note "workflow automatic"
 on alice work/website "lore sync install-action --auto"
 on alice work/website "grep -A 7 '^on:' .github/workflows/lore-sync-merge.yml"
-on alice work/website "lore sync uninstall-action"
+on alice work/website "rm .github/workflows/lore-sync-merge.yml"
 
 note "ci merge"
 on bob work/website "git pull -q --no-rebase origin main"

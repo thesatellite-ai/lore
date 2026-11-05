@@ -280,7 +280,6 @@ git pull
 lore memory list                      # adopts .lore/data: switches to the shared project id,
                                       # imports teammates' rows, exports their private rows
 lore sync conflicts                   # rows both sides changed: the newer won, the other is here
-lore sync dupes                       # same fact recorded twice → lore sync merge-rows …
 git add .lore/data && git commit -m "lore: my knowledge"   # on their branch, merged via PR
 ```
 

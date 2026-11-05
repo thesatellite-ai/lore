@@ -1,6 +1,6 @@
-# Trash, export and purge
+# Trash, restore from git and purge
 
-**In short:** when a note's file disappears (deleted, reverted, or missing on the branch you switched to), lore removes the note from your database but keeps a copy in a local trash, so you can put it back. If the whole `.lore/data` folder is gone, git brings your notes back and `lore sync export --all` rewrites the few rows only the database holds. And when you really want old archived notes gone for good, `lore sync purge` deletes them so no old clone brings them back.
+**In short:** when a note's file disappears (deleted, reverted, or missing on the branch you switched to), lore removes the note from your database but keeps a copy in a local trash, so you can put it back. If the whole `.lore/data` folder is gone, git brings your notes back. And when you really want old archived notes gone for good, `lore trash purge --archived-before` deletes them so no old clone brings them back.
 
 ## What it is and when you want it
 
@@ -8,9 +8,9 @@ The files in `.lore/data` are the truth; the database follows them ([How notes t
 
 | Tool | Use it when |
 |---|---|
-| `lore sync trash`, then `git checkout HEAD -- <file>` | a note disappeared and you want it back |
-| `git checkout HEAD -- .lore/data` and `lore sync export --all` | the `.lore/data` folder was deleted, or files went missing |
-| `lore sync purge --archived-before <date-or-age> --confirm` | archived notes should be deleted for good, everywhere |
+| `lore trash list --local`, then `git checkout HEAD -- <file>` | a note disappeared and you want it back |
+| `git checkout HEAD -- .lore/data` | the `.lore/data` folder was deleted, or files went missing |
+| `lore trash purge --archived-before <date-or-age> --confirm` | archived notes should be deleted for good, everywhere |
 
 Archiving (`lore memory archive <id>`, `lore rule archive <id>`, ...) is the normal way to retire a note: it stays in its file with an archive date and stops showing up. Purge is the step after that, for notes that must not come back.
 
@@ -21,7 +21,7 @@ Archiving (`lore memory archive <id>`, `lore rule archive <id>`, ...) is the nor
 
 ## Step 1 — Get back a note whose file disappeared
 
-Alice deletes a memory's file (here with `git rm`, as a teammate's commit or a revert would). The next command moves the row to the trash. `lore sync trash` lists what is there. A memory is a core note whose file is the truth, so `lore sync trash restore` refuses and names the git command that brings the file back; run it, and the note is there again:
+Alice deletes a memory's file (here with `git rm`, as a teammate's commit or a revert would). The next command moves the row to the trash. `lore trash list --local` lists what is there. A memory is a core note whose file is the truth, so `lore trash restore --local` refuses and names the git command that brings the file back; run it, and the note is there again:
 
 <!-- example: sync#trash -->
 ```console
@@ -31,14 +31,13 @@ $ lore memory list
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
-$ lore sync trash
-note: lore sync trash is now lore trash --local; this spelling goes away in the next release
+$ lore trash list --local
+this machine only: local safety copies of rows sync removed (never shared)
 #4 memories/mem_05e9…4603  2026-11-02T10:05:40Z  (file deleted)
 #3 memories/mem_c0f3…b5b8  2026-11-02T10:02:50Z  (file deleted)
 #2 rules/rul_76bd…3f10  2026-11-02T10:02:00Z  (file deleted)
 #1 memories/mem_c0f3…b5b8  2026-11-02T10:02:00Z  (file deleted)
-$ lore sync trash restore 4
-note: lore sync trash restore is now lore trash restore --local 4; this spelling goes away in the next release
+$ lore trash restore 4 --local
 ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: a trash restore of memories is not done in lore.db (the row files are the truth): restore the file from git (`git checkout HEAD -- .lore/data/memories/mem_05e9…4603.json`, or from the commit before the one that deleted it: `git log --diff-filter=D -- .lore/data/memories/mem_05e9…4603.json`)
 (exit 20)
 $ git checkout HEAD -- .lore/data/memories/mem_05e9…4603.json
@@ -51,9 +50,9 @@ $ git add -A && git status --short
 
 The other entries in that list are rows that left the database when Alice switched branches earlier ([Branches: peek and promote](branches-peek-promote.md)). They come back by themselves when you switch back, because their files are still on that branch.
 
-## Step 2 — Rebuild `.lore/data` from the database
+## Step 2 — Get back a deleted `.lore/data`
 
-If `.lore/data` is deleted, lore does not empty your database. It warns on every command and points at the fix. `lore sync export --all` writes the rows the database owns, and skips the core notes (rules, memories, tasks, …), because their files are the truth and come back from git. Restore those from git; when nothing was lost, git shows no change at all:
+If `.lore/data` is deleted, lore does not empty your database; it warns on every command. The files are the truth, so they come back from git; when nothing was lost, git shows no change at all:
 
 <!-- example: sync#export -->
 ```console
@@ -69,23 +68,9 @@ uncommitted:      12
 meta quarantined: 0
 live rows:        0 (_root)
 lore sync: ~/work/website/.lore/data is missing (a branch without lore data, or deleted): lore.db is left untouched; run `lore sync export --all` to recreate it
-$ lore sync export --all
-lore sync: ~/work/website/.lore/data is missing (a branch without lore data, or deleted): lore.db is left untouched; run `lore sync export --all` to recreate it
-lore sync: actors/act_28f8…03df.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: actors/act_162d…9666.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: memories/mem_05e9…4603.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: memories/mem_4c59…6c38.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: projects/prj_7a67…9504.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: repos/rep_54fe…28f2.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: rules/rul_2ad3…f891.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: rules/rul_76bd…3f10.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: rules/rul_b4f4…a5b0.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-✓ 0 file(s) written
 $ git checkout -q HEAD -- .lore/data && git status --short
 ```
 <!-- /example -->
-
-`export --all` is also the step to run after a tool changed `lore.db` without going through lore, or after a lore upgrade asks you to rewrite files in a new format; commit the result on main.
 
 ## Step 3 — Purge archived notes for good
 
@@ -96,18 +81,18 @@ Alice archives a memory and commits that. Later the team decides archived notes 
 # alice, in website
 $ lore memory archive mem_05e9…4603 && git commit -qam 'lore: archive whatsapp memory'
 ✓ mem_05e9…4603 archived
-$ lore sync purge --archived-before 0d --dry-run
-note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
-would purge 1 archived row(s) archived before 2026-11-02T10:06:30Z
-$ lore sync purge --archived-before 0d
-note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
-ERROR: [E_INVALID_INPUT] purge is durable; pass --confirm (or --dry-run to preview)
-(exit 20)
-$ lore sync purge --archived-before 0d --confirm
-note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
-✓ purged 1 row(s)
+$ lore trash purge --archived-before 0d --dry-run
+would purge 1 rows
+  mem_05e9…4603 (memories, repo)
+dry run: nothing written
+$ lore trash purge --archived-before 0d
+ERROR: [E_NEEDS_CONFIRM] trash: purge removes every row archived before 0d for good; only tombstones stay
+  hint: ask the person, then re-run with --confirm
+(exit 26)
+$ lore trash purge --archived-before 0d --confirm
+purged 1 rows
+  mem_05e9…4603 (memories, repo)
+tombstones are kept forever; the old content is still in git history (rotate any leaked secret)
 $ cat .lore/data/_purged.json
 {
   "_v": 1,
@@ -118,6 +103,8 @@ $ cat .lore/data/_purged.json
 $ git add -A && git status --short && git commit -qm 'lore: purge archived rows' && git push -q origin main
 A  .lore/data/_purged.json
 M  .lore/data/memories/mem_05e9…4603.json
+lore sync: trashed rows 1
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ```
 <!-- /example -->
 
@@ -127,7 +114,7 @@ Purge empties each purged row's file to a deletion marker (only its id and `"_de
 
 - **The trash is local.** It lives in your `lore.db` only, and core notes are restored from git, not from it: an old file comes back from history (`git log --diff-filter=D -- .lore/data/memories/<id>.json`).
 - **Restore numbers are per machine.** `#4` is the number in your trash list, not a row id.
-- **`lore <kind> delete` is a hard delete.** It removes the file at once. If another branch edited that note, git shows a normal "deleted on one side, changed on the other" conflict. Prefer `archive`.
+- **`lore <kind> delete` moves a note to the shared trash, not this local one.** `lore trash list` shows it and `lore trash restore <id>` brings it back; this page's `--local` trash only holds rows whose file disappeared. Prefer `archive` for notes you may still want to read.
 - **Purge only touches archived rows.** A row that is not archived is never purged, however old it is.
 - **Run purge on main and commit `_purged.json`.** Purged on a feature branch only, the rows come back from main when the branch merges.
 

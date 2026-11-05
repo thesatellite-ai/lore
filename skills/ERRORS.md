@@ -108,7 +108,7 @@ E_AUDIT_CHAIN_BROKEN
       backup to compare.
 
 E_SYNC_DATA_IGNORED
-    → `lore sync install-git` found .lore/data files git would not commit.
+    → lore's git wiring found .lore/data files git would not commit.
       Lore adds `!.lore/data/` exceptions itself when that helps; this error
       means a whole parent folder (usually `.lore/`) is ignored. Change that
       rule (ignore `.lore/lore.db`, `.lore/state/`, `.lore/backups/` instead).

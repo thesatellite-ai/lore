@@ -24,7 +24,7 @@ You want this page after a `git pull` or merge that touched `.lore/data`, when `
 ## Before you start
 
 - A repo set up with lore, cloned by two people (here Alice and Bob, agency developers, in `github.com/client/website`).
-- The merge driver is set up in each clone. lore does this on its first command in a clone; `lore sync install-git` does it at once.
+- The merge driver is set up in each clone. lore does this on its first command in a clone.
 
 ## Step 1 — Two edits of different fields merge by themselves
 
@@ -119,7 +119,7 @@ A conflict between the file and `lore.db` can still happen for the few rows `lor
 
 ## Step 4 — The same fact written twice
 
-Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, `lore sync dupes` finds rows whose text is the same (ignoring case and spaces). Memories are core notes whose files are the truth, so `lore sync merge-rows` does not fold them in the database; it refuses and names the fix: keep one row (edit it if it should carry the other's text) and delete the other with its own command:
+Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, both rows are there; `lore memory list` (or `lore search`) shows them side by side. Memories are core notes whose files are the truth, so `lore sync merge-rows` does not fold them in the database; it refuses and names the fix: keep one row (edit it if it should carry the other's text) and delete the other with its own command:
 
 <!-- example: sync#duplicates only=2,3,4,5,6,7,8 -->
 ```console
@@ -133,9 +133,9 @@ $ lore memory add --body 'send the invoice reminder before the demo on friday.' 
 ✓ mem_3b62…e913
   scope: [master]
 $ git pull -q --no-rebase origin main
-$ lore sync dupes
-memories: mem_4c59…6c38, mem_3b62…e913
-    Send the invoice reminder before the demo on Friday.
+$ lore memory list | grep -i invoice
+mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
+mem_3b62…e913 [retrieved] send the invoice reminder before the demo on friday.
 $ lore sync merge-rows memories --keep mem_4c59…6c38 --drop mem_3b62…e913
 ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_4c59…6c38 (edit it with its lore command if it should carry the other's text), then delete mem_3b62…e913 with its lore command
 (exit 20)
@@ -190,7 +190,7 @@ lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a 
 ## Pitfalls
 
 - **GitHub's merge button does not run lore's driver.** On a pull request, two edits of the same note show as a conflict even when lore could merge them. Merge main into your branch locally (`git pull origin main`), or install [the GitHub workflow](github-workflow.md).
-- **A clone that never ran lore has no driver.** If someone merges in a fresh clone before running any lore command, git falls back to line merging. Run any lore command (or `lore sync install-git`) once after cloning.
+- **A clone that never ran lore has no driver.** If someone merges in a fresh clone before running any lore command, git falls back to line merging. Run `lore sync` once after cloning.
 - **Conflict markers in a value are imported, not hidden.** Until you settle them, `lore rule list` shows the markers in the text, and every command repeats the warning. That is deliberate, so the conflict is not forgotten.
 - **`dupes` finds exact text only.** "We use Stripe" and "Payments go through Stripe" are not duplicates to lore. Fold those by hand when you see them: edit the one you keep, delete the other.
 - **Resolve numbers are per machine.** `#1` in `lore sync conflicts` is a local number, not a row id; it means nothing on a teammate's machine.
@@ -199,6 +199,6 @@ lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a 
 
 - [Hooks and the merge driver](hooks-and-merge-driver.md): what the driver is and how it is installed.
 - [The GitHub workflow](github-workflow.md): merge lore data on pull requests.
-- [Trash, export and purge](trash-and-purge.md): where dropped rows go.
+- [Trash, restore from git and purge](trash-and-purge.md): where dropped rows go.
 - [How it works › Merging two versions of a row](../team/how-it-works.md#merging-two-versions-of-a-row): the same rules for live rows.
 - [Feature index › Git sync](../reference/features.md#git-sync-notes-travel-with-your-commits)

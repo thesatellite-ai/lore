@@ -140,11 +140,6 @@ on alice work/website "git fetch -q origin && git log --oneline origin/develop -
 quiet alice . "rm .lore/config.yaml"
 
 # --- one error from each group (docs/reference/errors.md) --------------------------------
-note "sync data ignored"
-on alice work/website "mkdir -p .lore/data/tasks && echo '*.json' > .lore/data/tasks/.gitignore"
-on! alice work/website "lore sync install-git"
-quiet alice work/website "rm .lore/data/tasks/.gitignore"
-
 note "no work"
 lore_repo alice client/landing
 on! alice work/landing "lore task next"

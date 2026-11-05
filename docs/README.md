@@ -43,7 +43,7 @@ Each step builds on the one before. Every example is a script that runs the real
 | let a contractor see one client only | [Contractor limited to one client](team/use-cases/contractor.md) | [`contractor`](../tests/team/docs/transcripts/contractor.txt) |
 | run several agents on one plan | [When to use agents, claims and gates](choosing/agents-claims-gates.md), [Agents on one mission](team/use-cases/agents-mission.md) | [`agents`](../tests/team/docs/transcripts/agents.txt) |
 | fix a merge conflict in a note | [Conflicts and duplicates](sync/conflicts-and-duplicates.md) | [`sync`](../tests/docs/sections/sync.sh) |
-| get a note back that I deleted | [Trash, export and purge](sync/trash-and-purge.md) | [`sync`](../tests/docs/sections/sync.sh) |
+| get a note back that I deleted | [Trash, restore from git and purge](sync/trash-and-purge.md) | [`sync`](../tests/docs/sections/sync.sh) |
 | recover from a broken database | [Back up, restore and repair](operations/backup-restore-repair.md) | [`ops`](../tests/docs/sections/ops.sh) |
 | run lore in CI | [Use lore in CI](operations/ci.md) | [`ops`](../tests/docs/sections/ops.sh) |
 | find out what an error means | [Error codes and exit statuses](reference/errors.md), [Troubleshooting](team/troubleshooting.md) | [`reference`](../tests/docs/sections/reference.sh), [`errors`](../tests/team/docs/transcripts/errors.txt) |
@@ -80,7 +80,7 @@ Each step builds on the one before. Every example is a script that runs the real
 - [How notes travel with git](sync/how-notes-travel-with-git.md): `.lore/data`, commits, clones, and turning sync off for one command.
 - [Branches: peek and promote](sync/branches-peek-promote.md): read another branch's notes, and copy one to `main` now.
 - [Conflicts and duplicates](sync/conflicts-and-duplicates.md): field-by-field merges, real conflicts, the same fact written twice, and two separate setups in one repo.
-- [Trash, export and purge](sync/trash-and-purge.md): get a lost note back, write `.lore/data` again, delete old notes for good.
+- [Trash, restore from git and purge](sync/trash-and-purge.md): get a lost note back, write `.lore/data` again, delete old notes for good.
 - [Hooks and the merge driver](sync/hooks-and-merge-driver.md): the git set-up lore adds and why.
 - [The GitHub workflow](sync/github-workflow.md): let GitHub merge note files with lore.
 - [Projects and repos](sync/multi-repo-projects.md): projects, repos inside a project, and renamed repos.

@@ -102,7 +102,7 @@ When Alice's branch merges later, the promoted file is already on main with the 
 - **Peek needs a fetched ref** (a ref is git's name for a branch or other named pointer; "fetched" means your clone has downloaded it). `lore sync peek feature/payments` reads your local branch; to see the remote one, run `git fetch` and use `origin/feature/payments`.
 - **Promote copies the file as it is on your current branch.** Make your last edit before you promote. It cannot target the branch you are on.
 - **Promote never pushes.** The new commit sits on your local main until you push it or open a pull request. If main is protected on GitHub (GitHub will not let anyone push to it directly), push it to a new branch and open a pull request instead.
-- **Rows that vanish on a branch switch go to the trash.** When you switch to a branch that does not have a row, lore removes it from the database and keeps a copy in `lore sync trash`. That is normal; switching back brings the row back from its file. See [Trash, export and purge](trash-and-purge.md).
+- **Rows that vanish on a branch switch go to the trash.** When you switch to a branch that does not have a row, lore removes it from the database and keeps a copy in `lore trash list --local`. That is normal; switching back brings the row back from its file. See [Trash, restore from git and purge](trash-and-purge.md).
 - **Live rows do not follow branches.** Tasks are live by default: they are shared at once on every branch. See [Lore for teams](../team/README.md).
 
 ## Related
