@@ -171,7 +171,7 @@ func (o AllowsOut) Text() string {
 
 func (o ops) secretOps() []op.Entry {
 	ask := op.ConfirmRule{Always: true}
-	return []op.Entry{
+	return append([]op.Entry{
 		op.Define(op.Spec{Name: OpSecretRules, Summary: "List secret rule rows (added, changed or off) with their level", Permission: op.PermRead,
 			Access: op.AccessRead, Errors: readErrors, RESTNoun: rulesREST}, o.rules),
 		op.Define(op.Spec{Name: OpSecretRuleAdd, Summary: "Add a lore secret rule on top of the defaults", Permission: op.PermWrite, Access: op.AccessWrite,
@@ -189,7 +189,7 @@ func (o ops) secretOps() []op.Entry {
 			Access: op.AccessWrite, Errors: writeErrors, Confirm: ask}, o.allowRm),
 		op.Define(op.Spec{Name: OpSecretAllowList, Summary: "List the allow entries", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.allowList),
-	}
+	}, o.secretIndexOps()...)
 }
 
 func ruleOf(env Env, l located) Rule {
@@ -436,6 +436,12 @@ func (o ops) allowRm(ctx context.Context, in AllowRmIn) (RowOut, error) {
 	}
 	src, _, err := o.env.Get(ctx, engine.Ref{Table: schema.TableSecretAllows, ID: id.Any()})
 	if err != nil {
+		if errs.Has(err, errs.NotFound) {
+			// DELETION 3.2: a trashed allow entry says where it is.
+			if terr := inTrashByKey(ctx, o.env, o.env.Stores(), schema.TableSecretAllows, func(l located) bool { return l.Row.ID == id.Any() }); terr != nil {
+				return RowOut{}, terr
+			}
+		}
 		return RowOut{}, err
 	}
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: src, Table: schema.TableSecretAllows, ID: id.Any()}); err != nil {

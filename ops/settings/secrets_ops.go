@@ -1,0 +1,978 @@
+package settings
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"path"
+	"slices"
+	"strconv"
+	"strings"
+
+	"github.com/thesatellite-ai/lore/adapters/secretmgr"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/work"
+	"github.com/thesatellite-ai/lore/ops/task"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// lore secrets offboarding (SECRETS_AND_REFERENCES 2.6, 2.7, 7, 15, 16):
+// the index of every secret reference, reveal (SQ10, D18), verify, and the
+// bulk rewrites of holder, label and entry name. Lore never copies a
+// secret between vaults and never lists a vault (SQ6 dropped).
+const (
+	OpSecretsList        = "secrets.list"
+	OpSecretsShow        = "secrets.show"
+	OpSecretsCheck       = "secrets.check"
+	OpSecretsMove        = "secrets.move"
+	OpSecretsRelabel     = "secrets.relabel"
+	OpSecretsRenameEntry = "secrets.rename_entry"
+	OpSecretsLink        = "secrets.link"
+)
+
+// Words of the audit records and the messages.
+const (
+	cmdSecretsShow = "secrets show"
+	secretOpen     = "${secret:"
+	secretClose    = "}"
+	rotateTitle    = "Rotate secrets %s held: %d entries"
+	unstoredTitle  = "Store the secret redacted from %s, then rotate it"
+	machinePrefix  = "mch_"
+	actorPrefix    = "act_"
+	handleSep      = "."
+)
+
+// SecretAuditor is the Env upgrade that records secret.* events (wire.App
+// has it). A reveal without it is refused: a reveal is never unaudited.
+type SecretAuditor interface {
+	AuditSecret(ctx context.Context, action engine.Action, s engine.SecretAudit) error
+}
+
+// SecretManagerSource is an optional Env upgrade giving the managers (tests
+// hand in fakes; a later plugin system adds its own). Without it the
+// built-in managers with their default timeout are used.
+type SecretManagerSource interface {
+	SecretManagers() secretmgr.Set
+}
+
+// Holderer is an optional Env upgrade: this machine's holder id and label
+// for a reference lore writes (5.2). Without it lore secrets link writes
+// no holder unless --holder is given.
+type Holderer interface {
+	ThisHolder(ctx context.Context) (id, label string, err error)
+}
+
+// SecretsListIn is the input of secrets.list.
+type SecretsListIn struct {
+	Holder   string `json:"holder,omitempty" flag:"holder" desc:"only references held by this person, person.machine label or holder id"`
+	Manager  string `json:"manager,omitempty" flag:"manager" desc:"only this manager scheme (gopass, op, aws-secrets, …)"`
+	Unstored bool   `json:"unstored,omitempty" flag:"unstored" desc:"only ${secret:unstored} placeholders"`
+	Missing  bool   `json:"missing,omitempty" flag:"missing" desc:"check every entry now and keep the missing ones (opens the managers)"`
+}
+
+// SecretsShowIn is the input of secrets.show.
+type SecretsShowIn struct {
+	ID     string `json:"id" arg:"0" desc:"a secret reference (manager://entry or ${secret:…}) or a row id"`
+	Reveal bool   `json:"reveal,omitempty" flag:"reveal" desc:"read the value from the manager and print it (asks every time; audited)"`
+	Force  bool   `json:"force,omitempty" flag:"force" desc:"reveal without a person's answer (agents; audited as FORCED)"`
+}
+
+// SecretsCheckIn is the input of secrets.check.
+type SecretsCheckIn struct {
+	Manager string `json:"manager,omitempty" flag:"manager" desc:"only this manager scheme"`
+	Holder  string `json:"holder,omitempty" flag:"holder" desc:"only references held by this person or holder id"`
+}
+
+// SecretsMoveIn is the input of secrets.move.
+type SecretsMoveIn struct {
+	From    string `json:"from" flag:"from" desc:"the current holder (person, person.machine or holder id)"`
+	To      string `json:"to_holder" flag:"to" desc:"the new holder (person.machine label of a known machine, or an mch_/act_ id)"`
+	Manager string `json:"manager,omitempty" flag:"manager" desc:"only this manager scheme"`
+	Entry   string `json:"entry,omitempty" flag:"entry" desc:"only entries matching this glob (acme/hub/*)"`
+}
+
+// SecretsRelabelIn is the input of secrets.relabel.
+type SecretsRelabelIn struct {
+	Holder string `json:"holder,omitempty" flag:"holder" desc:"only this holder id"`
+}
+
+// SecretsRenameIn is the input of secrets.rename_entry.
+type SecretsRenameIn struct {
+	Manager string `json:"manager" flag:"manager" desc:"the manager scheme"`
+	From    string `json:"from" flag:"from" desc:"the old entry name"`
+	To      string `json:"to_entry" flag:"to" desc:"the new entry name"`
+}
+
+// SecretsLinkIn is the input of secrets.link.
+type SecretsLinkIn struct {
+	Row    string `json:"id" arg:"0" desc:"the row holding ${secret:unstored}"`
+	At     int    `json:"at" flag:"at" desc:"which placeholder (1-based, as lore secrets list --unstored prints it)"`
+	Ref    string `json:"ref" flag:"ref" desc:"the entry, as manager://entry (holder options optional)"`
+	Holder string `json:"holder,omitempty" flag:"holder" desc:"the holder id to record (default this machine, when known)"`
+}
+
+// SecretsOut is the output of secrets.list, show and check.
+type SecretsOut struct {
+	Count int         `json:"count"`
+	Data  []SecretUse `json:"data"`
+	// Revealed, Forced, Warning and Values: secrets show --reveal (2.7).
+	Revealed int           `json:"revealed,omitempty"`
+	Forced   bool          `json:"forced,omitempty"`
+	Warning  string        `json:"warning,omitempty"`
+	Values   []RevealedOne `json:"values,omitempty"`
+	// Tasks are the store-then-rotate tasks secrets check added (D21).
+	Tasks []string `json:"tasks,omitempty"`
+	Human string   `json:"-"`
+}
+
+// RevealedOne is one revealed reference: which target answered, and the
+// value (printed only because the caller asked with --reveal).
+type RevealedOne struct {
+	Ref      string `json:"ref"`
+	Answered string `json:"answered"`
+	Value    string `json:"value"`
+}
+
+// Text implements op.Texter.
+func (o SecretsOut) Text() string { return o.Human }
+
+// SecretsBatchOut is the output of the bulk rewrites and link.
+type SecretsBatchOut struct {
+	Batch string   `json:"batch,omitempty"`
+	Count int      `json:"count"`
+	Rows  []string `json:"rows"`
+	Task  string   `json:"task,omitempty"`
+	Human string   `json:"-"`
+}
+
+// Text implements op.Texter.
+func (o SecretsBatchOut) Text() string { return o.Human }
+
+// secretErrors are the codes the secret index ops may return.
+var secretErrors = append(slices.Clone(writeErrors), errs.SecretUnavailable, errs.RefSyntax, errs.RefScheme)
+
+func (o ops) secretIndexOps() []op.Entry {
+	return []op.Entry{
+		op.Define(op.Spec{Name: OpSecretsList, Summary: "Every secret reference in this view: entry, holder, row and field (opens no vault)", Permission: op.PermRead,
+			Access: op.AccessRead, Errors: secretErrors,
+			Examples: []op.Example{{Title: "references a person holds", CLI: "lore secrets list --holder tomas", Want: "references"}}}, o.secretsList),
+		op.Define(op.Spec{Name: OpSecretsShow, Summary: "Show a secret reference or a row's references; --reveal prints the value (asks every time)", Permission: op.PermRead,
+			Access: op.AccessRead, Errors: secretErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.secretsShow),
+		op.Define(op.Spec{Name: OpSecretsCheck, Summary: "Verify each referenced entry by its name (the value is read and dropped); adds the store-then-rotate tasks", Permission: op.PermWrite,
+			Access: op.AccessWrite, Errors: secretErrors}, o.secretsCheck),
+		op.Define(op.Spec{Name: OpSecretsMove, Summary: "Rewrite the holder of matching references (one batch; never copies a secret)", Permission: op.PermWrite,
+			Access: op.AccessWrite, Errors: secretErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.secretsMove),
+		op.Define(op.Spec{Name: OpSecretsRelabel, Summary: "Rewrite each reference's holder label from its holder id (one batch)", Permission: op.PermWrite,
+			Access: op.AccessWrite, Errors: secretErrors}, o.secretsRelabel),
+		op.Define(op.Spec{Name: OpSecretsRenameEntry, Summary: "Rewrite an entry name everywhere (a renamed vault entry; one batch)", Permission: op.PermWrite,
+			Access: op.AccessWrite, Errors: secretErrors}, o.secretsRename),
+		op.Define(op.Spec{Name: OpSecretsLink, Summary: "Fill a ${secret:unstored} placeholder with the entry it is now stored in", Permission: op.PermWrite,
+			Access: op.AccessWrite, Errors: secretErrors}, o.secretsLink),
+	}
+}
+
+// managers is the manager set of this Env.
+func (o ops) managers() secretmgr.Set {
+	if s, ok := o.env.(SecretManagerSource); ok {
+		return s.SecretManagers()
+	}
+	return secretmgr.Builtin(secretmgr.Options{})
+}
+
+// filterUses keeps the uses matching holder and manager.
+func filterUses(rows []secretRow, holder, manager string, unstored bool) []SecretUse {
+	out := []SecretUse{}
+	for _, r := range rows {
+		for _, u := range r.uses {
+			if (manager != "" && u.Manager != manager) || !holderMatch(u, holder) || (unstored && u.Ref != refs.TargetUnstored) {
+				continue
+			}
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+// usesText is the 2.6 table.
+func usesText(us []SecretUse, tail string) string {
+	if len(us) == 0 {
+		return "(no secret references)\n"
+	}
+	var b strings.Builder
+	b.WriteString("REF\tHOLDER\tUSED IN\tSTATE\n")
+	rows := map[string]bool{}
+	for _, u := range us {
+		holder := "-"
+		switch {
+		case u.Label != "" && u.Holder != "":
+			holder = u.Label + " (" + shortHolder(u.Holder) + ")"
+		case u.Holder != "":
+			holder = shortHolder(u.Holder)
+		case u.Label != "":
+			holder = u.Label
+		}
+		used := u.Row + " " + u.Field
+		if u.At > 0 {
+			used += " (" + strconv.Itoa(u.At) + ")"
+		}
+		state := u.State
+		if state == "" {
+			state = "-"
+		}
+		rows[u.Row] = true
+		fmt.Fprintf(&b, "%s\t%s\t%s\t%s\n", u.Ref, holder, used, state)
+	}
+	fmt.Fprintf(&b, "%d references in %d rows.%s\n", len(us), len(rows), tail)
+	return b.String()
+}
+
+// shortHolder is the 8-hex short form of a holder id (AGENT_IDENTITY 6.8).
+func shortHolder(id string) string {
+	p, rest, ok := strings.Cut(id, "_")
+	if !ok || len(rest) <= 8 {
+		return id
+	}
+	return p + "_" + rest[:8]
+}
+
+// secretsList is `lore secrets list` (2.6, 15): the index, filtered; no
+// vault is opened unless --missing (DECISION SEC-IDX1).
+func (o ops) secretsList(ctx context.Context, in SecretsListIn) (SecretsOut, error) {
+	rows, err := o.secretIndex(ctx)
+	if err != nil {
+		return SecretsOut{}, err
+	}
+	us := filterUses(rows, in.Holder, in.Manager, in.Unstored)
+	if in.Missing {
+		us, err = o.verify(ctx, us)
+		if err != nil {
+			return SecretsOut{}, err
+		}
+		us = slices.DeleteFunc(us, func(u SecretUse) bool { return u.State != stateMissing })
+	}
+	return SecretsOut{Count: len(us), Data: us, Human: usesText(us, "")}, nil
+}
+
+// verify checks each distinct manager target once: Reveal, drop the
+// Secret unread, record secret.verified (6: present, missing, not_checked).
+func (o ops) verify(ctx context.Context, us []SecretUse) ([]SecretUse, error) {
+	set := o.managers()
+	done := map[string]string{}
+	for i, u := range us {
+		if u.Manager == "" {
+			continue
+		}
+		key := u.Manager + "://" + u.Locator + "#" + u.Fragment
+		st, seen := done[key]
+		if !seen {
+			st = o.verifyOne(ctx, set, u)
+			done[key] = st
+			if a, ok := o.env.(SecretAuditor); ok {
+				if err := a.AuditSecret(ctx, engine.ActionSecretVerified, engine.SecretAudit{Ref: u.Ref, Command: "secrets check", Result: st}); err != nil {
+					return nil, err
+				}
+			}
+		}
+		us[i].State = st
+	}
+	return us, nil
+}
+
+func (o ops) verifyOne(ctx context.Context, set secretmgr.Set, u SecretUse) string {
+	m, ok := set.Get(u.Manager)
+	if !ok {
+		return stateNotChecked
+	}
+	_, err := m.Reveal(ctx, locatorOf(u))
+	switch {
+	case err == nil:
+		return statePresent
+	case isMissing(err):
+		return stateMissing
+	}
+	return stateNotChecked
+}
+
+func isMissing(err error) bool { return err != nil && errors.Is(err, secretmgr.ErrMissing) }
+
+// locatorOf is a use's manager locator (manager options only, never
+// holder or label).
+func locatorOf(u SecretUse) secretmgr.Locator {
+	l := secretmgr.Locator{Path: u.Locator, Fragment: u.Fragment}
+	parts := refs.Parse(secretOpen + u.Ref + secretClose)
+	if len(parts) == 1 && len(parts[0].Ref.Alternates) == 1 {
+		for _, op := range parts[0].Ref.Alternates[0].Options {
+			if op.Name != refs.OptHolder && op.Name != refs.OptLabel {
+				l.Options = append(l.Options, secretmgr.Option{Name: op.Name, Value: op.Value})
+			}
+		}
+	}
+	return l
+}
+
+// secretsCheck is `lore secrets check` (15): verify every matching entry,
+// then make sure each row with ${secret:unstored} has its "store, then
+// rotate" task (7, D21; idempotent by row).
+func (o ops) secretsCheck(ctx context.Context, in SecretsCheckIn) (SecretsOut, error) {
+	rows, err := o.secretIndex(ctx)
+	if err != nil {
+		return SecretsOut{}, err
+	}
+	us, err := o.verify(ctx, filterUses(rows, in.Holder, in.Manager, false))
+	if err != nil {
+		return SecretsOut{}, err
+	}
+	tail, added := "", []string{}
+	for _, r := range rows {
+		if in.Holder != "" || in.Manager != "" {
+			break
+		}
+		id, made, terr := o.unstoredTask(ctx, r)
+		if terr != nil {
+			return SecretsOut{}, terr
+		}
+		if made {
+			added = append(added, id)
+			tail += "\nAdded task " + id + " (store the secret of " + r.Row.ID.String() + ", then rotate it)."
+		}
+	}
+	return SecretsOut{Count: len(us), Data: us, Tasks: added, Human: usesText(us, tail)}, nil
+}
+
+// unstoredTask adds the D21 task for a row holding ${secret:unstored};
+// made is false when the row has none or its task exists.
+func (o ops) unstoredTask(ctx context.Context, r secretRow) (string, bool, error) {
+	var fields []string
+	for _, u := range r.uses {
+		if u.Ref == refs.TargetUnstored && !slices.Contains(fields, u.Field) {
+			fields = append(fields, u.Field)
+		}
+	}
+	we, ok := o.env.(work.Env)
+	if len(fields) == 0 || !ok {
+		return "", false, nil
+	}
+	id := r.Row.ID.String()
+	body := "Row " + id + " (" + r.Row.Table.String() + "), fields " + strings.Join(fields, ", ") + ", holds $${secret:unstored} (escaped here so this task is not indexed as one).\n" +
+		"1. Store the secret in a manager, then: lore secrets link " + id + " --at 1 --ref <manager>://<entry>\n" +
+		"2. Rotate it (it was seen by a shell or an agent), then close this task."
+	tid, existed, err := task.AddSecretTask(ctx, we, task.SecretTask{Store: r.Src, Title: fmt.Sprintf(unstoredTitle, id), Body: body,
+		Key: "secret-unstored-" + id, Rows: []string{id}})
+	return tid, err == nil && !existed, err
+}
+
+// secretsShow is `lore secrets show <ref|row> [--reveal [--force]]` (2.7):
+//
+//	resolve the argument to uses ─► no --reveal: list them
+//	--reveal ─► gate (SQ10: --yes, --force, or agent_reveal allow; else
+//	E_NEEDS_CONFIRM) ─► auditor present ─► per reference: alternates in
+//	order until one answers (19.7) ─► secret.revealed / reveal_failed
+func (o ops) secretsShow(ctx context.Context, in SecretsShowIn) (SecretsOut, error) {
+	us, err := o.usesOf(ctx, in.ID)
+	if err != nil {
+		return SecretsOut{}, err
+	}
+	out := SecretsOut{Count: len(us), Data: us}
+	if !in.Reveal {
+		if in.Force {
+			return SecretsOut{}, errs.New(errs.InvalidInput, "--force goes with --reveal")
+		}
+		out.Human = usesText(us, " Not revealed (add --reveal).")
+		return out, nil
+	}
+	groups := revealGroups(us)
+	if len(groups) == 0 {
+		return SecretsOut{}, errs.New(errs.NotFound, "nothing to reveal: no manager reference in "+quote(in.ID))
+	}
+	g, err := o.revealGate(ctx, groups, in.Force)
+	if err != nil {
+		return SecretsOut{}, err
+	}
+	auditor, ok := o.env.(SecretAuditor)
+	if !ok {
+		return SecretsOut{}, errs.New(errs.Internal, "this surface cannot audit a reveal, so lore does not reveal here")
+	}
+	set := o.managers()
+	var b strings.Builder
+	for _, grp := range groups {
+		one, rerr := revealGroup(ctx, set, auditor, grp, g, us[0].Row)
+		if rerr != nil {
+			return SecretsOut{}, rerr
+		}
+		out.Values = append(out.Values, one)
+		fmt.Fprintf(&b, "%s = %s\n", one.Answered, one.Value)
+	}
+	out.Revealed, out.Forced = len(out.Values), g.forced
+	if g.forced {
+		out.Warning = "W_REVEAL_FORCED: revealed without a person's answer; recorded in the audit log as forced"
+		b.WriteString(out.Warning + "\n")
+	}
+	out.Human = b.String()
+	return out, nil
+}
+
+// usesOf resolves a show argument: a row id (its references) or a
+// reference text (bare manager://… or ${secret:…}).
+func (o ops) usesOf(ctx context.Context, arg string) ([]SecretUse, error) {
+	arg = strings.TrimSpace(arg)
+	if strings.Contains(arg, "://") || strings.HasPrefix(arg, secretOpen) {
+		text := arg
+		if !strings.HasPrefix(text, secretOpen) {
+			text = secretOpen + arg + secretClose
+		}
+		if err := refs.Validate(text); err != nil {
+			return nil, err
+		}
+		var us []SecretUse
+		for _, p := range refs.Parse(text) {
+			if p.Kind == refs.PartRef && p.Ref.Scheme == refs.SchemeSecret {
+				for i, t := range p.Ref.Alternates {
+					u := useOf(SecretUse{Kind: useText}, "", t)
+					u.Alt = i
+					us = append(us, u)
+				}
+			}
+		}
+		if len(us) == 0 {
+			return nil, errs.New(errs.RefSyntax, "no secret reference in the argument")
+		}
+		return us, nil
+	}
+	rows, err := o.secretIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if r.Row.ID.String() == arg {
+			return r.uses, nil
+		}
+	}
+	if id, perr := ids.ParseAny(arg); perr == nil {
+		// DELETION 3.2: a trashed row says where it is (E_IN_TRASH).
+		for _, t := range schema.Builtin() {
+			if t.Prefix != id.Prefix() {
+				continue
+			}
+			if terr := inTrashByKey(ctx, o.env, o.env.Stores(), t.Name, func(l located) bool { return l.Row.ID == id }); terr != nil {
+				return nil, terr
+			}
+		}
+	}
+	return nil, errs.New(errs.NotFound, "no secret reference in row "+quote(arg)).WithHint("lore secrets list shows every row that holds one")
+}
+
+// revealGroups groups the uses by reference (row, field, position): each
+// group's alternates are tried in order.
+func revealGroups(us []SecretUse) [][]SecretUse {
+	var out [][]SecretUse
+	for _, u := range us {
+		if u.Alt == 0 || len(out) == 0 {
+			out = append(out, nil)
+		}
+		if u.Manager != "" {
+			out[len(out)-1] = append(out[len(out)-1], u)
+		}
+	}
+	return slices.DeleteFunc(out, func(g []SecretUse) bool { return len(g) == 0 })
+}
+
+// gate is how a reveal was allowed.
+type gate struct {
+	confirmed bool
+	forced    bool
+	by        engine.ForcedBy
+}
+
+// revealGate settles SQ10: --yes (a person said yes) passes; --force, or an
+// agent under secrets.agent_reveal: allow, passes as forced; anyone else
+// gets E_NEEDS_CONFIRM with the question (the CLI asks a terminal and
+// re-runs with yes). No session-wide yes: the question is per command.
+func (o ops) revealGate(ctx context.Context, groups [][]SecretUse, force bool) (gate, error) {
+	if engine.Confirmed(ctx) {
+		return gate{confirmed: true}, nil
+	}
+	if force {
+		return gate{forced: true, by: engine.ForcedFlag}, nil
+	}
+	agent := engine.AgentOf(ctx) != ""
+	if agent {
+		if p, ok := o.env.(bulk.Policier); ok {
+			set, err := p.Policy(ctx, store.SourceRepo)
+			if err != nil {
+				return gate{}, err
+			}
+			if e, found := set.Get(policy.KeyAgentReveal); found && e.Value != nil && e.Value.String() == string(policy.AgentRevealAllow) {
+				return gate{forced: true, by: engine.ForcedPolicy}, nil
+			}
+		}
+	}
+	var names []string
+	for _, g := range groups {
+		names = append(names, g[0].Manager+" ("+g[0].Locator+")")
+	}
+	q := fmt.Sprintf("lore will read %d secret(s) from %s and print it in clear. This is recorded in the audit log.", len(groups), strings.Join(names, ", "))
+	if agent {
+		q += " The value will be printed to this agent's session."
+	}
+	return gate{}, errs.New(errs.NeedsConfirm, q+" Continue?").WithHint("ask the person, then rerun with --yes (an agent alone: --force, audited as FORCED)")
+}
+
+// revealGroup tries a reference's alternates in order; the first that
+// answers is printed. Every attempt is audited without its value.
+func revealGroup(ctx context.Context, set secretmgr.Set, a SecretAuditor, grp []SecretUse, g gate, rowID string) (RevealedOne, error) {
+	var last error
+	for _, u := range grp {
+		au := engine.SecretAudit{Ref: u.Ref, Command: cmdSecretsShow, Forced: g.forced, ForcedBy: g.by}
+		if id, perr := ids.ParseAny(rowID); perr == nil {
+			au.Row = id
+		}
+		m, ok := set.Get(u.Manager)
+		if !ok {
+			last = errs.New(errs.RefScheme, "no secret manager "+quote(u.Manager))
+			continue
+		}
+		s, err := m.Reveal(ctx, locatorOf(u))
+		if err != nil {
+			last = err
+			au.Result = string(errs.CodeOf(err))
+			if aerr := a.AuditSecret(ctx, engine.ActionSecretRevealFailed, au); aerr != nil {
+				return RevealedOne{}, aerr
+			}
+			continue
+		}
+		if aerr := a.AuditSecret(ctx, engine.ActionSecretRevealed, au); aerr != nil {
+			return RevealedOne{}, aerr
+		}
+		return RevealedOne{Ref: grp[0].Ref, Answered: u.Ref, Value: exposeForPrint(s)}, nil
+	}
+	return RevealedOne{}, last
+}
+
+// exposeForPrint is the ONLY caller of Secret.Expose (10.2; a source test
+// pins it): the --reveal printer.
+func exposeForPrint(s secretmgr.Secret) string { return s.Expose() }
+
+// holderOf resolves --to of move: an mch_/act_ id (label from the
+// machines table when known), or a person.machine label of a known machine.
+func (o ops) holderOf(ctx context.Context, q string) (id, label string, err error) {
+	ms, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableMachines)
+	if err != nil {
+		return "", "", err
+	}
+	if strings.HasPrefix(q, machinePrefix) || strings.HasPrefix(q, actorPrefix) {
+		for _, m := range ms {
+			if mid := text(m.Row, schema.FieldMachineID); mid == q || m.Row.ID.String() == q {
+				return q, text(m.Row, schema.FieldMachineLabel), nil
+			}
+		}
+		return q, "", nil
+	}
+	_, mlabel, hasMachine := strings.Cut(q, handleSep)
+	for _, m := range ms {
+		if hasMachine && text(m.Row, schema.FieldMachineLabel) == mlabel {
+			mid := text(m.Row, schema.FieldMachineID)
+			if mid == "" {
+				mid = m.Row.ID.String()
+			}
+			return mid, q, nil
+		}
+	}
+	return "", "", errs.New(errs.NotFound, "no machine labelled "+quote(q)+" in the attached stores").
+		WithHint("give the holder id (mch_… or act_…), or set the machine label with lore whoami --machine-label")
+}
+
+// rewriteAll applies fix to every row holding a matching reference (text
+// fields, resource secret_ref fields, secret_ref variables) in one batch.
+func (o ops) rewriteAll(ctx context.Context, rows []secretRow, fix rewriter) (int, []string, error) {
+	total, changed := 0, []string{}
+	for _, r := range rows {
+		n, err := o.rewriteRow(ctx, r, fix)
+		if err != nil {
+			return total, changed, err
+		}
+		if n > 0 {
+			total += n
+			changed = append(changed, r.Row.ID.String())
+		}
+	}
+	return total, changed, nil
+}
+
+// rewriteRow writes one row's rewritten references through the engine.
+func (o ops) rewriteRow(ctx context.Context, r secretRow, fix rewriter) (int, error) {
+	ref := engine.Ref{Store: r.Src, Table: r.Row.Table, ID: r.Row.ID}
+	switch {
+	case r.Row.Table == schema.TableResources:
+		return o.rewriteResource(ctx, r, fix)
+	case r.Row.Table == schema.TableVars && text(r.Row, vType) == varTypeSecretRef:
+		nv, n := bareRewrite(display(fromJSON(r.Row.Fields[vValue])), fix)
+		if n == 0 {
+			return 0, nil
+		}
+		tv, err := txt(nv)
+		if err != nil {
+			return 0, err
+		}
+		jv, err := asJSON(tv)
+		if err != nil {
+			return 0, err
+		}
+		_, err = o.env.Update(ctx, ref, map[string]value.Value{vValue: jv})
+		return n, err
+	}
+	patch, n, err := rowPatch(r.Row, fix)
+	if err != nil || n == 0 {
+		return 0, err
+	}
+	_, err = o.env.Update(ctx, ref, patch)
+	return n, err
+}
+
+// bareRewrite applies fix to a bare manager://… value.
+func bareRewrite(raw string, fix rewriter) (string, int) {
+	s, n := rewriteText(secretOpen+raw+secretClose, fix)
+	return strings.TrimSuffix(strings.TrimPrefix(s, secretOpen), secretClose), n
+}
+
+// rewriteResource rewrites a resource's secret_ref values.
+func (o ops) rewriteResource(ctx context.Context, r secretRow, fix rewriter) (int, error) {
+	stored, err := decodeValues(r.located)
+	if err != nil {
+		return 0, err
+	}
+	vals, total := map[string]json.RawMessage{}, 0
+	for id, raw := range stored.vals {
+		var s string
+		if json.Unmarshal(raw, &s) != nil {
+			continue
+		}
+		if _, ok := bareUse(SecretUse{}, "", s); !ok {
+			continue
+		}
+		ns, n := bareRewrite(s, fix)
+		if n == 0 {
+			continue
+		}
+		b, merr := json.Marshal(ns)
+		if merr != nil {
+			return 0, errs.Wrap(errs.Internal, "secrets: encode a resource value", merr)
+		}
+		vals[id], total = b, total+n
+	}
+	if total == 0 {
+		return 0, nil
+	}
+	d, err := o.kindDef(ctx, text(r.Row, rKind))
+	if err != nil {
+		return 0, err
+	}
+	patch, err := valuesPatch(d, vals, stored)
+	if err != nil {
+		return 0, err
+	}
+	_, err = o.env.Update(ctx, engine.Ref{Store: r.Src, Table: r.Row.Table, ID: r.Row.ID}, patch)
+	return total, err
+}
+
+// keepRows keeps the rows with at least one use matching keep.
+func keepRows(rows []secretRow, keep func(SecretUse) bool) []secretRow {
+	var out []secretRow
+	for _, r := range rows {
+		if slices.ContainsFunc(r.uses, keep) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// secretsMove is `lore secrets move` (15): rewrite holder id and label of
+// every matching reference in one batch (asks; E_NEEDS_CONFIRM without a
+// terminal), audit secret.refs_moved, then add the rotate task.
+func (o ops) secretsMove(ctx context.Context, in SecretsMoveIn) (SecretsBatchOut, error) {
+	if in.From == "" || in.To == "" {
+		return SecretsBatchOut{}, errs.New(errs.InvalidInput, "give --from and --to")
+	}
+	toID, toLabel, err := o.holderOf(ctx, in.To)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	match := func(t refs.SecretTarget) bool {
+		u := useOf(SecretUse{}, "", t)
+		if t.Fixed != "" || !holderMatch(u, in.From) || u.Holder == "" && u.Label == "" || (in.Manager != "" && t.Manager != in.Manager) {
+			return false
+		}
+		if in.Entry != "" {
+			ok, perr := path.Match(in.Entry, t.Locator)
+			return perr == nil && ok
+		}
+		return true
+	}
+	all, err := o.secretIndex(ctx)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	rows := keepRows(all, func(u SecretUse) bool {
+		return u.Manager != "" && holderMatch(u, in.From) && (u.Holder != "" || u.Label != "") && (in.Manager == "" || u.Manager == in.Manager) &&
+			(in.Entry == "" || globOK(in.Entry, u.Locator))
+	})
+	n := 0
+	for _, r := range rows {
+		for _, u := range r.uses {
+			if u.Manager != "" && holderMatch(u, in.From) {
+				n++
+			}
+		}
+	}
+	if n == 0 {
+		return SecretsBatchOut{}, errs.New(errs.NotFound, "no reference held by "+quote(in.From))
+	}
+	if err = bulk.Ask(ctx, fmt.Sprintf("Moving %d references from %s to %s. This changes the holder only; it does not copy any secret. Continue?", n, in.From, in.To)); err != nil {
+		return SecretsBatchOut{}, err
+	}
+	ctx, bat, err := bulk.Begin(ctx, bulk.KindSecrets)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	total, changed, err := o.rewriteAll(ctx, rows, func(t refs.SecretTarget) (refs.SecretTarget, bool) {
+		if !match(t) {
+			return t, false
+		}
+		return setOption(setOption(t, refs.OptHolder, toID), refs.OptLabel, toLabel), true
+	})
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	if err = o.auditBatch(ctx, engine.ActionSecretRefsMoved, total, in.From, toLabel+" ("+toID+")"); err != nil {
+		return SecretsBatchOut{}, err
+	}
+	out := SecretsBatchOut{Batch: bat.String(), Count: total, Rows: changed}
+	out.Human = fmt.Sprintf("Moved %d references in %d rows (batch %s).", total, len(changed), bat)
+	if we, ok := o.env.(work.Env); ok {
+		// one rotate task per store, beside its rows (a task never points
+		// across stores: F15).
+		byStore := map[store.Source][]string{}
+		var order []store.Source
+		for _, r := range rows {
+			if slices.Contains(changed, r.Row.ID.String()) {
+				if _, seen := byStore[r.Src]; !seen {
+					order = append(order, r.Src)
+				}
+				byStore[r.Src] = append(byStore[r.Src], r.Row.ID.String())
+			}
+		}
+		for _, src := range order {
+			tid, _, terr := task.AddSecretTask(ctx, we, task.SecretTask{Store: src, Title: fmt.Sprintf(rotateTitle, in.From, total),
+				Body: "lore secrets move " + bat.String() + " moved " + strconv.Itoa(total) + " references from " + in.From +
+					". They had the values: rotate each entry, then close this task.", Key: "secret-rotate-" + bat.String(), Rows: byStore[src]})
+			if terr != nil {
+				return SecretsBatchOut{}, terr
+			}
+			out.Task = tid
+			out.Human += " Added task " + tid + " (tasklist " + task.SecretsTasklist + ", " + string(src) + ")."
+		}
+	}
+	out.Human += "\n"
+	return out, nil
+}
+
+func globOK(glob, s string) bool {
+	ok, err := path.Match(glob, s)
+	return err == nil && ok
+}
+
+// auditBatch records one bulk secret.* event (16: batch id, counts, from
+// and to; never a value).
+func (o ops) auditBatch(ctx context.Context, action engine.Action, n int, from, to string) error {
+	a, ok := o.env.(SecretAuditor)
+	if !ok {
+		return nil // the rows themselves are audited by the engine
+	}
+	return a.AuditSecret(ctx, action, engine.SecretAudit{Command: strings.ReplaceAll(string(action), ".", " "), Count: n, From: from, To: to})
+}
+
+// secretsRelabel is `lore secrets relabel` (5.2): each machine holder's
+// label becomes "<handle>.<current machine label>" (the handle part kept).
+func (o ops) secretsRelabel(ctx context.Context, in SecretsRelabelIn) (SecretsBatchOut, error) {
+	ms, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableMachines)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	labels := map[string]string{}
+	for _, m := range ms {
+		if l := text(m.Row, schema.FieldMachineLabel); l != "" {
+			labels[m.Row.ID.String()] = l
+			if mid := text(m.Row, schema.FieldMachineID); mid != "" {
+				labels[mid] = l
+			}
+		}
+	}
+	fix := func(t refs.SecretTarget) (refs.SecretTarget, bool) {
+		h := targetOption(t, refs.OptHolder)
+		ml, known := labels[h]
+		if t.Fixed != "" || h == "" || !known || (in.Holder != "" && h != in.Holder) {
+			return t, false
+		}
+		old := targetOption(t, refs.OptLabel)
+		handle, _, hasHandle := strings.Cut(old, handleSep)
+		want := ml
+		if hasHandle {
+			want = handle + handleSep + ml
+		}
+		if want == old {
+			return t, false
+		}
+		return setOption(t, refs.OptLabel, want), true
+	}
+	return o.batchRewrite(ctx, engine.ActionSecretRelabeled, fix, "Relabelled", in.Holder, "")
+}
+
+// secretsRename is `lore secrets rename-entry` (19.5).
+func (o ops) secretsRename(ctx context.Context, in SecretsRenameIn) (SecretsBatchOut, error) {
+	if in.Manager == "" || in.From == "" || in.To == "" {
+		return SecretsBatchOut{}, errs.New(errs.InvalidInput, "give --manager, --from and --to")
+	}
+	if m, ok := o.managers().Get(in.Manager); !ok {
+		return SecretsBatchOut{}, errs.New(errs.RefScheme, "no secret manager "+quote(in.Manager))
+	} else if err := m.ValidateLocator(secretmgr.Locator{Path: in.To}); err != nil && in.Manager != secretmgr.Vault {
+		return SecretsBatchOut{}, err
+	}
+	fix := func(t refs.SecretTarget) (refs.SecretTarget, bool) {
+		if t.Manager != in.Manager || strings.Trim(t.Locator, "/") != strings.Trim(in.From, "/") {
+			return t, false
+		}
+		t.Locator = strings.Trim(in.To, "/")
+		return t, true
+	}
+	return o.batchRewrite(ctx, engine.ActionSecretEntryRenamed, fix, "Renamed", in.Manager+"://"+in.From, in.Manager+"://"+in.To)
+}
+
+// batchRewrite runs fix over the index in one batch and audits it.
+func (o ops) batchRewrite(ctx context.Context, action engine.Action, fix rewriter, verb, from, to string) (SecretsBatchOut, error) {
+	all, err := o.secretIndex(ctx)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	ctx, bat, err := bulk.Begin(ctx, bulk.KindSecrets)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	total, changed, err := o.rewriteAll(ctx, all, fix)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	out := SecretsBatchOut{Count: total, Rows: changed}
+	if total == 0 {
+		out.Human = "Nothing to change.\n"
+		return out, nil
+	}
+	if err = o.auditBatch(ctx, action, total, from, to); err != nil {
+		return SecretsBatchOut{}, err
+	}
+	out.Batch = bat.String()
+	out.Human = fmt.Sprintf("%s %d references in %d rows (batch %s).\n", verb, total, len(changed), bat)
+	return out, nil
+}
+
+// secretsLink is `lore secrets link <row> --at N --ref REF` (7): the Nth
+// ${secret:unstored} of the row becomes the given entry (holder filled in
+// when known). The task stays open: only rotation ends the exposure.
+func (o ops) secretsLink(ctx context.Context, in SecretsLinkIn) (SecretsBatchOut, error) {
+	if in.At < 1 {
+		return SecretsBatchOut{}, errs.New(errs.InvalidInput, "--at is the 1-based placeholder number (lore secrets list --unstored)")
+	}
+	parts := refs.Parse(secretOpen + strings.TrimSuffix(strings.TrimPrefix(in.Ref, secretOpen), secretClose) + secretClose)
+	if len(parts) != 1 || parts[0].Kind != refs.PartRef || parts[0].Ref.Problem != "" || len(parts[0].Ref.Alternates) == 0 {
+		if err := refs.Validate(secretOpen + in.Ref + secretClose); err != nil {
+			return SecretsBatchOut{}, err
+		}
+		return SecretsBatchOut{}, errs.New(errs.RefSyntax, "--ref takes manager://entry")
+	}
+	newT := parts[0].Ref.Alternates[0]
+	if newT.Fixed != "" {
+		return SecretsBatchOut{}, errs.New(errs.RefSyntax, "--ref takes manager://entry, not "+newT.Fixed)
+	}
+	if m, ok := o.managers().Get(newT.Manager); ok {
+		if err := m.ValidateLocator(secretmgr.Locator{Path: newT.Locator, Fragment: newT.Fragment}); err != nil {
+			return SecretsBatchOut{}, err
+		}
+	}
+	if targetOption(newT, refs.OptHolder) == "" {
+		hid, hlabel := in.Holder, ""
+		if hid == "" {
+			if h, ok := o.env.(Holderer); ok {
+				var herr error
+				if hid, hlabel, herr = h.ThisHolder(ctx); herr != nil {
+					return SecretsBatchOut{}, herr
+				}
+			}
+		}
+		newT = setOption(setOption(newT, refs.OptHolder, hid), refs.OptLabel, hlabel)
+	}
+	rows, err := o.secretIndex(ctx)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	var target *secretRow
+	for i := range rows {
+		if rows[i].Row.ID.String() == in.Row {
+			target = &rows[i]
+		}
+	}
+	if target == nil {
+		return SecretsBatchOut{}, errs.New(errs.NotFound, "no ${secret:unstored} in row "+quote(in.Row))
+	}
+	field := ""
+	for _, u := range target.uses {
+		if u.At == in.At {
+			field = u.Field
+		}
+	}
+	if field == "" {
+		return SecretsBatchOut{}, errs.New(errs.NotFound, "row "+in.Row+" has no unstored placeholder #"+strconv.Itoa(in.At))
+	}
+	// position of the placeholder inside its field: count the earlier ones.
+	before := 0
+	for _, u := range target.uses {
+		if u.At > 0 && u.At < in.At && u.Field == field {
+			before++
+		}
+	}
+	seen := 0
+	fix := func(t refs.SecretTarget) (refs.SecretTarget, bool) {
+		if t.Fixed != refs.TargetUnstored {
+			return t, false
+		}
+		seen++
+		if seen != before+1 {
+			return t, false
+		}
+		return newT, true
+	}
+	only := secretRow{located: target.located, uses: target.uses}
+	only.Row.Fields = map[string]value.Value{field: target.Row.Fields[field]}
+	patch, n, err := rowPatch(only.Row, fix)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	if n != 1 {
+		return SecretsBatchOut{}, errs.New(errs.Internal, "secrets link: placeholder not found in "+field)
+	}
+	if _, err = o.env.Update(ctx, engine.Ref{Store: target.Src, Table: target.Row.Table, ID: target.Row.ID}, patch); err != nil {
+		return SecretsBatchOut{}, err
+	}
+	if err = o.auditBatch(ctx, engine.ActionSecretLinked, 1, refs.TargetUnstored, targetText(newT)); err != nil {
+		return SecretsBatchOut{}, err
+	}
+	return SecretsBatchOut{Count: 1, Rows: []string{in.Row},
+		Human: fmt.Sprintf("Replaced ${secret:unstored} #%d in %s %s with ${secret:%s}.\nIts task stays open: rotate the secret, then lore task done <task>.\n",
+			in.At, in.Row, field, targetText(newT))}, nil
+}

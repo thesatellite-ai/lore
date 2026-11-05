@@ -14,6 +14,9 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
+// scriptMode lets the owner run a fake CLI script.
+const scriptMode = 0o700
+
 // fakeValue is a dummy value the fake CLIs print (never a real secret).
 const fakeValue = "fake-sunflower-tractor-42"
 
@@ -25,7 +28,11 @@ func fakeCLIs(t *testing.T, scripts map[string]string) (func(string) (string, er
 	dir := t.TempDir()
 	for name, body := range scripts {
 		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o700); err != nil {
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// owner-only execute: the fake CLI must run, and nobody else may.
+		if err := os.Chmod(p, scriptMode); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -99,7 +106,7 @@ func TestRevealMatrix(t *testing.T) {
 		}
 		if c.wantArgs != "" {
 			bin := map[string]string{Gopass: "gopass", OnePass: "op", Vault: "vault", AWS: "aws", GCP: "gcloud", Azure: "az", Bitwarden: "bw"}[c.mgr]
-			b, _ := os.ReadFile(filepath.Join(dir, bin+".args"))
+			b, _ := os.ReadFile(filepath.Clean(filepath.Join(dir, filepath.Base(bin)+".args")))
 			args[c.mgr] = strings.TrimSpace(string(b))
 			if args[c.mgr] != c.wantArgs {
 				t.Fatalf("%s args = %q, want %q", c.mgr, args[c.mgr], c.wantArgs)

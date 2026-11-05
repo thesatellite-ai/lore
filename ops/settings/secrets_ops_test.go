@@ -1,0 +1,147 @@
+package settings_test
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/ops/settings"
+	"github.com/thesatellite-ai/lore/wire"
+)
+
+// secretDummy is a dummy value the env manager reveals (never a real one).
+const secretDummy = "fake-sunflower-tractor-42"
+
+const (
+	holderA = "mch_0cd630f0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	holderB = "mch_7a21b9e4bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
+
+func secretsOf(t *testing.T, h *opstest.H, name, in string) settings.SecretsOut {
+	t.Helper()
+	var out settings.SecretsOut
+	if err := json.Unmarshal([]byte(h.JSON(h.Must(name, in))), &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestSecretsOffboarding(t *testing.T) {
+	t.Setenv("LORE_HUMAN", "1")
+	t.Setenv("LORE_TEST_DB", secretDummy)
+	h := multiStore(t)
+	ref := "env://LORE_TEST_DB?holder=" + holderA + "&label=mira.studio_mac"
+	mem := h.ID(h.MustYes("memory.add", `{"body":"db login: ${secret:`+ref+`} and token ${secret:unstored}","to":"kb"}`))
+
+	all := secretsOf(t, h, settings.OpSecretsList, ``)
+	if all.Count != 2 {
+		t.Fatalf("list = %+v", all.Data)
+	}
+	if got := secretsOf(t, h, settings.OpSecretsList, `{"holder":"mira"}`); got.Count != 1 || got.Data[0].Locator != "LORE_TEST_DB" {
+		t.Fatalf("--holder mira = %+v", got.Data)
+	}
+	if got := secretsOf(t, h, settings.OpSecretsList, `{"unstored":true}`); got.Count != 1 || got.Data[0].At != 1 || got.Data[0].Row != mem {
+		t.Fatalf("--unstored = %+v", got.Data)
+	}
+
+	// reveal asks every time: no --yes → E_NEEDS_CONFIRM, never the value.
+	msg := h.Fails(settings.OpSecretsShow, `{"id":"env://LORE_TEST_DB","reveal":true}`, errs.NeedsConfirm)
+	if strings.Contains(msg, secretDummy) || !strings.Contains(msg, "env (LORE_TEST_DB)") {
+		t.Fatalf("question %q", msg)
+	}
+	res, err := h.RunYes(settings.OpSecretsShow, `{"id":`+opstest.Quote(mem)+`,"reveal":true}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shown settings.SecretsOut
+	if err = json.Unmarshal([]byte(h.JSON(res)), &shown); err != nil {
+		t.Fatal(err)
+	}
+	if shown.Revealed != 1 || shown.Values[0].Value != secretDummy || shown.Forced {
+		t.Fatalf("reveal = %+v", shown)
+	}
+	forced := secretsOf(t, h, settings.OpSecretsShow, `{"id":"env://LORE_TEST_DB","reveal":true,"force":true}`)
+	if !forced.Forced || !strings.HasPrefix(forced.Warning, "W_REVEAL_FORCED") {
+		t.Fatalf("forced = %+v", forced)
+	}
+	h.Fails(settings.OpSecretsShow, `{"id":"env://LORE_NOT_SET","reveal":true,"force":true}`, errs.SecretUnavailable)
+	h.Fails(settings.OpSecretsShow, `{"id":"nope://x"}`, errs.RefScheme)
+
+	// the audit has the events, never the value.
+	b, err := os.ReadFile(filepath.Join(h.Repo, filepath.FromSlash(wire.AuditFile)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := string(b)
+	if strings.Contains(log, secretDummy) || !strings.Contains(log, `"action":"secret.revealed"`) ||
+		!strings.Contains(log, `"secret_forced_by":"flag"`) || !strings.Contains(log, `"action":"secret.reveal_failed"`) {
+		t.Fatalf("audit log:\n%s", log)
+	}
+
+	// check: present; the unstored row gets its store-then-rotate task once.
+	chk := secretsOf(t, h, settings.OpSecretsCheck, ``)
+	if chk.Data[0].State != "present" || len(chk.Tasks) != 1 {
+		t.Fatalf("check = %+v\n%s", chk.Data, chk.Human)
+	}
+	if again := secretsOf(t, h, settings.OpSecretsCheck, ``); len(again.Tasks) != 0 {
+		t.Fatalf("second check added another task:\n%s", again.Human)
+	}
+	t.Setenv("LORE_TEST_DB", "")
+	if miss := secretsOf(t, h, settings.OpSecretsList, `{"missing":true}`); miss.Count != 1 || miss.Data[0].State != "missing" {
+		t.Fatalf("--missing = %+v", miss.Data)
+	}
+
+	// move asks, then rewrites the holder in one batch.
+	h.Fails(settings.OpSecretsMove, `{"from":"mira","to_holder":"`+holderB+`"}`, errs.NeedsConfirm)
+	h.MustYes(settings.OpSecretsMove, `{"from":"mira","to_holder":"`+holderB+`"}`)
+	if got := secretsOf(t, h, settings.OpSecretsList, `{"holder":"`+holderB+`"}`); got.Count != 1 {
+		t.Fatalf("after move = %+v", all.Data)
+	}
+	h.Must(settings.OpSecretsRenameEntry, `{"manager":"env","from":"LORE_TEST_DB","to_entry":"LORE_TEST_DB2"}`)
+	if got := secretsOf(t, h, settings.OpSecretsList, `{"manager":"env"}`); got.Count != 1 || got.Data[0].Locator != "LORE_TEST_DB2" || got.Data[0].Holder != holderB {
+		t.Fatalf("after rename = %+v", got.Data)
+	}
+	h.Fails(settings.OpSecretsLink, `{"id":`+opstest.Quote(mem)+`,"at":2,"ref":"env://X"}`, errs.NotFound)
+	h.Must(settings.OpSecretsLink, `{"id":`+opstest.Quote(mem)+`,"at":1,"ref":"env://LORE_TOKEN"}`)
+	if got := secretsOf(t, h, settings.OpSecretsList, `{"unstored":true}`); got.Count != 0 {
+		t.Fatalf("after link = %+v", got.Data)
+	}
+	if got := secretsOf(t, h, settings.OpSecretsList, ``); got.Count != 2 {
+		t.Fatalf("after link list = %+v", got.Data)
+	}
+}
+
+// TestExposeOneCaller: Secret.Expose is called from exactly one function,
+// the --reveal printer (SECRETS_AND_REFERENCES 10.2).
+func TestExposeOneCaller(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b, rerr := os.ReadFile(filepath.Clean(f))
+		if rerr != nil {
+			t.Fatal(rerr)
+		}
+		n += strings.Count(string(b), ".Expose()")
+	}
+	if n != 1 {
+		t.Fatalf(".Expose() called %d times in ops/settings, want 1 (exposeForPrint)", n)
+	}
+}
+
+func TestSecretsShowTrashed(t *testing.T) {
+	t.Setenv("LORE_HUMAN", "1")
+	h := multiStore(t)
+	mem := h.ID(h.MustYes("memory.add", `{"body":"k ${secret:env://LORE_X}","to":"kb"}`))
+	h.MustYes("memory.delete", `{"id":`+opstest.Quote(mem)+`}`)
+	h.Fails(settings.OpSecretsShow, `{"id":`+opstest.Quote(mem)+`}`, errs.InTrash)
+}

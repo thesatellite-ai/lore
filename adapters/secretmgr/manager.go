@@ -133,8 +133,8 @@ func Builtin(o Options) Set {
 
 // unavailable is E_SECRET_UNAVAILABLE with the manager's one-line reason.
 // It never carries stderr or the value.
-func unavailable(manager, reason string, cause error) error {
-	return errs.Wrap(errs.SecretUnavailable, manager+": "+reason, cause).
+func unavailable(manager, reason string) error {
+	return errs.New(errs.SecretUnavailable, manager+": "+reason).
 		WithHint("check that " + manager + " is installed, unlocked and logged in on this machine")
 }
 
@@ -156,17 +156,19 @@ var notFoundWords = []string{"not found", "no such", "does not exist", "isn't an
 func (r runner) run(ctx context.Context, manager, bin, path string, args []string) ([]byte, error) {
 	exe, err := r.o.LookPath(bin)
 	if err != nil {
-		return nil, unavailable(manager, bin+" not found on PATH", nil)
+		return nil, unavailable(manager, bin+" not found on PATH")
 	}
 	ctx, cancel := context.WithTimeout(ctx, r.o.Timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, exe, args...)
-	cmd.WaitDelay = waitDelay
+	// Built directly (as adapters/gitcommit does): exe is the absolute path
+	// LookPath resolved for a fixed program name, every argument is its own
+	// argv entry (no shell parses it), and runKillable kills it on timeout.
+	cmd := &exec.Cmd{Path: exe, Args: append([]string{exe}, args...), WaitDelay: waitDelay}
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
-	err = cmd.Run()
+	err = runKillable(ctx, cmd)
 	if ctx.Err() != nil {
-		return nil, unavailable(manager, "timed out after "+r.o.Timeout.String(), nil)
+		return nil, unavailable(manager, "timed out after "+r.o.Timeout.String())
 	}
 	if err != nil {
 		low := strings.ToLower(stderr.String())
@@ -180,9 +182,26 @@ func (r runner) run(ctx context.Context, manager, bin, path string, args []strin
 		if errors.As(err, &ee) {
 			code = ee.ExitCode()
 		}
-		return nil, unavailable(manager, bin+" failed (exit "+strconv.Itoa(code)+"; its message is not shown)", nil)
+		return nil, unavailable(manager, bin+" failed (exit "+strconv.Itoa(code)+"; its message is not shown)")
 	}
 	return trimNewline(out.Bytes()), nil
+}
+
+// runKillable starts cmd and kills it when ctx ends first.
+func runKillable(ctx context.Context, cmd *exec.Cmd) error {
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		_ = cmd.Process.Kill() // the process may have just exited; Wait reports it
+		<-done
+		return ctx.Err()
+	}
 }
 
 // trimNewline drops one trailing line break (what most CLIs add).
@@ -201,8 +220,10 @@ type cliManager struct {
 	twoParts     bool // azure: <vault>/<name>
 }
 
+// Name implements Manager.
 func (m cliManager) Name() string { return m.name }
 
+// ValidateLocator implements Manager (syntax only).
 func (m cliManager) ValidateLocator(l Locator) error {
 	p := strings.Trim(l.Path, "/")
 	switch {
@@ -219,13 +240,15 @@ func (m cliManager) ValidateLocator(l Locator) error {
 	return nil
 }
 
+// Available implements Manager: the CLI is on PATH.
 func (m cliManager) Available(_ context.Context) error {
 	if _, err := m.r.o.LookPath(m.bin); err != nil {
-		return unavailable(m.name, m.bin+" not found on PATH", nil)
+		return unavailable(m.name, m.bin+" not found on PATH")
 	}
 	return nil
 }
 
+// Reveal implements Manager: one named entry into a Secret.
 func (m cliManager) Reveal(ctx context.Context, l Locator) (Secret, error) {
 	if err := m.ValidateLocator(l); err != nil {
 		return Secret{}, err
@@ -245,7 +268,7 @@ func (m cliManager) Reveal(ctx context.Context, l Locator) (Secret, error) {
 func pickKey(manager string, l Locator, out []byte) (Secret, error) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(out, &obj); err != nil {
-		return Secret{}, unavailable(manager, "the secret is not a JSON object, so #"+l.Fragment+" cannot be read", nil)
+		return Secret{}, unavailable(manager, "the secret is not a JSON object, so #"+l.Fragment+" cannot be read")
 	}
 	raw, ok := obj[l.Fragment]
 	if !ok {
@@ -297,16 +320,20 @@ var bwFields = []string{"password", "username", "totp", "notes", "uri"}
 
 const bwBin = "bw"
 
+// Name implements Manager.
 func (bitwarden) Name() string { return Bitwarden }
 
+// ValidateLocator implements Manager (syntax only).
 func (b bitwarden) ValidateLocator(l Locator) error {
 	return cliManager{name: Bitwarden}.ValidateLocator(l)
 }
 
+// Available implements Manager: bw is on PATH.
 func (b bitwarden) Available(ctx context.Context) error {
 	return cliManager{name: Bitwarden, bin: bwBin, r: b.r}.Available(ctx)
 }
 
+// Reveal implements Manager: one item field into a Secret.
 func (b bitwarden) Reveal(ctx context.Context, l Locator) (Secret, error) {
 	if err := b.ValidateLocator(l); err != nil {
 		return Secret{}, err
@@ -334,7 +361,7 @@ func (b bitwarden) Reveal(ctx context.Context, l Locator) (Secret, error) {
 		} `json:"fields"`
 	}
 	if err := json.Unmarshal(out, &it); err != nil {
-		return Secret{}, unavailable(Bitwarden, "bw get item did not answer JSON", nil)
+		return Secret{}, unavailable(Bitwarden, "bw get item did not answer JSON")
 	}
 	for _, f := range it.Fields {
 		if f.Name == field {
@@ -347,8 +374,10 @@ func (b bitwarden) Reveal(ctx context.Context, l Locator) (Secret, error) {
 // envManager reads one variable of lore's own environment.
 type envManager struct{ get func(string) string }
 
+// Name implements Manager.
 func (envManager) Name() string { return Env }
 
+// ValidateLocator implements Manager: a variable name.
 func (envManager) ValidateLocator(l Locator) error {
 	p := strings.Trim(l.Path, "/")
 	if p == "" || strings.ContainsAny(p, "/= ") {
@@ -357,8 +386,10 @@ func (envManager) ValidateLocator(l Locator) error {
 	return nil
 }
 
+// Available implements Manager: the environment is always there.
 func (envManager) Available(context.Context) error { return nil }
 
+// Reveal implements Manager: the one named variable.
 func (m envManager) Reveal(_ context.Context, l Locator) (Secret, error) {
 	if err := m.ValidateLocator(l); err != nil {
 		return Secret{}, err

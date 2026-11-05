@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 )
@@ -15,8 +16,7 @@ import (
 //	--set f=<value>               bare path → <default manager>://path,
 //	                              shape (value.SecretRefOf: length, spaces,
 //	                              random-looking part); the manager list
-//	                              check (E_REF_SCHEME) joins when logic/refs
-//	                              exports Managers (ov8, REFERENCE FORMAT)
+//	                              check (E_REF_SCHEME, refs.Managers)
 
 // defaultSecretManager is the manager a bare secret_ref path means when no
 // kind or policy names one (RESOURCES 3.5: "default from policy"; the
@@ -93,6 +93,13 @@ func secretRefValue(where, raw, manager string) (value.SecretRef, error) {
 		}
 		return value.SecretRef{}, errs.New(errs.SecretDetected, where+" holds no entry name ("+why+")").
 			WithHint("a secret_ref takes an entry name such as gopass://acme/hub_stag/ssh_deploy; keep the secret in the manager")
+	}
+	// E_REF_SCHEME: the manager must be one lore knows (5.1; the list is
+	// logic/refs.Managers, the same one ${secret:…} text is checked with).
+	scheme, _, _ := strings.Cut(raw, "://")
+	if _, known := refs.Managers()[scheme]; !known {
+		return value.SecretRef{}, errs.New(errs.RefScheme, where+": no secret manager "+quote(scheme)).
+			WithHint("use one of gopass, op, bitwarden, vault, aws-secrets, gcp-secrets, azure-keyvault, env")
 	}
 	return v, nil
 }
