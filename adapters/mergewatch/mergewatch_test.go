@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
 )
 
 const target = "refs/remotes/origin/main"
@@ -32,7 +32,7 @@ func (f *fixture) git(c *gitremotetest.Clone, args ...string) string {
 }
 
 func (f *fixture) commit(c *gitremotetest.Clone, file, msg string) string {
-	if err := os.WriteFile(filepath.Join(c.Dir, file), []byte(file+msg), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(c.Dir, file), []byte(file+msg), 0o600); err != nil {
 		f.t.Fatal(err)
 	}
 	f.git(c, "add", ".")
