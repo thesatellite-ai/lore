@@ -14,6 +14,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -47,10 +48,18 @@ const (
 // write (E_CONFIG_INVALID, naming the rule id), never silently drops a
 // rule. Safe for concurrent use.
 //
-// Gap (phase 2): every store's rules apply to every write; the per-level
-// "stricter wins" resolution of logic/policy is not wired yet.
+// Rows of every store are merged into one row per rule_id (resolveRules,
+// OV45): personal off/changed rows never reach the shared scanner (the
+// engine's rules.IsOff(id, own) applies a personal off to the person's
+// own captures, BATCH 8), and when team stores disagree "on" wins in the
+// scanner (the engine still applies an off to writes).
 type liveScanner struct {
 	backends map[store.Source]store.Backend
+	// folders is each attached store's folder (the settings level, O1);
+	// a store without one counts as a store root. own makes this the
+	// person's own scanner (OutputScanner): personal offs apply too.
+	folders map[store.Source]string
+	own     bool
 	// repoDir is the repo top whose .gitleaks.toml contributes allow
 	// patterns and stopwords (D8) while secrets.use_repo_gitleaks is on;
 	// "" reads no file. policy reads the effective policy (set once the
@@ -72,6 +81,18 @@ func withRepoGitleaks(dir string) scannerOption {
 	return func(s *liveScanner) { s.repoDir = dir }
 }
 
+// withFolders gives the scanner each store's folder, so rows of two team
+// stores resolve nearest-first (D9).
+func withFolders(f map[store.Source]string) scannerOption {
+	return func(s *liveScanner) { s.folders = f }
+}
+
+// withOwnRules makes this the person's own scanner: a personal off or
+// changed row applies (BATCH 8: own captures only).
+func withOwnRules() scannerOption {
+	return func(s *liveScanner) { s.own = true }
+}
+
 // repoGitleaksFile is the repo file gitleaks itself reads (D8).
 const repoGitleaksFile = ".gitleaks.toml"
 
@@ -91,7 +112,7 @@ func newScanner(ctx context.Context, backends map[store.Source]store.Backend, op
 
 // Refresh implements engine.RefreshingScanner.
 func (s *liveScanner) Refresh(ctx context.Context) error {
-	rows, key, err := ruleRows(ctx, s.backends)
+	entries, key, err := ruleRows(ctx, s.backends, s.folders)
 	if err != nil {
 		return err
 	}
@@ -109,7 +130,7 @@ func (s *liveScanner) Refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rules, err := gitleaks.Rules(base, rows)
+	rules, err := gitleaks.Rules(base, resolveRules(entries, base, s.own))
 	if err != nil {
 		return err
 	}
@@ -181,17 +202,25 @@ func (s *liveScanner) ScanReport(field, text string) scan.Report {
 	return s.scanner().ScanReport(field, text)
 }
 
+// ruleEntry is one live secret_rules row and the level of its store.
+type ruleEntry struct {
+	store store.Source
+	level policy.Level
+	row   gitleaks.RuleRow
+}
+
 // ruleRows reads the live secret_rules rows of every backend, with a key
 // naming each row's store, id and HLC (sorted), which changes whenever a
 // rule is added, edited or deleted.
-func ruleRows(ctx context.Context, backends map[store.Source]store.Backend) ([]gitleaks.RuleRow, string, error) {
-	var rows []gitleaks.RuleRow
+func ruleRows(ctx context.Context, backends map[store.Source]store.Backend, folders map[store.Source]string) ([]ruleEntry, string, error) {
+	var out []ruleEntry
 	var keys []string
 	for name, b := range backends {
 		got, _, readErr := b.Read(ctx, "")
 		if readErr != nil {
 			return nil, "", readErr
 		}
+		level := ruleLevel(name, folders[name])
 		for _, sr := range got {
 			if sr.Table != row.Table(schema.TableSecretRules) {
 				continue
@@ -208,13 +237,100 @@ func ruleRows(ctx context.Context, backends map[store.Source]store.Backend) ([]g
 			if ruleErr != nil {
 				return nil, "", ruleErr
 			}
-			rows = append(rows, rr)
+			out = append(out, ruleEntry{store: name, level: level, row: rr})
 		}
 	}
 	slices.Sort(keys)
-	// the rules' order must not follow map order either
-	slices.SortStableFunc(rows, func(a, b gitleaks.RuleRow) int { return strings.Compare(a.RuleID, b.RuleID) })
-	return rows, strings.Join(keys, "\n"), nil
+	return out, strings.Join(keys, "\n"), nil
+}
+
+// ruleLevel is the settings level of a store's rows (O1): the repo, the
+// personal store, else levelOf by the store's folder.
+func ruleLevel(name store.Source, folder string) policy.Level {
+	if name == store.SourceRepo {
+		return policy.LevelRepo
+	}
+	return levelOf(attach.Opened{Attached: engine.Attached{Name: name}, Folder: folder})
+}
+
+// resolveRules merges the rows of every store into at most one row per
+// rule_id, the input gitleaks.Rules accepts (it refuses two rows with one
+// id). Per rule_id:
+//
+//	own && a personal row is off        → off      (BATCH 8, own captures)
+//	a team row is not off               → the nearest such team row
+//	                                       ("on" wins in the scanner, OV45;
+//	                                       nearest change wins, D9)
+//	every team row is off               → off
+//	personal rows only                  → own: the nearest personal row;
+//	                                      shared: only a rule it ADDS (no
+//	                                      default has the id, has a regex,
+//	                                      not off), never an off or change
+//
+// The shared scanner (writes, hooks, export, lore check leaks) therefore
+// never drops a rule for a personal off: the engine's rules.IsOff(id,
+// own) applies that off to the person's own writes only.
+func resolveRules(entries []ruleEntry, base []scan.Rule, own bool) []gitleaks.RuleRow {
+	known := map[string]bool{}
+	for _, b := range base {
+		known[b.ID] = true
+	}
+	order := policy.Levels() // nearest first
+	slices.SortStableFunc(entries, func(a, b ruleEntry) int {
+		if c := strings.Compare(a.row.RuleID, b.row.RuleID); c != 0 {
+			return c
+		}
+		if c := slices.Index(order, a.level) - slices.Index(order, b.level); c != 0 {
+			return c
+		}
+		return strings.Compare(string(a.store), string(b.store)) // same level: stable by name
+	})
+	var out []gitleaks.RuleRow
+	for start := 0; start < len(entries); {
+		end := start + 1
+		for end < len(entries) && entries[end].row.RuleID == entries[start].row.RuleID {
+			end++
+		}
+		if r, ok := resolveOne(entries[start:end], known, own); ok {
+			out = append(out, r)
+		}
+		start = end
+	}
+	return out
+}
+
+// resolveOne picks the row of one rule_id; group is sorted nearest first.
+func resolveOne(group []ruleEntry, known map[string]bool, own bool) (gitleaks.RuleRow, bool) {
+	var teamOff, firstPersonal *ruleEntry
+	for i := range group {
+		e := &group[i]
+		personal := e.level == policy.LevelPersonal
+		switch {
+		case personal && own && e.row.State == schema.SecretRuleOff:
+			return e.row, true
+		case personal:
+			if firstPersonal == nil {
+				firstPersonal = e
+			}
+		case e.row.State != schema.SecretRuleOff:
+			return e.row, true // nearest team row that keeps the rule: on wins
+		case teamOff == nil:
+			teamOff = e
+		}
+	}
+	switch {
+	case teamOff != nil:
+		return teamOff.row, true
+	case firstPersonal == nil:
+		return gitleaks.RuleRow{}, false
+	case own:
+		return firstPersonal.row, true
+	}
+	p := firstPersonal.row
+	if known[p.RuleID] || p.State == schema.SecretRuleOff || p.Regex == "" {
+		return gitleaks.RuleRow{}, false // a personal off/change never reaches the shared scanner
+	}
+	return p, true
 }
 
 // ruleRow maps one secret_rules row to the scanner's input.
