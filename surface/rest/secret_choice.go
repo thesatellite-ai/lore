@@ -14,15 +14,15 @@ import (
 // --secret-unstored give, carried in headers so they never clash with an
 // operation's own input fields (an op with its own "reason" field).
 const (
-	// HeaderNotASecret keeps detected text as a false positive; its value
+	// HeaderFalsePositive keeps detected text as a false positive; its value
 	// is the typed reason (required, D12).
-	HeaderNotASecret = "X-Lore-Not-A-Secret"
-	// HeaderSecretRef redacts findings with this reference; repeat the
+	HeaderFalsePositive = "X-Lore-Not-A-Secret"
+	// HeaderVaultRef redacts findings with this reference; repeat the
 	// header once per finding, in finding order.
-	HeaderSecretRef = "X-Lore-Secret-Ref"
-	// HeaderSecretUnstored ("true") redacts every finding as
+	HeaderVaultRef = "X-Lore-Secret-Ref"
+	// HeaderUnstoredFinding ("true") redacts every finding as
 	// ${secret:unstored} and adds the store-then-rotate task.
-	HeaderSecretUnstored = "X-Lore-Secret-Unstored"
+	HeaderUnstoredFinding = "X-Lore-Secret-Unstored"
 	// maxSecretHeaderLen caps each header value.
 	maxSecretHeaderLen = 1024
 )
@@ -42,9 +42,9 @@ func secretChoiceOf(r *http.Request) (op.SecretChoice, error) {
 		}
 		return nil
 	}
-	if vs, ok := r.Header[http.CanonicalHeaderKey(HeaderNotASecret)]; ok {
+	if vs, ok := r.Header[http.CanonicalHeaderKey(HeaderFalsePositive)]; ok {
 		for _, v := range vs {
-			if err := check(HeaderNotASecret, v); err != nil {
+			if err := check(HeaderFalsePositive, v); err != nil {
 				return ch, err
 			}
 		}
@@ -53,16 +53,16 @@ func secretChoiceOf(r *http.Request) (op.SecretChoice, error) {
 			ch.Reason = vs[len(vs)-1]
 		}
 	}
-	for _, v := range r.Header.Values(HeaderSecretRef) {
-		if err := check(HeaderSecretRef, v); err != nil {
+	for _, v := range r.Header.Values(HeaderVaultRef) {
+		if err := check(HeaderVaultRef, v); err != nil {
 			return ch, err
 		}
 		ch.Refs = append(ch.Refs, v)
 	}
-	if v := r.Header.Get(HeaderSecretUnstored); v != "" {
+	if v := r.Header.Get(HeaderUnstoredFinding); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return ch, errs.New(errs.InvalidInput, HeaderSecretUnstored+" must be true or false")
+			return ch, errs.New(errs.InvalidInput, HeaderUnstoredFinding+" must be true or false")
 		}
 		ch.Unstored = b
 	}
