@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/surface/docs"
 )
 
 // Server constants (spec 9.7, 12).
@@ -117,6 +118,11 @@ func New(reg *op.Registry, runner op.Runner, opts Options) (*Server, error) {
 		}
 		if err := register(mux, rt.Method+" "+rt.Path, h.operation(e, rt)); err != nil {
 			return nil, err
+		}
+		if bt, bulk := bulkRoute(e, rt); bulk && !served(mux, bt) {
+			if err := register(mux, bt.Method+" "+bt.Path, h.operation(e, bt)); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if err := register(mux, "/", http.HandlerFunc(notFound)); err != nil {
@@ -293,4 +299,36 @@ func writeJSON(w http.ResponseWriter, status int, body []byte) {
 	w.WriteHeader(status)
 	// A failed write means the client went away; there is no one to tell.
 	_, _ = w.Write(append(body, '\n'))
+}
+
+// bulkRoute is the collection-path twin of an edit or delete route whose
+// id is optional (the bulk form --kind/--where, CLI_REFERENCE 3.2):
+// DELETE /v1/resources?kind=host&where=… runs resource.delete without an
+// id, so REST reaches every form the CLI has (ONE OPERATION SPEC; r3-batch,
+// P2-RES-1). An operation whose id is required has no twin.
+func bulkRoute(e op.Entry, rt op.Route) (op.Route, bool) {
+	if rt.Method != http.MethodDelete && rt.Method != http.MethodPatch {
+		return op.Route{}, false
+	}
+	base, ok := strings.CutSuffix(rt.Path, "/{"+docs.IDParam+"}")
+	if !ok {
+		return op.Route{}, false
+	}
+	for _, f := range e.InputFields() {
+		if f.Name == docs.IDParam {
+			return op.Route{Method: rt.Method, Path: base, Status: rt.Status}, !f.Required
+		}
+	}
+	return op.Route{}, false
+}
+
+// served reports whether mux already has a route for rt's method and
+// path (a registry operation keeps the path; the twin never shadows it).
+func served(mux *http.ServeMux, rt op.Route) bool {
+	r, err := http.NewRequest(rt.Method, rt.Path, nil)
+	if err != nil {
+		return true
+	}
+	_, pattern := mux.Handler(r)
+	return pattern != "" && pattern != "/"
 }
