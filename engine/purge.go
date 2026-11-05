@@ -12,6 +12,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
@@ -42,6 +43,8 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 	if err != nil {
 		return Written{}, err
 	}
+	// DELETION 3.5: the purge commit carries the Lore-Purge trailer
+	ctx = withPurgeTrailer(ctx, e.clock.Now(hlc.HLC{}).Wall, "")
 	if err = refuseActorDelete(cur); err != nil { // BATCH2 #8
 		return Written{}, err
 	}

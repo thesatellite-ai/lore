@@ -91,7 +91,11 @@ const combinedLensName = "combined"
 // unless r.ShowSensitive), runs it under r.Timeout (E_SQL_TIMEOUT past it)
 // and closes the lens.
 func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) {
-	l, err := a.Lens(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive})
+	trashRows, err := a.lensTrash(ctx, !r.ShowSensitive) // DELETION 3.2: the cache keeps no trashed row
+	if err != nil {
+		return opssql.Result{}, err
+	}
+	l, err := a.Lens(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows})
 	if err != nil {
 		return opssql.Result{}, err
 	}

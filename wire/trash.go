@@ -9,8 +9,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/row"
+	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -90,4 +92,25 @@ func (a *App) trashWrite(ctx context.Context, do func(*engine.Engine) (engine.Tr
 		a.wroteTo(t.Store, err)
 	}
 	return res, err
+}
+
+// lensTrash is the rows of the `lore sql` trash view (DELETION 3.2, 2.9):
+// every row in the trash of the attached stores, a sensitive title masked
+// unless --show-sensitive.
+func (a *App) lensTrash(ctx context.Context, mask bool) ([]sqlite.TrashRow, error) {
+	all, err := a.Trashed(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]sqlite.TrashRow, 0, len(all))
+	for _, t := range all {
+		def, _ := a.TableSchema(ctx, t.Row.Table)
+		r := sqlite.TrashRow{Source: string(t.Store), Table: t.Row.Table.String(), ID: t.Row.ID.String(),
+			Title: opstrash.Title(t.Row, def, mask), DeletedBy: t.Info.By, Reason: t.Info.Reason, Batch: t.Info.Batch, Dependent: t.Dependent}
+		if !t.Info.At.IsZero() {
+			r.DeletedAt = t.Info.At.UTC().Format(time.RFC3339)
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }
