@@ -46,6 +46,15 @@ func (e *Engine) originOf(ctx context.Context, opName string, st Attached) (valu
 	}
 	f.Cmd = strings.ReplaceAll(opName, ".", " ")
 	f.Store = string(st.Name)
+	// r3-origin (PROVENANCE 5.1): a marked store records its permanent
+	// sto_ id, and a folder its prj_ id (Place = "<sto_>[/<prj_>]", FQ4);
+	// the repo store and unmarked stores keep the attached name.
+	if sto, folder, _ := strings.Cut(st.Place, "/"); sto != "" {
+		f.Store = sto
+		if strings.HasPrefix(folder, string(ids.PrefixProject)+"_") {
+			f.Folder = folder
+		}
+	}
 	o, err := origin.Build(f)
 	if err != nil || !st.Client {
 		return o, err
