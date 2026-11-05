@@ -48,7 +48,7 @@ const (
 // Codes lists every finding code.
 func Codes() []Code {
 	return []Code{UnknownScheme, DanglingRef, VarOldName, VarShadowed, VarShareableDiffers,
-		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound}
+		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel}
 }
 
 // ManyTimeEntries is where lint warns that a task should be split (TQ4,
@@ -163,6 +163,7 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	out = append(out, varFindings(all[schema.TableVars])...)
 	out = append(out, taskFindings(all[schema.TableTasks])...)
 	out = append(out, metaFindings(all)...)
+	out = append(out, holderFindings(all)...) // SECRETS 5.2: stale holder labels
 	secrets, err := o.secretScan(ctx, all) // SQ12: re-scan with today's team rules
 	if err != nil {
 		return RunOut{}, err
