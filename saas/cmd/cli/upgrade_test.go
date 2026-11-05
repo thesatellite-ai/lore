@@ -348,12 +348,16 @@ func TestUpgradeNoticeNeverInCI(t *testing.T) {
 	old := version
 	version = "0.1.19"
 	defer func() { version = old }()
-	noticeOrAuto(&buf, upgradeSettings{notice: true}, "v0.1.20")
+	if err := noticeOrAuto(&buf, upgradeSettings{notice: true}, "v0.1.20"); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(buf.String(), "lore 0.1.20 is available (you have 0.1.19)") {
 		t.Errorf("notice: %q", buf.String())
 	}
 	buf.Reset()
-	noticeOrAuto(&buf, upgradeSettings{notice: false}, "v0.1.20")
+	if err := noticeOrAuto(&buf, upgradeSettings{notice: false}, "v0.1.20"); err != nil {
+		t.Fatal(err)
+	}
 	if buf.Len() != 0 {
 		t.Errorf("upgrade_notice false printed %q", buf.String())
 	}
