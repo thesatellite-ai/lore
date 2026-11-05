@@ -72068,6 +72068,16 @@
             }
           },
           {
+            "name": "signals",
+            "in": "query",
+            "required": false,
+            "description": "show the claim as seen now (holder, token prefix, expires, renewed_seq)",
+            "schema": {
+              "type": "boolean",
+              "description": "show the claim as seen now (holder, token prefix, expires, renewed_seq)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -78851,6 +78861,16 @@
               "type": "boolean",
               "description": "list rows purged or hard-deleted, read from this place's git history"
             }
+          },
+          {
+            "name": "local",
+            "in": "query",
+            "required": false,
+            "description": "this machine's safety copies (_lore_sync_trash), this machine only; replaces lore sync trash",
+            "schema": {
+              "type": "boolean",
+              "description": "this machine's safety copies (_lore_sync_trash), this machine only; replaces lore sync trash"
+            }
           }
         ],
         "responses": {
@@ -78861,6 +78881,36 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "copies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "row_id": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "row_id",
+                          "reason",
+                          "at"
+                        ]
+                      }
+                    },
                     "count": {
                       "type": "integer"
                     },
@@ -78921,6 +78971,9 @@
                       "type": "integer"
                     },
                     "from_history": {
+                      "type": "boolean"
+                    },
+                    "local": {
                       "type": "boolean"
                     },
                     "overruled": {
@@ -79198,6 +79251,10 @@
                     "type": "boolean",
                     "description": "refused: a purged row never comes back; read it with trash show --from-history"
                   },
+                  "local": {
+                    "type": "boolean",
+                    "description": "restore this machine's safety copy \u003cn\u003e (lore trash list --local lists them); replaces lore sync trash restore"
+                  },
                   "mission": {
                     "type": "string",
                     "description": "new mission id for the restored row"
@@ -79350,7 +79407,7 @@
             }
           },
           "409": {
-            "description": "E_PARENT_DELETED, E_PARENT_PURGED, E_PURGED, E_SECRET_DETECTED, E_STALE",
+            "description": "E_PARENT_DELETED, E_PARENT_PURGED, E_PURGED, E_SECRET_DETECTED, E_STALE, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
