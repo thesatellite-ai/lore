@@ -119,6 +119,7 @@ type AddIn struct {
 	Severity   string   `json:"severity,omitempty" flag:"severity" desc:"must | should | may (default must)"`
 	Activation string   `json:"activation,omitempty" flag:"activation" desc:"always | glob | semantic | manual (default always)"`
 	Globs      string   `json:"globs,omitempty" flag:"globs" desc:"JSON array of glob patterns (when activation=glob)"`
+	AppliesTo  string   `json:"applies_to_description,omitempty" flag:"applies-to" desc:"when activation=semantic: words describing where the rule applies (lore context matches them, CONTEXT_BUDGET 6.8)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance pointer"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"rule_id (rul_*) this entry replaces"`
@@ -297,6 +298,7 @@ type EditIn struct {
 	Severity     string   `json:"severity,omitempty" flag:"severity" desc:"must | should | may"`
 	Activation   string   `json:"activation,omitempty" flag:"activation" desc:"always | glob | semantic | manual"`
 	Globs        string   `json:"globs,omitempty" flag:"globs" desc:"JSON array of glob patterns"`
+	AppliesTo    string   `json:"applies_to_description,omitempty" flag:"applies-to" desc:"words describing where a semantic rule applies"`
 	Summary      string   `json:"summary,omitempty" flag:"summary" desc:"one-line short form used when the full text does not fit LORE.md (up to 200 characters)"`
 	SourceRef    string   `json:"source_ref,omitempty" flag:"source-ref" desc:"new source-ref"`
 	RebindRepo   string   `json:"rebind_repo,omitempty" flag:"rebind-repo" desc:"move this row to repo <mount> (rebinds repo_id)"`
@@ -385,7 +387,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, CreatedBy: in.CreatedBy, Tags: in.Tags,
 		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
-			kn.FieldBody: body, fieldSeverity: sev, fieldActivation: act, fieldGlobs: in.Globs, schema.FieldSummary: summary,
+			kn.FieldBody: body, fieldSeverity: sev, fieldActivation: act, fieldGlobs: in.Globs, fieldApplies: in.AppliesTo, schema.FieldSummary: summary,
 			kn.FieldSourceKind: in.Source, kn.FieldSourceRef: in.SourceRef,
 		},
 	}
@@ -446,10 +448,10 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	}
 	e := kn.Edit{
 		Texts: map[string]string{
-			kn.FieldBody: in.Body, fieldSeverity: in.Severity, fieldActivation: in.Activation, fieldGlobs: in.Globs, kn.FieldSourceRef: in.SourceRef, schema.FieldSummary: summary,
+			kn.FieldBody: in.Body, fieldSeverity: in.Severity, fieldActivation: in.Activation, fieldGlobs: in.Globs, fieldApplies: in.AppliesTo, kn.FieldSourceRef: in.SourceRef, schema.FieldSummary: summary,
 		},
 		RebindRepo: in.RebindRepo, RebindMaster: in.RebindMaster, Tags: in.Tags, Untags: in.Untags,
-		Hint: "give at least one of --body, --severity, --activation, --globs, --source-ref, --summary, --scope, --overrides, --rebind-repo, --rebind-master, --tag, --untag",
+		Hint: "give at least one of --body, --severity, --activation, --globs, --applies-to, --source-ref, --summary, --scope, --overrides, --rebind-repo, --rebind-master, --tag, --untag",
 	}
 	plan, err := knscope.ForEdit(ctx, o.env, noun, in.ID, in.Scope, in.Overrides, &e)
 	if err != nil {
