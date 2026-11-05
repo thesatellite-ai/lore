@@ -3,8 +3,7 @@ package main
 // Use-case tests for CLI commands no other test reached: repos, commit
 // links, `lore tables`, global search, the agent directive, project-name
 // inference, `lore setup`, learn-candidate filtering, tier-3 repair, the
-// support bundle, tag usage counts, run step numbering, and small sync
-// helpers. Each command is driven through the real binary (e2e helpers in
+// support bundle, tag usage counts, and small sync helpers. Each command is driven through the real binary (e2e helpers in
 // sync_e2e_test.go) where one exists; pure helpers get table tests.
 
 import (
@@ -686,8 +685,6 @@ func TestUC_MiscTagListUsageCounts(t *testing.T) {
 		t.Fatalf("unknown tag: %d %s", r.code, r.stderr)
 	}
 }
-
-// ── run step numbering ──────────────────────────────────────────────────
 
 // ── sync helpers ────────────────────────────────────────────────────────
 

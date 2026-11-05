@@ -159,6 +159,43 @@ func TestStartEndWritesSpanOnTask(t *testing.T) {
 	}
 }
 
+// TestEndWithoutStartTime: a run whose started_at is unset (a v0.1.17
+// lore.db copy, found migrating a real repo: the old run commands
+// dereferenced it and crashed) ends, says "start time unknown", has no
+// length and writes no span on its task (ported from the run half of
+// TestE2E_ShowCommandsWithOptionalTimesUnset).
+func TestEndWithoutStartTime(t *testing.T) {
+	ctx := context.Background()
+	for _, cancel := range []bool{false, true} {
+		f := newFake(t)
+		o := ops{env: f}
+		task := f.addTask(t)
+		st, err := o.start(ctx, StartIn{Task: task})
+		if err != nil {
+			t.Fatal(err)
+		}
+		delete(f.rows[st.ID].Fields, schema.FieldRunStartedAt)
+		var end EndOut
+		if cancel {
+			end, err = o.cancel(ctx, CancelIn{ID: st.ID})
+		} else {
+			end, err = o.end(ctx, EndIn{ID: st.ID, Outcome: schema.RunSuccess})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if end.Elapsed != startUnknown || end.Seconds != 0 || end.TimeEntry != "" || end.TaskID != "" {
+			t.Fatalf("cancel=%v: %+v", cancel, end)
+		}
+		if !cancel && !strings.Contains(end.Text(), startUnknown) {
+			t.Fatalf("end text: %q", end.Text())
+		}
+		if n := len(opstask.TimeEntries(f.rows[task])); n != 0 {
+			t.Fatalf("cancel=%v: %d span(s) written without a start", cancel, n)
+		}
+	}
+}
+
 func TestEndRefusesUnknownOutcomeAndRun(t *testing.T) {
 	ctx := context.Background()
 	f := newFake(t)

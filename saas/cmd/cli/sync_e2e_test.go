@@ -23,8 +23,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"dbent"
-
 	"dbent/pkg/dbtemplate"
 
 	"saas/pkg/aicoder/ids"
@@ -1367,8 +1365,9 @@ func TestE2E_IgnoredLoreFolderIsReported(t *testing.T) {
 }
 
 // Found migrating a real repo: `memory show` dereferenced the optional
-// valid_until, so it crashed on every memory without one (all 550 there),
-// and the run commands did the same with an optional started_at.
+// valid_until, so it crashed on every memory without one (all 550 there).
+// The run commands did the same with an optional started_at: that case is
+// ops/run's TestEndWithoutStartTime (run show is dropped in 0.1.18).
 func TestE2E_ShowCommandsWithOptionalTimesUnset(t *testing.T) {
 	w := newWorld(t)
 	alice := w.newClone("alice")
@@ -1378,23 +1377,6 @@ func TestE2E_ShowCommandsWithOptionalTimesUnset(t *testing.T) {
 	mem := idPattern.FindString(alice.lore("memory", "add", "--body", "no valid-until on this one").stdout)
 	if r := alice.lore("memory", "show", mem); !strings.Contains(r.stdout, "no valid-until on this one") || strings.Contains(r.stdout, "valid_until:") {
 		t.Fatalf("memory show: %s", r.stdout)
-	}
-	run := idPattern.FindString(alice.lore("run", "start", "--goal", "check").stdout)
-	if run == "" {
-		t.Fatal("run start printed no id")
-	}
-	db := dbent.InitDB(filepath.Join(alice.dir, ".lore", "lore.db"))
-	if _, err := db.Exec(`UPDATE runs SET started_at = NULL WHERE id = ?`, run); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if r := alice.lore("run", "show", run); strings.Contains(r.stdout, "started:") {
-		t.Fatalf("run show printed a start time it does not have: %s", r.stdout)
-	}
-	if r := alice.lore("run", "end", run, "--outcome", "success"); !strings.Contains(r.stdout, "start time unknown") {
-		t.Fatalf("run end: %s", r.stdout)
 	}
 }
 
