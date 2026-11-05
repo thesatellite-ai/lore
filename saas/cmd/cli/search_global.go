@@ -51,6 +51,9 @@ type globalSearchHit struct {
 	// (FLAG1: {store, store_id, folder, folder_id}); zero for a repo hit,
 	// so repo hits' --json bytes are unchanged (r2-source).
 	Source store.SourceRef `json:"_source,omitzero"`
+	// InTrash marks a row in the trash, listed only with --include-deleted
+	// after the live hits (DELETION 2.9, DEL-LIST-MARK, FA-META-4).
+	InTrash bool `json:"in_trash,omitempty"`
 	// fallback is the terminal text when neither Snippet nor Body is set
 	// (a cache that gave no snippet); never in --json, so the v0.1.17
 	// envelope is unchanged.
@@ -184,7 +187,7 @@ func newGlobalSearchCommand() *cobra.Command {
 	var limit int
 	var perTableLimit int
 	var jsonOut bool
-	var includeArchived bool
+	var includeArchived, includeDeleted bool
 	var allRepos, masterOnly, noInherit bool
 
 	cmd := &cobra.Command{
@@ -281,6 +284,16 @@ you want to scope to one type. This is the cross-entity hammer.`,
 			if len(merged) > limit {
 				merged = merged[:limit]
 			}
+			if includeDeleted {
+				// DELETION 2.9 (FA-META-4): the cache holds no trashed row,
+				// so rows in the trash are matched as plain text on their
+				// text fields and listed after the live hits, marked.
+				trashed, terr := searchTrashed(ctx, eng, targets, plainSearchText(rest), sc, limit)
+				if terr != nil {
+					return terr
+				}
+				merged = append(merged, trashed...)
+			}
 
 			// Rows outside this checkout (linked store projects, global,
 			// personal; F20) are matched as plain text and listed after the
@@ -337,6 +350,9 @@ you want to scope to one type. This is the cross-entity hammer.`,
 				if h.Source.Store != "" {
 					body += "  " + style.Muted(storeHitLabel(h.Source))
 				}
+				if h.InTrash {
+					body += "  " + style.Muted("(in the trash)")
+				}
 				fmt.Printf("%s %-7s %s  (score=%.3f)\n", style.Code(kindTag), pretty, body, h.Score)
 			}
 			return nil
@@ -349,6 +365,7 @@ you want to scope to one type. This is the cross-entity hammer.`,
 	cmd.Flags().IntVar(&perTableLimit, "per-table", searchDefaultPerTable, "per-entity top-K before merge (default 10)")
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON envelope output")
 	cmd.Flags().BoolVar(&includeArchived, constants.FlagIncludeArchived, false, "include archived rows")
+	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "also list matching rows in the trash, after the live hits")
 	cmd.Flags().BoolVar(&allRepos, constants.FlagAllRepos, false, "search every repo (ignore --repo)")
 	cmd.Flags().BoolVar(&masterOnly, constants.FlagMasterOnly, false, "only master-scoped rows")
 	cmd.Flags().BoolVar(&noInherit, constants.FlagNoInherit, false, "strict scope (reserved)")
@@ -481,6 +498,71 @@ func searchCoreTable(ctx context.Context, eng *engine.Engine, t globalSearchTarg
 		out = append(out, hit)
 	}
 	return out, nil
+}
+
+// searchTrashed matches the rows in the trash of every attached store
+// against text (every word, case-insensitive, in the table's full-text
+// fields; the resources table is left out, its field values may be
+// sensitive) under the same scope filters as live hits, at most limit,
+// each marked InTrash (FA-META-4). Empty text matches nothing.
+func searchTrashed(ctx context.Context, eng *engine.Engine, targets []globalSearchTarget, text string, sc globalSearchScope, limit int) ([]globalSearchHit, error) {
+	words := strings.Fields(strings.ToLower(text))
+	if len(words) == 0 {
+		return nil, nil
+	}
+	byTable := map[row.Table]globalSearchTarget{}
+	for _, t := range targets {
+		if t.entity != searchEntityResource {
+			byTable[t.table] = t
+		}
+	}
+	all, err := coreApp.Trashed(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []globalSearchHit
+	for _, tr := range all {
+		if len(out) == limit {
+			break
+		}
+		t, ok := byTable[tr.Row.Table]
+		if !ok {
+			continue
+		}
+		def, ok := eng.Registry().Table(tr.Row.Table)
+		if !ok {
+			continue
+		}
+		live := tr.Row
+		live.Deleted = false // the scope filters, minus the deleted test
+		if tr.Store == store.SourceRepo && !sc.keeps(t, live) || tr.Store != store.SourceRepo && !sc.keepsStoreRow(t, live) {
+			continue
+		}
+		var hay strings.Builder
+		for _, f := range def.FTS {
+			hay.WriteString(strings.ToLower(searchField(live, f)) + "\n")
+		}
+		if !allWords(hay.String(), words) {
+			continue
+		}
+		hit := globalHitOf(t, live.ID.String(), "", live)
+		hit.InTrash = true
+		if tr.Store != store.SourceRepo {
+			hit.Source = coreApp.DescribeSource(tr.Store)
+		}
+		out = append(out, hit)
+	}
+	return out, nil
+}
+
+// allWords reports whether every word occurs in hay.
+func allWords(hay string, words []string) bool {
+	for _, w := range words {
+		if !strings.Contains(hay, w) {
+			return false
+		}
+	}
+	return true
 }
 
 // storeHitLabel is the bracketed store label of a store hit ("[agency]",
