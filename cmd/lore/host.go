@@ -16,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/surface/docs"
 	"github.com/thesatellite-ai/lore/surface/rest"
 	"github.com/thesatellite-ai/lore/wire"
+	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
 
 // Host command defaults.
@@ -33,6 +34,8 @@ const (
 type host struct {
 	app  *wire.App
 	home string
+	// live is the live-rows wiring (init primes the fetch stamp with it).
+	live *hosthooks.Live
 	// printed is set when a host command printed its own error.
 	printed bool
 }

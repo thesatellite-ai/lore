@@ -80,7 +80,7 @@ func run(ctx context.Context, args []string) int {
 	root := cli.Build(app.Registry(), runner, cli.WithInteractive(wire.StdinIsTerminal))
 	root.Version = version
 	hosthooks.Install(root, runner)
-	h := &host{app: app, home: home}
+	h := &host{app: app, home: home, live: liveRows}
 	h.markPrinted(root)
 	mountShortcuts(root)
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())

@@ -109,6 +109,20 @@ func (l *Live) SyncHookCommand(stdin io.Reader) *cobra.Command {
 	}
 }
 
+// Prime runs the live session's prepare once for the repo holding the cwd
+// (lock, tracking refspec, the fetch when due and its stamp, integrate)
+// outside an operation. `lore init` calls it: v0.1.17's init wrote through
+// the live wrapper, so the first command after it found a fresh fetch
+// stamp and did not fetch again (Leak_WriteCheckNoOpWithoutOrg).
+func (l *Live) Prime(ctx context.Context) {
+	if os.Getenv(EnvRideActive) != "" || liveDisabled() {
+		return
+	}
+	if r, s := l.h.hookSession(ctx); s != nil {
+		r.finish(ctx)
+	}
+}
+
 // hookSession opens the live session of the repo holding the cwd (git runs
 // hooks at the top level, which need not be a lore project itself). The
 // caller finishes the returned run.

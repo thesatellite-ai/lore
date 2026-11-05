@@ -77,6 +77,9 @@ func (h *host) initCommand(wd string) *cobra.Command {
 				}
 				// E1: the checkout carries the shared project: adopt it.
 				ensureGitignore(ctx, cmd, wd)
+				if h.live != nil {
+					h.live.Prime(ctx)
+				}
 				_, err = fmt.Fprintf(cmd.OutOrStdout(), "✓ adopted the shared lore project at %s\n    project_id: %s\n", wd, pid)
 				return err
 			} else if !errs.Has(err, errs.NotFound) {
@@ -106,6 +109,9 @@ func (h *host) initCommand(wd string) *cobra.Command {
 				return err
 			}
 			ensureGitignore(ctx, cmd, wd)
+			if h.live != nil {
+				h.live.Prime(ctx) // the first fetch happens here, as v0.1.17's init did
+			}
 			out := cmd.OutOrStdout()
 			_, err = fmt.Fprintf(out, "lore initialized\n    project_id: %s\n    name:       %s\n    repo_id:    %s\n", w.Row.ID, n, repoID)
 			return err
