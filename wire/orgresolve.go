@@ -20,6 +20,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"os"
 	"slices"
 	"strings"
@@ -31,6 +32,8 @@ import (
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -40,6 +43,23 @@ type OrgResolution struct {
 	home  string
 	dir   string
 	links orgcfg.LinkSource
+
+	// Interactive reports whether a person can answer (stdin is a
+	// terminal); nil = no. F14 refuses a rule or decision written into a
+	// client repo without a terminal unless --to names the target.
+	Interactive func() bool
+	// IsAgent reports whether the caller is an agent (F14: an agent must
+	// name the target of a rule or decision in a client repo); nil = no.
+	IsAgent func(ctx context.Context) bool
+	// RepoWriteCheck is the F16 write-time leak check of a row about to be
+	// written into a client repo (root, the row kind, its text); nil skips
+	// it (the commit hooks still check). The old binary passes its
+	// v0.1.17 check (P3-ORG-3).
+	RepoWriteCheck func(ctx context.Context, root, kind, text string) error
+
+	// routed is the F14 rule of the routed create this process made, for
+	// the "filed: <rule>" line (Routed).
+	routed string
 
 	once sync.Once
 	sit  *orgcfg.Situation
@@ -79,6 +99,12 @@ func (r *OrgResolution) Apply(o *Options) {
 	}
 	if o.OrgSigners == nil {
 		o.OrgSigners = r.OrgSigners
+	}
+	if o.DefaultTarget == nil {
+		o.DefaultTarget = r.DefaultTarget
+	}
+	if o.GuardRepoWrite == nil {
+		o.GuardRepoWrite = r.GuardRepoWrite
 	}
 }
 
@@ -261,4 +287,173 @@ func emailOfKey(key string) string {
 		return ""
 	}
 	return rest
+}
+
+// routeKinds maps a core table to the kind name F14's routing rules
+// (defaults.client_repos, routing.client_repos) use for it.
+var routeKinds = map[row.Table]string{
+	schema.TableMemories:  "memory",
+	schema.TableRules:     "rule",
+	schema.TableDecisions: "decision",
+	schema.TableComments:  "comment",
+	schema.TableTasks:     "task",
+	schema.TableMissions:  "mission",
+}
+
+// Routed is the F14 rule that chose the target of this process's routed
+// create ("" when none did), for v0.1.17's "  filed: <rule>" line.
+func (r *OrgResolution) Routed() string { return r.routed }
+
+// DefaultTarget is Options.DefaultTarget: a create of a routed kind that
+// names no --to goes where F14 sends it. In a client repo that is the
+// linked folder of the org store (attached under the org's name by
+// OrgStores) or the folder a client-repo default names; in the org's own
+// repo, or with no org, the repo store (""), where GuardRepoWrite still
+// runs. A folder this process has not attached answers "" too, so the
+// guard refuses it naming the --to to use (fail closed).
+func (r *OrgResolution) DefaultTarget(ctx context.Context, q WriteQuery) (store.Source, error) {
+	kind, ok := routeKinds[q.Table]
+	if !ok {
+		return "", nil
+	}
+	s, dec, err := r.decide(ctx, false, kind, q)
+	if err != nil {
+		return "", err
+	}
+	if dec.Repo || s.Result.Org == nil {
+		return "", nil
+	}
+	attached, err := r.OrgStores(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, a := range attached {
+		if a.Folder == dec.Folder {
+			r.routed = dec.Rule
+			return a.Name, nil
+		}
+	}
+	return "", nil
+}
+
+// GuardRepoWrite is Options.GuardRepoWrite: a create of a routed kind that
+// lands in the repo store is refused when F14 sends it elsewhere (a
+// client repo: internal knowledge never lands in it, D8) or when the
+// links cannot be read (E_LINK_UNKNOWN); a write F14 keeps here gets the
+// F16 leak check (RepoWriteCheck). explicit is `--to repo`.
+func (r *OrgResolution) GuardRepoWrite(ctx context.Context, q WriteQuery, explicit bool) error {
+	kind, ok := routeKinds[q.Table]
+	if !ok {
+		return nil
+	}
+	s, dec, err := r.decide(ctx, explicit, kind, q)
+	if err != nil {
+		return err
+	}
+	if !dec.Repo {
+		hint := "write it to a store listed in .lore/stores.yaml with --to <name>, or choose this repo with --to repo"
+		if org := s.Result.Org; org != nil {
+			hint = "write it to " + org.Name + "'s store with --to " + org.Name + "/" + dec.Folder + " (the folder " + dec.Folder + "/), or choose this repo with --to repo"
+		}
+		return errs.New(errs.Unsupported, "this repository's lore routing sends a "+kind+" to a store folder lore has not attached ("+dec.Rule+"); name the target with --to").
+			WithHint(hint)
+	}
+	needs := s.Result.Role == orgresolve.RoleClient || s.Result.LinkUnknown
+	if r.RepoWriteCheck == nil || !needs || strings.TrimSpace(q.Text) == "" {
+		return nil
+	}
+	return r.RepoWriteCheck(ctx, s.Dir, kind, q.Text)
+}
+
+// decide is F14 for one create of kind: the org situation, --to repo when
+// explicit, the team's client-repo defaults (lore-org.yaml until migrated)
+// joined with the routing.client_repos policy (q.Routes; per kind a store
+// target beats repo, CFG8) and the entry's personal defaults.
+func (r *OrgResolution) decide(ctx context.Context, explicit bool, kind string, q WriteQuery) (*orgcfg.Situation, orgresolve.TargetDecision, error) {
+	none := orgresolve.TargetDecision{}
+	s, err := r.Situation(ctx)
+	if err != nil {
+		return nil, none, err
+	}
+	if s.ResolveErr != nil {
+		return nil, none, orgcfg.ResolveError(s.ResolveErr)
+	}
+	if cerr := s.Result.CheckWrite(false, explicit); cerr != nil {
+		return nil, none, orgcfg.ResolveError(cerr)
+	}
+	res := s.Result
+	in := orgresolve.TargetInputs{Org: res.OrgName(), Kind: kind, Role: res.Role, LinkUnknown: res.LinkUnknown}
+	if r.Interactive != nil {
+		in.TTY = r.Interactive()
+	}
+	if r.IsAgent != nil {
+		in.Agent = r.IsAgent(ctx)
+	}
+	if explicit {
+		in.To = orgresolve.ToRepo
+	}
+	links := res.Links
+	if res.Org != nil && len(links) == 0 && s.ProjectID != "" && r.links != nil {
+		// A staging entry chosen on purpose has its own links on its own
+		// store branch (F10 skips them only for automatic matching).
+		el, ok, lerr := r.links.EntryLinks(ctx, res.Org, s.ProjectID, s.Remotes)
+		if lerr != nil {
+			return nil, none, lerr
+		}
+		if ok {
+			links = el
+		}
+	}
+	for _, l := range links {
+		in.Links = append(in.Links, orgresolve.TargetLink{Folder: l.Folder, Default: l.Default, Own: l.Own})
+	}
+	if s.Committed != nil {
+		in.CommittedProject = s.Committed.Project
+	}
+	if res.Org != nil {
+		in.PersonalDefaults = res.Org.Defaults.ClientRepos
+		if r.links != nil {
+			d, derr := r.links.ClientRepoDefaults(ctx, res.Org)
+			if derr != nil {
+				return nil, none, errs.Wrap(errs.StoreUnreachable, "read "+res.Org.Name+"'s lore-org.yaml", derr)
+			}
+			in.StoreDefaults = d
+		}
+	}
+	in.StoreDefaults = joinRoutes(in.StoreDefaults, q.Routes)
+	dec, err := orgresolve.ResolveTarget(in)
+	if err != nil {
+		return nil, none, targetError(err)
+	}
+	return s, dec, nil
+}
+
+// joinRoutes joins the routing.client_repos policy into the team defaults:
+// per kind a store target beats repo (CFG8).
+func joinRoutes(team, routes map[string]string) map[string]string {
+	if len(routes) == 0 {
+		return team
+	}
+	out := make(map[string]string, len(team)+len(routes))
+	for k, v := range team {
+		out[k] = v
+	}
+	for k, v := range routes {
+		if cur, seen := out[k]; !seen || (cur == orgresolve.DefaultRepo && v != orgresolve.DefaultRepo) {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// targetError maps F14 refusals to codes, as v0.1.17's targetCLIError.
+func targetError(err error) error {
+	switch {
+	case errors.Is(err, orgresolve.ErrLinkUnknown):
+		return errs.New(errs.LinkUnknown, err.Error()+"; nothing written").
+			WithHint("pass --to (repo, <org> or <org>/<folder>) or retry when the store is reachable")
+	case errors.Is(err, orgresolve.ErrNeedsExplicitTo), errors.Is(err, orgresolve.ErrTwoLinksNoDefault), errors.Is(err, orgresolve.ErrNoLinkedProject):
+		return errs.New(errs.InvalidInput, err.Error())
+	}
+	return errs.Wrap(errs.Internal, "decide the write target", err)
 }

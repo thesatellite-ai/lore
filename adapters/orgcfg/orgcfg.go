@@ -65,6 +65,10 @@ type LinkSource interface {
 	// (orgconf.DefaultStoreBranch when unknown): an entry on another
 	// branch is a staging entry (TEAM-022).
 	DefaultBranch(ctx context.Context, storeNorm string) string
+	// ClientRepoDefaults returns the team's defaults.client_repos of an
+	// entry (lore-org.yaml in its org folder, until migrated to a
+	// routing.client_repos policy row, CFG8); nil when none.
+	ClientRepoDefaults(ctx context.Context, o *orgconf.Org) (map[string]string, error)
 }
 
 // In is what Gather reads.

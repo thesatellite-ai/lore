@@ -10,8 +10,9 @@
 // v0.1.17's YAML: the same file is read by both binaries.
 //
 // Scope: only the keys org resolution reads (identity, personal, orgs,
-// repo_orgs). Every other config.yaml block (live, lease, agents,
-// context, …) is ignored here; its own reader validates it (P3-ORG-1).
+// repo_orgs, live.fetch_ttl, link_index.max_age). Every other
+// config.yaml block (lease, agents, context, …) is ignored here; its own
+// reader validates it (P3-ORG-1).
 //
 //	config.yaml bytes ──▶ Parse ──▶ Config ──▶ Validate (every problem at once)
 //	org.yaml bytes    ──▶ ParseOrgFile ──▶ OrgFile (validated)
@@ -78,6 +79,9 @@ type Config struct {
 	Personal Personal           `yaml:"personal,omitempty"`
 	Orgs     []Org              `yaml:"orgs,omitempty"`
 	RepoOrgs map[string]RepoOrg `yaml:"repo_orgs,omitempty"`
+	// Live is read for live.fetch_ttl only (store clone freshness).
+	Live      Live      `yaml:"live,omitempty"`
+	LinkIndex LinkIndex `yaml:"link_index,omitempty"`
 }
 
 // Personal is the personal store setting.
@@ -99,6 +103,8 @@ type Org struct {
 	Repos        []string     `yaml:"repos,omitempty"`
 	Defaults     OrgDefaults  `yaml:"defaults,omitempty"`
 	AgentDetails AgentDetails `yaml:"agent_details,omitempty"`
+	// Live overrides the top level's live.fetch_ttl for this entry.
+	Live *Live `yaml:"live,omitempty"`
 }
 
 // OrgIdentity is who you are inside one org (F18); the key is
