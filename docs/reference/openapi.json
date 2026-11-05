@@ -52851,6 +52851,182 @@
         }
       }
     },
+    "/v1/skill/compile": {
+      "post": {
+        "operationId": "skill.compile",
+        "summary": "Compress the canonical skill bundle into a smaller draft .md through a model",
+        "tags": [
+          "skill"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "budget_bytes": {
+                    "type": "integer",
+                    "description": "byte budget the model aims for (default 14000)"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "print the result instead of writing the file"
+                  },
+                  "include": {
+                    "type": "array",
+                    "description": "file globs relative to source-dir to read (repeatable; default *.md, examples/*.md, playbooks/*.md)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "compressor model; must be a strong model (default claude-sonnet-4-6; ollama:\u003cmodel\u003e for a local one)"
+                  },
+                  "output": {
+                    "type": "string",
+                    "description": "output path (default \u003csource-dir\u003e/SKILL-\u003ctarget\u003e-draft.md; the compiler output is never canonical: bench it, then pass --output to promote)"
+                  },
+                  "source_dir": {
+                    "type": "string",
+                    "description": "directory holding the canonical bundle (.md files; default ./skill)"
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "compression target (only mini; default mini)"
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "description": "sampling temperature (default 0.2; raise to 0.5+ for bolder edits)"
+                  },
+                  "timeout": {
+                    "type": "integer",
+                    "description": "model call timeout in seconds (default 300)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "budget_bytes": {
+                      "type": "integer"
+                    },
+                    "compiled": {
+                      "type": "string"
+                    },
+                    "compression_x": {
+                      "type": "number",
+                      "description": "source bytes / output bytes"
+                    },
+                    "cost_usd": {
+                      "type": "number",
+                      "description": "estimated model cost"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "elapsed_ms": {
+                      "type": "integer"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "output": {
+                      "type": "string",
+                      "description": "the file written (or that would be, with --dry-run)"
+                    },
+                    "output_bytes": {
+                      "type": "integer"
+                    },
+                    "source_bytes": {
+                      "type": "integer"
+                    },
+                    "source_files": {
+                      "type": "integer"
+                    },
+                    "target": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "target",
+                    "output",
+                    "model",
+                    "source_files",
+                    "source_bytes",
+                    "budget_bytes",
+                    "output_bytes",
+                    "compression_x",
+                    "cost_usd",
+                    "elapsed_ms"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/snapshots": {
       "get": {
         "operationId": "snapshot.list",

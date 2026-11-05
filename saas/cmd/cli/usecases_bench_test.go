@@ -566,80 +566,7 @@ func TestUC_BenchPrintRunSummaryFromComputedSummary(t *testing.T) {
 	}
 }
 
-// ── skill compiler helpers ──────────────────────────────────────────────────
-
-func TestUC_BenchSkillCompilerHelpers(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	write := func(rel, content string) {
-		t.Helper()
-		p := filepath.Join(dir, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("SKILL.md", "skill")
-	write("ZETA.md", "zeta")
-	write("ALPHA.md", "alpha")
-	write("examples/one.md", "ex")
-	write("notes.txt", "not markdown")
-	if err := os.MkdirAll(filepath.Join(dir, "dir.md"), 0o750); err != nil { // a directory matching *.md
-		t.Fatal(err)
-	}
-	files, total, err := collectSkillSources(dir, []string{"*.md", "examples/*.md", "*.md"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(files) != 4 || total != len("skill")+len("zeta")+len("alpha")+len("ex") || files["examples/one.md"] != "ex" {
-		t.Fatalf("collected %v (%d bytes)", files, total)
-	}
-	if _, _, err := collectSkillSources(dir, []string{"["}); err == nil {
-		t.Fatal("a malformed glob must error")
-	}
-	if f, n, err := collectSkillSources(filepath.Join(dir, "missing"), []string{"*.md"}); err != nil || len(f) != 0 || n != 0 {
-		t.Fatalf("missing dir: %v %d %v", f, n, err)
-	}
-
-	prompt := buildSkillCompressPrompt(files, 9000)
-	if !strings.HasPrefix(prompt, compressionRules(9000)) {
-		t.Fatal("the prompt must open with the compression rules")
-	}
-	order := []string{"## FILE: SKILL.md", "## FILE: ALPHA.md", "## FILE: ZETA.md", "## FILE: examples/one.md"}
-	last := -1
-	for _, h := range order {
-		i := strings.Index(prompt, h)
-		if i <= last {
-			t.Fatalf("SKILL.md first, then alphabetical; %q out of order", h)
-		}
-		last = i
-	}
-	if !strings.Contains(prompt, "approximately 9000 bytes") {
-		t.Fatal("budget not stated")
-	}
-	if rules := compressionRules(1234); strings.Count(rules, "1234") != 2 || !strings.Contains(rules, "OUTPUT CONTRACT") {
-		t.Fatal("compressionRules must state the budget at the top and the end")
-	}
-}
-
-func TestUC_BenchExtractCompressedOutput(t *testing.T) {
-	t.Parallel()
-	for in, want := range map[string]string{
-		"---\nname: x\n---\nbody":                                  "---\nname: x\n---\nbody\n",
-		"  ---\nbody  \n\n":                                        "---\nbody\n",
-		"```markdown\n---\nbody\n```":                              "---\nbody\n",
-		"Here is the compressed version:\n---\nname: x\n---\nbody": "---\nname: x\n---\nbody\n",
-		"```\nSure! Below:\n---\nbody\n```":                        "---\nbody\n",
-		"ok\n---\nbody":                                            "ok\n---\nbody\n", // too little prose to strip
-		"no frontmatter at all":                                    "no frontmatter at all\n",
-	} {
-		if got := extractCompressedOutput(in); got != want {
-			t.Fatalf("extractCompressedOutput(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
+// The skill compiler helper tests moved to ops/skill (P3-SKILL-1).
 
 // ── TUI tables screen ───────────────────────────────────────────────────────
 
@@ -799,15 +726,14 @@ func TestUC_BenchSkillCompileEndToEnd(t *testing.T) {
 	if args := readFileE2E(t, argsFile); !strings.Contains(args, "--model claude-test") {
 		t.Fatalf("model not passed to the provider: %q", args)
 	}
+	// skill.compile answers the plain operation object (P3-SKILL-1).
 	var env2 struct {
-		Data struct {
-			OutputBytes int     `json:"output_bytes"`
-			SourceBytes int     `json:"source_bytes"`
-			Ratio       float64 `json:"compression_x"`
-		} `json:"data"`
+		OutputBytes int     `json:"output_bytes"`
+		SourceBytes int     `json:"source_bytes"`
+		Ratio       float64 `json:"compression_x"`
 	}
-	if err := json.Unmarshal([]byte(r.stdout), &env2); err != nil || env2.Data.SourceBytes != 1600 || env2.Data.OutputBytes != len("---\nname: lore\n---\nmini body\n") || env2.Data.Ratio <= 1 {
-		t.Fatalf("json: %+v %v", env2.Data, err)
+	if err := json.Unmarshal([]byte(r.stdout), &env2); err != nil || env2.SourceBytes != 1600 || env2.OutputBytes != len("---\nname: lore\n---\nmini body\n") || env2.Ratio <= 1 {
+		t.Fatalf("json: %+v %v", env2, err)
 	}
 
 	// --dry-run prints and writes nothing; the default output is a DRAFT path.

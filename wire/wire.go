@@ -90,6 +90,7 @@ import (
 	opssession "github.com/thesatellite-ai/lore/ops/session"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
+	opsskill "github.com/thesatellite-ai/lore/ops/skill"
 	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -422,6 +423,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opstask.ImportOps(a)...)
 	// XQ1: lore batch list|show over the machine-local batch log (Q-R3-8).
 	entries = append(entries, opsbatch.Ops(a)...)
+	// CLI_REFERENCE 3.17 "existing" (P3-SKILL-1): lore skill compile as the Local operation skill.compile.
+	entries = append(entries, opsskill.Ops(a)...)
 	// DELETION 2.2-2.6: lore trash list|show|restore|purge (DQ1-DQ4).
 	entries = append(entries, opstrash.Ops(a)...)
 	// CLI_REFERENCE 3.5 (PASS3 ONE-PATH, P3-UPG-1): lore upgrade as the Local operation upgrade.run.

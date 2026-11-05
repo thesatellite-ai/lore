@@ -135,7 +135,6 @@ func init() {
 	rootCmd.AddCommand(newProjectCommand())
 	rootCmd.AddCommand(newRepoCommand())
 	rootCmd.AddCommand(newBenchCommand())
-	rootCmd.AddCommand(newSkillCommand())
 	rootCmd.AddCommand(newActorCommand())
 	rootCmd.AddCommand(newPluginCommand())
 	rootCmd.AddCommand(newMountAliasCommand())
