@@ -887,6 +887,17 @@ func setURLText(o RepoSetURLOut) string {
 // 11.5).
 type RepoForkIn struct {
 	Split bool `json:"split,omitempty" flag:"split" desc:"this repo was split from the recorded one (records split_from instead of forked_from)"`
+	// NewProject gives the fork its own project too (PROVENANCE_DESIGN
+	// 10.6, FA-AGENT-10): a new prj_ row and _meta.json project_id.
+	NewProject bool `json:"new_project,omitempty" flag:"new-project" desc:"also give the fork its own project: a new project id in _meta.json and a projects row; this fork's rows move to it (their _o.repo still names the upstream)"`
+}
+
+// RepoProjectWriter is the optional RepoFiles upgrade `repo fork
+// --new-project` needs: set the checkout's _meta.json project_id, keeping
+// every other key. Files without it refuse --new-project (E_UNSUPPORTED)
+// rather than leave a project row that _meta.json does not name.
+type RepoProjectWriter interface {
+	WriteRepoProjectID(ctx context.Context, pid ids.ID[ids.Project]) error
 }
 
 // RepoForkOut is the result of `lore repo fork`.
@@ -896,7 +907,12 @@ type RepoForkOut struct {
 	SplitFrom  string `json:"split_from,omitempty"`
 	MountName  string `json:"mount_name"`
 	URL        string `json:"url,omitempty"`
-	human      string
+	// ProjectID is the fork's project: the upstream's, or the new one with
+	// --new-project (then UpstreamProject names the old one, folded into
+	// the new one in this fork).
+	ProjectID       string `json:"project_id"`
+	UpstreamProject string `json:"upstream_project_id,omitempty"`
+	human           string
 }
 
 // Text implements op.Texter.
@@ -947,26 +963,133 @@ func repoFork(ctx context.Context, env Env, files RepoFiles, in RepoForkIn) (Rep
 	if err != nil {
 		return RepoForkOut{}, err
 	}
+	upPid := pid
+	mount := work.Field(up.Row, fieldMountName) + forkSuffix
+	var pw RepoProjectWriter
+	if in.NewProject {
+		// FA-AGENT-10: checked before any write, so a refusal leaves nothing.
+		var ok bool
+		if pw, ok = files.(RepoProjectWriter); !ok {
+			return RepoForkOut{}, errs.New(errs.Unsupported, "repo fork --new-project: this checkout's _meta.json cannot be updated here")
+		}
+		if pid, err = forkProject(ctx, env, files, upPid, mount, clean[0].URL); err != nil {
+			return RepoForkOut{}, err
+		}
+	}
 	rows, err := o(env).projectRepos(ctx, pid.String())
 	if err != nil {
 		return RepoForkOut{}, err
 	}
-	r, err := createRepoRow(ctx, forkNamed{RepoFiles: files, name: work.Field(up.Row, fieldMountName) + forkSuffix}, pid, meta.RepoID, rows, h, meta)
+	r, err := createRepoRow(ctx, forkNamed{RepoFiles: files, name: mount}, pid, meta.RepoID, rows, h, meta)
 	if err != nil {
 		return RepoForkOut{}, err
 	}
 	if err := files.WriteRepoMeta(ctx, meta); err != nil {
 		return RepoForkOut{}, err
 	}
-	out := RepoForkOut{RepoID: meta.RepoID, ForkedFrom: meta.ForkedFrom, SplitFrom: meta.SplitFrom, MountName: work.Field(r, fieldMountName), URL: clean[0].URL}
+	if pw != nil {
+		if err := pw.WriteRepoProjectID(ctx, pid); err != nil {
+			return RepoForkOut{}, err
+		}
+	}
+	out := RepoForkOut{RepoID: meta.RepoID, ForkedFrom: meta.ForkedFrom, SplitFrom: meta.SplitFrom, MountName: work.Field(r, fieldMountName), URL: clean[0].URL,
+		ProjectID: pid.String()}
 	rel := "forked_from " + meta.ForkedFrom
 	if in.Split {
 		rel = "split_from " + meta.SplitFrom
 	}
-	out.human = work.Success + " new repo " + out.RepoID + " (" + out.MountName + "), " + rel + "\n" +
-		work.Success + " .lore/data/_meta.json updated; commit it with your next push\n"
+	out.human = work.Success + " new repo " + out.RepoID + " (" + out.MountName + "), " + rel + "\n"
+	if in.NewProject {
+		out.UpstreamProject = upPid.String()
+		out.human += work.Success + " new project " + pid.String() + " (" + mount + "); this fork's rows moved to it from " + upPid.String() + " (_o.repo still names " + up.Meta.RepoID + ")\n"
+	}
+	out.human += work.Success + " .lore/data/_meta.json updated; commit it with your next push\n"
 	return out, nil
 }
+
+// forkProject creates the projects row of a `repo fork --new-project`
+// (FA-AGENT-10): a new random prj_ id in the repo store, named after the
+// fork's mount name, with the fork's remote as origin_url. The upstream
+// project row stays: rows made before the fork keep pointing at it (they
+// were made there, the 10.6 rule for _o.repo), and new rows take the new
+// project through _meta.json's project_id.
+func forkProject(ctx context.Context, env Env, files RepoFiles, upstream ids.ID[ids.Project], name, originURL string) (ids.ID[ids.Project], error) {
+	if _, _, err := env.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: schema.TableProjects, ID: upstream.Any()}); err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	nid, err := ids.New[ids.Project]()
+	if err != nil {
+		return ids.ID[ids.Project]{}, errs.Wrap(errs.Internal, "infra: mint a project id", err)
+	}
+	fields, err := work.Texts(NounRepo, map[string]string{projectFieldName: name, fieldOrigin: originURL})
+	if err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	if _, err := files.CreateWithID(ctx, store.SourceRepo, schema.TableProjects, nid.Any(), fields); err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	if err := foldProject(ctx, env, upstream, nid); err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	return nid, nil
+}
+
+// foldProject makes the fork a one-project repo again (E1: a repo's data
+// folder holds one project; `lore sync fix-projects` does the same fold):
+// every live repo-store row whose project ref names upstream is re-pointed
+// to nid through the engine (HLC, audit, scan hold), then the upstream
+// project row is deleted in this fork (a tombstone). _o.repo is never
+// touched: rows made before the fork still say where they were made. The
+// delete runs last; a row still naming upstream makes the Restrict
+// relation refuse it, so nothing is cascaded away (FA-AGENT-10).
+func foldProject(ctx context.Context, env Env, upstream, nid ids.ID[ids.Project]) error {
+	ref, err := value.RefOf(nid.Any())
+	if err != nil {
+		return err
+	}
+	for _, t := range schema.Builtin() {
+		if t.Name == schema.TableProjects {
+			continue
+		}
+		var refFields []string
+		for _, f := range t.Fields {
+			if f.Kind == value.KindRef && f.RefTable == schema.TableProjects {
+				refFields = append(refFields, f.Name)
+			}
+		}
+		if len(refFields) == 0 {
+			continue
+		}
+		rows, lerr := env.List(ctx, store.SourceRepo, t.Name)
+		if lerr != nil {
+			return lerr
+		}
+		for _, r := range rows {
+			if r.Deleted {
+				continue
+			}
+			patch := map[string]value.Value{}
+			for _, f := range refFields {
+				if work.Field(r, f) == upstream.String() {
+					patch[f] = ref
+				}
+			}
+			if len(patch) == 0 {
+				continue
+			}
+			if _, uerr := env.Update(ctx, engine.Ref{Store: store.SourceRepo, Table: r.Table, ID: r.ID}, patch); uerr != nil {
+				return errs.Wrap(errs.CodeOf(uerr), "repo fork --new-project: re-point "+r.ID.String(), uerr)
+			}
+		}
+	}
+	if _, err := env.Delete(ctx, engine.Ref{Store: store.SourceRepo, Table: schema.TableProjects, ID: upstream.Any()}); err != nil {
+		return errs.Wrap(errs.CodeOf(err), "repo fork --new-project: remove the upstream project from this fork", err)
+	}
+	return nil
+}
+
+// projectFieldName is the projects table's name field (schema.Builtin).
+const projectFieldName = "name"
 
 // forkNamed is files with the fork's mount name in place of the folder
 // name (createRepoRow names a row after RepoDirName).

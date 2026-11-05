@@ -2,10 +2,17 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/model/canon"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 )
 
@@ -142,3 +149,93 @@ func (a *App) RepoAddressStatus(ctx context.Context) (opsinfra.AddressReport, er
 // folder, so --scope dir:<path> checks the folder exists (CONTEXT_BUDGET
 // 6.2.3).
 func (a *App) RepoTop(ctx context.Context) (string, error) { return a.knownRepoTop(ctx) }
+
+// repoMetaProjectKey is the _meta.json key naming the checkout's project
+// (v0.1.17's lsync and SeedRepoMeta write it; rowfs.RepoMeta leaves it to
+// them).
+const repoMetaProjectKey = "project_id"
+
+// repoMetaProjectID is the project_id of the checkout's _meta.json; ok is
+// false when there is none or the file cannot be read. Project() prefers
+// it when the repo store holds several projects (a `repo fork
+// --new-project` clone keeps its upstream's project row, FA-AGENT-10).
+func repoMetaProjectID(top string) (string, bool) {
+	o, _, err := readMetaObject(top)
+	if err != nil {
+		return "", false
+	}
+	raw, ok := o[repoMetaProjectKey]
+	if !ok {
+		return "", false
+	}
+	var s string
+	if json.Unmarshal(raw, &s) != nil || s == "" {
+		return "", false
+	}
+	return s, true
+}
+
+// WriteRepoProjectID implements opsinfra.RepoProjectWriter: it sets
+// _meta.json's project_id to pid and keeps every other key (`repo fork
+// --new-project`, FA-AGENT-10). The file is committed by the person, like
+// the repo id.
+func (a *App) WriteRepoProjectID(ctx context.Context, pid ids.ID[ids.Project]) error {
+	top, err := a.knownRepoTop(ctx)
+	if err != nil {
+		return err
+	}
+	o, path, err := readMetaObject(top)
+	if err != nil {
+		return err
+	}
+	v, err := json.Marshal(pid.String())
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: encode "+rowfs.RepoMetaPath, err)
+	}
+	o[repoMetaProjectKey] = v
+	raw, err := json.Marshal(o)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: encode "+rowfs.RepoMetaPath, err)
+	}
+	doc, err := canon.Document(raw)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: encode "+rowfs.RepoMetaPath, err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, doc, repoMetaMode); err != nil {
+		return errs.Wrap(errs.Internal, "wire: write "+rowfs.RepoMetaPath, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return errs.Wrap(errs.Internal, "wire: write "+rowfs.RepoMetaPath, errors.Join(err, os.Remove(tmp)))
+	}
+	return nil
+}
+
+// readMetaObject reads the checkout's _meta.json as a JSON object (key →
+// raw value) and its path. A missing file is E_NOT_FOUND; a symlink or
+// other non-regular file is refused (P2-LINT: lore never writes through a
+// link it did not make).
+func readMetaObject(top string) (map[string]json.RawMessage, string, error) {
+	path := filepath.Clean(filepath.Join(top, filepath.FromSlash(rowfs.RepoMetaPath)))
+	fi, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, "", errs.New(errs.NotFound, "wire: "+rowfs.RepoMetaPath+" does not exist").WithHint("run `lore init` in the repository first")
+	}
+	if err != nil {
+		return nil, "", errs.Wrap(errs.Internal, "wire: read "+rowfs.RepoMetaPath, err)
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, "", errs.New(errs.InvalidInput, "wire: "+rowfs.RepoMetaPath+" is not a regular file")
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", errs.Wrap(errs.Internal, "wire: read "+rowfs.RepoMetaPath, err)
+	}
+	o := map[string]json.RawMessage{}
+	if err := json.Unmarshal(b, &o); err != nil {
+		return nil, "", errs.Wrap(errs.InvalidInput, "wire: "+rowfs.RepoMetaPath+" is not a JSON object", err)
+	}
+	return o, path, nil
+}
+
+var _ opsinfra.RepoProjectWriter = (*App)(nil)

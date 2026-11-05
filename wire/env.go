@@ -189,6 +189,17 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	case 1:
 		return ids.As[ids.Project](rows[0].ID)
 	}
+	// FA-AGENT-10: a `repo fork --new-project` clone holds its upstream's
+	// project row too; _meta.json's project_id names the checkout's own.
+	if top, terr := a.knownRepoTop(ctx); terr == nil {
+		if pid, ok := repoMetaProjectID(top); ok {
+			for _, r := range rows {
+				if r.ID.String() == pid {
+					return ids.As[ids.Project](r.ID)
+				}
+			}
+		}
+	}
 	if a.opts.ProjectHint != nil {
 		if hint, ok := a.opts.ProjectHint(ctx); ok {
 			for _, r := range rows {
