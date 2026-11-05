@@ -16,6 +16,11 @@
 // (XQ3: without a terminal it needs --yes, else E_NEEDS_CONFIRM).
 // Internal fields need no masking here: they are never written into a
 // client repo (the leak guard), and a client repo's lens holds nothing else.
+//
+// Client repos (CFG4, META 3.16 step 5): the lens holds the repo's cache
+// plus the stores marked visibility: shareable; --internal adds the
+// internal stores, and the output names them (RunOut.Internal and a note
+// under the table) so their rows read as internal (FA-META-1).
 package sql
 
 import (
@@ -54,6 +59,9 @@ const showSensitiveField = "show_sensitive"
 type Result struct {
 	Columns []string
 	Rows    [][]value.Value
+	// Internal names the internal stores the lens attached only because of
+	// --internal in a client repo (CFG4); empty otherwise.
+	Internal []string
 }
 
 // Request is one query as sql.run hands it to Env.
@@ -63,6 +71,9 @@ type Request struct {
 	// Timeout bounds the statement itself, not the lens open (the refresh
 	// before it can fetch); always > 0 here (DefaultTimeout when unset).
 	Timeout time.Duration
+	// Internal also attaches the internal stores in a client repo (CFG4);
+	// in an own repo every store is attached already.
+	Internal bool
 }
 
 // Env is what sql.run needs; *wire.App implements it.
@@ -96,6 +107,7 @@ type RunIn struct {
 	ShowSensitive bool          `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
 	Format        string        `json:"format,omitempty" flag:"format" desc:"table (default), csv or json (an array of row objects)"`
 	Timeout       time.Duration `json:"timeout,omitempty" flag:"timeout" desc:"stop the statement after this long (default 10s); past it E_SQL_TIMEOUT"`
+	Internal      bool          `json:"internal,omitempty" flag:"internal" desc:"in a client repo, also read the internal stores (their rows are internal: never copy them into the repo)"`
 }
 
 // RunOut is the output of sql.run (--json and REST): column names, rows
@@ -110,6 +122,9 @@ type RunOut struct {
 	Columns []string `json:"columns"`
 	Rows    []Row    `json:"rows"`
 	Count   int      `json:"count"`
+	// Internal lists the internal stores read only because of --internal in
+	// a client repo; their rows are internal (CFG4).
+	Internal []string `json:"internal,omitempty"`
 	// Format is RunIn.Format for Text; not part of the --json shape.
 	Format string `json:"-"`
 }
@@ -180,7 +195,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
-	res, err := env.SQL(ctx, Request{Query: q, ShowSensitive: in.ShowSensitive, Timeout: timeout})
+	res, err := env.SQL(ctx, Request{Query: q, ShowSensitive: in.ShowSensitive, Timeout: timeout, Internal: in.Internal})
 	if err != nil {
 		return RunOut{}, err
 	}
@@ -196,7 +211,17 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if cols == nil {
 		cols = []string{}
 	}
-	return RunOut{Columns: cols, Rows: rows, Count: len(rows), Format: format}, nil
+	return RunOut{Columns: cols, Rows: rows, Count: len(rows), Internal: res.Internal, Format: format}, nil
+}
+
+// internalNote is the line under the table of a query that read internal stores
+// (CFG4: the output marks their rows internal).
+func (o RunOut) internalNote() string {
+	if len(o.Internal) == 0 {
+		return ""
+	}
+	return "note: internal stores read (--internal): " + strings.Join(o.Internal, ", ") +
+		"; rows with these sources are internal, never copy them into this client repo\n"
 }
 
 // Human-form constants.
@@ -228,6 +253,11 @@ func (o RunOut) Text() string {
 	case FormatJSON:
 		return o.jsonText()
 	}
+	return o.tableText() + o.internalNote()
+}
+
+// tableText is the aligned table of Text.
+func (o RunOut) tableText() string {
 	if len(o.Rows) == 0 {
 		return strings.Join(o.Columns, colGap) + "\n" + noRows + "\n"
 	}

@@ -19,67 +19,132 @@ import (
 // the repo's own file plus the one combined file whose rows carry their own
 // source (CFG3, O10). The caller closes it.
 //
-// Client repos (MQ6, CFG6): when the repo store is client-class, the lens
-// attaches ONLY the repo's own cache, never a store's data. The engine's
-// answer already fails closed (no RepoIsClient hook, or the check failed,
-// counts as client: see repoIsClient), so an unknown answer also gets the
-// repo-only lens.
+// Client repos (MQ6, CFG4, CFG6): when the repo store is client-class, the
+// lens attaches the repo's own cache plus the stores marked visibility:
+// shareable; internal stores join only with internal (`lore sql
+// --internal`). The engine's answer already fails closed (no RepoIsClient
+// hook, or the check failed, counts as client: see repoIsClient), so an
+// unknown answer gets the client lens. Past MaxStoreCaches a client lens
+// without --internal stays repo-only (the combined file mixes every store,
+// FA-META-1).
 //
 // Invariant: the lens reads the files the engine refreshed at open, through
 // its own read-only connection (mode=ro, query_only); nothing it runs can
 // change a cache.
 func (a *App) Lens(ctx context.Context, o sqlite.LensOptions) (*sqlite.Lens, error) {
+	l, _, err := a.lensFor(ctx, o, false)
+	return l, err
+}
+
+// lensFor is Lens with the client repo's --internal choice; it also
+// returns the internal stores attached only because of internal.
+func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool) (*sqlite.Lens, []string, error) {
 	st, err := a.state(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	srcs, err := a.lensSources(st)
+	srcs, extra, err := a.lensSources(ctx, st, internal)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	o.Trash = trashIn(o.Trash, srcs, st.eng.Stores())
 	if o.Expand == nil {
 		// lore_expand(text): var/res/row filled from the row files, never env,
 		// secrets or sensitive values (SQ4, SQ15); client repos see only their own (MQ6).
 		o.Expand = refs.Expander{Resolver: newResolver(st)}
 	}
-	return sqlite.OpenLensWith(ctx, srcs, o)
+	l, err := sqlite.OpenLensWith(ctx, srcs, o)
+	return l, extra, err
 }
 
 // lensSources lists the cache files of st's lens, the repo first (the
-// nearer store wins an unqualified name, as everywhere else).
-func (a *App) lensSources(st *state) ([]sqlite.LensSource, error) {
+// nearer store wins an unqualified name, as everywhere else), and the
+// internal stores a client repo attached only because of internal:
+//
+//	own repo ─▶ every store (or the combined file)
+//	client   ─▶ repo + shareable stores; + internal stores with internal (CFG4)
+//	client, combined ─▶ repo only; + the combined file with internal
+func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqlite.LensSource, []string, error) {
 	repo := sqlite.LensSource{
 		Name: string(store.SourceRepo),
 		Path: filepath.Join(st.repoTop, filepath.FromSlash(RepoCacheFile)),
 	}
 	srcs := []sqlite.LensSource{repo}
-	if st.eng.IsClient(store.SourceRepo) {
-		return srcs, nil
+	client := st.eng.IsClient(store.SourceRepo)
+	shareable := map[store.Source]bool{}
+	if client {
+		sh, err := a.ShareableStores(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, n := range sh {
+			shareable[n] = true
+		}
 	}
+	var extra []string
 	st.caches.mu.Lock()
 	combined := st.caches.combined != nil
 	st.caches.mu.Unlock()
 	if combined {
+		if client && !internal {
+			return srcs, nil, nil // the combined file mixes internal stores in (fail closed)
+		}
 		path, err := combinedCachePath(a.opts.Home, st.repoTop)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return append(srcs, sqlite.LensSource{Name: combinedLensName, Path: path, Combined: true}), nil
+		if client {
+			for _, name := range st.eng.Stores() {
+				if name != store.SourceRepo && !shareable[name] {
+					extra = append(extra, string(name))
+				}
+			}
+		}
+		return append(srcs, sqlite.LensSource{Name: combinedLensName, Path: path, Combined: true}), extra, nil
 	}
 	for _, name := range st.eng.Stores() {
 		if name == store.SourceRepo {
 			continue
+		}
+		if client && !shareable[name] {
+			if !internal {
+				continue // CFG4: an internal store stays out of a client repo's lens
+			}
+			extra = append(extra, string(name))
 		}
 		path, err := cachePath(a.opts.Home, attach.Opened{
 			Attached: engine.Attached{Name: name, Backend: st.byName[name]},
 			Folder:   st.folders[name],
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		srcs = append(srcs, sqlite.LensSource{Name: string(name), Path: path})
 	}
-	return srcs, nil
+	return srcs, extra, nil
+}
+
+// trashIn keeps the trash rows of the stores the lens attached, so a client
+// repo's `trash` view never lists an internal store's titles (CFG4). A
+// combined source stands for every attached store.
+func trashIn(rows []sqlite.TrashRow, srcs []sqlite.LensSource, all []store.Source) []sqlite.TrashRow {
+	keep := map[string]bool{}
+	for _, s := range srcs {
+		if s.Combined {
+			for _, n := range all {
+				keep[string(n)] = true
+			}
+			continue
+		}
+		keep[s.Name] = true
+	}
+	out := rows[:0:0]
+	for _, r := range rows {
+		if keep[r.Source] {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // combinedLensName labels the combined cache file in a lens; it never
@@ -95,7 +160,7 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 	if err != nil {
 		return opssql.Result{}, err
 	}
-	l, err := a.Lens(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows})
+	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows}, r.Internal)
 	if err != nil {
 		return opssql.Result{}, err
 	}
@@ -106,5 +171,5 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 	if qerr != nil {
 		return opssql.Result{}, qerr
 	}
-	return opssql.Result{Columns: res.Columns, Rows: res.Rows}, nil
+	return opssql.Result{Columns: res.Columns, Rows: res.Rows, Internal: extra}, nil
 }
