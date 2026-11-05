@@ -557,13 +557,18 @@ func (o ops) templateAdd(ctx context.Context, in TemplateAddIn) (TemplateOut, er
 	if err = checkTemplate(f, maxDepth); err != nil {
 		return TemplateOut{}, err
 	}
-	all, err := work.ListAll(ctx, o.env, tplTable, in.To)
+	// PC-TASK-2 (RQ10): a name any attached store already holds is
+	// refused, not only one in the target store, so add never makes a name
+	// ambiguous; two stores can still meet through a sync, and
+	// findTemplate refuses that case naming both.
+	all, err := work.ListAll(ctx, o.env, tplTable, "")
 	if err != nil {
 		return TemplateOut{}, err
 	}
 	for _, s := range all {
 		if !s.Row.Deleted && work.Field(s.Row, schema.FieldTemplateName) == f.Name {
-			return TemplateOut{}, tplErr(strconv.Quote(f.Name) + " already exists (" + s.Row.ID.String() + ")").WithHint("lore task template edit " + f.Name + " --from-file <file.yaml>")
+			return TemplateOut{}, tplErr(strconv.Quote(f.Name) + " already exists (" + s.Row.ID.String() + " in " +
+				orDefault(work.SourceName(s.Source), "repo") + ")").WithHint("lore task template edit " + s.Row.ID.String() + " --from-file <file.yaml>")
 		}
 	}
 	fields, err := templateFields(f)
