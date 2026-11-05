@@ -182,7 +182,7 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpDeferred, Summary: "Show deferred tasks (snoozed; deferred_until in the future)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.deferred),
-	}, slices.Concat(timeOps(o), recurOps(o), templateOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o), historyOps(o), exportOps(o), viewOps(o), taskViewOps(o))...)
+	}, slices.Concat(timeOps(o), recurOps(o), templateOps(o), checklistOps(o), watchOps(o), relateOps(o), triageOps(o), historyOps(o), exportOps(o), viewOps(o), taskViewOps(o), treeCheckOps(o))...)
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
