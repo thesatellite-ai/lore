@@ -8,6 +8,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/logic/merge3"
+	lorerow "github.com/thesatellite-ai/lore/model/row"
 )
 
 // BlockKey is the key of the `_live` block inside a live file (§3.3). Lore
@@ -176,12 +177,59 @@ func (b Block) toMap() canonjson.Object {
 	return m
 }
 
-// HasConflictMarkers reports whether any string field of the body carries
-// merge conflict markers (a text clash, F4).
+// HasConflictMarkers reports whether the body holds an unsettled conflict
+// (F4): merge conflict markers in any string at any depth (a text clash,
+// including one inside a meta entry or an object value), or a structured
+// meta conflict entry {"conflict": {base, ours, theirs}} (METADATA 3.12:
+// every conflict scanner recurses into meta, so ShouldLand never lands it).
 func (f File) HasConflictMarkers() bool {
 	for _, v := range f.Body {
-		if s, ok := v.AsString(); ok && merge3.ContainsConflictMarkers(s) {
+		if valueHasMarkers(v) {
 			return true
+		}
+	}
+	return metaHasConflictEntry(f.Body[lorerow.KeyMeta])
+}
+
+// metaConflict is the member a strict meta clash writes into an entry
+// (logic/merge entryConflict, unexported there; METADATA 3.12 shape).
+const metaConflict = "conflict"
+
+// valueHasMarkers walks v and reports a string holding a conflict block.
+func valueHasMarkers(v canonjson.Value) bool {
+	if s, ok := v.AsString(); ok {
+		return merge3.ContainsConflictMarkers(s)
+	}
+	if arr, ok := v.AsArray(); ok {
+		for _, it := range arr {
+			if valueHasMarkers(it) {
+				return true
+			}
+		}
+		return false
+	}
+	if obj, ok := v.AsObject(); ok {
+		for k, it := range obj {
+			if merge3.ContainsConflictMarkers(k) || valueHasMarkers(it) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// metaHasConflictEntry reports a meta object with an entry holding a
+// structured conflict (a strict key both sides changed, 3.12).
+func metaHasConflictEntry(meta canonjson.Value) bool {
+	entries, ok := meta.AsObject()
+	if !ok {
+		return false
+	}
+	for _, e := range entries {
+		if obj, ok := e.AsObject(); ok {
+			if _, has := obj[metaConflict]; has {
+				return true
+			}
 		}
 	}
 	return false
