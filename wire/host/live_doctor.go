@@ -11,14 +11,21 @@ package host
 //	note:    last fetch, writes not pushed, rows only in live, rows waiting
 //	         to land (and why: a protected default branch rides on the push)
 //
-// Not ported: the fetch refspec check, the hook block check, the shallow
-// clone warning and the compaction count.
+//	warning: an unsafe fetch refspec into refs/lore/*, missing post-commit /
+//	         pre-push blocks, a shallow clone
+//	note:    the tracking refspec, the hook blocks, the live ref's commits
+//	         since the last compaction
 
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 )
@@ -57,6 +64,17 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		}
 	}
 	note := func(msg string) { base.Notes = append(base.Notes, liveDoctorPrefix+msg) }
+	if s.ref.Remote != nil {
+		st, rerr := gitremote.EnsureTrackingRefspec(ctx, s.repo, s.ref.RemoteName)
+		switch {
+		case rerr != nil:
+			warn("cannot check the fetch refspec: " + rerr.Error())
+		case len(st.Unsafe) > 0:
+			warn("a fetch refspec writes straight into refs/lore/* and can overwrite unpushed live writes on a plain git fetch: " + strings.Join(st.Unsafe, ", ") + " (remove it; lore uses refs/lore-remote/)")
+		default:
+			note("tracking refspec installed, not forced into refs/lore/*")
+		}
+	}
 	if why := s.noteText(liveNoteRefused); why != "" {
 		warn("the remote refused a push to refs/lore/live, so live rows stay on this machine (the host may allow only branches and tags): " + why)
 	}
@@ -113,5 +131,34 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 	if conflicts > 0 {
 		warn(fmt.Sprintf("%d live row(s) carry conflict markers and cannot land (`lore sync conflicts`)", conflicts))
 	}
+	if n, cerr := s.ref.CommitCount(ctx); cerr == nil && n > 0 {
+		_, tree, _ := s.ref.LocalTree(ctx) // display only: an unreadable tree shows epoch 0
+		note(fmt.Sprintf("live ref: %d commit(s) since the last compaction (epoch %d; automatic past %d)", n, tree.Epoch(), s.cfg.CompactAfter))
+	}
+	s.doctorHooks(ctx, branch, warn, note)
+	if out, serr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--is-shallow-repository"}}); serr == nil && strings.TrimSpace(string(out)) == "true" {
+		warn("shallow clone: landing and merged checks need the default branch's history")
+	}
 	return base, nil
+}
+
+// doctorHooks checks that the ride-along blocks are in the hook folder git
+// uses (lore installs them on its next command in the project).
+func (s *liveSession) doctorHooks(ctx context.Context, branch string, warn, note func(string)) {
+	dir, err := s.hooksDir(ctx)
+	if err != nil {
+		return
+	}
+	var missing []string
+	for _, h := range []string{hookPostCommit, hookPrePush} {
+		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, h)))
+		if rerr != nil || !strings.Contains(string(b), rideHookMarker) {
+			missing = append(missing, h)
+		}
+	}
+	if len(missing) > 0 {
+		warn("git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + "); run any lore command (such as `lore sync`) to install it")
+		return
+	}
+	note("post-commit and pre-push hook blocks installed")
 }
