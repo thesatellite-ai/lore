@@ -710,6 +710,10 @@ func metaSearchTerms(ctx context.Context, query string) ([]metaquery.Term, strin
 	for _, q := range []string{
 		`SELECT key_name, MAX(COALESCE(sensitive, 0)) FROM row_meta_all WHERE item_idx = -1 GROUP BY key_name`,
 		`SELECT name, MAX(COALESCE(sensitive, 0)) FROM meta_keys_all GROUP BY name`,
+		// METADATA 3.20: by key id too, so a row label that still carries
+		// an old name (renamed key, labels refresh on the next write) of a
+		// registry-sensitive key is sensitive as well
+		`SELECT r.key_name, 1 FROM row_meta_all r JOIN meta_keys_all k ON k.id = r.key_id WHERE r.item_idx = -1 AND COALESCE(k.sensitive, 0) <> 0 GROUP BY r.key_name`,
 	} {
 		res, err := coreApp.SQL(ctx, opssql.Request{Query: q, Timeout: opssql.DefaultTimeout})
 		if err != nil {

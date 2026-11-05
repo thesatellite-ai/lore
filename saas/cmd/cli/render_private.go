@@ -581,7 +581,12 @@ var privateExpandFields = []string{renderFieldTitle, renderFieldBody, privateFie
 
 // privateExpander fills references for the private render (refpoint
 // Private point).
-type privateExpander struct{ opt refpoint.Options }
+type privateExpander struct {
+	opt refpoint.Options
+	// keys is the registry's sensitive flag by key id (METADATA 3.20: a
+	// ${meta:…} value is masked when its entry OR the registry says so)
+	keys refpoint.KeyFlags
+}
 
 // newPrivateExpander builds the private point: resolver and scanner from
 // the App, Locate marking personal-store targets (kept, BATCH 16).
@@ -602,7 +607,11 @@ func newPrivateExpander(ctx context.Context) (*privateExpander, error) {
 		class, err := coreApp.StoreClass(ctx, src)
 		return refpoint.Target{Personal: err != nil || class == direction.Personal, Reaches: true}
 	}
-	return &privateExpander{opt: opt}, nil
+	keys, err := coreApp.MetaKeyFlags(ctx)
+	if err != nil {
+		return nil, coreErr(err)
+	}
+	return &privateExpander{opt: opt, keys: keys}, nil
 }
 
 // row returns r with its printed text fields expanded (a copy; the row
@@ -615,7 +624,7 @@ func (e *privateExpander) row(r row.Row) (row.Row, error) {
 			continue
 		}
 		opt := e.opt
-		opt.Meta = refpoint.MetaOf(r) // ${meta:…}: the row's own metadata (OV13a)
+		opt.Meta = refpoint.MetaOfWith(r, e.keys) // ${meta:…}: the row's own metadata (OV13a), registry-masked (3.20)
 		res, err := refpoint.Expand(opt, r.ID.String()+" "+f, txt)
 		if err != nil {
 			return r, coreErr(err)
