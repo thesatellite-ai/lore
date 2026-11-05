@@ -79,6 +79,10 @@ const (
 	// ResourceStale refuses a write that needs store kind rows that are not
 	// available (store unreachable / never synced; RES 3.6).
 	ResourceStale Code = "E_RESOURCE_STALE"
+	// ResourceInternal: an internal resource field written/moved into a client repo (RES 3.19).
+	ResourceInternal Code = "E_RESOURCE_INTERNAL"
+	// ResourceQuarantined: move of a resource with quarantined values (RES 3.19).
+	ResourceQuarantined Code = "E_RESOURCE_QUARANTINED"
 	// NameTaken refuses a create or rename onto a name a live settings row
 	// of that place already uses (a var, a kind, a resource).
 	NameTaken Code = "E_NAME_TAKEN"
@@ -259,6 +263,8 @@ var table = map[Code]entry{
 	ResourceInUse:         {class: ClassRefused, desc: "a kind field or value is still used by resources"},
 	KindConflict:          {class: ClassDefinition, desc: "a kind definition clashes with another level's definition"},
 	ResourceStale:         {class: ClassDefinition, desc: "store kind rows needed for this write are not available; run lore sync or write with --to repo"},
+	ResourceInternal:      {class: ClassGuard, desc: "an internal resource field would be written in a client repo; write it in the store or an own repo, or move with --drop-internal"},
+	ResourceQuarantined:   {class: ClassRefused, desc: "the resource has quarantined values; fix them before moving it"},
 	NameTaken:             {class: ClassRefused, desc: "that name is already used by a live row in this place"},
 	MetaTaken:             {class: ClassRefused, desc: "that metadata key or value name is already taken in this place"},
 	NoWork:                {class: ClassCoordination, exit: 10, desc: "no ready task"},
