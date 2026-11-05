@@ -222,6 +222,28 @@ func expandable(def schema.TableDef, k string, v value.Value) (string, bool) {
 // masks every ${secret:…}); NUL bytes never occur in stored text.
 func placeholder(i int) string { return "\x00lore-reveal-" + strconv.Itoa(i) + "\x00" }
 
+// keyFlags is the key registry's sensitive flag by key id, for ${meta:…}
+// (METADATA 3.20 "one masker": entry label OR registry). A key row that
+// does not exist leaves the entry label to decide; any other lookup error
+// masks (fail closed: a value that cannot be cleared is not printed).
+func keyFlags(ctx context.Context, env Env) refpoint.KeyFlags {
+	return refpoint.KeyFlagsFunc(func(id string) bool {
+		kid, err := ids.Parse[ids.MetaKey](id)
+		if err != nil {
+			return true
+		}
+		_, k, err := env.Get(ctx, engine.Ref{Table: schema.TableMetaKeys, ID: kid.Any()})
+		if errs.Has(err, errs.NotFound) {
+			return false
+		}
+		if err != nil {
+			return true
+		}
+		b, ok := k.Fields["sensitive"].(value.Bool)
+		return ok && b.Bool()
+	})
+}
+
 // expandRow is --expand of r; revealed maps a secret reference's raw text
 // to its revealed value (nil: nothing revealed, every secret masked).
 func expandRow(ctx context.Context, env Env, r row.Row, revealed map[string]reveal.One) (Block, error) {
@@ -239,7 +261,7 @@ func expandRow(ctx context.Context, env Env, r row.Row, revealed map[string]reve
 	}
 	def, _ := env.TableSchema(ctx, r.Table)
 	opt := refpoint.Options{Point: refpoint.Show, Resolver: rv, Scanner: sc, Env: os.LookupEnv,
-		Meta: refpoint.MetaOf(r)} // ${meta:…}: the row's own metadata (OV13a)
+		Meta: refpoint.MetaOfWith(r, keyFlags(ctx, env))} // ${meta:…}: the row's own metadata (OV13a), registry-masked (3.20)
 	order := slices.Sorted(maps.Keys(revealed))
 	for _, k := range slices.Sorted(maps.Keys(r.Fields)) {
 		stored, ok := expandable(def, k, r.Fields[k])
