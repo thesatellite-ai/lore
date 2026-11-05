@@ -168,6 +168,14 @@ func (a *App) RosterRegister(ctx context.Context, target store.Source, sp Roster
 		fields[rosterFieldOwner] = ref
 	}
 	fields[rosterFieldActive] = value.BoolOf(true)
+	if target != store.SourceRepo {
+		// The org folder's first roster write also gives the folder its
+		// project row (v0.1.17 ensureProjectRow): the row every clone
+		// agrees on, named by _meta.json (see rosterProject).
+		if _, perr := a.rosterProject(ctx, st, target, rosterFolderName(target)); perr != nil {
+			return "", false, perr
+		}
+	}
 	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: aid.Any()}
 	_, cur, gerr := st.eng.Get(ctx, ref)
 	switch {
@@ -273,19 +281,39 @@ func (a *App) RosterTeamPut(ctx context.Context, target store.Source, folder, ha
 	return w.Row.ID.String(), true, nil
 }
 
-// rosterProject is the ref to target's project row (see RosterTeamPut).
+// rosterProject is the ref to target's project row (see RosterTeamPut),
+// creating it when the folder has none.
+//
+// The row's id is the folder's _meta.json project_id (rowfs
+// Folder.ProjectID: the shared copy's, else the natural id of store and
+// folder, recorded by the folder's first write). So two clones that create
+// the same folder seconds apart, neither seeing the other's push, write the
+// same project row file, which merges, instead of two rows under random ids
+// (one per racing creator) that made every later @handle command
+// E_AMBIGUOUS_PROJECT. A folder an older lore left with extra project rows
+// resolves to the one _meta.json names. A backend with no folder identity
+// (the store root, a test backend) keeps the first live row, else a new
+// one under the engine's id.
 func (a *App) rosterProject(ctx context.Context, st *state, target store.Source, folder string) (value.Ref, error) {
+	pid, err := folderProjectIDOf(ctx, st, target)
+	if err != nil {
+		return value.Ref{}, err
+	}
 	rows, err := st.eng.List(ctx, target, schema.TableProjects)
 	if err != nil {
 		return value.Ref{}, err
 	}
 	var live []row.Row
 	for _, r := range rows {
-		if !r.Deleted {
-			live = append(live, r)
+		if r.Deleted {
+			continue
 		}
+		if !pid.IsZero() && r.ID == pid.Any() {
+			return value.RefOf(r.ID)
+		}
+		live = append(live, r)
 	}
-	if len(live) > 0 {
+	if pid.IsZero() && len(live) > 0 {
 		slices.SortFunc(live, func(x, y row.Row) int { return strings.Compare(x.ID.String(), y.ID.String()) })
 		return value.RefOf(live[0].ID)
 	}
@@ -293,12 +321,42 @@ func (a *App) rosterProject(ctx context.Context, st *state, target store.Source,
 	if err != nil {
 		return value.Ref{}, errs.Wrap(errs.InvalidInput, "roster: the folder name is not valid text", err)
 	}
-	w, err := st.eng.Create(ctx, target, schema.TableProjects, map[string]value.Value{rosterFieldName: n})
+	fields := map[string]value.Value{rosterFieldName: n}
+	var w engine.Written
+	if pid.IsZero() {
+		w, err = st.eng.Create(ctx, target, schema.TableProjects, fields)
+	} else {
+		w, err = st.eng.CreateWithID(ctx, target, schema.TableProjects, pid.Any(), fields)
+	}
 	a.wrote(err)
 	if err != nil {
 		return value.Ref{}, err
 	}
 	return value.RefOf(w.Row.ID)
+}
+
+// folderProjectIDOf is target's folder project id (_meta.json project_id,
+// or the id its first write records); zero when the backend has no folder
+// identity.
+func folderProjectIDOf(ctx context.Context, st *state, target store.Source) (ids.ID[ids.Project], error) {
+	fb, ok := concrete(st.byName[target]).(folderIDOf)
+	if !ok {
+		return ids.ID[ids.Project]{}, nil
+	}
+	pid, err := fb.FolderProjectID(ctx)
+	if err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	return pid, nil
+}
+
+// rosterFolderName is the folder part of a "<store>/<folder>" target, the
+// name the folder's project row carries.
+func rosterFolderName(target store.Source) string {
+	if _, f, ok := strings.Cut(string(target), targetSep); ok {
+		return f
+	}
+	return string(target)
 }
 
 // textFields turns the non-empty strings of vals into Text values.
