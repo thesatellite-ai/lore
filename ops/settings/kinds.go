@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -441,7 +442,11 @@ func (o ops) patchRow(ctx context.Context, l located, patch map[string]value.Val
 	if err != nil {
 		return RowOut{}, err
 	}
-	return RowOut{ID: w.Row.ID.String(), Store: string(l.Src), Human: fmt.Sprintf("✓ %s (%s)\n", what, short(w.Row.ID))}, nil
+	human := fmt.Sprintf("✓ %s (%s)\n", what, short(w.Row.ID))
+	for _, x := range w.Warnings { // OV10: --meta notes like meta set
+		human += metalist.NoteLine(string(x.Code), x.Message)
+	}
+	return RowOut{ID: w.Row.ID.String(), Store: string(l.Src), Human: human}, nil
 }
 
 func (o ops) kindView(ctx context.Context, k located) (Kind, error) {
