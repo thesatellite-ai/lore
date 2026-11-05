@@ -53,7 +53,8 @@ func decode(t *testing.T, h *opstest.H, name, in string, v any) {
 // rows and notes per folder and flags no file before a render; move
 // relabels the folder and the folders under it with ids unchanged, and
 // refuses a move into itself, an unknown folder, a taken target and a
-// target folder that does not exist.
+// target folder that does not exist; after a move the old path can be
+// scoped again and gets a new folder row.
 func TestScopeOps(t *testing.T) {
 	h := scopeHarness(t, "src/booking/payments", "src/billing", "web")
 	add := func(name, in string) string {
@@ -155,5 +156,23 @@ func TestScopeOps(t *testing.T) {
 	}
 	if got := contenttest.Str(t, h.JSON(h.Must("rule.show", `{"id":"`+rOuter+`"}`)), "data", "scope_id"); got != ids["src/booking"] {
 		t.Fatalf("rule scope after move %q, want the same scp_ id", got)
+	}
+
+	// The old path again after the move (later:472, engine 0f504de): a new
+	// scope row with a fresh id, not the moved one; a second write to the
+	// same path re-uses that new row.
+	again := add("rule.add", `{"body":"back at booking","severity":"must","scope":"dir:src/booking"}`)
+	scp := contenttest.Str(t, h.JSON(h.Must("rule.show", `{"id":"`+again+`"}`)), "data", "scope_id")
+	if scp == "" || scp == ids["src/booking"] {
+		t.Fatalf("re-created scope %q (moved row %q)", scp, ids["src/booking"])
+	}
+	twice := add("rule.add", `{"body":"booking again","severity":"must","scope":"dir:src/booking"}`)
+	if got := contenttest.Str(t, h.JSON(h.Must("rule.show", `{"id":"`+twice+`"}`)), "data", "scope_id"); got != scp {
+		t.Fatalf("second write scope %q, want %q", got, scp)
+	}
+	list = scope.ListOut{}
+	decode(t, h, "scope.list", `{}`, &list)
+	if len(list.Data) != 4 {
+		t.Fatalf("after re-create: %+v", list.Data)
 	}
 }
