@@ -91,7 +91,7 @@ These matter when you work for an org in client repos. A **store** is a separate
 | `--body <text>` | the row's text |
 | `--created-by <actor id>` | who wrote it (an `act_` id); defaults to you |
 | `--supersedes <id>` | on `rule`, `memory`, `decision`, `hotfix` and `pattern add`: the older row this one replaces. Rows linked by older versions point the wrong way; `lore doctor --fix` repairs them once |
-| `--yes` on a secret warning | on `rule add`, `memory add` and the other `add`/`edit` commands: store the text as not a secret even though it looks like it holds a password or key (the commit hook still refuses a file with a credential pattern) |
+| `--not-a-secret --reason "<why>" --yes` | on `rule add`, `memory add` and the other `add`/`edit` commands: store the text as not a secret even though it looks like it holds a password or key. A bare `--yes` is not enough; the other two answers are `--secret-ref "<manager>://<entry>"` (store a reference instead of the value) and `--secret-unstored` (store a placeholder). See [When a write looks like it holds a secret](errors.md#when-a-write-looks-like-it-holds-a-secret). The commit hook still refuses a file with a credential pattern |
 
 ## Pitfalls
 

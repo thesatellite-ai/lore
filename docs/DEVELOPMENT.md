@@ -29,6 +29,15 @@ This is a Go **workspace** (`go.work`) stitching local modules:
 | `lace/db` | pure-Go SQLite open/registration |
 | `github.com/khanakia/entx/enttui` | TUI engine (resolved from the module proxy) |
 
+## Engine notes (0.1.18 core)
+
+Every row write in the core goes through one path in `engine/`: scan, validate, policy, backend, cache, audit. Two context helpers in `engine/batch.go` change how a group of writes lands; an operation that writes many rows as one action uses them instead of its own loop of commits.
+
+| Helper | What it does | Who uses it |
+|---|---|---|
+| `engine.Staging(ctx)` then `engine.Commit(ctx)` | Every engine write made with the staged `ctx` is held, not written. `Commit` writes all of them as one backend batch (one git commit on a git store), then refreshes the cache and records the audit. All or none: a failed write leaves the store as it was. A stage that touches two stores is refused with `E_INVALID_INPUT` and nothing written. A second write of the same row inside one stage is `E_INVALID_INPUT` (the stage cannot read its own rows back); a repeated create of the same row (an actor row two writes both ensure) is dropped. After `Commit` the stage is closed: a later write with the same `ctx` goes straight to the store. | `lore resource import` (FB-RES-1): the whole file is one batch, one commit |
+| `engine.WithCreateID(ctx, id)` | The next `Create` of a row of `id`'s table made with `ctx` uses `id` instead of a fresh one. It runs through the ordinary `Create` path, so every guard a surface adds around `Create` still runs; creates of other tables (an actor row the write ensures) are not affected; the row must not exist yet (`E_STALE`). | `lore resource import`: each new row's id is pinned first, so references between rows of the same file resolve before any row is written (no second pass) |
+
 `vendor/` is **not** committed; `go.sum` is. A fresh clone builds from the module proxy. The build is pure-Go: `CGO_ENABLED=0`, `modernc.org/sqlite` (FTS5 is built in — no build tag).
 
 ## Build

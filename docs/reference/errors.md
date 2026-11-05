@@ -35,7 +35,7 @@ The [full list](#the-full-list) below links every code with its exit status.
 | Exit status | Meaning |
 |---|---|
 | 0 | the command worked |
-| 1 | something unexpected failed: `E_INTERNAL`, or an error that carries no code (for example a mistyped flag) |
+| 1 | something unexpected failed: `E_INTERNAL` |
 | 10 | `E_NO_WORK`: `lore task next` found nothing ready to do |
 | 11 | `E_CONTENDED`: there was work, but another agent claimed it first every time; wait a moment and try again |
 | 12 | `E_LOST_CLAIM`: your claim on the task ran out or was taken back; stop working on it |
@@ -46,13 +46,13 @@ The [full list](#the-full-list) below links every code with its exit status.
 | 17 | `E_ORG_AMBIGUOUS` or `E_ORG_DISAGREES`: lore cannot tell which org this repo belongs to |
 | 18 | `E_LINK_UNKNOWN`: lore cannot tell whether this is a client repo |
 | 19 | a guard refused on purpose (`E_NOT_A_STORE`, `E_LEAK_BLOCKED`, `E_CYCLE`, `E_OLD_LORE`, …); read the message |
-| 20 | bad input: a value, flag combination or config lore cannot use (`E_INVALID_INPUT`, `E_CONFIG_INVALID`, …) |
+| 20 | bad input: a value, flag combination or config lore cannot use, including a mistyped flag or command (`E_INVALID_INPUT`, `E_CONFIG_INVALID`, …) |
 | 21 | a name matches more than one definition (`E_META_AMBIGUOUS`, `E_RESOURCE_AMBIGUOUS`) |
 | 22 | a kind or key definition is missing or out of date (`E_KIND_UNKNOWN`, `E_META_STALE`, …) |
 | 23 | lore refused in this state (`E_READ_ONLY`, `E_DB_CORRUPT`, `E_HAS_DEPENDENTS`, …) |
 | 24 | a migration is locked or would lose data (`E_MIGRATE_LOCKED`, `E_MIGRATE_ROLLBACK_LOSES`) |
 | 25 | an upgrade problem (`E_SCHEMA_OLD`, `E_UPGRADE_PINNED`, …) |
-| 26 | `E_NEEDS_CONFIRM`: ask the person, then run again with `--yes` (or `--confirm` where the command says so) |
+| 26 | `E_NEEDS_CONFIRM`: ask the person, then run again with `--yes` (or `--confirm` where the command says so); for a secret warning, with one of the choices it names ([below](#when-a-write-looks-like-it-holds-a-secret)) |
 | 27 | `E_NOT_FOUND`: no row, key or project with that name or id |
 
 These numbers are a promise: they are never renumbered, only added to. Two commands have their own statuses on top: `lore doctor` exits 0 when healthy, 1 when something needs attention and 2 when something is broken, and lore's git merge helper exits 1 when it leaves a conflict for a person to merge.
@@ -104,7 +104,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_SECRET_DETECTED` | 23 | the text looks like it holds a password or key, so lore will not store it | remove the secret; in 0.1.18 a write asks first instead (`E_NEEDS_CONFIRM`), and `--yes` stores it as not a secret when you are sure |
+| `E_SECRET_DETECTED` | 23 | the text looks like it holds a password or key, so lore will not store it | remove the secret; in 0.1.18 a write asks first instead (`E_NEEDS_CONFIRM`, [below](#when-a-write-looks-like-it-holds-a-secret)); a bare `--yes` is not enough: say `--not-a-secret --reason "<why>" --yes`, `--secret-ref` or `--secret-unstored` |
 | `E_ROOT_REFUSED` | 23 | lore will not run as the root user | run as your normal user, or set `LORE_ALLOW_ROOT=1` |
 | `E_SYMLINK_DB` | 23 | `.lore/lore.db` is a symbolic link (a shortcut to another file) | delete the link; the next lore command rebuilds the database from `.lore/data` |
 | `E_SYMLINK_LOOP` | 23 | a folder walk went round in a loop of links. Not raised yet | remove the looping link |
@@ -123,9 +123,9 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
 | `E_AUDIT_CHAIN_BROKEN` | 23 | `lore audit verify` found an audit entry that was edited or deleted | `lore audit log` shows the entries; `lore <kind> show <id>` the rows named |
-| `E_SYNC_DATA_IGNORED` | 23 | git ignores `.lore/data`, so teammates would never get your notes | remove the line that ignores it from `.gitignore` |
+| `E_SYNC_DATA_IGNORED` | 23 | `lore sync` found row files under `.lore/data` that git still ignores, so teammates would never get those notes; nothing was pushed | remove the line that ignores them from `.gitignore` |
 
-lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. A rule it cannot override, such as a `.gitignore` inside `.lore/data`, stops it with `E_SYNC_DATA_IGNORED`.
+lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. When a rule it cannot override, such as a `.gitignore` inside `.lore/data`, still hides row files, `lore sync` stops with `E_SYNC_DATA_IGNORED` (exit 23) and pushes nothing.
 
 ### General
 
@@ -177,6 +177,47 @@ ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in ag
 ```
 <!-- /example -->
 
+## When a write looks like it holds a secret
+
+With `secrets.on_detect: ask` (the default), a write whose text looks like it holds a password or key is not stored. lore answers `E_NEEDS_CONFIRM` (exit 26) and lists every match, one finding per matched value. Run your own command again with one of three choices:
+
+| Add to your command | What lore stores |
+|---|---|
+| `--secret-ref "<manager>://<entry>"` | a reference to where the value really lives, instead of the value |
+| `--secret-unstored` | a `${secret:unstored}` placeholder, instead of the value |
+| `--not-a-secret --reason "<why>" --yes` | the text as it is; the finding and your reason are saved as an allow entry (`lore secrets allow list`), so it is not reported again |
+
+A bare `--yes` never stores a detected secret: it answers `E_NEEDS_CONFIRM` again. On a terminal lore asks the same thing as a menu, one question per finding.
+
+With `--json`, the error carries the findings and the three choices as argument lists, so an agent can ask the person and then add the chosen flags to its own command. `findings[]` shows where each match is and which rule matched, never the value; `next.add_args_one_of` holds only the flags to add (there is no `command` or `args` key, because lore never repeats your text). The real output shows the first few characters of a match in `masked`; here they are replaced with `<redacted>`, and the JSON writes `<` and `>` as `\u003c` and `\u003e`:
+
+```json
+{
+  "error": {
+    "code": "E_NEEDS_CONFIRM",
+    "message": "engine: body looks like a secret (aws_access_key) at line 1: <redacted>: redact it with a reference, mark it unstored, mark it not a secret, or cancel?",
+    "hint": "re-run your own command with one of: --secret-ref \"<manager>://<entry>\" | --secret-unstored | --not-a-secret --reason \"<why>\" --yes",
+    "exit": 26,
+    "class": "needs_confirmation",
+    "retryable": true,
+    "needs_person": true,
+    "next": {
+      "add_args_one_of": [
+        ["--secret-ref", "<manager>://<entry>"],
+        ["--secret-unstored"],
+        ["--not-a-secret", "--reason", "<why>", "--yes"]
+      ]
+    },
+    "question": "body looks like a secret (aws_access_key) at line 1: <redacted>: redact it with a reference, mark it unstored, mark it not a secret, or cancel?",
+    "findings": [
+      {"n": 1, "rule": "aws_access_key", "field": "body", "line": 1, "masked": "<redacted>"}
+    ]
+  }
+}
+```
+
+`lore lint` reports the same kind of match in rows already stored as a `secret_found` finding.
+
 ## The full list
 
 Every code with its exit status, class and HTTP status is in the generated [command and error reference](cli-commands.md#errors), written by `lore spec docs` from the code, so it always matches the program.
@@ -184,7 +225,7 @@ Every code with its exit status, class and HTTP status is in the generated [comm
 ## Pitfalls
 
 - Match on the code, never on the message text. The message wording may change between versions; the code does not.
-- `--json` changes a command's normal output, not its errors: errors still print as text on stderr. A mistyped flag exits 1 with `ERROR: unknown flag` and no code:
+- With `--json`, an error prints as one JSON object with the code, exit status and class. A mistyped flag or command is `E_INVALID_INPUT` with exit status 20:
 
 <!-- example: reference#errors-with-json -->
 ```console

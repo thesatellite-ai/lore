@@ -126,7 +126,7 @@ lore copies your notes into `.lore/data`, the folder git commits, before and aft
 | `LORE_SYNC` | `0` turns sync off for this command or shell: lore uses only the local database, writes nothing to `.lore/data`, and live rows are off too |
 | `LORE_SYNC_GIT` | `0` keeps syncing the files but stops lore from running git setup by itself: no hooks, no `.gitattributes`, no git config |
 | `LORE_SYNC_QUIET` | `1` hides sync's progress lines; errors still print |
-| `LORE_SYNC_ALLOW_SECRETS` | kept for older scripts. A row you confirmed with `--yes` on a secret warning is already in `.lore/data`; lore's commit hook still refuses a file that holds a credential pattern |
+| `LORE_SYNC_ALLOW_SECRETS` | removed in 0.1.18 and ignored; `lore doctor` warns while it is still set. A row you confirmed with `--not-a-secret --reason "<why>" --yes` is already in `.lore/data`; lore's commit hook still refuses a file that holds a credential pattern |
 
 ## Live rows and the network
 

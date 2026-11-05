@@ -94,11 +94,11 @@ on bob work/website "lore memory list | grep -i invoice"
 local m_a m_b
 m_a=$(grep -o 'mem_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 1p)
 m_b=$(grep -o 'mem_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 2p)
-# Memories are core-owned rows (their files are the truth), so merge-rows refuses and
-# names the fix: keep one row, delete the other with its own command (a63c6f8).
-on! bob work/website "lore sync merge-rows memories --keep $m_a --drop $m_b"
-on bob work/website "lore memory delete $m_b --yes"
+# merge-rows folds the duplicate on the 0.1.18 core: references move to the kept row,
+# the dropped row goes to the trash in one batch.
+on bob work/website "lore sync merge-rows memories --keep $m_a --drop $m_b"
 on bob work/website "lore memory list"
+on bob work/website "lore trash list"
 on bob work/website "git add -A && git commit -qm 'lore: fold duplicate memory' && git push -q origin main"
 
 note "file and database conflict"
@@ -115,11 +115,8 @@ on alice work/website "git add -A && git commit -qm 'lore: whatsapp wording' && 
 note "trash"
 on alice work/website "git rm -q .lore/data/memories/$m_whatsapp.json"
 on alice work/website "lore memory list"
-on alice work/website "lore trash list --local"
-local t_no; t_no=$(grep -o '^#[0-9]*' <<<"$LAST_OUT" | head -1 | tr -d '#')
-# Core-owned rows come back from git, not from the trash: restore refuses and names
-# the git command (a63c6f8).
-on! alice work/website "lore trash restore $t_no --local"
+# A row file removed with git is not in lore's trash: the file is the truth, so the
+# row comes back from git (lore trash holds rows deleted with a lore command).
 on alice work/website "git checkout HEAD -- .lore/data/memories/$m_whatsapp.json"
 on alice work/website "lore memory list"
 on alice work/website "git add -A && git status --short"

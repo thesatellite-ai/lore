@@ -105,7 +105,6 @@ For shared notes (rules, memories, tasks and the other core notes) the file is t
 # alice, in website
 $ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_05e9…4603.json
 $ lore memory list
-lore sync: imported 1
 mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email or phone.
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ lore sync
@@ -115,11 +114,11 @@ $ lore sync conflicts
 ```
 <!-- /example -->
 
-A conflict between the file and `lore.db` can still happen for the few rows `lore.db` owns (for example project settings changed with sync turned off). The pass keeps one version, saves the other and says so; `lore sync conflicts` shows it, `lore sync resolve <number> --take kept` accepts what the pass kept and `--take other` puts the saved one back. For a core note `resolve` refuses and names the fix: edit the note with its own lore command. `lore sync conflicts --all` also lists conflicts you already resolved.
+A conflict between the file and `lore.db` can still happen for the few rows `lore.db` owns (for example project settings changed with sync turned off). The pass keeps one version, saves the other and says so; `lore sync conflicts` shows it, `lore sync resolve <number> --take kept` accepts what the pass kept and `--take other` puts the saved one back. `lore sync conflicts --all` also lists conflicts you already resolved.
 
 ## Step 4 — The same fact written twice
 
-Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, both rows are there; `lore memory list` (or `lore search`) shows them side by side. `lore sync merge-rows <table> --keep <id> --drop <id>` folds them: every reference to the dropped row (links, comments, tags, `${…}` references in other rows) moves to the row you keep, and the dropped row goes to the trash, so `lore trash restore` can bring it back. Edit the kept row first if it should carry some of the other's text. Deleting the duplicate with its own command also works, but leaves references to it dangling (`lore lint` reports them).
+Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, both rows are there; `lore memory list` (or `lore search`) shows them side by side. `lore sync merge-rows <table> --keep <id> --drop <id>` folds them: every reference to the dropped row (links, comments, tags, `${…}` references in other rows) moves to the row you keep, and the dropped row goes to the trash in one batch, so `lore trash restore` can bring it back (`lore trash list` shows it with the reason `merged into <kept id>`). Edit the kept row first if it should carry some of the other's text. Deleting the duplicate with its own command also works, but leaves references to it dangling (`lore lint` reports them).
 
 <!-- example: sync#duplicates only=2,3,4,5,6,7,8 -->
 ```console
@@ -137,15 +136,13 @@ $ lore memory list | grep -i invoice
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 mem_3b62…e913 [retrieved] send the invoice reminder before the demo on friday.
 $ lore sync merge-rows memories --keep mem_4c59…6c38 --drop mem_3b62…e913
-ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_4c59…6c38 (edit it with its lore command if it should carry the other's text), then delete mem_3b62…e913 with its lore command
-(exit 20)
-$ lore memory delete mem_3b62…e913 --yes
-✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
+✓ merged mem_3b62…e913 into mem_4c59…6c38 (0 row(s) re-pointed; mem_3b62…e913 is in the trash, batch bat_…)
 $ lore memory list
 mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
+$ lore trash list
+mem_3b62…e913  memories  "send the invoice reminder before the demo on friday."  …  reason "merged into mem_4c59…6c38"  bat_…
+1 rows in the trash
 ```
 <!-- /example -->
 

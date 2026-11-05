@@ -48,7 +48,7 @@ The `.gitattributes` lines (shown in [How notes travel with git](how-notes-trave
 
 ## Step 2 — Read a hook
 
-Each hook gets one block between `>>> lore-sync >>>` and `<<< lore-sync <<<` markers. The block does nothing when lore is not installed, and it checks that the installed lore knows the command before it calls it, so a teammate on an older lore can still commit:
+Each hook gets one block between `>>> lore-sync >>>` and `<<< lore-sync <<<` markers. Unlike the merge driver, a hook runs whatever `lore` is first on your PATH, not the binary that installed it. The block does nothing when lore is not installed, and it checks that the installed lore knows the command before it calls it. One case is refused on purpose: when `.lore/data` holds lore 0.1.18 row files (`"_v": 2`) and the `lore` on PATH is older, the pre-commit hook stops the commit and asks you to install lore 0.1.18 or newer, because an older lore cannot check the new files:
 
 <!-- example: sync#hooks only=4 -->
 ```console
@@ -90,6 +90,7 @@ $ git checkout -q HEAD -- .lore/data && git status --short
 ## Pitfalls
 
 - **lore never changes `core.hooksPath`** (the git setting that says which folder holds the hooks). When a hook manager owns the hooks folder, lore adds its block to the scripts there. Its block goes right after the first line, so an early `exit 0` in your own script cannot skip it.
+- **Upgrading from v0.1.17: update every `lore` on your PATH.** After `lore migrate run` the row files are in the 0.1.18 format. If an old v0.1.17 `lore` is still first on your PATH (an old Homebrew or `~/.local/bin` copy, or a second machine), every `git commit` in that repo is refused with `lore: .lore/data holds lore 0.1.18 rows but the lore on PATH is older`. Run `which lore` and `lore version` and upgrade or remove the old copy; the merge driver is not affected, because it names the binary by its full path.
 - **A fresh clone has no hooks until lore runs.** git does not copy hooks when you clone. Run `lore sync` once; until then, a merge in that clone uses plain line merging.
 - **`LORE_SYNC_GIT=0` leaves git alone.** With it set, lore still syncs files but never adds hooks, the driver or `.gitattributes` lines. Use it on build machines where you do not want lore to change the clone.
 - **The hint after a refused commit talks about markers even for broken JSON.** If the message says "invalid JSON", the file is not valid JSON at all: restore it from git (`git checkout HEAD -- <file>`) or fix the text.
