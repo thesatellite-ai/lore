@@ -138,6 +138,10 @@ const (
 	KeyBatchPreviewRows Key = "batch.preview_rows"
 	// KeyDeleteRequireReason refuses a delete without --reason (DELETION 475, E_REASON_REQUIRED).
 	KeyDeleteRequireReason Key = "delete.require_reason"
+	// KeyTrashPurgeOnDelete makes every delete a purge (DELETION 3.12,
+	// 3.5): the row skips the trash and leaves a tombstone, so a delete
+	// then needs --confirm like every purge (DQ2).
+	KeyTrashPurgeOnDelete Key = "trash.purge_on_delete"
 )
 
 // ClientRouteRepo is the KeyClientRoutes target that keeps a kind in the
@@ -371,6 +375,10 @@ func Keys() []KeyDef {
 			Doc: "rows a bulk action (a --where delete, an import) changes before it previews and asks (XQ2)"},
 		// true is stricter: a level may require a reason, never drop a requirement above it.
 		{Key: KeyDeleteRequireReason, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(false), Doc: "refuse a delete without --reason (E_REASON_REQUIRED)"},
+		// true is stricter: content leaves the files at delete time (a
+		// leak-averse team turns it on), and every delete then needs
+		// --confirm; a lower level may not switch it back off.
+		{Key: KeyTrashPurgeOnDelete, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(false), Doc: "every delete purges (tombstone, no trash) and needs --confirm (DELETION 3.12)"},
 		{Key: KeyAgentsPersonOnly, Shape: ShapeSet, Default: mustList(), Doc: "operations only a person may run"},
 		// A set: every level's items join (union), and ClientRoutes then
 		// takes, per kind, a store target over "repo" (a store is
