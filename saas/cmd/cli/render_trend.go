@@ -1,9 +1,9 @@
 // render_trend.go — `lore render --trend` (CONTEXT_BUDGET 6.11): bytes per
-// render from render_history (machine-local lore.db, written by every
-// render), growth per day over the last 14 days, and the projected date
+// render from render_histories (the machine store, written by every
+// render, P3-LOCAL-5), growth per day over the last 14 days, and the projected date
 // the core file reaches its budget. Writes nothing.
 //
-//	--trend ─▶ render_history rows (project, target = --out, last 14 days, oldest first)
+//	--trend ─▶ render_histories rows of the machine store (project, target = --out, last 14 days, oldest first)
 //	        ─▶ growth/day = (last − first) / days between them
 //	        ─▶ budget (CQ6: smallest target budget) ─▶ days left = (budget − last) / growth
 //	        ─▶ text (one line per render + summary) or --json
@@ -18,11 +18,10 @@ import (
 	"strings"
 	"time"
 
-	"dbent/gen/ent"
-	entRenderHistory "dbent/gen/ent/renderhistory"
 	"saas/pkg/aicoder/errcodes"
 
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // renderTrendWindow is the 6.11 window ("growth per day over 14 days").
@@ -51,16 +50,19 @@ type trendOut struct {
 }
 
 // renderTrend prints the trend for f.outPath of projectID.
-func renderTrend(ctx context.Context, client *ent.Client, projectID string, f *renderFlags) error {
+func renderTrend(ctx context.Context, projectID string, f *renderFlags) error {
 	target := resolveSymlinkTarget(f.outPath)
 	now := cliClock().Now()
-	rows, err := client.RenderHistory.Query().
-		Where(entRenderHistory.ProjectID(projectID), entRenderHistory.TargetPath(target),
-			entRenderHistory.CreatedAtGTE(now.Add(-renderTrendWindow))).
-		Order(ent.Asc(entRenderHistory.FieldCreatedAt)).
-		All(ctx)
+	all, err := coreRenderHistory(ctx, projectID) // P3-LOCAL-5: the machine store, oldest first
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "read render history").WithCause(err)
+	}
+	since := now.Add(-renderTrendWindow)
+	var rows []wire.RenderRecord
+	for _, r := range all {
+		if r.TargetPath == target && !r.CreatedAt.Before(since) {
+			rows = append(rows, r)
+		}
 	}
 	root, err := os.Getwd()
 	if err != nil {

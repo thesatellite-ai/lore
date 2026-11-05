@@ -18,6 +18,7 @@ import (
 	"saas/pkg/aicoder/sessions"
 
 	opssupportbundle "github.com/thesatellite-ai/lore/ops/supportbundle"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // supportBundleHost implements opssupportbundle.Host over lore.db.
@@ -95,7 +96,9 @@ func gatherCounts(ctx context.Context, f *doctorFlags) opssupportbundle.Counts {
 	if n, err := client.AuditLog.Query().Count(ctx); err == nil {
 		counts["audit_log_rows"] = n
 	}
-	if n, err := client.RenderHistory.Query().Count(ctx); err == nil {
+	// P3-LOCAL-5: render records live in the machine store (every repo's;
+	// the bundle counts the machine's, as v0.1.17 counted its lore.db's).
+	if n, ok := coreMachineRowCount(ctx, schema.TableRenderHistories); ok {
 		counts["render_history_rows"] = n
 	}
 	return counts

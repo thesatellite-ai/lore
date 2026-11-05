@@ -31,7 +31,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"dbent/gen/ent"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/style"
@@ -108,7 +107,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 		return errcodes.New(errcodes.InvalidInput, "--scopes needs --report").WithHint("run `lore render --report --scopes`")
 	}
 	if f.trend { // 6.11: read-only, from render_history
-		return renderTrend(ctx, client, projectID, f)
+		return renderTrend(ctx, projectID, f)
 	}
 
 	// ds:def id=render-pins-ez0g6hen owner=@khanakia stability=stable desc="what render pins into the context file (must rules, critical/high hotfixes, directive)"
@@ -288,7 +287,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 		return errcodes.New(errcodes.Internal, "folder files").WithCause(err)
 	}
 
-	if err := persistRenderHistory(ctx, client, projectID, repoID, resolvedOut, body, renderResult{
+	if err := persistRenderHistory(ctx, projectID, repoID, resolvedOut, body, renderResult{
 		Rules: len(rules), Hotfixes: len(hotfixes),
 	}, newCutSummary(report, skips)); err != nil {
 		// Non-fatal: file written, history failed. Log and continue
@@ -668,27 +667,18 @@ func resolveSymlinkTarget(path string) string {
 	return target
 }
 
-// persistRenderHistory writes a render_history row for `lore why-context`
-// with what the render left out of the core (cut, 6.11).
-func persistRenderHistory(ctx context.Context, client *ent.Client, projectID, repoID, target, body string, summary renderResult, cut cutSummary) error {
+// persistRenderHistory records the render for `lore why-context` and
+// `render --trend`, with what the render left out of the core (cut, 6.11),
+// in the machine store (P3-LOCAL-5). Its time is the core's wall clock,
+// which is cliClock (a test build's LORE_NOW fixes it).
+func persistRenderHistory(ctx context.Context, projectID, repoID, target, body string, summary renderResult, cut cutSummary) error {
 	scope := renderScopeSummary{Included: summary, Cut: &cut}
-	scopeJSON, _ := json.Marshal(scope)
-
-	// created_at from the CLI clock, not the schema default, so a test
-	// build's LORE_NOW fixes what `lore why-context` shows.
-	create := client.RenderHistory.Create().
-		SetCreatedAt(cliClock().Now()).
-		SetProjectID(projectID).
-		SetTargetPath(target).
-		SetRenderedText(body).
-		SetRenderedSha256(sha256Hex([]byte(body))).
-		SetTotalBytes(len(body)).
-		SetScopeSummary(string(scopeJSON))
-	if repoID != "" {
-		create.SetRepoID(repoID)
+	scopeJSON, err := json.Marshal(scope)
+	if err != nil {
+		return err
 	}
-	_, err := create.Save(ctx)
-	return err
+	return coreRecordRender(ctx, wire.RenderRecord{ProjectID: projectID, RepoID: repoID, TargetPath: target, Text: body,
+		SHA256: sha256Hex([]byte(body)), TotalBytes: len(body), ScopeSummary: string(scopeJSON)})
 }
 
 // sha256Hex returns the hex-encoded sha256 of data
