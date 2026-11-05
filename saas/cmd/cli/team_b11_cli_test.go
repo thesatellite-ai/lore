@@ -495,3 +495,68 @@ func TestB11_ResourceMetaDeletePurgeConfirm(t *testing.T) {
 	trash := c.MustLore("trash").Says(t, `"h_soft"`, `"k_soft"`)
 	trash.Never(t, `"h_gone"`, `"k_gone"`, `"h_bulk"`)
 }
+
+// TestB11_SearchHydratesHits (old usecases_misc_test.go
+// TestUC_MiscGlobalSearchHydratesHits and TestUC_MiscTruncBody; ops/search
+// has no test of its own): `lore search` finds every kind, each hit carries
+// its id and pretty id, a long body is cut to 80 characters ending in
+// "...", a decision shows its title, and no match says so.
+func TestB11_SearchHydratesHits(t *testing.T) {
+	c := b11Solo(t)
+	mem := mustID(t, c.MustLore("memory", "add", "--body", "zebra stripes confuse predators"), "mem")
+	longRule := "zebra crossings need a dedicated rule whose body is deliberately longer than eighty characters in total"
+	rule := mustID(t, c.MustLore("rule", "add", "--body", longRule), "rul")
+	c.MustLore("decision", "add", "--title=zebra decision", "--body=we picked zebra")
+	var res struct {
+		Count int `json:"count"`
+		Hits  []struct {
+			Entity string `json:"entity"`
+			ID     string `json:"id"`
+			Pretty string `json:"pretty"`
+			Body   string `json:"body"`
+		} `json:"hits"`
+	}
+	b11Data(t, c.MustLore("search", "zebra", "--json"), &res)
+	if res.Count < 3 {
+		t.Fatalf("expected hits from three kinds: %+v", res)
+	}
+	seen := map[string]int{}
+	for i, h := range res.Hits {
+		seen[h.Entity] = i
+	}
+	if i, ok := seen["memory"]; !ok || res.Hits[i].ID != mem || res.Hits[i].Pretty != mem {
+		t.Fatalf("memory hit not hydrated: %+v", res.Hits)
+	}
+	if i, ok := seen["rule"]; !ok || res.Hits[i].ID != rule || len(res.Hits[i].Body) != 80 || !strings.HasSuffix(res.Hits[i].Body, "...") ||
+		!strings.HasPrefix(longRule, strings.TrimSuffix(res.Hits[i].Body, "...")) {
+		t.Fatalf("rule body must be cut to 80: %+v", res.Hits)
+	}
+	if i, ok := seen["decision"]; !ok || res.Hits[i].Body != "zebra decision" || res.Hits[i].Pretty == "" {
+		t.Fatalf("decision hit shows its title: %+v", res.Hits)
+	}
+	c.MustLore("search", "qqqnomatchqqq").Says(t, "(no matches)")
+}
+
+// TestB11_DirectiveReinstallIsIdempotent (old usecases_misc_test.go
+// TestUC_MiscDirectiveReinstallIsIdempotent): re-installing leaves the block
+// byte for byte as `directive show` prints it (a "$RID" in it survives), and
+// a stale block is replaced in place, keeping the person's own notes.
+// TOOL NEUTRAL: a folder with no tool file gets AGENTS.md.
+func TestB11_DirectiveReinstallIsIdempotent(t *testing.T) {
+	w := newTeamWorld(t, th.Cmd("directive", "install"))
+	c := w.Human("dev", "dev@acme.example").Clone(w.Remote(slugApp), "app")
+	block := c.MustLore("directive", "show").Stdout
+	c.MustLore("directive", "install")
+	c.MustLore("directive", "install").Says(t, "(no change)")
+	got, _ := c.ReadFile("AGENTS.md")
+	if got != block {
+		t.Fatalf("re-installed block differs from `directive show` ($RID kept: %v)", strings.Contains(got, "$RID"))
+	}
+	const hand = "\nhand notes\n"
+	first, rest, _ := strings.Cut(block, "\n")
+	c.WriteFile("AGENTS.md", first+"\nan outdated line\n"+rest+hand)
+	c.MustLore("directive", "install")
+	if got, _ := c.ReadFile("AGENTS.md"); got != block+hand {
+		t.Fatalf("a stale block must be replaced in place, keeping hand notes:\n%q", got)
+	}
+}
