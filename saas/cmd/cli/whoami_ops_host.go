@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"strings"
 
 	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 )
@@ -47,11 +48,12 @@ func (whoamiHost) SetMachineLabel(ctx context.Context, label string) (opswhoami.
 }
 
 // whoamiOpData copies the v0.1.17 JSON data into the operation's types
-// (same keys, so --json keeps its shape).
+// (same keys, so --json keeps its shape; personal_store joins the v0.1.17
+// folder list into one place, G-DECIDE-7).
 func whoamiOpData(j whoamiJSON) opswhoami.Data {
 	d := opswhoami.Data{Org: j.Org, MatchedBy: j.MatchedBy, Rule: j.Rule, RepoRole: string(j.RepoRole),
 		Identity:  opswhoami.Identity{StableKey: j.Identity.StableKey, Name: j.Identity.Name, Kind: j.Identity.Kind, ActorID: j.Identity.ActorID, Source: j.Identity.Source, Session: j.Identity.Session},
-		ProjectID: j.ProjectID, Remotes: j.Remotes, Personal: j.Personal, LinkStatus: j.LinkStatus, Warnings: j.Warnings, Error: j.Error, Machine: j.Machine,
+		ProjectID: j.ProjectID, Remotes: j.Remotes, Personal: strings.Join(j.Personal, ", "), LinkStatus: j.LinkStatus, Warnings: j.Warnings, Error: j.Error, Machine: j.Machine,
 		Stores: make([]opswhoami.Store, 0, len(j.Stores)), Trace: make([]opswhoami.Rule, 0, len(j.Trace))}
 	for _, st := range j.Stores {
 		d.Stores = append(d.Stores, opswhoami.Store{URL: st.URL, Branch: st.Branch, OrgFolder: st.OrgFolder})
