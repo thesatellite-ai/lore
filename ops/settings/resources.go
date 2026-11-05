@@ -613,6 +613,9 @@ func (o ops) fieldValue(ctx context.Context, d kindDef, name string, def located
 // resourceByName finds a live resource by name or id, optionally of one
 // kind id.
 func (o ops) resourceByName(ctx context.Context, key, kindID string) (located, error) {
+	if l, ok, err := pendingRow(ctx, key, kindID); ok { // FB-RES-1: a row this import creates
+		return l, err
+	}
 	var extra map[string]string
 	if kindID != "" {
 		extra = map[string]string{rKind: kindID}
@@ -730,7 +733,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if err = o.withHistory(ctx, d, nil, fields); err != nil { // RES 3.22
 		return RowOut{}, err
 	}
-	w, err := o.env.Create(ctx, target, schema.TableResources, fields)
+	w, err := o.createRes(ctx, target, d.kind.Row.ID.String(), in.Name, fields)
 	if err != nil {
 		return RowOut{}, err
 	}

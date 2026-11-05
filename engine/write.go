@@ -76,6 +76,11 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err = e.checkRefs(ctx, target, def, typed, names); err != nil {
 		return Written{}, err
 	}
+	if pin.IsZero() { // FB-RES-1: an id pinned on ctx (WithCreateID)
+		if p, ok := createIDOf(ctx, def.Prefix); ok {
+			pin = p
+		}
+	}
 	if !pin.IsZero() && pin.Prefix() != def.Prefix {
 		return Written{}, errs.New(errs.InvalidID, "engine: "+pin.String()+" is not an id of "+string(table))
 	}
@@ -810,6 +815,16 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 	evs := make([]Event, 0, 1+len(out.extra))
 	evs = append(evs, Event{Op: e.callOf(ctx).op, Action: putAction(expect, r), Store: st.Name, Table: r.Table, ID: r.ID, HLC: r.HLC, Actor: r.UpdatedBy})
 	evs = append(evs, out.allowEvents(e.callOf(ctx).op, st.Name)...)
+	if s := stageOf(ctx); s != nil { // FB-RES-1: held until Commit
+		kept, err := s.addWrite(e, st, changes, evs)
+		if err != nil {
+			return stored{}, err
+		}
+		if !kept { // a second create of a row the stage already creates
+			out.extra, out.extraDocs = nil, nil
+		}
+		return out, nil
+	}
 	if err := e.writeChanges(ctx, st, changes, evs); err != nil {
 		return stored{}, err
 	}
@@ -869,6 +884,10 @@ func (e *Engine) finish(ctx context.Context, source store.Source, rows []store.R
 //	           not journaled: the error, naming its cause (cl-wire)
 //	→ replay older pending records of this store (best effort)
 func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.Row, evs ...Event) ([]Warning, error) {
+	if s := stageOf(ctx); s != nil { // FB-RES-1: the cache and audit follow the write at Commit
+		s.addFinish(e, source, rows, evs)
+		return nil, nil
+	}
 	cur, err := e.cache.Cursor(ctx, source)
 	if err != nil {
 		return nil, err

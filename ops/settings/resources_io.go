@@ -20,6 +20,8 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
@@ -523,44 +525,143 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 		return ResImportOut{}, err
 	}
 	out.Batch = bid.String()
-	stopped := func(werr error, at string, i int) error {
-		return errors.Join(werr, errs.New(errs.ResourceInvalid, "resource import: stopped at "+at+" after "+
-			strconv.Itoa(i)+" of "+strconv.Itoa(len(plan))+" rows; the ones written are in batch "+out.Batch))
+	// FB-RES-1 (PC-RES-1 "both or neither"): every new row gets its res_ id
+	// before anything is written, so a ref to another row of the file
+	// (forward, a cycle, itself) resolves to that id at once and each row
+	// is written exactly once with all its refs. The writes are staged
+	// (engine.Staging) and land in ONE backend batch at engine.Commit: a
+	// row that fails while being written (a secret found, a policy, a
+	// value) leaves the store exactly as it was.
+	pend, err := o.pendingOf(ctx, target, plan, existing)
+	if err != nil {
+		return ResImportOut{}, err
 	}
-	// Pass 1: every row, without its deferred refs.
-	rowIDs := make([]string, len(plan))
-	for i, p := range plan {
-		rctx := engine.WithImport(bctx, origin.Import{Source: format, ExtID: p.extID})
+	sctx := withPending(engine.Staging(bctx), pend)
+	stopped := func(werr error, at string) error {
+		return errors.Join(werr, errs.New(errs.ResourceInvalid, "resource import: "+at+" failed; nothing written (all or nothing)"))
+	}
+	for _, p := range plan {
+		rctx := engine.WithImport(sctx, origin.Import{Source: format, ExtID: p.extID})
+		sets := append(slices.Clone(p.first), p.later...)
 		var got RowOut
 		var werr error
 		if id, up := existing[p.extID]; up {
-			got, werr = o.resEdit(rctx, ResEditIn{Name: id, Set: p.first})
+			got, werr = o.resEdit(rctx, ResEditIn{Name: id, Set: sets})
 			out.Updated++
 		} else {
-			got, werr = o.resAdd(rctx, ResAddIn{Kind: p.kind, Name: p.name, Set: p.first, To: in.To})
+			got, werr = o.resAdd(rctx, ResAddIn{Kind: p.kind, Name: p.name, Set: sets, To: in.To})
 			out.Created++
 		}
 		if werr != nil {
-			return ResImportOut{}, stopped(werr, p.extID, i)
+			return ResImportOut{}, stopped(werr, p.extID)
 		}
-		rowIDs[i] = got.ID
 		for j := range out.Rows {
 			if out.Rows[j].Kind == p.kind && out.Rows[j].Name == p.name {
 				out.Rows[j].ID = got.ID
 			}
 		}
 	}
-	// Pass 2: the deferred refs, now that every row of the file exists.
-	for i, p := range plan {
-		if len(p.later) == 0 {
-			continue
-		}
-		rctx := engine.WithImport(bctx, origin.Import{Source: format, ExtID: p.extID})
-		if _, werr := o.resEdit(rctx, ResEditIn{Name: rowIDs[i], Set: p.later}); werr != nil {
-			return ResImportOut{}, stopped(werr, p.extID+" (refs)", len(plan))
-		}
+	if _, err = engine.Commit(sctx); err != nil {
+		return ResImportOut{}, stopped(err, "the batch write")
 	}
 	return out, nil
+}
+
+// pendingRes is a row an import is about to create (FB-RES-1): its pinned
+// id, kind id and name, so refs to it resolve before it is written.
+type pendingRes struct {
+	id     ids.ID[ids.Resource]
+	kindID string
+	name   string
+	src    store.Source
+}
+
+// pendingKey is the context key of the import's pending rows.
+type pendingKey struct{}
+
+// withPending marks ctx as an import whose new rows are pend.
+func withPending(ctx context.Context, pend []pendingRes) context.Context {
+	return context.WithValue(ctx, pendingKey{}, pend)
+}
+
+// pendingOf pins an id for every record of plan the import creates (not
+// the upserts in existing, which already have one).
+func (o ops) pendingOf(ctx context.Context, target store.Source, plan []plannedRecord, existing map[string]string) ([]pendingRes, error) {
+	out := make([]pendingRes, 0, len(plan))
+	for _, p := range plan {
+		if _, up := existing[p.extID]; up {
+			continue
+		}
+		d, err := o.kindDef(ctx, p.kind)
+		if err != nil {
+			return nil, err
+		}
+		id, err := ids.New[ids.Resource]()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pendingRes{id: id, kindID: d.kind.Row.ID.String(), name: p.name, src: target})
+	}
+	return out, nil
+}
+
+// pendingRow finds a pending row by name or id (and kind id when given):
+// the import's not yet written rows read as written for ref resolution.
+// Two pending rows of different kinds sharing the name, with no kind to
+// pick one, is E_RESOURCE_AMBIGUOUS like two stored rows.
+func pendingRow(ctx context.Context, key, kindID string) (located, bool, error) {
+	pend, _ := ctx.Value(pendingKey{}).([]pendingRes)
+	var hits []pendingRes
+	for _, p := range pend {
+		if (p.name == key || p.id.String() == key) && (kindID == "" || p.kindID == kindID) {
+			hits = append(hits, p)
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return located{}, false, nil
+	case 1:
+	default:
+		return located{}, true, errs.New(errs.ResourceAmbiguous, "resource "+quote(key)+" names "+strconv.Itoa(len(hits))+" rows of this import").
+			WithHint("give the ref field a ref_kind")
+	}
+	p := hits[0]
+	kid, err := ids.ParseAny(p.kindID)
+	if err != nil {
+		return located{}, true, errs.Wrap(errs.Internal, "resource import: kind id "+p.kindID, err)
+	}
+	kv, err := ref(kid)
+	if err != nil {
+		return located{}, true, err
+	}
+	nv, err := txt(p.name)
+	if err != nil {
+		return located{}, true, err
+	}
+	r := row.Row{Table: schema.TableResources, ID: p.id.Any(), Fields: map[string]value.Value{rKind: kv, rName: nv}}
+	return located{Src: p.src, Row: r}, true, nil
+}
+
+// pinnedID is the id the running import pinned for a new (kind, name).
+func pinnedID(ctx context.Context, kindID, name string) (ids.AnyID, bool) {
+	pend, _ := ctx.Value(pendingKey{}).([]pendingRes)
+	for _, p := range pend {
+		if p.kindID == kindID && p.name == name {
+			return p.id.Any(), true
+		}
+	}
+	return ids.AnyID{}, false
+}
+
+// createRes writes a new resource row: under the id its import pinned
+// (FB-RES-1, engine.WithCreateID), else a fresh one. It goes through
+// Env.Create either way, so the wire guards of a plain create (leak guard,
+// default target) apply to an imported row too.
+func (o ops) createRes(ctx context.Context, target store.Source, kindID, name string, fields map[string]value.Value) (engine.Written, error) {
+	if id, pinned := pinnedID(ctx, kindID, name); pinned {
+		ctx = engine.WithCreateID(ctx, id)
+	}
+	return o.env.Create(ctx, target, schema.TableResources, fields)
 }
 
 // existingIn finds a live resource (kind, name) in target.
