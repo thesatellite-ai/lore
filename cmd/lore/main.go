@@ -51,16 +51,25 @@ func main() {
 func run(ctx context.Context, args []string) int {
 	wd, home := dirs()
 	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
+	// One clock for row stamps and live decisions: the wall clock, or
+	// LORE_NOW in a test build (the team harness refuses a binary that
+	// ignores it).
+	clk := liveClock()
+	base.Wall = clk.Now
 	// The host hooks both binaries install (wire/host); the compat hook
 	// also prints v0.1.17's "  filed: <rule>" line under a routed create.
 	hooks := hosthooks.Replace(hosthooks.Default(wd), hosthooks.CompatFlagsHook(hosthooks.CompatOptions{Filed: org.Routed}))
+	// Live rows on refs/lore/live around every operation (LORE_TEAM_SPEC
+	// F1-F3, F8): the old binary has its own live wiring, so only this
+	// binary adds the hook.
+	hooks = append(hooks, hosthooks.LiveHook(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk}))
 	app, err := wire.New(hosthooks.Options(base, hooks))
 	if err != nil {
 		return printHostError(err)
 	}
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
-	root := cli.Build(app.Registry(), runner, cli.WithInteractive(stdinIsTTY))
+	root := cli.Build(app.Registry(), runner, cli.WithInteractive(wire.StdinIsTerminal))
 	root.Version = version
 	hosthooks.Install(root, runner)
 	h := &host{app: app, home: home}
@@ -111,11 +120,4 @@ func dirs() (wd, home string) {
 		return wd, filepath.Join(os.TempDir(), unresolvedHome)
 	}
 	return wd, filepath.Join(uh, rowfs.LoreDir)
-}
-
-// stdinIsTTY reports whether stdin is a terminal (a person can answer a
-// [y/N] prompt). Stdlib only: a character device is a terminal.
-func stdinIsTTY() bool {
-	fi, err := os.Stdin.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }

@@ -61,7 +61,15 @@ type Hook struct {
 	// Command adjusts the mounted command tree once, after cli.Mount /
 	// cli.Build (compat flags, the migrate team lock, the move preview).
 	Command func(root *cobra.Command, r *Runner)
+	// Around wraps the operation itself (after the Before hooks and the
+	// read-only refusal): it may put per-run state on ctx, refuse, and act
+	// once the operation finished (the live ref's fetch before and push
+	// after, LiveHook). It must call next at most once.
+	Around func(ctx context.Context, run *Run, next Next) (op.Result, error)
 }
+
+// Next runs the rest of the operation (inner Around hooks, then the app).
+type Next func(ctx context.Context) (op.Result, error)
 
 // Run is one operation as the Runner runs it: the registry entry, its
 // input, the caller, and the CLI state of the running command (zero for a
@@ -139,7 +147,7 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
 			WithHint("unset --read-only and " + EnvReadOnly)
 	}
-	res, err := r.app.Run(ctx, e, d, c)
+	res, err := r.around(ctx, run, 0)
 	if err == nil {
 		return res, nil
 	}
@@ -149,6 +157,17 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		}
 	}
 	return res, err
+}
+
+// around runs the Around hooks from index i inward, then the app.
+func (r *Runner) around(ctx context.Context, run *Run, i int) (op.Result, error) {
+	for ; i < len(r.hooks); i++ {
+		if h := r.hooks[i]; h.Around != nil {
+			next := i + 1
+			return h.Around(ctx, run, func(ctx context.Context) (op.Result, error) { return r.around(ctx, run, next) })
+		}
+	}
+	return r.app.Run(ctx, run.Entry, run.Decoder, run.Caller)
 }
 
 // Install runs every hook's Command on root, in order.
