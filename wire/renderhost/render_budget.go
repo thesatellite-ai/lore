@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -34,6 +35,7 @@ import (
 	opsdirective "github.com/thesatellite-ai/lore/ops/directive"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // Fallbacks when the policy cannot be read (no core yet): the key defaults.
@@ -510,8 +512,8 @@ func (r renderReport) reportJSON() ([]byte, error) {
 // .lore/LORE.md against its budget (a warning above warn_at, and over the
 // budget), and for each Claude Code-style target the launch set: every
 // file that tool loads at start, the user-level ~/.claude/CLAUDE.md
-// reported with its share (lore never edits it). The CQ8 measurement of
-// the tool's real warning is a release checklist step, not built here.
+// reported with its share (lore never edits it), warned at the measured
+// Claude Code startup levels (CQ8, claudeStartWarnings).
 func (h *Host) contextDoctor(ctx context.Context, root string) (warnings, notes []string) {
 	pick, err := h.resolveTargets(ctx, root, nil, h.coreContextTargets)
 	if err != nil {
@@ -539,12 +541,91 @@ func (h *Host) contextDoctor(ctx context.Context, root string) (warnings, notes 
 			continue
 		}
 		notes = append(notes, launchSet(root, t.profile, size))
+		if t.profile.Name == toolprofile.NameClaudeCode {
+			warnings = append(warnings, claudeStartWarnings(launchFiles(root, t.profile, size))...)
+		}
 	}
 	warnings = append(warnings, doubleLoads(root, pick.targets)...)
+	notes = append(notes, h.targetSuggestions(ctx, root, pick.targets)...)
 	if n := h.dirFileCount(ctx, root); n > maxDirFiles {
 		warnings = append(warnings, fmt.Sprintf("context: %d folder LORE.md files (over %d): globs or topics may fit better than this many folder scopes (lore scope list)", n, maxDirFiles))
 	}
 	return warnings, notes
+}
+
+// suggestWindow is how far back the doctor target suggestion looks at
+// this machine's sessions (CONTEXT_BUDGET 6.7: "the last 30 days").
+const suggestWindow = 30 * 24 * time.Hour
+
+// copilotToolPrefix: agentdetect names each Copilot surface on its own
+// (copilot_cli, copilot_vscode, copilot_cloud); they share the copilot
+// profile.
+const copilotToolPrefix = "copilot_"
+
+// targetSuggestions is the doctor's target suggestion (6.7): a tool whose
+// sessions ran in this repo on this machine in the last 30 days, with a
+// tool profile that is not a target, is named with the command that adds
+// it. Best effort: no sessions or no registry, no line.
+func (h *Host) targetSuggestions(ctx context.Context, root string, targets []contextTarget) []string {
+	if h.app == nil {
+		return nil
+	}
+	sessions, err := h.app.Sessions(ctx, 0)
+	if err != nil {
+		return nil
+	}
+	pid, err := h.app.Project(ctx)
+	if err != nil {
+		return nil
+	}
+	reg, err := h.loadToolRegistry(ctx)
+	if err != nil {
+		return nil
+	}
+	return suggestTargets(sessions, pid.String(), filepath.Base(root), h.now(), reg, targets)
+}
+
+// suggestTargets is targetSuggestions on given rows (pure, for tests):
+// sessions of projectID in repo (the checkout's folder name, as the
+// session row records it) whose last activity is within suggestWindow of
+// now, one line per profile, in tool name order.
+func suggestTargets(sessions []wire.SessionRow, projectID, repo string, now time.Time, reg *toolprofile.Registry, targets []contextTarget) []string {
+	have := map[string]bool{}
+	var names []string
+	for _, t := range targets {
+		if t.known {
+			have[t.profile.Name] = true
+			names = append(names, t.profile.Name)
+		}
+	}
+	seen := map[string]bool{}
+	var tools []string
+	for _, s := range sessions {
+		last := s.EndedAt
+		if last.IsZero() {
+			last = s.StartedAt
+		}
+		if s.ProjectID != projectID || s.Repo != repo || now.Sub(last) > suggestWindow {
+			continue
+		}
+		name := s.Tool
+		if strings.HasPrefix(name, copilotToolPrefix) {
+			name = toolprofile.NameCopilot
+		}
+		p, ok := reg.Lookup(name)
+		if !ok || p.Name == toolprofile.NameGeneric || have[p.Name] || seen[p.Name] {
+			continue
+		}
+		seen[p.Name] = true
+		tools = append(tools, p.Name)
+	}
+	sort.Strings(tools)
+	out := make([]string, 0, len(tools))
+	for _, t := range tools {
+		out = append(out, fmt.Sprintf("context: %s sessions ran in this repo in the last 30 days but %s is not a target; add it with: lore policy set %s %s --yes",
+			t, t, policy.KeyContextTargets, strings.Join(append(append([]string(nil), names...), t), ",")))
+	}
+	return out
 }
 
 // maxDirFiles is the 8.9 doctor threshold for folder files.
@@ -591,40 +672,103 @@ func (h *Host) dirFileCount(ctx context.Context, root string) int {
 	return n
 }
 
-// launchSet adds up the files a @import tool loads at start (6.11, CQ7).
-func launchSet(root string, p toolprofile.Profile, loreSize int) string {
-	parts := []string{}
-	total := loreSize
+// launchFile is one file a @import tool loads at start, with its size.
+type launchFile struct {
+	label   string // what the doctor line prints
+	size    int
+	private bool // a private store file imported by the local file
+}
+
+// launchFiles lists the files a @import tool loads at start (6.11, CQ7):
+// for claude_code the user-level ~/.claude/CLAUDE.md, then the pointer
+// file, .lore/LORE.md, the local file and each private store file it
+// imports. Unreadable files are left out.
+func launchFiles(root string, p toolprofile.Profile, loreSize int) []launchFile {
+	var out []launchFile
 	if home, err := os.UserHomeDir(); err == nil && p.Name == toolprofile.NameClaudeCode {
 		if n := fileSize(filepath.Join(home, ".claude", "CLAUDE.md")); n >= 0 {
-			total += n
-			parts = append(parts, fmt.Sprintf("~/.claude/CLAUDE.md %d (not edited by lore)", n))
+			out = append(out, launchFile{label: "~/.claude/CLAUDE.md", size: n})
 		}
 	}
 	if n := fileSize(filepath.Join(root, filepath.FromSlash(p.PointerFile))); n >= 0 {
-		total += n
-		parts = append(parts, fmt.Sprintf("%s %d", p.PointerFile, n))
+		out = append(out, launchFile{label: p.PointerFile, size: n})
 	}
-	parts = append(parts, fmt.Sprintf("%s %d", toolprofile.CanonicalOutput, loreSize))
+	out = append(out, launchFile{label: toolprofile.CanonicalOutput, size: loreSize})
 	local := strings.TrimSuffix(p.PointerFile, ".md") + ".local.md"
 	if data, err := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(local)))); err == nil {
-		total += len(data)
-		parts = append(parts, fmt.Sprintf("%s %d", local, len(data)))
-		priv, privBytes := 0, 0
+		out = append(out, launchFile{label: local, size: len(data)})
 		for _, l := range strings.Split(string(data), "\n") {
 			if f, ok := strings.CutPrefix(strings.TrimSpace(l), "@"); ok {
 				if n := fileSize(expandHome(f)); n >= 0 {
-					priv++
-					privBytes += n
+					out = append(out, launchFile{label: f, size: n, private: true})
 				}
 			}
 		}
-		if priv > 0 {
-			total += privBytes
-			parts = append(parts, fmt.Sprintf("%d private store files %d", priv, privBytes))
+	}
+	return out
+}
+
+// launchSet adds up the files a @import tool loads at start (6.11, CQ7).
+func launchSet(root string, p toolprofile.Profile, loreSize int) string {
+	parts := []string{}
+	total, priv, privBytes := 0, 0, 0
+	for _, f := range launchFiles(root, p, loreSize) {
+		total += f.size
+		switch {
+		case f.private:
+			priv++
+			privBytes += f.size
+		case f.label == "~/.claude/CLAUDE.md":
+			parts = append(parts, fmt.Sprintf("%s %d (not edited by lore)", f.label, f.size))
+		default:
+			parts = append(parts, fmt.Sprintf("%s %d", f.label, f.size))
 		}
 	}
+	if priv > 0 {
+		parts = append(parts, fmt.Sprintf("%d private store files %d", priv, privBytes))
+	}
 	return fmt.Sprintf("context: launch set for %s: %s = %d bytes", p.Name, strings.Join(parts, " + "), total)
+}
+
+// Claude Code's startup size warnings, measured (CQ8, decision A) on
+// 2026-11-05 with Claude Code 2.1.318 on fixture repos (CLAUDE.md
+// importing .lore/LORE.md, plus CLAUDE.local.md and other imports): with a
+// 200K-window model (Haiku 4.5) it warns "<file> is over the 40.0k-char
+// limit" for one file over 40,000 characters (39,999 and 40,000 quiet,
+// 40,001 warned) and "N instruction files add up to … over the
+// 120.0k-char total limit" when the files not over the per-file limit sum
+// to more than 120,000 (117,031 quiet, 140,000 warned); with the default
+// large-window model (Sonnet 5.5) both levels are 150,000 (150,000 in one
+// file quiet, 150,001 warned; 150,015 in two files warned). The limits
+// scale with the model's window, so doctor uses the 200K numbers, the
+// smallest a session can meet. Claude Code counts characters, lore bytes:
+// for ASCII they are equal, otherwise bytes run higher, so doctor warns no
+// later than the tool. Re-measure on a Claude Code release that changes
+// them (release checklist step, docsi CONTEXT_BUDGET 6.11).
+const (
+	claudeStartFileMax  = 40000
+	claudeStartTotalMax = 120000
+)
+
+// claudeStartWarnings are the doctor warnings for the launch set of the
+// claude_code target, at the measured levels above: each file over the
+// per-file level, and the total of the other files over the total level
+// (Claude Code leaves an over-limit file out of the total).
+func claudeStartWarnings(files []launchFile) []string {
+	var out []string
+	total, n := 0, 0
+	for _, f := range files {
+		if f.size > claudeStartFileMax {
+			out = append(out, fmt.Sprintf("context: %s is %d bytes; Claude Code warns at start above %d characters per file (lore render --report, lore lint --context)", f.label, f.size, claudeStartFileMax))
+			continue
+		}
+		total += f.size
+		n++
+	}
+	if total > claudeStartTotalMax {
+		out = append(out, fmt.Sprintf("context: %d files Claude Code loads at start add up to %d bytes; it warns above %d characters in total (lore render --report; the user-level ~/.claude/CLAUDE.md counts too)", n, total, claudeStartTotalMax))
+	}
+	return out
 }
 
 // fileSize is a file's size, -1 when it cannot be read.
