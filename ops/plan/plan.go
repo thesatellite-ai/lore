@@ -9,7 +9,7 @@ package plan
 
 import (
 	"context"
-	"slices"
+	"github.com/thesatellite-ai/lore/logic/planstatus"
 	"strconv"
 	"strings"
 	"time"
@@ -57,27 +57,14 @@ const (
 	fieldStatus   = work.FieldStatus
 	// badge prefixes a list line ("PL  <id>", v0.1.17's generated output).
 	badge = "PL"
-	// legacyActive is v0.1.17's only written status_str.
-	legacyActive = "active"
 )
 
 // table is the plans table.
 const table row.Table = schema.TablePlans
 
-// UpcastStatus maps a v0.1.17 plans.status_str to the TSQ9 closed set: a
-// value already in the set is kept, v0.1.17's default "active" becomes
-// in_progress, and anything else (free text, empty) becomes draft (open
-// question F2 in FORMAT_EVOLUTION_DESIGN; spec-deltas records this rule).
-func UpcastStatus(statusStr string) string {
-	s := strings.TrimSpace(strings.ToLower(statusStr))
-	switch {
-	case slices.Contains(schema.PlanStatuses(), s):
-		return s
-	case s == legacyActive:
-		return schema.PlanStatusInProgress
-	}
-	return schema.PlanStatusDraft
-}
+// UpcastStatus maps a v0.1.17 plans.status_str to the TSQ9 closed set
+// (logic/planstatus, shared with the engine's client write step).
+func UpcastStatus(statusStr string) string { return planstatus.Upcast(statusStr) }
 
 // statusOf is a plan row's status: the status field, else the upcast
 // v0.1.17 status_str.
