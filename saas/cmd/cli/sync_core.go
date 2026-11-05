@@ -170,39 +170,10 @@ func answerAddress(ctx context.Context, n opsinfra.AddressNotice) {
 	}
 }
 
-// printCoreSyncReport prints one line per new-format store and one indented
-// line per problem, in the style of printSyncReport.
-func printCoreSyncReport(out opsstores.SyncOut) {
-	for _, r := range out.Stores {
-		line := "store " + r.Store + ": sent " + strconv.Itoa(r.Sent) +
-			", received " + strconv.Itoa(r.Received) +
-			", merged " + strconv.Itoa(r.Merged) +
-			", refused " + strconv.Itoa(r.Refused)
-		if r.Offline {
-			line += style.Muted(" (offline: local changes kept, sent on the next sync)")
-		}
-		fmt.Println(line)
-		for _, p := range r.Problems {
-			fmt.Println("  " + p)
-		}
-	}
-}
-
-// coreSyncRefusal is the error `lore sync` returns when a new-format store
-// refused rows: E_STALE (exit 23), printed here because main treats every
-// core error as already printed (coreExitCode). Nothing was lost: the
-// refused rows stay local until resolved (spec 10.4).
-func coreSyncRefusal(out opsstores.SyncOut) error {
-	refused := 0
-	for _, r := range out.Stores {
-		refused += r.Refused
-	}
-	if refused == 0 {
-		return nil
-	}
-	e := errs.New(errs.Stale, strconv.Itoa(refused)+" row(s) changed on both sides and could not be merged automatically").
+// coreSyncStale is the error `lore sync` returns when a new-format store
+// refused rows: E_STALE (exit 23); surface/cli prints it. Nothing was
+// lost: the refused rows stay local until resolved (spec 10.4).
+func coreSyncStale(refused int) error {
+	return errs.New(errs.Stale, strconv.Itoa(refused)+" row(s) changed on both sides and could not be merged automatically").
 		WithHint("the rows are listed above; edit each to the text to keep, then run lore sync again")
-	fmt.Fprintln(os.Stderr, style.Error("ERROR: ")+e.Error())
-	fmt.Fprintln(os.Stderr, hintPrefix+e.Hint)
-	return e
 }

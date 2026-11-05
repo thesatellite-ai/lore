@@ -199,7 +199,7 @@ func addCompatFlags(c *cobra.Command, r *Runner, o CompatOptions) {
 		err := inner(cmd, args)
 		cmd.SetOut(out)
 		if asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON); asJSON {
-			return errors.Join(err, writeIndented(out, buf.Bytes()))
+			return errors.Join(err, WriteIndented(out, buf.Bytes()))
 		}
 		// Buffered so the "filed:" line (where a routed write went and
 		// why) goes right under the success line, before the op's own
@@ -265,10 +265,10 @@ func insertAfterFirstLine(b []byte, line string) []byte {
 	return append(out, b[i+1:]...)
 }
 
-// writeIndented prints JSON the way v0.1.17's printJSON did
+// WriteIndented (shared with the binaries' own --json commands) prints JSON the way v0.1.17's printJSON did
 // (json.MarshalIndent with two spaces, one trailing newline); anything that
 // is not one JSON value is written unchanged.
-func writeIndented(w io.Writer, b []byte) error {
+func WriteIndented(w io.Writer, b []byte) error {
 	var ind bytes.Buffer
 	if err := json.Indent(&ind, bytes.TrimSpace(b), "", jsonIndent); err != nil {
 		_, werr := w.Write(b)

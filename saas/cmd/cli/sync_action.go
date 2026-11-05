@@ -38,7 +38,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	"saas/pkg/aicoder/errcodes"
@@ -214,104 +213,16 @@ type syncActionResult struct {
 // "status" field of their --json output).
 type syncActionStatus string
 
-// install-action / uninstall-action statuses.
+// install-action statuses.
 const (
 	syncActionCreated   syncActionStatus = "created"
 	syncActionUpdated   syncActionStatus = "updated"
 	syncActionUnchanged syncActionStatus = "unchanged"
 	syncActionDryRun    syncActionStatus = "dry-run"
-	syncActionRemoved   syncActionStatus = "removed"
-	syncActionAbsent    syncActionStatus = "not-installed"
 )
 
 // syncActionStatuses is every status (tests check each is printed).
-var syncActionStatuses = []syncActionStatus{syncActionCreated, syncActionUpdated, syncActionUnchanged, syncActionDryRun, syncActionRemoved, syncActionAbsent}
-
-// jsonKindSyncAction is the JSON envelope kind of both commands.
-const jsonKindSyncAction = "sync.action"
-
-func newSyncInstallActionCommand() *cobra.Command {
-	var o syncActionOptions
-	var asJSON bool
-	cmd := &cobra.Command{
-		Use:   "install-action",
-		Short: "Add a GitHub workflow that merges lore data in pull requests (opt-in)",
-		Long: `Writes .github/workflows/lore-sync-merge.yml at the repository root.
-
-GitHub's merge button never runs lore's merge driver, so two pull requests
-that edited the same lore row conflict there even when lore would merge them.
-The workflow runs ` + "`lore sync ci-merge`" + ` for open pull requests: it merges the base
-branch in with lore and pushes, only when every conflict is in lore data and
-lore settles all of them. Anything else is left for a person.
-
-By default it runs only when started by hand (Actions → lore sync merge →
-Run workflow), so it never spends Actions time (billed on private
-repositories) on its own. --auto makes it run whenever lore data changes on a
-pull request or on a --branch (default: the remote's default branch).
-Re-running install-action keeps the triggers an installed file already has
-unless --auto or --manual is given; --manual is accepted for compatibility
-(it is the default) and switches an automatic workflow back to manual.
-
-Commit the file to enable it. Its lore version keeps itself current: when a
-developer runs a newer lore release here, their next lore command rewrites
-the file to that release (commit it). --lore-version pins a version that is
-never changed. A subfolder project gets its own lore-sync-merge-<folder>.yml.`,
-		Example: `  lore sync install-action
-  lore sync install-action --auto
-  lore sync install-action --auto --branch main --branch staging
-  lore sync install-action --dry-run`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Flags().Changed(constants.FlagLoreVersion) {
-				o.pin = syncActionPinFixed
-			}
-			res, err := installSyncAction(cmd.Context(), ".", o)
-			if err != nil {
-				return err
-			}
-			if asJSON {
-				printJSON(jsonKindSyncAction, res, 0)
-				return nil
-			}
-			printSyncAction(res)
-			return nil
-		},
-	}
-	cmd.Flags().StringArrayVar(&o.branches, constants.FlagBranch, nil, "branch whose pushes trigger the workflow (repeatable; default: the remote's default branch)")
-	cmd.Flags().BoolVar(&o.auto, constants.FlagAuto, false, "also run automatically when lore data changes on a pull request or a --branch (spends Actions time)")
-	cmd.Flags().BoolVar(&o.manualSet, constants.FlagManual, false, "run only when started by hand: already the default, kept for compatibility (switches an automatic workflow back)")
-	cmd.Flags().StringVar(&o.loreVersion, constants.FlagLoreVersion, "", "lore release the workflow downloads: vX.Y.Z or latest (default: this lore's version)")
-	cmd.Flags().BoolVar(&o.dryRun, constants.FlagDryRun, false, "print the workflow; write nothing")
-	cmd.Flags().BoolVar(&o.force, constants.FlagForce, false, "overwrite a file at that path that lore did not generate")
-	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
-
-func newSyncUninstallActionCommand() *cobra.Command {
-	var force, asJSON bool
-	cmd := &cobra.Command{
-		Use:     "uninstall-action",
-		Short:   "Remove the workflow added by install-action",
-		Long:    "Deletes .github/workflows/lore-sync-merge.yml if lore generated it. Commit the deletion to disable it.",
-		Example: "  lore sync uninstall-action",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := uninstallSyncAction(cmd.Context(), ".", force)
-			if err != nil {
-				return err
-			}
-			if asJSON {
-				printJSON(jsonKindSyncAction, res, 0)
-				return nil
-			}
-			printSyncAction(res)
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&force, constants.FlagForce, false, "delete the file even if lore did not generate it")
-	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
+var syncActionStatuses = []syncActionStatus{syncActionCreated, syncActionUpdated, syncActionUnchanged, syncActionDryRun}
 
 // installSyncAction renders and writes the workflow for the project at dir.
 func installSyncAction(ctx context.Context, dir string, o syncActionOptions) (syncActionResult, error) {
@@ -475,39 +386,6 @@ func removeLegacySyncAction(toplevel, prefix string) error {
 		return os.Remove(legacy)
 	}
 	return nil
-}
-
-// uninstallSyncAction deletes the generated workflow.
-func uninstallSyncAction(ctx context.Context, dir string, force bool) (syncActionResult, error) {
-	repo, err := gitsetup.Open(ctx, dir)
-	if err != nil {
-		return syncActionResult{}, errcodes.New(errcodes.Unsupported, "uninstall-action needs a git repository").WithCause(err)
-	}
-	prefix := lorePathPrefix(repo.Toplevel, dir)
-	file := filepath.Join(repo.Toplevel, filepath.FromSlash(syncActionFileRel(prefix)))
-	if _, statErr := os.Stat(file); errors.Is(statErr, fs.ErrNotExist) {
-		if legacy := legacySyncActionFor(repo.Toplevel, prefix); legacy != "" {
-			file = legacy
-		}
-	}
-	res := syncActionResult{Path: file}
-	existing, err := os.ReadFile(filepath.Clean(file))
-	if errors.Is(err, fs.ErrNotExist) {
-		res.Status = syncActionAbsent
-		return res, nil
-	}
-	if err != nil {
-		return res, errcodes.New(errcodes.Internal, "read "+file).WithCause(err)
-	}
-	if !strings.HasPrefix(string(existing), syncActionMarker) && !force {
-		return res, errcodes.New(errcodes.InvalidInput, file+" was not generated by lore; refusing to delete it").
-			WithHint("pass --force to delete it anyway")
-	}
-	if err := os.Remove(file); err != nil {
-		return res, errcodes.New(errcodes.Internal, "remove "+file).WithCause(err)
-	}
-	res.Status = syncActionRemoved
-	return res, nil
 }
 
 // syncActionParamsFor validates options and derives the template inputs.
@@ -857,35 +735,29 @@ func releaseParts(v string) [3]int {
 	return out
 }
 
-// printSyncAction renders an install/uninstall result for a terminal.
-func printSyncAction(res syncActionResult) {
+// printSyncAction renders an install-action result for a terminal.
+func printSyncAction(w *strings.Builder, res syncActionResult) {
 	switch res.Status {
 	case syncActionDryRun:
-		fmt.Print(res.Content)
-		return
-	case syncActionAbsent:
-		fmt.Printf("· no lore workflow at %s\n", res.Path)
-		return
-	case syncActionRemoved:
-		fmt.Printf("%s removed %s — commit the deletion to disable it\n", style.Success("✓"), res.Path)
+		w.WriteString(res.Content)
 		return
 	case syncActionUnchanged:
-		fmt.Printf("· %s is already up to date\n", res.Path)
+		fmt.Fprintf(w, "· %s is already up to date\n", res.Path)
 		return
 	case syncActionCreated, syncActionUpdated:
 		// the write lines below
 	}
-	fmt.Printf("%s %s %s\n", style.Success("✓"), res.Status, res.Path)
+	fmt.Fprintf(w, "%s %s %s\n", style.Success("✓"), res.Status, res.Path)
 	if res.Pin == syncActionPinFixed {
-		fmt.Printf("  downloads lore %s (pinned: never updated automatically)\n", res.LoreVersion)
+		fmt.Fprintf(w, "  downloads lore %s (pinned: never updated automatically)\n", res.LoreVersion)
 	} else {
-		fmt.Printf("  downloads lore %s; lore moves it to newer releases as developers upgrade (commit those updates)\n", res.LoreVersion)
+		fmt.Fprintf(w, "  downloads lore %s; lore moves it to newer releases as developers upgrade (commit those updates)\n", res.LoreVersion)
 	}
 	if res.Manual {
-		fmt.Println("  runs only when started by hand (Actions → lore sync merge → Run workflow)")
-		fmt.Printf("  re-run with --%s to also run it when lore data changes (spends Actions time)\n", constants.FlagAuto)
+		fmt.Fprintln(w, "  runs only when started by hand (Actions → lore sync merge → Run workflow)")
+		fmt.Fprintf(w, "  re-run with --%s to also run it when lore data changes (spends Actions time)\n", constants.FlagAuto)
 	} else {
-		fmt.Printf("  runs when lore data changes on a pull request or on: %s\n", strings.Join(res.Branches, ", "))
+		fmt.Fprintf(w, "  runs when lore data changes on a pull request or on: %s\n", strings.Join(res.Branches, ", "))
 	}
-	fmt.Println("  commit the file to enable it; add a LORE_SYNC_TOKEN secret if required checks must re-run on its merges")
+	fmt.Fprintln(w, "  commit the file to enable it; add a LORE_SYNC_TOKEN secret if required checks must re-run on its merges")
 }

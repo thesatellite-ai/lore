@@ -24,11 +24,11 @@ func TestInsertAfterFirstLine(t *testing.T) {
 // anything else passes through.
 func TestWriteIndented(t *testing.T) {
 	var b bytes.Buffer
-	if err := writeIndented(&b, []byte(`{"a":1}`)); err != nil || b.String() != "{\n  \"a\": 1\n}\n" {
+	if err := WriteIndented(&b, []byte(`{"a":1}`)); err != nil || b.String() != "{\n  \"a\": 1\n}\n" {
 		t.Fatalf("indent: %q %v", b.String(), err)
 	}
 	b.Reset()
-	if err := writeIndented(&b, []byte("not json\n")); err != nil || b.String() != "not json\n" {
+	if err := WriteIndented(&b, []byte("not json\n")); err != nil || b.String() != "not json\n" {
 		t.Fatalf("passthrough: %q %v", b.String(), err)
 	}
 }

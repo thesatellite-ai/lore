@@ -144,7 +144,6 @@ func init() {
 	rootCmd.AddCommand(newPluginCommand())
 	rootCmd.AddCommand(newMountAliasCommand())
 	rootCmd.AddCommand(buildTUICommand())
-	rootCmd.AddCommand(newSyncCommand())
 	rootCmd.AddCommand(newMergeDriverCommand())
 	registerExtraCommands(rootCmd)
 	attachRosterCommands(rootCmd)

@@ -16,8 +16,6 @@ import (
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/gitremote"
 	"saas/pkg/aicoder/live"
-
-	"github.com/spf13/cobra"
 )
 
 // doctorLive adds one line per live-rows check to the doctor report. Only
@@ -171,23 +169,8 @@ func doctorLiveHooks(ctx context.Context, s *liveSession, warn, note func(string
 
 // ---------------------------------------------------------------- explain
 
-func newExplainCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "explain <id>",
-		Short: "Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			s, folder, err := liveHere(cmd)
-			if err != nil {
-				return err
-			}
-			return s.explain(cmd.Context(), folder, args[0])
-		},
-	}
-}
-
 // explain prints F1's view of one id.
-func (s *liveSession) explain(ctx context.Context, folder, id string) error {
+func (s *liveSession) explain(ctx context.Context, w *strings.Builder, folder, id string) error {
 	_, local, err := s.ref.LocalTree(ctx)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "read live ref").WithCause(err)
@@ -202,28 +185,28 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 		}
 	}
 	snap, _ := s.ref.Snapshot(ctx) // display only (`lore live explain`): unreadable refs show as none
-	fmt.Printf("%s in %s (folder %s)\n", id, s.toplevel, folder)
+	fmt.Fprintf(w, "%s in %s (folder %s)\n", id, s.toplevel, folder)
 	if at := live.FetchStamp(s.stateDir); !at.IsZero() {
-		fmt.Printf("  fetched %s ago\n", s.clk.Now().Sub(at).Round(time.Second))
+		fmt.Fprintf(w, "  fetched %s ago\n", s.clk.Now().Sub(at).Round(time.Second))
 	}
 	if lf != nil {
 		state := "row"
 		if lf.Deleted() {
 			state = "tombstone"
 		}
-		fmt.Printf("  live (local %s): %s, live since %s, hlc %s", shortSHA(snap.Local), state, lf.Block.LiveSince.Format(time.RFC3339), lf.Block.HLC)
+		fmt.Fprintf(w, "  live (local %s): %s, live since %s, hlc %s", shortSHA(snap.Local), state, lf.Block.LiveSince.Format(time.RFC3339), lf.Block.HLC)
 		if !lf.Block.LastCopyAt.IsZero() {
-			fmt.Printf(", last copy %s", lf.Block.LastCopyAt.Format(time.RFC3339))
+			fmt.Fprintf(w, ", last copy %s", lf.Block.LastCopyAt.Format(time.RFC3339))
 		}
 		if lf.Block.Conflict {
-			fmt.Print(", CONFLICT")
+			w.WriteString(", CONFLICT")
 		}
-		fmt.Println()
+		w.WriteString("\n")
 		if snap.Tracking != snap.Local {
-			fmt.Printf("  live on the remote (tracking %s) differs: %d write(s) not pushed\n", shortSHA(snap.Tracking), max(1, len(mustPending(s))))
+			fmt.Fprintf(w, "  live on the remote (tracking %s) differs: %d write(s) not pushed\n", shortSHA(snap.Tracking), max(1, len(mustPending(s))))
 		}
 	} else {
-		fmt.Println("  live: not present")
+		fmt.Fprintln(w, "  live: not present")
 	}
 	table := key.Table
 	if table == "" {
@@ -232,17 +215,17 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 	branchPath := mainDataPath(folder, table+"/"+id+".json")
 	if table != "" {
 		if b, ok, _ := s.repo.ReadFile(ctx, "HEAD", branchPath); ok { // display only: a read error shows as absent
-			fmt.Printf("  this branch (HEAD): %s (%d bytes)\n", branchPath, len(b))
+			fmt.Fprintf(w, "  this branch (HEAD): %s (%d bytes)\n", branchPath, len(b))
 		} else {
-			fmt.Println("  this branch (HEAD): not present")
+			fmt.Fprintln(w, "  this branch (HEAD): not present")
 		}
 		mv := s.mainView(ctx, folder)
 		if b := mv.body(ctx, live.RowKey{Table: table, ID: id}); b != nil {
-			fmt.Printf("  %s: present\n", strings.TrimPrefix(mv.ref, "refs/remotes/"))
+			fmt.Fprintf(w, "  %s: present\n", strings.TrimPrefix(mv.ref, "refs/remotes/"))
 		} else if mv.purged[id] {
-			fmt.Printf("  %s: deleted on purpose (_purged.json)\n", strings.TrimPrefix(mv.ref, "refs/remotes/"))
+			fmt.Fprintf(w, "  %s: deleted on purpose (_purged.json)\n", strings.TrimPrefix(mv.ref, "refs/remotes/"))
 		} else {
-			fmt.Printf("  %s: not present\n", strings.TrimPrefix(mv.ref, "refs/remotes/"))
+			fmt.Fprintf(w, "  %s: not present\n", strings.TrimPrefix(mv.ref, "refs/remotes/"))
 		}
 	}
 	onMainOnly := false
@@ -251,21 +234,21 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 			mv := s.mainView(ctx, folder)
 			if t := s.findTableAt(ctx, mv.ref, folder, id); t != "" {
 				onMainOnly = true
-				fmt.Printf("  %s: present (%s)\n", strings.TrimPrefix(mv.ref, "refs/remotes/"), t)
+				fmt.Fprintf(w, "  %s: present (%s)\n", strings.TrimPrefix(mv.ref, "refs/remotes/"), t)
 			}
 		}
 	}
 	switch {
 	case onMainOnly:
-		fmt.Println("  wins: the fetched default branch's copy, by the " + ruleDefaultReadThrough + " rule (you are on the default branch and have not pulled it yet)")
+		fmt.Fprintln(w, "  wins: the fetched default branch's copy, by the "+ruleDefaultReadThrough+" rule (you are on the default branch and have not pulled it yet)")
 	case lf != nil && lf.Deleted():
-		fmt.Println("  wins: the live tombstone (rule 4): the row is deleted; lookup stops here")
+		fmt.Fprintln(w, "  wins: the live tombstone (rule 4): the row is deleted; lookup stops here")
 	case lf != nil:
-		fmt.Println("  wins: the live copy (rule 4: if a row id is in live, live wins)")
+		fmt.Fprintln(w, "  wins: the live copy (rule 4: if a row id is in live, live wins)")
 	case table != "":
-		fmt.Println("  wins: this branch's copy (not live)")
+		fmt.Fprintln(w, "  wins: this branch's copy (not live)")
 	default:
-		fmt.Println("  not found in live or on this branch; " + livePeekHint(s.ref.RemoteName, s.defaultBranch(ctx), ""))
+		fmt.Fprintln(w, "  not found in live or on this branch; "+livePeekHint(s.ref.RemoteName, s.defaultBranch(ctx), ""))
 	}
 	if lf != nil {
 		plan, err := s.plan(ctx, folder, nil)
@@ -280,7 +263,7 @@ func (s *liveSession) explain(ctx context.Context, folder, id string) error {
 				} else if p.Decision.Action != live.LandStay && readLiveNoteText(s.stateDir, liveNoteProtected) != "" {
 					what = explainWaitsLine(s.defaultBranch(ctx))
 				}
-				fmt.Println("  land: " + what)
+				fmt.Fprintln(w, "  land: "+what)
 			}
 		}
 	}

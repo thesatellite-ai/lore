@@ -22,7 +22,6 @@ import (
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/style"
 
-	"github.com/spf13/cobra"
 	coreschema "github.com/thesatellite-ai/lore/schema"
 )
 
@@ -368,53 +367,6 @@ func shortSHA(s string) string {
 
 // ---------------------------------------------------------------- lore land
 
-func newLandCommand() *cobra.Command {
-	var all, dryRun bool
-	var kind, mission string
-	cmd := &cobra.Command{
-		Use:   "land [id]",
-		Short: "Write live rows to main now (finished rows land; open rows are copied and stay live)",
-		Long: `Live rows land on main by themselves when they are finished, and open rows
-are copied at live.max_age. land does it now for one row or a selection.
---dry-run prints the plan with the reason for every row.`,
-		Example: `  lore land tsk_02
-  lore land --mission mis_12 --dry-run
-  lore land --all --kind rules`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 && !all && kind == "" && mission == "" {
-				return errcodes.New(errcodes.InvalidInput, "name a row id, or use --all, --kind or --mission")
-			}
-			s, folder, err := liveHere(cmd)
-			if err != nil {
-				return err
-			}
-			sel := landSelector(args, kind, mission)
-			if dryRun {
-				return s.printLandPlan(cmd.Context(), folder, sel)
-			}
-			out, err := s.landPass(cmd.Context(), folder, sel, false)
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "land").WithCause(err)
-			}
-			if len(out.Conflicts) > 0 {
-				return errcodes.New(errcodes.InvalidInput, strings.Join(out.Conflicts, ", ")+" has a conflict (conflict markers in a text field); it cannot land").
-					WithHint("settle it with `lore sync conflicts` / `lore sync resolve`, then land again")
-			}
-			if out.Status == "" {
-				fmt.Printf("nothing to land: %s already holds every named row\n", out.Branch)
-				return nil
-			}
-			return printLandOutcome(os.Stderr, out)
-		},
-	}
-	cmd.Flags().BoolVar(&all, "all", false, "every live row of this project")
-	cmd.Flags().StringVar(&kind, "kind", "", "only rows of this kind (tasks, rules, …)")
-	cmd.Flags().StringVar(&mission, "mission", "", "only the mission and its tasks")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the plan, change nothing")
-	return cmd
-}
-
 // landSelector builds the row filter of `lore land`.
 func landSelector(args []string, kind, mission string) landSelect {
 	table := ""
@@ -441,14 +393,14 @@ func landSelector(args []string, kind, mission string) landSelect {
 	}
 }
 
-func (s *liveSession) printLandPlan(ctx context.Context, folder string, sel landSelect) error {
+func (s *liveSession) printLandPlan(ctx context.Context, w *strings.Builder, folder string, sel landSelect) error {
 	plan, err := s.plan(ctx, folder, sel)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "land plan").WithCause(err)
 	}
-	fmt.Printf("would land %d row(s) to %s (%s/):\n", countLanding(plan), s.defaultBranch(ctx), folder)
+	fmt.Fprintf(w, "would land %d row(s) to %s (%s/):\n", countLanding(plan), s.defaultBranch(ctx), folder)
 	for _, p := range plan {
-		fmt.Printf("  %-40s %-5s %s\n", p.Key.ID, p.Decision.Action, p.Decision.Reason)
+		fmt.Fprintf(w, "  %-40s %-5s %s\n", p.Key.ID, p.Decision.Action, p.Decision.Reason)
 	}
 	return nil
 }
@@ -466,7 +418,7 @@ func countLanding(plan []landPlanRow) int {
 // printLiveStatus adds the live part of `lore sync status`: rows that exist
 // only in live with their age, and what each waits for (rule 8, side
 // effect 13).
-func printLiveStatus(ctx context.Context, projectRoot string) {
+func printLiveStatus(ctx context.Context, w *strings.Builder, projectRoot string) {
 	s := liveFor(ctx, projectRoot)
 	if s == nil {
 		return
@@ -474,16 +426,16 @@ func printLiveStatus(ctx context.Context, projectRoot string) {
 	folder := s.folderFor(projectRoot)
 	plan, err := s.plan(ctx, folder, nil)
 	if err != nil {
-		fmt.Println(style.Warn("live: " + err.Error()))
+		fmt.Fprintln(w, style.Warn("live: "+err.Error()))
 		return
 	}
 	// Display only (the land preview): unreadable refs or pending list show
 	// as none; the land itself re-reads both and fails on an error.
 	snap, _ := s.ref.Snapshot(ctx)
 	pending, _ := s.ref.Pending()
-	fmt.Printf("live rows:        %d (%s)\n", len(plan), folder)
+	fmt.Fprintf(w, "live rows:        %d (%s)\n", len(plan), folder)
 	if snap.Ahead() {
-		fmt.Printf("live not pushed:  %d write(s) waiting\n", max(len(pending), 1))
+		fmt.Fprintf(w, "live not pushed:  %d write(s) waiting\n", max(len(pending), 1))
 	}
 	protected := readLiveNoteText(s.stateDir, liveNoteProtected)
 	branch := s.defaultBranch(ctx)
@@ -499,7 +451,7 @@ func printLiveStatus(ctx context.Context, projectRoot string) {
 		case p.Decision.Action != live.LandStay:
 			why = "waiting to land (" + why + ")"
 		}
-		fmt.Printf("  %-10s %-40s live %-8s %s\n", p.Key.Table, p.Key.ID, age, why)
+		fmt.Fprintf(w, "  %-10s %-40s live %-8s %s\n", p.Key.Table, p.Key.ID, age, why)
 	}
 }
 

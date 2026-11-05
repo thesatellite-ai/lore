@@ -19,12 +19,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/style"
-	"saas/pkg/constants"
 )
 
 // ciMergeOutcome is what `lore sync ci-merge` decided. The generated workflow
@@ -55,9 +52,6 @@ var ciMergeOutcomes = []ciMergeOutcome{ciMergeUpToDate, ciMergeClean, ciMergeMer
 // by it, so the two can never disagree.
 const ciMergeCommand = BinaryName + " sync ci-merge"
 
-// jsonKindSyncCIMerge is the JSON envelope kind of `lore sync ci-merge`.
-const jsonKindSyncCIMerge = "sync.ci-merge"
-
 // ciMergeResult is what `lore sync ci-merge` reports.
 type ciMergeResult struct {
 	// Outcome is one of the ciMerge* constants.
@@ -72,49 +66,6 @@ type ciMergeResult struct {
 	Blocking []string `json:"blocking,omitempty"`
 	// Reason explains a needs-human outcome in one sentence.
 	Reason string `json:"reason,omitempty"`
-}
-
-func newSyncCIMergeCommand() *cobra.Command {
-	var base string
-	var dryRun, asJSON bool
-	cmd := &cobra.Command{
-		Use:   "ci-merge --base <ref>",
-		Short: "Merge a base branch into this branch when only lore data conflicts (for CI)",
-		Long: `Merges <ref> into the current branch with lore's field-level merge driver and
-commits the merge, but only when a plain merge would conflict, every conflict
-is in .lore/data or .lore/LORE.md, and lore's driver settles all of them.
-Otherwise nothing is changed and the outcome says why.
-
-It never pushes; the workflow installed by ` + "`lore sync install-action`" + ` runs it and
-pushes the result. Run it locally to see what that workflow would do.
-
-Outcomes (also in --json): up-to-date, clean (the host can merge as is),
-merged (committed here, ready to push), needs-human (left unchanged).
-Exits 0 for every outcome; a non-zero exit means the command itself failed.`,
-		Example: `  lore sync ci-merge --base origin/main
-  lore sync ci-merge --base origin/main --dry-run
-  lore sync ci-merge --base origin/main --json`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(base) == "" {
-				return errcodes.New(errcodes.InvalidInput, "--base is required").WithHint("e.g. --base origin/main")
-			}
-			res, err := runCIMerge(cmd.Context(), ".", base, dryRun)
-			if err != nil {
-				return err
-			}
-			if asJSON {
-				printJSON(jsonKindSyncCIMerge, res, 0)
-				return nil
-			}
-			printCIMerge(res, dryRun)
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&base, constants.FlagBase, "", "ref to merge in (e.g. origin/main)")
-	cmd.Flags().BoolVar(&dryRun, constants.FlagDryRun, false, "report what would happen; change nothing")
-	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "JSON output")
-	return cmd
 }
 
 // runCIMerge implements `lore sync ci-merge` for the project at dir.
@@ -220,28 +171,28 @@ func isLoreManagedPath(prefix, p string) bool {
 }
 
 // printCIMerge renders a ci-merge result for a terminal.
-func printCIMerge(res ciMergeResult, dryRun bool) {
+func printCIMerge(w *strings.Builder, res ciMergeResult, dryRun bool) {
 	switch res.Outcome {
 	case ciMergeUpToDate:
-		fmt.Printf("%s %s is already merged into this branch\n", style.Success("✓"), res.Base)
+		fmt.Fprintf(w, "%s %s is already merged into this branch\n", style.Success("✓"), res.Base)
 	case ciMergeClean:
-		fmt.Printf("%s merging %s has no conflicts; the host can merge it as is\n", style.Success("✓"), res.Base)
+		fmt.Fprintf(w, "%s merging %s has no conflicts; the host can merge it as is\n", style.Success("✓"), res.Base)
 	case ciMergeMerged:
 		verb := "merged and committed"
 		if dryRun {
 			verb = "would merge"
 		}
-		fmt.Printf("%s %s %s: %d lore file(s) settled field by field\n", style.Success("✓"), verb, res.Base, len(res.Merged))
+		fmt.Fprintf(w, "%s %s %s: %d lore file(s) settled field by field\n", style.Success("✓"), verb, res.Base, len(res.Merged))
 		for _, p := range res.Merged {
-			fmt.Printf("  %s\n", p)
+			fmt.Fprintf(w, "  %s\n", p)
 		}
 		if res.Commit != "" {
-			fmt.Printf("  commit %s — push it to update the pull request\n", res.Commit)
+			fmt.Fprintf(w, "  commit %s — push it to update the pull request\n", res.Commit)
 		}
 	case ciMergeNeedsHuman:
-		fmt.Printf("%s %s — nothing changed\n", style.Warn("!"), res.Reason)
+		fmt.Fprintf(w, "%s %s — nothing changed\n", style.Warn("!"), res.Reason)
 		for _, p := range res.Blocking {
-			fmt.Printf("  %s\n", path.Clean(p))
+			fmt.Fprintf(w, "  %s\n", path.Clean(p))
 		}
 	}
 }

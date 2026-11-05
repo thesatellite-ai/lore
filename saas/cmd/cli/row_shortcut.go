@@ -90,6 +90,10 @@ func defaultVerb(root *cobra.Command, noun, verb string) *cobra.Command {
 		return nil
 	}
 	g.Short = run.Short
+	// The verb's flags are listed on the group too, so `lore <noun> --flag`
+	// is documented where it is typed (help, the docs drift check); the
+	// group never parses them (DisableFlagParsing), the verb does.
+	g.Flags().AddFlagSet(run.LocalFlags())
 	g.Args = cobra.ArbitraryArgs
 	g.DisableFlagParsing = true
 	g.RunE = forward(run)

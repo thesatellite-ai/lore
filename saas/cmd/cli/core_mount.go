@@ -92,6 +92,7 @@ func coreOptions(repoDir, home string) wire.Options {
 		WorkDir: coreWorkDir(), Version: version, Audit: &coreAuditSink{root: repoDir}, // OVERNIGHT Qs subfolder: audit at the repo top
 		ModeB: modeBExporter{}, Roster: cliRoster{}, WrapBackend: coreWrapBackend, ProjectHint: coreProjectHint, LiveRef: coreLiveRef, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now,
 		Context: wire.ContextHosts{RenderHistory: renderHistoryHost{}, Setup: setupHost{}, SupportBundle: supportBundleHost{}, Fetch: contextHost{}},
+		Sync:    syncHost{},  // P3-SYNC-1: lore sync|land|explain are ops/sync operations run by this host
 		Coord:   coordHost{}} // P3-COORD-1: task claim|next|…, hold, gate, inbox, mission status (coord_ops_host.go)
 	// Org, RepoIsClient, OrgStores, OrgEntryStore, OrgSigners, DefaultTarget
 	// and GuardRepoWrite: the core's org resolution, the same code cmd/lore
@@ -239,6 +240,7 @@ func mountCore(root *cobra.Command) {
 	mountSearchShortcut(root) // CLI_REFERENCE 2.5: lore search "<q>" (P3-MISC-1)
 	mountBareVerbs(root)      // P3-MISC-3: lore why-context [--cut] (misc_shortcuts.go)
 	mountRowShortcuts(root)   // CLI 2.7/2.13: lore show <id>, bare lore lint
+	attachSyncHost(root)      // P3-SYNC-1: bare lore sync|land|explain, lore sync trash, the hidden lore sync hook
 	withMigrateTeamLock(root) // FORMAT_EVOLUTION 7.2: migrate run|rollback|unlock --team get the signals-ref team lock
 	// The coordination verbs (task claim|next|…, hold, gate, inbox, mission
 	// status) are ops/coord operations over coordHost (P3-COORD-1); only

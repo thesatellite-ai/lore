@@ -89,6 +89,7 @@ import (
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssuggestion "github.com/thesatellite-ai/lore/ops/suggestion"
 	opssupportbundle "github.com/thesatellite-ai/lore/ops/supportbundle"
+	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	opstasklist "github.com/thesatellite-ai/lore/ops/tasklist"
@@ -237,6 +238,10 @@ type Options struct {
 	// Version is the lore version written into every `_w` stamp (OQ7,
 	// PROVENANCE_DESIGN 6.2). Empty leaves `v` out.
 	Version string
+	// Sync is the binary's repo-sync host: `lore sync …`, `lore land`,
+	// `lore explain` (ops/sync). nil registers the same operations, each
+	// answering E_UNSUPPORTED (P3-SYNC-1).
+	Sync opssync.Env
 	// Machine returns this machine's id for `_w.m` (PROV4); nil reads the
 	// OS machine id through adapters/machine. An error leaves `m` out
 	// (never a made-up id). Tests pass a fixed id.
@@ -455,6 +460,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opscoord.Ops(a)...)
 	entries = append(entries, opssupportbundle.Ops(a)...)
 	entries = append(entries, contextop.Ops(a)...)
+	// PASS3 ONE-PATH: lore sync …, land, explain (the host is Options.Sync).
+	entries = append(entries, opssync.Ops(a.opts.Sync)...)
 	return op.NewRegistry(entries...)
 }
 

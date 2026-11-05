@@ -205,21 +205,15 @@ func TestSyncActionPerProjectFiles(t *testing.T) {
 	if !strings.Contains(readFile(t, apiFile), "group: lore-sync-merge-services-api-") {
 		t.Fatal("concurrency group must be per project")
 	}
-	webBefore := readFile(t, webFile)
+	webBefore, rootBefore := readFile(t, webFile), readFile(t, rootFile)
 	if r := refresh(t, api, "0.1.12"); r.Path != apiFile || r.To != "v0.1.12" {
 		t.Fatalf("api refresh = %+v", r)
 	}
-	if readFile(t, webFile) != webBefore {
+	if readFile(t, webFile) != webBefore || readFile(t, rootFile) != rootBefore {
 		t.Fatal("refreshing one project touched another")
 	}
-	if res, err := uninstallSyncAction(context.Background(), web, false); err != nil || res.Path != webFile {
-		t.Fatalf("uninstall web: %+v %v", res, err)
-	}
-	for _, f := range []string{apiFile, rootFile} {
-		if _, err := os.Stat(f); err != nil {
-			t.Fatalf("uninstalling one project removed %s", f)
-		}
-	}
+	// The per-project uninstall check went with `lore sync uninstall-action`
+	// (dropped, p3/dropped.md).
 }
 
 // legacyFile turns a freshly rendered file into what lore v0.1.11 wrote: no

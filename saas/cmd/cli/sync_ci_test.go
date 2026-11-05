@@ -209,18 +209,16 @@ func captureStdout(t *testing.T, fn func()) string {
 // without printing it would leave the user with no output at all.
 func TestPrintersCoverEveryValue(t *testing.T) {
 	for _, o := range ciMergeOutcomes {
-		out := captureStdout(t, func() {
-			printCIMerge(ciMergeResult{Outcome: o, Base: "origin/main", Reason: "r", Merged: []string{"a"}, Blocking: []string{"b"}}, false)
-		})
-		if strings.TrimSpace(out) == "" {
+		var b strings.Builder
+		printCIMerge(&b, ciMergeResult{Outcome: o, Base: "origin/main", Reason: "r", Merged: []string{"a"}, Blocking: []string{"b"}}, false)
+		if strings.TrimSpace(b.String()) == "" {
 			t.Fatalf("outcome %q prints nothing", o)
 		}
 	}
 	for _, s := range syncActionStatuses {
-		out := captureStdout(t, func() {
-			printSyncAction(syncActionResult{Status: s, Path: "p", Content: "c", LoreVersion: "v1.0.0", Branches: []string{"main"}})
-		})
-		if strings.TrimSpace(out) == "" {
+		var b strings.Builder
+		printSyncAction(&b, syncActionResult{Status: s, Path: "p", Content: "c", LoreVersion: "v1.0.0", Branches: []string{"main"}})
+		if strings.TrimSpace(b.String()) == "" {
 			t.Fatalf("status %q prints nothing", s)
 		}
 	}

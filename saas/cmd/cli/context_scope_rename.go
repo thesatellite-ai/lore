@@ -18,8 +18,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
-
-	"saas/pkg/aicoder/style"
 )
 
 // renameStatusPrefix starts a rename line of `git log --name-status`.
@@ -88,11 +86,4 @@ func renamedTo(ctx context.Context, root, old string) string {
 func isDir(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.IsDir()
-}
-
-// printScopeRenameHints prints the hints (sync's human output only).
-func printScopeRenameHints(ctx context.Context, root string) {
-	for _, h := range scopeRenameHints(ctx, root) {
-		fmt.Println(style.Muted("· ") + h)
-	}
 }

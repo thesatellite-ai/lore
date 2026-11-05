@@ -977,31 +977,24 @@ func TestE2E_PromoteToMain(t *testing.T) {
 	}
 }
 
-// E48: duplicates found and folded.
-func TestE2E_DupesAndMergeRows(t *testing.T) {
+// E48: duplicates folded. `lore sync dupes` is dropped in 0.1.18
+// (p3/dropped.md: only LORE_SYNC_SPEC lists it), so the test names the two
+// rows itself and checks the fold.
+func TestE2E_MergeRows(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	c.lore("init", "--non-interactive", "--name=app")
 	a := c.addRule("Same Fact")
 	b := c.addRule("same   fact")
-	// The core writes the row files; a pass brings them into lore.db, which
-	// dupes reads (STORE_SERVER_SPEC 3: lore.db is the files' read copy).
 	c.lore("sync")
-	out := c.lore("sync", "dupes").stdout
-	if !strings.Contains(out, a) || !strings.Contains(out, b) {
-		t.Fatalf("dupes: %s", out)
-	}
 	// merge-rows of a core row would change only lore.db, so it is refused
 	// and names the core's way: keep one, delete the other (a63c6f8).
 	if r := c.loreAny("sync", "merge-rows", "rules", "--keep", a, "--drop", b); r.code == 0 || !strings.Contains(r.stderr, "delete "+b) {
 		t.Fatalf("merge-rows of a core row must be refused with the core's way: %d %s", r.code, r.stderr)
 	}
 	c.lore("rule", "delete", b, "--yes")
-	if strings.Contains(c.rows(), b) {
-		t.Fatal("dropped row still listed")
-	}
-	if out := c.lore("sync", "dupes").stdout; !strings.Contains(out, "no duplicates") {
-		t.Fatalf("still dupes: %s", out)
+	if rows := c.rows(); strings.Contains(rows, b) || !strings.Contains(rows, a) {
+		t.Fatalf("dropped row still listed or kept row gone: %s", rows)
 	}
 
 	// The lore.db engine still folds rows of the tables it owns: references
@@ -1317,14 +1310,19 @@ func TestE2E_RepoIgnoreRuleCannotHideData(t *testing.T) {
 	if out := bob.rows(); !strings.Contains(out, "survives a broad ignore rule") {
 		t.Fatalf("fresh clone did not import: %s", out)
 	}
-	if r := bob.lore("sync", "install-git"); !strings.Contains(r.stdout, "gitignore:   changed=false") {
-		t.Fatalf("bob must not need another .gitignore change: %s", r.stdout)
+	// `lore sync install-git` is dropped (p3/dropped.md); the wiring runs
+	// after every command, so bob's commands must leave .gitignore as
+	// alice committed it.
+	bob.lore("rule", "list")
+	if out := bob.git("status", "--porcelain", "--", ".gitignore"); out != "" {
+		t.Fatalf("bob must not need another .gitignore change: %s", out)
 	}
 }
 
 // When the whole .lore/ folder is ignored a negation cannot help: lore leaves
-// .gitignore alone, says so once (it is often deliberate), and install-git
-// fails naming the rule.
+// .gitignore alone and says so once (it is often deliberate). The
+// E_SYNC_DATA_IGNORED failure of the dropped `lore sync install-git` went
+// with that command (p3/dropped.md).
 func TestE2E_IgnoredLoreFolderIsReported(t *testing.T) {
 	w := newWorld(t)
 	alice := w.newClone("alice")
@@ -1342,10 +1340,6 @@ func TestE2E_IgnoredLoreFolderIsReported(t *testing.T) {
 	if again := alice.lore("rule", "list"); strings.Contains(again.stderr, "git ignores lore data") {
 		t.Fatalf("warning must not repeat while nothing changed: %s", again.stderr)
 	}
-	r = alice.loreAny("sync", "install-git")
-	if r.code == 0 || !strings.Contains(r.stderr+r.stdout, "E_SYNC_DATA_IGNORED") {
-		t.Fatalf("install-git must fail: %d %s %s", r.code, r.stdout, r.stderr)
-	}
 	// Editing the rule re-runs the check; fixing it clears the warning.
 	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/\n# still private\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -1358,9 +1352,6 @@ func TestE2E_IgnoredLoreFolderIsReported(t *testing.T) {
 	}
 	if r := alice.lore("rule", "list"); strings.Contains(r.stderr, "git ignores lore data") {
 		t.Fatalf("still warning after the fix: %s", r.stderr)
-	}
-	if r := alice.lore("sync", "install-git"); r.code != 0 {
-		t.Fatalf("install-git after the fix: %s", r.stderr)
 	}
 }
 

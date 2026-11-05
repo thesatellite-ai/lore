@@ -184,7 +184,7 @@ func TestSyncActionRefusesUnsafeBranch(t *testing.T) {
 	}
 }
 
-// Every install/uninstall state, in one repository.
+// Every install state, in one repository.
 func TestInstallUninstallSyncAction(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -192,9 +192,6 @@ func TestInstallUninstallSyncAction(t *testing.T) {
 	file := filepath.Join(dir, filepath.FromSlash(syncActionFileRel("")))
 	o := syncActionOptions{branches: []string{"main"}, loreVersion: "v0.1.10"}
 
-	if res, err := uninstallSyncAction(ctx, dir, false); err != nil || res.Status != syncActionAbsent {
-		t.Fatalf("uninstall before install: %+v %v", res, err)
-	}
 	dry := o
 	dry.dryRun = true
 	if res, err := installSyncAction(ctx, dir, dry); err != nil || res.Status != syncActionDryRun || !strings.HasPrefix(res.Content, syncActionMarker) {
@@ -217,16 +214,13 @@ func TestInstallUninstallSyncAction(t *testing.T) {
 		t.Fatal("update did not rewrite the version")
 	}
 
-	// A workflow someone else wrote at that path is never overwritten or
-	// deleted without --force.
+	// A workflow someone else wrote at that path is never overwritten
+	// without --force.
 	if err := os.WriteFile(file, []byte("name: theirs\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := installSyncAction(ctx, dir, o); err == nil {
 		t.Fatal("overwrote a foreign file")
-	}
-	if _, err := uninstallSyncAction(ctx, dir, false); err == nil {
-		t.Fatal("deleted a foreign file")
 	}
 	if got, _ := os.ReadFile(filepath.Clean(file)); string(got) != "name: theirs\n" {
 		t.Fatal("foreign file changed")
@@ -236,12 +230,8 @@ func TestInstallUninstallSyncAction(t *testing.T) {
 	if res, err := installSyncAction(ctx, dir, forced); err != nil || res.Status != syncActionUpdated {
 		t.Fatalf("--force: %+v %v", res, err)
 	}
-	if res, err := uninstallSyncAction(ctx, dir, false); err != nil || res.Status != syncActionRemoved {
-		t.Fatalf("uninstall: %+v %v", res, err)
-	}
-	if _, err := os.Stat(file); !os.IsNotExist(err) {
-		t.Fatal("file still there")
-	}
+	// The uninstall half went with `lore sync uninstall-action` (dropped,
+	// p3/dropped.md).
 }
 
 func TestSyncActionNeedsGit(t *testing.T) {

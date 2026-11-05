@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
+	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -170,6 +171,11 @@ func TestEveryPurgePathRefusesYes(t *testing.T) {
 			// before the id is looked up, so the memory's id serves every
 			// noun and nothing is removed either way.
 			modes = []string{`{"id":"%s","purge":true}`}
+		case name == opssync.OpPurge:
+			// v0.1.17's `lore sync purge` spelling (FA-DEL-4) runs in the
+			// binary's sync host (Options.Sync, none here); that host
+			// refuses without the literal --confirm, never on --yes.
+			continue
 		case name == opslive.OpPurge:
 			// DELETION_DESIGN (command table): `lore live purge` is unchanged,
 			// the leak-cleanup tool of the live ref; it removes no trashed row
