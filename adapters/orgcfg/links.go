@@ -75,6 +75,9 @@ type GitLinks struct {
 	Config *orgconf.Config
 	// Now is the clock (default time.Now).
 	Now func() time.Time
+	// Always fetches every store this process reads, ignoring
+	// live.fetch_ttl (`lore sync`: v0.1.17 refreshLinkIndex).
+	Always bool
 }
 
 // compile-time check.
@@ -245,7 +248,7 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		}
 		last := lastFetch(dir)
 		offline := false
-		if last.IsZero() || g.now().Sub(last) >= ttl {
+		if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
 			if ferr := fetch(ctx, dir); ferr != nil {
 				offline = true
 			} else {

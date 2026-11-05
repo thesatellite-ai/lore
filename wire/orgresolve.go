@@ -74,6 +74,15 @@ func NewOrgResolution(home, dir string, links orgcfg.LinkSource) *OrgResolution 
 	return &OrgResolution{home: home, dir: dir, links: links}
 }
 
+// FetchLinksAlways makes the link read of this process fetch every org
+// store now, ignoring live.fetch_ttl: `lore sync` refreshes the link index
+// (F11, v0.1.17 refreshLinkIndex). Call it before the first Situation.
+func (r *OrgResolution) FetchLinksAlways() {
+	if g, ok := r.links.(*orgcfg.GitLinks); ok {
+		g.Always = true
+	}
+}
+
 // Situation is the gathered inputs and F10's decision, computed once (it
 // may fetch the org stores).
 func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error) {
