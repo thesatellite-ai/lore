@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -87,6 +88,9 @@ type Entry struct {
 	Branch string `json:"branch,omitempty"`
 	// Personal marks `me` (from ~/.lore/config.yaml, not stores.yaml).
 	Personal bool `json:"personal,omitempty"`
+	// Visibility and Reach are filled by store.list only (StatusReader).
+	Visibility string `json:"visibility,omitempty"`
+	Reach      Reach  `json:"reach,omitempty"`
 }
 
 // InitIn is the input of store.init.
@@ -283,6 +287,12 @@ func Ops(m Manager) []op.Entry {
 			}
 			if got == nil {
 				got = []Entry{}
+			}
+			if sr, ok := upgrade.As[StatusReader](m); ok {
+				for i := range got {
+					st := sr.StoreStatus(ctx, got[i])
+					got[i].Visibility, got[i].Reach = st.Visibility, st.Reach
+				}
 			}
 			return ListOut{Stores: got, Count: len(got)}, nil
 		}),
