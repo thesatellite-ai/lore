@@ -121,6 +121,15 @@ func (l *Live) Prime(ctx context.Context) {
 		return
 	}
 	if r, s := l.h.hookSession(ctx); s != nil {
+		// init wires the clone at once, as v0.1.17's init did through its
+		// first sync pass: the .gitattributes block then exists before the
+		// project's first commit and is committed with it. Wired only by a
+		// later command instead, it sits untracked in each clone and a
+		// merge bringing a teammate's committed copy aborts ("untracked
+		// working tree files would be overwritten").
+		if root := liveProjectRoot(l.h.cfg.WorkDir); root != "" {
+			s.ensureGitWiring(ctx, root)
+		}
 		r.finish(ctx)
 	}
 }
