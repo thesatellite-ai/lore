@@ -258,6 +258,12 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 		}
 		sc.warnings = append(sc.warnings, mwarn...)
 	}
+	if unchangedUpdate(ctx, def, cur, ours, sc) {
+		// the same write twice is a no-op (LORE_TEAM_SPEC F2 step 3): no
+		// new HLC, no updated_at, so the store sees no change and a live
+		// ref makes no commit and no push
+		return Written{Row: cur, Warnings: sc.warnings}, nil
+	}
 	ours.HLC = e.clock.Now(cur.HLC)
 	ours.UpdatedAt, ours.UpdatedBy = ours.HLC.Wall, actor
 
@@ -273,6 +279,35 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 		Merged: merged, SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
 	aw, err := e.finishW(ctx, src, got.docs(), append(got.allowEvents(cl.op, src), ev)...)
 	return Written{Row: got.row, Warnings: append(sc.warnings, aw...)}, err
+}
+
+// unchangedUpdate reports an Update that changes nothing: every field and
+// every metadata value equals the stored row's, no secret finding was
+// accepted or redacted, and no explicit --live moves the row (an edit with
+// --live and no field change still moves a branch row into live, F1).
+func unchangedUpdate(ctx context.Context, def schema.TableDef, cur, ours row.Row, sc screened) bool {
+	if len(sc.accepted) > 0 || len(sc.redacted) > 0 {
+		return false
+	}
+	if store.LiveChoiceFrom(ctx).For(cur.Table) != store.LiveDefault {
+		return false
+	}
+	was := retype(def, cur.Fields)
+	if len(was) != len(ours.Fields) || len(cur.Meta) != len(ours.Meta) {
+		return false
+	}
+	for k, v := range ours.Fields {
+		if !value.Equal(was[k], v) {
+			return false
+		}
+	}
+	for k, v := range ours.Meta {
+		old, ok := cur.Meta[k]
+		if !ok || !value.Equal(old, v) {
+			return false
+		}
+	}
+	return true
 }
 
 // retype returns a copy of a stored row's fields with every field the

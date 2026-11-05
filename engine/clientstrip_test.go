@@ -241,7 +241,11 @@ func TestClientWriteStripsInternalFields(t *testing.T) {
 						if client {
 							eng = f.engine(t, race, nil)
 						}
-						if _, err = eng.Update(ctx, Ref{Store: src, Table: c.table, ID: id}, map[string]value.Value{c.plain: full[c.plain]}); err != nil {
+						// a changed plain value: an Update that changes nothing
+						// writes nothing (engine unchangedUpdate, F2 step 3), so
+						// the merge path needs a real edit
+						edited := txt(full[c.plain].String() + " (edited)")
+						if _, err = eng.Update(ctx, Ref{Store: src, Table: c.table, ID: id}, map[string]value.Value{c.plain: edited}); err != nil {
 							t.Fatal(err)
 						}
 						if !raced {

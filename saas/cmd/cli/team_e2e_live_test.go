@@ -263,9 +263,9 @@ func TestF02_OldBinaryBelowVersionFloorIsReadOnly(t *testing.T) {
 }
 
 // F2 + side effect 32: a delete writes a tombstone, never removes the file.
-// Ported to DELETION SYSTEM (owner, meta-decisions): delete is soft by
-// default (the row goes to the trash with its content, deleted_at set), and
-// only --purge leaves a tombstone, so the tombstone is checked after a purge.
+// Ported to DELETION SYSTEM / DQ8 / FA-DEL-1: a plain `delete --confirm` is a
+// soft delete (the row goes to the trash with its content), and only
+// `--purge --confirm` leaves the tombstone this case checks.
 func TestF02_DeleteWritesATombstone(t *testing.T) {
 	rt := newRepoTeam(t)
 	id := rt.addTask(t, rt.c1, "to delete")
