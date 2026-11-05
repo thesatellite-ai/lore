@@ -96,7 +96,7 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			}
 			n := strings.ToLower(strings.TrimSpace(name))
 			if n == "" {
-				n = strings.ToLower(filepath.Base(wd))
+				n = defaultProjectName(ctx, wd) // initname.go: origin's repo name, else the folder (v0.1.17)
 			}
 			t, err := value.TextOf(n)
 			if err != nil {
@@ -130,7 +130,7 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&name, "name", "", "project name (default: the folder name)")
+	cmd.Flags().StringVar(&name, "name", "", "project name (default: the repo name of origin's URL, else the folder name)")
 	cmd.Flags().StringSliceVar(&targets, flagTarget, nil, "AI tool profile(s) or file(s) to point at .lore/LORE.md (default: tool files found in the repo, else AGENTS.md)")
 	cmd.Flags().Bool(flagNonInteractive, false, "accepted for v0.1.17 scripts; init never asks")
 	return cmd

@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/wire"
@@ -52,6 +53,9 @@ func main() {
 // run builds the app and the command tree, executes args and returns the
 // process exit status (never 0 for a failure).
 func run(ctx context.Context, args []string) int {
+	if err := refuseRoot(); err != nil { // guard.go: E_ROOT_REFUSED unless LORE_ALLOW_ROOT=1
+		return printHostError(err)
+	}
 	wd, home := dirs()
 	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
 	// One clock for row stamps and live decisions: the wall clock, or
@@ -71,7 +75,7 @@ func run(ctx context.Context, args []string) int {
 		return app.LeakCheckDocs(ctx, org, where, docs)
 	}
 	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak})
-	hooks = append(hooks, liveRows.Hook())
+	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
 	// render, why-context and setup (wire/renderhost) over the app built below.
 	rend := &lateRender{}
 	base.Context.Render, base.Context.RenderHistory, base.Context.Setup = rend, rend, &lateSetup{r: rend}
@@ -88,6 +92,7 @@ func run(ctx context.Context, args []string) int {
 	h := &host{app: app, home: home, live: liveRows, render: rend.h}
 	h.markPrinted(root)
 	mountShortcuts(root)
+	mountSQLHelp(root) // sqlhelp.go: bare `lore sql` prints help (after mountShortcuts)
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())
 	// git's merge.lore.driver calls it (P3-MODEB-4: a host command, not an op).
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
@@ -104,7 +109,7 @@ func run(ctx context.Context, args []string) int {
 		if code := cli.ExitCode(err); code != cli.ExitUnknown || h.printed {
 			return code
 		}
-		return printHostError(err)
+		return printHostError(sqlite.ExplainDiskFull(err))
 	}
 	return 0
 }
