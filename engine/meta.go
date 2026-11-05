@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
@@ -284,6 +285,9 @@ type pendingKey struct {
 	name string
 	home store.Source
 	typ  meta.Type
+	// named: the term named its place (repo:key=v), so the person chose
+	// where the key lives and the freshness guard does not apply (3.18).
+	named bool
 }
 
 // metaPlan is applyMeta's working state.
@@ -712,7 +716,7 @@ func (p *metaPlan) keyID(d *keyDef, t meta.Term, name string, fields []string, v
 	if len(fields) > 0 {
 		typ = meta.Type{Kind: value.KindJSON} // META-B7-OBJ
 	}
-	k := pendingKey{name: name, home: home, typ: typ}
+	k := pendingKey{name: name, home: home, typ: typ, named: t.Level != ""}
 	k.id = p.e.newMetaKeyID()
 	p.pending = append(p.pending, k)
 	return k.id
@@ -926,6 +930,60 @@ func (e *Engine) scanMeta(cl call, target store.Source, rowID ids.AnyID, p *meta
 	return nil
 }
 
+// checkFresh is the E_META_STALE guard of auto-registration (METADATA
+// 3.9, 3.18): a new key registered in an own repo first needs every
+// attached store registry fresh, else a key the store already defines
+// would be registered twice. P2-META-14: a store whose backend cannot
+// tell its fetch time (a folder store, repo mode, a clone never fetched)
+// is not refused; one fetched longer ago than meta.stale_after hours is.
+func (p *metaPlan) checkFresh(ctx context.Context) error {
+	var names []string
+	for _, k := range p.pending {
+		if k.home == store.SourceRepo && !k.named {
+			names = append(names, k.name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	if a, err := p.e.attached(store.SourceRepo); err != nil || a.Client {
+		return nil // a client repo has no store registries to consult
+	}
+	pol, _, err := p.e.settings.Policy(store.SourceRepo)
+	if err != nil {
+		return err
+	}
+	hours, ok := pol.Limit(policy.KeyMetaStaleAfter)
+	if !ok || hours <= 0 {
+		return nil
+	}
+	limit := time.Duration(hours) * time.Hour
+	for _, s := range p.e.Stores() {
+		if s == store.SourceRepo {
+			continue
+		}
+		f, ferr := p.e.StoreFresh(ctx, s)
+		if ferr != nil || !f.Known {
+			continue
+		}
+		if age := time.Since(f.FetchedAt); age > limit {
+			days := int(age.Hours() / 24)
+			return errs.New(errs.MetaStale, fmt.Sprintf("the store registry for %s is not fresh on this machine (last sync %d days ago), so the new key %s may already be defined there",
+				metaScopeLabel(s), days, strings.Join(names, ", "))).
+				WithHint("run lore sync, or name the place: repo:" + names[0] + "=…")
+		}
+	}
+	return nil
+}
+
+// metaScopeLabel is how an E_META_STALE message names a store place.
+func metaScopeLabel(s store.Source) string {
+	if _, f, ok := strings.Cut(string(s), folderSep); ok {
+		return "project:" + f
+	}
+	return string(s)
+}
+
 // nearShown is how many near-duplicate names a new key's warning lists
 // (METADATA 7: "the three nearest existing keys").
 const nearShown = 3
@@ -946,6 +1004,9 @@ func (p *metaPlan) visibleNames() []string {
 // 3.9 (a)): internal when first registered in a store (R2-Q2); added_by
 // and reviewed record an agent's key for review (MQ7).
 func (p *metaPlan) register(ctx context.Context, cl call) error {
+	if err := p.checkFresh(ctx); err != nil {
+		return err
+	}
 	byWhom, reviewed := schema.MetaAddedByPerson, true
 	if cl.caller.Agent != "" {
 		byWhom, reviewed = schema.MetaAddedByAgent, false
