@@ -48,7 +48,7 @@ const (
 // Codes lists every finding code.
 func Codes() []Code {
 	return []Code{UnknownScheme, DanglingRef, VarOldName, VarShadowed, VarShareableDiffers,
-		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey}
+		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound}
 }
 
 // ManyTimeEntries is where lint warns that a task should be split (TQ4,
@@ -119,7 +119,7 @@ func (o RunOut) Text() string {
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	return []op.Entry{
-		op.Define(op.Spec{Name: OpRun, Summary: "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, unknown metadata keys)",
+		op.Define(op.Spec{Name: OpRun, Summary: "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, unknown metadata keys, stored secrets)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: []errs.Code{errs.InvalidInput, errs.Internal},
 			Examples: []op.Example{{Title: "every finding as JSON", CLI: "lore lint --json", Want: `"findings"`},
 				{Title: "LORE.md clean-up suggestions", CLI: "lore lint --context", Want: "finding"}}}, o.run),
@@ -163,6 +163,11 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	out = append(out, varFindings(all[schema.TableVars])...)
 	out = append(out, taskFindings(all[schema.TableTasks])...)
 	out = append(out, metaFindings(all)...)
+	secrets, err := o.secretScan(ctx, all) // SQ12: re-scan with today's team rules
+	if err != nil {
+		return RunOut{}, err
+	}
+	out = append(out, secrets...)
 	dups, err := opstask.FindDuplicateImports(ctx, o.env)
 	if err != nil {
 		return RunOut{}, err
