@@ -196,7 +196,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	// read after settleAgentKey, which may lengthen an agent's key (OQ9)
 	actor := st.actor
-	scanner, err := newScanner(ctx, backends, withRepoGitleaks(st.repoTop), withFolders(st.folders), withToolSessions(opts.Audit)) // D9: team stores nearest-first; OV11 session ids
+	// D9: team stores nearest-first; OV11 session ids; SECRETS 3.8: built on
+	// the first write that scans, so list/show/search never build it (P3-SEC-5)
+	scanner, err := newScanner(ctx, backends, withRepoGitleaks(st.repoTop), withFolders(st.folders), withToolSessions(opts.Audit), withLazyBuild())
 	if err != nil {
 		return fail(err)
 	}
@@ -899,7 +901,7 @@ func openStoreOnly(ctx context.Context, opts Options, target store.Source) (*sta
 	if err = st.settleAgentKey(ctx, st.byName); err != nil {
 		return fail(err)
 	}
-	scanner, err := newScanner(ctx, st.byName, withRepoGitleaks(""), withFolders(st.folders))
+	scanner, err := newScanner(ctx, st.byName, withRepoGitleaks(""), withFolders(st.folders), withLazyBuild()) // SECRETS 3.8, P3-SEC-5
 	if err != nil {
 		return fail(err)
 	}

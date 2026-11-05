@@ -75,6 +75,11 @@ type liveScanner struct {
 	// the set read at the last Refresh.
 	sessions ToolSessionSource
 	ids      []string
+	// lazy defers the first rule build from newScanner to the first
+	// Refresh or scan (withLazyBuild); buildErr is the error of a failed
+	// lazy build inside a scan, which has no error return.
+	lazy     bool
+	buildErr error
 }
 
 // ToolSessionSource is an optional capability of the repo audit sink
@@ -121,6 +126,15 @@ func withFolders(f map[store.Source]string) scannerOption {
 	return func(s *liveScanner) { s.folders = f }
 }
 
+// withLazyBuild leaves the detector unbuilt until the first write scans
+// (SECRETS 3.8: list, show and search never build it; P3-SEC-5). The
+// engine's write path calls Refresh before its scan, so a write builds
+// with errors returned as before (E_CONFIG_INVALID fails that write, no
+// longer the open); any other scan builds on first use.
+func withLazyBuild() scannerOption {
+	return func(s *liveScanner) { s.lazy = true }
+}
+
 // withOwnRules makes this the person's own scanner: a personal off or
 // changed row applies (BATCH 8: own captures only).
 func withOwnRules() scannerOption {
@@ -137,6 +151,9 @@ func newScanner(ctx context.Context, backends map[store.Source]store.Backend, op
 	s := &liveScanner{backends: backends}
 	for _, o := range opts {
 		o(s)
+	}
+	if s.lazy {
+		return s, nil
 	}
 	if err := s.refresh(ctx, false); err != nil {
 		return nil, err
@@ -261,12 +278,31 @@ func (s *liveScanner) repoAllow() (gitleaks.RepoAllow, string, error) {
 	return allow, hex.EncodeToString(sum[:]), nil
 }
 
-// scanner is the current rule set's scanner.
+// scanner is the current rule set's scanner, built on first use when the
+// scanner is lazy and no Refresh ran yet (a scan outside the write
+// path's screen, e.g. a purge reason or an E_STALE value). nil means that
+// build failed (its error in buildErr): ScanReport then fails closed.
 func (s *liveScanner) scanner() *gitleaks.Scanner {
 	s.mu.Lock()
+	cur := s.cur
+	s.mu.Unlock()
+	if cur != nil {
+		return cur
+	}
+	// a scan has no context or error return: the build reads rule rows
+	// with a background context, sessions tolerantly like the open did
+	err := s.refresh(context.Background(), false)
+	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.buildErr = err
 	return s.cur
 }
+
+// scannerUnavailable is the rule id of the fail-closed finding a scan
+// reports when the lazy detector build failed (P3-SEC-5): the whole text
+// counts as a hit, so a caller masks or refuses it rather than letting
+// it through unscanned.
+const scannerUnavailable = "scanner_unavailable"
 
 // Scan implements scan.Scanner.
 func (s *liveScanner) Scan(field, text string) []scan.Finding {
@@ -275,7 +311,23 @@ func (s *liveScanner) Scan(field, text string) []scan.Finding {
 
 // ScanReport implements scan.Reporter (the engine surfaces a degraded scan).
 func (s *liveScanner) ScanReport(field, text string) scan.Report {
-	rep := s.scanner().ScanReport(field, text)
+	sc := s.scanner()
+	if sc == nil {
+		s.mu.Lock()
+		err := s.buildErr
+		s.mu.Unlock()
+		note := "the secret scanner could not be built"
+		if err != nil {
+			note += ": " + err.Error()
+		}
+		rep := scan.Report{Degraded: true, Note: note}
+		if text != "" {
+			rep.Findings = []scan.Finding{{RuleID: scannerUnavailable, Field: field, Line: 1, Length: len(text),
+				Preview: scan.Mask(text), MatchHash: scan.HashMatch(text)}}
+		}
+		return rep
+	}
+	rep := sc.ScanReport(field, text)
 	rep.Findings = append(rep.Findings, s.sessionHits(field, text)...)
 	return rep
 }
