@@ -139,7 +139,7 @@ Status: HEALTHY
 ```
 <!-- /example -->
 
-The full story of that rebuild is in [A damaged database](backup-restore-repair.md). The `lore repair` the BROKEN line names is gone; follow that page instead.
+The full story of that rebuild is in [A damaged database](backup-restore-repair.md). There is no repair command in 0.1.18 (an older BROKEN line may still name one); follow that page instead.
 
 ## Look up an error code
 

@@ -31,7 +31,7 @@ All phases P0–P7 are implemented and tested. The design below is kept as writt
 | Generic helpers (importable by any project) | `saas/pkg/aicoder/canonjson` (byte-stable JSON), `saas/pkg/aicoder/merge3` (field-level three-way merge), `saas/pkg/aicoder/gitsetup` (idempotent git config / attribute blocks / chained hook blocks, `ReadTree`, `CommitFiles`) |
 | Deterministic ids for natural keys | `saas/pkg/aicoder/ids/deterministic.go`, `saas/cmd/cli/natural_ids.go` (ent hook) |
 | CLI wiring (pass before and after every command, fresh-clone build, git wiring, LORE.md re-render) | `saas/cmd/cli/sync_wire.go`, `memory.go` (`resolveContext`), `main.go`, `init.go` (`createProjectDB`, adopt-on-init) |
-| Commands | `saas/cmd/cli/sync_cmd.go`: `lore sync`, `status`, `export --all`, `conflicts`, `resolve`, `trash`, `trash restore`, `purge`, `fix-projects`, `install-git`, `peek`, `promote`, `dupes`, `merge-rows`, hidden `hook`, hidden `merge-driver`; `lore restore --prefer` (`backup.go`); doctor `[sync]` section (`doctor.go`) |
+| Commands | `saas/cmd/cli/sync_cmd.go`: `lore sync`, `status`, `export --all`, `conflicts`, `resolve`, `trash`, `trash restore`, `purge`, `fix-projects`, `install-git`, `peek`, `promote`, `dupes`, `merge-rows`, hidden `hook`, hidden `merge-driver`; the v0.1.17 whole-database restore command with `--prefer` (`backup.go`, not in 0.1.18: single rows come back with `lore trash restore`); doctor `[sync]` section (`doctor.go`) |
 | Docs | `README.md` (Team sync through git, Sharing through git, FAQ), `skills/` (SKILL, SKILL-mini, COMMANDS, PLAYBOOKS P13/P13b, GLOSSARY), `docs/DEVELOPMENT.md`, agent directive (`directive.go`) |
 | Tasks | `task lore:test:sync`, `task lore:bench:sync` |
 
@@ -68,7 +68,7 @@ These were pre-existing and unrelated to the sync design, but sync's extra write
 |---|---|---|
 | Pre-commit guard skipped an UNSTAGED lore file (git's ` M` lost its leading space to output trimming) and then auto-staged it unchecked | `gitsetup.Uncommitted` parses `--porcelain -z` untrimmed (renames handled) | `TestUncommitted_UnstagedAndSubdir`, `TestE2E_PreCommitGuardsUnstagedFileInSubdirProject` (proven by reverting) |
 | Same guard read the wrong files when the lore project lives in a subdirectory of the repo (repo-root-relative paths joined onto the project dir) | `Uncommitted` returns paths relative to the directory asked about | same tests |
-| `lore restore --prefer <typo>` replaced the DB, then failed before resetting sync state | flags validated before any file is touched | `TestE2E_RestoreRejectsBadPreferBeforeTouchingDB` |
+| The v0.1.17 restore command with a mistyped `--prefer` value replaced the DB, then failed before resetting sync state | flags validated before any file is touched | `TestE2E_RestoreRejectsBadPreferBeforeTouchingDB` |
 | `--prefer db` re-imported rows added after the backup (they still had files), silently undoing the restore | after a restore the preference is a rollback: `db` removes file-only rows' files, `files` trashes DB-only rows | `TestAdopt_PreferIsARollback` |
 | Deterministic ids come from editable fields: re-creating a row under a renamed row's old key hit a primary-key collision | on an id (not natural-key) collision the hook falls back to a random id | `TestNaturalIDHook_RenamedRowDoesNotBlockRecreate` (proven by disabling) |
 | `--columns` scoped only the first search term (FTS5 binds a column filter to the next phrase) | `{cols}: (expr)` | `TestSearchEntity_ColumnFilterScopesAllTerms` (proven by removing the parentheses) |
@@ -622,7 +622,7 @@ As built, the numbers behind E28 and E32 are named constants: a pass waits up to
 
 ## 12. Existing `lore.db` files and direct DB writes
 
-Every repo using lore today has a `lore.db` and no `.lore/data/`. And not every write goes through lore's write path: `lore tui` opens the same `lore.db` through enttui (`saas/cmd/cli/tui.go`), 13 CLI files run raw SQL, people run `sqlite3` by hand, `lore backup restore` replaces the whole file, and teammates on an older lore binary keep writing to their DB with no files at all. So sync must work in **both directions**: files → DB (§8.2) and DB → files (this section).
+Every repo using lore today has a `lore.db` and no `.lore/data/`. And not every write goes through lore's write path: `lore tui` opens the same `lore.db` through enttui (`saas/cmd/cli/tui.go`), 13 CLI files run raw SQL, people run `sqlite3` by hand, the v0.1.17 backup restore command replaces the whole file (0.1.18 has no backup or restore command: the row files are the truth), and teammates on an older lore binary keep writing to their DB with no files at all. So sync must work in **both directions**: files → DB (§8.2) and DB → files (this section).
 
 ### 12.1 Catching every DB write: triggers + outbox
 
@@ -683,7 +683,7 @@ lore <any command>   (new version, LORE_SYNC on)
            • print a summary: imported N, exported M, conflicts K
 ```
 
-Bootstrap never modifies existing DB rows except the project-id rewrite in ADOPT, and it backs up `lore.db` first via the existing `lore backup` path (`.lore/backups/<ts>.sqlite`), so it can always be undone.
+Bootstrap never modifies existing DB rows except the project-id rewrite in ADOPT, and it backs up `lore.db` first with the same `VACUUM INTO` copy the v0.1.17 backup command made (`.lore/backups/<ts>.sqlite`; in 0.1.18 that copy is only taken inside the automatic schema update, not by a command), so it can always be undone.
 
 ### 12.4 Rolling out to a team that already uses lore
 
@@ -702,7 +702,7 @@ If two people bootstrap in parallel before either merges, both `_meta.json` file
 |---|---|---|
 | E41 | `lore tui` edits a row | Trigger → outbox → exported on the next command (or immediately: tui calls the drain on exit). |
 | E42 | Raw SQL inside lore's own code paths, or `sqlite3` by hand | Same triggers; nothing to remember per code path. |
-| E43 | `lore backup restore` replaces `lore.db` | The restored DB has an old or no `sync_state`. Restore asks `--prefer db` (default, since restoring means "I want this DB back") or `--prefer files`. With `db`: export every differing row (the result is a reviewable git diff before commit). With `files`: full import over the restored DB. |
+| E43 | The v0.1.17 backup restore command replaces `lore.db` (not in 0.1.18) | The restored DB has an old or no `sync_state`. Restore asks `--prefer db` (default, since restoring means "I want this DB back") or `--prefer files`. With `db`: export every differing row (the result is a reviewable git diff before commit). With `files`: full import over the restored DB. |
 | E44 | `lore.db` deleted or corrupt | Full import from files rebuilds every synced row; only local-only telemetry is lost. This becomes the cheapest recovery tier, ahead of today's backup tiers. |
 | E45 | A teammate still on an old lore binary keeps writing to their DB with no triggers | Their changes are invisible until they upgrade; on upgrade, ADOPT exports them (rows only in the DB) and conflict-copies any that diverged. `_meta.json` carries `min_lore_version`; future versions refuse to write below it. Rollout note: upgrade everyone in step 2 above. **As built:** no `min_lore_version` field; the per-file `_v` check gives the same protection. |
 | E46 | Existing hook manager owns `core.hooksPath` (husky, lefthook, a repo's `.githooks` like sync_go) | Append lore's marked block to that directory's scripts; never repoint `core.hooksPath` (also referenced in §10). |

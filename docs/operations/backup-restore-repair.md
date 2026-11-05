@@ -72,7 +72,7 @@ $ lore sync conflicts | head -3
 - **The `.lore/lore.db.old` file is not ignored by git.** Do not commit it (it is a whole database, with private rows in it); delete it once you are happy with the result.
 - **Uncommitted notes still come back.** The rebuild reads the files in your working tree, committed or not. Only a file you deleted, or never wrote, is gone; get a deleted one back from git (see [Trash, restore from git and purge](../sync/trash-and-purge.md)).
 - **The database is per machine.** It is not in git, so a teammate never needs your copy. Shared notes reach them through `.lore/data`.
-- **`lore doctor` may still name `lore repair`.** That command is gone; follow Step 2 instead.
+- **There is no repair command.** Older lore versions had one, and an old doctor line may still name it; in 0.1.18 the cache is rebuilt from the row files, so follow Step 2 instead.
 
 ## Related
 
