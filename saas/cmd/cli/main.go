@@ -216,7 +216,11 @@ func inputError(err error, args []string) error {
 }
 
 func main() {
+	// The first Init (env only: flags are not parsed yet) covers errors
+	// cobra prints before any command runs; OnInitialize runs after flag
+	// parsing, so an explicit --color always|never takes effect.
 	style.Init(style.ParseMode(flagColor))
+	cobra.OnInitialize(func() { style.Init(style.ParseMode(flagColor)) })
 	err := inputError(rootCmd.Execute(), os.Args[1:])
 	// Export this command's writes to .lore/data (and wire git) even when the
 	// command failed part-way: rows it already wrote must not be left behind.
