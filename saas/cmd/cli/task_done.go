@@ -113,21 +113,19 @@ func addLinkedMemory(ctx context.Context, c *commonFlags, text, sourceKind, sour
 	if refuseErr := refuseSecretsCtx(ctx, body); refuseErr != nil {
 		return "", refuseErr
 	}
-	// The memory is written by the 0.1.18 core (memory.add) into the repo
-	// store. v0.1.17 routed it to the store holding the task or mission
-	// (D8); old-store routing has no 0.1.18 home yet (phase 2 gap), so a
-	// lesson on a store task is refused rather than written to the wrong
-	// place.
+	// The memory is written by the 0.1.18 core (memory.add) into the store
+	// holding the task or mission (D8, as v0.1.17 routed it): the repo for
+	// one of its own rows, else the linked store project (BUG-T9).
 	to, err := rowHomeTo(ctx, sourceRef)
 	if err != nil {
 		return "", err
 	}
-	if to.To != "" {
-		return "", errcodes.New(errcodes.Unsupported, "a lesson or finding on a task that lives in a store cannot be saved yet").
-			WithHint("save it in the store's repo with `lore memory add --to <store>`")
+	_ = c // the scope flags no longer apply: the row's home decides
+	target := to.To
+	if target == toRepo {
+		target = "" // memory.add's default target is the repo store
 	}
-	_ = c // the scope flags no longer apply: the core writes to the repo store
-	return coreAddMemory(ctx, body, sourceKind, sourceRef)
+	return coreAddMemoryTo(ctx, body, sourceKind, sourceRef, target)
 }
 
 // rowHomeTo is the --to that addresses the project holding row id: this

@@ -902,6 +902,13 @@ func coreErr(err error) error {
 // memory as a side effect (task done --lesson, learn promote) call it
 // instead of writing lore.db. Returns the new id.
 func coreAddMemory(ctx context.Context, body, sourceKind, sourceRef string) (string, error) {
+	return coreAddMemoryTo(ctx, body, sourceKind, sourceRef, "")
+}
+
+// coreAddMemoryTo is coreAddMemory into target to ("" = the repo store; a
+// store or `<store>/<folder>` the runner resolves like `memory add --to`):
+// a lesson or finding goes to the store holding its task (D8, BUG-T9).
+func coreAddMemoryTo(ctx context.Context, body, sourceKind, sourceRef, to string) (string, error) {
 	if coreApp == nil {
 		return "", errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
 	}
@@ -909,7 +916,7 @@ func coreAddMemory(ctx context.Context, body, sourceKind, sourceRef string) (str
 	if !ok {
 		return "", errcodes.New(errcodes.Internal, "memory.add is not registered")
 	}
-	in, err := json.Marshal(opsmemory.AddIn{Body: body, Source: sourceKind, SourceRef: sourceRef})
+	in, err := json.Marshal(opsmemory.AddIn{Body: body, Source: sourceKind, SourceRef: sourceRef, To: to})
 	if err != nil {
 		return "", errcodes.New(errcodes.Internal, "encode memory").WithCause(err)
 	}
