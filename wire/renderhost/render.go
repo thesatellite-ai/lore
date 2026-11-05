@@ -33,7 +33,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
-	"saas/pkg/aicoder/ids"
+	"github.com/thesatellite-ai/lore/model/ids"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
@@ -162,7 +162,7 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	// invariant. Prompt-injection detection still works: the canary is
 	// unique-per-content, and the renderhistory row stores it for lookup
 	contentForCanary, _ := buildBudgetedFile("PLACEHOLDER", in)
-	canary := ids.PrefixRenderHistory + "_" + sha256Hex16(contentForCanary)
+	canary := string(ids.PrefixRenderHistory) + "_" + sha256Hex16(contentForCanary)
 	body, report := buildBudgetedFile(canary, in)
 	full := buildFullFile(allRules, allHotfixes)
 	report.File, report.Before = f.outPath, len(full)

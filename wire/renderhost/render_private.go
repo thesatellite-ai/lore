@@ -60,6 +60,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -72,9 +73,6 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 
 	"github.com/thesatellite-ai/lore/model/errs"
-	"saas/pkg/aicoder/lsync"
-	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/stores"
 )
 
 const (
@@ -108,7 +106,11 @@ const (
 // privateImportDir starts the path of every private line lore owns; the
 // v0.1.17 single-file import (`@~/.lore/render/<project-id>.md`) has the
 // same prefix, so the first 0.1.18 render replaces it.
-var privateImportDir = "~/.lore/" + stores.RenderDir + "/"
+// renderDirName is the folder under the lore home holding the private
+// renders (v0.1.17 stores.RenderDir).
+const renderDirName = "render"
+
+var privateImportDir = "~/.lore/" + renderDirName + "/"
 
 // privateStemUnsafe matches characters a store name may hold that a file
 // stem must not.
@@ -306,7 +308,7 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 	p.projectID = pid.String()
 	p.repoKey = privateRepoKey(root, p.projectID)
 	home := h.opts.Home
-	p.dir = filepath.Join(home, stores.RenderDir, p.repoKey)
+	p.dir = filepath.Join(home, renderDirName, p.repoKey)
 	repoName := filepath.Base(root)
 
 	var imports []string
@@ -385,7 +387,7 @@ func (h *Host) planPrivateLocals(ctx context.Context, root string, imports []str
 // privateRepoKey is the repo's permanent id for the render dir: _meta.json's
 // repo_id, else the prj_ project id (see the file comment).
 func privateRepoKey(root, projectID string) string {
-	metaPath := filepath.Join(root, projresolve.MarkerDir, lsync.DataDirName, lsync.MetaFileName)
+	metaPath := filepath.Join(root, rowfs.LoreDir, rowfs.DataDir, rowfs.MetaFileName)
 	if b, err := os.ReadFile(filepath.Clean(metaPath)); err == nil {
 		var meta map[string]json.RawMessage
 		if json.Unmarshal(b, &meta) == nil {
