@@ -85,6 +85,11 @@ var deleteExceptions = map[row.Table]deletePath{
 	// TIME_TRACKING 2.2: a run is ended by run.end or run.cancel; the
 	// design has no run delete (machine-local, P3-LOCAL-3).
 	schema.TableRuns: {none: noRowDelete + "a run is a machine-local log of one attempt: run.end or run.cancel closes it"},
+	// Machine-local records lore writes itself (P3-LOCAL-5); the design
+	// names no delete for them (AGENT_IDENTITY 6.2, CONTEXT_BUDGET 6.11).
+	schema.TableSessions:        {none: noRowDelete + "a session is machine-local bookkeeping lore writes at each agent write"},
+	schema.TableRenderHistories: {none: noRowDelete + "a render record is written by lore render and read by render --trend and why-context"},
+	schema.TableTechDocPages:    {none: noRowDelete + "a fetched page is a machine-local copy of a tech doc page"},
 	// P3-PII-1: v0.1.17 custom PII patterns, kept read-only on the machine
 	// (secret rules replaced them); pii-pattern has only list (CLI_REFERENCE 2.25).
 	schema.TablePIIPatterns: {none: noRowDelete + "a v0.1.17 PII pattern is a read-only leftover; secret rules replaced it"},

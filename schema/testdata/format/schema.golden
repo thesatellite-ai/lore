@@ -266,6 +266,15 @@ reminders.project_id ref required
 reminders.recurrence text
 reminders.target_id text
 reminders.target_table text
+render_histories.project_id text required
+render_histories.rendered_by_actor_id text
+render_histories.rendered_sha256 text required
+render_histories.rendered_text text required
+render_histories.repo_id text
+render_histories.scope_summary text required
+render_histories.target_path text required
+render_histories.total_bytes number required
+render_histories.total_tokens number
 repos.archived_at datetime
 repos.display_name text
 repos.forked_from ref
@@ -330,6 +339,28 @@ secret_rules.reason text
 secret_rules.regex text
 secret_rules.rule_id text required
 secret_rules.state text required
+sessions.actor_id text
+sessions.agent_kind text
+sessions.branch text
+sessions.ci text
+sessions.cwd text
+sessions.declared_human bool
+sessions.ended_at datetime
+sessions.flags list[text]
+sessions.machine_id text
+sessions.model text
+sessions.outer_tools list[text]
+sessions.parent_session_id text
+sessions.project_id text required
+sessions.repo text
+sessions.run_id text
+sessions.signal text
+sessions.sources json
+sessions.started_at datetime required
+sessions.terminal text
+sessions.tool text
+sessions.tool_session_id text
+sessions.tool_version text
 snapshots.archived_at datetime
 snapshots.body text required
 snapshots.confidence number
@@ -422,6 +453,12 @@ teams.handle text required
 teams.left_at datetime
 teams.member_actor_ids list[ref]
 teams.project_id ref required
+tech_doc_pages.body text required
+tech_doc_pages.content_sha text
+tech_doc_pages.project_id text required
+tech_doc_pages.tech_doc_id text required
+tech_doc_pages.title text
+tech_doc_pages.url text required
 tech_docs.base_url text
 tech_docs.description text
 tech_docs.name text required
