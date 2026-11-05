@@ -29,7 +29,6 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_2ad3…f891 [must/always] Never put passwords in the code
-rul_d431…313a [must/always] Buttons are blue
 $ lore rule add --read-only --body 'Buttons are blue'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
@@ -46,24 +45,26 @@ After an upgrade, lore warns on every command that opens its local database (`lo
 <!-- example: ops#stale-warning -->
 ```console
 # alice, in website
-$ lore plugin list
+$ lore session list
 ⚠ search index is out of date
   run `lore setup` to rebuild
-tpg_b4f4…a5b0 hello  sha256:bfdeaeb08cff
-$ lore plugin list
-tpg_b4f4…a5b0 hello  sha256:bfdeaeb08cff
+(no sessions)
+$ lore session list
+(no sessions)
 $ lore setup
 ⚠ search index is out of date
   run `lore setup` to rebuild
 → running ent schema migration...
 → building FTS5 search index...
 ✓ setup complete (registry fingerprint: 601d2850ffd047c2)
-$ lore plugin list
-tpg_b4f4…a5b0 hello  sha256:bfdeaeb08cff
+$ lore session list
+(no sessions)
 ```
 <!-- /example -->
 
 ## Step 3 — Wire git once in the fresh clone
+
+> **OPEN (owner question):** `lore sync install-git` is dropped in 0.1.18, and nothing else wires git in a read-only clone yet, so the commands below fail today. How a read-only CI clone gets lore's git wiring is not decided.
 
 A CI clone has the `.lore/data` files but not the database, and not lore's git settings. The first lore command builds the database from the files, even in read-only mode (the database is only a local copy; no note changes). `lore doctor` then says DEGRADED, because lore's git merge helper and hooks are missing in this clone. `lore sync install-git` adds them (it changes git settings in the clone, not your notes, so it works in read-only mode too):
 
@@ -73,7 +74,6 @@ A CI clone has the `.lore/data` files but not the database, and not lore's git s
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_2ad3…f891 [must/always] Never put passwords in the code
-rul_d431…313a [must/always] Buttons are blue
 $ lore doctor
 Status: BROKEN
   …
@@ -82,10 +82,8 @@ Status: BROKEN
   -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000003Z)
   …
 $ lore sync install-git
-✓ git wired for lore data
-  …
-  config:      merge.lore.name, merge.lore.driver, merge.lore-keep-ours.name, merge.lore-keep-ours.driver
-  hooks:       commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push
+ERROR: [E_INVALID_INPUT] unknown command "install-git" for "lore sync"
+  hint: see `lore sync --help`
 ```
 <!-- /example -->
 
@@ -97,11 +95,12 @@ Check the audit log, save the JSON report and act on the exit code. Read `status
 ```console
 # alice, in ci-clone
 $ lore audit verify
-✓ audit chain intact (0 entries)
+ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
+  hint: run `lore init` here, or cd into a project root
 $ lore doctor --json > doctor.json; echo "doctor exit $?"
-doctor exit 0
+doctor exit 2
 $ grep '"status"' doctor.json
-  "status": "healthy",
+  "status": "broken",
 ```
 <!-- /example -->
 

@@ -9,7 +9,7 @@ lore keeps your notes in a small database file, `.lore/lore.db`, inside the repo
 `lore doctor` looks at all of that and gives one answer: **HEALTHY**, **DEGRADED** (it works, but something needs your attention) or **BROKEN** (lore cannot use the database). Run it:
 
 - when a lore command prints an error you do not understand,
-- after you upgrade lore, restore a backup or repair the database,
+- after you upgrade lore or rebuild the database,
 - in a script or CI job that should stop when lore is not healthy (see [Use lore in CI](ci.md)).
 
 It only reads. It never changes your notes.
@@ -105,7 +105,7 @@ Doctor lists those links in its report, then `lore doctor --fix` turns each one 
 
 When the database file is damaged, doctor says BROKEN, exits 2 and names the fix:
 
-<!-- example: ops#repair only=1 -->
+<!-- example: ops#damaged-database only=2 -->
 ```console
 # alice, in website
 $ lore doctor
@@ -129,48 +129,21 @@ Notes:
 ```
 <!-- /example -->
 
-After a repair, doctor reports HEALTHY again. When a sync conflict is kept aside it says DEGRADED (exit 1) instead and names `lore sync conflicts`:
+After a rebuild from `.lore/data`, doctor reports HEALTHY again. When a sync conflict is kept aside it says DEGRADED (exit 1) instead and names `lore sync conflicts`:
 
-<!-- example: ops#after-repair only=1 keep=Status|open|Warnings|conflict -->
+<!-- example: ops#rebuild-from-data only=4 -->
 ```console
 # alice, in website
-$ lore doctor
+$ lore doctor | head -1
 Status: HEALTHY
-  …
-  open conflicts:   0
-  …
 ```
 <!-- /example -->
 
-The full story of that repair is in [Back up, restore and repair](backup-restore-repair.md).
+The full story of that rebuild is in [A damaged database](backup-restore-repair.md). The `lore repair` the BROKEN line names is gone; follow that page instead.
 
 ## Look up an error code
 
-Every lore error starts with a code such as `E_DB_CORRUPT`. `lore errors list` prints every code with one line about what it means; add `--json` for scripts:
-
-<!-- example: ops#errors-list -->
-```console
-# alice, in website
-$ lore errors list | head -5
-E_DB_LOCKED                      another lore process is holding the DB write lock
-E_DB_CORRUPT                     DB file failed quick_check; run `lore repair`
-E_DB_NOT_FOUND                   DB file does not exist at the configured path
-E_SCHEMA_VERSION_MISMATCH        DB was migrated by a newer lore; upgrade or use a different DB
-E_MIGRATION_INCOMPLETE           a schema migration did not finish; run `lore setup`
-$ lore errors list | wc -l
-54
-$ lore errors list --json | head -9
-{
-  "schema_version": 1,
-  "count": 54,
-  "errors": [
-    {
-      "code": "E_DB_LOCKED",
-      "description": "another lore process is holding the DB write lock"
-    },
-    {
-```
-<!-- /example -->
+Every lore error starts with a code such as `E_DB_CORRUPT`. [Error codes](../reference/errors.md) explains each one and what to do; the generated [command and error reference](../reference/cli-commands.md#errors) lists every code with its exit status. Add `--json` to a failing command to get the code, exit status and hint as fields.
 
 The [error reference](../reference/errors.md) explains each code and its fix.
 
@@ -188,7 +161,7 @@ $ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
     "status": "healthy",
     "binary_version": "0.1.0-dev",
     "memories": 1,
-    "rules": 3,
+    "rules": 2,
   "sanitized": true,
 ```
 <!-- /example -->
@@ -206,7 +179,7 @@ Without `--out` the bundle is printed to the screen. Read it before you send it;
 
 ## Related
 
-- [Back up, restore and repair](backup-restore-repair.md)
+- [A damaged database](backup-restore-repair.md)
 - [Use lore in CI](ci.md)
 - [The audit log](audit-log.md)
 - [Error reference](../reference/errors.md)

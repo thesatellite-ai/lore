@@ -1,21 +1,4 @@
 
-### errors list
-alice (work/website)$ lore errors list | head -4
-E_DB_LOCKED                      another lore process is holding the DB write lock
-E_DB_CORRUPT                     DB file failed quick_check; run `lore repair`
-E_DB_NOT_FOUND                   DB file does not exist at the configured path
-E_SCHEMA_VERSION_MISMATCH        DB was migrated by a newer lore; upgrade or use a different DB
-alice (work/website)$ lore errors list --json | head -9
-{
-  "schema_version": 1,
-  "count": 54,
-  "errors": [
-    {
-      "code": "E_DB_LOCKED",
-      "description": "another lore process is holding the DB write lock"
-    },
-    {
-
 ### an error
 alice (work)$ lore rule list
 ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree

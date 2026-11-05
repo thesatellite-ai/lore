@@ -16,9 +16,8 @@ between two markers, and this script rewrites what is between them:
   <!-- help: task next -->                `lore task next --help`: usage and flags
   <!-- /help -->
 
-  <!-- errors -->                         every lore error code with its exit status and
-  <!-- /errors -->                        description (lore errors list + the exit table
-                                          in errcodes/registry.go)
+The full error table is not pasted here: `lore spec docs` writes it into
+docs/reference/cli-commands.md from model/errs.
 
 Spec words: a heading slug uses "-" for spaces (### first rule -> start#first-rule).
 
@@ -48,7 +47,6 @@ DOCS = REPO / "docs"
 # docs/team pages are refreshed by tests/team/docs/paste.py from its own transcripts.
 SKIP = DOCS / "team"
 TRANSCRIPTS = HERE / "transcripts"
-REGISTRY = REPO / "saas" / "pkg" / "aicoder" / "errcodes" / "registry.go"
 
 # Lines every first command in a fresh clone prints; they say nothing about the example.
 NOISE = re.compile(
@@ -61,7 +59,6 @@ LONG_SHA = re.compile(r"\b([0-9a-f]{12})[0-9a-f]{28}\b")
 # A transcript command line: "who (dir)$ cmd" or "who$ cmd".
 PROMPT = re.compile(r"^([a-z0-9-]+)(?: \(([^)]*)\))?\$ (.*)$")
 BLOCK = re.compile(r"(<!-- (example|help): ([^>]*?) -->\n)(.*?)(<!-- /\2 -->)", re.S)
-ERRORS = re.compile(r"(<!-- errors -->\n)(.*?)(<!-- /errors -->)", re.S)
 ELLIPSIS = "…"
 
 
@@ -166,24 +163,6 @@ def render_help(spec: str) -> str:
     return f"{lead}```text\n{body}\n```\n"
 
 
-def exit_codes() -> dict:
-    src = REGISTRY.read_text()
-    names = dict(re.findall(r"^\s+(\w+)\s+Code = \"(E_[A-Z_]+)\"", src, re.M))
-    table = re.search(r"var exitCodes = map\[Code\]int\{(.*?)\n\}", src, re.S).group(1)
-    return {names[k]: int(v) for k, v in re.findall(r"(\w+):\s+(\d+),", table)}
-
-
-def render_errors() -> str:
-    codes = exit_codes()
-    listing = lore("errors", "list")
-    rows = ["| Code | Exit status | Meaning |", "|---|---|---|"]
-    for line in listing.splitlines():
-        code, _, desc = line.partition(" ")
-        if code.startswith("E_"):
-            rows.append(f"| `{code}` | {codes.get(code, 1)} | {desc.strip()} |")
-    return "\n".join(rows) + "\n"
-
-
 class BlockError(Exception):
     """A marked block that cannot be rendered (missing transcript or section)."""
 
@@ -215,7 +194,6 @@ def main() -> int:
         except BlockError as e:
             errors.append(f"error: {page.relative_to(REPO)}: {e}")
             continue
-        new = ERRORS.sub(lambda m: m.group(1) + render_errors() + m.group(3), new)
         if new != text:
             stale.append(page.relative_to(REPO))
             if not check:

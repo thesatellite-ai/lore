@@ -39,10 +39,10 @@ When the match is not a real secret (a sample value like this one, a test string
 ```console
 # alice, in website
 $ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
-✓ mem_28f8…03df
+✓ mem_d431…313a
   scope: [master]
 $ grep -rl AKIA .lore/data || echo 'not in .lore/data'
-.lore/data/memories/mem_28f8…03df.json
+.lore/data/memories/mem_d431…313a.json
 ```
 <!-- /example -->
 
@@ -51,8 +51,8 @@ Delete the row (or edit the key out) before you commit:
 <!-- example: ops#allow-secrets only=3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_28f8…03df --yes
-✓ mem_28f8…03df moved to the trash (restore: lore trash restore mem_28f8…03df)
+$ lore memory delete mem_d431…313a --yes
+✓ mem_d431…313a moved to the trash (restore: lore trash restore mem_d431…313a)
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ```
@@ -62,7 +62,7 @@ If a note that is meant to be shared trips the check by mistake, edit its text s
 
 ## Add your own patterns
 
-`lore pii-pattern` keeps a list of your own patterns (regular expressions: a small text language for "this shape of text", like `INV-[0-9]{6}` for "INV- and six digits"). A new pattern starts switched off; you switch it on with its id:
+`lore secrets rule add` adds your own pattern (a regular expression: a small text language for "this shape of text", like `INV-[0-9]{6}` for "INV- and six digits"). It is a settings row of the place you add it to (this repo by default, or `--to <store>`), so everyone who works there gets it, and lore checks every new note against it at once:
 
 <!-- example: ops#pii-pattern -->
 ```console
@@ -79,9 +79,7 @@ ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (invoice-number) at li
 ```
 <!-- /example -->
 
-`lore pii-pattern disable <id>` switches it off again. The list is kept per machine, in the database; it is not shared through git.
-
-**Today these patterns are stored but not used.** lore's save checks only use the built-in list, and the `~/.lore/pii-patterns.txt` file named in the refusal hint is not read either. Until that is fixed, do not count on your own patterns to stop a note.
+`lore secrets rule off <rule>` switches a rule off again, and `lore secrets rule on <rule>` back on. The v0.1.17 `lore pii-pattern add`, `enable` and `disable` are refused and name these commands; `lore pii-pattern list` only shows patterns copied from v0.1.17.
 
 ## Safety switches
 
@@ -135,15 +133,15 @@ rul_28f8…03df  Posts go out on Tuesdays  [shared]
 ## Pitfalls
 
 - **The check looks at shapes, not meaning.** A password written as plain words ("the password is blue-horse-42") does not match any pattern. Never rely on lore as your only guard.
-- **Rows confirmed with `--yes` live in your backups too.** `lore backup` copies the whole database. Do not put `.lore/backups/` in a shared folder.
+- **Rows confirmed with `--yes` live in your local database too.** `.lore/lore.db` and the copies lore keeps in `.lore/backups/` hold them. Do not put either in a shared folder.
 - **A forced row keeps a warning in `lore doctor` while it exists.** Each refused file shows as a `secret-detected` warning and makes doctor DEGRADED. Edit the text or delete the row; once the row is gone, doctor drops the warning.
-- **Custom patterns do nothing yet** (see above), even when `lore pii-pattern list` shows them `[on]`.
+- **`lore pii-pattern list` is not your rule list.** It shows only patterns left over from v0.1.17, which nothing checks; `lore secrets rules` shows the rules lore uses.
 - **Support bundles are safe to share by default:** they carry counts, not note text. See [doctor](doctor.md#send-a-support-bundle-with-a-bug-report).
 
 ## Related
 
 - [The audit log](audit-log.md)
-- [Back up, restore and repair](backup-restore-repair.md)
+- [A damaged database](backup-restore-repair.md)
 - [Use lore in CI](ci.md)
 - [Rules, memories and decisions](../knowledge/rules-memories-decisions.md)
 - [Environment variables](../reference/environment.md)

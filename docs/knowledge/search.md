@@ -194,5 +194,5 @@ $ lore querylog list
 - [Render and agent files](render-and-agent-files.md): what is pinned and what is left for search.
 - [Rules, memories and decisions](rules-memories-decisions.md)
 - [Multi-repo projects](../sync/multi-repo-projects.md): repos in one project.
-- [Backup, restore and repair](../operations/backup-restore-repair.md): rebuild the index after a restore.
+- [A damaged database](../operations/backup-restore-repair.md): rebuild the database and the search index.
 - [Knowledge guides index](README.md)

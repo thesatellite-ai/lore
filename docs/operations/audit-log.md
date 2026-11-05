@@ -55,9 +55,7 @@ Now someone changes the first rule's text straight in the database file, without
 ```console
 # alice, in website
 $ lore audit verify
-✓ audit chain intact (10 entries)
-✗ hash mismatch: rules/rul_54fe…28f2 changed outside lore
-ERROR: [E_AUDIT_CHAIN_BROKEN] hash mismatch: 1 row(s) changed outside lore
+ERROR: [E_AUDIT_CHAIN_BROKEN] hash mismatch: 1 row(s) changed outside lore: rules/rul_54fe…28f2
   hint: inspect them (`lore <kind> show <id>`); the next lore command records them as external writes
 (exit 23)
 ```
@@ -100,13 +98,13 @@ Exit 1 comes with `E_AUDIT_CHAIN_BROKEN` and a hint, as in Step 2.
 
 - **The log is per machine.** A teammate's log shows their own changes and what their lore read in from git, not yours. It cannot be merged, so it is never committed.
 - **Only `verify` stops on an outside edit.** Every other command records it and carries on. If you want to catch such edits, run `lore audit verify` before anything else (for example at the start of a CI job, see [Use lore in CI](ci.md)).
-- **A rebuild starts a new log.** When you rebuild the database from `.lore/data` (see [Back up, restore and repair](backup-restore-repair.md#step-5--rebuild-from-the-files-in-git)), the old log is not carried over. Keep a backup if you need the history.
+- **A rebuild starts a new log.** When you rebuild the database from `.lore/data` (see [A damaged database](backup-restore-repair.md#step-2--rebuild-from-the-files-in-git)), the old log is not carried over. Keep a backup if you need the history.
 - **The times in the log are the real clock time,** even when you run lore with a fixed test clock.
 - **The actor is an id (`act_…`).** `lore whoami` shows your own; for teams, [the roster](../team/concepts.md) maps ids to people and agents.
 
 ## Related
 
 - [Check lore's health with `lore doctor`](doctor.md)
-- [Back up, restore and repair](backup-restore-repair.md)
+- [A damaged database](backup-restore-repair.md)
 - [Secrets and personal data](secrets-and-pii.md)
 - [Operations index](README.md)

@@ -1,15 +1,10 @@
 # reference: the outputs the reference pages quote (docs/reference/*.md).
-# Alice (an agency developer) works in the client's website repo. She lists the
-# error codes, sees how one error looks and which exit status it gives, checks
+# Alice (an agency developer) works in the client's website repo. She sees how one error looks and which exit status it gives, checks
 # her ~/.lore/config.yaml with `lore config check` (first a good file, then one
 # with mistakes), and sees that --db is refused (rows are read from the repo's files)
 # while LORE_REPO / LORE_PROJECT_ID still pick the repo and project.
 
 lore_repo alice client/website
-
-note "errors list"
-on alice work/website "lore errors list | head -4"
-on alice work/website "lore errors list --json | head -9"
 
 note "an error"
 on! alice work "lore rule list"
