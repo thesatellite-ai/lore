@@ -325,6 +325,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if root := liveProjectRoot(h.cfg.WorkDir); root != "" {
 		top, _ := livePlace(root)
 		if s := r.session(ctx, top); s != nil {
+			s.ensureGitWiring(ctx, root) // merge driver, attributes, hook blocks (gitwire.go)
 			if err := h.refuse(ctx, s, spec); err != nil {
 				return op.Result{}, err
 			}

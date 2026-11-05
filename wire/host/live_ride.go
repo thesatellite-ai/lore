@@ -94,15 +94,17 @@ func (l *Live) SyncHookCommand(stdin io.Reader) *cobra.Command {
 		Hidden: true,
 		Args:   cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if os.Getenv(EnvRideActive) != "" || liveDisabled() {
+			if os.Getenv(EnvRideActive) != "" {
 				return nil
 			}
 			switch args[0] {
 			case hookPostCommit:
-				l.h.postCommit(cmd.Context())
+				if !liveDisabled() {
+					l.h.postCommit(cmd.Context())
+				}
 				return nil
 			case hookPrePush:
-				return l.h.prePush(cmd.Context(), stdin)
+				return l.h.prePush(cmd.Context(), stdin, args[1:])
 			}
 			return nil
 		},
@@ -165,10 +167,26 @@ func (h *liveHost) postCommit(ctx context.Context) {
 // sha> <remote ref> <remote sha>" lines on stdin. When the current branch
 // is pushed without the current waiting rows, a fresh ride commit is added
 // and this push stops so the next one carries it.
-func (h *liveHost) prePush(ctx context.Context, stdin io.Reader) error {
+func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) error {
 	in, err := io.ReadAll(stdin)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "read the pre-push input", err)
+	}
+	// First F16 over what the push sends (live_prepush.go; fails closed).
+	if cwd, cerr := os.Getwd(); cerr == nil {
+		top, _ := livePlace(cwd)
+		if repo, oerr := gitref.Open(ctx, top, h.git()); oerr == nil && !repo.Bare() {
+			remote := ""
+			if len(args) > 0 {
+				remote = args[0]
+			}
+			if lerr := h.prePushLeakCheck(ctx, repo, remote, parsePushUpdates(in)); lerr != nil {
+				return lerr
+			}
+		}
+	}
+	if liveDisabled() {
+		return nil
 	}
 	r, s := h.hookSession(ctx)
 	if s == nil {
@@ -341,19 +359,10 @@ func (s *liveSession) rideCommit(ctx context.Context, branch, head string, items
 // protected, the moment a ride-along becomes possible. Best effort: a
 // failure is a status line, the rows keep waiting for `lore land`.
 func (s *liveSession) ensureRideHooks(ctx context.Context) {
-	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-path", "hooks"}})
+	dir, err := s.hooksDir(ctx)
 	if err != nil {
 		s.warn("ride-along hooks: " + err.Error())
 		return
-	}
-	dir := strings.TrimSpace(string(out))
-	if hp, herr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); herr == nil {
-		if p := strings.TrimSpace(string(hp)); p != "" {
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(s.top, p)
-			}
-			dir = p
-		}
 	}
 	for _, hook := range []string{hookPostCommit, hookPrePush} {
 		if err := ensureHookBlock(dir, hook, rideHookMarker, rideHookLines[hook]); err != nil {
