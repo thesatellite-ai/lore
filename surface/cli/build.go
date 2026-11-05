@@ -295,12 +295,18 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 	return c
 }
 
-// run calls the Runner and, for an interactive caller that has not said yes,
-// turns E_NEEDS_CONFIRM into a [y/N] prompt and one re-run with Yes set.
+// run calls the Runner and, for an interactive caller, answers what it
+// asks:
+//
+//	Run ─▶ E_NEEDS_CONFIRM? ── no / not a terminal ─▶ return as is
+//	        │ findings, no secret choice yet ─▶ secret menu (2.1) ─▶ Run with the choice
+//	        │ otherwise, no --yes ───────────▶ [y/N] ─▶ Run with Yes
+//	        └ (the re-run may ask again: the not-a-secret confirm)
 //
 // Why here: the Runner decides THAT an operation asks; only the surface can
 // talk to a person. A non-interactive caller gets the error back unchanged
-// (the agent asks its human and re-runs with --yes).
+// (the agent asks its human and re-runs with the flags). One reader serves
+// every prompt of the run, so no typed line is lost between prompts.
 func run(cmd *cobra.Command, e op.Entry, runner op.Runner, cfg config, d op.Decoder, yes bool, secret op.SecretChoice) (op.Result, error) {
 	ctx := cmd.Context()
 	if ctx == nil {
@@ -314,24 +320,54 @@ func run(cmd *cobra.Command, e op.Entry, runner op.Runner, cfg config, d op.Deco
 	caller.Yes = yes
 	caller.Secret = secret
 	res, err := runner.Run(ctx, e, d, caller)
-	if !errs.Has(err, errs.NeedsConfirm) || !caller.Interactive || caller.Yes {
-		return res, err
+	in := bufio.NewReader(cmd.InOrStdin())
+	for range maxAsks {
+		if !errs.Has(err, errs.NeedsConfirm) || !caller.Interactive {
+			return res, err
+		}
+		body := errs.EnvelopeOf(err).Error
+		switch {
+		case len(body.Findings) > 0 && !caller.Secret.Any():
+			// SECRETS 2.1 / FB-SEC-2: the finding needs a choice, never a
+			// yes; cancel, an empty answer or end of input writes nothing.
+			ch, ok := secretMenu(in, cmd.ErrOrStderr(), body.Findings)
+			if !ok {
+				return op.Result{}, errs.New(errs.NeedsConfirm, notConfirmed)
+			}
+			caller.Secret = ch
+		case caller.Yes:
+			return res, err
+		default:
+			if !ask(in, cmd.ErrOrStderr(), body.Message) {
+				return op.Result{}, errs.New(errs.NeedsConfirm, notConfirmed)
+			}
+			caller.Yes = true
+		}
+		res, err = runner.Run(ctx, e, d, caller)
 	}
-	if !ask(cmd.InOrStdin(), cmd.ErrOrStderr(), errs.EnvelopeOf(err).Error.Message) {
-		return op.Result{}, errs.New(errs.NeedsConfirm, notConfirmed)
-	}
-	caller.Yes = true
-	return runner.Run(ctx, e, d, caller)
+	return res, err
 }
 
+// maxAsks bounds the prompts of one run: a secret choice, then its
+// not-a-secret confirm, then the operation's own confirm. A runner that
+// keeps asking past that gets its last answer returned, never a loop.
+const maxAsks = 3
+
 // ask prints question with [y/N] and reads one line.
-func ask(in io.Reader, out io.Writer, question string) bool {
+func ask(in *bufio.Reader, out io.Writer, question string) bool {
 	_, _ = io.WriteString(out, question+confirmPrompt)
-	line, err := bufio.NewReader(in).ReadString('\n')
+	line, ok := readLine(in)
+	return ok && slices.Contains(yesAnswers, strings.ToLower(line))
+}
+
+// readLine reads one trimmed line; ok is false at end of input with
+// nothing typed.
+func readLine(in *bufio.Reader) (string, bool) {
+	line, err := in.ReadString('\n')
 	if err != nil && line == "" {
-		return false
+		return "", false
 	}
-	return slices.Contains(yesAnswers, strings.ToLower(strings.TrimSpace(line)))
+	return strings.TrimSpace(line), true
 }
 
 // positional returns the arg fields ordered by index.
