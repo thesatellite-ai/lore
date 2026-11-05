@@ -3,6 +3,7 @@
 //
 //	lore context --for-file <path>   rules/hotfixes whose globs match (why "glob …"),
 //	                                 then rules/hotfixes naming the path or its folder,
+//	                                 then semantic rules on the path's words,
 //	                                 then up to 5 memories/decisions on the path's words
 //	lore context --for-task <id>     the task, its plan/mission/refs, then what applies to
 //	                                 the files it names, its tags and words (context_fortask.go)
@@ -412,6 +413,8 @@ func contextForFileTool(ctx context.Context, p, tool string) (contextResult, err
 	}
 	// 4. rows tagged with a topic whose glob set covers the path (6.10).
 	topicGlobPicks(ctx, rel, rows, add)
+	// 5. semantic rules on the path's words (context_semantic.go).
+	semanticRulePicks(rows, words, add)
 	// 6. notes on the path's words, best first, up to 5; notes scoped to
 	// the path's folder chain rank first (CQ12), innermost first.
 	type scored struct {
@@ -496,7 +499,16 @@ func contextForPrompt(ctx context.Context, text string) (contextResult, error) {
 		n int
 	}
 	var cand []scored
+	// 6.8 step 5: semantic rules first, on their applies_to_description.
+	semSeen := map[string]bool{}
+	semanticRulePicks(rows, words, func(k knowledgeRow, why string) {
+		semSeen[k.r.ID.String()] = true
+		cand = append(cand, scored{pickOf(k, why), len(words) + 1})
+	})
 	for _, k := range rows {
+		if semSeen[k.r.ID.String()] {
+			continue
+		}
 		n := contextfit.Score(renderField(k.r.Row, renderFieldTitle)+" "+renderField(k.r.Row, renderFieldBody), words)
 		if n > 0 {
 			cand = append(cand, scored{pickOf(k, "words"), n})

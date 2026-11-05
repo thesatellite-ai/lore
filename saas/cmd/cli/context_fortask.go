@@ -117,6 +117,8 @@ func contextForTask(ctx context.Context, raw string) (contextResult, error) {
 	}
 	// Notes on the task's words, best first.
 	words := contextfit.Words(t.Title + " " + t.Body)
+	// Semantic rules on the task's words (6.8 step 5, context_semantic.go).
+	semanticRulePicks(rows, words, add)
 	type scored struct {
 		k knowledgeRow
 		n int
