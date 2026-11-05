@@ -100,7 +100,10 @@ func (b *storePush) refresh(ctx context.Context) {
 	}
 	b.fetched = true
 	autopush, ttl := b.settings(ctx)
-	in := live.FetchInputs{Now: time.Now(), TTL: ttl, Kind: live.FetchCached, Autopush: autopush, HasRemote: true}
+	in := live.FetchInputs{Now: b.res.now(), TTL: ttl, Kind: live.FetchCached, Autopush: autopush, HasRemote: true}
+	if b.res != nil && b.res.fetchAlways {
+		in.Kind = live.FetchAlways
+	}
 	if b.stateDir != "" {
 		in.LastFetch = live.FetchStamp(b.stateDir)
 	}

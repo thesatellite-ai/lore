@@ -26,6 +26,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -57,6 +58,15 @@ type OrgResolution struct {
 	// it (the commit hooks still check). The old binary passes its
 	// v0.1.17 check (P3-ORG-3).
 	RepoWriteCheck func(ctx context.Context, root, kind, text string) error
+	// Now is the clock of live decisions (a store clone's live.fetch_ttl,
+	// storePush); nil = time.Now. cmd/lore passes its live clock, so a
+	// test build's LORE_NOW decides the fetch as it stamps the rows (the
+	// old binary's liveClock).
+	Now func() time.Time
+
+	// fetchAlways: this process fetches the store clones whatever the
+	// fetch stamp says (FetchLinksAlways).
+	fetchAlways bool
 
 	// routed is the F14 rule of the routed create this process made, for
 	// the "filed: <rule>" line (Routed).
@@ -65,6 +75,14 @@ type OrgResolution struct {
 	once sync.Once
 	sit  *orgcfg.Situation
 	err  error
+}
+
+// now is r.Now, or the wall clock.
+func (r *OrgResolution) now() time.Time {
+	if r != nil && r.Now != nil {
+		return r.Now()
+	}
+	return time.Now()
 }
 
 // NewOrgResolution resolves the org of the project at dir from the config
@@ -76,8 +94,11 @@ func NewOrgResolution(home, dir string, links orgcfg.LinkSource) *OrgResolution 
 
 // FetchLinksAlways makes the link read of this process fetch every org
 // store now, ignoring live.fetch_ttl: `lore sync` refreshes the link index
-// (F11, v0.1.17 refreshLinkIndex). Call it before the first Situation.
+// (F11, v0.1.17 refreshLinkIndex). The attached store clones fetch now too
+// (storePush, v0.1.17 fetchKind: FetchAlways for sync). Call it before the
+// first Situation.
 func (r *OrgResolution) FetchLinksAlways() {
+	r.fetchAlways = true
 	if g, ok := r.links.(*orgcfg.GitLinks); ok {
 		g.Always = true
 	}
