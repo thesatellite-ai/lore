@@ -132,7 +132,7 @@ func (e *Engine) holders(ctx context.Context, t validate.Target) ([]store.Source
 		return nil, nil
 	}
 	var out []store.Source
-	for _, name := range e.order {
+	for _, name := range e.lookupStores(table) { // P3-LOCAL-1
 		got, _, err := e.getRow(ctx, name, table, t.ID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue
@@ -232,7 +232,7 @@ func (e *Engine) dependents(ctx context.Context, table row.Table, id ids.AnyID) 
 		byTable[r.table] = append(byTable[r.table], r)
 	}
 	var out []dependent
-	for _, name := range e.order {
+	for _, name := range e.allStores() { // P3-LOCAL-1: machine-local rows may point at the row too
 		rows, _, err := e.readRows(ctx, name, "")
 		if err != nil {
 			return nil, err

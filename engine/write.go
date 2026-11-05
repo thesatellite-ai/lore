@@ -56,11 +56,14 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if target == "" {
 		target = cl.target
 	}
-	st, err := e.writable(target)
+	def, err := e.tableDef(table)
 	if err != nil {
 		return Written{}, err
 	}
-	def, err := e.tableDef(table)
+	if target, err = e.routeTable(target, def); err != nil { // P3-LOCAL-1
+		return Written{}, err
+	}
+	st, err := e.writable(target)
 	if err != nil {
 		return Written{}, err
 	}
@@ -492,7 +495,7 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 	}
 	actor := e.actorOf(cl)
 	var w Written
-	for _, name := range e.order {
+	for _, name := range e.allStores() { // P3-LOCAL-1: a plan may tombstone machine-local rows
 		steps := plan.byStore[name]
 		if len(steps) == 0 {
 			continue
@@ -739,8 +742,8 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 		}
 		table = def.Name
 	}
-	names := e.order
-	if ref.Store != "" {
+	names := e.lookupStores(table) // P3-LOCAL-1: a machine-local table is looked up in the machine store only
+	if ref.Store != "" && !e.IsMachineLocal(table) {
 		if _, err := e.attached(ref.Store); err != nil {
 			return "", row.Row{}, false, err
 		}

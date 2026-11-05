@@ -42,6 +42,13 @@ type TableDef struct {
 	// GlobalKey: the natural id ignores the store (engine naturalParts), so
 	// a row with the same key has one id in every store (actors).
 	GlobalKey bool
+	// MachineLocal tables hold stored rows that never leave this machine
+	// (PASS3 phase C, P3-LOCAL-1; v0.1.17 lsync localTables): the engine
+	// routes every read and write of them to store.SourceMachine and
+	// refuses them in any other store. A machine-local table is also
+	// Synced (stored rows, not a cache projection); it simply never
+	// travels because its one store has no remote.
+	MachineLocal bool
 }
 
 // Field returns the field named name.

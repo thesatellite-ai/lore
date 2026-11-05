@@ -149,6 +149,13 @@ func UniqueOn(fields ...string) Item {
 // GlobalKey makes the table's natural id the same in every store.
 func GlobalKey() Item { return itemFunc(func(t *TableDef) { t.GlobalKey = true }) }
 
+// MachineLocal marks a table whose rows stay on this machine
+// (TableDef.MachineLocal, P3-LOCAL-1). It implies Synced: the rows are
+// stored (in the machine store), never a cache-only projection.
+func MachineLocal() Item {
+	return itemFunc(func(t *TableDef) { t.MachineLocal, t.Synced = true, true })
+}
+
 // Description sets the table's one-line description.
 func Description(s string) Item { return itemFunc(func(t *TableDef) { t.Description = s }) }
 

@@ -151,6 +151,9 @@ type Engine struct {
 	// machinePolicy are this machine's stricter local policy values
 	// (WithMachinePolicy, FQ11); storeSettings resolves them with the rows.
 	machinePolicy []policy.Entry
+	// machine: the machine store (store.SourceMachine) is attached in
+	// stores but kept out of order (WithMachineStore, P3-LOCAL-1).
+	machine bool
 }
 
 // Option configures New.

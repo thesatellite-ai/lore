@@ -65,7 +65,7 @@ func deletedFor(ctx context.Context, table row.Table) DeletedMode {
 // the backend (the cache port has no query yet); search and sql read the
 // cache lens instead. A trashed row keeps its delete fields (trash.Is).
 func (e *Engine) List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error) {
-	a, err := e.attached(source)
+	a, err := e.attached(e.listSource(source, table)) // P3-LOCAL-1
 	if err != nil {
 		return nil, err
 	}
