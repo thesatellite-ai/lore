@@ -906,6 +906,22 @@ func (e *Engine) scanMeta(cl call, target store.Source, rowID ids.AnyID, p *meta
 	return nil
 }
 
+// nearShown is how many near-duplicate names a new key's warning lists
+// (METADATA 7: "the three nearest existing keys").
+const nearShown = 3
+
+// visibleNames are the names of the live (not retired) definitions this
+// write can see.
+func (p *metaPlan) visibleNames() []string {
+	var out []string
+	for _, d := range p.reg {
+		if !d.retired && !slices.Contains(out, d.name) {
+			out = append(out, d.name)
+		}
+	}
+	return out
+}
+
 // register writes the key rows this write created (auto-registration,
 // 3.9 (a)): internal when first registered in a store (R2-Q2); added_by
 // and reviewed record an agent's key for review (MQ7).
@@ -940,6 +956,10 @@ func (p *metaPlan) register(ctx context.Context, cl call) error {
 		}
 		what := k.name + " (" + k.typ.String() + ")"
 		p.warn(k.name, "new keys in "+scope+": "+what)
+		if near := meta.Nearest(k.name, p.visibleNames(), nearShown); len(near) > 0 {
+			// 3.5 / P2-META-7: a new key close to an existing one warns
+			p.warn(k.name, "did you mean "+strings.Join(near, ", ")+"? "+k.name+" is a new key; fold it with lore meta edit "+k.name+" --merge-into "+near[0])
+		}
 		if k.home != store.SourceRepo {
 			p.warn(k.name, "internal: keys first registered in the store start internal; to let one reach client repos: lore meta edit "+k.name+" --no-internal")
 		}
