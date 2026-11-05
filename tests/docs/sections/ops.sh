@@ -128,7 +128,7 @@ note "secret refused"
 on! alice work/website "lore memory add --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'"
 
 note "allow secrets"
-on alice work/website "lore memory add --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'"
+on alice work/website "lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'"
 local secret_mem; secret_mem=$(id mem)
 on alice work/website "grep -rl AKIA .lore/data || echo 'not in .lore/data'"
 on alice work/website "lore memory delete $secret_mem --yes"
