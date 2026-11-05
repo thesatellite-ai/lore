@@ -237,6 +237,11 @@ func (e *Engine) planTrashMany(ctx context.Context, roots []trashItem) ([]trashI
 	for _, r := range roots {
 		seen[r.row.ID] = true
 	}
+	// A restrict hit is checked only after the whole cascade closure is
+	// known: a pointing row that joins the group later (a task cascading
+	// from a tasklist root) is going to the trash too, so it never blocks,
+	// whatever order the roots were given in (p2b: the plan was order-dependent).
+	var blocked []restrictHit
 	for i := 0; i < len(plan); i++ {
 		it := plan[i]
 		deps, err := e.dependents(ctx, it.row.Table, it.row.ID)
@@ -249,15 +254,13 @@ func (e *Engine) planTrashMany(ctx context.Context, roots []trashItem) ([]trashI
 			}
 			if d.rule.list { // a many-to-many link: restrict refuses (3.15), other rules leave the list (D8)
 				if d.rule.onDelete == schema.Restrict {
-					return nil, errs.New(errs.HasDependents, "engine: "+d.row.ID.String()+" ("+string(d.rule.table)+"."+d.rule.field+") still lists "+it.row.ID.String()).
-						WithHint("remove it from the list first")
+					blocked = append(blocked, restrictHit{d, it.row.ID})
 				}
 				continue
 			}
 			switch d.rule.onDelete {
 			case schema.Restrict:
-				return nil, errs.New(errs.HasDependents, "engine: "+d.row.ID.String()+" ("+string(d.rule.table)+"."+d.rule.field+") still points at "+it.row.ID.String()).
-					WithHint("delete or move the pointing rows first")
+				blocked = append(blocked, restrictHit{d, it.row.ID})
 			case schema.Cascade:
 				seen[d.row.ID] = true
 				plan = append(plan, trashItem{d.source, d.row})
@@ -265,7 +268,24 @@ func (e *Engine) planTrashMany(ctx context.Context, roots []trashItem) ([]trashI
 			}
 		}
 	}
+	for _, b := range blocked {
+		if seen[b.dep.row.ID] {
+			continue
+		}
+		where := "engine: " + b.dep.row.ID.String() + " (" + string(b.dep.rule.table) + "." + b.dep.rule.field + ")"
+		if b.dep.rule.list {
+			return nil, errs.New(errs.HasDependents, where+" still lists "+b.target.String()).WithHint("remove it from the list first")
+		}
+		return nil, errs.New(errs.HasDependents, where+" still points at "+b.target.String()).WithHint("delete or move the pointing rows first")
+	}
 	return plan, nil
+}
+
+// restrictHit is a live row whose restrict relation points at target, a
+// row of the delete group.
+type restrictHit struct {
+	dep    dependent
+	target ids.AnyID
 }
 
 // confirmGroup asks before a group delete (3.4, TSQ3, DQ6; a soft delete is
