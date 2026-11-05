@@ -26,6 +26,9 @@ type Data struct {
 	mu   sync.Mutex
 	rows map[store.Key]entry
 	seq  uint64
+	// journal is the pending audit records (store.AuditJournal), oldest
+	// first; it lives with the rows, so every handle sees the same set.
+	journal []store.AuditRecord
 }
 
 // entry is a stored row and the sequence number of the batch that wrote it.
@@ -116,6 +119,74 @@ func (b *Backend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store
 // Write implements store.Backend: every Expect is checked under one lock
 // before anything is applied, so a batch is all or none.
 func (b *Backend) Write(ctx context.Context, changes []store.Change) error {
+	return b.write(ctx, changes, nil)
+}
+
+// Journaled is a Backend that also implements store.AuditJournal (the
+// pending journal lives in the Data, beside the rows). It is a separate
+// type, not a method set on Backend, because the capability is optional
+// and the engine changes path on it: engine tests that pin the plain
+// Write path keep the plain Backend, and the contract suite runs both
+// (later 543).
+type Journaled struct{ *Backend }
+
+var _ store.AuditJournal = Journaled{}
+
+// OpenJournaled returns a journal-capable Backend over d.
+func (d *Data) OpenJournaled(opts store.OpenOptions) Journaled {
+	return Journaled{d.Open(opts)}
+}
+
+// WriteAudited implements store.AuditJournal: the rows and recs land under
+// the same lock, or neither does (a refused batch keeps no record).
+func (b Journaled) WriteAudited(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
+	return b.write(ctx, changes, recs)
+}
+
+// PendingAudit implements store.AuditJournal: the records not yet
+// acknowledged, oldest first (copies; a caller cannot change the journal).
+func (b Journaled) PendingAudit(ctx context.Context) ([]store.AuditRecord, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, err
+	}
+	d := b.data
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := make([]store.AuditRecord, 0, len(d.journal))
+	for _, r := range d.journal {
+		out = append(out, cloneRec(r))
+	}
+	return out, nil
+}
+
+// AckAudit implements store.AuditJournal: drops the pending records whose
+// Key and HLC match one of acked; an unknown record is ignored.
+func (b Journaled) AckAudit(ctx context.Context, acked []store.AuditRecord) error {
+	if err := b.usable(ctx); err != nil {
+		return err
+	}
+	d := b.data
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	keep := d.journal[:0]
+	for _, r := range d.journal {
+		drop := false
+		for _, a := range acked {
+			if a.Key == r.Key && a.HLC.Compare(r.HLC) == 0 {
+				drop = true
+				break
+			}
+		}
+		if !drop {
+			keep = append(keep, r)
+		}
+	}
+	d.journal = keep
+	return nil
+}
+
+// write is Write with recs appended to the journal in the same batch.
+func (b *Backend) write(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
 	if err := b.usable(ctx); err != nil {
 		return err
 	}
@@ -149,6 +220,9 @@ func (b *Backend) Write(ctx context.Context, changes []store.Change) error {
 	for _, c := range changes {
 		d.rows[c.Row.Key()] = entry{row: clone(c.Row), seq: d.seq}
 	}
+	for _, r := range recs {
+		d.journal = append(d.journal, cloneRec(r))
+	}
 	return nil
 }
 
@@ -169,6 +243,12 @@ func (b *Backend) Close() error {
 	defer b.mu.Unlock()
 	b.closed = true
 	return nil
+}
+
+// cloneRec copies a record's line so no caller can change the journal.
+func cloneRec(r store.AuditRecord) store.AuditRecord {
+	r.Line = append([]byte(nil), r.Line...)
+	return r
 }
 
 // clone copies the document bytes so no caller can change stored data.
