@@ -51,6 +51,11 @@ type Scanner struct {
 	// counters are atomic and its findings list and commit map have their
 	// own mutexes; TestScanConcurrent pins this under -race.
 	detector *detect.Detector // nil when no gitleaks rule is on
+	// plain is detector's twin with decoding off (MaxDecodeDepth 0), used
+	// for a text mayHoldEncoding rules out: the decode passes would find
+	// no segment there, so the findings are the same at about half the
+	// cost (SECRETS 3.8, OWNERQ-13). nil exactly when detector is.
+	plain *detect.Detector
 	// builtin: rule ids still in their built-in form (post-filters run
 	// only on these); allow: the repo .gitleaks.toml allow (D8).
 	builtin map[string]bool
@@ -134,13 +139,23 @@ func NewWith(rules []scan.Rule, opts Options) (*Scanner, error) {
 				kw[strings.ToLower(k)] = struct{}{}
 			}
 		}
-		s.detector = detect.NewDetector(config.Config{
+		s.detector = newDetector(config.Config{
 			Rules: glRules, Keywords: kw, OrderedRules: order, Allowlists: base.Allowlists,
-		})
-		s.detector.MaxDecodeDepth = maxDecodeDepth
-		s.detector.IgnoreGitleaksAllow = ignoreGitleaksAllow
+		}, maxDecodeDepth)
+		s.plain = newDetector(config.Config{
+			Rules: glRules, Keywords: kw, OrderedRules: order, Allowlists: base.Allowlists,
+		}, 0)
 	}
 	return s, nil
+}
+
+// newDetector builds one gitleaks detector over cfg with the 3.1
+// settings and the given decode depth.
+func newDetector(cfg config.Config, decodeDepth int) *detect.Detector {
+	d := detect.NewDetector(cfg)
+	d.MaxDecodeDepth = decodeDepth
+	d.IgnoreGitleaksAllow = ignoreGitleaksAllow
+	return d
 }
 
 // Scan implements scan.Scanner. It drops the gate outcome; the engine
@@ -161,7 +176,11 @@ func (s *Scanner) ScanReport(field, text string) Report {
 		return rep
 	}
 	var gl []scan.Finding
-	found := s.detector.DetectString(text)
+	d := s.detector
+	if !mayHoldEncoding(text) {
+		d = s.plain
+	}
+	found := d.DetectString(text)
 	for _, f := range found {
 		gl = append(gl, convert(field, text, f.RuleID, f.StartLine, f.Match, f.Secret))
 	}
@@ -223,6 +242,9 @@ func lineStart(text string, n int) int {
 func (s *Scanner) decodedOwn(field, text string) []scan.Finding {
 	if len(text) > GitleaksMaxBytes {
 		return nil // the same size gate as the detector (a degraded scan is reported there)
+	}
+	if !mayHoldEncoding(text) {
+		return nil // no decodable segment: the passes below would find nothing
 	}
 	dec := codec.NewDecoder()
 	cur := text

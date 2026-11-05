@@ -11,23 +11,24 @@ import (
 )
 
 // SECRETS 3.8 pins the scan budgets with a test. The budgets (design
-// table) are the contract; a change that makes the scanner slower than
-// them fails here instead of in a person's commit hook.
+// table, as set by OWNERQ-13) are the contract; a change that makes the
+// scanner slower than them fails here instead of in a person's commit hook.
 //
 //	scan part of a pre-push over 1,000 changed row files      < 2 s    TestScanBudgets
-//	detector build (defaults + lore pack + store rules)        < 40 ms  BenchmarkDetectorBuild only
-//	scan of a 4 KB row, no hit                                 < 1 ms   BenchmarkScan4KB only
-//	scan of a 16 KB metadata blob (the MQ3 cap)                < 4 ms   BenchmarkScanMetaBlob16KB only
+//	detector build (defaults + lore pack + store rules), cold  < 60 ms  BenchmarkDetectorBuild (warm) only
+//	scan of a 4 KB row, no hit                                 < 5 ms   BenchmarkScan4KB, BenchmarkScan4KBCandidates
+//	scan of a 16 KB metadata blob (the MQ3 cap)                < 20 ms  BenchmarkScanMetaBlob16KB only
 //
-// Only the pre-push budget is asserted (P3-SEC-3): the as-built scanner
-// misses the per-row budgets (about 3.5 ms per 4 KB row and 15 ms per
-// 16 KB blob, mostly gitleaks' encoded-segment search and the regexes of
-// keyword-triggered rules), and its cold build (once per process, gitleaks
-// config parse included) sits at 32-55 ms, so an assertion would fail or
-// flap. That is an open owner question, not a number to loosen here; the
-// benchmarks keep the cost visible (go test -bench . ./adapters/scanner/gitleaks).
-// The "zero for commands that write no text" row is a wiring property,
-// not a timing.
+// Only the pre-push budget is asserted (OWNERQ-13): per-row times swing
+// with machine load, so an assertion would flap; the benchmarks keep the
+// cost visible (go test -bench . ./adapters/scanner/gitleaks). Detection
+// is never weakened to meet a number: gitleaks' decode depth 3 and its
+// keyword-free rules stay. The decode passes are skipped only for a text
+// mayHoldEncoding proves has no encoded segment (encoded.go), which is
+// most prose and metadata; a row holding paths or long identifiers pays
+// them (BenchmarkScan4KBCandidates). The "zero for commands that write no
+// text" row is a wiring property (wire withLazyBuild, P3-SEC-5), not a
+// timing.
 //
 // The timed case takes the fastest of budgetRuns runs (race_test.go,
 // norace_test.go): the fastest run is
@@ -152,6 +153,17 @@ func BenchmarkScan4KB(b *testing.B) {
 		b.Fatal(err)
 	}
 	scanBench(sc, fill(prose, 4<<10))(b)
+}
+
+// BenchmarkScan4KBCandidates scans a 4 KB row with no hit whose text
+// holds codec candidates (paths, long identifiers), so the decode passes
+// run: the slow side of the 3.8 per-row figure.
+func BenchmarkScan4KBCandidates(b *testing.B) {
+	sc, err := budgetScanner()
+	if err != nil {
+		b.Fatal(err)
+	}
+	scanBench(sc, fill("See github.com/thesatellite-ai/lore/adapters/scanner for the release_checklist_items. "+prose, 4<<10))(b)
 }
 
 // BenchmarkScanMetaBlob16KB scans one 16 KB metadata value with no hit.
