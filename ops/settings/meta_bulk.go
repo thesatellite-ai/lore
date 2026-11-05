@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -170,6 +171,11 @@ func (o ops) metaSetWhere(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	if f.Empty() {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta set --where: nothing to set").WithHint("lore meta set --where 'client=acme' key=value")
 	}
+	aliases, err := metalist.ScopeAliases(ctx, o.env) // 3.6 meta.scope_aliases (FA-META-12)
+	if err != nil {
+		return RowOut{}, err
+	}
+	f.Meta = meta.ExpandAliases(f.Meta, aliases)
 	// parse once (stdin is read once), bind per row below
 	proto, err := f.Write("", ids.AnyID{}, nil)
 	if err != nil {

@@ -42,6 +42,11 @@ const (
 	// KeyMetaRenderKeysBudget: bytes of the rendered keys block (METADATA
 	// 3.14: 6144); a limit, the smaller is stricter (FA-META-11).
 	KeyMetaRenderKeysBudget Key = "meta.render_keys_budget"
+	// KeyMetaScopeAliases: short names for scope labels, items
+	// "alias=scope" ("be=repo:acmehub_backend"; METADATA 3.6, FA-META-12);
+	// a set, every level adds; an alias two levels define differently is
+	// dropped (ScopeAliases), so a lower place cannot redefine one.
+	KeyMetaScopeAliases Key = "meta.scope_aliases"
 	// KeyMetaStaleAfter: hours since a store's last successful fetch after
 	// which auto-registering a new metadata key in an own repo is refused
 	// with E_META_STALE (METADATA 3.9/3.18; P2-META-14: whole hours, default
@@ -331,6 +336,7 @@ func Keys() []KeyDef {
 		{Key: KeyMetaResourceHintValues, Shape: ShapeLimit, Default: value.Int(defaultMetaResourceHint), Doc: "distinct values past which meta lint suggests a resource kind (METADATA 3.8, D39)"},
 		{Key: KeyMetaMaxKeyLength, Shape: ShapeLimit, Ceiling: defaultMetaMaxKeyLength, Default: value.Int(defaultMetaMaxKeyLength), Doc: "most characters in a metadata key name (METADATA 3.13, at most 64)"},
 		{Key: KeyMetaMaxKeysPerRegistry, Shape: ShapeLimit, Default: value.Int(defaultMetaMaxKeysPerReg), Doc: "most metadata key rows one place holds (METADATA 3.8)"},
+		{Key: KeyMetaScopeAliases, Shape: ShapeSet, Default: mustList(), Doc: "short names for metadata scope labels, alias=scope items (METADATA 3.6)"},
 		{Key: KeyMetaRenderKeysBudget, Shape: ShapeLimit, Default: value.Int(defaultMetaRenderKeysBudget), Doc: "bytes of the metadata keys block in rendered files (METADATA 3.14)"},
 		{Key: KeyResourcesMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest resource in bytes"},
 		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource larger than this many bytes prints a warning (RQ4)"},
@@ -496,6 +502,33 @@ func (s Set) ClientRoutes() map[string]string {
 		}
 	}
 	return out
+}
+
+// ScopeAliases reads the effective KeyMetaScopeAliases items into alias →
+// scope label. An alias given two different labels (two levels, or one
+// level twice) is dropped and named in conflicts: a lower place may add
+// aliases but never redefine one (METADATA 3.6, FA-META-12). Items without
+// "=" or with an empty side are skipped.
+func (s Set) ScopeAliases() (aliases map[string]string, conflicts []string) {
+	aliases = map[string]string{}
+	bad := map[string]bool{}
+	for _, it := range s.Strings(KeyMetaScopeAliases) { // sorted
+		name, target, ok := strings.Cut(it, clientRouteSep)
+		name, target = strings.TrimSpace(name), strings.TrimSpace(target)
+		if !ok || name == "" || target == "" {
+			continue
+		}
+		if cur, seen := aliases[name]; seen && cur != target {
+			bad[name] = true
+		}
+		aliases[name] = target
+	}
+	for name := range bad {
+		delete(aliases, name)
+		conflicts = append(conflicts, name)
+	}
+	slices.Sort(conflicts)
+	return aliases, conflicts
 }
 
 // ClientRouteItem is one KeyClientRoutes item ("memory=agency").

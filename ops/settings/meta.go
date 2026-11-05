@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -700,6 +701,11 @@ func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	if f.Empty() {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta set: nothing to set").WithHint("lore meta set <id> key=value")
 	}
+	aliases, err := metalist.ScopeAliases(ctx, o.env) // 3.6 meta.scope_aliases (FA-META-12)
+	if err != nil {
+		return RowOut{}, err
+	}
+	f.Meta = meta.ExpandAliases(f.Meta, aliases)
 	mw, err := f.Write("", id, nil)
 	if err != nil {
 		return RowOut{}, err

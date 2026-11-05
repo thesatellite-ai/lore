@@ -89,7 +89,7 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		}
 	}
 	// --meta / --meta-json / --meta-stdin of any input (engine/meta.go, R13)
-	ctx, metaUsed, merr := bindInputMeta(ctx, in)
+	ctx, metaUsed, merr := e.bindInputMeta(ctx, in)
 	if merr != nil {
 		return op.Result{}, merr
 	}

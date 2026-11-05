@@ -175,7 +175,11 @@ func Select(ctx context.Context, env Lister, f Flags, rows []row.Row) (Result, e
 	if err != nil {
 		return Result{}, err
 	}
-	p, warnings, err := metafilter.Compile(f.Meta, f.Place, f.Sort, keys)
+	aliases, err := ScopeAliases(ctx, env) // 3.6 meta.scope_aliases (FA-META-12)
+	if err != nil {
+		return Result{}, err
+	}
+	p, warnings, err := metafilter.Compile(meta.ExpandAliases(f.Meta, aliases), f.Place, f.Sort, keys)
 	if err != nil {
 		return Result{}, err
 	}

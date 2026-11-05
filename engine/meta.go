@@ -1254,11 +1254,22 @@ func readMetaInput(r io.Reader, what string) (string, error) {
 // bindInputMeta is Run's step: an input's --meta flags ride on the
 // command's first metadata write. check, run after the operation, refuses
 // flags no write took (E_META_TABLE), so a value is never dropped silently.
-func bindInputMeta(ctx context.Context, in op.Input) (context.Context, func() error, error) {
+//
+// The --meta arguments go through meta.scope_aliases first (3.6, the
+// repo chain's policy; FA-META-12).
+func (e *Engine) bindInputMeta(ctx context.Context, in op.Input) (context.Context, func() error, error) {
 	none := func() error { return nil }
 	f := metaFromInput(in)
 	if f.Empty() {
 		return ctx, none, nil
+	}
+	if len(f.Meta) > 0 && e.settings != nil {
+		pol, _, perr := e.settings.Policy(store.SourceRepo)
+		if perr != nil {
+			return nil, none, perr
+		}
+		aliases, _ := pol.ScopeAliases()
+		f.Meta = meta.ExpandAliases(f.Meta, aliases)
 	}
 	mw, err := f.Write("", ids.AnyID{}, nil)
 	if err != nil {
