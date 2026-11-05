@@ -20,33 +20,49 @@ import (
 // localDirMode is the mode of the state folder (owner only: P2-LINT-1).
 const localDirMode = 0o750
 
+// All machine-local tables share one SQLite table keyed by (tbl, key), so
+// every statement is a constant with bound parameters and no identifier is
+// ever spliced into SQL (FB-DOC-1; fixes gosec G202). The localstate.Table
+// name is a bound value, still checked against the closed list first.
+const (
+	localDDL  = `CREATE TABLE IF NOT EXISTS local_state (tbl TEXT NOT NULL, key TEXT NOT NULL, doc TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (tbl, key))`
+	localPut  = `INSERT INTO local_state (tbl, key, doc, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(tbl, key) DO UPDATE SET doc = excluded.doc, updated_at = excluded.updated_at`
+	localGet  = `SELECT doc, updated_at FROM local_state WHERE tbl = ? AND key = ?`
+	localList = `SELECT key, doc, updated_at FROM local_state WHERE tbl = ? AND key LIKE ? ESCAPE '\' ORDER BY key`
+	localDel  = `DELETE FROM local_state WHERE tbl = ? AND key = ?`
+	// localHasTable asks whether a legacy per-table layout table exists.
+	localHasTable = `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`
+)
+
+// legacyMoves copies the rows of the first layout (one SQLite table per
+// localstate.Table, built before FB-DOC-1) into local_state and drops the
+// old table. Constant statements per known table; a table added after
+// FB-DOC-1 never had the old layout and needs no entry.
+var legacyMoves = map[localstate.Table][2]string{
+	localstate.Usage: {
+		`INSERT OR IGNORE INTO local_state (tbl, key, doc, updated_at) SELECT 'row_usage', key, doc, updated_at FROM row_usage`,
+		`DROP TABLE row_usage`,
+	},
+	localstate.SecretChecks: {
+		`INSERT OR IGNORE INTO local_state (tbl, key, doc, updated_at) SELECT 'secret_checks', key, doc, updated_at FROM secret_checks`,
+		`DROP TABLE secret_checks`,
+	},
+	localstate.TimeOutbox: {
+		`INSERT OR IGNORE INTO local_state (tbl, key, doc, updated_at) SELECT 'time_outbox', key, doc, updated_at FROM time_outbox`,
+		`DROP TABLE time_outbox`,
+	},
+}
+
 // LocalState implements localstate.Store over one SQLite file.
 type LocalState struct {
 	db *sql.DB
-	// sql holds each table's statements, built once at open from the
-	// closed table list (identifiers validated by ident).
-	sql map[localstate.Table]localSQL
-}
-
-// localSQL is the statement set of one machine-local table.
-type localSQL struct {
-	put, get, list, del string
-}
-
-// localStatements builds the statements of the table quoted as q.
-func localStatements(q string) localSQL {
-	return localSQL{
-		put:  "INSERT INTO " + q + " (key, doc, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET doc = excluded.doc, updated_at = excluded.updated_at",
-		get:  "SELECT doc, updated_at FROM " + q + " WHERE key = ?",
-		list: "SELECT key, doc, updated_at FROM " + q + ` WHERE key LIKE ? ESCAPE '\' ORDER BY key`,
-		del:  "DELETE FROM " + q + " WHERE key = ?",
-	}
 }
 
 var _ localstate.Store = (*LocalState)(nil)
 
 // OpenLocalState opens (creating it and its folder when missing) the
-// machine-local state file at path and creates every localstate table.
+// machine-local state file at path and creates the shared table, moving
+// rows of the old per-table layout into it once.
 func OpenLocalState(ctx context.Context, path string) (*LocalState, error) {
 	if err := os.MkdirAll(filepath.Dir(path), localDirMode); err != nil {
 		return nil, errs.Wrap(errs.Internal, "localstate: create "+filepath.Dir(path), err)
@@ -60,20 +76,55 @@ func OpenLocalState(ctx context.Context, path string) (*LocalState, error) {
 		return nil, dbErr("open local state", err)
 	}
 	db.SetMaxOpenConns(1)
-	stmts := map[localstate.Table]localSQL{}
-	for _, t := range localstate.Tables() {
-		// Table names come from the closed localstate list, never input.
-		q, ierr := ident(string(t))
-		if ierr != nil {
-			return nil, errors.Join(ierr, db.Close())
-		}
-		ddl := `CREATE TABLE IF NOT EXISTS ` + q + ` (key TEXT PRIMARY KEY, doc TEXT NOT NULL, updated_at TEXT NOT NULL)`
-		if _, err := db.ExecContext(ctx, ddl); err != nil {
-			return nil, errors.Join(dbErr("create "+string(t), err), db.Close())
-		}
-		stmts[t] = localStatements(q)
+	if _, err := db.ExecContext(ctx, localDDL); err != nil {
+		return nil, errors.Join(dbErr("create local_state", err), db.Close())
 	}
-	return &LocalState{db: db, sql: stmts}, nil
+	if err := moveLegacyTables(ctx, db); err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	return &LocalState{db: db}, nil
+}
+
+// moveLegacyTables runs legacyMoves for each old table still present, each
+// copy + drop in one transaction (a crash leaves the old table whole).
+func moveLegacyTables(ctx context.Context, db *sql.DB) error {
+	for _, t := range localstate.Tables() {
+		mv, ok := legacyMoves[t]
+		if !ok {
+			continue
+		}
+		var one int
+		err := db.QueryRowContext(ctx, localHasTable, string(t)).Scan(&one)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return dbErr("check legacy "+string(t), err)
+		}
+		if err := execTx(ctx, db, mv[0], mv[1]); err != nil {
+			return dbErr("move legacy "+string(t), err)
+		}
+	}
+	return nil
+}
+
+// execTx runs constant statements in one transaction.
+func execTx(ctx context.Context, db *sql.DB, stmts ...string) (err error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+	for _, q := range stmts {
+		if _, err = tx.ExecContext(ctx, q); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // Put implements localstate.Store.
@@ -82,8 +133,8 @@ func (l *LocalState) Put(ctx context.Context, t localstate.Table, key string, do
 	if err != nil {
 		return err
 	}
-	_, err = l.db.ExecContext(ctx, l.sql[t].put,
-		key, string(doc), time.Now().UTC().Format(time.RFC3339Nano))
+	_, err = l.db.ExecContext(ctx, localPut,
+		string(t), key, string(doc), time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return dbErr("put "+string(t), err)
 	}
@@ -97,7 +148,7 @@ func (l *LocalState) Get(ctx context.Context, t localstate.Table, key string) (l
 		return localstate.Entry{}, false, err
 	}
 	var doc, at string
-	err = l.db.QueryRowContext(ctx, l.sql[t].get, key).Scan(&doc, &at)
+	err = l.db.QueryRowContext(ctx, localGet, string(t), key).Scan(&doc, &at)
 	if errors.Is(err, sql.ErrNoRows) {
 		return localstate.Entry{}, false, nil
 	}
@@ -115,7 +166,7 @@ func (l *LocalState) List(ctx context.Context, t localstate.Table, prefix string
 	}
 	// LIKE with an escaped prefix: % and _ in a key are literal.
 	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(prefix)
-	rows, err := l.db.QueryContext(ctx, l.sql[t].list, esc+"%")
+	rows, err := l.db.QueryContext(ctx, localList, string(t), esc+"%")
 	if err != nil {
 		return nil, dbErr("list "+string(t), err)
 	}
@@ -140,7 +191,7 @@ func (l *LocalState) Delete(ctx context.Context, t localstate.Table, key string)
 	if err != nil {
 		return err
 	}
-	if _, err = l.db.ExecContext(ctx, l.sql[t].del, key); err != nil {
+	if _, err = l.db.ExecContext(ctx, localDel, string(t), key); err != nil {
 		return dbErr("delete "+string(t), err)
 	}
 	return nil
