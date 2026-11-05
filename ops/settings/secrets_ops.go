@@ -69,6 +69,13 @@ type Holderer interface {
 	ThisHolder(ctx context.Context) (id, label string, err error)
 }
 
+// sharedManagers are the managers whose entry stands for the team's
+// access (a 1Password shared vault, Vault, AWS Secrets Manager): lore
+// records no holder for them on its own (SECRETS 5.2; the opt-in
+// secrets.holder_for_shared is deferred with the plugin system, SQ9, so it
+// is off). A holder typed with --holder is still written.
+var sharedManagers = map[string]bool{secretmgr.OnePass: true, secretmgr.Vault: true, secretmgr.AWS: true}
+
 // SecretsListIn is the input of secrets.list.
 type SecretsListIn struct {
 	Holder   string `json:"holder,omitempty" flag:"holder" desc:"only references held by this person, person.machine label or holder id"`
@@ -118,7 +125,7 @@ type SecretsLinkIn struct {
 	Row    string `json:"id" arg:"0" desc:"the row holding ${secret:unstored}"`
 	At     int    `json:"at" flag:"at" desc:"which placeholder (1-based, as lore secrets list --unstored prints it)"`
 	Ref    string `json:"ref" flag:"ref" desc:"the entry, as manager://entry (holder options optional)"`
-	Holder string `json:"holder,omitempty" flag:"holder" desc:"the holder id to record (default this machine, when known)"`
+	Holder string `json:"holder,omitempty" flag:"holder" desc:"the holder id to record (default this machine for a personal manager; none for op, vault, aws-secrets)"`
 }
 
 // SecretsOut is the output of secrets.list, show and check.
@@ -935,7 +942,7 @@ func (o ops) secretsLink(ctx context.Context, in SecretsLinkIn) (SecretsBatchOut
 	}
 	if targetOption(newT, refs.OptHolder) == "" {
 		hid, hlabel := in.Holder, ""
-		if hid == "" {
+		if hid == "" && !sharedManagers[newT.Manager] { // SEC-LINK1: this machine through the Env
 			if h, ok := o.env.(Holderer); ok {
 				var herr error
 				if hid, hlabel, herr = h.ThisHolder(ctx); herr != nil {
