@@ -76,13 +76,6 @@ type doneNext struct {
 	} `json:"next"`
 }
 
-// bugCancelFence: `task cancel <parent> --children cancel` cancels a
-// claimed child but leaves its claim_epoch as it was (1 -> 1), so the
-// holder's next fenced write (`task done`) succeeds on the cancelled task
-// instead of failing E_CANCELLED (TASK_SYSTEM 6.9). Found by a-task-e2e
-// (PASS3 queue #10).
-var bugCancelFence = th.Bug{ID: "BUG-CANCEL-FENCE", Owner: "main (ops/task cancel cascade)", Open: true}
-
 // bugLandSession: when an agent closes a task it claimed in a client repo,
 // the landing of the row is blocked E_LEAK_BLOCKED for "an agent's tool
 // session id" in the row: the row the claim writers build carries the
@@ -202,7 +195,6 @@ func TestTask_CancelCascadeFencesChildHolder(t *testing.T) {
 		t.Fatalf("the cascade cancels the held child: %s", s)
 	}
 	r := wc.Lore("task", "done", kids[0], "--no-lesson")
-	bugCancelFence.PendingIf(t, r.Code == th.ExitOK, "the fenced holder's done succeeded on a cancelled child")
 	r.Fails(t, th.ExitCancelled, "E_CANCELLED")
 	if s := subtaskStatus(t, cr.toolsC, kids[0]); s != "cancelled" {
 		t.Fatalf("the fenced holder's done changes nothing: %s", s)

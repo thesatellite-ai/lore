@@ -189,6 +189,26 @@ func (o ops) fenceClaimed(ctx context.Context, f forest, claimed []string) error
 	return nil
 }
 
+// activeClaims is the set of tasks among tasks that are actively claimed on
+// the host's board (empty without a team board).
+func activeClaims(ctx context.Context, tasks []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	t, ok := work.TeamFrom(ctx)
+	if !ok || len(tasks) == 0 {
+		return out, nil
+	}
+	board, err := t.Claims(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range tasks {
+		if _, isClaimed, active := board.Claim(id); isClaimed && active {
+			out[id] = true
+		}
+	}
+	return out, nil
+}
+
 // selfClaimNow reports whether task is actively claimed on the host's board
 // (false without a team board).
 func selfClaimNow(ctx context.Context, task string) (bool, error) {
@@ -375,6 +395,10 @@ func (o ops) closeChildren(ctx context.Context, f forest, id, verb, children, su
 	if err := bulk.Preview(ctx, o.env, f.row(id).Source, "task "+verb+" --children "+children, items); err != nil {
 		return "", err
 	}
+	claimed, err := activeClaims(ctx, targets)
+	if err != nil {
+		return "", err
+	}
 	// deepest first, so no write ever leaves a closed task over an open one
 	slices.Reverse(targets)
 	for _, d := range targets {
@@ -382,6 +406,14 @@ func (o ops) closeChildren(ctx context.Context, f forest, id, verb, children, su
 		patch, err := o.closePatch(ctx, s.Source, s.Row, status, "")
 		if err != nil {
 			return "", err
+		}
+		// TASK 6.9 (BUG-CANCEL-FENCE): a claimed child closed by the cascade
+		// gets claim_epoch +1 in the same write, so its holder's next fenced
+		// write is refused (E_CANCELLED for a cancel) instead of landing on
+		// a task somebody else closed. A done cascade fences the same way:
+		// the holder no longer owns the outcome of that task either.
+		if claimed[d] {
+			patch[fieldClaimEpoch] = value.Int(int64(rowClaimEpoch(s.Row)) + 1)
 		}
 		if _, err := o.hist().Update(ctx, engine.Ref{Store: s.Source, Table: table, ID: s.Row.ID}, patch); err != nil {
 			return "", err
