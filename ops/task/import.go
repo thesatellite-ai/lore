@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/origin"
@@ -480,8 +481,12 @@ func checkRecord(r importRecord) error {
 	}
 	for _, d := range []string{colDue, colDeferUntil} {
 		if v := r.cols[d]; v != "" {
+			// A day, or an RFC 3339 datetime (what export writes for a due
+			// with a clock time, OV53); --due reads both.
 			if _, err := work.Date(d, v); err != nil {
-				return errors.Join(err, errs.New(errs.InvalidInput, "task import: in "+r.extID))
+				if _, terr := time.Parse(time.RFC3339, v); terr != nil {
+					return errors.Join(err, errs.New(errs.InvalidInput, "task import: in "+r.extID))
+				}
 			}
 		}
 	}

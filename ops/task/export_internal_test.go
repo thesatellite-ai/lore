@@ -59,3 +59,38 @@ func TestExportWithChildren(t *testing.T) {
 		t.Fatalf("nesting wrong: %s", js)
 	}
 }
+
+// TestExportDateForms (OV53): export writes due/defer_until in a form task
+// import reads back: a calendar day as YYYY-MM-DD, a datetime as RFC 3339
+// UTC (whatever zone it was given in), nothing when unset; both forms pass
+// the import's date check.
+func TestExportDateForms(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"2026-12-01T00:00:00Z", "2026-12-01"},
+		{"2026-12-01T09:30:00Z", "2026-12-01T09:30:00Z"},
+		{"2026-12-01T09:30:00+05:30", "2026-12-01T04:00:00Z"},
+		{"2026-12-01T00:00:00.5Z", "2026-12-01T00:00:00Z"}, // sub-second: a datetime, not a day
+		{"", ""},
+	}
+	for _, c := range cases {
+		r := row.Row{Fields: map[string]value.Value{}}
+		if c.in != "" {
+			v, err := value.DateTimeOf(c.in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.Fields[fieldDue] = v
+		}
+		got := exportDate(r, fieldDue)
+		if got != c.want {
+			t.Errorf("%q: export %q want %q", c.in, got, c.want)
+		}
+		if got == "" {
+			continue
+		}
+		rec := importRecord{extID: "x", cols: map[string]string{colTitle: "t", colDue: got}}
+		if err := checkRecord(rec); err != nil {
+			t.Errorf("%q: import refuses the exported form %q: %v", c.in, got, err)
+		}
+	}
+}

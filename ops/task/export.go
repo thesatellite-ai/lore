@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/logic/direction"
 
@@ -146,7 +147,7 @@ func importShape(r row.Row) map[string]string {
 	m := map[string]string{
 		colExtID: r.ID.String(), colTitle: work.Field(r, work.FieldTitle), colBody: work.Field(r, work.FieldBody),
 		colPriority: work.Field(r, fieldPriority), colCommitment: work.Field(r, fieldCommitment),
-		colDue: work.Field(r, fieldDue), colDeferUntil: work.Field(r, fieldDeferred),
+		colDue: exportDate(r, fieldDue), colDeferUntil: exportDate(r, fieldDeferred),
 		colTasklist: work.Field(r, work.FieldTasklist), colMission: work.Field(r, work.FieldMission),
 		colPlan: work.Field(r, work.FieldPlan), colRole: work.Field(r, fieldRole),
 	}
@@ -156,6 +157,22 @@ func importShape(r row.Row) map[string]string {
 		}
 	}
 	return m
+}
+
+// exportDate is a date field in the form task import (and --due) reads
+// back: a calendar day (midnight UTC, TSQ11) as YYYY-MM-DD, a datetime as
+// RFC 3339 UTC; "" when unset. The stored text ("…T00:00:00.000000000Z")
+// is not a form the import accepts (OV53).
+func exportDate(r row.Row, name string) string {
+	t := work.Time(r, name)
+	if t.IsZero() {
+		return ""
+	}
+	t = t.UTC()
+	if t.Equal(t.Truncate(24 * time.Hour)) {
+		return t.Format(time.DateOnly)
+	}
+	return t.Format(time.RFC3339)
 }
 
 // exportOpt is the 19.2 extras of one export.
