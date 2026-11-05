@@ -76,16 +76,14 @@ $ git ls-remote https://github.com/agency/notes
 ```
 <!-- /example -->
 
-With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=agency-stag` shows it for one command. On the remote, the store has a `staging` branch and its own live ref `refs/lore/live/staging` (a hidden list that is not a branch), next to `main`.
+With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=agency-stag` shows it for one command. On the remote, the store has a `staging` branch next to `main`; each store branch is its own lore, written by plain commits (a store has no live ref in 0.1.18).
 
 ## What happened
 
 ```text
  github.com/agency/notes
    refs/heads/main          ◀── agency       (normal work; matched by link or pattern)
-   refs/lore/live/main
    refs/heads/staging       ◀── agency-stag  (only by lore org use / LORE_ORG)
-   refs/lore/live/staging
  ~/.lore/clones/github.com/agency/notes.git   one bare clone serves both entries
 ```
 
@@ -93,6 +91,6 @@ With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=ag
 
 - **The branch must exist first.** Linking or writing to a staging entry whose branch does not exist is refused, with a hint to create it on purpose with `lore store init <name> '<url>?branch=staging'`; `lore store add <name> <url> --branch staging` attaches a branch that already exists. A typo never creates a new lore silently. See [Troubleshooting](../troubleshooting.md#store-branch-does-not-exist).
 - **Links, roster and global project are per branch.** The roster is the list of people and agents in the org. A staging entry needs its own `lore org link`, and `lore actor register` if you want `@handles` there. With a staging entry chosen, `lore whoami` counts only that branch's links: `0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)` until you link it.
-- **A branch name may not contain `/`** (`release/2026` is refused by `lore config check`), so `refs/lore/live/<branch>` names can never clash.
+- **A branch name may not contain `/`** (`release/2026` is refused by `lore config check`), so a store branch name never clashes with lore's own refs.
 - `lore org use` is saved in `repo_orgs:` of your own `~/.lore/config.yaml`. Nothing is committed, and teammates are not affected.
 - To move rows between staging and main, merge the store branches yourself with git. Lore's merge driver (a small helper git calls to combine two edits of the same note) settles the row files.
