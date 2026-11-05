@@ -16,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -73,7 +74,7 @@ type Env = work.Env
 type RunIn struct {
 	Code []string `json:"code,omitempty" flag:"code" desc:"only these finding codes (repeatable)"`
 	// Context runs only the LORE.md clean-up checks (CONTEXT_BUDGET 6.12).
-	Context bool `json:"context,omitempty" flag:"context" desc:"only the context checks: superseded but pinned, no summary, too long, code path without globs, untagged, near duplicates"`
+	Context bool `json:"context,omitempty" flag:"context" desc:"only the context checks: superseded but pinned, no summary, too long, code path without globs, untagged, near duplicates, scope missing or conflicting, high hotfix older than 45 days, not validated in 90 days"`
 }
 
 // Finding is one problem lint found.
@@ -150,6 +151,7 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	if in.Context {
 		// 6.12: the context checks alone, read-only, each with its command.
 		out := append(contextFindings(all), o.contextScopeFindings(ctx, all)...)
+		out = append(out, ageFindings(all, opclock.Now(o.env))...)
 		if len(want) > 0 {
 			out = slices.DeleteFunc(out, func(f Finding) bool { return !want[f.Code] })
 		}
