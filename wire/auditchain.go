@@ -207,8 +207,12 @@ func (c *chainAudit) resolve(ctx context.Context) {
 		if c.top == "" {
 			c.top = dir
 		}
-		c.dbPath = filepath.Join(projectFolder(dir, c.top), filepath.FromSlash(legacyLoreDB))
-		c.file = &fileAudit{path: filepath.Join(c.top, filepath.FromSlash(AuditFile))}
+		project := projectFolder(dir, c.top)
+		c.dbPath = filepath.Join(project, filepath.FromSlash(legacyLoreDB))
+		// the project's own .lore/state (OWNERQ-1): a monorepo sub-project's
+		// trail is not written into the repo top, which may have no project
+		// (and no .gitignore line for it)
+		c.file = &fileAudit{path: filepath.Join(project, filepath.FromSlash(AuditFile))}
 	})
 }
 
