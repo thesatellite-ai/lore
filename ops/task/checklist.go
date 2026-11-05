@@ -3,7 +3,7 @@ package task
 // checklist.go — `lore task checklist add|tick|untick|edit|rm|list|import|
 // promote` (TASK_SYSTEM_DESIGN 7.3, 7.4) and the done rule (TSQ14).
 //
-//	op ─► getChecklist (row + model/checklist.Decode)
+//	op ─► getChecklist (row + model/checklist.Decode; a write: holder fence)
 //	   ─► checklist.Resolve (position or chk_ id) ─► mutate item (stamps)
 //	   ─► putChecklist ─► engine Update (one write; merge by item id)
 //	task done ─► openItemsGuard: E_OPEN_ITEMS | --tick-all (same write) | --force
@@ -148,7 +148,8 @@ func box(done bool) string {
 
 // checklistOps are the checklist operations, appended to Ops.
 func checklistOps(o ops) []op.Entry {
-	w := work.WriteErrors
+	// a checklist write by a claim holder is fenced (7.4, fence.go)
+	w := append(slices.Clone(work.WriteErrors), errs.LostClaim)
 	return []op.Entry{
 		op.Define(op.Spec{
 			Name: OpChecklistAdd, Summary: "Add checklist items to a task" + checklistHelp,
@@ -309,7 +310,7 @@ func (o ops) checklistAdd(ctx context.Context, in ChecklistAddIn) (ChecklistOut,
 		return ChecklistOut{}, errs.New(errs.InvalidInput, "task checklist add: no item text").
 			WithHint(`lore task checklist add <task> "item" [--item "another"]`)
 	}
-	h, err := o.getChecklist(ctx, in.ID)
+	h, err := o.getChecklistForWrite(ctx, in.ID)
 	if err != nil {
 		return ChecklistOut{}, err
 	}
@@ -327,7 +328,7 @@ func (o ops) checklistAdd(ctx context.Context, in ChecklistAddIn) (ChecklistOut,
 
 // checklistTick ticks or unticks one item; the status never changes (7.4).
 func (o ops) checklistTick(ctx context.Context, in ChecklistItemIn, done bool) (ChecklistOut, error) {
-	h, err := o.getChecklist(ctx, in.ID)
+	h, err := o.getChecklistForWrite(ctx, in.ID)
 	if err != nil {
 		return ChecklistOut{}, err
 	}
@@ -369,7 +370,7 @@ func liveIndex(list []checklist.Item, ref string) (int, error) {
 
 // checklistEdit changes an item's text.
 func (o ops) checklistEdit(ctx context.Context, in ChecklistEditIn) (ChecklistOut, error) {
-	h, err := o.getChecklist(ctx, in.ID)
+	h, err := o.getChecklistForWrite(ctx, in.ID)
 	if err != nil {
 		return ChecklistOut{}, err
 	}
@@ -394,7 +395,7 @@ func (o ops) checklistEdit(ctx context.Context, in ChecklistEditIn) (ChecklistOu
 
 // checklistRm tombstones an item (7.2: delete vs edit merges as edit wins).
 func (o ops) checklistRm(ctx context.Context, in ChecklistItemIn) (ChecklistOut, error) {
-	h, err := o.getChecklist(ctx, in.ID)
+	h, err := o.getChecklistForWrite(ctx, in.ID)
 	if err != nil {
 		return ChecklistOut{}, err
 	}
@@ -426,7 +427,7 @@ func (o ops) checklistImport(ctx context.Context, in ChecklistImportIn) (Checkli
 		return ChecklistOut{}, errs.New(errs.InvalidInput, "task checklist import: --from "+work.Quote(in.From)+" is not a source").
 			WithHint("use --from body")
 	}
-	h, err := o.getChecklist(ctx, in.ID)
+	h, err := o.getChecklistForWrite(ctx, in.ID)
 	if err != nil {
 		return ChecklistOut{}, err
 	}
@@ -465,7 +466,7 @@ func (o ops) checklistImport(ctx context.Context, in ChecklistImportIn) (Checkli
 // the child is added (inheriting like task add --parent) and the item
 // removed in one bat_ batch.
 func (o ops) checklistPromote(ctx context.Context, in ChecklistPromoteIn) (ChecklistOut, error) {
-	h, err := o.getChecklist(ctx, in.ID)
+	h, err := o.getChecklistForWrite(ctx, in.ID)
 	if err != nil {
 		return ChecklistOut{}, err
 	}

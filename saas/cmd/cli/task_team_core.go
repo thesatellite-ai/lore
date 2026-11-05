@@ -166,6 +166,40 @@ func (b claimBoard) OpenClaim(taskID string) (opstask.OpenClaim, bool) {
 	return opstask.OpenClaim{Holder: sig.Holder, Session: sig.Session, Since: sig.Since, End: end, Expired: !active}, true
 }
 
+var _ opstask.HolderFencer = cliTeam{}
+
+// FenceHolder implements opstask.HolderFencer (TASK 7.4, PASS3-A): a
+// checklist write is fenced like `task note` when the caller holds the
+// task (its claim is on the board) or held it in this session (its held
+// record, so a claim taken over or revoked is still caught); anyone else
+// writes unfenced. Without team coordination (plainRowFallback: no git
+// repo, no live rows, no roster actor, and no store link) nothing is
+// fenced. The cheap local board is read first; only a holder pays for the
+// fresh read the fence decides on (fencing always reads the signals ref,
+// coord.HeldRecord). A failed fence is E_LOST_CLAIM (signals.ErrNotHeld).
+func (cliTeam) FenceHolder(ctx context.Context, taskID string, rowEpoch int) error {
+	w, t, err := openTaskCoord(ctx, taskID, "")
+	if err != nil {
+		return coreErr(plainRowFallback(ctx, err))
+	}
+	defer t.Close()
+	local, err := t.Signals.Local(ctx)
+	if err != nil {
+		return coreErr(coordError(fmt.Errorf("read the signals ref: %w", err)))
+	}
+	_, mine := signals.FindOwn(local, w.Caller(), t.Folder, taskID)
+	_, had := w.held().Get(w.Session(), taskID)
+	if !mine && !had {
+		return nil
+	}
+	v, err := t.Signals.Read(ctx)
+	if err != nil {
+		return coreErr(coordError(err))
+	}
+	_, err = signals.CheckHolder(v, w.Caller(), t.Folder, taskID, rowEpoch)
+	return coreErr(coordError(err))
+}
+
 // teamCommandGroups are the core noun groups whose operations take team
 // flags (task, mission; plan apply creates missions with approvers); tasklist
 // delete fences the claimed tasks it takes (FA-TASK-7).
