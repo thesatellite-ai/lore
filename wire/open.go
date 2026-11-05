@@ -5,11 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
@@ -21,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -349,6 +353,9 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	if err != nil {
 		return nil, nil, err
 	}
+	if err = cleanStoresFileURLs(repoTop, cfg); err != nil {
+		return nil, nil, err
+	}
 	for _, x := range extra {
 		// The committed file wins a name clash (an org store the repo
 		// also attaches by hand, or a recorded folder target).
@@ -464,11 +471,12 @@ func levelOf(o attach.Opened) policy.Level {
 
 // canonical prepares one stores.yaml url for store.Openers: the scp form
 // (git@host:owner/repo) becomes ssh:// through git.CanonicalURL (net/url
-// cannot parse it), a password is refused (attach.NormalizeURL, never
-// echoed), and the entry's folder becomes the `?folder=` the backends read
+// cannot parse it), a credential is cleaned on read (attach.CleanURL:
+// password, token user; SECRETS 14.2 row 16, OV4; never echoed; the commit
+// hook still refuses the committed file), and the entry's folder becomes the `?folder=` the backends read
 // (rowfs.FolderParam), its branch the `?branch=` (git.BranchParam).
 func canonical(s attach.Store) (string, error) {
-	raw, err := attach.NormalizeURL(s.URL)
+	raw, err := attach.CleanURL(s.URL)
 	if err != nil {
 		return "", err
 	}
@@ -704,3 +712,47 @@ func wrapBackend(ctx context.Context, opts Options, name store.Source, folder st
 	}
 	return w, nil
 }
+
+// cleanStoresFileURLs rewrites .lore/stores.yaml when a url in it holds a
+// credential (a password or a token-shaped user, repourl.Strip): the file
+// keeps everything else, the url loses the credential, and one line on
+// stderr says so, naming the store and never the removed text (DECISION
+// P2-CTX-6: SECRETS 14.2 row 16 cleans on read and writes back "on the
+// next write"; for stores.yaml the safest next write is now, so the token
+// does not stay on disk or reach a commit). A file with nothing to clean
+// is never touched.
+func cleanStoresFileURLs(top string, cfg attach.Config) error {
+	dirty := map[string]string{} // raw url → clean url
+	var names []string
+	for _, s := range cfg.Stores {
+		clean, removed, err := repourl.Strip(s.URL)
+		if err == nil && removed.Warn() {
+			dirty[s.URL] = clean
+			names = append(names, string(s.Name))
+		}
+	}
+	if len(dirty) == 0 {
+		return nil
+	}
+	err := editStoresFile(top, func(list *yaml.Node) error {
+		for _, n := range list.Content {
+			if u := mapGet(n, keyURL); u != nil {
+				if clean, ok := dirty[u.Value]; ok {
+					u.Value = clean
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return errs.Wrap(errs.CodeOf(err), "wire: remove a credential from "+attach.FileName, err)
+	}
+	// The composition root is the one layer that may talk to the terminal.
+	fmt.Fprintf(os.Stderr, "lore: %s: a credential was in the url of store %s; lore removed it from %s (use your git credential helper; rotate it if it was ever committed)\n",
+		urlCredentialsWarn, strings.Join(names, ", "), attach.FileName)
+	return nil
+}
+
+// urlCredentialsWarn is the warning code of a removed URL credential
+// (SECRETS 14.4, the same code engine writes use).
+const urlCredentialsWarn = "W_URL_CREDENTIALS"

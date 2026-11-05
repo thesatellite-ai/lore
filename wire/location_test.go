@@ -62,7 +62,8 @@ func TestAttachLocationMatrix(t *testing.T) {
 	if a, b := at(attach.Store{URL: scp}, "x"), at(attach.Store{URL: "ssh://git@example.com/acme/store.git"}, "x"); a != b {
 		t.Errorf("scp and ssh:// spellings of one store differ: %q %q", a, b)
 	}
-	if _, err := attachLocation(attach.Store{URL: "https://user:" + "pw@example.com/x.git"}, "f"); err == nil {
-		t.Error("a url with a password must not get a location (canonical refuses it)")
+	// OV4: a credential is cleaned on read, so the store keeps one location
+	if a, b := at(attach.Store{URL: "https://user:" + "pw@example.com/x.git"}, "f"), at(attach.Store{URL: "https://example.com/x.git"}, "f"); a != b {
+		t.Errorf("a url with a password must map to the clean url's location: %q %q", a, b)
 	}
 }

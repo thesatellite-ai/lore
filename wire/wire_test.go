@@ -371,7 +371,7 @@ func TestMigrateChangesOnlyTheFormat(t *testing.T) {
 }
 
 // TestCanonical: the scp form becomes ssh://, a folder becomes ?folder=,
-// a password is refused without echoing it, a file url stays a file url.
+// a password is cleaned on read (OV4), a file url stays a file url.
 func TestCanonical(t *testing.T) {
 	secret := "pw" + strings.Repeat("x", 6)
 	for _, c := range []struct {
@@ -382,7 +382,9 @@ func TestCanonical(t *testing.T) {
 		{attach.Store{Name: "a", URL: "git@github.com:acme/kb.git"}, "ssh://git@github.com/acme/kb.git", ""},
 		{attach.Store{Name: "a", URL: "https://example.com/acme/kb.git", Folder: "acme-hub"}, "https://example.com/acme/kb.git?folder=acme-hub", ""},
 		{attach.Store{Name: "a", URL: "file:///srv/kb", Folder: "org"}, "file:///srv/kb?folder=org", ""},
-		{attach.Store{Name: "a", URL: "https://bob:" + secret + "@example.com/kb.git"}, "", errs.URLUserinfo},
+		// OV4 / SECRETS 14.2 row 16: a credential is cleaned on read, not refused
+		{attach.Store{Name: "a", URL: "https://bob:" + secret + "@example.com/kb.git"}, "https://example.com/kb.git", ""},
+		{attach.Store{Name: "a", URL: "https://user@example.com/kb\x00"}, "", errs.StoreScheme},
 	} {
 		got, err := canonical(c.in)
 		if c.code != "" {
