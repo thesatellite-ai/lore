@@ -28,10 +28,13 @@ package main
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 
@@ -68,7 +71,38 @@ func coreLeakRows(ctx context.Context, client bool) ([]leakcheck.IndexRow, error
 	for _, e := range expected {
 		names = append(names, e.Name)
 	}
-	return leakRowsFrom(ctx, coreApp, client, names...)
+	out, err := leakRowsFrom(ctx, coreApp, client, names...)
+	if err != nil || !client {
+		return out, err
+	}
+	// METADATA 3.11 item 1 / 3.15: the client repo's own key rows feed the
+	// foreign-key rule, and an internal key name the repo itself defines is
+	// not a leak there (its own key of that name).
+	repoKeys, err := coreApp.List(ctx, store.SourceRepo, schema.TableMetaKeys)
+	if err != nil {
+		return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()+" (the repo's key rows)").WithCause(err)
+	}
+	return withRepoKeys(out, repoKeys), nil
+}
+
+// withRepoKeys adds the repo's live key rows as RepoKey index rows and
+// drops their names from the internal key names of out.
+func withRepoKeys(out []leakcheck.IndexRow, repoKeys []row.Row) []leakcheck.IndexRow {
+	own := map[string]bool{}
+	for _, k := range repoKeys {
+		if k.Deleted {
+			continue
+		}
+		own[renderField(k, metaKeyNameField)] = true
+		out = append(out, leakcheck.IndexRow{ID: k.ID.String(), Table: string(schema.TableMetaKeys), Source: string(store.SourceRepo),
+			RepoKey: true, RepoKeyScope: renderField(k, metaKeyScopeField)})
+	}
+	for i := range out {
+		if len(out[i].KeyNames) > 0 {
+			out[i].KeyNames = slices.DeleteFunc(slices.Clone(out[i].KeyNames), func(n string) bool { return own[n] })
+		}
+	}
+	return out
 }
 
 // leakStores is the part of the core the leak index reads: which stores are
@@ -113,12 +147,17 @@ func leakRowsFrom(ctx context.Context, app leakStores, client bool, expected ...
 			continue
 		}
 		label := leakStoreLabelPrefix + string(si.Name)
+		keyRows, err := app.List(ctx, si.Name, schema.TableMetaKeys)
+		if err != nil {
+			return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()+" (store "+string(si.Name)+")").WithCause(err)
+		}
+		keys := leakKeysOf(keyRows)
 		for _, t := range wire.CoreTables() {
 			rows, err := app.List(ctx, si.Name, t)
 			if err != nil {
 				return nil, errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()+" (store "+string(si.Name)+")").WithCause(err)
 			}
-			out = append(out, leakIndexRows(rows, t, si.Name, label)...)
+			out = append(out, leakIndexRowsWith(rows, t, si.Name, label, keys)...)
 		}
 	}
 	return out, nil
@@ -137,6 +176,65 @@ func leakIndexesClass(class direction.Class, client bool) bool {
 		return false
 	}
 	return false // the repo store, or a class this binary does not know
+}
+
+// Key row fields the leak index reads (schema meta_keys).
+const (
+	metaKeyNameField      = "name"
+	metaKeyScopeField     = "scope"
+	metaKeyTypeField      = "type"
+	metaKeyInternalField  = "internal"
+	metaKeySensitiveField = "sensitive"
+)
+
+// leakKey is what the metadata leak rules need of one key row.
+type leakKey struct {
+	name, typ           string
+	internal, sensitive bool
+}
+
+// leakKeysOf maps a store's live key rows by id.
+func leakKeysOf(rows []row.Row) map[string]leakKey {
+	out := make(map[string]leakKey, len(rows))
+	for _, k := range rows {
+		if k.Deleted {
+			continue
+		}
+		out[k.ID.String()] = leakKey{name: renderField(k, metaKeyNameField), typ: renderField(k, metaKeyTypeField),
+			internal: rowBool(k, metaKeyInternalField), sensitive: rowBool(k, metaKeySensitiveField)}
+	}
+	return out
+}
+
+// rowBool is a bool field of r (false when absent).
+func rowBool(r row.Row, f string) bool {
+	b, ok := r.Fields[f].(value.Bool)
+	return ok && b.Bool()
+}
+
+// leakMetaTokens are the exact-token / key-pair inputs of an internal row
+// (METADATA 3.15 step 6): every string leaf of each entry whose key is
+// internal or sensitive (by the key row or the entry's label), or whose key
+// row is not known here (R2 item 4: unknown ids count as internal).
+func leakMetaTokens(r row.Row, keys map[string]leakKey) []leakcheck.Token {
+	var out []leakcheck.Token
+	for kid, j := range r.Meta {
+		en, err := meta.DecodeEntry(j)
+		if err != nil {
+			continue
+		}
+		k, known := keys[kid.String()]
+		if known && !k.internal && !k.sensitive && !en.Sensitive {
+			continue
+		}
+		for _, v := range meta.Strings(en.V) {
+			if v != "" {
+				out = append(out, leakcheck.Token{Value: v, Key: en.Name, Type: k.typ})
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b leakcheck.Token) int { return strings.Compare(a.Key+"\x00"+a.Value, b.Key+"\x00"+b.Value) })
+	return out
 }
 
 // leakMetaTexts is the metadata of an internal row as index text (META
@@ -165,6 +263,13 @@ func leakMetaTexts(r row.Row) []string {
 // carry no text and are skipped; their ids stay internal through any live
 // copy only).
 func leakIndexRows(rows []row.Row, t row.Table, src store.Source, label string) []leakcheck.IndexRow {
+	return leakIndexRowsWith(rows, t, src, label, nil)
+}
+
+// leakIndexRowsWith is leakIndexRows with the store's key rows (keys), so
+// metadata values feed the exact-token rule (nil: every value counts as
+// internal, R2 item 4).
+func leakIndexRowsWith(rows []row.Row, t row.Table, src store.Source, label string, keys map[string]leakKey) []leakcheck.IndexRow {
 	out := make([]leakcheck.IndexRow, 0, len(rows))
 	for _, r := range rows {
 		if r.Deleted {
@@ -177,7 +282,11 @@ func leakIndexRows(rows []row.Row, t row.Table, src store.Source, label string) 
 			}
 		}
 		texts = append(texts, leakMetaTexts(r)...)
-		out = append(out, leakcheck.IndexRow{ID: r.ID.String(), Table: t.String(), Label: label, Source: string(src), Texts: texts})
+		ir := leakcheck.IndexRow{ID: r.ID.String(), Table: t.String(), Label: label, Source: string(src), Texts: texts, Tokens: leakMetaTokens(r, keys)}
+		if t == schema.TableMetaKeys && rowBool(r, metaKeyInternalField) {
+			ir.KeyNames = []string{renderField(r, metaKeyNameField)} // 3.15 step 1
+		}
+		out = append(out, ir)
 	}
 	return out
 }

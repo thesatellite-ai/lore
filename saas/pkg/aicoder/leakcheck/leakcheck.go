@@ -93,6 +93,8 @@ type Index struct {
 	// row it was copied from (IndexRow.SharedAs): that copy's row file may
 	// carry the source's text, nothing else may.
 	sharedFrom map[string]string
+	// meta holds the metadata rules' inputs (metarules.go).
+	meta metaIndex
 }
 
 // IndexRow is one internal row for NewIndex.
@@ -107,6 +109,17 @@ type IndexRow struct {
 	// read; the command is removed in 0.1.18, BATCH 2, but copies already in
 	// client repos stay). Such a copy's row file may carry this row's text.
 	SharedAs []string
+	// Tokens are the row's internal and sensitive metadata values (the
+	// exact-token and key-pair rules, METADATA 3.15 step 6).
+	Tokens []Token
+	// KeyNames are the internal key names a meta_keys row defines (the
+	// key-name rule, 3.15 step 1).
+	KeyNames []string
+	// RepoKey marks a key row of the checked repo itself (not internal):
+	// its id and RepoKeyScope feed only the client foreign-key rule (3.11
+	// item 1), never the id or text rules.
+	RepoKey      bool
+	RepoKeyScope string
 }
 
 // NewIndex builds an Index. Actor rows feed only the actor exception, never
@@ -116,7 +129,13 @@ func NewIndex(rows []IndexRow, projectIDs map[string]string) *Index {
 	for k, v := range projectIDs {
 		idx.ProjectIDs[k] = v
 	}
+	idx.meta = metaIndex{keyNames: map[string]string{}, repoKeys: map[string]string{}}
 	for _, r := range rows {
+		if r.RepoKey {
+			idx.meta.repoKeys[r.ID] = r.RepoKeyScope
+			continue
+		}
+		idx.meta.addMeta(r)
 		if r.Table == tableActors || r.Table == tableTeams {
 			idx.actors[r.ID] = true
 			continue
@@ -453,7 +472,9 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 			out = append(out, idHits(it, content, idx)...)
 		}
 		if idx != nil {
-			out = append(out, textHits(it, content, idx, allowedRows(it, idx))...)
+			allowed := allowedRows(it, idx)
+			out = append(out, textHits(it, content, idx, allowed)...)
+			out = append(out, metaHits(it, content, idx, allowed)...) // METADATA 3.15 steps 1, 6
 		}
 		out = append(out, sessionHits(it, content, o.SessionIDs)...)
 		if secrets != nil {
@@ -556,7 +577,16 @@ func checkRowFile(it Item, table, id string, idx *Index, o Options) []Finding {
 		out = append(out, Finding{Rule: RuleID, Where: it.Where, RowID: id, Label: label, Detail: "row of another project"})
 	}
 	if idx != nil {
-		for _, ref := range refsIn(doc) {
+		refs := refsIn(doc)
+		if table == tableMetaKeys {
+			// 3.11 R2-Q1: a client key row's origin may name a store key id.
+			refs = refsIn(withoutKey(doc, keyOriginField))
+		}
+		refs = append(refs, metaEntryIDs(doc)...) // 3.15 step 3: meta map keys too
+		if o.ClientRepo {
+			out = append(out, foreignKeyHits(it, id, doc, idx)...)
+		}
+		for _, ref := range refs {
 			if ref == id {
 				continue
 			}
@@ -606,6 +636,17 @@ func refsIn(doc map[string]any) []string {
 		}
 	}
 	walk(doc)
+	return out
+}
+
+// withoutKey is a shallow copy of doc without k.
+func withoutKey(doc map[string]any, k string) map[string]any {
+	out := make(map[string]any, len(doc))
+	for dk, v := range doc {
+		if dk != k {
+			out[dk] = v
+		}
+	}
 	return out
 }
 
@@ -728,6 +769,7 @@ func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
+	repoKeys := ciRepoKeys(files) // METADATA 3.15 step 4
 	for _, p := range paths {
 		m := rowPathRe.FindStringSubmatch(p)
 		if m == nil {
@@ -739,6 +781,7 @@ func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
 			continue
 		}
 		where := table + " row file"
+		out = append(out, ciMetaFindings(where, table, doc, repoKeys)...)
 		if table == tableActors {
 			// BATCH2 #14: name the keys (exact reason); the id stays
 			// withheld as for every CI finding.
@@ -766,7 +809,9 @@ func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
 // the Index: true for any file (a staged file is always checked against
 // the store, F16), and for text that has an id-shaped token or at least
 // MinRunWords words. A caller that cannot build the index fails closed
-// only when this is true — an empty commit with a one-word message cannot
+// only when this is true (FB-META-2: the metadata rules of metarules.go
+// run whenever the index exists, but a short message does not make an
+// unreachable store refuse the commit) — an empty commit with a one-word message cannot
 // leak anything, whatever the store holds.
 func NeedsIndex(items []Item) bool {
 	for _, it := range items {
