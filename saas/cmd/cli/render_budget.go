@@ -294,7 +294,7 @@ type renderReport struct {
 func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 	var crit, high []pinnedHotfix
 	for _, h := range in.Hotfixes {
-		if h.Severity == renderHotfixSeverityCritical {
+		if h.Severity == renderHotfixSeverityCritical || h.Pin == contextfit.FormFull {
 			crit = append(crit, h)
 		} else {
 			high = append(high, h)
@@ -333,7 +333,7 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 			noSummary++
 		}
 		entries = append(entries, contextfit.Entry{ID: r.ID, Full: ruleFull(r), Line: ruleLine(r),
-			Always: r.Activation == schema.RuleActivationAlways, HasSummary: r.Summary != "", Updated: r.Updated})
+			Always: r.Activation == schema.RuleActivationAlways, HasSummary: r.Summary != "", Updated: r.Updated, Pin: r.Pin, PinnedAt: r.PinnedAt})
 	}
 	contextfit.Rank(entries)
 	dirIdx := dirIndexText(in.Dirs)

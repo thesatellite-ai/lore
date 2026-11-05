@@ -6,7 +6,7 @@
 // Layer L1: pure. The caller renders each entry's full and line text; this
 // package ranks, measures and chooses.
 //
-//	Rank(entries)                      6.6 order: always > summary > newest > id
+//	Rank(entries)                      6.6 order: full pin (by pin time) > always > summary > newest > id
 //	Fit(Plan) ─► start: must rules as lines, index full
 //	          ├─ upgrade must rules to full in rank order while it fits
 //	          │    (an entry over EntryMax stays a line: "line form: entry_max")
@@ -42,6 +42,7 @@ const (
 	ReasonEntryMax   Reason = "line form: entry_max"
 	ReasonSuperseded Reason = "superseded"
 	ReasonManual     Reason = "manual"
+	ReasonPinned     Reason = "line form: pinned"
 )
 
 // Entry is one must rule a Plan may show in full or as a line.
@@ -54,6 +55,10 @@ type Entry struct {
 	Always     bool
 	HasSummary bool
 	Updated    time.Time
+	// Pin is a `lore pin --context` form ("" none, FA-CTX-6): FormFull is
+	// always in full and ranks first by PinnedAt; FormLine always a line.
+	Pin      Form
+	PinnedAt time.Time
 }
 
 // Rank sorts entries in place by the 6.6 order: activation always first,
@@ -61,7 +66,15 @@ type Entry struct {
 // newest updated, then id.
 func Rank(es []Entry) {
 	slices.SortStableFunc(es, func(a, b Entry) int {
+		fa, fb := a.Pin == FormFull, b.Pin == FormFull
 		switch {
+		case fa != fb:
+			return boolFirst(fa)
+		case fa && !a.PinnedAt.Equal(b.PinnedAt):
+			if a.PinnedAt.Before(b.PinnedAt) {
+				return -1 // 6.6: full pins by pin time
+			}
+			return 1
 		case a.Always != b.Always:
 			return boolFirst(a.Always)
 		case a.HasSummary != b.HasSummary:
@@ -122,11 +135,26 @@ func Fit(p Plan) Result {
 		r.Forms[i], r.Reasons[i] = FormLine, ReasonBudget
 		total += len(e.Line)
 	}
+	// FA-CTX-6: full pins are in full whatever the budget (like critical
+	// hotfixes); line pins never grow.
+	for i, e := range p.Must {
+		if e.Pin == FormFull {
+			total += len(e.Full) - len(e.Line)
+			r.Forms[i], r.Reasons[i] = FormFull, ReasonNone
+		}
+	}
 	if p.Budget > 0 && total > p.Budget {
 		r.IndexCollapsed = true
 		total += p.IndexCollapsed - p.Index
 	}
 	for i, e := range p.Must {
+		if e.Pin == FormFull {
+			continue
+		}
+		if e.Pin == FormLine {
+			r.Reasons[i] = ReasonPinned
+			continue
+		}
 		if p.EntryMax > 0 && len(e.Full) > p.EntryMax {
 			r.Reasons[i] = ReasonEntryMax
 			continue

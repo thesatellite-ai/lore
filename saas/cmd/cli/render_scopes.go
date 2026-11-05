@@ -243,7 +243,7 @@ type dirReport struct {
 func buildDirFile(g dirGroup, plan dirPlan, entryMax int) (string, dirReport) {
 	var crit, high []pinnedHotfix
 	for _, h := range g.Hotfixes {
-		if h.Severity == renderHotfixSeverityCritical {
+		if h.Severity == renderHotfixSeverityCritical || h.Pin == contextfit.FormFull {
 			crit = append(crit, h)
 		} else {
 			high = append(high, h)
@@ -292,7 +292,7 @@ func buildDirFile(g dirGroup, plan dirPlan, entryMax int) (string, dirReport) {
 	entries := make([]contextfit.Entry, 0, len(g.Rules))
 	for _, r := range g.Rules {
 		entries = append(entries, contextfit.Entry{ID: r.ID, Full: ruleFull(r), Line: ruleLine(r),
-			Always: r.Activation == schema.RuleActivationAlways, HasSummary: r.Summary != "", Updated: r.Updated})
+			Always: r.Activation == schema.RuleActivationAlways, HasSummary: r.Summary != "", Updated: r.Updated, Pin: r.Pin, PinnedAt: r.PinnedAt})
 	}
 	contextfit.Rank(entries)
 	fixed := len(head) + critText.Len() + len(mustHead) + tail.Len() + 1

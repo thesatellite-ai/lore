@@ -51,6 +51,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opspin "github.com/thesatellite-ai/lore/ops/pin"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 
@@ -94,6 +95,9 @@ type pinnedRule struct {
 	Globs      string
 	Updated    time.Time
 	TagIDs     []string
+	// Pin / PinnedAt: `lore pin --context full|line` (FA-CTX-6).
+	Pin      contextfit.Form
+	PinnedAt time.Time
 	// ScopeID / OverridesID: the folder scope and the wider rule this one
 	// replaces there (6.2, render_scopes.go); repo-store rows only.
 	ScopeID     string
@@ -108,6 +112,9 @@ type pinnedHotfix struct {
 	Body     string
 	Summary  string
 	TagIDs   []string
+	// Pin: a full pin puts a high hotfix in full (a critical one is always
+	// full and a line pin does not shorten it, CQ3; FA-CTX-6).
+	Pin contextfit.Form
 	// ScopeID is the folder scope (repo-store rows only, 6.2).
 	ScopeID string
 }
@@ -239,9 +246,27 @@ func loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]
 			Summary: renderField(r.Row, schema.FieldSummary), Activation: act,
 			Globs: renderField(r.Row, renderFieldGlobs), Updated: renderUpdated(r.Row),
 			TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope), OverridesID: repoScope(r, schema.FieldOverrides),
+			Pin: renderPin(r.Row), PinnedAt: renderPinnedAt(r.Row),
 		})
 	}
 	return out, nil
+}
+
+// renderPin is the row's context pin form ("" none or unknown).
+func renderPin(r row.Row) contextfit.Form {
+	switch f := contextfit.Form(renderField(r, opspin.FieldPin)); f {
+	case contextfit.FormFull, contextfit.FormLine:
+		return f
+	}
+	return ""
+}
+
+// renderPinnedAt is when the pin was set (zero when none).
+func renderPinnedAt(r row.Row) time.Time {
+	if dt, ok := r.Fields[opspin.FieldPinnedAt].(value.DateTime); ok {
+		return dt.Time()
+	}
+	return time.Time{}
 }
 
 // renderUpdated is the row's last edit time (updated, else created).
@@ -289,6 +314,7 @@ func loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) 
 			ID: r.ID.String(), Severity: sev,
 			Title: renderField(r.Row, renderFieldTitle), Body: renderField(r.Row, renderFieldBody),
 			Summary: renderField(r.Row, schema.FieldSummary), TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope),
+			Pin: renderPin(r.Row),
 		})
 	}
 	return out, nil
