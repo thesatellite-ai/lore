@@ -98,6 +98,15 @@ func (h *host) initCommand(wd string) *cobra.Command {
 				return errs.New(errs.InvalidInput, "init: run lore init "+args[0]+" as the whole command")
 			}
 			ctx := cmd.Context()
+			// G-MONO-1: the repo id the checkout's other projects carry. Two ids
+			// refuse before the store opens (it would leave a cache file), unless
+			// wd already holds a project (adopt / already initialised: no new id).
+			shared, hasShared, sharedErr := sharedRepoMeta(ctx, wd)
+			if sharedErr != nil {
+				if _, own, _ := rowfs.ReadRepoMeta(wd); !own {
+					return sharedErr
+				}
+			}
 			// OWNERQ-1: the project is rooted here, never at a .lore above (initsub.go).
 			undo, err := rootInitAt(wd)
 			if err != nil {
@@ -124,6 +133,9 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			} else if !errs.Has(err, errs.NotFound) {
 				return err
 			}
+			if sharedErr != nil { // a new project would take a second id (G-MONO-1)
+				return sharedErr
+			}
 			n := strings.ToLower(strings.TrimSpace(name))
 			if n == "" {
 				n = defaultProjectName(ctx, wd) // initname.go: origin's repo name, else the folder (v0.1.17)
@@ -143,8 +155,10 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			if serr := h.app.SeedRepoMeta(ctx, pid); serr != nil {
 				return serr
 			}
-			if ierr := h.inheritRepoID(ctx, wd); ierr != nil { // OWNERQ-1: one repo id per monorepo (initsub.go)
-				return ierr
+			if hasShared {
+				if ierr := h.inheritRepoID(ctx, shared); ierr != nil { // one repo id per checkout (initsub.go)
+					return ierr
+				}
 			}
 			repoID, _, err := h.app.EnsureRepoIdentity(ctx)
 			if err != nil {

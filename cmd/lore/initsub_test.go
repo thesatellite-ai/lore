@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,48 +96,128 @@ func TestRootInitAt(t *testing.T) {
 	})
 }
 
-// TestAncestorRepoMeta: where the repo id of a new sub-project comes from.
-func TestAncestorRepoMeta(t *testing.T) {
-	const topID, midID = "rep_01a1acc07dde78bf85b8873dc9d1e16d", "rep_01a1acc07dde78bf85b8873dc9d1e16e"
+// TestChooseRepoMeta: the one repo id the projects of a checkout share
+// (G-MONO-1), over every shape of the checkout's _meta.json files.
+func TestChooseRepoMeta(t *testing.T) {
+	const idA, idB = "rep_01a1acc07dde78bf85b8873dc9d1e16d", "rep_01a1acc07dde78bf85b8873dc9d1e16e"
 	cases := []struct {
-		name  string
-		git   bool              // a .git folder at the root
-		metas map[string]string // folder -> repo_id ("" = a _meta.json with no repo_id)
-		wd    string
-		want  string // "" = none
+		name    string
+		metas   map[string]rowfs.RepoMeta
+		want    string // "" = none
+		refused bool
 	}{
-		{"repo top itself", true, map[string]string{"": topID}, "", ""},
-		{"direct sub-folder", true, map[string]string{"": topID}, "web", topID},
-		{"nested sub-folder", true, map[string]string{"": topID}, "services/billing/api", topID},
-		{"nearer project wins", true, map[string]string{"": topID, "services": midID}, "services/billing", midID},
-		{"project above has no repo id yet", true, map[string]string{"": ""}, "web", ""},
-		{"no project above", true, nil, "web", ""},
-		{"not in a git checkout", false, map[string]string{"": topID}, "web", ""},
+		{"none", nil, "", false},
+		{"empty map", map[string]rowfs.RepoMeta{}, "", false},
+		{"one at the top", map[string]rowfs.RepoMeta{".": {RepoID: idA}}, idA, false},
+		{"one in a sub-folder", map[string]rowfs.RepoMeta{"web": {RepoID: idA}}, idA, false},
+		{"same id twice", map[string]rowfs.RepoMeta{".": {RepoID: idA}, "web": {RepoID: idA}}, idA, false},
+		{"alias counts as same", map[string]rowfs.RepoMeta{"api": {RepoID: idA, Aliases: []string{idB}}, "web": {RepoID: idB}}, idA, false},
+		{"alias counts as same, alias holder sorts last", map[string]rowfs.RepoMeta{"a": {RepoID: idB}, "z": {RepoID: idA, Aliases: []string{idB}}}, idA, false},
+		{"two different ids", map[string]rowfs.RepoMeta{".": {RepoID: idA}, "web": {RepoID: idB}}, "", true},
+		{"two different ids in sub-folders", map[string]rowfs.RepoMeta{"api": {RepoID: idA}, "web": {RepoID: idB}, "docs": {RepoID: idA}}, "", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root := t.TempDir()
-			outer := root
-			root = filepath.Join(root, "repo")
-			mkdirs(t, root, c.wd)
-			if c.git {
-				mkdirs(t, root, ".git")
-			} else {
-				writeMeta(t, outer, map[string]string{"repo_id": topID}) // above, but no checkout joins them
-			}
-			for f, id := range c.metas {
-				m := map[string]string{}
-				if id != "" {
-					m["repo_id"] = id
+			got, ok, err := chooseRepoMeta(c.metas)
+			if c.refused {
+				var e *errs.Error
+				if !errs.Has(err, errs.AmbiguousID) || !errors.As(err, &e) {
+					t.Fatalf("want E_AMBIGUOUS_ID, got %v", err)
 				}
-				writeMeta(t, filepath.Join(root, filepath.FromSlash(f)), m)
+				if !strings.Contains(e.Hint, "lore repo merge-ids") || !strings.Contains(err.Error(), idA) || !strings.Contains(err.Error(), idB) {
+					t.Fatalf("the refusal names both ids and the merge-ids hint: %v (hint %q)", err, e.Hint)
+				}
+				return
 			}
-			got, ok := ancestorRepoMeta(filepath.Join(root, filepath.FromSlash(c.wd)))
+			if err != nil {
+				t.Fatal(err)
+			}
 			if ok != (c.want != "") || got.RepoID != c.want {
-				t.Fatalf("ancestorRepoMeta = %q, %v; want %q", got.RepoID, ok, c.want)
+				t.Fatalf("chooseRepoMeta = %q, %v; want %q", got.RepoID, ok, c.want)
 			}
 		})
 	}
+}
+
+// newGitRepo is a fresh git checkout (no lore project) under a test HOME.
+func newGitRepo(t *testing.T) string {
+	t.Helper()
+	root := envScopeRepo(t) // sets HOME and git env; its own repo is not used
+	repo := filepath.Join(root, "mono")
+	mkdirs(t, root, "mono")
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not installed")
+	}
+	cmd := &exec.Cmd{Path: git, Args: []string{git, "-C", repo, "init", "-q", "-b", "main"}}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	return repo
+}
+
+// TestInitSharesRepoIDAcrossCheckout: whatever order `lore init` runs in a
+// checkout's folders, every project carries one repo id; two different ids
+// already in the checkout refuse init with nothing written (G-MONO-1).
+func TestInitSharesRepoIDAcrossCheckout(t *testing.T) {
+	asPerson(t)
+	sameID := func(t *testing.T, repo string, folders ...string) {
+		t.Helper()
+		want, _ := metaOf(t, filepath.Join(repo, filepath.FromSlash(folders[0])))
+		if want == "" {
+			t.Fatalf("%s: no repo id", folders[0])
+		}
+		for _, f := range folders[1:] {
+			if got, _ := metaOf(t, filepath.Join(repo, filepath.FromSlash(f))); got != want {
+				t.Fatalf("%s: repo_id %s, want the checkout's one id %s", f, got, want)
+			}
+		}
+	}
+	t.Run("sub first, then top", func(t *testing.T) {
+		repo := newGitRepo(t)
+		mkdirs(t, repo, "web")
+		mustRun(t, filepath.Join(repo, "web"), "init", "--name", "web")
+		mustRun(t, repo, "init", "--name", "top")
+		sameID(t, repo, "web", ".")
+	})
+	t.Run("top first, then sub", func(t *testing.T) {
+		repo := newGitRepo(t)
+		mkdirs(t, repo, "web")
+		mustRun(t, repo, "init", "--name", "top")
+		mustRun(t, filepath.Join(repo, "web"), "init", "--name", "web")
+		sameID(t, repo, ".", "web")
+	})
+	t.Run("two subs, no top", func(t *testing.T) {
+		repo := newGitRepo(t)
+		mkdirs(t, repo, "web", "services/api")
+		mustRun(t, filepath.Join(repo, "web"), "init", "--name", "web")
+		mustRun(t, filepath.Join(repo, "services", "api"), "init", "--name", "api")
+		sameID(t, repo, "web", "services/api")
+		if _, err := os.Stat(filepath.Join(repo, ".lore", "data")); !os.IsNotExist(err) {
+			t.Fatalf("init in sub-folders made a project at the top (%v)", err)
+		}
+	})
+	t.Run("conflicting ids refuse, nothing written", func(t *testing.T) {
+		repo := newGitRepo(t)
+		const idA, idB = "rep_01a1acc07dde78bf85b8873dc9d1e16d", "rep_01a1acc07dde78bf85b8873dc9d1e16e"
+		writeMeta(t, filepath.Join(repo, "web"), map[string]string{"repo_id": idA})
+		writeMeta(t, filepath.Join(repo, "api"), map[string]string{"repo_id": idB})
+		for _, wd := range []string{".", "docs"} {
+			dir := filepath.Join(repo, filepath.FromSlash(wd))
+			mkdirs(t, repo, wd)
+			t.Chdir(dir)
+			code, out, errOut := runCaptured(t, "init", "--name", "x")
+			all := out + errOut
+			if code == 0 || !strings.Contains(all, "E_AMBIGUOUS_ID") || !strings.Contains(all, idA) || !strings.Contains(all, idB) || !strings.Contains(all, "merge-ids") {
+				t.Fatalf("init in %s with two repo ids: exit %d\n%s", wd, code, all)
+			}
+			for _, f := range []string{".lore", "AGENTS.md", ".gitignore"} {
+				if _, err := os.Stat(filepath.Join(dir, f)); !os.IsNotExist(err) {
+					t.Fatalf("refused init in %s left %s (%v)", wd, f, err)
+				}
+			}
+		}
+	})
 }
 
 // metaOf reads dir's _meta.json repo_id and project_id.
