@@ -233,6 +233,7 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	next := retype(def, cur.Fields)
 	maps.Copy(next, typedPatch)
 	dropNulls(next)
+	next, overruled := setAsideOverruled(next) // a merge's note, not a table field (overruled.go)
 	whole, err := validate.Fields(def, next, validate.Whole)
 	if err != nil {
 		return Written{}, err
@@ -249,7 +250,7 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	}
 	actor := e.actorOf(cl)
 	ours := cur
-	ours.Fields = sc.fields
+	ours.Fields = putBackOverruled(sc.fields, overruled)
 	// metadata riding on this update (engine/meta.go; R13)
 	if mw, ok := metaFor(ctx, cur.Table, cur.ID); ok {
 		var mwarn []Warning
@@ -374,11 +375,12 @@ func (e *Engine) putMerging(ctx context.Context, st Attached, def schema.TableDe
 		return stored{}, false, e.staleErr(base.ID, res.Conflicts, def)
 	}
 	m := res.Row
-	whole, err := validate.Fields(def, m.Fields, validate.Whole)
+	rest, overruled := setAsideOverruled(m.Fields) // a merge's note, not a table field (overruled.go)
+	whole, err := validate.Fields(def, rest, validate.Whole)
 	if err != nil {
 		return stored{}, false, err
 	}
-	m.Fields = whole
+	m.Fields = putBackOverruled(whole, overruled)
 	m.HLC = e.clock.Now(theirs.HLC, ours.HLC)
 	m.UpdatedAt, m.UpdatedBy = m.HLC.Wall, ours.UpdatedBy
 	got, err = e.put(ctx, st, m, theirs.HLC, allows...)
