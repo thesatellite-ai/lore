@@ -26,6 +26,7 @@ import (
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/model/row"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -774,7 +775,8 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 		}
 		qs = append(qs, qt)
 	}
-	res := queue.Next(queue.Input{Tasks: qs, Filter: queue.Filter{Mission: id, AnyRepoRole: true}, Now: cv.now(), MaxAttempts: cv.maxAttempts()})
+	res := queue.Next(queue.Input{Tasks: qs, Filter: queue.Filter{Mission: id, AnyRepoRole: true}, Now: cv.now(), MaxAttempts: cv.maxAttempts(),
+		Weights: urgencyWeights(ctx)})
 	counts := map[string]int{}
 	slaCounts := map[string]int{}
 	sla := cv.newMissionSLA(ctx)
@@ -851,6 +853,22 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 		fmt.Printf("  %-9s %s  %-28s %-12s %s\n", r.State, r.ID, r.Title, r.Who, r.Detail)
 	}
 	return nil
+}
+
+// urgencyWeights are the repo's tasks.urgency.* weights over the 13.2
+// defaults (OV15B-URG, opstask.UrgencyWeights). No policy, or a policy
+// that does not resolve, leaves the zero value: queue.Next then uses the
+// defaults, the same ranking as before the keys existed.
+func urgencyWeights(ctx context.Context) urgency.Weights {
+	set, ok := policySet(ctx)
+	if !ok {
+		return urgency.Weights{}
+	}
+	w, err := opstask.UrgencyWeights(set)
+	if err != nil {
+		return urgency.Weights{}
+	}
+	return w
 }
 
 func (cv *coordView) maxAttempts() int {
