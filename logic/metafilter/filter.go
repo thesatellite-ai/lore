@@ -3,6 +3,7 @@ package metafilter
 import (
 	"bytes"
 	"math/big"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -43,6 +44,9 @@ type cond struct {
 	path  []string // fields inside an object value (deploy.region)
 	want  [][]byte // canonical JSON values to compare with (= != ~=)
 	bound *ordered // > >= < <=
+	// steps is the json path after '$' (nil: none); rng the range of '<<'.
+	steps []pathStep
+	rng   *netip.Prefix
 }
 
 // clause is one --meta argument: its conditions over every matching
@@ -79,9 +83,12 @@ func Compile(filters []string, place, sort string, keys []Key) (*Plan, []string,
 		if err != nil {
 			return nil, nil, err
 		}
+		var steps []pathStep
 		if t.Path != "" {
-			return nil, nil, errs.New(errs.MetaOp, "meta: a json path filter ($) is not supported on list yet: "+strconv.Quote(f)).
-				WithHint("use lore sql for json paths")
+			// P2-META-13: json paths are evaluated on the row's value
+			if steps, err = parsePath(t.Path); err != nil {
+				return nil, nil, err
+			}
 		}
 		cl := clause{arg: f}
 		matches := resolve(visible, t)
@@ -89,7 +96,7 @@ func Compile(filters []string, place, sort string, keys []Key) (*Plan, []string,
 			warnings = append(warnings, unknownWarning(t.Name(), keys))
 		}
 		for _, m := range matches {
-			c, cerr := compileCond(t, m.key, m.path)
+			c, cerr := compileCond(t, m.key, m.path, steps)
 			if cerr != nil {
 				return nil, nil, cerr
 			}
@@ -207,14 +214,14 @@ func unknownWarning(name string, keys []Key) string {
 }
 
 // compileCond types the term's value by k (3.7 "typed by the registry").
-func compileCond(t meta.Term, k Key, path []string) (cond, error) {
-	c := cond{term: t, key: k, path: path}
+func compileCond(t meta.Term, k Key, path []string, steps []pathStep) (cond, error) {
+	c := cond{term: t, key: k, path: path, steps: steps}
 	elem := k.Type
 	if elem.Kind == value.KindList {
 		elem = meta.Type{Kind: elemKind(k.Type)}
 	}
-	if len(path) > 0 {
-		elem = meta.Type{} // a field inside an object value: inferred
+	if len(path) > 0 || steps != nil {
+		elem = meta.Type{} // a field inside an object or json value: inferred
 	}
 	switch t.Op {
 	case meta.OpHas, meta.OpMissing:
@@ -232,7 +239,17 @@ func compileCond(t meta.Term, k Key, path []string) (cond, error) {
 		c.bound = &b
 		return c, nil
 	case meta.OpIn:
-		return cond{}, errs.New(errs.MetaOp, "meta: << (ip in range) is not supported on list yet").WithHint("use lore sql")
+		// 3.6: << needs an ip or cidr key (a json path leaf is inferred)
+		if steps == nil && elem.Kind != value.KindIP && elem.Kind != value.KindCIDR {
+			return cond{}, errs.New(errs.MetaOp, "meta: << (inside a range) needs an ip or cidr key; "+t.Name()+" is "+typeWord(k, path))
+		}
+		pr, err := netip.ParsePrefix(strings.TrimSpace(t.Value))
+		if err != nil {
+			return cond{}, errs.New(errs.MetaOp, "meta: << takes an address range such as 10.0.0.0/8, not "+strconv.Quote(t.Value))
+		}
+		pr = pr.Masked()
+		c.rng = &pr
+		return c, nil
 	case meta.OpEq, meta.OpNe, meta.OpLike:
 	}
 	if t.Op == meta.OpLike {
@@ -306,6 +323,11 @@ func (cl clause) match(rowID string, m map[ids.ID[ids.MetaKey]]value.JSON) (bool
 	var note Note
 	for _, c := range cl.conds {
 		raw, present, conflict := lookup(m, c.key.ID, c.path)
+		var leaves [][]byte
+		if c.steps != nil && present {
+			leaves = walk(raw, c.steps)
+			present = len(leaves) > 0
+		}
 		if conflict {
 			note = Note("note: 1 row skipped: " + c.term.Name() + " on " + rowID + " holds an unsettled merge conflict")
 			continue
@@ -330,7 +352,9 @@ func (cl clause) match(rowID string, m map[ids.ID[ids.MetaKey]]value.JSON) (bool
 			continue
 		}
 		items := [][]byte{raw}
-		if canon.KindOf(raw) == canon.KindArray {
+		if c.steps != nil {
+			items = leaves
+		} else if canon.KindOf(raw) == canon.KindArray {
 			if els, err := canon.Elements(raw); err == nil {
 				items = els
 			}
@@ -376,7 +400,14 @@ func (c cond) compare(items [][]byte) (hit, skipped bool) {
 			}
 		}
 		return false, false
-	case meta.OpHas, meta.OpMissing, meta.OpIn:
+	case meta.OpIn:
+		for _, it := range items {
+			if inRange(display(it), *c.rng) {
+				return true, false
+			}
+		}
+		return false, false
+	case meta.OpHas, meta.OpMissing:
 	}
 	return false, false
 }
