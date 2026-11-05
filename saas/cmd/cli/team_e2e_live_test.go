@@ -240,7 +240,7 @@ func TestF02_AutopushOffNeverTouchesTheNetwork(t *testing.T) {
 // F2 edge case + §6.5: a secret in a row is refused before it reaches any ref.
 func TestF02_SecretIsRefusedBeforeTheLiveRef(t *testing.T) {
 	rt := newRepoTeam(t)
-	const secret = "AKIAIOSFODNN7EXAMPLE"
+	secret := "AKIA" + "IOSFODNN7EXAMPLE" // built at run time (convention 8)
 	r := rt.c1.Lore("task", "add", "rotate keys", "--tasklist", rt.tasklist, "--body", "aws key "+secret)
 	r.Says(t, "secret")
 	clean := rt.addTask(t, rt.c1, "rotate keys, no secret here")

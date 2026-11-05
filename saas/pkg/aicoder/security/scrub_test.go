@@ -7,11 +7,30 @@ import (
 	"testing"
 )
 
+// Key-shaped fixtures are built at run time, so the source holds no
+// literal that a secret scanner (push protection, gitleaks) reads as a
+// real key (CLAUDE.md convention 8).
+var (
+	fakeAWSKey = "AKIA" + "IOSFODNN7EXAMPLE"
+	fakeGHPTok = "ghp_" + "1234567890abcdefghijklmnopqrstuvwxyz12"
+)
+
+// fakePEM is a private-key block of kind ("RSA ", "OPENSSH ", "") with
+// body, its BEGIN/END lines split so no source line is a PEM header.
+func fakePEM(kind, body string, end bool) string {
+	const dashes, priv = "-----", "PRIVATE KEY"
+	out := dashes + "BEGIN " + kind + priv + dashes + "\n" + body
+	if end {
+		out += "\n" + dashes + "END " + kind + priv + dashes
+	}
+	return out
+}
+
 func TestScan_AWSKey(t *testing.T) {
 	s := NewScanner()
 	cases := []string{
-		"my key is AKIAIOSFODNN7EXAMPLE for staging",
-		"AKIAIOSFODNN7EXAMPLE",
+		"my key is " + fakeAWSKey + " for staging",
+		fakeAWSKey,
 		"prefix ASIAIOSFODNN7EXAMPLE suffix",
 	}
 	for _, c := range cases {
@@ -30,7 +49,7 @@ func TestScan_GitHubToken(t *testing.T) {
 	s := NewScanner()
 	// Realistic 36-char-ish payloads.
 	cases := []string{
-		"ghp_1234567890abcdefghijklmnopqrstuvwxyz12",
+		fakeGHPTok,
 		"gho_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
 		"ghs_yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
 		"My token: ghr_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA in env",
@@ -74,11 +93,11 @@ func TestScan_JWT(t *testing.T) {
 
 func TestScan_PEM(t *testing.T) {
 	s := NewScanner()
-	pem := "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJ...\n-----END RSA PRIVATE KEY-----"
+	pem := fakePEM("RSA ", "MIIBOgIBAAJ...", true)
 	if !s.HasSecrets(pem) {
 		t.Error("expected PEM match")
 	}
-	openssh := "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNza..."
+	openssh := fakePEM("OPENSSH ", "b3BlbnNza...", false)
 	if !s.HasSecrets(openssh) {
 		t.Error("expected OpenSSH match")
 	}
@@ -119,11 +138,11 @@ func TestScan_CleanInput(t *testing.T) {
 
 func TestRedact_Format(t *testing.T) {
 	cases := map[string]string{
-		"AKIAIOSFODNN7EXAMPLE": "AKIA****",
-		"sk-1234567890abc":     "sk-1****",
-		"abc":                  "****",
-		"xy":                   "****",
-		"":                     "****",
+		fakeAWSKey:         "AKIA****",
+		"sk-1234567890abc": "sk-1****",
+		"abc":              "****",
+		"xy":               "****",
+		"":                 "****",
 	}
 	for in, want := range cases {
 		if got := redact(in); got != want {
@@ -134,7 +153,7 @@ func TestRedact_Format(t *testing.T) {
 
 func TestScan_PreviewIsRedacted(t *testing.T) {
 	s := NewScanner()
-	matches := s.Scan("AKIAIOSFODNN7EXAMPLE")
+	matches := s.Scan(fakeAWSKey)
 	if len(matches) == 0 {
 		t.Fatal("expected match")
 	}
@@ -206,7 +225,7 @@ func TestLoadUserPatterns_RealFile(t *testing.T) {
 
 func TestScan_MultiplePatternsMatching(t *testing.T) {
 	s := NewScanner()
-	in := "AWS=AKIAIOSFODNN7EXAMPLE GH=ghp_1234567890abcdefghijklmnopqrstuvwxyz12"
+	in := "AWS=" + fakeAWSKey + " GH=" + fakeGHPTok
 	matches := s.Scan(in)
 	if len(matches) < 2 {
 		t.Errorf("expected >=2 matches, got %d", len(matches))
