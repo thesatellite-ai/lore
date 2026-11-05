@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/sessionmask"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -34,13 +36,22 @@ const (
 	floatBits = 64
 )
 
+// masked is text with every session-shaped token masked (PASS3-A-7,
+// supersedes FB-SESS-2): every byte the surface prints goes through it, so
+// a tool session id never reaches output, whether or not lore.db (where
+// the known ids live) can be read: the shape and the session variables of
+// this process need no lore.db (fail closed).
+func masked(text string) string {
+	return sessionmask.Mask(text, sessionmask.EnvIDs(os.Getenv))
+}
+
 // printJSON writes the result as one JSON object and a newline (--json).
 func printJSON(w io.Writer, r op.Result) error {
 	b, err := r.JSON()
 	if err != nil {
 		return err
 	}
-	_, err = w.Write(append(b, '\n'))
+	_, err = io.WriteString(w, masked(string(b))+"\n")
 	return err
 }
 
@@ -56,7 +67,7 @@ func printHuman(w io.Writer, r op.Result) error {
 	// Interface() is the reflect boundary; it is narrowed at once.
 	if v.CanInterface() {
 		if t, ok := v.Interface().(op.Texter); ok {
-			_, err := io.WriteString(w, t.Text())
+			_, err := io.WriteString(w, masked(t.Text()))
 			return err
 		}
 	}
@@ -64,7 +75,7 @@ func printHuman(w io.Writer, r op.Result) error {
 	if err := writeObject(&b, v, r.Fields(), ""); err != nil {
 		return err
 	}
-	_, err := io.WriteString(w, b.String())
+	_, err := io.WriteString(w, masked(b.String()))
 	return err
 }
 
@@ -211,7 +222,7 @@ func printError(stdout, stderr io.Writer, err error, asJSON bool) int {
 		// fail on it, and a failing writer has nowhere left to report to.
 		b, mErr := json.Marshal(env)
 		if mErr == nil {
-			_, _ = stdout.Write(append(b, '\n'))
+			_, _ = io.WriteString(stdout, masked(string(b))+"\n")
 		}
 		return env.Error.Exit
 	}
@@ -219,6 +230,6 @@ func printError(stdout, stderr io.Writer, err error, asJSON bool) int {
 	if env.Error.Hint != "" {
 		line += hintPrefix + env.Error.Hint + "\n"
 	}
-	_, _ = io.WriteString(stderr, line)
+	_, _ = io.WriteString(stderr, masked(line))
 	return env.Error.Exit
 }

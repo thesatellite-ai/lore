@@ -10,11 +10,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/sessionmask"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
@@ -291,8 +293,12 @@ func writeError(w http.ResponseWriter, err error) {
 	writeJSON(w, StatusOf(err), b)
 }
 
-// writeJSON writes a JSON body with the safety headers.
+// writeJSON writes a JSON body with the safety headers. Every
+// session-shaped token in it is masked first (PASS3-A-7: always, whether
+// or not lore.db can be read; see logic/sessionmask), so `lore api`
+// prints no more than the CLI does.
 func writeJSON(w http.ResponseWriter, status int, body []byte) {
+	body = sessionmask.MaskBytes(body, sessionmask.EnvIDs(os.Getenv))
 	h := w.Header()
 	h.Set(headerContentType, mediaJSON)
 	h.Set(headerNoSniff, noSniff)
