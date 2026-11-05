@@ -118,7 +118,7 @@ func run(ctx context.Context, args []string) int {
 	if err != nil {
 		return printHostError(err)
 	}
-	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now})
+	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now, External: renderhost.CoreExternal(app)})
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
 	root := cli.Build(app.Registry(), runner, cli.WithInteractive(wire.StdinIsTerminal))
