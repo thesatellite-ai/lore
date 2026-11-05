@@ -194,7 +194,7 @@ type ClaimResult struct {
 func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimResult, error) {
 	var out ClaimResult
 	var poisoned *PoisonedError
-	_, err := env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
 		out, poisoned = ClaimResult{}, nil
 		mission := IsMission(id)
 		doc, ok, err := env.Rows.Get(ctx, id)
@@ -418,7 +418,7 @@ func prefix(tok string) string {
 // Renew is the heartbeat (F7 "renew"): signals only, never the row.
 func Renew(ctx context.Context, env Env, id string) (signals.Signal, error) {
 	var renewed signals.Signal
-	_, err := env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
 		s, err := signals.DecideRenew(v, env.Caller, env.Folder, id)
 		if err != nil {
 			return signals.Change{}, err
@@ -444,7 +444,7 @@ func Renew(ctx context.Context, env Env, id string) (signals.Signal, error) {
 // ref and the row gets one claim_log entry, atomically.
 func Release(ctx context.Context, env Env, id string) error {
 	now := env.Signals.Clock.Now()
-	_, err := env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
 		s, err := signals.DecideRelease(v, env.Caller, env.Folder, id)
 		if err != nil {
 			return signals.Change{}, err
@@ -495,7 +495,7 @@ func errIf(cond bool, err error) error {
 // the same commit (a note's comment). dropClaim removes the claim (done).
 func HolderWrite(ctx context.Context, env Env, id string, dropClaim bool, mutate func(doc Doc, now time.Time) ([]RowWrite, error)) (Doc, error) {
 	var written Doc
-	_, err := env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
 		doc, ok, err := env.Rows.Get(ctx, id)
 		if err != nil {
 			return signals.Change{}, err
@@ -594,7 +594,7 @@ func Override(ctx context.Context, env Env, id string, kind OverrideKind, mutate
 // mutate nil is the plain override.
 func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind, mutate func(Doc, time.Time) error) (*signals.Signal, error) {
 	var removed *signals.Signal
-	_, err := env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
 		removed = nil
 		doc, ok, err := env.Rows.Get(ctx, id)
 		if err != nil {
@@ -670,7 +670,7 @@ func Gated(d Doc) bool {
 // held task changes only through the holder or a human override.
 func Update(ctx context.Context, env Env, id string, mutate func(Doc, time.Time) error) (Doc, error) {
 	var written Doc
-	_, err := env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
 		doc, ok, err := env.Rows.Get(ctx, id)
 		if err != nil {
 			return signals.Change{}, err

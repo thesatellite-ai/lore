@@ -42,7 +42,7 @@ var ErrNotGated = fmt.Errorf("coord: task has no gate")
 // approved_at and approved_hash over title + body, plus a claim_log entry.
 func Approve(ctx context.Context, env Env, req ApproveRequest) (Approval, error) {
 	var out Approval
-	_, err := env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
 		doc, ok, err := env.Rows.Get(ctx, req.ID)
 		if err != nil {
 			return signals.Change{}, err
