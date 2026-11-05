@@ -417,8 +417,28 @@ func itemOf(t engine.Trashed) Item {
 	return it
 }
 
+// Title is r's label as the `lore sql` trash view lists it (DELETION 3.2):
+// titleOf, or the mask when mask is set and the field it came from is
+// sensitive in def (3.11: protections stay in the trash).
+func Title(r row.Row, def schema.TableDef, mask bool) string {
+	s, field := labelOf(r)
+	if f, ok := def.Field(field); ok && mask && f.Sensitive && s != "" {
+		return maskedTitle
+	}
+	return s
+}
+
+// maskedTitle replaces a sensitive title (the lens's own mask).
+const maskedTitle = "•••"
+
 // titleOf is a row's label: its first title-like field, one line, cut.
 func titleOf(r row.Row) string {
+	s, _ := labelOf(r)
+	return s
+}
+
+// labelOf is titleOf plus the field it came from.
+func labelOf(r row.Row) (string, string) {
 	for _, f := range titleFields {
 		v, ok := r.Fields[f]
 		if !ok || v == nil || v.Kind() == value.KindNull {
@@ -428,9 +448,9 @@ func titleOf(r row.Row) string {
 		if rs := []rune(s); len(rs) > titleCut {
 			s = string(rs[:titleCut]) + "…"
 		}
-		return s
+		return s, f
 	}
-	return ""
+	return "", ""
 }
 
 // resultOf renders a restore or purge result.

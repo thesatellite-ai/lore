@@ -60,6 +60,10 @@ type LensOptions struct {
 	// secret (SQ15, BATCH 10), never a sensitive value. nil leaves the text
 	// as stored.
 	Expand Expander
+	// Trash is the rows in the trash the `trash` view lists (DELETION 3.2,
+	// lens_trash.go): the cache keeps no trashed row, so the caller reads
+	// them from the stores and hands them in. nil gives an empty view.
+	Trash []TrashRow
 }
 
 // LensHit is where ResolveID found an id.
@@ -95,6 +99,7 @@ type Lens struct {
 	hidden []string
 	closed bool
 	expand Expander
+	trash  []TrashRow
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -153,7 +158,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -282,6 +287,10 @@ func (l *Lens) setup(ctx context.Context) error {
 	// TASK 6.6 (rollup.go): task_rollup over tasks_all, task_tree_all and
 	// the spans above.
 	if err := l.createTaskRollup(ctx, tables); err != nil {
+		return err
+	}
+	// DELETION 3.2 (lens_trash.go): the trash view over LensOptions.Trash.
+	if err := l.createTrash(ctx); err != nil {
 		return err
 	}
 	if _, err := l.conn.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
