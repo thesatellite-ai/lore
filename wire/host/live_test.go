@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/op"
 )
 
@@ -90,6 +91,42 @@ func TestSkipLive(t *testing.T) {
 	for name, want := range map[string]bool{"migrate.run": true, "init": true, "config.get": true, "task.add": false, "live.compact": false} {
 		if got := skipLive(name); got != want {
 			t.Errorf("skipLive(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// TestAddPurged: ids are unioned and sorted, other keys kept, a non-list
+// "ids" is an error (never an empty set), non-string entries skipped.
+func TestAddPurged(t *testing.T) {
+	check := func(b []byte, err error, want string, note bool) {
+		t.Helper()
+		doc, got, perr := purgedIDs(b)
+		if err != nil || perr != nil || join(got) != want || doc.Str("note") != map[bool]string{true: "x"}[note] {
+			t.Fatalf("file = %s (%v, %v), ids %v", b, err, perr, got)
+		}
+	}
+	b, err := addPurged(nil, []string{"tsk_b", "tsk_a"})
+	check(b, err, "tsk_a tsk_b", false)
+	b, err = addPurged([]byte(`{"_v":1,"ids":["tsk_c",7],"note":"x"}`), []string{"tsk_a", "tsk_c"})
+	check(b, err, "tsk_a tsk_c", true)
+	if _, err := addPurged([]byte(`{"ids":"tsk_a"}`), nil); err == nil {
+		t.Fatal("a non-list ids must fail")
+	}
+}
+
+// TestLiveFinished: kinds with a lifecycle finish on their end states only;
+// a kind without one is finished on every write.
+func TestLiveFinished(t *testing.T) {
+	for _, c := range []struct {
+		table, status string
+		want          bool
+	}{
+		{"tasks", "done", true}, {"tasks", "cancelled", true}, {"tasks", "open", false},
+		{"missions", "active", false}, {"handoffs", "accepted", true}, {"rules", "", true},
+	} {
+		body := canonjson.Object{"status": canonjson.String(c.status)}
+		if got := liveFinished(c.table, body); got != c.want {
+			t.Errorf("liveFinished(%s, %s) = %v, want %v", c.table, c.status, got, c.want)
 		}
 	}
 }

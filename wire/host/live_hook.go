@@ -162,6 +162,9 @@ func LiveHook(cfg LiveConfig) Hook {
 				return h.wrap(name, b)
 			}
 			o.LiveRef = h.liveRef
+			if o.Sync == nil {
+				o.Sync = liveSync{h: h} // live-only lore sync / lore land (P3-MODEB-3)
+			}
 		},
 		Around:  h.around,
 		OnError: h.explainNotFound,

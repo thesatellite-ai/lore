@@ -11,6 +11,7 @@ package main
 //	lore machine(s) [show]    ─► machine list | machine show
 //	lore trash [--type …]     ─► trash list
 //	lore sql "<query>"        ─► sql run
+//	lore sync / lore land     ─► sync run / land run
 //	lore upgrade [--check …]  ─► upgrade run
 //	lore plan apply …         ─► refused, hint: lore mission apply (2.15)
 
@@ -30,6 +31,7 @@ import (
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	opsselfupgrade "github.com/thesatellite-ai/lore/ops/selfupgrade"
 	opsql "github.com/thesatellite-ai/lore/ops/sql"
+	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 )
 
@@ -55,6 +57,8 @@ func mountShortcuts(root *cobra.Command) {
 		root.AddCommand(shortcutOf(mv, "move <id>", "Move a row to another store (same id; asks first)"))
 	}
 	defaultVerb(root, opslint.Noun, lintRunVerb)
+	defaultVerb(root, opssync.Noun, opssync.VerbRun)     // lore sync ─► sync run
+	defaultVerb(root, opssync.NounLand, opssync.VerbRun) // lore land ─► land run
 	if g := defaultVerb(root, opsinfra.NounMachine, machineListVerb); g != nil {
 		g.Aliases = append(g.Aliases, opsinfra.NounMachine+"s")
 	}

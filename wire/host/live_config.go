@@ -19,6 +19,7 @@ import (
 // Built-in live defaults (v0.1.17 lorecfg: TEAM-025, TEAM-026, F8).
 const (
 	defaultLiveFetchTTL     = 60 * time.Second
+	defaultLiveMaxAge       = 7 * 24 * time.Hour // TEAM-026: an open row is copied to main after a week
 	defaultLiveAutopush     = true
 	defaultLiveCompactAfter = 1000
 	defaultLiveRemote       = "origin"
@@ -38,6 +39,7 @@ func defaultLiveKinds() map[string]bool {
 type liveSettings struct {
 	Defaults      map[string]bool
 	FetchTTL      time.Duration
+	MaxAge        time.Duration
 	Autopush      bool
 	CompactAfter  int
 	Remote        string
@@ -51,6 +53,7 @@ type liveFile struct {
 	Live          struct {
 		Defaults     map[string]bool   `yaml:"defaults"`
 		FetchTTL     *orgconf.Duration `yaml:"fetch_ttl"`
+		MaxAge       *orgconf.Duration `yaml:"max_age"`
 		Autopush     *bool             `yaml:"autopush"`
 		CompactAfter *int              `yaml:"compact_after"`
 		Remote       string            `yaml:"remote"`
@@ -66,7 +69,7 @@ type liveFile struct {
 // (v0.1.17 liveConfig).
 func loadLiveSettings(home string) liveSettings {
 	s := liveSettings{
-		Defaults: defaultLiveKinds(), FetchTTL: defaultLiveFetchTTL, Autopush: defaultLiveAutopush,
+		Defaults: defaultLiveKinds(), FetchTTL: defaultLiveFetchTTL, MaxAge: defaultLiveMaxAge, Autopush: defaultLiveAutopush,
 		CompactAfter: defaultLiveCompactAfter, Remote: defaultLiveRemote, PushRetries: defaultPushRetries,
 	}
 	b, err := os.ReadFile(filepath.Clean(orgcfg.ConfigPath(home)))
@@ -82,6 +85,9 @@ func loadLiveSettings(home string) liveSettings {
 	}
 	if f.Live.FetchTTL != nil {
 		s.FetchTTL = f.Live.FetchTTL.D()
+	}
+	if f.Live.MaxAge != nil {
+		s.MaxAge = f.Live.MaxAge.D()
 	}
 	if f.Live.Autopush != nil {
 		s.Autopush = *f.Live.Autopush
