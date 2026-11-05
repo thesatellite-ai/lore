@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -267,8 +268,12 @@ func storeDefaultBranchFunc(cfg *lorecfg.Config) func(string) string {
 // unique across an entry's stores, F13), checks the store, creates the
 // folder project when missing, writes the link and pushes.
 type storeLinkWriter struct {
-	// Remove makes it the `lore org unlink` writer.
+	// Remove makes it the unlink writer (project_repo.go's repo set-url
+	// follow-up; `lore org unlink` itself is dropped, PASS3 DESIGN-ONLY).
 	Remove bool
+	// Out receives the result line (the org.link operation's report);
+	// nil is stdout.
+	Out *bytes.Buffer
 }
 
 // compile-time check.
@@ -323,7 +328,12 @@ func (w storeLinkWriter) WriteLink(ctx context.Context, plan orgresolve.LinkPlan
 	if res.CreatedFolder {
 		created = "created; "
 	}
-	fmt.Printf("✓ %s (%s, %s) %s %s %s/ (%s%s)\n  nothing was written to this repo\n", plan.Remote, plan.ProjectID, plan.Remote, verb, plan.StoreURL, plan.Folder, created, state)
+	line := fmt.Sprintf("✓ %s (%s, %s) %s %s %s/ (%s%s)\n  nothing was written to this repo\n", plan.Remote, plan.ProjectID, plan.Remote, verb, plan.StoreURL, plan.Folder, created, state)
+	if w.Out == nil {
+		fmt.Print(line)
+		return nil
+	}
+	w.Out.WriteString(line)
 	return nil
 }
 

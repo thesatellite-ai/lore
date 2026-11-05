@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,151 +22,99 @@ import (
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/stores"
 
-	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
 )
 
-// Flags of org import.
-const (
-	flagImportKey    = "key"
-	flagImportName   = "name"
-	flagImportHandle = "handle"
-	flagImportAs     = "as"
-	flagImportBranch = "branch"
-)
-
-// attachStoreSubcommands adds the store-side org commands to `lore org`
-// (registered by org_cmd.go) when they are not there yet.
-func attachStoreSubcommands(root *cobra.Command) {
-	for _, c := range root.Commands() {
-		if c.Name() != "org" {
-			continue
-		}
-		have := map[string]bool{}
-		for _, sub := range c.Commands() {
-			have[sub.Name()] = true
-		}
-		if !have["unlink"] {
-			c.AddCommand(newOrgUnlinkCommand())
-		}
-		if !have["import"] {
-			c.AddCommand(newOrgImportCommand())
-		}
+// runOrgImport is org.import: read the store's suggestion, print the
+// entry, and (confirmed) add it and join the roster. It returns the
+// question when it stopped unconfirmed (nothing written).
+func runOrgImport(ctx context.Context, w *bytes.Buffer, in opsorgcmd.ImportIn, yes bool) (string, error) {
+	url, branch := in.URL, in.Branch
+	cfg, err := loadTeamConfig(ctx)
+	if err != nil {
+		return "", err
 	}
-}
-
-func newOrgImportCommand() *cobra.Command {
-	var key, name, handle, as, branch string
-	var yes bool
-	cmd := &cobra.Command{
-		Use:   "import <store-url>",
-		Short: "Adopt the org entry a team suggests in its store, with your identity, and join its roster",
-		Example: `  lore org import git@github.com:agency/notes --key human:me@agency.example --name "Me" --handle me
-  lore org import git@github.com:agency/notes --as agency-2`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			url := args[0]
-			cfg, err := loadTeamConfig(ctx)
-			if err != nil {
-				return err
-			}
-			m, err := newStoreManager(cfg, nil)
-			if err != nil {
-				return err
-			}
-			st, err := m.Open(ctx, url)
-			if err != nil {
-				return storeCLIError(err, "open the store")
-			}
-			fr, err := st.Fetch(ctx, true)
-			if err != nil {
-				return storeCLIError(err, "fetch the store")
-			}
-			if fr.Offline {
-				return storeCLIError(fmt.Errorf("%w: %s", stores.ErrOffline, st.Norm), "fetch the store")
-			}
-			if branch == "" {
-				branch = st.DefaultBranch()
-			}
-			if checkErr := st.Check(ctx, branch); checkErr != nil {
-				return storeCLIError(checkErr, "check the store")
-			}
-			sugg, orgFolder, err := readSuggestion(ctx, st, branch)
-			if err != nil {
-				return err
-			}
-			entry := lorecfg.Org{Name: sugg.Name, Own: sugg.Own, Repos: sugg.Repos}
-			if as != "" {
-				entry.Name = as
-			}
-			if entry.Name == "" {
-				return errcodes.New(errcodes.InvalidInput, "the store's lore-org.yaml names no org; pass --as <name>")
-			}
-			if cfg.FindOrg(entry.Name) != nil {
-				return errcodes.New(errcodes.InvalidInput, "an org entry named "+entry.Name+" already exists in ~/.lore/config.yaml").
-					WithHint("pass --as <another name>, or edit the existing entry")
-			}
-			for _, s := range sugg.Stores {
-				entry.Stores = append(entry.Stores, lorecfg.Store{URL: s.URL, Branch: s.Branch, OrgFolder: s.OrgFolder})
-			}
-			if len(entry.Stores) == 0 {
-				entry.Stores = []lorecfg.Store{{URL: url, OrgFolder: orgFolder}}
-			}
-			if len(sugg.Defaults.ClientRepos) > 0 {
-				entry.Defaults.ClientRepos = sugg.Defaults.ClientRepos
-			}
-			entry.Identity = lorecfg.OrgIdentity{Key: key, Name: name, Handle: handle}
-			if entry.Identity.Key == "" || entry.Identity.Name == "" {
-				return errcodes.New(errcodes.InvalidInput, "your identity in "+entry.Name+" is required: --key human:<your email there> --name \"Your Name\" [--handle h]")
-			}
-			body, err := yaml.Marshal(entry)
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "encode the entry").WithCause(err)
-			}
-			fmt.Printf("This adds to ~/.lore/config.yaml:\n\n%s\n", indentBlock(string(body)))
-			risky := riskyImport(entry)
-			for _, r := range risky {
-				fmt.Println("  note: " + r)
-			}
-			if !yes {
-				if !stdinIsTTY() {
-					return errcodes.New(errcodes.InvalidInput, "confirm with --yes when there is no terminal; nothing written")
-				}
-				q := "Add it? [y/N] "
-				if len(risky) > 0 {
-					q = "Accept the notes above and add it? [y/N] "
-				}
-				if !confirmYes(q) {
-					fmt.Println("nothing written")
-					return nil
-				}
-			}
-			home, err := loreHome()
-			if err != nil {
-				return err
-			}
-			if err := appendOrgEntry(ctx, home, entry); err != nil {
-				return err
-			}
-			fmt.Printf("✓ added org entry %s\n", entry.Name)
-			if err := registerAfterImport(ctx, entry.Name); err != nil {
-				// BUG-T3: a half-done import must not exit 0. The entry stays
-				// (it is valid on its own); the error keeps the cause's code
-				// so the exit status says what failed.
-				return importRegisterErr(entry.Name, err)
-			}
-			return nil
-		},
+	m, err := newStoreManager(cfg, nil)
+	if err != nil {
+		return "", err
 	}
-	cmd.Flags().StringVar(&key, flagImportKey, "", "your identity key in this org: human:<your email there>")
-	cmd.Flags().StringVar(&name, flagImportName, "", "your display name")
-	cmd.Flags().StringVar(&handle, flagImportHandle, "", "your @handle on the roster")
-	cmd.Flags().StringVar(&as, flagImportAs, "", "entry name, when the suggested one is taken")
-	cmd.Flags().StringVar(&branch, flagImportBranch, "", "store branch to read the suggestion from (default: the store's default branch)")
-	cmd.Flags().BoolVar(&yes, flagYes, false, "confirm without a prompt")
-	return cmd
+	st, err := m.Open(ctx, url)
+	if err != nil {
+		return "", storeCLIError(err, "open the store")
+	}
+	fr, err := st.Fetch(ctx, true)
+	if err != nil {
+		return "", storeCLIError(err, "fetch the store")
+	}
+	if fr.Offline {
+		return "", storeCLIError(fmt.Errorf("%w: %s", stores.ErrOffline, st.Norm), "fetch the store")
+	}
+	if branch == "" {
+		branch = st.DefaultBranch()
+	}
+	if checkErr := st.Check(ctx, branch); checkErr != nil {
+		return "", storeCLIError(checkErr, "check the store")
+	}
+	sugg, orgFolder, err := readSuggestion(ctx, st, branch)
+	if err != nil {
+		return "", err
+	}
+	entry := lorecfg.Org{Name: sugg.Name, Own: sugg.Own, Repos: sugg.Repos}
+	if in.As != "" {
+		entry.Name = in.As
+	}
+	if entry.Name == "" {
+		return "", errcodes.New(errcodes.InvalidInput, "the store's lore-org.yaml names no org; pass --as <name>")
+	}
+	if cfg.FindOrg(entry.Name) != nil {
+		return "", errcodes.New(errcodes.InvalidInput, "an org entry named "+entry.Name+" already exists in ~/.lore/config.yaml").
+			WithHint("pass --as <another name>, or edit the existing entry")
+	}
+	for _, s := range sugg.Stores {
+		entry.Stores = append(entry.Stores, lorecfg.Store{URL: s.URL, Branch: s.Branch, OrgFolder: s.OrgFolder})
+	}
+	if len(entry.Stores) == 0 {
+		entry.Stores = []lorecfg.Store{{URL: url, OrgFolder: orgFolder}}
+	}
+	if len(sugg.Defaults.ClientRepos) > 0 {
+		entry.Defaults.ClientRepos = sugg.Defaults.ClientRepos
+	}
+	entry.Identity = lorecfg.OrgIdentity{Key: in.Key, Name: in.Name, Handle: in.Handle}
+	if entry.Identity.Key == "" || entry.Identity.Name == "" {
+		return "", errcodes.New(errcodes.InvalidInput, "your identity in "+entry.Name+" is required: --key human:<your email there> --name \"Your Name\" [--handle h]")
+	}
+	body, err := yaml.Marshal(entry)
+	if err != nil {
+		return "", errcodes.New(errcodes.Internal, "encode the entry").WithCause(err)
+	}
+	fmt.Fprintf(w, "This adds to ~/.lore/config.yaml:\n\n%s\n", indentBlock(string(body)))
+	risky := riskyImport(entry)
+	for _, r := range risky {
+		fmt.Fprintln(w, "  note: "+r)
+	}
+	if !yes {
+		if len(risky) > 0 {
+			return "Accept the notes above and add it?", nil
+		}
+		return "Add it?", nil
+	}
+	home, err := loreHome()
+	if err != nil {
+		return "", err
+	}
+	if err := appendOrgEntry(ctx, home, entry); err != nil {
+		return "", err
+	}
+	fmt.Fprintf(w, "✓ added org entry %s\n", entry.Name)
+	if err := registerAfterImport(ctx, entry.Name); err != nil {
+		// BUG-T3: a half-done import must not exit 0. The entry stays
+		// (it is valid on its own); the error keeps the cause's code
+		// so the exit status says what failed.
+		return "", importRegisterErr(entry.Name, err)
+	}
+	return "", nil
 }
 
 // readSuggestion reads lore-org.yaml from the org folder the store's

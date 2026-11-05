@@ -15,70 +15,45 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/style"
 
-	"github.com/spf13/cobra"
+	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// orgRenameOut is `lore org rename --json`.
-type orgRenameOut struct {
-	From       string `json:"from"`
-	To         string `json:"to"`
-	ID         string `json:"id,omitempty"`
-	IDRecorded bool   `json:"id_recorded"`
-	RepoOrgs   int    `json:"repo_orgs"`
-	Defaults   int    `json:"defaults"`
-	Config     string `json:"config"`
-}
-
-func newOrgRenameCommand() *cobra.Command {
-	var asJSON bool
-	cmd := &cobra.Command{
-		Use:   "rename <old> <new>",
-		Short: "Rename an org entry on this machine (a label change; the org's id and every row stay)",
-		Example: `  lore org rename agency northwind   # the entry, its repo choices and defaults follow
-  lore org rename agency northwind --json`,
-		Args: cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			from, to := args[0], args[1]
-			dir, err := identity.Dir()
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "resolve HOME").WithCause(err)
-			}
-			cfg, _, err := lorecfg.LoadTeam(ctx, dir, lorecfg.Options{})
-			if err != nil {
-				return errcodes.New(errcodes.ConfigInvalid, "~/.lore/config.yaml is not valid").WithCause(err).
-					WithHint("run `lore config check` for every problem with its location")
-			}
-			if cfg == nil || cfg.FindOrg(from) == nil {
-				names := []string{}
-				if cfg != nil {
-					names = cfg.OrgNames()
-				}
-				return errcodes.New(errcodes.NotFound, fmt.Sprintf("no org entry named %q", from)).
-					WithHint(fmt.Sprintf("entries: %v", names))
-			}
-			id := orgFolderID(ctx, from)
-			res, err := lorecfg.RenameOrg(ctx, dir, from, to, id, lorecfg.Options{})
-			if err != nil {
-				return errcodes.New(errcodes.InvalidInput, "org rename refused").WithCause(err)
-			}
-			out := orgRenameOut{From: from, To: to, ID: id, IDRecorded: res.IDRecorded, RepoOrgs: res.RepoOrgs, Defaults: res.Defaults, Config: res.Path}
-			if asJSON {
-				return writeJSONOut(out)
-			}
-			printOrgRename(out)
-			return nil
-		},
+// runOrgRename is org.rename: the label change, one validated write.
+func runOrgRename(ctx context.Context, in opsorgcmd.RenameIn) (opsorgcmd.RenameOut, error) {
+	from, to := in.Old, in.New
+	dir, err := identity.Dir()
+	if err != nil {
+		return opsorgcmd.RenameOut{}, errcodes.New(errcodes.Internal, "resolve HOME").WithCause(err)
 	}
-	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result as JSON")
-	return cmd
+	cfg, _, err := lorecfg.LoadTeam(ctx, dir, lorecfg.Options{})
+	if err != nil {
+		return opsorgcmd.RenameOut{}, errcodes.New(errcodes.ConfigInvalid, "~/.lore/config.yaml is not valid").WithCause(err).
+			WithHint("run `lore config check` for every problem with its location")
+	}
+	if cfg == nil || cfg.FindOrg(from) == nil {
+		names := []string{}
+		if cfg != nil {
+			names = cfg.OrgNames()
+		}
+		return opsorgcmd.RenameOut{}, errcodes.New(errcodes.NotFound, fmt.Sprintf("no org entry named %q", from)).
+			WithHint(fmt.Sprintf("entries: %v", names))
+	}
+	id := orgFolderID(ctx, from)
+	res, err := lorecfg.RenameOrg(ctx, dir, from, to, id, lorecfg.Options{})
+	if err != nil {
+		return opsorgcmd.RenameOut{}, errcodes.New(errcodes.InvalidInput, "org rename refused").WithCause(err)
+	}
+	out := opsorgcmd.RenameOut{From: from, To: to, ID: id, IDRecorded: res.IDRecorded, RepoOrgs: res.RepoOrgs, Defaults: res.Defaults, Config: res.Path}
+	out.Lines = orgRenameLines(out)
+	return out, nil
 }
 
 // orgFolderID is the prj_ id of the org's folder when this repo attaches
@@ -96,21 +71,22 @@ func orgFolderID(_ context.Context, org string) string {
 	return ref.FolderID.String()
 }
 
-// printOrgRename is the human output of `lore org rename`.
-func printOrgRename(o orgRenameOut) {
-	fmt.Printf("%s org entry %s is now %s (this machine)\n", style.Success("✓"), o.From, style.Bold(o.To))
+// orgRenameLines is the human output of `lore org rename`.
+func orgRenameLines(o opsorgcmd.RenameOut) []string {
+	lines := []string{fmt.Sprintf("%s org entry %s is now %s (this machine)", style.Success("✓"), o.From, style.Bold(o.To))}
 	switch {
 	case o.IDRecorded:
-		fmt.Printf("  id %s recorded (the org folder's project id; it never changes)\n", o.ID)
+		lines = append(lines, fmt.Sprintf("  id %s recorded (the org folder's project id; it never changes)", o.ID))
 	case o.ID == "":
-		fmt.Println("  id not recorded: this repo does not attach the org; run it inside one of its repos to record it")
+		lines = append(lines, "  id not recorded: this repo does not attach the org; run it inside one of its repos to record it")
 	}
 	if o.RepoOrgs > 0 {
-		fmt.Printf("  %d project choice(s) (lore org use) moved to %s\n", o.RepoOrgs, o.To)
+		lines = append(lines, fmt.Sprintf("  %d project choice(s) (lore org use) moved to %s", o.RepoOrgs, o.To))
 	}
 	if o.Defaults > 0 {
-		fmt.Printf("  %d defaults.client_repos target(s) moved to %s\n", o.Defaults, o.To)
+		lines = append(lines, fmt.Sprintf("  %d defaults.client_repos target(s) moved to %s", o.Defaults, o.To))
 	}
-	fmt.Println("  rows are unchanged; store rows that name the old label (routing.client_repos) and other machines keep it until edited there")
-	fmt.Printf("  written to %s\n", o.Config)
+	lines = append(lines, "  rows are unchanged; store rows that name the old label (routing.client_repos) and other machines keep it until edited there",
+		"  written to "+o.Config)
+	return plainLines(strings.Join(lines, "\n"))
 }

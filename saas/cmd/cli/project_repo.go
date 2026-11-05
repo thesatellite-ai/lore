@@ -3,9 +3,8 @@
 // list/show/archive/unarchive/delete of projects and add/list/archive/
 // unarchive/delete of repos are served by the 0.1.18 core (ops/infra,
 // mounted into these groups by core_mount.go: cli.Mount reuses a pure
-// group). What stays here is the retired v0.1.17 Mode B pair (project
-// shared-init|shared-list), which now only refuses (Q-MODEB,
-// project_shared.go).
+// group), as are the retired v0.1.17 Mode B refusals (project
+// shared-init|shared-list, ops/projectshared; Q-MODEB).
 package main
 
 import (
@@ -25,10 +24,9 @@ import (
 // newProjectCommand is the `lore project` group (a pure group, so the
 // core's project verbs mount into it).
 func newProjectCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "project", Short: "Manage projects"}
-	cmd.AddCommand(newProjectSharedInitCommand())
-	cmd.AddCommand(newProjectSharedListCommand())
-	return cmd
+	// shared-init|shared-list are the retired-refusal operations of
+	// ops/projectshared (PASS3 ONE-PATH), mounted with the core's verbs.
+	return &cobra.Command{Use: "project", Short: "Manage projects"}
 }
 
 // newRepoCommand is the `lore repo` group; every verb is the core's.

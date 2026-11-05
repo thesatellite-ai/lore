@@ -131,8 +131,6 @@ func init() {
 	rootCmd.AddCommand(newRepairCommand())
 	rootCmd.AddCommand(newLearnCommand())
 	rootCmd.AddCommand(newLearnFromRootAliasCommand()) // lore learn-from docs at root
-	rootCmd.AddCommand(newWhoamiCommand())
-	rootCmd.AddCommand(newOrgCommand())
 	rootCmd.AddCommand(newMoveCommand())
 	rootCmd.AddCommand(newProjectCommand())
 	rootCmd.AddCommand(newRepoCommand())
@@ -145,7 +143,6 @@ func init() {
 	rootCmd.AddCommand(newMergeDriverCommand())
 	registerExtraCommands(rootCmd)
 	attachRosterCommands(rootCmd)
-	attachStoreSubcommands(rootCmd)
 	addCoordCommands(rootCmd) // lore-signals: agent, resource, gate, inbox, handoff, finding, plan apply (coord_cmd.go)
 	// Live rows (LORE_TEAM_SPEC F1–F8): --live/--no-live, land, live, and the
 	// pre-run hook. Last, so it sees every command registered above.

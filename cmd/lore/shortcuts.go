@@ -35,6 +35,7 @@ import (
 	opsql "github.com/thesatellite-ai/lore/ops/sql"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
+	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 )
 
 // Verbs the shortcuts run.
@@ -74,6 +75,7 @@ func mountShortcuts(root *cobra.Command) {
 	}
 	defaultVerb(root, opstrash.Noun, trashListVerb)
 	defaultVerb(root, opsql.Noun, sqlRunVerb)
+	defaultVerb(root, opswhoami.Noun, opswhoami.ShowVerb)          // CLI_REFERENCE 3.8 (P3-ORG-G-3)
 	defaultVerb(root, opsselfupgrade.Noun, opsselfupgrade.RunVerb) // CLI_REFERENCE 3.5 (P3-UPG-1)
 	defaultVerb(root, opssearch.Noun, searchRunVerb)               // CLI_REFERENCE 2.5 (P3-MISC-1)
 	defaultVerb(root, "why-context", "show")                       // CLI_REFERENCE 2.14 (P3-MISC-3)

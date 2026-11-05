@@ -33,6 +33,7 @@ import (
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsrow "github.com/thesatellite-ai/lore/ops/row"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
+	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 	"github.com/thesatellite-ai/lore/store"
 
 	"github.com/spf13/cobra"
@@ -65,6 +66,8 @@ func mountRowShortcuts(root *cobra.Command) {
 	}
 	// CLI_REFERENCE 3.9: bare `lore trash [--type …]` lists the trash.
 	defaultVerb(root, opstrash.Noun, trashListVerb)
+	// CLI_REFERENCE 3.8: bare `lore whoami` runs whoami.show (P3-ORG-G-3).
+	defaultVerb(root, opswhoami.Noun, opswhoami.ShowVerb)
 	// CLI_REFERENCE 2.15 (TSQ9): `lore plan apply` is gone; it answers as
 	// an unknown command but names the new spelling.
 	if g, _, err := root.Find([]string{opsplan.Noun}); err == nil && g.Name() == opsplan.Noun {

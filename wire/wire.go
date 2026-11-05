@@ -71,11 +71,13 @@ import (
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opsmission "github.com/thesatellite-ai/lore/ops/mission"
+	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
 	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
 	opspii "github.com/thesatellite-ai/lore/ops/piipattern"
 	opspin "github.com/thesatellite-ai/lore/ops/pin"
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
+	opsprojectshared "github.com/thesatellite-ai/lore/ops/projectshared"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
@@ -100,6 +102,7 @@ import (
 	opstastepref "github.com/thesatellite-ai/lore/ops/tastepref"
 	opstechdoc "github.com/thesatellite-ai/lore/ops/techdoc"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
+	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 	opswhycontext "github.com/thesatellite-ai/lore/ops/whycontext"
 	opsworkflow "github.com/thesatellite-ai/lore/ops/workflow"
 	opsworkspace "github.com/thesatellite-ai/lore/ops/workspace"
@@ -250,6 +253,13 @@ type Options struct {
 	// OS machine id through adapters/machine. An error leaves `m` out
 	// (never a made-up id). Tests pass a fixed id.
 	Machine func() (ids.MachineID, error)
+	// OrgCommands is the machinery behind `lore org create|import|link|
+	// rename|set|use` (ops/orgcmd.Host: store clones, org resolution, the
+	// roster registration); nil answers E_UNSUPPORTED (P3-ORG-G-2).
+	OrgCommands opsorgcmd.Host
+	// Whoami is the machinery behind `lore whoami` (ops/whoami.Host); nil
+	// answers E_UNSUPPORTED (P3-ORG-G-3).
+	Whoami opswhoami.Host
 	// Local supplies the rules of the Local operations (config schema,
 	// leak checks, v0.1.17 store clones; wire/localops.go, P3-CFG-1). A
 	// nil part answers E_UNSUPPORTED.
@@ -474,6 +484,10 @@ func Registry(a *App) (*op.Registry, error) {
 	// CLI 3.8 / 2.11: lore session list, lore agent start (P3-RUNS-4, P3-RUNS-6).
 	entries = append(entries, opssession.Ops(a)...)
 	entries = append(entries, opsagent.Ops(a)...)
+	// PASS3 ONE-PATH (p3-g-org): lore org, lore whoami, the retired lore project shared-init|shared-list.
+	entries = append(entries, opsorgcmd.Ops(a)...)
+	entries = append(entries, opswhoami.Ops(a)...)
+	entries = append(entries, opsprojectshared.Ops()...)
 	return op.NewRegistry(entries...)
 }
 

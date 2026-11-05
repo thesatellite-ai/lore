@@ -5,10 +5,8 @@
 // and a project_id. 0.1.18 replaces it with stores, so:
 //
 //	lore project shared-init|shared-list
-//	    refuse (E_UNSUPPORTED), naming the replacement:
-//	    `lore store init <name> file:///abs/path` + `lore store add`.
-//	    shared-list refuses too rather than listing: a list from a file
-//	    0.1.18 no longer reads would suggest the mode still works.
+//	    refuse (E_UNSUPPORTED), naming the replacement: the operations
+//	    of ops/projectshared (PASS3 ONE-PATH).
 //
 //	lore migrate run
 //	    converts an existing Mode B repo (wire/migrate_modeb.go); this file
@@ -28,51 +26,13 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/constants"
 
 	"github.com/pelletier/go-toml/v2"
-	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/wire"
 )
-
-// modeBReplacement is the refusal's hint: the stores commands that replace
-// a shared database.
-const modeBReplacement = "the shared-database mode is retired; use a store instead: " +
-	"`lore store init <name> file:///abs/path` once, then `lore store add <name> <url>` in each repo " +
-	"(write to it with `--to <name>`); an existing shared project converts with `lore migrate run`"
-
-// newProjectSharedInitCommand is the retired `lore project shared-init`.
-func newProjectSharedInitCommand() *cobra.Command {
-	return retiredModeBCommand("shared-init", "Retired (0.1.18): use `lore store init` + `lore store add`")
-}
-
-// newProjectSharedListCommand is the retired `lore project shared-list`.
-func newProjectSharedListCommand() *cobra.Command {
-	return retiredModeBCommand("shared-list", "Retired (0.1.18): use `lore store list`")
-}
-
-// retiredModeBCommand refuses whatever it is given; the v0.1.17 flags are
-// still declared so an old invocation gets the refusal, not "unknown flag".
-func retiredModeBCommand(use, short string) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   use,
-		Short: short,
-		Args:  cobra.ArbitraryArgs,
-		RunE: func(*cobra.Command, []string) error {
-			return errcodes.New(errcodes.Unsupported, "lore project "+use+" was removed in 0.1.18").
-				WithHint(modeBReplacement)
-		},
-	}
-	var ignored string
-	var ignoredBool bool
-	cmd.Flags().StringVar(&ignored, constants.FlagDB, "", "ignored (retired)")
-	cmd.Flags().StringVar(&ignored, constants.FlagName, "", "ignored (retired)")
-	cmd.Flags().BoolVar(&ignoredBool, constants.FlagJSON, false, "ignored (retired)")
-	return cmd
-}
 
 // retiredModeBError is the refusal the v0.1.17 command paths give in a repo
 // that still has a Mode B pointer (the same sentence wire gives).

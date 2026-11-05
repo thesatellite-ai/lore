@@ -17,9 +17,6 @@ import (
 	"saas/pkg/aicoder/repourl"
 )
 
-// flagShare turns redaction off on a terminal (§6.5).
-const flagShare = "share"
-
 // whoamiRedactor masks internal names in whoami output. The zero value
 // (on=false) passes every string through.
 //

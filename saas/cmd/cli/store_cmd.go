@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -261,16 +260,6 @@ func hereLinks(ctx context.Context, cfg *lorecfg.Config) []string {
 		out = append(out, fmt.Sprintf("  %s → %s %s/ (store default branch %s)%s", l.Entry, redactIfQuiet(l.StoreURL), l.Folder, branch, d))
 	}
 	return out
-}
-
-// writeJSONOut prints v as indented JSON on stdout.
-func writeJSONOut(v any) error {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return errcodes.New(errcodes.Internal, "encode json").WithCause(err)
-	}
-	fmt.Println(string(b))
-	return nil
 }
 
 // resolveStoreArg finds a configured store by URL (any form), or accepts an

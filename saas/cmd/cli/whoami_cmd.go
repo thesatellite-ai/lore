@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,20 +21,15 @@ import (
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/sessions"
 	"saas/pkg/aicoder/style"
-	"saas/pkg/constants"
-
-	"github.com/spf13/cobra"
 
 	coreidentity "github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/machine"
 	coreids "github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 	"github.com/thesatellite-ai/lore/wire"
 )
-
-// flagExplain is whoami's switch for the full rule trace.
-const flagExplain = "explain"
 
 // whoamiJSON is `lore whoami --json` data (kind "whoami").
 type whoamiJSON struct {
@@ -135,85 +131,34 @@ type whoamiIdentityJSON struct {
 	Session   string `json:"session,omitempty"`
 }
 
-func newWhoamiCommand() *cobra.Command {
-	var asJSON, explain, share bool
-	var machineLabel string
-	cmd := &cobra.Command{
-		Use:   "whoami",
-		Short: "Show the resolved org, what decided it, your identity and what loads here",
-		Example: `  lore whoami
-  lore whoami --explain        # every org rule with hit or miss
-  LORE_ORG=agency-stag lore whoami
-  lore whoami --json
-  lore whoami --machine-label "tomas desktop"   # synced label of this machine ("" clears)`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if cmd.Flags().Changed(flagMachineLabel) {
-				return setMachineLabel(cmd.Context(), machineLabel, asJSON)
-			}
-			dir, err := os.Getwd()
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
-			}
-			s, err := gatherOrgSituation(cmd.Context(), dir)
-			if err != nil {
-				return err
-			}
-			id, idErr := s.identity()
-			red := newWhoamiRedactor(s, share)
-			if asJSON {
-				printJSON("whoami", whoamiData(s, id, idErr, red), 0)
-				return firstErr(s.ResolveErr, idErr)
-			}
-			printWhoami(s, id, idErr, explain, red)
-			if s.ResolveErr != nil {
-				return orgResolveCLIError(s.ResolveErr)
-			}
-			return idErr
-		},
-	}
-	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "machine-readable output")
-	cmd.Flags().BoolVar(&explain, flagExplain, false, "print every org rule with hit or miss and why")
-	cmd.Flags().BoolVar(&share, flagShare, false, "on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)")
-	cmd.Flags().StringVar(&machineLabel, flagMachineLabel, "", "set this machine's label, synced with its profile to our own stores (MACHINE LABEL)")
-	return cmd
-}
-
-// flagMachineLabel sets the synced machine label (MACHINE LABEL).
-const flagMachineLabel = "machine-label"
-
 // setMachineLabel runs the core's machine.label (profile + label into our
-// own store, never a code or client repo, Q-R3-9).
-func setMachineLabel(ctx context.Context, label string, asJSON bool) error {
+// own store, never a code or client repo, Q-R3-9) for whoami.show
+// --machine-label.
+func setMachineLabel(ctx context.Context, label string) (opswhoami.MachineLabel, []string, error) {
 	if coreApp == nil {
-		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
+		return opswhoami.MachineLabel{}, nil, errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
 	}
 	e, ok := coreApp.Registry().Lookup(opsinfra.OpMachineLabel)
 	if !ok {
-		return errcodes.New(errcodes.Internal, opsinfra.OpMachineLabel+" is not registered")
+		return opswhoami.MachineLabel{}, nil, errcodes.New(errcodes.Internal, opsinfra.OpMachineLabel+" is not registered")
 	}
 	in, err := json.Marshal(opsinfra.MachineLabelIn{Label: label})
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "encode the machine label").WithCause(err)
+		return opswhoami.MachineLabel{}, nil, errcodes.New(errcodes.Internal, "encode the machine label").WithCause(err)
 	}
 	res, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY()})
 	if err != nil {
-		return err
+		return opswhoami.MachineLabel{}, nil, err
 	}
 	raw, err := res.JSON()
 	if err != nil {
-		return err
-	}
-	if asJSON {
-		fmt.Println(string(raw))
-		return nil
+		return opswhoami.MachineLabel{}, nil, err
 	}
 	var out opsinfra.MachineLabelOut
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return errcodes.New(errcodes.Internal, "decode machine.label result").WithCause(err)
+		return opswhoami.MachineLabel{}, nil, errcodes.New(errcodes.Internal, "decode machine.label result").WithCause(err)
 	}
-	fmt.Print(out.Text())
-	return nil
+	return opswhoami.MachineLabel{ID: out.ID, Label: out.Label, Store: out.Store, Changed: out.Changed}, plainLines(out.Text()), nil
 }
 
 // whoamiMachine is this machine's id (adapters/machine.Load: the
@@ -300,8 +245,8 @@ func whoamiWarnings(s *orgSituation, id identity.Resolved) []string {
 const whoamiLabelWidth = 10
 
 // printWhoamiRow prints one aligned "label value" line of `lore whoami`.
-func printWhoamiRow(label, value string) {
-	fmt.Printf("%-*s %s\n", whoamiLabelWidth, label, value)
+func printWhoamiRow(w *bytes.Buffer, label, value string) {
+	fmt.Fprintf(w, "%-*s %s\n", whoamiLabelWidth, label, value)
 }
 
 // orgUseHint tells a user in a repo no rule matched how to pick an org
@@ -327,26 +272,26 @@ func orgUseHint(cfg *lorecfg.Config) string {
 	}
 }
 
-func printWhoami(s *orgSituation, id identity.Resolved, idErr error, explain bool, red whoamiRedactor) {
+func printWhoami(w *bytes.Buffer, s *orgSituation, id identity.Resolved, idErr error, explain bool, red whoamiRedactor) {
 	r := s.Result
 	switch {
 	case s.ResolveErr != nil:
-		printWhoamiRow("org", style.Error("refused")+"  "+style.Muted("("+red.str(s.ResolveErr.Error())+")"))
+		printWhoamiRow(w, "org", style.Error("refused")+"  "+style.Muted("("+red.str(s.ResolveErr.Error())+")"))
 	case r.Org == nil:
 		v := "none" + "  " + style.Muted("(matched by: "+red.str(r.MatchedBy)+")")
 		if h := orgUseHint(s.Config); h != "" {
 			v += "   " + style.Muted("hint: "+h)
 		}
-		printWhoamiRow("org", v)
+		printWhoamiRow(w, "org", v)
 	default:
-		printWhoamiRow("org", style.Bold(r.Org.Name)+"  "+style.Muted("(matched by: "+red.str(r.MatchedBy)+")"))
+		printWhoamiRow(w, "org", style.Bold(r.Org.Name)+"  "+style.Muted("(matched by: "+red.str(r.MatchedBy)+")"))
 	}
 
 	switch {
 	case s.ResolveErr != nil:
-		printWhoamiRow("identity", style.Muted("(not resolved: the org is refused above)"))
+		printWhoamiRow(w, "identity", style.Muted("(not resolved: the org is refused above)"))
 	case idErr != nil:
-		printWhoamiRow("identity", style.Error("missing")+"  "+style.Muted(idErr.Error()))
+		printWhoamiRow(w, "identity", style.Error("missing")+"  "+style.Muted(idErr.Error()))
 	default:
 		v := fmt.Sprintf("%s <%s>   %s", id.DisplayName, id.StableKey, actorIDFor(id.StableKey))
 		if id.Handle != "" {
@@ -355,41 +300,41 @@ func printWhoami(s *orgSituation, id identity.Resolved, idErr error, explain boo
 		if id.Session != "" {
 			v += "  session " + id.Session
 		}
-		printWhoamiRow("identity", v+"  "+style.Muted("(from: "+id.Step.String()+")"))
+		printWhoamiRow(w, "identity", v+"  "+style.Muted("(from: "+id.Step.String()+")"))
 	}
 
 	if s.ResolveErr == nil {
 		switch r.Role {
 		case orgresolve.RoleClient:
-			printWhoamiRow("repo", "client repo  "+style.Muted("(guards on)"))
+			printWhoamiRow(w, "repo", "client repo  "+style.Muted("(guards on)"))
 		case orgresolve.RoleOwn:
-			printWhoamiRow("repo", "own repo  "+style.Muted("(no client guards)"))
+			printWhoamiRow(w, "repo", "own repo  "+style.Muted("(no client guards)"))
 		default:
-			printWhoamiRow("repo", "no org  "+style.Muted("(fallback identity, personal everywhere/ notes only)"))
+			printWhoamiRow(w, "repo", "no org  "+style.Muted("(fallback identity, personal everywhere/ notes only)"))
 		}
 	}
 	// PROV4: the machine line shows the short form (mch_ + 8 hex, like a
 	// git short hash); stored data and --json keep the full id.
 	if m := whoamiMachine(); m.IsZero() {
-		printWhoamiRow("machine", style.Muted("(no OS machine id readable here)"))
+		printWhoamiRow(w, "machine", style.Muted("(no OS machine id readable here)"))
 	} else {
-		printWhoamiRow("machine", m.Short()+"  "+style.Muted("("+m.String()+")"))
+		printWhoamiRow(w, "machine", m.Short()+"  "+style.Muted("("+m.String()+")"))
 	}
-	printWhoamiAgent(whoamiAgent())
+	printWhoamiAgent(w, whoamiAgent())
 	project := s.ProjectID
 	if project == "" {
 		project = style.Muted("(no .lore/data/_meta.json here)")
 	}
-	printWhoamiRow("project", project)
+	printWhoamiRow(w, "project", project)
 	if len(s.Remotes) > 0 {
-		printWhoamiRow("remotes", strings.Join(s.Remotes, ", "))
+		printWhoamiRow(w, "remotes", strings.Join(s.Remotes, ", "))
 	} else {
-		printWhoamiRow("remotes", style.Muted("(none)"))
+		printWhoamiRow(w, "remotes", style.Muted("(none)"))
 	}
 
 	if r.Org != nil {
 		if len(r.Org.Stores) == 0 {
-			printWhoamiRow("stores", style.Muted("(none listed for "+r.Org.Name+")"))
+			printWhoamiRow(w, "stores", style.Muted("(none listed for "+r.Org.Name+")"))
 		}
 		for i, st := range r.Org.Stores {
 			label := ""
@@ -400,39 +345,39 @@ func printWhoami(s *orgSituation, id identity.Resolved, idErr error, explain boo
 			if st.OrgFolder != "" {
 				v += "  (org folder " + red.folder(st.OrgFolder) + ")"
 			}
-			printWhoamiRow(label, v)
+			printWhoamiRow(w, label, v)
 		}
 		if r.Org.OrgFolderStore() == nil {
-			printWhoamiRow("global", style.Muted("(no store sets org_folder: no roster or company rules)"))
+			printWhoamiRow(w, "global", style.Muted("(no store sets org_folder: no roster or company rules)"))
 		}
 		for _, l := range r.Links {
 			v := red.str(l.StoreURL) + " " + red.folder(l.Folder) + "/"
 			if l.Default {
 				v += " (default link)"
 			}
-			printWhoamiRow("internal", v)
+			printWhoamiRow(w, "internal", v)
 		}
 	}
-	printWhoamiRow("links", r.LinkStatus.String()+"  "+style.Muted(red.str(r.LinkDetail)))
+	printWhoamiRow(w, "links", r.LinkStatus.String()+"  "+style.Muted(red.str(r.LinkDetail)))
 
 	personal := personalFolders(r.OrgName())
 	store := s.Config.Personal.Store
 	if store == "" {
 		store = lorecfg.PersonalStoreLocal
 	}
-	printWhoamiRow("personal", store+": "+strings.Join(appendSlash(personal), ", "))
+	printWhoamiRow(w, "personal", store+": "+strings.Join(appendSlash(personal), ", "))
 	if !s.HasConfig {
-		printWhoamiRow("config", style.Muted(s.ConfigPath+" does not exist (no orgs configured)"))
+		printWhoamiRow(w, "config", style.Muted(s.ConfigPath+" does not exist (no orgs configured)"))
 	}
 
-	for _, w := range whoamiWarnings(s, id) {
-		fmt.Println(style.Warn("warning: " + red.str(w)))
+	for _, warn := range whoamiWarnings(s, id) {
+		fmt.Fprintln(w, style.Warn("warning: "+red.str(warn)))
 	}
 
 	if explain {
-		fmt.Println()
-		fmt.Println(style.Bold("org resolution (first rule that answers wins):"))
-		printOrgTrace(red.trace(r.Trace))
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, style.Bold("org resolution (first rule that answers wins):"))
+		printOrgTrace(w, red.trace(r.Trace))
 	}
 }
 
@@ -445,7 +390,7 @@ func appendSlash(xs []string) []string {
 }
 
 // printOrgTrace prints the F10 trace; `lore explain org` reuses it.
-func printOrgTrace(trace []orgresolve.RuleTrace) {
+func printOrgTrace(w *bytes.Buffer, trace []orgresolve.RuleTrace) {
 	for _, t := range trace {
 		mark := style.Muted("·")
 		switch t.Outcome {
@@ -456,12 +401,12 @@ func printOrgTrace(trace []orgresolve.RuleTrace) {
 		case orgresolve.OutcomeNotReached:
 			// keeps the muted dot
 		}
-		fmt.Printf("  %s %d. %-16s %s\n", mark, int(t.Step), t.Step.String(), t.Reason)
+		fmt.Fprintf(w, "  %s %d. %-16s %s\n", mark, int(t.Step), t.Step.String(), t.Reason)
 	}
 }
 
 // printWhoamiAgent prints the tool, version and model lines (R11).
-func printWhoamiAgent(a *whoamiAgentJSON) {
+func printWhoamiAgent(w *bytes.Buffer, a *whoamiAgentJSON) {
 	switch {
 	case a == nil:
 		return
@@ -470,19 +415,19 @@ func printWhoamiAgent(a *whoamiAgentJSON) {
 		if a.CI != "" {
 			v = a.CI + "  " + style.Muted("(CI actor)")
 		}
-		printWhoamiRow("agent", v)
+		printWhoamiRow(w, "agent", v)
 		return
 	}
 	v := a.Tool + "  " + style.Muted("(from: "+a.Signal+")")
 	if a.DeclaredHuman {
 		v += "  " + style.Muted("LORE_HUMAN=1: writes stay yours")
 	}
-	printWhoamiRow("agent", v)
+	printWhoamiRow(w, "agent", v)
 	if a.ToolSession != "" {
-		printWhoamiRow("session", a.ToolSession) // section 9: "<redacted>" without a terminal or in CI
+		printWhoamiRow(w, "session", a.ToolSession) // section 9: "<redacted>" without a terminal or in CI
 	}
 	if a.Version != "" {
-		printWhoamiRow("tool version", a.Version+"  "+style.Muted("(from: "+a.Sources["tool_version"]+")"))
+		printWhoamiRow(w, "tool version", a.Version+"  "+style.Muted("(from: "+a.Sources["tool_version"]+")"))
 	}
 	model := style.Muted("(not exposed by the tool)")
 	switch {
@@ -491,5 +436,5 @@ func printWhoamiAgent(a *whoamiAgentJSON) {
 	case a.Model != "":
 		model = a.Model + "  " + style.Muted("(from config)")
 	}
-	printWhoamiRow("model", model)
+	printWhoamiRow(w, "model", model)
 }

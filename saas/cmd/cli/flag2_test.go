@@ -23,9 +23,11 @@ func TestFlag2InputErrorsExit20(t *testing.T) {
 		{"unknown flag on an old command", []string{"backup", "--nope"}, "unknown flag: --nope"},
 		{"unknown flag on a generated command", []string{"memory", "list", "--nope"}, "unknown flag: --nope"},
 		{"unknown shorthand flag", []string{"backup", "-Z"}, "unknown shorthand flag"},
-		{"missing argument (cobra.ExactArgs)", []string{"org", "link"}, "accepts 1 arg(s), received 0"},
-		{"too many arguments (cobra.ExactArgs)", []string{"org", "link", "a", "b"}, "accepts 1 arg(s), received 2"},
-		{"required flag not set", []string{"org", "link", "northwind"}, `required flag(s) "project" not set`},
+		// org link is the operation org.link since P3-ORG-G-2: the op's
+		// decoder names the missing positional and the extra arguments.
+		{"missing positional on an operation", []string{"org", "link"}, "missing required field org"},
+		{"too many arguments on an operation", []string{"org", "link", "a", "b"}, "too many arguments: want at most 1"},
+		{"required flag not set", []string{"org", "link", "northwind"}, "--project <folder>"},
 		{"missing id on a generated show", []string{"memory", "show"}, "missing required field id"},
 	}
 	for _, c := range cases {
