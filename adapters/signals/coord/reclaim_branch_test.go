@@ -31,9 +31,9 @@ func TestClaimWorkBranch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			wd := newWorld(t)
-			extra := map[string]any(nil)
+			var extra Doc
 			if tc.noted != "" {
-				extra = map[string]any{keyWorkBranch: tc.noted}
+				extra = Doc{keyWorkBranch: str(tc.noted)}
 			}
 			wd.addTask("tsk_1", extra)
 			dead, heir := wd.agent("dead"), wd.agent("heir")
@@ -50,8 +50,8 @@ func TestClaimWorkBranch(t *testing.T) {
 			}
 			// The heir must see the lease once before it can expire (F7).
 			heir.clk.Set(t0.Add(time.Minute))
-			if _, err := heir.env.Signals.Read(ctx); err != nil {
-				t.Fatal(err)
+			if _, rerr := heir.env.Signals.Read(ctx); rerr != nil {
+				t.Fatal(rerr)
 			}
 			heir.clk.Set(t0.Add(lease.TTL + lease.Grace + time.Minute))
 			res, err := Claim(ctx, heir.env, "tsk_1", ClaimOptions{WorkBranch: tc.heirBranch})

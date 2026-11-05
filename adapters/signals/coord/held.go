@@ -66,6 +66,10 @@ func (h HeldStore) read() heldFile {
 	return f
 }
 
+// heldDirMode is the mode of the held.json directory (<git dir>/lore):
+// machine state of this user only, never world-readable.
+const heldDirMode = 0o750
+
 // heldMaxAge drops records of claims that expired long ago, so the file
 // stays bounded even when a session never released (principle 1).
 const heldMaxAge = 7 * 24 * time.Hour
@@ -91,7 +95,7 @@ func (h HeldStore) write(f heldFile, now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("coord: encode held: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(h.Path), 0o755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(h.Path), heldDirMode); err != nil {
 		return fmt.Errorf("coord: held dir: %w", err)
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(h.Path), ".held-*")

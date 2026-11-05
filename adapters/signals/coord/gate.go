@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"dbent/schema"
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
-// Gate states (dbent/schema TaskGate).
+// Gate states (schema TaskGate*).
 const (
-	gateRequired  = string(schema.TaskGateRequired)
-	gateRequested = string(schema.TaskGateRequested)
-	gateApproved  = string(schema.TaskGateApproved)
+	gateRequired  = schema.TaskGateRequired
+	gateRequested = schema.TaskGateRequested
+	gateApproved  = schema.TaskGateApproved
 )
 
 // ApproveRequest is one `lore gate approve` (§7.4 "Gates", TEAM-028).
@@ -56,11 +56,11 @@ func Approve(ctx context.Context, env Env, req ApproveRequest) (Approval, error)
 		next := doc.Clone()
 		at := v.Now.UTC().Truncate(time.Second)
 		out = Approval{Hash: GateHash(doc.Str(keyTitle), doc.Str(keyBody)), At: at}
-		next[keyGate] = gateApproved
+		next.SetStr(keyGate, gateApproved)
 		next.SetStr(keyApprovedBy, req.ApproverID)
 		next.SetTime(keyApprovedAt, at)
 		next.SetStr(keyApprovedSum, out.Hash)
-		if err := next.AppendClaimLog(schema.ClaimLogEntry{At: at, Event: schema.ClaimEventApprove, ActorID: req.ApproverID, Epoch: doc.Epoch()}); err != nil {
+		if err := next.AppendClaimLog(ClaimLogEntry{At: at, Event: ClaimEventApprove, ActorID: req.ApproverID, Epoch: doc.Epoch()}); err != nil {
 			return signals.Change{}, nil, err
 		}
 		next.touch(v.Now)
@@ -76,8 +76,10 @@ func RequestGate(d Doc, _ time.Time) ([]RowWrite, error) {
 	if d.Str(keyGate) == gateApproved && !Gated(d) {
 		return nil, nil
 	}
-	d[keyGate] = gateRequested
-	d[keyApprovedBy], d[keyApprovedAt], d[keyApprovedSum] = nil, nil, nil
+	d.SetStr(keyGate, gateRequested)
+	for _, k := range []string{keyApprovedBy, keyApprovedAt, keyApprovedSum} {
+		d.SetNull(k)
+	}
 	return nil, nil
 }
 

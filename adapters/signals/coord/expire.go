@@ -28,15 +28,13 @@ import (
 	"errors"
 	"time"
 
-	"saas/pkg/aicoder/signals"
-
-	"dbent/schema"
+	"github.com/thesatellite-ai/lore/adapters/signals"
 )
 
 // ClaimEventExpire is the claim_log event of a claim that expired with no
 // reclaim (TIME 4.2). It extends schema's closed ClaimEvent set; readers
 // treat an unknown event as an ordinary log line.
-const ClaimEventExpire schema.ClaimEvent = "expire"
+const ClaimEventExpire ClaimEvent = "expire"
 
 // rowDecide is a signals decide that also returns the rows to write with
 // the change. It never stages them: writeSignals stages them together with
@@ -143,7 +141,7 @@ func expireOn(doc Doc, sig signals.Signal, v signals.View, env Env) (Doc, bool) 
 		return nil, false
 	}
 	at, _ := sig.LastHeartbeat(v.Lease.TTL)
-	if err := next.AppendClaimLog(schema.ClaimLogEntry{At: at.UTC().Truncate(time.Second), Event: ClaimEventExpire,
+	if err := next.AppendClaimLog(ClaimLogEntry{At: at.UTC().Truncate(time.Second), Event: ClaimEventExpire,
 		ActorID: sig.Holder, Session: sig.Session, Epoch: sig.ClaimEpoch}); err != nil {
 		return nil, false
 	}

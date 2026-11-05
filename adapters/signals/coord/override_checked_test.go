@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
 )
 
 // errRefusedMark stands in for a done mark that refuses (task_done's

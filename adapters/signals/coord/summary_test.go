@@ -4,22 +4,20 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
-	"dbent/schema"
 )
 
 // Summarize reads every field `task show` prints from the row document,
 // and an empty row gives the zero summary (no gate, no timebox, no outcome).
 func TestSummarize(t *testing.T) {
 	merged := time.Date(2026, 11, 2, 11, 0, 0, 0, time.UTC)
-	d := Doc{keyID: "tsk_1", keyTitle: "invite route", keyBody: "b", keyStatus: "done", keyPriority: "high",
-		keyCommitment: "accepted", keyMissionID: "msn_1", keyRepoID: "rep_1", keyRole: "coordinator",
-		keyAssignee: "act_a", keyDoneBy: "act_b", keyGate: gateRequired, keyDoneCommit: "abc", keyWorkBranch: "agent/x"}
+	d := Doc{keyID: str("tsk_1"), keyTitle: str("invite route"), keyBody: str("b"), keyStatus: str("done"), keyPriority: str("high"),
+		keyCommitment: str("accepted"), keyMissionID: str("msn_1"), keyRepoID: str("rep_1"), keyRole: str("coordinator"),
+		keyAssignee: str("act_a"), keyDoneBy: str("act_b"), keyGate: str(gateRequired), keyDoneCommit: str("abc"), keyWorkBranch: str("agent/x")}
 	d.SetInt(keyTimebox, 3600)
 	d.SetInt(keyAttempts, 2)
 	d.SetInt(keyDonePR, 412)
 	d.SetTime(keyMergedAt, merged)
-	deps := []schema.TaskDependency{{TaskID: "tsk_0", Until: schema.DependencyUntilMerged}}
+	deps := []TaskDependency{{TaskID: "tsk_0", Until: DependencyUntilMerged}}
 	if err := d.SetBlockedBy(deps); err != nil {
 		t.Fatal(err)
 	}

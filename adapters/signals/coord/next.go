@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/queue"
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
+	"github.com/thesatellite-ai/lore/logic/queue"
 
 	"github.com/thesatellite-ai/lore/logic/urgency"
 )

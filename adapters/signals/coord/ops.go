@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"dbent/schema"
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
+	"github.com/thesatellite-ai/lore/schema"
 
 	"github.com/thesatellite-ai/lore/logic/urgency"
 )
@@ -66,11 +66,11 @@ type Env struct {
 type FenceKind string
 
 const (
-	// FenceLost: the claim expired or was revoked (E_LOST_CLAIM).
+	// FenceLost means the claim expired or was revoked (E_LOST_CLAIM).
 	FenceLost FenceKind = "lost"
-	// FenceCancelled: the task was cancelled while held (E_CANCELLED).
+	// FenceCancelled means the task was cancelled while held (E_CANCELLED).
 	FenceCancelled FenceKind = "cancelled"
-	// FenceReassigned: the task now has another assignee (E_REASSIGNED).
+	// FenceReassigned means the task now has another assignee (E_REASSIGNED).
 	FenceReassigned FenceKind = "reassigned"
 )
 
@@ -87,6 +87,8 @@ func (e *FencedError) Error() string {
 		return fmt.Sprintf("%s was cancelled while you held it; stop work on it", e.Task)
 	case FenceReassigned:
 		return fmt.Sprintf("%s was reassigned while you held it; stop work on it (%s)", e.Task, e.Detail)
+	case FenceLost:
+		return e.Detail
 	}
 	return e.Detail
 }
@@ -118,19 +120,19 @@ func (e *PoisonedError) Error() string {
 // Unwrap lets errors.Is(err, ErrPoisoned) match.
 func (e *PoisonedError) Unwrap() error { return ErrPoisoned }
 
-// Statuses this package writes (dbent/schema TaskStatus).
+// Statuses this package writes (schema TaskStatus*).
 const (
-	statusTodo       = string(schema.TaskStatusTodo)
-	statusInProgress = string(schema.TaskStatusInProgress)
-	statusDone       = string(schema.TaskStatusDone)
-	statusCancelled  = string(schema.TaskStatusCancelled)
-	statusBlocked    = string(schema.TaskStatusBlocked)
+	statusTodo       = schema.TaskStatusTodo
+	statusInProgress = schema.TaskStatusInProgress
+	statusDone       = schema.TaskStatusDone
+	statusCancelled  = schema.TaskStatusCancelled
+	statusBlocked    = schema.TaskStatusBlocked
 )
 
-// Mission statuses that end coordination (dbent/schema MissionStatus).
+// Mission statuses that end coordination (schema MissionStatus*).
 const (
-	missionDone      = string(schema.MissionStatusDone)
-	missionCancelled = string(schema.MissionStatusCancelled)
+	missionDone      = schema.MissionStatusDone
+	missionCancelled = schema.MissionStatusCancelled
 )
 
 // claimable: a task must be open; a mission may be coordinated until it is
@@ -276,7 +278,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		next := doc.Clone()
 		now := v.Now
 		if plan.Poisoned {
-			next[keyStatus] = statusBlocked
+			next.SetStr(keyStatus, statusBlocked)
 			next.touch(now)
 			poisoned = &PoisonedError{Task: id, Attempts: plan.Attempts}
 			return signals.Change{Delete: []string{plan.Path}}, []RowWrite{{ID: id, Doc: next}}, nil
@@ -284,7 +286,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		next.SetInt(keyEpoch, plan.Epoch)
 		next.SetInt(keyAttempts, plan.Attempts)
 		if doc.Status() != statusInProgress {
-			next[keyStatus] = statusInProgress
+			next.SetStr(keyStatus, statusInProgress)
 			if doc.Time(keyStartedAt).IsZero() {
 				next.SetTime(keyStartedAt, now)
 			}
@@ -292,10 +294,10 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		if workBranch != "" {
 			next.SetStr(keyWorkBranch, workBranch)
 		}
-		entry := schema.ClaimLogEntry{At: now.UTC().Truncate(time.Second), Event: schema.ClaimEventClaim,
+		entry := ClaimLogEntry{At: now.UTC().Truncate(time.Second), Event: ClaimEventClaim,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: plan.Epoch}
 		if plan.Reclaim && plan.Prev != nil {
-			entry.Event = schema.ClaimEventReclaim
+			entry.Event = ClaimEventReclaim
 			entry.PrevActorID = plan.Prev.Holder
 			// D3: the previous holder's span ends at its last heartbeat.
 			if err = next.closeClaimSpan(*plan.Prev, now, v.Lease.TTL, env.Time); err != nil {
@@ -399,9 +401,9 @@ func classify(ctx context.Context, env Env, id string, cause error) error {
 
 // lastRevokeSince returns the newest revoke in the row's claim log at or
 // after since (the caller's claim time).
-func lastRevokeSince(doc Doc, since time.Time) (schema.ClaimLogEntry, bool) {
+func lastRevokeSince(doc Doc, since time.Time) (ClaimLogEntry, bool) {
 	if doc == nil {
-		return schema.ClaimLogEntry{}, false
+		return ClaimLogEntry{}, false
 	}
 	log := doc.ClaimLog()
 	for i := len(log) - 1; i >= 0; i-- {
@@ -409,11 +411,11 @@ func lastRevokeSince(doc Doc, since time.Time) (schema.ClaimLogEntry, bool) {
 		if e.At.Before(since.Truncate(time.Second)) {
 			break
 		}
-		if e.Event == schema.ClaimEventRevoke {
+		if e.Event == ClaimEventRevoke {
 			return e, true
 		}
 	}
-	return schema.ClaimLogEntry{}, false
+	return ClaimLogEntry{}, false
 }
 
 func orNobody(s string) string {
@@ -487,7 +489,7 @@ func Release(ctx context.Context, env Env, id string) error {
 		if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
 			return signals.Change{}, nil, err
 		}
-		if err := next.AppendClaimLog(schema.ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: schema.ClaimEventRelease,
+		if err := next.AppendClaimLog(ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: ClaimEventRelease,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: s.ClaimEpoch}); err != nil {
 			return signals.Change{}, nil, err
 		}
@@ -560,10 +562,10 @@ func HolderWrite(ctx context.Context, env Env, id string, dropClaim bool, mutate
 // done_by, done_commit / done_pr (content that lands, §3.5).
 func MarkDone(by, commit string, pr int) func(Doc, time.Time) error {
 	return func(d Doc, now time.Time) error {
-		d[keyStatus] = statusDone
+		d.SetStr(keyStatus, statusDone)
 		d.SetTime(keyCompletedAt, now)
-		d[keyCommitment] = commitmentAccepted
-		d[keyDeferredUntil] = nil
+		d.SetStr(keyCommitment, commitmentAccepted)
+		d.SetNull(keyDeferredUntil)
 		d.SetStr(keyDoneBy, by)
 		if commit != "" {
 			d.SetStr(keyDoneCommit, commit)
@@ -632,12 +634,12 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 		epoch := doc.Epoch() + 1
 		next.SetInt(keyEpoch, epoch)
 		if mutate != nil {
-			if err := mutate(next, v.Now); err != nil {
+			if merr := mutate(next, v.Now); merr != nil {
 				removed = nil
-				return signals.Change{}, nil, fmt.Errorf("override %s %s: %w", kind, id, err)
+				return signals.Change{}, nil, fmt.Errorf("override %s %s: %w", kind, id, merr)
 			}
 		}
-		entry := schema.ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: schema.ClaimEventRevoke,
+		entry := ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: ClaimEventRevoke,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: epoch}
 		if removed != nil {
 			entry.PrevActorID = removed.Holder
@@ -671,7 +673,7 @@ func Gated(d Doc) bool {
 	switch d.Str(keyGate) {
 	case "":
 		return false
-	case string(schema.TaskGateApproved):
+	case schema.TaskGateApproved:
 		return d.Str(keyApprovedSum) != GateHash(d.Str(keyTitle), d.Str(keyBody))
 	}
 	return true

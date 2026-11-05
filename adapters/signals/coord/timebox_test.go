@@ -6,7 +6,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/timeentry"
 
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
 )
 
 // TestLeaseTimeSpans (TIME_TRACKING 4.2, P3-TASK-LEASE-1): closed claim

@@ -20,7 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
 )
 
 // keyTimeEntries is the task row's closed time spans (model/timeentry).

@@ -6,7 +6,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/timeentry"
 
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
 )
 
 // HolderTime is one holder's share of a task's active lease time.

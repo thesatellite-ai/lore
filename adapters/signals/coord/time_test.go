@@ -7,7 +7,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/timeentry"
 
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
 )
 
 // fakeToken is a claim token fixture built at run time, so no literal in

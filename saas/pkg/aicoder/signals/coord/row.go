@@ -1,19 +1,9 @@
-// Package coord is the task-row half of agent coordination
-// (LORE_TEAM_SPEC.md F7 "Contract: the operations", §7.3, §7.4): it joins a
-// claim on the signals ref with the task row it fences, so that claim,
-// renew, release, holder done/note, human revoke/cancel/reassign, poison
-// blocking and `task next` all follow one set of rules.
-//
-// Why a package of its own (not the CLI): every operation is "decide on the
-// signals board AND the row, then push both atomically", and the decision
-// must be testable with a real signals ref and a fake row store — no
-// database, no cobra. The CLI supplies the row store (live ref or store
-// project, through rowroute) and prints the outcomes.
-//
-// Rows are handled as canonical documents (map[string]any, the exact shape
-// of a .lore/data file), so this package never depends on the generated ORM
-// and writes only the fields it owns.
 package coord
+
+// row.go — the v0.1.17 map form of a row document, kept so the old
+// binary's callers (which build and read rows as map[string]any) need no
+// edit. Every operation converts to the root package's closed form at the
+// edge (toRoot / fromRoot) and runs there (P3-SIGCOORD-1).
 
 import (
 	"bytes"
@@ -24,56 +14,78 @@ import (
 	"time"
 
 	"dbent/schema"
+	"saas/pkg/aicoder/canonjson"
+
+	root "github.com/thesatellite-ai/lore/adapters/signals/coord"
+	rootjson "github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/model/timeentry"
 )
 
-// Document keys of a task row this package reads or writes (column names,
-// dbent/schema/task.go; they are the wire format of .lore/data files).
+// Row keys the map-form accessors below read (same names as the root
+// package's; they are the .lore/data wire format).
 const (
-	keyID          = "id"
-	keyTitle       = "title"
-	keyBody        = "body"
 	keyStatus      = "status"
-	keyPriority    = "priority"
-	keyCreatedAt   = "created_at"
 	keyUpdatedAt   = "updated_at"
-	keyStartedAt   = "started_at"
-	keyCompletedAt = "completed_at"
-	keyMissionID   = "mission_id"
-	keyRepoID      = "repo_id"
-	keyRole        = "role"
-	keyAssignee    = "assigned_to_actor_id"
-	keyTeam        = "assigned_team"
 	keyBlockedBy   = "blocked_by"
 	keyEpoch       = "claim_epoch"
-	keyAttempts    = "attempts"
 	keyClaimLog    = "claim_log"
-	keyTimebox     = "timebox_seconds"
-	keyGate        = "gate"
-	keyApprovedBy  = "approved_by"
-	keyApprovedAt  = "approved_at"
-	keyApprovedSum = "approved_hash"
-	keyDoneBy      = "done_by"
-	keyDoneCommit  = "done_commit"
-	keyDonePR      = "done_pr"
-	keyMergedAt    = "merged_at"
-	keyWorkBranch  = "work_branch"
-	keyCommitment  = "commitment"
-	// Urgency inputs (TASK 13.2, 6.10) read by task next.
-	keyParentID = "parent_id"
-	keyDueAt    = "due_at"
-	keyTagIDs   = "tag_ids"
-	// keyDeferredUntil is cleared by done (a finished task is not snoozed).
-	keyDeferredUntil = "deferred_until"
+	keyTimeEntries = "time_entries"
 )
 
-// commitmentAccepted is the commitment done sets (dbent/schema
-// TaskCommitmentAccepted: finishing work commits it, as `task done` always did).
-const commitmentAccepted = string(schema.TaskCommitmentAccepted)
-
-// docTimeLayout is how timestamps are written in row files. It must equal
-// lsync's timeLayout (saas/pkg/aicoder/lsync/codec.go): fixed nine
-// fractional digits so string comparison orders them.
+// docTimeLayout is the row-file timestamp layout (root coord docTimeLayout).
 const docTimeLayout = "2006-01-02T15:04:05.000000000Z"
+
+// sessionRefPrefix is lore's own session id prefix (root coord).
+const sessionRefPrefix = "ses_"
+
+// toRoot converts a map-form document to the root form. Values outside
+// the canonjson shell's accepted set (a []string a caller put in, a typed
+// struct) take one JSON round trip, the way v0.1.17's encoder saw them.
+func toRoot(d Doc) (root.Doc, error) {
+	if d == nil {
+		return nil, nil
+	}
+	o, err := canonjson.ToObject(d)
+	if err == nil {
+		return root.Doc(o), nil
+	}
+	b, merr := json.Marshal(map[string]any(d))
+	if merr != nil {
+		return nil, fmt.Errorf("coord: row document: %w", err)
+	}
+	o, err = rootjson.Decode(b, rootjson.DefaultMaxDepth)
+	if err != nil {
+		return nil, fmt.Errorf("coord: row document: %w", err)
+	}
+	return root.Doc(o), nil
+}
+
+// fromRoot converts a root document back to the map form (numbers as
+// json.Number, lists as []any); nil stays nil.
+func fromRoot(d root.Doc) Doc {
+	if d == nil {
+		return nil
+	}
+	return Doc(canonjson.FromObject(rootjson.Object(d)))
+}
+
+// refill replaces dst's contents with src's, so an in-place mutation on a
+// converted copy reaches the document the root operation holds.
+func refill[K comparable, V any](dst, src map[K]V) {
+	for k := range dst {
+		delete(dst, k)
+	}
+	for k, v := range src {
+		dst[k] = v
+	}
+}
+
+// TimeEntries decodes the row's time_entries (none when absent or bad).
+func (d Doc) TimeEntries() []timeentry.Entry {
+	var list []timeentry.Entry
+	_ = fromJSONValue(d[keyTimeEntries], &list) // a malformed list reads as none, as in the root package
+	return list
+}
 
 // Doc is one canonical row document.
 type Doc map[string]any

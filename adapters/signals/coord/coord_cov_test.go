@@ -8,9 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"dbent/schema"
-	"saas/pkg/aicoder/queue"
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals"
+	"github.com/thesatellite-ai/lore/logic/queue"
 )
 
 func TestPathsOverlap(t *testing.T) {
@@ -43,7 +42,7 @@ func TestPathsOverlap(t *testing.T) {
 
 func TestErrIf(t *testing.T) {
 	e := errors.New("x")
-	if errIf(false, e) != nil || errIf(true, e) != e || errIf(true, nil) != nil {
+	if errIf(false, e) != nil || !errors.Is(errIf(true, e), e) || errIf(true, nil) != nil {
 		t.Fatal("errIf")
 	}
 }
@@ -139,7 +138,7 @@ func TestReleaseRoundTrip(t *testing.T) {
 	}
 	d := a.row(t, "tsk_1")
 	log := d.ClaimLog()
-	if len(log) != 2 || log[1].Event != schema.ClaimEventRelease || log[1].ActorID != "act_a" {
+	if len(log) != 2 || log[1].Event != ClaimEventRelease || log[1].ActorID != "act_a" {
 		t.Fatalf("one release entry: %+v", log)
 	}
 	if _, ok := a.env.Held.Get(a.env.Caller.Session, "tsk_1"); ok {
@@ -197,7 +196,7 @@ func TestApproveAndRequestGate(t *testing.T) {
 	ctx := context.Background()
 	wd := newWorld(t)
 	wd.addTask("tsk_plain", nil)
-	wd.addTask("tsk_gate", map[string]any{keyGate: gateRequired, keyBody: "Deploy the site to staging"})
+	wd.addTask("tsk_gate", Doc{keyGate: str(gateRequired), keyBody: str("Deploy the site to staging")})
 	human := wd.agent("alice")
 
 	if _, err := Approve(ctx, human.env, ApproveRequest{ID: "tsk_plain", ApproverID: "act_alice"}); !errors.Is(err, ErrNotGated) {
@@ -221,7 +220,7 @@ func TestApproveAndRequestGate(t *testing.T) {
 		t.Fatalf("approval: %+v", ap)
 	}
 	log := d.ClaimLog()
-	if len(log) != 1 || log[0].Event != schema.ClaimEventApprove || log[0].ActorID != "act_alice" {
+	if len(log) != 1 || log[0].Event != ClaimEventApprove || log[0].ActorID != "act_alice" {
 		t.Fatalf("approval is logged: %+v", log)
 	}
 

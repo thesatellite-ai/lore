@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/canonjson"
-	"saas/pkg/aicoder/clock"
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
-	"saas/pkg/aicoder/gitremote/gitremotetest"
-	"saas/pkg/aicoder/queue"
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/adapters/signals"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/clock"
+	"github.com/thesatellite-ai/lore/logic/queue"
 )
 
 var (
@@ -29,6 +29,9 @@ const (
 	liveRef   = "refs/lore/live"
 	liveTrack = "refs/lore-remote/origin/live"
 )
+
+// str builds a JSON string value (test shorthand).
+func str(s string) canonjson.Value { return canonjson.String(s) }
 
 func rowPath(id string) string { return folder + "/tasks/" + id + ".json" }
 
@@ -99,9 +102,9 @@ func (s stagedRow) Prepare(ctx context.Context) (gitremote.RefUpdate, error) {
 	}
 	put := map[string][]byte{}
 	for _, r := range s.rows {
-		b, err := canonjson.Encode(r.Doc)
-		if err != nil {
-			return gitremote.RefUpdate{}, err
+		b, encErr := canonjson.Encode(canonjson.Object(r.Doc))
+		if encErr != nil {
+			return gitremote.RefUpdate{}, encErr
 		}
 		table := r.Table
 		if table == "" {
@@ -137,9 +140,9 @@ func newWorld(t *testing.T) *world {
 }
 
 // addTask writes a todo task straight onto the origin's live ref.
-func (wd *world) addTask(id string, extra map[string]any) {
+func (wd *world) addTask(id string, extra Doc) {
 	ctx := context.Background()
-	d := Doc{keyID: id, keyTitle: "task " + id, keyStatus: statusTodo, keyPriority: "medium", keyCreatedAt: t0.Add(-time.Hour).Format(docTimeLayout)}
+	d := Doc{keyID: str(id), keyTitle: str("task " + id), keyStatus: str(statusTodo), keyPriority: str("medium"), keyCreatedAt: str(t0.Add(-time.Hour).Format(docTimeLayout))}
 	for k, v := range extra {
 		d[k] = v
 	}
@@ -287,7 +290,7 @@ func TestHumanOverrides(t *testing.T) {
 		agent  func(a *agent) error
 		want   FenceKind
 	}{
-		{OverrideCancel, func(d Doc) { d[keyStatus] = statusCancelled }, func(a *agent) error { _, err := Renew(context.Background(), a.env, "tsk_1"); return err }, FenceCancelled},
+		{OverrideCancel, func(d Doc) { d.SetStr(keyStatus, statusCancelled) }, func(a *agent) error { _, err := Renew(context.Background(), a.env, "tsk_1"); return err }, FenceCancelled},
 		{OverrideReassign, func(d Doc) { d.SetStr(keyAssignee, "act_dev1") }, func(a *agent) error { return a.done("tsk_1") }, FenceReassigned},
 		{OverrideRevoke, nil, func(a *agent) error { return a.done("tsk_1") }, FenceLost},
 	}
@@ -413,9 +416,9 @@ func TestNextRaceFourAgents(t *testing.T) {
 func TestNextExplainsWaiting(t *testing.T) {
 	ctx := context.Background()
 	wd := newWorld(t)
-	wd.addTask("tsk_a", map[string]any{keyStatus: statusInProgress})
-	wd.addTask("tsk_b", map[string]any{keyBlockedBy: []any{map[string]any{"task_id": "tsk_a", "until": "merged"}}})
-	wd.addTask("tsk_g", map[string]any{keyGate: "required"})
+	wd.addTask("tsk_a", Doc{keyStatus: str(statusInProgress)})
+	wd.addTask("tsk_b", Doc{keyBlockedBy: canonjson.Array(canonjson.ObjectValue(canonjson.Object{"task_id": str("tsk_a"), "until": str("merged")}))})
+	wd.addTask("tsk_g", Doc{keyGate: str("required")})
 	holder := wd.agent("h")
 	if _, err := Claim(ctx, holder.env, "tsk_a", ClaimOptions{}); err != nil {
 		t.Fatal(err)
@@ -437,15 +440,15 @@ func TestNextExplainsWaiting(t *testing.T) {
 
 // TestGateHash: editing the title voids an approval.
 func TestGateHash(t *testing.T) {
-	d := Doc{keyTitle: "deploy", keyBody: "staging", keyGate: "approved", keyApprovedSum: GateHash("deploy", "staging")}
+	d := Doc{keyTitle: str("deploy"), keyBody: str("staging"), keyGate: str("approved"), keyApprovedSum: str(GateHash("deploy", "staging"))}
 	if Gated(d) {
 		t.Fatal("a matching approval opens the gate")
 	}
-	d[keyTitle] = "deploy to production"
+	d.SetStr(keyTitle, "deploy to production")
 	if !Gated(d) {
 		t.Fatal("an edit voids the approval")
 	}
-	if !Gated(Doc{keyGate: "requested"}) || Gated(Doc{}) {
+	if !Gated(Doc{keyGate: str("requested")}) || Gated(Doc{}) {
 		t.Fatal("requested gates; no gate does not")
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"dbent/schema"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
 )
 
 // TestClaimLogSessionKeepsOnlyLoreRefs pins BUG-LAND-SESSION (P3-SEC-LAND-1):
@@ -29,7 +29,7 @@ func TestClaimLogSessionKeepsOnlyLoreRefs(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := Doc{}
-			if err := d.AppendClaimLog(schema.ClaimLogEntry{At: t0, Event: schema.ClaimEventClaim, ActorID: "act_a", Session: tc.in, Epoch: 1}); err != nil {
+			if err := d.AppendClaimLog(ClaimLogEntry{At: t0, Event: ClaimEventClaim, ActorID: "act_a", Session: tc.in, Epoch: 1}); err != nil {
 				t.Fatal(err)
 			}
 			if got := d.ClaimLog()[0].Session; got != tc.want {
@@ -39,15 +39,19 @@ func TestClaimLogSessionKeepsOnlyLoreRefs(t *testing.T) {
 	}
 
 	t.Run("older raw entries are cleaned on the next event", func(t *testing.T) {
-		legacy, err := json.Marshal([]schema.ClaimLogEntry{
-			{At: t0, Event: schema.ClaimEventClaim, ActorID: "act_a", Session: "s-legacy01", Epoch: 1},
-			{At: t0, Event: schema.ClaimEventRelease, ActorID: "act_a", Session: ref, Epoch: 1},
+		legacy, err := json.Marshal([]ClaimLogEntry{
+			{At: t0, Event: ClaimEventClaim, ActorID: "act_a", Session: "s-legacy01", Epoch: 1},
+			{At: t0, Event: ClaimEventRelease, ActorID: "act_a", Session: ref, Epoch: 1},
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		d := Doc{keyClaimLog: json.RawMessage(legacy)}
-		if err := d.AppendClaimLog(schema.ClaimLogEntry{At: t0, Event: schema.ClaimEventClaim, ActorID: "act_b", Session: "s-newer001", Epoch: 2}); err != nil {
+		raw, err := canonjson.Raw(legacy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := Doc{keyClaimLog: raw}
+		if err := d.AppendClaimLog(ClaimLogEntry{At: t0, Event: ClaimEventClaim, ActorID: "act_b", Session: "s-newer001", Epoch: 2}); err != nil {
 			t.Fatal(err)
 		}
 		log := d.ClaimLog()

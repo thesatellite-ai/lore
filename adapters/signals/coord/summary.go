@@ -2,8 +2,6 @@ package coord
 
 import (
 	"time"
-
-	"dbent/schema"
 )
 
 // TaskSummary is the part of a task row a reader needs to pick the work
@@ -17,7 +15,7 @@ type TaskSummary struct {
 	// Assignee and DoneBy are actor ids ("" = none).
 	Assignee, DoneBy string
 	// After is the --after list (blocked_by edges).
-	After []schema.TaskDependency
+	After []TaskDependency
 	// Gate is GateState's text ("" = no gate).
 	Gate string
 	// Timebox is 0 when the task has none.

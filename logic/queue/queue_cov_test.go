@@ -8,14 +8,14 @@ import (
 func TestPriorityRank(t *testing.T) {
 	cases := map[string]int{
 		"low": PriorityLow, "medium": PriorityMedium, "high": PriorityHigh, "urgent": PriorityUrgent,
-		"": PriorityMedium, "LOW": PriorityMedium, " high": PriorityMedium, "critical": PriorityMedium, "日本": PriorityMedium,
+		"": PriorityMedium, "LOW": PriorityMedium, "\thigh": PriorityMedium, "high\n": PriorityMedium, "critical": PriorityMedium, "日本": PriorityMedium,
 	}
 	for in, want := range cases {
 		if got := PriorityRank(in); got != want {
 			t.Errorf("PriorityRank(%q) = %d, want %d", in, got, want)
 		}
 	}
-	if !(PriorityRank("low") < PriorityRank("medium") && PriorityRank("medium") < PriorityRank("high") && PriorityRank("high") < PriorityRank("urgent")) {
+	if PriorityRank("low") >= PriorityRank("medium") || PriorityRank("medium") >= PriorityRank("high") || PriorityRank("high") >= PriorityRank("urgent") {
 		t.Fatal("ranks are ordered low < medium < high < urgent")
 	}
 }
