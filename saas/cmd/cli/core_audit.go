@@ -11,8 +11,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -197,13 +199,35 @@ func (s *coreAuditSink) Session(ctx context.Context) (string, error) {
 // ToolSessionIDs implements wire.ToolSessionSource: the raw tool session
 // ids in the repo's lore.db (OV11: the scanner refuses them at write time);
 // none when there is no lore.db here.
+//
+// P2B-OLD-3: it reads through its own read-only handle, never s.db. The
+// core scanner is built lazily inside lsync.Reconcile's write transaction
+// (exportDoc → exportSecretCheck → coreApp.HookScanner → wire scanner
+// Refresh → here); opening s.db there ran materialize and ApplyPragmas on a
+// second shared-cache connection while the first held the write lock, and
+// `lore sync` deadlocked. A private-cache mode=ro handle with a busy
+// timeout reads beside the writer and cannot wait forever.
 func (s *coreAuditSink) ToolSessionIDs(ctx context.Context) ([]string, error) {
-	s.once.Do(func() { s.db, s.err = openCoreAuditDBAt(ctx, s.projectRoot(ctx)) })
-	if s.err != nil {
-		return nil, nil // no repo lore.db (attached-store-only run): no ids known
+	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: s.projectRoot(ctx)})
+	if err != nil {
+		return nil, nil // no project here (attached-store-only run): no ids known
 	}
-	return sessions.KnownToolSessionIDs(ctx, s.db)
+	fi, err := os.Lstat(rctx.DBPath)
+	if err != nil || !fi.Mode().IsRegular() {
+		return nil, nil // no lore.db yet (sessions are machine-local, Q-LOCAL), or a symlink lore never reads
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(rctx.DBPath), RawQuery: "mode=ro&_pragma=busy_timeout(" + strconv.Itoa(sessionIDsBusyMS) + ")"}
+	db, err := sql.Open(doctorCacheDriver, u.String())
+	if err != nil {
+		return nil, errcodes.New(errcodes.Internal, "read tool session ids").WithCause(err)
+	}
+	ids, err := sessions.KnownToolSessionIDs(ctx, db)
+	return ids, errors.Join(err, db.Close())
 }
+
+// sessionIDsBusyMS bounds ToolSessionIDs' wait for a lock held by another
+// process (P2B-OLD-3): short, a read beside a WAL writer does not wait.
+const sessionIDsBusyMS = 2000
 
 // openCoreAuditDB opens the project's lore.db for the chain, building it
 // from .lore/data first in a fresh clone (as every old command does).
