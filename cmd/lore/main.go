@@ -59,7 +59,7 @@ func run(ctx context.Context, args []string) int {
 	h := &host{app: app, home: home}
 	h.markPrinted(root)
 	mountShortcuts(root)
-	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd))
+	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())
 	root.SetArgs(args)
 	if err := root.ExecuteContext(ctx); err != nil {
 		if code := cli.ExitCode(err); code != cli.ExitUnknown || h.printed {
