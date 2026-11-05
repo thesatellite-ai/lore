@@ -92,6 +92,8 @@ func TestStrategyListByID(t *testing.T) {
 		{"edit/delete: newer tombstone wins", list(t, item(idA, tsOld, `"seconds":3`)), list(t, item(idA, tsNew, `"seconds":3,`+del)), "01=3†"},
 		{"edit/delete: newer edit wins over older tombstone", list(t, item(idA, tsNew, `"seconds":4`)), list(t, item(idA, tsOld, `"deleted_at":"`+tsOld+`"`)), "01=4"},
 		{"delete/delete", list(t, item(idA, tsNew, del)), list(t, item(idA, tsNew, del)), "01†"},
+		// DEL-TOMB2: both deleted, the EARLIER delete wins even with an older updated_at.
+		{"delete/delete: earlier delete wins", list(t, item(idA, tsOld, `"seconds":1,"deleted_at":"`+tsOld+`"`)), list(t, item(idA, tsNew, `"seconds":2,`+del)), "01=1†"},
 		{"identical", list(t, item(idA, tsOld, `"seconds":1`)), list(t, item(idA, tsOld, `"seconds":1`)), "01=1"},
 		{"unicode note survives", list(t, item(idA, tsOld, `"note":"ドキュメント ✓"`)), list(t), "01"},
 	}

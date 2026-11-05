@@ -156,7 +156,7 @@ func TestRows(t *testing.T) {
 			editAfterDel: true,
 		},
 		{
-			name:    "two tombstones: the newer one",
+			name:    "two tombstones: the earlier one (DEL-TOMB2)",
 			base:    base,
 			ours:    tomb(stamp(5, actorA)),
 			theirs:  tomb(stamp(9, actorB)),
@@ -336,4 +336,22 @@ func encode(t *testing.T, r row.Row) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// TestRowsBothTombstonesKeepEarlier pins DEL-TOMB2 (DELETION 3.7, owner
+// 2026-11-05): when both sides are tombstones the EARLIER one (lower HLC)
+// is kept, in either argument order (this replaced "the newer one").
+func TestRowsBothTombstonesKeepEarlier(t *testing.T) {
+	t.Parallel()
+	p := PolicyFor(testDef)
+	early, late := tomb(stamp(5, actorA)), tomb(stamp(9, actorB))
+	for _, pair := range [][2]row.Row{{early, late}, {late, early}} {
+		res, err := Rows(p, Absent, pair[0], pair[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.Row.Deleted || res.Row.HLC != early.HLC {
+			t.Fatalf("kept %v deleted=%v, want the earlier tombstone %v", res.Row.HLC, res.Row.Deleted, early.HLC)
+		}
+	}
 }

@@ -19,6 +19,8 @@ const (
 	// listKeyUpdatedAt orders two versions of one item; a fixed-width UTC
 	// timestamp, so text order is time order.
 	listKeyUpdatedAt = "updated_at"
+	// listKeyDeletedAt marks a deleted item (RFC 3339 text, like updated_at).
+	listKeyDeletedAt = "deleted_at"
 )
 
 // StrategyListByID merges two versions of a JSON list of objects keyed by
@@ -27,7 +29,7 @@ const (
 //     both survive; a merge never drops an item);
 //   - the same id on both sides: the newer "updated_at" wins for the whole
 //     item; a tombstone (deleted_at set) is just an edit, so it wins only
-//     when it is newer;
+//     when it is newer; both deleted: the earlier deleted_at wins (DEL-TOMB2);
 //   - equal "updated_at" with different bytes: the larger canonical bytes
 //     win, so the outcome never depends on which side is "ours".
 //
@@ -95,8 +97,15 @@ func listItems(v value.Value) ([]listItem, error) {
 }
 
 // newerItem reports whether a beats b (same id): newer updated_at, ties by
-// canonical bytes.
+// canonical bytes. Both items deleted: the EARLIER deleted_at wins whole
+// (DEL-TOMB2, DELETION 3.7: the first delete stays on record), ties by bytes.
 func newerItem(a, b []byte) bool {
+	if da, db := memberText(a, listKeyDeletedAt), memberText(b, listKeyDeletedAt); da != "" && db != "" {
+		if c := strings.Compare(da, db); c != 0 {
+			return c < 0
+		}
+		return bytes.Compare(a, b) > 0
+	}
 	if c := strings.Compare(memberText(a, listKeyUpdatedAt), memberText(b, listKeyUpdatedAt)); c != 0 {
 		return c > 0
 	}

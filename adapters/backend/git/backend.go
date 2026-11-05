@@ -109,10 +109,11 @@ func (b *Backend) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, s
 }
 
 // Capabilities implements store.Backend: History, Review and Remote for a
-// store clone (spec 5.5), none for the code repo.
+// store clone (spec 5.5); History only for the code repo, where row history
+// reads the repo's own git log (spec 5.5, OVERNIGHT Qs 2026-11-05).
 func (b *Backend) Capabilities() store.Capabilities {
 	if b.mode == modeRepo {
-		return store.Capabilities{}
+		return store.Capabilities{History: true}
 	}
 	return store.Capabilities{History: true, Review: true, Remote: true}
 }

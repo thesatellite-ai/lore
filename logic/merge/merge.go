@@ -148,7 +148,10 @@ func Rows(p Policy, base, ours, theirs row.Row) (Result, error) {
 	newer, older, oursNewer := order(ours, theirs)
 	switch {
 	case newer.Deleted && older.Deleted:
-		return Result{Row: newer}, nil
+		// DEL-TOMB2 (DELETION 3.7): both sides purged: the EARLIER tombstone
+		// (lower HLC; order() breaks an HLC tie by bytes) is kept, so the
+		// first purge's purger and time stay on record whatever the side.
+		return Result{Row: older}, nil
 	case newer.Deleted:
 		// The tombstone is newer than the edit: it wins (rule 3).
 		return Result{Row: newer}, nil

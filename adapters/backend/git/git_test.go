@@ -286,8 +286,10 @@ func TestRepoModeNeverCommits(t *testing.T) {
 	if err != nil || rep.Sent != 0 || rep.Received != 0 || rep.Offline || len(rep.Refused) != 0 {
 		t.Fatalf("repo sync = %+v %v", rep, err)
 	}
-	if b.Capabilities() != (store.Capabilities{}) {
-		t.Fatal("repo mode reports capabilities")
+	// OVERNIGHT Qs 2026-11-05 (spec 5.5): repo mode reports History (row
+	// history reads the repo's git log), nothing else.
+	if got := b.Capabilities(); got != (store.Capabilities{History: true}) {
+		t.Fatalf("repo mode capabilities = %+v, want History only", got)
 	}
 	if _, err := OpenRepo(ctx, t.TempDir(), rowfs.FolderRoot, store.OpenOptions{}); !errors.Is(err, store.ErrNotAStore) {
 		t.Fatalf("outside a repo: %v", err)
