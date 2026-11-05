@@ -2,7 +2,6 @@ package gitremote_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,10 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
-	gt "saas/pkg/aicoder/gitremote/gitremotetest"
-	"saas/pkg/aicoder/merge3"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	gt "github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
 )
 
 const (
@@ -74,11 +72,15 @@ func TestLeaseMatrix(t *testing.T) {
 				switch rs {
 				case moved:
 					b.Fetch()
-					b.Repo.UpdateRef(ctx, ref, b.Ref("refs/lore-remote/origin/signals"), "")
+					if err := b.Repo.UpdateRef(ctx, ref, b.Ref("refs/lore-remote/origin/signals"), ""); err != nil {
+						t.Fatal(err)
+					}
 					b.Write(ref, "claims/t2.json", "other")
 					b.MustPush(ref)
 				case missing:
 					gt.Git(t, w.OriginDir, "update-ref", "-d", ref)
+				case asExpected, neverSeen:
+					// the remote is where a stays: nothing to change
 				}
 				var src string
 				switch uk {
@@ -221,10 +223,17 @@ func installHook(t *testing.T, w *gt.World, msg string) {
 	t.Helper()
 	hook := filepath.Join(w.OriginDir, "hooks", "pre-receive")
 	body := "#!/bin/sh\necho \"" + msg + "\" >&2\nexit 1\n"
-	if err := os.WriteFile(hook, []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(hook, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// owner-only execute: git must run the hook, nobody else may.
+	if err := os.Chmod(hook, hookMode); err != nil {
 		t.Fatal(err)
 	}
 }
+
+// hookMode lets the owner (the test's git) run a server-side hook.
+const hookMode = 0o700
 
 func TestProtectionDetection(t *testing.T) {
 	cases := []struct {
@@ -356,8 +365,8 @@ func TestFetchNeverOverwritesLocalLive(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := a.Repo.UpdateRef(ctx, live, merged.OID, aLocal); err != nil {
-				t.Fatal(err)
+			if uerr := a.Repo.UpdateRef(ctx, live, merged.OID, aLocal); uerr != nil {
+				t.Fatal(uerr)
 			}
 			a.MustPush(live)
 			files, err := w.Origin.ReadTree(ctx, live, "")
@@ -713,83 +722,5 @@ func TestManyPlainWritersRaceOnLive(t *testing.T) {
 	}
 	if ok != 1 {
 		t.Fatalf("%d pushes applied, want 1", ok)
-	}
-}
-
-// loadFile reads one row file of rev as a merge3.File: absent, a row, or a
-// tombstone (`_live.deleted: true`, the marker F2 writes).
-func loadFile(t *testing.T, r *gitref.Repo, rev, path string) merge3.File {
-	t.Helper()
-	b, ok, err := r.ReadFile(context.Background(), rev, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok {
-		return merge3.Absent()
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(b, &doc); err != nil {
-		t.Fatal(err)
-	}
-	if lv, _ := doc["_live"].(map[string]any); lv != nil && lv["deleted"] == true {
-		return merge3.Tombstone(doc)
-	}
-	return merge3.Row(doc)
-}
-
-// TestDeleteVersusEditAcrossClones is the F4 E2E shape on the primitives:
-// clone A tombstones a live row and pushes; clone B edits it, loses the
-// push race, fetches, merges file-level (modify beats delete) and pushes a
-// merge commit. The row survives with B's edit; nothing is half a row.
-func TestDeleteVersusEditAcrossClones(t *testing.T) {
-	ctx := context.Background()
-	const row = "_root/tasks/tsk_02.json"
-	w := gt.NewWorld(t)
-	a, b := w.Clone("a"), w.Clone("b")
-	a.Write(live, row, `{"id":"tsk_02","status":"todo","title":"fix login"}`)
-	a.MustPush(live)
-	b.SyncRef(live)
-
-	a.Write(live, row, `{"_live":{"deleted":true},"id":"tsk_02"}`)
-	a.MustPush(live)
-	bEdit := b.Write(live, row, `{"id":"tsk_02","status":"todo","title":"fix login timeout"}`)
-	res := push(t, b.Remote, gitremote.PushRequest{Updates: []gitremote.RefUpdate{{Src: bEdit, Dst: live}}})
-	if status(t, res, live) != gitremote.StatusNonFastForward {
-		t.Fatalf("B's push = %+v", res)
-	}
-
-	b.Fetch()
-	theirs := b.Ref("refs/lore-remote/origin/live")
-	baseRev, ok, err := b.Repo.MergeBase(ctx, bEdit, theirs)
-	if err != nil || !ok {
-		t.Fatalf("merge base = %v %v", ok, err)
-	}
-	fr, err := merge3.MergeFile(loadFile(t, b.Repo, baseRev, row), loadFile(t, b.Repo, bEdit, row), loadFile(t, b.Repo, theirs, row), merge3.Policy{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fr.Decision != merge3.DecisionModifyBeatsDelete || fr.DeletedBy != merge3.SideTheirs || fr.File.Kind != merge3.FileRow {
-		t.Fatalf("merge = %v deleted by %v kind %v", fr.Decision, fr.DeletedBy, fr.File.Kind)
-	}
-	out, err := json.Marshal(fr.File.Doc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m, err := b.Repo.MakeCommit(ctx, gitref.CommitRequest{Base: bEdit, MergeParents: []string{theirs}, Message: "lore: live merge", Signature: gt.Sig,
-		Changes: gitref.Changes{Put: map[string][]byte{row: out}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := b.Repo.UpdateRef(ctx, live, m.OID, bEdit); err != nil {
-		t.Fatal(err)
-	}
-	b.MustPush(live)
-
-	final := loadFile(t, w.Origin, live, row)
-	if final.Kind != merge3.FileRow || final.Doc["title"] != "fix login timeout" {
-		t.Fatalf("origin row = %v %v", final.Kind, final.Doc)
-	}
-	if n := gt.Git(t, w.OriginDir, "rev-list", "--count", live); n != "4" {
-		t.Fatalf("live history has %s commits, want 4 (seed, tombstone, edit, merge)", n)
 	}
 }

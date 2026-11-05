@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"saas/pkg/aicoder/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 )
 
 // RefspecState reports a remote's fetch configuration for lore refs.

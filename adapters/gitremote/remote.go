@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"strings"
 
-	"saas/pkg/aicoder/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 )
 
 // Remote is one remote repository as seen from one local repository.

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"saas/pkg/aicoder/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 )
 
 // Fetch implements Remote. It passes `--refmap=` so the remote's configured
