@@ -76,6 +76,7 @@ func mountShortcuts(root *cobra.Command) {
 		g.Aliases = append(g.Aliases, opsinfra.NounMachine+"s")
 	}
 	defaultVerb(root, opstrash.Noun, trashListVerb)
+	defaultVerbAt(root, []string{opssync.Noun, opssync.NounTrash}, trashListVerb) // bare `lore sync trash` lists (DELETION_DESIGN 3.10)
 	defaultVerb(root, opsql.Noun, sqlRunVerb)
 	defaultVerb(root, opswhoami.Noun, opswhoami.ShowVerb)          // CLI_REFERENCE 3.8 (P3-ORG-G-3)
 	defaultVerb(root, opsselfupgrade.Noun, opsselfupgrade.RunVerb) // CLI_REFERENCE 3.5 (P3-UPG-1)
@@ -110,8 +111,15 @@ func find(root *cobra.Command, path ...string) *cobra.Command {
 // defaultVerb makes bare `lore <noun>` run `lore <noun> <verb>` (other verbs
 // stay subcommands) and returns the group; nil when either is missing.
 func defaultVerb(root *cobra.Command, noun, verb string) *cobra.Command {
-	g := find(root, noun)
-	run := find(root, noun, verb)
+	return defaultVerbAt(root, []string{noun}, verb)
+}
+
+// defaultVerbAt is defaultVerb for the group at path (a nested group such
+// as `lore sync trash`).
+func defaultVerbAt(root *cobra.Command, path []string, verb string) *cobra.Command {
+	noun := path[len(path)-1]
+	g := find(root, path...)
+	run := find(root, append(append([]string{}, path...), verb)...)
 	if g == nil || run == nil || run.RunE == nil {
 		return nil
 	}
