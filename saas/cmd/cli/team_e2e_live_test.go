@@ -610,6 +610,13 @@ func TestRecipe07_UrgentRuleLandsFromAFeatureBranch(t *testing.T) {
 	if _, ok := readRow(t, rt.app, refLive, liveRowPath(rootFolder, tblRules, id)); ok {
 		t.Fatal("the landed rule must leave live")
 	}
+	// Ported to LORE_TEAM_SPEC rule 4 and F1 (coordinator 2026-11-02,
+	// default-branch read-through only): a row that landed on main and
+	// left live is not found on an older feature branch (the hint names
+	// `lore sync peek`); v0.1.17 found it only because its SQLite kept
+	// every row it had seen. Bringing main into the branch finds it again.
+	rt.c1.Lore("rule", "edit", id, "--body", "never run migrations from any container", "--live").Refused(t, "lore sync peek")
+	rt.c1.Git("merge", "-q", "--no-edit", "origin/main")
 	rt.c1.MustLore("rule", "edit", id, "--body", "never run migrations from any container", "--live")
 	if !strings.Contains(mustRow(t, rt.app, refMain, mainRowPath("", tblRules, id)).Body, "any container") {
 		t.Fatal("each live write of a rule lands a new copy")

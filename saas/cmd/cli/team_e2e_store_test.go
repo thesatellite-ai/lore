@@ -826,8 +826,11 @@ func TestRecipe13_StagingLoreIsSeparate(t *testing.T) {
 	}
 	a.aliceApp.MustLore("org", "link", orgStaging, "--project", folderAcme, "--yes")
 	id := mustID(t, a.aliceApp.MustLore("task", "add", "seed staging with demo data", "--to", orgStaging), "tsk")
-	if _, ok := readRow(t, a.store, storeLive(stagingBranch), liveRowPath(folderAcme, tblTasks, id)); !ok {
-		t.Fatalf("the row lives on refs/lore/live/staging: %v", a.store.Refs("refs/lore/"))
+	// Ported to STORE_SERVER_SPEC 6.1 (LORE_TEAM_SPEC 3.2): a store clone
+	// has no live ref in 0.1.18, so the open row is committed on the staging
+	// store branch (was refs/lore/live/staging).
+	if _, ok := readRow(t, a.store, stagingHead, mainRowPath(folderAcme, tblTasks, id)); !ok {
+		t.Fatalf("the row lives on the staging store branch: %v", a.store.Files(stagingHead))
 	}
 	if a.storeHas(t, folderAcme, "seed staging with demo data") {
 		t.Fatal("the main store branch and its live ref never get a staging row")
