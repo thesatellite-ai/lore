@@ -20,9 +20,9 @@ func TestFlag2InputErrorsExit20(t *testing.T) {
 	}{
 		{"unknown root command", []string{"nosuchverb"}, `unknown command "nosuchverb"`},
 		{"unknown subcommand of a generated group", []string{"memory", "nosuchverb"}, `unknown command "nosuchverb"`},
-		{"unknown flag on an old command", []string{"backup", "--nope"}, "unknown flag: --nope"},
+		{"unknown flag on an old command", []string{"version", "--nope"}, "unknown flag: --nope"},
 		{"unknown flag on a generated command", []string{"memory", "list", "--nope"}, "unknown flag: --nope"},
-		{"unknown shorthand flag", []string{"backup", "-Z"}, "unknown shorthand flag"},
+		{"unknown shorthand flag", []string{"version", "-Z"}, "unknown shorthand flag"},
 		// org link is the operation org.link since P3-ORG-G-2: the op's
 		// decoder names the missing positional and the extra arguments.
 		{"missing positional on an operation", []string{"org", "link"}, "missing required field org"},

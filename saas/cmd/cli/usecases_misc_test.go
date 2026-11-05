@@ -191,49 +191,6 @@ func TestUC_MiscLinkAddResolvesCommits(t *testing.T) {
 
 // ── lore tables ─────────────────────────────────────────────────────────
 
-func TestUC_MiscTablesCommand(t *testing.T) {
-	_, c := initProject(t)
-	c.addMemory("one")
-	c.addMemory("two")
-	c.addRule("three")
-	var all []tableCount
-	decodeData(t, c.lore("tables", "--json").stdout, &all)
-	counts := map[string]int64{}
-	for _, tc := range all {
-		counts[tc.Table] = tc.Rows
-		if strings.HasSuffix(tc.Table, "_fts") || strings.Contains(tc.Table, "_fts_") || strings.HasPrefix(tc.Table, "sqlite_") {
-			t.Fatalf("internal table listed: %s", tc.Table)
-		}
-	}
-	if counts["memories"] != 2 || counts["rules"] != 1 {
-		t.Fatalf("counts: memories=%d rules=%d", counts["memories"], counts["rules"])
-	}
-	var filtered []tableCount
-	decodeData(t, c.lore("tables", "--json", "--filter=MEMOR").stdout, &filtered)
-	for _, tc := range filtered {
-		if !strings.Contains(tc.Table, "memor") {
-			t.Fatalf("--filter kept %s", tc.Table)
-		}
-	}
-	if len(filtered) == 0 {
-		t.Fatal("--filter is case-insensitive and must keep memories")
-	}
-	var byCount []tableCount
-	decodeData(t, c.lore("tables", "--json", "--sort=count").stdout, &byCount)
-	for i := 1; i < len(byCount); i++ {
-		if byCount[i].Rows > byCount[i-1].Rows {
-			t.Fatalf("--sort=count must be biggest first: %v then %v", byCount[i-1], byCount[i])
-		}
-	}
-	text := c.lore("tables", "--filter=memories").stdout
-	if !regexp.MustCompile(`(?m)^memories\s+2$`).MatchString(text) || !strings.Contains(text, "total records") {
-		t.Fatalf("text output: %s", text)
-	}
-	if r := c.lore("tables", "--filter=no-such-table"); !strings.Contains(r.stdout, "(no tables)") {
-		t.Fatalf("empty filter result: %s", r.stdout)
-	}
-}
-
 func TestUC_MiscTableCountsAndView(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "lore.db")
@@ -520,47 +477,6 @@ func TestUC_MiscSetupStampsFingerprint(t *testing.T) {
 
 // ── learn candidates ────────────────────────────────────────────────────
 
-func TestUC_MiscLearnListStatusFilter(t *testing.T) {
-	_, c := initProject(t)
-	notes := "# Notes\n\n## Always lint\n\nRun the linter before commit.\n\n## Release\n\nTag from main only.\n"
-	if err := os.WriteFile(filepath.Join(c.dir, "notes.md"), []byte(notes), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	c.lore("learn-from", "docs", "--paths=notes.md")
-	type cand struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
-	}
-	var pending []cand
-	decodeData(t, c.lore("learn", "list", "--status=pending", "--json").stdout, &pending)
-	if len(pending) < 2 {
-		t.Fatalf("expected candidates from two sections: %+v", pending)
-	}
-	c.lore("learn", "reject", pending[0].ID)
-	var rejected, stillPending []cand
-	decodeData(t, c.lore("learn", "list", "--status=rejected", "--json").stdout, &rejected)
-	decodeData(t, c.lore("learn", "list", "--status=pending", "--json").stdout, &stillPending)
-	if len(rejected) != 1 || rejected[0].ID != pending[0].ID || rejected[0].Status != "rejected" {
-		t.Fatalf("--status=rejected: %+v", rejected)
-	}
-	if len(stillPending) != len(pending)-1 {
-		t.Fatalf("--status=pending after reject: %d of %d", len(stillPending), len(pending))
-	}
-}
-
-func TestUC_MiscLearnStatus(t *testing.T) {
-	t.Parallel()
-	for in, want := range map[string]string{
-		"pending": "pending", "accepted": "accepted", "rejected": "rejected", "expired": "expired",
-		// An unknown value falls back to pending (current behaviour).
-		"bogus": "pending", "": "pending",
-	} {
-		if got := string(learnStatus(in)); got != want {
-			t.Fatalf("learnStatus(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 // addMemory adds a memory through the 0.1.18 core (`lore memory add`,
 // ops/memory) and returns its id; old commands see it in lore.db after the
 // lsync import of the row file.
@@ -574,38 +490,6 @@ func (c *clone) addMemory(body string) string {
 }
 
 // ── tier-3 repair ───────────────────────────────────────────────────────
-
-func TestUC_MiscRepairTier3(t *testing.T) {
-	_, c := initProject(t)
-	c.addRow("kept in the broken copy")
-	c.addMemory("kept in the broken copy")
-	// rules and memories are core-owned (0.1.18): lore.db holds the bridge copy only
-	// after an old command's sync pass imports the row file.
-	c.lore("sync")
-	dbPath := filepath.Join(c.dir, ".lore", "lore.db")
-	if r := c.loreAny("repair", "--tier=3"); r.code == 0 || !strings.Contains(r.stderr, "--confirm") {
-		t.Fatalf("repair without --confirm must refuse: %d %s", r.code, r.stderr)
-	}
-	if r := c.loreAny("repair", "--tier=7", "--confirm"); r.code == 0 || !strings.Contains(r.stderr, "E_NOT_IMPLEMENTED") {
-		t.Fatalf("unknown tier: %d %s", r.code, r.stderr)
-	}
-	r := c.w.run(c.dir, []string{"LORE_SYNC=0"}, e2eBin, "repair", "--tier=3", "--confirm")
-	if r.code != 0 || !strings.Contains(r.stdout, "empty DB created at") || !strings.Contains(r.stdout, "previous DB at:") {
-		t.Fatalf("repair tier 3: %d %s %s", r.code, r.stdout, r.stderr)
-	}
-	broken, err := filepath.Glob(dbPath + ".broken.*")
-	if err != nil || len(broken) != 1 {
-		t.Fatalf("broken copy: %v %v", broken, err)
-	}
-	for _, table := range []string{"rules", "memories"} {
-		if n := countRows(t, broken[0], `SELECT COUNT(*) FROM `+table+` WHERE body = 'kept in the broken copy'`); n != 1 {
-			t.Fatalf("the previous DB must be kept intact (%s): %d", table, n)
-		}
-	}
-	if n := countRows(t, dbPath, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'`); n != 0 {
-		t.Fatalf("tier 3 must leave an empty DB: %d tables", n)
-	}
-}
 
 func countRows(t *testing.T, path, q string) int {
 	t.Helper()

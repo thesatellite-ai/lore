@@ -103,22 +103,6 @@ func TestParseCutoff(t *testing.T) {
 	}
 }
 
-func TestParsePrefer(t *testing.T) {
-	t.Parallel()
-	for in, want := range map[string]lsync.PreferMode{"db": lsync.PreferDB, "files": lsync.PreferFiles, "newest": lsync.PreferNewest} {
-		got, err := parsePrefer(in)
-		if err != nil || got != want {
-			t.Fatalf("%s: %v %v", in, got, err)
-		}
-		if preferLabel(got) != in {
-			t.Fatalf("label round trip %s", in)
-		}
-	}
-	if _, err := parsePrefer(""); err == nil {
-		t.Fatal("empty must fail")
-	}
-}
-
 func TestHookLines(t *testing.T) {
 	t.Parallel()
 	top := hookLines("")

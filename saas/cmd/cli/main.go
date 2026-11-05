@@ -123,26 +123,13 @@ var flagColor string
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "auto", "color output: auto | always | never")
 	rootCmd.AddCommand(newInitCommand())
-	rootCmd.AddCommand(newTablesCommand())
 	rootCmd.AddCommand(newVersionCommand())
-	rootCmd.AddCommand(newErrorsCommand())
-	rootCmd.AddCommand(newBackupCommand())
-	rootCmd.AddCommand(newRestoreCommand())
-	rootCmd.AddCommand(newRepairCommand())
-	rootCmd.AddCommand(newLearnCommand())
-	rootCmd.AddCommand(newLearnFromRootAliasCommand()) // lore learn-from docs at root
 	rootCmd.AddCommand(newMoveCommand())
 	rootCmd.AddCommand(newProjectCommand())
 	rootCmd.AddCommand(newRepoCommand())
-	rootCmd.AddCommand(newBenchCommand())
 	rootCmd.AddCommand(newActorCommand())
-	rootCmd.AddCommand(newPluginCommand())
-	rootCmd.AddCommand(newMountAliasCommand())
 	rootCmd.AddCommand(buildTUICommand())
 	rootCmd.AddCommand(newMergeDriverCommand())
-	registerExtraCommands(rootCmd)
-	attachRosterCommands(rootCmd)
-	addCoordCommands(rootCmd) // lore-signals: agent, resource, gate, inbox, handoff, finding, plan apply (coord_cmd.go)
 	// Live rows (LORE_TEAM_SPEC F1–F8): --live/--no-live, land, live, and the
 	// pre-run hook. Last, so it sees every command registered above.
 	wireLive(rootCmd)

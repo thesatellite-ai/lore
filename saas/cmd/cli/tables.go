@@ -1,9 +1,7 @@
-// tables.go — `lore tables` (all-tables overview with record counts)
-//
-// Enumerates every real data table in the .lore DB and its total row
-// count, sortable + filterable, with --json. The tableCounts() helper is
-// the single source of truth so the TUI overview screen (Phase 2) reuses
-// the exact same enumeration + count logic
+// tables.go — the table overview the TUI's tables screen shows: every real
+// data table in the .lore DB with its row count, sortable and filterable.
+// The `lore tables` command itself is dropped in 0.1.18 (p3/dropped.md:
+// the designed overview is `lore sql`, CLI_REFERENCE 3.6).
 package main
 
 import (
@@ -13,13 +11,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"dbent"
-	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/style"
-	"saas/pkg/constants"
-
-	"github.com/spf13/cobra"
 )
 
 type tableCount struct {
@@ -105,64 +96,4 @@ func applyTableView(in []tableCount, filter, sortSpec string) []tableCount {
 		return less
 	})
 	return out
-}
-
-func newTablesCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	var filter, sortSpec string
-	cmd := &cobra.Command{
-		Use:   "tables",
-		Short: "List every data table and its total record count",
-		Long: `Tabular overview of all data tables in the .lore DB with row counts.
-
-FTS5 virtual/shadow tables and SQLite internals are excluded.
-Sortable (--sort=name|count[:asc|desc]) and filterable (--filter=<substr>).`,
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			rctx, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer joinClose(&err, client, "the project DB")
-
-			db := dbent.InitDB(rctx.DBPath)
-			defer joinClose(&err, db, "the DB")
-
-			counts, err := tableCounts(cmd.Context(), db)
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "table counts").WithCause(err)
-			}
-			counts = applyTableView(counts, filter, sortSpec)
-
-			if jsonOut {
-				printJSON("tables", counts, len(counts))
-				return nil
-			}
-			if len(counts) == 0 {
-				fmt.Println(style.Muted("(no tables)"))
-				return nil
-			}
-			width := len("TABLE")
-			var total int64
-			for _, t := range counts {
-				if len(t.Table) > width {
-					width = len(t.Table)
-				}
-				total += t.Rows
-			}
-			// Plain header — ANSI codes would break %-*s width padding
-			fmt.Printf("%-*s  %s\n", width, "TABLE", "ROWS")
-			for _, t := range counts {
-				fmt.Printf("%-*s  %d\n", width, t.Table, t.Rows)
-			}
-			fmt.Printf("%s\n", style.Muted(fmt.Sprintf(
-				"%d tables, %d total records", len(counts), total)))
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	cmd.Flags().StringVar(&filter, constants.FlagFilter, "", "case-insensitive substring filter on table name")
-	cmd.Flags().StringVar(&sortSpec, constants.FlagSort, "name", "name | count [ :asc | :desc ]")
-	return cmd
 }

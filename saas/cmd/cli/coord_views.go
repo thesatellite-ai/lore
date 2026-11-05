@@ -19,13 +19,10 @@ import (
 	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/queue"
-	"saas/pkg/aicoder/rowroute"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
-	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
-	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/timeentry"
@@ -76,38 +73,6 @@ const (
 )
 
 // ---------------------------------------------------------------- finding
-
-func newFindingCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "finding", Short: "Findings: what one agent learns, every agent of the mission sees"}
-	var mission string
-	add := &cobra.Command{
-		Use:   "add --mission <id> <text>",
-		Short: "Save a finding pinned to a mission (a live memory every agent sees in its inbox)",
-		Long: `Finding saves a memory pinned to a mission. It is written live (shared at once), like
-the mission, and shows up in the inbox of everyone working the mission.
-
-Example:
-  lore finding add --mission mis_12 "the proxy strips X-Forwarded-Host; links must use the public base URL"`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if mission == "" {
-				return errcodes.New(errcodes.InvalidInput, "--mission is required")
-			}
-			// The finding inherits the mission's liveness: missions are
-			// live, so the memory goes on the live ref too (§7.2).
-			liveCmdState.table, liveCmdState.choice = tableMemories, rowroute.ChoiceLive
-			id, err := addLinkedMemory(cmd.Context(), &commonFlags{}, strings.Join(args, " "), sourceKindFinding, mission)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("%s %s finding on %s (live)\n", style.Success("✓"), id, mission)
-			return nil
-		},
-	}
-	add.Flags().StringVar(&mission, flagMission, "", "the mission the finding belongs to")
-	cmd.AddCommand(add)
-	return cmd
-}
 
 // ---------------------------------------------------------------- shared view
 

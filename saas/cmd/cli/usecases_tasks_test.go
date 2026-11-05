@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -174,7 +175,7 @@ func TestUC_Tasks_ListFiltersAndViews(t *testing.T) {
 		{[]string{"--mission=" + m}, "active one"},
 	} {
 		got := ucListTitles(t, c, tc.args...)
-		sortStrings(got)
+		sort.Strings(got)
 		if strings.Join(got, ",") != tc.want {
 			t.Fatalf("task list %v = %v, want %s", tc.args, got, tc.want)
 		}
@@ -272,7 +273,7 @@ func TestUC_Tasks_ListAssignee(t *testing.T) {
 		{[]string{"--assignee=@me", "--read-only"}, "mine started,mine todo"},
 	} {
 		got := ucListTitles(t, c, tc.args...)
-		sortStrings(got)
+		sort.Strings(got)
 		if strings.Join(got, ",") != tc.want {
 			t.Fatalf("task list %v = %v, want %q", tc.args, got, tc.want)
 		}

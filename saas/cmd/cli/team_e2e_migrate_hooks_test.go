@@ -28,8 +28,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -116,7 +118,7 @@ func tableFiles(t *testing.T, c *th.Clone) map[string]string {
 // sameFiles fails when got and want differ in any key or byte.
 func sameFiles(t *testing.T, what string, got, want map[string]string) {
 	t.Helper()
-	for _, k := range sortedKeys(want) {
+	for _, k := range slices.Sorted(maps.Keys(want)) {
 		if got[k] != want[k] {
 			t.Errorf("%s: %s differs:\n got %s\nwant %s", what, k, got[k], want[k])
 		}

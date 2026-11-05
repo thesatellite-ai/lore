@@ -1,4 +1,6 @@
-// version.go — `lore version` and `lore errors list` (S3.4)
+// version.go — `lore version` (S3.4); `lore errors list` is dropped in
+// 0.1.18 (p3/dropped.md: the registry is CLI_REFERENCE section 5, written
+// by `lore spec`)
 //
 // Stable JSON contract per R25 #3 + R25 #11
 package main
@@ -7,8 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"saas/pkg/constants"
-
-	"saas/pkg/aicoder/errcodes"
 
 	"github.com/spf13/cobra"
 )
@@ -49,56 +49,6 @@ func newVersionCommand() *cobra.Command {
 			fmt.Printf("  bundle_format:    v%d (deferred to v0.2)\n", info.BundleFormatVersion)
 			fmt.Printf("  plugin_protocol:  v%d (deferred to v0.2)\n", info.PluginProtocolVersion)
 			fmt.Printf("  mcp_tool:         v%d (deferred to v0.2)\n", info.MCPToolVersion)
-		},
-	}
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output (stable schema)")
-	return cmd
-}
-
-// errorsListEntry is one row in `lore errors list --json` output
-type errorsListEntry struct {
-	Code        string `json:"code"`
-	Description string `json:"description"`
-}
-
-type errorsListEnvelope struct {
-	SchemaVersion int               `json:"schema_version"`
-	Count         int               `json:"count"`
-	Errors        []errorsListEntry `json:"errors"`
-}
-
-func newErrorsCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "errors", Short: "Manage error code registry"}
-	cmd.AddCommand(newErrorsListCommand())
-	return cmd
-}
-
-func newErrorsListCommand() *cobra.Command {
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List all registered error codes",
-		Run: func(cmd *cobra.Command, args []string) {
-			codes := errcodes.All()
-			if jsonOut {
-				env := errorsListEnvelope{
-					SchemaVersion: 1,
-					Count:         len(codes),
-					Errors:        make([]errorsListEntry, 0, len(codes)),
-				}
-				for _, c := range codes {
-					env.Errors = append(env.Errors, errorsListEntry{
-						Code:        string(c),
-						Description: errcodes.Description(c),
-					})
-				}
-				out, _ := json.MarshalIndent(env, "", "  ")
-				fmt.Println(string(out))
-				return
-			}
-			for _, c := range codes {
-				fmt.Printf("%-32s %s\n", c, errcodes.Description(c))
-			}
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output (stable schema)")

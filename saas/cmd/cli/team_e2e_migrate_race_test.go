@@ -23,9 +23,11 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -208,7 +210,7 @@ func TestMigrateRaceOneRepo(t *testing.T) {
 	ref := bob.Clone(app, "app")
 	ref.MustLore("migrate", "run", "--offline")
 	want := memoryFiles(t, ref)
-	for _, k := range sortedKeys(v1Files()) {
+	for _, k := range slices.Sorted(maps.Keys(v1Files())) {
 		if got[k] != want[k] {
 			t.Errorf("%s differs from an uncontended migration:\n%s\n%s", k, got[k], want[k])
 		}
@@ -259,7 +261,7 @@ func TestMigrateRaceNClones(t *testing.T) {
 	assertMigrated(t, "clone 0", want)
 	for i, c := range clones[1:] {
 		got := memoryFiles(t, c)
-		for _, k := range sortedKeys(want) {
+		for _, k := range slices.Sorted(maps.Keys(want)) {
 			if got[k] != want[k] {
 				t.Errorf("clone %d: %s differs:\n%s\n%s", i+1, k, got[k], want[k])
 			}
@@ -291,7 +293,7 @@ func TestMigrateRaceOfflineThenMerge(t *testing.T) {
 	}
 	f1, f2 := memoryFiles(t, c1), memoryFiles(t, c2)
 	assertMigrated(t, "alice", f1)
-	for _, k := range sortedKeys(f1) {
+	for _, k := range slices.Sorted(maps.Keys(f1)) {
 		if f1[k] != f2[k] {
 			t.Errorf("%s differs between the offline runs:\n%s\n%s", k, f1[k], f2[k])
 		}

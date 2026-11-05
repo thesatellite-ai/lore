@@ -36,17 +36,6 @@ import (
 	"github.com/thesatellite-ai/lore/schema"
 )
 
-// Flag names of the coordination subcommands (§1 "Flags").
-const (
-	flagOwns      = "owns"
-	flagStrict    = "strict"
-	flagDaemon    = "daemon"
-	flagAssign    = "assign"
-	flagFromActor = "from"
-	flagMission   = "mission"
-	flagRole      = "role"
-)
-
 // taskCoordCommands are the host commands added to `lore task`: only
 // `task hook`; the coordination verbs are ops/coord operations mounted by
 // the surface (PASS3 ONE-PATH, P3-COORD-1).

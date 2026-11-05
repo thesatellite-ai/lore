@@ -13,12 +13,9 @@ import (
 
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/lorecfg"
-	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
-	"saas/pkg/aicoder/textnorm"
 
 	"github.com/spf13/cobra"
 	coreschema "github.com/thesatellite-ai/lore/schema"
@@ -101,83 +98,6 @@ func workBranchHead(ctx context.Context, r *gitref.Repo) string {
 func isStoreTarget(t coordTarget) bool {
 	_, ok := t.Rows.(*storeRows)
 	return ok
-}
-
-// addLinkedMemory saves a memory whose source points at a task or mission
-// (a lesson, a finding). The body is secret-scanned like `memory add`.
-func addLinkedMemory(ctx context.Context, c *commonFlags, text, sourceKind, sourceRef string) (string, error) {
-	body, err := textnorm.Normalize(text)
-	if err != nil {
-		return "", errcodes.New(errcodes.EmptyBody, err.Error())
-	}
-	if refuseErr := refuseSecretsCtx(ctx, body); refuseErr != nil {
-		return "", refuseErr
-	}
-	// The memory is written by the 0.1.18 core (memory.add) into the store
-	// holding the task or mission (D8, as v0.1.17 routed it): the repo for
-	// one of its own rows, else the linked store project (BUG-T9).
-	to, err := rowHomeTo(ctx, sourceRef)
-	if err != nil {
-		return "", err
-	}
-	_ = c // the scope flags no longer apply: the row's home decides
-	target := to.To
-	if target == toRepo {
-		target = "" // memory.add's default target is the repo store
-	}
-	return coreAddMemoryTo(ctx, body, sourceKind, sourceRef, target)
-}
-
-// rowHomeTo is the --to that addresses the project holding row id: this
-// repo when the row is one of its own (live or branch data), else the
-// linked store project (group work, and a client repo's own task unless
-// the org sets agent_details: client — lessons are agent work details, D8).
-//
-// When this checkout has no store links (or no team coordination at all)
-// it returns no --to, so the ordinary F14 resolver decides exactly as for
-// any write without --to: this repo for an own repo or no org, a refusal
-// for an unlinked client repo or an unknown link status (fixed rule 6).
-// Every other failure is returned: a row is never routed into the repo
-// because lore could not tell where it belongs.
-func rowHomeTo(ctx context.Context, id string) (toFlags, error) {
-	w, err := openCoordWorld(ctx)
-	if err != nil {
-		if isNoTeamCoordination(err) {
-			return toFlags{}, nil
-		}
-		return toFlags{}, fmt.Errorf("decide where the note on %s lives: %w", id, err)
-	}
-	if w.LinkUnknown || len(w.Links) == 0 {
-		return toFlags{}, nil
-	}
-	t, err := openRepoTarget(ctx, w)
-	switch {
-	case err == nil:
-		_, found, gerr := t.Rows.Get(ctx, id)
-		t.Close()
-		if gerr != nil {
-			return toFlags{}, fmt.Errorf("decide where the note on %s lives: read the repo's row: %w", id, gerr)
-		}
-		internal := w.Role == orgresolve.RoleClient && (w.Org == nil || w.Org.EffectiveAgentDetails() != lorecfg.AgentDetailsClient)
-		if found && !internal {
-			return toFlags{To: toRepo}, nil
-		}
-	case errcodes.IsCode(err, errcodes.NotImplemented):
-		// This checkout has no live rows (errRowsNotWired), so the row is
-		// not one this repo coordinates: the linked store project, the
-		// internal side, is its home.
-	default:
-		return toFlags{}, fmt.Errorf("decide where the note on %s lives: %w", id, err)
-	}
-	if w.Org == nil {
-		return toFlags{}, errcodes.New(errcodes.LinkUnknown, "this repo has store links but no org resolved; refusing to choose where the note on "+id+" lives").
-			WithHint("`lore whoami` shows the org and link status")
-	}
-	link, err := defaultLink(w.Links)
-	if err != nil {
-		return toFlags{}, err
-	}
-	return toFlags{To: w.Org.Name + "/" + link.Folder}, nil
 }
 
 // isNoTeamCoordination reports whether an openCoordWorld/openTaskCoord

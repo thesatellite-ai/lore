@@ -15,16 +15,8 @@ import (
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/style"
 
-	"github.com/spf13/cobra"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 )
-
-// addCoordCommands registers every top-level command this file family adds
-// and `apply` under the existing `plan` group. It runs after the generated
-// entity groups are registered, so the group exists.
-func addCoordCommands(root *cobra.Command) {
-	root.AddCommand(newFindingCommand())
-}
 
 // `lore agent start` is the operation agent.start (ops/agent over
 // agentHost and the App's roster, P3-RUNS-6).

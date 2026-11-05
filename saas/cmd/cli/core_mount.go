@@ -15,7 +15,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -35,7 +34,6 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
-	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/surface/cli"
@@ -507,47 +505,6 @@ func coreErr(err error) error {
 		e = e.WithHint(old.Hint)
 	}
 	return e
-}
-
-// coreAddMemory writes one memory through the core's memory.add operation
-// (the one write path: scan, validate, audit). Old commands that create a
-// memory as a side effect (task done --lesson, learn promote) call it
-// instead of writing lore.db. Returns the new id.
-func coreAddMemory(ctx context.Context, body, sourceKind, sourceRef string) (string, error) {
-	return coreAddMemoryTo(ctx, body, sourceKind, sourceRef, "")
-}
-
-// coreAddMemoryTo is coreAddMemory into target to ("" = the repo store; a
-// store or `<store>/<folder>` the runner resolves like `memory add --to`):
-// a lesson or finding goes to the store holding its task (D8, BUG-T9).
-func coreAddMemoryTo(ctx context.Context, body, sourceKind, sourceRef, to string) (string, error) {
-	if coreApp == nil {
-		return "", errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
-	}
-	e, ok := coreApp.Registry().Lookup(opsmemory.OpAdd)
-	if !ok {
-		return "", errcodes.New(errcodes.Internal, "memory.add is not registered")
-	}
-	in, err := json.Marshal(opsmemory.AddIn{Body: body, Source: sourceKind, SourceRef: sourceRef, To: to})
-	if err != nil {
-		return "", errcodes.New(errcodes.Internal, "encode memory").WithCause(err)
-	}
-	if ensureErr := ensureCoreGitignore(ctx); ensureErr != nil {
-		return "", coreErr(ensureErr)
-	}
-	res, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY()})
-	if err != nil {
-		return "", err
-	}
-	raw, err := res.JSON()
-	if err != nil {
-		return "", err
-	}
-	var out opsmemory.WriteOut
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", errcodes.New(errcodes.Internal, "decode memory.add result").WithCause(err)
-	}
-	return out.ID, nil
 }
 
 // newAPICommand is `lore api` (spec 9.7): the REST surface of every

@@ -23,32 +23,16 @@ import (
 	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
-	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// Roster flags and values.
+// Roster values.
 const (
-	flagRosterKind    = "kind"
-	flagRosterLabel   = "label"
-	flagRosterOwner   = "owner"
-	flagRosterName    = "name"
-	flagRosterMembers = "members"
 	// agentKeyPrefix is the stable_key prefix of agent actors
 	// (LORE_ACTOR=agent:<label>, F18).
 	agentKeyPrefix = "agent:"
 	handlePrefix   = "@"
 )
-
-// attachRosterCommands adds the `lore team` group. `lore actor
-// register|deactivate` are core operations (ops/infra roster.go) served by
-// cliRoster (roster_op.go); `lore agent start` is lore-signals', its roster
-// write is rosterRegisterAgent.
-func attachRosterCommands(root *cobra.Command) {
-	team := &cobra.Command{Use: "team", Short: "Teams on the org roster (@handle resolves to a person or a team)"}
-	team.AddCommand(newTeamAddCommand(), newTeamListCommand())
-	root.AddCommand(team)
-}
 
 // roster is an opened roster: the org folder's project (or this repo's
 // project when no org applies), as an ent client.
@@ -354,111 +338,4 @@ func (r *roster) callerOnRoster(ctx context.Context) (*ent.Actor, error) {
 		return nil, errcodes.New(errcodes.Internal, "read the roster").WithCause(err)
 	}
 	return a, nil
-}
-
-func newTeamAddCommand() *cobra.Command {
-	var f commonFlags
-	var name, members string
-	cmd := &cobra.Command{
-		Use:     "add <@handle> --members @a,@b",
-		Short:   "Create or update a team; @handle then resolves to the team",
-		Example: `  lore team add @frontend --name "Frontend" --members @bob,@carol`,
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			handle := strings.TrimPrefix(args[0], handlePrefix)
-			cr, err := openRosterOnCore(ctx)
-			if err != nil {
-				return err
-			}
-			if cr != nil {
-				return cr.teamAdd(ctx, handle, name, members)
-			}
-			r, err := openRoster(ctx, &f)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
-			if a, qerr := r.client.Actor.Query().Where(entActor.Handle(handle), entActor.Active(true)).First(ctx); qerr == nil {
-				return errcodes.New(errcodes.InvalidInput, "handle @"+handle+" is taken by actor "+a.DisplayName)
-			}
-			var ids []string
-			for _, m := range strings.Split(members, ",") {
-				if m = strings.TrimSpace(m); m == "" {
-					continue
-				}
-				a, herr := r.resolveHandle(ctx, m)
-				if herr != nil {
-					return herr
-				}
-				ids = append(ids, a.ID)
-			}
-			t, err := r.client.Team.Query().Where(entTeam.ProjectID(r.project), entTeam.Handle(handle)).First(ctx)
-			switch {
-			case err == nil:
-				up := t.Update().SetMemberActorIds(ids).SetActive(true)
-				if name != "" {
-					up.SetDisplayName(name)
-				}
-				if t, err = up.Save(ctx); err != nil {
-					return errcodes.New(errcodes.Internal, "update the team").WithCause(err)
-				}
-			case ent.IsNotFound(err):
-				cr := r.client.Team.Create().SetProjectID(r.project).SetHandle(handle).SetMemberActorIds(ids).SetActive(true)
-				if name != "" {
-					cr.SetDisplayName(name)
-				}
-				if t, err = cr.Save(ctx); err != nil {
-					return errcodes.New(errcodes.Internal, "write the team").WithCause(err)
-				}
-			default:
-				return errcodes.New(errcodes.Internal, "read the roster").WithCause(err)
-			}
-			fmt.Printf("✓ %s @%s (%d member(s)) in %s\n", t.ID, handle, len(ids), redactIfQuiet(r.where))
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&name, flagRosterName, "", "display name")
-	cmd.Flags().StringVar(&members, flagRosterMembers, "", "comma-separated @handles")
-	return cmd
-}
-
-func newTeamListCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List the roster's teams",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-			cr, err := openRosterOnCore(ctx)
-			if err != nil {
-				return err
-			}
-			if cr != nil {
-				return cr.teamList(ctx)
-			}
-			r, err := openRoster(ctx, &f)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
-			ts, err := r.client.Team.Query().Where(entTeam.Active(true)).Order(ent.Asc(entTeam.FieldHandle)).All(ctx)
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "read the roster").WithCause(err)
-			}
-			for _, t := range ts {
-				name := ""
-				if t.DisplayName != nil {
-					name = *t.DisplayName
-				}
-				fmt.Printf("@%-16s %-24s %d member(s)\n", t.Handle, name, len(t.MemberActorIds))
-			}
-			if len(ts) == 0 {
-				fmt.Println("no teams on " + redactIfQuiet(r.where) + "'s roster")
-			}
-			return nil
-		},
-	}
-	return cmd
 }
