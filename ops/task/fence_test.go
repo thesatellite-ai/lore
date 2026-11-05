@@ -7,6 +7,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 )
 
@@ -76,4 +77,34 @@ func TestChecklistHolderFence(t *testing.T) {
 	// a team without the upgrade fences nothing.
 	plain := opstask.WithTeam(context.Background(), &fakeTeam{})
 	mustCtx(h, plain, opstask.OpChecklistAdd, fmt.Sprintf(`{"id":%q,"text":"reviewed"}`, lost))
+}
+
+// TestTrashFencesHolderThroughRestore (FB-TASK-1, TASK 6.12): deleting a
+// task someone holds raises its claim_epoch inside the delete batch (a
+// task nobody holds keeps 0); a trash restore brings the row back with
+// the raised epoch, so the holder's next fenced write is checked against
+// epoch 1 and stays refused until a release and a fresh claim.
+func TestTrashFencesHolderThroughRestore(t *testing.T) {
+	h := opstest.New(t, repoClient(false))
+	held := add(h, "held", "")
+	free := add(h, "free", "")
+	ft := &fencingTeam{fakeTeam: fakeTeam{board: &fakeBoard{claims: map[string]claim{
+		held: {holder: "act_01936f0000007a1b8c2d3e4f5a6b7c8d", active: true},
+	}}}}
+	ctx := opstask.WithTeam(context.Background(), ft)
+	for _, id := range []string{held, free} {
+		e, _ := h.App.Registry().Lookup(opstask.OpDelete)
+		if _, err := h.App.Run(ctx, e, op.JSONDecoder{Body: []byte(`{"id":"` + id + `"}`)}, op.Caller{Yes: true}); err != nil {
+			t.Fatal(err)
+		}
+		h.Fails(opstask.OpShow, `{"id":"`+id+`"}`, errs.InTrash)
+		h.Must("trash.restore", `{"target":"`+id+`"}`)
+	}
+	ft.calls = nil
+	mustCtx(h, ctx, opstask.OpChecklistAdd, `{"id":"`+held+`","text":"after restore"}`)
+	mustCtx(h, ctx, opstask.OpChecklistAdd, `{"id":"`+free+`","text":"after restore"}`)
+	want := []fenceCall{{held, 1}, {free, 0}}
+	if len(ft.calls) != 2 || ft.calls[0] != want[0] || ft.calls[1] != want[1] {
+		t.Fatalf("fence checks after restore: %+v, want %+v", ft.calls, want)
+	}
 }
