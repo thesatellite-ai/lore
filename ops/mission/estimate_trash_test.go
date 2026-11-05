@@ -1,10 +1,12 @@
 package mission_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // TestMissionEstimateSkipsTrash (OV12, TASK 9.2/9.4): a mission's estimate
@@ -12,7 +14,10 @@ import (
 // estimate and its tracked time out of the rollup, and restoring it (not
 // tested here: trash restore is p2-del's) is the way back.
 func TestMissionEstimateSkipsTrash(t *testing.T) {
-	h := opstest.New(t)
+	// time data lives in internal stores only (PC-LEAK-1): an own repo
+	h := opstest.New(t, func(o *wire.Options) {
+		o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
+	})
 	m := addMission(t, h, `{"title":"estimated"}`)
 	taskID := func(in string) string {
 		t.Helper()

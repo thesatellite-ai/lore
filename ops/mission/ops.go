@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
@@ -321,7 +322,11 @@ func (o ShowOut) baseText() string {
 	if len(m.Tasks) > 0 {
 		b.WriteString("\nTasks:\n")
 		for _, t := range m.Tasks {
-			b.WriteString("  " + t.ID + " [" + t.Status + "] " + t.Title + "\n")
+			b.WriteString("  " + t.ID + " [" + t.Status + "] " + t.Title)
+			if o.timed {
+				b.WriteString("  time:" + timeentry.FormatSeconds(t.Time.EffortSeconds) + "  elapsed:" + timeentry.FormatSeconds(t.Time.ElapsedSeconds))
+			}
+			b.WriteString("\n")
 		}
 	}
 	return b.String()

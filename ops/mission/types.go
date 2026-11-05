@@ -125,6 +125,8 @@ type ShowOut struct {
 	Revealed int    `json:"revealed,omitempty"`
 	Forced   bool   `json:"forced,omitempty"`
 	Warning  string `json:"warning,omitempty"`
+	// timed: a TIME 10 flag was given, so each task line shows its time.
+	timed bool
 }
 
 // IDIn is the input of the operations that take one mission id.
