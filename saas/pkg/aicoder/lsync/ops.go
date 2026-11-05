@@ -225,6 +225,49 @@ func ListTrash(ctx context.Context, db *sql.DB) ([]TrashRecord, error) {
 	return out, rows.Err()
 }
 
+// DropPurgedCopies removes this machine's safety copies (_lore_sync_trash,
+// DELETION 3.10) of rows that dataDir's _purged.json lists: a purge on
+// another machine leaves the purged content in this machine's copies, and
+// `lore trash purge --local --purged --confirm` drops them (OV31). It
+// returns the copies it removed (or, with dryRun, would remove), newest
+// first. A _purged.json that cannot be read is an error, never "nothing
+// purged".
+//
+//	readPurged(dataDir) ─► ListTrash ─► keep row_id ∈ purged ─► DELETE each
+func DropPurgedCopies(ctx context.Context, db *sql.DB, dataDir string, dryRun bool) ([]TrashRecord, error) {
+	purged, err := readPurged(dataDir)
+	if err != nil {
+		return nil, err
+	}
+	all, err := ListTrash(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	var out []TrashRecord
+	for _, r := range all {
+		if purged[r.RowID] {
+			out = append(out, r)
+		}
+	}
+	if dryRun || len(out) == 0 {
+		return out, nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("lsync: drop purged copies: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, r := range out {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+tblTrash+` WHERE id = ?`, r.ID); err != nil {
+			return nil, fmt.Errorf("lsync: drop purged copy %d: %w", r.ID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("lsync: drop purged copies: %w", err)
+	}
+	return out, nil
+}
+
 // RestoreTrash puts a trashed row back. The next Reconcile exports it, which
 // recreates its file — i.e. restoring is an ordinary, reviewable edit.
 func RestoreTrash(ctx context.Context, db *sql.DB, id int64, opts ...dbOnlyOpt) error {

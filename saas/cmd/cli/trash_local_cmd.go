@@ -7,6 +7,9 @@
 //
 //	lore trash --local [--json]          ─► sync trash list (this machine's _lore_sync_trash)
 //	lore trash restore --local <n>       ─► sync trash restore <n>
+//	lore trash purge --local --purged    ─► lsync.DropPurgedCopies (OV31: drop
+//	    [--dry-run|--confirm]                this machine's copies of rows
+//	                                         purged elsewhere, DELETION 3.10)
 //
 // `lore trash purge --archived-before` is the generated op itself
 // (ops/trash, DEL-ARCH: it works on the row files, not lore.db).
@@ -19,10 +22,13 @@ import (
 	"fmt"
 	"os"
 
+	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/trash"
 )
 
@@ -31,9 +37,13 @@ const localTrashNote = "this machine only: local safety copies of rows sync remo
 
 // Flags this file adds to the generated trash commands.
 const (
-	flagTrashLocal = "local"
-	trashVerbList  = "list"
-	trashVerbRest  = "restore"
+	flagTrashLocal  = "local"
+	flagTrashPurged = "purged"
+	trashVerbList   = "list"
+	trashVerbRest   = "restore"
+	trashVerbPurge  = "purge"
+	// jsonKindTrashLocalPurged is the --json kind of purge --local --purged.
+	jsonKindTrashLocalPurged = "trash.local_purged"
 )
 
 // attachTrashLocal adds --local (list, restore) to the generated trash
@@ -58,8 +68,93 @@ func attachTrashLocal(root *cobra.Command) {
 			wrapTrashLocal(sub, "restore this machine's safety copy <n> (lore trash --local lists them); replaces lore sync trash restore",
 				func(_ *cobra.Command, args []string) []string { return append([]string{trashVerbRest}, args...) },
 				newSyncTrashCommand)
+		case trashVerbPurge:
+			wrapTrashLocalPurge(sub)
 		}
 	}
+}
+
+// wrapTrashLocalPurge adds --local and --purged to the generated purge
+// command: `purge --local --purged` drops this machine's safety copies of
+// rows purged elsewhere (DELETION 3.10, OV31); every other purge form runs
+// the generated op. Like every permanent removal it needs --confirm, or
+// --dry-run to only list (DQ2).
+func wrapTrashLocalPurge(c *cobra.Command) {
+	c.Flags().Bool(flagTrashLocal, false, "with --purged: this machine's safety copies (_lore_sync_trash) only")
+	c.Flags().Bool(flagTrashPurged, false, "with --local: drop local copies of rows purged elsewhere")
+	inner, innerArgs := c.RunE, c.Args
+	isLocal := func(cmd *cobra.Command) (bool, bool) {
+		local, _ := cmd.Flags().GetBool(flagTrashLocal)
+		purged, _ := cmd.Flags().GetBool(flagTrashPurged)
+		return local, purged
+	}
+	c.Args = func(cmd *cobra.Command, args []string) error {
+		if local, _ := isLocal(cmd); local {
+			return cobra.NoArgs(cmd, args)
+		}
+		if innerArgs == nil {
+			return nil
+		}
+		return innerArgs(cmd, args)
+	}
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		local, purged := isLocal(cmd)
+		if !local && !purged {
+			return inner(cmd, args)
+		}
+		if !local || !purged {
+			return errs.New(errs.InvalidInput, "trash purge: --local and --purged go together (lore trash purge --local --purged --confirm)")
+		}
+		return runLocalPurged(cmd)
+	}
+}
+
+// runLocalPurged is `lore trash purge --local --purged`: list, then (with
+// --confirm) drop, this machine's copies of rows _purged.json lists.
+func runLocalPurged(cmd *cobra.Command) error {
+	dry, _ := cmd.Flags().GetBool(constants.FlagDryRun)
+	confirm, _ := cmd.Flags().GetBool(constants.FlagConfirm)
+	asJSON, _ := cmd.Flags().GetBool(constants.FlagJSON)
+	t, err := openSyncTarget(&commonFlags{})
+	if err != nil {
+		return err
+	}
+	defer t.close()
+	ctx := cmd.Context()
+	if !dry && !confirm {
+		// DQ2: a permanent removal asks for --confirm; list what it would drop.
+		found, err := lsync.DropPurgedCopies(ctx, t.db, t.dataDir, true)
+		if err != nil {
+			return errcodes.New(errcodes.Internal, "list local copies of purged rows").WithCause(err)
+		}
+		if len(found) == 0 {
+			fmt.Println(style.Muted("· no local copies of purged rows"))
+			return nil
+		}
+		msg := fmt.Sprintf("drop %d local cop(ies) of purged rows on this machine for good", len(found))
+		return errs.New(errs.NeedsConfirm, "trash purge --local --purged: "+msg).
+			WithHint("ask the person, then re-run with --confirm").
+			WithQuestion(msg+"?").
+			WithNext("lore", "trash", "purge", "--local", "--purged", "--confirm")
+	}
+	dropped, err := lsync.DropPurgedCopies(ctx, t.db, t.dataDir, dry)
+	if err != nil {
+		return errcodes.New(errcodes.Internal, "drop local copies of purged rows").WithCause(err)
+	}
+	if asJSON {
+		printJSON(jsonKindTrashLocalPurged, dropped, len(dropped))
+		return nil
+	}
+	fmt.Fprintln(os.Stderr, style.Muted(localTrashNote))
+	verb := "dropped"
+	if dry {
+		verb = "would drop"
+	}
+	for _, r := range dropped {
+		fmt.Printf("#%d %s/%s  %s\n", r.ID, r.Table, r.RowID, r.At)
+	}
+	fmt.Printf("%s %s %d local cop(ies) of purged rows\n", style.Success("✓"), verb, len(dropped))
+	return nil
 }
 
 // wrapTrashLocal adds --local to c: with it, c runs the old command built
