@@ -163,7 +163,8 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	out = append(out, varFindings(all[schema.TableVars])...)
 	out = append(out, taskFindings(all[schema.TableTasks])...)
 	out = append(out, metaFindings(all)...)
-	out = append(out, holderFindings(all)...) // SECRETS 5.2: stale holder labels
+	// SECRETS 5.2: stale holder labels
+	out = append(out, holderFindings(all)...)
 	secrets, err := o.secretScan(ctx, all) // SQ12: re-scan with today's team rules
 	if err != nil {
 		return RunOut{}, err
