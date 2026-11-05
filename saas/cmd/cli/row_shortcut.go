@@ -175,7 +175,12 @@ func runCoreMove(ctx context.Context, table row.Table, id string, f *shareFlags)
 	if len(texts) > 0 {
 		preview = texts[0]
 	}
-	fmt.Printf("This becomes visible to everyone with access to store %s:\n  %q\n", to, oneLine(preview))
+	// --json keeps stdout for the result alone (CLI_REFERENCE 2.7).
+	previewOut := os.Stdout
+	if f.asJSON {
+		previewOut = os.Stderr
+	}
+	fmt.Fprintf(previewOut, "This becomes visible to everyone with access to store %s:\n  %q\n", to, oneLine(preview))
 	if !f.yes {
 		if !stdinIsTTY() {
 			return errcodes.New(errcodes.InvalidInput, "not moved: confirm on a terminal (or --yes); nothing written")
@@ -203,6 +208,10 @@ func runCoreMove(ctx context.Context, table row.Table, id string, f *shareFlags)
 	raw, err := res.JSON()
 	if err != nil {
 		return err
+	}
+	if f.asJSON {
+		fmt.Println(string(raw))
+		return nil
 	}
 	var out opsrow.MoveOut
 	if uerr := json.Unmarshal(raw, &out); uerr != nil {

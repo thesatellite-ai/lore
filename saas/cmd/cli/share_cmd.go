@@ -53,6 +53,9 @@ type shareFlags struct {
 	dropInternal bool
 	withTime     string
 	withChildren bool // --with-children: a task with its subtree (TASK 6.14, B7)
+	// asJSON (move only, CLI_REFERENCE 2.7 --json): the core move result as
+	// JSON on stdout; the preview line goes to stderr so stdout parses.
+	asJSON bool
 }
 
 func newShareCommand() *cobra.Command { return newShareLikeCommand(false) }
@@ -81,6 +84,7 @@ func newShareLikeCommand(move bool) *cobra.Command {
 		cmd.Flags().BoolVar(&f.dropInternal, flagDropInternal, false, "into a client repo: remove the row's internal metadata values instead of refusing (MQ11)")
 		cmd.Flags().StringVar(&f.withTime, flagWithTime, "", "totals | none (default none): time totals for a task moved into a client repo (TQ3; totals not built yet)")
 		cmd.Flags().BoolVar(&f.withChildren, "with-children", false, "a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14)")
+		cmd.Flags().BoolVar(&f.asJSON, flagJSONOut, false, "print the result as JSON (rows on the 0.1.18 core)")
 	}
 	return cmd
 }
@@ -116,8 +120,8 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 		}
 		return runCoreMove(ctx, table, id, f)
 	}
-	if f.dropInternal || f.withTime != "" || f.withChildren {
-		return errcodes.New(errcodes.Unsupported, "--drop-internal, --with-time and --with-children apply to rows on the 0.1.18 core only; "+id+" still moves the v0.1.17 way")
+	if f.dropInternal || f.withTime != "" || f.withChildren || f.asJSON {
+		return errcodes.New(errcodes.Unsupported, "--drop-internal, --with-time, --with-children and --json apply to rows on the 0.1.18 core only; "+id+" still moves the v0.1.17 way")
 	}
 	if f.to.To == "" {
 		return errcodes.New(errcodes.InvalidInput, "--to is required (repo, <org>, <org>/<folder> or me)")

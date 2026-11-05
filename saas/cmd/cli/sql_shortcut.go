@@ -32,6 +32,10 @@ func mountSQLShortcut(root *cobra.Command) {
 		return
 	}
 	g.Example = sqlShortcutExample
+	// CLI_REFERENCE 3.6: the shortcut takes the run verb's flags; listing
+	// the same flag objects on the group makes `lore sql --help` show them
+	// (parsing still happens in run, below).
+	g.Flags().AddFlagSet(run.LocalFlags())
 	g.Args = cobra.ArbitraryArgs
 	g.DisableFlagParsing = true
 	g.RunE = func(cmd *cobra.Command, args []string) error {

@@ -29,6 +29,8 @@ const (
 type MetaAdoptIn struct {
 	From string `json:"from" flag:"from" desc:"the place whose key rows move here (<store>, <store>/<folder>)"`
 	To   string `json:"to,omitempty" flag:"to" desc:"the place that takes them (default repo)"`
+	// DryRun previews (CLI_REFERENCE 3.1): the clash check runs, nothing moves.
+	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would move; write nothing"`
 }
 
 // MetaMoveIn is the input of meta.move.
@@ -42,6 +44,7 @@ type MetaMoveOut struct {
 	Keys   []string `json:"keys"`
 	Values int      `json:"values"`
 	Store  string   `json:"store"`
+	DryRun bool     `json:"dry_run,omitempty"`
 	Human  string   `json:"-"`
 }
 
@@ -51,6 +54,9 @@ func (o MetaMoveOut) Text() string { return o.Human }
 // MetaRehomeIn is the input of meta.rehome.
 type MetaRehomeIn struct {
 	In string `json:"in,omitempty" flag:"in" desc:"the place whose rows are checked (default repo)"`
+	// DryRun is accepted for the reference spelling (3.1); rehome is a
+	// report in 0.1.18 (OV58), so it never writes either way.
+	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"preview (rehome only reports in this release; nothing is written either way)"`
 }
 
 // MetaRehomeItem is one key id a row of the place uses that no visible
@@ -118,7 +124,8 @@ func (o ops) metaMoveOps() []op.Entry {
 //
 //	from's live key rows (and their meta_values) ─► a name the target
 //	defines under another id refuses (E_META_TAKEN; DECISION: no automatic
-//	fold, rename or --merge-into first) ─► ask (E_NEEDS_CONFIRM)
+//	fold, rename or --merge-into first) ─► --dry-run: report, stop
+//	─► ask (E_NEEDS_CONFIRM)
 //	─► each key moves (id kept, tombstone left, engine.Move) with its
 //	values, then its scope label is set to the target's
 func (o ops) metaAdopt(ctx context.Context, in MetaAdoptIn) (MetaMoveOut, error) {
@@ -157,6 +164,10 @@ func (o ops) metaAdopt(ctx context.Context, in MetaAdoptIn) (MetaMoveOut, error)
 	if len(clash) > 0 {
 		return MetaMoveOut{}, errs.New(errs.MetaTaken, "both places define "+strings.Join(clash, ", ")).
 			WithHint("rename one (lore meta rename) or fold it (lore meta edit <key> --merge-into <other>) first; nothing written")
+	}
+	if in.DryRun {
+		return MetaMoveOut{Keys: names, Values: nvals, Store: string(to), DryRun: true,
+			Human: fmt.Sprintf("would adopt %d metadata keys (%s) and %d allowed values from %s into %s; ids unchanged\ndry run: nothing written\n", len(keys), strings.Join(names, ", "), nvals, from, place(to))}, nil
 	}
 	if err = bulk.Ask(ctx, fmt.Sprintf("move %d metadata keys (%s) and %d allowed values from %s into %s? ids stay, values unchanged", len(keys), strings.Join(names, ", "), nvals, from, place(to))); err != nil {
 		return MetaMoveOut{}, err

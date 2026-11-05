@@ -69,8 +69,10 @@ func (o MetaExportOut) Text() string { return o.text }
 
 // MetaImportIn is the input of meta.import.
 type MetaImportIn struct {
-	File   string `json:"file" arg:"0" desc:"the file to import (csv or json lines)"`
-	Format string `json:"format,omitempty" flag:"format" desc:"csv or json (default: from the file extension)"`
+	File string `json:"file" arg:"0" desc:"the file to import (csv or json lines)"`
+	// From is the import source (XQ9: every import takes --from; v0.1.17
+	// had no meta import, so no --format alias is kept).
+	From   string `json:"from,omitempty" flag:"from" desc:"csv or json (default: from the file extension)"`
 	DryRun bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be written; write nothing"`
 }
 
@@ -95,7 +97,7 @@ func metaFormat(given, file string) (string, error) {
 	case metaFormatJSON, "jsonl", "ndjson":
 		return metaFormatJSON, nil
 	}
-	return "", errs.New(errs.InvalidInput, "meta: unknown format "+quote(f)).WithHint("--format csv or json")
+	return "", errs.New(errs.InvalidInput, "meta: unknown format "+quote(f)).WithHint("csv or json (export: --format, import: --from)")
 }
 
 // exportValue is one entry's value as a record value.
@@ -223,7 +225,7 @@ func importTerm(rec MetaRecord) (meta.Term, bool, error) {
 // batch.preview_rows (XQ2) ─► one import batch; every write runs the normal
 // metadata checks, so `lore batch undo` reverses it.
 func (o ops) metaImport(ctx context.Context, in MetaImportIn) (RowOut, error) {
-	format, err := metaFormat(in.Format, in.File)
+	format, err := metaFormat(in.From, in.File)
 	if err != nil {
 		return RowOut{}, err
 	}

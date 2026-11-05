@@ -234,7 +234,7 @@ func (o ops) extendField(ctx context.Context, k, f located, target store.Source,
 		on   bool
 		what string
 	}{{in.NoRequired, "make it optional"}, {in.NoSensitive, "unmark sensitive"}, {in.NoInternal, "unmark internal"},
-		{in.NoStrict, "unmark strict"}, {len(in.RemoveValues) > 0, "remove values"}, {in.Deprecated || in.NoDeprecated, "change deprecated"},
+		{in.NoStrict, "unmark strict"}, {len(in.RemoveValues) > 0, "remove values"}, {len(in.RenameValues) > 0, "rename values"}, {in.Deprecated || in.NoDeprecated, "change deprecated"},
 		{in.Default != "", "change the default"}, {in.ReplacedBy != "", "set replaced-by"}, {in.RemindBefore != "", "set remind-before"},
 		{in.Label != "", "change the label"}, {in.Description != "", "change the description"}} {
 		if x.on {

@@ -360,6 +360,7 @@ func Ops(m Manager) []op.Entry {
 			}
 			return m.AddFolder(ctx, in)
 		}),
+		setURLOp(m),
 	}
 }
 
@@ -430,15 +431,16 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 }
 
 // WritesStoresFile reports whether the operation name records a store in
-// the repo's committed stores.yaml (init of a store other than `me`, add):
+// the repo's committed stores.yaml (init of a store other than `me`, add,
+// set-url):
 // in a client repo that puts the store url in a file the client reads, so
 // the composition root asks first (CFG7).
-func WritesStoresFile(name string) bool { return name == OpInit || name == OpAdd }
+func WritesStoresFile(name string) bool { return name == OpInit || name == OpAdd || name == OpSetURL }
 
 // IsStoreOp reports whether name is one of the store operations: they edit
 // configuration files, not rows, so the composition root runs them without
 // opening the attached stores (one unreachable store must not block
 // `lore store remove`).
 func IsStoreOp(name string) bool {
-	return slices.Contains([]string{OpInit, OpAdd, OpRemove, OpList, OpVisibility, OpFolderAdd}, name)
+	return slices.Contains([]string{OpInit, OpAdd, OpRemove, OpList, OpVisibility, OpFolderAdd, OpSetURL}, name)
 }

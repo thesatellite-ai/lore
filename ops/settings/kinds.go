@@ -123,6 +123,7 @@ type FieldEditIn struct {
 	NoInternal   bool     `json:"no_internal,omitempty" flag:"no-internal" desc:"mark it not internal"`
 	AddValues    []string `json:"add_values,omitempty" flag:"add-value" desc:"add an allowed value (repeatable)"`
 	RemoveValues []string `json:"remove_values,omitempty" flag:"remove-value" desc:"remove an allowed value (repeatable; refused while rows use it)"`
+	RenameValues []string `json:"rename_values,omitempty" flag:"rename-value" desc:"rename an allowed value, <old>=<new> (repeatable); rows holding it are rewritten"`
 	Label        string   `json:"label,omitempty" flag:"label" desc:"display label"`
 	Description  string   `json:"description,omitempty" flag:"description" desc:"what the field means"`
 	NoStrict     bool     `json:"no_strict,omitempty" flag:"no-strict" desc:"back to newer-wins on a both-sides change (asks)"`
@@ -136,6 +137,8 @@ type FieldRenameIn struct {
 	Kind string `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Old  string `json:"field" arg:"1" desc:"the current field name"`
 	New  string `json:"new_name" arg:"2" desc:"the new field name"`
+	// DryRun previews (CLI_REFERENCE 3.2): checks run, nothing is written.
+	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would change; write nothing"`
 }
 
 // FieldRemoveIn is the input of resource.field.remove.
@@ -292,7 +295,7 @@ func (o ops) kindOps() []op.Entry {
 			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "closed set", CLI: "lore resource field add host provider --type text --required --values hetzner,aws", Want: "fld_"}}}, o.fieldAdd),
 		op.Define(op.Spec{Name: OpFieldEdit, Summary: "Edit a field of a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: layerErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldEdit),
+			Errors: append(slices.Clone(layerErrors), errs.ResourceType), Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldEdit),
 		op.Define(op.Spec{Name: OpFieldRename, Summary: "Rename a field (a label change: rows key values by fld_ id)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: nameErrors}, o.fieldRename),
 		op.Define(op.Spec{Name: OpFieldRemove, Summary: "Remove a field from a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
@@ -670,7 +673,8 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 	if err = optTexts(patch, map[string]string{fLabel: in.Label, fDescription: in.Description}); err != nil {
 		return RowOut{}, err
 	}
-	if len(in.AddValues) > 0 || len(in.RemoveValues) > 0 {
+	var renames []valueRename
+	if len(in.AddValues) > 0 || len(in.RemoveValues) > 0 || len(in.RenameValues) > 0 {
 		vals := texts(f.Row, fValues)
 		for _, v := range in.AddValues {
 			if !slices.Contains(vals, v) {
@@ -688,6 +692,9 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 			}
 			vals = slices.DeleteFunc(vals, func(x string) bool { return x == v })
 		}
+		if renames, vals, err = renamePairs(in.Kind+"."+in.Field, in.RenameValues, vals); err != nil {
+			return RowOut{}, err
+		}
 		if patch[fValues], err = textList(vals); err != nil {
 			return RowOut{}, err
 		}
@@ -698,7 +705,17 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 	if err = o.checkOuterEdit(ctx, k, f, patch); err != nil {
 		return RowOut{}, err
 	}
-	return o.patchRow(ctx, f, patch, "edited field "+in.Kind+"."+in.Field)
+	out, err := o.patchRow(ctx, f, patch, "edited field "+in.Kind+"."+in.Field)
+	if err != nil || len(renames) == 0 {
+		return out, err
+	}
+	// CLI_REFERENCE 3.2: --rename-value rewrites every row holding the value.
+	n, err := o.rewriteValueRows(ctx, k, f, renames)
+	if err != nil {
+		return out, err
+	}
+	out.Human += fmt.Sprintf("  renamed %d value(s); %d resources rewritten\n", len(renames), n)
+	return out, nil
 }
 
 func (o ops) fieldRename(ctx context.Context, in FieldRenameIn) (RowOut, error) {
@@ -719,6 +736,15 @@ func (o ops) fieldRename(ctx context.Context, in FieldRenameIn) (RowOut, error) 
 	v, err := txt(in.New)
 	if err != nil {
 		return RowOut{}, err
+	}
+	if in.DryRun {
+		using, uerr := o.resourcesUsing(ctx, k, f)
+		if uerr != nil {
+			return RowOut{}, uerr
+		}
+		return RowOut{ID: f.Row.ID.String(), Store: string(f.Src), Human: fmt.Sprintf(
+			"would rename field %s.%s → %s (%s); %d resources hold values (keyed by fld_ id, their stored name refreshes on their next write)\ndry run: nothing written\n",
+			in.Kind, in.Old, in.New, short(f.Row.ID), len(using))}, nil
 	}
 	return o.patchRow(ctx, f, map[string]value.Value{kName: v}, "renamed field "+in.Kind+"."+in.Old+" → "+in.New+"; no values changed")
 }
