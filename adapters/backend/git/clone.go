@@ -281,12 +281,14 @@ const msgMissingRemoteRef = "couldn't find remote ref"
 func (b *Backend) fetch(ctx context.Context, dir string) error {
 	_, err := b.git.run(ctx, call{dir: dir, args: []string{"fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", "--", RemoteName, "+" + headsPrefix + "*:" + trackingRefNS + "*"}})
 	if err == nil {
+		b.stampFetch(ctx, dir) // RES 3.6: the remote answered (fresh.go)
 		return nil
 	}
 	if _, ran := exitCode(err); !ran {
 		return err // git never ran, or ctx ended
 	}
 	if strings.Contains(stderrOf(err), msgMissingRemoteRef) {
+		b.stampFetch(ctx, dir)
 		return nil
 	}
 	return errs.Wrap(errs.Offline, "git: fetch the store", errors.Join(errOffline, err))
