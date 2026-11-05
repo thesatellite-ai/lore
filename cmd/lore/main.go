@@ -58,6 +58,7 @@ func run(ctx context.Context, args []string) int {
 	root.Version = version
 	h := &host{app: app, home: home}
 	h.markPrinted(root)
+	mountShortcuts(root)
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd))
 	root.SetArgs(args)
 	if err := root.ExecuteContext(ctx); err != nil {
