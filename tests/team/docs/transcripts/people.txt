@@ -44,7 +44,7 @@ stable:      yes
 alice (notes-checkout)$ git add org/.lore/lore-org.yaml && git commit -qm 'suggest the agency org entry' && git push -q origin main
 
 ### org import
-bob (work/website)$ lore org import git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
+bob$ lore org import git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
 This adds to ~/.lore/config.yaml:
 
     name: agency
@@ -60,11 +60,8 @@ This adds to ~/.lore/config.yaml:
     repos:
         - github.com/client/*
 ✓ added org entry agency
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 ✓ act_7a670ae8548ed05bf57ad29ad0759504 Bob Roe (@bob) registered in agency org/
-bob (work/website)$ cat ~/.lore/config.yaml
+bob$ cat ~/.lore/config.yaml
 orgs:
     - name: agency
       identity:

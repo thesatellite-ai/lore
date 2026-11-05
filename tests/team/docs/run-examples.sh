@@ -853,11 +853,10 @@ Y
   on alice notes-checkout "git add org/.lore/lore-org.yaml && git commit -qm 'suggest the agency org entry' && git push -q origin main"
 
   note "org import"
-  # Run inside one of the org's repos: the import also registers bob on the
-  # roster, which needs a repo (outside one it exits non-zero, BUG-T3).
+  # Run outside any repo: the register step opens only the org store (BUG-T3).
+  on bob . "lore org import git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes"
+  on bob . "cat ~/.lore/config.yaml"
   quiet bob work "git clone -q https://github.com/client/website website"
-  on bob work/website "lore org import git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes"
-  on bob work/website "cat ~/.lore/config.yaml"
   on bob work/website "lore whoami"
 
   note "org set"

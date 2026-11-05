@@ -103,11 +103,11 @@ $ git add org/.lore/lore-org.yaml && git commit -qm 'suggest the agency org entr
 ```
 <!-- /example -->
 
-Then each new person runs one command with their own email, inside a clone of one of the org's repos. Lore shows the entry, adds it to their config and puts them on the roster (the org's list of people). Run outside a repo, the entry is still added but the roster step fails and the command exits non-zero, telling you to run `lore actor register` in one of the org's repos:
+Then each new person runs one command with their own email, from any folder: no repo is needed. Lore shows the entry, adds it to their config and puts them on the roster (the org's list of people), opening only the org's store. If the roster step fails (the store cannot be reached, say), the entry is still added and the command exits non-zero, telling you to run `lore actor register` again later:
 
 <!-- example: people#org-import -->
 ```console
-# bob, in website
+# bob, in ~
 $ lore org import git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
 This adds to ~/.lore/config.yaml:
     name: agency
@@ -138,6 +138,8 @@ orgs:
         - github.com/agency/*
       repos:
         - github.com/client/*
+
+# bob, in website
 $ lore whoami
 org        agency  (matched by: link in <redacted>, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_7a67…9504  @bob  (from: org entry (config.yaml))
