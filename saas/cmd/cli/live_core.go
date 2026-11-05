@@ -443,6 +443,9 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		// where it is, live (rule 1: a live row stays live).
 		chosen := liveChoiceFor(ch.Row.Table) && liveReadable(s, ch.Row.Table)
 		if !chosen && !isLiveKind(s, ch.Row.Table) && (!inLive || !liveReadable(s, ch.Row.Table)) {
+			if ch, err = b.landedExpect(ctx, s, ch); err != nil {
+				return err
+			}
 			branch = append(branch, ch)
 			continue
 		}
@@ -464,15 +467,8 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 			place = rowroute.PlaceLive
 		}
 		if place != rowroute.PlaceLive {
-			if !inBranch && !inLive && !ch.Expect.IsZero() {
-				// An edit of a row Get served from origin/<default>
-				// (landedOnDefault): the edit materialises that copy
-				// into .lore/data, so the branch file it expects is
-				// "none" — but only when the caller read exactly that
-				// copy (its HLC), never a stale one.
-				if landed, ok := b.landedOnDefault(ctx, s, k); ok && landed.HLC.Compare(ch.Expect) == 0 {
-					ch.Expect = hlc.HLC{}
-				}
+			if !inBranch && !inLive {
+				ch = b.materialiseLanded(ctx, s, ch)
 			}
 			branch = append(branch, ch)
 			continue
@@ -856,8 +852,59 @@ func (b *liveBackend) WriteAudited(ctx context.Context, changes []store.Change, 
 		if !branch {
 			return b.Write(ctx, changes)
 		}
+		// The journal path writes the batch to the branch exactly as
+		// Write's branch route does, so it materialises read-through
+		// rows the same way (without it an edit of a landed memory was
+		// E_STALE: the branch file it expected is not in .lore/data).
+		out := make([]store.Change, len(changes))
+		for i, ch := range changes {
+			if out[i], err = b.landedExpect(ctx, s, ch); err != nil {
+				return err
+			}
+		}
+		changes = out
 	}
 	return j.WriteAudited(ctx, changes, recs)
+}
+
+// landedExpect is materialiseLanded for a change whose branch and live
+// copies are not known yet: it applies only to a row that is neither on
+// the branch nor live (Get then served it from origin/<default>).
+func (b *liveBackend) landedExpect(ctx context.Context, s *liveSession, ch store.Change) (store.Change, error) {
+	if ch.Expect.IsZero() || !liveReadable(s, ch.Row.Table) {
+		return ch, nil // landedOnDefault serves only live-readable tables (Get)
+	}
+	_, berr := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID)
+	if berr == nil {
+		return ch, nil
+	}
+	if !errors.Is(berr, store.ErrNotFound) {
+		return ch, berr
+	}
+	_, files, err := b.liveFiles(ctx, s)
+	if err != nil {
+		return ch, err
+	}
+	if _, inLive := files[live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}]; inLive {
+		return ch, nil
+	}
+	return b.materialiseLanded(ctx, s, ch), nil
+}
+
+// materialiseLanded resets the Expect of an edit of a row Get served from
+// origin/<default> (landedOnDefault) and that is neither on the branch nor
+// live: the edit materialises that copy into .lore/data, so the branch
+// file it expects is "none" — but only when the caller read exactly that
+// copy (its HLC), never a stale one (F1 read-through).
+func (b *liveBackend) materialiseLanded(ctx context.Context, s *liveSession, ch store.Change) store.Change {
+	if ch.Expect.IsZero() {
+		return ch
+	}
+	k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
+	if landed, ok := b.landedOnDefault(ctx, s, k); ok && landed.HLC.Compare(ch.Expect) == 0 {
+		ch.Expect = hlc.HLC{}
+	}
+	return ch
 }
 
 // wholeBatchToBranch reports whether Write would send every change of the
