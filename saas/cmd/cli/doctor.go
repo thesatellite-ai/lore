@@ -31,6 +31,7 @@ import (
 
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
+	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 
 	"github.com/spf13/cobra"
 )
@@ -267,6 +268,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	// 10. Duplicate imports (PROV9).
 	doctorDuplicateImports(ctx, r)
 	doctorTaskTree(ctx, r)
+	doctorTrash(ctx, r) // DELETION 3.8: rows past trash.retention_days, tombstones
 	// 10b. Secret rules that are off + leftover LORE_SYNC_ALLOW_SECRETS (D2/D3, doctor_secrets.go).
 	doctorSecretRules(ctx, r)
 	// 11. Context budget and launch set (CONTEXT_BUDGET 6.11, CQ7).
@@ -615,4 +617,24 @@ func doctorTaskTree(ctx context.Context, r *doctorReport) {
 		r.Warnings = append(r.Warnings, line)
 		degrade(r)
 	}
+}
+
+// doctorTrash is the trash check (DELETION 3.8, build step 9; opstrash.Doctor):
+// rows past trash.retention_days warn and name the purge command (never
+// purged here, DQ3); the trash and tombstone counts are a note.
+func doctorTrash(ctx context.Context, r *doctorReport) {
+	if coreApp == nil {
+		return
+	}
+	warnings, notes, err := opstrash.Doctor(ctx, coreApp)
+	if err != nil {
+		r.Warnings = append(r.Warnings, "trash: the trash could not be read: "+err.Error())
+		degrade(r)
+		return
+	}
+	for _, w := range warnings {
+		r.Warnings = append(r.Warnings, w)
+		degrade(r)
+	}
+	r.Notes = append(r.Notes, notes...)
 }
