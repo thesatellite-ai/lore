@@ -266,7 +266,7 @@ func filesHash(files map[string][]byte) string {
 	h := sha256.New()
 	for _, p := range paths {
 		sum := sha256.Sum256(files[p])
-		fmt.Fprintf(h, "%s %x\n", p, sum)
+		h.Write(fmt.Appendf(nil, "%s %x\n", p, sum)) // hash.Hash.Write never returns an error
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

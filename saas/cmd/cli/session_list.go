@@ -83,12 +83,12 @@ func newSessionListCommand() *cobra.Command {
 		Short: "List agent sessions on this machine: tool, session, model, version, place",
 		Example: `  lore session list
   lore session list --json`,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) (err error) {
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			rows, err := sessions.List(cmd.Context(), client, sessionListLimit)
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list sessions").WithCause(err)

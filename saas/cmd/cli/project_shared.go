@@ -99,7 +99,7 @@ const (
 )
 
 // ExportModeB implements wire.ModeBExporter.
-func (modeBExporter) ExportModeB(ctx context.Context, pointerPath string) (wire.ModeBExport, error) {
+func (modeBExporter) ExportModeB(ctx context.Context, pointerPath string) (_ wire.ModeBExport, err error) {
 	ptr, err := readModeBPointer(pointerPath)
 	if err != nil {
 		return wire.ModeBExport{}, err
@@ -116,7 +116,7 @@ func (modeBExporter) ExportModeB(ctx context.Context, pointerPath string) (wire.
 		return wire.ModeBExport{}, errcodes.New(errcodes.NotFound, "migrate: the shared lore.db "+dbPath+" named by "+pointerPath+" is not there").WithCause(err)
 	}
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
+	defer joinClose(&err, db, "the DB")
 	out := wire.ModeBExport{DBPath: dbPath, ProjectID: ptr.ProjectID}
 	if err := db.QueryRowContext(ctx, `SELECT name FROM `+projectsTable+` WHERE id = ?`, ptr.ProjectID).Scan(&out.ProjectName); err != nil {
 		return wire.ModeBExport{}, errcodes.New(errcodes.NotFound, "migrate: project "+ptr.ProjectID+" is not in "+dbPath).WithCause(err)
@@ -249,7 +249,7 @@ func modeBRowIDs(ctx context.Context, db *sql.DB, projectID string) ([]tableRow,
 }
 
 // modeBTagLinks reads the entity_tags rows of the exported rows.
-func modeBTagLinks(ctx context.Context, db *sql.DB, exported map[string]bool) ([]opsmemory.TagLink, error) {
+func modeBTagLinks(ctx context.Context, db *sql.DB, exported map[string]bool) (_ []opsmemory.TagLink, err error) {
 	cols, err := tableColumns(ctx, db, entityTagsTable)
 	if err != nil || len(cols) == 0 {
 		return nil, err
@@ -258,7 +258,7 @@ func modeBTagLinks(ctx context.Context, db *sql.DB, exported map[string]bool) ([
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "migrate: list entity_tags").WithCause(err)
 	}
-	defer rows.Close()
+	defer joinClose(&err, rows, "the query rows")
 	var out []opsmemory.TagLink
 	for rows.Next() {
 		var l opsmemory.TagLink
@@ -273,12 +273,12 @@ func modeBTagLinks(ctx context.Context, db *sql.DB, exported map[string]bool) ([
 }
 
 // tableColumns returns a table's column names (none when it is absent).
-func tableColumns(ctx context.Context, db *sql.DB, table string) ([]string, error) {
+func tableColumns(ctx context.Context, db *sql.DB, table string) (_ []string, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT name FROM pragma_table_info(?)`, table)
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "migrate: columns of "+table).WithCause(err)
 	}
-	defer rows.Close()
+	defer joinClose(&err, rows, "the query rows")
 	var out []string
 	for rows.Next() {
 		var n string
@@ -291,12 +291,12 @@ func tableColumns(ctx context.Context, db *sql.DB, table string) ([]string, erro
 }
 
 // queryIDs runs a one-column id query.
-func queryIDs(ctx context.Context, db *sql.DB, q string, args ...any) ([]string, error) {
+func queryIDs(ctx context.Context, db *sql.DB, q string, args ...any) (_ []string, err error) {
 	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "migrate: list ids").WithCause(err)
 	}
-	defer rows.Close()
+	defer joinClose(&err, rows, "the query rows")
 	var out []string
 	for rows.Next() {
 		var id string

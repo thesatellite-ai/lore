@@ -41,7 +41,7 @@ func newBenchGraderTestCommand() *cobra.Command {
 		Use:   "test <eval-code>",
 		Short: "Run a grader against a sample output file (no model call)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if outputFile == "" {
 				return errcodes.New(errcodes.InvalidInput, "--output-file=<path> required")
 			}
@@ -53,7 +53,7 @@ func newBenchGraderTestCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -100,12 +100,12 @@ func newBenchGraderDebugCommand() *cobra.Command {
 		Use:   "debug <result-id>",
 		Short: "Show stored grader_trace for one result (forensic debug)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -152,12 +152,12 @@ all stored BenchResult rows. Flags:
   - too-loose:  pass-rate > 95% across both arms (no discrimination)
   - flaky:      attempt-to-attempt variance > 30pp on the same arm
   - error-prone: > 10% of results graded as 'error' (cmd crashed)`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err

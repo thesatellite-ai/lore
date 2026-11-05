@@ -12,9 +12,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/thesatellite-ai/lore/wire"
 	"os"
 	"saas/pkg/constants"
+
+	"github.com/thesatellite-ai/lore/wire"
 
 	"dbent"
 	"dbent/gen/ent"
@@ -115,13 +116,11 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 
 	db := dbent.InitDB(ctx.DBPath)
 	if err := dbent.ApplyPragmas(db); err != nil {
-		db.Close()
-		return nil, nil, errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
+		return nil, nil, errcodes.New(errcodes.Internal, "apply pragmas").WithCause(errors.Join(err, db.Close()))
 	}
 	if err := dbent.QuickCheck(db); err != nil {
-		db.Close()
 		return nil, nil, errcodes.New(errcodes.DBCorrupt, "DB failed quick_check").
-			WithCause(err).
+			WithCause(errors.Join(err, db.Close())).
 			WithHint("run `lore repair` to attempt recovery")
 	}
 

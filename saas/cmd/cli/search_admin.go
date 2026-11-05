@@ -44,7 +44,7 @@ func newSearchRebuildCommand() *cobra.Command {
 
 Pass --kind=<entity> to rebuild only one (e.g. --kind=memory). Omitting
 the flag rebuilds every registered entity.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -52,7 +52,7 @@ the flag rebuilds every registered entity.`,
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			rawDB := rawDBFromClient(client)
 			if rawDB == nil {
 				return errcodes.New(errcodes.Internal, "raw DB unavailable")
@@ -90,12 +90,12 @@ func newSearchStatusCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Per-entity FTS5 row counts + drift health",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			rawDB := rawDBFromClient(client)
 			if rawDB == nil {
 				return errcodes.New(errcodes.Internal, "raw DB unavailable")

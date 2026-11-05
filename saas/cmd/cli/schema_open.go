@@ -90,9 +90,9 @@ func ensureDBSchema(ctx context.Context, dbPath string) error {
 
 // schemaState reads the log state and the version stamp on a short-lived
 // connection (runSetup opens its own; ent's Migrate closes what it gets).
-func schemaState(ctx context.Context, dbPath string) (migrationlog.State, string, error) {
+func schemaState(ctx context.Context, dbPath string) (_ migrationlog.State, _ string, err error) {
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
+	defer joinClose(&err, db, "the DB")
 	state, err := migrationlog.NeedsUpdate(ctx, db)
 	if err != nil {
 		return state, "", errcodes.New(errcodes.Internal, "read schema migration log").WithCause(err)
@@ -182,7 +182,7 @@ func updateSchema(ctx context.Context, dbPath, stamped string) error {
 // backupBeforeSchema writes .lore/backups/pre-schema-<old>-to-<new>-<date>.sqlite
 // with VACUUM INTO (the `lore backup` mechanism). A name already taken today
 // gets the time appended, so a second update never overwrites a backup.
-func backupBeforeSchema(ctx context.Context, dbPath, old string) (string, error) {
+func backupBeforeSchema(ctx context.Context, dbPath, old string) (_ string, err error) {
 	dir := filepath.Join(filepath.Dir(dbPath), schemaBackupDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", errcodes.New(errcodes.Internal, "mkdir "+dir).WithCause(err)
@@ -198,7 +198,7 @@ func backupBeforeSchema(ctx context.Context, dbPath, old string) (string, error)
 		return "", errcodes.New(errcodes.Internal, "backup path").WithCause(err)
 	}
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
+	defer joinClose(&err, db, "the DB")
 	if _, err := db.ExecContext(ctx, "VACUUM INTO ?", abs); err != nil {
 		return "", errcodes.New(errcodes.Internal, "back the database up before its schema update").WithCause(err).
 			WithHint("free disk space or run `" + BinaryName + " setup` after a manual `" + BinaryName + " backup`")

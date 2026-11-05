@@ -56,12 +56,12 @@ keymap and , for the leader menu.`,
 	return cmd
 }
 
-func runTUI(ctx context.Context, f *tuiFlags) error {
+func runTUI(ctx context.Context, f *tuiFlags) (err error) {
 	rctx, client, err := resolveContext(&f.commonFlags)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 
 	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {

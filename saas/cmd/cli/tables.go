@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -44,16 +45,16 @@ func tableCounts(ctx context.Context, db *sql.DB) ([]tableCount, error) {
 	for rows.Next() {
 		var n string
 		if err := rows.Scan(&n); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("scan table name: %w", err)
+			return nil, fmt.Errorf("scan table name: %w", errors.Join(err, rows.Close()))
 		}
 		names = append(names, n)
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, err
+		return nil, errors.Join(err, rows.Close())
 	}
-	rows.Close()
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close table list: %w", err)
+	}
 
 	out := make([]tableCount, 0, len(names))
 	for _, n := range names {
@@ -117,15 +118,15 @@ func newTablesCommand() *cobra.Command {
 
 FTS5 virtual/shadow tables and SQLite internals are excluded.
 Sortable (--sort=name|count[:asc|desc]) and filterable (--filter=<substr>).`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 
 			db := dbent.InitDB(rctx.DBPath)
-			defer db.Close()
+			defer joinClose(&err, db, "the DB")
 
 			counts, err := tableCounts(cmd.Context(), db)
 			if err != nil {

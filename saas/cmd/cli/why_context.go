@@ -51,12 +51,12 @@ the full text.`,
 	return cmd
 }
 
-func runWhyContext(ctx context.Context, f *whyContextFlags) error {
+func runWhyContext(ctx context.Context, f *whyContextFlags) (err error) {
 	rctx, client, err := resolveContext(&f.commonFlags)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 
 	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {

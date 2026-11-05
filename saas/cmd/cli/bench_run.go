@@ -126,7 +126,7 @@ given USD threshold.`,
 	return cmd
 }
 
-func runBenchRunStart(ctx context.Context, f *benchRunStartFlags) error {
+func runBenchRunStart(ctx context.Context, f *benchRunStartFlags) (err error) {
 	if err := refuseIfReadOnly(&f.commonFlags); err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func runBenchRunStart(ctx context.Context, f *benchRunStartFlags) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		return err
@@ -435,12 +435,12 @@ func newBenchRunListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List past bench runs",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -495,12 +495,12 @@ func newBenchRunShowCommand() *cobra.Command {
 		Use:   "show <run-id-or-code>",
 		Short: "Show one bench run with per-task verdict",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -550,7 +550,7 @@ func newBenchRunCancelCommand() *cobra.Command {
 		Use:   "cancel <run-id-or-code>",
 		Short: "Mark a running benchmark as aborted",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -558,7 +558,7 @@ func newBenchRunCancelCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err

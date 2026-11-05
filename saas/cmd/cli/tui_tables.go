@@ -31,9 +31,9 @@ func registerTablesScreen(app *enttuirt.App, dbPath string) {
 			SortDir:   enttuirt.Desc,
 			Mode:      "table",
 		},
-		Fetch: func(ctx context.Context, opts enttuirt.ListOpts) ([]tableCount, int, error) {
+		Fetch: func(ctx context.Context, opts enttuirt.ListOpts) (_ []tableCount, _ int, err error) {
 			db := dbent.InitDB(dbPath)
-			defer db.Close()
+			defer joinClose(&err, db, "the DB")
 			tc, err := tableCounts(ctx, db)
 			if err != nil {
 				return nil, 0, err

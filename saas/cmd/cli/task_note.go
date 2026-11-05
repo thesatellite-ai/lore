@@ -283,13 +283,13 @@ func plainNote(ctx context.Context, id, body string) error {
 	return plainNoteIn(ctx, &commonFlags{}, id, body)
 }
 
-func plainNoteIn(ctx context.Context, f *commonFlags, id, body string) error {
+func plainNoteIn(ctx context.Context, f *commonFlags, id, body string) (err error) {
 	by, projected := clientAuthor(ctx)
 	_, client, err := resolveContext(f)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 	if !projected {
 		if by, err = resolveCurrentActorID(ctx, client); err != nil {
 			return err

@@ -51,12 +51,12 @@ func newBenchResultStatsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Tally pass/fail/error grouped by arm for one run (live-safe)",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -216,12 +216,12 @@ func newBenchResultListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List bench results (filter by --run, --eval, --arm, --grade)",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -293,12 +293,12 @@ func newBenchResultShowCommand() *cobra.Command {
 		Use:   "show <result-id>",
 		Short: "Show one bench result: prompt sent, output received, grader trace",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -349,12 +349,12 @@ func newBenchResultCompareCommand() *cobra.Command {
 		Use:   "compare <result-a> <result-b>",
 		Short: "Side-by-side: prompts, outputs, grades",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -401,7 +401,7 @@ model cost of re-querying
 Either pass a single <result-id> OR use --run=<id-or-code> [--all] to
 regrade a whole run.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -409,7 +409,7 @@ regrade a whole run.`,
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -458,7 +458,9 @@ regrade a whole run.`,
 					SetGraderTrace(verdict.Trace).
 					Save(cmd.Context())
 				if err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "  ! %s: %v\n", r.ID, err)
+					if _, werr := fmt.Fprintf(cmd.ErrOrStderr(), "  ! %s: %v\n", r.ID, err); werr != nil {
+						return werr
+					}
 				}
 			}
 			fmt.Printf("%s regraded: %d flipped, %d unchanged (%d total)\n",

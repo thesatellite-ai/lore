@@ -29,12 +29,12 @@ func newRunListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List runs",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			_ = rctx
 			rows, err := client.Run.Query().
 				Order(ent.Desc(entRun.FieldID)).
@@ -76,12 +76,12 @@ func newQueryLogListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List querylogs",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			_ = rctx
 			rows, err := client.QueryLog.Query().
 				Order(ent.Desc(entQueryLog.FieldID)).
@@ -121,12 +121,12 @@ func newRenderHistoryListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List renderhistorys",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			_ = rctx
 			rows, err := client.RenderHistory.Query().
 				Order(ent.Desc(entRenderHistory.FieldID)).

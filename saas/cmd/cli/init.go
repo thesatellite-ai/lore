@@ -103,7 +103,7 @@ Refuses if a project already exists (.lore/lore.db or .lore/lore.yaml).`,
 	return cmd
 }
 
-func runInit(ctx context.Context, projectRoot string) error {
+func runInit(ctx context.Context, projectRoot string) (err error) {
 	// 1. A checkout that already carries shared lore data (.lore/data from a
 	// teammate) but no local DB: adopt it instead of minting a second
 	// project (E1).
@@ -174,7 +174,7 @@ func runInit(ctx context.Context, projectRoot string) error {
 		return err
 	}
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
+	defer joinClose(&err, db, "the DB")
 	if err := dbent.ApplyPragmas(db); err != nil {
 		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
 	}
@@ -182,7 +182,7 @@ func runInit(ctx context.Context, projectRoot string) error {
 	client := entdb.Client()
 	client.Use(naturalIDHook())
 	client.Use(txAtMonotonicHook())
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 
 	// 6. Seed the initial actor row (identity resolved before step 3)
 	if !resolved.Step.Stable() {
@@ -378,7 +378,7 @@ const (
 // full schema, config singletons and the FTS5 search tables. Shared by
 // `lore init` and by the fresh-clone path (materializeFromData), which
 // must produce an identical cache before importing .lore/data.
-func createProjectDB(ctx context.Context, dbPath string) error {
+func createProjectDB(ctx context.Context, dbPath string) (err error) {
 	db := dbent.InitDB(dbPath)
 	if err := dbent.ApplyPragmas(db); err != nil {
 		_ = db.Close() // the pragma error is the one to report
@@ -389,7 +389,7 @@ func createProjectDB(ctx context.Context, dbPath string) error {
 		return errcodes.New(errcodes.Internal, "migrate schema").WithCause(err)
 	}
 	db = dbent.InitDB(dbPath)
-	defer db.Close()
+	defer joinClose(&err, db, "the DB")
 	if err := dbent.ApplyPragmas(db); err != nil {
 		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
 	}
@@ -474,7 +474,7 @@ func alreadyIgnored(ctx context.Context, projectRoot, path string) bool {
 }
 
 // ensureGitignore appends standard lore paths to .gitignore if missing
-func ensureGitignore(ctx context.Context, projectRoot string) error {
+func ensureGitignore(ctx context.Context, projectRoot string) (err error) {
 	gi := filepath.Join(projectRoot, ".gitignore")
 	required := []string{
 		".lore/lore.db",
@@ -513,7 +513,7 @@ func ensureGitignore(ctx context.Context, projectRoot string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer joinClose(&err, f, "the file")
 
 	if existing != "" && !strings.HasSuffix(existing, "\n") {
 		if _, err := f.WriteString("\n"); err != nil {

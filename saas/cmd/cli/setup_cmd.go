@@ -44,8 +44,8 @@ const setupFingerprintKey = "fts_registry_fingerprint"
 func computeRegistryFingerprint() string {
 	h := sha256.New()
 	for _, c := range fts5.Registry {
-		fmt.Fprintf(h, "%s|%s|%v|%v|%d\n",
-			c.Entity, c.Table, c.Columns, c.Weights, c.SchemaVersion)
+		h.Write(fmt.Appendf(nil, "%s|%s|%v|%v|%d\n", // hash.Hash.Write never returns an error
+			c.Entity, c.Table, c.Columns, c.Weights, c.SchemaVersion))
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
@@ -115,7 +115,9 @@ hook only with context.hooks.prompt_search on or --prompt-search. It asks first.
 				return err
 			}
 			dbPath := rctx.DBPath
-			client.Close()
+			if err := client.Close(); err != nil {
+				return errcodes.New(errcodes.Internal, "close the project DB").WithCause(err)
+			}
 			// --schema-only: only the database schema update, terse, the step
 			// `lore upgrade` runs with the new binary right after the swap
 			// (FORMAT_EVOLUTION 8.11 part 2). resolveContext above already ran
@@ -162,7 +164,7 @@ func (o setupOptions) say(line string) {
 //  2. FTS5 base schema (memory_fts legacy table). Fresh conn
 //  3. FTS5 per-entity registry (23 <kind>_fts tables + triggers + backfill)
 //  4. Stamp the registry fingerprint so per-command warnings stop
-func runSetup(ctx context.Context, dbPath string, o setupOptions) error {
+func runSetup(ctx context.Context, dbPath string, o setupOptions) (err error) {
 	// 1. ent migration. Open + immediately hand to Migrate (which closes)
 	o.say(style.Hint("→ running ent schema migration..."))
 	// Record the migration as in_progress first: if it is killed half-way
@@ -187,11 +189,10 @@ func runSetup(ctx context.Context, dbPath string, o setupOptions) error {
 
 	// 2-4. FTS5 + fingerprint stamp on a fresh connection
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
+	defer joinClose(&err, db, "the DB")
 	if err := dbent.ApplyPragmas(db); err != nil {
 		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
 	}
-	var err error
 	if logVersion != 0 {
 		err = migrationlog.Complete(ctx, db, logVersion)
 	} else {

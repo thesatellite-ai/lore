@@ -50,7 +50,7 @@ func runAgentHook(ctx context.Context, tool, session, model string, hookStdin bo
 }
 
 // agentHook records the session details; the error is shown, not returned.
-func agentHook(ctx context.Context, tool, session, model string, hookStdin bool, stdin io.Reader) error {
+func agentHook(ctx context.Context, tool, session, model string, hookStdin bool, stdin io.Reader) (err error) {
 	tool = cleanHookValue(tool)
 	if tool == "" {
 		return errors.New("--tool needs a tool slug")
@@ -113,7 +113,7 @@ func agentHook(ctx context.Context, tool, session, model string, hookStdin bool,
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer joinClose(&err, db, "the DB")
 	if _, err := currentSessionWith(ctx, db, d); err != nil {
 		return err
 	}

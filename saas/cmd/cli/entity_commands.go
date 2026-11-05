@@ -81,12 +81,12 @@ func newPluginListCommand() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use: "list", Short: "List trusted plugins",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			rows, err := client.TrustedPlugin.Query().
 				Order(ent.Asc(entTrustedPlugin.FieldTrustedAt)).All(cmd.Context())
 			if err != nil {
@@ -144,7 +144,7 @@ func newPluginTrustCommand() *cobra.Command {
 	var name, sha string
 	cmd := &cobra.Command{
 		Use: "trust", Short: "Trust a plugin by name + sha256",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -155,7 +155,7 @@ func newPluginTrustCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			create := client.TrustedPlugin.Create().
 				SetName(name).
 				SetSha256(sha).
@@ -186,7 +186,7 @@ func newPluginUntrustCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "untrust <id>", Short: "Remove a trusted-plugin entry",
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -194,7 +194,7 @@ func newPluginUntrustCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			if err := client.TrustedPlugin.DeleteOneID(args[0]).Exec(cmd.Context()); err != nil {
 				return errcodes.New(errcodes.Internal, "untrust plugin").WithCause(err)
 			}
@@ -222,12 +222,12 @@ func newPIIPatternListCommand() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use: "list", Short: "List PII patterns",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			rows, err := client.PiiPattern.Query().
 				Order(ent.Asc(entPIIPattern.FieldName)).All(cmd.Context())
 			if err != nil {
@@ -308,12 +308,12 @@ func newMountAliasListCommand() *cobra.Command {
 	var jsonOut, expiringOnly bool
 	cmd := &cobra.Command{
 		Use: "list", Short: "List mount aliases (rename redirects)",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			q := client.MountAlias.Query()
 			if expiringOnly {
 				q = q.Where(entMountAlias.ExpiresAtLT(time.Now().Add(7 * 24 * time.Hour)))

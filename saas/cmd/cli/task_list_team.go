@@ -83,7 +83,7 @@ func filterTeamRows(ctx context.Context, _ *ent.Client, f *taskListTeamFlags, ro
 		p := signals.ClaimPath(folder, t.ID)
 		sig, claimed := v.Board[p]
 		_, active := v.Active(p)
-		if holder != "" && !(claimed && active && sig.Holder == holder) {
+		if holder != "" && (!claimed || !active || sig.Holder != holder) {
 			continue
 		}
 		if f.mine {

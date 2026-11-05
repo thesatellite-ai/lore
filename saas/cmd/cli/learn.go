@@ -94,12 +94,12 @@ learn_candidate. Review and promote with:
 	return cmd
 }
 
-func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []string) error {
+func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []string) (err error) {
 	rctx, client, err := resolveContext(f)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 
 	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
@@ -291,12 +291,12 @@ func newLearnListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List learn_candidates",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -345,12 +345,12 @@ func newLearnPromoteCommand() *cobra.Command {
 		Use:   "promote <id>",
 		Short: "Promote a learn_candidate to its target table",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -412,12 +412,12 @@ func newLearnRejectCommand() *cobra.Command {
 		Use:   "reject [id]",
 		Short: "Mark a learn_candidate as rejected (single, --ids=a,b,c, or --all)",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err

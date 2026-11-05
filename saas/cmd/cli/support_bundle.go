@@ -117,7 +117,7 @@ func gatherCounts(ctx context.Context, f *doctorFlags) map[string]int {
 	if err != nil {
 		return counts
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }() // read-only use
 
 	// Core-owned tables are counted through the core (live rows of every
 	// attached store); lore.db only holds a bridge copy of them. Without a
@@ -205,7 +205,7 @@ func supportSessions(ctx context.Context, f *doctorFlags) []supportSession {
 	if err != nil {
 		return out
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }() // read-only use
 	db := dbent.InitDB(rctx.DBPath)
 	defer func() { _ = db.Close() }() // read-only use
 	if ok, rerr := sessions.Ready(ctx, db); rerr != nil || !ok {

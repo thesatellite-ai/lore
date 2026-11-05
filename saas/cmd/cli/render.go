@@ -133,12 +133,12 @@ type renderResult struct {
 	Memories int `json:"memories"`
 }
 
-func runRender(ctx context.Context, f *renderFlags) error {
+func runRender(ctx context.Context, f *renderFlags) (err error) {
 	rctx, client, err := resolveContext(&f.commonFlags)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 
 	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {

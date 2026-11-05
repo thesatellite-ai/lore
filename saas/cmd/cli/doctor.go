@@ -153,7 +153,7 @@ Exit codes are stable across versions for monitoring integration.`,
 	return cmd
 }
 
-func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
+func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error) {
 	r := &doctorReport{
 		SchemaVersion: 1,
 		BinaryVersion: version,
@@ -176,7 +176,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	// 2. DB integrity
 	if rctx != nil {
 		db := dbent.InitDB(rctx.DBPath)
-		defer db.Close()
+		defer joinClose(&err, db, "the DB")
 		if err := dbent.ApplyPragmas(db); err != nil {
 			r.Errors = append(r.Errors, dbOpenError("pragmas", err))
 			r.Status = doctorBroken

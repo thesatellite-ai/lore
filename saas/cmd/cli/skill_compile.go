@@ -262,7 +262,7 @@ func buildSkillCompressPrompt(files map[string]string, budgetBytes int) string {
 	b.WriteString("\n---\n\nNow produce the compressed `SKILL-mini.md`. ")
 	b.WriteString("Respond with the compressed markdown ONLY — no preamble, no explanation, no closing remarks. ")
 	b.WriteString("Start your response with the YAML frontmatter (`---\\n`) and end with the last line of the bundle. ")
-	b.WriteString(fmt.Sprintf("Aim for approximately %d bytes total.\n", budgetBytes))
+	b.Write(fmt.Appendf(nil, "Aim for approximately %d bytes total.\n", budgetBytes))
 	return b.String()
 }
 

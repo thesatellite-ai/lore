@@ -83,7 +83,9 @@ func runUpgrade(ctx context.Context, out io.Writer, f upgradeFlags) error {
 	}
 	method := detectInstall(exe, version)
 	if method == installSource {
-		fmt.Fprintf(out, "This %s (%s) was built from source. Update it with: %s\n", BinaryName, version, sourceUpdateHint)
+		if _, werr := fmt.Fprintf(out, "This %s (%s) was built from source. Update it with: %s\n", BinaryName, version, sourceUpdateHint); werr != nil {
+			return werr
+		}
 		return nil
 	}
 	if method == installBrew && f.version != "" {
@@ -108,29 +110,45 @@ func runUpgrade(ctx context.Context, out io.Writer, f upgradeFlags) error {
 	have, want := normVersion(version), normVersion(target)
 	if pin.pin != "" && !f.ignorePin && f.version == "" && have == want {
 		latest, lerr := rc.latestTag(ctx)
-		fmt.Fprintf(out, "%s %s is this project's pinned version (%s)", BinaryName, have, pin.source)
+		if _, werr := fmt.Fprintf(out, "%s %s is this project's pinned version (%s)", BinaryName, have, pin.source); werr != nil {
+			return werr
+		}
 		if lerr == nil && normVersion(latest) != have {
-			fmt.Fprintf(out, "; the newest release is %s. Nothing to do.\n", normVersion(latest))
-			fmt.Fprintf(out, "hint: %s upgrade --ignore-pin to install %s anyway\n", BinaryName, normVersion(latest))
+			if _, werr := fmt.Fprintf(out, "; the newest release is %s. Nothing to do.\n", normVersion(latest)); werr != nil {
+				return werr
+			}
+			if _, werr := fmt.Fprintf(out, "hint: %s upgrade --ignore-pin to install %s anyway\n", BinaryName, normVersion(latest)); werr != nil {
+				return werr
+			}
 			return nil
 		}
-		fmt.Fprintln(out, ". Nothing to do.")
+		if _, werr := fmt.Fprintln(out, ". Nothing to do."); werr != nil {
+			return werr
+		}
 		return nil
 	}
 	if f.check {
 		if have == want || !formatgate.VersionBelow(have, want) {
-			fmt.Fprintf(out, "%s %s is the newest release; nothing to do.\n", BinaryName, have)
+			if _, werr := fmt.Fprintf(out, "%s %s is the newest release; nothing to do.\n", BinaryName, have); werr != nil {
+				return werr
+			}
 			return nil
 		}
-		fmt.Fprintf(out, "%s %s is available (you have %s, installed by %s). Run: %s upgrade\n", BinaryName, want, have, method, BinaryName)
+		if _, werr := fmt.Fprintf(out, "%s %s is available (you have %s, installed by %s). Run: %s upgrade\n", BinaryName, want, have, method, BinaryName); werr != nil {
+			return werr
+		}
 		return nil
 	}
 	if have == want {
-		fmt.Fprintf(out, "%s %s is the newest release; nothing to do.\n", BinaryName, have)
+		if _, werr := fmt.Fprintf(out, "%s %s is the newest release; nothing to do.\n", BinaryName, have); werr != nil {
+			return werr
+		}
 		return nil
 	}
 	if method == installOther {
-		fmt.Fprintf(out, "%s at %s is managed by another tool; changing nothing. It would have installed %s.\n", BinaryName, exe, want)
+		if _, werr := fmt.Fprintf(out, "%s at %s is managed by another tool; changing nothing. It would have installed %s.\n", BinaryName, exe, want); werr != nil {
+			return werr
+		}
 		return nil
 	}
 	if proceed, err := confirmDowngrade(out, have, want, filepath.Base(root), meta, inProject, f.yes); err != nil || !proceed {
@@ -138,7 +156,9 @@ func runUpgrade(ctx context.Context, out io.Writer, f upgradeFlags) error {
 	}
 	switch method {
 	case installBrew:
-		fmt.Fprintf(out, "%s %s → %s (installed by Homebrew)\n", BinaryName, have, want)
+		if _, werr := fmt.Fprintf(out, "%s %s → %s (installed by Homebrew)\n", BinaryName, have, want); werr != nil {
+			return werr
+		}
 		if err := runBrewUpgrade(ctx, out); err != nil {
 			return err
 		}
@@ -150,7 +170,9 @@ func runUpgrade(ctx context.Context, out io.Writer, f upgradeFlags) error {
 	if inProject {
 		runSchemaOnly(ctx, out, exe, root)
 	}
-	fmt.Fprintf(out, "Done. Running %s processes keep %s until they exit.\n", BinaryName, have)
+	if _, werr := fmt.Fprintf(out, "Done. Running %s processes keep %s until they exit.\n", BinaryName, have); werr != nil {
+		return werr
+	}
 	return nil
 }
 
@@ -161,7 +183,9 @@ func confirmDowngrade(out io.Writer, have, want, project string, meta projectMet
 	if !formatgate.VersionBelow(want, have) {
 		return true, nil
 	}
-	fmt.Fprintf(out, "%s %s → %s is a DOWNGRADE.\n", BinaryName, have, want)
+	if _, werr := fmt.Fprintf(out, "%s %s → %s is a DOWNGRADE.\n", BinaryName, have, want); werr != nil {
+		return false, werr
+	}
 	why := []string{}
 	if inProject {
 		why = lockedOut(want, meta)
@@ -174,18 +198,24 @@ func confirmDowngrade(out io.Writer, have, want, project string, meta projectMet
 		return false, errcodes.New(errcodes.Code(errs.NeedsConfirm), question).
 			WithHint("ask the person, then run `" + BinaryName + " upgrade --version " + tagOf(want) + " --yes`")
 	}
-	fmt.Fprintf(out, "%s [y/N] ", question)
+	if _, werr := fmt.Fprintf(out, "%s [y/N] ", question); werr != nil {
+		return false, werr
+	}
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n') // EOF answers no
 	if a := strings.ToLower(strings.TrimSpace(line)); a == "y" || a == "yes" {
 		return true, nil
 	}
-	fmt.Fprintln(out, "Nothing changed.")
+	if _, werr := fmt.Fprintln(out, "Nothing changed."); werr != nil {
+		return false, werr
+	}
 	return false, nil
 }
 
 // runBrewUpgrade hands a Homebrew install to brew and shows its output.
 func runBrewUpgrade(ctx context.Context, out io.Writer) error {
-	fmt.Fprintf(out, "Running: brew upgrade %s\n", brewFormula)
+	if _, werr := fmt.Fprintf(out, "Running: brew upgrade %s\n", brewFormula); werr != nil {
+		return werr
+	}
 	c := exec.CommandContext(ctx, "brew", "upgrade", brewFormula)
 	c.Stdout, c.Stderr = out, os.Stderr
 	if err := c.Run(); err != nil {
@@ -210,7 +240,9 @@ func upgradeByScript(ctx context.Context, out io.Writer, rc releaseClient, exe, 
 	defer unlock()
 	// The first upgrade may have finished while this one waited (8.9).
 	if now, verr := runVersion(ctx, exe); verr == nil && normVersion(now) == normVersion(tag) {
-		fmt.Fprintf(out, "already %s\n", normVersion(tag))
+		if _, werr := fmt.Fprintf(out, "already %s\n", normVersion(tag)); werr != nil {
+			return werr
+		}
 		return nil
 	}
 	dir := filepath.Dir(exe)
@@ -219,13 +251,17 @@ func upgradeByScript(ctx context.Context, out io.Writer, rc releaseClient, exe, 
 		return errcodes.New(errcodes.Code(errs.UpgradePermission), dir+" is not writable, so "+exe+" cannot be replaced").
 			WithHint("run `sudo " + BinaryName + " upgrade`")
 	}
-	fmt.Fprintf(out, "%s %s → %s (installed by script at %s)\n", BinaryName, have, normVersion(tag), exe)
+	if _, werr := fmt.Fprintf(out, "%s %s → %s (installed by script at %s)\n", BinaryName, have, normVersion(tag), exe); werr != nil {
+		return werr
+	}
 	name := archiveName(runtime.GOOS, runtime.GOARCH)
 	archive, err := rc.fetch(ctx, tag, name)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "  downloaded %s (%.1f MB)\n", name, float64(len(archive))/(1<<20))
+	if _, werr := fmt.Fprintf(out, "  downloaded %s (%.1f MB)\n", name, float64(len(archive))/(1<<20)); werr != nil {
+		return werr
+	}
 	sums, err := rc.fetch(ctx, tag, checksumsFile)
 	if err != nil {
 		return err
@@ -233,7 +269,9 @@ func upgradeByScript(ctx context.Context, out io.Writer, rc releaseClient, exe, 
 	if err := verifySHA(archive, sums, name); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "  sha256 ok (%s of %s)\n", checksumsFile, tag)
+	if _, werr := fmt.Fprintf(out, "  sha256 ok (%s of %s)\n", checksumsFile, tag); werr != nil {
+		return werr
+	}
 	files, err := extract(archive, runtime.GOOS)
 	if err != nil {
 		return err
@@ -265,22 +303,32 @@ func upgradeByScript(ctx context.Context, out io.Writer, rc releaseClient, exe, 
 			fmt.Sprintf("the new binary does not run as %s (got %q)", normVersion(tag), got)).WithCause(err).
 			WithHint("nothing changed; run `" + BinaryName + " upgrade` again")
 	}
-	fmt.Fprintf(out, "  new binary runs: %s %s\n", BinaryName, normVersion(got))
+	if _, werr := fmt.Fprintf(out, "  new binary runs: %s %s\n", BinaryName, normVersion(got)); werr != nil {
+		return werr
+	}
 	if err := swapBinary(runtime.GOOS, tmp, exe, osSwapOps); err != nil {
 		return errcodes.New(errcodes.Code(errs.UpgradePermission), "replace "+exe).WithCause(err).
 			WithHint("run `sudo " + BinaryName + " upgrade`")
 	}
 	keep = true
 	if runtime.GOOS == goosWindows {
-		fmt.Fprintf(out, "  replaced %s (old copy %s%s is removed on the next start)\n", filepath.Base(exe), filepath.Base(exe), oldExeSuffix)
+		if _, werr := fmt.Fprintf(out, "  replaced %s (old copy %s%s is removed on the next start)\n", filepath.Base(exe), filepath.Base(exe), oldExeSuffix); werr != nil {
+			return werr
+		}
 	} else {
-		fmt.Fprintf(out, "  replaced %s\n", exe)
+		if _, werr := fmt.Fprintf(out, "  replaced %s\n", exe); werr != nil {
+			return werr
+		}
 	}
 	if home, herr := os.UserHomeDir(); herr == nil {
 		if done, cerr := copySkills(skillDest(home), files.skills); cerr != nil {
-			fmt.Fprintf(out, "  agent skill bundle not updated: %v\n", cerr)
+			if _, werr := fmt.Fprintf(out, "  agent skill bundle not updated: %v\n", cerr); werr != nil {
+				return werr
+			}
 		} else if done {
-			fmt.Fprintln(out, "  updated the agent skill bundle")
+			if _, werr := fmt.Fprintln(out, "  updated the agent skill bundle"); werr != nil {
+				return werr
+			}
 		}
 	}
 	return nil

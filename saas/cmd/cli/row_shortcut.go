@@ -180,7 +180,9 @@ func runCoreMove(ctx context.Context, table row.Table, id string, f *shareFlags)
 	if f.asJSON {
 		previewOut = os.Stderr
 	}
-	fmt.Fprintf(previewOut, "This becomes visible to everyone with access to store %s:\n  %q\n", to, oneLine(preview))
+	if _, werr := fmt.Fprintf(previewOut, "This becomes visible to everyone with access to store %s:\n  %q\n", to, oneLine(preview)); werr != nil {
+		return werr
+	}
 	if !f.yes {
 		if !stdinIsTTY() {
 			return errcodes.New(errcodes.InvalidInput, "not moved: confirm on a terminal (or --yes); nothing written")

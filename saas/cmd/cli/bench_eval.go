@@ -142,7 +142,7 @@ Linkage — optional polymorphic FK to the artifact this task exercises:
 	return cmd
 }
 
-func runBenchEvalAdd(ctx context.Context, f *benchEvalAddFlags) error {
+func runBenchEvalAdd(ctx context.Context, f *benchEvalAddFlags) (err error) {
 	if err := refuseIfReadOnly(&f.commonFlags); err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func runBenchEvalAdd(ctx context.Context, f *benchEvalAddFlags) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		return err
@@ -245,12 +245,12 @@ func newBenchEvalListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List benchmark tasks",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -315,12 +315,12 @@ func newBenchEvalShowCommand() *cobra.Command {
 		Use:   "show <code-or-id>",
 		Short: "Show one bench task with full grader spec + linked body",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -381,7 +381,7 @@ func newBenchEvalEditCommand() *cobra.Command {
 		Use:   "edit <code-or-id>",
 		Short: "Update fields on an existing bench task",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f.commonFlags); err != nil {
 				return err
 			}
@@ -389,7 +389,7 @@ func newBenchEvalEditCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -505,7 +505,7 @@ func newBenchEvalDeleteCommand() *cobra.Command {
 		Use:   "delete <code-or-id>",
 		Short: "Durably delete (refuses if any results reference it)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -517,7 +517,7 @@ func newBenchEvalDeleteCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -554,7 +554,7 @@ func newBenchEvalDuplicateCommand() *cobra.Command {
 		Use:   "duplicate <code-or-id>",
 		Short: "Clone an existing task with --as=<new-code>",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -565,7 +565,7 @@ func newBenchEvalDuplicateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -641,7 +641,7 @@ func newBenchEvalImportCommand() *cobra.Command {
 Useful for the one-shot migration from the old bench/tasks/ format
 
 Existing tasks with the same code are skipped (or replaced with --replace).`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -652,7 +652,7 @@ Existing tasks with the same code are skipped (or replaced with --replace).`,
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -773,7 +773,7 @@ func newBenchEvalExportCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Dump bench tasks → directory of YAML files (round-trip with import)",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if toDir == "" {
 				return errcodes.New(errcodes.InvalidInput, "--to=<dir> required")
 			}
@@ -781,7 +781,7 @@ func newBenchEvalExportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -1005,7 +1005,7 @@ func lookupBenchEval(ctx context.Context, client *ent.Client, projectID, ref str
 	return row, nil
 }
 
-func updateBenchEvalArchive(ctx context.Context, f *commonFlags, ref string, archive bool) error {
+func updateBenchEvalArchive(ctx context.Context, f *commonFlags, ref string, archive bool) (err error) {
 	if err := refuseIfReadOnly(f); err != nil {
 		return err
 	}
@@ -1013,7 +1013,7 @@ func updateBenchEvalArchive(ctx context.Context, f *commonFlags, ref string, arc
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer joinClose(&err, client, "the project DB")
 	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		return err

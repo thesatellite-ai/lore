@@ -810,7 +810,7 @@ func wiringFingerprint(paths []string) string {
 			h.Write([]byte(p + ":missing\n"))
 			continue
 		}
-		fmt.Fprintf(h, "%s:%d:%d\n", p, info.Size(), info.ModTime().UnixNano())
+		h.Write(fmt.Appendf(nil, "%s:%d:%d\n", p, info.Size(), info.ModTime().UnixNano())) // hash.Hash.Write never returns an error
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

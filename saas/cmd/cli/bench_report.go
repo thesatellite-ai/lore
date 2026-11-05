@@ -48,12 +48,12 @@ func newBenchReportSummaryCommand() *cobra.Command {
 		Use:   "summary [run-id-or-code]",
 		Short: "Headline numbers for one run (omit arg or pass --latest for the most recent)",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -116,12 +116,12 @@ func newBenchReportCompareCommand() *cobra.Command {
 		Use:   "compare <run-a> <run-b>",
 		Short: "Side-by-side: which tasks improved, which regressed",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -221,12 +221,12 @@ func newBenchReportTrendCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "trend",
 		Short: "Longitudinal: pass-rates / Δ per run, ordered by time",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -299,12 +299,12 @@ func newBenchReportByCategoryCommand() *cobra.Command {
 		Use:   "by-category <run-id-or-code>",
 		Short: "Pass-rates per category × arm for one run",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -346,12 +346,12 @@ func newBenchReportRegressionsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "regressions",
 		Short: "Tasks whose with-skill pass-rate dropped > 5pp recently",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
@@ -406,12 +406,12 @@ func newBenchReportAnalyzeCommand() *cobra.Command {
 		Use:   "analyze <run-id-or-code>",
 		Short: "Statistical analysis: paired t-test, Cohen's d, 95% CI",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err

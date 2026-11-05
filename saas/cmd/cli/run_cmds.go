@@ -89,7 +89,7 @@ func newRunStartCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Open a run (records what agent is attempting which task with which model)",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -97,7 +97,7 @@ func newRunStartCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			projectID, err := resolveProjectID(cmd.Context(), "")
 			if err != nil {
 				return err
@@ -183,7 +183,7 @@ func newRunStepCommand() *cobra.Command {
 		Use:   "step <run-id>",
 		Short: "Append a step to a run (prompt / tool / verify / reflect / decide / error / note)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			passedSet = cmd.Flags().Changed("passed")
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
@@ -192,7 +192,7 @@ func newRunStepCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			runID := args[0]
 			run, err := client.Run.Get(cmd.Context(), runID)
 			if err != nil {
@@ -278,7 +278,7 @@ func newRunEndCommand() *cobra.Command {
 		Use:   "end <run-id>",
 		Short: "Close a run with outcome (success | partial | failed | cancelled)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -290,7 +290,7 @@ func newRunEndCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			runID := args[0]
 			run, err := client.Run.Get(cmd.Context(), runID)
 			if err != nil {
@@ -382,7 +382,7 @@ func newRunCancelCommand() *cobra.Command {
 		Use:   "cancel <run-id>",
 		Short: "Cancel a run (alias for `end --outcome=cancelled`)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
@@ -390,7 +390,7 @@ func newRunCancelCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			run, err := client.Run.Get(cmd.Context(), args[0])
 			if err != nil {
 				return errcodes.New(errcodes.NotFound, "run "+args[0]+" not found")
@@ -481,12 +481,12 @@ func newRunShowCommand() *cobra.Command {
 		Use:   "show <run-id>",
 		Short: "Show a run's metadata (status, outcome, tokens, cost)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			run, err := client.Run.Get(cmd.Context(), args[0])
 			if err != nil {
 				return errcodes.New(errcodes.NotFound, "run "+args[0]+" not found")
@@ -560,12 +560,12 @@ func newRunReplayCommand() *cobra.Command {
 		Use:   "replay <run-id>",
 		Short: "Print the full step-by-step transcript of a run",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			_, client, err := resolveContext(&f)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer joinClose(&err, client, "the project DB")
 			run, err := client.Run.Get(cmd.Context(), args[0])
 			if err != nil {
 				return errcodes.New(errcodes.NotFound, "run "+args[0]+" not found")
