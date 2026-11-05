@@ -11,7 +11,8 @@ package main
 //	TestMigrateRaceLockHolderCrash
 //	                             the holder pauses right after the team lock, then is
 //	                             killed: a teammate is locked out until the hold
-//	                             expires, then takes over; unlock rules on both machines
+//	                             expires, then takes over; unlock rules on both machines;
+//	                             the killed run's lock file stays until unlock (P3-FMT-1)
 //	TestMigrateRaceRollbackAfterTeammatesPushed
 //	                             a teammate's edit blocks the rollback (exactly that
 //	                             row), reverting it lets it through (new row kept); the
@@ -259,6 +260,17 @@ func TestMigrateRaceLockHolderCrash(t *testing.T) {
 	bc.Lore("migrate", "run").Refused(t, migrateLockedCode, "alice")
 	bc.Lore("migrate", "unlock", "--team", "--yes").Refused(t, migrateLockedCode)
 	crashed(t, "team-locked", p.kill())
+	// Today's machine lock (wire/migrate.go LockMigration) is a plain
+	// O_EXCL file holding the pid, so kill -9 leaves it behind: her own
+	// rerun is E_MIGRATE_LOCKED naming the dead pid until `unlock`.
+	// FORMAT_EVOLUTION 7.2 describes a kernel lock the OS drops when the
+	// process dies (rerun would just go ahead); which one 0.1.18 keeps is
+	// an owner question (P3-FMT-1), and this pin flips with the answer.
+	if _, ok := alice.ReadFile(".lore/state/migrate.lock"); !ok {
+		t.Fatal("the killed run's machine lock file is gone; was the lock changed to a kernel lock? update this pin (P3-FMT-1)")
+	}
+	alice.Lore("migrate", "run", "--no-push").Refused(t, migrateLockedCode, "pid", strconv.Itoa(p.pid))
+	alice.MustLore("migrate", "status").Says(t, "stale")
 	alice.MustLore("migrate", "unlock").Says(t, "released")
 	bob.Advance(5 * time.Minute) // inside the 10-minute lease
 	bc.Lore("migrate", "run").Refused(t, migrateLockedCode)

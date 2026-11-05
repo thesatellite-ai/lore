@@ -17,7 +17,8 @@ package main
 //	                            the same tree
 //
 // The rows that stop a run at a named point (crash, pause) are in
-// team_e2e_migrate_hooks_test.go; TestLockOrderRanks is in
+// team_e2e_migrate_hooks_test.go; TestMigrateRaceLiveWritesAndClaims is in
+// team_e2e_migrate_live_test.go; TestLockOrderRanks is in
 // team_e2e_lockrank_test.go.
 
 import (
