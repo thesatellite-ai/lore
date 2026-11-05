@@ -109,6 +109,7 @@ const (
 	ParentMission   Code = "E_PARENT_MISSION"
 	ParentProject   Code = "E_PARENT_PROJECT"
 	TreeDepth       Code = "E_TREE_DEPTH"
+	TreeWidth       Code = "E_TREE_WIDTH"
 	HasOpenChildren Code = "E_HAS_OPEN_CHILDREN"
 	Date            Code = "E_DATE"
 	Recur           Code = "E_RECUR"
@@ -290,6 +291,7 @@ var table = map[Code]entry{
 	ParentMission:         {class: ClassRefused, desc: "a sub-task's mission differs from its parent's"},
 	ParentProject:         {class: ClassRefused, desc: "the parent task is in another project"},
 	TreeDepth:             {class: ClassRefused, desc: "the sub-task tree would be deeper than tasks.max_depth"},
+	TreeWidth:             {class: ClassRefused, desc: "a parent task would have more direct sub-tasks than tasks.max_children"},
 	HasOpenChildren:       {class: ClassRefused, desc: "claim of a parent task with open sub-tasks without --coordinate"},
 	Date:                  {class: ClassBadInput, desc: "a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days"},
 	Recur:                 {class: ClassBadInput, desc: "a recurrence rule lore does not understand; give e.g. every week, every month on last, every! 3 days, … until 2027-03-31"},
