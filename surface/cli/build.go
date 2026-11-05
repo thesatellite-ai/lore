@@ -245,11 +245,15 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		SilenceUsage:  true,
 	}
 	values := map[string]*rawFlag{}
+	// pflag parses in order and appends each positional to Args() as it
+	// goes, so at Set time len(Args()) is the number of positionals typed
+	// before the value (the group routing of op.ArgsDecoder.FlagPos).
+	seen := func() int { return len(c.Flags().Args()) }
 	for _, f := range fields {
 		if f.Flag == "" {
 			continue
 		}
-		rf := &rawFlag{typ: f.Type}
+		rf := &rawFlag{typ: f.Type, at: seen}
 		values[f.Flag] = rf
 		desc := f.Desc
 		if f.Required {
@@ -272,12 +276,14 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 	c.SetFlagErrorFunc(usageError)
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		flags := map[string][]string{}
+		pos := map[string][]int{}
 		for name, rf := range values {
 			if cmd.Flags().Changed(name) {
 				flags[name] = rf.vals
+				pos[name] = rf.pos
 			}
 		}
-		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags}, *yes, sf.choice(cmd))
+		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags, FlagPos: pos}, *yes, sf.choice(cmd))
 		out := cmd.OutOrStdout()
 		if err != nil {
 			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON), cause: err}
@@ -414,8 +420,24 @@ func long(s op.Spec, fields []op.FieldInfo) string {
 			b.WriteString(requiredSuffix)
 		}
 		b.WriteString("\n")
+		if f.Group {
+			b.WriteString(groupHelp(f))
+		}
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// groupHelp is the --help line under a repeated group argument: which
+// flags an item takes and where they apply (P3-TASK-1).
+func groupHelp(f op.FieldInfo) string {
+	fl := f.GroupFlags()
+	if len(fl) == 0 {
+		return ""
+	}
+	for i, n := range fl {
+		fl[i] = "--" + n
+	}
+	return "    " + strings.Join(fl, " ") + " after an item apply to that item only; before the first item, to every item\n"
 }
 
 // examples is the --help Examples block.

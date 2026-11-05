@@ -13,6 +13,12 @@ import (
 type rawFlag struct {
 	typ  op.FieldType
 	vals []string
+	// pos[i] is how many positional arguments the parser had seen when
+	// vals[i] was set (op.ArgsDecoder.FlagPos): a repeated group gives a
+	// flag typed after an item to that item (P3-TASK-1). at reads the
+	// count; nil records nothing.
+	pos []int
+	at  func() int
 }
 
 // String implements pflag.Value; it is what --help prints as the default.
@@ -23,6 +29,9 @@ func (f *rawFlag) String() string { return strings.Join(f.vals, ",") }
 // silently resolved to the last one.
 func (f *rawFlag) Set(s string) error {
 	f.vals = append(f.vals, s)
+	if f.at != nil {
+		f.pos = append(f.pos, f.at())
+	}
 	return nil
 }
 

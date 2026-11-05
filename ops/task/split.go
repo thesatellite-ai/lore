@@ -28,15 +28,18 @@ const splitStdin = "-"
 // splitPiece is one sub-task of a split file (the task shape of the
 // mission file, 15.2, reduced to the fields a split sets).
 type splitPiece struct {
-	Title      string `yaml:"title"`
-	Body       string `yaml:"body"`
-	Priority   string `yaml:"priority"`
-	Commitment string `yaml:"commitment"`
+	Title      string   `yaml:"title"`
+	Body       string   `yaml:"body"`
+	Priority   string   `yaml:"priority"`
+	Commitment string   `yaml:"commitment"`
+	Assign     []string `yaml:"assign"`
+	Due        string   `yaml:"due"`
 }
 
 // split adds several sub-tasks under one task in one bat_ batch:
 //
-//	titles (positional…, --title…, --from file|-; shared --priority/--commitment) → checks of the first child (project,
+//	titles (positional… each with its own flags, --title…, --from file|-;
+//	shared --priority/--commitment/--assign/--due fill the rest) → checks of the first child (project,
 //	depth, closed parent: add --parent's rules) → --dry-run prints and
 //	stops → bulk.Begin(task) → add --parent per child, rank after the last
 //	sibling, --key <key>/<n> per child (a re-run adds nothing).
@@ -71,7 +74,7 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 	out := SplitOut{ParentID: id.String(), Inherited: par.inh, DryRun: in.DryRun}
 	rank := par.rank
 	for _, p := range pieces {
-		out.Added = append(out.Added, SplitAdded{Title: p.Title, Rank: rank})
+		out.Added = append(out.Added, SplitAdded{Title: p.Title, Rank: rank, Priority: p.Priority, Commitment: p.Commitment, Assign: p.Assign, Due: p.Due})
 		rank = tasktree.After(rank)
 	}
 	if in.DryRun {
@@ -91,6 +94,7 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 		}
 		a, aerr := o.add(bctx, AddIn{
 			Title: p.Title, Body: p.Body, Priority: p.Priority, Commitment: p.Commitment,
+			Assign: p.Assign, Due: p.Due,
 			Parent: id.String(), Key: key, Project: project,
 		})
 		if aerr != nil {
@@ -112,9 +116,25 @@ func splitList(xs []SplitAdded) string {
 		if x.ID != "" {
 			b.WriteString(x.ID + " ")
 		}
-		b.WriteString(x.Title + "\n")
+		b.WriteString(x.Title + pieceFlags(x) + "\n")
 	}
 	return b.String()
+}
+
+// pieceFlags is the "  (priority high, assign @x, due fri)" tail of a
+// split line: what the split set for that sub-task, so a dry run shows
+// where each per-child flag landed (P3-TASK-1).
+func pieceFlags(x SplitAdded) string {
+	var parts []string
+	for _, kv := range [][2]string{{"priority", x.Priority}, {"commitment", x.Commitment}, {"assign", strings.Join(x.Assign, " ")}, {"due", x.Due}} {
+		if kv[1] != "" {
+			parts = append(parts, kv[0]+" "+kv[1])
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "  (" + strings.Join(parts, ", ") + ")"
 }
 
 // inheritedLine is the "inherited:" line of an add --parent.
@@ -130,10 +150,20 @@ func inheritedLine(p *addParent) string {
 // maxSplitBytes bounds a --from file.
 const maxSplitBytes = 1 << 20
 
-// splitPieces collects --title values and --from contents, in order.
+// splitPieces collects positional titles (with their own flags), --title
+// values and --from contents, in order.
 func splitPieces(in SplitIn) ([]splitPiece, error) {
 	var out []splitPiece
-	for _, t := range append(slices.Clone(in.TitleArgs), in.Titles...) {
+	for i, c := range in.Children {
+		t := strings.TrimSpace(c.Title)
+		if t == "" {
+			// P3-TASK-1: an item may carry flags, so an empty title is
+			// refused rather than skipped (its flags would vanish).
+			return nil, errs.New(errs.InvalidInput, "task split: sub-task "+strconv.Itoa(i+1)+" has no title")
+		}
+		out = append(out, splitPiece{Title: t, Priority: c.Priority, Commitment: c.Commitment, Assign: c.Assign, Due: c.Due})
+	}
+	for _, t := range in.Titles {
 		if t = strings.TrimSpace(t); t != "" {
 			out = append(out, splitPiece{Title: t})
 		}
@@ -153,13 +183,20 @@ func splitPieces(in SplitIn) ([]splitPiece, error) {
 		return nil, errs.New(errs.InvalidInput, "task split: no sub-task titles").
 			WithHint(`lore task split <id> "First" "Second" (or --title …), or --from <file|->`)
 	}
-	// FB-TASK-2: the shared flags fill what a piece does not set itself.
+	// FB-TASK-2, P3-TASK-1: the shared flags fill what a piece does not
+	// set itself (a piece's own --assign replaces the shared list).
 	for i := range out {
 		if out[i].Priority == "" {
 			out[i].Priority = in.Priority
 		}
 		if out[i].Commitment == "" {
 			out[i].Commitment = in.Commitment
+		}
+		if len(out[i].Assign) == 0 {
+			out[i].Assign = slices.Clone(in.Assign)
+		}
+		if out[i].Due == "" {
+			out[i].Due = in.Due
 		}
 	}
 	return out, nil

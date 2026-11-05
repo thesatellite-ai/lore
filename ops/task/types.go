@@ -441,17 +441,31 @@ type CancelIn struct {
 // SplitIn is the input of task.split (TASK 6.3).
 type SplitIn struct {
 	ID string `json:"id" arg:"0" desc:"the task to split (tsk_…)"`
-	// TitleArgs are the positional titles after the id (OV2-2 positional
-	// lists, FB-TASK-2): one sub-task per argument, before any --title.
-	TitleArgs []string `json:"title_args,omitempty" arg:"1" rest:"true" desc:"sub-task titles, one per argument, in order (added before any --title)"`
-	Titles    []string `json:"titles,omitempty" flag:"title" desc:"a sub-task title; repeatable, one sub-task each, in order"`
-	// Priority and Commitment are shared by every sub-task (FB-TASK-2:
-	// per-child values go through --from YAML, where a piece's own value wins).
-	Priority   string `json:"priority,omitempty" flag:"priority" desc:"priority of every sub-task (low | medium | high | urgent; default: inherited from the parent)"`
-	Commitment string `json:"commitment,omitempty" flag:"commitment" desc:"commitment of every sub-task (accepted | proposed | someday; default: inherited from the parent)"`
-	From       string `json:"from,omitempty" flag:"from" desc:"read titles from a file (- = stdin): one per line, or YAML: a list of titles or of {title, priority, commitment, body}"`
-	Key        string `json:"key,omitempty" flag:"key" desc:"idempotency key: child n gets <key>/<n>, so a re-run adds nothing"`
-	DryRun     bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be added, write nothing"`
+	// Children are the positional sub-tasks after the id (OV2-2, FB-TASK-2),
+	// a repeated group (op/group.go, P3-TASK-1): `"a" --priority high "b"`
+	// gives --priority high to a only; added before any --title.
+	Children []SplitChild `json:"children,omitempty" arg:"1" rest:"true" desc:"sub-task titles, one per argument, in order (added before any --title)"`
+	Titles   []string     `json:"titles,omitempty" flag:"title" desc:"a sub-task title; repeatable, one sub-task each, in order"`
+	// Priority, Commitment, Assign and Due given before the first title are
+	// shared by every sub-task; after a title they are that sub-task's own
+	// (P3-TASK-1). In a --from YAML piece, the piece's own value wins.
+	Priority   string   `json:"priority,omitempty" flag:"priority" desc:"priority of every sub-task (low | medium | high | urgent; default: inherited from the parent); after a title: that sub-task's"`
+	Commitment string   `json:"commitment,omitempty" flag:"commitment" desc:"commitment of every sub-task (accepted | proposed | someday; default: inherited from the parent); after a title: that sub-task's"`
+	Assign     []string `json:"assign,omitempty" flag:"assign" desc:"assign every sub-task to @handle or an actor (repeatable, the first is the lead); after a title: that sub-task's assignees"`
+	Due        string   `json:"due,omitempty" flag:"due" desc:"due date of every sub-task (YYYY-MM-DD or a phrase: tomorrow, fri, in 3d); after a title: that sub-task's"`
+	From       string   `json:"from,omitempty" flag:"from" desc:"read titles from a file (- = stdin): one per line, or YAML: a list of titles or of {title, priority, commitment, assign, due, body}"`
+	Key        string   `json:"key,omitempty" flag:"key" desc:"idempotency key: child n gets <key>/<n>, so a re-run adds nothing"`
+	DryRun     bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be added, write nothing"`
+}
+
+// SplitChild is one positional sub-task of a split with its own flags
+// (P3-TASK-1). An empty field takes the shared SplitIn value.
+type SplitChild struct {
+	Title      string   `json:"title" arg:"0" desc:"the sub-task title"`
+	Priority   string   `json:"priority,omitempty" flag:"priority" desc:"this sub-task's priority"`
+	Commitment string   `json:"commitment,omitempty" flag:"commitment" desc:"this sub-task's commitment"`
+	Assign     []string `json:"assign,omitempty" flag:"assign" desc:"this sub-task's assignees (@handle or actor; the first is the lead)"`
+	Due        string   `json:"due,omitempty" flag:"due" desc:"this sub-task's due date"`
 }
 
 // SplitAdded is one sub-task of a split.
@@ -459,6 +473,12 @@ type SplitAdded struct {
 	ID    string `json:"id,omitempty"`
 	Title string `json:"title"`
 	Rank  string `json:"rank"`
+	// The values the split asked for (own or shared, P3-TASK-1); empty
+	// means the parent's or the default.
+	Priority   string   `json:"priority,omitempty"`
+	Commitment string   `json:"commitment,omitempty"`
+	Assign     []string `json:"assign,omitempty"`
+	Due        string   `json:"due,omitempty"`
 }
 
 // SplitOut is the output of task.split.

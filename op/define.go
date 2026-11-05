@@ -44,10 +44,12 @@ func Define[In, Out any](spec Spec, run func(context.Context, In) (Out, error)) 
 	if run == nil {
 		panic(tagError{"op.Define(" + spec.Name + "): nil run function"})
 	}
+	in := fieldsOf(spec.Name, reflect.TypeFor[In](), dirInput)
+	checkGroups(spec.Name, in)
 	return &Op[In, Out]{
 		spec: spec,
 		run:  run,
-		in:   fieldsOf(spec.Name, reflect.TypeFor[In](), dirInput),
+		in:   in,
 		out:  fieldsOf(spec.Name, reflect.TypeFor[Out](), dirOutput),
 	}
 }
@@ -109,24 +111,36 @@ type TextValue struct {
 
 // Texts returns every string the input carries: string fields, every item
 // of a []string, every key and value of a map. The Runner scans them all.
-func (i Input) Texts() []TextValue {
+func (i Input) Texts() []TextValue { return texts(i.v, i.fields, "") }
+
+// texts collects the strings of struct v; prefix names the group a nested
+// item belongs to ("children."), so every item of a repeated group is
+// scanned under one stable field name (no index: allow rows key on field).
+func texts(v reflect.Value, fields []FieldInfo, prefix string) []TextValue {
 	var out []TextValue
-	for _, f := range i.fields {
-		fv := i.v.FieldByIndex(f.index)
+	for _, f := range fields {
+		fv := v.FieldByIndex(f.index)
+		name := prefix + f.Name
 		switch f.Type {
 		case TypeString:
-			out = append(out, TextValue{Field: f.Name, Text: fv.String()})
+			out = append(out, TextValue{Field: name, Text: fv.String()})
 		case TypeStrings:
 			for j := range fv.Len() {
-				out = append(out, TextValue{Field: f.Name, Text: fv.Index(j).String()})
+				out = append(out, TextValue{Field: name, Text: fv.Index(j).String()})
 			}
 		case TypeStringMap:
 			iter := fv.MapRange()
 			for iter.Next() {
 				k := iter.Key().String()
-				out = append(out, TextValue{Field: f.Name, Text: k}, TextValue{Field: f.Name + "." + k, Text: iter.Value().String()})
+				out = append(out, TextValue{Field: name, Text: k}, TextValue{Field: name + "." + k, Text: iter.Value().String()})
 			}
-		case TypeBool, TypeInt, TypeUint, TypeFloat, TypeDuration, TypeText, TypeObject, TypeList:
+		case TypeList:
+			if f.Group { // the only input list; outputs are never scanned
+				for j := range fv.Len() {
+					out = append(out, texts(fv.Index(j), f.Fields, name+".")...)
+				}
+			}
+		case TypeBool, TypeInt, TypeUint, TypeFloat, TypeDuration, TypeText, TypeObject:
 		}
 	}
 	return out

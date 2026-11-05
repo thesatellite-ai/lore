@@ -64009,17 +64009,63 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "assign": {
+                    "type": "array",
+                    "description": "assign every sub-task to @handle or an actor (repeatable, the first is the lead); after a title: that sub-task's assignees",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "children": {
+                    "type": "array",
+                    "description": "sub-task titles, one per argument, in order (added before any --title)",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "assign": {
+                          "type": "array",
+                          "description": "this sub-task's assignees (@handle or actor; the first is the lead)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "commitment": {
+                          "type": "string",
+                          "description": "this sub-task's commitment"
+                        },
+                        "due": {
+                          "type": "string",
+                          "description": "this sub-task's due date"
+                        },
+                        "priority": {
+                          "type": "string",
+                          "description": "this sub-task's priority"
+                        },
+                        "title": {
+                          "type": "string",
+                          "description": "the sub-task title"
+                        }
+                      },
+                      "required": [
+                        "title"
+                      ]
+                    }
+                  },
                   "commitment": {
                     "type": "string",
-                    "description": "commitment of every sub-task (accepted | proposed | someday; default: inherited from the parent)"
+                    "description": "commitment of every sub-task (accepted | proposed | someday; default: inherited from the parent); after a title: that sub-task's"
                   },
                   "dry_run": {
                     "type": "boolean",
                     "description": "show what would be added, write nothing"
                   },
+                  "due": {
+                    "type": "string",
+                    "description": "due date of every sub-task (YYYY-MM-DD or a phrase: tomorrow, fri, in 3d); after a title: that sub-task's"
+                  },
                   "from": {
                     "type": "string",
-                    "description": "read titles from a file (- = stdin): one per line, or YAML: a list of titles or of {title, priority, commitment, body}"
+                    "description": "read titles from a file (- = stdin): one per line, or YAML: a list of titles or of {title, priority, commitment, assign, due, body}"
                   },
                   "key": {
                     "type": "string",
@@ -64027,14 +64073,7 @@
                   },
                   "priority": {
                     "type": "string",
-                    "description": "priority of every sub-task (low | medium | high | urgent; default: inherited from the parent)"
-                  },
-                  "title_args": {
-                    "type": "array",
-                    "description": "sub-task titles, one per argument, in order (added before any --title)",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "priority of every sub-task (low | medium | high | urgent; default: inherited from the parent); after a title: that sub-task's"
                   },
                   "titles": {
                     "type": "array",
@@ -64062,7 +64101,22 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "assign": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "commitment": {
+                            "type": "string"
+                          },
+                          "due": {
+                            "type": "string"
+                          },
                           "id": {
+                            "type": "string"
+                          },
+                          "priority": {
                             "type": "string"
                           },
                           "rank": {

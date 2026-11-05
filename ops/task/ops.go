@@ -157,7 +157,11 @@ func Ops(env work.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpSplit, Summary: "Split a task into sub-tasks (one batch)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), treeAddErrors...),
-			Examples: []op.Example{{Title: "preview a split", CLI: `lore task split tsk_<id> --title "Export query" --title "Download button" --dry-run`, Want: "would add"}},
+			Examples: []op.Example{
+				{Title: "preview a split", CLI: `lore task split tsk_<id> --title "Export query" --title "Download button" --dry-run`, Want: "would add"},
+				// P3-TASK-1: flags before the first title are shared, after a title that sub-task's own.
+				{Title: "per-child flags", CLI: `lore task split tsk_<id> --priority low "Export query" --assign @ann --priority high "Download button" --dry-run`, Want: "priority high, assign @ann"},
+			},
 		}, o.split),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a task and its sub-tasks (it goes to the trash; lore trash restore brings it back)",

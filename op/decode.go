@@ -51,10 +51,25 @@ func (d JSONDecoder) Decode(dst reflect.Value, _ []FieldInfo) error {
 type ArgsDecoder struct {
 	Args  []string
 	Flags map[string][]string
+	// FlagPos holds, per flag, how many positional arguments came before
+	// each of its values (same order as Flags). Only a repeated group
+	// (group.go) reads it, to give a flag typed after an item to that item;
+	// nil keeps every value on the outer input.
+	FlagPos map[string][]int
 }
 
 // Decode implements Decoder.
 func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
+	flags := d.Flags
+	var items []map[string][]string
+	for _, f := range fields {
+		if f.Group { // at most one: a group is the rest positional
+			var err error
+			if flags, items, err = d.routeGroup(f); err != nil {
+				return err
+			}
+		}
+	}
 	used := map[string]bool{}
 	maxArg := NoArg
 	rest := false
@@ -67,6 +82,13 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 				continue
 			}
 			vals = d.Args[f.Arg : f.Arg+1]
+			if f.Group {
+				rest = true
+				if err := decodeGroup(dst.FieldByIndex(f.index), f, d.Args[f.Arg:], items); err != nil {
+					return err
+				}
+				continue
+			}
 			if f.Rest {
 				rest = true
 				vals = []string{strings.Join(d.Args[f.Arg:], " ")}
@@ -75,7 +97,7 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 				}
 			}
 		case f.Flag != "":
-			v, ok := d.Flags[f.Flag]
+			v, ok := flags[f.Flag]
 			if !ok {
 				continue
 			}
@@ -91,7 +113,7 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 	if !rest && len(d.Args) > maxArg+1 {
 		return errs.New(errs.InvalidInput, "too many arguments: want at most "+strconv.Itoa(maxArg+1))
 	}
-	for name := range d.Flags {
+	for name := range flags {
 		if !used[name] {
 			return errs.New(errs.InvalidInput, "unknown flag --"+name)
 		}

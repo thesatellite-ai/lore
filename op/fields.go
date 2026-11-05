@@ -30,8 +30,9 @@ const (
 	// TypeText is any type that parses itself from text (an ids.ID, for
 	// instance): encoding.TextUnmarshaler on the pointer.
 	TypeText FieldType = "text"
-	// TypeObject and TypeList (of objects) appear only in outputs; Fields
-	// holds the children.
+	// TypeObject and TypeList (of objects) appear in outputs; Fields holds
+	// the children. An input holds a TypeList only as a repeated group
+	// (group.go, P3-TASK-1).
 	TypeObject FieldType = "object"
 	TypeList   FieldType = "list"
 )
@@ -50,6 +51,11 @@ type FieldInfo struct {
 	// field keeps one value per argument (`lore task split <id> "a" "b"`,
 	// FB-TASK-2).
 	Rest bool
+	// Group marks a repeated group input (group.go): a rest positional of
+	// type []S (Type TypeList) whose Fields are the item's fields, one
+	// positional head at arg 0 and flags that override the outer input's
+	// shared flags of the same name for that item.
+	Group bool
 	// Flag is the CLI flag name ("" when the field is positional or has no
 	// flag).
 	Flag string
@@ -217,10 +223,11 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		f.Arg = n
 	}
 	if r, ok := sf.Tag.Lookup(tagRest); ok {
-		if r != "true" || f.Arg == NoArg || (f.Type != TypeString && f.Type != TypeStrings) {
-			panic(tagError{where + `: rest:"true" goes on a positional string or []string argument`})
+		if r != "true" || f.Arg == NoArg || (f.Type != TypeString && f.Type != TypeStrings && f.Type != TypeList) {
+			panic(tagError{where + `: rest:"true" goes on a positional string, []string or []struct argument`})
 		}
 		f.Rest = true
+		f.Group = f.Type == TypeList
 	}
 	if fl, ok := sf.Tag.Lookup(tagFlag); ok {
 		if !flagName.MatchString(fl) {
@@ -231,8 +238,8 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		}
 		f.Flag = fl
 	}
-	if dir == dirInput && (f.Type == TypeObject || f.Type == TypeList) {
-		panic(tagError{where + ": inputs cannot nest structs"})
+	if dir == dirInput && (f.Type == TypeObject || (f.Type == TypeList && !f.Group)) {
+		panic(tagError{where + `: inputs nest structs only as a repeated group (a []struct positional with rest:"true")`})
 	}
 	if ui, ok := sf.Tag.Lookup(tagUI); ok {
 		f.UI = parseUI(where, ui)
@@ -263,7 +270,10 @@ func typeOf(op, where string, t reflect.Type, dir fieldDirection) (FieldType, []
 		if t.Elem().Kind() == reflect.String {
 			return TypeStrings, nil
 		}
-		if dir == dirOutput && t.Elem().Kind() == reflect.Struct {
+		if t.Elem().Kind() == reflect.Struct {
+			if dir == dirInput {
+				return TypeList, groupItemFields(op, where, t.Elem())
+			}
 			return TypeList, fieldsOf(op, t.Elem(), dir)
 		}
 	case reflect.Map:
