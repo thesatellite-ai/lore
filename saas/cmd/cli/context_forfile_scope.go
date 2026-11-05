@@ -51,6 +51,9 @@ type fileScope struct {
 	path  map[string]string // scp_ id → folder
 	root  string            // repo top folder ("" unknown)
 	tool  string            // the calling tool ("" a person / unknown)
+	// pathRules is the text of the calling tool's lore-path-* rule files
+	// (6.7, 6.9: the tool loads those glob rules itself).
+	pathRules string
 }
 
 // newFileScope resolves the folder chain of rel; tool is the hook's tool
@@ -73,7 +76,45 @@ func newFileScope(ctx context.Context, rel, tool string) fileScope {
 			fs.tool = who.Detection.Tool
 		}
 	}
+	fs.pathRules = toolPathRulesText(ctx, fs.root, fs.tool)
 	return fs
+}
+
+// toolPathRulesText reads the lore-path-* rule files the tool loads by
+// itself ("" when the tool has no path loader or none are written).
+func toolPathRulesText(ctx context.Context, root, tool string) string {
+	if root == "" || tool == "" {
+		return ""
+	}
+	reg, err := loadToolRegistry(ctx)
+	if err != nil {
+		return ""
+	}
+	prof, ok := reg.Lookup(tool)
+	if !ok || !prof.HasPathRules() {
+		return ""
+	}
+	dir := filepath.Join(root, filepath.FromSlash(prof.PathRules.Dir))
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range ents {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), toolprofile.PathRulePrefix) {
+			continue
+		}
+		if data, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, e.Name()))); rerr == nil {
+			b.Write(data)
+		}
+	}
+	return b.String()
+}
+
+// pathRuleLoaded reports whether the calling tool already loads row id
+// through its own path rule file (6.9: the hook skips those glob matches).
+func (fs fileScope) pathRuleLoaded(id string) bool {
+	return fs.pathRules != "" && strings.Contains(fs.pathRules, id)
 }
 
 // folderOf is the folder a row attaches at ("" not a folder scope).

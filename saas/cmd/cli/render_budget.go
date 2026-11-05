@@ -279,6 +279,7 @@ type renderReport struct {
 	SupersededR  int           `json:"superseded_rules"`
 	SupersededH  int           `json:"superseded_hotfixes"`
 	Manual       int           `json:"manual_rules"`
+	PathScoped   int           `json:"path_scoped_rules"`
 	Lines        []reportEntry `json:"line_forms,omitempty"`
 	Canary       string        `json:"-"`
 	WarnExceeded bool          `json:"over_warn_level"`
@@ -354,7 +355,7 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 	rep := renderReport{Profile: in.Settings.Profile, Budget: in.Settings.Budget, WarnPct: in.Settings.WarnPct,
 		Critical: len(crit), HighLine: len(high), Topics: len(in.Topics), IndexFolded: res.IndexCollapsed,
 		NoSummary: noSummary, SupersededR: in.Skips.SupersededRules, SupersededH: in.Skips.SupersededHotfixes,
-		Manual: in.Skips.ManualRules, Canary: canary}
+		Manual: in.Skips.ManualRules, PathScoped: in.Skips.PathScoped, Canary: canary}
 	// Full entries first, then lines, each group in rank order.
 	for i, e := range entries {
 		if res.Forms[i] == contextfit.FormFull {
@@ -454,6 +455,9 @@ func (r renderReport) reportText() string {
 	fmt.Fprintf(&b, "  superseded rules     %4d  reason: superseded_by set\n", r.SupersededR)
 	fmt.Fprintf(&b, "  superseded hotfixes  %4d  reason: superseded_by set\n", r.SupersededH)
 	fmt.Fprintf(&b, "  manual rules         %4d  reason: activation manual\n", r.Manual)
+	if r.PathScoped > 0 {
+		fmt.Fprintf(&b, "  glob rules           %4d  reason: path-scoped (the tools' own path rule files)\n", r.PathScoped)
+	}
 	for _, l := range r.Lines {
 		fmt.Fprintf(&b, "  %s  %s\n", l.ID, l.Reason)
 	}

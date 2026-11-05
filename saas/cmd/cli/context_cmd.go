@@ -368,9 +368,11 @@ func contextForFileTool(ctx context.Context, p, tool string) (contextResult, err
 			picks = append(picks, pickOf(k, why))
 		}
 	}
-	// 1. globs match the path.
+	fs := newFileScope(ctx, rel, tool)
+	// 1. globs match the path; a glob rule the tool loads from its own
+	// path rule file is not repeated (6.9).
 	for _, k := range rows {
-		if k.kind != "rule" && k.kind != "hotfix" {
+		if k.kind != "rule" && k.kind != "hotfix" || fs.pathRuleLoaded(k.r.ID.String()) {
 			continue
 		}
 		for _, g := range contextfit.SplitGlobs(renderField(k.r.Row, renderFieldGlobs)) {
@@ -381,7 +383,6 @@ func contextForFileTool(ctx context.Context, p, tool string) (contextResult, err
 		}
 	}
 	// 2. the folder scope chain, innermost first (6.2.2, 6.2.8).
-	fs := newFileScope(ctx, rel, tool)
 	scopeChainPicks(fs, rows, add, func(cp contextPick) {
 		if !seen[cp.ID] {
 			seen[cp.ID] = true

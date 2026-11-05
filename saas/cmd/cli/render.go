@@ -196,6 +196,11 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	// full file still holds every scope (CQ2).
 	allRules, allHotfixes := rules, hotfixes
 	rules, hotfixes, dirs := planDirs(ctx, root, rules, hotfixes)
+	// 6.7 claude_rules / cursor_rules: glob rules go to the tools' own path
+	// files when every target loads them (render_pathrules.go, FA-CTX-2).
+	rules, pathGroups := planPathRules(rules, profiles)
+	skips.IDs = append(skips.IDs, pathRuleIDs(pathGroups)...)
+	skips.PathScoped = len(pathRuleIDs(pathGroups))
 	in := renderInput{Settings: loadContextSettings(ctx, profiles), Rules: rules, Hotfixes: hotfixes, Topics: topics, Skips: skips, Dirs: dirs.Groups}
 	dirBodies, dirReps := buildDirFiles(dirs, in.Settings.EntryMax)
 
@@ -307,6 +312,14 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 				return err
 			}
 		}
+	}
+	// 6.7: path-scoped rule files per target; stale lore-path-* files go.
+	reg, err := loadToolRegistry(ctx)
+	if err != nil {
+		return err
+	}
+	if err := writePathRules(root, pathGroups, pick.targets, reg.Profiles(), f.quiet); err != nil {
+		return errcodes.New(errcodes.Internal, "path rule files").WithCause(err)
 	}
 	// 6.2.5: folder files and each target's folder file; stale ones go.
 	if err := writeDirs(root, dirs, dirBodies, pick.targets, len(body), f.quiet); err != nil {

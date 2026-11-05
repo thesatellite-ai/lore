@@ -117,6 +117,8 @@ type pinnedHotfix struct {
 type pinSkips struct {
 	SupersededRules, SupersededHotfixes int
 	ManualRules                         int
+	// PathScoped counts glob rules moved to path files (6.7).
+	PathScoped int
 	// IDs are the skipped rows with their reason, in load order; the
 	// render history's cut_summary keeps them for `why-context --cut`
 	// (CONTEXT_BUDGET 6.11).

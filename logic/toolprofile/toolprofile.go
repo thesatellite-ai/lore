@@ -106,6 +106,10 @@ type Profile struct {
 	// .git/info/exclude. Empty when the tool has no such file; that tool
 	// gets internal context through `lore context` and the hooks only.
 	PrivateFile string `yaml:"private_file,omitempty" json:"private_file,omitempty"`
+	// PathRules is the tool's own loader of path-scoped rule files
+	// (CONTEXT_BUDGET 6.7 claude_rules / cursor_rules); zero when it has
+	// none (pathrules.go).
+	PathRules PathRules `yaml:"path_rules,omitempty" json:"path_rules,omitzero"`
 }
 
 // EffectiveBudget returns Budget, or DefaultBudget when unset.
@@ -124,9 +128,11 @@ func (p Profile) HasPointerFile() bool { return p.Import != ImportNone && p.Poin
 // profile is resolved by exactly the same code.
 func Builtins() []Profile {
 	return []Profile{
-		{Name: NameClaudeCode, PointerFile: "CLAUDE.md", Import: ImportAt, Budget: largeBudget, PrivateFile: "CLAUDE.local.md"},
+		{Name: NameClaudeCode, PointerFile: "CLAUDE.md", Import: ImportAt, Budget: largeBudget, PrivateFile: "CLAUDE.local.md",
+			PathRules: PathRules{Dir: ".claude/rules/lore", Style: PathRulesPaths}},
 		{Name: NameCodex, PointerFile: "AGENTS.md", Import: ImportRead, Budget: DefaultBudget},
-		{Name: NameCursor, PointerFile: ".cursor/rules/lore.mdc", Import: ImportMDC, Budget: DefaultBudget, PrivateFile: ".cursor/rules/lore-private.mdc"},
+		{Name: NameCursor, PointerFile: ".cursor/rules/lore.mdc", Import: ImportMDC, Budget: DefaultBudget, PrivateFile: ".cursor/rules/lore-private.mdc",
+			PathRules: PathRules{Dir: ".cursor/rules", Style: PathRulesMDCGlobs}},
 		{Name: NameGeminiCLI, PointerFile: "GEMINI.md", Import: ImportAt, Budget: largeBudget},
 		{Name: NameCopilot, PointerFile: ".github/copilot-instructions.md", Import: ImportRead, Budget: DefaultBudget},
 		{Name: NameGeneric, Import: ImportNone, Budget: DefaultBudget},
@@ -195,6 +201,9 @@ func (r *Registry) validate(p Profile) error {
 		return nil
 	}
 	if err := r.validatePrivate(p); err != nil {
+		return err
+	}
+	if err := validatePathRules(p); err != nil {
 		return err
 	}
 	f := p.PointerFile
