@@ -73,7 +73,6 @@ func TestBrokenRowFileIsReported(t *testing.T) {
 			if strings.Contains(list, id) {
 				t.Fatalf("a broken row must not be listed: %s", list)
 			}
-			b.rowFileNotices(b.st) // what App.state calls after the open (wire.go patch)
 			rel := ".lore/data/memories/" + id + ".json"
 			n := 0
 			for _, m := range notes {
@@ -98,7 +97,6 @@ func TestBrokenRowFileIsReported(t *testing.T) {
 			if list, lerr = run(t, c, opsmemory.OpList, ``, false); lerr != nil || !strings.Contains(list, id) {
 				t.Fatalf("the fixed row must read: %s %v", list, lerr)
 			}
-			c.rowFileNotices(c.st)
 			if r2 := runDoctorOp(t, c); len(after) != 0 || len(r2.Errors) != 0 {
 				t.Fatalf("after the fix: notices %q errors %q", after, r2.Errors)
 			}

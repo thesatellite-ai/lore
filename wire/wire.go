@@ -529,6 +529,7 @@ func (a *App) state(ctx context.Context) (*state, error) {
 		}
 		if a.err == nil && a.opts.Notice != nil {
 			a.healedNotices(a.st)
+			a.rowFileNotices(a.st) // fail closed: name every row file the refresh left out (rowfile_notice.go)
 			if n := liveNote(ctx, a.st); n != "" {
 				a.opts.Notice(n)
 			}
