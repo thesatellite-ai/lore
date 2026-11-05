@@ -34,19 +34,19 @@ Outside any company, `lore identity set` saves a fallback identity in `~/.lore/i
 # alice, in ~
 $ lore identity set alice@example.com
 ✓ identity persisted: alice@example.com
-  file: ~/.lore/identity.yaml
+  file: ~/.lore/config.yaml (identity:)
 
 # alice, in website
 $ lore identity show
 resolved:    human:alice@example.com
 display:     alice@example.com
 kind:        human
-source:      identity.yaml
+source:      top-level identity (config.yaml)
 stable:      yes
 
 # alice, in ~
 $ lore identity unset
-✓ identity unset (next session will fall through chain)
+✓ identity: unset (next session will fall through chain)
 
 # alice, in website
 $ lore identity show
@@ -74,7 +74,7 @@ $ lore identity anonymize off
 
 An **org** is one company's setup in your config: its stores, its people and the repos it owns. At work you usually use a different email than at home. `--org` stores that identity in the company's entry of `~/.lore/config.yaml`, and lore uses it in every repo of that company:
 
-<!-- example: people#identity-per-org only=2,3 -->
+<!-- example: people#identity-per-org only=1,2 -->
 ```console
 # alice, in ~
 $ lore identity set --org agency --key human:alice@agency.example --name 'Alice Doe' --handle alice
@@ -123,8 +123,8 @@ This adds to ~/.lore/config.yaml:
     repos:
         - github.com/client/*
 ✓ added org entry agency
-✓ act_7a67…9504 Bob Roe (@bob) registered in agency org/
-lore: [agency/org] 1 file(s) pushed
+lore: the entry is added, but registering on the roster failed: [E_NOT_A_STORE] git: the folder is not inside a git work tree: [E_NOT_A_STORE] store: url is not a lore store
+      run `lore actor register` in one of agency's repos
 $ cat ~/.lore/config.yaml
 orgs:
     - name: agency
@@ -145,6 +145,8 @@ $ lore whoami
 org        agency  (matched by: link in <redacted>, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_7a67…9504  @bob  (from: org entry (config.yaml))
 repo       client repo  (guards on)
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
 stores     <redacted> on branch main  (org folder <redacted>)
@@ -171,7 +173,7 @@ org: agency
 $ lore org set agency --commit
 ERROR: [E_INVALID_INPUT] refusing to write .lore/org.yaml: .lore/org.yaml names agency, but no remote (github.com/client/website) matches its own: patterns; ignored (only an org's own repos may name it)
   hint: only an org's own repos (matching its own: patterns) may name it; use `lore org use` for a machine-only choice
-(exit 1)
+(exit 20)
 ```
 <!-- /example -->
 
@@ -185,17 +187,14 @@ Alice wrote a note into the client's repo by mistake, where the client can read 
 $ lore memory add --body 'the client replies faster on WhatsApp than email' --to repo
 ✓ mem_162d…9666 
   scope: [master]
-lore sync: exported 2
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ lore move mem_162d…9666 --to agency --yes
-This becomes visible to everyone with access to [agency/client]:
+This becomes visible to everyone with access to store agency:
   "the client replies faster on WhatsApp than email"
-✓ mem_54fe…28f2 moved from mem_162d…9666, in [agency/client] (the copy has no pointer back)
-lore: [agency/client] 1 file(s) pushed
+✓ mem_162d…9666 moved to store agency (same id; the old copy is tombstoned)
 $ lore memory list
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
-mem_54fe…28f2  the client replies faster on WhatsApp than email  [agency/client]
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
+mem_162d…9666  the client replies faster on WhatsApp than email  [agency/client]
 ```
 <!-- /example -->
 
@@ -217,7 +216,7 @@ org
 
 # bob, in ~
 $ lore store forget git@github.com:agency/notes
-✓ forgot <redacted> (removed ~/.lore/clones/github.com/agency/notes.git; the next command that needs it clones it again)
+✓ forgot <redacted> (removed ~/.lore/clones-v017/github.com/agency/notes.git; the next command that needs it clones it again)
 ```
 <!-- /example -->
 
@@ -229,7 +228,10 @@ Lore keeps a cache file per attached store in `~/.lore/cache`. `lore cache prune
 ```console
 # alice, in ~
 $ lore cache prune --dry-run
-nothing to prune: every cache file belongs to a store a repo on this machine attaches
+cache files no repo on this machine attaches:
+  ~/.lore/cache/stores/sto_54fe…28f2/main/root.db  2.5 MB
+1 file(s), 2.5 MB
+--dry-run: nothing removed
 ```
 <!-- /example -->
 

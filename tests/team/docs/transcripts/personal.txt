@@ -1,41 +1,37 @@
 
 ### local personal store
 alice (work/website)$ lore memory add --body 'I always forget the staging VPN profile' --to me
-✓ mem_7a670ae8548ed05bf57ad29ad0759504 [me]
-  filed: --to me → personal agency/
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+lore sync: built .lore/lore.db from .lore/data (3 rows)
+lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+✓ mem_7a670ae8548ed05bf57ad29ad0759504 [me/agency]
   scope: [master]
 alice (work/scratch)$ lore memory add --body 'I prefer tabs over spaces' --to me
-✓ mem_2ad3618e878ebbf527d34d446ef4f891 [me]
-  filed: --to me → personal everywhere/
+lore sync: imported 3
+✓ mem_2ad3618e878ebbf527d34d446ef4f891 [me/everywhere]
   scope: [master]
-alice (work/website)$ lore memory add --body 'agency invoices go to the finance inbox' --to me --everywhere
-note mentions [agency], a known org or repo. Save it under everywhere/ anyway? [y/N] n
-ERROR: [E_INVALID_INPUT] not saved
-(exit 1)
 alice (work/website)$ lore memory list
-lore sync: built .lore/lore.db from .lore/data (2 rows)
-lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-mem_7a670ae8548ed05bf57ad29ad0759504  I always forget the staging VPN profile  [me]
-mem_2ad3618e878ebbf527d34d446ef4f891  I prefer tabs over spaces  [me]
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+mem_7a670ae8548ed05bf57ad29ad0759504  I always forget the staging VPN profile  [me/agency]
+mem_2ad3618e878ebbf527d34d446ef4f891  I prefer tabs over spaces  [me/everywhere]
 alice (work/scratch)$ lore memory list
-mem_2ad3618e878ebbf527d34d446ef4f891  I prefer tabs over spaces  [me]
+mem_2ad3618e878ebbf527d34d446ef4f891  I prefer tabs over spaces  [me/everywhere]
 alice$ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
 everywhere/.lore/data/memories/mem_2ad3618e878ebbf527d34d446ef4f891.json
 agency/.lore/data/memories/mem_7a670ae8548ed05bf57ad29ad0759504.json
 
 ### git personal store
-alice$ lore store init git@github.com:alice/lore-me
-✓ wrote lore-store.yaml to github.com/alice/lore-me (new branch main, first commit) and pushed
+alice (work/scratch)$ lore store init me git@github.com:alice/lore-me --yes
+name: me
+url: git@github.com:alice/lore-me
+personal: true
+id: sto_162df51b7f78b785c97c26b41ea89666
 alice (work/website)$ lore memory add --body 'the client invoice template lives in the shared drive' --to me
-✓ mem_162df51b7f78b785c97c26b41ea89666 [me]
-  filed: --to me → personal agency/
+✓ mem_54fe984c9b495744c0217776765a28f2 [me]
   scope: [master]
-lore: [me] 4 file(s) pushed
 alice-devbox (work/website)$ lore memory list
-lore sync: built .lore/lore.db from .lore/data (2 rows)
-lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-mem_162df51b7f78b785c97c26b41ea89666  the client invoice template lives in the shared drive  [me]
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+lore sync: built .lore/lore.db from .lore/data (3 rows)
+lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
+lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
+mem_54fe984c9b495744c0217776765a28f2  the client invoice template lives in the shared drive  [me]

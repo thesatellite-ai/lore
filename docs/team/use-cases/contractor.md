@@ -37,36 +37,38 @@ orgs:
 
 ## The commands
 
-Alice creates the three stores. She links `client/website` to the client's store with `--store`. Then she writes one client note and one company rule (`--to agency/.` is the company store's root project):
+Alice creates the three stores (from a plain folder of hers, `stores`, which attaches them by name; never from the client's repo). She links `client/website` to the client's store with `--store`. Then she writes one client note and one company rule (`--to agency/.` is the company store's root project):
 
 <!-- example: contractor#one-store-per-client -->
 ```console
-# alice, in ~
-$ lore store init git@github.com:agency/notes && lore store init git@github.com:agency/notes-client && lore store init git@github.com:agency/notes-client2
-✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
-✓ wrote lore-store.yaml to github.com/agency/notes-client (new branch main, first commit) and pushed
-✓ wrote lore-store.yaml to github.com/agency/notes-client2 (new branch main, first commit) and pushed
+# alice, in stores
+$ lore store init agency git@github.com:agency/notes --yes && lore store init client git@github.com:agency/notes-client --yes && lore store init client2 git@github.com:agency/notes-client2 --yes
+name: agency
+url: git@github.com:agency/notes
+id: sto_7a67…9504
+name: client
+url: git@github.com:agency/notes-client
+id: sto_2ad3…f891
+name: client2
+url: git@github.com:agency/notes-client2
+id: sto_162d…9666
 
 # alice, in website
 $ lore org link agency --project client --store git@github.com:agency/notes-client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_7a67…9504 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
-✓ github.com/client/website (prj_7a67…9504, github.com/client/website) linked to github.com/agency/notes-client client/ (created; pushed)
+  link: project prj_54fe…28f2 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
+✓ github.com/client/website (prj_54fe…28f2, github.com/client/website) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
-✓ act_2ad3…f891 Alice Doe (@alice) registered in agency ./
-lore: [agency/.] 3 file(s) pushed
+✓ act_05e9…4603 Alice Doe (@alice) registered in agency ./
 $ lore memory add --body 'the client staging database is restored every Sunday night'
-✓ mem_162d…9666 [agency/client]
+✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
   scope: [master]
-lore: [agency/client] 2 file(s) pushed
 $ lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'
-✓ rul_54fe…28f2 [agency/.]
-  filed: --to agency/.
+✓ rul_76bd…3f10 [agency/.]
   scope: [master] severity: must
-lore: [agency/.] 1 file(s) pushed
 ```
 <!-- /example -->
 
@@ -77,9 +79,11 @@ Bob, in the same client repo, sees the link, the client's note and the company s
 # bob, in website
 $ lore whoami
 org        agency  (matched by: link in github.com/agency/notes-client client/, project id + remote)
-identity   Bob Roe <human:bob@agency.example>   act_05e9…4603  @bob  (from: org entry (config.yaml))
+identity   Bob Roe <human:bob@agency.example>   act_d431…313a  @bob  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-project    prj_7a67…9504
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+agent      none  (no coding agent detected)
+project    prj_54fe…28f2
 remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch main  (org folder .)
            git@github.com:agency/notes-client on branch main
@@ -87,20 +91,21 @@ internal   github.com/agency/notes-client client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   local: agency/, everywhere/
 $ lore actor register
-✓ act_05e9…4603 Bob Roe (@bob) registered in agency ./
-lore: [agency/.] 1 file(s) pushed
+✓ act_d431…313a Bob Roe (@bob) registered in agency ./
 $ lore memory list
-mem_162d…9666  the client staging database is restored every Sunday night  [agency/client]
+mem_c0f3…b5b8  the client staging database is restored every Sunday night  [agency/client]
 
 # bob, in ~
 $ lore store show
 <redacted>
   entries   agency   branches main
-  clone     ~/.lore/clones/github.com/agency/notes.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+  clone     ~/.lore/clones-v017/github.com/agency/notes.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
 <redacted>
   entries   agency   branches main
-  clone     ~/.lore/clones/github.com/agency/notes-client.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+  clone     ~/.lore/clones-v017/github.com/agency/notes-client.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
 $ ls ~/.lore/clones/github.com/agency
+notes
+notes-client
 notes-client.git
 notes.git
 ```

@@ -27,21 +27,27 @@ An entry whose store branch is not the store's default branch is a **staging ent
 
 ## The commands
 
-Alice (an agency developer) creates the staging branch once and switches this repo to staging. She links it there (links exist per store branch), adds a staging task, and switches back:
+Alice (an agency developer) creates the staging branch once (from her `stores` folder, never from the client's repo) and switches this repo to staging. She links it there (links exist per store branch), adds a staging task, and switches back:
 
 <!-- example: staging#staging-branch -->
 ```console
+# alice, in stores
+$ lore store init agency_stag 'git@github.com:agency/notes?branch=staging' --yes
+name: agency_stag
+url: git@github.com:agency/notes?branch=staging
+id: sto_7a67…9504
+
 # alice, in website
-$ lore store init agency_stag 'git@github.com:agency/notes?branch=staging'
-✓ wrote lore-store.yaml to github.com/agency/notes (new branch staging, first commit) and pushed
 $ lore org use agency-stag
-✓ prj_7a67…9504 uses org agency-stag on this machine
+✓ prj_2ad3…f891 uses org agency-stag on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore whoami
 org        agency-stag  (matched by: lore org use (this machine))
-identity   Alice Doe <human:alice@agency.example>   act_2ad3…f891  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@agency.example>   act_162d…9666  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-project    prj_7a67…9504
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+agent      none  (no coding agent detected)
+project    prj_2ad3…f891
 remotes    github.com/client/website
 stores     <redacted> on branch staging  (org folder <redacted>)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
@@ -49,26 +55,24 @@ personal   local: agency-stag/, everywhere/
 $ lore org link agency-stag --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency-stag.
-  link: project prj_7a67…9504 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
-✓ github.com/client/website (prj_7a67…9504, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
+✓ github.com/client/website (prj_2ad3…f891, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 $ lore task add 'seed staging with demo data' --to agency-stag
-✓ tsk_162d…9666 — seed staging with demo data [medium] → [agency-stag/client]
-lore live: (live, pushed)
+ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
 $ lore task list
-○ tsk_162d…9666 seed staging with demo data [medium]  [agency-stag/client]
+ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
 $ lore org use agency
-✓ prj_7a67…9504 uses org agency on this machine
+✓ prj_2ad3…f891 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore task list
 (no tasks)
 $ LORE_ORG=agency-stag lore task list
-○ tsk_162d…9666 seed staging with demo data [medium]  [agency-stag/client]
+ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
 $ git ls-remote https://github.com/agency/notes
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main
 86dbae476bd6	refs/heads/staging
-9b40ce71af28	refs/lore/live/staging
 ```
 <!-- /example -->
 

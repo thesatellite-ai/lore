@@ -37,16 +37,14 @@ A real task file, as lore wrote it (shortened):
 # carol, in app
 $ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only refs/lore/live | grep '_root/tasks/')
 {
+  "_hlc": "2026-11-02T10:00:10.000Z/0001/act_162d…9666",
   "_live": {
-    "hlc": "2026-11-02T10:00:10.000Z/0000/act_54fe…28f2",
+    "hlc": "2026-11-02T10:00:10.000Z/0001/act_162d…9666",
     "live_since": "2026-11-02T10:00:10Z"
-  …
-  "claim_epoch": 0,
   …
   "id": "tsk_7a67…9504",
   …
   "project_id": "prj_05e9…4603",
-  …
   "status": "todo",
   …
   "title": "fix header",
@@ -88,12 +86,9 @@ A monorepo (one repo that holds several projects) has one live ref. Each lore pr
 $ git ls-tree -r --name-only refs/lore/live
 _live/epoch
 _live/meta.json
-_root/task_lists/tlt_162d…9666.json
 _root/tasks/tsk_7a67…9504.json
-web/rules/rul_2ad3…f891.json
 $ git log --oneline refs/lore/live
-86dbae4 lore: live 1 row (web)
-9b40ce7 lore: live 2 rows (_root)
+601d285 lore: live 1 row (_root)
 ```
 <!-- /example -->
 
@@ -159,6 +154,8 @@ $ lore whoami --explain
 org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity, personal everywhere/ notes only)
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+agent      none  (no coding agent detected)
 project    prj_c0f3…b5b8
 remotes    github.com/someone/tool
 links      known  0 link(s) for this repo (stores of 2 entries scanned)

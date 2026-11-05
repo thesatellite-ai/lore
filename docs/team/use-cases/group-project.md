@@ -49,13 +49,10 @@ The first link created `client2/` in the store. The others joined it. Now add a 
 # alice, in api
 $ lore mission add 'Invite landing page' --to agency/client2 --key invite
 ✓ msn_05e9…4603 — Invite landing page → [agency/client2]
-lore live: (live, pushed)
 $ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e9…4603 --repo api --key invite/backend
 ✓ tsk_c0f3…b5b8 — send the invite email from the API [medium] → [agency/client2]
-lore live: (live, pushed)
 $ lore task add 'build the invite page' --to agency/client2 --mission msn_05e9…4603 --repo app --after tsk_c0f3…b5b8 --key invite/frontend
 ✓ tsk_76bd…3f10 — build the invite page [medium] → [agency/client2]
-lore live: (live, pushed)
 $ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e9…4603 --repo api --key invite/backend
 ✓ tsk_c0f3…b5b8 — send the invite email from the API (already added with --key invite/backend)
 ```

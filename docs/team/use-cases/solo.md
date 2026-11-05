@@ -18,10 +18,9 @@ In a repo without a remote, nothing is ever pushed. Tasks are still live by defa
 ```console
 # alice, in scratch
 $ lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
+lore sync: imported 3
 ✓ rul_7a67…9504 
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore task add 'write the README'
 ✓ tsk_2ad3…f891 — write the README [medium]
 lore live: (live, local: no remote)
@@ -30,13 +29,13 @@ $ lore task done tsk_2ad3…f891
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, local: no remote)
 $ lore land --all --dry-run
-would land 2 row(s) to main (_root/):
-  tlt_162d…9666     land  named by lore land
+would land 1 row(s) to main (_root/):
   tsk_2ad3…f891     land  named by lore land
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 ```
 <!-- /example -->
 
@@ -54,13 +53,12 @@ live:
 ```console
 # alice, in scratch
 $ lore task add 'tidy the scripts folder'
-✓ tsk_54fe…28f2 — tidy the scripts folder [medium]
-lore sync: exported 1
-lore sync: 5 file(s) in .lore/data not committed — commit them with your change
+✓ tsk_162d…9666 — tidy the scripts folder [medium]
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 ```
 <!-- /example -->
 

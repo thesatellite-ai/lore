@@ -32,9 +32,14 @@ $ lore init --non-interactive --name=notes-app
     origin:     https://github.com/alice/notes-app
     db:         ~/work/notes-app/.lore/lore.db
     identity:   human:alice@example.com (git config)
+· context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
+✓ ~/work/notes-app/AGENTS.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
   next: lore learn-from docs   to bootstrap from existing markdown
-lore sync: exported 2 rows to .lore/data — review and commit it
+        lore render            to write .lore/LORE.md for those tools
+lore sync: exported 0 rows to .lore/data — review and commit it
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
+lore sync: imported 3
 ```
 <!-- /example -->
 
@@ -51,6 +56,8 @@ $ lore whoami
 org        none  (matched by: nothing matched)
 identity   alice <human:alice@example.com>   act_2ad3…f891  (from: git config)
 repo       no org  (fallback identity, personal everywhere/ notes only)
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+agent      none  (no coding agent detected)
 project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
@@ -72,14 +79,14 @@ lore live: (live, pushed)
 $ lore task list
 ○ tsk_162d…9666 fix login timeout [medium]
 $ git status --short
+?? .lore/data/task_lists/
 $ git ls-remote origin
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main
 86dbae476bd6	refs/lore/live
 $ lore live show
-task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
 tasks      tsk_162d…9666     live      since 2026-11-02 10:00
-2 live rows in _root (epoch 1)
+1 live rows in _root (epoch 1)
 ```
 <!-- /example -->
 
@@ -98,16 +105,15 @@ $ lore task done tsk_162d…9666
 lore live: (live, pushed)
 lore live: landed on main (9b40ce7); leaves live once main is fetched
 $ git fetch -q origin && git log --oneline origin/main
-9b40ce7 lore: land 2 rows (_root)
+9b40ce7 lore: land 1 row (_root)
 601d285 lore: init
 05513aa init
 $ lore live show
-task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
 tasks      tsk_162d…9666     live      since 2026-11-02 10:00
-2 live rows in _root (epoch 1)
+1 live rows in _root (epoch 1)
 $ lore sync
 · already in sync
-lore live: 2 row(s) left live (main holds them)
+lore live: 1 row(s) left live (main holds them)
 $ lore live show
 0 live rows in _root (epoch 1)
 ```
@@ -127,6 +133,8 @@ lore: migrated ~/.lore/identity.toml → identity.yaml (old file kept as identit
 org        none  (matched by: nothing matched)
 identity   Alice Doe <human:alice@example.com>   act_2ad3…f891  (from: identity.yaml)
 repo       no org  (fallback identity, personal everywhere/ notes only)
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+agent      none  (no coding agent detected)
 project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
@@ -138,6 +146,7 @@ $ ls ~/.lore; cat ~/.lore/identity.yaml
 cache
 identity.toml.migrated
 identity.yaml
+machine.json
 display_name: Alice Doe
 stable_key: human:alice@example.com
 ```
@@ -181,29 +190,32 @@ orgs:
 | `orgs[].own` | URL patterns of the org's own repos (no client guards) |
 | `orgs[].repos` | URL patterns of client repos (guards on) |
 
-Check it. Create the store (once per company, in a new empty repo). Then see the result in one of the org's own repos:
+Check it. Create the store (once per company, from a new empty repo): `lore store init <name> <url>` runs inside one of the org's own repos and attaches the store there by name. Then see the result in that repo:
 
-<!-- example: getting-started#first-config only=2,3,5,6 -->
+<!-- example: getting-started#first-config only=2,4,5,6 -->
 ```console
 # alice, in ~
 $ lore config check
 ✓ ~/.lore/config.yaml is valid: 1 org entry (agency)
-$ lore store init git@github.com:agency/notes
-✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
 
 # alice, in tools
+$ lore store init agency git@github.com:agency/notes --yes
+name: agency
+url: git@github.com:agency/notes
+id: sto_05e9…4603
 $ lore whoami
 org        agency  (matched by: own pattern github.com/agency/* of agency)
 identity   Alice Doe <human:alice@agency.example>   act_c0f3…b5b8  @alice  (from: org entry (config.yaml))
 repo       own repo  (no client guards)
-project    prj_05e9…4603
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+agent      none  (no coding agent detected)
+project    prj_54fe…28f2
 remotes    github.com/agency/tools
 stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   local: agency/, everywhere/
 $ lore actor register
 ✓ act_c0f3…b5b8 Alice Doe (@alice) registered in agency org/
-lore: [agency/org] 3 file(s) pushed
 ```
 <!-- /example -->
 
@@ -218,6 +230,8 @@ $ lore whoami
 org        none  (matched by: nothing matched)   hint: lore org use agency
 identity   Alice Doe <human:alice@example.com>   act_2ad3…f891  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity, personal everywhere/ notes only)
+machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+agent      none  (no coding agent detected)
 project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      known  0 link(s) for this repo (stores of 1 entry scanned)

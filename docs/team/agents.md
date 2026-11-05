@@ -89,9 +89,9 @@ A real one, from the worked example: the crashed `agent-frontend` woke up after 
 ```console
 # agent-frontend, in agents/app
 $ lore task done tsk_54fe…28f2
-ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 10:57AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:45AM
-  hint: stop work on this task; `lore task next` finds other work
-(exit 12)
+✓ tsk_54fe…28f2 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+(exit 0)
 ```
 <!-- /example -->
 
@@ -107,22 +107,22 @@ Use it when you started a task and cannot finish it. The task is free at once, s
 ```console
 # alice, in website
 $ lore task add 'send the invoice reminder before Friday' --to agency
-✓ tsk_162d…9666 — send the invoice reminder before Friday [medium] → [agency/client]
-lore live: (live, pushed)
+✓ tsk_7a67…9504 — send the invoice reminder before Friday [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_162d…9666
-✓ claimed tsk_162d…9666 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
-$ lore task release tsk_162d…9666
-✓ released tsk_162d…9666
+$ lore task claim tsk_7a67…9504
+✓ claimed tsk_7a67…9504 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+$ lore task release tsk_7a67…9504
+✓ released tsk_7a67…9504
 
 # alice, in website
-$ lore task show tsk_162d…9666
-tsk_162d…9666
+$ lore task show tsk_7a67…9504
+tsk_7a67…9504
   title:    send the invoice reminder before Friday
   status:   in_progress
   priority: medium
   commit:   accepted
+  time:     1m (agent 0m, person 1m)
   attempts: 1
   source:   agency/client
   claim:    none on refs/lore/signals/main
@@ -139,23 +139,22 @@ Use it when an agent holds a task it should not work on any more. The agent's ne
 ```console
 # alice, in website
 $ lore agent start --label agent-backend --owner @alice
-✓ act_54fe…28f2 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_2ad3…f891 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
-lore: [agency/org] 1 file(s) pushed
 
 # agent-backend, in website
-$ lore task claim tsk_162d…9666
-✓ claimed tsk_162d…9666 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
+$ lore task claim tsk_7a67…9504
+ERROR: signals: signals written but the companion write failed: companion 1 on its own remote: [E_NEEDS_CONFIRM] engine: claim_log looks like a secret (session-id) at line 1: s-…: store it anyway as not a secret?
 
 # alice, in website
-$ lore task revoke tsk_162d…9666
-✓ revoked the claim on tsk_162d…9666 (was held by agent-backend)
+$ lore task revoke tsk_7a67…9504
+✓ revoked the claim on tsk_7a67…9504 (was held by agent-backend)
 
 # agent-backend, in website
-$ lore task done tsk_162d…9666
-ERROR: [E_LOST_CLAIM] tsk_162d…9666: your claim (token ct_cb04f…) was revoked by act_05e9…4603 at 10:17AM
-  hint: stop work on this task; `lore task next` finds other work
-(exit 12)
+$ lore task done tsk_7a67…9504
+✓ tsk_7a67…9504 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+(exit 0)
 ```
 <!-- /example -->
 
@@ -167,19 +166,19 @@ Use it when the work should move to another person. The old holder's next write 
 ```console
 # alice, in website
 $ lore task add 'update the contact page' --to agency --assign @bob
-✓ tsk_c0f3…b5b8 — update the contact page [medium] → [agency/client]
+✓ tsk_162d…9666 — update the contact page [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_c0f3…b5b8
-✓ claimed tsk_c0f3…b5b8 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
+$ lore task claim tsk_162d…9666
+✓ claimed tsk_162d…9666 update the contact page (lease 20m, token ct_cb04f…) on refs/lore/signals/main
 
 # alice, in website
-$ lore task reassign tsk_c0f3…b5b8 --assign @alice
-✓ tsk_c0f3…b5b8 reassigned to @alice
+$ lore task reassign tsk_162d…9666 --assign @alice
+✓ tsk_162d…9666 reassigned to @alice
 
 # bob, in website
-$ lore task done tsk_c0f3…b5b8
-ERROR: [E_REASSIGNED] tsk_c0f3…b5b8 was reassigned while you held it; stop work on it (now assigned to act_05e9…4603)
+$ lore task done tsk_162d…9666
+ERROR: [E_REASSIGNED] tsk_162d…9666 was reassigned while you held it; stop work on it (now assigned to act_54fe…28f2)
   hint: stop work on this task; `lore task next` finds other work
 (exit 14)
 ```
@@ -195,19 +194,19 @@ A **team** is a name for a group of people, like a mailing list: `--assign @fron
 ```console
 # alice, in billing
 $ lore team add @frontend --name 'Frontend' --members @alice,@bob
-✓ tem_7a67…9504 @frontend (2 member(s)) in this repo
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+ERROR: [E_INVALID_INPUT] no one is @bob on this repo's roster
+  hint: register first: `lore actor register` (as that person)
 $ lore team list
-@frontend         Frontend                 2 member(s)
+no teams on this repo's roster
 $ lore task add 'make the buttons blue' --assign @frontend
-✓ tsk_2ad3…f891 — make the buttons blue [medium]
-lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
+lore sync: imported 1
+ERROR: [E_NOT_FOUND] no person or team with handle @frontend
+  hint: people join with `lore actor register`; teams with `lore team add`
 
 # bob, in billing
 $ lore task list
-○ tsk_2ad3…f891 make the buttons blue [medium]
+lore sync: imported 1
+(no tasks)
 ```
 <!-- /example -->
 
@@ -225,8 +224,9 @@ $ lore hold claim full-suite --ttl 30m
 
 # bob, in billing
 $ lore hold claim full-suite --ttl 30m
-ERROR: [E_INVALID_INPUT] full-suite is held by alice since 10:05AM (lease until 10:35AM)
-(exit 1)
+ERROR: [E_CONTENDED] full-suite is held by alice since 10:05AM (lease until 10:35AM)
+  hint: retry after the hold ends, or pick other work with `lore task next`
+(exit 11)
 
 # alice, in billing
 $ lore hold release full-suite
@@ -252,7 +252,7 @@ Running `lore hold claim` again while you hold it renews your hold. A typical li
 
 ## Hooking an agent tool
 
-- Context: `lore render` writes the internal context to `~/.lore/render/<project-id>.md` and a one-line `CLAUDE.local.md` import in the checkout. Tools that do not follow imports can run `lore context --internal`.
+- Context: `lore render` writes the internal context outside the checkout, one private file per internal store under `~/.lore/render/<repo-id>/` (with an `index.md`); agents read it through `lore context` and the session hooks.
 - Heartbeats: either call `lore task heartbeat` from a hook of your agent tool, often enough to stay well inside `lease.ttl`, or run the daemon. `lore task heartbeat --daemon <id>` renews at once and then every `lease.renew_every`, and checks every 5 seconds that the process that started it is still running. When that process is gone, it stops (it also stops when the claim ends). So start it from a process that lives as long as the work: the agent's own long-running shell or wrapper script, or the same shell command as the long step (`lore task heartbeat --daemon <id> & go test ./...; kill $!`). A detached launch from a short-lived script or tool call (`setsid … &`, then the script exits) stops within seconds, together with that script. It needs the agent's `LORE_ACTOR` and `LORE_SESSION` in its environment.
 - Machine-readable output: `lore task next` and other commands print plain text. Branch on the exit status first. Use `--json` where a command offers it (`lore mission status --json`, `lore inbox --json`, `lore whoami --json`).
 

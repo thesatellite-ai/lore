@@ -163,6 +163,20 @@ on_known() {
   fi
 }
 on!() { _on fail "$@"; }
+# on_known_fail BUG NAME DIR CMD: an example that should FAIL (a refusal) but succeeds today
+# because of a reported bug; reported like on_known, and flagged once it refuses again.
+on_known_fail() {
+  local bug="$1"; shift
+  local before=$FAILURES
+  _on fail "$@" 2>/dev/null || true
+  if [ "$FAILURES" -gt "$before" ]; then
+    FAILURES=$before
+    KNOWN+=("$bug: $1 ($2) \$ $3")
+    printf 'KNOWN FAILURE (%s, expected a refusal): %s (%s) $ %s\n%s\n' "$bug" "$1" "$2" "$3" "$LAST_OUT" >&2
+  else
+    printf 'KNOWN FAILURE NOW PASSES (%s): remove on_known_fail from this example: %s\n' "$bug" "$3" >&2
+  fi
+}
 
 # quiet NAME DIR CMD: setup step, not shown in transcripts; fails the run on error.
 quiet() {

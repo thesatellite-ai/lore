@@ -23,24 +23,23 @@ personal:
 ```console
 # alice, in website
 $ lore memory add --body 'I always forget the staging VPN profile' --to me
-✓ mem_7a67…9504 [me]
-  filed: --to me → personal agency/
+✓ mem_7a67…9504 [me/agency]
   scope: [master]
 
 # alice, in scratch
 $ lore memory add --body 'I prefer tabs over spaces' --to me
-✓ mem_2ad3…f891 [me]
-  filed: --to me → personal everywhere/
+lore sync: imported 3
+✓ mem_2ad3…f891 [me/everywhere]
   scope: [master]
 
 # alice, in website
 $ lore memory list
-mem_7a67…9504  I always forget the staging VPN profile  [me]
-mem_2ad3…f891  I prefer tabs over spaces  [me]
+mem_7a67…9504  I always forget the staging VPN profile  [me/agency]
+mem_2ad3…f891  I prefer tabs over spaces  [me/everywhere]
 
 # alice, in scratch
 $ lore memory list
-mem_2ad3…f891  I prefer tabs over spaces  [me]
+mem_2ad3…f891  I prefer tabs over spaces  [me/everywhere]
 
 # alice, in ~
 $ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
@@ -55,20 +54,21 @@ To sync between machines, make a private repo of your own into a store (a lore-o
 
 <!-- example: personal#git-personal-store -->
 ```console
-# alice, in ~
-$ lore store init git@github.com:alice/lore-me
-✓ wrote lore-store.yaml to github.com/alice/lore-me (new branch main, first commit) and pushed
+# alice, in scratch
+$ lore store init me git@github.com:alice/lore-me --yes
+name: me
+url: git@github.com:alice/lore-me
+personal: true
+id: sto_162d…9666
 
 # alice, in website
 $ lore memory add --body 'the client invoice template lives in the shared drive' --to me
-✓ mem_162d…9666 [me]
-  filed: --to me → personal agency/
+✓ mem_54fe…28f2 [me]
   scope: [master]
-lore: [me] 4 file(s) pushed
 
 # alice-devbox, in website
 $ lore memory list
-mem_162d…9666  the client invoice template lives in the shared drive  [me]
+mem_54fe…28f2  the client invoice template lives in the shared drive  [me]
 ```
 <!-- /example -->
 

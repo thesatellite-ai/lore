@@ -22,11 +22,13 @@ Examples:
   lore whoami --explain        # every org rule with hit or miss
   LORE_ORG=agency-stag lore whoami
   lore whoami --json
+  lore whoami --machine-label "tomas desktop"   # synced label of this machine ("" clears)
 
 Flags:
-      --explain   print every org rule with hit or miss and why
-      --json      machine-readable output
-      --share     on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)
+      --explain                print every org rule with hit or miss and why
+      --json                   machine-readable output
+      --machine-label string   set this machine's label, synced with its profile to our own stores (MACHINE LABEL)
+      --share                  on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)
 ```
 <!-- /help -->
 
@@ -42,6 +44,9 @@ Usage:
 Examples:
   lore config check
   HOME=/tmp/test-home lore config check
+
+Flags:
+      --json   JSON output
 ```
 <!-- /help -->
 
@@ -61,7 +66,8 @@ Examples:
   lore identity set --org agency --key human:alice@agency.example --name "Alice Doe" --handle alice
 
 Flags:
-      --handle string   with --org: roster handle, without @
+      --handle string   roster handle, without @
+      --json            JSON output
       --key string      human:<your email> (with --org: your email in that org, TEAM-029)
       --name string     with --org: display name
       --org string      set your identity inside this org entry of ~/.lore/config.yaml
@@ -243,9 +249,13 @@ Examples:
   lore store init agency git@github.com:agency/notes
 
 Flags:
-      --json                print the result (or the error) as JSON
-      --visibility string   internal (default) or shareable (CFG4)
-      --yes                 answer yes to the confirmation without a terminal
+      --json                     print the result (or the error) as JSON
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --visibility string        internal (default) or shareable (CFG4)
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -391,7 +401,7 @@ $ git push -q origin :refs/lore/live && git ls-remote origin
 $ lore task add 'close the books for Q1'
 ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it: live: the remote live ref was deleted or rewritten (local copy kept as refs/lore-backup/live/20261102T100020)
   hint: your local copy is kept under refs/lore-backup/live/; run `lore live restore` to put it back
-(exit 1)
+(exit 23)
 $ lore doctor | grep 'remote live ref'
   - live: the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`
 ```
@@ -401,7 +411,7 @@ $ lore doctor | grep 'remote live ref'
 ```console
 # alice, in billing
 $ lore live restore
-✓ restored refs/lore/live: 3 rows (left out 0 already landed or purged)
+✓ restored refs/lore/live: 2 rows (left out 0 already landed or purged)
 $ git ls-remote origin refs/lore/live
 86dbae476bd6	refs/lore/live
 $ lore task add 'close the books for Q1'
@@ -475,14 +485,14 @@ Examples:
 
 Flags:
       --to string   the target: repo | <org> | <org>/<folder> | me (required)
-      --yes         confirm without a prompt (never accepted from agent actors)
+      --yes         confirm without a prompt
 ```
 <!-- /help -->
 
 ### `lore move`
 
 <!-- help: move -->
-Move a row to another project (new id; the original is deleted; asks first)
+Move a row to another store (same id for rows on the core; asks first)
 
 ```text
 Usage:
@@ -490,10 +500,15 @@ Usage:
 
 Examples:
   lore move mem_0b77 --to agency
+  lore move tsk_0201 --to repo --drop-internal
 
 Flags:
-      --to string   the target: repo | <org> | <org>/<folder> | me (required)
-      --yes         confirm without a prompt (never accepted from agent actors)
+      --drop-internal      into a client repo: remove the row's internal metadata values instead of refusing (MQ11)
+      --json               print the result as JSON (rows on the 0.1.18 core)
+      --to string          the target: repo | <org> | <org>/<folder> | me (required)
+      --with-children      a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14)
+      --with-time string   totals | none (default none): time totals for a task moved into a client repo (TQ3; totals not built yet)
+      --yes                confirm without a prompt
 ```
 <!-- /help -->
 
@@ -512,9 +527,11 @@ Examples:
   lore check leaks                 # staged files, as the pre-commit hook does
   lore check leaks --commit-msg .git/COMMIT_EDITMSG
   lore check leaks --ci            # in the client's CI
+  lore check leaks --as-client     # before handing an own repo to the client
   lore check leaks --explain
 
 Flags:
+      --as-client           check the whole repo as the client would see it (before a hand-over)
       --ci                  CI mode: ids and structure only, no store access, names nothing internal
       --commit-msg string   also check this commit message file (the commit-msg hook's $1)
       --explain             print the rule, the source and the matched words of each finding
@@ -543,21 +560,35 @@ Flags:
 ### `lore context`
 
 <!-- help: context -->
-Print internal, global and personal context for tools that cannot follow an import
+Print the rules, hotfixes and notes for a file, topic or prompt (the agent's fetch command)
 
 ```text
 Usage:
-  lore context --internal
+  lore context
 
 Examples:
-  lore context --internal
+  lore context --for-file services/billing/invoice.go
+  lore context --for-task tsk_01jf8e5w…
+  lore context --topic billing
+  lore context --topics
+  lore context --for-prompt "invoice rounding"
+  lore context --hook claude_code --hook-stdin < hook.json
   lore context --internal --table rules --json
 
 Flags:
-      --internal        internal, global and personal rows (outside this checkout)
-      --json            machine-readable output
-      --search string   only rows whose title or body contains this text
-      --table string    only this table (rules, memories, decisions, tasks, …)
+      --for-file string     rules, hotfixes and notes for this path
+      --for-prompt string   rows matching this free text
+      --for-task string     the task, its plan and links, then what applies to the files it names
+      --hook string         answer a tool hook (claude_code, codex)
+      --hook-stdin          with --hook: read the hook input JSON from stdin
+      --internal            internal, global and personal rows (outside this checkout)
+      --json                machine-readable output
+      --max-bytes int       cap the output in bytes (default 16000; hooks: context.hook_cap)
+      --search string       with --internal: only rows whose title or body contains this text
+      --session-start       with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)
+      --table string        with --internal: only this table (rules, memories, decisions, tasks, …)
+      --topic string        every row tagged with this topic
+      --topics              list the topics with their counts
 ```
 <!-- /help -->
 
@@ -584,21 +615,26 @@ Flags:
 ### `lore render`
 
 <!-- help: render -->
-render assembles the project's knowledge into a generated file (default .lore/LORE.md) and stitches an idempotent @import pointer into the agent file (default CLAUDE.md) so hand-written CLAUDE.md content is never clobbered
+render assembles the project's knowledge into a generated file (default .lore/LORE.md) and stitches an idempotent pointer block into the file each AI tool reads, so hand-written content there is never clobbered
 
 ```text
 Usage:
   lore render
 
 Flags:
+      --check            CI check: write nothing, fail when LORE.md would be over the warn level or the budget
       --db string        override DB path (default: cwd's .lore/lore.db)
       --dry-run          print to stdout instead of writing file
+      --json             with --report or --trend: machine-readable output
       --no-pointer       do not stitch the pointer into the agent file
       --out string       generated knowledge file path (default ".lore/LORE.md")
       --project string   override project (id or name)
       --read-only        skip lock acquisition; refuse writes
       --repo string      scope to a specific repo (mount_name or rep_id)
-      --target string    agent file to stitch the @import pointer into (default "CLAUDE.md")
+      --report           print the budget report (what is full, what is a line, what moved out) and write nothing
+      --scopes           with --report: one row per generated file per tool, plus the Codex and Claude Code chain sums
+      --target strings   tool profile name or pointer file to wire (repeatable; default: the repo's tool files, else AGENTS.md)
+      --trend            bytes per render over the last 14 days, growth per day and when LORE.md reaches its budget; writes nothing
 ```
 <!-- /help -->
 
@@ -611,7 +647,7 @@ Add a new task
 
 ```text
 Usage:
-  lore task add <title...>
+  lore task add [title...]
 
 Examples:
   # add a task
@@ -620,30 +656,46 @@ Examples:
   lore task add "Try a cache" --commitment proposed --json
 
 Flags:
-      --after stringArray    dependencies: <id>[:done|:merged][,…] (default: done in the same repo, merged across repos)
-      --assign string        assign to @handle (a person sets the assignee, a team the assigned team)
-      --assigned-to string   actor_id (act_*) the task is assigned to
-      --body string          longer description
-      --commitment string    accepted | proposed | someday (default accepted)
-      --confirm              v0.1.17 spelling: refused, use --yes
-      --created-by string    actor_id (act_*); default: the row's created_by is the current identity
-      --db string            v0.1.17 lore.db path: not used by this command (refused)
-      --defer-until string   snooze until date (YYYY-MM-DD); hides from active list until then
-      --due string           due date (YYYY-MM-DD)
-      --json                 print the result (or the error) as JSON
-      --key string           idempotency key: a re-run with the same key (in the same mission) adds nothing
-      --mission string       mission_id (msn_*) to attach to
-      --plan string          plan_id (pln_*) to attach to
-      --priority string      low | medium | high | urgent (default medium)
-      --project string       the project (prj_ id or name; default the repo's one project)
-      --read-only            refuse writes (also LORE_READ_ONLY=1)
-      --ref stringArray      a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
-      --repo string          scope to a repo of the project (mount name or rep_ id)
-      --role string          plan role matched by task next --role (e.g. coordinator)
-      --tasklist string      tasklist_id (tlt_*); default: the project's default list (created on demand)
-      --timebox duration     time box, e.g. 60m (active lease time summed across holders)
-      --to string            store to write to (a name from .lore/stores.yaml; default repo)
-      --yes                  answer yes to the confirmation without a terminal
+      --after stringArray        dependencies: <id>[:done|:merged][,…] (default: done in the same repo, merged across repos)
+      --arg stringArray          a template argument name=value (repeatable)
+      --assign stringArray       assign to @handle or an actor; repeatable: the assignees, the first is the lead (a team sets the assigned team)
+      --assigned-to string       actor_id (act_*) the task is assigned to
+      --body string              longer description
+      --commitment string        accepted | proposed | someday (default accepted)
+      --confirm                  v0.1.17 spelling: refused, use --yes
+      --created-by string        actor_id (act_*); default: the row's created_by is the current identity
+      --db string                v0.1.17 lore.db path: not used by this command (refused)
+      --defer-until string       snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM); hides from active list until then
+      --dry-run                  with --template: show the tasks that would be added, write nothing
+      --due string               due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)
+      --estimate string          estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit); hours also take 90m, days 2d
+      --json                     print the result (or the error) as JSON
+      --key string               idempotency key: a re-run with the same key (in the same mission) adds nothing
+      --lead string              the lead (@handle or actor); added to the assignees if missing
+      --meta stringArray         set metadata: key=value, key:type=value, project:key=value (repeatable)
+      --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
+      --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
+      --mission string           mission_id (msn_*) to attach to
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --parent string            the parent task (tsk_…): add as a sub-task, inheriting mission, tasklist, plan, repo, commitment, priority
+      --plan string              plan_id (pln_*) to attach to
+      --priority string          low | medium | high | urgent (default medium)
+      --project string           the project (prj_ id or name; default the repo's one project)
+      --read-only                refuse writes (also LORE_READ_ONLY=1)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --recur string             recurrence: every day|weekday|week|month|quarter|year, every N days|weeks|months, every mon[,thu], every month on N|last, every! N days|weeks (from completion); optional until <date> | for N
+      --ref stringArray          a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
+      --relation string          the relation each --ref records (snake_case; default mentions)
+      --reopen-parent            the parent is done or cancelled: reopen it to in_progress in the same write
+      --repo string              scope to a repo of the project (mount name or rep_ id)
+      --role string              plan role matched by task next --role (e.g. coordinator)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --tasklist string          tasklist_id (tlt_*); default: the project's default list (created on demand)
+      --template string          apply this task template (its name or ttp_ id); the title comes from the template
+      --timebox duration         time box, e.g. 60m (active lease time summed across holders)
+      --to string                store to write to (a name from .lore/stores.yaml; default repo)
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -656,36 +708,61 @@ Edit task fields (only flags you pass are applied)
 
 ```text
 Usage:
-  lore task edit <id>
+  lore task edit [id]
 
 Flags:
-      --after stringArray    dependencies: <id>[:done|:merged][,…] (replaces the list)
-      --assign string        assign to @handle (a person sets the assignee, a team the assigned team)
-      --assigned-to string   actor_id (act_*) to assign to
-      --body string          new body
-      --clear-assignee       unassign
-      --clear-defer          un-defer (clear deferred_until)
-      --clear-due            remove due date
-      --clear-mission        detach from mission
-      --clear-plan           detach from plan
-      --commitment string    accepted | proposed | someday
-      --confirm              v0.1.17 spelling: refused, use --yes
-      --db string            v0.1.17 lore.db path: not used by this command (refused)
-      --defer-until string   snooze until date YYYY-MM-DD
-      --due string           due date YYYY-MM-DD
-      --json                 print the result (or the error) as JSON
-      --mission string       attach to mission_id (msn_*)
-      --plan string          attach to plan_id (pln_*)
-      --priority string      low | medium | high | urgent
-      --project string       accepted for v0.1.17 scripts; a row id already names its project
-      --read-only            refuse writes (also LORE_READ_ONLY=1)
-      --ref stringArray      a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
-      --role string          plan role matched by task next --role (e.g. coordinator)
-      --status string        todo | in_progress | done | cancelled | blocked
-      --tasklist string      move to tasklist_id (tlt_*)
-      --timebox duration     time box, e.g. 60m
-      --title string         new title
-      --yes                  answer yes to the confirmation without a terminal
+      --add-assignee stringArray      add an assignee (repeatable); the first one on a task with no lead leads
+      --add-watcher stringArray       add a watcher (repeatable)
+      --after stringArray             dependencies: <id>[:done|:merged][,…] (replaces the list)
+      --after-sibling string          place just after this sibling (tsk_…)
+      --assign stringArray            set the assignees: @handle or actor, repeatable; the first is the lead (a team sets the assigned team)
+      --assigned-to string            actor_id (act_*) to assign to
+      --before string                 place just before this sibling (tsk_…)
+      --body string                   new body
+      --clear-assignee                unassign
+      --clear-defer                   un-defer (clear deferred_until)
+      --clear-due                     remove due date
+      --clear-estimate                remove the estimate
+      --clear-mission                 detach from mission
+      --clear-plan                    detach from plan
+      --commitment string             accepted | proposed | someday
+      --confirm                       v0.1.17 spelling: refused, use --yes
+      --db string                     v0.1.17 lore.db path: not used by this command (refused)
+      --defer-until string            snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)
+      --dry-run                       with --where: list the tasks that would change, write nothing
+      --due string                    due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)
+      --estimate string               estimate in the project's unit (tasks.estimate_unit)
+      --first                         place first among its siblings
+      --json                          print the result (or the error) as JSON
+      --last                          place last among its siblings
+      --lead string                   make this person the lead (added to the assignees if missing)
+      --meta stringArray              set metadata: key=value, key:type=value, project:key=value (repeatable)
+      --meta-json stringArray         set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
+      --meta-stdin string             read the value of this key from stdin (keeps it out of shell history)
+      --mission string                attach to mission_id (msn_*)
+      --no-parent                     detach: make it a top-level task
+      --not-a-secret                  keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --parent string                 move under this task (tsk_…), with its subtree
+      --plan string                   attach to plan_id (pln_*)
+      --priority string               low | medium | high | urgent
+      --project string                accepted for v0.1.17 scripts; a row id already names its project
+      --read-only                     refuse writes (also LORE_READ_ONLY=1)
+      --reason string                 why the detected text is not a secret (with --not-a-secret)
+      --recur string                  set or change the recurrence rule (applies to this and later instances)
+      --ref stringArray               a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable
+      --relation string               the relation each --ref records (snake_case; default mentions)
+      --remove-assignee stringArray   remove an assignee (repeatable); removing the lead needs --lead
+      --remove-watcher stringArray    remove a watcher (repeatable)
+      --reopen-parent                 the parent is closed: reopen it to in_progress in the same write
+      --role string                   plan role matched by task next --role (e.g. coordinator)
+      --secret-ref stringArray        replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored               replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --status string                 todo | in_progress | done | cancelled | blocked
+      --tasklist string               move to tasklist_id (tlt_*)
+      --timebox duration              time box, e.g. 60m
+      --title string                  new title
+      --where stringArray             bulk edit: every task matching this filter (the task list --where grammar; repeatable, all must match)
+      --yes                           answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -703,23 +780,42 @@ Examples:
   lore task list --json
 
 Flags:
-      --all                 show everything: done/cancelled + proposed/someday + deferred
-      --all-repos           every repo of the project (the default)
-      --assignee string     filter by assignee: actor_id (act_*)
-      --claimed-by string   only tasks claimed right now by @handle (or actor id)
-      --commitment string   filter: accepted | proposed | someday
-      --db string           v0.1.17 lore.db path: not used by this command (refused)
-      --include-deferred    also include deferred (deferred_until in the future)
-      --include-proposed    also include commitment=proposed
-      --include-someday     also include commitment=someday
-      --json                print the result (or the error) as JSON
-      --mine                assigned to me or my team, and unclaimed or claimed by me
-      --mission string      filter by mission_id
-      --project string      only tasks of this project (prj_ id or name)
-      --read-only           refuse writes (also LORE_READ_ONLY=1)
-      --repo string         accepted for v0.1.17 scripts (task list shows every repo's tasks)
-      --status string       filter: todo | in_progress | done | cancelled | blocked (empty = default active set, see --all)
-      --store string        only tasks of this store (default every attached store)
+      --all                   show everything: done/cancelled + proposed/someday + deferred
+      --all-repos             every repo of the project (the default)
+      --assignee string       filter by assignee: actor_id (act_*)
+      --claimed-by string     only tasks claimed right now by @handle (or actor id)
+      --columns stringArray   columns of a table: id,title,estimate,tracked,… (any --where key, time|tracked, elapsed, progress, store); +time / +elapsed alone extend the usual line
+      --commitment string     filter: accepted | proposed | someday
+      --db string             v0.1.17 lore.db path: not used by this command (refused)
+      --deleted-only          list only rows in the trash
+      --include-deferred      also include deferred (deferred_until in the future)
+      --include-deleted       also list rows in the trash (marked in the trash)
+      --include-proposed      also include commitment=proposed
+      --include-someday       also include commitment=someday
+      --json                  print the result (or the error) as JSON
+      --lead string           only tasks led by this actor (@me, act_ id, stable key or name)
+      --leaves                only tasks with no open sub-tasks (what can be worked on)
+      --max-time string       only tasks with at most this effort (e.g. 30m)
+      --meta stringArray      filter by metadata: key=value, key!=value, key~=text, key>n, key?, key!? (repeatable, all must match)
+      --min-time string       only tasks with at least this effort (e.g. 2h)
+      --mine                  assigned to me or my team, and unclaimed or claimed by me
+      --mission string        filter by mission_id
+      --parent string         only the direct sub-tasks of this task (tsk_…)
+      --place string          narrow --meta names to one place: repo, project, org or a scope label (project:acme-hub)
+      --project string        only tasks of this project (prj_ id or name)
+      --read-only             refuse writes (also LORE_READ_ONLY=1)
+      --repo string           accepted for v0.1.17 scripts (task list shows every repo's tasks)
+      --series string         only the instances of this recurrence series (rcs_…); add --all for closed ones
+      --sort stringArray      sort by a task field, urgency, time_spent or elapsed: <key>, <key>:asc or <key>:desc (repeatable; ties keep the default order)
+      --status string         filter: todo | in_progress | done | cancelled | blocked (empty = default active set, see --all)
+      --store string          only tasks of this store (default every attached store)
+      --top                   only top-level tasks
+      --under string          only the whole subtree under this task (tsk_…)
+      --view string           apply a saved task view (name or tvw_ id; lore task view list)
+      --where stringArray     filter on a task field: status:todo,in_progress priority>=high due_at<2026-12-01 (= != ~= > >= < <= ? !?; repeatable, all must match)
+      --worked-by string      only tasks with time by this actor (@me, act_ id, key or name); add +agents for their agents too
+      --worked-since string   only tasks with time on or after this day (YYYY-MM-DD or a date phrase); TIME shows that range
+      --worked-until string   only tasks with time on or before this day; TIME shows that range
 ```
 <!-- /help -->
 
@@ -734,9 +830,15 @@ Usage:
 
 Flags:
       --db string        v0.1.17 lore.db path: not used by this command (refused)
+      --expand           fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)
+      --from string      the source of the id: repo | <org> | <org>/<folder>
       --json             print the result (or the error) as JSON
       --project string   accepted for v0.1.17 scripts; a row id already names its project
       --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --relations        show every relation, both directions
+      --tree             also print the sub-task tree
+      --who              who created and last changed it (and, on the writing machine, with which session)
+      --why              explain the urgency score term by term
 ```
 <!-- /help -->
 
@@ -754,16 +856,23 @@ Examples:
   lore task done tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"
 
 Flags:
-      --commit string    the commit that finished the task
-      --confirm          v0.1.17 spelling: refused, use --yes
-      --db string        v0.1.17 lore.db path: not used by this command (refused)
-      --json             print the result (or the error) as JSON
-      --lesson string    save a lesson learned (a memory pointing at the task)
-      --no-lesson        skip the lesson reminder
-      --pr int           the pull request that finished the task
-      --project string   accepted for v0.1.17 scripts; a row id already names its project
-      --read-only        refuse writes (also LORE_READ_ONLY=1)
-      --yes              answer yes to the confirmation without a terminal
+      --children string          open sub-tasks: done | cancel them in the same write (required when there are any)
+      --commit string            the commit that finished the task
+      --confirm                  v0.1.17 spelling: refused, use --yes
+      --db string                v0.1.17 lore.db path: not used by this command (refused)
+      --force                    close even with unticked checklist items
+      --json                     print the result (or the error) as JSON
+      --lesson string            save a lesson learned (a memory pointing at the task)
+      --no-lesson                skip the lesson reminder
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --pr int                   the pull request that finished the task
+      --project string           accepted for v0.1.17 scripts; a row id already names its project
+      --read-only                refuse writes (also LORE_READ_ONLY=1)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --tick-all                 unticked checklist items: tick them in the same write
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -795,10 +904,17 @@ Usage:
   lore task cancel <id>
 
 Flags:
-      --db string        v0.1.17 lore.db path: not used by this command (refused)
-      --json             print the result (or the error) as JSON
-      --project string   accepted for v0.1.17 scripts; a row id already names its project
-      --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --children string          open sub-tasks: cancel | done them in the same write (required when there are any)
+      --confirm                  v0.1.17 spelling: refused, use --yes
+      --db string                v0.1.17 lore.db path: not used by this command (refused)
+      --json                     print the result (or the error) as JSON
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --project string           accepted for v0.1.17 scripts; a row id already names its project
+      --read-only                refuse writes (also LORE_READ_ONLY=1)
+      --reason string            close reason: cancelled (default) | duplicate | wont_do | obsolete | stale
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -816,19 +932,27 @@ Examples:
   lore mission add "Ship the invite flow" --target 2026-12-31
 
 Flags:
-      --approvers stringArray   only these people (@handle or act_…, comma separated) may approve the mission's gates
-      --body string             longer description
-      --confirm                 v0.1.17 spelling: refused, use --yes
-      --created-by string       actor_id (act_*); default: the row's created_by is the current identity
-      --db string               v0.1.17 lore.db path: not used by this command (refused)
-      --json                    print the result (or the error) as JSON
-      --key string              idempotency key: a re-run with the same key adds nothing
-      --plan string             plan_id (pln_*) this mission carries out
-      --project string          the project (prj_ id or name; default the repo's one project)
-      --read-only               refuse writes (also LORE_READ_ONLY=1)
-      --target string           target completion date (YYYY-MM-DD)
-      --to string               store to write to (a name from .lore/stores.yaml; default repo)
-      --yes                     answer yes to the confirmation without a terminal
+      --approvers stringArray    only these people (@handle or act_…, comma separated) may approve the mission's gates
+      --body string              longer description
+      --confirm                  v0.1.17 spelling: refused, use --yes
+      --created-by string        actor_id (act_*); default: the row's created_by is the current identity
+      --db string                v0.1.17 lore.db path: not used by this command (refused)
+      --json                     print the result (or the error) as JSON
+      --key string               idempotency key: a re-run with the same key adds nothing
+      --meta stringArray         set metadata: key=value, key:type=value, project:key=value (repeatable)
+      --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
+      --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --plan string              plan_id (pln_*) this mission carries out
+      --project string           the project (prj_ id or name; default the repo's one project)
+      --read-only                refuse writes (also LORE_READ_ONLY=1)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --starts-at string         when the mission's work starts (YYYY-MM-DD or a date phrase)
+      --target string            target completion date (YYYY-MM-DD or a date phrase: eom, next fri, in 2w, …)
+      --to string                store to write to (a name from .lore/stores.yaml; default repo)
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -860,12 +984,17 @@ Examples:
   lore mission apply invite.yaml
 
 Flags:
-      --confirm          v0.1.17 spelling: refused, use --yes
-      --db string        v0.1.17 lore.db path: not used by this command (refused)
-      --json             print the result (or the error) as JSON
-      --project string   accepted for v0.1.17 scripts; a row id already names its project
-      --read-only        refuse writes (also LORE_READ_ONLY=1)
-      --yes              answer yes to the confirmation without a terminal
+      --confirm                  v0.1.17 spelling: refused, use --yes
+      --db string                v0.1.17 lore.db path: not used by this command (refused)
+      --dry-run                  show what would be written; write nothing
+      --json                     print the result (or the error) as JSON
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --project string           accepted for v0.1.17 scripts; a row id already names its project
+      --read-only                refuse writes (also LORE_READ_ONLY=1)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -881,8 +1010,12 @@ Usage:
   lore agent start
 
 Flags:
-      --label string   the agent's label (one actor per label), e.g. agent-frontend
-      --owner string   the owning person (@handle); default: you
+      --hook-stdin       session hook: read the tool's hook JSON from stdin
+      --label string     the agent's label (one actor per label), e.g. agent-frontend
+      --model string     session hook: the model the tool reports (never guessed)
+      --owner string     the owning person (@handle); default: you
+      --session string   session hook: the tool's own session id
+      --tool string      session hook: the tool's slug (claude_code, codex, …); records details only
 ```
 <!-- /help -->
 
@@ -896,6 +1029,7 @@ Usage:
   lore task claim <task-or-mission-id>
 
 Flags:
+      --coordinate     take a coordinator lease on a parent with open sub-tasks (TASK 6.9)
       --from string    the source of the id: repo | <org> | <org>/<folder>
       --owns strings   paths this claim owns (directory prefixes ending in / or exact files)
       --strict         refuse instead of warning when --owns overlaps another claim
@@ -905,17 +1039,20 @@ Flags:
 ### `lore task next`
 
 <!-- help: task next -->
-Next returns the task you already hold, or claims the first ready task: open, not gated, no live claim, every --after dependency satisfied. Exit 10 (E_NO_WORK) lists why each task waits; exit 11 (E_CONTENDED) means every claim lost a race.
+Next returns the task you already hold, or claims the most urgent ready leaf task: open, no open sub-tasks, not gated, no live claim, every --after dependency (its own and its ancestors') satisfied. Order is the urgency score (TASK 13): --why explains every point, --dry-run ranks and explains without claiming. Exit 10 (E_NO_WORK) lists why each task waits; exit 11 (E_CONTENDED) means every claim lost a race.
 
 ```text
 Usage:
   lore task next
 
 Flags:
+      --dry-run          rank and explain without claiming (nothing written)
+      --json             with --dry-run: the ranking as JSON (urgency + terms)
       --mission string   only tasks of this mission
       --owns strings     paths the claim owns
       --repo string      only tasks of this repo (a repo name of the group)
       --role string      plan role (e.g. coordinator)
+      --why              explain the urgency score term by term
 ```
 <!-- /help -->
 
@@ -1063,17 +1200,24 @@ Examples:
   lore handoff add --for @agent-frontend --task tsk_31 "form is half done"
 
 Flags:
-      --body string      the handoff text (instead of the positional text)
-      --confirm          v0.1.17 spelling: refused, use --yes
-      --db string        v0.1.17 lore.db path: not used by this command (refused)
-      --for string       who the handoff is for (@handle, stable key, display name or act_ id)
-      --json             print the result (or the error) as JSON
-      --project string   the project (prj_ id or name; default the repo's one project)
-      --read-only        refuse writes (also LORE_READ_ONLY=1)
-      --store string     store to write to (a name from .lore/stores.yaml; default repo)
-      --task string      the task it is about (its mission is recorded too)
-      --to string        deprecated alias of --for
-      --yes              answer yes to the confirmation without a terminal
+      --body string              the handoff text (instead of the positional text)
+      --confirm                  v0.1.17 spelling: refused, use --yes
+      --db string                v0.1.17 lore.db path: not used by this command (refused)
+      --for string               who the handoff is for (@handle, stable key, display name or act_ id)
+      --json                     print the result (or the error) as JSON
+      --meta stringArray         set metadata: key=value, key:type=value, project:key=value (repeatable)
+      --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
+      --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --project string           the project (prj_ id or name; default the repo's one project)
+      --read-only                refuse writes (also LORE_READ_ONLY=1)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --store string             store to write to (a name from .lore/stores.yaml; default repo)
+      --task string              the task it is about (its mission is recorded too)
+      --to string                deprecated alias of --for
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1187,11 +1331,12 @@ Agents and scripts can branch on the exit status without parsing text. These num
 | `E_OFFLINE` | 15 | a coordination write (claim, renew, release, done, approve, hold) could not be confirmed by the remote; nothing was queued |
 | `E_AMBIGUOUS_ID` | 16 | the id exists in two loaded sources; name one with --from |
 | `E_ORG_AMBIGUOUS` | 17 | two org entries match this repo at the same rule; choose one with `lore org use <entry>` |
-| `E_ORG_DISAGREES` | 17 | LORE_ORG or `lore org use` names a different org than the store link; pass --force-org to override |
+| `E_ORG_DISAGREES` | 17 | LORE_ORG or `lore org use` names a different org than the store link; name the target with --to <org> |
 | `E_LINK_UNKNOWN` | 18 | lore cannot tell whether this repo is a client repo (store unreachable, no cached link index); pass --to or retry online |
 | `E_NOT_A_STORE` | 19 | the repo is not a lore store (no lore-store.yaml marker, or it holds non-lore files) |
 | `E_LEAK_BLOCKED` | 19 | the write would put internal content where the client can read it; see `lore check leaks --explain` |
 | `E_CYCLE` | 19 | the dependency would create a cycle between tasks |
-| `E_OLD_LORE` | 19 | this lore binary is below the live ref's min_lore_version; upgrade lore (reads still work) |
+| `E_OLD_LORE` | 19 | this lore binary is below the live ref's min_lore_version; run lore upgrade (reads still work) |
 | `E_CONFIG_INVALID` | 1 | ~/.lore/config.yaml failed validation; run `lore config check` |
+| `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule and what to do instead |
 <!-- /errors -->

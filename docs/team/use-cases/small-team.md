@@ -19,15 +19,10 @@ Each developer registers once. With no org, the roster entry itself is live. So 
 # alice, in billing
 $ lore actor register
 ✓ act_7a67…9504 alice (@alice) already registered (refreshed) in this repo
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
 
 # bob, in billing
 $ lore actor register
 ✓ act_2ad3…f891 bob (@bob) registered in this repo
-lore live: (live, pushed)
-lore live: landed on main (86dbae4); leaves live once main is fetched
-lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
 
@@ -37,18 +32,18 @@ Bob, on `feat/payments`, gives Alice a task. Alice, on `feat/login`, sees it. He
 ```console
 # bob, in billing
 $ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
-✓ tsk_162d…9666 — check the checkout page on a phone [medium]
-lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
+lore sync: imported 1
+ERROR: [E_NOT_FOUND] no person or team with handle @alice
+  hint: people join with `lore actor register`; teams with `lore team add`
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-○ tsk_162d…9666 check the checkout page on a phone [medium]
+(no tasks)
 $ lore inbox
--  assigned              tsk_162d…9666  check the checkout page on a phone
+(inbox empty)
 ```
 <!-- /example -->
 
@@ -57,23 +52,18 @@ Alice finishes it and names the commit that did the work. The task lands on `mai
 <!-- example: small-team#done-lands-on-main -->
 ```console
 # alice, in billing
-$ lore task start tsk_162d…9666
-✓ tsk_162d…9666 started
-lore live: (live, pushed)
-$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done tsk_162d…9666 --commit $(git rev-parse --short HEAD)
-✓ tsk_162d…9666 done (commit 9b40ce7); waiting for merge
-  learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed)
-lore live: landed on main (05513aa); leaves live once main is fetched
+$ lore task start tsk_missing
+ERROR: [E_NOT_FOUND] task: "tsk_missing" is not a task id (tsk_…)
+  hint: it may have landed on main while this branch is older: `lore sync peek origin/main tasks`
+$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done tsk_missing --commit $(git rev-parse --short HEAD)
+ERROR: [E_NOT_FOUND] task: "tsk_missing" is not a task id (tsk_…)
+  hint: it may have landed on main while this branch is older: `lore sync peek origin/main tasks`
 $ git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3
-05513aa lore: land 2 rows (_root)
-86dbae4 lore: land 1 row (_root)
-601d285 lore: land 1 row (_root)
-dfd8dc8 lore: init
-cf563f3 init
- .../tlt_54fe…28f2.json      | 11 ++++++
- .../tsk_162d…9666.json      | 40 ++++++++++++++++++++++
- 2 files changed, 51 insertions(+)
+601d285 lore: init
+86dbae4 init
+ .../rep_162d…9666.json      | 33 ++++++++++++++++++++++
+ AGENTS.md                                          |  3 ++
+ 8 files changed, 135 insertions(+)
 $ git log --oneline -1 && git status --short
 9b40ce7 fix the checkout page on phones
 ```
@@ -98,33 +88,26 @@ Most teams protect `main` (only pull requests may change it). Then the landing w
 ```console
 # bob, in billing
 $ lore task add 'ask the client for the new logo' --assign @alice
-✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
-lore live: (live, pushed)
-lore live: 3 row(s) left live (main holds them)
+ERROR: [E_NOT_FOUND] no person or team with handle @alice
+  hint: people join with `lore actor register`; teams with `lore team add`
 
 # alice, in billing
-$ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
-✓ tsk_c0f3…b5b8 done
-  learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed)
-lore live: main is protected: the rows ride on your next push (lore: land N rows)
-$ lore explain tsk_c0f3…b5b8
-tsk_c0f3…b5b8 in ~/work/billing (folder _root)
+$ lore sync >/dev/null && lore task done tsk_missing
+ERROR: [E_NOT_FOUND] task: "tsk_missing" is not a task id (tsk_…)
+  hint: it may have landed on main while this branch is older: `lore sync peek origin/main tasks`
+$ lore explain tsk_missing
+tsk_missing in ~/work/billing (folder _root)
   fetched 5s ago
-  live (local 34ee210): row, live since 2026-11-02T10:01:10Z, hlc 2026-11-02T10:01:15.000Z/0000/act_7a67…9504
-  this branch (HEAD): not present
-  origin/main: not present
-  wins: the live copy (rule 4: if a row id is in live, live wins)
-  land: waits: main is protected; rides on your next push
+  live: not present
+  not found in live or on this branch; it may have landed on main while this branch is older: `lore sync peek origin/main`
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
-[feat/login 7898daa] fix login timeout
+[feat/login dfd8dc8] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 $ git log --oneline -3
-ccfb0bb lore: land 1 row (_root)
-7898daa fix login timeout
+dfd8dc8 fix login timeout
 9b40ce7 fix the checkout page on phones
+601d285 lore: init
 $ git push -q -u origin feat/login
 $ git status --short
 ```
