@@ -22,6 +22,7 @@ import (
 const (
 	KeyCmd        = "cmd"
 	KeyStore      = "store"
+	KeyFolder     = "folder"
 	KeyRepo       = "repo"
 	KeyProject    = "project"
 	KeyDir        = "dir"
@@ -120,9 +121,14 @@ type Facts struct {
 	// Cmd is the command path, words only (`memory add`); never arguments,
 	// which can carry row text and so a secret (PROVENANCE_DESIGN 5.1).
 	Cmd string
-	// Store names the store the row was written into (today the attached
-	// store name; the sto_ id once attachments carry it).
+	// Store names the store the row was written into: its sto_ id when
+	// the store has one, else the attached name (the repo store, a
+	// v0.1.17 marker) (PROVENANCE 5.1, r3-origin).
 	Store string
+	// Folder is the store folder's prj_ id (its _meta.json project_id);
+	// "" for the store root or outside a store (PROVENANCE 5.1). Never
+	// client-visible: ClientFilter keeps only allowlisted keys.
+	Folder string
 	// Repo is the rep_ id of the checkout the command ran in; "" absent.
 	Repo string
 	// Dir is the working folder relative to the repo root, forward
@@ -144,6 +150,7 @@ func Build(f Facts) (value.JSON, error) {
 	}
 	add(KeyCmd, f.Cmd)
 	add(KeyStore, f.Store)
+	add(KeyFolder, f.Folder)
 	add(KeyRepo, f.Repo)
 	add(KeyDir, f.Dir)
 	if f.Git.State != "" {
