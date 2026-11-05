@@ -202,7 +202,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	// read after settleAgentKey, which may lengthen an agent's key (OQ9)
 	actor := st.actor
-	scanner, err := newScanner(ctx, backends, withRepoGitleaks(st.repoTop), withFolders(st.folders)) // D9: team stores nearest-first
+	scanner, err := newScanner(ctx, backends, withRepoGitleaks(st.repoTop), withFolders(st.folders), withToolSessions(opts.Audit)) // D9: team stores nearest-first; OV11 session ids
 	if err != nil {
 		return fail(err)
 	}
