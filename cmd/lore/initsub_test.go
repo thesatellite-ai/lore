@@ -142,7 +142,7 @@ func TestAncestorRepoMeta(t *testing.T) {
 // metaOf reads dir's _meta.json repo_id and project_id.
 func metaOf(t *testing.T, dir string) (repoID, projectID string) {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(dir, rowfs.LoreDir, rowfs.DataDir, rowfs.MetaFileName))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, rowfs.LoreDir, rowfs.DataDir, rowfs.MetaFileName)))
 	if err != nil {
 		t.Fatalf("%s: %v", dir, err)
 	}
@@ -279,7 +279,12 @@ func TestInitSubfolderNoProjectAbove(t *testing.T) {
 	repo := filepath.Join(root, "other")
 	mkdirs(t, repo, "app/sub")
 	t.Chdir(repo)
-	if out, err := exec.Command("git", "-C", repo, "init", "-q", "-b", "main").CombinedOutput(); err != nil {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not installed")
+	}
+	cmd := &exec.Cmd{Path: git, Args: []string{git, "-C", repo, "init", "-q", "-b", "main"}} // the envScopeRepo shape
+	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)
 	}
 	mustRun(t, filepath.Join(repo, "app"), "init", "--name", "app")
