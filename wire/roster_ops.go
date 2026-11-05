@@ -79,6 +79,12 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 			return opsinfra.ActorRegisterOut{}, herr
 		}
 	}
+	if r.src == store.SourceRepo {
+		// Q12, BUG-T1 (v0.1.17 liveCmdState): a no-org register puts its
+		// actors row on the live ref, so the next command of every other
+		// clone resolves the handle (`task add --assign @h`, Recipe02).
+		ctx = store.WithLiveChoice(ctx, store.LiveChoice{Mode: store.LiveOn, Table: schema.TableActors})
+	}
 	id, created, err := a.RosterRegister(ctx, r.src, sp)
 	if err != nil {
 		return opsinfra.ActorRegisterOut{}, err
@@ -99,6 +105,11 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 	act, err := a.rosterByHandle(ctx, r, handle)
 	if err != nil {
 		return opsinfra.ActorDeactivateOut{}, err
+	}
+	if r.src == store.SourceRepo {
+		// Same as register (Q12): the no-org roster change rides the live
+		// ref so other clones see the actor gone on their next command.
+		ctx = store.WithLiveChoice(ctx, store.LiveChoice{Mode: store.LiveOn, Table: schema.TableActors})
 	}
 	if err := a.RosterDeactivate(ctx, r.src, act.ID); err != nil {
 		return opsinfra.ActorDeactivateOut{}, err
