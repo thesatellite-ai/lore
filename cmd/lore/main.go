@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/wire"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
@@ -68,7 +69,8 @@ func run(ctx context.Context, args []string) int {
 	leak := func(ctx context.Context, where string, docs map[string][]byte) error {
 		return app.LeakCheckDocs(ctx, org, where, docs)
 	}
-	hooks = append(hooks, hosthooks.LiveHook(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak}))
+	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak})
+	hooks = append(hooks, liveRows.Hook())
 	app, err := wire.New(hosthooks.Options(base, hooks))
 	if err != nil {
 		return printHostError(err)
@@ -84,6 +86,10 @@ func run(ctx context.Context, args []string) int {
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())
 	// git's merge.lore.driver calls it (P3-MODEB-4: a host command, not an op).
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
+	// The git hook blocks call `lore sync hook <name>` (F6 ride-along).
+	if sync := find(root, opssync.Noun); sync != nil {
+		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin))
+	}
 	root.SetArgs(args)
 	if err := root.ExecuteContext(ctx); err != nil {
 		var status hosthooks.ExitStatus

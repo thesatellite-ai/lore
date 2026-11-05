@@ -180,8 +180,11 @@ func (r *liveRun) finish(ctx context.Context) {
 // LiveHook is the live-rows hook (see the file comment). The old binary
 // keeps its own live wiring until it is deleted, so this hook is not in
 // Default: cmd/lore adds it.
-func LiveHook(cfg LiveConfig) Hook {
-	h := &liveHost{cfg: cfg}
+func LiveHook(cfg LiveConfig) Hook { return NewLive(cfg).Hook() }
+
+// Hook is the live-rows operation hook (LiveHook).
+func (l *Live) Hook() Hook {
+	h := l.h
 	return Hook{
 		Name: HookLive,
 		Options: func(o *wire.Options) {

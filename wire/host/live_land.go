@@ -298,7 +298,8 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 				}
 			}
 		case live.LandProtected:
-			_ = s.writeNote(liveNoteProtected, res.Detail) // best effort: feeds `lore live doctor` only
+			_ = s.writeNote(liveNoteProtected, res.Detail) // best effort: feeds `lore live doctor` and the ride-along
+			s.ensureRideHooks(ctx)                         // F6: the rows ride on the next code commit
 		case live.LandOffline, live.LandNoRemote, live.LandRetriesOut, live.LandRefused:
 			// nothing landed: the rows stay live and the next pass retries
 		}
