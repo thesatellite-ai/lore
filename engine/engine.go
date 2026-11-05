@@ -202,7 +202,7 @@ const storeRootFolder = "."
 // digits, '_' and '-' (no backslash, no path tricks).
 func validStoreName(n string) bool {
 	base, rest, hasFolder := strings.Cut(n, "/")
-	if !row.ValidName(base) {
+	if !row.ValidName(base) && !validOrgName(base) {
 		return false
 	}
 	if !hasFolder || rest == storeRootFolder {
@@ -216,6 +216,31 @@ func validStoreName(n string) bool {
 			if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '_' && c != '-' {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+// maxOrgNameLen is the longest org entry name (lorecfg's maxNameLen).
+const maxOrgNameLen = 64
+
+// validOrgName accepts an org entry name of ~/.lore/config.yaml: lower-case
+// letters, digits, '.' and '-', starting with a letter or digit (the
+// grammar lorecfg validates the entry with). The stores of an org entry
+// are attached under the entry's own name (`--to agency-stag`), so the
+// engine must accept that grammar beside snake_case store names; forcing
+// it through the store-name rule refused every open of an org named with
+// a dash (BUG-T2). Store names are never SQL identifiers or file paths
+// (the cache lens uses s_<n> schema names), so the wider grammar is safe;
+// stores.yaml entries stay snake_case (engine/attach).
+func validOrgName(n string) bool {
+	if n == "" || len(n) > maxOrgNameLen {
+		return false
+	}
+	for i, c := range n {
+		alnum := (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+		if !alnum && (i == 0 || (c != '.' && c != '-')) {
+			return false
 		}
 	}
 	return true
