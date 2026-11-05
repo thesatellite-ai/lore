@@ -223,7 +223,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	for _, o := range attached {
 		a := o.Attached
 		a.KeyNamespace = keyNamespace(a)
-		a.Place = keyNamespace(a) // FQ4: sto_ id (+ "/<folder>") of a marked store; "" keeps the attached name
+		a.Place = placeOf(ctx, a) // FQ4: sto_ id (+ "/<folder prj_ id>") of a marked store; "" keeps the attached name
 		engOpts = append(engOpts, engine.WithStore(a))
 	}
 	st.defaultTarget = store.SourceRepo
@@ -628,6 +628,34 @@ func keyNamespace(a engine.Attached) string {
 		ns += "/" + folder
 	}
 	return ns
+}
+
+// placeOf is an attached store's place id for `_o.moves` (PROVENANCE 5.4,
+// FQ4): its marker's sto_ id, plus "/<folder prj_ id>" when the backend
+// is a folder of the store (the folder's _meta.json project_id, stable
+// before its first write: rowfs.Folder.ProjectID), so a folder rename
+// never changes a recorded place. Unlike keyNamespace it is not hashed
+// into row ids, so it may differ from it. An unreadable _meta.json falls
+// back to keyNamespace's "<sto_ id>/<folder name>" rather than failing the
+// open; "" when the store has no sto_ id.
+func placeOf(ctx context.Context, a engine.Attached) string {
+	c := concrete(a.Backend)
+	mb, ok := c.(markerBackend)
+	if !ok || mb.Marker().ID.IsZero() {
+		return ""
+	}
+	fb, ok := c.(folderIDOf)
+	if !ok {
+		return keyNamespace(a)
+	}
+	pid, err := fb.FolderProjectID(ctx)
+	if err != nil {
+		return keyNamespace(a)
+	}
+	if pid.IsZero() {
+		return mb.Marker().ID.String() // the store root has no folder id
+	}
+	return mb.Marker().ID.String() + "/" + pid.String()
 }
 
 // sameURL reports whether two store entries name the same store url and
