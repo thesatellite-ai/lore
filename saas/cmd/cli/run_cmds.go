@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -35,6 +36,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -432,6 +434,7 @@ func recordRunTime(ctx context.Context, run *ent.Run, taskID string, end time.Ti
 	if taskID == "" || run.StartedAt == nil {
 		return
 	}
+	flushTimeOutbox(ctx) // TIME 11.9: spans queued while a store was unreachable go first
 	if err := writeRunTime(ctx, run, taskID, end); err != nil {
 		fmt.Fprintf(os.Stderr, "%s run time not recorded on task %s: %v\n", style.Warn("!"), taskID, err)
 	}
@@ -459,10 +462,31 @@ func writeRunTime(ctx context.Context, run *ent.Run, taskID string, end time.Tim
 	if err != nil {
 		return err
 	}
+	err = appendRunEntry(ctx, tid, entry)
+	if errs.Has(err, errs.StoreUnreachable) {
+		// TIME 4.3 / 11.9: the task's store is out of reach; the span
+		// waits in this machine's time_outbox for the next reachable write.
+		if qerr := queueTimeOutbox(ctx, taskID, entry); qerr != nil {
+			return errors.Join(err, qerr)
+		}
+		fmt.Fprintf(os.Stderr, "%s task %s's store is unreachable: run time queued, written on the next run end or lore sync\n", style.Warn("!"), taskID)
+		return nil
+	}
+	return err
+}
+
+// appendRunEntry appends entry to task tid's time_entries; an entry whose
+// id is already there is not added again (an outbox replay is idempotent).
+func appendRunEntry(ctx context.Context, tid ids.AnyID, entry timeentry.Entry) error {
 	ref := engine.Ref{Table: schema.TableTasks, ID: tid}
 	_, cur, err := coreApp.Get(ctx, ref)
 	if err != nil {
 		return err
+	}
+	for _, e := range opstask.TimeEntries(cur) {
+		if e.ID == entry.ID {
+			return nil
+		}
 	}
 	list, err := opstask.WithTimeEntry(cur, entry)
 	if err != nil {
