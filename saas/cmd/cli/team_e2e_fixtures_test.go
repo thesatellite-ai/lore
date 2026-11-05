@@ -172,11 +172,12 @@ func newTeamWorld(t *testing.T, caps ...th.Cap) *th.World {
 // envLockRanks runs every team test under the ranked lock watch.
 const envLockRanks = "LORE_TEAM_LOCK_RANKS"
 
-// bugLiveLockWholeCommand: the old binary's live session takes L (live.lock)
-// at the start of every command and holds it to the end (live_wire.go
-// liveSession.acquire), so `lore migrate run` takes M while holding L, the
-// reverse of 7.5's M < L, and L stays held through the whole branch phase.
-var bugLiveLockWholeCommand = th.Bug{ID: "BUG-LIVE-LOCK-WHOLE-COMMAND", Owner: "a-meta-live (live_wire.go)", Open: true}
+// bugLiveLockWholeCommand: the old binary's live session took L (live.lock)
+// at the start of every command and held it to the end, so `lore migrate
+// run` took M while holding L, the reverse of 7.5's M < L, and L stayed held
+// through the whole branch phase. Fixed: a migrate command's session is
+// phased (live_wire.go liveSession.hold), L only for each live step.
+var bugLiveLockWholeCommand = th.Bug{ID: "BUG-LIVE-LOCK-WHOLE-COMMAND", Owner: "p3-port-live (live_wire.go)", Open: false}
 
 // knownLockOrderDefect matches the violation bugLiveLockWholeCommand causes
 // (held L, then took M) while the bug is open.

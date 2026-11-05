@@ -116,6 +116,13 @@ type liveSession struct {
 	// notes are merge decisions to print once.
 	notes []live.MergeNote
 	lock  *processlock.Lock
+	// phased is set for a command that takes the migrate lock (M): it holds
+	// L only for each live step and drops it after, never for the whole
+	// command (FORMAT_EVOLUTION 7.5: M < L, and L is free during the branch
+	// phase; BUG-LIVE-LOCK-WHOLE-COMMAND). Every other command keeps L from
+	// its first live step to the end, which puts L before S and R (7.5
+	// rule 2).
+	phased bool
 	// actorCompanions are new actor rows held until a content row of the
 	// command carries them (FLAG6, live_core.go holdActorCompanions);
 	// companionInner is the branch backend that writes any left over.
@@ -191,6 +198,7 @@ func newLiveSession(ctx context.Context, repo *gitref.Repo, top string) (*liveSe
 		clk:      liveClock(),
 		stateDir: filepath.Join(common, liveStateDirName),
 		autopush: cfg.Autopush && os.Getenv(envLiveAutopush) != envValueOff,
+		phased:   liveCmdState.phased(),
 	}
 	remoteName := cfg.Remote
 	if v := os.Getenv(envLiveRemote); v != "" {
@@ -352,6 +360,41 @@ func (s *liveSession) release() {
 	}
 }
 
+// livePhasedPrefixes are the commands that take the migrate lock M. M ranks
+// before L (FORMAT_EVOLUTION 7.5), so their live session holds L only for
+// each live step instead of the whole command (liveSession.phased).
+var livePhasedPrefixes = []string{BinaryName + " migrate"}
+
+// phased reports a command of livePhasedPrefixes. The path is the cobra
+// path livePreRun recorded; when no pre-run recorded one (a command mounted
+// with its own pre-run), the process arguments decide.
+func (c liveCommand) phased() bool {
+	path := c.path
+	if path == "" {
+		path = strings.Join(append([]string{BinaryName}, os.Args[1:]...), " ")
+	}
+	for _, p := range livePhasedPrefixes {
+		if path == p || strings.HasPrefix(path, p+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+// hold takes L for one live step of a phased session and returns the func
+// that drops it when the step ends; a nested step inside one that holds L
+// reuses it. A whole-command session took L in prepare and keeps it until
+// finishLive, so hold does nothing there.
+func (s *liveSession) hold(ctx context.Context) (func(), error) {
+	if s.lock != nil || !s.phased {
+		return func() {}, nil // whole command: prepare took L (or reported why not)
+	}
+	if err := s.acquire(ctx); err != nil {
+		return func() {}, err
+	}
+	return s.release, nil
+}
+
 // prepare runs F3 once per command: the tracking refspec, a fetch when due
 // and the integration of the tracking ref into the local ref.
 func (s *liveSession) prepare(ctx context.Context, kind live.FetchKind) {
@@ -359,7 +402,15 @@ func (s *liveSession) prepare(ctx context.Context, kind live.FetchKind) {
 		return
 	}
 	s.prepared = true
-	if err := s.acquire(ctx); err != nil {
+	done := func() {}
+	var err error
+	if s.phased {
+		done, err = s.hold(ctx)
+	} else {
+		err = s.acquire(ctx) // held for the rest of the command
+	}
+	defer done()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+err.Error()))
 		return
 	}
@@ -563,6 +614,11 @@ func liveStoreAndApply(ctx context.Context, db *sql.DB, projectRoot string, dive
 	}
 	if !s.prepared {
 		s.prepare(ctx, liveCmdState.fetchKind())
+	}
+	done, err := s.hold(ctx)
+	defer done()
+	if err != nil { // as for a whole-command session that could not take L: warn, go on
+		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+err.Error()))
 	}
 	folder := s.folderFor(projectRoot)
 	if len(diverted) > 0 {
@@ -881,6 +937,11 @@ func (s *liveSession) finish(ctx context.Context, folder string) {
 		return
 	}
 	s.finished = true
+	done, err := s.hold(ctx)
+	defer done()
+	if err != nil { // as for a whole-command session that could not take L: warn, go on
+		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+err.Error()))
+	}
 	if err := s.flushActorCompanions(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+"supporting rows (actors, metadata keys) were not written: "+err.Error()))
 	}

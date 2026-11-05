@@ -54,7 +54,8 @@ func newLiveFixture(t *testing.T) (*liveBackend, store.Backend, *liveSession) {
 	}
 	inner := memstore.NewData().Open(store.OpenOptions{})
 	b := &liveBackend{inner: inner, top: dir, folder: live.RootFolder}
-	s := b.session(context.Background())
+	s, done := b.session(context.Background())
+	done()
 	if s == nil {
 		t.Fatal("live mode must apply in a git repo with LORE_LIVE unset")
 	}

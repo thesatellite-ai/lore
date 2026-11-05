@@ -115,12 +115,23 @@ var (
 
 // session is the live session of the repository, prepared (fetched and
 // integrated) once per command; nil when live mode does not apply here.
-func (b *liveBackend) session(ctx context.Context) *liveSession {
+// The returned func ends the step's hold on L (liveSession.hold): call it
+// when the backend call returns. When L cannot be taken the call goes on
+// without it, as prepare does (the live ref's compare-and-swap still keeps
+// writes safe; the warning names the lock).
+func (b *liveBackend) session(ctx context.Context) (*liveSession, func()) {
 	s := liveFor(ctx, b.top)
-	if s != nil && !s.prepared {
+	if s == nil {
+		return nil, func() {}
+	}
+	if !s.prepared {
 		s.prepare(ctx, liveCmdState.fetchKind())
 	}
-	return s
+	done, err := s.hold(ctx)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, style.Warn(liveLogPrefix+err.Error()))
+	}
+	return s, done
 }
 
 // liveKinds are the tables whose new rows go live (config live.defaults,
@@ -275,7 +286,8 @@ func newer(liveRow, branchRow store.Row) store.Row {
 
 // Get implements store.Backend.
 func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store.Row, error) {
-	s := b.session(ctx)
+	s, done := b.session(ctx)
+	defer done()
 	if s != nil {
 		if ch, held := s.actorCompanions[live.RowKey{Table: string(table), ID: id.String()}]; held {
 			return ch.Row, nil
@@ -490,7 +502,8 @@ func (b *liveBackend) dataPaths(ctx context.Context, s *liveSession, rev string)
 // idempotent upsert for the cache), because a row that left live must be
 // re-read from the branch.
 func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, store.Cursor, error) {
-	s := b.session(ctx)
+	s, done := b.session(ctx)
+	defer done()
 	if s == nil {
 		return b.inner.Read(ctx, cursor)
 	}
@@ -556,7 +569,8 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 // all-or-none and refuses a stale batch); the live rows then go to the
 // local live ref in one commit.
 func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
-	s := b.session(ctx)
+	s, done := b.session(ctx)
+	defer done()
 	if s == nil {
 		return b.inner.Write(ctx, changes)
 	}
@@ -969,7 +983,8 @@ func (b *liveBackend) WriteAudited(ctx context.Context, changes []store.Change, 
 	if !ok {
 		return b.Write(ctx, changes)
 	}
-	if s := b.session(ctx); s != nil {
+	if s, done := b.session(ctx); s != nil {
+		defer done()
 		// With a live session, the journal is used only when the whole
 		// batch goes to the branch anyway (p2-audit follow-up): no
 		// collector, nothing held or holdable as an actor companion, no

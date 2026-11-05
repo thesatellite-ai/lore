@@ -22,7 +22,9 @@ package teamharness
 // wrong order is caught on a run that did not deadlock. Its limit is the
 // sampling: two acquisitions inside one Interval are not ordered (they show
 // up together and are skipped), so a test must hold its locks for longer
-// than Interval to be checked; Observed says how many holds were seen.
+// than Interval to be checked; Observed says how many holds were seen. A
+// sampled order is kept only when the lock files' mtimes agree with it
+// (takenAfter), so a lock a sample missed is never "taken after" the others.
 
 import (
 	"bufio"
@@ -165,17 +167,22 @@ func (lw *LockWatch) sample() {
 	}
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
-	for _, fl := range readProcLocks() {
-		if p := lw.pathOf(fl.pid, fl.inode); p != "" {
-			add(fl.pid, p)
-		}
-	}
+	// M files first, then the flocks: a sample is two reads, and a flock
+	// read before an M file would see a lock released just before M was
+	// taken next to that new M ("held L, then took M" for a process that
+	// dropped L first). In this order a lock seen with M was still held
+	// after M was taken, which is what an order means.
 	ms, _ := filepath.Glob(filepath.Join(lw.root, "work", "*", "*", filepath.FromSlash(migrateLockRel)))
 	for _, m := range ms {
 		if b, err := os.ReadFile(filepath.Clean(m)); err == nil {
 			if pid, perr := strconv.Atoi(strings.TrimSpace(string(b))); perr == nil {
 				add(pid, m)
 			}
+		}
+	}
+	for _, fl := range readProcLocks() {
+		if p := lw.pathOf(fl.pid, fl.inode); p != "" {
+			add(fl.pid, p)
 		}
 	}
 	for pid, now := range held {
@@ -186,13 +193,31 @@ func (lw *LockWatch) sample() {
 				continue
 			}
 			for q := range before { // q held in both samples, p is new: p taken after q
-				if now[q] {
+				if now[q] && takenAfter(p, q) {
 					lw.orders[LockOrder{PID: pid, First: q, Then: p}] = true
 				}
 			}
 		}
 	}
 	lw.prev = held
+}
+
+// takenAfter confirms "p was taken after q" by the files' modification
+// times: every watched lock writes its file when it is taken (processlock and
+// the store lock write the holder line, M is created with it), so a file's
+// mtime is its holder's acquisition time. A sample can miss a held lock (a
+// /proc/locks read is not a snapshot: the kernel returns about a page per
+// read, and a lock moves between two reads while other processes take and
+// drop locks), and that lock then looks newly
+// taken although it was held all along; the mtime check drops that false
+// order. An unreadable file keeps the sampled order.
+func takenAfter(p, q string) bool {
+	ps, perr := os.Stat(p)
+	qs, qerr := os.Stat(q)
+	if perr != nil || qerr != nil {
+		return true
+	}
+	return !ps.ModTime().Before(qs.ModTime())
 }
 
 // pathOf resolves (pid, inode) to a lock path under root ("" otherwise).
@@ -253,6 +278,11 @@ func (w *World) CheckLockRanks(known func(LockOrder) bool) {
 	w.T.Cleanup(func() {
 		lw.Stop()
 		for _, v := range lw.Violations() {
+			if v.PID == os.Getpid() {
+				// The test process's own locks: TestLockOrderRanks takes a
+				// swapped order on purpose to prove the watch sees it.
+				continue
+			}
 			if known != nil && known(v) {
 				w.T.Logf("lock order (known defect): %s", v)
 				continue

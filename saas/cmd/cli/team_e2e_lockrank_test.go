@@ -21,6 +21,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -44,6 +45,11 @@ func flockFor(t *testing.T, path string) func() {
 		t.Fatal(err)
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	// Like every real lore lock, write the holder line once taken: the
+	// watch orders two held locks by their files' mtimes (takenAfter).
+	if _, err := f.WriteString(strconv.Itoa(os.Getpid()) + "\n"); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(heldLongerThanASample)
