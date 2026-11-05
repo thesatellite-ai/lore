@@ -102,19 +102,22 @@ $ lore task next --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invit
 ```
 <!-- /example -->
 
-## 3. A finding every agent sees
+## 3. A fact every agent sees
 
-`agent-infra` learns something the others need. A finding is a memory pinned to the mission. It shows up in every inbox on that agent's next fetch. Lore reuses a fetch for 60 seconds (`live.fetch_ttl`), so a finding can take up to a minute to reach another agent's inbox; `lore sync` fetches at once (`lore inbox` has no refresh flag of its own):
+`agent-infra` learns something the others need, and saves it as a live memory: `--live` puts it on the store's live list at once, before any commit, and the org's defaults file it in the client project's store folder. Another agent sees it on its next fetch. Lore reuses a fetch for 60 seconds (`live.fetch_ttl`), so it can take up to a minute; `lore sync` fetches at once, and `lore search` finds it:
 
-<!-- example: agents#finding -->
+<!-- example: agents#shared-fact -->
 ```console
 # agent-infra, in agents/infra
-$ lore finding add --mission msn_2ad3…f891 'invite links must use the public website address, not the server name'
-✓ mem_28f8…03df finding on msn_2ad3…f891 (live)
+$ lore memory add --live --body 'invite links must use the public website address, not the server name'
+✓ mem_28f8…03df [agency/client2]
+  filed: defaults.client_repos.memory = agency (personal config) → the linked project client2/
+  scope: [master]
 
 # agent-backend, in agents/api
-$ lore inbox
-(inbox empty)
+$ lore sync >/dev/null && lore search 'invite links'
+Found 1 hit for "invite links" across 1 entity type:
+[memory    ] mem_28f8…03df invite links must use the public website address, not the server name  [agency/client2]  (score=0.017)
 
 # agent-infra, in agents/infra
 $ lore task done tsk_05e9…4603
@@ -176,7 +179,7 @@ $ lore mission status msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 2 done · 0 claimed · 0 ready · 1 waiting · 0 gated · 1 expired · 0 blocked
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  not merged yet 4m
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:23 12m (timebox 1h)
-  expired   tsk_54fe…28f2  build the invite page        agent-frontend work branch agent-frontend/invite-route 30m (timebox 1h)
+  expired   tsk_54fe…28f2  build the invite page        agent-frontend work branch agent-frontend/invite-route 0s (timebox 1h)
   waiting   tsk_c0f3…b5b8  deploy to staging                         waits for tsk_54fe…28f2 to be merged (in_progress)
 ```
 <!-- /example -->
@@ -265,7 +268,7 @@ $ lore mission status msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
   claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:29) 1m
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:04 4m
-  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:02 24m (timebox 1h; agent-frontend 20m + agent-frontend-2 4m)
+  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:02 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:23 12m (timebox 1h)
 $ lore task show tsk_c0f3…b5b8 --from agency/client2
 tsk_c0f3…b5b8
@@ -311,7 +314,7 @@ tsk_54fe…28f2
 ```text
  agency/notes (store)                                     who wrote it
    refs/lore/live/main    client2/missions/…, tasks/…     agent-coord (mission apply), workers (notes, done)
-                          client2/memories/… (finding, lessons)
+                          client2/memories/… (shared facts, lessons)
    refs/heads/main        client2/.lore/data/…            landings: every finished task, with done_by,
                                                           done_commit, merged_at, claim log
    refs/lore/signals/main client2/claims/<task>.json      one commit, replaced on every claim and heartbeat

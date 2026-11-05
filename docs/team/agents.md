@@ -26,7 +26,7 @@ Words used below:
  start ─▶ lore agent start --label <name> --owner @<person>    once per session; export what it prints
    │
    ▼
- lore inbox                       # what is for me: assignments, handoffs, findings, expired claims
+ lore inbox                       # what is for me: assignments, handoffs, expired claims
    │
    ▼
  lore task next --mission <id> [--repo <name> | --role <role>] [--owns <paths>]
@@ -52,7 +52,7 @@ Words used below:
 | Moment | Command | Why |
 |---|---|---|
 | session starts | `lore agent start --label agent-backend --owner @alice`, then export `LORE_ACTOR` and `LORE_SESSION` | you become your own actor on the org's roster; claims record your session |
-| before choosing work | `lore inbox` | handoffs and findings change what you should do |
+| before choosing work | `lore inbox`, `lore search "<topic>"` | handoffs and facts other agents saved change what you should do |
 | taking work | `lore task next --mission <id> --repo <name>` | resume-first, respects dependencies, gates, priority and races |
 | a specific task | `lore task claim <id> [--owns <paths>]` | when a person told you which task |
 | during long steps (tests, builds) | `lore task heartbeat --daemon <id>` in the background, started from a process that lives as long as the step | a lease runs out after `lease.ttl` (20m) without a heartbeat; the daemon stops when the process that started it exits |

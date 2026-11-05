@@ -568,9 +568,10 @@ Y
   ag agent-infra work/agents/infra "lore task next --mission $mis --repo infra --owns nginx/sites/invite.conf"
   local tp; tp=$(id tsk)
 
-  note "finding"
-  ag agent-infra work/agents/infra "lore finding add --mission $mis 'invite links must use the public website address, not the server name'"
-  ag agent-backend work/agents/api "lore inbox"
+  note "shared fact"
+  # lore finding add is not in 0.1.18 (dropped): a fact every agent needs is a live memory.
+  ag agent-infra work/agents/infra "lore memory add --live --body 'invite links must use the public website address, not the server name'"
+  ag agent-backend work/agents/api "lore sync >/dev/null && lore search 'invite links'"
   ag agent-infra work/agents/infra "lore task done $tp"
 
   note "done then merged"
