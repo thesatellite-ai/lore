@@ -34,6 +34,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -660,11 +661,51 @@ func (s *liveSession) flushActorCompanions(ctx context.Context) error {
 		return nil
 	}
 	branch, keys := s.companionChanges(nil)
-	if err := s.companionInner.Write(ctx, branch); err != nil {
-		return err
+	// r2-regress: a held row whose identical file is already there (an
+	// earlier write of this command or another path wrote the same actor)
+	// is a no-op, not a create that answers E_STALE. A different file
+	// still goes to Write, which reports the clash.
+	pending := branch[:0:0]
+	for _, ch := range branch {
+		cur, err := s.companionInner.Get(ctx, ch.Row.Table, ch.Row.ID)
+		switch {
+		case err == nil && ch.Expect.IsZero() && sameActorFile(cur, ch.Row):
+			continue
+		case err != nil && !errors.Is(err, store.ErrNotFound):
+			return err
+		}
+		pending = append(pending, ch)
+	}
+	if len(pending) > 0 {
+		if err := s.companionInner.Write(ctx, pending); err != nil {
+			return err
+		}
 	}
 	s.dropCompanions(keys)
 	return nil
+}
+
+// sameActorFile reports whether the stored row cur already holds what the
+// held row r would write (same tombstone state and canonical document).
+func sameActorFile(cur, r store.Row) bool {
+	if cur.Deleted != r.Deleted {
+		return false
+	}
+	a, errA := canonicalDoc(cur.Doc)
+	b, errB := canonicalDoc(r.Doc)
+	return errA == nil && errB == nil && bytes.Equal(a, b)
+}
+
+// canonicalDoc re-encodes a row document canonically, so key order and
+// number spelling do not make two equal documents differ.
+func canonicalDoc(doc []byte) ([]byte, error) {
+	dec := json.NewDecoder(bytes.NewReader(doc))
+	dec.UseNumber()
+	var v map[string]any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	return canonjson.Encode(v)
 }
 
 // prevPtr is the live file a new version edits (nil = first live write).
