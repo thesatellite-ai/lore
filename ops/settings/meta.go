@@ -3,11 +3,12 @@ package settings
 import (
 	"context"
 	"fmt"
-	"github.com/thesatellite-ai/lore/ops/internal/lookup"
-	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/meta"
@@ -649,17 +650,43 @@ func rowID(s string) (ids.AnyID, error) {
 // metaRowWrite runs one metadata change on the row id names (flow: bind
 // the MetaWrite to the id → Env.Update with no field change → the engine
 // resolves, checks and writes, R13) and reports it.
-func (o ops) metaRowWrite(ctx context.Context, id ids.AnyID, mw engine.MetaWrite, done string) (RowOut, error) {
+func (o ops) metaRowWrite(ctx context.Context, id ids.AnyID, mw engine.MetaWrite, done func(row.Row) string) (RowOut, error) {
 	w, err := o.env.Update(engine.WithMeta(ctx, mw), engine.Ref{ID: id}, map[string]value.Value{})
 	if err != nil {
 		return RowOut{}, err
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s: %s\n", w.Row.Table, short(w.Row.ID), done)
+	fmt.Fprintf(&b, "%s %s: %s\n", w.Row.Table, short(w.Row.ID), done(w.Row))
 	for _, x := range w.Warnings {
 		b.WriteString(x.Message + "\n")
 	}
 	return RowOut{ID: w.Row.ID.String(), Human: b.String()}, nil
+}
+
+// setEcho is "name = value, …" of the keys a meta set wrote, read back
+// from the stored row so a sensitive key echoes "= •••" (METADATA 3.2,
+// 3.20; OV10) and a typed value shows as stored. A dotted (object field)
+// name, or one the row does not hold, shows alone.
+func setEcho(r row.Row, names []string) string {
+	byName := map[string]meta.Entry{}
+	for _, j := range r.Meta {
+		if en, err := meta.DecodeEntry(j); err == nil {
+			byName[en.Name] = en
+		}
+	}
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		en, ok := byName[meta.TopSegment(n)]
+		switch {
+		case ok && en.Sensitive:
+			parts = append(parts, n+" = "+meta.Show(en))
+		case ok && len(meta.Segments(n)) == 1:
+			parts = append(parts, n+" = "+meta.Show(en))
+		default: // a field of an object key: the name alone
+			parts = append(parts, n)
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 // metaSet is `lore meta set <id> k=v` (3.2; MQ9, MQ12, R13).
@@ -687,7 +714,7 @@ func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	for _, t := range append(slices.Clone(mw.Set), mw.JSON...) {
 		names = append(names, t.Name())
 	}
-	return o.metaRowWrite(ctx, id, mw, "set "+strings.Join(names, ", "))
+	return o.metaRowWrite(ctx, id, mw, func(r row.Row) string { return "set " + setEcho(r, names) })
 }
 
 // metaUnset is `lore meta unset <id> <key>` (3.2): E_META_UNKNOWN when the
@@ -704,7 +731,8 @@ func (o ops) metaUnset(ctx context.Context, in MetaUnsetIn) (RowOut, error) {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta unset: name the key").WithHint("lore meta unset <id> <key>")
 	}
 	keys := append([]string{in.Key}, in.More...)
-	return o.metaRowWrite(ctx, id, engine.MetaWrite{ID: id, Unset: keys}, "removed "+strings.Join(keys, ", "))
+	done := "removed " + strings.Join(keys, ", ")
+	return o.metaRowWrite(ctx, id, engine.MetaWrite{ID: id, Unset: keys}, func(row.Row) string { return done })
 }
 
 // metaGet shows one row's metadata, sensitive values masked (OQ2).

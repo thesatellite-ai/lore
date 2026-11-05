@@ -139,7 +139,7 @@ type AddOut struct {
 
 // Text prints v0.1.17's add line.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s — %s %s\n", o.ID, o.Title, o.label) + carriedLine(o.CarriedMeta)
+	return fmt.Sprintf("✓ %s — %s %s\n", o.ID, o.Title, o.label) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings)
 }
 
 // carriedLine is the "carried over N keys" note of a --supersedes add.
@@ -161,7 +161,7 @@ func (o WriteOut) Text() string {
 	if o.trashed {
 		return trashline.Moved(o.ID, o.ID)
 	}
-	return "✓ " + o.ID + " " + o.done + "\n"
+	return "✓ " + o.ID + " " + o.done + "\n" + kn.WarnText(o.Warnings)
 }
 
 // ListIn is the input of decision.list. v0.1.17 listed archived

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 
@@ -190,6 +191,16 @@ func Warnings(w engine.Written) []Warning {
 		out = append(out, Warning{Code: string(x.Code), Field: x.Field, Message: x.Message})
 	}
 	return out
+}
+
+// WarnText is the metadata notes among ws, one line each (metalist.NoteLine;
+// OV10: an add/edit with --meta prints them like meta set).
+func WarnText(ws []Warning) string {
+	var b strings.Builder
+	for _, w := range ws {
+		b.WriteString(metalist.NoteLine(w.Code, w.Message))
+	}
+	return b.String()
 }
 
 // TagRefs resolves tag names of project to their ids; each must exist (a

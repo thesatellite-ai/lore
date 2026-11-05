@@ -427,7 +427,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if in.ClearPlan {
 		patch[work.FieldPlan] = value.Null{}
 	}
-	if len(patch) == 0 {
+	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "mission edit: nothing to change").
 			WithHint("give at least one of --title, --body, --status, --target, --clear-target, --starts-at, --clear-starts-at, --plan, --clear-plan")
 	}

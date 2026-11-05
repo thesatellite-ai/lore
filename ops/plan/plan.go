@@ -339,7 +339,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if len(patch) == 0 {
+	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "plan edit: nothing to change").WithHint("give at least one of --title, --body, --status")
 	}
 	// A v0.1.17 row: move its status_str into status in the same write

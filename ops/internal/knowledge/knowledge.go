@@ -446,7 +446,7 @@ func Apply(ctx context.Context, env Env, n Noun, raw string, e Edit) (store.Sour
 		}
 		patch[schema.FieldTagIDs] = v
 	}
-	if len(patch) == 0 {
+	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return "", engine.Written{}, errs.New(errs.InvalidInput, n.Name+" edit: nothing to change").WithHint(e.Hint)
 	}
 	w, err := env.Update(ctx, engine.Ref{Store: it.Source, Table: n.Table, ID: it.Row.ID}, patch)

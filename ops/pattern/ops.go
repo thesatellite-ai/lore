@@ -257,7 +257,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
 	case in.RebindMaster:
 		patch[content.FieldRepo] = value.Null{}
 	}
-	if len(patch) == 0 {
+	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return content.WriteOut{}, errs.New(errs.InvalidInput, "pattern edit: nothing to change").
 			WithHint("give at least one of --title, --body, --language, --scope, --rebind-repo, --rebind-master")
 	}

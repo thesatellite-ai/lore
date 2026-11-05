@@ -93,6 +93,15 @@ func metaFor(ctx context.Context, table row.Table, id ids.AnyID) (MetaWrite, boo
 	return mw, true
 }
 
+// MetaBound reports that ctx carries a --meta change no write has taken
+// yet: an edit whose only flags are --meta is a real change (OV10), so a
+// noun's "nothing to change" check asks this before refusing and then
+// writes an empty patch the change rides on.
+func MetaBound(ctx context.Context) bool {
+	mw, ok := ctx.Value(metaKey{}).(MetaWrite)
+	return ok && mw.used != nil && !mw.used.Load()
+}
+
 // metaTables are the tables whose rows accept metadata from the CLI (U19);
 // every other synced table answers E_META_TABLE.
 var metaTables = map[row.Table]bool{
@@ -506,7 +515,11 @@ func (p *metaPlan) resolve(t meta.Term) (*keyDef, []string, error) {
 		return nil, nil, errs.New(errs.MetaUnregistered, "meta: no key "+t.KeyID.String()+" is visible here").
 			WithHint("lore sync, or lore meta keys --ids")
 	}
-	if err := meta.CheckName(t.Key, meta.MaxDepth); err != nil {
+	depth, err := p.maxDepth()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := meta.CheckName(t.Key, depth); err != nil {
 		return nil, nil, err
 	}
 	if err := meta.Reserved(t.Key, p.columns); err != nil {
@@ -763,18 +776,33 @@ func (p *metaPlan) unset(rowID ids.AnyID, name string) error {
 	return nil
 }
 
-// checkSize applies meta.max_bytes (3.13) and the 4 KB warning.
+// maxDepth is the team's meta.max_depth for the target (3.13, OV56); 0
+// (unset) lets meta.CheckName use meta.MaxDepth.
+func (p *metaPlan) maxDepth() (int, error) {
+	pol, _, err := p.e.settings.Policy(p.target)
+	if err != nil {
+		return 0, err
+	}
+	n, ok := pol.Limit(policy.KeyMetaMaxDepth)
+	if ok && n < 1 {
+		n = 1 // a set 0 is the strictest place, never "use the default" (stricter wins)
+	}
+	return int(n), nil
+}
+
+// checkSize applies meta.max_bytes and meta.warn_bytes (3.13).
 func (p *metaPlan) checkSize() error {
 	pol, _, err := p.e.settings.Policy(p.target)
 	if err != nil {
 		return err
 	}
 	limit, _ := pol.Limit(policy.KeyMetaMaxBytes)
+	warnAt, _ := pol.Limit(policy.KeyMetaWarnBytes) // OV56: unset → meta.WarnBytes
 	entries := make([]meta.Entry, 0, len(p.entries))
 	for _, id := range sortedIDs(p.entries) {
 		entries = append(entries, p.entries[id])
 	}
-	w, err := meta.CheckSize(entries, limit)
+	w, err := meta.CheckSizeWarn(entries, limit, warnAt)
 	if err != nil {
 		return err
 	}

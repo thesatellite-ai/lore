@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 )
 
@@ -26,7 +27,15 @@ func cutBody(body string) string {
 
 // Text is the line(s) the op set in Human ("✓ <id> <verb>", and for add
 // the scope line).
-func (o WriteOut) Text() string { return o.Human }
+func (o WriteOut) Text() string {
+	// OV10: the metadata notes of an add/edit --meta, as meta set prints them
+	var b strings.Builder
+	b.WriteString(o.Human)
+	for _, w := range o.Warnings {
+		b.WriteString(metalist.NoteLine(w.Code, w.Message))
+	}
+	return b.String()
+}
 
 // ExternalLine is v0.1.17's human line of a row from outside the checkout
 // (stores_reads.go printExternalRows): "<id>  <text><status>  <label>",

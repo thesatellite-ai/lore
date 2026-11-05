@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
@@ -114,7 +115,11 @@ type Warning struct {
 // Text is v0.1.17's line: "✓ comment <id> on <table>/<id> <label>"; the
 // label is empty for a repo comment and v0.1.17 kept the space before it.
 func (o AddOut) Text() string {
-	return "✓ comment " + o.ID + " on " + o.OnTable + "/" + o.OnID + " " + o.label + "\n"
+	out := "✓ comment " + o.ID + " on " + o.OnTable + "/" + o.OnID + " " + o.label + "\n"
+	for _, w := range o.Warnings { // OV10: metadata notes like meta set
+		out += metalist.NoteLine(w.Code, w.Message)
+	}
+	return out
 }
 
 // ListIn is the input of comment.list.

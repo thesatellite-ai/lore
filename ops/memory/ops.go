@@ -479,7 +479,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 		}
 		patch[schema.FieldTagIDs] = v
 	}
-	if len(patch) == 0 {
+	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return WriteOut{}, errs.New(errs.InvalidInput, "memory edit: nothing to change").
 			WithHint("give at least one of --body, --kind, --source, --source-ref, --scope, --rebind-repo, --rebind-master, --tag, --untag")
 	}

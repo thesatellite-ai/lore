@@ -189,6 +189,15 @@ func Size(entries []Entry) (int, error) {
 
 // CheckSize refuses past max (E_META_SIZE) and warns past WarnBytes.
 func CheckSize(entries []Entry, maxBytes int64) (warning string, err error) {
+	return CheckSizeWarn(entries, maxBytes, WarnBytes)
+}
+
+// CheckSizeWarn is CheckSize with the team's meta.warn_bytes (OV56;
+// warnBytes <= 0 means WarnBytes).
+func CheckSizeWarn(entries []Entry, maxBytes, warnBytes int64) (warning string, err error) {
+	if warnBytes <= 0 {
+		warnBytes = WarnBytes
+	}
 	n, err := Size(entries)
 	if err != nil {
 		return "", err
@@ -200,8 +209,8 @@ func CheckSize(entries []Entry, maxBytes int64) (warning string, err error) {
 		return "", errs.New(errs.MetaSize, "meta: the row's metadata would be "+strconv.Itoa(n)+" bytes; the limit is "+
 			strconv.FormatInt(maxBytes, 10)+" (meta.max_bytes)").WithHint("move the content to the body or a memory")
 	}
-	if n > WarnBytes {
-		return "the row's metadata is " + strconv.Itoa(n) + " bytes; past " + strconv.Itoa(WarnBytes) + " it looks like content (put long text in the body or a memory)", nil
+	if int64(n) > warnBytes {
+		return "the row's metadata is " + strconv.Itoa(n) + " bytes; past " + strconv.FormatInt(warnBytes, 10) + " it looks like content (put long text in the body or a memory)", nil
 	}
 	return "", nil
 }

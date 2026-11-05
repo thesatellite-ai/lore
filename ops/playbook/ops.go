@@ -8,6 +8,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -182,7 +183,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
 	if err != nil {
 		return content.WriteOut{}, err
 	}
-	if len(patch) == 0 {
+	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return content.WriteOut{}, errs.New(errs.InvalidInput, "playbook edit: nothing to change").
 			WithHint("give at least one of --name, --body, --description")
 	}

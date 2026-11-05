@@ -667,6 +667,10 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	}
 	human += defaults + notes
 	human += sizeWarning(ctx, o.env, target, w.Row.Fields) // RQ4
+	// OV10: --meta notes like meta set
+	for _, x := range w.Warnings {
+		human += metalist.NoteLine(string(x.Code), x.Message)
+	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target), Human: human}, nil
 }
 

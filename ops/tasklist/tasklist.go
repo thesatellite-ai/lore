@@ -303,7 +303,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if len(patch) == 0 {
+	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "tasklist edit: nothing to change").WithHint("give at least one of --title, --body, --status")
 	}
 	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" tasklist "+id.String()+" updated\n")
