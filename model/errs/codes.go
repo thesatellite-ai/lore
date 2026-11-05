@@ -261,7 +261,7 @@ var table = map[Code]entry{
 	InvalidUTF8:           {class: ClassBadInput, desc: "input is not valid UTF-8"},
 	BodyTooLarge:          {class: ClassBadInput, desc: "body exceeds maximum allowed size"},
 	InvalidIdentifier:     {class: ClassBadInput, desc: "identifier contains disallowed character"},
-	SecretDetected:        {class: ClassRefused, desc: "input contains a credential pattern; refusing to store. When secrets.on_detect is ask, rerun with --yes once a person confirms it is not a secret (recorded in secret_allows)"},
+	SecretDetected:        {class: ClassRefused, desc: "input contains a credential pattern; refusing to store. When secrets.on_detect is ask, rerun with a choice: --secret-ref, --secret-unstored, or mark it not a secret with --not-a-secret --reason <why> --yes (recorded in secret_allows)"},
 	RootRefused:           {class: ClassRefused, desc: "lore refuses to run as root"},
 	SymlinkDB:             {class: ClassRefused, desc: "DB path is a symlink; refusing for safety"},
 	SymlinkLoop:           {class: ClassRefused, desc: "filesystem walk encountered a symlink loop"},

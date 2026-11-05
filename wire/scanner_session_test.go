@@ -95,7 +95,7 @@ func TestSessionIDFinding(t *testing.T) {
 	}{
 		{mode: policy.OnDetectRefuse, yes: true, code: errs.SecretDetected},
 		{mode: "", code: errs.NeedsConfirm},
-		{mode: "", yes: true, want: body},
+		{mode: "", yes: true, code: errs.NeedsConfirm}, // FB-SEC-1: a bare --yes is no choice
 		{mode: policy.OnDetectRedact, want: "resume with claude --resume " + refs.Unstored + " later"},
 	}
 	for _, c := range cases {

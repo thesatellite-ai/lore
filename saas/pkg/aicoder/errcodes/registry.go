@@ -215,7 +215,7 @@ func Description(c Code) string {
 		InvalidUTF8:           "input is not valid UTF-8",
 		BodyTooLarge:          "body exceeds maximum allowed size",
 		InvalidIdentifier:     "identifier contains disallowed character",
-		SecretDetected:        "input contains a credential pattern; refusing to store. When secrets.on_detect is ask, rerun with --yes once a person confirms it is not a secret (recorded in secret_allows)",
+		SecretDetected:        "input contains a credential pattern; refusing to store. When secrets.on_detect is ask, rerun with a choice: --secret-ref, --secret-unstored, or mark it not a secret with --not-a-secret --reason <why> --yes (recorded in secret_allows)",
 		RootRefused:           "lore refuses to run as root; set LORE_ALLOW_ROOT=1 to override",
 		SymlinkDB:             "DB path is a symlink; refusing for safety. Delete the symlink and re-init, or restore lore.db from a backup",
 		SymlinkLoop:           "filesystem walk encountered a symlink loop",

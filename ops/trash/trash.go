@@ -219,7 +219,11 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: append(slices.Clone(read), errs.NeedsConfirm, errs.Cancelled),
 			Confirm: op.ConfirmRule{When: showSensitiveField}}, o.show),
 		op.Define(op.Spec{Name: OpRestore, Summary: "Bring a row (with its dependents) or a whole batch back from the trash, same ids",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: write}, o.restore),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.SecretDetected),
+			// MayAsk: the restore re-scan may ask about a secret (P2-DEL-3,
+			// FB-SEC-1), so the answer flags (--secret-ref,
+			// --secret-unstored, --not-a-secret --reason) and --yes exist.
+			Confirm: op.ConfirmRule{MayAsk: true}}, o.restore),
 		op.Define(op.Spec{Name: OpPurge, Summary: "Remove rows from the trash for good (a tombstone stays forever); needs --confirm",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported)}, o.purge),
 		op.Define(op.Spec{Name: OpStats, Summary: "Count the trash per type, store and deleter, rows past retention, and tombstones",

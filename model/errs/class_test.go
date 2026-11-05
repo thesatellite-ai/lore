@@ -34,6 +34,7 @@ func allConstants() []Code {
 		DurationBad, TimeTooLong, UpgradePermission, UpgradeChecksum, UpgradePinned,
 		RefSyntax, RefScheme, RefCycle, RefDepth, RefLimit, RefDangling, RefRequired, VaultEntryUnavailable,
 		InTrash, ParentDeleted, ParentPurged, ReasonRequired, MigrateRollbackLoses,
+		ResourceAmbiguous, ResourceTaken, ResourceArchived, ResourceBatch, ResourceConflict, KindLimit,
 	}
 }
 
