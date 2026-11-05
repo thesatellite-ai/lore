@@ -28,6 +28,9 @@ import (
 const (
 	Noun  = "upgrade"
 	OpRun = "upgrade.run"
+	// RunVerb is the verb bare `lore upgrade` runs (the shortcut of
+	// cmd/lore and the old binary's bare-verb list).
+	RunVerb = "run"
 )
 
 // restNoun keeps the REST collection "upgrade" (the default plural would
