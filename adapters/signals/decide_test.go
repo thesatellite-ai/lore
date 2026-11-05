@@ -119,12 +119,13 @@ func TestDecideClaimMatrix(t *testing.T) {
 			v := view(tc.board, t0, tc.now)
 			plan, err := DecideClaim(v, ClaimRequest{Caller: tc.caller, Folder: folder, ID: tc.id, CountsTowardWIP: tc.wip,
 				MaxClaims: 1, MaxAttempts: 3, Row: tc.row, Token: "ct_fresh"})
-			switch w := tc.want.err.(type) {
-			case nil:
+			var wantHeld *HeldError
+			switch w := tc.want.err; {
+			case w == nil:
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-			case *HeldError:
+			case errors.As(w, &wantHeld):
 				var he *HeldError
 				if !errors.As(err, &he) || he.SameActor != tc.want.sameActor {
 					t.Fatalf("want HeldError(sameActor=%v), got %v", tc.want.sameActor, err)
@@ -210,7 +211,7 @@ func TestResourceHold(t *testing.T) {
 	if err != nil || s.Kind != KindResource || s.Name != "full-suite" || !s.Expires.Equal(t0.Add(30*time.Minute)) {
 		t.Fatalf("fresh hold: %+v %v", s, err)
 	}
-	if _, err := DecideHold(view(Board{p: s}, t0, t0.Add(time.Minute)), HoldRequest{Caller: other, Folder: folder, Name: "full-suite", TTL: time.Minute, Token: "x"}); err == nil {
+	if _, herr := DecideHold(view(Board{p: s}, t0, t0.Add(time.Minute)), HoldRequest{Caller: other, Folder: folder, Name: "full-suite", TTL: time.Minute, Token: "x"}); herr == nil {
 		t.Fatal("a held resource must refuse another holder")
 	}
 	again, err := DecideHold(view(Board{p: s}, t0, t0.Add(time.Minute)), req)

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/clock"
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
-	"saas/pkg/aicoder/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/logic/clock"
 )
 
 const liveRef = "refs/lore/live"
@@ -417,7 +417,7 @@ func (o *otherRemoteRow) PushSelf(ctx context.Context) error {
 	o.pushed++
 	res, err := o.c.Remote.Push(ctx, gitremote.PushRequest{Updates: []gitremote.RefUpdate{{Src: o.prepared, Dst: liveRef}}})
 	if err != nil || !res.OK() {
-		return fmt.Errorf("push: %+v %v", res, err)
+		return fmt.Errorf("push: %+v %w", res, err)
 	}
 	return nil
 }

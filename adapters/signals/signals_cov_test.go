@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/clock"
-	"saas/pkg/aicoder/gitremote"
-	"saas/pkg/aicoder/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/logic/clock"
 )
 
 // fixed rule 3: a store branch has its own signals ref, never the code
@@ -158,14 +158,14 @@ func TestStoreLocalIsTheLastFetchedCopy(t *testing.T) {
 		t.Fatalf("never fetched: empty view, no error: %+v %v", v.Board, err)
 	}
 	var plan ClaimPlan
-	if _, err := sa.Write(ctx, claimDecide(sa, me, task, &plan)); err != nil {
-		t.Fatal(err)
+	if _, werr := sa.Write(ctx, claimDecide(sa, me, task, &plan)); werr != nil {
+		t.Fatal(werr)
 	}
-	if v, _ := sb.Local(ctx); len(v.Board) != 0 {
+	if lv, _ := sb.Local(ctx); len(lv.Board) != 0 {
 		t.Fatal("Local must not fetch")
 	}
-	if _, err := sb.Read(ctx); err != nil {
-		t.Fatal(err)
+	if _, rerr := sb.Read(ctx); rerr != nil {
+		t.Fatal(rerr)
 	}
 	fb.SetOffline(true)
 	v, err = sb.Local(ctx)

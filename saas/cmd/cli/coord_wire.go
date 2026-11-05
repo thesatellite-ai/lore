@@ -255,11 +255,11 @@ func signatureEmail(stableKey string) string {
 }
 
 // traceFunc writes signals trace lines to stderr when LORE_TRACE=1.
-func traceFunc() func(string, ...any) {
+func traceFunc() func(string) {
 	if os.Getenv(envLoreTrace) != "1" {
 		return nil
 	}
-	return func(format string, args ...any) { fmt.Fprintf(os.Stderr, "trace: "+format+"\n", args...) }
+	return func(line string) { fmt.Fprintln(os.Stderr, "trace: "+line) }
 }
 
 // envLoreTrace turns on --trace output (§1).

@@ -120,6 +120,10 @@ func (s SeenStore) read() seenFile {
 // seenFileMode keeps machine state private to the user.
 const seenFileMode = 0o600
 
+// stateDirMode is the mode of the state directory the seen file lives in
+// (owner and group only, like the rest of lore's machine state).
+const stateDirMode = 0o750
+
 // Save stores o for ref, atomically (temp file + rename) so a concurrent
 // lore command in the same clone reads either the old or the new file.
 func (s SeenStore) Save(_ context.Context, ref string, o Observations) error {
@@ -129,8 +133,8 @@ func (s SeenStore) Save(_ context.Context, ref string, o Observations) error {
 	if err != nil {
 		return fmt.Errorf("signals: encode observations: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(s.Path), 0o755); err != nil {
-		return fmt.Errorf("signals: observations dir: %w", err)
+	if mkErr := os.MkdirAll(filepath.Dir(s.Path), stateDirMode); mkErr != nil {
+		return fmt.Errorf("signals: observations dir: %w", mkErr)
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(s.Path), ".signals-seen-*")
 	if err != nil {

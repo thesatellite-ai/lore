@@ -7,11 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"time"
 
-	"saas/pkg/aicoder/clock"
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/logic/clock"
 )
 
 // Companion is another ref that must change together with a signals write:
@@ -167,8 +168,10 @@ type Store struct {
 	// companions). Set it when doctor found the host lacks atomic push;
 	// the executor also switches by itself on ErrAtomicUnsupported.
 	NoAtomic bool
-	// Trace, when set, receives one line per fetch, push and retry.
-	Trace func(format string, args ...any)
+	// Trace, when set, receives one line per fetch, push and retry, already
+	// formatted (a plain string rather than v0.1.17's printf pair, so the
+	// field holds no `any`: P3-PORT-LIVE).
+	Trace func(line string)
 	// Gate, when set, runs before every write and refuses it (E_OLD_LORE)
 	// when this lore may not write the project the signals belong to
 	// (FORMAT_EVOLUTION rule 2 "read-only on every path": no claim, renew
@@ -188,9 +191,10 @@ type Result struct {
 	Atomic bool
 }
 
-func (s *Store) tracef(format string, args ...any) {
+// trace sends one line to Trace when it is set.
+func (s *Store) trace(line string) {
 	if s.Trace != nil {
-		s.Trace(format, args...)
+		s.Trace(line)
 	}
 }
 
@@ -209,7 +213,7 @@ func (s *Store) fetchState(ctx context.Context) (string, map[string][]byte, erro
 	if err != nil {
 		return "", nil, err
 	}
-	s.tracef("signals: fetch %s", s.Ref)
+	s.trace(fmt.Sprintf("signals: fetch %s", s.Ref))
 	err = s.Remote.Fetch(ctx, gitremote.FetchRequest{Refspecs: []string{"+" + s.Ref + ":" + track}})
 	switch {
 	case errors.Is(err, gitremote.ErrRemoteRefMissing):
@@ -252,7 +256,7 @@ func (s *Store) view(ctx context.Context, tree map[string][]byte) (View, []strin
 	now := s.Clock.Now()
 	seen := s.Seen.Load(ctx, s.Ref).Observe(b, now)
 	if err := s.Seen.Save(ctx, s.Ref, seen); err != nil {
-		s.tracef("signals: %v", err)
+		s.trace(fmt.Sprintf("signals: %v", err))
 	}
 	return View{Board: b, Seen: seen, Now: now, Lease: s.Lease}, bad
 }
@@ -347,7 +351,7 @@ func (s *Store) Write(ctx context.Context, decide Decide) (Result, error) {
 		if attempt > retries {
 			return res, &OfflineError{Reason: fmt.Sprintf("gave up after %d lost races on %s (last seen %s)", attempt, s.Ref, short(last))}
 		}
-		s.tracef("signals: lost race on %s (attempt %d), re-deciding", s.Ref, attempt)
+		s.trace(fmt.Sprintf("signals: lost race on %s (attempt %d), re-deciding", s.Ref, attempt))
 		if err := s.backoff(ctx, attempt); err != nil {
 			return res, err
 		}
@@ -429,7 +433,7 @@ func (s *Store) attempt(ctx context.Context, decide Decide) (Result, bool, error
 		}
 		updates = append(updates, u)
 	}
-	ch.Companions = append(local, remote...)
+	ch.Companions = slices.Concat(local, remote)
 	if len(updates) == 0 {
 		// Only other-remote companions and no ref to lease on: nothing to
 		// fence with here, push them as they are.
@@ -471,7 +475,7 @@ func (s *Store) ordered(ctx context.Context, res Result, sigUpdate gitremote.Ref
 			// %v, not %w, on purpose: the CLI classifies with errors.As, and a
 			// wrapped inner *OfflineError would turn this partial push into
 			// E_OFFLINE. Only ErrPartial is part of the error's identity.
-			return res, false, fmt.Errorf("%w: companion %d: %v", ErrPartial, i+1, errors.Join(err, errAgain(again)))
+			return res, false, fmt.Errorf("%w: companion %d: %w", ErrPartial, i+1, errors.Join(err, errAgain(again)))
 		}
 	}
 	return s.finish(ctx, res, sigUpdate, ch)
@@ -492,7 +496,7 @@ func (s *Store) finish(ctx context.Context, res Result, sigUpdate gitremote.RefU
 			if err := rc.PushSelf(ctx); err != nil {
 				s.recordTracking(ctx, sigUpdate)
 				// %v on purpose: see the companion push error above.
-				return res, false, fmt.Errorf("%w: companion %d on its own remote: %v", ErrPartial, i+1, err)
+				return res, false, fmt.Errorf("%w: companion %d on its own remote: %w", ErrPartial, i+1, err)
 			}
 		}
 	}
@@ -512,7 +516,7 @@ func (s *Store) recordTracking(ctx context.Context, sigUpdate gitremote.RefUpdat
 		track, err := s.tracking()
 		if err == nil {
 			if uerr := s.Repo.UpdateRef(ctx, track, sigUpdate.Src, sigUpdate.Expect); uerr != nil {
-				s.tracef("signals: tracking ref not moved: %v", uerr)
+				s.trace(fmt.Sprintf("signals: tracking ref not moved: %v", uerr))
 			}
 		}
 	}
@@ -522,7 +526,7 @@ func (s *Store) recordTracking(ctx context.Context, sigUpdate gitremote.RefUpdat
 // race (stale lease, non-fast-forward, or an atomic sibling failing for one
 // of those), an error for anything a retry cannot fix.
 func (s *Store) push(ctx context.Context, updates []gitremote.RefUpdate, atomic bool) (bool, error) {
-	s.tracef("signals: push %d ref(s) atomic=%v", len(updates), atomic)
+	s.trace(fmt.Sprintf("signals: push %d ref(s) atomic=%v", len(updates), atomic))
 	res, err := s.Remote.Push(ctx, gitremote.PushRequest{Updates: updates, Atomic: atomic})
 	switch {
 	case errors.Is(err, gitremote.ErrAtomicUnsupported):
@@ -537,9 +541,9 @@ func (s *Store) push(ctx context.Context, updates []gitremote.RefUpdate, atomic 
 	}
 	again := false
 	for _, r := range res.Refs {
-		switch {
-		case r.Status == gitremote.StatusOK, r.Status == gitremote.StatusUpToDate, r.Status == gitremote.StatusAtomicFailed:
-		case r.Status == gitremote.StatusStale, r.Status == gitremote.StatusNonFastForward:
+		switch r.Status {
+		case gitremote.StatusOK, gitremote.StatusUpToDate, gitremote.StatusAtomicFailed:
+		case gitremote.StatusStale, gitremote.StatusNonFastForward:
 			again = true
 		default:
 			return false, fmt.Errorf("%w: %s %s: %s", ErrRejected, r.Dst, r.Status, r.Message)
