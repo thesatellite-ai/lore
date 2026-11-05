@@ -1499,6 +1499,16 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 			return work.WriteOut{}, err
 		}
 	}
+	// FB-TASK-1: a claimed task itself is fenced too, so a restore never
+	// hands the old holder its claim back (its next write fails; it
+	// releases, which drops the claim, and claims again).
+	selfClaimed, err := selfClaimNow(ctx, id.String())
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if selfClaimed {
+		question += " (it is claimed: the holder's next write fails)"
+	}
 	if err = bulk.Ask(ctx, question); err != nil {
 		return work.WriteOut{}, err
 	}
@@ -1506,8 +1516,12 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
+	fence := claimed
+	if selfClaimed {
+		fence = append([]string{id.String()}, claimed...)
+	}
 	// 6.12: claimed children are fenced before the tombstones (FA-TASK-3).
-	if err = o.fenceClaimed(bctx, f, claimed); err != nil {
+	if err = o.fenceClaimed(bctx, f, fence); err != nil {
 		return work.WriteOut{}, err
 	}
 	human := trashline.Moved(id.String(), id.String())
@@ -1516,6 +1530,9 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	}
 	if len(claimed) > 0 {
 		human += "  fenced " + strconv.Itoa(len(claimed)) + " claimed sub-task(s): their holders' next write fails\n"
+	}
+	if selfClaimed {
+		human += "  fenced the claim on " + id.String() + ": its holder's next write fails; `lore task release` drops it\n"
 	}
 	return work.Delete(bctx, o.env, Noun, table, id, human)
 }

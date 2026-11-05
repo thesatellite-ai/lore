@@ -189,6 +189,21 @@ func (o ops) fenceClaimed(ctx context.Context, f forest, claimed []string) error
 	return nil
 }
 
+// selfClaimNow reports whether task is actively claimed on the host's board
+// (false without a team board).
+func selfClaimNow(ctx context.Context, task string) (bool, error) {
+	t, ok := work.TeamFrom(ctx)
+	if !ok {
+		return false, nil
+	}
+	board, err := t.Claims(ctx)
+	if err != nil {
+		return false, err
+	}
+	_, isClaimed, active := board.Claim(task)
+	return isClaimed && active, nil
+}
+
 // FenceClaimed raises claim_epoch on every actively claimed task among
 // rows (FA-TASK-3, FA-TASK-7): the group deletes of other nouns (a
 // mission, a tasklist, a plan taking its tasks) call it under their delete

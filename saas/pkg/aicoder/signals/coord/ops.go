@@ -189,6 +189,24 @@ func (o ClaimOptions) coordinating(task string) bool {
 	return o.OpenChildren != nil && len(o.OpenChildren(task)) > 0
 }
 
+// exemptFromWIP reports the held tasks that do not count toward
+// agents.max_claims_per_agent: coordinator leases (6.9) and, FB-TASK-1,
+// claims of this folder whose task row is gone (moved to the trash or
+// purged while held). A claim in another folder is never judged here: this
+// env's row store cannot see that folder's rows, so it keeps counting.
+func exemptFromWIP(ctx context.Context, env Env, v signals.View, opts ClaimOptions) func(string) bool {
+	return func(task string) bool {
+		if opts.coordinating(task) {
+			return true
+		}
+		if s, ok := v.Board[signals.ClaimPath(env.Folder, task)]; !ok || s.Holder != env.Caller.ActorID {
+			return false
+		}
+		_, live, err := env.Rows.Get(ctx, task)
+		return err == nil && !live
+	}
+}
+
 // ClaimResult is a successful claim.
 type ClaimResult struct {
 	Plan signals.ClaimPlan
@@ -238,7 +256,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			return signals.Change{}, err
 		}
 		plan, err := signals.DecideClaim(v, signals.ClaimRequest{
-			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission && !lease, Exempt: opts.coordinating,
+			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission && !lease, Exempt: exemptFromWIP(ctx, env, v, opts),
 			MaxClaims: env.Agents.MaxClaims, MaxAttempts: env.Agents.MaxAttempts,
 			Row: signals.RowState{Epoch: doc.Epoch(), Attempts: doc.Int(keyAttempts)}, Token: tok,
 			WorkBranch: workBranch, Owns: opts.Owns,
@@ -462,8 +480,16 @@ func Release(ctx context.Context, env Env, id string) error {
 			return ch, nil
 		}
 		doc, ok, err := env.Rows.Get(ctx, id)
-		if err != nil || !ok {
-			return signals.Change{}, errors.Join(err, errIf(!ok, fmt.Errorf("%w: %s", ErrUnknownTask, id)))
+		if err != nil {
+			return signals.Change{}, err
+		}
+		if !ok {
+			// FB-TASK-1: the task went to the trash (or was purged) while held.
+			// The caller's own claim is still on the board (DecideRelease
+			// found it), so the release only drops it: there is no live row
+			// to log the release on, and keeping the claim would hold a WIP
+			// slot until it expires.
+			return ch, nil
 		}
 		next := doc.Clone()
 		if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
