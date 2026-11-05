@@ -123,9 +123,9 @@ type MetaKeyRef struct {
 type MetaKeysIn struct {
 	Keys []string `json:"keys,omitempty" flag:"key" desc:"only these keys (repeatable)"`
 	IDs  bool     `json:"ids,omitempty" flag:"ids" desc:"show key ids"`
-	// Unreviewed lists only keys an agent registered that no person has
-	// approved yet (MQ7).
-	Unreviewed bool `json:"unreviewed,omitempty" flag:"unreviewed" desc:"only keys an agent added that no person reviewed yet"`
+	// Unreviewed lists only keys an agent registered that nobody has
+	// reviewed yet (MQ7, P3-AGENT-3).
+	Unreviewed bool `json:"unreviewed,omitempty" flag:"unreviewed" desc:"only keys an agent added that nobody reviewed yet (lore meta describe reviews one)"`
 	// Unused lists keys no row uses (archived rows count as use, 3.8).
 	Unused bool `json:"unused,omitempty" flag:"unused" desc:"only keys used on no row (remove with lore meta forget)"`
 	// Place and Table narrow the list (CLI_REFERENCE 3.1 meta keys, XQ6).
@@ -372,12 +372,10 @@ func (o ops) metaDescribe(ctx context.Context, in MetaDescribeIn) (RowOut, error
 	if err != nil {
 		return RowOut{}, err
 	}
-	patch := map[string]value.Value{mDescription: v}
-	// a person's description approves an agent's key (MQ7); an agent's
-	// description leaves it for review
-	if addedBy(ctx) == schema.MetaAddedByPerson {
-		patch[mReviewed] = value.BoolOf(true)
-	}
+	// describe marks the key reviewed whoever runs it: anyone, a person or
+	// an agent, reviews an agent's key, and the audit fields name the
+	// reviewer (AGENT_IDENTITY 8.3, METADATA 3.14, MQ7, P3-AGENT-3).
+	patch := map[string]value.Value{mDescription: v, mReviewed: value.BoolOf(true)}
 	return o.patchRow(ctx, k, patch, text(k.Row, mName)+": description set")
 }
 

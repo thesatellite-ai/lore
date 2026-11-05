@@ -17344,7 +17344,7 @@
                   },
                   "unreviewed": {
                     "type": "boolean",
-                    "description": "only keys an agent added that no person reviewed yet"
+                    "description": "only keys an agent added that nobody reviewed yet (lore meta describe reviews one)"
                   },
                   "unused": {
                     "type": "boolean",

@@ -29,8 +29,9 @@ func runAs(t *testing.T, h *opstest.H, agent, name, input string) {
 }
 
 // TestUnreviewedKeys: keys an agent added are listed (sorted, with their
-// writer) until a person describes them; a person's own key never is; the
-// list matches `meta keys --unreviewed` (AGENT_IDENTITY 8.3, MQ7).
+// writer) until someone describes them, a person or an agent (P3-AGENT-3);
+// a person's own key never is; the list matches `meta keys --unreviewed`
+// (AGENT_IDENTITY 8.3, MQ7).
 func TestUnreviewedKeys(t *testing.T) {
 	h := opstest.New(t)
 	runAs(t, h, "codex", settings.OpMetaAdd, `{"name":"renewal_risk","type":"text"}`)
@@ -54,14 +55,17 @@ func TestUnreviewedKeys(t *testing.T) {
 		t.Errorf("meta keys --unreviewed = %s, want count 2 (same set as the inbox)", list)
 	}
 
-	// an agent's description leaves the key for review; a person's clears it
+	// an agent's description reviews the key, a person's too
 	runAs(t, h, "codex", settings.OpMetaDescribe, `{"id":"customer_tier","text":"plan level"}`)
-	runAs(t, h, "", settings.OpMetaDescribe, `{"id":"renewal_risk","text":"churn risk"}`)
 	got, err = settings.UnreviewedKeys(context.Background(), h.App)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].Name != "customer_tier" {
-		t.Fatalf("after describe: %+v, want customer_tier only", got)
+	if len(got) != 1 || got[0].Name != "renewal_risk" {
+		t.Fatalf("after an agent's describe: %+v, want renewal_risk only", got)
+	}
+	runAs(t, h, "", settings.OpMetaDescribe, `{"id":"renewal_risk","text":"churn risk"}`)
+	if got, err = settings.UnreviewedKeys(context.Background(), h.App); err != nil || len(got) != 0 {
+		t.Fatalf("after a person's describe: %+v (%v), want none", got, err)
 	}
 }
