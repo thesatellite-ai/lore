@@ -21,6 +21,7 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
+	"saas/pkg/aicoder/sessions"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -191,6 +192,17 @@ func (s *coreAuditSink) Session(ctx context.Context) (string, error) {
 		s.ses, s.sesErr = currentSession(ctx, s.app, s.db, s.projectRoot(ctx))
 	})
 	return s.ses, s.sesErr
+}
+
+// ToolSessionIDs implements wire.ToolSessionSource: the raw tool session
+// ids in the repo's lore.db (OV11: the scanner refuses them at write time);
+// none when there is no lore.db here.
+func (s *coreAuditSink) ToolSessionIDs(ctx context.Context) ([]string, error) {
+	s.once.Do(func() { s.db, s.err = openCoreAuditDBAt(ctx, s.projectRoot(ctx)) })
+	if s.err != nil {
+		return nil, nil // no repo lore.db (attached-store-only run): no ids known
+	}
+	return sessions.KnownToolSessionIDs(ctx, s.db)
 }
 
 // openCoreAuditDB opens the project's lore.db for the chain, building it
