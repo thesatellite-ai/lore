@@ -153,7 +153,7 @@ func queueOf(env Env, v signals.View, req NextRequest, docs []Doc) queue.Result 
 		st, by := ClaimStateOf(v, env.Folder, d.Str(keyID))
 		tasks = append(tasks, withUrgency(ToQueueTask(d, req.RepoName, st, by), d, req.Urgency))
 	}
-	return queue.Next(queue.Input{Tasks: tasks, Filter: req.Filter, Now: v.Now, MaxAttempts: env.Agents.MaxAttempts})
+	return queue.Next(queue.Input{Tasks: tasks, Filter: req.Filter, Now: v.Now, MaxAttempts: env.Agents.MaxAttempts, Weights: env.Urgency})
 }
 
 // Next runs §7.3: resume first, block poisoned tasks, then claim the first

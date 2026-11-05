@@ -11,6 +11,8 @@ import (
 
 	"dbent/schema"
 	"saas/pkg/aicoder/signals"
+
+	"github.com/thesatellite-ai/lore/logic/urgency"
 )
 
 // Rows is the row store of one project as the CLI sees it: live wins over
@@ -51,6 +53,9 @@ type Env struct {
 	Caller signals.Caller
 	Agents Agents
 	Held   HeldStore
+	// Urgency are the tasks.urgency.* weights the host read from policy
+	// (OV15B-URG); the zero value means the TASK 13.2 defaults.
+	Urgency urgency.Weights
 }
 
 // FenceKind is the kind of fencing failure (§7.4), mapped by the CLI to

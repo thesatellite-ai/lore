@@ -181,7 +181,8 @@ func openRepoTarget(ctx context.Context, w *coordWorld) (coordTarget, error) {
 
 // env builds the coord.Env for a target.
 func (w *coordWorld) env(t coordTarget) coord.Env {
-	return coord.Env{Signals: t.Signals, Folder: t.Folder, Rows: t.Rows, Caller: w.Caller(), Agents: w.Agents, Held: w.held()}
+	return coord.Env{Signals: t.Signals, Folder: t.Folder, Rows: t.Rows, Caller: w.Caller(), Agents: w.Agents, Held: w.held(),
+		Urgency: urgencyWeights(context.Background())} // OV15B-URG (coord_views.go); policySet reads the process's core app
 }
 
 // liveRows is coord.Rows over this repo's live ref (live wins) with the
