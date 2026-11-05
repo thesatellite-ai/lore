@@ -66,6 +66,16 @@ func Unsupported() error {
 // Show reads the row id names (a noun show already answered for it) and
 // expands it; env is nil when the caller's env does not implement Env.
 func Show(ctx context.Context, env Env, id string) (Block, error) {
+	return ShowWith(ctx, env, id, RevealFlag{})
+}
+
+// ShowWith is Show with --reveal / --force: a noun show that embeds
+// RevealFlag calls it when --expand or --reveal is set (--force alone is
+// refused).
+func ShowWith(ctx context.Context, env Env, id string, rf RevealFlag) (Block, error) {
+	if rf.Force && !rf.Reveal {
+		return Block{}, errs.New(errs.InvalidInput, "--force goes with --reveal")
+	}
 	if env == nil {
 		return Block{}, Unsupported()
 	}
@@ -76,6 +86,9 @@ func Show(ctx context.Context, env Env, id string) (Block, error) {
 	_, r, err := env.Get(ctx, engine.Ref{ID: aid})
 	if err != nil {
 		return Block{}, err
+	}
+	if rf.Reveal {
+		return Reveal(ctx, env, r, rf.Force)
 	}
 	return Row(ctx, env, r)
 }
