@@ -254,7 +254,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 		kid := text(r.Row, rKind)
 		d, ok := defs[kid]
 		if !ok {
-			if d, err = o.kindDef(ctx, kid); err != nil {
+			if d, err = o.kindDefRead(ctx, kid); err != nil {
 				continue // a row of a kind this place cannot see
 			}
 			defs[kid] = d

@@ -355,7 +355,7 @@ func (o ops) resGitHistory(ctx context.Context, r located) ([]ResHistoryEntry, e
 	if err != nil {
 		return nil, err
 	}
-	d, err := o.kindDef(ctx, text(r.Row, rKind))
+	d, err := o.kindDefRead(ctx, text(r.Row, rKind))
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +474,7 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 	}
 	kindID := ""
 	if in.Kind != "" {
-		d, kerr := o.kindDef(ctx, in.Kind)
+		d, kerr := o.kindDefRead(ctx, in.Kind)
 		if kerr != nil {
 			return ResReportOut{}, kerr
 		}
@@ -497,7 +497,7 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 		d, seen := defs[kid]
 		if !seen {
 			var kerr error
-			if d, kerr = o.kindDef(ctx, kid); kerr != nil {
+			if d, kerr = o.kindDefRead(ctx, kid); kerr != nil {
 				continue // a kind this view cannot see
 			}
 			defs[kid] = d

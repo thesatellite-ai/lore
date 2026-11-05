@@ -461,6 +461,9 @@ type kindDef struct {
 	kind   located
 	byName map[string]located
 	byID   map[string]located
+	// note is set only by kindDefRead when this is a conflicted kind's
+	// last good definition (RES 3.13); never on a definition used to write.
+	note string
 }
 
 func (o ops) kindDef(ctx context.Context, key string) (kindDef, error) {
@@ -468,7 +471,16 @@ func (o ops) kindDef(ctx context.Context, key string) (kindDef, error) {
 	if err != nil {
 		return kindDef{}, err
 	}
-	fs, err := o.fieldsOf(ctx, k)
+	raw, err := o.rawFieldsOf(ctx, k)
+	if err != nil {
+		return kindDef{}, err
+	}
+	// RES 3.13: a kind or field row with conflict markers refuses writes
+	// (read ops fall back through kindDefRead).
+	if marked := markedRows(k, raw); len(marked) > 0 {
+		return kindDef{}, conflicted(k, marked)
+	}
+	fs, err := effectiveFields(raw)
 	if err != nil {
 		return kindDef{}, err
 	}
@@ -802,7 +814,7 @@ func fieldsRaw(r located) []byte {
 }
 
 func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
-	d, err := o.kindDef(ctx, text(r.Row, rKind))
+	d, err := o.kindDefRead(ctx, text(r.Row, rKind))
 	if err != nil {
 		return Resource{}, err
 	}
@@ -846,7 +858,7 @@ func (o ops) resShow(ctx context.Context, in ResRef) (ResOut, error) {
 }
 
 func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
-	d, err := o.kindDef(ctx, in.Kind)
+	d, err := o.kindDefRead(ctx, in.Kind)
 	if err != nil {
 		return ResListOut{}, err
 	}
@@ -916,6 +928,7 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 		shown[i] = h.row.Row
 	}
 	out.Notes = append(out.Notes, in.TrashNotes(shown)...)
+	out.Notes = append(out.Notes, d.noteLines()...) // RES 3.13 last good warning
 	out.Count = len(out.Data)
 	return out, nil
 }

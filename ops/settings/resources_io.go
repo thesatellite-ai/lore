@@ -512,7 +512,7 @@ func (o ops) resExport(ctx context.Context, in ResExportIn) (ResExportOut, error
 	if err != nil {
 		return ResExportOut{}, err
 	}
-	d, err := o.kindDef(ctx, in.Kind)
+	d, err := o.kindDefRead(ctx, in.Kind)
 	if err != nil {
 		return ResExportOut{}, err
 	}
