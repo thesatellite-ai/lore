@@ -34,7 +34,6 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckResurrected, a.DoctorResurrected},
 		{DoctorCheckCache, a.DoctorCaches},
 		{DoctorCheckRemovedEnv, a.DoctorRemovedEnv},
-		{DoctorCheckRowFile, a.DoctorRowFiles},
 		{DoctorCheckUntrustedHost, a.DoctorUntrustedHost},
 	}
 	out := make([]opsdoctor.CheckRun, 0, len(checks))
