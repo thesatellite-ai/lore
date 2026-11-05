@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // syncPassLive names the pass of a live-only sync in the sync.report data.
@@ -232,13 +233,13 @@ func (liveSync) SyncFixProjects(context.Context, opssync.FixProjectsIn) (opssync
 }
 
 // SyncPeek implements opssync.Env.
-func (liveSync) SyncPeek(context.Context, opssync.PeekIn) (opssync.PeekOut, error) {
-	return opssync.PeekOut{}, unsupported("peek")
+func (l liveSync) SyncPeek(ctx context.Context, in opssync.PeekIn) (opssync.PeekOut, error) {
+	return l.repo().SyncPeek(ctx, in)
 }
 
 // SyncPromote implements opssync.Env.
-func (liveSync) SyncPromote(context.Context, opssync.PromoteIn) (opssync.DoneOut, error) {
-	return opssync.DoneOut{}, unsupported("promote")
+func (l liveSync) SyncPromote(ctx context.Context, in opssync.PromoteIn) (opssync.DoneOut, error) {
+	return l.repo().SyncPromote(ctx, in)
 }
 
 // SyncMergeRows implements opssync.Env.
@@ -246,14 +247,20 @@ func (liveSync) SyncMergeRows(context.Context, opssync.MergeRowsIn) (opssync.Don
 	return opssync.DoneOut{}, unsupported("merge-rows")
 }
 
+// repo is the repo-level sync host (install-action, ci-merge, peek,
+// promote; wire/syncrepo_standalone.go, b11-sync).
+func (l liveSync) repo() wire.RepoSync {
+	return wire.RepoSync{WorkDir: l.h.cfg.WorkDir, Version: l.h.cfg.Version, Clock: l.h.clock()}
+}
+
 // SyncCIMerge implements opssync.Env.
-func (liveSync) SyncCIMerge(context.Context, opssync.CIMergeIn) (opssync.CIMergeOut, error) {
-	return opssync.CIMergeOut{}, unsupported("ci-merge")
+func (l liveSync) SyncCIMerge(ctx context.Context, in opssync.CIMergeIn) (opssync.CIMergeOut, error) {
+	return l.repo().SyncCIMerge(ctx, in)
 }
 
 // SyncInstallAction implements opssync.Env.
-func (liveSync) SyncInstallAction(context.Context, opssync.InstallActionIn) (opssync.ActionOut, error) {
-	return opssync.ActionOut{}, unsupported("install-action")
+func (l liveSync) SyncInstallAction(ctx context.Context, in opssync.InstallActionIn) (opssync.ActionOut, error) {
+	return l.repo().SyncInstallAction(ctx, in)
 }
 
 // Explain implements opssync.Env.
