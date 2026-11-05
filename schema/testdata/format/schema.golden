@@ -92,6 +92,8 @@ incidents.resolved_at datetime
 incidents.severity_str text
 incidents.tag_ids list[ref]
 incidents.title text required
+kind_fields.changed_at datetime
+kind_fields.changed_by ref
 kind_fields.default text
 kind_fields.deprecated bool
 kind_fields.description text
@@ -264,6 +266,7 @@ repos.split_from ref
 repos.tag_ids list[ref]
 repos.urls json
 resources.archived_at datetime
+resources.check_note text
 resources.checked_by text
 resources.fields json
 resources.history json

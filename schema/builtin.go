@@ -305,6 +305,10 @@ func coreDefs() []TableDef {
 			Text("replaced_by"),
 			Text("remind_before"),
 			JSON("type_history"),
+			// changed_by/changed_at: who loosened the field last and when
+			// (RES 3.14: a loosening asks, then records both; OV32).
+			Ref("changed_by", TableActors),
+			DateTime("changed_at"),
 			UniqueOn("kind_id", fieldName),
 			BelongsToRel("kind", "kind_id", TableKinds, Cascade),
 			BelongsToRel("ref_kind_def", "ref_kind", TableKinds, SetNull),
@@ -357,6 +361,8 @@ func coreDefs() []TableDef {
 			DateTime("last_checked"),
 			// checked_by is who stamped last_checked: manual | edit | verifier:<plugin> (RQ8); the actor is the audit event's.
 			Text("checked_by"),
+			// check_note is the note of the last `lore resource check --note` (OV32).
+			Text("check_note"),
 			// replaced_by is the resource that took this one's place: `resource
 			// repoint` archives the old row with it (RESOURCES 3.20); show prints it.
 			Ref("replaced_by", TableResources),
