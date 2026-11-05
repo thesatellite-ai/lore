@@ -221,7 +221,7 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 		}
 	}
 	var w Written
-	for _, name := range e.order {
+	for _, name := range e.allStores() { // P3-LOCAL-1: machine-local rows trash and restore too
 		rows := byStore[name]
 		if len(rows) == 0 {
 			continue
@@ -478,7 +478,7 @@ func inTrashErr(r row.Row) error {
 func (e *Engine) Trashed(ctx context.Context) ([]Trashed, error) {
 	var out []Trashed
 	seen := map[string]bool{}
-	for _, name := range e.order {
+	for _, name := range e.allStores() { // P3-LOCAL-1: machine-local rows trash and restore too
 		st := e.stores[name]
 		if st.Location != "" {
 			if seen[st.Location] {
@@ -668,7 +668,7 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 	}
 	var out TrashResult
 	out.Batch = res.Batch
-	for _, name := range e.order {
+	for _, name := range e.allStores() { // P3-LOCAL-1: machine-local rows trash and restore too
 		rows := byStore[name]
 		if len(rows) == 0 {
 			continue
@@ -791,7 +791,7 @@ func (e *Engine) checkParents(ctx context.Context, r row.Row, set map[ids.AnyID]
 			continue
 		}
 		found := false
-		for _, name := range e.order {
+		for _, name := range e.allStores() { // P3-LOCAL-1: machine-local rows trash and restore too
 			def, _ := e.reg.ByPrefix(pid.Prefix())
 			if pr, ok, err := e.rawTrashed(ctx, name, def.Name, pid); err != nil {
 				return err
@@ -982,7 +982,7 @@ func (e *Engine) InTrash(ctx context.Context, ref Ref) error {
 		}
 		table = def.Name
 	}
-	names := e.order
+	names := e.lookupStores(table) // P3-LOCAL-1
 	if ref.Store != "" {
 		names = []store.Source{ref.Store}
 	}

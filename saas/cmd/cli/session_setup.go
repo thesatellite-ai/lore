@@ -2,43 +2,30 @@
 // [--yes]` (AGENT_IDENTITY_DESIGN 6.4): install or remove the shipped
 // session-hook snippets for the tools set up in this repo.
 //
-//	runAgentHooksSetup
+//	setup.run (ops/setup) ─► setupHost.PlanAgentHooks
 //	  ├─ plan: every toolprofile built-in, in its order (TOOL NEUTRAL)
 //	  │    ├─ confirmed hook + its config folder exists → add / remove / already
 //	  │    ├─ confirmed hook, folder missing          → "not set up here"
 //	  │    └─ no confirmed hook                       → nothing to install
-//	  ├─ --dry-run → print only
-//	  ├─ confirm (terminal y/N, else E_NEEDS_CONFIRM with --yes as next)
-//	  └─ rewrite each settings file, keeping every other key as it was
+//	  ├─ (the operation prints, stops on --dry-run, asks: ops/setup)
+//	  └─ setupHost.WriteAgentHooks: rewrite each settings file, keeping every other key as it was
 package main
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/style"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
-)
-
-// Setup --agent-hooks flags.
-const (
-	flagAgentHooks = "agent-hooks"
-	flagHooksRm    = "remove"
-	flagHooksDry   = "dry-run"
-	flagHooksYes   = "yes"
-	// flagPromptSearch installs the per-prompt hook on this machine (CQ5).
-	flagPromptSearch = "prompt-search"
+	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 )
 
 // hookSettingsMode is the mode of a settings file lore creates.
@@ -54,15 +41,21 @@ type hookPlan struct {
 	change           bool // the file is rewritten
 }
 
-// runAgentHooksSetup is the --agent-hooks mode of `lore setup`.
-func runAgentHooksSetup(ctx context.Context, remove, dryRun, yes, promptSearch bool) error {
-	top, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+// setupHost is the machinery behind the setup.run operation
+// (ops/setup, wire.ContextHosts.Setup; PASS3 ONE-PATH, P3-MISC-4): the
+// lore.db schema update and the tools' hook files. The operation prints,
+// asks and decides; these methods only plan and write.
+type setupHost struct{}
+
+// PlanAgentHooks is the --agent-hooks plan of this git work tree. CQ5: the
+// per-prompt search hook only when the policy (or --prompt-search for
+// this machine) turns it on.
+func (setupHost) PlanAgentHooks(ctx context.Context, remove, promptSearch bool) (_ []opssetup.HookPlan, err error) {
+	defer asHostError(&err)
+	root, err := agentHooksRoot()
 	if err != nil {
-		return errcodes.New(errcodes.InvalidInput, "lore setup --agent-hooks runs inside a git work tree")
+		return nil, err
 	}
-	root := strings.TrimSpace(string(top))
-	// CQ5: the per-prompt search hook only when the policy (or
-	// --prompt-search for this machine) turns it on.
 	if set, ok := policySet(ctx); ok {
 		if e, found := set.Get(policy.KeyContextPromptSearch); found {
 			if b, isBool := e.Value.(value.Bool); isBool && b.Bool() {
@@ -70,53 +63,43 @@ func runAgentHooksSetup(ctx context.Context, remove, dryRun, yes, promptSearch b
 			}
 		}
 	}
-	if remove {
-		promptSearch = true // --remove takes out every lore hook
-	}
 	plans, err := planAgentHooks(root, remove, promptSearch)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]opssetup.HookPlan, 0, len(plans))
+	for _, p := range plans {
+		out = append(out, opssetup.HookPlan{Tool: p.tool, File: p.file, Note: p.note, Change: p.change, Hook: p.hook})
+	}
+	return out, nil
+}
+
+// WriteAgentHooks rewrites the settings file of every changed plan,
+// keeping every other key as it was.
+func (setupHost) WriteAgentHooks(_ context.Context, plans []opssetup.HookPlan, remove bool) (err error) {
+	defer asHostError(&err)
+	root, err := agentHooksRoot()
 	if err != nil {
 		return err
 	}
-	changes := 0
 	for _, p := range plans {
-		fmt.Printf("%-13s %-28s %s\n", p.tool, p.file, p.note)
-		if p.change {
-			changes++
-		}
-	}
-	switch {
-	case changes == 0:
-		fmt.Println("Nothing to change.")
-		return nil
-	case dryRun:
-		fmt.Println("Nothing written (dry run).")
-		return nil
-	}
-	if !yes {
-		q := fmt.Sprintf("Write %d settings file(s)?", changes)
-		if !stdinIsTTY() {
-			next := []string{"lore", "setup", "--" + flagAgentHooks, "--" + flagHooksYes}
-			if remove {
-				next = append(next, "--"+flagHooksRm)
-			}
-			return errs.New(errs.NeedsConfirm, "lore setup --agent-hooks changes the files listed above and there is no terminal to ask on").
-				WithQuestion(q).WithHint("rerun with --yes to write them, or --dry-run to only show them").WithNext(next[0], next[1:]...)
-		}
-		if !confirmYes(q + " [y/N] ") {
-			fmt.Println("Nothing written.")
-			return nil
-		}
-	}
-	for _, p := range plans {
-		if !p.change {
+		if !p.Change {
 			continue
 		}
-		if err := writeHookFile(filepath.Join(root, filepath.FromSlash(p.hook.ConfigFile)), p.hook, remove); err != nil {
+		if err := writeHookFile(filepath.Join(root, filepath.FromSlash(p.Hook.ConfigFile)), p.Hook, remove); err != nil {
 			return err
 		}
 	}
-	fmt.Printf("%s %d settings file(s) written\n", style.Success("✓"), changes)
 	return nil
+}
+
+// agentHooksRoot is the top of the git work tree --agent-hooks writes in.
+func agentHooksRoot() (string, error) {
+	top, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", errcodes.New(errcodes.InvalidInput, "lore setup --agent-hooks runs inside a git work tree")
+	}
+	return strings.TrimSpace(string(top)), nil
 }
 
 // planAgentHooks lists what --agent-hooks would do per built-in profile.

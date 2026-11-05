@@ -9,8 +9,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"strings"
 	"time"
 
 	"encoding/json"
@@ -25,43 +23,10 @@ import (
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
 	"saas/pkg/aicoder/textnorm"
-
-	"github.com/spf13/cobra"
 )
 
 // tableComments is the comments table (notes are comments on the task).
 const tableComments = "comments"
-
-func newTaskNoteCommand() *cobra.Command {
-	var to toFlags
-	var from string
-	cmd := &cobra.Command{
-		Use:   "note <id> <text>",
-		Short: "Record a progress note on a task (pushes your work branch)",
-		Long: `Note saves a checkpoint a replacement agent can resume from. When you hold the task
-it is fenced (exit 12–14 if your claim is gone) and pushed with your claim, and your
-current work branch is pushed to the remote and recorded on the task.
-
-In a linked client repo the note stays internal (the store project) unless the
-org sets agent_details: client; --to repo shares this one note with the client.
-
-Example:
-  lore task note tsk_31 "route + loader done, form next"
-  lore task note tsk_01 "fixed rounding; see PR #88" --to repo`,
-		Args: cobra.MinimumNArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			text := strings.Join(args[1:], " ")
-			out := os.Stdout
-			if to.To != "" {
-				return sharedNote(cmd.Context(), out, args[0], text, to)
-			}
-			return runTaskNote(cmd.Context(), out, args[0], text, from)
-		},
-	}
-	bindToFlags(cmd, &to, false)
-	bindFromFlag(cmd, &from)
-	return cmd
-}
 
 func runTaskNote(ctx context.Context, out io.Writer, id, text, from string) error {
 	body, err := textnorm.Normalize(text)

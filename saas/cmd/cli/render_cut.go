@@ -5,18 +5,13 @@
 //
 //	lore render ─► buildBudgetedFile → renderReport + pinSkips
 //	            └► newCutSummary ─► render_histories.scope_summary.cut_summary
-//	lore why-context --cut ─► read the newest row ─► cutSummary.text()
+//	lore why-context --cut ─► read the newest row ─► ops/whycontext renders it
 //
 // DECISION FA-CTX-1: cut_summary is a key inside the existing
 // scope_summary JSON text of the machine-local render_histories row, not a
 // new column (render_histories stays on the old ent module, which gets no
 // new generated code; the JSON already carries the render's breakdown).
 package main
-
-import (
-	"fmt"
-	"strings"
-)
 
 // renderScopeSummary is the scope_summary JSON of a render history row.
 // Cut is nil on rows written before 0.1.18 (no cut_summary key).
@@ -51,27 +46,4 @@ func newCutSummary(r renderReport, skips pinSkips) cutSummary {
 		c.Entries = []reportEntry{}
 	}
 	return c
-}
-
-// text is the human form printed by `lore why-context --cut`.
-func (c cutSummary) text() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "file:     %s (profile %s)\n", c.File, c.Profile)
-	fmt.Fprintf(&b, "bytes:    %d of %d budget (every pinned entry in full: %d)\n", c.After, c.Budget, c.Before)
-	if c.Over {
-		b.WriteString("status:   budget_exceeded (nothing was dropped; lore render --report)\n")
-	}
-	if c.Index {
-		b.WriteString("index:    collapsed to one line\n")
-	}
-	if len(c.Entries) == 0 {
-		b.WriteString("moved out of the core: nothing (every pinned entry is in full)\n")
-		return b.String()
-	}
-	fmt.Fprintf(&b, "moved out of the core (%d):\n", len(c.Entries))
-	for _, e := range c.Entries {
-		fmt.Fprintf(&b, "  %s  %s\n", e.ID, e.Reason)
-	}
-	b.WriteString("fetch any of them with `lore show <id>`\n")
-	return b.String()
 }

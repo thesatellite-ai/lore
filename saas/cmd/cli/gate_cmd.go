@@ -19,7 +19,6 @@ import (
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
 
-	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -31,43 +30,6 @@ const (
 
 // gateHashShown is how much of approved_hash messages print.
 const gateHashShown = 8
-
-func newGateCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "gate", Short: "Human gates: stop agents until a person approves"}
-	var reqFrom, apFrom string
-	req := &cobra.Command{
-		Use:   "request <id>",
-		Short: "Put a gate on a task (agents stop at it until a person approves)",
-		Long: `Request sets the task's gate to requested. Run by the agent holding the task, it is
-fenced like any holder write (exit 12–14 when the claim is gone).
-
-Example:
-  lore gate request tsk_33`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGateRequest(cmd.Context(), os.Stdout, args[0], reqFrom)
-		},
-	}
-	ap := &cobra.Command{
-		Use:   "approve <id>",
-		Short: "Approve a gate (a person on the roster, from the identity file, never an agent)",
-		Long: `Approve records approved_by, approved_at and a hash of title + body: editing either
-voids the approval. Only a human identity from ~/.lore/config.yaml (or the identity
-file) approves — never an agent, never LORE_ACTOR — and only a listed approver when
-the mission names approvers. Fails closed (exit 15) when the push is not confirmed.
-
-Example:
-  lore gate approve tsk_33`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGateApprove(cmd.Context(), os.Stdout, args[0], apFrom)
-		},
-	}
-	bindFromFlag(req, &reqFrom)
-	bindFromFlag(ap, &apFrom)
-	cmd.AddCommand(req, ap)
-	return cmd
-}
 
 func runGateRequest(ctx context.Context, out io.Writer, id, from string) error {
 	w, t, err := openTaskCoord(ctx, id, from)

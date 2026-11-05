@@ -259,7 +259,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		if f.Required {
 			desc += requiredSuffix
 		}
-		fl := c.Flags().VarPF(rf, f.Flag, "", desc)
+		fl := c.Flags().VarPF(rf, f.Flag, f.Short, desc)
 		if f.Type == op.TypeBool {
 			fl.NoOptDefVal = boolNoValue
 		}

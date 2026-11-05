@@ -8,7 +8,6 @@
 //	actor          — list / show
 //	snapshot       — add / list / show
 //	plugin         — list / trust / untrust       (TrustedPlugin)
-//	pii-pattern    — list / enable / disable / add
 //	task-view      — add / list / show
 //	external-source— list / enable / disable / add
 //	techdoc        — add / list / show
@@ -24,7 +23,6 @@ import (
 
 	"dbent/gen/ent"
 	entMountAlias "dbent/gen/ent/mountalias"
-	entPIIPattern "dbent/gen/ent/piipattern"
 	entTrustedPlugin "dbent/gen/ent/trustedplugin"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
@@ -34,36 +32,11 @@ import (
 
 // ── actor ────────────────────────────────────────────────────────────────
 
-// newActorCommand is the `lore actor` group: list and show are the
-// core's (ops/infra), register and deactivate the roster's
-// (attachRosterCommands). A pure group, so cli.Mount reuses it.
+// newActorCommand is the `lore actor` group. Every verb is a core
+// operation (ops/infra: list, show, register, deactivate, delete); a pure
+// group, so cli.Mount reuses it.
 func newActorCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "actor", Short: "Inspect actors (humans, agents, hooks, plugins)"}
-	cmd.AddCommand(newActorDeleteCommand())
-	return cmd
-}
-
-// newActorDeleteCommand is `lore actor delete [<id>]`, which always refuses.
-//
-// BATCH2 #8: actors are never deleted (DELETION 4.1): every *_by field of
-// every row points at an actor, so the command answers E_REFUSED naming
-// `lore actor deactivate` instead of printing the group help with exit 0
-// (it did before: no delete existed, so cobra fell back to the help). The
-// engine refuses the same delete for every other surface.
-func newActorDeleteCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "delete [<id>]",
-		Short: "Refused: actors are never deleted (use `lore actor deactivate`)",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			what := "an actor"
-			if len(args) == 1 {
-				what = "actor " + args[0]
-			}
-			return errcodes.New(errcodes.Refused, what+" cannot be deleted: actors are never deleted, every *_by field points at them").
-				WithHint(fmt.Sprintf("deactivate the person instead: %s actor deactivate <@handle> (the row stays, marked inactive)", BinaryName))
-		},
-	}
+	return &cobra.Command{Use: "actor", Short: "Inspect actors (humans, agents, hooks, plugins)"}
 }
 
 // ── snapshot ─────────────────────────────────────────────────────────────
@@ -206,91 +179,8 @@ func newPluginUntrustCommand() *cobra.Command {
 	return cmd
 }
 
-// ── pii-pattern ──────────────────────────────────────────────────────────
-
-func newPIIPatternCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "pii-pattern", Short: "Manage custom PII/secret detection patterns"}
-	cmd.AddCommand(newPIIPatternListCommand())
-	cmd.AddCommand(newPIIPatternAddCommand())
-	cmd.AddCommand(newPIIPatternEnableCommand(true))
-	cmd.AddCommand(newPIIPatternEnableCommand(false))
-	return cmd
-}
-
-func newPIIPatternListCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use: "list", Short: "List PII patterns",
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			_, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer joinClose(&err, client, "the project DB")
-			rows, err := client.PiiPattern.Query().
-				Order(ent.Asc(entPIIPattern.FieldName)).All(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "list pii-patterns").WithCause(err)
-			}
-			if jsonOut {
-				printJSON(constants.KindPiiPatternList, rows, len(rows))
-				return nil
-			}
-			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no patterns)"))
-				return nil
-			}
-			for _, p := range rows {
-				state := "off"
-				if p.Enabled {
-					state = "on"
-				}
-				fmt.Printf("[%s] %s  (%s)\n", state, p.Name, p.SourceKind)
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
-
-// errPIIPatternMoved is the answer of `lore pii-pattern add|enable|disable`:
-// custom secret patterns are settings rows now (SETTINGS ARE DATA,
-// FORMAT_EVOLUTION step 17), written by `lore secrets rule add|on|off`.
-// The v0.1.17 pii_patterns table was machine-local and no scanner ever
-// read it, so nothing that worked before stops working; `pii-pattern list`
-// still shows what is left in it.
-func errPIIPatternMoved(verb string) error {
-	repl := map[string]string{"add": "lore secrets rule add", "enable": "lore secrets rule on", "disable": "lore secrets rule off"}[verb]
-	return errcodes.New(errcodes.InvalidInput, "lore pii-pattern "+verb+" was replaced by "+repl+" (secret rules are settings rows)").
-		WithHint("use `" + repl + "`; `lore secrets rules` lists every rule")
-}
-
-func newPIIPatternAddCommand() *cobra.Command {
-	var name, regex, source string
-	cmd := &cobra.Command{
-		Use: "add", Short: "Replaced by `lore secrets rule add`",
-		RunE: func(cmd *cobra.Command, args []string) error { return errPIIPatternMoved("add") },
-	}
-	cmd.Flags().StringVar(&name, constants.FlagName, "", "pattern name")
-	cmd.Flags().StringVar(&regex, "regex", "", "regex pattern")
-	cmd.Flags().StringVar(&source, constants.FlagSource, "user", "source_kind")
-	return cmd
-}
-
-func newPIIPatternEnableCommand(enable bool) *cobra.Command {
-	verb := "enable"
-	repl := "lore secrets rule on"
-	if !enable {
-		verb, repl = "disable", "lore secrets rule off"
-	}
-	return &cobra.Command{
-		Use: verb + " <id>", Short: "Replaced by `" + repl + "`",
-		RunE: func(cmd *cobra.Command, args []string) error { return errPIIPatternMoved(verb) },
-	}
-}
+// pii-pattern moved to the core: ops/piipattern (CLI_REFERENCE 2.25,
+// PASS3 ONE-PATH).
 
 // task-view moved to the core: `lore task view add|list|show|edit|delete`
 // (TASK 16.2, OV22-VIEWNAME / OV22-VIEWSYNC).
@@ -340,21 +230,6 @@ func newMountAliasListCommand() *cobra.Command {
 	bindCommonFlags(cmd, &f)
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	cmd.Flags().BoolVar(&expiringOnly, constants.FlagExpiring, false, "show only aliases expiring within 7 days")
-	return cmd
-}
-
-// ── config (~/.lore/config.yaml, CFG12) ─────────────────────────────────
-
-// newConfigCommand is `lore config`: get, set and list edit only
-// ~/.lore/config.yaml (CFG12, config_yaml_cmd.go); check validates it.
-// The DB-level dbconfig table is the cache's own bookkeeping and has no
-// user command any more.
-func newConfigCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "config", Short: "Get/set keys of ~/.lore/config.yaml"}
-	cmd.AddCommand(newConfigGetCommand())
-	cmd.AddCommand(newConfigSetCommand())
-	cmd.AddCommand(newConfigListCommand())
-	cmd.AddCommand(newConfigCheckCommand())
 	return cmd
 }
 

@@ -19,9 +19,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 )
 
-// flagContextMeta prints the returned rows' metadata.
-const flagContextMeta = "meta"
-
 // pickMeta is one metadata entry of a picked row.
 type pickMeta struct {
 	keyID, name, val string

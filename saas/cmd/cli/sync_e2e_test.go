@@ -1260,7 +1260,8 @@ func TestE2E_AuditVerifyAndLog(t *testing.T) {
 		t.Fatalf("verify must surface recorded external writes: %s", out)
 	}
 	tamper("UPDATE audit_logs SET action = 'forged' WHERE rowid = 1")
-	if r := c.loreAny("audit", "verify", "--json"); r.code == 0 || !strings.Contains(r.stdout, "chain_broken_at") {
+	// P3-AUDIT-1: a broken chain is the error envelope (E_AUDIT_CHAIN_BROKEN), not a report.
+	if r := c.loreAny("audit", "verify", "--json"); r.code == 0 || !strings.Contains(r.stdout+r.stderr, "audit chain broken at") {
 		t.Fatalf("forged entry not detected: %d %s", r.code, r.stdout)
 	}
 }

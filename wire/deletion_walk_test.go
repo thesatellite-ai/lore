@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	opslive "github.com/thesatellite-ai/lore/ops/live"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -169,6 +170,11 @@ func TestEveryPurgePathRefusesYes(t *testing.T) {
 			// before the id is looked up, so the memory's id serves every
 			// noun and nothing is removed either way.
 			modes = []string{`{"id":"%s","purge":true}`}
+		case name == opslive.OpPurge:
+			// DELETION_DESIGN (command table): `lore live purge` is unchanged,
+			// the leak-cleanup tool of the live ref; it removes no trashed row
+			// and asks as v0.1.17 did, so it is not a trash purge path.
+			continue
 		case name != "trash.purge":
 			t.Errorf("%s can purge but is not walked: add its modes to this test", name)
 			continue

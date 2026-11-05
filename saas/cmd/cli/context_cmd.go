@@ -41,32 +41,13 @@ import (
 	"time"
 
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/constants"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/row"
+	contextop "github.com/thesatellite-ai/lore/ops/context"
 	"github.com/thesatellite-ai/lore/schema"
-
-	"github.com/spf13/cobra"
-)
-
-// Flags of lore context.
-const (
-	flagContextInternal  = "internal"
-	flagContextTable     = "table"
-	flagContextSearch    = "search"
-	flagContextForFile   = "for-file"
-	flagContextForTask   = "for-task"
-	flagContextTopic     = "topic"
-	flagContextTopics    = "topics"
-	flagContextForPrompt = "for-prompt"
-	flagContextHook      = "hook"
-	flagContextHookStdin = "hook-stdin"
-	flagContextMaxBytes  = "max-bytes"
-	// flagContextSessionStart answers the SessionStart hook (6.9).
-	flagContextSessionStart = "session-start"
 )
 
 // Caps (6.8): the default output cap, the hook cap when the policy cannot
@@ -85,77 +66,54 @@ const (
 var errContextNeedsMode = errors.New("pass --for-file <path>, --for-task <id>, --topic <name>, --topics, --for-prompt <text>, --hook <tool> --hook-stdin, or --internal")
 
 type contextFlags struct {
-	internal, asJSON, topics, hookStdin bool
-	sessionStart, withMeta              bool
-	table, search                       string
-	forFile, topic, forPrompt, hook     string
-	forTask                             string
-	maxBytes                            int
+	internal, topics, hookStdin     bool
+	sessionStart, withMeta          bool
+	table, search                   string
+	forFile, topic, forPrompt, hook string
+	forTask                         string
+	maxBytes                        int
 }
 
-func newContextCommand() *cobra.Command {
-	f := &contextFlags{}
-	cmd := &cobra.Command{
-		Use:   "context",
-		Short: "Print the rules, hotfixes and notes for a file, topic or prompt (the agent's fetch command)",
-		Example: `  lore context --for-file services/billing/invoice.go
-  lore context --for-task tsk_01jf8e5w…
-  lore context --topic billing
-  lore context --topics
-  lore context --for-prompt "invoice rounding"
-  cat hook.json | lore context --hook claude_code --hook-stdin
-  lore context --internal --table rules --json`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runContext(cmd.Context(), f, os.Stdin, os.Stdout)
-		},
-	}
-	fl := cmd.Flags()
-	fl.BoolVar(&f.internal, flagContextInternal, false, "internal, global and personal rows (outside this checkout)")
-	fl.StringVar(&f.table, flagContextTable, "", "with --internal: only this table (rules, memories, decisions, tasks, …)")
-	fl.StringVar(&f.search, flagContextSearch, "", "with --internal: only rows whose title or body contains this text")
-	fl.StringVar(&f.forFile, flagContextForFile, "", "rules, hotfixes and notes for this path")
-	fl.StringVar(&f.forTask, flagContextForTask, "", "the task, its plan and links, then what applies to the files it names")
-	fl.StringVar(&f.topic, flagContextTopic, "", "every row tagged with this topic")
-	fl.BoolVar(&f.topics, flagContextTopics, false, "list the topics with their counts")
-	fl.StringVar(&f.forPrompt, flagContextForPrompt, "", "rows matching this free text")
-	fl.StringVar(&f.hook, flagContextHook, "", "answer a tool hook (claude_code, codex, gemini_cli)")
-	fl.BoolVar(&f.hookStdin, flagContextHookStdin, false, "with --hook: read the hook input JSON from stdin")
-	fl.BoolVar(&f.sessionStart, flagContextSessionStart, false, "with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)")
-	fl.IntVar(&f.maxBytes, flagContextMaxBytes, 0, "cap the output in bytes (default 16000; hooks: context.hook_cap)")
-	fl.BoolVar(&f.withMeta, flagContextMeta, false, "also print each returned row's metadata (sensitive values masked)")
-	fl.BoolVar(&f.asJSON, constants.FlagJSON, false, "machine-readable output")
-	return cmd
+// contextHost implements contextop.Host: `lore context` is the operation
+// context.fetch (ops/context); this binary answers it with the machinery
+// below (PASS3 ONE-PATH, P3-MISC-6).
+type contextHost struct{}
+
+// Fetch implements contextop.Host.
+func (contextHost) Fetch(ctx context.Context, in contextop.FetchIn, hookIn io.Reader) (a contextop.Answer, err error) {
+	defer asHostError(&err)
+	f := &contextFlags{internal: in.Internal, topics: in.Topics, hookStdin: in.HookStdin, sessionStart: in.SessionStart,
+		withMeta: in.Meta, table: in.Table, search: in.Search, forFile: in.ForFile, topic: in.Topic,
+		forPrompt: in.ForPrompt, hook: in.Hook, forTask: in.ForTask, maxBytes: in.MaxBytes}
+	return contextAnswer(ctx, f, hookIn)
 }
 
-func runContext(ctx context.Context, f *contextFlags, stdin io.Reader, out io.Writer) error {
+// contextAnswer is one fetch: the text and the --json data. The mode
+// order is v0.1.17's (internal, hook, topics, then the row modes).
+func contextAnswer(ctx context.Context, f *contextFlags, stdin io.Reader) (contextop.Answer, error) {
 	switch {
 	case f.internal:
-		if f.asJSON {
-			return writeJSONOut(map[string]any{"data": externalJSONRows(ctx, f.table, f.search)})
-		}
 		var b strings.Builder
 		b.WriteString(renderHeader + "\n")
 		if n := printExternalRows(ctx, &b, f.table, f.search); n == 0 {
 			b.WriteString("(nothing internal or personal loads in this repo)\n")
 		}
-		return writeOut(out, b.String())
+		return answerOf(b.String(), externalJSONRows(ctx, f.table, f.search))
 	case f.hook != "":
 		// 6.9: a hook never blocks the tool (2 s timeout); every error
 		// prints nothing and goes to ~/.lore/logs/hooks.log.
 		hctx, cancel := context.WithTimeout(ctx, hookTimeout)
 		defer cancel()
-		if err := runContextHook(hctx, f, stdin, out); err != nil {
+		var b strings.Builder
+		if err := runContextHook(hctx, f, stdin, &b); err != nil {
 			logHookError(err)
+			return contextop.Answer{}, nil
 		}
-		return nil
+		return contextop.Answer{Text: b.String()}, nil
 	case f.topics:
 		topics, err := loadTopicIndex(ctx)
 		if err != nil {
-			return err
-		}
-		if f.asJSON {
-			return writeJSONOut(map[string]any{"data": topics})
+			return contextop.Answer{}, err
 		}
 		var b strings.Builder
 		for _, t := range topics {
@@ -164,7 +122,7 @@ func runContext(ctx context.Context, f *contextFlags, stdin io.Reader, out io.Wr
 		if len(topics) == 0 {
 			b.WriteString("(no rows yet)\n")
 		}
-		return writeOut(out, b.String())
+		return answerOf(b.String(), topics)
 	}
 	var res contextResult
 	var err error
@@ -178,40 +136,36 @@ func runContext(ctx context.Context, f *contextFlags, stdin io.Reader, out io.Wr
 	case f.forPrompt != "":
 		res, err = contextForPrompt(ctx, f.forPrompt)
 	default:
-		return errcodes.New(errcodes.InvalidInput, errContextNeedsMode.Error())
+		return contextop.Answer{}, errcodes.New(errcodes.InvalidInput, errContextNeedsMode.Error())
 	}
 	if err != nil {
-		return err
+		return contextop.Answer{}, err
 	}
 	// 6.13: metadata only on request.
 	if f.withMeta {
 		if res, err = withMeta(ctx, res); err != nil {
-			return err
+			return contextop.Answer{}, err
 		}
-	}
-	if f.asJSON {
-		ids := make([]string, 0, len(res.picks))
-		for _, p := range res.picks {
-			ids = append(ids, p.ID)
-		}
-		recordUsage(ctx, ids)
-		return writeJSONOut(map[string]any{"data": res.picks})
 	}
 	maxB := f.maxBytes
 	if maxB <= 0 {
 		maxB = contextDefaultMax
 	}
 	text, printed := res.fit(maxB)
-	recordUsage(ctx, printed) // 6.12 "not used in 60 days" (context_usage.go)
-	return writeOut(out, text)
+	// 6.12 "not used in 60 days" (context_usage.go). P3-MISC-6: one fetch
+	// answers both forms, so the usage count takes the rows the text
+	// printed (a --json caller gets every pick, as before).
+	recordUsage(ctx, printed)
+	return answerOf(text, res.picks)
 }
 
-// writeOut writes s to out.
-func writeOut(out io.Writer, s string) error {
-	if _, err := io.WriteString(out, s); err != nil {
-		return errcodes.New(errcodes.Internal, "write output").WithCause(err)
+// answerOf is text with data encoded for --json.
+func answerOf[T any](text string, data T) (contextop.Answer, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return contextop.Answer{}, errcodes.New(errcodes.Internal, "encode json").WithCause(err)
 	}
-	return nil
+	return contextop.Answer{Text: text, Data: b}, nil
 }
 
 // contextPick is one row lore context returns, with why it was picked.

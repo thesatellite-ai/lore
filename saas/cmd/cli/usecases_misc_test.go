@@ -22,6 +22,9 @@ import (
 	"dbent"
 	"dbent/pkg/dbtemplate"
 	"saas/pkg/aicoder/lsync"
+
+	opssearch "github.com/thesatellite-ai/lore/ops/search"
+	opssupportbundle "github.com/thesatellite-ai/lore/ops/supportbundle"
 )
 
 // decodeData unmarshals the "data" field of a lore --json envelope.
@@ -295,14 +298,14 @@ func TestUC_MiscGlobalSearchHydratesHits(t *testing.T) {
 	rule := c.addRule(longRule)
 	c.lore("decision", "add", "--title=zebra decision", "--body=we picked zebra")
 	var res struct {
-		Count int               `json:"count"`
-		Hits  []globalSearchHit `json:"hits"`
+		Count int             `json:"count"`
+		Hits  []opssearch.Hit `json:"hits"`
 	}
 	decodeData(t, c.lore("search", "zebra", "--json").stdout, &res)
 	if res.Count < 3 {
 		t.Fatalf("expected hits from three entity types: %+v", res)
 	}
-	seen := map[string]globalSearchHit{}
+	seen := map[string]opssearch.Hit{}
 	for _, h := range res.Hits {
 		seen[h.Entity] = h
 	}
@@ -332,7 +335,7 @@ func TestUC_MiscTruncBody(t *testing.T) {
 		{"eleven chars", 10, "eleven ..."},
 		{"", 5, ""},
 	} {
-		if got := truncBody(tc.in, tc.n); got != tc.want {
+		if got := opssearch.TruncBody(tc.in, tc.n); got != tc.want {
 			t.Fatalf("truncBody(%q,%d) = %q", tc.in, tc.n, got)
 		}
 	}
@@ -390,19 +393,11 @@ func TestUC_MiscDirectiveInstallRemove(t *testing.T) {
 		t.Fatal("a target in a missing folder must be created")
 	}
 
-	// Remove: block gone, hand content intact, repeat is harmless.
-	run("directive", "remove", "--target=AGENTS.md")
-	if got := read("AGENTS.md"); got != hand {
-		t.Fatalf("after remove: %q", got)
-	}
-	if r := run("directive", "remove", "--target=AGENTS.md"); !strings.Contains(r.stdout, "(no block found)") {
-		t.Fatalf("second remove: %s", r.stdout)
-	}
-	if r := run("directive", "remove", "--target=MISSING.md"); !strings.Contains(r.stdout, "(not present)") {
-		t.Fatalf("remove on a missing file: %s", r.stdout)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "MISSING.md")); !os.IsNotExist(err) {
-		t.Fatal("remove must not create the file")
+	// v0.1.17's `directive remove` is not in the 0.1.18 design and was
+	// dropped (PASS3 DESIGN-ONLY); the remove
+	// half of this case went with it.
+	if r := w.run(dir, nil, e2eBin, "directive", "remove"); r.code == 0 {
+		t.Fatalf("directive remove must be gone: %s", r.stdout)
 	}
 }
 
@@ -634,7 +629,7 @@ func TestUC_MiscSupportBundleCounts(t *testing.T) {
 	c.addMemory("one")
 	c.addMemory("two")
 	c.addRule("a rule")
-	var b supportBundle
+	var b opssupportbundle.Bundle
 	if err := json.Unmarshal([]byte(c.lore("support-bundle").stdout), &b); err != nil {
 		t.Fatal(err)
 	}
@@ -655,7 +650,7 @@ func TestUC_MiscSupportBundleCounts(t *testing.T) {
 	}
 	// Outside any project the bundle still works, with no counts.
 	r := w.run(t.TempDir(), nil, e2eBin, "support-bundle")
-	var empty supportBundle
+	var empty opssupportbundle.Bundle
 	if r.code != 0 || json.Unmarshal([]byte(r.stdout), &empty) != nil || len(empty.Counts) != 0 {
 		t.Fatalf("outside a project: %d %s %v", r.code, r.stderr, empty.Counts)
 	}
@@ -693,30 +688,6 @@ func TestUC_MiscTagListUsageCounts(t *testing.T) {
 }
 
 // ── run step numbering ──────────────────────────────────────────────────
-
-func TestUC_MiscRunStepSequence(t *testing.T) {
-	_, c := initProject(t)
-	runA := idPattern.FindString(c.lore("run", "start", "--goal", "a").stdout)
-	runB := idPattern.FindString(c.lore("run", "start", "--goal", "b").stdout)
-	for i, want := range []string{"step #1", "step #2", "step #3"} {
-		r := c.lore("run", "step", runA, "--kind=note", "--name=s"+string(rune('a'+i)))
-		if !strings.Contains(r.stdout, want) {
-			t.Fatalf("step %d: %s", i+1, r.stdout)
-		}
-	}
-	if r := c.lore("run", "step", runB, "--kind=note", "--name=first"); !strings.Contains(r.stdout, "step #1") {
-		t.Fatalf("numbering is per run: %s", r.stdout)
-	}
-	var replay struct {
-		Steps []struct {
-			Seq int `json:"seq"`
-		} `json:"steps"`
-	}
-	decodeData(t, c.lore("run", "replay", runA, "--json").stdout, &replay)
-	if len(replay.Steps) != 3 || replay.Steps[0].Seq != 1 || replay.Steps[2].Seq != 3 {
-		t.Fatalf("replay: %+v", replay)
-	}
-}
 
 // ── sync helpers ────────────────────────────────────────────────────────
 

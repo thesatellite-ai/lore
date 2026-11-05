@@ -1,4 +1,6 @@
-// check_cmd.go — `lore check leaks` and `lore check pr-body` (F16, §6.3):
+// check_cmd.go — the rules behind `lore check leaks` and `lore check
+// pr-body` (F16, §6.3; the commands are core operations, ops/check, run
+// through check_port.go):
 // the copy-paste catch between internal or personal content and anything a
 // client can read. The pre-commit and commit-msg hooks run `lore check
 // leaks --staged` / `--commit-msg <file>`; agents run `lore check pr-body`
@@ -15,7 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,134 +29,16 @@ import (
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/projresolve"
 
-	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opscheck "github.com/thesatellite-ai/lore/ops/check"
 	"github.com/thesatellite-ai/lore/wire"
-)
-
-// Flags of `lore check leaks`.
-const (
-	flagCheckCI        = "ci"
-	flagCheckExplain   = "explain"
-	flagCheckStaged    = "staged"
-	flagCheckCommitMsg = "commit-msg"
-	flagCheckAsClient  = "as-client"
 )
 
 // Places a finding can be in.
 const (
 	whereCommitMessage = "commit message"
-	wherePRBody        = "PR body"
-	stdinArg           = "-"
+	wherePRBody        = opscheck.WherePRBody
 )
-
-func newCheckCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "check",
-		Short: "Leak checks: internal or personal content must never reach the client",
-	}
-	cmd.AddCommand(newCheckLeaksCommand(), newCheckPRBodyCommand())
-	return cmd
-}
-
-func newCheckLeaksCommand() *cobra.Command {
-	var ci, explain, staged, asClient bool
-	var commitMsg string
-	cmd := &cobra.Command{
-		Use:   "leaks",
-		Short: "Check staged files and the commit message (hooks), or the tree structure (--ci)",
-		Long: `Without flags, checks every staged file (not only .lore/) against the internal
-and personal rows loaded for this repo: a row whose id belongs elsewhere, a
-pointer to an internal row, 8 or more consecutive words of an internal note,
-or a secret. It fails closed when it cannot read the store.
-
---ci needs no store access: it checks only ids and structure of .lore/data
-(a row of another project, a reference field pointing outside) and its output
-names no internal id, store or org.
-
---as-client checks this repo as the client would see it, before handing an
-own repo over (RES 3.9): every tracked file against the internal rows,
-resources with internal, secret_ref or sensitive values, refs and kinds that
-name store rows, and those values in git history. It refuses until each is
-cleared; it never prints a value.`,
-		Example: `  lore check leaks                 # staged files, as the pre-commit hook does
-  lore check leaks --commit-msg .git/COMMIT_EDITMSG
-  lore check leaks --ci            # in the client's CI
-  lore check leaks --as-client     # before handing an own repo to the client
-  lore check leaks --explain`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-			root, err := os.Getwd()
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
-			}
-			if ci {
-				return runCheckCI(ctx, root)
-			}
-			if asClient {
-				return runCheckAsClient(ctx, root, explain)
-			}
-			var items []leakcheck.Item
-			if commitMsg != "" {
-				it, err := commitMessageItem(ctx, root, commitMsg)
-				if err != nil {
-					return err
-				}
-				items = append(items, it)
-			}
-			if staged || commitMsg == "" {
-				st, err := stagedItems(ctx, root)
-				if err != nil {
-					return err
-				}
-				items = append(items, st...)
-			}
-			return runLeakCheck(ctx, root, items, explain, leakContext{action: leakActionCommit, what: "this commit"})
-		},
-	}
-	cmd.Flags().BoolVar(&ci, flagCheckCI, false, "CI mode: ids and structure only, no store access, names nothing internal")
-	cmd.Flags().BoolVar(&explain, flagCheckExplain, false, "print the rule, the source and the matched words of each finding")
-	cmd.Flags().BoolVar(&staged, flagCheckStaged, false, "check the staged files (default unless --commit-msg is given alone)")
-	cmd.Flags().StringVar(&commitMsg, flagCheckCommitMsg, "", "also check this commit message file (the commit-msg hook's $1)")
-	cmd.Flags().BoolVar(&asClient, flagCheckAsClient, false, "check the whole repo as the client would see it (before a hand-over)")
-	cmd.MarkFlagsMutuallyExclusive(flagCheckCI, flagCheckAsClient)
-	return cmd
-}
-
-func newCheckPRBodyCommand() *cobra.Command {
-	var explain bool
-	cmd := &cobra.Command{
-		Use:   "pr-body <file|->",
-		Short: "Check a pull request body or comment before posting it (agents: always)",
-		Example: `  lore check pr-body body.md
-  gh pr view 12 --json body -q .body | lore check pr-body -`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			root, err := os.Getwd()
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
-			}
-			var b []byte
-			if args[0] == stdinArg {
-				b, err = io.ReadAll(os.Stdin)
-			} else {
-				b, err = os.ReadFile(args[0])
-			}
-			if err != nil {
-				return errcodes.New(errcodes.InvalidInput, "read the body").WithCause(err)
-			}
-			if err := runLeakCheck(ctx, root, []leakcheck.Item{{Where: wherePRBody, Content: b}}, explain, leakContext{action: leakActionText, what: "this text"}); err != nil {
-				return err
-			}
-			fmt.Println("✓ nothing internal found (a copy-paste check: a paraphrase passes it)")
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&explain, flagCheckExplain, false, "print the rule, the source and the matched words of each finding")
-	return cmd
-}
 
 // leakIndexFor builds the index for the project at root: every external
 // row for a client repo; personal rows only for a repo with no org; nil for
@@ -528,7 +411,8 @@ func checkKeyLoosening(ctx context.Context, root, base string) error {
 	return keyLooseningError(found)
 }
 
-// runCheckCI is F16's CI mode over the checked-out tree's .lore/data.
+// runCheckCI is F16's CI mode over the checked-out tree's .lore/data;
+// nil means every row belongs to this project.
 func runCheckCI(ctx context.Context, root string) error {
 	if err := checkKeyLoosening(ctx, root, ""); err != nil {
 		return err
@@ -548,8 +432,7 @@ func runCheckCI(ctx context.Context, root string) error {
 	}
 	fs := leakcheck.CheckCI(tree, meta.ProjectID)
 	if len(fs) == 0 {
-		fmt.Println("✓ lore check leaks --ci: every row in .lore/data belongs to this project")
-		return nil
+		return nil // the operation prints ciClean (check_port.go)
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "lore check leaks --ci: %d row file(s) must not be in this repo:\n", len(fs))

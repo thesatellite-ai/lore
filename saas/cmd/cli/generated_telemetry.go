@@ -1,4 +1,4 @@
-// generated_telemetry.go — the run, session, querylog and renderhistory command groups, moved verbatim out of generated_commands.go so each
+// generated_telemetry.go — the session, querylog and renderhistory command groups, moved verbatim out of generated_commands.go so each
 // phase 5 noun group owns its own file.
 package main
 
@@ -9,58 +9,11 @@ import (
 	"dbent/gen/ent"
 	entQueryLog "dbent/gen/ent/querylog"
 	entRenderHistory "dbent/gen/ent/renderhistory"
-	entRun "dbent/gen/ent/run"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
 )
-
-func newRunGroup() *cobra.Command {
-	cmd := &cobra.Command{Use: "run", Short: "Log + inspect agent runs (start/step/end/cancel/replay/show/list)"}
-	cmd.AddCommand(newRunListCommand())
-	attachRunWriters(cmd)
-	return cmd
-}
-
-func newRunListCommand() *cobra.Command {
-	var f commonFlags
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List runs",
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			rctx, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			defer joinClose(&err, client, "the project DB")
-			_ = rctx
-			rows, err := client.Run.Query().
-				Order(ent.Desc(entRun.FieldID)).
-				Limit(50).
-				All(cmd.Context())
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "list runs").WithCause(err)
-			}
-			if jsonOut {
-				printJSON(constants.KindRunList, rows, len(rows))
-				return nil
-			}
-			if len(rows) == 0 {
-				fmt.Println(style.Muted("(no runs)"))
-				return nil
-			}
-			for _, r := range rows {
-				fmt.Printf("%s\n", style.Code(r.ID))
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
 
 // newSessionGroup lives in session_list.go (AGENT_IDENTITY_DESIGN 6.2 columns).
 

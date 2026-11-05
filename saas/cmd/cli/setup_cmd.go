@@ -19,6 +19,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -33,8 +34,6 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/fts5"
 	"saas/pkg/aicoder/style"
-
-	"github.com/spf13/cobra"
 )
 
 const setupFingerprintKey = "fts_registry_fingerprint"
@@ -74,69 +73,26 @@ func warnIfSetupStale(ctx context.Context, db *sql.DB) {
 	}
 }
 
-func newSetupCommand() *cobra.Command {
-	var f commonFlags
-	var schemaOnly, agentHooks, hooksRemove, hooksDry, hooksYes, promptSearch bool
-	cmd := &cobra.Command{
-		Use:   "setup",
-		Short: "Run one-time migrations after install/upgrade (FTS index + future migrations)",
-		Long: `Run after upgrading lore. Creates/rebuilds the FTS5 search index
-for every registered entity and stamps the current registry fingerprint so
-the per-command staleness warning goes away
-
-Re-run any time after editing search-related schema (changing Registry
-column lists, weights, SchemaVersion). Idempotent
-
-Fresh installs: ` + "`lore init`" + ` calls setup automatically; you don't
-need to run this manually unless upgrading.
-
---agent-hooks installs (or with --remove takes out) the optional session-hook
-snippet of each tool set up here that has a confirmed hook, so lore records
-the model the tool reports (` + "`lore agent start --tool …`" + `), plus the
-per-file context hook (` + "`lore context --hook <tool> --hook-stdin`" + ` on
-Read/Edit/Write, in the tool's local settings file); the per-prompt search
-hook only with context.hooks.prompt_search on or --prompt-search. It asks first.`,
-		Example: `  lore setup
-  lore setup --agent-hooks --dry-run
-  lore setup --agent-hooks --yes
-  lore setup --agent-hooks --remove`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if agentHooks {
-				return runAgentHooksSetup(cmd.Context(), hooksRemove, hooksDry, hooksYes, promptSearch) // 6.4, CONTEXT_BUDGET 6.9
-			}
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
-			}
-			// Resolve project, but close ent client immediately. We manage our
-			// own raw *sql.DB lifecycle so we can survive Migrate() closing
-			// the connection it was handed
-			rctx, client, err := resolveContext(&f)
-			if err != nil {
-				return err
-			}
-			dbPath := rctx.DBPath
-			if err := client.Close(); err != nil {
-				return errcodes.New(errcodes.Internal, "close the project DB").WithCause(err)
-			}
-			// --schema-only: only the database schema update, terse, the step
-			// `lore upgrade` runs with the new binary right after the swap
-			// (FORMAT_EVOLUTION 8.11 part 2). resolveContext above already ran
-			// the automatic update on open; runSetup then finds the log current
-			// and only re-stamps, so the flag is cheap and idempotent.
-			if schemaOnly {
-				return runSetup(cmd.Context(), dbPath, setupOptions{out: cmd.ErrOrStderr(), quiet: true})
-			}
-			return runSetup(cmd.Context(), dbPath, setupOptions{out: cmd.OutOrStdout()})
-		},
+// UpdateSchema is setup.run without --agent-hooks (ops/setup, P3-MISC-4):
+// the lore.db schema migration, the search index and the fingerprint
+// stamp, returning the lines it reports (none when quiet: --schema-only,
+// which `lore upgrade` runs right after the swap).
+func (setupHost) UpdateSchema(ctx context.Context, quiet bool) (lines []string, err error) {
+	defer asHostError(&err)
+	f := commonFlags{}
+	if err = refuseIfReadOnly(&f); err != nil {
+		return nil, err
 	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&schemaOnly, "schema-only", false, "update only the local database schema (used by `lore upgrade` after the swap)")
-	cmd.Flags().BoolVar(&agentHooks, flagAgentHooks, false, "install the session-hook snippets for the tools set up here")
-	cmd.Flags().BoolVar(&hooksRemove, flagHooksRm, false, "with --agent-hooks: take the snippets out again")
-	cmd.Flags().BoolVar(&hooksDry, flagHooksDry, false, "with --agent-hooks: only show the changes")
-	cmd.Flags().BoolVar(&hooksYes, flagHooksYes, false, "with --agent-hooks: write without asking")
-	cmd.Flags().BoolVar(&promptSearch, flagPromptSearch, false, "with --agent-hooks: also install the per-prompt search hook on this machine (CQ5)")
-	return cmd
+	rctx, client, err := resolveContext(&f)
+	if err != nil {
+		return nil, err
+	}
+	if err = client.Close(); err != nil {
+		return nil, errcodes.New(errcodes.Internal, "close the project DB").WithCause(err)
+	}
+	var b bytes.Buffer
+	err = runSetup(ctx, rctx.DBPath, setupOptions{out: &b, quiet: quiet})
+	return splitLines(b.String()), err
 }
 
 // setupOptions says where runSetup reports and how much.

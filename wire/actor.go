@@ -91,6 +91,12 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	if target == "" {
 		target = st.defaultTarget
 	}
+	// P3-LOCAL-1: the machine store keeps only machine-local tables, and
+	// actors is not one (a machine-local row's actor refs resolve against
+	// the stores that hold actor rows), so nothing is written there.
+	if target == store.SourceMachine {
+		return nil
+	}
 	if st.who.StableKey == "" {
 		return nil
 	}

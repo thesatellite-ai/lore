@@ -26,7 +26,6 @@ import (
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/style"
-	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/logic/urgency"
@@ -48,19 +47,16 @@ const (
 	flagRole      = "role"
 )
 
-// taskCoordCommands are the coordination subcommands added to `lore task`.
+// taskCoordCommands are the host commands added to `lore task`: only
+// `task hook`; the coordination verbs are ops/coord operations mounted by
+// the surface (PASS3 ONE-PATH, P3-COORD-1).
 //
 // They are mounted after wireLive ran, so each is wrapped here for the F1
 // not-found explanation (the "sync peek" hint) v0.1.17 gave them.
 func taskCoordCommands() []*cobra.Command {
-	cmds := []*cobra.Command{
-		newTaskClaimCommand(), newTaskNextCommand(), newTaskHeartbeatCommand(), newTaskReleaseCommand(),
-		newTaskRevokeCommand(), newTaskReassignCommand(), newTaskHookCommand(), newTaskMergedCommand(), newTaskNoteCommand(),
-	}
-	for _, c := range cmds {
-		wrapLeaves(c)
-	}
-	return cmds
+	hook := newTaskHookCommand()
+	wrapLeaves(hook)
+	return []*cobra.Command{hook}
 }
 
 // openTaskCoord opens the world and the target of one task, refusing
@@ -78,16 +74,6 @@ func openTaskCoord(ctx context.Context, id, from string) (*coordWorld, coordTarg
 		return nil, coordTarget{}, err
 	}
 	return w, t, nil
-}
-
-// flagFromSource is `--from <source>` (fixed rule 5): repo | <org> |
-// <org>/<folder>; picks the source of an id found in several, or one the
-// normal lookup does not reach (another org entry such as staging).
-const flagFromSource = "from"
-
-// bindFromFlag adds --from to a command that takes a task id.
-func bindFromFlag(cmd *cobra.Command, from *string) {
-	cmd.Flags().StringVar(from, flagFromSource, "", "the source of the id: repo | <org> | <org>/<folder>")
 }
 
 // currentWorkBranch is the checked-out branch when it is a work branch
@@ -151,35 +137,6 @@ func shortDuration(d time.Duration) string {
 	return s
 }
 
-// flagCoordinate is `claim --coordinate` (TASK 6.9).
-const flagCoordinate = "coordinate"
-
-func newTaskClaimCommand() *cobra.Command {
-	var owns []string
-	var strict, coordinate bool
-	var from string
-	cmd := &cobra.Command{
-		Use:   "claim <task-or-mission-id>",
-		Short: "Claim a task (or coordinate a mission) on the signals ref, with a lease",
-		Long: `Claim takes a lease on a task with a unique token, pushed with a compare-and-swap
-on refs/lore/signals. Exactly one session holds a task at a time; renew it with
-'lore task heartbeat'. Fails closed (exit 15, E_OFFLINE) when the push cannot be confirmed.
-
-Examples:
-  lore task claim tsk_31 --owns src/routes/invite/
-  lore task claim mis_12          # a coordinator's lease on a mission`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTaskClaim(cmd.Context(), os.Stdout, opscoord.ClaimIn{ID: args[0], Owns: owns, Strict: strict, Coordinate: coordinate, From: from})
-		},
-	}
-	cmd.Flags().StringSliceVar(&owns, flagOwns, nil, "paths this claim owns (directory prefixes ending in / or exact files)")
-	cmd.Flags().BoolVar(&strict, flagStrict, false, "refuse instead of warning when --owns overlaps another claim")
-	cmd.Flags().BoolVar(&coordinate, flagCoordinate, false, "take a coordinator lease on a parent with open sub-tasks (TASK 6.9)")
-	bindFromFlag(cmd, &from)
-	return cmd
-}
-
 // runTaskClaim is task.claim (ops/coord): claim a task, or coordinate a
 // parent with open sub-tasks, on its signals ref.
 func runTaskClaim(ctx context.Context, out io.Writer, in opscoord.ClaimIn) error {
@@ -219,46 +176,6 @@ func runTaskClaim(ctx context.Context, out io.Writer, in opscoord.ClaimIn) error
 	}
 	printClaim(out, in.ID, cr, w, t.Signals.Ref)
 	return nil
-}
-
-func newTaskNextCommand() *cobra.Command {
-	var f queue.Filter
-	var owns []string
-	var why, dryRun, asJSON bool
-	cmd := &cobra.Command{
-		Use:   "next",
-		Short: "Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency)",
-		Long: `Next returns the task you already hold, or claims the most urgent ready leaf task:
-open, no open sub-tasks, not gated, no live claim, every --after dependency (its own
-and its ancestors') satisfied. Order is the urgency score (TASK 13): --why explains
-every point, --dry-run ranks and explains without claiming. Exit 10 (E_NO_WORK)
-lists why each task waits; exit 11 (E_CONTENDED) means every claim lost a race.
-
-Examples:
-  lore task next --mission mis_12 --repo backend
-  lore task next --mission mis_12 --why --dry-run
-  lore task next --mission mis_12 --role coordinator`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			repo, _ := cmd.Flags().GetString(constants.FlagRepo) // registered below: GetString errors only for an unknown flag name
-			res, err := runTaskNext(cmd.Context(), opscoord.NextIn{Mission: f.Mission, Role: f.Role, Repo: repo, Owns: owns, Why: why, DryRun: dryRun})
-			if asJSON && dryRun {
-				enc := json.NewEncoder(os.Stdout)
-				enc.SetIndent("", "  ")
-				return errors.Join(enc.Encode(res), err)
-			}
-			_, werr := io.WriteString(os.Stdout, res.Text())
-			return errors.Join(err, werr)
-		},
-	}
-	cmd.Flags().StringVar(&f.Mission, flagMission, "", "only tasks of this mission")
-	cmd.Flags().StringVar(&f.Role, flagRole, "", "plan role (e.g. coordinator)")
-	cmd.Flags().String(constants.FlagRepo, "", "only tasks of this repo (a repo name of the group)")
-	cmd.Flags().StringSliceVar(&owns, flagOwns, nil, "paths the claim owns")
-	cmd.Flags().BoolVar(&why, flagWhy, false, "explain the urgency score term by term")
-	cmd.Flags().BoolVar(&dryRun, flagDryRun, false, "rank and explain without claiming (nothing written)")
-	cmd.Flags().BoolVar(&asJSON, flagJSONOut, false, "with --dry-run: the ranking as JSON (urgency + terms)")
-	return cmd
 }
 
 // Flags of task next (TASK 13.3).
@@ -337,33 +254,6 @@ type coordLister interface {
 
 // cryptoPick returns a uniformly random number in [0, n).
 func cryptoPick(n int) int { return int(signals.CryptoJitter{}.Int63n(int64(n))) }
-
-func newTaskHeartbeatCommand() *cobra.Command {
-	var daemon bool
-	cmd := &cobra.Command{
-		Use:   "heartbeat [id]",
-		Short: "Renew your claim's lease (alive, not progress)",
-		Long: `Heartbeat renews the lease of a claim you hold: signals only, the task row is never
-touched. Without an id it renews every claim of this session, at most once per
-lease.renew_every (safe to call from an agent tool hook). --daemon keeps renewing
-until the claim ends or the parent process exits; if renewals keep failing it stops
-at expires − grace with exit 12 (E_LOST_CLAIM).
-
-Examples:
-  lore task heartbeat tsk_31
-  lore task heartbeat --daemon tsk_31 &`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			in := opscoord.HeartbeatIn{Daemon: daemon}
-			if len(args) == 1 {
-				in.ID = args[0]
-			}
-			return runTaskHeartbeat(cmd.Context(), os.Stdout, in)
-		},
-	}
-	cmd.Flags().BoolVar(&daemon, flagDaemon, false, "keep renewing until the claim ends or the parent exits")
-	return cmd
-}
 
 // renewedRecently implements the hook form's rate limit: the last renewal
 // (expires − ttl) is younger than renew_every.
@@ -467,20 +357,6 @@ func pushWorkBranch(ctx context.Context, w *coordWorld) bool {
 	return err == nil
 }
 
-func newTaskReleaseCommand() *cobra.Command {
-	var from string
-	cmd := &cobra.Command{
-		Use:   "release <id>",
-		Short: "Give back a claim you hold",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTaskRelease(cmd.Context(), os.Stdout, opscoord.ReleaseIn{ID: args[0], From: from})
-		},
-	}
-	bindFromFlag(cmd, &from)
-	return cmd
-}
-
 // requireHuman refuses agents for human overrides (§7.4 "Human overrides").
 func requireHuman(w *coordWorld, what string) error {
 	if w.Ident.Kind == identity.KindHuman {
@@ -488,46 +364,6 @@ func requireHuman(w *coordWorld, what string) error {
 	}
 	return errcodes.New(errcodes.InvalidInput, what+" is a human override; an agent actor may not do it").
 		WithHint("run it as yourself (the identity in ~/.lore/config.yaml), not from an agent session")
-}
-
-func newTaskRevokeCommand() *cobra.Command {
-	var from string
-	cmd := &cobra.Command{
-		Use:   "revoke <id>",
-		Short: "Drop the current claim on a task (human override; the holder is fenced out)",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTaskRevoke(cmd.Context(), os.Stdout, opscoord.RevokeIn{ID: args[0], From: from})
-		},
-	}
-	bindFromFlag(cmd, &from)
-	return cmd
-}
-
-func newTaskReassignCommand() *cobra.Command {
-	var assign, from string
-	cmd := &cobra.Command{
-		Use:   "reassign [id]",
-		Short: "Assign a task to someone else, dropping any claim (human override)",
-		Long: `Reassign sets the assignee and raises claim_epoch, so a holder's next write fails
-with exit 14 (E_REASSIGNED). With --from @handle instead of an id it reassigns every
-open task assigned to that person (offboarding, cookbook 9).
-
-Examples:
-  lore task reassign tsk_31 --assign @bob
-  lore task reassign --from @bob --assign @alice`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			in := opscoord.ReassignIn{Assign: assign, From: from}
-			if len(args) == 1 {
-				in.ID = args[0]
-			}
-			return runTaskReassign(cmd.Context(), os.Stdout, in)
-		},
-	}
-	cmd.Flags().StringVar(&assign, flagAssign, "", "the new assignee (@handle)")
-	cmd.Flags().StringVar(&from, flagFromActor, "", "reassign every open task of this person")
-	return cmd
 }
 
 // resolveHandleActor resolves @handle to an actor id on the org roster (the

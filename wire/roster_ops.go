@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
+	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -39,8 +41,25 @@ const repoRosterWhere = "this repo"
 // rosterHandleMark prefixes a handle.
 const rosterHandleMark = "@"
 
+// hostRunOp reports whether wire runs the operation name directly.
+func hostRunOp(name string) bool {
+	return opsaudit.IsAuditOp(name) || opsinfra.IsRosterOp(name)
+}
+
+// runDirect decodes and invokes e with no engine around it.
+func runDirect(ctx context.Context, e op.Entry, d op.Decoder) (op.Result, error) {
+	in, err := e.Decode(d)
+	if err != nil {
+		return op.Result{}, err
+	}
+	return e.Invoke(ctx, in)
+}
+
 // ActorRegister implements opsinfra.Roster.
 func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (opsinfra.ActorRegisterOut, error) {
+	if a.opts.Roster != nil {
+		return a.opts.Roster.ActorRegister(ctx, in)
+	}
 	who, err := a.repoRoster(ctx)
 	if err != nil {
 		return opsinfra.ActorRegisterOut{}, err
@@ -67,6 +86,9 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 
 // ActorDeactivate implements opsinfra.Roster.
 func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.ActorDeactivateOut, error) {
+	if a.opts.Roster != nil {
+		return a.opts.Roster.ActorDeactivate(ctx, handle)
+	}
 	if _, err := a.repoRoster(ctx); err != nil {
 		return opsinfra.ActorDeactivateOut{}, err
 	}

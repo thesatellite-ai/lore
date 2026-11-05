@@ -31,6 +31,7 @@ import (
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
+	"github.com/thesatellite-ai/lore/wire"
 
 	"github.com/spf13/cobra"
 )
@@ -111,7 +112,7 @@ Checks:
     not counted as unhealthy)
   • Schema version (TODO: validate against expected)
   • --supersedes links written the old way (on the new row instead of
-    the old one); --fix repairs them, and a second --fix changes nothing
+    the old one); --fix repairs them (and writes a task lead missing from its assignees back), and a second --fix changes nothing
 
 Exit codes are stable across versions for monitoring integration.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -148,7 +149,7 @@ Exit codes are stable across versions for monitoring integration.`,
 	}
 	bindCommonFlags(cmd, &f.commonFlags)
 	cmd.Flags().BoolVar(&f.jsonOutput, constants.FlagJSON, false, "JSON output (stable schema)")
-	cmd.Flags().BoolVar(&f.fix, doctorFlagFix, false, "repair what doctor can fix safely (reversed --supersedes links)")
+	cmd.Flags().BoolVar(&f.fix, doctorFlagFix, false, "repair what doctor can fix safely (reversed --supersedes links, a task lead missing from assignees)")
 	return cmd
 }
 
@@ -278,6 +279,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 	// 10. Duplicate imports (PROV9).
 	doctorDuplicateImports(ctx, r)
 	doctorTaskTree(ctx, r)
+	doctorWireChecks(ctx, f.fix, r)    // TASK 14.4/18.3, SPEC 6.2, DQ4, META 3.8 (wire/doctor_checks.go)
 	doctorTrash(ctx, r)                // DELETION 3.8: rows past trash.retention_days, tombstones
 	doctorUnclassifiedSettings(ctx, r) // CFG12: v0.1.17 settings left in place (doctor_local.go)
 	// 10b. Secret rules that are off + leftover LORE_SYNC_ALLOW_SECRETS (D2/D3, doctor_secrets.go).
@@ -648,4 +650,42 @@ func doctorTrash(ctx context.Context, r *doctorReport) {
 		degrade(r)
 	}
 	r.Notes = append(r.Notes, notes...)
+}
+
+// doctorWireChecks runs the five checks of wire/doctor_checks.go (task lead
+// missing from assignees, unknown tasks.triage_owner, store lock holder, an
+// edit newer than a purge, internal turned off without the record). A
+// warning degrades doctor's status, a note does not; fix is doctor --fix,
+// which writes a missing lead back (P3-DOC-2). A check that fails to run is
+// one warning naming the check, and the others still run.
+func doctorWireChecks(ctx context.Context, fix bool, r *doctorReport) {
+	if coreApp == nil {
+		return
+	}
+	checks := []struct {
+		name string
+		run  func(context.Context) ([]wire.DoctorFinding, error)
+	}{
+		{string(wire.DoctorCheckTaskLead), func(c context.Context) ([]wire.DoctorFinding, error) { return coreApp.DoctorTaskLeads(c, fix) }},
+		{string(wire.DoctorCheckTriageOwner), coreApp.DoctorTriageOwner},
+		{string(wire.DoctorCheckStoreLock), coreApp.DoctorStoreLocks},
+		{string(wire.DoctorCheckEditAfterPurge), coreApp.DoctorEditsAfterPurge},
+		{string(wire.DoctorCheckInternalOff), coreApp.DoctorInternalOff},
+	}
+	for _, c := range checks {
+		found, err := c.run(ctx)
+		if err != nil {
+			r.Warnings = append(r.Warnings, c.name+": the check could not run: "+err.Error())
+			degrade(r)
+			continue
+		}
+		for _, f := range found {
+			if f.Level == wire.DoctorNote || f.Fixed {
+				r.Notes = append(r.Notes, f.Line())
+				continue
+			}
+			r.Warnings = append(r.Warnings, f.Line())
+			degrade(r)
+		}
+	}
 }

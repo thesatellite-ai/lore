@@ -244,15 +244,17 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		}
 	}
 	engOpts = append(engOpts, engine.WithMachinePolicy(machinePol))
+	// P3-LOCAL-2: this machine's machine store, when a table needs it.
+	if engOpts, err = st.withMachine(ctx, opts.Home, reg, exp, engOpts); err != nil {
+		return fail(err)
+	}
 	st.defaultTarget = store.SourceRepo
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}
 	scanner.bindEngine(st.eng) // D8: secrets.use_repo_gitleaks decides whether the repo .gitleaks.toml allow applies
-	for _, name := range st.eng.Stores() {
-		if _, refErr := st.eng.Refresh(ctx, name); refErr != nil {
-			return fail(errs.Wrap(errs.CodeOf(refErr), "wire: refresh the cache of store "+string(name), refErr))
-		}
+	if err = st.refreshAll(ctx); err != nil {
+		return fail(err)
 	}
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
@@ -927,15 +929,16 @@ func openStoreOnly(ctx context.Context, opts Options, target store.Source) (*sta
 		a.Place = placeOf(ctx, a)
 		engOpts = append(engOpts, engine.WithStore(a))
 	}
+	if engOpts, err = st.withMachine(ctx, opts.Home, reg, exp, engOpts); err != nil { // P3-LOCAL-2
+		return fail(err)
+	}
 	st.defaultTarget = target
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}
 	scanner.bindEngine(st.eng)
-	for _, name := range st.eng.Stores() {
-		if _, refErr := st.eng.Refresh(ctx, name); refErr != nil {
-			return fail(errs.Wrap(errs.CodeOf(refErr), "wire: refresh the cache of store "+string(name), refErr))
-		}
+	if err = st.refreshAll(ctx); err != nil {
+		return fail(err)
 	}
 	if st.storeFormat, err = readStoreFormats(ctx, opts, "", st.byName, st.actor); err != nil {
 		return fail(err)

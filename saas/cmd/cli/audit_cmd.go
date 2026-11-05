@@ -1,212 +1,115 @@
-// audit_cmd.go — `lore audit verify` / `lore audit log`.
+// audit_cmd.go — the old binary's reader of the v0.1.17 hash-chained audit
+// log (lore.db audit_logs) for `lore audit log|verify`, which are core
+// operations now (ops/audit, P3-AUDIT-1..4): coreAuditSink, which appends
+// the chain, also implements opsaudit.Env, and wire hands the operations
+// to it (wire/auditlog.go).
 //
-// The audit log is appended by every sync pass (sync_wire.go auditChange):
-// one hash-chained entry per changed shared row. verify checks two things:
+// verify checks two things:
 //
 //  1. the chain: editing or deleting a past entry breaks the link of the
 //     entry after it (E_AUDIT_CHAIN_BROKEN);
 //  2. rows changed in lore.db by something other than lore since the last
 //     lore command (sqlite3, a script): "hash mismatch".
 //
-// These commands deliberately open the DB WITHOUT a sync pass: a pass would
-// export — and audit as accepted — the very changes verify looks for.
+// The DB is opened WITHOUT a sync pass: a pass would export, and audit as
+// accepted, the very changes verify looks for.
 package main
 
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 
 	"dbent"
 	"saas/pkg/aicoder/audit"
-	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/style"
-	"saas/pkg/constants"
 
-	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/model/errs"
+	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 )
 
-// JSON envelope kinds for the audit commands.
-const (
-	jsonKindAuditVerify = "audit.verify"
-	jsonKindAuditLog    = "audit.log"
-)
-
-// externalWriteSuffix ends the action of entries recorded for changes lore
-// found in the DB but did not make.
-const externalWriteSuffix = "." + string(lsync.ChangeExternal)
-
-// defaultAuditLogLimit is how many entries `lore audit log` shows.
-const defaultAuditLogLimit = 50
-
-// auditVerifyResult is the --json shape of `lore audit verify`.
-type auditVerifyResult struct {
-	OK             bool                     `json:"ok"`
-	Entries        int                      `json:"entries"`
-	ChainBrokenAt  string                   `json:"chain_broken_at,omitempty"`
-	ChangedOutside []lsync.UnexportedChange `json:"changed_outside_lore,omitempty"`
-	ExternalWrites int                      `json:"external_writes_recorded"`
-}
+var _ opsaudit.Env = (*coreAuditSink)(nil)
 
 // openAuditDB opens the project DB with no sync pass and no session
-// registration (see file doc).
-func openAuditDB(c *commonFlags) (*sql.DB, *projresolve.Context, error) {
-	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: oldProjectDir(), FlagDB: c.flagDB, FlagProject: c.flagProject})
+// registration (see file doc). The project is the one the working
+// directory resolves to, as v0.1.17's `lore audit` did.
+func openAuditDB() (*sql.DB, *projresolve.Context, error) {
+	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: oldProjectDir()})
 	if err != nil {
-		return nil, nil, mapResolveError(err)
+		return nil, nil, asCoreError(mapResolveError(err))
 	}
 	db := dbent.InitDB(rctx.DBPath)
 	if err := dbent.ApplyPragmas(db); err != nil {
 		_ = db.Close() // the pragma error is the one to report
-		return nil, nil, errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
+		return nil, nil, errs.Wrap(errs.Internal, "apply pragmas", err)
 	}
 	return db, rctx, nil
 }
 
-func newAuditCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "audit",
-		Short: "Inspect and verify the hash-chained audit log of knowledge changes",
-		Long: `Every change to a shared row (rules, memories, tasks, …) is recorded in a
-hash-chained audit log: lore's own writes, imports from teammates via
-.lore/data, and changes lore found in the DB that no lore command made.`,
+// AuditLog implements opsaudit.Env: newest first, limit <= 0 = all.
+func (s *coreAuditSink) AuditLog(ctx context.Context, limit int) ([]opsaudit.Entry, error) {
+	db, _, err := openAuditDB()
+	if err != nil {
+		return nil, err
 	}
-	cmd.AddCommand(newAuditVerifyCommand(), newAuditLogCommand())
-	return cmd
+	defer func() { _ = db.Close() }() // read-only: nothing to flush
+	recs, err := audit.List(ctx, db, limit)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "read audit log", err)
+	}
+	out := make([]opsaudit.Entry, 0, len(recs))
+	for _, r := range recs {
+		out = append(out, entryOf(r))
+	}
+	return out, nil
 }
 
-func newAuditVerifyCommand() *cobra.Command {
-	var f commonFlags
-	var asJSON bool
-	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Check the audit chain and look for rows changed outside lore",
-		Long: `verify exits non-zero when:
-  • the audit chain is broken (an entry was edited or deleted), or
-  • a shared row in lore.db differs from what lore last recorded and no lore
-    command made the change (hash mismatch: e.g. an edit with sqlite3).
-
-Run it BEFORE other lore commands when investigating: any lore command
-synchronises the DB and records such changes as external writes (listed by
-` + "`lore audit log`" + `).`,
-		Example: "  lore audit verify\n  lore audit verify --json",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, rctx, err := openAuditDB(&f)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = db.Close() }() // read-only: nothing to flush
-			res, err := runAuditVerify(cmd.Context(), db, rctx)
-			if err != nil {
-				return err
-			}
-			if asJSON {
-				printJSON(jsonKindAuditVerify, res, res.Entries)
-			} else {
-				printAuditVerify(res)
-			}
-			switch {
-			case res.ChainBrokenAt != "":
-				return errcodes.New(errcodes.AuditChainBroken, "audit chain broken at "+res.ChainBrokenAt).
-					WithHint("an audit entry was edited or deleted; restore lore.db from a backup to investigate")
-			case len(res.ChangedOutside) > 0:
-				return errcodes.New(errcodes.AuditChainBroken,
-					fmt.Sprintf("hash mismatch: %d row(s) changed outside lore", len(res.ChangedOutside))).
-					WithHint("inspect them (`lore <kind> show <id>`); the next lore command records them as external writes")
-			}
-			return nil
-		},
+// AuditVerify implements opsaudit.Env. It records nothing.
+func (s *coreAuditSink) AuditVerify(ctx context.Context) (opsaudit.Report, error) {
+	db, rctx, err := openAuditDB()
+	if err != nil {
+		return opsaudit.Report{}, err
 	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "JSON output")
-	return cmd
+	defer func() { _ = db.Close() }() // read-only: nothing to flush
+	return runAuditVerify(ctx, db, rctx)
 }
 
-func runAuditVerify(ctx context.Context, db *sql.DB, rctx *projresolve.Context) (auditVerifyResult, error) {
-	var res auditVerifyResult
+// runAuditVerify walks the chain, compares the rows with the synced state
+// and counts the external writes recorded earlier.
+func runAuditVerify(ctx context.Context, db *sql.DB, rctx *projresolve.Context) (opsaudit.Report, error) {
+	var rep opsaudit.Report
 	broken, n, err := audit.Verify(ctx, db)
 	if err != nil {
-		return res, errcodes.New(errcodes.Internal, "verify audit chain").WithCause(err)
+		return rep, errs.Wrap(errs.Internal, "verify audit chain", err)
 	}
-	res.Entries, res.ChainBrokenAt = n, broken
+	rep.Entries, rep.BrokenAt = n, broken
 	if syncApplies(rctx) {
-		changed, unexportedErr := lsync.UnexportedChanges(ctx, db)
-		if unexportedErr != nil {
-			return res, errcodes.New(errcodes.Internal, "compare rows with the synced state").WithCause(unexportedErr)
+		changed, uerr := lsync.UnexportedChanges(ctx, db)
+		if uerr != nil {
+			return rep, errs.Wrap(errs.Internal, "compare rows with the synced state", uerr)
 		}
-		res.ChangedOutside = changed
+		for _, c := range changed {
+			rep.ChangedOutside = append(rep.ChangedOutside, opsaudit.RowRef{Table: c.Table, ID: c.ID})
+		}
 	}
 	recs, err := audit.List(ctx, db, 0)
 	if err != nil {
-		return res, errcodes.New(errcodes.Internal, "read audit log").WithCause(err)
+		return rep, errs.Wrap(errs.Internal, "read audit log", err)
 	}
 	for _, r := range recs {
-		if strings.HasSuffix(r.Action, externalWriteSuffix) {
-			res.ExternalWrites++
+		if strings.HasSuffix(r.Action, "."+string(lsync.ChangeExternal)) {
+			rep.ExternalWrites++
 		}
 	}
-	res.OK = res.ChainBrokenAt == "" && len(res.ChangedOutside) == 0
-	return res, nil
+	return rep, nil
 }
 
-func printAuditVerify(res auditVerifyResult) {
-	if res.ChainBrokenAt != "" {
-		fmt.Println(style.Error("✗ audit chain broken at " + res.ChainBrokenAt + " (an entry was edited or deleted)"))
-	} else {
-		fmt.Printf("%s audit chain intact (%d entries)\n", style.Success("✓"), res.Entries)
+// entryOf is one chain record in the operation's shape (same JSON keys).
+func entryOf(r audit.Record) opsaudit.Entry {
+	return opsaudit.Entry{
+		ActingProjectID: r.ActingProjectID, TargetProjectID: r.TargetProjectID, ActorID: r.ActorID, Action: r.Action,
+		TargetTable: r.TargetTable, TargetID: r.TargetID, Override: r.Override, BeforeHash: r.BeforeHash, AfterHash: r.AfterHash,
+		Reason: r.Reason, SessionID: r.SessionID, Confirmed: r.Confirmed, ID: r.ID, CreatedAt: r.CreatedAt, PrevLogHash: r.PrevLogHash,
 	}
-	for _, c := range res.ChangedOutside {
-		fmt.Println(style.Error(fmt.Sprintf("✗ hash mismatch: %s/%s changed outside lore", c.Table, c.ID)))
-	}
-	if res.ExternalWrites > 0 {
-		fmt.Println(style.Warn(fmt.Sprintf("! %d change(s) were made outside lore and later recorded (action *.external-write; see `lore audit log`)", res.ExternalWrites)))
-	}
-}
-
-func newAuditLogCommand() *cobra.Command {
-	var f commonFlags
-	var asJSON bool
-	var limit int
-	cmd := &cobra.Command{
-		Use:     "log",
-		Short:   "Show recent audit entries, newest first",
-		Example: "  lore audit log\n  lore audit log --limit 200 --json",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, _, err := openAuditDB(&f)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = db.Close() }() // read-only: nothing to flush
-			recs, err := audit.List(cmd.Context(), db, limit)
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "read audit log").WithCause(err)
-			}
-			if asJSON {
-				printJSON(jsonKindAuditLog, recs, len(recs))
-				return nil
-			}
-			if len(recs) == 0 {
-				fmt.Println(style.Muted("· audit log is empty"))
-			}
-			for _, r := range recs {
-				// SECRETS 16 / SQ10: a forced reveal is printed loudly
-				// (core_audit.go writes the marker into the reason).
-				loud := ""
-				if strings.Contains(r.Reason, forcedMarker) {
-					loud = "  " + style.Warn(inboxForced+" ("+strings.TrimSuffix(strings.SplitN(r.Reason, forcedMarker, 2)[1], ")")+")")
-				}
-				fmt.Printf("%s  %-28s %s/%s  by %s%s\n", r.CreatedAt, r.Action, r.TargetTable, r.TargetID, r.ActorID, loud)
-			}
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "JSON output")
-	cmd.Flags().IntVar(&limit, constants.FlagLimit, defaultAuditLogLimit, "entries to show (0 = all)")
-	return cmd
 }

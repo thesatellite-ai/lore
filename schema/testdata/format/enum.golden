@@ -18,6 +18,7 @@ rule_verifier_refs.verifier_kind regex,shell,go-fn,custom
 rules.activation always,glob,semantic,manual
 rules.context_pin full,line
 rules.severity must,should,may
+runs.status_str in_progress,success,partial,failed,cancelled
 secret_rules.state on,off,changed
 tasks.close_reason completed,duplicate,wont_do,obsolete,stale,cancelled,skipped
 tasks.commitment accepted,proposed,someday

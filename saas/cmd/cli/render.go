@@ -438,24 +438,6 @@ type targetPick struct {
 	sel     toolprofile.Selection
 }
 
-// resolveContextTargets turns --target values into tool files, or, with
-// none, resolves the repo's own targets: its context.targets settings row
-// (Q-R2-3), else the pointer-file detection (toolprofile.Resolve). A value
-// is a profile name, a known profile's pointer file, or any other file,
-// wired with an @import pointer as v0.1.17's --target was. TOOL NEUTRAL: no
-// tool file is assumed; the first wiring of a repo says which tools it
-// chose and why, so the choice is never a surprise.
-func resolveContextTargets(ctx context.Context, root string, values []string, quiet bool) ([]contextTarget, error) {
-	pick, err := resolveTargets(ctx, root, values, coreContextTargets)
-	if err != nil {
-		return nil, err
-	}
-	if !quiet {
-		printTargetPick(pick)
-	}
-	return pick.targets, nil
-}
-
 // printTargetPick prints how the targets were chosen (silent for an
 // already-wired repo and for the settings row: nothing new to say) and
 // names each tool file found but not wired.
@@ -484,8 +466,12 @@ func printTargetPick(pick targetPick) {
 	}
 }
 
-// resolveTargets is resolveContextTargets without the output, reading the
-// settings row through setting.
+// resolveTargets turns --target values into tool files, or, with none,
+// resolves the repo's own targets: its context.targets settings row
+// (read through setting, Q-R2-3), else the pointer-file detection
+// (toolprofile.Resolve). A value is a profile name, a known profile's
+// pointer file, or any other file, wired with an @import pointer as
+// v0.1.17's --target was. TOOL NEUTRAL: no tool file is assumed.
 func resolveTargets(ctx context.Context, root string, values []string, setting targetSetting) (targetPick, error) {
 	reg, err := loadToolRegistry(ctx)
 	if err != nil {

@@ -83,10 +83,14 @@ type liveCommand struct {
 var liveCmdState liveCommand
 
 // fetchKind is FetchAlways for `lore sync` (and `lore sync status`), which
-// always fetch (TEAM-025), FetchCached for everything else.
+// always fetch (TEAM-025), FetchCached for everything else. The bare nouns
+// `lore sync` and `lore land` are ops/sync's run verbs, so both spellings of
+// the cobra path are listed (P3-SYNC-1).
 func (c liveCommand) fetchKind() live.FetchKind {
 	switch c.path {
-	case BinaryName + " sync", BinaryName + " sync status", BinaryName + " land", BinaryName + " live restore", BinaryName + " live compact":
+	case BinaryName + " sync", BinaryName + " sync run", BinaryName + " sync status",
+		BinaryName + " land", BinaryName + " land run",
+		BinaryName + " live restore", BinaryName + " live compact":
 		return live.FetchAlways
 	}
 	return live.FetchCached
@@ -129,7 +133,8 @@ var liveReadVerbs = map[string]bool{
 // hook and the not-found explanation. Called once from main's init after
 // every command is registered.
 func wireLive(root *cobra.Command) {
-	root.AddCommand(newLandCommand(), newLiveCommand(), newExplainCommand())
+	// `lore live …` is ops/live (P3-LIVE-1) and `lore land` / `lore explain`
+	// are ops/sync (P3-SYNC-1); mountCore mounts all of them.
 	root.PersistentFlags().Bool(flagTrace, false, "print every git command lore runs for live rows, with timing (same as LORE_TRACE=1)")
 	for _, group := range root.Commands() {
 		table := liveTableForGroup(group.Name())

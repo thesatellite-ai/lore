@@ -305,6 +305,13 @@ rules.summary text
 rules.superseded_by_id ref
 rules.tag_ids list[ref]
 rules.trust_score number
+runs.actor_id text
+runs.completed_at datetime
+runs.kind text required
+runs.notes text
+runs.project_id text
+runs.started_at datetime
+runs.status_str text required
 scopes.path text required
 scopes.repo_id ref required
 secret_allows.field text required

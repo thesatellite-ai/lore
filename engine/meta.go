@@ -310,14 +310,8 @@ type metaPlan struct {
 	ask func(question string) (bool, error)
 }
 
-// applyMeta returns cur changed by mw (see the file's flow sketch). A
-// write with no change returns cur untouched.
-func (e *Engine) applyMeta(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
-	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
-	return e.applyMetaOn(ctx, cl, target, def, rowID, cur, mw, false, nil)
-}
-
-// applyMetaScreened is applyMeta adding the metadata secret answers to sc
+// applyMetaScreened returns cur changed by mw (see the file's flow
+// sketch; a write with no change returns cur untouched), adding the metadata secret answers to sc
 // (PASS3-A-2): findings kept as not secrets go to sc.accepted (allow rows),
 // redacted ones to sc.redacted (the D21 task), as for the row's fields.
 func (e *Engine) applyMetaScreened(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
@@ -325,18 +319,13 @@ func (e *Engine) applyMetaScreened(ctx context.Context, cl call, target store.So
 	return e.applyMetaOn(ctx, cl, target, def, rowID, cur, mw, false, sc)
 }
 
-// createMeta is the metadata step of every create (write.go): the change
+// createMetaScreened is the metadata step of every create (write.go): the change
 // riding on it (has) plus, on a table that accepts metadata, the 3.19
 // create-only rules: defaults (default_on, printed as "default: k = v",
 // never back-filled) and required keys (required_on, E_META_REQUIRED).
 // A create with no change on a table without metadata does nothing.
-func (e *Engine) createMeta(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
-	mw MetaWrite, has bool) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
-	return e.createMetaScreened(ctx, cl, target, def, rowID, mw, has, nil)
-}
-
-// createMetaScreened is createMeta adding the metadata secret answers to
-// sc, as applyMetaScreened does (PASS3-A-2).
+// It adds the metadata secret answers to sc, as applyMetaScreened does
+// (PASS3-A-2).
 func (e *Engine) createMetaScreened(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
 	mw MetaWrite, has bool, sc *screened) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
 	if !has && !metaTables[def.Name] {

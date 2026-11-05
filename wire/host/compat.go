@@ -7,9 +7,9 @@ package host
 //	--db          refused (E_UNSUPPORTED): rows are row files, not lore.db
 //	--project     accepted where the op has none (a row id names its project)
 //	--read-only   refuse writes (also LORE_READ_ONLY=1)
-//	--confirm     on a delete: confirms --purge, else v0.1.17's --yes (DQ8,
-//	              FA-DEL-1); elsewhere refused, renamed to --yes
-//	--purge       on a delete: skip the trash (needs the literal --confirm)
+//	--confirm     refused, renamed to --yes (a delete's --purge / --confirm
+//	              are its op's own input, op.PurgeFlags, bound by the engine
+//	              for every surface: P3-DEL-1)
 //	--json        printed indented, as v0.1.17's printJSON did
 //	LORE_PROJECT_ID / LORE_REPO fill --project / --repo when not given
 //
@@ -22,14 +22,12 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/op"
 	opsarchitecturenote "github.com/thesatellite-ai/lore/ops/architecturenote"
+	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
 	opscomment "github.com/thesatellite-ai/lore/ops/comment"
 	opscookbookrecipe "github.com/thesatellite-ai/lore/ops/cookbookrecipe"
@@ -48,7 +46,6 @@ import (
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
-	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
 	opssuggestion "github.com/thesatellite-ai/lore/ops/suggestion"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
@@ -69,7 +66,6 @@ const (
 	FlagRepo     = "repo"
 	FlagReadOnly = "read-only"
 	FlagConfirm  = "confirm"
-	FlagPurge    = "purge"
 	// EnvProjectID fills --project when the caller gave none.
 	EnvProjectID = "LORE_PROJECT_ID"
 	// EnvRepo fills --repo when the caller gave none.
@@ -78,10 +74,6 @@ const (
 
 // jsonIndent is v0.1.17's printJSON indent.
 const jsonIndent = "  "
-
-// trashLineMark is the phrase of every noun delete's success line
-// (ops/internal/trashline).
-const trashLineMark = "moved to the trash"
 
 // ExternalSourceNoun is the CLI spelling of opsexternalsource.Noun.
 const ExternalSourceNoun = "external-source"
@@ -96,6 +88,7 @@ var CompatNouns = []string{
 	opstag.Noun, opscomment.Noun, opslink.Noun, opslink.CommitNoun,
 	opstask.Noun, opstasklist.Noun, opsmission.Noun, opsplan.Noun,
 	opsreminder.Noun,
+	opsaudit.Noun, // P3-AUDIT-2: --db/--project refused with a reason, as on every core noun
 	opsinfra.NounActor, opsinfra.NounProject, opsinfra.NounRepo, opsinfra.NounMachine,
 	opsarchitecturenote.Noun, opsbehaviour.Noun, opscookbookrecipe.Noun, opsincident.Noun,
 	opssuggestion.Noun, opstastepref.Noun, opsworkflow.Noun, opsworkspace.Noun,
@@ -161,59 +154,25 @@ func recordCommand(c *cobra.Command, r *Runner) {
 	}
 }
 
-// PurgeOnlyDeletes are the delete operations outside CompatNouns that get
-// only the delete half of the compat flags, --purge / --confirm (PASS3:
-// like every core delete; FA-DEL-1). resource and meta never had v0.1.17's
-// --db / --project / --read-only.
-var PurgeOnlyDeletes = []string{opssettings.OpResDelete, opssettings.OpMetaDelete}
-
-// DeletePurgeHook gives each PurgeOnlyDeletes command --purge / --confirm
-// with the same refusal and output rewrite as a compat-noun delete. A
-// command not mounted in this build is skipped.
-func DeletePurgeHook(o CompatOptions) Hook {
-	return Hook{Name: HookDeletePurge, Command: func(root *cobra.Command, r *Runner) {
-		for _, name := range PurgeOnlyDeletes {
-			noun, verb, ok := strings.Cut(name, ".")
-			if !ok || verb != op.VerbDelete {
-				continue
-			}
-			c, _, err := root.Find([]string{noun, verb})
-			if err != nil || c.Name() != verb || !cli.Generated(c) || c.RunE == nil {
-				continue
-			}
-			addFlags(c, r, o, false)
-		}
-	}}
-}
-
-// addCompatFlags adds the flags to one generated command c.
-func addCompatFlags(c *cobra.Command, r *Runner, o CompatOptions) { addFlags(c, r, o, true) }
-
-// addFlags adds the delete half (--purge / --confirm on a delete) and,
-// when full, v0.1.17's --db / --project / --read-only, the --confirm
-// refusal elsewhere, the env defaults and indented --json.
-func addFlags(c *cobra.Command, r *Runner, o CompatOptions, full bool) {
+// addCompatFlags adds v0.1.17's --db / --project / --read-only, the
+// --confirm refusal (only where the op has no confirm input of its own: a
+// delete's is op.PurgeFlags), the env defaults and indented --json to one
+// generated command c.
+func addCompatFlags(c *cobra.Command, r *Runner, o CompatOptions) {
 	var db, project string
-	var readOnly, confirm, purge bool
-	isDelete := c.Name() == op.VerbDelete
-	if full && c.Flags().Lookup(FlagDB) == nil {
+	var readOnly, confirm bool
+	if c.Flags().Lookup(FlagDB) == nil {
 		c.Flags().StringVar(&db, FlagDB, "", "v0.1.17 lore.db path: not used by this command (refused)")
 	}
-	if full && c.Flags().Lookup(FlagProject) == nil {
+	if c.Flags().Lookup(FlagProject) == nil {
 		c.Flags().StringVar(&project, FlagProject, "", "accepted for v0.1.17 scripts; a row id already names its project")
 	}
-	if full && c.Flags().Lookup(FlagReadOnly) == nil {
+	if c.Flags().Lookup(FlagReadOnly) == nil {
 		c.Flags().BoolVar(&readOnly, FlagReadOnly, false, "refuse writes (also "+EnvReadOnly+"=1)")
 	}
-	if (full || isDelete) && c.Flags().Lookup(cli.FlagYes) != nil && c.Flags().Lookup(FlagConfirm) == nil {
-		desc := "v0.1.17 spelling: refused, use --yes"
-		if isDelete { // DQ8 / FA-DEL-1: accepted on a delete
-			desc = "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
-		}
-		c.Flags().BoolVar(&confirm, FlagConfirm, false, desc)
-	}
-	if isDelete && c.Flags().Lookup(FlagPurge) == nil {
-		c.Flags().BoolVar(&purge, FlagPurge, false, "skip the trash: remove for good, only a tombstone stays (needs --confirm)")
+	ownConfirm := c.Flags().Lookup(cli.FlagYes) != nil && c.Flags().Lookup(FlagConfirm) == nil
+	if ownConfirm {
+		c.Flags().BoolVar(&confirm, FlagConfirm, false, "v0.1.17 spelling: refused, use --yes")
 	}
 	printed := func() {
 		if o.Printed != nil {
@@ -229,13 +188,7 @@ func addFlags(c *cobra.Command, r *Runner, o CompatOptions, full bool) {
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		defer printed() // every error a generated command returns was printed by surface/cli
 		r.State.ReadOnly = readOnly
-		if isDelete {
-			r.State.Purge = &engine.PurgeRequest{Asked: purge, Confirmed: confirm}
-		}
-		r.State.Pending = compatRefusal(cmd, args, isDelete, purge, confirm)
-		if !full {
-			return runDeleteOnly(cmd, args, inner, r.State.Purge, confirm)
-		}
+		r.State.Pending = compatRefusal(cmd, ownConfirm)
 		applyEnvDefaults(cmd)
 		if o.BeforeCommand != nil {
 			o.BeforeCommand(cmd, readOnly)
@@ -252,9 +205,6 @@ func addFlags(c *cobra.Command, r *Runner, o CompatOptions, full bool) {
 		// why) goes right under the success line, before the op's own
 		// detail lines. Prompts go to stderr, so nothing waits behind it.
 		b := buf.Bytes()
-		if err == nil && r.State.Purge != nil {
-			b = purgedLines(b, r.State.Purge, confirm)
-		}
 		if err == nil && o.Filed != nil {
 			if f := o.Filed(); f != "" {
 				b = insertAfterFirstLine(b, "  filed: "+f+"\n")
@@ -265,40 +215,11 @@ func addFlags(c *cobra.Command, r *Runner, o CompatOptions, full bool) {
 	}
 }
 
-// runDeleteOnly runs a PurgeOnlyDeletes command: JSON as the op prints it
-// (it carries the ids), text with the trash line rewritten.
-func runDeleteOnly(cmd *cobra.Command, args []string, inner func(*cobra.Command, []string) error, pr *engine.PurgeRequest, confirm bool) error {
-	if asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON); asJSON {
-		return inner(cmd, args)
-	}
-	var buf bytes.Buffer
-	out := cmd.OutOrStdout()
-	cmd.SetOut(&buf)
-	err := inner(cmd, args)
-	cmd.SetOut(out)
-	b := buf.Bytes()
-	if err == nil {
-		b = purgedLines(b, pr, confirm)
-	}
-	_, werr := out.Write(b)
-	return errors.Join(err, werr)
-}
-
-// compatRefusal is the refusal a compat flag sets for this run (nil = none).
-// On a delete given --confirm without --purge it also sets --yes (DQ8).
-func compatRefusal(cmd *cobra.Command, args []string, isDelete, purge, confirm bool) error {
+// compatRefusal is the refusal a compat flag sets for this run (nil =
+// none); ownConfirm is whether the compat hook added --confirm itself.
+func compatRefusal(cmd *cobra.Command, ownConfirm bool) error {
 	switch {
-	case isDelete && purge && !confirm: // DQ2/DEL-R4: a purge never prompts, it needs the literal --confirm
-		return errs.New(errs.NeedsConfirm, "--purge removes "+purgeTarget(args)+" for good, without the trash (only a tombstone stays)").
-			WithHint("ask the person, then rerun with --confirm (--yes does not purge)")
-	case isDelete && cmd.Flags().Changed(FlagConfirm):
-		// DQ8 (FA-DEL-1): v0.1.17's delete --confirm is accepted; a delete
-		// is soft, so it answers the question like --yes.
-		if fl := cmd.Flags().Lookup(cli.FlagYes); fl != nil {
-			_ = fl.Value.Set("true") // a bool flag accepts "true"
-		}
-		return nil
-	case cmd.Flags().Changed(FlagConfirm):
+	case ownConfirm && cmd.Flags().Changed(FlagConfirm):
 		return errs.New(errs.InvalidInput, "--confirm was renamed: confirm with --yes").
 			WithHint("rerun with --yes instead of --confirm")
 	case cmd.Flags().Changed(FlagDB):
@@ -306,15 +227,6 @@ func compatRefusal(cmd *cobra.Command, args []string, isDelete, purge, confirm b
 			WithHint("run the command inside the repository (or name a store with --store / --to)")
 	}
 	return nil
-}
-
-// purgeTarget names what a refused --purge would have removed: the named
-// row, or the bulk form's matches (resource delete --kind --where).
-func purgeTarget(args []string) string {
-	if len(args) == 0 {
-		return "every matching row"
-	}
-	return strings.Join(args, " ")
 }
 
 // envFlagDefaults are v0.1.17's environment fallbacks for a row command's
@@ -335,29 +247,6 @@ func applyEnvDefaults(cmd *cobra.Command) {
 		}
 		_ = cmd.Flags().Set(fe[0], v) // a string flag accepts any value; the op validates it
 	}
-}
-
-// purgedLines rewrites a delete's "moved to the trash" line when the
-// engine purged instead (--purge, or policy trash.purge_on_delete), and
-// adds DQ8's hint to a plain delete given v0.1.17's --confirm.
-func purgedLines(b []byte, pr *engine.PurgeRequest, confirm bool) []byte {
-	if len(pr.Purged) == 0 {
-		if confirm && bytes.Contains(b, []byte(trashLineMark)) {
-			b = append(b, []byte("  note: a delete is soft now (restorable); to remove content for good: lore trash purge <id> --confirm\n")...)
-		}
-		return b
-	}
-	names := make([]string, 0, len(pr.Purged))
-	for _, id := range pr.Purged {
-		names = append(names, id.String())
-	}
-	lines := strings.SplitAfter(string(b), "\n")
-	for i, l := range lines {
-		if strings.Contains(l, trashLineMark) {
-			lines[i] = "✓ purged for good: " + strings.Join(names, ", ") + " (tombstones written; old content is still in git history)\n"
-		}
-	}
-	return []byte(strings.Join(lines, ""))
 }
 
 // insertAfterFirstLine returns b with line inserted after its first line

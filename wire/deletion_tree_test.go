@@ -82,6 +82,9 @@ var deleteExceptions = map[row.Table]deletePath{
 	schema.TableKinds:           {none: noRowDelete + "a resource kind is renamed or edited; its fields are removed with resource.field.remove"},
 	schema.TableTags:            {none: noRowDelete + "v0.1.17 had no tag delete; tag.detach removes an attachment"},
 	schema.TableExternalSources: {none: noRowDelete + "a learn-from source is switched off (external_source.disable), not deleted"},
+	// TIME_TRACKING 2.2: a run is ended by run.end or run.cancel; the
+	// design has no run delete (machine-local, P3-LOCAL-3).
+	schema.TableRuns: {none: noRowDelete + "a run is a machine-local log of one attempt: run.end or run.cancel closes it"},
 	// Rows that leave only with what owns them (DELETION 3.4 group rule).
 	schema.TableMetaValues:       {none: noRowDelete + "allowed values go to the trash with their key (meta.delete)"},
 	schema.TableKnowledgeRefs:    {none: noRowDelete + "a link goes to the trash with either end (DELETION 3.3, RESOURCES group)"},

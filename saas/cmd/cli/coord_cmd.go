@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"time"
 
@@ -29,7 +28,7 @@ import (
 // and `apply` under the existing `plan` group. It runs after the generated
 // entity groups are registered, so the group exists.
 func addCoordCommands(root *cobra.Command) {
-	root.AddCommand(newAgentCommand(), newHoldCommand(), newGateCommand(), newFindingCommand(), newInboxCommand())
+	root.AddCommand(newAgentCommand(), newFindingCommand())
 }
 
 // ---------------------------------------------------------------- agent
@@ -160,40 +159,6 @@ const (
 	// the claim lease, so one heartbeat interval keeps both alive.
 	defaultHoldTTL = 0
 )
-
-// newHoldCommand is `lore hold claim|release` (RQ11: no alias; `--scope` is
-// an unknown flag here, `--on` replaces it, XQ6).
-func newHoldCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "hold", Short: "Hold a shared resource (a test suite, a staging slot) with a lease"}
-	var ttl time.Duration
-	var scope string
-	claim := &cobra.Command{
-		Use:   "claim <name>",
-		Short: "Hold a resource exclusively (same lease, token and renew as a task claim)",
-		Long: `Claim holds a named resource on the project's signals ref, exclusively, until --ttl
-passes or you release it; running claim again renews your hold. Fails closed (exit
-15, E_OFFLINE) when the push cannot be confirmed.
-
-Example:
-  lore hold claim full-suite --ttl 30m && task test && lore hold release full-suite`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runHoldClaim(cmd.Context(), os.Stdout, opscoord.HoldClaimIn{Name: args[0], TTL: ttl, On: scope})
-		},
-	}
-	claim.Flags().DurationVar(&ttl, flagTTL, 0, "how long the hold lasts (default: lease.ttl)")
-	claim.Flags().StringVar(&scope, flagOn, scopeProject, "project (the project's signals ref) or machine")
-	release := &cobra.Command{
-		Use:   "release <name>",
-		Short: "Release a resource you hold",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runHoldRelease(cmd.Context(), os.Stdout, opscoord.HoldReleaseIn{Name: args[0]})
-		},
-	}
-	cmd.AddCommand(claim, release)
-	return cmd
-}
 
 // runHoldClaim is hold.claim (RES 3.17): hold a named resource on the
 // project's signals ref, exclusively, until the ttl passes (default

@@ -30,6 +30,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"time"
 
@@ -43,23 +44,33 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	opsarchitecturenote "github.com/thesatellite-ai/lore/ops/architecturenote"
+	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opsbatch "github.com/thesatellite-ai/lore/ops/batch"
 	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
+	opscache "github.com/thesatellite-ai/lore/ops/cache"
+	opscheck "github.com/thesatellite-ai/lore/ops/check"
 	opscomment "github.com/thesatellite-ai/lore/ops/comment"
+	opsconfig "github.com/thesatellite-ai/lore/ops/config"
 	opscontent "github.com/thesatellite-ai/lore/ops/content"
+	contextop "github.com/thesatellite-ai/lore/ops/context"
 	opscookbookrecipe "github.com/thesatellite-ai/lore/ops/cookbookrecipe"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
+	opsdirective "github.com/thesatellite-ai/lore/ops/directive"
 	opsexternalsource "github.com/thesatellite-ai/lore/ops/externalsource"
 	opshandoff "github.com/thesatellite-ai/lore/ops/handoff"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
+	opsidentity "github.com/thesatellite-ai/lore/ops/identity"
 	opsincident "github.com/thesatellite-ai/lore/ops/incident"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opslint "github.com/thesatellite-ai/lore/ops/lint"
+	opslive "github.com/thesatellite-ai/lore/ops/live"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opsmission "github.com/thesatellite-ai/lore/ops/mission"
 	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
+	opspii "github.com/thesatellite-ai/lore/ops/piipattern"
 	opspin "github.com/thesatellite-ai/lore/ops/pin"
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
@@ -67,18 +78,24 @@ import (
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
 	opsrow "github.com/thesatellite-ai/lore/ops/row"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
+	opsrun "github.com/thesatellite-ai/lore/ops/run"
 	opsscope "github.com/thesatellite-ai/lore/ops/scope"
+	opssearch "github.com/thesatellite-ai/lore/ops/search"
+	opsselfupgrade "github.com/thesatellite-ai/lore/ops/selfupgrade"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
+	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssuggestion "github.com/thesatellite-ai/lore/ops/suggestion"
+	opssupportbundle "github.com/thesatellite-ai/lore/ops/supportbundle"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	opstasklist "github.com/thesatellite-ai/lore/ops/tasklist"
 	opstastepref "github.com/thesatellite-ai/lore/ops/tastepref"
 	opstechdoc "github.com/thesatellite-ai/lore/ops/techdoc"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
+	opswhycontext "github.com/thesatellite-ai/lore/ops/whycontext"
 	opsworkflow "github.com/thesatellite-ai/lore/ops/workflow"
 	opsworkspace "github.com/thesatellite-ai/lore/ops/workspace"
 	"github.com/thesatellite-ai/lore/schema"
@@ -135,6 +152,12 @@ type Options struct {
 	// audit_logs hash chain, so `lore audit log|verify` see core writes).
 	// Nil keeps the append-only AuditFile.
 	Audit engine.AuditSink
+	// Roster, when set, does `lore actor register|deactivate` (ops/infra
+	// Roster): the old binary passes its roster, which resolves the org,
+	// opens the org store's org folder (store-only outside a repo) and
+	// keeps the v0.1.17 org-store path. Nil: the repo's own roster with no
+	// org (wire/roster_ops.go), an org's roster is E_NOT_IMPLEMENTED.
+	Roster opsinfra.Roster
 	// RepoIsClient reports whether this code repository is a client repo
 	// (a customer org's repository: CONFIG_GUIDE "a client repo is tied to
 	// the store by a link kept only in the store"). Wire sets the engine's
@@ -176,6 +199,11 @@ type Options struct {
 	// Close must close b. The close list and the migration rewrite keep
 	// the unwrapped backends (RewriteV1 rewrites branch files).
 	WrapBackend func(ctx context.Context, name store.Source, folder string, b store.Backend) store.Backend
+	// Coord is the host's team coordination machinery (the signals ref,
+	// roster and store links) behind task claim|next|…, hold, gate, inbox
+	// and mission status (ops/coord, P3-COORD-1). nil: those operations
+	// answer E_UNSUPPORTED.
+	Coord opscoord.Host
 	// AllowNetworkFS lets stores (the repo itself included) live inside a
 	// cloud-sync folder or on a network file system, refused otherwise
 	// with E_NETWORK_FS. The CLI sets it from LORE_ALLOW_NETWORK_FS=1, the
@@ -197,6 +225,11 @@ type Options struct {
 	// hint that names one of the live projects is used; ok=false, or a
 	// hint naming none of them, keeps E_AMBIGUOUS_PROJECT. nil = no hint.
 	ProjectHint func(ctx context.Context) (id string, ok bool)
+	// LiveRef is the live ref of the project the command runs in, behind
+	// `lore live show|diff|log|restore|compact|purge` (ops/live, P3-LIVE-1):
+	// the host that owns the live session implements it. nil answers
+	// E_UNSUPPORTED (no live ref wired in this binary).
+	LiveRef func(ctx context.Context) (opslive.Ref, error)
 	// WorkDir is the folder the command runs in (the process's working
 	// directory), for `_o.dir`: PROV6 records it relative to the repo
 	// root for monorepos and omits it at the root. Empty = RepoDir.
@@ -208,6 +241,14 @@ type Options struct {
 	// OS machine id through adapters/machine. An error leaves `m` out
 	// (never a made-up id). Tests pass a fixed id.
 	Machine func() (ids.MachineID, error)
+	// Local supplies the rules of the Local operations (config schema,
+	// leak checks, v0.1.17 store clones; wire/localops.go, P3-CFG-1). A
+	// nil part answers E_UNSUPPORTED.
+	Local LocalPorts
+	// Context supplies the machinery behind the context commands that
+	// still lives in the binary (render history, …; wire/context_hosts.go,
+	// P3-MISC-3). A nil part answers E_UNSUPPORTED.
+	Context ContextHosts
 }
 
 // openOptions is what every store open of this App passes to a backend:
@@ -264,6 +305,9 @@ type state struct {
 	actor    ids.ID[ids.Actor]
 	caches   *caches
 	backends []store.Backend
+	// machine closes the machine store's backend (P3-LOCAL-2); nil when
+	// none was opened. Kept apart from backends, which follow Stores().
+	machine io.Closer
 	// byName maps every attached store (the repo included) to its backend.
 	byName map[store.Source]store.Backend
 	// folders is each attached store's folder ("" or "." = the store root);
@@ -358,6 +402,10 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsbatch.Ops(a)...)
 	// DELETION 2.2-2.6: lore trash list|show|restore|purge (DQ1-DQ4).
 	entries = append(entries, opstrash.Ops(a)...)
+	// CLI_REFERENCE 3.5 (PASS3 ONE-PATH, P3-UPG-1): lore upgrade as the Local operation upgrade.run.
+	entries = append(entries, opsselfupgrade.Ops(a)...)
+	// LORE_TEAM_SPEC §1, §6.6, F8: lore live show|diff|log|restore|compact|purge.
+	entries = append(entries, opslive.Ops(a)...)
 	entries = append(entries, opstasklist.Ops(a)...)
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
@@ -382,6 +430,31 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsrow.Ops(a)...)
 	// lore lint: one host for the findings the design sends to lint (PROV9, SQ20/22, TQ2/TQ4, DOCS O2).
 	entries = append(entries, opslint.Ops(a)...)
+	// P3-CFG-1: lore config get|set|list|check and lore check leaks|pr-body (Local).
+	entries = append(entries, opsconfig.Ops(a)...)
+	entries = append(entries, opscheck.Ops(a)...)
+	// TIME_TRACKING 2.2/4: lore run start|end|cancel on the machine store (P3-LOCAL-3).
+	entries = append(entries, opsrun.Ops(a)...)
+	// PASS3 ONE-PATH: lore directive install|show (Local, p3-g-org).
+	entries = append(entries, opsdirective.Ops(a)...)
+	// PASS3 ONE-PATH: lore identity set|unset|show (Local, p3-g-org).
+	entries = append(entries, opsidentity.Ops(a)...)
+	// CLI_REFERENCE 2.25 (PASS3 ONE-PATH): lore pii-pattern list (leftover v0.1.17 rows), add|enable|disable refused.
+	entries = append(entries, opspii.Ops(a)...)
+	// CLI_REFERENCE 2.5, SEARCH_INDEX_DESIGN: lore search run|status|rebuild (P3-MISC-1).
+	entries = append(entries, opssearch.Ops(a)...)
+	// lore audit log|verify over the repo sink's hash chain (P3-AUDIT-1..4).
+	entries = append(entries, opsaudit.Ops(a)...)
+	// lore actor register|deactivate|delete (F18, BATCH2 #8), run direct in Run.
+	entries = append(entries, opsinfra.ActorOps(a)...)
+	// P3-MISC-2: lore cache prune (Local; asks through Confirm.MayAsk + op.Confirmed).
+	entries = append(entries, opscache.Ops(a)...)
+	// P3-MISC-3: the context commands; their machinery is Options.Context (wire/context_hosts.go).
+	entries = append(entries, opswhycontext.Ops(a)...)
+	entries = append(entries, opssetup.Ops(a)...)
+	entries = append(entries, opscoord.Ops(a)...)
+	entries = append(entries, opssupportbundle.Ops(a)...)
+	entries = append(entries, contextop.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 
@@ -467,12 +540,29 @@ func (a *App) repoTop(ctx context.Context) (string, error) {
 // The store operations run on the repo-only engine (configState); a
 // `--to <store>/<folder>` target is attached first (prepareTarget).
 func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+	// P3-CFG-1: a Local operation opens nothing, not even the
+	// agent detection's repo state (wire/localops.go).
+	if e.Spec().Local {
+		return a.runLocal(ctx, e, d, c)
+	}
+	// P3-AUDIT-4: audit reads and roster verbs run without the repo engine
+	// (wire/roster_ops.go), before anything opens the App: opening it can
+	// run the host's sync pass, which would record as accepted the very
+	// changes audit verify looks for.
+	if hostRunOp(e.Spec().Name) {
+		return runDirect(ctx, e, d)
+	}
 	// AGENT_IDENTITY 8.2 (#7): the CLI caller carries the detected agent, so
 	// agents.person_only fires on the CLI too, not only for REST callers
 	// that send X-Lore-Agent. A surface that already set an agent or an
 	// explicit actor keeps it.
 	if !c.AgentFixed && c.Agent == "" && c.Actor.IsZero() {
 		c.Agent = a.CallerAgent(ctx)
+	}
+	// v0.1.17 order: a live operation outside a project (or where live
+	// rows do not apply) is refused before any store opens (P3-LIVE-1).
+	if err := a.liveReady(ctx, e.Spec().Name); err != nil {
+		return op.Result{}, err
 	}
 	if name := e.Spec().Name; name != opsmigrate.OpRun && !opsstores.IsStoreOp(name) {
 		if err := a.RefuseRetiredModeB(ctx); err != nil {
@@ -600,6 +690,9 @@ func (s *state) close() error {
 	var all []error
 	for _, b := range s.backends {
 		all = append(all, b.Close())
+	}
+	if s.machine != nil {
+		all = append(all, s.machine.Close())
 	}
 	if s.caches != nil {
 		all = append(all, s.caches.Close())

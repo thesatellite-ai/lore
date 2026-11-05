@@ -14,18 +14,15 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"maps"
 	"os"
 	"path/filepath"
-	"saas/pkg/constants"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 
@@ -36,45 +33,22 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
-	opsarchitecturenote "github.com/thesatellite-ai/lore/ops/architecturenote"
-	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
-	opscomment "github.com/thesatellite-ai/lore/ops/comment"
-	opscookbookrecipe "github.com/thesatellite-ai/lore/ops/cookbookrecipe"
-	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
-	opshandoff "github.com/thesatellite-ai/lore/ops/handoff"
-	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
-	opsincident "github.com/thesatellite-ai/lore/ops/incident"
-	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
-	opsmission "github.com/thesatellite-ai/lore/ops/mission"
-	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
-	opsplan "github.com/thesatellite-ai/lore/ops/plan"
-	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
-	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
-	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
-	opsrule "github.com/thesatellite-ai/lore/ops/rule"
-	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
-	opssuggestion "github.com/thesatellite-ai/lore/ops/suggestion"
-	opstag "github.com/thesatellite-ai/lore/ops/tag"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
-	opstasklist "github.com/thesatellite-ai/lore/ops/tasklist"
-	opstastepref "github.com/thesatellite-ai/lore/ops/tastepref"
-	opstechdoc "github.com/thesatellite-ai/lore/ops/techdoc"
-	opsworkflow "github.com/thesatellite-ai/lore/ops/workflow"
-	opsworkspace "github.com/thesatellite-ai/lore/ops/workspace"
 	"github.com/thesatellite-ai/lore/schema"
-	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/surface/docs"
 	"github.com/thesatellite-ai/lore/surface/rest"
 	"github.com/thesatellite-ai/lore/wire"
+	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 
 	"dbent"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/identity"
-	"saas/pkg/aicoder/lorecfg"
+	"saas/pkg/aicoder/leakcheck"
 	"saas/pkg/aicoder/orgresolve"
 	"saas/pkg/aicoder/projresolve"
 	oldstores "saas/pkg/aicoder/stores"
@@ -95,7 +69,7 @@ var coreApp *wire.App
 // CLI. Its CLI-only state (compat flag refusals, --read-only, the running
 // command for the not-found explanation) is never set while `lore api`
 // serves, so a REST request sees only the shared path.
-var coreRunner *compatRunner
+var coreRunner *hosthooks.Runner
 
 // Defaults of the generated reference (`lore spec`), relative to the
 // directory the command runs in (the repo root when regenerating).
@@ -114,10 +88,119 @@ const (
 // notices, the live-row wrapper, LORE_ALLOW_NETWORK_FS). mountCore and the
 // test fixtures call it, so a hook added here reaches both.
 func coreOptions(repoDir, home string) wire.Options {
-	return wire.Options{RepoDir: repoDir, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
-		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, OrgEntryStore: coreOrgEntryStore, OrgSigners: coreOrgSigners,
+	o := wire.Options{RepoDir: repoDir, Home: home, Local: coreLocalPorts(),
 		WorkDir: coreWorkDir(), Version: version, Audit: &coreAuditSink{root: repoDir}, // OVERNIGHT Qs subfolder: audit at the repo top
-		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, ProjectHint: coreProjectHint, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
+		ModeB: modeBExporter{}, Roster: cliRoster{}, WrapBackend: coreWrapBackend, ProjectHint: coreProjectHint, LiveRef: coreLiveRef, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now,
+		Context: wire.ContextHosts{RenderHistory: renderHistoryHost{}, Setup: setupHost{}, SupportBundle: supportBundleHost{}, Fetch: contextHost{}},
+		Coord:   coordHost{}} // P3-COORD-1: task claim|next|…, hold, gate, inbox, mission status (coord_ops_host.go)
+	// Org, RepoIsClient, OrgStores, OrgEntryStore, OrgSigners, DefaultTarget
+	// and GuardRepoWrite: the core's org resolution, the same code cmd/lore
+	// runs (FA-OLDCODE-1, P3-ORG-3).
+	coreOrgResolution().Apply(&o)
+	return hosthooks.Options(o, coreHookList())
+}
+
+// coreHooks are this binary's host hooks (wire/host): the shared ones
+// (notices, compat flags, resource/meta delete --purge) with this binary's
+// compat options, its own .gitignore + git wiring step (the git hooks call
+// v0.1.17's sync commands, P3-HOOKS-2), the org write check (v0.1.17 org
+// resolution) and the F1 not-found explanation (the live ref). One list,
+// built once (coreHookList): coreOptions and mountCore share it.
+func buildCoreHooks() []hosthooks.Hook {
+	compat := hosthooks.CompatOptions{
+		Printed: func() { corePrinted = true },
+		BeforeCommand: func(cmd *cobra.Command, readOnly bool) {
+			// P3-AUDIT-4: `lore audit …` runs no start-of-command sync
+			// pass: the pass would record as external writes (and so
+			// accept) the very changes audit verify looks for.
+			if cmd.Parent() != nil && cmd.Parent().Name() == opsaudit.Noun {
+				return
+			}
+			coreSyncBefore(cmd.Context(), readOnly)
+		},
+		Filed: func() string { return coreOrgResolution().Routed() },
+		Wrap: func(c *cobra.Command) {
+			if c.Parent() != nil && c.Parent().Name() == opstask.Noun && c.Name() == op.VerbList {
+				wrapTaskListMergedCheck(c)
+			}
+		},
+	}
+	hooks := hosthooks.Default(coreWorkDir())
+	hooks = hosthooks.Replace(hooks, hosthooks.Hook{Name: hosthooks.HookGitignore, Before: func(ctx context.Context, run *hosthooks.Run) error {
+		// --read-only writes nothing, not even the .gitignore lines or
+		// the git wiring (v0.1.17); a live ref op writes no row file.
+		if !hosthooks.NeedsGitignore(run) {
+			return nil
+		}
+		if err := ensureCoreGitignore(ctx); err != nil {
+			return coreErr(err)
+		}
+		return nil
+	}})
+	hooks = hosthooks.Replace(hooks, hosthooks.CompatFlagsHook(compat))
+	return append(hooks,
+		hosthooks.Hook{Name: "org-write-check", Before: func(ctx context.Context, run *hosthooks.Run) error {
+			return coreOrgWriteCheck(ctx, run.Entry, run.Decoder)
+		}},
+		hosthooks.Hook{Name: "not-found", OnError: explainNotFound},
+	)
+}
+
+// coreHooksOnce / coreHooks cache buildCoreHooks (a function, not a var
+// initializer: the hooks reach coreOptions through the sync pass, which
+// would be an initialization cycle).
+var (
+	coreHooksOnce sync.Once
+	coreHooks     []hosthooks.Hook
+)
+
+// coreHookList returns this process's host hooks, built on first use.
+func coreHookList() []hosthooks.Hook {
+	coreHooksOnce.Do(func() { coreHooks = buildCoreHooks() })
+	return coreHooks
+}
+
+// coreOrgRes is the core's org resolution of this process (one command per
+// process, like rootCmd), built by coreOrgResolution on first use.
+var (
+	coreOrgResOnce sync.Once
+	coreOrgRes     *wire.OrgResolution
+)
+
+// coreOrgResolution is the org resolution for the working directory as of
+// its first use (v0.1.17 read the working directory when a hook first
+// asked, not at mount time), with the person's terminal for F14's
+// prompt-or-refuse and v0.1.17's F16 write-time leak check
+// (coreRepoWriteCheck). A HOME that cannot be resolved leaves the lore
+// home empty: config.yaml is then not found and no org resolves, as
+// gatherOrgSituation's error answered before (writes stay in the repo,
+// and the commit hooks still check).
+func coreOrgResolution() *wire.OrgResolution {
+	coreOrgResOnce.Do(func() {
+		home, _ := identity.Dir() // no HOME: no config, no org (see above)
+		dir, err := os.Getwd()
+		if err != nil {
+			dir = "."
+		}
+		coreOrgRes = wire.StandaloneOrgResolution(home, dir)
+		coreOrgRes.Interactive = stdinIsTTY
+		coreOrgRes.RepoWriteCheck = coreRepoWriteCheck
+	})
+	return coreOrgRes
+}
+
+// coreRepoWriteCheck is OrgResolution.RepoWriteCheck: v0.1.17's F16 check
+// of a row about to be written into a client repo (leakCheckRouteWrite's
+// body; the resolution already decided the repo needs it). A row moved out
+// of a store may quote its own source row (movedSource).
+func coreRepoWriteCheck(ctx context.Context, root, kind, text string) error {
+	it := leakcheck.Item{Where: "this " + kind, Content: []byte(text)}
+	lc := leakContext{action: leakActionWrite, what: "this " + kind}
+	if src := movedSource(ctx); src != "" {
+		it.AllowRows = []string{src}
+		lc = leakContext{action: leakActionMove, what: "this move", source: src}
+	}
+	return coreErr(runLeakCheck(ctx, root, []leakcheck.Item{it}, false, lc))
 }
 
 // coreWorkDir is the folder the command runs in, for `_o.dir` (PROV6:
@@ -131,35 +214,6 @@ func coreWorkDir() string {
 	return wd
 }
 
-// coreOrgSigners lists every org entry of ~/.lore/config.yaml that has an
-// identity, with its store urls and storeSignature's author (Q-R2-1: the
-// org identity signs every commit to an org store, never the person's own
-// git email). An unreadable config lists none (the FLAG4 rule signs).
-func coreOrgSigners(ctx context.Context) ([]wire.OrgSigner, error) {
-	dir, err := identity.Dir()
-	if err != nil {
-		return nil, err
-	}
-	cfg, _, err := lorecfg.LoadTeam(ctx, dir, lorecfg.Options{})
-	if err != nil || cfg == nil {
-		return nil, err
-	}
-	var out []wire.OrgSigner
-	for i := range cfg.Orgs {
-		org := &cfg.Orgs[i]
-		if strings.TrimSpace(org.Identity.Key) == "" || len(org.Stores) == 0 {
-			continue
-		}
-		sig := storeSignature(org)
-		s := wire.OrgSigner{Name: sig.Name, Email: sig.Email}
-		for _, st := range org.Stores {
-			s.StoreURLs = append(s.StoreURLs, st.URL)
-		}
-		out = append(out, s)
-	}
-	return out, nil
-}
-
 // mountCore builds the core and mounts its commands under root. A failure
 // here is a programmer error (a registry or mount clash) and stops the
 // binary, like op.Define's panics.
@@ -170,44 +224,29 @@ func mountCore(root *cobra.Command) {
 		panic(err)
 	}
 	coreApp = app
-	runner := &compatRunner{app: app}
+	runner := hosthooks.NewRunner(app, coreHookList())
 	coreRunner = runner
 	if err := cli.Mount(root, app.Registry(), runner,
 		cli.WithInteractive(stdinIsTTY),
 	); err != nil {
 		panic(err)
 	}
-	for _, noun := range coreNouns {
-		if g, _, ferr := root.Find([]string{noun}); ferr == nil && g.Name() == noun {
-			for _, c := range g.Commands() {
-				// Only the surface's operation commands: a host command
-				// mounted under a core noun (project shared-init) prints
-				// its own errors, and a group has no RunE to wrap.
-				if cli.Generated(c) && c.RunE != nil {
-					addCompatFlags(c, runner)
-					wrapCoreNotFound(c, runner)
-					if noun == opstask.Noun && c.Name() == op.VerbList {
-						wrapTaskListMergedCheck(c)
-					}
-				}
-			}
-		}
-	}
-	withDeletePurgeFlags(root, runner) // PASS3: resource/meta delete --purge/--confirm (core_delete_purge.go)
+	// compat flags (+ the task list merged check), resource/meta delete
+	// --purge, the running command for the F1 explanation (wire/host).
+	hosthooks.Install(root, runner)
 	markCorePrinted(root)
 	mountSQLShortcut(root)
+	mountSearchShortcut(root) // CLI_REFERENCE 2.5: lore search "<q>" (P3-MISC-1)
+	mountBareVerbs(root)      // P3-MISC-3: lore why-context [--cut] (misc_shortcuts.go)
 	mountRowShortcuts(root)   // CLI 2.7/2.13: lore show <id>, bare lore lint
 	withMigrateTeamLock(root) // FORMAT_EVOLUTION 7.2: migrate run|rollback|unlock --team get the signals-ref team lock
-	// The coordination verbs and mission status stay on the v0.1.17 signals
-	// machinery, mounted under the core nouns (after the compat loop: they
-	// carry their own v0.1.17 flags).
+	// The coordination verbs (task claim|next|…, hold, gate, inbox, mission
+	// status) are ops/coord operations over coordHost (P3-COORD-1); only
+	// `task hook` stays a host command under the task noun.
 	if t, _, ferr := root.Find([]string{opstask.Noun}); ferr == nil && t.Name() == opstask.Noun {
 		t.AddCommand(taskCoordCommands()...)
 		guardTaskCoreCommands(root)
 		withTaskShowSignals(root) // F7 Debug: task show --signals (task_show_signals.go)
-	}
-	if m, _, ferr := root.Find([]string{opsmission.Noun}); ferr == nil && m.Name() == opsmission.Noun {
-		m.AddCommand(newMissionStatusCommand())
 	}
 	if alias := newCommitShowAlias(root); alias != nil {
 		root.AddCommand(alias)
@@ -247,83 +286,9 @@ func newCommitShowAlias(root *cobra.Command) *cobra.Command {
 	}
 }
 
-// coreNouns are the command groups mounted from the core that keep
-// v0.1.17's common flags (addCompatFlags). One list: a migrated noun adds
-// its name here.
-var coreNouns = []string{
-	opsmemory.Noun,
-	opspattern.Noun, opsplaybook.Noun, opsprompt.Noun,
-	opsrule.Noun, opsdecision.Noun, opshotfix.Noun,
-	opstag.Noun, opscomment.Noun, opslink.Noun, opslink.CommitNoun,
-	opstask.Noun, opstasklist.Noun, opsmission.Noun, opsplan.Noun,
-	opsreminder.Noun,
-	opsinfra.NounActor, opsinfra.NounProject, opsinfra.NounRepo, opsinfra.NounMachine,
-	opsarchitecturenote.Noun, opsbehaviour.Noun, opscookbookrecipe.Noun, opsincident.Noun,
-	opssuggestion.Noun, opstastepref.Noun, opsworkflow.Noun, opsworkspace.Noun,
-	opshandoff.Noun, opssnapshot.Noun, opstechdoc.Noun, externalSourceNoun,
-}
-
-// externalSourceNoun is the CLI spelling of opsexternalsource.Noun
-// ("external_source").
-const externalSourceNoun = "external-source"
-
-// v0.1.17 flags every `lore memory …` command still accepts on the core
-// (CLI parity, phase 3). --read-only and --project keep working; --db and
-// --confirm are refused with the replacement named (spec-deltas.md);
-// --allow-secrets is gone with no alias (O12a: cobra's unknown flag).
-const (
-	jsonIndent = "  "
-)
-
-// compatRunner is the core's Runner as the old binary mounts it: it adds
-// v0.1.17's read-only mode (--read-only, LORE_READ_ONLY=1: a write
-// operation is refused with E_READ_ONLY before it runs) and returns the
-// refusal a compat flag set for this run. REST (`lore api`) runs through
-// the same runner (coreRunner); the CLI-only flags are never set there.
-type compatRunner struct {
-	app *wire.App
-	// pending is the refusal of the running command's compat flags (one
-	// command runs per process; set by the command's RunE wrapper).
-	pending error
-	// readOnly is --read-only of the running command.
-	readOnly bool
-	// cmd and args are the running command (wrapCoreNotFound), for the
-	// F1 not-found explanation.
-	cmd  *cobra.Command
-	args []string
-	// purge is the running delete's --purge / --confirm (DELETION 2.5,
-	// 3.12); the engine fills Purged so the output can say "purged".
-	purge *engine.PurgeRequest
-}
-
-// Run implements op.Runner.
-func (r *compatRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
-	if r.pending != nil {
-		return op.Result{}, r.pending
-	}
-	// --read-only writes nothing, not even the .gitignore lines or the git
-	// wiring (v0.1.17: a read-only command leaves the checkout untouched).
-	if !r.readOnly {
-		if err := ensureCoreGitignore(ctx); err != nil {
-			return op.Result{}, coreErr(err)
-		}
-	}
-	if e.Spec().Access == op.AccessWrite && (r.readOnly || os.Getenv(envReadOnly) == envValueOn) {
-		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
-			WithHint("unset --read-only and LORE_READ_ONLY")
-	}
-	if err := coreOrgWriteCheck(ctx, e, d); err != nil {
-		return op.Result{}, err
-	}
-	if r.purge != nil {
-		ctx = engine.WithPurge(ctx, r.purge)
-	}
-	res, err := r.app.Run(ctx, e, d, c)
-	if err != nil {
-		return res, r.explainNotFound(ctx, err)
-	}
-	return res, nil
-}
+// jsonIndent is v0.1.17's printJSON indent (main.go's error envelope; the
+// core commands' indented --json is wire/host's compat flags hook).
+const jsonIndent = "  "
 
 // coreOrgWriteCheck runs v0.1.17's org checks on a write that takes --to
 // (an op with a `to` input), before the core opens or guards anything:
@@ -383,178 +348,6 @@ func coreOrgWriteCheck(ctx context.Context, e op.Entry, d op.Decoder) error {
 		return coreErr(targetCLIError(rerr))
 	}
 	return nil
-}
-
-// addCompatFlags gives one mounted memory command v0.1.17's common flags
-// (--db, --project where the op has none, --read-only, and --confirm on the
-// commands that ask) and v0.1.17's indented --json output.
-func addCompatFlags(c *cobra.Command, r *compatRunner) {
-	var db, project string
-	var readOnly, confirm, purge bool
-	isDelete := c.Name() == op.VerbDelete
-	if c.Flags().Lookup(constants.FlagDB) == nil {
-		c.Flags().StringVar(&db, constants.FlagDB, "", "v0.1.17 lore.db path: not used by this command (refused)")
-	}
-	if c.Flags().Lookup(constants.FlagProject) == nil {
-		// show/edit/delete/… address a memory by its id, which is unique
-		// across projects: --project is accepted and has nothing to do.
-		c.Flags().StringVar(&project, constants.FlagProject, "", "accepted for v0.1.17 scripts; a row id already names its project")
-	}
-	if c.Flags().Lookup(constants.FlagReadOnly) == nil {
-		c.Flags().BoolVar(&readOnly, constants.FlagReadOnly, false, "refuse writes (also LORE_READ_ONLY=1)")
-	}
-	if c.Flags().Lookup(cli.FlagYes) != nil && c.Flags().Lookup(constants.FlagConfirm) == nil {
-		desc := "v0.1.17 spelling: refused, use --yes"
-		if isDelete { // DQ8 / FA-DEL-1: accepted on a delete
-			desc = "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
-		}
-		c.Flags().BoolVar(&confirm, constants.FlagConfirm, false, desc)
-	}
-	if isDelete && c.Flags().Lookup(flagPurge) == nil {
-		c.Flags().BoolVar(&purge, flagPurge, false, "skip the trash: remove for good, only a tombstone stays (needs --confirm)")
-	}
-	flagErr := c.FlagErrorFunc()
-	c.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
-		corePrinted = true // the surface prints cobra's usage error itself
-		return flagErr(cmd, err)
-	})
-	inner := c.RunE
-	c.RunE = func(cmd *cobra.Command, args []string) error {
-		// Every error a generated command returns was printed by surface/cli.
-		defer func() { corePrinted = true }()
-		r.readOnly = readOnly
-		if isDelete {
-			r.purge = &engine.PurgeRequest{Asked: purge, Confirmed: confirm}
-		}
-		switch {
-		case isDelete && purge && !confirm: // DQ2/DEL-R4: a purge never prompts, it needs the literal --confirm
-			r.pending = errs.New(errs.NeedsConfirm, "--purge removes "+strings.Join(args, " ")+" for good, without the trash (only a tombstone stays)").
-				WithHint("ask the person, then rerun with --confirm (--yes does not purge)")
-		case isDelete && cmd.Flags().Changed(constants.FlagConfirm):
-			// DQ8 (FA-DEL-1): v0.1.17's delete --confirm is accepted; a
-			// delete is soft, so it answers the question like --yes.
-			if fl := cmd.Flags().Lookup(cli.FlagYes); fl != nil {
-				_ = fl.Value.Set("true") // a bool flag accepts "true"
-			}
-		case cmd.Flags().Changed(constants.FlagConfirm):
-			r.pending = errs.New(errs.InvalidInput, "--confirm was renamed: confirm with --yes").
-				WithHint("rerun with --yes instead of --confirm")
-		case cmd.Flags().Changed(constants.FlagDB):
-			r.pending = errs.New(errs.Unsupported, "--db is not supported by this command: its rows are row files read from the repository, not lore.db").
-				WithHint("run the command inside the repository (or name a store with --store / --to)")
-		}
-		applyEnvDefaults(cmd)
-		coreSyncBefore(cmd.Context(), readOnly)
-		asJSON, _ := cmd.Flags().GetBool(cli.FlagJSON)
-		if !asJSON {
-			// Buffered so v0.1.17's "filed:" line (printRoute: where a
-			// routed write went and why) goes right under the success line,
-			// before the op's own detail lines (scope: …). Prompts go to
-			// stderr, so nothing interactive waits behind the buffer.
-			var buf bytes.Buffer
-			out := cmd.OutOrStdout()
-			cmd.SetOut(&buf)
-			err := inner(cmd, args)
-			cmd.SetOut(out)
-			b := buf.Bytes()
-			if err == nil && r.purge != nil {
-				b = purgedLines(b, r.purge, confirm)
-			}
-			if err == nil && coreRouted != "" {
-				b = insertAfterFirstLine(b, "  filed: "+coreRouted+"\n")
-			}
-			_, werr := out.Write(b)
-			return errors.Join(err, werr)
-		}
-		var buf bytes.Buffer
-		out := cmd.OutOrStdout()
-		cmd.SetOut(&buf)
-		err := inner(cmd, args)
-		cmd.SetOut(out)
-		return errors.Join(err, writeIndented(out, buf.Bytes()))
-	}
-}
-
-// envFlagDefaults are v0.1.17's environment fallbacks for a row command's
-// scope flags (projresolve: flag > env): LORE_PROJECT_ID for --project,
-// LORE_REPO for --repo. LORE_DB is not one: --db is refused on core
-// commands, and so is its variable (memparity).
-var envFlagDefaults = [][2]string{
-	{constants.FlagProject, projresolve.EnvProjectID},
-	{constants.FlagRepo, projresolve.EnvRepo},
-}
-
-// applyEnvDefaults sets each scope flag the command has, and the caller did
-// not give, from its environment variable when that is set.
-func applyEnvDefaults(cmd *cobra.Command) {
-	for _, fe := range envFlagDefaults {
-		fl := cmd.Flags().Lookup(fe[0])
-		v := os.Getenv(fe[1])
-		if fl == nil || fl.Changed || v == "" {
-			continue
-		}
-		_ = cmd.Flags().Set(fe[0], v) // a string flag accepts any value; the op validates it
-	}
-}
-
-// flagPurge is a delete's --purge (DELETION 2.5).
-const flagPurge = "purge"
-
-// trashLineMark is the phrase of every noun delete's success line
-// (ops/internal/trashline).
-const trashLineMark = "moved to the trash"
-
-// purgedLines rewrites a delete's "moved to the trash" line when the
-// engine purged instead (--purge, or policy trash.purge_on_delete), and
-// adds DQ8's hint to a plain delete given v0.1.17's --confirm.
-func purgedLines(b []byte, pr *engine.PurgeRequest, confirm bool) []byte {
-	if len(pr.Purged) == 0 {
-		if confirm && bytes.Contains(b, []byte(trashLineMark)) {
-			b = append(b, []byte("  note: a delete is soft now (restorable); to remove content for good: lore trash purge <id> --confirm\n")...)
-		}
-		return b
-	}
-	names := make([]string, 0, len(pr.Purged))
-	for _, id := range pr.Purged {
-		names = append(names, id.String())
-	}
-	lines := strings.SplitAfter(string(b), "\n")
-	for i, l := range lines {
-		if strings.Contains(l, trashLineMark) {
-			lines[i] = "✓ purged for good: " + strings.Join(names, ", ") + " (tombstones written; old content is still in git history)\n"
-		}
-	}
-	return []byte(strings.Join(lines, ""))
-}
-
-// insertAfterFirstLine returns b with line inserted after its first line
-// (at the end when b has no newline; b itself when empty is just line).
-func insertAfterFirstLine(b []byte, line string) []byte {
-	i := bytes.IndexByte(b, '\n')
-	if i < 0 {
-		if len(b) > 0 {
-			return append(append(append([]byte{}, b...), '\n'), line...)
-		}
-		return []byte(line)
-	}
-	out := make([]byte, 0, len(b)+len(line))
-	out = append(out, b[:i+1]...)
-	out = append(out, line...)
-	return append(out, b[i+1:]...)
-}
-
-// writeIndented prints JSON the way v0.1.17's printJSON did
-// (json.MarshalIndent with two spaces, one trailing newline); anything that
-// is not one JSON value is written unchanged.
-func writeIndented(w io.Writer, b []byte) error {
-	var ind bytes.Buffer
-	if err := json.Indent(&ind, bytes.TrimSpace(b), "", jsonIndent); err != nil {
-		_, werr := w.Write(b)
-		return werr
-	}
-	ind.WriteByte('\n')
-	_, err := w.Write(ind.Bytes())
-	return err
 }
 
 // ensureCoreGitignore makes sure the repo's .gitignore lists the core's
@@ -646,268 +439,22 @@ func ensureCoreGitSetup(ctx context.Context, root string) {
 // process, like rootCmd).
 var gitignoreChecked bool
 
-// coreRouteKinds maps a core table to the kind name v0.1.17's routing
-// rules (defaults.client_repos, F14) use for it.
-var coreRouteKinds = map[row.Table]string{
-	schema.TableMemories:  "memory",
-	schema.TableRules:     "rule",
-	schema.TableDecisions: "decision",
-	schema.TableComments:  "comment",
-	schema.TableTasks:     "task",
-	schema.TableMissions:  "mission",
-}
-
-// guardCoreRepoWrite keeps v0.1.17's write routing in force for the rows
-// the core writes into the repo store: in a repo whose org config sends
-// that kind elsewhere (a client repo: internal knowledge must never land
-// in it, D8), or whose store links cannot be read (F10 fail closed,
-// E_LINK_UNKNOWN), the write is refused; a write the rules keep in this
-// repo still passes the F16 leak check. The core cannot write into a
-// v0.1.17 store yet, so "goes elsewhere" is a refusal naming --to.
-//
-// explicit is `--to repo`: the person chose this repo, which v0.1.17
-// accepted (the leak check still runs).
+// guardCoreRepoWrite is wire.Options.GuardRepoWrite for this binary's
+// other core apps (lore init): the core's F14 decision (OrgResolution).
 func guardCoreRepoWrite(ctx context.Context, q wire.WriteQuery, explicit bool) error {
-	kind, ok := coreRouteKinds[q.Table]
-	if !ok {
-		return nil
-	}
-	var to toFlags
-	if explicit {
-		to.To = toRepo
-	}
-	wt, dec, err := coreRouteDecision(ctx, to, kind, q)
-	if err != nil {
-		return err
-	}
-	if wt.Personal != nil || !dec.Repo {
-		// coreDefaultTarget sends this row to the org store when that
-		// folder is attached; reaching here means it is not.
-		hint := "write it to a store listed in .lore/stores.yaml with --to <name>, or choose this repo with --to repo"
-		if wt.Personal == nil && wt.Situation != nil && wt.Situation.Result.Org != nil {
-			org := wt.Situation.Result.Org.Name
-			hint = "write it to " + org + "'s store with --to " + org + "/" + dec.Folder + " (the folder " + dec.Folder + "/), or choose this repo with --to repo"
-		}
-		return errs.New(errs.Unsupported, "this repository's lore routing sends a "+kind+" to a store folder lore has not attached ("+dec.Rule+"); name the target with --to").
-			WithHint(hint)
-	}
-	return coreErr(leakCheckRouteWrite(ctx, writeRoute{Repo: true, Rule: dec.Rule, Situation: wt.Situation}, kind, q.Text))
+	return coreOrgResolution().GuardRepoWrite(ctx, q, explicit)
 }
 
-// coreRouteDecision is v0.1.17's F14 target decision (routeWrite) for one
-// core create of kind: the org situation, the --to given, the team's
-// client-repo defaults from lore-org.yaml (until `lore migrate run` moves
-// them) joined with the routing.client_repos policy rows (CFG8; per kind a
-// store target beats repo, as v0.1.17's effectiveDefault).
-func coreRouteDecision(ctx context.Context, to toFlags, kind string, q wire.WriteQuery) (writeTarget, oldstores.TargetDecision, error) {
-	wt, err := resolveWriteTarget(ctx, to, q.Text)
-	if err != nil {
-		return writeTarget{}, oldstores.TargetDecision{}, coreErr(err)
-	}
-	in, err := targetInputs(ctx, wt.Situation, wt.Target, kind)
-	if err != nil {
-		return writeTarget{}, oldstores.TargetDecision{}, coreErr(err)
-	}
-	if len(q.Routes) > 0 {
-		merged := maps.Clone(in.StoreDefaults)
-		if merged == nil {
-			merged = map[string]string{}
-		}
-		for k, v := range q.Routes {
-			if cur, seen := merged[k]; !seen || (cur == oldstores.DefaultRepo && v != oldstores.DefaultRepo) {
-				merged[k] = v
-			}
-		}
-		in.StoreDefaults = merged
-	}
-	dec, err := oldstores.ResolveTarget(in)
-	if err != nil {
-		return writeTarget{}, oldstores.TargetDecision{}, coreErr(targetCLIError(err))
-	}
-	return wt, dec, nil
-}
-
-// coreDefaultTarget is wire.Options.DefaultTarget for this binary: a
-// create of a routed kind (coreRouteKinds) that names no --to goes where
-// v0.1.17's routeWrite sent it. In a client repo that is the org store's
-// linked folder (attached as the org's name by coreOrgStores), or the
-// folder a client-repo default names ("<org>/<folder>", the org folder
-// attached as such); in the org's own repo, or with no org, the repo
-// store (""), where guardCoreRepoWrite still runs the leak check. A folder
-// the core has not attached answers "" too, so the guard refuses it with
-// the explicit --to to use (fail closed). The decision's rule is kept in
-// coreRouted for the "filed:" line v0.1.17 printed.
-func coreDefaultTarget(ctx context.Context, q wire.WriteQuery) (store.Source, error) {
-	kind, ok := coreRouteKinds[q.Table]
-	if !ok {
-		return "", nil
-	}
-	wt, dec, err := coreRouteDecision(ctx, toFlags{}, kind, q)
-	if err != nil {
-		return "", err
-	}
-	if wt.Personal != nil || dec.Repo || wt.Situation == nil || wt.Situation.Result.Org == nil {
-		return "", nil
-	}
-	attached, err := coreOrgStores(ctx)
-	if err != nil {
-		return "", coreErr(err)
-	}
-	for _, s := range attached {
-		if s.Folder == dec.Folder {
-			coreRouted = dec.Rule
-			return s.Name, nil
-		}
-	}
-	return "", nil
-}
-
-// coreRouted is the F14 rule of the routed create this process made (one
-// command per process); printed as v0.1.17's "  filed: <rule>" line.
-var coreRouted string
-
-// coreRepoIsClient is wire.Options.RepoIsClient for this binary: the repo
-// is a client repo when org resolution (F10, gatherOrgSituation) says its
-// role is client (a non-own link in an attached org store, a repos:
-// pattern, or an org chosen on purpose that nobody declared own), or when
-// a staging entry's own store branch links it that way (entryLinks, read
-// by gatherOrgSituation). Links
-// that cannot be read, an org resolution refusal or any error answer
-// client (fail closed). No org at all, or the org's own repo, is internal.
-// The answer is computed once per process: it runs on every core command
-// and may read the org stores.
+// coreRepoIsClient is the repo's role for the old commands that still ask
+// (render scopes, roster): the core's answer (OrgResolution, fail closed).
 func coreRepoIsClient(ctx context.Context) (bool, error) {
-	if !repoClientChecked {
-		repoClientChecked = true
-		repoClientAnswer, repoClientErr = repoIsClientNow(ctx)
-	}
-	return repoClientAnswer, repoClientErr
+	return coreOrgResolution().RepoIsClient(ctx)
 }
 
-// Cache of coreRepoIsClient (one command per process, like rootCmd).
-var (
-	repoClientChecked bool
-	repoClientAnswer  bool
-	repoClientErr     error
-)
-
-// repoIsClientNow computes coreRepoIsClient's answer.
-func repoIsClientNow(ctx context.Context) (bool, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return true, err
-	}
-	s, err := gatherOrgSituation(ctx, dir)
-	if err != nil {
-		return true, err
-	}
-	if s.ResolveErr != nil {
-		return true, s.ResolveErr
-	}
-	r := s.Result
-	if r.LinkUnknown {
-		return true, errors.New("the store links of this repo cannot be read: " + r.LinkDetail)
-	}
-	if r.Role == orgresolve.RoleClient {
-		return true, nil
-	}
-	// A staging entry chosen on purpose: gatherOrgSituation replaced the
-	// links with that entry's own (entryLinks) after the role was decided.
-	for _, l := range r.Links {
-		if !l.Own {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// coreOrgStores is wire.Options.OrgStores for this binary (CONFIG_GUIDE
-// section 4 step 5b): when an org resolves for the working directory, its
-// store is attached under the org entry's name at the folder this repo is
-// linked to (the default link, else the first; else the committed
-// .lore/org.yaml project; else the store root), and the org folder store
-// under "<org>/<org folder>" at its org folder (`--to agency/org`). Nothing
-// is written to the repo: in a client repo this is how the internal store
-// is reached without its url in a file the client reads (CFG7).
-//
-// Fail closed: an org refusal or links that cannot be read is an error
-// (wire then attaches nothing). A store entry pinned to a non-default
-// branch (a staging entry) is attached on that branch (attach.Store.Branch:
-// its own clone, its own cache path).
+// coreOrgStores is the org stores the core attaches, for the old commands
+// that still ask (the leak index): the core's answer (OrgResolution).
 func coreOrgStores(ctx context.Context) ([]attach.Store, error) {
-	s, err := coreSituationOnce(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if s.ResolveErr != nil {
-		return nil, s.ResolveErr
-	}
-	org := s.Result.Org
-	if org == nil || len(org.Stores) == 0 {
-		return nil, nil
-	}
-	if s.Result.LinkUnknown {
-		return nil, errors.New("the store links of this repo cannot be read: " + s.Result.LinkDetail)
-	}
-	attachable := func(sc *lorecfg.Store) bool { return sc != nil }
-	// branchOf is the attach branch of an entry store: "" for the default.
-	branchOf := func(sc *lorecfg.Store) string {
-		if b := sc.EffectiveBranch(); b != lorecfg.DefaultStoreBranch {
-			return b
-		}
-		return ""
-	}
-	var out []attach.Store
-	var linked *orgresolve.Link
-	for i := range s.Result.Links {
-		l := &s.Result.Links[i]
-		if l.Entry != org.Name {
-			continue
-		}
-		if linked == nil || (l.Default && !linked.Default) {
-			linked = l
-		}
-	}
-	switch {
-	case linked != nil:
-		if sc := oldstores.StoreFor(org, linked.StoreURL); attachable(sc) {
-			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: linked.Folder, Branch: branchOf(sc)})
-		}
-	case s.Committed != nil && s.Committed.Org == org.Name && s.Committed.Project != "":
-		if sc := &org.Stores[0]; attachable(sc) {
-			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: s.Committed.Project, Branch: branchOf(sc)})
-		}
-	default:
-		if sc := &org.Stores[0]; attachable(sc) {
-			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Branch: branchOf(sc)})
-		}
-	}
-	for i := range org.Stores {
-		sc := &org.Stores[i]
-		if sc.OrgFolder == "" || !attachable(sc) {
-			continue
-		}
-		company := attach.Store{Name: store.Source(org.Name + "/" + sc.OrgFolder), URL: sc.URL, Folder: sc.OrgFolder, Branch: branchOf(sc)}
-		// org_folder "." is a dedicated company store (F13): its root is
-		// the company folder, attached as "<org>/." so company rules
-		// (`--to <org>/.`) land there and every teammate listing that
-		// store reads them. It is skipped only when the linked-folder
-		// entry above already attaches that same root (no link, first
-		// store): one store folder keeps one name.
-		if sc.OrgFolder == oldstores.RootFolder && slices.ContainsFunc(out, func(o attach.Store) bool { return sameStoreRoot(o, company) }) {
-			break
-		}
-		out = append(out, company)
-		break // one org folder per entry (F13)
-	}
-	return out, nil
-}
-
-// sameStoreRoot reports whether a and b both attach the root folder of the
-// same store url on the same branch.
-func sameStoreRoot(a, b attach.Store) bool {
-	isRoot := func(f string) bool { f = strings.Trim(f, "/"); return f == "" || f == oldstores.RootFolder }
-	return a.URL == b.URL && a.Branch == b.Branch && isRoot(a.Folder) && isRoot(b.Folder)
+	return coreOrgResolution().OrgStores(ctx)
 }
 
 // coreSituationOnce is gatherOrgSituation for the working directory,
@@ -1201,33 +748,17 @@ const (
 	fieldStatus       = "status"
 )
 
-// coreNotice prints a core notice (wire.Options.Notice) on stderr, so
-// stdout (--json, piped output) stays the command's own.
-func coreNotice(msg string) { fmt.Fprintln(os.Stderr, msg) }
-
-// wrapCoreNotFound records the running core command and its arguments on
-// the runner, so compatRunner.Run can give an E_NOT_FOUND for the id
-// argument v0.1.17's F1 explanation before the surface prints it.
-// wireLive wraps only the commands registered before the core is mounted.
-func wrapCoreNotFound(c *cobra.Command, r *compatRunner) {
-	run := c.RunE
-	c.RunE = func(cmd *cobra.Command, args []string) error {
-		r.cmd, r.args = cmd, args
-		return run(cmd, args)
-	}
-}
-
 // explainNotFound is v0.1.17's F1 answer (live_flags.go
 // liveMissingExplain) for an E_NOT_FOUND of the running command's id
 // argument: what live knows about the id, else the `lore sync peek
 // <remote>/<branch> <table>` hint. An error that already carries a hint,
 // or a command with no argument, is returned as it is.
-func (r *compatRunner) explainNotFound(ctx context.Context, err error) error {
+func explainNotFound(ctx context.Context, run *hosthooks.Run, err error) error {
 	var e *errs.Error
-	if r.cmd == nil || len(r.args) == 0 || !errors.As(err, &e) || e.Code != errs.NotFound || e.Hint != "" {
+	if run.Cmd == nil || len(run.Args) == 0 || !errors.As(err, &e) || e.Code != errs.NotFound || e.Hint != "" {
 		return err
 	}
-	why, hint, ok := liveMissingExplain(ctx, r.cmd, r.args[0])
+	why, hint, ok := liveMissingExplain(ctx, run.Cmd, run.Args[0])
 	switch {
 	case !ok:
 		return err

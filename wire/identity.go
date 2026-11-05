@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -263,7 +264,7 @@ func (a *App) RefreshMachineProfile(ctx context.Context) (bool, error) {
 // command refreshes this machine's profile in its own store (MACH-AUTO).
 // machine.label already wrote it; a failure is only a notice.
 func (a *App) afterWrite(ctx context.Context, e op.Entry) {
-	if e.Spec().Access != op.AccessWrite || e.Spec().Name == opsinfra.OpMachineLabel {
+	if e.Spec().Access != op.AccessWrite || e.Spec().Name == opsinfra.OpMachineLabel || opscoord.SignalsOnly(e.Spec().Name) {
 		return
 	}
 	_, err := a.RefreshMachineProfile(ctx)

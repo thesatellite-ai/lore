@@ -1,6 +1,65 @@
 package schema
 
-// telemetryDefs returns the built-in run, run-step, session, query-log, render-history, audit, activity-archive, intervention-metric, bench and assemble/compress tables. Owned by the phase 5 group 8
-// migration; empty until that noun moves onto the new core, so Builtin is
-// unchanged for nouns still served by the old binary.
-func telemetryDefs() []TableDef { return nil }
+import "github.com/thesatellite-ai/lore/model/ids"
+
+// Telemetry tables that the 0.1.18 design keeps (P3-LOCAL-3): machine-local
+// rows that never leave this machine (schema.MachineLocal, P3-LOCAL-1).
+// runs keeps v0.1.17's columns (dbent/schema/runs.go) so the one-time copy
+// from .lore/lore.db is column for column; id and created_at are envelope
+// fields. Every other v0.1.17 telemetry table (run_steps, query_logs,
+// bench_*, assemble_*, compress_runs, …) is dropped (p3/dropped.md).
+const (
+	TableRuns = "runs"
+)
+
+// Run fields (TIME_TRACKING 4: `lore run start|end|cancel`).
+const (
+	FieldRunProjectID   = "project_id"
+	FieldRunKind        = "kind"
+	FieldRunStatus      = "status_str"
+	FieldRunActorID     = "actor_id"
+	FieldRunStartedAt   = "started_at"
+	FieldRunCompletedAt = "completed_at"
+	// FieldRunNotes is v0.1.17's JSON text of the run's details (task_id,
+	// mission_id, agent_kind, model_id, retry_of_run_id, goal, outcome,
+	// summary, error_message, tokens_in, tokens_out, cost); ops/run owns its
+	// typed shape (runNotes).
+	FieldRunNotes = "notes"
+)
+
+// Run statuses: a run is in_progress until `run end --outcome` sets one of
+// the outcomes, or `run cancel` sets cancelled.
+const (
+	RunInProgress = "in_progress"
+	RunSuccess    = "success"
+	RunPartial    = "partial"
+	RunFailed     = "failed"
+	RunCancelled  = "cancelled"
+)
+
+// RunOutcomes are the values `run end --outcome` takes, in v0.1.17 help order.
+func RunOutcomes() []string { return []string{RunSuccess, RunPartial, RunFailed, RunCancelled} }
+
+// RunStatuses are every status a run row may hold.
+func RunStatuses() []string { return append([]string{RunInProgress}, RunOutcomes()...) }
+
+// telemetryDefs returns the machine-local telemetry tables.
+//
+// Why project_id and actor_id are text, not refs: the project and actor
+// rows live in the repo or an org store, never in the machine store, so a
+// relation would cross stores; the machine store holds every repo's runs
+// and ops/run filters by project_id (P3-LOCAL-2).
+func telemetryDefs() []TableDef {
+	return []TableDef{
+		Table(TableRuns, ids.PrefixRun, MachineLocal(), Description("an agent's or person's attempt at a task, logged on this machine"),
+			Text(FieldRunProjectID),
+			Text(FieldRunKind, Required()),
+			Text(FieldRunStatus, Required(), OneOf(RunStatuses()...)),
+			Text(FieldRunActorID),
+			DateTime(FieldRunStartedAt),
+			DateTime(FieldRunCompletedAt),
+			Text(FieldRunNotes, WithWidget(WidgetJSON)),
+			IndexOn(FieldRunProjectID, FieldRunStartedAt),
+		),
+	}
+}

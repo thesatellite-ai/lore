@@ -226,7 +226,8 @@ func MissingInitURL(name string) error {
 
 // Ops returns the store operations bound to m.
 func Ops(m Manager) []op.Entry {
-	return []op.Entry{
+	// The v0.1.17 clone commands (show, open, forget, doctor) come last (clones.go).
+	return append([]op.Entry{
 		op.Define(op.Spec{
 			Name: OpInit, Summary: "Make a git repo or folder a lore store and attach it (me = your personal store)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
@@ -361,7 +362,7 @@ func Ops(m Manager) []op.Entry {
 			return m.AddFolder(ctx, in)
 		}),
 		setURLOp(m),
-	}
+	}, cloneOps(m)...)
 }
 
 // Syncer is what SyncAll needs; the engine provides both methods.

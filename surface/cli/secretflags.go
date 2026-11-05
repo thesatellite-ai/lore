@@ -33,7 +33,9 @@ type secretFlagSet struct {
 // secretFlags adds the answer flags to c when s may ask about a secret.
 func secretFlags(c *cobra.Command, s op.Spec, values map[string]*rawFlag) secretFlagSet {
 	var sf secretFlagSet
-	if !s.Confirm.MayAsk {
+	// P3-MISC-2: a Local operation writes no row, so it never asks about a
+	// secret; its MayAsk is only its own yes/no question.
+	if !s.Confirm.MayAsk || s.Local {
 		return sf
 	}
 	taken := func(name string) bool { _, ok := values[name]; return ok }

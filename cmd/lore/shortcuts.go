@@ -11,6 +11,7 @@ package main
 //	lore machine(s) [show]    ─► machine list | machine show
 //	lore trash [--type …]     ─► trash list
 //	lore sql "<query>"        ─► sql run
+//	lore upgrade [--check …]  ─► upgrade run
 //	lore plan apply …         ─► refused, hint: lore mission apply (2.15)
 
 import (
@@ -21,10 +22,13 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslint "github.com/thesatellite-ai/lore/ops/lint"
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsrow "github.com/thesatellite-ai/lore/ops/row"
+	opssearch "github.com/thesatellite-ai/lore/ops/search"
+	opsselfupgrade "github.com/thesatellite-ai/lore/ops/selfupgrade"
 	opsql "github.com/thesatellite-ai/lore/ops/sql"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 )
@@ -37,6 +41,7 @@ const (
 	machineListVerb = "list"
 	trashListVerb   = "list"
 	sqlRunVerb      = "run"
+	searchRunVerb   = "run"
 	planApplyVerb   = "apply"
 	missionApply    = "lore mission apply "
 )
@@ -55,6 +60,13 @@ func mountShortcuts(root *cobra.Command) {
 	}
 	defaultVerb(root, opstrash.Noun, trashListVerb)
 	defaultVerb(root, opsql.Noun, sqlRunVerb)
+	defaultVerb(root, opsselfupgrade.Noun, opsselfupgrade.RunVerb) // CLI_REFERENCE 3.5 (P3-UPG-1)
+	defaultVerb(root, opssearch.Noun, searchRunVerb)               // CLI_REFERENCE 2.5 (P3-MISC-1)
+	defaultVerb(root, "why-context", "show")                       // CLI_REFERENCE 2.14 (P3-MISC-3)
+	defaultVerb(root, "setup", "run")                              // CLI_REFERENCE 2.14, 3.18 (P3-MISC-4)
+	defaultVerb(root, opscoord.NounInbox, opscoord.InboxVerb)      // bare `lore inbox` (CLI_REFERENCE 2.11, P3-COORD-1)
+	defaultVerb(root, "support-bundle", "run")                     // CLI_REFERENCE 2.11 (P3-MISC-5)
+	defaultVerb(root, "context", "fetch")                          // CLI_REFERENCE 2.14 (P3-MISC-6)
 	if g := find(root, opsplan.Noun); g != nil {
 		g.AddCommand(&cobra.Command{
 			Use: planApplyVerb, Hidden: true, Args: cobra.ArbitraryArgs, DisableFlagParsing: true,
@@ -93,38 +105,27 @@ func defaultVerb(root *cobra.Command, noun, verb string) *cobra.Command {
 // shortcutOf is a top-level command that parses its arguments with target's
 // flags and runs target, so both spellings share one implementation.
 func shortcutOf(target *cobra.Command, use, short string) *cobra.Command {
-	sc := &cobra.Command{
+	return &cobra.Command{
 		Use: use, Short: short, Long: target.Long, Example: target.Example,
 		DisableFlagParsing: true,
+		RunE:               forward(target),
 	}
-	// --help prints the shortcut's own usage ("lore move <id>", CLI_REFERENCE
-	// 2.7) with target's flags listed; the flags are shown here only, target
-	// still parses them (P3-CMDLORE-3).
-	sc.Flags().AddFlagSet(target.NonInheritedFlags())
-	sc.RunE = forwardHelp(target, sc)
-	return sc
 }
 
-// forward runs target with args parsed by target's own flag set; --help
-// prints target's help.
+// forward runs target with args parsed by target's own flag set.
 func forward(target *cobra.Command) func(*cobra.Command, []string) error {
-	return forwardHelp(target, target)
-}
-
-// forwardHelp is forward with --help printing help's help instead.
-func forwardHelp(target, help *cobra.Command) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		target.SetContext(cmd.Context())
 		target.SetOut(cmd.OutOrStdout())
 		target.SetErr(cmd.ErrOrStderr())
 		if err := target.ParseFlags(args); err != nil {
 			if errors.Is(err, pflag.ErrHelp) {
-				return help.Help()
+				return target.Help()
 			}
 			return target.FlagErrorFunc()(target, err)
 		}
 		if h, _ := target.Flags().GetBool("help"); h {
-			return help.Help()
+			return target.Help()
 		}
 		rest := target.Flags().Args()
 		if err := target.ValidateArgs(rest); err != nil {

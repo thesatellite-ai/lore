@@ -227,37 +227,8 @@ func supersedeArgs(kind string) []string {
 
 // ── identity set ────────────────────────────────────────────────────────
 
-func TestFix_FallbackIdentityKeyIsAnEmail(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		arg, key           string
-		wantDisplay, wantK string
-		wantErr            bool
-	}{
-		{arg: "alice@example.com", wantDisplay: "alice@example.com", wantK: "human:alice@example.com"},
-		{arg: "Alice Doe <alice@example.com>", wantDisplay: "Alice Doe", wantK: "human:alice@example.com"},
-		{arg: "Alice Doe", key: "human:alice@example.com", wantDisplay: "Alice Doe", wantK: "human:alice@example.com"},
-		{arg: "alice@example.com", key: "human:alice@example.com", wantDisplay: "alice@example.com", wantK: "human:alice@example.com"},
-		{arg: "alice", wantErr: true},
-		{arg: "Alice Doe", wantErr: true},
-		{arg: "   ", wantErr: true},
-		{arg: "Alice", key: "alice@example.com", wantErr: true},
-		{arg: "Alice", key: "human:alice", wantErr: true},
-		{arg: "Alice", key: "human:Alice <alice@example.com>", wantErr: true},
-		{arg: "bob@example.com", key: "human:alice@example.com", wantErr: true},
-	} {
-		display, key, err := fallbackIdentity(tc.arg, tc.key)
-		if tc.wantErr {
-			if errCode(err) != errcodes.InvalidInput {
-				t.Fatalf("fallbackIdentity(%q,%q) = %q,%q,%v; want E_INVALID_INPUT", tc.arg, tc.key, display, key, err)
-			}
-			continue
-		}
-		if err != nil || display != tc.wantDisplay || key != tc.wantK {
-			t.Fatalf("fallbackIdentity(%q,%q) = %q,%q,%v", tc.arg, tc.key, display, key, err)
-		}
-	}
-}
+// TestFix_FallbackIdentityKeyIsAnEmail moved to ops/identity
+// (TestKeyIsAnEmail) with the code (PASS3 ONE-PATH).
 
 func TestFix_IdentitySetRefusesABareName(t *testing.T) {
 	w := newWorld(t)
@@ -270,6 +241,10 @@ func TestFix_IdentitySetRefusesABareName(t *testing.T) {
 		t.Fatalf("a refused identity set must write nothing: %v", err)
 	}
 	c.lore("identity", "set", "Alice Doe", "--key", "human:alice@example.com")
+	// identity show resolves the chain every write stamps (ops/identity),
+	// agent detection included; this test checks the person's own entry,
+	// so a run under a coding agent declares the person (LORE_HUMAN=1).
+	c.env = append(c.env, "LORE_HUMAN=1")
 	out := c.lore("identity", "show").stdout
 	if !strings.Contains(out, "resolved:    human:alice@example.com") || !strings.Contains(out, "display:     Alice Doe") {
 		t.Fatalf("identity show:\n%s", out)

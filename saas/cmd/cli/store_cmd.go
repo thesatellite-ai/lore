@@ -1,9 +1,9 @@
-// store_cmd.go — the v0.1.17 `lore store show|open|forget|doctor`
-// (LORE_TEAM_SPEC §1 Commands, F12, §5.3): what this machine knows about
-// each configured v0.1.17 store, an optional browsing worktree, dropping a
-// clone, a clone's health. `lore store init|add|remove|list` are the 0.1.18
-// core's (ops/stores, mounted from the registry into this same group);
-// v0.1.17's `store init <url>` was removed for `lore store init <name> [url]`.
+// store_cmd.go — opsstores.Cloner for this binary: the rules behind the
+// core's `lore store show|open|forget|doctor` operations (ops/stores
+// clones.go, P3-CFG-1; LORE_TEAM_SPEC §1 Commands, F12, §5.3): what this
+// machine knows about each configured v0.1.17 store, an optional browsing
+// worktree, dropping a clone, a clone's health. `lore store init|add|
+// remove|list` are core operations too (ops/stores).
 package main
 
 import (
@@ -21,34 +21,13 @@ import (
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/stores"
-	"saas/pkg/aicoder/style"
-	"saas/pkg/constants"
 
-	"github.com/spf13/cobra"
-)
-
-// Flag names of the store commands.
-const (
-	flagStoreBranch    = "branch"
-	flagStoreOrgFolder = "org-folder"
-	flagStoreLinks     = "links"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
 // defaultMarkerOrgFolder is the org folder lore-store.yaml suggests when no
 // configured entry names one (§5.1 example).
 const defaultMarkerOrgFolder = "org"
-
-func newStoreCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "store",
-		Short: "Manage lore stores: lore-only repos holding internal and personal projects",
-		Long: `A store is a separate lore-only git repo (never a code repo) with one folder
-per project. Lore keeps one bare clone per store URL under ~/.lore/clones and
-reads and writes it without a checkout.`,
-	}
-	cmd.AddCommand(newStoreShowCommand(), newStoreOpenCommand(), newStoreForgetCommand(), newStoreDoctorCommand())
-	return cmd
-}
 
 // storeView is one configured store as `lore store show` reports it.
 type storeView struct {
@@ -187,119 +166,88 @@ func appendUnique(xs []string, x string) []string {
 	return append(xs, x)
 }
 
-func newStoreShowCommand() *cobra.Command {
-	var links, asJSON bool
-	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "List the configured stores, their clones and (with --links) the link index",
-		Example: `  lore store show
-  lore store show --links --json`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-			cfg, err := loadTeamConfig(ctx)
-			if err != nil {
-				return err
-			}
-			m, err := newStoreManager(cfg, nil)
-			if err != nil {
-				return err
-			}
-			views, err := collectStores(ctx, cfg, m)
-			if err != nil {
-				return err
-			}
-			if links {
-				printHereLinks(ctx, cfg)
-				for _, v := range views {
-					for _, e := range v.Entries {
-						ls, _, ok := stores.CachedLinks(m.Layout, e)
-						if !ok {
-							continue
-						}
-						for _, l := range ls {
-							if dir, err := m.Layout.CloneDir(l.StoreURL); err == nil && dir == v.Clone {
-								v.Links = append(v.Links, linkView{Entry: l.Entry, Folder: l.Folder, Branch: l.Branch, ProjectID: l.ProjectID, Remote: l.Remote, Own: l.Own, Default: l.Default})
-							}
-						}
-					}
-				}
-			}
-			if asJSON {
-				return writeJSONOut(map[string]any{"data": views})
-			}
-			if len(views) == 0 {
-				fmt.Println(style.Muted("no stores configured (orgs[].stores in ~/.lore/config.yaml)"))
-				return nil
-			}
-			for _, v := range views {
-				fmt.Printf("%s\n", redactIfQuiet(v.URL))
-				fmt.Printf("  entries   %s   branches %s\n", strings.Join(v.Entries, ", "), strings.Join(v.Branches, ", "))
-				for _, p := range v.Problems {
-					fmt.Println("  problem   " + style.Warn(p))
-				}
-				if !v.Cloned {
-					fmt.Println("  clone     " + style.Muted("not cloned yet (the next command that needs it clones it)"))
-					continue
-				}
-				fetched := "never"
-				if v.LastFetch != nil {
-					fetched = v.LastFetch.Local().Format(time.RFC3339)
-				}
-				fmt.Printf("  clone     %s (bare)   default branch %s   last fetch %s\n", v.Clone, v.DefaultBranch, fetched)
-				if len(v.Unpushed) > 0 {
-					fmt.Printf("  unpushed  %s\n", strings.Join(v.Unpushed, ", "))
-				}
-				for _, l := range v.Links {
-					d := ""
-					if l.Default {
-						d = " (default)"
-					}
-					o := ""
-					if l.Own {
-						o = " own"
-					}
-					fmt.Printf("  link      %s/ on %s ← %s %s%s%s\n", l.Folder, l.Branch, l.Remote, l.ProjectID, o, d)
-				}
-			}
-			return nil
-		},
+// clonePort is opsstores.Cloner for this binary.
+type clonePort struct{}
+
+// cloneViews converts the views for the operation output.
+func cloneViews(views []*storeView) []opsstores.CloneView {
+	out := make([]opsstores.CloneView, 0, len(views))
+	for _, v := range views {
+		cv := opsstores.CloneView{URL: v.URL, Shown: redactIfQuiet(v.URL), Entries: v.Entries, Branches: v.Branches,
+			Clone: v.Clone, Cloned: v.Cloned, DefaultBranch: v.DefaultBranch, Unpushed: v.Unpushed, Problems: v.Problems}
+		if v.LastFetch != nil {
+			cv.LastFetch = v.LastFetch.Local().Format(time.RFC3339)
+		}
+		for _, l := range v.Links {
+			cv.Links = append(cv.Links, opsstores.CloneLink(l))
+		}
+		out = append(out, cv)
 	}
-	cmd.Flags().BoolVar(&links, flagStoreLinks, false, "also print the cached link index of every entry")
-	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "machine-readable output")
-	return cmd
+	return out
 }
 
-// printHereLinks prints what org resolution's link source answers for the
-// repo in the working directory (the F11 debug view of `store show
-// --links`), with the store default branches staging is decided against.
-func printHereLinks(ctx context.Context, cfg *lorecfg.Config) {
-	// A debug view: every failure is printed as the answer, never skipped
-	// (a silent gap reads as "this repo has no links").
+// ShowClones lists the configured stores and their clones, without
+// touching the network; Links adds the cached link index and this repo's
+// links (the F11 debug view).
+func (clonePort) ShowClones(ctx context.Context, in opsstores.ShowIn) (opsstores.ClonesOut, error) {
+	cfg, err := loadTeamConfig(ctx)
+	if err != nil {
+		return opsstores.ClonesOut{}, coreErr(err)
+	}
+	m, err := newStoreManager(cfg, nil)
+	if err != nil {
+		return opsstores.ClonesOut{}, coreErr(err)
+	}
+	views, err := collectStores(ctx, cfg, m)
+	if err != nil {
+		return opsstores.ClonesOut{}, coreErr(err)
+	}
+	var here []string
+	if in.Links {
+		here = hereLinks(ctx, cfg)
+		for _, v := range views {
+			for _, e := range v.Entries {
+				ls, _, ok := stores.CachedLinks(m.Layout, e)
+				if !ok {
+					continue
+				}
+				for _, l := range ls {
+					if dir, err := m.Layout.CloneDir(l.StoreURL); err == nil && dir == v.Clone {
+						v.Links = append(v.Links, linkView{Entry: l.Entry, Folder: l.Folder, Branch: l.Branch, ProjectID: l.ProjectID, Remote: l.Remote, Own: l.Own, Default: l.Default})
+					}
+				}
+			}
+		}
+	}
+	return opsstores.ClonesOut{Stores: cloneViews(views), Here: here}, nil
+}
+
+// hereLinks is what org resolution's link source answers for the repo in
+// the working directory (the F11 debug view of `store show --links`),
+// with the store default branches staging is decided against.
+func hereLinks(ctx context.Context, cfg *lorecfg.Config) []string {
+	// A debug view: every failure is the answer, never skipped (a silent
+	// gap reads as "this repo has no links").
 	dir, err := os.Getwd()
 	if err != nil {
-		fmt.Println("this repo: " + err.Error())
-		return
+		return []string{"this repo: " + err.Error()}
 	}
 	s, err := gatherOrgSituation(ctx, dir)
 	if err != nil {
-		fmt.Println("this repo: " + redactIfQuiet(err.Error()))
-		return
+		return []string{"this repo: " + redactIfQuiet(err.Error())}
 	}
 	if s.ProjectID == "" {
-		return // not a lore project: nothing to look up
+		return nil // not a lore project: nothing to look up
 	}
 	src, err := storeLinkSource(cfg)
 	if err != nil {
-		fmt.Println("this repo: " + redactIfQuiet(err.Error()))
-		return
+		return []string{"this repo: " + redactIfQuiet(err.Error())}
 	}
 	res, err := src.Links(ctx, s.ProjectID, s.Remotes)
 	if err != nil {
-		fmt.Println("this repo: " + redactIfQuiet(err.Error()))
-		return
+		return []string{"this repo: " + redactIfQuiet(err.Error())}
 	}
-	fmt.Printf("this repo (%s): links %s — %s\n", s.ProjectID, res.Status, redactIfQuiet(res.Detail))
+	out := []string{fmt.Sprintf("this repo (%s): links %s — %s", s.ProjectID, res.Status, redactIfQuiet(res.Detail))}
 	def := storeDefaultBranchFunc(cfg)
 	for _, l := range res.Links {
 		d := ""
@@ -310,8 +258,9 @@ func printHereLinks(ctx context.Context, cfg *lorecfg.Config) {
 		if def != nil {
 			branch = def(l.StoreURL)
 		}
-		fmt.Printf("  %s → %s %s/ (store default branch %s)%s\n", l.Entry, redactIfQuiet(l.StoreURL), l.Folder, branch, d)
+		out = append(out, fmt.Sprintf("  %s → %s %s/ (store default branch %s)%s", l.Entry, redactIfQuiet(l.StoreURL), l.Folder, branch, d))
 	}
+	return out
 }
 
 // writeJSONOut prints v as indented JSON on stdout.
@@ -334,157 +283,150 @@ func resolveStoreArg(cfg *lorecfg.Config, url string) (*lorecfg.Org, string) {
 	return org, url
 }
 
-func newStoreOpenCommand() *cobra.Command {
-	var branch string
-	cmd := &cobra.Command{
-		Use:   "open <url>",
-		Short: "Check out a store branch for browsing (detached, under ~/.lore/worktrees)",
-		Long: `Lore never needs a checkout of a store. This makes one for reading: a detached
-worktree, so lore can keep writing the branch itself (a ref checked out in any
-worktree is never written by lore).`,
-		Example: `  lore store open git@github.com:agency/notes`,
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := loadTeamConfig(ctx)
-			if err != nil {
-				return err
-			}
-			org, url := resolveStoreArg(cfg, args[0])
-			m, err := newStoreManager(cfg, org)
-			if err != nil {
-				return err
-			}
-			st, err := m.Open(ctx, url)
-			if err != nil {
-				return storeCLIError(err, "open the store clone")
-			}
-			if _, fetchErr := st.Fetch(ctx, false); fetchErr != nil {
-				return storeCLIError(fetchErr, "fetch the store")
-			}
-			if branch == "" {
-				branch = st.DefaultBranch()
-				if _, sc := orgForStoreURL(cfg, url); sc != nil {
-					branch = sc.EffectiveBranch()
-				}
-			}
-			tip, ok, err := st.Tip(ctx, branch)
-			if err != nil {
-				return storeCLIError(err, "read the store branch")
-			}
-			if !ok {
-				return storeCLIError(fmt.Errorf("%w: %s has no branch %s", stores.ErrNoBranch, st.Norm, branch), "open")
-			}
-			dir, err := m.Layout.WorktreeDir(url, branch)
-			if err != nil {
-				return storeCLIError(err, "worktree path")
-			}
-			if _, err := os.Stat(dir); err == nil {
-				if _, err := st.Repo.Run(ctx, gitref.Invocation{Dir: dir, Args: []string{"checkout", "--quiet", "--detach", tip}}); err != nil {
-					return errcodes.New(errcodes.Internal, "refresh the worktree").WithCause(err)
-				}
-			} else {
-				if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
-					return errcodes.New(errcodes.Internal, "create worktree dir").WithCause(err)
-				}
-				if _, err := st.Repo.Run(ctx, gitref.Invocation{Args: []string{"worktree", "add", "--quiet", "--detach", dir, tip}}); err != nil {
-					return errcodes.New(errcodes.Internal, "git worktree add").WithCause(err)
-				}
-			}
-			fmt.Printf("✓ %s at %s (%s, detached; read-only by convention — lore writes the branch itself)\n", dir, branch, tip[:12])
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&branch, flagStoreBranch, "", "store branch (default: the entry's branch)")
-	return cmd
+// OpenClone fetches the store and checks the branch out as a detached
+// worktree under ~/.lore/worktrees (lore keeps writing the branch itself:
+// a ref checked out in any worktree is never written by lore).
+func (clonePort) OpenClone(ctx context.Context, in opsstores.OpenIn) (opsstores.OpenOut, error) {
+	out, err := openClone(ctx, in)
+	return out, coreErr(err)
 }
 
-func newStoreForgetCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:     "forget <url>",
-		Short:   "Delete this machine's clone of a store (refused while it holds unpushed work)",
-		Example: `  lore store forget git@github.com:agency/notes`,
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := loadTeamConfig(ctx)
-			if err != nil {
-				return err
-			}
-			org, url := resolveStoreArg(cfg, args[0])
-			m, err := newStoreManager(cfg, org)
-			if err != nil {
-				return err
-			}
-			// The 0.1.18 core's clone of the same url: unpushed work there
-			// blocks the forget too (side effect 20).
-			home, err := loreHome()
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "resolve the lore home").WithCause(err)
-			}
-			cores, err := coreClonesOf(home, url)
-			if err != nil {
-				return err
-			}
-			var corePending []string
-			for _, c := range cores {
-				corePending = append(corePending, coreCloneUnpushed(ctx, c)...)
-			}
-			if len(corePending) > 0 {
-				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("the clone holds unpushed work (%s); forgetting it would lose it", strings.Join(corePending, ", "))).
-					WithHint("run `lore sync` when the store is reachable, then forget it")
-			}
-			st, err := m.Lookup(ctx, url)
-			if errors.Is(err, stores.ErrNoClone) {
-				if len(cores) > 0 {
-					if rerr := removeCoreClones(cores); rerr != nil {
-						return rerr
-					}
-					fmt.Printf("✓ forgot %s (removed %s; the next command that needs it clones it again)\n", redactIfQuiet(url), cores[0].base)
-					return nil
-				}
-				fmt.Println(style.Muted("no clone of " + redactIfQuiet(url) + " on this machine; nothing to forget"))
-				return nil
-			}
-			if err != nil {
-				// Not "nothing to forget": a clone that cannot be opened
-				// (or a URL lore cannot place) may still hold unpushed work.
-				return storeCLIError(err, "open the clone of "+redactIfQuiet(url))
-			}
-			// Try to deliver waiting work first (PushPending takes the
-			// clone's lock itself); whatever still waits blocks the forget.
-			if storeAutopush(cfg, org) {
-				if _, _, pushErr := st.PushPending(ctx, storeSignature(org)); pushErr != nil {
-					fmt.Fprintln(os.Stderr, "lore: push waiting store writes: "+redactIfQuiet(pushErr.Error()))
-				}
-			}
-			unlock, err := st.Lock()
-			if err != nil {
-				return storeCLIError(err, "lock the clone")
-			}
-			defer unlock()
-			pending, err := st.Unpushed(ctx)
-			if err != nil {
-				return storeCLIError(err, "list unpushed work")
-			}
-			if len(pending) > 0 {
-				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("the clone holds unpushed work (%s); forgetting it would lose it", strings.Join(pending, ", "))).
-					WithHint("run `lore sync` when the store is reachable, then forget it")
-			}
-			if err := removeStoreWorktrees(m, url); err != nil {
-				return err
-			}
-			if err := os.RemoveAll(st.Dir); err != nil {
-				return errcodes.New(errcodes.Internal, "remove the clone").WithCause(err)
-			}
-			if rerr := removeCoreClones(cores); rerr != nil {
-				return rerr
-			}
-			fmt.Printf("✓ forgot %s (removed %s; the next command that needs it clones it again)\n", redactIfQuiet(st.Norm), st.Dir)
-			return nil
-		},
+func openClone(ctx context.Context, in opsstores.OpenIn) (opsstores.OpenOut, error) {
+	cfg, err := loadTeamConfig(ctx)
+	if err != nil {
+		return opsstores.OpenOut{}, err
 	}
-	return cmd
+	org, url := resolveStoreArg(cfg, in.URL)
+	m, err := newStoreManager(cfg, org)
+	if err != nil {
+		return opsstores.OpenOut{}, err
+	}
+	st, err := m.Open(ctx, url)
+	if err != nil {
+		return opsstores.OpenOut{}, storeCLIError(err, "open the store clone")
+	}
+	if _, fetchErr := st.Fetch(ctx, false); fetchErr != nil {
+		return opsstores.OpenOut{}, storeCLIError(fetchErr, "fetch the store")
+	}
+	branch := in.Branch
+	if branch == "" {
+		branch = st.DefaultBranch()
+		if _, sc := orgForStoreURL(cfg, url); sc != nil {
+			branch = sc.EffectiveBranch()
+		}
+	}
+	tip, ok, err := st.Tip(ctx, branch)
+	if err != nil {
+		return opsstores.OpenOut{}, storeCLIError(err, "read the store branch")
+	}
+	if !ok {
+		return opsstores.OpenOut{}, storeCLIError(fmt.Errorf("%w: %s has no branch %s", stores.ErrNoBranch, st.Norm, branch), "open")
+	}
+	dir, err := m.Layout.WorktreeDir(url, branch)
+	if err != nil {
+		return opsstores.OpenOut{}, storeCLIError(err, "worktree path")
+	}
+	if _, err := os.Stat(dir); err == nil {
+		if _, err := st.Repo.Run(ctx, gitref.Invocation{Dir: dir, Args: []string{"checkout", "--quiet", "--detach", tip}}); err != nil {
+			return opsstores.OpenOut{}, errcodes.New(errcodes.Internal, "refresh the worktree").WithCause(err)
+		}
+	} else {
+		if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
+			return opsstores.OpenOut{}, errcodes.New(errcodes.Internal, "create worktree dir").WithCause(err)
+		}
+		if _, err := st.Repo.Run(ctx, gitref.Invocation{Args: []string{"worktree", "add", "--quiet", "--detach", dir, tip}}); err != nil {
+			return opsstores.OpenOut{}, errcodes.New(errcodes.Internal, "git worktree add").WithCause(err)
+		}
+	}
+	return opsstores.OpenOut{Dir: dir, Branch: branch, Commit: tip}, nil
+}
+
+// ForgetClone deletes this machine's clone of a store, refused while it
+// (or the 0.1.18 core's clone of the same url, side effect 20) holds
+// unpushed work; waiting work is pushed first when autopush is on.
+func (clonePort) ForgetClone(ctx context.Context, in opsstores.ForgetIn) (opsstores.ForgetOut, error) {
+	out, err := forgetClone(ctx, in.URL)
+	return out, coreErr(err)
+}
+
+// unpushedForgetError is the refusal of a forget that would lose work.
+func unpushedForgetError(pending []string) error {
+	return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("the clone holds unpushed work (%s); forgetting it would lose it", strings.Join(pending, ", "))).
+		WithHint("run `lore sync` when the store is reachable, then forget it")
+}
+
+func forgetClone(ctx context.Context, arg string) (opsstores.ForgetOut, error) {
+	cfg, err := loadTeamConfig(ctx)
+	if err != nil {
+		return opsstores.ForgetOut{}, err
+	}
+	org, url := resolveStoreArg(cfg, arg)
+	m, err := newStoreManager(cfg, org)
+	if err != nil {
+		return opsstores.ForgetOut{}, err
+	}
+	// The 0.1.18 core's clone of the same url: unpushed work there
+	// blocks the forget too (side effect 20).
+	home, err := loreHome()
+	if err != nil {
+		return opsstores.ForgetOut{}, errcodes.New(errcodes.Internal, "resolve the lore home").WithCause(err)
+	}
+	cores, err := coreClonesOf(home, url)
+	if err != nil {
+		return opsstores.ForgetOut{}, err
+	}
+	var corePending []string
+	for _, c := range cores {
+		corePending = append(corePending, coreCloneUnpushed(ctx, c)...)
+	}
+	if len(corePending) > 0 {
+		return opsstores.ForgetOut{}, unpushedForgetError(corePending)
+	}
+	st, err := m.Lookup(ctx, url)
+	if errors.Is(err, stores.ErrNoClone) {
+		out := opsstores.ForgetOut{URL: url, Shown: redactIfQuiet(url)}
+		if len(cores) > 0 {
+			if rerr := removeCoreClones(cores); rerr != nil {
+				return opsstores.ForgetOut{}, rerr
+			}
+			out.Removed = cores[0].base
+		}
+		return out, nil
+	}
+	if err != nil {
+		// Not "nothing to forget": a clone that cannot be opened (or a
+		// URL lore cannot place) may still hold unpushed work.
+		return opsstores.ForgetOut{}, storeCLIError(err, "open the clone of "+redactIfQuiet(url))
+	}
+	// Try to deliver waiting work first (PushPending takes the clone's
+	// lock itself); whatever still waits blocks the forget.
+	if storeAutopush(cfg, org) {
+		if _, _, pushErr := st.PushPending(ctx, storeSignature(org)); pushErr != nil {
+			fmt.Fprintln(os.Stderr, "lore: push waiting store writes: "+redactIfQuiet(pushErr.Error()))
+		}
+	}
+	unlock, err := st.Lock()
+	if err != nil {
+		return opsstores.ForgetOut{}, storeCLIError(err, "lock the clone")
+	}
+	defer unlock()
+	pending, err := st.Unpushed(ctx)
+	if err != nil {
+		return opsstores.ForgetOut{}, storeCLIError(err, "list unpushed work")
+	}
+	if len(pending) > 0 {
+		return opsstores.ForgetOut{}, unpushedForgetError(pending)
+	}
+	if err := removeStoreWorktrees(m, url); err != nil {
+		return opsstores.ForgetOut{}, err
+	}
+	if err := os.RemoveAll(st.Dir); err != nil {
+		return opsstores.ForgetOut{}, errcodes.New(errcodes.Internal, "remove the clone").WithCause(err)
+	}
+	if rerr := removeCoreClones(cores); rerr != nil {
+		return opsstores.ForgetOut{}, rerr
+	}
+	return opsstores.ForgetOut{URL: st.Norm, Shown: redactIfQuiet(st.Norm), Removed: st.Dir}, nil
 }
 
 // removeStoreWorktrees deletes the browsing worktrees of one store.
@@ -499,60 +441,26 @@ func removeStoreWorktrees(m *stores.Manager, url string) error {
 	return nil
 }
 
-func newStoreDoctorCommand() *cobra.Command {
-	var asJSON bool
-	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Check every configured store: reachable, marker and files, unpushed work, entries sharing the clone",
-		Example: `  lore store doctor
-  lore store doctor --json`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-			cfg, err := loadTeamConfig(ctx)
-			if err != nil {
-				return err
-			}
-			m, err := newStoreManager(cfg, nil)
-			if err != nil {
-				return err
-			}
-			m.FetchTTL = 0 // doctor always asks the store
-			views, err := collectStores(ctx, cfg, m)
-			if err != nil {
-				return err
-			}
-			bad := 0
-			for _, v := range views {
-				doctorCheckStore(ctx, m, v)
-				if len(v.Problems) > 0 {
-					bad++
-				}
-			}
-			if asJSON {
-				if err := writeJSONOut(map[string]any{"data": views}); err != nil {
-					return err
-				}
-			} else {
-				sort.SliceStable(views, func(i, j int) bool { return len(views[i].Problems) > len(views[j].Problems) })
-				for _, v := range views {
-					mark := style.Success("✓")
-					if len(v.Problems) > 0 {
-						mark = style.Warn("!")
-					}
-					fmt.Printf("%s %s  (entries %s; branches %s)\n", mark, redactIfQuiet(v.URL), strings.Join(v.Entries, ", "), strings.Join(v.Branches, ", "))
-					for _, p := range v.Problems {
-						fmt.Println("    " + p)
-					}
-				}
-				fmt.Println(style.Muted("  direct pushes to a store branch are confirmed on the next write; a refusal is reported there"))
-			}
-			if bad > 0 {
-				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%d store(s) need attention", bad))
-			}
-			return nil
-		},
+// DoctorClones runs every check of every configured store (always
+// asking the remote); the operation turns any problem into an error.
+func (clonePort) DoctorClones(ctx context.Context) (opsstores.ClonesOut, error) {
+	cfg, err := loadTeamConfig(ctx)
+	if err != nil {
+		return opsstores.ClonesOut{}, coreErr(err)
 	}
-	cmd.Flags().BoolVar(&asJSON, constants.FlagJSON, false, "machine-readable output")
-	return cmd
+	m, err := newStoreManager(cfg, nil)
+	if err != nil {
+		return opsstores.ClonesOut{}, coreErr(err)
+	}
+	m.FetchTTL = 0 // doctor always asks the store
+	views, err := collectStores(ctx, cfg, m)
+	if err != nil {
+		return opsstores.ClonesOut{}, coreErr(err)
+	}
+	for _, v := range views {
+		doctorCheckStore(ctx, m, v)
+	}
+	// Stores with problems first, as v0.1.17 printed them.
+	sort.SliceStable(views, func(i, j int) bool { return len(views[i].Problems) > len(views[j].Problems) })
+	return opsstores.ClonesOut{Stores: cloneViews(views)}, nil
 }

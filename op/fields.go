@@ -59,7 +59,10 @@ type FieldInfo struct {
 	// Flag is the CLI flag name ("" when the field is positional or has no
 	// flag).
 	Flag string
-	Desc string
+	// Short is the one-letter CLI shorthand of Flag (`short:"n"` keeps
+	// v0.1.17's `lore live log -n 5`); "" for none.
+	Short string
+	Desc  string
 	// Required: the json tag has no omitempty, or the field carries
 	// `required:"after-lookup"` (required.go). Bool fields are never
 	// required (false is a value).
@@ -86,12 +89,13 @@ const NoArg = -1
 
 // Struct tag keys read by Define.
 const (
-	tagJSON = "json"
-	tagArg  = "arg"
-	tagFlag = "flag"
-	tagDesc = "desc"
-	tagUI   = "ui"
-	tagRest = "rest"
+	tagJSON  = "json"
+	tagArg   = "arg"
+	tagFlag  = "flag"
+	tagShort = "short"
+	tagDesc  = "desc"
+	tagUI    = "ui"
+	tagRest  = "rest"
 )
 
 // ui tag keys.
@@ -103,6 +107,9 @@ const (
 
 // flagName is a CLI flag: lowercase words joined by hyphens.
 var flagName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+// shortName is a CLI flag shorthand: one lowercase letter.
+var shortName = regexp.MustCompile(`^[a-z]$`)
 
 // fieldDirection says whether a struct is an input or an output: outputs may
 // nest objects, inputs may not (a flag cannot hold a struct).
@@ -237,6 +244,12 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 			panic(tagError{where + ": a field is either an arg or a flag"})
 		}
 		f.Flag = fl
+	}
+	if sh, ok := sf.Tag.Lookup(tagShort); ok {
+		if f.Flag == "" || !shortName.MatchString(sh) {
+			panic(tagError{where + `: short goes with a flag and is one lowercase letter`})
+		}
+		f.Short = sh
 	}
 	if dir == dirInput && (f.Type == TypeObject || (f.Type == TypeList && !f.Group)) {
 		panic(tagError{where + `: inputs nest structs only as a repeated group (a []struct positional with rest:"true")`})

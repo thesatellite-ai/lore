@@ -112,7 +112,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	var rmeta map[ids.ID[ids.MetaKey]]value.JSON
 	mw, hasMeta := metaFor(ctx, table, ids.AnyID{})
 	var mwarn []Warning
-	if rmeta, mwarn, err = e.createMeta(ctx, cl, target, def, id, mw, hasMeta); err != nil {
+	if rmeta, mwarn, err = e.createMetaScreened(ctx, cl, target, def, id, mw, hasMeta, &sc); err != nil {
 		return Written{}, err
 	}
 	sc.warnings = append(sc.warnings, mwarn...)
@@ -257,7 +257,7 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	// metadata riding on this update (engine/meta.go; R13)
 	if mw, ok := metaFor(ctx, cur.Table, cur.ID); ok {
 		var mwarn []Warning
-		if ours.Meta, mwarn, err = e.applyMeta(ctx, cl, src, def, cur.ID, cur.Meta, mw); err != nil {
+		if ours.Meta, mwarn, err = e.applyMetaScreened(ctx, cl, src, def, cur.ID, cur.Meta, mw, &sc); err != nil {
 			return Written{}, err
 		}
 		sc.warnings = append(sc.warnings, mwarn...)

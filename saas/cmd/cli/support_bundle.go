@@ -1,118 +1,61 @@
-// support_bundle.go — `lore support-bundle` (S3.7)
+// support_bundle.go — the host behind `lore support-bundle` (S3.7): the
+// operation support_bundle.run (ops/supportbundle) builds and writes the
+// bundle; this binary supplies the parts that live in lore.db and the
+// doctor (PASS3 ONE-PATH, P3-MISC-3). Every part degrades to empty, so a
+// bundle is produced outside a project too.
 //
-// Sanitized incident bundle for bug reports. Includes:
-//   - schema_version + binary version
-//   - doctor JSON
-//   - last 50 query_log rows (excluding query text by default)
-//   - last 3 render_history rows (sanitized)
-//   - sanitized config (no DB content)
-//
-// NEVER includes raw memory/decision content unless --include-content
+// NEVER includes raw memory/decision content (--include-content only marks
+// the bundle unsanitized, as in v0.1.17).
 package main
 
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
-	"saas/pkg/constants"
-	"time"
 
 	"dbent"
 	"dbent/gen/ent"
-	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/sessions"
-	"saas/pkg/aicoder/style"
 
-	"github.com/spf13/cobra"
+	opssupportbundle "github.com/thesatellite-ai/lore/ops/supportbundle"
 )
 
-type supportBundle struct {
-	SchemaVersion int            `json:"schema_version"`
-	GeneratedAt   string         `json:"generated_at"`
-	BinaryVersion string         `json:"binary_version"`
-	GoVersion     string         `json:"go_version"`
-	OS            string         `json:"os"`
-	Arch          string         `json:"arch"`
-	Identity      map[string]any `json:"identity"`
-	Doctor        any            `json:"doctor"`
-	Counts        map[string]int `json:"counts"`
-	// Sessions are the newest agent sessions, stripped (section 9).
-	Sessions       []supportSession `json:"sessions"`
-	Note           string           `json:"note"`
-	Sanitized      bool             `json:"sanitized"`
-	IncludeContent bool             `json:"include_content"`
+// supportBundleHost implements opssupportbundle.Host over lore.db.
+type supportBundleHost struct{}
+
+// Version implements opssupportbundle.Host.
+func (supportBundleHost) Version() string { return version }
+
+// Identity implements opssupportbundle.Host.
+func (supportBundleHost) Identity(context.Context) opssupportbundle.Identity {
+	r := identity.Resolve(identity.Inputs{})
+	return opssupportbundle.Identity{Resolved: r.StableKey, Source: r.Step.String(), Stable: r.Step.Stable()}
 }
 
-func newSupportBundleCommand() *cobra.Command {
-	var f doctorFlags
-	var out string
-	var includeContent bool
-	cmd := &cobra.Command{
-		Use:   "support-bundle",
-		Short: "Produce a sanitized incident-report bundle",
-		Long: `Produces a JSON bundle of lore's state for bug reports
-
-By default, NO memory/decision/rule content is included. Pass
---include-content to include it (requires explicit confirmation).`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			report, _ := runDoctor(cmd.Context(), &f)
-			r := identity.Resolve(identity.Inputs{})
-
-			bundle := supportBundle{
-				SchemaVersion: 1,
-				GeneratedAt:   cliClock().Now().UTC().Format(time.RFC3339Nano),
-				BinaryVersion: version,
-				GoVersion:     runtime.Version(),
-				OS:            runtime.GOOS,
-				Arch:          runtime.GOARCH,
-				Identity: map[string]any{
-					"resolved": r.StableKey,
-					"source":   r.Step.String(),
-					"stable":   r.Step.Stable(),
-				},
-				Doctor:   report,
-				Counts:   gatherCounts(cmd.Context(), &f),
-				Sessions: supportSessions(cmd.Context(), &f),
-				Note: "Sanitized: no memory/decision/rule body content included. " +
-					"Use --include-content to include if needed for bug repro.",
-				Sanitized:      !includeContent,
-				IncludeContent: includeContent,
-			}
-
-			data, err := json.MarshalIndent(bundle, "", "  ")
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "marshal bundle").WithCause(err)
-			}
-
-			if out == "" {
-				fmt.Println(string(data))
-				return nil
-			}
-
-			if err := os.MkdirAll(filepath.Dir(out), cliDirMode); err != nil {
-				return errcodes.New(errcodes.Internal, "mkdir output").WithCause(err)
-			}
-			if err := os.WriteFile(out, data, cliFileMode); err != nil {
-				return errcodes.New(errcodes.Internal, "write bundle").WithCause(err)
-			}
-			fmt.Printf("%s wrote support bundle to %s (%d bytes)\n",
-				style.Success("✓"), out, len(data))
-			return nil
-		},
+// Doctor implements opssupportbundle.Host: the doctor report as JSON
+// (null when it cannot be encoded; the report itself never fails the
+// bundle, as in v0.1.17).
+func (supportBundleHost) Doctor(ctx context.Context) opssupportbundle.RawJSON {
+	report, _ := runDoctor(ctx, &doctorFlags{}) // a failing check is part of the report
+	data, err := json.Marshal(report)
+	if err != nil {
+		return nil
 	}
-	bindCommonFlags(cmd, &f.commonFlags)
-	cmd.Flags().StringVar(&out, "out", "", "output file (default: stdout)")
-	cmd.Flags().BoolVar(&includeContent, constants.FlagIncludeContent, false,
-		"include memory/decision/rule body text (NOT default)")
-	return cmd
+	return data
 }
 
-func gatherCounts(ctx context.Context, f *doctorFlags) map[string]int {
-	counts := map[string]int{}
+// Counts implements opssupportbundle.Host.
+func (supportBundleHost) Counts(ctx context.Context) opssupportbundle.Counts {
+	return gatherCounts(ctx, &doctorFlags{})
+}
+
+// Sessions implements opssupportbundle.Host.
+func (supportBundleHost) Sessions(ctx context.Context) []opssupportbundle.Session {
+	return supportSessions(ctx, &doctorFlags{})
+}
+
+func gatherCounts(ctx context.Context, f *doctorFlags) opssupportbundle.Counts {
+	counts := opssupportbundle.Counts{}
 	_, client, err := resolveContext(&f.commonFlags)
 	if err != nil {
 		return counts
@@ -181,26 +124,10 @@ func coreRowCount(ctx context.Context, table string) (int, bool) {
 // supportSessionLimit is how many sessions a bundle describes.
 const supportSessionLimit = 10
 
-// supportSession is one session row in a bundle. AGENT_IDENTITY_DESIGN
-// section 9: tool_session_id, model, cwd and ci are stripped, keeping only
-// whether they were present; the tool, its version and the deciding
-// signal stay (they are not secrets and explain detection bugs).
-type supportSession struct {
-	Tool             string   `json:"tool,omitempty"`
-	ToolVersion      string   `json:"tool_version,omitempty"`
-	Signal           string   `json:"signal,omitempty"`
-	Flags            []string `json:"flags,omitempty"`
-	DeclaredHuman    bool     `json:"declared_human,omitempty"`
-	HasToolSessionID bool     `json:"has_tool_session_id"`
-	HasModel         bool     `json:"has_model"`
-	HasCwd           bool     `json:"has_cwd"`
-	HasCI            bool     `json:"has_ci"`
-}
-
 // supportSessions reads the newest sessions from lore.db, stripped; empty
 // when there is no lore.db or it predates the 0.1.18 columns.
-func supportSessions(ctx context.Context, f *doctorFlags) []supportSession {
-	out := []supportSession{}
+func supportSessions(ctx context.Context, f *doctorFlags) []opssupportbundle.Session {
+	out := []opssupportbundle.Session{}
 	rctx, client, err := resolveContext(&f.commonFlags)
 	if err != nil {
 		return out
@@ -222,8 +149,8 @@ func supportSessions(ctx context.Context, f *doctorFlags) []supportSession {
 }
 
 // stripSession is r without the four private fields (section 9).
-func stripSession(r *ent.Session) supportSession {
-	return supportSession{Tool: r.Tool, ToolVersion: r.ToolVersion, Signal: r.Signal, Flags: r.Flags,
+func stripSession(r *ent.Session) opssupportbundle.Session {
+	return opssupportbundle.Session{Tool: r.Tool, ToolVersion: r.ToolVersion, Signal: r.Signal, Flags: r.Flags,
 		DeclaredHuman: r.DeclaredHuman, HasToolSessionID: r.ToolSessionID != "", HasModel: r.Model != "",
 		HasCwd: r.Cwd != "", HasCI: r.Ci != ""}
 }

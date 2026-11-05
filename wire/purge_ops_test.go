@@ -18,9 +18,6 @@ var purgeExempt = map[string]string{
 	"actor.delete":         "always refused: an actor is identity (P3-G-AUDIT), nothing to purge",
 	"task.template.delete": "addressed by name with the show input; v0.1.17 had no --purge on it",
 	"task.view.delete":     "addressed by name with the show input; v0.1.17 had no --purge on it",
-	// Pending fixall/a-purge-op/infra-repo-delete-purge.diff (ops/infra/infra.go
-	// is p3-g-audit's); the patch deletes this line.
-	"repo.delete": "pending infra.go patch",
 }
 
 // TestDeleteOpsTakePurgeFlags: every registered delete operation takes the

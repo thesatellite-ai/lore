@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 )
 
 // Flags of org import.
@@ -305,8 +306,10 @@ func registerAfterImport(ctx context.Context, entryName string) error {
 			_ = os.Unsetenv(envOrg) // restoring the caller's environment
 		}
 	}()
-	reg := newActorRegisterCommand()
-	reg.SetArgs([]string{})
-	reg.SilenceUsage, reg.SilenceErrors = true, true
-	return reg.ExecuteContext(ctx)
+	out, err := (cliRoster{}).ActorRegister(ctx, opsinfra.ActorRegisterIn{})
+	if err != nil {
+		return err
+	}
+	fmt.Print(out.Text()) // the `lore actor register` line, as before
+	return nil
 }

@@ -19,6 +19,7 @@ import (
 	"saas/pkg/aicoder/errcodes"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -184,22 +185,13 @@ func (r *coreRoster) push(ctx context.Context) error {
 }
 
 // registerHuman is `lore actor register` on the core roster.
-func (r *coreRoster) registerHuman(ctx context.Context, key, name, handle string) error {
+func (r *coreRoster) registerHuman(ctx context.Context, key, name, handle string) (opsinfra.ActorRegisterOut, error) {
 	h := defaultHandle(handle, key)
 	id, created, err := r.register(ctx, wire.RosterActor{Kind: schema.ActorKindHuman, StableKey: key, Name: name, Handle: h})
 	if err != nil {
-		return err
+		return opsinfra.ActorRegisterOut{}, err
 	}
-	verb := "registered"
-	if !created {
-		verb = "already registered (refreshed)"
-	}
-	shown := ""
-	if h != "" {
-		shown = " (@" + h + ")"
-	}
-	fmt.Printf("✓ %s %s%s %s in %s\n", id, name, shown, verb, redactIfQuiet(r.where))
-	return nil
+	return opsinfra.ActorRegisterOut{ID: id, Kind: opsinfra.RegisterKindHuman, Name: name, Handle: h, Created: created, Where: redactIfQuiet(r.where)}, nil
 }
 
 // registerAgent is rosterRegisterAgent on the core roster.
@@ -238,19 +230,18 @@ func (r *coreRoster) caller(ctx context.Context) (wire.RosterActor, error) {
 }
 
 // deactivate is `lore actor deactivate` on the core roster.
-func (r *coreRoster) deactivate(ctx context.Context, handle string) error {
+func (r *coreRoster) deactivate(ctx context.Context, handle string) (opsinfra.ActorDeactivateOut, error) {
 	a, err := r.resolveHandle(ctx, handle)
 	if err != nil {
-		return err
+		return opsinfra.ActorDeactivateOut{}, err
 	}
 	if err := r.app.RosterDeactivate(ctx, r.target, a.ID); err != nil {
-		return coreErr(err)
+		return opsinfra.ActorDeactivateOut{}, coreErr(err)
 	}
 	if err := r.push(ctx); err != nil {
-		return err
+		return opsinfra.ActorDeactivateOut{}, err
 	}
-	fmt.Printf("✓ %s %s deactivated (kept on the roster; old rows still resolve)\n", a.ID, a.Name)
-	return nil
+	return opsinfra.ActorDeactivateOut{ID: a.ID, Name: a.Name}, nil
 }
 
 // teamAdd is `lore team add` on the core roster.

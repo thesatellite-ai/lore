@@ -40,15 +40,11 @@ const (
 	handlePrefix   = "@"
 )
 
-// attachRosterCommands adds the roster subcommands to the existing
-// `lore actor` group and the new `lore team` group. (`lore agent start` is
-// lore-signals'; its roster write is rosterRegisterAgent.)
+// attachRosterCommands adds the `lore team` group. `lore actor
+// register|deactivate` are core operations (ops/infra roster.go) served by
+// cliRoster (roster_op.go); `lore agent start` is lore-signals', its roster
+// write is rosterRegisterAgent.
 func attachRosterCommands(root *cobra.Command) {
-	for _, c := range root.Commands() {
-		if c.Name() == "actor" {
-			c.AddCommand(newActorRegisterCommand(), newActorDeactivateCommand())
-		}
-	}
 	team := &cobra.Command{Use: "team", Short: "Teams on the org roster (@handle resolves to a person or a team)"}
 	team.AddCommand(newTeamAddCommand(), newTeamListCommand())
 	root.AddCommand(team)
@@ -299,112 +295,6 @@ func (r *roster) refreshOnMiss(ctx context.Context) bool {
 		return false
 	}
 	return true
-}
-
-func newActorRegisterCommand() *cobra.Command {
-	var f commonFlags
-	var kind, label, owner string
-	cmd := &cobra.Command{
-		Use:   "register",
-		Short: "Put yourself (or, with --kind agent, an agent you own) on the org roster",
-		Example: `  lore actor register
-  lore actor register --kind agent --label agent-frontend --owner @alice
-  lore agent start --label agent-frontend --owner @alice   # same, and prints the session env`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-			id, err := resolveIdentityHere(ctx)
-			if err != nil {
-				return err
-			}
-			if id.Kind == identityKindAgent {
-				return errcodes.New(errcodes.InvalidInput, "an agent cannot register actors; its owner runs `lore agent start --label <l> --owner @<owner>`")
-			}
-			switch kind {
-			case string(entActor.KindAgent):
-				aid, where, rerr := rosterRegisterAgent(ctx, label, owner)
-				if rerr != nil {
-					return rerr
-				}
-				fmt.Printf("✓ %s agent %s registered in %s\n", aid, label, redactIfQuiet(where))
-				return nil
-			case "", string(entActor.KindHuman):
-			default:
-				return errcodes.New(errcodes.InvalidInput, "--kind is human (default) or agent")
-			}
-			cr, err := openRosterOnCore(ctx)
-			if err != nil {
-				return err
-			}
-			if cr != nil {
-				return cr.registerHuman(ctx, id.StableKey, id.DisplayName, id.Handle)
-			}
-			r, err := openRoster(ctx, &f)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
-			if r.org == nil {
-				// No org: the repo's own actors table is the roster (Q4), and
-				// the row is written LIVE so every clone resolves the handle
-				// after its next fetch (coordinator answer Q12).
-				liveCmdState.table, liveCmdState.choice = tableActors, rowroute.ChoiceLive
-			}
-			a, created, err := r.register(ctx, actorSpec{Kind: entActor.KindHuman, StableKey: id.StableKey, Name: id.DisplayName, Handle: defaultHandle(id.Handle, id.StableKey)})
-			if err != nil {
-				return err
-			}
-			verb := "registered"
-			if !created {
-				verb = "already registered (refreshed)"
-			}
-			h := ""
-			if a.Handle != nil {
-				h = " (@" + *a.Handle + ")"
-			}
-			fmt.Printf("✓ %s %s%s %s in %s\n", a.ID, a.DisplayName, h, verb, redactIfQuiet(r.where))
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&kind, flagRosterKind, "", "human (default) or agent")
-	cmd.Flags().StringVar(&label, flagRosterLabel, "", "with --kind agent: the session label")
-	cmd.Flags().StringVar(&owner, flagRosterOwner, "", "with --kind agent: the owning human as @handle (default: you)")
-	return cmd
-}
-
-func newActorDeactivateCommand() *cobra.Command {
-	var f commonFlags
-	cmd := &cobra.Command{
-		Use:     "deactivate <@handle>",
-		Short:   "Mark someone as gone (active=false, left_at); actors are never deleted",
-		Example: `  lore actor deactivate @carol`,
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cr, err := openRosterOnCore(ctx)
-			if err != nil {
-				return err
-			}
-			if cr != nil {
-				return cr.deactivate(ctx, args[0])
-			}
-			r, err := openRoster(ctx, &f)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = r.client.Close() }() // writes have saved by return; a close error is not actionable
-			a, err := r.resolveHandle(ctx, args[0])
-			if err != nil {
-				return err
-			}
-			if _, err := a.Update().SetActive(false).SetLeftAt(cliClock().Now().UTC()).Save(ctx); err != nil {
-				return errcodes.New(errcodes.Internal, "update the roster").WithCause(err)
-			}
-			fmt.Printf("✓ %s %s deactivated (kept on the roster; old rows still resolve)\n", a.ID, a.DisplayName)
-			return nil
-		},
-	}
-	return cmd
 }
 
 // rosterRegisterAgent writes the agent actor for one session label on the

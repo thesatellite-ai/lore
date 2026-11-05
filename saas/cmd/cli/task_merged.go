@@ -201,31 +201,6 @@ func mergeAdapter(ctx context.Context, dir string) (mergewatch.Adapter, bool) {
 	return nil, false
 }
 
-func newTaskMergedCommand() *cobra.Command {
-	var f commonFlags
-	var from string
-	cmd := &cobra.Command{
-		Use:   "merged <id>",
-		Short: "Mark a done task as merged by hand (when lore cannot see the merge)",
-		Long: `Merged records merged_at for a done task whose merge lore cannot detect (a squash
-template that drops the Lore-Task trailer, no recorded commit, no host adapter).
-Dependents waiting for :merged become ready.
-
-Example:
-  lore task merged tsk_30`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
-			}
-			return runTaskMerged(cmd.Context(), os.Stdout, opscoord.MergedIn{ID: args[0], From: from})
-		},
-	}
-	bindCommonFlags(cmd, &f)
-	bindFromFlag(cmd, &from)
-	return cmd
-}
-
 // runTaskMerged is task.merged: record merged_at by hand on a done task
 // whose merge lore cannot see (F9). A coordinated row is stamped on its
 // live ref; any other through the core.

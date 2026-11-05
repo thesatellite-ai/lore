@@ -1,4 +1,6 @@
-// upgrade.go — `lore upgrade` (FORMAT_EVOLUTION 8, decision FUPG).
+// upgrade.go — the v0.1.17 upgrade path, kept for the daily notice's
+// opt-in auto_upgrade (upgrade_notice.go); the `lore upgrade` command is
+// the operation upgrade.run (ops/selfupgrade, P3-UPG-1).
 //
 //	lore upgrade [--check] [--version vX] [--ignore-pin] [--yes]
 //	  resolvedExe ─▶ detectInstall
@@ -34,7 +36,6 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/processlock"
 
-	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"golang.org/x/term"
@@ -44,33 +45,6 @@ import (
 type upgradeFlags struct {
 	check, ignorePin, yes bool
 	version               string
-}
-
-func newUpgradeCommand() *cobra.Command {
-	var f upgradeFlags
-	cmd := &cobra.Command{
-		Use:   "upgrade",
-		Short: "Install the newest lore release (or this project's pinned version)",
-		Long: `Install the newest lore release, however lore was installed.
-
-Homebrew installs run brew upgrade; script and archive installs download the
-release, check its sha256 against checksums.txt and swap the binary atomically.
-Inside a project that pins a version (lore_version_pin in .lore/data/_meta.json,
-or LORE_VERSION_PIN), the pin is installed instead. In CI a version must be
-named. After the swap the local database schema is updated with the new binary.`,
-		Example: `  lore upgrade
-  lore upgrade --check
-  lore upgrade --version v0.1.19`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runUpgrade(cmd.Context(), cmd.OutOrStdout(), f)
-		},
-	}
-	cmd.Flags().BoolVar(&f.check, "check", false, "say whether a newer release exists; change nothing")
-	cmd.Flags().StringVar(&f.version, "version", "", "install exactly this release (also used to downgrade)")
-	cmd.Flags().BoolVar(&f.ignorePin, "ignore-pin", false, "install past this project's pinned version")
-	cmd.Flags().BoolVar(&f.yes, "yes", false, "confirm a downgrade into a project the older lore could not write")
-	return cmd
 }
 
 // sourceUpdateHint is how a source build is updated (8.8).

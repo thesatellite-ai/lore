@@ -30,7 +30,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/wire"
@@ -94,13 +93,10 @@ func Options(base wire.Options, hooks []Hook) wire.Options {
 // it zero, so a request sees only the shared path.
 type State struct {
 	// Pending is the refusal a compat flag of the running command set
-	// (--db, the renamed --confirm, --purge without --confirm).
+	// (--db, the renamed --confirm).
 	Pending error
 	// ReadOnly is --read-only of the running command.
 	ReadOnly bool
-	// Purge is the running delete's --purge / --confirm (DELETION 2.5,
-	// 3.12); the engine fills Purged so the output can say "purged".
-	Purge *engine.PurgeRequest
 	// Cmd and Args are the running command and its arguments.
 	Cmd  *cobra.Command
 	Args []string
@@ -143,9 +139,6 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
 			WithHint("unset --read-only and " + EnvReadOnly)
 	}
-	if r.State.Purge != nil {
-		ctx = engine.WithPurge(ctx, r.State.Purge)
-	}
 	res, err := r.app.Run(ctx, e, d, c)
 	if err == nil {
 		return res, nil
@@ -171,8 +164,6 @@ func Install(root *cobra.Command, r *Runner) {
 const (
 	HookNotice = "notice"
 	HookCompat = "compat-flags"
-	// HookDeletePurge is DeletePurgeHook.
-	HookDeletePurge = "delete-purge"
 	// HookGitignore is GitignoreHook.
 	HookGitignore = "gitignore"
 )
@@ -184,7 +175,7 @@ const (
 // workDir is the folder the command runs in (the project's .gitignore is
 // found from it).
 func Default(workDir string) []Hook {
-	return []Hook{NoticeHook(), GitignoreHook(workDir), CompatFlagsHook(CompatOptions{}), DeletePurgeHook(CompatOptions{})}
+	return []Hook{NoticeHook(), GitignoreHook(workDir), CompatFlagsHook(CompatOptions{})}
 }
 
 // Replace returns hooks with every hook named h.Name replaced by h, or h

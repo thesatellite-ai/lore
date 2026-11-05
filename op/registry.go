@@ -72,9 +72,12 @@ func checkSpec(e Entry) []error {
 			p = append(p, errors.New(s.Name+": unknown error code "+string(c)))
 		}
 	}
-	// P3-CFG-1: a Local operation runs without the engine, so nothing could ask.
-	if s.Local && s.Confirm.CanAsk() {
-		p = append(p, errors.New(s.Name+": a local operation cannot ask for confirmation"))
+	// P3-CFG-1: a Local operation runs without the engine, so nothing asks
+	// up front for it. P3-MISC-2: it may still decide for itself to ask
+	// (Confirm.MayAsk: it answers E_NEEDS_CONFIRM and reads the caller's
+	// answer with op.Confirmed), so only Always and When are refused.
+	if s.Local && (s.Confirm.Always || s.Confirm.When != "") {
+		p = append(p, errors.New(s.Name+": a local operation cannot ask up front (only Confirm.MayAsk)"))
 	}
 	if s.Confirm.When != "" {
 		found := false

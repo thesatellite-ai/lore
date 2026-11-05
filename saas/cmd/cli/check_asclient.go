@@ -52,7 +52,8 @@ const (
 	gitNullBlob = "0000000000000000000000000000000000000000"
 )
 
-// runCheckAsClient runs every --as-client rule and prints one report.
+// runCheckAsClient runs every --as-client rule; findings are one
+// E_LEAK_BLOCKED report, nil means nothing would become visible.
 func runCheckAsClient(ctx context.Context, root string, explain bool) error {
 	if coreApp == nil {
 		return errcodes.New(errcodes.LeakBlocked, errCannotCheck.Error()+" (the core is not open)")
@@ -145,8 +146,7 @@ func runCheckAsClient(ctx context.Context, root string, explain bool) error {
 	}
 
 	if len(lines) == 0 {
-		fmt.Println("✓ lore check leaks --as-client: nothing internal would become visible to the client")
-		return nil
+		return nil // the operation prints asClientClean (check_port.go)
 	}
 	if inCI() {
 		return errcodes.New(errcodes.LeakBlocked, fmt.Sprintf("blocked: %d finding(s) would become visible to the client (details hidden in CI)", len(lines)))

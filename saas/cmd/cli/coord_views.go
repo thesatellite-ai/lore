@@ -496,38 +496,6 @@ func inboxMarkerPath(w *coordWorld) string {
 	return filepath.Join(w.StateDir, "inbox-"+w.ActorID+".json")
 }
 
-func newInboxCommand() *cobra.Command {
-	var since time.Duration
-	var ack, jsonOut bool
-	cmd := &cobra.Command{
-		Use:   "inbox",
-		Short: "What needs you: assignments, handoffs, gates, expired claims, blocked tasks, findings",
-		Long: `Inbox lists, grouped by mission: tasks assigned to you, handoffs for you, gates you
-can approve, expired claims and poison tasks of missions you own, and findings.
---ack marks everything seen (local to this checkout); --since limits to recent items.
-
-Example:
-  lore inbox --since 2h`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			out, err := runInbox(cmd.Context(), opscoord.InboxIn{Since: since, Ack: ack})
-			if err != nil {
-				return err
-			}
-			if jsonOut {
-				printJSON(out.Kind, out.Data, out.Count)
-				return nil
-			}
-			fmt.Print(out.Text())
-			return nil
-		},
-	}
-	cmd.Flags().DurationVar(&since, flagSince, 0, "only items newer than this (e.g. 2h)")
-	cmd.Flags().BoolVar(&ack, flagAck, false, "mark everything shown as seen")
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	return cmd
-}
-
 // runInbox is inbox.show: the items that need the caller since the last
 // ack (or --since), and --ack records now as seen (PASS3 ONE-PATH,
 // P3-COORD-1). Expired claims, gates and blocked tasks always show.
@@ -728,37 +696,6 @@ func gateDoc(t *ent.Task) coord.Doc {
 }
 
 // ---------------------------------------------------------------- mission status
-
-func newMissionStatusCommand() *cobra.Command {
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use:   "status <mission-id>",
-		Short: "The whole mission at a glance: ready / waiting / gated / claimed / expired / blocked / done",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cv, done, err := openCoordView(ctx)
-			if err != nil {
-				return err
-			}
-			defer done()
-			out, err := cv.missionStatus(ctx, args[0])
-			if err != nil {
-				return err
-			}
-			if jsonOut {
-				printJSON(out.Kind, out.Data, out.Count)
-				return nil
-			}
-			fmt.Print(out.Text())
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
-	// Mounted after wireLive: wrapped here for the F1 not-found hint.
-	wrapLeaves(cmd)
-	return cmd
-}
 
 // missionRow is one task line of `mission status`: the operation's row
 // (mission.status).
