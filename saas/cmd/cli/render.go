@@ -459,6 +459,13 @@ func printTargetPick(pick targetPick) {
 		}
 		fmt.Printf("%s %s found but not wired to lore; add it with: %s\n", style.Muted("·"), p.PointerFile, hint)
 	}
+	// r3-targets (DECISION P2-OLDCLI-2): a file that carries lore's pointer
+	// but is not in context.targets is left as it is; say so and how to
+	// list it, instead of skipping it silently.
+	for _, p := range pick.sel.Unlisted {
+		fmt.Printf("%s %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set %s <profiles incl. %s> --yes\n",
+			style.Muted("·"), p.PointerFile, policy.KeyContextTargets, policy.KeyContextTargets, p.Name)
+	}
 }
 
 // resolveTargets is resolveContextTargets without the output, reading the
