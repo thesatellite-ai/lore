@@ -41,7 +41,7 @@ const (
 	fallbackDirBudget     = 8000
 	fallbackDirBudgetCdx  = 4000
 	fallbackDirMinEntries = 3
-	fallbackChainMaxCodex = 32768
+	fallbackChainMaxCodex = 26000 // logic/policy default of context.chain_max.codex (G-META-1, CONTEXT_BUDGET 6.1)
 	dirFileName           = "LORE.md"
 	// dirHeaderPrefix opens every folder LORE.md lore writes; only a file
 	// starting with it is deleted when its folder loses its file.

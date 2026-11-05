@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -252,19 +253,33 @@ func hookInstalled(path string, h toolprofile.SessionHook) (bool, error) {
 	return false, nil
 }
 
-// writeHookFile adds (or removes) lore's hook in path.
+// writeHookFile adds (or removes) lore's hook in path. Every object it
+// rewrites keeps the user's key order (keysInOrder / marshalInOrder; a
+// Go map would sort them), and a group it does not change keeps its bytes.
 func writeHookFile(path string, h toolprofile.SessionHook, remove bool) error {
 	doc, err := readSettings(path)
 	if err != nil {
 		return err
 	}
+	orig, err := os.ReadFile(filepath.Clean(path)) // the same settings file readSettings read
+	if err != nil && !os.IsNotExist(err) {
+		return errs.Wrap(errs.Internal, "read "+path, err)
+	}
 	hooks, groups, err := eventGroups(doc, h.Event)
 	if err != nil {
 		return err
 	}
+	origHooks := doc["hooks"]
+	var origGroups []json.RawMessage
+	if raw, ok := hooks[h.Event]; ok {
+		_ = json.Unmarshal(raw, &origGroups) // eventGroups decoded the same list
+	}
+	rawGroups := make([]json.RawMessage, len(groups))
+	copy(rawGroups, origGroups)
 	if remove {
 		var kept []hookGroup
-		for _, g := range groups {
+		var keptRaw []json.RawMessage
+		for i, g := range groups {
 			es := groupEntries(g)
 			var rest []hookEntry
 			for _, e := range es {
@@ -275,16 +290,20 @@ func writeHookFile(path string, h toolprofile.SessionHook, remove bool) error {
 			if len(es) > 0 && len(rest) == 0 {
 				continue // the group held only lore's hook
 			}
+			raw := rawGroups[i]
 			if len(rest) != len(es) {
 				b, merr := json.Marshal(rest)
 				if merr != nil {
 					return errs.Wrap(errs.Internal, "encode hooks", merr)
 				}
 				g["hooks"] = b
+				if raw, merr = marshalInOrder(rawGroups[i], g); merr != nil {
+					return errs.Wrap(errs.Internal, "encode hooks", merr)
+				}
 			}
-			kept = append(kept, g)
+			kept, keptRaw = append(kept, g), append(keptRaw, raw)
 		}
-		groups = kept
+		groups, rawGroups = kept, keptRaw
 	} else {
 		typ, _ := json.Marshal(hookCommandType)
 		cmd, _ := json.Marshal(h.Command())
@@ -297,12 +316,16 @@ func writeHookFile(path string, h toolprofile.SessionHook, remove bool) error {
 			m, _ := json.Marshal(h.Matcher)
 			g["matcher"] = m
 		}
-		groups = append(groups, g)
+		raw, merr := marshalInOrder(nil, g)
+		if merr != nil {
+			return errs.Wrap(errs.Internal, "encode the hook", merr)
+		}
+		groups, rawGroups = append(groups, g), append(rawGroups, raw)
 	}
 	if len(groups) == 0 {
 		delete(hooks, h.Event)
 	} else {
-		b, merr := json.Marshal(groups)
+		b, merr := json.Marshal(rawGroups)
 		if merr != nil {
 			return errs.Wrap(errs.Internal, "encode hooks", merr)
 		}
@@ -311,20 +334,91 @@ func writeHookFile(path string, h toolprofile.SessionHook, remove bool) error {
 	if len(hooks) == 0 {
 		delete(doc, "hooks")
 	} else {
-		b, merr := json.Marshal(hooks)
+		b, merr := marshalInOrder(origHooks, hooks)
 		if merr != nil {
 			return errs.Wrap(errs.Internal, "encode hooks", merr)
 		}
 		doc["hooks"] = b
 	}
-	b, err := json.MarshalIndent(doc, "", "  ")
+	compact, err := marshalInOrder(orig, doc)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "encode "+path, err)
 	}
-	if err := os.WriteFile(path, append(b, '\n'), hookSettingsMode); err != nil {
+	var b bytes.Buffer
+	if err := json.Indent(&b, compact, "", "  "); err != nil {
+		return errs.Wrap(errs.Internal, "encode "+path, err)
+	}
+	if err := os.WriteFile(path, append(b.Bytes(), '\n'), hookSettingsMode); err != nil {
 		return errs.Wrap(errs.Internal, "write "+path, err)
 	}
 	return nil
+}
+
+// keysInOrder lists the top-level keys of the JSON object orig in the
+// order they are written ("" or not an object: none).
+func keysInOrder(orig []byte) []string {
+	dec := json.NewDecoder(bytes.NewReader(orig))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return nil
+	}
+	var keys []string
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return keys
+		}
+		k, ok := tok.(string)
+		if !ok {
+			return keys
+		}
+		keys = append(keys, k)
+		var skip json.RawMessage
+		if err := dec.Decode(&skip); err != nil {
+			return keys
+		}
+	}
+	return keys
+}
+
+// marshalInOrder writes m as a compact JSON object: the keys orig had, in
+// orig's order, then the new keys sorted (a settings file is the user's;
+// lore never reorders it).
+func marshalInOrder(orig []byte, m map[string]json.RawMessage) ([]byte, error) {
+	order := keysInOrder(orig)
+	seen := make(map[string]bool, len(order))
+	var rest []string
+	for k := range m {
+		rest = append(rest, k)
+	}
+	slices.Sort(rest)
+	var b bytes.Buffer
+	b.WriteByte('{')
+	first := true
+	put := func(k string) error {
+		v, ok := m[k]
+		if !ok || seen[k] {
+			return nil
+		}
+		seen[k] = true
+		kb, err := json.Marshal(k)
+		if err != nil {
+			return err
+		}
+		if !first {
+			b.WriteByte(',')
+		}
+		first = false
+		b.Write(kb)
+		b.WriteByte(':')
+		return json.Compact(&b, v)
+	}
+	for _, k := range append(order, rest...) {
+		if err := put(k); err != nil {
+			return nil, err
+		}
+	}
+	b.WriteByte('}')
+	return b.Bytes(), nil
 }
 
 // Lines of the core's schema half.

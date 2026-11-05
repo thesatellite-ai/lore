@@ -361,7 +361,7 @@ func namedTool(table []Detector, v string) (Detector, string, bool) {
 	}
 	name, ver := "", ""
 	if parts := strings.SplitN(v, "_", 3); len(parts) == 3 {
-		name, ver = parts[0], parts[1]
+		name, ver = parts[0], dashedVersion(parts[1])
 	} else if n, vv, ok := strings.Cut(v, "@"); ok {
 		name, ver = n, vv
 	}
@@ -374,6 +374,18 @@ func namedTool(table []Detector, v string) (Detector, string, bool) {
 		}
 	}
 	return Detector{}, "", false
+}
+
+// dashedVersionRe is a version written with dashes: Claude Code 2.1.318
+// stamps AI_AGENT=claude-code_2-1-318_agent (live capture, 2026-11-05).
+var dashedVersionRe = regexp.MustCompile(`^[0-9]+(?:-[0-9]+)+$`)
+
+// dashedVersion turns "2-1-318" into "2.1.318"; anything else is kept.
+func dashedVersion(v string) string {
+	if dashedVersionRe.MatchString(v) {
+		return strings.ReplaceAll(v, "-", ".")
+	}
+	return v
 }
 
 // walkHit is the parent-process fallback (step 4): the nearest ancestor

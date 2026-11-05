@@ -11,6 +11,8 @@
 //	        ├─ tasks       ─► parent_cycle (TASK 6.13), long_span (TQ2),
 //	        │                 time_entries_many (300, TQ4),
 //	        │                 duplicate_import (PROV9, moved from doctor)
+//	        │                 (own and plain repos only: client repos drop
+//	        │                 _o.import, PROVENANCE 8.1, G-DECIDE-3)
 //	        ├─ meta        ─► meta_unknown_key (an entry whose key id no
 //	        │                 attached registry defines, METADATA 3.21)
 //	        └─ every text  ─► secret_found (secrets.go: re-scan with the

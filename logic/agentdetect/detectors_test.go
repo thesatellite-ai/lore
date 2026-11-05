@@ -148,6 +148,13 @@ func TestDetectVersions(t *testing.T) {
 	if r.Tool != "claude_code" || r.Version != "2.1.0" || r.Sources["tool_version"] != SourceEnv {
 		t.Fatalf("env version: %+v", r)
 	}
+	// Live capture: Claude Code 2.1.318 writes the version with dashes.
+	for v, want := range map[string]string{"claude-code_2-1-318_agent": "2.1.318", "claude-code_2.1.318_agent": "2.1.318", "claude-code_2-1-rc1_agent": "2-1-rc1"} {
+		r, _ = Detect(Inputs{Getenv: envOf(map[string]string{"CLAUDE_CODE_CHILD_SESSION": "1", "AI_AGENT": v})})
+		if r.Version != want {
+			t.Fatalf("%s: version %q, want %q", v, r.Version, want)
+		}
+	}
 	r, _ = Detect(Inputs{Getenv: envOf(map[string]string{"GEMINI_CLI": "1"}), Files: fakeFiles{}})
 	if r.Version != "" {
 		t.Fatalf("blank: %+v", r)
