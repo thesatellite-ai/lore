@@ -414,12 +414,19 @@ func resolveRules(entries []ruleEntry, base []scan.Rule, own bool) []gitleaks.Ru
 // resolveOne picks the row of one rule_id; group is sorted nearest first.
 func resolveOne(group []ruleEntry, known map[string]bool, own bool) (gitleaks.RuleRow, bool) {
 	var teamOff, firstPersonal *ruleEntry
+	if own {
+		// BATCH 8: the person's own off wins over any team row for their
+		// own captures, wherever it sorts (team rows sort nearer)
+		for _, e := range group {
+			if e.level == policy.LevelPersonal && e.row.State == schema.SecretRuleOff {
+				return e.row, true
+			}
+		}
+	}
 	for i := range group {
 		e := &group[i]
 		personal := e.level == policy.LevelPersonal
 		switch {
-		case personal && own && e.row.State == schema.SecretRuleOff:
-			return e.row, true
 		case personal:
 			if firstPersonal == nil {
 				firstPersonal = e
