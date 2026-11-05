@@ -5,6 +5,7 @@ package main
 // `lore version`. Same behaviour as the old binary's (core_mount.go).
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -132,17 +133,51 @@ func (h *host) specCommand() *cobra.Command {
 	return cmd
 }
 
-// versionCommand is `lore version`: the stamped version on one line.
+// versionInfo is `lore version --json`: the stable JSON contract of the
+// old binary (saas/cmd/cli/version.go, R25 #3 and #11) that `lore upgrade`
+// smoke-tests a new binary with (`binary_version` equals the tag,
+// FORMAT_EVOLUTION 8.6 step 5). Fields only ever get added, at the end.
+type versionInfo struct {
+	SchemaVersion         int    `json:"schema_version"`
+	BinaryVersion         string `json:"binary_version"`
+	DBSchemaVersion       int    `json:"db_schema_version"`
+	BundleFormatVersion   int    `json:"bundle_format_version"`
+	PluginProtocolVersion int    `json:"plugin_protocol_version"`
+	MCPToolVersion        int    `json:"mcp_tool_version"`
+}
+
+// versionContract is the value of every versioned contract this release
+// names (schema 1; bundle, plugin and MCP are placeholders until their
+// releases, as in v0.1.17).
+const versionContract = 1
+
+// versionCommand is `lore version [--json]`: the stamped version and the
+// contract versions, as the old binary prints them.
 func (h *host) versionCommand() *cobra.Command {
-	return &cobra.Command{
+	asJSON := false
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), "lore "+version)
+			info := versionInfo{SchemaVersion: versionContract, BinaryVersion: version, DBSchemaVersion: versionContract,
+				BundleFormatVersion: versionContract, PluginProtocolVersion: versionContract, MCPToolVersion: versionContract}
+			out := cmd.OutOrStdout()
+			if asJSON {
+				b, err := json.MarshalIndent(info, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(out, string(b))
+				return err
+			}
+			_, err := fmt.Fprintf(out, "lore %s\n  db_schema:        v%d\n  bundle_format:    v%d (deferred to v0.2)\n  plugin_protocol:  v%d (deferred to v0.2)\n  mcp_tool:         v%d (deferred to v0.2)\n",
+				info.BinaryVersion, info.DBSchemaVersion, info.BundleFormatVersion, info.PluginProtocolVersion, info.MCPToolVersion)
 			return err
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "JSON output (stable schema)")
+	return cmd
 }
 
 // printHostError prints an error no generated command printed, in the

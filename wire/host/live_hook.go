@@ -61,6 +61,10 @@ type LiveConfig struct {
 	// write" or "landing"; docs: live path → row body). cmd/lore passes
 	// wire.App.LeakCheckDocs; nil checks nothing.
 	LeakCheck func(ctx context.Context, where string, docs map[string][]byte) error
+	// RepoAddresses is the repo identity half of `lore sync` (PROV2, Q2:
+	// address notices and the ask-once question), run at the start of
+	// every sync; cmd/lore passes wire.App.SyncRepoAddresses. nil skips it.
+	RepoAddresses func(ctx context.Context)
 }
 
 // Leak check actions (the refusal names them).

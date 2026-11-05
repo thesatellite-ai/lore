@@ -70,6 +70,9 @@ func (l liveSync) pushAndLand(ctx context.Context) ([]string, error) {
 
 // SyncRun implements opssync.Env.
 func (l liveSync) SyncRun(ctx context.Context, _ opssync.RunIn) (opssync.RunOut, error) {
+	if l.h.cfg.RepoAddresses != nil {
+		l.h.cfg.RepoAddresses(ctx) // PROVENANCE_DESIGN 10.3: records and notices only, never fails the sync
+	}
 	lines, err := l.pushAndLand(ctx)
 	if err != nil {
 		return opssync.RunOut{}, err

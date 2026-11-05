@@ -68,17 +68,21 @@ const flagTarget = "target"
 // written by render.
 const initNextHint = "  next: lore render            to write .lore/LORE.md for those tools"
 
-// initCommand is `lore init [--name] [--target] [--non-interactive]`.
+// initCommand is `lore init [<path>] [--name] [--target] [--non-interactive]`;
+// run has already taken <path> off the arguments (initpath.go).
 func (h *host) initCommand(wd string) *cobra.Command {
 	name := ""
 	var targets []string
 	// Read now, before any command opens the store (and creates the cache).
 	local := hasLocalState(wd)
 	cmd := &cobra.Command{
-		Use:   "init",
+		Use:   "init [path]",
 		Short: "Initialize a lore project in this repository (project row and repo id)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 { // run takes the path off first; reaching here means it could not
+				return errs.New(errs.InvalidInput, "init: run lore init "+args[0]+" as the whole command")
+			}
 			ctx := cmd.Context()
 			if pid, err := h.app.Project(ctx); err == nil {
 				if local {

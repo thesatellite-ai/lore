@@ -28,6 +28,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/wire"
@@ -56,6 +57,13 @@ func main() {
 func run(ctx context.Context, args []string) int {
 	if err := refuseRoot(); err != nil { // guard.go: E_ROOT_REFUSED unless LORE_ALLOW_ROOT=1
 		return printHostError(err)
+	}
+	// `lore init <path>` runs the whole command in that folder (initpath.go).
+	if p, rest, ok := initPathArg(args); ok {
+		if err := enterInitDir(p); err != nil {
+			return printHostError(err)
+		}
+		args = rest
 	}
 	wd, home := dirs()
 	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
@@ -90,8 +98,16 @@ func run(ctx context.Context, args []string) int {
 	org.RepoWriteCheck = func(ctx context.Context, _, kind, text string) error {
 		return app.LeakCheckDocs(ctx, org, "repo write", map[string][]byte{kind: []byte(text)})
 	}
-	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak})
+	// --trace / LORE_TRACE=1 print every git command of live rows (trace.go);
+	// the flag is parsed later, so the runner reads it per call.
+	trace := false
+	liveGit := hosthooks.TraceGit{Inner: gitref.Exec{}, On: hosthooks.TraceOn(&trace), W: os.Stderr}
+	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak, Git: liveGit,
+		RepoAddresses: func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) }})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
+	// FORMAT_EVOLUTION rule 2: a read in a project this lore may not write
+	// prints one stderr line and succeeds.
+	hooks = append(hooks, hosthooks.ReadOnlyNoticeHook(os.Stderr, func(ctx context.Context) string { return app.ReadOnlyNotice(ctx) }))
 	// render, why-context, context and setup (wire/renderhost) over the app built below.
 	rend := &lateRender{}
 	base.Context.Render, base.Context.RenderHistory, base.Context.Fetch, base.Context.Setup = rend, rend, rend, &lateSetup{r: rend}
@@ -104,6 +120,7 @@ func run(ctx context.Context, args []string) int {
 	runner := hosthooks.NewRunner(app, hooks)
 	root := cli.Build(app.Registry(), runner, cli.WithInteractive(wire.StdinIsTerminal))
 	root.Version = version
+	addRootFlags(root, &trace)
 	hosthooks.Install(root, runner)
 	h := &host{app: app, home: home, live: liveRows, render: rend.h}
 	h.markPrinted(root)

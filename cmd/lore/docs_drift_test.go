@@ -67,6 +67,8 @@ func driftRoot(t *testing.T) *cobra.Command {
 	runner := hosthooks.NewRunner(app, hooks)
 	root := cli.Build(app.Registry(), runner, cli.WithInteractive(wire.StdinIsTerminal))
 	root.Version = version
+	trace := false
+	addRootFlags(root, &trace)
 	hosthooks.Install(root, runner)
 	h := &host{app: app, home: home, live: liveRows}
 	mountShortcuts(root)
