@@ -312,7 +312,7 @@ func (o ops) resourceOps() []op.Entry {
 		// XQ2: MayAsk, not Always: the bulk form must count its rows before
 		// it may ask (a preview above batch.preview_rows); the one-row form
 		// still always asks, in resDelete (bulk.Ask).
-		op.Define(op.Spec{Name: OpResDelete, Summary: "Delete a resource, or every resource of a kind matching --where (a tombstone is kept)", Permission: op.PermWrite, Access: op.AccessWrite,
+		op.Define(op.Spec{Name: OpResDelete, Summary: "Delete a resource, or every resource of a kind matching --where (to the trash)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "bulk delete without a terminal", CLI: "lore resource delete --kind host --where provider=linode --yes", Want: "batch bat_"}}}, o.resDelete),
 		op.Define(op.Spec{Name: OpResArchive, Summary: "Archive a resource (refs stay; new refs are refused)", Permission: op.PermWrite, Access: op.AccessWrite,
@@ -550,6 +550,7 @@ func (o ops) applySets(ctx context.Context, d kindDef, name string, sets []strin
 // (or res_ id) of the ref kind and stores its id.
 func (o ops) fieldValue(ctx context.Context, d kindDef, name string, def located, raw string) (value.Value, error) {
 	fname := text(def.Row, kName)
+	raw = normaliseValue(def.Row, raw) // OQ-AV: a label or val_ id names the value
 	if vs := texts(def.Row, fValues); len(vs) > 0 && !slices.Contains(vs, raw) {
 		return nil, invalid(d, name, fname+" "+quote(raw)+" is not one of "+strings.Join(vs, ", "))
 	}

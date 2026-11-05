@@ -35,6 +35,8 @@ const (
 	kDescription = "description"
 	kNameFormat  = "name_format"
 	kRender      = "render"
+	kAddedBy     = "added_by" // MQ7, as meta_keys
+	kReviewed    = "reviewed"
 	fKindID      = "kind_id"
 	fType        = "type"
 	fRequired    = "required"
@@ -78,6 +80,9 @@ type KindEditIn struct {
 	NameFormat    string `json:"name_format,omitempty" flag:"name-format" desc:"id | dns | ip | text"`
 	Render        string `json:"render,omitempty" flag:"render" desc:"how a row renders"`
 	SecretManager string `json:"secret_manager,omitempty" flag:"secret-manager" desc:"the secret manager a bare secret_ref path means"`
+	// Reviewed approves an agent-added kind with no other change; any edit
+	// by a person approves it too (MQ7, as meta keys).
+	Reviewed bool `json:"reviewed,omitempty" flag:"reviewed" desc:"mark an agent-added kind reviewed (a person only)"`
 }
 
 // KindRef names one kind.
@@ -92,7 +97,11 @@ type RenameIn struct {
 }
 
 // KindsIn is the input of resource.kinds.
-type KindsIn struct{}
+type KindsIn struct {
+	// Unreviewed lists only kinds an agent added that no person reviewed
+	// yet (CLI 3.2, mirrors meta keys --unreviewed, MQ7).
+	Unreviewed bool `json:"unreviewed,omitempty" flag:"unreviewed" desc:"only kinds an agent added that no person reviewed yet"`
+}
 
 // FieldAddIn is the input of resource.field.add.
 type FieldAddIn struct {
@@ -124,6 +133,7 @@ type FieldEditIn struct {
 	AddValues    []string `json:"add_values,omitempty" flag:"add-value" desc:"add an allowed value (repeatable)"`
 	RemoveValues []string `json:"remove_values,omitempty" flag:"remove-value" desc:"remove an allowed value (repeatable; refused while rows use it)"`
 	RenameValues []string `json:"rename_values,omitempty" flag:"rename-value" desc:"rename an allowed value, <old>=<new> (repeatable); rows holding it are rewritten"`
+	ValueLabels  []string `json:"value_labels,omitempty" flag:"value-label" desc:"label an allowed value, <name>=<text> (repeatable; input then also takes the label; OQ-AV)"`
 	Label        string   `json:"label,omitempty" flag:"label" desc:"display label"`
 	Description  string   `json:"description,omitempty" flag:"description" desc:"what the field means"`
 	NoStrict     bool     `json:"no_strict,omitempty" flag:"no-strict" desc:"back to newer-wins on a both-sides change (asks)"`
@@ -140,6 +150,9 @@ type FieldRenameIn struct {
 	New  string `json:"new_name" arg:"2" desc:"the new field name"`
 	// DryRun previews (CLI_REFERENCE 3.2): checks run, nothing is written.
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would change; write nothing"`
+	// RewriteRows writes the new field name into every resource's stored
+	// label now, in one batch (R4 item 6; mirrors meta rename, FA-RES-4).
+	RewriteRows bool `json:"rewrite_rows,omitempty" flag:"rewrite-rows" desc:"also rewrite the field's stored name in every resource now (one batch)"`
 }
 
 // FieldRemoveIn is the input of resource.field.remove.
@@ -167,16 +180,18 @@ func (o RowOut) Text() string { return o.Human }
 
 // Field is one kind field as shown.
 type Field struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Type        string   `json:"type"`
-	Required    bool     `json:"required,omitempty"`
-	Sensitive   bool     `json:"sensitive,omitempty"`
-	Internal    bool     `json:"internal,omitempty"`
-	RefKind     string   `json:"ref_kind,omitempty"`
-	Values      []string `json:"values,omitempty"`
-	Label       string   `json:"label,omitempty"`
-	Description string   `json:"description,omitempty"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Type      string   `json:"type"`
+	Required  bool     `json:"required,omitempty"`
+	Sensitive bool     `json:"sensitive,omitempty"`
+	Internal  bool     `json:"internal,omitempty"`
+	RefKind   string   `json:"ref_kind,omitempty"`
+	Values    []string `json:"values,omitempty"`
+	// ValueIDs are the allowed values with their val_ ids and labels (OQ-AV).
+	ValueIDs    []ValueEntry `json:"value_ids,omitempty"`
+	Label       string       `json:"label,omitempty"`
+	Description string       `json:"description,omitempty"`
 	// RES 3.1 options (OV32); ReplacedBy is the replacing field's name.
 	Default      string `json:"default,omitempty"`
 	Pattern      string `json:"pattern,omitempty"`
@@ -197,6 +212,8 @@ type Kind struct {
 	NameFormat    string  `json:"name_format,omitempty"`
 	Render        string  `json:"render,omitempty"`
 	SecretManager string  `json:"secret_manager,omitempty"`
+	AddedBy       string  `json:"added_by,omitempty"`
+	Unreviewed    bool    `json:"unreviewed,omitempty"`
 	Count         int     `json:"count"`
 	Fields        []Field `json:"fields"`
 }
@@ -211,6 +228,9 @@ func (o KindOut) Text() string {
 	k := o.Data
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s  %s  (%s)\n", k.ID, k.Name, k.Store)
+	if k.Unreviewed {
+		b.WriteString("  added by an agent, not reviewed yet (lore resource kind edit " + k.Name + " --reviewed)\n")
+	}
 	if k.Description != "" {
 		fmt.Fprintf(&b, "  %s\n", k.Description)
 	}
@@ -242,7 +262,7 @@ func fieldLine(f Field) string {
 		}
 	}
 	if len(f.Values) > 0 {
-		parts = append(parts, "values "+strings.Join(f.Values, ", "))
+		parts = append(parts, "values "+strings.Join(valueWords(f), ", "))
 	}
 	return strings.Join(parts, "  ")
 }
@@ -265,7 +285,11 @@ func (o KindsOut) Text() string {
 		for _, f := range k.Fields {
 			names = append(names, f.Name)
 		}
-		fmt.Fprintf(&b, "%s\t%s\t%s\t%d\t%s\n", k.ID, k.Name, k.Store, k.Count, strings.Join(names, ", "))
+		name := k.Name
+		if k.Unreviewed {
+			name += " (unreviewed)"
+		}
+		fmt.Fprintf(&b, "%s\t%s\t%s\t%d\t%s\n", k.ID, name, k.Store, k.Count, strings.Join(names, ", "))
 	}
 	return b.String()
 }
@@ -298,7 +322,7 @@ func (o ops) kindOps() []op.Entry {
 		op.Define(op.Spec{Name: OpFieldEdit, Summary: "Edit a field of a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(layerErrors), errs.ResourceType), Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldEdit),
 		op.Define(op.Spec{Name: OpFieldRename, Summary: "Rename a field (a label change: rows key values by fld_ id)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: nameErrors}, o.fieldRename),
+			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.fieldRename),
 		op.Define(op.Spec{Name: OpFieldRemove, Summary: "Remove a field from a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: layerErrors}, o.fieldRemove),
 	}, o.layerOps()...)
@@ -394,8 +418,10 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 	if err := checkSecretManager(in.SecretManager); err != nil {
 		return RowOut{}, err
 	}
-	fields := map[string]value.Value{}
-	if err := optTexts(fields, map[string]string{kName: in.Kind, kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render, kSecretMgr: in.SecretManager}); err != nil {
+	// MQ7 (as meta keys): an agent's kind waits for a person's review.
+	byWhom := addedBy(ctx)
+	fields := map[string]value.Value{kReviewed: value.BoolOf(byWhom == schema.MetaAddedByPerson)}
+	if err := optTexts(fields, map[string]string{kName: in.Kind, kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render, kSecretMgr: in.SecretManager, kAddedBy: byWhom}); err != nil {
 		return RowOut{}, err
 	}
 	target := targetOf(in.To)
@@ -425,8 +451,16 @@ func (o ops) kindEdit(ctx context.Context, in KindEditIn) (RowOut, error) {
 	if err := optTexts(patch, map[string]string{kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render, kSecretMgr: in.SecretManager}); err != nil {
 		return RowOut{}, err
 	}
+	person := addedBy(ctx) == schema.MetaAddedByPerson
+	if in.Reviewed && !person {
+		return RowOut{}, &errs.Error{Code: errs.PolicyDenied, Message: "resource kind edit --reviewed: only a person reviews a kind", Hint: "ask your human to review it", NeedsPerson: true}
+	}
+	// MQ7: a person's edit approves an agent-added kind.
+	if person && isUnreviewed(k.Row) {
+		patch[kReviewed] = value.BoolOf(true)
+	}
 	if len(patch) == 0 {
-		return RowOut{}, errs.New(errs.InvalidInput, "resource kind edit: nothing to change").WithHint("give --description, --name-format, --render or --secret-manager")
+		return RowOut{}, errs.New(errs.InvalidInput, "resource kind edit: nothing to change").WithHint("give --description, --name-format, --render, --secret-manager or --reviewed")
 	}
 	return o.patchRow(ctx, k, patch, "edited kind "+text(k.Row, kName))
 }
@@ -464,10 +498,11 @@ func (o ops) kindView(ctx context.Context, k located) (Kind, error) {
 	}
 	out := Kind{ID: k.Row.ID.String(), Name: text(k.Row, kName), Store: string(k.Src), Description: text(k.Row, kDescription),
 		NameFormat: text(k.Row, kNameFormat), Render: text(k.Row, kRender), SecretManager: text(k.Row, kSecretMgr), Fields: []Field{},
+		AddedBy: text(k.Row, kAddedBy), Unreviewed: isUnreviewed(k.Row),
 		Count: len(where(res, map[string]string{rKind: k.Row.ID.String()}))}
 	for _, f := range fs {
 		fv := Field{ID: f.Row.ID.String(), Name: text(f.Row, kName), Type: text(f.Row, fType), Required: flag(f.Row, fRequired),
-			Sensitive: flag(f.Row, fSensitive), Internal: flag(f.Row, fInternal), Values: texts(f.Row, fValues),
+			Sensitive: flag(f.Row, fSensitive), Internal: flag(f.Row, fInternal), Values: texts(f.Row, fValues), ValueIDs: valueEntries(f.Row),
 			Label: text(f.Row, fLabel), Description: text(f.Row, fDescription),
 			Default: text(f.Row, fDefault), Pattern: text(f.Row, fPattern), Min: text(f.Row, fMin), Max: text(f.Row, fMax),
 			Strict: flag(f.Row, fStrict), Deprecated: flag(f.Row, fDeprecated), RemindBefore: text(f.Row, fRemindBefore)}
@@ -505,13 +540,16 @@ func (o ops) kindShow(ctx context.Context, in KindRef) (KindOut, error) {
 	return KindOut{Data: v}, err
 }
 
-func (o ops) kindList(ctx context.Context, _ KindsIn) (KindsOut, error) {
+func (o ops) kindList(ctx context.Context, in KindsIn) (KindsOut, error) {
 	ks, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableKinds)
 	if err != nil {
 		return KindsOut{}, err
 	}
 	out := KindsOut{Data: []Kind{}}
 	for _, k := range ks {
+		if in.Unreviewed && !isUnreviewed(k.Row) {
+			continue
+		}
 		v, err := o.kindView(ctx, k)
 		if err != nil {
 			return KindsOut{}, err
@@ -588,6 +626,14 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 	vs := splitList(in.Values)
 	if len(vs) > 0 {
 		if fields[fValues], err = textList(vs); err != nil {
+			return RowOut{}, err
+		}
+		// OQ-AV: each allowed value gets its permanent val_ id.
+		es, verr := syncValueIDs(in.Kind+"."+in.Field, nil, vs, nil, nil)
+		if verr != nil {
+			return RowOut{}, verr
+		}
+		if fields[fValueIDs], err = valueEntriesValue(es); err != nil {
 			return RowOut{}, err
 		}
 	}
@@ -687,7 +733,7 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	var renames []valueRename
-	if len(in.AddValues) > 0 || len(in.RemoveValues) > 0 || len(in.RenameValues) > 0 {
+	if len(in.AddValues) > 0 || len(in.RemoveValues) > 0 || len(in.RenameValues) > 0 || len(in.ValueLabels) > 0 {
 		vals := texts(f.Row, fValues)
 		for _, v := range in.AddValues {
 			if !slices.Contains(vals, v) {
@@ -709,6 +755,14 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 			return RowOut{}, err
 		}
 		if patch[fValues], err = textList(vals); err != nil {
+			return RowOut{}, err
+		}
+		// OQ-AV: ids follow the values (a rename keeps the id); labels last.
+		es, verr := syncValueIDs(in.Kind+"."+in.Field, valueEntries(f.Row), vals, renames, in.ValueLabels)
+		if verr != nil {
+			return RowOut{}, verr
+		}
+		if patch[fValueIDs], err = valueEntriesValue(es); err != nil {
 			return RowOut{}, err
 		}
 	}
@@ -764,7 +818,46 @@ func (o ops) fieldRename(ctx context.Context, in FieldRenameIn) (RowOut, error) 
 			"would rename field %s.%s → %s (%s); %d resources hold values (keyed by fld_ id, their stored name refreshes on their next write)\ndry run: nothing written\n",
 			in.Kind, in.Old, in.New, short(f.Row.ID), len(using))}, nil
 	}
-	return o.patchRow(ctx, f, map[string]value.Value{kName: v}, "renamed field "+in.Kind+"."+in.Old+" → "+in.New+"; no values changed")
+	out, err := o.patchRow(ctx, f, map[string]value.Value{kName: v}, "renamed field "+in.Kind+"."+in.Old+" → "+in.New+"; no values changed")
+	if err != nil || !in.RewriteRows {
+		return out, err
+	}
+	n, batch, err := o.relabelFieldRows(ctx, k, f)
+	if err != nil {
+		return out, err
+	}
+	out.Human += fmt.Sprintf("  rewrote the stored name in %d resources%s\n", n, batch)
+	return out, nil
+}
+
+// relabelFieldRows writes field f's current name into the `fields` entry
+// of every live resource holding a value for it, one batch (--rewrite-rows).
+func (o ops) relabelFieldRows(ctx context.Context, k, f located) (int, string, error) {
+	using, err := o.resourcesUsing(ctx, k, f)
+	if err != nil || len(using) == 0 {
+		return 0, "", err
+	}
+	d, err := o.kindDef(ctx, k.Row.ID.String())
+	if err != nil {
+		return 0, "", err
+	}
+	res, err := o.bulkRun(ctx, d, using, false, "relabel", func(located) string { return "stored field name → " + text(d.byID[f.Row.ID.String()].Row, kName) },
+		func(c context.Context, r located) error {
+			stored, derr := decodeValues(r)
+			if derr != nil {
+				return derr
+			}
+			patch, perr := valuesPatch(d, stored.vals, stored)
+			if perr != nil {
+				return perr
+			}
+			_, uerr := o.env.Update(c, engine.Ref{Store: r.Src, Table: r.Row.Table, ID: r.Row.ID}, patch)
+			return uerr
+		})
+	if err != nil {
+		return 0, "", err
+	}
+	return len(using), " (batch " + res.Batch + ")", nil
 }
 
 func (o ops) fieldRemove(ctx context.Context, in FieldRemoveIn) (RowOut, error) {

@@ -162,6 +162,9 @@ func effectiveFields(raw []located) ([]located, error) {
 			if err != nil {
 				return nil, err
 			}
+			if folded, err = foldValueIDs(folded, e.Row); err != nil { // OQ-AV
+				return nil, err
+			}
 			base[j].Row = folded
 		}
 	}
@@ -280,6 +283,18 @@ func (o ops) extendField(ctx context.Context, k, f located, target store.Source,
 			}
 		}
 		if patch[fValues], err = textList(vals); err != nil {
+			return RowOut{}, err
+		}
+		// OQ-AV: an extension's own values get their own val_ ids.
+		var prev []ValueEntry
+		if existing != nil {
+			prev = valueEntries(existing.Row)
+		}
+		es, verr := syncValueIDs(in.Kind+"."+in.Field, prev, vals, nil, nil)
+		if verr != nil {
+			return RowOut{}, verr
+		}
+		if patch[fValueIDs], err = valueEntriesValue(es); err != nil {
 			return RowOut{}, err
 		}
 	}
