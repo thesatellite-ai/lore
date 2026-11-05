@@ -568,13 +568,15 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 }
 
 // checkParents refuses to restore r while a cascade parent outside set is
-// in the trash (E_PARENT_DELETED, 3.4) or was deleted for good
-// (E_PARENT_PURGED, 4.2).
+// in the trash (E_PARENT_DELETED, 3.4), was deleted for good
+// (E_PARENT_PURGED, 4.2) or is in no attached store (E_NOT_FOUND naming
+// it; --parent/--tasklist rehome it first, 4.2).
 func (e *Engine) checkParents(ctx context.Context, r row.Row, set map[ids.AnyID]bool) error {
 	for _, pid := range e.parentsOf(r) {
 		if set[pid] {
 			continue
 		}
+		found := false
 		for _, name := range e.order {
 			def, _ := e.reg.ByPrefix(pid.Prefix())
 			if pr, ok, err := e.rawTrashed(ctx, name, def.Name, pid); err != nil {
@@ -591,10 +593,15 @@ func (e *Engine) checkParents(ctx context.Context, r row.Row, set map[ids.AnyID]
 			if err != nil {
 				return err
 			}
+			found = true
 			if sr.Deleted {
 				return errs.New(errs.ParentPurged, "engine: "+pid.String()+" was deleted for good; "+r.ID.String()+" cannot come back under it").
 					WithHint("give it a new home in the same restore: lore trash restore " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
 			}
+		}
+		if !found { // DELETION 4.2: the old parent is in no attached store; never restore an orphan
+			return errs.New(errs.NotFound, "engine: "+r.ID.String()+"'s parent "+pid.String()+" is not in any attached store").
+				WithHint("give it a new home in the same restore: lore trash restore " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
 		}
 	}
 	return nil

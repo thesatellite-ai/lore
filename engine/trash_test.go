@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -100,5 +102,34 @@ func TestDeleteRequireReason(t *testing.T) {
 	}
 	if _, derr := f.eng.Delete(WithDeleteReason(ctx, "duplicate"), Ref{ID: w.Row.ID}); derr != nil {
 		t.Fatalf("delete with a reason: %v", derr)
+	}
+}
+
+// TestRestoreMissingParent (DELETION 4.2): a trashed dependent whose parent
+// is in no attached store is refused with E_NOT_FOUND naming the parent
+// and the --parent/--tasklist hint; nothing comes back.
+func TestRestoreMissingParent(t *testing.T) {
+	ctx := context.Background()
+	f, dir := purgeFixture(t)
+	key, err := f.eng.Create(ctx, kbStore, schema.TableMetaKeys, map[string]value.Value{"name": txt("client"), "scope": txt("repo"), "type": txt("text")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	val, err := f.eng.Create(ctx, kbStore, schema.TableMetaValues, map[string]value.Value{"key_id": txt(key.Row.ID.String()), "name": txt("acme")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.eng.Delete(ctx, Ref{ID: val.Row.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(rowPath(dir, schema.TableMetaKeys, key.Row.ID)); err != nil {
+		t.Fatal(err)
+	}
+	_, rerr := f.eng.Restore(ctx, val.Row.ID.String())
+	if !errs.Has(rerr, errs.NotFound) || !strings.Contains(rerr.Error(), key.Row.ID.String()) {
+		t.Fatalf("restore under a missing parent: %v, want E_NOT_FOUND naming %s", rerr, key.Row.ID)
+	}
+	if all, _ := f.eng.Trashed(ctx); len(all) != 1 {
+		t.Fatalf("trash after the refusal = %d rows, want 1", len(all))
 	}
 }
