@@ -13,6 +13,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 )
 
 // Field options of RES 3.1 (OV32), the kind_fields columns of the same
@@ -239,7 +241,7 @@ func (o ops) applyDefaults(ctx context.Context, d kindDef, name string, vals map
 // loosening is the confirmation a field edit asks before it loosens a
 // field (RES 3.14: unmark sensitive/internal/strict, change or drop a
 // pattern or bound that was set): E_NEEDS_CONFIRM without --yes.
-func loosening(ctx context.Context, f located, in FieldEditIn) error {
+func loosening(ctx context.Context, f located, in FieldEditIn) (bool, error) {
 	var what []string
 	for _, c := range in.Clear {
 		if col := clearable[c]; (col == fPattern || col == fMin || col == fMax) && text(f.Row, col) != "" {
@@ -260,9 +262,9 @@ func loosening(ctx context.Context, f located, in FieldEditIn) error {
 		}
 	}
 	if len(what) == 0 {
-		return nil
+		return false, nil
 	}
-	return bulk.Ask(ctx, "loosen field "+text(f.Row, kName)+"? "+strings.Join(what, ", "))
+	return true, bulk.Ask(ctx, "loosen field "+text(f.Row, kName)+"? "+strings.Join(what, ", "))
 }
 
 // remindWindow is field f's --remind-before as a duration (0 when unset or
@@ -310,5 +312,31 @@ func clearRules(f located, in FieldEditIn, patch map[string]value.Value) error {
 			patch[col] = value.Null{}
 		}
 	}
+	return nil
+}
+
+// Columns a loosening stamps on the field row (RES 3.14, OV32).
+const (
+	fChangedBy = "changed_by"
+	fChangedAt = "changed_at"
+)
+
+// stampChange sets changed_at (now) and changed_by (the caller's actor,
+// when the Env names one) in patch.
+func (o ops) stampChange(ctx context.Context, patch map[string]value.Value) error {
+	patch[fChangedAt] = value.DateTimeFrom(opclock.Now(o.env))
+	a, isA := upgrade.As[actorer](o.env)
+	if !isA {
+		return nil
+	}
+	id, err := a.Actor(ctx)
+	if err != nil || id.IsZero() {
+		return nil // an unknown caller leaves changed_by out; the audit log still names the writer
+	}
+	ref, err := value.RefOf(id.Any())
+	if err != nil {
+		return errs.Wrap(errs.Internal, "changed_by", err)
+	}
+	patch[fChangedBy] = ref
 	return nil
 }

@@ -658,8 +658,15 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	// RES 3.14: a loosening asks first.
-	if err = loosening(ctx, f, in); err != nil {
+	loosened, err := loosening(ctx, f, in)
+	if err != nil {
 		return RowOut{}, err
+	}
+	// RES 3.14: a confirmed loosening records who and when in the field row.
+	if loosened {
+		if err = o.stampChange(ctx, patch); err != nil {
+			return RowOut{}, err
+		}
 	}
 	siblings, err := o.fieldMap(ctx, k)
 	if err != nil {
