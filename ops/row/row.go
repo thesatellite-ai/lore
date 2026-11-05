@@ -30,9 +30,12 @@ const (
 	OpShow = "row.show"
 	OpMove = "row.move"
 	// hidden is what a sensitive field shows (RQ1: hidden in show).
-	hidden     = "(sensitive, hidden)"
-	timeLayout = "2006-01-02 15:04 UTC"
-	shortID    = 12 // how much of a machine id the human form prints
+	hidden = "(sensitive, hidden)"
+	// showSensitiveField is the json name of ShowIn.ShowSensitive: its
+	// true value makes row.show ask first (META 3.20, XQ3).
+	showSensitiveField = "show_sensitive"
+	timeLayout         = "2006-01-02 15:04 UTC"
+	shortID            = 12 // how much of a machine id the human form prints
 )
 
 // Fields read from the lookup tables and from rows written before 0.1.18.
@@ -63,6 +66,9 @@ type Mover interface {
 type ShowIn struct {
 	ID     string `json:"id" arg:"0" desc:"any row id (mem_…, tsk_…, res_…, var_…)"`
 	Origin bool   `json:"origin,omitempty" flag:"origin" desc:"also print where the row came from: _o, the audit fields, the _w stamp and its moves (PROV 9.1)"`
+	// ShowSensitive: META 3.20 / RQ1 (asks first; --yes without a
+	// terminal, XQ3; agents may run it too, OQ25).
+	ShowSensitive bool `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive field and metadata values (asks first)"`
 	expand.Flag
 	expand.RevealFlag
 }
@@ -168,6 +174,9 @@ type ShowOut struct {
 	Store  string            `json:"store"`
 	Fields map[string]string `json:"fields"`
 	Meta   map[string]string `json:"meta,omitempty"`
+	// MetaMasked names the metadata keys and the sensitive fields printed
+	// masked (META 3.14/3.20 meta_masked); empty with --show-sensitive.
+	MetaMasked []string `json:"meta_masked,omitempty"`
 	// The --origin blocks (PROV 9.1's JSON keys), nil without --origin.
 	// (The session block lives only on the writing machine's sessions
 	// table, AID 6.6, so show never carries it.)
@@ -224,7 +233,7 @@ func Ops(env Env) []op.Entry {
 		// --reveal may answer E_NEEDS_CONFIRM (SQ10: asks every time), so
 		// surfaces offer --yes (MayAsk).
 		op.Define(op.Spec{Name: OpShow, Summary: "Show any row by id, with --origin for where it came from",
-			Permission: op.PermRead, Access: op.AccessRead, Confirm: op.ConfirmRule{MayAsk: true},
+			Permission: op.PermRead, Access: op.AccessRead, Confirm: op.ConfirmRule{When: showSensitiveField, MayAsk: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.RefCycle, errs.RefDepth,
 				errs.RefLimit, errs.RefRequired, errs.NeedsConfirm, errs.RefScheme, errs.VaultEntryUnavailable, errs.Internal}}, o.show),
 		op.Define(op.Spec{Name: OpMove, Summary: "Move any row to another store, keeping its id (the old copy is tombstoned)",
@@ -256,8 +265,9 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	out := ShowOut{ID: r.ID.String(), Table: string(r.Table), Store: string(src), Fields: map[string]string{}}
 	def, _ := o.env.TableSchema(ctx, r.Table)
 	for k, v := range r.Fields {
-		if f, ok := def.Field(k); ok && f.Sensitive {
+		if f, ok := def.Field(k); ok && f.Sensitive && !in.ShowSensitive {
 			out.Fields[k] = hidden
+			out.MetaMasked = append(out.MetaMasked, k)
 			continue
 		}
 		out.Fields[k] = v.String()
@@ -280,8 +290,15 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		if out.Meta == nil {
 			out.Meta = map[string]string{}
 		}
+		switch {
+		case en.Sensitive && in.ShowSensitive: // 3.20: asked first (the op confirmed)
+			en.Sensitive = false
+		case en.Sensitive:
+			out.MetaMasked = append(out.MetaMasked, en.Name)
+		}
 		out.Meta[en.Name] = meta.Show(en)
 	}
+	slices.Sort(out.MetaMasked)
 	if in.Force && !in.Reveal {
 		return ShowOut{}, errs.New(errs.InvalidInput, "--force goes with --reveal")
 	}
