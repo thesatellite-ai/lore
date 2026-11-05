@@ -1,13 +1,18 @@
 package task
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -17,6 +22,7 @@ import (
 //	show ─► forest(project) ─► urgencyInputs (tags `next`, mission target_date)
 //	     ─► urgency.Compute ─► Full.Why (total + terms)
 //	show ─► row envelope created/updated + actor names ─► Full.Who
+//	     ├─ touched: created_by + history[].by + claim_log actors (synced)
 //	     └─ Whoer (optional Env upgrade: the local session block, Q-LOCAL)
 
 // nextTagName is the tag whose tasks get the next_tag term (13.2).
@@ -45,7 +51,21 @@ type Who struct {
 	UpdatedAt string   `json:"updated_at,omitempty"`
 	UpdatedBy string   `json:"updated_by,omitempty"`
 	Sessions  []string `json:"sessions,omitempty"`
-	shown     bool
+	// Touched is every actor that wrote the task, from the synced row:
+	// creator, last writer, history entries and claim_log events
+	// (AGENT_IDENTITY 6.2 "who changed a task"), most recent first.
+	Touched []WhoActor `json:"touched,omitempty"`
+	shown   bool
+}
+
+// WhoActor is one actor that touched a task.
+type WhoActor struct {
+	ActorID string `json:"actor_id"`
+	Name    string `json:"name,omitempty"`
+	// Changes counts the recorded writes: creation, history entries,
+	// claim events (a write that kept no history entry is not counted).
+	Changes int    `json:"changes"`
+	Last    string `json:"last,omitempty"`
 }
 
 // Whoer is the optional Env upgrade that knows the local session of the
@@ -137,7 +157,8 @@ func (o ops) who(ctx context.Context, r row.Row) (Who, error) {
 	if !r.UpdatedBy.IsZero() {
 		w.UpdatedBy = o.actorName(ctx, r.UpdatedBy.String())
 	}
-	if wh, ok := o.env.(Whoer); ok {
+	w.Touched = o.touched(ctx, r)
+	if wh, ok := upgrade.As[Whoer](o.env); ok {
 		lines, err := wh.WhoLines(ctx, r.ID.String())
 		if err != nil {
 			return Who{}, err
@@ -145,6 +166,72 @@ func (o ops) who(ctx context.Context, r row.Row) (Who, error) {
 		w.Sessions = lines
 	}
 	return w, nil
+}
+
+// touched folds the row's writers (6.2): created_by at created_at, each
+// history entry's by/at, each claim_log actor; updated_by joins at
+// updated_at when no entry named it. Ordered by last write, newest first,
+// then actor id.
+func (o ops) touched(ctx context.Context, r row.Row) []WhoActor {
+	by := map[string]*WhoActor{}
+	note := func(actor, at string, count bool) {
+		if !strings.HasPrefix(actor, "act_") {
+			return
+		}
+		a, ok := by[actor]
+		if !ok {
+			a = &WhoActor{ActorID: actor}
+			by[actor] = a
+		}
+		if count {
+			a.Changes++
+		}
+		if at > a.Last {
+			a.Last = at
+		}
+	}
+	stamp := func(t time.Time) string {
+		if t.IsZero() {
+			return ""
+		}
+		return t.UTC().Format(time.RFC3339)
+	}
+	note(r.CreatedBy.String(), stamp(r.CreatedAt), true)
+	for _, e := range History(r) {
+		at := e.At
+		if t, err := time.Parse(histTimeLayout, e.At); err == nil {
+			at = stamp(t)
+		}
+		note(e.By, at, true)
+	}
+	for _, c := range claimLog(r) {
+		note(c.ActorID, stamp(c.At), true)
+	}
+	note(r.UpdatedBy.String(), stamp(r.UpdatedAt), false)
+	out := make([]WhoActor, 0, len(by))
+	for _, a := range by {
+		a.Name = o.actorName(ctx, a.ActorID)
+		out = append(out, *a)
+	}
+	slices.SortFunc(out, func(a, b WhoActor) int { return cmp.Or(cmp.Compare(b.Last, a.Last), cmp.Compare(a.ActorID, b.ActorID)) })
+	return out
+}
+
+// claimLog decodes the task's claim_log (nil when absent or unreadable).
+func claimLog(r row.Row) []claimEntry {
+	v := r.Fields[fieldClaimLog]
+	if v == nil {
+		return nil
+	}
+	raw, err := v.MarshalJSON()
+	if err != nil {
+		return nil
+	}
+	var log []claimEntry
+	if json.Unmarshal(raw, &log) != nil {
+		return nil
+	}
+	return log
 }
 
 // whyText / whoText are the human lines show appends.
@@ -167,6 +254,16 @@ func (w *Who) text() string {
 	}
 	if w.UpdatedAt != "" || w.UpdatedBy != "" {
 		b.WriteString("  updated:  " + strings.TrimSpace(w.UpdatedAt+"  "+w.UpdatedBy) + "\n")
+	}
+	if len(w.Touched) > 0 {
+		b.WriteString("  touched by:\n")
+		for _, a := range w.Touched {
+			name := a.Name
+			if name == "" {
+				name = a.ActorID
+			}
+			b.WriteString("    " + padRight(name, 24) + "  " + strconv.Itoa(a.Changes) + " change(s), last " + a.Last + "\n")
+		}
 	}
 	for _, l := range w.Sessions {
 		b.WriteString("    " + l + "\n")
