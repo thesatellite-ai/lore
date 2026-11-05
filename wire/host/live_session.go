@@ -94,6 +94,11 @@ type liveSession struct {
 	// run carries them (FLAG6); companionInner writes any left over.
 	companions     map[live.RowKey]store.Change
 	companionInner store.Backend
+	// atomicMark is the local live ref before a coordination write put its
+	// rows there for the atomic signals push (live_stage.go); atomicOpen
+	// while that push is not confirmed.
+	atomicMark string
+	atomicOpen bool
 }
 
 // openLiveSession opens the live session of the repository at top.
@@ -224,6 +229,11 @@ func (s *liveSession) finish(ctx context.Context) {
 		return
 	}
 	s.finished = true
+	// A coordination write whose atomic push never succeeded leaves its
+	// rows on the local ref: they were never fenced, so they never go out.
+	if err := s.atomicReset(ctx); err != nil {
+		s.warn("undo an unconfirmed coordination write: " + err.Error())
+	}
 	if err := s.flushCompanions(ctx); err != nil {
 		s.warn("supporting rows (actors, metadata keys) were not written: " + err.Error())
 	}
