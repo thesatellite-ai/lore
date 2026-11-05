@@ -112,6 +112,7 @@ func buildScopeReport(ctx context.Context, root renderReport, plan dirPlan, bodi
 				file, n = rep.File, rep.Bytes
 			case toolprofile.DirInline:
 				file = rel + " (block)"
+			case toolprofile.DirGlobRule, toolprofile.DirNone: // the rule file itself
 			}
 			out.Files = append(out.Files, scopeFileRow{File: file, Scope: rep.Scope, Tool: t.profile.Name, Budget: plan.Settings.Budget,
 				Bytes: n, MustFull: rep.MustFull, MustLine: rep.MustLine, Status: scopeStatus(n, plan.Settings.Budget, root.WarnPct)})
