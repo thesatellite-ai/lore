@@ -891,6 +891,34 @@ var clientActorKeys = []string{keyDoneByDoc, "created_by_actor_id", "assigned_to
 // keyAssigneesDoc is the task's list of assignee actor ids.
 const keyAssigneesDoc = "assignees"
 
+// clientNestedActorKeys are the task's lists of objects whose fields name
+// one actor by id (P2B-OLD-2): history entries and time entries.
+var clientNestedActorKeys = []struct {
+	list string
+	keys []string
+}{
+	{"history", []string{"by"}},
+	{"time_entries", []string{"actor_id", "created_by", "updated_by"}},
+}
+
+// ownAll rewrites, in m, every key of keys that names an agent to that
+// agent's owner, or to nobody when no owner is known; persons stay.
+func ownAll(m map[string]any, keys []string, look func(string) (string, bool)) {
+	for _, k := range keys {
+		id, _ := m[k].(string)
+		if id == "" {
+			continue
+		}
+		if owner, agent := look(id); agent {
+			if owner == "" {
+				m[k] = nil
+			} else {
+				m[k] = owner
+			}
+		}
+	}
+}
+
 // ownersForAgents rewrites, in a client copy written while agent details
 // stay internal, every actor field that names an agent (this writer or
 // ANOTHER agent) to that agent's owner, or to nobody when no owner is known
@@ -898,16 +926,16 @@ const keyAssigneesDoc = "assignees"
 // no client actor row is needed for it. Persons are left as they are.
 func (r *clientRows) ownersForAgents(ctx context.Context, d coord.Doc) {
 	look := agentOwnerLookup(ctx)
-	for _, k := range clientActorKeys {
-		id := d.Str(k)
-		if id == "" {
-			continue
-		}
-		if owner, agent := look(id); agent {
-			if owner == "" {
-				d[k] = nil
-			} else {
-				d.SetStr(k, owner)
+	ownAll(d, clientActorKeys, look)
+	// P2B-OLD-2 (Q11, r2-actor): the nested lists name actors too — each
+	// history entry's "by" and each time entry's actor fields — so a client
+	// copy rewrites them the same way, or the agent's id leaks through them.
+	for _, n := range clientNestedActorKeys {
+		if items, ok := d[n.list].([]any); ok {
+			for _, it := range items {
+				if m, ok := it.(map[string]any); ok {
+					ownAll(m, n.keys, look)
+				}
 			}
 		}
 	}
