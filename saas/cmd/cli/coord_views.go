@@ -508,6 +508,13 @@ Example:
 			if err != nil {
 				return err
 			}
+			// SECRETS 16 / SQ10: every forced reveal since the last ack
+			// (secrets_forced.go).
+			forced, err := forcedRevealItems(ctx)
+			if err != nil {
+				return err
+			}
+			items = append(items, forced...)
 			var marker inboxMarker
 			if b, err := os.ReadFile(inboxMarkerPath(cv.w)); err == nil {
 				// A corrupt marker reads as "never acked": the inbox shows
