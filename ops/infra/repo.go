@@ -757,7 +757,7 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 	}
 	key, err := repourl.Normalize(clean)
 	if err != nil {
-		return RepoSetURLOut{}, errs.Wrap(errs.InvalidInput, "not a repo address: "+clean, err).
+		return RepoSetURLOut{}, errs.Wrap(errs.RepoURL, "not a repo address: "+clean, err). // E_REPO_URL (PROVENANCE 10.4)
 			WithHint("use https://host/owner/repo(.git), git@host:owner/repo.git or host/owner/repo")
 	}
 	day := today(env)
