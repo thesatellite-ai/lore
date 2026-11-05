@@ -74,7 +74,7 @@ func driftRoot(t *testing.T) *cobra.Command {
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
 	if sync := find(root, opssync.Noun); sync != nil {
-		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin))
+		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, nil))
 	}
 	// cobra adds `completion` and `help` only when the root executes; add
 	// them now so docs that run them are checked like any other command.

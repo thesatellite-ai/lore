@@ -139,7 +139,7 @@ func run(ctx context.Context, args []string) int {
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
 	// The git hook blocks call `lore sync hook <name>` (F6 ride-along).
 	if sync := find(root, opssync.Noun); sync != nil {
-		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin))
+		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, refreshHook(rend.h, wd)))
 	}
 	root.SetArgs(args)
 	if err := root.ExecuteContext(ctx); err != nil {

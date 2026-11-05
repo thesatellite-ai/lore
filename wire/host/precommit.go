@@ -1,0 +1,210 @@
+package host
+
+// precommit.go — `lore sync hook pre-commit` on a binary built from the root
+// module (v0.1.17 sync_cmd.go preCommitCheck, minus its lore.db sync pass):
+//
+//	git commit ─▶ pre-commit block ─▶ project root (none: not a lore
+//	project, git is never blocked) ─▶ changed files under .lore/data ─▶
+//	any of them broken (invalid JSON, conflict markers at any depth)?
+//	refuse, naming each ─▶ else stage .lore/data (knowledge is never left
+//	behind by a partial `git add`) ─▶ RX7: a staged meta_keys row that
+//	drops internal, sensitive or strict without a new changed_by record
+//	refuses with E_LEAK_BLOCKED (wire.KeyLoosenings)
+//
+// Secrets and F16 in the staged files are the commit-msg block's job
+// (`lore check leaks --staged`), which runs after this one has staged.
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/logic/merge3"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/wire"
+)
+
+// Reasons a changed lore file is refused (printed after its path).
+const (
+	brokenConflictMarkers = "conflict markers"
+	brokenInvalidJSON     = "invalid JSON"
+)
+
+// brokenFilesHint is the next step of a refused pre-commit.
+const brokenFilesHint = "fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again"
+
+// loreDataPathspec is the project's row folder, relative to its root.
+var loreDataPathspec = filepath.ToSlash(filepath.Join(rowfs.LoreDir, rowfs.DataDir))
+
+// preCommit is `lore sync hook pre-commit` (see the file comment).
+func (h *liveHost) preCommit(ctx context.Context) error {
+	root := liveProjectRoot(h.cfg.WorkDir)
+	if root == "" {
+		return nil // not a lore project: never block git over it
+	}
+	repo, err := gitref.Open(ctx, root, h.cfg.Git)
+	if err != nil {
+		return nil // not a git checkout (a hook copied around)
+	}
+	changed, err := changedUnder(ctx, repo, root, loreDataPathspec)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "pre-commit: list the changed lore files", err)
+	}
+	// A branch file of a row on the live ref is shadowed by live (fixed
+	// rule 4): neither checked nor staged, so a stale or hand-edited copy
+	// never rides into the user's commit (F6 "dirty landed path").
+	changed, shadowed, err := withoutLiveRows(ctx, repo, root, changed)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "pre-commit: read the local live ref", err)
+	}
+	var bad []string
+	for _, p := range changed {
+		b, rerr := os.ReadFile(filepath.Join(root, filepath.FromSlash(p))) // p is a path git listed under .lore/data
+		if errors.Is(rerr, os.ErrNotExist) {
+			continue // a deletion: staging records it
+		}
+		if rerr != nil {
+			return errs.Wrap(errs.Internal, "pre-commit: read "+p, rerr)
+		}
+		if why := brokenLoreFile(b); why != "" {
+			bad = append(bad, p+" ("+why+")")
+		}
+	}
+	if len(bad) > 0 {
+		return errs.New(errs.InvalidInput, "refusing to commit broken lore files: "+strings.Join(bad, ", ")).WithHint(brokenFilesHint)
+	}
+	if len(changed) > 0 {
+		specs := []string{loreDataPathspec}
+		if shadowed {
+			specs = changed // stage the rest one by one, leaving the shadowed files out
+		}
+		args := append([]string{"add", "-A", "--"}, specs...)
+		if _, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: args}); err != nil {
+			return errs.Wrap(errs.Internal, "pre-commit: stage "+loreDataPathspec, err)
+		}
+	}
+	// RX7 (OV64). No HEAD yet (a first commit) is a git error here, and
+	// then there is nothing to compare.
+	found, lerr := wire.KeyLoosenings(ctx, root, "HEAD", "")
+	if lerr != nil {
+		return nil
+	}
+	return looseningError(found)
+}
+
+// changedUnder lists the files under pathspec that differ from HEAD or are
+// untracked, as paths relative to root (git status, porcelain v1 with -z:
+// "XY <path>", a rename or copy followed by its old path).
+func changedUnder(ctx context.Context, repo *gitref.Repo, root, pathspec string) ([]string, error) {
+	out, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--", pathspec}})
+	if err != nil {
+		return nil, err
+	}
+	top, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"rev-parse", "--show-prefix"}})
+	if err != nil {
+		return nil, err
+	}
+	prefix := strings.TrimSpace(string(top)) // root relative to the top, "" or "sub/"
+	var paths []string
+	fields := strings.Split(string(out), "\x00")
+	for i := 0; i < len(fields); i++ {
+		f := fields[i]
+		if len(f) < len("XY ")+1 {
+			continue
+		}
+		status, p := f[:2], f[3:]
+		if strings.ContainsAny(status, "RC") {
+			i++ // the old path of a rename or copy
+		}
+		paths = append(paths, strings.TrimPrefix(p, prefix))
+	}
+	return paths, nil
+}
+
+// withoutLiveRows drops from changed (paths relative to root) the row
+// files whose row is on the local live ref; shadowed reports whether any
+// was dropped. Offline: only the local ref is read, no session is opened.
+func withoutLiveRows(ctx context.Context, repo *gitref.Repo, root string, changed []string) (kept []string, shadowed bool, err error) {
+	if len(changed) == 0 {
+		return changed, false, nil
+	}
+	ref := &live.Ref{Repo: repo, Name: live.RefLive}
+	oid, ok, err := repo.ResolveRef(ctx, ref.Name)
+	if err != nil || !ok {
+		return changed, false, err
+	}
+	tree, err := ref.ReadTree(ctx, oid)
+	if err != nil {
+		return nil, false, err
+	}
+	_, folder := livePlace(root)
+	rows, _ := tree.Rows(folder) // an unreadable live row shadows nothing here; lore doctor reports it
+	prefix := loreDataPathspec + "/"
+	for _, p := range changed {
+		rel, isRow := strings.CutPrefix(p, prefix)
+		table, file, nested := strings.Cut(rel, "/")
+		id, isJSON := strings.CutSuffix(file, rowFileExt)
+		if isRow && nested && isJSON && !strings.Contains(file, "/") {
+			if _, onLive := rows[live.RowKey{Table: table, ID: id}]; onLive {
+				shadowed = true
+				continue
+			}
+		}
+		kept = append(kept, p)
+	}
+	return kept, shadowed, nil
+}
+
+// brokenLoreFile is why b cannot be committed as a lore file ("" = fine):
+// conflict markers in the text or in any string value (meta and fields
+// entries nest, METADATA_DESIGN 3.x), or not one JSON document.
+func brokenLoreFile(b []byte) string {
+	if merge3.ContainsConflictMarkers(string(b)) {
+		return brokenConflictMarkers
+	}
+	if !json.Valid(b) {
+		return brokenInvalidJSON
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	for {
+		t, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			return ""
+		}
+		if err != nil {
+			return brokenInvalidJSON
+		}
+		if s, ok := t.(string); ok && merge3.ContainsConflictMarkers(s) {
+			return brokenConflictMarkers + " in a value"
+		}
+	}
+}
+
+// looseningError joins the RX7 findings into one E_LEAK_BLOCKED (nil: none).
+func looseningError(found []error) error {
+	if len(found) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, len(found))
+	hints := make([]string, 0, len(found))
+	for _, f := range found {
+		var e *errs.Error
+		if errors.As(f, &e) {
+			lines = append(lines, e.Message)
+			if e.Hint != "" {
+				hints = append(hints, e.Hint)
+			}
+			continue
+		}
+		lines = append(lines, f.Error())
+	}
+	return errs.New(errs.LeakBlocked, strings.Join(lines, "; ")).WithHint(strings.Join(hints, "; "))
+}

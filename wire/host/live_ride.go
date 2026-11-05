@@ -36,6 +36,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -82,34 +83,61 @@ type Live struct{ h *liveHost }
 // NewLive builds the live wiring for cfg.
 func NewLive(cfg LiveConfig) *Live { return &Live{h: &liveHost{cfg: cfg}} }
 
+// hookRefresh is the hook name of the post-checkout, post-merge and
+// post-rewrite blocks (gitwire.go).
+const hookRefresh = "refresh"
+
 // SyncHookCommand is the hidden `lore sync hook <name>` the git hook blocks
-// call. post-commit and pre-push are the ride-along; the other names the
-// old binary's blocks use (pre-commit, refresh) do nothing here: this
-// binary validates rows on write, and a hook must never block git over a
-// lore it cannot run.
-func (l *Live) SyncHookCommand(stdin io.Reader) *cobra.Command {
+// call: post-commit and pre-push are the ride-along, pre-commit stages and
+// checks .lore/data (precommit.go), refresh re-renders LORE.md after git
+// changed the rows (refresh: nil does nothing; it never fails git). Any
+// other name is E_INVALID_INPUT: a typo in a hook block must show, not pass
+// as a hook that checked nothing.
+func (l *Live) SyncHookCommand(stdin io.Reader, refresh func(context.Context)) *cobra.Command {
 	return &cobra.Command{
 		Use:    syncHookUse,
 		Short:  "Entry point for lore's git hook blocks",
 		Hidden: true,
-		Args:   cobra.MinimumNArgs(1),
+		Args:   cobra.MinimumNArgs(1), // pre-push also gets git's remote name and url
 		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			if !syncHookNames[name] {
+				return errs.New(errs.InvalidInput, "unknown hook "+strconv.Quote(name)).
+					WithHint("the hook blocks call one of: " + strings.Join(syncHookList, ", "))
+			}
 			if os.Getenv(EnvRideActive) != "" {
 				return nil
 			}
-			switch args[0] {
+			switch name {
 			case hookPostCommit:
 				if !liveDisabled() {
 					l.h.postCommit(cmd.Context())
 				}
-				return nil
 			case hookPrePush:
 				return l.h.prePush(cmd.Context(), stdin, args[1:])
+			case hookPreCommit:
+				return l.h.preCommit(cmd.Context())
+			case hookRefresh:
+				if refresh != nil {
+					refresh(cmd.Context())
+				}
 			}
 			return nil
 		},
 	}
 }
+
+// syncHookList are the names `lore sync hook` takes, in help order.
+var syncHookList = []string{hookPreCommit, hookRefresh, hookPostCommit, hookPrePush}
+
+// syncHookNames is syncHookList as a set.
+var syncHookNames = func() map[string]bool {
+	m := make(map[string]bool, len(syncHookList))
+	for _, n := range syncHookList {
+		m[n] = true
+	}
+	return m
+}()
 
 // Prime runs the live session's prepare once for the repo holding the cwd
 // (lock, tracking refspec, the fetch when due and its stamp, integrate)

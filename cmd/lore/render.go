@@ -8,7 +8,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	contextop "github.com/thesatellite-ai/lore/ops/context"
@@ -88,4 +91,22 @@ func (l *lateSetup) WriteAgentHooks(ctx context.Context, plans []opssetup.HookPl
 		return err
 	}
 	return s.WriteAgentHooks(ctx, plans, remove)
+}
+
+// refreshHook is `lore sync hook refresh` (post-checkout, post-merge,
+// post-rewrite): git just changed the rows, so .lore/LORE.md is
+// re-rendered quietly, as v0.1.17's rerenderLoreMD did. Only a project that
+// already renders (the file exists; tool pointer files are `lore render`'s
+// explicit job, so none is touched), and it never fails git: a problem is
+// one stderr line.
+func refreshHook(h *renderhost.Host, wd string) func(context.Context) {
+	return func(ctx context.Context) {
+		out := filepath.Join(wd, filepath.FromSlash(renderhost.LoreMDRel))
+		if _, err := os.Stat(out); err != nil || h == nil {
+			return
+		}
+		if _, err := h.Run(ctx, renderhost.Flags{OutPath: out, NoPointer: true, Quiet: true}); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "lore: refresh: re-render "+renderhost.LoreMDRel+": "+err.Error()) // stderr gone: nothing left to report to
+		}
+	}
 }
