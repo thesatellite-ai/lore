@@ -37,7 +37,7 @@ carol (work/app)$ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only re
     "cmd": "task add",
     "git": {
       "branch": "main",
-      "commit": "d9a70f8f951bcdd2344aa3ed634d1f3deb3a2224",
+      "commit": "dab4a6a2a4b677e3473d783020dda5cd43323bb7",
       "state": "branch"
     },
     "repo": "rep_54fe984c9b495744c0217776765a28f2",
@@ -121,14 +121,14 @@ alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p ref
   "session": "s-10e90368",
   "claim_token": "ct_a5f6f…",
   "claim_epoch": 1,
-  "since": "2026-11-02T10:03:20Z",
-  "expires": "2026-11-02T10:23:20Z",
+  "since": "2026-11-02T10:01:10Z",
+  "expires": "2026-11-02T10:21:10Z",
   "renewed_seq": 0,
-  "renewed_at": "2026-11-02T10:03:20Z",
+  "renewed_at": "2026-11-02T10:01:10Z",
   "host": "devbox"
 }
 agent-backend (work/website)$ lore task heartbeat tsk_76bd560aff0771fab8457dbfa9823f10
-✓ tsk_76bd560aff0771fab8457dbfa9823f10 renewed until 2026-11-02T10:26:50Z (seq 1)
+✓ tsk_76bd560aff0771fab8457dbfa9823f10 renewed until 2026-11-02T10:21:25Z (seq 1)
 alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main
 9b40ce7 lore: signals
 

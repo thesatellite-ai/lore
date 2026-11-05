@@ -24,7 +24,7 @@ The coordinator writes the plan once. A plan file names the mission, its approve
 ```console
 # alice, in api
 $ cat invite.yaml
-mission: {key: invite, title: "Invite landing page", to: agency}
+mission: {key: invite, title: "Invite landing page", to: agency/client2}
 approvers: ["@alice"]
 tasks:
   - {key: backend,  title: "send the invite email from the API", repo: api,   timebox: 60m}
@@ -48,13 +48,13 @@ $ lore mission apply invite.yaml
 ✓ msn_2ad3…f891 Invite landing page (created) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
-  tsk_05e9…4603 allow /invite on the proxy  
+  tsk_05e9…4603 allow /invite on the proxy
   tsk_c0f3…b5b8 deploy to staging             after frontend,proxy  gate required
 $ lore mission apply invite.yaml
 ✓ msn_2ad3…f891 Invite landing page (found) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
-  tsk_05e9…4603 allow /invite on the proxy  
+  tsk_05e9…4603 allow /invite on the proxy
   tsk_c0f3…b5b8 deploy to staging             after frontend,proxy  gate required
 $ lore task claim msn_2ad3…f891
 ✓ claimed msn_2ad3…f891 (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
@@ -110,8 +110,7 @@ $ lore task next --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invit
 ```console
 # agent-infra, in agents/infra
 $ lore finding add --mission msn_2ad3…f891 'invite links must use the public website address, not the server name'
-ERROR: [E_UNSUPPORTED] a lesson or finding on a task that lives in a store cannot be saved yet
-  hint: save it in the store's repo with `lore memory add --to <store>`
+✓ mem_28f8…03df finding on msn_2ad3…f891 (live)
 
 # agent-backend, in agents/api
 $ lore inbox
@@ -132,11 +131,11 @@ $ lore task done tsk_05e9…4603
 ```console
 # agent-backend, in agents/api
 $ lore task note tsk_162d…9666 'the API sends the invite email and returns a link; the email text is in invite.html'
-✓ note cmt_28f8…03df on tsk_162d…9666
+✓ note cmt_4c59…6c38 on tsk_162d…9666
 $ git switch -q -c agent-backend/invite && mkdir -p api && echo 'package api' > api/invite.go && git add api && git commit -qm 'send the invite email' && git push -q -u origin agent-backend/invite
 $ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
 ✓ tsk_162d…9666 done (commit 601d285); waiting for merge
-  lesson → mem_4c59…6c38
+  lesson → mem_3b62…e913
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
@@ -167,7 +166,7 @@ $ lore task next --mission msn_2ad3…f891 --repo app
 # agent-frontend, in agents/app
 $ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page'
 $ lore task note tsk_54fe…28f2 'route + loader done, form next'
-✓ note cmt_3b62…e913 on tsk_54fe…28f2
+✓ note cmt_f147…5139 on tsk_54fe…28f2
   work branch agent-frontend/invite-route pushed
 
 # agent-coord, in api
@@ -188,7 +187,7 @@ A replacement agent, `agent-frontend-2`, takes the task over (attempt 2), fetche
 ```console
 # alice, in agents/fe2/app
 $ lore agent start --label agent-frontend-2 --owner @alice
-✓ act_f147…5139 agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
+✓ act_2537…6bbb agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 
 # agent-frontend-2, in agents/fe2/app

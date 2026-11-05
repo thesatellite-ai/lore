@@ -107,17 +107,17 @@ Use it when you started a task and cannot finish it. The task is free at once, s
 ```console
 # alice, in website
 $ lore task add 'send the invoice reminder before Friday' --to agency
-✓ tsk_7a67…9504 — send the invoice reminder before Friday [medium] → [agency/client]
+✓ tsk_162d…9666 — send the invoice reminder before Friday [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_7a67…9504
-✓ claimed tsk_7a67…9504 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
-$ lore task release tsk_7a67…9504
-✓ released tsk_7a67…9504
+$ lore task claim tsk_162d…9666
+✓ claimed tsk_162d…9666 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+$ lore task release tsk_162d…9666
+✓ released tsk_162d…9666
 
 # alice, in website
-$ lore task show tsk_7a67…9504
-tsk_7a67…9504
+$ lore task show tsk_162d…9666
+tsk_162d…9666
   title:    send the invoice reminder before Friday
   status:   in_progress
   priority: medium
@@ -139,20 +139,20 @@ Use it when an agent holds a task it should not work on any more. The agent's ne
 ```console
 # alice, in website
 $ lore agent start --label agent-backend --owner @alice
-✓ act_2ad3…f891 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_54fe…28f2 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 
 # agent-backend, in website
-$ lore task claim tsk_7a67…9504
-✓ claimed tsk_7a67…9504 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
+$ lore task claim tsk_162d…9666
+✓ claimed tsk_162d…9666 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
 
 # alice, in website
-$ lore task revoke tsk_7a67…9504
-✓ revoked the claim on tsk_7a67…9504 (was held by agent-backend)
+$ lore task revoke tsk_162d…9666
+✓ revoked the claim on tsk_162d…9666 (was held by agent-backend)
 
 # agent-backend, in website
-$ lore task done tsk_7a67…9504
-ERROR: [E_LOST_CLAIM] tsk_7a67…9504: your claim (token ct_cb04f…) was revoked by act_162d…9666 at 10:17AM
+$ lore task done tsk_162d…9666
+ERROR: [E_LOST_CLAIM] tsk_162d…9666: your claim (token ct_cb04f…) was revoked by act_05e9…4603 at 10:17AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 ```
@@ -166,19 +166,19 @@ Use it when the work should move to another person. The old holder's next write 
 ```console
 # alice, in website
 $ lore task add 'update the contact page' --to agency --assign @bob
-✓ tsk_54fe…28f2 — update the contact page [medium] → [agency/client]
+✓ tsk_c0f3…b5b8 — update the contact page [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_54fe…28f2
-✓ claimed tsk_54fe…28f2 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
+$ lore task claim tsk_c0f3…b5b8
+✓ claimed tsk_c0f3…b5b8 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
 
 # alice, in website
-$ lore task reassign tsk_54fe…28f2 --assign @alice
-✓ tsk_54fe…28f2 reassigned to @alice
+$ lore task reassign tsk_c0f3…b5b8 --assign @alice
+✓ tsk_c0f3…b5b8 reassigned to @alice
 
 # bob, in website
-$ lore task done tsk_54fe…28f2
-ERROR: [E_REASSIGNED] tsk_54fe…28f2 was reassigned while you held it; stop work on it (now assigned to act_162d…9666)
+$ lore task done tsk_c0f3…b5b8
+ERROR: [E_REASSIGNED] tsk_c0f3…b5b8 was reassigned while you held it; stop work on it (now assigned to act_05e9…4603)
   hint: stop work on this task; `lore task next` finds other work
 (exit 14)
 ```
@@ -194,19 +194,18 @@ A **team** is a name for a group of people, like a mailing list: `--assign @fron
 ```console
 # alice, in billing
 $ lore team add @frontend --name 'Frontend' --members @alice,@bob
-ERROR: [E_INVALID_INPUT] no one is @bob on this repo's roster
-  hint: register first: `lore actor register` (as that person)
+✓ tem_7a67…9504 @frontend (2 member(s)) in this repo
 $ lore team list
-no teams on this repo's roster
+@frontend         Frontend                 2 member(s)
 $ lore task add 'make the buttons blue' --assign @frontend
 lore sync: imported 1
-ERROR: [E_NOT_FOUND] no person or team with handle @frontend
-  hint: people join with `lore actor register`; teams with `lore team add`
+✓ tsk_2ad3…f891 — make the buttons blue [medium]
+lore live: (live, pushed)
+lore live: landed on main (601d285); leaves live once main is fetched
 
 # bob, in billing
 $ lore task list
-lore sync: imported 1
-(no tasks)
+○ tsk_2ad3…f891 make the buttons blue [medium]
 ```
 <!-- /example -->
 

@@ -53,14 +53,15 @@ Two developers, one repo, two branches. Bob (an agency developer) gives Alice (a
 ```console
 # bob, in billing
 $ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
-lore sync: imported 1
-ERROR: [E_NOT_FOUND] no person or team with handle @alice
-  hint: people join with `lore actor register`; teams with `lore team add`
+✓ tsk_162d…9666 — check the checkout page on a phone [medium]
+lore live: (live, pushed)
+lore live: landed on main (601d285); leaves live once main is fetched
 
 # alice, in billing
 $ lore sync && lore task list --mine
 · already in sync
-(no tasks)
+lore live: 2 row(s) left live (main holds them)
+○ tsk_162d…9666 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
 

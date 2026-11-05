@@ -2,79 +2,96 @@
 ### register
 alice (work/billing)$ lore actor register
 ✓ act_7a670ae8548ed05bf57ad29ad0759504 alice (@alice) already registered (refreshed) in this repo
+lore live: (live, pushed)
 bob (work/billing)$ lore actor register
 lore sync: built .lore/lore.db from .lore/data (3 rows)
 lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
 lore sync: backup of lore.db before adopt: ~/work/billing/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 ✓ act_2ad3618e878ebbf527d34d446ef4f891 bob (@bob) registered in this repo
+lore live: (live, pushed)
 
 ### assign across branches
 bob (work/billing)$ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
-lore sync: imported 1
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/billing/.git/hooks)
-ERROR: [E_NOT_FOUND] no person or team with handle @alice
-  hint: people join with `lore actor register`; teams with `lore team add`
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — check the checkout page on a phone [medium]
+lore live: (live, pushed)
+lore live: landed on main (601d285); leaves live once main is fetched
 alice (work/billing)$ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 alice (work/billing)$ lore sync && lore task list --mine
 · already in sync
-(no tasks)
+lore live: 2 row(s) left live (main holds them)
+○ tsk_162df51b7f78b785c97c26b41ea89666 check the checkout page on a phone [medium]
 alice (work/billing)$ lore inbox
-(inbox empty)
+-  assigned              tsk_162df51b7f78b785c97c26b41ea89666  check the checkout page on a phone (lead)
 
 ### done lands on main
-alice (work/billing)$ lore task start tsk_missing
-ERROR: [E_NOT_FOUND] task: "tsk_missing" is not a task id (tsk_…)
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main tasks`
-alice (work/billing)$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done tsk_missing --commit $(git rev-parse --short HEAD)
-ERROR: [E_NOT_FOUND] task: "tsk_missing" is not a task id (tsk_…)
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main tasks`
+alice (work/billing)$ lore task start tsk_162df51b7f78b785c97c26b41ea89666
+✓ tsk_162df51b7f78b785c97c26b41ea89666 started
+lore live: (live, pushed)
+alice (work/billing)$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done tsk_162df51b7f78b785c97c26b41ea89666 --commit $(git rev-parse --short HEAD)
+✓ tsk_162df51b7f78b785c97c26b41ea89666 done (commit 86dbae4); waiting for merge
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 alice (work/billing)$ git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3
-601d285 lore: init
-86dbae4 init
- .../rep_162df51b7f78b785c97c26b41ea89666.json      | 33 ++++++++++++++++++++++
- AGENTS.md                                          |  3 ++
- 8 files changed, 135 insertions(+)
+9b40ce7 lore: land 1 row (_root)
+601d285 lore: land 2 rows (_root)
+05513aa lore: init
+dfd8dc8 init
+
+ .../tsk_162df51b7f78b785c97c26b41ea89666.json      | 86 ++++++++++++++++++++++
+ 1 file changed, 86 insertions(+)
 alice (work/billing)$ git log --oneline -1 && git status --short
-9b40ce7 fix the checkout page on phones
+86dbae4 fix the checkout page on phones
 
 ### urgent rule
 bob (work/billing)$ lore rule add --body 'Never deploy on a Friday'
-✓ rul_54fe984c9b495744c0217776765a28f2 
+✓ rul_54fe984c9b495744c0217776765a28f2
   scope: [master] severity: must
 bob (work/billing)$ lore sync promote rul_54fe984c9b495744c0217776765a28f2 --to main --dry-run
 would commit .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json onto main
-bob (work/billing)$ lore sync promote rul_54fe984c9b495744c0217776765a28f2 --to main
-✓ committed 1 file(s) onto main (05513aa29b78) — not pushed
+bob (work/billing)$ git fetch -q origin main:main && lore sync promote rul_54fe984c9b495744c0217776765a28f2 --to main
+✓ committed 1 file(s) onto main (cf563f347792) — not pushed
 bob (work/billing)$ git push -q origin main && git fetch -q origin && git log --oneline -1 origin/main
-05513aa lore: promote rul_54fe984c9b495744c0217776765a28f2
+cf563f3 lore: promote rul_54fe984c9b495744c0217776765a28f2
 
 ### explain
-alice (work/billing)$ lore explain tsk_missing
-tsk_missing in ~/work/billing (folder _root)
+alice (work/billing)$ lore explain tsk_162df51b7f78b785c97c26b41ea89666
+tsk_162df51b7f78b785c97c26b41ea89666 in ~/work/billing (folder _root)
   fetched 50s ago
-  live: not present
-  not found in live or on this branch; it may have landed on main while this branch is older: `lore sync peek origin/main`
+  live (local df3a55c): row, live since 2026-11-02T10:00:15Z, hlc 2026-11-02T10:00:40.000Z/0000/act_7a670ae8548ed05bf57ad29ad0759504
+  this branch (HEAD): not present
+  origin/main: present
+  wins: the live copy (rule 4: if a row id is in live, live wins)
+  land: leaves live on the next sync (finished, main holds it)
 
 ### protected main
 bob (work/billing)$ lore task add 'ask the client for the new logo' --assign @alice
-ERROR: [E_NOT_FOUND] no person or team with handle @alice
-  hint: people join with `lore actor register`; teams with `lore team add`
-alice (work/billing)$ lore sync >/dev/null && lore task done tsk_missing
-ERROR: [E_NOT_FOUND] task: "tsk_missing" is not a task id (tsk_…)
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main tasks`
-alice (work/billing)$ lore explain tsk_missing
-tsk_missing in ~/work/billing (folder _root)
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 — ask the client for the new logo [medium]
+lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
+alice (work/billing)$ lore sync >/dev/null && lore task done tsk_05e99e22e9e86e96fe4daa7777994603
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: (live, pushed)
+lore live: main is protected: the rows ride on your next push (lore: land N rows)
+alice (work/billing)$ lore explain tsk_05e99e22e9e86e96fe4daa7777994603
+tsk_05e99e22e9e86e96fe4daa7777994603 in ~/work/billing (folder _root)
   fetched 5s ago
-  live: not present
-  not found in live or on this branch; it may have landed on main while this branch is older: `lore sync peek origin/main`
+  live (local 6d00426): row, live since 2026-11-02T10:01:20Z, hlc 2026-11-02T10:01:25.000Z/0000/act_7a670ae8548ed05bf57ad29ad0759504
+  this branch (HEAD): not present
+  origin/main: not present
+  wins: the live copy (rule 4: if a row id is in live, live wins)
+  land: waits: main is protected; rides on your next push
 alice (work/billing)$ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-[feat/login dfd8dc8] fix login timeout
+lore: added "lore: land 2 rows (_root)" to feat/login (act_2ad3618e878ebbf527d34d446ef4f891, tsk_05e99e22e9e86e96fe4daa7777994603)
+[feat/login 34ee210] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 alice (work/billing)$ git log --oneline -3
-dfd8dc8 fix login timeout
-9b40ce7 fix the checkout page on phones
-601d285 lore: init
+7898daa lore: land 2 rows (_root)
+34ee210 fix login timeout
+86dbae4 fix the checkout page on phones
 alice (work/billing)$ git push -q -u origin feat/login
 alice (work/billing)$ git status --short

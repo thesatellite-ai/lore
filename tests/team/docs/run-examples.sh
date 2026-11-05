@@ -194,15 +194,15 @@ s_small_team() {
   on bob work/billing "lore actor register"
 
   note "assign across branches"
-  on_known BUG-T1 bob work/billing "git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice"
+  on bob work/billing "git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice"
   local t1; t1=$(id tsk)
   on alice work/billing "git switch -q -c feat/login && lore task list --mine"
   on alice work/billing "lore sync && lore task list --mine"
   on alice work/billing "lore inbox"
 
   note "done lands on main"
-  on_known BUG-T1 alice work/billing "lore task start $t1"
-  on_known BUG-T1 alice work/billing "echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done $t1 --commit \$(git rev-parse --short HEAD)"
+  on alice work/billing "lore task start $t1"
+  on alice work/billing "echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done $t1 --commit \$(git rev-parse --short HEAD)"
   on alice work/billing "git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3"
   on alice work/billing "git log --oneline -1 && git status --short"
 
@@ -211,7 +211,8 @@ s_small_team() {
   on bob work/billing "lore rule add --body 'Never deploy on a Friday'"
   local r1; r1=$(id rul)
   on bob work/billing "lore sync promote $r1 --to main --dry-run"
-  on bob work/billing "lore sync promote $r1 --to main"
+  # promote commits onto the LOCAL main (it never pushes): bring it up to date first.
+  on bob work/billing "git fetch -q origin main:main && lore sync promote $r1 --to main"
   on bob work/billing "git push -q origin main && git fetch -q origin && git log --oneline -1 origin/main"
 
   note "explain"
@@ -219,9 +220,9 @@ s_small_team() {
 
   note "protected main"
   protect agency/billing
-  on_known BUG-T1 bob work/billing "lore task add 'ask the client for the new logo' --assign @alice"
+  on bob work/billing "lore task add 'ask the client for the new logo' --assign @alice"
   local t2; t2=$(id tsk)
-  on_known BUG-T1 alice work/billing "lore sync >/dev/null && lore task done $t2"
+  on alice work/billing "lore sync >/dev/null && lore task done $t2"
   on alice work/billing "lore explain $t2"
   on alice work/billing "echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'"
   on alice work/billing "git log --oneline -3"
@@ -540,7 +541,7 @@ s_agents() {
 
   note "plan"
   cat > "$HOMES/alice/work/api/invite.yaml" <<'Y'
-mission: {key: invite, title: "Invite landing page", to: agency}
+mission: {key: invite, title: "Invite landing page", to: agency/client2}
 approvers: ["@alice"]
 tasks:
   - {key: backend,  title: "send the invite email from the API", repo: api,   timebox: 60m}
@@ -568,7 +569,7 @@ Y
   local tp; tp=$(id tsk)
 
   note "finding"
-  agk BUG-T9 agent-infra work/agents/infra "lore finding add --mission $mis 'invite links must use the public website address, not the server name'"
+  ag agent-infra work/agents/infra "lore finding add --mission $mis 'invite links must use the public website address, not the server name'"
   ag agent-backend work/agents/api "lore inbox"
   ag agent-infra work/agents/infra "lore task done $tp"
 
@@ -747,9 +748,6 @@ s_internals() {
   on alice . "git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client/.lore/data/_meta.json"
 
   note "signals"
-  # 70 s per step: a claim right after `lore agent start` reads the roster through lore's 60 s
-  # fetch cache and refuses the new agent (BUG-T6, reported); waiting past it shows the claim.
-  STEP=70
   on alice work/website "lore agent start --label agent-backend --owner @alice"
   local a s2
   a=$(grep -o 'LORE_ACTOR=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2); s2=$(grep -o 'LORE_SESSION=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2)
@@ -778,9 +776,9 @@ s_team_ops() {
   quiet bob work "git clone -q https://github.com/agency/billing && cd billing && lore actor register"
 
   note "teams"
-  on_known BUG-T1 alice work/billing "lore team add @frontend --name 'Frontend' --members @alice,@bob"
+  on alice work/billing "lore team add @frontend --name 'Frontend' --members @alice,@bob"
   on alice work/billing "lore team list"
-  on_known BUG-T1 alice work/billing "lore task add 'make the buttons blue' --assign @frontend"
+  on alice work/billing "lore task add 'make the buttons blue' --assign @frontend"
   on bob work/billing "lore task list"
 
   note "resource"

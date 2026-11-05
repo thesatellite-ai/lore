@@ -55,11 +55,14 @@ Live always wins over branch data. So you see a teammate's edit on live, whateve
 <!-- example: small-team#explain -->
 ```console
 # alice, in billing
-$ lore explain tsk_missing
-tsk_missing in ~/work/billing (folder _root)
+$ lore explain tsk_162d…9666
+tsk_162d…9666 in ~/work/billing (folder _root)
   fetched 50s ago
-  live: not present
-  not found in live or on this branch; it may have landed on main while this branch is older: `lore sync peek origin/main`
+  live (local df3a55c): row, live since 2026-11-02T10:00:15Z, hlc 2026-11-02T10:00:40.000Z/0000/act_7a67…9504
+  this branch (HEAD): not present
+  origin/main: present
+  wins: the live copy (rule 4: if a row id is in live, live wins)
+  land: leaves live on the next sync (finished, main holds it)
 ```
 <!-- /example -->
 
@@ -95,7 +98,8 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-(no tasks)
+lore live: 2 row(s) left live (main holds them)
+○ tsk_162d…9666 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
 
@@ -174,17 +178,20 @@ A **protected branch** is one GitHub only lets you change through a pull request
 <!-- example: small-team#protected-main only=2,4,5 -->
 ```console
 # alice, in billing
-$ lore sync >/dev/null && lore task done tsk_missing
-ERROR: [E_NOT_FOUND] task: "tsk_missing" is not a task id (tsk_…)
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main tasks`
+$ lore sync >/dev/null && lore task done tsk_05e9…4603
+✓ tsk_05e9…4603 done
+  learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore live: (live, pushed)
+lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-[feat/login dfd8dc8] fix login timeout
+lore: added "lore: land 2 rows (_root)" to feat/login (act_2ad3…f891, tsk_05e9…4603)
+[feat/login 34ee210] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 $ git log --oneline -3
-dfd8dc8 fix login timeout
-9b40ce7 fix the checkout page on phones
-601d285 lore: init
+7898daa lore: land 2 rows (_root)
+34ee210 fix login timeout
+86dbae4 fix the checkout page on phones
 ```
 <!-- /example -->
 
@@ -267,16 +274,16 @@ $ cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p refs/lor
   "session": "s-10e90368",
   "claim_token": "ct_a5f6f…",
   "claim_epoch": 1,
-  "since": "2026-11-02T10:03:20Z",
-  "expires": "2026-11-02T10:23:20Z",
+  "since": "2026-11-02T10:01:10Z",
+  "expires": "2026-11-02T10:21:10Z",
   "renewed_seq": 0,
-  "renewed_at": "2026-11-02T10:03:20Z",
+  "renewed_at": "2026-11-02T10:01:10Z",
   "host": "devbox"
 }
 
 # agent-backend, in website
 $ lore task heartbeat tsk_76bd…3f10
-✓ tsk_76bd…3f10 renewed until 2026-11-02T10:26:50Z (seq 1)
+✓ tsk_76bd…3f10 renewed until 2026-11-02T10:21:25Z (seq 1)
 
 # alice, in ~
 $ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main
@@ -327,7 +334,7 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 # agent-backend, in agents/api
 $ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
 ✓ tsk_162d…9666 done (commit 601d285); waiting for merge
-  lesson → mem_4c59…6c38
+  lesson → mem_3b62…e913
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app

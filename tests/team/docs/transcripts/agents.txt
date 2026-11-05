@@ -1,7 +1,7 @@
 
 ### plan
 alice (work/api)$ cat invite.yaml
-mission: {key: invite, title: "Invite landing page", to: agency}
+mission: {key: invite, title: "Invite landing page", to: agency/client2}
 approvers: ["@alice"]
 tasks:
   - {key: backend,  title: "send the invite email from the API", repo: api,   timebox: 60m}
@@ -16,13 +16,13 @@ lore sync: configured git for lore data (merge driver, .gitattributes, hooks in 
 ✓ msn_2ad3618e878ebbf527d34d446ef4f891 Invite landing page (created) → [agency/client2]
   tsk_162df51b7f78b785c97c26b41ea89666 send the invite email from the API  timebox 1h
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page         timebox 1h  after backend
-  tsk_05e99e22e9e86e96fe4daa7777994603 allow /invite on the proxy  
+  tsk_05e99e22e9e86e96fe4daa7777994603 allow /invite on the proxy
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging             after frontend,proxy  gate required
 agent-coord (work/api)$ lore mission apply invite.yaml
 ✓ msn_2ad3618e878ebbf527d34d446ef4f891 Invite landing page (found) → [agency/client2]
   tsk_162df51b7f78b785c97c26b41ea89666 send the invite email from the API  timebox 1h
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page         timebox 1h  after backend
-  tsk_05e99e22e9e86e96fe4daa7777994603 allow /invite on the proxy  
+  tsk_05e99e22e9e86e96fe4daa7777994603 allow /invite on the proxy
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging             after frontend,proxy  gate required
 agent-coord (work/api)$ lore task claim msn_2ad3618e878ebbf527d34d446ef4f891
 ✓ claimed msn_2ad3618e878ebbf527d34d446ef4f891 (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
@@ -64,8 +64,7 @@ lore sync: configured git for lore data (merge driver, .gitattributes, hooks in 
 
 ### finding
 agent-infra (work/agents/infra)$ lore finding add --mission msn_2ad3618e878ebbf527d34d446ef4f891 'invite links must use the public website address, not the server name'
-ERROR: [E_UNSUPPORTED] a lesson or finding on a task that lives in a store cannot be saved yet
-  hint: save it in the store's repo with `lore memory add --to <store>`
+✓ mem_28f8d32584b2db54ffb146bede5b03df finding on msn_2ad3618e878ebbf527d34d446ef4f891 (live)
 agent-backend (work/agents/api)$ lore inbox
 (inbox empty)
 agent-infra (work/agents/infra)$ lore task done tsk_05e99e22e9e86e96fe4daa7777994603
@@ -74,11 +73,11 @@ agent-infra (work/agents/infra)$ lore task done tsk_05e99e22e9e86e96fe4daa777799
 
 ### done then merged
 agent-backend (work/agents/api)$ lore task note tsk_162df51b7f78b785c97c26b41ea89666 'the API sends the invite email and returns a link; the email text is in invite.html'
-✓ note cmt_28f8d32584b2db54ffb146bede5b03df on tsk_162df51b7f78b785c97c26b41ea89666
+✓ note cmt_4c590afb2a0cc7ae1b97b7e4e62d6c38 on tsk_162df51b7f78b785c97c26b41ea89666
 agent-backend (work/agents/api)$ git switch -q -c agent-backend/invite && mkdir -p api && echo 'package api' > api/invite.go && git add api && git commit -qm 'send the invite email' && git push -q -u origin agent-backend/invite
 agent-backend (work/agents/api)$ lore task done tsk_162df51b7f78b785c97c26b41ea89666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 done (commit 601d285); waiting for merge
-  lesson → mem_4c590afb2a0cc7ae1b97b7e4e62d6c38
+  lesson → mem_3b6283bc4392c556bbae5f094246e913
 agent-frontend (work/agents/app)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page: waits for tsk_162df51b7f78b785c97c26b41ea89666 to be merged (done, 601d285 not on the default branch yet)
@@ -95,7 +94,7 @@ agent-frontend (work/agents/app)$ lore task next --mission msn_2ad3618e878ebbf52
 ### crash and reclaim
 agent-frontend (work/agents/app)$ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page'
 agent-frontend (work/agents/app)$ lore task note tsk_54fe984c9b495744c0217776765a28f2 'route + loader done, form next'
-✓ note cmt_3b6283bc4392c556bbae5f094246e913 on tsk_54fe984c9b495744c0217776765a28f2
+✓ note cmt_f147dd95f1aaf742dd4f5214843a5139 on tsk_54fe984c9b495744c0217776765a28f2
   work branch agent-frontend/invite-route pushed
 agent-coord (work/api)$ lore inbox
 msn_2ad3618e878ebbf527d34d446ef4f891  EXPIRED  agent-frontend tsk_54fe984c9b495744c0217776765a28f2 claimed by agent-frontend, lease expired 8 min ago; work branch pushed (agent-frontend/invite-route)
@@ -109,7 +108,7 @@ alice (work/agents/fe2/app)$ lore agent start --label agent-frontend-2 --owner @
 lore sync: built .lore/lore.db from .lore/data (3 rows)
 lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
 lore sync: backup of lore.db before adopt: ~/work/agents/fe2/app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-✓ act_f147dd95f1aaf742dd4f5214843a5139 agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
+✓ act_2537f9b2f7de77bfe5ca958860216bbb agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 agent-frontend-2 (work/agents/fe2/app)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
 ✓ claimed tsk_54fe984c9b495744c0217776765a28f2 build the invite page (lease 20m, token ct_d57ca…) on refs/lore/signals/main; reclaim, attempt 2; previous holder agent-frontend timed out

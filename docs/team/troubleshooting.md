@@ -34,7 +34,8 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-(no tasks)
+lore live: 2 row(s) left live (main holds them)
+○ tsk_162d…9666 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
 
