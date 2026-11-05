@@ -69,3 +69,26 @@ func Pack() []scan.Rule {
 			`(?i)\bhttps?://[^\s:/@<>${}*]{4,}@[^\s/]+`, "http"),
 	}
 }
+
+// Covers maps each lore pack rule id to the gitleaks default rule ids that
+// cover the same token shapes (SECRETS 3.3: `lore secrets rules
+// --replaced`). Both run; a finding hit by both is reported once under the
+// lore id (19.10). A lore rule with no entry has no gitleaks match at all
+// (url_with_password, url_token_user, authorization_bearer, password_pair).
+// Ids are those of the gitleaks version in go.mod (v8.30).
+func Covers() map[string][]string {
+	return map[string][]string{
+		RuleAWSAccessKey:  {"aws-access-token"},
+		RuleGitHubToken:   {"github-pat", "github-fine-grained-pat", "github-oauth", "github-app-token", "github-refresh-token"},
+		RuleJWT:           {"jwt", "jwt-base64"},
+		RuleStripeLiveKey: {"stripe-access-token"},
+		RuleStripeTestKey: {"stripe-access-token"},
+		RuleModelKey:      {"openai-api-key", "anthropic-api-key", "anthropic-admin-api-key"},
+		RuleSlackToken:    {"slack-bot-token", "slack-user-token", "slack-app-token", "slack-legacy-token", "slack-legacy-bot-token", "slack-legacy-workspace-token", "slack-config-access-token", "slack-config-refresh-token"},
+		RuleGoogleAPIKey:  {"gcp-api-key"},
+		RulePEMPrivateKey: {"private-key"},
+		RuleShopifyToken:  {"shopify-access-token", "shopify-custom-access-token", "shopify-private-app-access-token", "shopify-shared-secret"},
+		RuleNPMToken:      {"npm-access-token"},
+		RuleTwilioKey:     {"twilio-api-key"},
+	}
+}

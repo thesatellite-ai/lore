@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -59,7 +60,16 @@ const (
 var ruleIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 // RulesIn is the input of secrets.rules.
-type RulesIn struct{}
+type RulesIn struct {
+	Replaced bool `json:"replaced,omitempty" flag:"replaced" desc:"also list which gitleaks rule ids cover the same ground as each lore rule (3.3)"`
+}
+
+// Coverage is one lore pack rule and the gitleaks ids covering the same
+// token shapes (`--replaced`); Gitleaks empty = lore only.
+type Coverage struct {
+	RuleID   string   `json:"rule_id"`
+	Gitleaks []string `json:"gitleaks"`
+}
 
 // RuleAddIn is the input of secrets.rule.add and secrets.rule.edit.
 type RuleAddIn struct {
@@ -120,14 +130,28 @@ type Rule struct {
 type RulesOut struct {
 	Count int    `json:"count"`
 	Data  []Rule `json:"data"`
+	// Replaced is set by --replaced: every lore pack rule, in pack order.
+	Replaced []Coverage `json:"replaced,omitempty"`
 }
 
 // Text implements op.Texter.
 func (o RulesOut) Text() string {
-	if len(o.Data) == 0 {
-		return "(no rule rows: gitleaks defaults and lore's own pack apply)\n"
-	}
 	var b strings.Builder
+	if len(o.Replaced) > 0 {
+		b.WriteString("LORE RULE\tALSO COVERED BY GITLEAKS\n")
+		for _, c := range o.Replaced {
+			cov := "(none: lore only)"
+			if len(c.Gitleaks) > 0 {
+				cov = strings.Join(c.Gitleaks, ", ")
+			}
+			fmt.Fprintf(&b, "%s\t%s\n", c.RuleID, cov)
+		}
+		b.WriteString("\n")
+	}
+	if len(o.Data) == 0 {
+		b.WriteString("(no rule rows: gitleaks defaults and lore's own pack apply)\n")
+		return b.String()
+	}
 	b.WriteString("RULE\tSTATE\tLEVEL\tWHERE\tNOTE\n")
 	for _, r := range o.Data {
 		note := r.Description
@@ -202,7 +226,11 @@ func ruleOf(env Env, l located) Rule {
 	return r
 }
 
-func (o ops) rules(ctx context.Context, _ RulesIn) (RulesOut, error) {
+// rules lists the secret_rules rows of every attached store.
+//
+//	rows (secret_rules, all stores) → Rule per row (level from the store)
+//	--replaced → every lore pack rule + its gitleaks twins (3.3)
+func (o ops) rules(ctx context.Context, in RulesIn) (RulesOut, error) {
 	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableSecretRules)
 	if err != nil {
 		return RulesOut{}, err
@@ -212,6 +240,12 @@ func (o ops) rules(ctx context.Context, _ RulesIn) (RulesOut, error) {
 		out.Data = append(out.Data, ruleOf(o.env, l))
 	}
 	out.Count = len(out.Data)
+	if in.Replaced {
+		covers := gitleaks.Covers()
+		for _, r := range gitleaks.Pack() {
+			out.Replaced = append(out.Replaced, Coverage{RuleID: r.ID, Gitleaks: append([]string{}, covers[r.ID]...)})
+		}
+	}
 	return out, nil
 }
 
