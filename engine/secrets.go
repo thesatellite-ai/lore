@@ -32,15 +32,52 @@ type screened struct {
 	// pol is the effective policy the scan read, kept for the POLICY step
 	// that follows it (enforceRow), so one write reads the settings once.
 	pol policy.Set
+	// hits are the field findings detect found and resolve has not
+	// answered yet; resolved is set once resolve ran. One write answers
+	// its field and metadata findings together (SECRETS 2.5, FB-SEC-3,
+	// P3-METASEC-2): one count, one numbering, one --secret-ref order
+	// (fields first, then metadata), one question.
+	hits     []fieldHit
+	resolved bool
 }
 
-// screen scans the named fields of a write (text, every text item of a
-// list, and the raw text of json) and applies secrets.on_detect: refuse →
-// E_SECRET_DETECTED; ask → the caller confirms (E_NEEDS_CONFIRM otherwise)
-// and the findings are audited as accepted; redact → each match is replaced
-// with ${secret:unstored}. Rules turned off at any level and allow entries
-// for rowID are honoured first (D2/D9, secret_allows).
+// fieldHit is the findings of one field (or one list item) of a write.
+type fieldHit struct {
+	field    string
+	item     int // list item index; -1 for the whole field
+	findings []scan.Finding
+}
+
+// metaPending is the metadata half of a write's findings, handed to
+// resolve by scanMeta: the plan whose leaves an answer redacts, and the
+// hits in leaf order.
+type metaPending struct {
+	p    *metaPlan
+	hits []metaHit
+}
+
+// screen scans the named fields of a write and answers the findings at
+// once (detect, then resolve with no metadata): the path of a write that
+// carries no metadata step (move, trash restore). A create or update
+// calls detect, lets its metadata step resolve both halves together, and
+// resolves the fields alone only when no metadata step ran.
 func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID ids.AnyID, fields map[string]value.Value, names []string) (screened, error) {
+	sc, err := e.detect(ctx, cl, target, rowID, fields, names)
+	if err != nil {
+		return screened{}, err
+	}
+	if err := e.resolve(ctx, cl, target, rowID, &sc, nil); err != nil {
+		return screened{}, err
+	}
+	return sc, nil
+}
+
+// detect scans the named fields of a write (text, every text item of a
+// list, and the raw text of json) and keeps the findings in sc.hits for
+// resolve. Rules turned off at any level and allow entries for rowID are
+// honoured first (D2/D9, secret_allows). A secret split across fields is
+// refused here, in every mode (19.2).
+func (e *Engine) detect(ctx context.Context, cl call, target store.Source, rowID ids.AnyID, fields map[string]value.Value, names []string) (screened, error) {
 	if rs, ok := e.scanner.(RefreshingScanner); ok {
 		// rules are settings rows: a rule added since the last write
 		// (a long-lived `lore api`) applies to this one
@@ -65,17 +102,6 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		}
 	}
 	mode := string(pol.OnDetect())
-	// detected records secret.detected (16, FA-AGENT-7) once per finding:
-	// field, rule, mode and the choice; never the value or a preview.
-	detected := func(choice string, fs []scan.Finding) error {
-		for _, f := range fs {
-			if aerr := e.AuditSecret(ctx, ActionSecretDetected, SecretAudit{Command: cl.op, Row: rowID,
-				Result: "field=" + f.Field + " rule=" + f.RuleID + " mode=" + mode + " choice=" + choice}); aerr != nil {
-				return aerr
-			}
-		}
-		return nil
-	}
 	// BATCH 8: a rule the personal store turned off covers only that
 	// person's own captures, i.e. a write stamped as the engine's own actor
 	// (the person whose personal store is attached). A write a surface
@@ -85,12 +111,6 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	if err != nil {
 		return screened{}, err
 	}
-	type hit struct {
-		field    string
-		item     int // list item index; -1 for the whole field
-		findings []scan.Finding
-	}
-	var hits []hit
 	loreRec := e.loreRecordFields(rowID)
 	look := func(field string, item int, text string) {
 		found, warn := e.scanText(field, text)
@@ -109,7 +129,7 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 			}
 		}
 		if kept = scan.Filter(rowID, kept, allows); len(kept) > 0 {
-			hits = append(hits, hit{field: field, item: item, findings: kept})
+			out.hits = append(out.hits, fieldHit{field: field, item: item, findings: kept})
 		}
 	}
 	for _, name := range names {
@@ -121,7 +141,7 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		case value.List:
 			// A list read back from a file may hold json objects as items
 			// (value.Infer): scan those too. Redacting one is refused
-			// (redactValue), never skipped.
+			// (redactValueWith), never skipped.
 			for i, it := range v.Items() {
 				switch t := it.(type) {
 				case value.Text:
@@ -147,112 +167,160 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	}
 	for _, f := range scan.Filter(rowID, inField, allows) {
 		dup := false
-		for _, h := range hits {
+		for _, h := range out.hits {
 			for _, g := range h.findings {
 				dup = dup || (h.field == f.Field && h.item < 0 && g.RuleID == f.RuleID && g.Offset == f.Offset)
 			}
 		}
 		if !dup {
-			hits = append(hits, hit{field: f.Field, item: -1, findings: []scan.Finding{f}})
+			out.hits = append(out.hits, fieldHit{field: f.Field, item: -1, findings: []scan.Finding{f}})
 		}
 	}
-	if len(hits) == 0 {
-		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
-	}
+	return out, nil
+}
+
+// fieldFindings is every finding of sc.hits, in hit order.
+func (sc *screened) fieldFindings() []scan.Finding {
 	var all []scan.Finding
-	for _, h := range hits {
+	for _, h := range sc.hits {
 		all = append(all, h.findings...)
 	}
+	return all
+}
+
+// resolve answers a write's findings once: the field hits detect kept in
+// sc plus mp's metadata hits (nil: none), and applies secrets.on_detect:
+// refuse → E_SECRET_DETECTED; ask → E_NEEDS_CONFIRM unless an answer was
+// given; redact → each match is replaced with ${secret:unstored}. An answer
+// given up front (--not-a-secret --reason, --secret-ref, --secret-unstored)
+// applies in every mode (SECRETS 4). The findings are counted, numbered,
+// asked about and given --secret-ref values as one list, fields first
+// (FB-SEC-3, P3-METASEC-2), so --not-a-secret confirms once and N refs
+// cover N findings across fields and metadata. Redaction rewrites
+// sc.fields and mp.p.entries in place; nothing is written on an error.
+func (e *Engine) resolve(ctx context.Context, cl call, target store.Source, rowID ids.AnyID, sc *screened, mp *metaPending) error {
+	sc.resolved = true
+	var metaHits []metaHit
+	if mp != nil {
+		metaHits = mp.hits
+	}
+	all := sc.fieldFindings()
+	for _, h := range metaHits {
+		all = append(all, h.findings...)
+	}
+	// clientRefs refuses a reference an answer left in a client repo's row
+	// (fields: SQ17; metadata: FLAG5), the last check of every stored path.
+	clientRefs := func() error {
+		if err := e.refuseClientSecretRefs(target, rowID, sc.fields); err != nil {
+			return err
+		}
+		if len(metaHits) == 0 {
+			return nil
+		}
+		return e.refuseClientMetaRefs(target, rowID, metaHits)
+	}
+	if len(all) == 0 {
+		return clientRefs()
+	}
+	mode := string(sc.pol.OnDetect())
 	// FB-SEC-3: one secret is one finding. The same value in two fields
 	// of one write (a resource's fields and the history entry that copies
-	// it) or under two rules is asked about, counted and given a
-	// --secret-ref once; the answer covers every place it sits. Allow rows
-	// stay one per (field, rule, hash): D6 pins them, and the commit hook
-	// and lore lint check them that way.
+	// it, or a field and a metadata value) or under two rules is asked
+	// about, counted and given a --secret-ref once; the answer covers every
+	// place it sits. Allow rows stay one per (field, rule, hash): D6 pins
+	// them, and the commit hook and lore lint check them that way.
 	uniq, slot := uniqueFindings(all)
-	// SECRETS 4: a choice given up front (--not-a-secret --reason,
-	// --secret-ref, --secret-unstored) applies in every on_detect mode.
-	if ch := cl.caller.Secret; ch.Any() {
-		if err := checkChoice(ch, len(uniq)); err != nil {
-			return screened{}, err
-		}
-		if ch.NotASecret {
-			if err := e.confirm(ctx, cl, describe(uniq)+": keep it as not a secret ("+ch.Reason+")?"); err != nil {
-				return screened{}, errors.Join(err, detected(choiceCancelled, all))
-			}
-			if err := detected(choiceNotASecret, all); err != nil {
-				return screened{}, err
-			}
-			out.accepted = all // allowRows records ch.Reason (D12, SQ2)
-			return out, e.refuseClientSecretRefs(target, rowID, out.fields)
-		}
+	// redact replaces finding i of all with repl[i]: the fields' hits
+	// first, then the metadata leaves (the order all was built in).
+	redact := func(repl []string) error {
+		red := maps.Clone(sc.fields)
 		n := 0
-		red := maps.Clone(fields)
-		for _, h := range hits {
-			repl := make([]string, len(h.findings))
-			for i := range h.findings {
-				repl[i] = refs.Unstored
-				if len(ch.Refs) == 1 {
-					repl[i] = secretRefText(ch.Refs[0])
-				} else if len(ch.Refs) > 0 {
-					repl[i] = secretRefText(ch.Refs[slot[n]]) // one ref per unique finding
-				}
-				n++
-			}
-			v, err := redactValueWith(red[h.field], h.item, h.findings, repl)
+		for _, h := range sc.hits {
+			v, err := redactValueWith(red[h.field], h.item, h.findings, repl[n:n+len(h.findings)])
 			if err != nil {
-				return screened{}, err
+				return err
 			}
 			red[h.field] = v
+			n += len(h.findings)
 		}
-		out.fields = red
+		if len(metaHits) > 0 {
+			if err := mp.p.redactLeaves(metaHits, repl[n:]); err != nil {
+				return err
+			}
+		}
+		sc.fields = red
+		return nil
+	}
+	if ch := cl.caller.Secret; ch.Any() {
+		if err := checkChoice(ch, len(uniq)); err != nil {
+			return err
+		}
+		if ch.NotASecret {
+			// one question for every finding of the write (P3-METASEC-2)
+			if err := e.confirm(ctx, cl, describe(uniq)+": keep it as not a secret ("+ch.Reason+")?"); err != nil {
+				return errors.Join(err, e.auditFindings(ctx, cl, rowID, mode, choiceCancelled, all))
+			}
+			if err := e.auditFindings(ctx, cl, rowID, mode, choiceNotASecret, all); err != nil {
+				return err
+			}
+			sc.accepted = append(sc.accepted, all...) // allowRows records ch.Reason (D12, SQ2)
+			return clientRefs()
+		}
+		repl := make([]string, len(all))
+		for i := range all {
+			repl[i] = refs.Unstored
+			if len(ch.Refs) == 1 {
+				repl[i] = secretRefText(ch.Refs[0])
+			} else if len(ch.Refs) > 0 {
+				repl[i] = secretRefText(ch.Refs[slot[i]]) // one ref per unique finding
+			}
+		}
+		if err := redact(repl); err != nil {
+			return err
+		}
 		choice := choiceRedacted // replaced by the reference(s) given
 		if ch.Unstored {
-			out.redacted = all // the D21 task follows (RedactHook)
+			sc.redacted = append(sc.redacted, all...) // the D21 task follows (RedactHook)
 			choice = choiceUnstored
 		}
-		if err := detected(choice, all); err != nil {
-			return screened{}, err
+		if err := e.auditFindings(ctx, cl, rowID, mode, choice, all); err != nil {
+			return err
 		}
-		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
+		return clientRefs()
 	}
-	switch pol.OnDetect() {
+	switch sc.pol.OnDetect() {
 	case policy.OnDetectAsk:
 		// ask needs a choice (SECRETS 2.1, 2.5, 4; SQ2, D12): --yes only
 		// confirms a choice already given by flags, and "not a secret"
 		// needs a typed reason, which a yes/no prompt cannot carry. So a
 		// write with findings and no choice flag stores nothing and
 		// records no allow entry, with or without --yes or a terminal; it
-		// answers E_NEEDS_CONFIRM naming the masked findings and the flag
-		// sets to re-run with (DECISION FB-SEC-1).
-		if derr := detected(choiceCancelled, all); derr != nil {
-			return screened{}, derr
+		// answers E_NEEDS_CONFIRM naming every masked finding of the write
+		// and the flag sets to re-run with (DECISION FB-SEC-1).
+		if derr := e.auditFindings(ctx, cl, rowID, mode, choiceCancelled, all); derr != nil {
+			return derr
 		}
-		return screened{}, askErr(uniq)
+		return askErr(uniq)
 	case policy.OnDetectRedact:
-		red := make(map[string]value.Value, len(fields))
-		for k, v := range fields {
-			red[k] = v
+		repl := make([]string, len(all))
+		for i := range repl {
+			repl[i] = refs.Unstored
 		}
-		for _, h := range hits {
-			v, err := redactValue(red[h.field], h.item, h.findings)
-			if err != nil {
-				return screened{}, err
-			}
-			red[h.field] = v
+		if err := redact(repl); err != nil {
+			return err
 		}
-		if err := detected(choiceUnstored, all); err != nil {
-			return screened{}, err
+		if err := e.auditFindings(ctx, cl, rowID, mode, choiceUnstored, all); err != nil {
+			return err
 		}
-		out.fields, out.redacted = red, all
+		sc.redacted = append(sc.redacted, all...)
 		// a redacted ${secret:unstored} is a secret reference too
-		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
+		return clientRefs()
 	case policy.OnDetectRefuse:
 	}
-	if err := detected(choiceRefused, all); err != nil {
-		return screened{}, err
+	if err := e.auditFindings(ctx, cl, rowID, mode, choiceRefused, all); err != nil {
+		return err
 	}
-	return screened{}, secretErr(uniq)
+	return secretErr(uniq)
 }
 
 // uniqueFindings is fs with each matched value (match hash) kept once,
@@ -488,19 +556,10 @@ func (e *Engine) scanText(field, text string) ([]scan.Finding, *Warning) {
 	return e.scanner.Scan(field, text), nil
 }
 
-// redactValue replaces the matches in one text (or one list item) with the
-// unstored-secret reference. A json field cannot be redacted safely in
-// place (a match may straddle its syntax), so it is refused instead.
-func redactValue(v value.Value, item int, fs []scan.Finding) (value.Value, error) {
-	repl := make([]string, len(fs))
-	for i := range repl {
-		repl[i] = refs.Unstored
-	}
-	return redactValueWith(v, item, fs, repl)
-}
-
-// redactValueWith is redactValue with one replacement per finding (repl[i]
-// replaces fs[i]): ${secret:unstored} or a --secret-ref reference.
+// redactValueWith replaces the matches in one text (or one list item):
+// repl[i] replaces fs[i], ${secret:unstored} or a --secret-ref reference.
+// A json field cannot be redacted safely in place (a match may straddle
+// its syntax), so it is refused instead.
 func redactValueWith(v value.Value, item int, fs []scan.Finding, repl []string) (value.Value, error) {
 	switch x := v.(type) {
 	case value.Text:

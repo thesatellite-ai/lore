@@ -8,6 +8,8 @@ package engine
 //	   ├─ leaves: the key name, every string leaf, every member name
 //	   ├─ scan each leaf; rules off / allow rows dropped (D2/D9)
 //	   ├─ a finding in a key name ─► E_SECRET_DETECTED in every mode
+//	   └─ resolve(the write's field hits + these leaf hits): one count,
+//	      one numbering, one --secret-ref order, one question (P3-METASEC-2)
 //	   ├─ answer given (--secret-ref | --secret-unstored | --not-a-secret --reason)
 //	   │     ref/unstored ─► the match is replaced inside its leaf only
 //	   │     not a secret ─► confirm, value kept, sc.accepted (allow rows)
@@ -22,8 +24,6 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
-	"github.com/thesatellite-ai/lore/logic/policy"
-	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -41,15 +41,15 @@ type metaHit struct {
 
 // scanMeta runs the secret scan over the changed metadata values and
 // applies secrets.on_detect and the caller's answer (see the file's flow
-// sketch). Redaction rewrites p.entries in place; accepted and redacted
-// findings are added to sc (nil: dropped, for callers that keep no allow
-// rows). A finding's field is "meta.<key>" plus the leaf's path
+// sketch) together with the field findings detect kept in sc (resolve).
+// Redaction rewrites p.entries in place; accepted and redacted findings
+// are added to sc. A finding's field is "meta.<key>" plus the leaf's path
 // ("meta.smtp.url", "meta.hosts[1]"), so an allow row pins that leaf (D6).
 func (e *Engine) scanMeta(ctx context.Context, cl call, target store.Source, rowID ids.AnyID, p *metaPlan, sc *screened) error {
 	if sc == nil {
-		sc = &screened{}
+		return errs.New(errs.Internal, "engine: the metadata secret scan needs the write's screened state")
 	}
-	pol, rules, err := e.settings.Policy(target)
+	_, rules, err := e.settings.Policy(target)
 	if err != nil {
 		return err
 	}
@@ -110,86 +110,19 @@ func (e *Engine) scanMeta(ctx context.Context, cl call, target store.Source, row
 			}
 		}
 	}
-	mode := string(pol.OnDetect())
 	if len(keyHits) > 0 {
-		// a key name cannot hold a reference: refused in every mode (19.1)
-		if aerr := e.auditFindings(ctx, cl, rowID, mode, choiceRefused, keyHits); aerr != nil {
+		// a key name cannot hold a reference: refused in every mode (19.1);
+		// the write's field findings are audited as cancelled (nothing is
+		// written), the key's own as refused
+		mode := string(sc.pol.OnDetect())
+		if aerr := errors.Join(e.auditFindings(ctx, cl, rowID, mode, choiceCancelled, sc.fieldFindings()),
+			e.auditFindings(ctx, cl, rowID, mode, choiceRefused, keyHits)); aerr != nil {
 			return aerr
 		}
 		return secretErr(keyHits).WithHint("a key name cannot hold a reference: rename the key, keep the secret in your vault and write ${secret:…} as its value")
 	}
-	if len(hits) == 0 {
-		return nil
-	}
-	var all []scan.Finding
-	for _, h := range hits {
-		all = append(all, h.findings...)
-	}
-	uniq, slot := uniqueFindings(all) // FB-SEC-3: one secret, one finding
-	// SECRETS 4: an answer given up front applies in every on_detect mode
-	if ch := cl.caller.Secret; ch.Any() {
-		if err := checkChoice(ch, len(uniq)); err != nil {
-			return err
-		}
-		if ch.NotASecret {
-			if err := e.confirm(ctx, cl, describe(uniq)+": keep it as not a secret ("+ch.Reason+")?"); err != nil {
-				return errors.Join(err, e.auditFindings(ctx, cl, rowID, mode, choiceCancelled, all))
-			}
-			if err := e.auditFindings(ctx, cl, rowID, mode, choiceNotASecret, all); err != nil {
-				return err
-			}
-			sc.accepted = append(sc.accepted, all...) // allowRows records ch.Reason (D12, SQ2)
-			return nil
-		}
-		repl := make([]string, len(all))
-		for i := range all {
-			repl[i] = refs.Unstored
-			if len(ch.Refs) == 1 {
-				repl[i] = secretRefText(ch.Refs[0])
-			} else if len(ch.Refs) > 0 {
-				repl[i] = secretRefText(ch.Refs[slot[i]]) // one ref per unique finding
-			}
-		}
-		if err := p.redactLeaves(hits, repl); err != nil {
-			return err
-		}
-		choice := choiceRedacted
-		if ch.Unstored {
-			sc.redacted = append(sc.redacted, all...) // the D21 task follows (RedactHook)
-			choice = choiceUnstored
-		}
-		if err := e.auditFindings(ctx, cl, rowID, mode, choice, all); err != nil {
-			return err
-		}
-		return e.refuseClientMetaRefs(target, rowID, hits)
-	}
-	switch pol.OnDetect() {
-	case policy.OnDetectAsk:
-		// FB-SEC-1: no answer = nothing written, with or without --yes or a
-		// terminal; the surface's menu (FB-SEC-2) re-runs with the answer
-		if aerr := e.auditFindings(ctx, cl, rowID, mode, choiceCancelled, all); aerr != nil {
-			return aerr
-		}
-		return askErr(uniq)
-	case policy.OnDetectRedact:
-		repl := make([]string, len(all))
-		for i := range repl {
-			repl[i] = refs.Unstored
-		}
-		if err := p.redactLeaves(hits, repl); err != nil {
-			return err
-		}
-		if err := e.auditFindings(ctx, cl, rowID, mode, choiceUnstored, all); err != nil {
-			return err
-		}
-		sc.redacted = append(sc.redacted, all...)
-		return e.refuseClientMetaRefs(target, rowID, hits)
-	case policy.OnDetectRefuse:
-	}
-	if err := e.auditFindings(ctx, cl, rowID, mode, choiceRefused, all); err != nil {
-		return err
-	}
-	return secretErr(uniq)
+	// one answer for the fields' and the metadata's findings (P3-METASEC-2)
+	return e.resolve(ctx, cl, target, rowID, sc, &metaPending{p: p, hits: hits})
 }
 
 // redactLeaves replaces each hit's matches inside its own leaf: repl[i]

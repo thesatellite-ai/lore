@@ -100,11 +100,11 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err != nil {
 		return Written{}, err
 	}
-	sc, err := e.screen(ctx, cl, target, id, typed, names)
+	// the fields' findings are answered together with the metadata's
+	// (one count, one question; P3-METASEC-2): detect now, resolve in the
+	// metadata step, or below when that step scanned nothing
+	sc, err := e.detect(ctx, cl, target, id, typed, names)
 	if err != nil {
-		return Written{}, err
-	}
-	if err = enforceRow(sc.pol, def, sc.fields); err != nil {
 		return Written{}, err
 	}
 	// metadata riding on this create (engine/meta.go; R13)
@@ -116,6 +116,14 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 		return Written{}, err
 	}
 	sc.warnings = append(sc.warnings, mwarn...)
+	if !sc.resolved {
+		if err = e.resolve(ctx, cl, target, id, &sc, nil); err != nil {
+			return Written{}, err
+		}
+	}
+	if err = enforceRow(sc.pol, def, sc.fields); err != nil {
+		return Written{}, err
+	}
 	origin, err := e.originOf(ctx, cl.op, st)
 	if err != nil {
 		return Written{}, err
@@ -244,16 +252,13 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	if err = e.checkRefs(ctx, src, def, whole, names); err != nil {
 		return Written{}, err
 	}
-	sc, err := e.screen(ctx, cl, src, cur.ID, whole, names)
+	// fields and metadata answered together (P3-METASEC-2, as Create)
+	sc, err := e.detect(ctx, cl, src, cur.ID, whole, names)
 	if err != nil {
-		return Written{}, err
-	}
-	if err = enforceRow(sc.pol, def, sc.fields); err != nil {
 		return Written{}, err
 	}
 	actor := e.actorOf(cl)
 	ours := cur
-	ours.Fields = putBackOverruled(sc.fields, overruled)
 	// metadata riding on this update (engine/meta.go; R13)
 	if mw, ok := metaFor(ctx, cur.Table, cur.ID); ok {
 		var mwarn []Warning
@@ -262,6 +267,15 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 		}
 		sc.warnings = append(sc.warnings, mwarn...)
 	}
+	if !sc.resolved {
+		if err = e.resolve(ctx, cl, src, cur.ID, &sc, nil); err != nil {
+			return Written{}, err
+		}
+	}
+	if err = enforceRow(sc.pol, def, sc.fields); err != nil {
+		return Written{}, err
+	}
+	ours.Fields = putBackOverruled(sc.fields, overruled)
 	if unchangedUpdate(ctx, def, cur, ours, sc) {
 		// the same write twice is a no-op (LORE_TEAM_SPEC F2 step 3): no
 		// new HLC, no updated_at, so the store sees no change and a live
