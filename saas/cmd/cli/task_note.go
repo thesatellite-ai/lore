@@ -65,7 +65,7 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 	if err != nil {
 		return errcodes.New(errcodes.EmptyBody, err.Error())
 	}
-	if err := refuseSecrets(body); err != nil {
+	if err := refuseSecretsCtx(ctx, body); err != nil {
 		return err
 	}
 	w, t, err := openTaskCoord(ctx, id, from)
@@ -214,7 +214,7 @@ func sharedNote(ctx context.Context, id, text string, to toFlags) error {
 	if err != nil {
 		return errcodes.New(errcodes.EmptyBody, err.Error())
 	}
-	if err := refuseSecrets(body); err != nil {
+	if err := refuseSecretsCtx(ctx, body); err != nil {
 		return err
 	}
 	if owner, projected := clientAuthor(ctx); projected && to.To == toRepo {
