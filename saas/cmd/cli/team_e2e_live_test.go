@@ -691,7 +691,10 @@ func TestSideEffect11_TombstoneLandsAsDeleteAndPurge(t *testing.T) {
 	rt.c1.MustLore("land", id)
 	rt.c2.Git("pull", "-q")
 	rt.c2.Git("checkout", "-q", "-b", "feat/old-copy")
-	rt.c1.MustLore("task", "delete", id, "--confirm")
+	// Ported to DELETION SYSTEM, DQ8, FA-DEL-1: a plain delete is soft (the row
+	// goes to the trash and keeps its content), so the v0.1.17 tombstone
+	// is a purge now: --purge --confirm leaves the tombstone that lands.
+	rt.c1.MustLore("task", "delete", id, "--purge", "--confirm")
 	rt.c1.MustLore("sync")
 	if _, ok := rt.mainTask(t, id); ok {
 		t.Fatal("a landed tombstone deletes the main file")
