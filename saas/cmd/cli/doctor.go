@@ -196,6 +196,8 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 			// live, waiting landings, compaction (live_doctor.go).
 			dataDir, _ := syncDataDir(rctx.DBPath)
 			doctorLive(ctx, filepath.Dir(filepath.Dir(dataDir)), r)
+			// DELETION 3.10: safety copies of rows purged elsewhere (doctor_local.go).
+			doctorPurgedCopies(ctx, db, dataDir, r)
 		}
 		// After the sync checks, so they describe the state doctor found;
 		// --fix writes are exported by the end-of-command sync pass.
@@ -261,6 +263,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 	}
 	home, _ := loreHome()
 	doctorCaches(ctx, repoTop, home, r)
+	doctorTimeOutbox(ctx, home, r)      // TIME 11.9: run time queued on this machine (doctor_local.go)
 	doctorTeamVersions(ctx, repoTop, r) // OQ7 Team versions
 	for _, q := range metaQuarantineLines(ctx) {
 		// METADATA 3.13: quarantined metadata is counted here

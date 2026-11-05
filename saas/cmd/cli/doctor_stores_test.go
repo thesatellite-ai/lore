@@ -35,7 +35,7 @@ func TestE2E_DoctorNamesResurrectedPurgedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.lore("memory", "archive", id)
-	if out := c.loreAny("doctor").stdout; strings.Contains(out, "purged row") {
+	if out := c.loreAny("doctor").stdout; strings.Contains(out, resurrectedMark) {
 		t.Fatalf("an archived row is not a resurrected one:\n%s", out)
 	}
 	c.lore("sync", "purge", "--archived-before", "2099-01-01", "--confirm")
@@ -56,7 +56,7 @@ func TestE2E_DoctorNamesResurrectedPurgedRow(t *testing.T) {
 	if err := repo.Remove(rel); err != nil {
 		t.Fatal(err)
 	}
-	if out := c.loreAny("doctor").stdout; strings.Contains(out, "purged row") {
+	if out := c.loreAny("doctor").stdout; strings.Contains(out, resurrectedMark) {
 		t.Fatalf("no finding once the file is deleted:\n%s", out)
 	}
 }
