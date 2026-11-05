@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -58,6 +59,11 @@ func run(ctx context.Context, args []string) int {
 	}
 	wd, home := dirs()
 	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
+	// `lore sync` refreshes the org stores' link index now (F11): every
+	// other command reads it within live.fetch_ttl.
+	if commandName(args) == syncCommand {
+		org.FetchLinksAlways()
+	}
 	// One clock for row stamps and live decisions: the wall clock, or
 	// LORE_NOW in a test build (the team harness refuses a binary that
 	// ignores it).
@@ -74,11 +80,16 @@ func run(ctx context.Context, args []string) int {
 	leak := func(ctx context.Context, where string, docs map[string][]byte) error {
 		return app.LeakCheckDocs(ctx, org, where, docs)
 	}
+	// F16 at write time for a row written into a client repo (GuardRepoWrite):
+	// the engine runs it, so `lore api` gets the same refusal as the CLI.
+	org.RepoWriteCheck = func(ctx context.Context, _, kind, text string) error {
+		return app.LeakCheckDocs(ctx, org, "repo write", map[string][]byte{kind: []byte(text)})
+	}
 	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
-	// render, why-context and setup (wire/renderhost) over the app built below.
+	// render, why-context, context and setup (wire/renderhost) over the app built below.
 	rend := &lateRender{}
-	base.Context.Render, base.Context.RenderHistory, base.Context.Setup = rend, rend, &lateSetup{r: rend}
+	base.Context.Render, base.Context.RenderHistory, base.Context.Fetch, base.Context.Setup = rend, rend, rend, &lateSetup{r: rend}
 	app, err := wire.New(hosthooks.Options(base, hooks))
 	if err != nil {
 		return printHostError(err)
@@ -148,4 +159,17 @@ func dirs() (wd, home string) {
 		return wd, filepath.Join(os.TempDir(), unresolvedHome)
 	}
 	return wd, filepath.Join(uh, rowfs.LoreDir)
+}
+
+// syncCommand is the first word of `lore sync`.
+const syncCommand = "sync"
+
+// commandName is the first argument that is not a flag ("" when none).
+func commandName(args []string) string {
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			return a
+		}
+	}
+	return ""
 }
