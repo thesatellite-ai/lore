@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/task"
@@ -77,6 +78,19 @@ type ResHistoryEntry struct {
 	// Commit is set only on entries read from git (--git, OV62); entries
 	// stored on the row never carry it.
 	Commit string `json:"commit,omitempty"`
+	// Import marks a change written by a resource import (batch kind
+	// import): PROVENANCE 11.4 updates a re-imported row in place only when
+	// its newest change is an import's (importedLast).
+	Import bool `json:"import,omitempty"`
+}
+
+// importedLast reports whether r's newest field change was written by an
+// import, i.e. nobody edited its fields in lore since (PROVENANCE 11.4).
+// A row without history, or imported before the mark existed, is treated
+// as edited: a re-import never silently overwrites a person's edit.
+func importedLast(r located) bool {
+	h := historyOf(r)
+	return len(h) > 0 && h[len(h)-1].Import
 }
 
 // actorer is the optional Env upgrade that names the caller (wire's actor).
@@ -125,9 +139,9 @@ func (o ops) withHistory(ctx context.Context, d kindDef, old *located, patch map
 			by = id.String()
 		}
 	}
-	batch := ""
+	batch, imported := "", false
 	if b, isB := engine.BatchOf(ctx); isB {
-		batch = b.ID.String()
+		batch, imported = b.ID.String(), b.Kind == string(bulk.KindImport)
 	}
 	at := opclock.Now(o.env).UTC().Format(time.RFC3339)
 	changes := fieldChanges(d, prev, next, false)
@@ -139,7 +153,7 @@ func (o ops) withHistory(ctx context.Context, d kindDef, old *located, patch map
 		if ierr != nil {
 			return ierr
 		}
-		c.ID, c.At, c.By, c.Batch = id.String(), at, by, batch
+		c.ID, c.At, c.By, c.Batch, c.Import = id.String(), at, by, batch, imported
 		list = append(list, c)
 	}
 	if n := len(list); n > resourceHistoryMax {

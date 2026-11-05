@@ -71,11 +71,12 @@ type ResImportIn struct {
 	To         string `json:"to,omitempty" flag:"to" desc:"where the rows are written (repo, <store>, <store>/<folder>; default repo)"`
 	DryRun     bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"check and list what would be written; write nothing"`
 	SkipErrors bool   `json:"skip_errors,omitempty" flag:"skip-errors" desc:"write the valid rows and list the rest (default: all or nothing)"`
+	Overwrite  bool   `json:"overwrite,omitempty" flag:"overwrite" desc:"re-import: also replace rows edited in lore since the last import (default: keep them)"`
 }
 
 // ImportLine is one record of an import as reported.
 type ImportLine struct {
-	Action string `json:"action"` // create | update | error | skipped
+	Action string `json:"action"` // create | update | kept | error | skipped
 	Kind   string `json:"kind"`
 	Name   string `json:"name"`
 	ID     string `json:"id,omitempty"`
@@ -88,6 +89,9 @@ const (
 	actUpdate  = "update"
 	actError   = "error"
 	actSkipped = "skipped"
+	// actKept: a re-imported row edited in lore since its last import is
+	// left alone (PROVENANCE 11.4; --overwrite replaces it).
+	actKept = "kept"
 )
 
 // ResImportOut is the output of resource.import.
@@ -97,6 +101,7 @@ type ResImportOut struct {
 	Batch   string       `json:"batch,omitempty"`
 	Created int          `json:"created"`
 	Updated int          `json:"updated"`
+	Kept    int          `json:"kept,omitempty"`
 	Errors  int          `json:"errors"`
 	Rows    []ImportLine `json:"rows"`
 }
@@ -114,8 +119,13 @@ func (o ResImportOut) Text() string {
 	switch {
 	case o.DryRun:
 		b.WriteString("nothing written (dry run)\n")
+	case o.Batch == "":
+		b.WriteString("nothing written\n")
 	default:
 		fmt.Fprintf(&b, "imported %d rows (%d created, %d updated) from %s; batch %s\n", o.Created+o.Updated, o.Created, o.Updated, o.Source, o.Batch)
+	}
+	if o.Kept > 0 {
+		fmt.Fprintf(&b, "kept %d rows edited in lore since the last import (use --overwrite to replace them)\n", o.Kept)
 	}
 	if o.Errors > 0 {
 		fmt.Fprintf(&b, "%d errors (skipped)\n", o.Errors)
@@ -384,10 +394,23 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 		line := ImportLine{Kind: r.kind, Name: r.name, Action: actCreate}
 		cerr := o.checkRecord(ctx, r, inFile)
 		if cerr == nil {
-			if id, found := o.existingIn(ctx, target, r); found {
-				if in.UpsertBy == "" {
+			if ex, found := o.existingIn(ctx, target, r); found {
+				id := ex.Row.ID.String()
+				// PROVENANCE 11.4: the same import key again is a re-import:
+				// update in place when nobody edited the row since, else keep it.
+				prev, imported := origin.ImportOf(ex.Row.Origin)
+				reimport := imported && prev.Key() == (origin.Import{Source: format, ExtID: r.extID}).Key()
+				switch {
+				case reimport && !in.Overwrite && !importedLast(ex):
+					line.Action, line.ID = actKept, id
+					out.Kept++
+					out.Rows = append(out.Rows, line)
+					continue
+				case reimport:
+					line.Action, line.ID, existing[r.extID] = actUpdate, id, id
+				case in.UpsertBy == "":
 					cerr = errs.New(errs.NameTaken, r.kind+" "+r.name+" already exists in "+string(target)+" ("+id+")").WithHint("--upsert-by name updates it")
-				} else {
+				default:
 					line.Action, line.ID, existing[r.extID] = actUpdate, id, id
 				}
 			}
@@ -403,9 +426,11 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 		}
 		out.Rows = append(out.Rows, line)
 	}
-	if in.DryRun || len(good) == 0 {
-		out.DryRun = true
+	if in.DryRun {
 		return out, nil
+	}
+	if len(good) == 0 {
+		return out, nil // nothing to write (all kept or skipped)
 	}
 	// 3.16: an import always asks, naming the rows and the place.
 	if err = bulk.Ask(ctx, "import "+strconv.Itoa(len(good))+" rows into "+string(target)+" as one batch?"); err != nil {
@@ -441,19 +466,19 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 }
 
 // existingIn finds a live resource (kind, name) in target.
-func (o ops) existingIn(ctx context.Context, target store.Source, r resRecord) (string, bool) {
+func (o ops) existingIn(ctx context.Context, target store.Source, r resRecord) (located, bool) {
 	d, err := o.kindDef(ctx, r.kind)
 	if err != nil {
-		return "", false
+		return located{}, false
 	}
 	rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TableResources)
 	if err != nil {
-		return "", false
+		return located{}, false
 	}
 	if hit := where(rows, map[string]string{rKind: d.kind.Row.ID.String(), rName: r.name}); len(hit) > 0 {
-		return hit[0].Row.ID.String(), true
+		return hit[0], true
 	}
-	return "", false
+	return located{}, false
 }
 
 // ResExportIn is the input of resource.export.
