@@ -227,12 +227,77 @@ func (cv *coordView) taskDocs(ctx context.Context) ([]coord.Doc, error) {
 // taskWatch is the part of a task document the "watched" inbox items read
 // (TASK 14 watchers, 17.2 history).
 type taskWatch struct {
-	ID       string                 `json:"id"`
-	Title    string                 `json:"title"`
-	Mission  string                 `json:"mission_id"`
-	Watchers []string               `json:"watchers"`
-	History  []opstask.HistoryEntry `json:"history"`
+	ID        string                 `json:"id"`
+	Title     string                 `json:"title"`
+	Mission   string                 `json:"mission_id"`
+	Lead      string                 `json:"assigned_to_actor_id"`
+	Assignees []string               `json:"assignees"`
+	Watchers  []string               `json:"watchers"`
+	History   []opstask.HistoryEntry `json:"history"`
 }
+
+// assignedRole is me's part in w: lead, assignee, or "" (TASK 14.2: the
+// lead is always an assignee, so lead wins).
+func (w *taskWatch) assignedRole(me string) string {
+	switch {
+	case w.Lead == me:
+		return roleLead
+	case slices.Contains(w.Assignees, me):
+		return roleAssignee
+	}
+	return ""
+}
+
+// Roles of an "assigned" inbox item (TASK 20: assigned to you / added as
+// assignee / made lead).
+const (
+	roleLead     = "lead"
+	roleAssignee = "assignee"
+)
+
+// assignedBy is the newest history entry that gave me role on w, written
+// by someone else (TASK 20, 17.2): the lead set to me, or me joining the
+// assignees list. ok is false when the history has none (an old row, a
+// task created already assigned, or me assigned myself).
+func (w *taskWatch) assignedBy(me, role string) (opstask.HistoryEntry, bool) {
+	for i := len(w.History) - 1; i >= 0; i-- {
+		e := w.History[i]
+		if e.By == me {
+			continue
+		}
+		switch {
+		case role == roleLead && e.Field == fieldTaskLead && e.To == me,
+			role == roleAssignee && e.Field == schema.FieldTaskAssignees &&
+				slices.Contains(strings.Split(e.To, ","), me) && !slices.Contains(strings.Split(e.From, ","), me):
+			return e, true
+		}
+	}
+	return opstask.HistoryEntry{}, false
+}
+
+// assignedItem is the "assigned" inbox item of an open task me leads or is
+// an assignee of: who made it so and when, from the history when it says
+// (TASK 20), else the task's last update.
+func (cv *coordView) assignedItem(ctx context.Context, w *taskWatch, role string, updated time.Time) inboxItem {
+	it := inboxItem{Mission: w.Mission, Kind: inboxAssigned, Text: w.ID + "  " + w.Title + " (" + role + ")", At: updated}
+	e, ok := w.assignedBy(cv.w.ActorID, role)
+	if !ok {
+		return it
+	}
+	if at, err := time.Parse(time.RFC3339Nano, e.At); err == nil {
+		it.At = at
+	}
+	it.Who = cv.actorLabel(ctx, e.By)
+	if role == roleLead {
+		it.Text += ": made you lead"
+	} else {
+		it.Text += ": added you as assignee"
+	}
+	return it
+}
+
+// fieldTaskLead is the tasks column holding the lead (TASK 14.2).
+const fieldTaskLead = "assigned_to_actor_id"
 
 // watchedFields are the history fields a watcher is told about (TASK 20:
 // "watched task changed status, parent, due, assignees").
@@ -485,9 +550,13 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 		return nil, err
 	}
 	tasks := make([]*ent.Task, 0, len(docs))
+	watch := map[string]*taskWatch{}
 	for _, d := range docs {
 		if t, terr := taskFromDoc(d); terr == nil {
 			tasks = append(tasks, t) // unreadable rows skipped, as in tasks()
+		}
+		if w, werr := docInto[taskWatch](d); werr == nil {
+			watch[w.ID] = w
 		}
 	}
 	missions, err := cv.projectDocs(ctx, tableMissions)
@@ -518,9 +587,16 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 		}
 		open := t.Status == entTask.StatusTodo || t.Status == entTask.StatusInProgress
 		heldByOther := claimed && active && sig.Holder != me
-		if open && t.AssignedToActorID != nil && *t.AssignedToActorID == me && !heldByOther {
+		// TASK 20: assigned to you / added as assignee / made lead, over the
+		// lead and the assignees list (14.2); an old row without the list
+		// still has its lead.
+		w := watch[t.ID]
+		if w == nil {
+			w = &taskWatch{ID: t.ID, Title: t.Title, Mission: mission, Lead: deref(t.AssignedToActorID)}
+		}
+		if role := w.assignedRole(me); open && role != "" && !heldByOther {
 			involved[mission] = true
-			out = append(out, inboxItem{Mission: mission, Kind: inboxAssigned, Text: t.ID + "  " + t.Title, At: t.UpdatedAt})
+			out = append(out, cv.assignedItem(ctx, w, role, t.UpdatedAt))
 		}
 		if open && claimed && !active && ownsIt {
 			wb := "work lost: never pushed"
