@@ -496,6 +496,11 @@ func TestMainPurgedRefusesAnUnreadableList(t *testing.T) {
 		"ids is a string":  {`{"ids":"mem_1","_v":1}`, true, nil},
 		"ids is an object": {`{"ids":{"mem_1":true},"_v":1}`, true, nil},
 		"not json":         {`{"ids":[`, true, nil},
+		// P3-LIVE-2: fail closed on the format version, as v0.1.17 did.
+		"no version":      {`{"ids":["mem_1"]}`, true, nil},
+		"version is text": {`{"ids":["mem_1"],"_v":"1"}`, true, nil},
+		"version zero":    {`{"ids":["mem_1"],"_v":0}`, true, nil},
+		"newer version":   {`{"ids":["mem_1"],"_v":2}`, true, nil},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -607,5 +612,48 @@ func TestLiveBackend_UnreadableLiveRowIsAnError(t *testing.T) {
 	}
 	if err := f.b.Write(f.ctx, []store.Change{{Row: a}}); err == nil {
 		t.Fatal("a create over an unreadable live row must fail")
+	}
+}
+
+// TestLiveBackend_ReadThroughEditMaterialises (t-old2, F1): on the default
+// branch, a memory that is on the fetched origin/main but not in this
+// checkout (its delete committed here, or not pulled yet) is read through;
+// an edit that expects exactly that landed copy writes the branch file
+// (Expect "none" on the branch) instead of E_STALE, and an edit from any
+// other version stays stale.
+func TestLiveBackend_ReadThroughEditMaterialises(t *testing.T) {
+	f := newLiveFixture(t)
+	dir := f.b.top
+	m := ltRow(t, schema.TableMemories, ltMemory, 1, "keep me around", false)
+	rel := mainDataPath(live.RootFolder, schema.TableMemories+"/"+ltMemory+rowFileExt)
+	full := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, m.Doc, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, dir, "add", "-A")
+	gitT(t, dir, "commit", "-q", "-m", "memory")
+	gitT(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
+	gitT(t, dir, "rm", "-q", rel)
+	gitT(t, dir, "commit", "-q", "-m", "rm")
+	got, err := f.b.Get(f.ctx, m.Table, m.ID)
+	if err != nil || got.HLC.Compare(m.HLC) != 0 {
+		t.Fatalf("the landed copy is read through: %v", err)
+	}
+	stale := ltRow(t, schema.TableMemories, ltMemory, 3, "stale edit", false)
+	if err := f.b.Write(f.ctx, []store.Change{{Row: stale, Expect: ltRow(t, schema.TableMemories, ltMemory, 9, "x", false).HLC}}); !errors.Is(err, store.ErrStale) {
+		t.Fatalf("an edit from another version stays stale: %v", err)
+	}
+	edit := ltRow(t, schema.TableMemories, ltMemory, 2, "archived", false)
+	if err := f.b.Write(f.ctx, []store.Change{{Row: edit, Expect: got.HLC}}); err != nil {
+		t.Fatalf("an edit of the read-through copy writes, not E_STALE: %v", err)
+	}
+	if br, err := f.inner.Get(f.ctx, m.Table, m.ID); err != nil || br.HLC.Compare(edit.HLC) != 0 {
+		t.Fatalf("the edit materialises the row in the branch data: %v", err)
+	}
+	if f.liveHas(t, schema.TableMemories, ltMemory) {
+		t.Fatal("a memory edit stays with the code")
 	}
 }
