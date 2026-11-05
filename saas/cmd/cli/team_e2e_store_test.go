@@ -1018,7 +1018,6 @@ func storeCacheFiles(t *testing.T, actor *th.Actor) []string {
 // Open bugs pinned by a regression test before lore-stores' fix lands
 // (coordinator 18:40). Open is false once the fix is merged, so a regression fails.
 var (
-	bugD1ShareToRepoRefused = th.Bug{ID: "BUG-D1", Owner: "lore-stores"} // fixed in lore-stores 5013e22; passes with LORE_TEAM_STRICT=1 on lore-core
 	bugD2ActorCopyStableKey = th.Bug{ID: "BUG-D2", Owner: "lore-stores"} // fixed in lore-stores 5013e22; passes with LORE_TEAM_STRICT=1 on lore-core
 )
 
