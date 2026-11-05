@@ -38,6 +38,8 @@ import (
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/aicoder/stores"
+
+	lorestore "github.com/thesatellite-ai/lore/store"
 )
 
 // storeStateDir is a bare store clone's machine-state folder (§1:
@@ -737,6 +739,20 @@ func (r *clientRows) Stage(ctx context.Context, rows ...coord.RowWrite) ([]signa
 	}
 	var out []signals.Companion
 	if len(internal) > 0 {
+		// fix-r15note: on a 0.1.18 store the internal rows go to the store
+		// branch through the core, the same ref a note on a store task
+		// takes (storeRows.Stage), never to its v0.1.17 live ref. The core
+		// source is the attached folder whose prj_ id is the store
+		// project's; when the core does not attach it, the old live ref
+		// stays (nothing is lost, the old readers see it).
+		if newFormatStore(ctx, r.store.st, r.store.branch) {
+			if src, ok := coreSourceForProject(r.storeProjectID(ctx)); ok {
+				out = append(out, &coreCompanion{rows: internal, target: src})
+				internal = nil
+			}
+		}
+	}
+	if len(internal) > 0 {
 		out = append(out, &stagedLiveRows{spot: liveSpot{ref: r.store.ref, folder: r.store.folder, clk: r.w.Clock, actor: r.w.ActorID, wrote: r.store.wrote}, rows: internal})
 	}
 	// Client-side rows of a core-owned table (tasks, comments, actors…)
@@ -765,6 +781,21 @@ func (r *clientRows) Stage(ctx context.Context, rows ...coord.RowWrite) ([]signa
 		out = append(out, &remoteStagedRows{stagedLiveRows{spot: sp, rows: client}})
 	}
 	return out, nil
+}
+
+// coreSourceForProject is the core's attached source whose folder has the
+// prj_ id pid (FLAG1 folder_id through DescribeSource); ok is false when no
+// attached source has it, or the core is not mounted.
+func coreSourceForProject(pid string) (lorestore.Source, bool) {
+	if coreApp == nil || pid == "" {
+		return "", false
+	}
+	for _, n := range coreApp.Stores() {
+		if d := coreApp.DescribeSource(n); !d.FolderID.IsZero() && d.FolderID.String() == pid {
+			return n, true
+		}
+	}
+	return "", false
 }
 
 // ownerProjection is the projection of the person an agent works for (the

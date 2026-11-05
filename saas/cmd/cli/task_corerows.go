@@ -218,6 +218,11 @@ func coreDocs(ctx context.Context, table string) ([]coord.Doc, error) {
 // signals push was confirmed.
 type coreCompanion struct {
 	rows []coord.RowWrite
+	// target is the store a NEW row is created in; "" = where the row
+	// points (newRowTarget). A client repo's internal rows (a note on a
+	// client task, the store-side linked row) name the linked store folder,
+	// so they are never created where their entity lives (fix-r15note).
+	target store.Source
 }
 
 var _ signals.RemoteCompanion = (*coreCompanion)(nil)
@@ -237,7 +242,7 @@ func (c *coreCompanion) Prepare(context.Context) (gitremote.RefUpdate, error) {
 // that changed, or a create with the row's id when the core has none yet.
 func (c *coreCompanion) PushSelf(ctx context.Context) error {
 	for _, w := range c.rows {
-		if err := coreWriteDoc(ctx, coreTableFor(w), w.ID, w.Doc); err != nil {
+		if err := coreWriteAt(ctx, c.target, coreTableFor(w), w.ID, w.Doc, true); err != nil {
 			return err
 		}
 	}
@@ -286,6 +291,11 @@ func newRowTarget(ctx context.Context, doc coord.Doc) store.Source {
 
 // coreWrite is coreWriteDoc (whole) or corePatchDoc.
 func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool) error {
+	return coreWriteAt(ctx, "", table, id, doc, whole)
+}
+
+// coreWriteAt is coreWrite creating a new row in target ("" = newRowTarget).
+func coreWriteAt(ctx context.Context, target store.Source, table, id string, doc coord.Doc, whole bool) error {
 	def, ok := coreTableDef(table)
 	if !ok {
 		return errcodes.New(errcodes.Internal, "core rows: unknown table "+table)
@@ -349,7 +359,9 @@ func coreWrite(ctx context.Context, table, id string, doc coord.Doc, whole bool)
 				delete(patch, fieldCreatedByActor)
 			}
 		}
-		target := newRowTarget(ctx, doc)
+		if target == "" {
+			target = newRowTarget(ctx, doc)
+		}
 		if table == tableActors {
 			target = store.SourceRepo
 		}
