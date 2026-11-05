@@ -158,6 +158,7 @@ type taskTime struct {
 // (open spans end at now).
 func (o ops) timeIndex(ctx context.Context, q timeQuery) func(row.Row) taskTime {
 	owners := o.actorOwners(ctx)
+	canon := o.mergedActors(ctx) // TIME 11.11
 	ownerOf := func(a string) string {
 		if v := owners[a]; v != "" {
 			return v
@@ -179,6 +180,7 @@ func (o ops) timeIndex(ctx context.Context, q timeQuery) func(row.Row) taskTime 
 		var spans []timecalc.Span
 		worked := false
 		add := func(actor, session, day string, s timecalc.Span) {
+			actor = canon(actor)
 			if !inRange(day) {
 				return
 			}
@@ -215,6 +217,31 @@ func (o ops) actorOwners(ctx context.Context) map[string]string {
 		}
 	}
 	return m
+}
+
+// mergedActors maps an actor id to the end of its merged_into chain
+// (TIME 11.11: reports follow a merge; stored entries keep their id). An
+// unmerged or unknown id maps to itself; a cycle stops where it repeats.
+func (o ops) mergedActors(ctx context.Context) func(string) string {
+	next := map[string]string{}
+	if all, err := work.ListAll(ctx, o.env, schema.TableActors, ""); err == nil {
+		for _, s := range all {
+			if to := work.Field(s.Row, "merged_into"); to != "" && to != s.Row.ID.String() {
+				next[s.Row.ID.String()] = to
+			}
+		}
+	}
+	return func(id string) string {
+		seen := map[string]bool{id: true}
+		for {
+			to, ok := next[id]
+			if !ok || seen[to] {
+				return id
+			}
+			seen[to] = true
+			id = to
+		}
+	}
 }
 
 // keepTime applies --worked-by / --worked-since/until / --min/--max-time.

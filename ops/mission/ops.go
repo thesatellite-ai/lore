@@ -88,7 +88,7 @@ func Ops(env work.Env) []op.Entry {
 		status(OpPause, "Mark mission as paused", schema.MissionStatusPaused, "paused"),
 		status(OpResume, "Mark mission as active (resume from paused)", schema.MissionStatusActive, "resumed"),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a mission (its tasks are detached; a tombstone is kept)",
+			Name: OpDelete, Summary: "Delete a mission (its tasks go with it: one batch, to the trash)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
 			Confirm: op.ConfirmRule{Always: true},
 		}, o.delete),

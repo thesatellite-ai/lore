@@ -218,23 +218,24 @@ type TimeChild struct {
 
 // rowSpans are the countable spans of one task row: live entries and open
 // spans (end = now) in range, plus its open claim (time show's sources).
-func (o ops) rowSpans(ctx context.Context, r row.Row, now time.Time, inRange func(string) bool, ownerOf func(string) string) []timecalc.Span {
+func (o ops) rowSpans(ctx context.Context, r row.Row, now time.Time, inRange func(string) bool, ownerOf, canon func(string) string) []timecalc.Span {
 	var spans []timecalc.Span
 	for _, e := range TimeEntries(r) {
 		if e.Deleted() || !inRange(e.Day) {
 			continue
 		}
-		w := timecalc.Worker{Actor: e.ActorID.String(), Session: e.SessionRef}
+		w := timecalc.Worker{Actor: canon(e.ActorID.String()), Session: e.SessionRef}
 		spans = append(spans, timecalc.Span{Worker: w, Owner: ownerOf(w.Actor), Start: e.StartTime(), End: e.EndTime(), Seconds: e.Seconds, Manual: e.Source == timeentry.SourceManual})
 	}
 	for _, s := range TimeOpen(r) {
 		if !inRange(s.StartTime().Format(timeentry.DayLayout)) {
 			continue
 		}
-		w := timecalc.Worker{Actor: s.ActorID.String()}
+		w := timecalc.Worker{Actor: canon(s.ActorID.String())}
 		spans = append(spans, timecalc.Span{Worker: w, Owner: ownerOf(w.Actor), Start: s.StartTime(), End: now, Open: true})
 	}
 	if _, sp, ok := o.openClaimSpan(ctx, r.ID.String()); ok && inRange(sp.Start.UTC().Format(timeentry.DayLayout)) {
+		sp.Worker.Actor = canon(sp.Worker.Actor)
 		sp.Owner = ownerOf(sp.Worker.Actor)
 		spans = append(spans, sp)
 	}
@@ -243,7 +244,7 @@ func (o ops) rowSpans(ctx context.Context, r row.Row, now time.Time, inRange fun
 
 // subtreeTime is the TASK 6.11 breakdown of id: empty when it has no live
 // sub-task: no Children. own are the parent's own spans (already filtered).
-func (o ops) subtreeTime(ctx context.Context, r row.Row, own []timecalc.Span, now time.Time, inRange func(string) bool, ownerOf func(string) string) (TimeSubtree, error) {
+func (o ops) subtreeTime(ctx context.Context, r row.Row, own []timecalc.Span, now time.Time, inRange func(string) bool, ownerOf, canon func(string) string) (TimeSubtree, error) {
 	f, err := o.forest(ctx, work.Field(r, work.FieldProject))
 	if err != nil {
 		return TimeSubtree{}, err
@@ -260,7 +261,7 @@ func (o ops) subtreeTime(ctx context.Context, r row.Row, own []timecalc.Span, no
 	var walk func(string)
 	walk = func(at string) {
 		for _, c := range f.tree.Children(at) {
-			cs := o.rowSpans(ctx, f.row(c).Row, now, inRange, ownerOf)
+			cs := o.rowSpans(ctx, f.row(c).Row, now, inRange, ownerOf, canon)
 			res := timecalc.Compute(cs)
 			ch := TimeChild{ID: c, Title: f.title(c), Depth: f.tree.Depth(c) - base, EffortSeconds: res.Effort}
 			for _, w := range res.Workers {
@@ -323,6 +324,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 	}
 	d := TimeData{TaskID: id.String(), Title: work.Field(r, work.FieldTitle), Status: work.Field(r, work.FieldStatus), GroupBy: group, showEntries: in.Entries, loc: loc, InTrash: trashed, names: map[string]string{}}
 	d.Reopened = reopenedDay(r, loc) // TIME 11.1
+	canon := o.mergedActors(ctx)     // TIME 11.11: entries keep their actor id
 	nameOf := func(actor string) {   // WHO column: display name, not the actor id
 		if _, ok := d.names[actor]; !ok {
 			d.names[actor] = o.actorName(ctx, actor)
@@ -373,7 +375,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		if e.Deleted() || !inRange(e.Day) {
 			continue
 		}
-		w := timecalc.Worker{Actor: e.ActorID.String(), Session: e.SessionRef}
+		w := timecalc.Worker{Actor: canon(e.ActorID.String()), Session: e.SessionRef}
 		s := timecalc.Span{Worker: w, Owner: ownerOf(w.Actor), Start: e.StartTime(), End: e.EndTime(), Seconds: e.Seconds, Manual: e.Source == timeentry.SourceManual}
 		spans = append(spans, s)
 		ks = append(ks, keyed{keyOf(w, e.Source, e.Day), s})
@@ -387,7 +389,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		if !inRange(day) {
 			continue
 		}
-		w := timecalc.Worker{Actor: s.ActorID.String()}
+		w := timecalc.Worker{Actor: canon(s.ActorID.String())}
 		sp := timecalc.Span{Worker: w, Owner: ownerOf(w.Actor), Start: s.StartTime(), End: now, Open: true}
 		spans = append(spans, sp)
 		ks = append(ks, keyed{keyOf(w, s.Source, day), sp})
@@ -396,6 +398,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		day := sp.Start.UTC().Format(timeentry.DayLayout)
 		d.OpenClaims = append(d.OpenClaims, tc)
 		if inRange(day) {
+			sp.Worker.Actor = canon(sp.Worker.Actor)
 			sp.Owner = ownerOf(sp.Worker.Actor)
 			spans = append(spans, sp)
 			ks = append(ks, keyed{keyOf(sp.Worker, timeentry.SourceClaim, day), sp})
@@ -442,7 +445,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 	// 6.11: a live parent shows its subtree total unless --no-children;
 	// trashed sub-tasks stay out (DQ10: the forest holds live tasks only).
 	if !in.NoChildren && !trashed {
-		if d.Subtree, err = o.subtreeTime(ctx, r, spans, now, inRange, ownerOf); err != nil {
+		if d.Subtree, err = o.subtreeTime(ctx, r, spans, now, inRange, ownerOf, canon); err != nil {
 			return TimeOut{}, err
 		}
 	}
