@@ -761,8 +761,17 @@ func searchMetaTable(ctx context.Context, eng *engine.Engine, t globalSearchTarg
 		` AND r.entity_table = ` + sqlText(t.table.String()) + ` AND r.item_idx = -1`
 	var said []string
 	for _, c := range conds {
+		// P2-META-9: repo:<name>:… names a repo; search reads only this
+		// repo's rows, so another repo's name matches nothing here.
+		if c.Level == metaquery.LevelRepo && c.Place != "" {
+			if dir, derr := coreApp.RepoDirName(ctx); derr != nil || dir != c.Place {
+				return nil, nil
+			}
+		}
+	}
+	for _, c := range conds {
 		// METADATA 3.17 / OV39-CMP: the row_meta condition comes from the
-		// cache adapter (key:value, key?, > >= < <= ~= !=).
+		// cache adapter (key:value, key?, > >= < <= ~= !=, scope prefixes).
 		cc := c
 		exists := "EXISTS"
 		if c.Kind == metaquery.Cmp && c.Op == meta.OpNe {
