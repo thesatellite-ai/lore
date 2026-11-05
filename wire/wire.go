@@ -156,6 +156,12 @@ type Options struct {
 	// already uses is skipped (the committed file wins). Nil, or an error,
 	// attaches nothing (fail closed: an internal store is never guessed).
 	OrgStores func(ctx context.Context) ([]attach.Store, error)
+	// OrgEntryStore finds the store of a configured org entry that is not
+	// necessarily the one in use (`--from staging/acme` after `org use
+	// northwind`, v0.1.17 fixed rule 5): its url and branch, at folder, or
+	// at this repo's link folder for that entry when folder is "". found
+	// is false for an unknown entry. Nil reaches no other entry.
+	OrgEntryStore func(ctx context.Context, entry, folder string) (s attach.Store, found bool, err error)
 	// OrgSigners lists, for every configured org that has an identity, the
 	// org's store urls and the signature its commits carry (Q-R2-1). Nil
 	// means no store is an org store and FLAG4 signs everything.
@@ -488,6 +494,9 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		return op.Result{}, err
 	}
 	if ctx, d, err = a.prepareTarget(ctx, e, d, c); err != nil {
+		return op.Result{}, err
+	}
+	if err = a.prepareSource(ctx, e, d); err != nil {
 		return op.Result{}, err
 	}
 	eng, err := a.Engine(ctx)

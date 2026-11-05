@@ -425,6 +425,10 @@ type DoneIn struct {
 	// TSQ14: unticked checklist items refuse the close (E_OPEN_ITEMS).
 	TickAll bool `json:"tick_all,omitempty" flag:"tick-all" desc:"unticked checklist items: tick them in the same write"`
 	Force   bool `json:"force,omitempty" flag:"force" desc:"close even with unticked checklist items"`
+	// From is v0.1.17's `task done --from` (fixed rule 5): the source of
+	// the id, also one no open store reaches (another org entry, such as
+	// staging); the runner attaches it before the run (op.SourceNamer).
+	From string `json:"from,omitempty" flag:"from" desc:"the source of the id: repo | <org> | <org>/<folder>"`
 }
 
 // CancelIn is the input of task.cancel.

@@ -115,7 +115,7 @@ const (
 // test fixtures call it, so a hook added here reaches both.
 func coreOptions(repoDir, home string) wire.Options {
 	return wire.Options{RepoDir: repoDir, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite,
-		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, OrgSigners: coreOrgSigners,
+		DefaultTarget: coreDefaultTarget, RepoIsClient: coreRepoIsClient, OrgStores: coreOrgStores, OrgEntryStore: coreOrgEntryStore, OrgSigners: coreOrgSigners,
 		WorkDir: coreWorkDir(), Version: version, Audit: &coreAuditSink{root: repoDir}, // OVERNIGHT Qs subfolder: audit at the repo top
 		ModeB: modeBExporter{}, Notice: coreNotice, WrapBackend: coreWrapBackend, ProjectHint: coreProjectHint, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
 }

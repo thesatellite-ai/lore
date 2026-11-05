@@ -1313,7 +1313,9 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
-	dsrc, dcur, err := work.Get(ctx, o.env, Noun, table, id)
+	// --from names the source of the id (fixed rule 5): another org
+	// entry's store the runner attached for this run (op.SourceNamer).
+	dsrc, dcur, err := o.getSource(ctx, in.From, id)
 	if err != nil {
 		return DoneOut{}, err
 	}
@@ -1349,7 +1351,7 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 		code = " (commit " + shortSHA(in.Commit) + "); waiting for merge"
 	}
 	// TSQ14 / 17.2: the history's status entry records the unticked items.
-	w, err := work.Patch(withHistoryNote(ctx, "open_items_at_close: "+strconv.Itoa(forced)), o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" done"+code+"\n")
+	w, err := o.patchAt(withHistoryNote(ctx, "open_items_at_close: "+strconv.Itoa(forced)), o.hist(), dsrc, id, patch, work.Success+" "+id.String()+" done"+code+"\n")
 	if err != nil {
 		return DoneOut{}, err
 	}
