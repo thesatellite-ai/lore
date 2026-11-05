@@ -170,7 +170,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 	}
 	bin := mergeDriverBinary()
 	blocks := hookBlocks(rel)
-	paths := []string{strings.TrimSpace(string(cfgPath)), filepath.Join(root, gitAttributesFile)}
+	paths := []string{strings.TrimSpace(string(cfgPath)), filepath.Join(root, gitAttributesFile), filepath.Join(root, gitignoreName)}
 	names := make([]string, 0, len(blocks))
 	for n := range blocks {
 		names = append(names, n)
@@ -202,6 +202,17 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 			s.warn("git wiring: " + err.Error())
 			return
 		}
+	}
+	// Row files git would not commit (OWNERQ-9): re-include them, once
+	// per state of .gitignore; `lore sync` refuses while some stay hidden.
+	switch changed, still, err := EnsureDataNotIgnored(ctx, root); {
+	case err != nil:
+		s.warn("git wiring: " + err.Error())
+		return
+	case changed:
+		s.warn("a .gitignore rule hid lore files; re-included " + dataRel + " in .gitignore — commit it")
+	case len(still) > 0:
+		s.warn("git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed):\n  " + strings.Join(still, "\n  "))
 	}
 	if err := os.MkdirAll(s.stateDir, liveStateMode); err == nil {
 		_ = os.WriteFile(stamp, []byte(wiringFingerprint(bin, rel, paths)+"\n"), liveNoteMode) // a lost stamp only means the next command checks again

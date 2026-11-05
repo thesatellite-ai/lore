@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -73,11 +74,34 @@ func (l liveSync) SyncRun(ctx context.Context, _ opssync.RunIn) (opssync.RunOut,
 	if l.h.cfg.RepoAddresses != nil {
 		l.h.cfg.RepoAddresses(ctx) // PROVENANCE_DESIGN 10.3: records and notices only, never fails the sync
 	}
+	// G-DECIDE-9: fail closed while git still ignores row files after the
+	// re-include block (teammates would silently miss those rows).
+	if err := l.refuseIgnoredData(ctx); err != nil {
+		return opssync.RunOut{}, err
+	}
 	lines, err := l.pushAndLand(ctx)
 	if err != nil {
 		return opssync.RunOut{}, err
 	}
 	return opssync.RunOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindReport, Data: opssync.RunData{Pass: syncPassLive}, Lines: lines}, nil
+}
+
+// refuseIgnoredData is E_SYNC_DATA_IGNORED while git ignores row files of
+// the cwd project after the re-include block (LORE_SYNC_GIT=0: checked
+// without editing .gitignore).
+func (l liveSync) refuseIgnoredData(ctx context.Context) error {
+	root := liveProjectRoot(l.h.cfg.WorkDir)
+	if root == "" {
+		return nil
+	}
+	still, err := stillIgnoredData(ctx, root, os.Getenv(EnvSyncGit) != envOff)
+	if err != nil {
+		return err
+	}
+	if len(still) > 0 {
+		return dataIgnoredError(still)
+	}
+	return nil
 }
 
 // Land implements opssync.Env (v0.1.17 `lore land`): the named rows (an
