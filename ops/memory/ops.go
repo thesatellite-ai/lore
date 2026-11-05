@@ -111,7 +111,7 @@ func Ops(env Env) []op.Entry {
 			Name: OpShow, Summary: "Show one memory",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
 			Examples: []op.Example{{Title: "read the body", CLI: "lore memory show mem_<id> --json | jq -r '.data.body'", Want: ""}},
-		}, o.show),
+		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit memory fields (only the flags given change)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,

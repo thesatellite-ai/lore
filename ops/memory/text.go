@@ -81,9 +81,9 @@ func (o ListOut) rowsText() string {
 	return b.String() + ext.String()
 }
 
-// Text prints the id, kind/trust/source (plus superseded-by, archived-at
+// baseText prints the id, kind/trust/source (plus superseded-by, archived-at
 // and valid-until when set), a blank line and the body.
-func (o ShowOut) Text() string {
+func (o ShowOut) baseText() string {
 	r := o.Data
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n  kind:   %s\n  trust:  %.2f\n  source: %s\n", r.ID, r.Kind, r.TrustScore, r.SourceKind)
