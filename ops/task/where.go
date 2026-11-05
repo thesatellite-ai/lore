@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/filter"
@@ -77,14 +76,14 @@ func sortedKeys(m map[string]filter.Field) []string {
 }
 
 // listMatcher binds task list --where (XQ7: the one filter grammar; a bare
-// name is a task field). Metadata keys (meta.<key>, or a bare name no
-// field carries) are refused with E_NOT_IMPLEMENTED: the new core has no
-// metadata reader for task rows yet, and an empty result would read as
-// "no task matches" (skeleton honesty).
-func listMatcher(where []string, keys map[string]filter.Field) (filter.Matcher, error) {
+// name is a task field). meta.<key> terms are returned apart, in the
+// --meta grammar, for the metadata filter (METADATA 3.7) that list and
+// bulk edit run after the field match; a bare name no field carries is
+// an unknown key (P2-TASK-1: never silently a metadata key).
+func listMatcher(where []string, keys map[string]filter.Field) (filter.Matcher, []string, error) {
 	f, err := filter.Parse(where)
 	if err != nil {
-		return filter.Matcher{}, err
+		return filter.Matcher{}, nil, err
 	}
 	return bindWhere(f, keys)
 }
@@ -93,33 +92,62 @@ func listMatcher(where []string, keys map[string]filter.Field) (filter.Matcher, 
 // @me becomes the caller's actor id first (16.1 `assignee:@me`, 16.2 a
 // view's @me resolves for whoever runs it); an unknown caller is the same
 // refusal --assignee @me gives.
-func (o ops) whereMatcher(ctx context.Context, where []string, keys map[string]filter.Field) (filter.Matcher, error) {
+func (o ops) whereMatcher(ctx context.Context, where []string, keys map[string]filter.Field) (filter.Matcher, []string, error) {
 	f, err := filter.Parse(where)
 	if err != nil {
-		return filter.Matcher{}, err
+		return filter.Matcher{}, nil, err
 	}
 	if f.HasValue(filter.Me) {
 		me, merr := o.actorRef(ctx, actorMe)
 		if merr != nil {
-			return filter.Matcher{}, merr
+			return filter.Matcher{}, nil, merr
 		}
 		f = f.Replace(filter.Me, me)
 	}
 	return bindWhere(f, keys)
 }
 
-// bindWhere binds a parsed task --where to the task keys.
-func bindWhere(f filter.Filter, keys map[string]filter.Field) (filter.Matcher, error) {
-	return f.Bind(func(k filter.Key) (filter.Field, error) {
-		if fd, ok := keys[k.Name]; ok && !k.Meta {
+// bindWhere binds a parsed task --where to the task keys; meta.<key>
+// terms come back as --meta filter arguments (r3-grammar: the metadata
+// reader on task rows is metalist, the same one --meta uses).
+func bindWhere(f filter.Filter, keys map[string]filter.Field) (filter.Matcher, []string, error) {
+	fields, metaArgs, err := splitMeta(f)
+	if err != nil {
+		return filter.Matcher{}, nil, err
+	}
+	m, err := fields.Bind(func(k filter.Key) (filter.Field, error) {
+		if fd, ok := keys[k.Name]; ok {
 			return fd, nil
-		}
-		if k.Meta {
-			return filter.Field{}, errs.New(errs.NotImplemented, "task list --where "+k.String()+": metadata keys are not filterable on task list yet").
-				WithHint("filter on a task field: " + strings.Join(sortedKeys(keys), ", "))
 		}
 		return filter.Field{}, filter.UnknownKey(k, sortedKeys(keys))
 	})
+	return m, metaArgs, err
+}
+
+// splitMeta moves the meta.<key> terms of f into --meta grammar arguments
+// (`key<op>value`; the operator spellings are the same in both grammars).
+// A term with several OR-ed values has no --meta form yet (`<<` is not
+// supported by the metadata filter), so it is refused rather than read as
+// one value.
+func splitMeta(f filter.Filter) (filter.Filter, []string, error) {
+	var rest filter.Filter
+	var out []string
+	for _, t := range f.Terms {
+		if !t.Key.Meta {
+			rest.Terms = append(rest.Terms, t)
+			continue
+		}
+		if len(t.Values) > 1 {
+			return filter.Filter{}, nil, errs.New(errs.InvalidInput, "task list --where "+t.Raw+": a metadata key takes one value here").
+				WithHint("repeat the list with one value each, or use lore sql over row_meta")
+		}
+		arg := t.Key.Name + string(t.Op)
+		if len(t.Values) == 1 {
+			arg += t.Values[0]
+		}
+		out = append(out, arg)
+	}
+	return rest, out, nil
 }
 
 // rowGetter reads a task row's values for the matcher.

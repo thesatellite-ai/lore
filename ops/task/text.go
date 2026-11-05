@@ -101,7 +101,12 @@ func fullOf(lab work.Labeler, src store.Source, r row.Row) Full {
 }
 
 // Text prints one list line per task; "(no tasks)" when there is none.
-func (o ListOut) Text() string { return o.rowsText() + work.NotesText(o.Notes) }
+func (o ListOut) Text() string {
+	if len(o.Columns) > 0 {
+		return o.columnsText() + work.NotesText(o.Notes)
+	}
+	return o.rowsText() + work.NotesText(o.Notes)
+}
 
 // rowsText is the list lines.
 func (o ListOut) rowsText() string {

@@ -47,6 +47,8 @@ type ViewSpec struct {
 	Where   string `json:"where,omitempty"`
 	Sort    string `json:"sort,omitempty"`
 	GroupBy string `json:"group_by,omitempty"`
+	// Columns are task list --columns (16.2), used when the list gives none.
+	Columns []string `json:"columns,omitempty"`
 }
 
 // sortList splits the stored sort ("urgency:desc,due_at") into --sort values.
@@ -63,6 +65,7 @@ type ViewAddIn struct {
 	Where   []string `json:"where,omitempty" flag:"where" desc:"the filter (the task list --where grammar; repeatable, all must match)"`
 	Sort    []string `json:"sort,omitempty" flag:"sort" desc:"sort keys: <key>, <key>:asc or <key>:desc (repeatable; urgency allowed first)"`
 	GroupBy string   `json:"group_by,omitempty" flag:"group-by" desc:"board grouping: status | assignee | priority | mission | repo | parent"`
+	Columns []string `json:"columns,omitempty" flag:"columns" desc:"task list columns: id,title,estimate,tracked,… (comma-separated or repeated; the task list --columns names)"`
 	Project string   `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 	To      string   `json:"to,omitempty" flag:"to" desc:"store to write to (default repo)"`
 }
@@ -139,7 +142,7 @@ func taskViewOps(o ops) []op.Entry {
 func checkViewSpec(s ViewSpec) error {
 	keys := taskKeys()
 	if s.Where != "" {
-		if _, err := listMatcher([]string{s.Where}, keys); err != nil {
+		if _, _, err := listMatcher([]string{s.Where}, keys); err != nil {
 			return err
 		}
 	}
@@ -148,6 +151,9 @@ func checkViewSpec(s ViewSpec) error {
 		return err
 	}
 	if _, err = listSort(rest, keys); err != nil {
+		return err
+	}
+	if _, err = parseColumns(s.Columns, keys); err != nil {
 		return err
 	}
 	if s.GroupBy != "" {
@@ -175,7 +181,7 @@ func specOf(r row.Row) (ViewSpec, error) {
 	dec := json.NewDecoder(strings.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&s); err != nil {
-		return ViewSpec{}, errs.New(errs.InvalidInput, "task view "+work.Field(r, schema.FieldTaskViewName)+": filter_json is not {where, sort, group_by}").
+		return ViewSpec{}, errs.New(errs.InvalidInput, "task view "+work.Field(r, schema.FieldTaskViewName)+": filter_json is not {where, sort, group_by, columns}").
 			WithHint("lore task view edit " + r.ID.String() + " --where '…'")
 	}
 	return s, nil
@@ -201,7 +207,7 @@ func (o ops) viewAdd(ctx context.Context, in ViewAddIn) (ViewOut, error) {
 	} else if !errs.Has(ferr, errs.NotFound) {
 		return ViewOut{}, ferr
 	}
-	spec := ViewSpec{Where: strings.Join(in.Where, " "), Sort: strings.Join(in.Sort, ","), GroupBy: in.GroupBy}
+	spec := ViewSpec{Where: strings.Join(in.Where, " "), Sort: strings.Join(in.Sort, ","), GroupBy: in.GroupBy, Columns: columnList(in.Columns)}
 	if err = checkViewSpec(spec); err != nil {
 		return ViewOut{}, err
 	}
@@ -241,8 +247,11 @@ func (o ops) viewEdit(ctx context.Context, in ViewAddIn) (ViewOut, error) {
 	if in.GroupBy != "" {
 		spec.GroupBy = in.GroupBy
 	}
-	if len(in.Where) == 0 && len(in.Sort) == 0 && in.GroupBy == "" {
-		return ViewOut{}, errs.New(errs.InvalidInput, "task view edit: nothing to change").WithHint("give --where, --sort or --group-by")
+	if len(in.Columns) > 0 {
+		spec.Columns = columnList(in.Columns)
+	}
+	if len(in.Where) == 0 && len(in.Sort) == 0 && in.GroupBy == "" && len(in.Columns) == 0 {
+		return ViewOut{}, errs.New(errs.InvalidInput, "task view edit: nothing to change").WithHint("give --where, --sort, --group-by or --columns")
 	}
 	if err = checkViewSpec(spec); err != nil {
 		return ViewOut{}, err
@@ -346,6 +355,9 @@ func (o ops) applyView(ctx context.Context, in ListIn) (ListIn, ViewSpec, error)
 	}
 	if len(in.Sort) == 0 {
 		in.Sort = spec.sortList()
+	}
+	if len(in.Columns) == 0 {
+		in.Columns = spec.Columns
 	}
 	in.View = ""
 	return in, spec, nil

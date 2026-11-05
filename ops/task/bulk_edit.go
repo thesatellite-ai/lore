@@ -82,7 +82,7 @@ func (o ops) editOp(ctx context.Context, in EditIn) (work.WriteOut, error) {
 // filter says: no hidden active-set default (the preview lists the rows).
 func (o ops) matchWhere(ctx context.Context, where []string) ([]work.Sourced, error) {
 	keys := taskKeys()
-	m, err := o.whereMatcher(ctx, where, keys)
+	m, whereMeta, err := o.whereMatcher(ctx, where, keys)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +98,12 @@ func (o ops) matchWhere(ctx context.Context, where []string) ([]work.Sourced, er
 	for _, s := range all {
 		if keepRow(s.Row) && m.Match(get(s.Row)) {
 			out = append(out, s)
+		}
+	}
+	// r3-grammar: meta.<key> terms narrow through the metadata filter.
+	if len(whereMeta) > 0 {
+		if out, _, err = work.Narrow(ctx, o.env, out, work.MetaFlags{Meta: whereMeta}); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil

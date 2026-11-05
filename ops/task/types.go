@@ -149,6 +149,8 @@ type Brief struct {
 	Store store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Cells are the --columns table cells, in ListOut.Columns order.
+	Cells []string `json:"cells,omitempty"`
 	// Line is the v0.1.17 human list line.
 	Line string `json:"-"`
 	// base is Line without the store label (withState inserts there).
@@ -288,7 +290,7 @@ type ListIn struct {
 	WorkedUntil string   `json:"worked_until,omitempty" flag:"worked-until" desc:"only tasks with time on or before this day; TIME shows that range"`
 	MinTime     string   `json:"min_time,omitempty" flag:"min-time" desc:"only tasks with at least this effort (e.g. 2h)"`
 	MaxTime     string   `json:"max_time,omitempty" flag:"max-time" desc:"only tasks with at most this effort (e.g. 30m)"`
-	Columns     []string `json:"columns,omitempty" flag:"columns" desc:"extra columns: +time, +elapsed (comma-separated or repeated)"`
+	Columns     []string `json:"columns,omitempty" flag:"columns" desc:"columns of a table: id,title,estimate,tracked,… (any --where key, time|tracked, elapsed, progress, store); +time / +elapsed alone extend the usual line"`
 	// --include-deleted / --deleted-only: the shared trash flags of every
 	// noun list (DELETION 3.2, DQ10); time of trashed tasks counts too.
 	metalist.Trash
@@ -306,6 +308,9 @@ type ListOut struct {
 	Kind          string  `json:"kind"`
 	Count         int     `json:"count,omitempty"`
 	Data          []Brief `json:"data"`
+	// Columns are --columns' table columns (TASK 16.2); each Brief's Cells
+	// follow this order. Empty: the usual list lines.
+	Columns []string `json:"columns,omitempty"`
 	// Notes are the metadata filter's lines (METADATA 3.7, 3.13).
 	Notes []string `json:"notes,omitempty"`
 }

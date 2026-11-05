@@ -96,8 +96,8 @@ func TestListWhereSort(t *testing.T) {
 		{`{"where":["status=todoo"]}`, errs.InvalidInput, `status "todoo" is not one of`},
 		{`{"where":["due_at<soon"]}`, errs.InvalidInput, "want YYYY-MM-DD or RFC 3339"},
 		{`{"where":["nope=1"]}`, errs.InvalidInput, "unknown field nope (fields: "},
-		{`{"where":["claim_epoch=1"]}`, errs.InvalidInput, "unknown field claim_epoch"}, // internal fields stay hidden
-		{`{"where":["meta.client=acme"]}`, errs.NotImplemented, "metadata keys are not filterable on task list yet"},
+		{`{"where":["claim_epoch=1"]}`, errs.InvalidInput, "unknown field claim_epoch"},                   // internal fields stay hidden
+		{`{"where":["meta.client=acme,beta"]}`, errs.InvalidInput, "a metadata key takes one value here"}, // r3-grammar: meta.<key> is read; OR-ed values have no --meta form
 		{`{"where":["todo"]}`, errs.InvalidInput, "no operator"},
 		{`{"where":[""]}`, errs.InvalidInput, "empty filter"},
 		{`{"sort":["-priority"]}`, errs.InvalidInput, "a leading - is not a sort direction"},

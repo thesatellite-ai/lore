@@ -64,6 +64,8 @@ type timeQuery struct {
 	sort           []sortspec.Spec // time_spent / elapsed keys, in order
 	showTime       bool
 	showElapsed    bool
+	// columns are --columns' table columns (columns.go; empty = line mode).
+	columns []string
 }
 
 // active reports whether any time flag was given (the TIME column then
@@ -135,19 +137,13 @@ func (o ops) timeQueryOf(ctx context.Context, in ListIn, sort []string) (timeQue
 		}
 		*d.set, *d.dst = true, int64(v.Duration()/time.Second)
 	}
-	for _, c := range in.Columns {
-		for _, part := range strings.Split(c, ",") {
-			switch strings.TrimPrefix(strings.TrimSpace(part), "+") {
-			case colTime:
-				q.showTime = true
-			case colElapsed:
-				q.showElapsed = true
-			case "":
-			default:
-				return q, nil, errs.New(errs.InvalidInput, "--columns "+work.Quote(part)+" is not a column").WithHint("task list columns: +time, +elapsed")
-			}
-		}
+	// TASK 16.2: bare names make a column table; +time / +elapsed alone
+	// extend the v0.1.17 line (columns.go).
+	cs, err := parseColumns(in.Columns, taskKeys())
+	if err != nil {
+		return q, nil, err
 	}
+	q.columns, q.showTime, q.showElapsed = cs.named, cs.time, cs.elapsed
 	return q, sort, nil
 }
 

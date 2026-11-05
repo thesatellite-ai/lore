@@ -741,14 +741,15 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	// XQ7: --where is the one filter grammar; its terms AND with the flags.
 	keys := taskKeys()
-	m, err := o.whereMatcher(ctx, in.Where, keys)
+	m, whereMeta, err := o.whereMatcher(ctx, in.Where, keys)
 	if err != nil {
 		return ListOut{}, err
 	}
 	// METADATA 3.7: a meta.<key> --sort goes to the metadata filter and
-	// replaces the field sort; --meta / --place narrow the rows.
+	// replaces the field sort; --meta / --place narrow the rows; --where
+	// meta.<key> terms join --meta (r3-grammar).
 	fieldSort := in.Sort
-	o.meta = work.MetaFlags{Meta: in.Meta, Place: in.Place}
+	o.meta = work.MetaFlags{Meta: append(slices.Clone(in.Meta), whereMeta...), Place: in.Place}
 	for _, s := range in.Sort {
 		if strings.HasPrefix(s, "meta.") {
 			if o.meta.Sort != "" {
@@ -810,8 +811,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		if tq.active() {
 			tq.timeColumns(b, timeOf(r))
 		}
+		cellsOf(tq.columns, get(r), b) // TASK 16.2 column table
 	}
-	return o.viewWith(ctx, in.Store, project, team.state, order, func(r row.Row) bool {
+	out, err := o.viewWith(ctx, in.Store, project, team.state, order, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
 		switch {
 		case !inTree(r.ID.String()):
@@ -835,6 +837,8 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		}
 		return true
 	})
+	out.Columns = tq.columns
+	return out, err
 }
 
 // view lists the tasks keep accepts, in v0.1.17's envelope.
