@@ -170,6 +170,7 @@ type Resource struct {
 	ArchivedAt  string            `json:"archived_at,omitempty"`
 	LastChecked string            `json:"last_checked,omitempty"`
 	CheckedBy   string            `json:"checked_by,omitempty"`
+	CheckNote   string            `json:"check_note,omitempty"`
 	// ReplacedBy is "<kind> <name> (<res_ id>)" of the resource repoint put
 	// in this one's place (RESOURCES 3.20); "" when none.
 	ReplacedBy string `json:"replaced_by,omitempty"`
@@ -205,6 +206,9 @@ func (o ResOut) Text() string {
 	}
 	if r.LastChecked != "" {
 		fmt.Fprintf(&b, "  checked %s%s\n", r.LastChecked, byWho(r.CheckedBy))
+		if r.CheckNote != "" {
+			fmt.Fprintf(&b, "  note: %s\n", r.CheckNote)
+		}
 	}
 	if r.ArchivedAt != "" {
 		fmt.Fprintf(&b, "  archived %s\n", r.ArchivedAt)
@@ -779,6 +783,9 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if patch[rCheckedBy], err = txt(CheckedEdit); err != nil {
 		return RowOut{}, err
 	}
+	if text(r.Row, rCheckNote) != "" {
+		patch[rCheckNote] = value.Null{} // the last check's note no longer describes the row (OV32)
+	}
 	out, err := o.patchRow(ctx, r, patch, "edited "+d.name()+" "+name)
 	if err == nil {
 		setNow := map[string]json.RawMessage{}
@@ -825,7 +832,7 @@ func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
 	vals := stored.vals
 	return Resource{ID: r.Row.ID.String(), Kind: d.name(), Name: text(r.Row, rName), Store: string(r.Src),
 		Values: o.named(ctx, d, vals, show), ArchivedAt: text(r.Row, rArchivedAt), LastChecked: text(r.Row, rLastChecked),
-		CheckedBy: text(r.Row, rCheckedBy), Conflicts: o.conflictsView(d, stored, show), ReplacedBy: o.successor(ctx, r),
+		CheckedBy: text(r.Row, rCheckedBy), CheckNote: text(r.Row, rCheckNote), Conflicts: o.conflictsView(d, stored, show), ReplacedBy: o.successor(ctx, r),
 		Quarantine: quarantineOf(d, stored)}, nil
 }
 
@@ -1190,11 +1197,11 @@ func (o ops) resCheck(ctx context.Context, in ResCheckIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	by, err := txt(CheckedManual) // RQ8: a person or agent looked
+	patch, err := o.checkPatch(r, in.Note)
 	if err != nil {
 		return RowOut{}, err
 	}
-	return o.patchRow(ctx, r, map[string]value.Value{rLastChecked: value.DateTimeFrom(opclock.Now(o.env)), rCheckedBy: by}, "checked "+text(r.Row, rName)+" now")
+	return o.patchRow(ctx, r, patch, "checked "+text(r.Row, rName)+" now")
 }
 
 func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {

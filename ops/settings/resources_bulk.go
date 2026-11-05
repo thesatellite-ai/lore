@@ -40,7 +40,30 @@ func (b BulkWhere) bulk() bool { return b.Kind != "" || len(b.Where) > 0 || b.Dr
 // form --kind --where.
 type ResCheckIn struct {
 	Name string `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
+	Note string `json:"note,omitempty" flag:"note" desc:"what was checked (kept until the next check)"`
 	BulkWhere
+}
+
+// rCheckNote is the note of the last check (OV32); a check without --note
+// clears the previous one, because the note describes that check.
+const rCheckNote = "check_note"
+
+// checkPatch is the patch of one manual check (RQ8 way 1) with in's note.
+func (o ops) checkPatch(r located, note string) (map[string]value.Value, error) {
+	by, err := txt(CheckedManual) // RQ8: a person or agent looked
+	if err != nil {
+		return nil, err
+	}
+	p := map[string]value.Value{rLastChecked: value.DateTimeFrom(opclock.Now(o.env)), rCheckedBy: by}
+	if text(r.Row, rCheckNote) != "" {
+		p[rCheckNote] = value.Null{}
+	}
+	if note != "" {
+		if p[rCheckNote], err = txt(note); err != nil {
+			return nil, err
+		}
+	}
+	return p, nil
 }
 
 // matchWhere is every live, unarchived resource of b.Kind matching b.Where,
@@ -191,13 +214,13 @@ func (o ops) resCheckWhere(ctx context.Context, in ResCheckIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	by, err := txt(CheckedManual)
-	if err != nil {
-		return RowOut{}, err
-	}
 	return o.bulkRun(ctx, d, hits, in.DryRun, "check", func(located) string { return "last_checked now (manual)" },
 		func(c context.Context, r located) error {
-			_, perr := o.patchRow(c, r, map[string]value.Value{rLastChecked: value.DateTimeFrom(opclock.Now(o.env)), rCheckedBy: by}, "checked "+text(r.Row, rName)+" now")
+			patch, perr := o.checkPatch(r, in.Note)
+			if perr != nil {
+				return perr
+			}
+			_, perr = o.patchRow(c, r, patch, "checked "+text(r.Row, rName)+" now")
 			return perr
 		})
 }
