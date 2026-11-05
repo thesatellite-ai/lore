@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opsagent "github.com/thesatellite-ai/lore/ops/agent"
@@ -61,28 +62,29 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 	if a.opts.Roster != nil {
 		return a.opts.Roster.ActorRegister(ctx, in)
 	}
-	who, err := a.repoRoster(ctx)
+	r, who, err := a.repoRoster(ctx)
 	if err != nil {
 		return opsinfra.ActorRegisterOut{}, err
 	}
 	sp := RosterActor{Kind: schema.ActorKindHuman, StableKey: who.StableKey, Name: who.DisplayName, Handle: defaultRosterHandle(who.Handle, who.StableKey)}
 	if in.Kind == opsinfra.RegisterKindAgent {
-		owner, oerr := a.rosterOwner(ctx, in.Owner, who.StableKey)
+		owner, oerr := a.rosterOwner(ctx, r, in.Owner, who.StableKey)
 		if oerr != nil {
 			return opsinfra.ActorRegisterOut{}, oerr
 		}
 		sp = RosterActor{Kind: schema.ActorKindAgent, StableKey: agentStableKeyPrefix + in.Label, Name: in.Label, Label: in.Label, OwnerID: owner.ID}
 	}
 	if sp.Handle != "" {
-		if herr := a.rosterHandleFree(ctx, sp.Handle, sp.StableKey); herr != nil {
+		if herr := a.rosterHandleFree(ctx, r, sp.Handle, sp.StableKey); herr != nil {
 			return opsinfra.ActorRegisterOut{}, herr
 		}
 	}
-	id, created, err := a.RosterRegister(ctx, store.SourceRepo, sp)
+	id, created, err := a.RosterRegister(ctx, r.src, sp)
 	if err != nil {
 		return opsinfra.ActorRegisterOut{}, err
 	}
-	return opsinfra.ActorRegisterOut{ID: id, Kind: in.Kind, Name: sp.Name, Handle: sp.Handle, Label: sp.Label, Created: created, Where: repoRosterWhere}, nil
+	a.rosterPush(ctx, r)
+	return opsinfra.ActorRegisterOut{ID: id, Kind: in.Kind, Name: sp.Name, Handle: sp.Handle, Label: sp.Label, Created: created, Where: r.shown()}, nil
 }
 
 // ActorDeactivate implements opsinfra.Roster.
@@ -90,46 +92,113 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 	if a.opts.Roster != nil {
 		return a.opts.Roster.ActorDeactivate(ctx, handle)
 	}
-	if _, err := a.repoRoster(ctx); err != nil {
-		return opsinfra.ActorDeactivateOut{}, err
-	}
-	act, err := a.rosterByHandle(ctx, handle)
+	r, _, err := a.repoRoster(ctx)
 	if err != nil {
 		return opsinfra.ActorDeactivateOut{}, err
 	}
-	if err := a.RosterDeactivate(ctx, store.SourceRepo, act.ID); err != nil {
+	act, err := a.rosterByHandle(ctx, r, handle)
+	if err != nil {
 		return opsinfra.ActorDeactivateOut{}, err
 	}
+	if err := a.RosterDeactivate(ctx, r.src, act.ID); err != nil {
+		return opsinfra.ActorDeactivateOut{}, err
+	}
+	a.rosterPush(ctx, r)
 	return opsinfra.ActorDeactivateOut{ID: act.ID, Name: act.Name}, nil
 }
 
-// repoRoster checks that this App's roster is the repo's own (no org, Q4)
-// and returns the caller's identity. An agent never registers (F18: its
-// owner runs `lore agent start`). An org's roster lives in the org store's
-// org folder, which only a host with org resolution reaches
-// (Options.Roster): refused here rather than written to the wrong place.
-func (a *App) repoRoster(ctx context.Context) (whoIs, error) {
+// rosterAt is the roster a verb works on: the repo's own (no org, Q4) or
+// the org folder of the resolved org's store ("<org>/<folder>", CFG1,
+// P3-CMDLORE-5).
+type rosterAt struct {
+	src store.Source
+	// where names it in messages: "this repo", "northwind org/".
+	where string
+}
+
+// shown is where for output: an org folder is internal, so it is hidden
+// without a terminal or in CI (§6.5).
+func (r rosterAt) shown() string {
+	if r.src != store.SourceRepo && quietOutput() {
+		return redactedText
+	}
+	return r.where
+}
+
+// missHint is the hint for a handle missing from the roster.
+func (r rosterAt) missHint() string {
+	if r.src == store.SourceRepo {
+		return "register first: `lore actor register` (as that person)"
+	}
+	return "they run `lore actor register` in a repo of the org, then `lore sync` here"
+}
+
+// rosterLookups bounds a handle lookup: the store copy, then once more
+// after syncing the roster's store.
+const rosterLookups = 2
+
+// rosterPush syncs an org roster's store at once (v0.1.17 autopush); a
+// failure leaves the change committed in the local copy for `lore sync`.
+func (a *App) rosterPush(ctx context.Context, r rosterAt) {
+	if r.src == store.SourceRepo {
+		return
+	}
+	_, _ = a.SyncStores(ctx, string(r.src)) // best effort: committed locally, `lore sync` pushes
+}
+
+// repoRoster picks the roster and returns the caller's identity. An agent
+// never registers (F18: its owner runs `lore agent start`). With an org,
+// the roster is its org folder store when OrgStores attaches one; an org
+// without one is refused rather than written to the wrong place.
+func (a *App) repoRoster(ctx context.Context) (rosterAt, whoIs, error) {
+	r := rosterAt{src: store.SourceRepo, where: repoRosterWhere}
 	if a.opts.Org != nil {
 		org, err := a.opts.Org(ctx)
 		if err != nil {
-			return whoIs{}, err
+			return r, whoIs{}, err
 		}
 		if org != nil {
-			return whoIs{}, errs.New(errs.NotImplemented, "org "+org.Name+"'s roster is kept in its org store, which this lore build does not reach for the roster").
-				WithHint("run the command with the lore release binary")
+			src, folder, ok, serr := a.orgRosterSource(ctx, org.Name)
+			if serr != nil {
+				return r, whoIs{}, serr
+			}
+			if !ok {
+				return r, whoIs{}, errs.New(errs.NotImplemented, "org "+org.Name+"'s roster is kept in its org store, which this lore build does not reach for the roster").
+					WithHint("set org_folder on one of the org's stores in ~/.lore/config.yaml")
+			}
+			r = rosterAt{src: src, where: org.Name + " " + folder + "/"}
 		}
 	}
 	who, err := a.Who(ctx)
 	if err != nil {
-		return whoIs{}, err
+		return r, whoIs{}, err
 	}
 	if who.Kind == schema.ActorKindAgent {
-		return whoIs{}, errs.New(errs.InvalidInput, "an agent cannot register actors; its owner runs `lore agent start --label <l> --owner @<owner>`")
+		return r, whoIs{}, errs.New(errs.InvalidInput, "an agent cannot register actors; its owner runs `lore agent start --label <l> --owner @<owner>`")
 	}
 	if who.StableKey == "" {
-		return whoIs{}, errs.New(errs.InvalidInput, "no identity: lore cannot tell who you are").WithHint("run `lore whoami` to see the identity chain")
+		return r, whoIs{}, errs.New(errs.InvalidInput, "no identity: lore cannot tell who you are").WithHint("run `lore whoami` to see the identity chain")
 	}
-	return whoIs{StableKey: who.StableKey, DisplayName: who.DisplayName, Handle: who.Handle}, nil
+	return r, whoIs{StableKey: who.StableKey, DisplayName: who.DisplayName, Handle: who.Handle}, nil
+}
+
+// orgRosterSource is the "<org>/<org folder>" store OrgStores attaches for
+// org (ok false when none).
+func (a *App) orgRosterSource(ctx context.Context, org string) (store.Source, string, bool, error) {
+	if a.opts.OrgStores == nil {
+		return "", "", false, nil
+	}
+	list, err := a.opts.OrgStores(ctx)
+	if err != nil {
+		return "", "", false, err
+	}
+	prefix := org + orgconf.RefSep
+	for _, st := range list {
+		if folder, ok := strings.CutPrefix(string(st.Name), prefix); ok && folder != "" {
+			return st.Name, folder, true, nil
+		}
+	}
+	return "", "", false, nil
 }
 
 // whoIs is the part of the identity a registration uses.
@@ -158,8 +227,8 @@ func defaultRosterHandle(handle, stableKey string) string {
 }
 
 // rosterHandleFree refuses a handle another active actor or team holds.
-func (a *App) rosterHandleFree(ctx context.Context, handle, stableKey string) error {
-	actors, err := a.RosterActors(ctx, store.SourceRepo)
+func (a *App) rosterHandleFree(ctx context.Context, r rosterAt, handle, stableKey string) error {
+	actors, err := a.RosterActors(ctx, r.src)
 	if err != nil {
 		return err
 	}
@@ -170,7 +239,7 @@ func (a *App) rosterHandleFree(ctx context.Context, handle, stableKey string) er
 		}
 	}
 	if holder == "" {
-		teams, terr := a.RosterTeams(ctx, store.SourceRepo)
+		teams, terr := a.RosterTeams(ctx, r.src)
 		if terr != nil {
 			return terr
 		}
@@ -183,37 +252,49 @@ func (a *App) rosterHandleFree(ctx context.Context, handle, stableKey string) er
 	if holder == "" {
 		return nil
 	}
-	return errs.New(errs.InvalidInput, fmt.Sprintf("handle @%s is taken by %s on %s's roster", handle, holder, repoRosterWhere)).
+	return errs.New(errs.InvalidInput, fmt.Sprintf("handle @%s is taken by %s on %s's roster", handle, holder, r.where)).
 		WithHint("choose another handle (`lore identity set --org <org> --handle <h>`); handles are unique per roster")
 }
 
 // rosterByHandle finds the active actor @handle on the repo's roster.
-func (a *App) rosterByHandle(ctx context.Context, handle string) (RosterActor, error) {
+func (a *App) rosterByHandle(ctx context.Context, r rosterAt, handle string) (RosterActor, error) {
 	h := strings.TrimPrefix(handle, rosterHandleMark)
-	actors, err := a.RosterActors(ctx, store.SourceRepo)
-	if err != nil {
-		return RosterActor{}, err
-	}
-	for _, x := range actors {
-		if x.Active && x.Handle == h {
-			return x, nil
+	// A miss on an org roster re-reads it once after syncing its store
+	// (v0.1.17 refreshOnMiss: a teammate may have just registered).
+	for attempt := 0; attempt < rosterLookups; attempt++ {
+		if attempt > 0 {
+			if r.src == store.SourceRepo {
+				break
+			}
+			if _, serr := a.Sync(ctx, r.src); serr != nil {
+				break
+			}
+		}
+		actors, err := a.RosterActors(ctx, r.src)
+		if err != nil {
+			return RosterActor{}, err
+		}
+		for _, x := range actors {
+			if x.Active && x.Handle == h {
+				return x, nil
+			}
 		}
 	}
-	return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on "+repoRosterWhere+"'s roster").
-		WithHint("register first: `lore actor register` (as that person)")
+	return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on "+r.where+"'s roster").
+		WithHint(r.missHint())
 }
 
 // rosterOwner is an agent's owner: @handle, or the caller's own actor.
-func (a *App) rosterOwner(ctx context.Context, handle, callerKey string) (RosterActor, error) {
+func (a *App) rosterOwner(ctx context.Context, r rosterAt, handle, callerKey string) (RosterActor, error) {
 	var owner RosterActor
 	if handle != "" {
-		o, err := a.rosterByHandle(ctx, handle)
+		o, err := a.rosterByHandle(ctx, r, handle)
 		if err != nil {
 			return RosterActor{}, err
 		}
 		owner = o
 	} else {
-		actors, err := a.RosterActors(ctx, store.SourceRepo)
+		actors, err := a.RosterActors(ctx, r.src)
 		if err != nil {
 			return RosterActor{}, err
 		}
@@ -224,7 +305,7 @@ func (a *App) rosterOwner(ctx context.Context, handle, callerKey string) (Roster
 			}
 		}
 		if !found {
-			return RosterActor{}, errs.New(errs.InvalidInput, "you are not on "+repoRosterWhere+"'s roster yet").WithHint("run `lore actor register` first")
+			return RosterActor{}, errs.New(errs.InvalidInput, "you are not on "+r.where+"'s roster yet").WithHint("run `lore actor register` first")
 		}
 	}
 	if owner.Kind != schema.ActorKindHuman {
