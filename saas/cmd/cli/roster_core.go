@@ -58,14 +58,18 @@ func openCoreRoster(ctx context.Context) (*coreRoster, error) {
 		return nil, nil
 	}
 	target := store.Source(org.Name + "/" + sc.OrgFolder)
-	v, err := coreApp.StoreFormat(ctx, target)
+	app, err := rosterCoreApp(ctx, target) // BUG-T3: outside a repo, a store-only App
+	if err != nil {
+		return nil, err
+	}
+	v, err := app.StoreFormat(ctx, target)
 	if err != nil {
 		return nil, coreErr(err)
 	}
 	if v < rowfs.MarkerVersion {
 		return nil, nil
 	}
-	return &coreRoster{app: coreApp, target: target, folder: sc.OrgFolder, where: org.Name + " " + sc.OrgFolder + "/",
+	return &coreRoster{app: app, target: target, folder: sc.OrgFolder, where: org.Name + " " + sc.OrgFolder + "/",
 		autopush: storeAutopush(s.Config, org)}, nil
 }
 
