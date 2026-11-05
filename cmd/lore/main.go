@@ -30,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/wire"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
+	"github.com/thesatellite-ai/lore/wire/renderhost"
 )
 
 // version is stamped at build time (-ldflags "-X main.version=…"), like
@@ -71,16 +72,20 @@ func run(ctx context.Context, args []string) int {
 	}
 	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak})
 	hooks = append(hooks, liveRows.Hook())
+	// render, why-context and setup (wire/renderhost) over the app built below.
+	rend := &lateRender{}
+	base.Context.Render, base.Context.RenderHistory, base.Context.Setup = rend, rend, &lateSetup{r: rend}
 	app, err := wire.New(hosthooks.Options(base, hooks))
 	if err != nil {
 		return printHostError(err)
 	}
+	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now})
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
 	root := cli.Build(app.Registry(), runner, cli.WithInteractive(wire.StdinIsTerminal))
 	root.Version = version
 	hosthooks.Install(root, runner)
-	h := &host{app: app, home: home, live: liveRows}
+	h := &host{app: app, home: home, live: liveRows, render: rend.h}
 	h.markPrinted(root)
 	mountShortcuts(root)
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())

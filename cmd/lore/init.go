@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,9 +61,17 @@ func hasLocalState(wd string) bool {
 	return false
 }
 
-// initCommand is `lore init [--name] [--non-interactive]`.
+// flagTarget is v0.1.17's `lore init --target` (repeatable, comma-separated).
+const flagTarget = "target"
+
+// initNextHint ends a fresh init: the pointer files are wired, LORE.md is
+// written by render.
+const initNextHint = "  next: lore render            to write .lore/LORE.md for those tools"
+
+// initCommand is `lore init [--name] [--target] [--non-interactive]`.
 func (h *host) initCommand(wd string) *cobra.Command {
 	name := ""
+	var targets []string
 	// Read now, before any command opens the store (and creates the cache).
 	local := hasLocalState(wd)
 	cmd := &cobra.Command{
@@ -113,11 +122,16 @@ func (h *host) initCommand(wd string) *cobra.Command {
 				h.live.Prime(ctx) // the first fetch happens here, as v0.1.17's init did
 			}
 			out := cmd.OutOrStdout()
-			_, err = fmt.Fprintf(out, "lore initialized\n    project_id: %s\n    name:       %s\n    repo_id:    %s\n", w.Row.ID, n, repoID)
+			if _, err = fmt.Fprintf(out, "lore initialized\n    project_id: %s\n    name:       %s\n    repo_id:    %s\n\n", w.Row.ID, n, repoID); err != nil {
+				return err
+			}
+			h.wireToolFiles(cmd, wd, targets)
+			_, err = fmt.Fprintln(out, initNextHint)
 			return err
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "project name (default: the folder name)")
+	cmd.Flags().StringSliceVar(&targets, flagTarget, nil, "AI tool profile(s) or file(s) to point at .lore/LORE.md (default: tool files found in the repo, else AGENTS.md)")
 	cmd.Flags().Bool(flagNonInteractive, false, "accepted for v0.1.17 scripts; init never asks")
 	return cmd
 }
@@ -128,5 +142,21 @@ func (h *host) initCommand(wd string) *cobra.Command {
 func ensureGitignore(ctx context.Context, cmd *cobra.Command, wd string) {
 	if err := hosthooks.EnsureGitignore(ctx, wd); err != nil {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: could not update .gitignore: "+err.Error()) // stderr gone: nothing left to report to
+	}
+}
+
+// wireToolFiles points the AI tools this repo uses (--target, else the
+// context.targets row, else their files, else AGENTS.md) at .lore/LORE.md
+// and records the choice (TOOL NEUTRAL, renderhost.WireToolFiles). Not
+// fatal, as on v0.1.17: a failure is a warning on stderr.
+func (h *host) wireToolFiles(cmd *cobra.Command, wd string, targets []string) {
+	if h.render == nil {
+		return
+	}
+	var lines strings.Builder
+	err := h.render.WireToolFiles(cmd.Context(), &lines, wd, targets)
+	_, _ = io.WriteString(cmd.OutOrStdout(), lines.String()) // stdout gone: nothing left to report to
+	if err != nil {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: could not wire AI tool files: "+err.Error()) // stderr gone: nothing left to report to
 	}
 }
