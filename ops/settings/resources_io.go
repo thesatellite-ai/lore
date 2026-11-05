@@ -151,7 +151,7 @@ func (o ops) resourceIOOps() []op.Entry {
 		op.Define(op.Spec{Name: OpResExport, Summary: "Export resources of a kind in the import format (sensitive values masked)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resExport),
 		op.Define(op.Spec{Name: OpResRepoint, Summary: "Move every ref from one resource to another of the same kind, then archive the old one", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid), Confirm: op.ConfirmRule{MayAsk: true}}, o.resRepoint),
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceKindMismatch), Confirm: op.ConfirmRule{MayAsk: true}}, o.resRepoint),
 		op.Define(op.Spec{Name: OpResClone, Summary: "Add a resource with another resource's values (--set overrides)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.ResourcePlace, errs.NameTaken), Confirm: op.ConfirmRule{MayAsk: true}}, o.resClone),
 	}
@@ -567,6 +567,12 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 	}
 	newR, err := o.resourceByName(ctx, in.New, text(oldR.Row, rKind))
 	if err != nil {
+		// OV33/RES 3.6: a live resource of another kind is a kind mismatch,
+		// not an invalid value.
+		if anyR, aerr := o.resourceByName(ctx, in.New, ""); aerr == nil && text(anyR.Row, rKind) != text(oldR.Row, rKind) {
+			return ResRepointOut{}, errs.New(errs.ResourceKindMismatch, "resource repoint: "+in.New+" is a "+o.kindName(ctx, text(anyR.Row, rKind))+
+				", "+in.Old+" is a "+o.kindName(ctx, text(oldR.Row, rKind))+"; refs can only move to a resource of the same kind; nothing written")
+		}
 		return ResRepointOut{}, errs.Wrap(errs.ResourceInvalid, "resource repoint: "+in.New+" must be a live resource of the same kind as "+in.Old, err)
 	}
 	if text(newR.Row, rArchivedAt) != "" {
