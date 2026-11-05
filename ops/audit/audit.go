@@ -48,6 +48,10 @@ const (
 // defaultAuditLogLimit).
 const DefaultLimit = 50
 
+// ChainFile is where the hash chain lives, for messages: the machine store
+// file under the lore home (wire.MachineStoreFile), never synced.
+const ChainFile = "~/.lore/state/machine.db"
+
 // ExternalWriteSuffix ends the action of entries recorded for changes lore
 // found in the DB but did not make (v0.1.17 lsync.ChangeExternal).
 const ExternalWriteSuffix = ".external-write"
@@ -224,7 +228,7 @@ func verify(ctx context.Context, env Env) (VerifyOut, error) {
 	switch {
 	case rep.BrokenAt != "":
 		return VerifyOut{}, errs.New(errs.AuditChainBroken, "audit chain broken at "+rep.BrokenAt+" (an entry was edited or deleted)").
-			WithHint("restore lore.db from a backup to investigate")
+			WithHint("the chain is the audit_chain table of " + ChainFile + "; compare it with a backup of that file to investigate")
 	case len(rep.ChangedOutside) > 0:
 		names := make([]string, 0, len(rep.ChangedOutside))
 		for _, c := range rep.ChangedOutside {
