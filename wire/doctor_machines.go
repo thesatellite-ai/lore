@@ -9,6 +9,9 @@ package wire
 //	DoctorSharedMachines  a machine id whose profiles name two or more hosts: warning
 //	DoctorTeamVersions    "Team versions" notes, one per (writer, machine); a
 //	                      writer below the repo's min_lore_version: warning
+//	DoctorCombinedCache   more than MaxStoreCaches store folders share one
+//	                      combined cache file (CFG3): note (core only; the
+//	                      old binary never printed it, so it runs in both)
 //
 // The old binary prints both rows from its own doctor host, so, like the
 // untrusted_host row, they run only in the binary StandaloneOptionsOrg
@@ -29,7 +32,23 @@ import (
 const (
 	DoctorCheckSharedMachine DoctorCheck = "shared_machine_id"
 	DoctorCheckTeamVersions  DoctorCheck = "team_versions"
+	DoctorCheckCombinedCache DoctorCheck = "combined_cache"
 )
+
+// DoctorCombinedCache notes the CFG3 fallback: past MaxStoreCaches
+// attached stores, every store shares one cache file (search and lore sql
+// still name each row's store). It is a note, not a warning: the
+// fallback is designed, only slower to rebuild one store alone.
+func (a *App) DoctorCombinedCache(ctx context.Context) ([]DoctorFinding, error) {
+	if _, err := a.state(ctx); err != nil {
+		return nil, nil // no store open: the other checks report it
+	}
+	if !a.Combined() {
+		return nil, nil
+	}
+	return []DoctorFinding{{Check: DoctorCheckCombinedCache, Level: DoctorNote,
+		Message: fmt.Sprintf("more than %d store folders: one combined cache for the attached stores (rebuilding one store rebuilds them all)", MaxStoreCaches)}}, nil
+}
 
 // doctorBinaryName is the command a below-floor writer runs to upgrade.
 const doctorBinaryName = "lore"

@@ -1,7 +1,7 @@
 package wire
 
 // The core side of `lore doctor` (ops/doctor, P3-MISC-8): the five store
-// checks of doctor_checks.go, the three of doctor_more.go and the two of
+// checks of doctor_checks.go, the three of doctor_more.go and the three of
 // doctor_machines.go mapped onto the operation's types, and the
 // binary's own lore.db checks from Options.Context.Doctor.
 
@@ -40,6 +40,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckTrash, a.DoctorTrash},
 		{DoctorCheckSharedMachine, a.DoctorSharedMachines},
 		{DoctorCheckTeamVersions, a.DoctorTeamVersions},
+		{DoctorCheckCombinedCache, a.DoctorCombinedCache},
 	}
 	out := make([]opsdoctor.CheckRun, 0, len(checks))
 	for _, c := range checks {

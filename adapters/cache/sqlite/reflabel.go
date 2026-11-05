@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"unicode"
 
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -37,11 +38,11 @@ const (
 const resourceIDPrefix = string(ids.PrefixResource) + "_"
 
 // refIDs lists the resource ids among one value leaf: a string, or the
-// strings of a list.
+// strings of a list (raw canonical JSON such as ["res_a","res_b"], which
+// has no spaces, so the words are split on the JSON punctuation too).
 func refIDs(leaf string) []string {
 	var out []string
-	for _, w := range strings.Fields(leaf) {
-		w = strings.Trim(w, `[]",`)
+	for _, w := range strings.FieldsFunc(leaf, isRefSeparator) {
 		if !strings.HasPrefix(w, resourceIDPrefix) {
 			continue
 		}
@@ -50,6 +51,12 @@ func refIDs(leaf string) []string {
 		}
 	}
 	return out
+}
+
+// isRefSeparator splits value text into words: space and JSON list
+// punctuation (an id is prefix, "_" and hex, so none of these is in it).
+func isRefSeparator(r rune) bool {
+	return unicode.IsSpace(r) || strings.ContainsRune(`[]",`, r)
 }
 
 // refLabels is the names of the resources text names, space separated
