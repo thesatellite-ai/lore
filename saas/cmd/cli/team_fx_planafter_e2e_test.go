@@ -11,16 +11,17 @@ import (
 
 // §7.4 idempotent plans + F9: a plan's after: entry may carry :merged, so
 // a same-repo task waits until its dependency is merged, not only done; a
-// re-run of the plan adds nothing and keeps the edge.
+// re-run of the plan adds nothing and keeps the edge. Ported to `lore
+// mission apply` (TSQ9: lore plan apply removed; same file format).
 func TestNext_PlanAfterMergedSuffix(t *testing.T) {
-	cr := newCrew(t, th.Cmd("plan", "apply"), th.Cmd("task", "next"))
+	cr := newCrew(t, th.Cmd("mission", "apply"), th.Cmd("task", "next"))
 	cr.toolsC.WriteFile("invite.yaml", `mission: {key: invite, title: "Invite landing page"}
 tasks:
   - {key: backend,  title: "invite mutation + email"}
   - {key: frontend, title: "invite landing route", after: ["backend:merged"]}
 `)
-	m := mustID(t, cr.toolsC.MustLore("plan", "apply", "invite.yaml"), "msn")
-	if again := cr.toolsC.MustLore("plan", "apply", "invite.yaml"); mustID(t, again, "msn") != m {
+	m := mustID(t, cr.toolsC.MustLore("mission", "apply", "invite.yaml"), "msn")
+	if again := cr.toolsC.MustLore("mission", "apply", "invite.yaml"); mustID(t, again, "msn") != m {
 		t.Fatal("a re-run resolves to the same mission")
 	}
 	l := th.DecodeJSON[taskListed](t, cr.toolsC.Lore("task", "list", "--json", "--mission", m, "--all"))

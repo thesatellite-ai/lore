@@ -30,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Handoff states (handoffs.status_str): open until accepted or declined
@@ -369,8 +370,18 @@ func (cv *coordView) projectDocs(ctx context.Context, table string) ([]coord.Doc
 	if coreApp == nil {
 		return nil, errcodes.New(errcodes.Internal, "the core is not mounted")
 	}
+	// A repo linked to a store project coordinates through that store: its
+	// missions, findings and handoffs are written from every repo of the
+	// group, so each carries the project id of the repo that wrote it (a
+	// finding from the proxy repo names the proxy's project). The store's
+	// rows are this repo's view because the repo attaches that store folder,
+	// so they are read whatever project wrote them; only the repo's own rows
+	// are matched on the project id (§7.5 step 3: a finding reaches every
+	// agent of the mission, PENDING-60 TestWorkedExample75).
+	_, storeTarget := cv.lister.(*storeRows)
 	var out []coord.Doc
 	for _, src := range coreApp.Stores() {
+		groupRows := storeTarget && src != store.SourceRepo
 		rows, err := coreApp.List(ctx, src, row.Table(table))
 		if err != nil {
 			return nil, coreErr(err)
@@ -383,7 +394,7 @@ func (cv *coordView) projectDocs(ctx context.Context, table string) ([]coord.Doc
 			if err != nil {
 				return nil, errcodes.New(errcodes.Internal, "read "+r.ID.String()).WithCause(err)
 			}
-			if d.Str(fieldProjectID) != cv.project {
+			if !groupRows && d.Str(fieldProjectID) != cv.project {
 				continue
 			}
 			out = append(out, d)

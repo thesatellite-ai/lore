@@ -299,18 +299,23 @@ func personalHas(t *testing.T, a *th.Actor, folder, text string) bool {
 	return found
 }
 
-// F17 warn rule: an --everywhere note naming a known org needs confirmation;
-// without a TTY it is refused unless --yes.
+// F17 warn rule: a personal note shown in every repo that names a known org
+// needs confirmation; without a TTY it is refused unless --yes. Ported from
+// `--to me --everywhere` to `--to me` (STORE TARGETS, DECISIONS_LOG 18: no
+// everywhere word or flag; `me` is the personal store, one place, its root,
+// shown in all your repos), so the personal store here is a 0.1.18 store as
+// in Recipe05. Where every repo reads it is checked from a betalabs repo.
 func TestF17_EverywhereNoteNamingAKnownOrgNeedsConfirmation(t *testing.T) {
-	o := newOrgWorld(t, th.Flag("to", "memory", "add"), th.Flag("everywhere", "memory", "add"), th.Flag("yes", "memory", "add"))
-	o.acme.Lore("memory", "add", "--body", "betalabs invoices go to finance@", "--to", "me", "--everywhere").Refused(t, "betalabs")
-	if personalHas(t, o.alice, "everywhere", "betalabs invoices") {
-		t.Fatal("a refused note must not be written")
-	}
-	o.acme.MustLore("memory", "add", "--body", "betalabs invoices go to finance@", "--to", "me", "--everywhere", "--yes")
-	if !personalHas(t, o.alice, "everywhere", "betalabs invoices") {
-		t.Fatal("--yes files it under everywhere/")
-	}
+	o := newOrgWorld(t, th.Flag("to", "memory", "add"), th.Flag("yes", "memory", "add"), th.Cmd("store", "init"))
+	personal := o.w.Remote(slugPersonal)
+	initStore(o.w, o.alice, "personal", personal.URL(), "", "--yes").OK(t)
+	cfg := aliceConfig()
+	cfg.Personal = &th.Personal{Store: personal.URL()}
+	o.alice.WriteConfig(cfg)
+	o.acme.Lore("memory", "add", "--body", "betalabs invoices go to finance@", "--to", "me").Refused(t, "betalabs")
+	o.beta.MustLore("memory", "list").Never(t, "betalabs invoices")
+	o.acme.MustLore("memory", "add", "--body", "betalabs invoices go to finance@", "--to", "me", "--yes")
+	o.beta.MustLore("memory", "list").Says(t, "betalabs invoices")
 }
 
 // Cookbook 5: personal notes in a git personal store sync between machines.

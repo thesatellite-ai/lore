@@ -512,9 +512,11 @@ func TestNext_EffectivePriorityFollowsWaiters(t *testing.T) {
 	ac.MustLore("task", "next").Says(t, blocker)
 }
 
-// §7.4 idempotent plans: `lore plan apply` twice creates every row once.
+// §7.4 idempotent plans: applying a plan file twice creates every row once.
+// Ported to `lore mission apply` (TSQ9: lore plan apply removed; the YAML
+// import moved to mission apply, same file format, idempotent).
 func TestNext_PlanApplyIsIdempotent(t *testing.T) {
-	cr := newCrew(t, th.Cmd("plan", "apply"))
+	cr := newCrew(t, th.Cmd("mission", "apply"))
 	plan := `mission: {key: invite, title: "Invite landing page"}
 tasks:
   - {key: backend,  title: "invite mutation + email", timebox: 60m}
@@ -522,9 +524,9 @@ tasks:
   - {key: deploy,   title: "deploy to staging", role: coordinator, after: [frontend], gate: required}
 `
 	cr.toolsC.WriteFile("invite.yaml", plan)
-	first := cr.toolsC.MustLore("plan", "apply", "invite.yaml")
+	first := cr.toolsC.MustLore("mission", "apply", "invite.yaml")
 	m := mustID(t, first, "msn")
-	again := cr.toolsC.MustLore("plan", "apply", "invite.yaml")
+	again := cr.toolsC.MustLore("mission", "apply", "invite.yaml")
 	if mustID(t, again, "msn") != m {
 		t.Fatal("a re-run must resolve to the same mission")
 	}
@@ -707,9 +709,10 @@ func TestF09_MergeCommitFoundByAncestryAndCheckWritesNothing(t *testing.T) {
 // ---------------------------------------------------------------- §7.5 worked example
 
 // §7.5 walked end to end: plan → workers → finding → done/merged → crash and
-// reclaim with the pushed work branch → gate → mission status.
+// reclaim with the pushed work branch → gate → mission status. The plan step
+// is ported to `lore mission apply` (TSQ9: lore plan apply removed).
 func TestWorkedExample75_FourAgentsOneMission(t *testing.T) {
-	g := newGlobexGroup(t, th.Cmd("plan", "apply"), th.Cmd("inbox"), th.Cmd("finding", "add"), th.Cmd("task", "note"),
+	g := newGlobexGroup(t, th.Cmd("mission", "apply"), th.Cmd("inbox"), th.Cmd("finding", "add"), th.Cmd("task", "note"),
 		th.Cmd("gate", "approve"), th.Cmd("mission", "status"), th.Flag("pr", "task", "done"), th.Flag("lesson", "task", "done"))
 	proxy := g.w.Remote("github.com/globex/proxy")
 	pc := g.alice.Clone(proxy, "proxy")
@@ -728,9 +731,9 @@ tasks:
   - {key: proxy,    title: "allow /invite on the proxy", repo: proxy}
   - {key: deploy,   title: "deploy to staging",          role: coordinator, after: [frontend, proxy], gate: required}
 `)
-	plan := coordC.MustLore("plan", "apply", "invite.yaml")
+	plan := coordC.MustLore("mission", "apply", "invite.yaml")
 	m := mustID(t, plan, "msn")
-	coordC.MustLore("plan", "apply", "invite.yaml")
+	coordC.MustLore("mission", "apply", "invite.yaml")
 	coordC.MustLore("task", "claim", m)
 	if f := g.clientSees(t, "Invite landing page"); len(f) != 0 {
 		t.Fatalf("the plan lives in Northwind's store, never in a client repo: %v", f)
