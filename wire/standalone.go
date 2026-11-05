@@ -6,16 +6,15 @@ package wire
 // Flow:
 //
 //	cmd/lore main ──▶ StandaloneOptions(repo, home, workdir, version)
-//	                     ├─ RepoIsClient: no org configured → internal repo;
-//	                     │   an org configured → client (fail closed, FA-OLDCODE-1)
-//	                     └─ Org: no org → nil; an org configured → E_UNSUPPORTED
-//	                         (never write under a guessed identity, FA-OLDCODE-1)
+//	                     └─ NewOrgResolution(home, workdir, GitLinks).Apply
+//	                         Org, RepoIsClient, OrgStores, OrgEntryStore,
+//	                         OrgSigners, DefaultTarget, GuardRepoWrite from
+//	                         the core's org resolution (CONFIG_GUIDE F10/F14,
+//	                         FA-OLDCODE-1), the same code the old binary uses
 //
-// The old binary (saas/cmd/cli) supplies these hooks from v0.1.17's org
-// resolution (links in the org stores, repo_orgs, own:/repos: patterns);
-// until that resolution moves into the core, the standalone binary only
-// serves repos of people with no org configured, and refuses the rest
-// instead of guessing.
+// The F16 write-time leak check (OrgResolution.RepoWriteCheck) stays nil
+// here until the leak check moves into the core: the commit hooks still
+// check (P3-ORG-3).
 
 import (
 	"context"
@@ -24,87 +23,53 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
-	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 )
 
-// EnvOrg is v0.1.17's org override variable; set, it means an org is
-// chosen, which the standalone binary cannot resolve yet.
-const EnvOrg = "LORE_ORG"
-
 // envOn is the value that turns a boolean LORE_* variable on.
 const envOn = "1"
 
-// orgUnsupportedMsg is the refusal of the standalone binary in a setup with
-// an org (FA-OLDCODE-1).
-const orgUnsupportedMsg = "this lore binary does not resolve orgs yet (an org is configured in ~/.lore/config.yaml or LORE_ORG is set)"
-
-// orgUnsupportedHint names the binary that still does.
-const orgUnsupportedHint = "use the released lore binary (built from saas/cmd/cli) until org resolution moves into the core"
-
 // StandaloneOptions returns the Options of the standalone binary: the
 // repo, home, working folder and version, LORE_ALLOW_NETWORK_FS, and the
-// org hooks of FA-OLDCODE-1. Every other hook keeps its documented
-// default (append-only audit file, no live-ref overlay, no org stores).
+// org hooks of StandaloneOrgResolution, with stdin being a terminal as
+// "a person can answer" (F14). Every other hook keeps its documented
+// default (append-only audit file, no live-ref overlay).
 func StandaloneOptions(repoDir, home, workDir, version string) Options {
-	return Options{
+	o := Options{
 		RepoDir:        repoDir,
 		Home:           home,
 		WorkDir:        workDir,
 		Version:        version,
 		AllowNetworkFS: os.Getenv(rowfs.AllowNetworkFSEnv) == envOn,
-		RepoIsClient:   func(context.Context) (bool, error) { return standaloneRepoIsClient(home) },
-		Org:            func(context.Context) (*identity.Org, error) { return standaloneOrg(home) },
 	}
+	dir := workDir
+	if dir == "" {
+		dir = repoDir
+	}
+	res := StandaloneOrgResolution(home, dir)
+	res.Interactive = stdinTTY
+	res.Apply(&o)
+	return o
 }
 
-// orgConfigured reports whether this machine names an org: LORE_ORG set,
-// or at least one orgs[] entry in config.yaml.
-func orgConfigured(home string) (bool, error) {
-	if strings.TrimSpace(os.Getenv(EnvOrg)) != "" {
-		return true, nil
-	}
-	c, err := readMachineConfig(home)
+// StandaloneOrgResolution is the org resolution of the project at dir with
+// the store links read from the shared v0.1.17 bare clones under home
+// (orgcfg.GitLinks). A config.yaml that cannot be read gives the link
+// source no entries; the resolution then reports the same config error
+// from Gather on the first hook, so nothing is written under a guessed org
+// (fail closed, FA-OLDCODE-1).
+func StandaloneOrgResolution(home, dir string) *OrgResolution {
+	cfg, _, err := orgcfg.LoadConfig(home)
 	if err != nil {
-		return false, err
+		cfg = nil
 	}
-	return len(c.Orgs) > 0, nil
-}
-
-// standaloneRepoIsClient: with no org anywhere the repo is the person's own
-// (internal), as v0.1.17 decided for "no org at all"; with an org the link
-// logic is needed, so it answers client with the reason (fail closed: the
-// client write path strips internal fields and projects agent ids).
-func standaloneRepoIsClient(home string) (bool, error) {
-	has, err := orgConfigured(home)
-	if err != nil {
-		return true, err
-	}
-	if has {
-		return true, errs.New(errs.Unsupported, orgUnsupportedMsg).WithHint(orgUnsupportedHint)
-	}
-	return false, nil
-}
-
-// standaloneOrg: no org → nil (the identity chain uses the top identity, git
-// email, …); an org configured → E_UNSUPPORTED, because the actor id
-// depends on which org's identity applies and a guess would stamp rows
-// with the wrong person.
-func standaloneOrg(home string) (*identity.Org, error) {
-	has, err := orgConfigured(home)
-	if err != nil {
-		return nil, err
-	}
-	if has {
-		return nil, errs.New(errs.Unsupported, orgUnsupportedMsg).WithHint(orgUnsupportedHint)
-	}
-	return nil, nil
+	return NewOrgResolution(home, dir, &orgcfg.GitLinks{Home: home, Config: cfg})
 }
 
 // repoMetaMode is the mode of a new _meta.json (P2-LINT-1: files lore
