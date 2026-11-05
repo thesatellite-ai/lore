@@ -199,15 +199,15 @@ tasks:
     cmds:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW (test clock).
-      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./cmd/lore
       # go test -json → pass / FAIL / pending matrix; exits 1 only on real failures
       # (pipefail so a build failure of the test binary is not swallowed by the pipe).
       # -count=1: the tests run the outside binary LORE_TEAM_BIN, which the test cache does not
       # track, so a cached pass could hide a rebuilt binary's failure.
       - |
         set -o pipefail
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
-          | go run ./saas/cmd/cli/internal/teamharness/matrix
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./tests/teame2e/ {{.CLI_ARGS}} \
+          | go run ./tests/teame2e/teamharness/matrix
 
   trial:github:
     desc: "MANUAL ONLY, never in CI or any automatic gate: the real-repo trial (docs/team/real-repo-trial.md). Needs two empty private repos you can push to, named by LORE_TRIAL_CLIENT_REMOTE and LORE_TRIAL_STORE_REMOTE; it deletes every ref of both (only when empty or carrying the trial's marker), builds lore from this checkout and runs every team step against them, then prints a pass/fail table"
@@ -230,8 +230,8 @@ tasks:
       TEAM_BIN: "{{.BIN_DIR}}/lore-team"
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./saas/cmd/cli
-      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -run 'Race' -count=5 ./saas/cmd/cli/ {{.CLI_ARGS}}
+      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./cmd/lore
+      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -run 'Race' -count=5 ./tests/teame2e/ {{.CLI_ARGS}}
 
   docs:examples:
     desc: "Run every docs/team example against the real binary (tests/team/docs/run-examples.sh), then refresh the pages from the transcripts (paste.py); fails when an example misbehaves or a page is stale. One section: task lore:docs:examples -- agents"

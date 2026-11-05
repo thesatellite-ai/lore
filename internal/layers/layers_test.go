@@ -32,6 +32,9 @@ var ranks = map[string]int{
 	// picks concrete adapters; nothing may import it but cmd and the old
 	// binary.
 	"wire": 70,
+	// tests holds the team scenario suite and its harness (tests/teame2e):
+	// it may import anything; nothing imports it.
+	"tests": 80,
 }
 
 // internalDir holds test-only helpers (this package); nothing imports it.
