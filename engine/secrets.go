@@ -163,14 +163,21 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	for _, h := range hits {
 		all = append(all, h.findings...)
 	}
+	// FB-SEC-3: one secret is one finding. The same value in two fields
+	// of one write (a resource's fields and the history entry that copies
+	// it) or under two rules is asked about, counted and given a
+	// --secret-ref once; the answer covers every place it sits. Allow rows
+	// stay one per (field, rule, hash): D6 pins them, and the commit hook
+	// and lore lint check them that way.
+	uniq, slot := uniqueFindings(all)
 	// SECRETS 4: a choice given up front (--not-a-secret --reason,
 	// --secret-ref, --secret-unstored) applies in every on_detect mode.
 	if ch := cl.caller.Secret; ch.Any() {
-		if err := checkChoice(ch, len(all)); err != nil {
+		if err := checkChoice(ch, len(uniq)); err != nil {
 			return screened{}, err
 		}
 		if ch.NotASecret {
-			if err := e.confirm(ctx, cl, describe(all)+": keep it as not a secret ("+ch.Reason+")?"); err != nil {
+			if err := e.confirm(ctx, cl, describe(uniq)+": keep it as not a secret ("+ch.Reason+")?"); err != nil {
 				return screened{}, errors.Join(err, detected(choiceCancelled, all))
 			}
 			if err := detected(choiceNotASecret, all); err != nil {
@@ -188,7 +195,7 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 				if len(ch.Refs) == 1 {
 					repl[i] = secretRefText(ch.Refs[0])
 				} else if len(ch.Refs) > 0 {
-					repl[i] = secretRefText(ch.Refs[n])
+					repl[i] = secretRefText(ch.Refs[slot[n]]) // one ref per unique finding
 				}
 				n++
 			}
@@ -221,7 +228,7 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		if derr := detected(choiceCancelled, all); derr != nil {
 			return screened{}, derr
 		}
-		return screened{}, askErr(all)
+		return screened{}, askErr(uniq)
 	case policy.OnDetectRedact:
 		red := make(map[string]value.Value, len(fields))
 		for k, v := range fields {
@@ -245,7 +252,28 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	if err := detected(choiceRefused, all); err != nil {
 		return screened{}, err
 	}
-	return screened{}, secretErr(all)
+	return screened{}, secretErr(uniq)
+}
+
+// uniqueFindings is fs with each matched value (match hash) kept once,
+// first occurrence first, plus slot[i]: the index in uniq of fs[i]
+// (FB-SEC-3). Two rules that match the same text (lore's aws_access_key
+// and gitleaks' aws-access-token) are one secret, as is the same value in
+// two fields; uniq keeps the first rule and field for the question.
+func uniqueFindings(fs []scan.Finding) (uniq []scan.Finding, slot []int) {
+	at := map[uint32]int{}
+	slot = make([]int, len(fs))
+	for i, f := range fs {
+		k := f.MatchHash
+		j, ok := at[k]
+		if !ok {
+			j = len(uniq)
+			at[k] = j
+			uniq = append(uniq, f)
+		}
+		slot[i] = j
+	}
+	return uniq, slot
 }
 
 // secret.detected choices (SECRETS 16).
@@ -553,11 +581,26 @@ func checkChoice(ch op.SecretChoice, n int) error {
 // caller re-runs its own command with (SECRETS 2.5), never the text.
 const askFlagSets = `re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes`
 
+// askAddArgs is next.add_args_one_of of an on_detect ask answer (SECRETS
+// 2.5): the same three flag sets as askFlagSets, as argument lists. The
+// placeholders stay placeholders: lore never names a vault entry (SQ6).
+var askAddArgs = [][]string{
+	{"--secret-ref", "<manager>://<entry>"},
+	{"--secret-unstored"},
+	{"--not-a-secret", "--reason", "<why>", "--yes"},
+}
+
 // askErr is the E_NEEDS_CONFIRM answer of on_detect ask when no choice
-// was given: the masked findings and the flag sets, nothing written.
+// was given: the masked findings (question, findings[]) and the flag sets
+// (hint, next.add_args_one_of), nothing written (SECRETS 2.5).
 func askErr(fs []scan.Finding) *errs.Error {
 	q := describe(fs) + ": redact it with a reference, mark it unstored, mark it not a secret, or cancel?"
-	return errs.New(errs.NeedsConfirm, "engine: "+q).WithQuestion(q).WithHint(askFlagSets)
+	masked := make([]errs.Finding, len(fs))
+	for i, f := range fs {
+		masked[i] = errs.Finding{N: i + 1, Rule: f.RuleID, Field: f.Field, Line: f.Line, Masked: f.Preview}
+	}
+	return errs.New(errs.NeedsConfirm, "engine: "+q).WithQuestion(q).WithHint(askFlagSets).
+		WithFindings(masked).WithAddArgs(askAddArgs...)
 }
 
 // describe names findings for a message: field, rule, line, masked preview.

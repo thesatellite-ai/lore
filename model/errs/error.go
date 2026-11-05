@@ -1,6 +1,7 @@
 package errs
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -38,14 +39,48 @@ type Error struct {
 	Question string
 	// DocURL points at the page explaining the code; may be empty.
 	DocURL string
+	// Findings are the masked secret findings an E_NEEDS_CONFIRM of
+	// secrets.on_detect ask is about (SECRETS 2.5); empty otherwise.
+	// Invariant: Masked is the masked preview, never the value.
+	Findings []Finding
+}
+
+// Finding is one masked secret finding of an E_NEEDS_CONFIRM answer
+// (SECRETS 2.5): where it is and which rule fired, never the value or a
+// vault entry name. A surface shows these in its choice menu (2.1).
+type Finding struct {
+	N      int    `json:"n"`
+	Rule   string `json:"rule"`
+	Field  string `json:"field"`
+	Line   int    `json:"line"`
+	Masked string `json:"masked"`
 }
 
 // Next is the `next` object of the --json error contract (CLI_REFERENCE
 // 1.4): a command plus its arguments, never a shell string, so an agent can
 // run it without quoting mistakes.
+//
+// AddArgsOneOf is the other shape (SECRETS 2.5): flag sets the caller adds
+// to its OWN command, one set per choice, when lore cannot name the command
+// (it never repeats the caller's text). A Next with only AddArgsOneOf
+// carries no command or args keys; one with a Command keeps both keys as
+// before (only added, never renamed: OQ5).
 type Next struct {
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
+	Command      string     `json:"command"`
+	Args         []string   `json:"args"`
+	AddArgsOneOf [][]string `json:"add_args_one_of,omitempty"`
+}
+
+// MarshalJSON keeps command and args on every Next that names a command and
+// drops them from an add-args-only Next (no empty "command": "" to run).
+func (n Next) MarshalJSON() ([]byte, error) {
+	if n.Command == "" && len(n.AddArgsOneOf) > 0 {
+		return json.Marshal(struct {
+			AddArgsOneOf [][]string `json:"add_args_one_of"`
+		}{n.AddArgsOneOf})
+	}
+	type plain Next // no MarshalJSON: no recursion
+	return json.Marshal(plain(n))
 }
 
 // New builds an Error. It does not check that code is registered: DefOf
@@ -70,6 +105,26 @@ func (e *Error) WithHint(hint string) *Error {
 func (e *Error) WithNext(command string, args ...string) *Error {
 	c := *e
 	c.Next = &Next{Command: command, Args: append([]string(nil), args...)}
+	return &c
+}
+
+// WithAddArgs returns a copy of e whose next is the flag sets the caller
+// re-runs its own command with, one set per choice (SECRETS 2.5).
+func (e *Error) WithAddArgs(sets ...[]string) *Error {
+	c := *e
+	cp := make([][]string, len(sets))
+	for i, s := range sets {
+		cp[i] = append([]string(nil), s...)
+	}
+	c.Next = &Next{AddArgsOneOf: cp}
+	return &c
+}
+
+// WithFindings returns a copy of e carrying the masked findings (SECRETS
+// 2.5). The caller guarantees each Masked is masked.
+func (e *Error) WithFindings(fs []Finding) *Error {
+	c := *e
+	c.Findings = append([]Finding(nil), fs...)
 	return &c
 }
 
@@ -148,6 +203,9 @@ type Body struct {
 	Next        *Next  `json:"next,omitempty"`
 	Question    string `json:"question,omitempty"`
 	DocURL      string `json:"doc_url,omitempty"`
+	// Findings: the masked secret findings of an on_detect ask answer
+	// (SECRETS 2.5); omitted otherwise.
+	Findings []Finding `json:"findings,omitempty"`
 }
 
 // classRetryable is the retryable default per class: coordination failures
@@ -172,6 +230,6 @@ func EnvelopeOf(err error) Envelope {
 		Code: e.Code, Message: e.Message, Hint: e.Hint, Exit: d.Exit, Class: d.Class,
 		Retryable:   e.Retryable || classRetryable(d.Class),
 		NeedsPerson: e.NeedsPerson || classNeedsPerson(d.Class),
-		Next:        e.Next, Question: e.Question, DocURL: e.DocURL,
+		Next:        e.Next, Question: e.Question, DocURL: e.DocURL, Findings: e.Findings,
 	}}
 }
