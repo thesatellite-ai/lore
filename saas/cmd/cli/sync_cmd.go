@@ -760,9 +760,16 @@ func newSyncHookCommand() *cobra.Command {
 func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error {
 	var bad []string
 	for _, e := range rep.Errors {
-		if e.Kind != lsync.ErrKindSecret {
-			bad = append(bad, e.Path+" ("+e.Kind+")")
+		if e.Kind == lsync.ErrKindSecret {
+			continue
 		}
+		// A broken branch file of a live row is shadowed by live (fixed
+		// rule 4, same as below): it is never staged, so it must not block
+		// a commit that does not carry it (F6 "dirty landed path").
+		if kept, _ := withoutLiveRows(ctx, t.db, []string{e.Path}); len(kept) == 0 {
+			continue
+		}
+		bad = append(bad, e.Path+" ("+e.Kind+")")
 	}
 	rel := filepath.Join(projresolve.MarkerDir, lsync.DataDirName)
 	changed, err := gitsetup.Uncommitted(ctx, t.root, rel)
@@ -824,16 +831,21 @@ const (
 )
 
 // brokenFilesHint is the next step for a refused pre-commit. Each entry of
-// bad is "<path> (<reason>)"; a reason that is neither broken-file kind is
-// the secret scan's.
+// bad is "<path> (<reason>)"; a reason that is neither a broken-file kind
+// nor a sync-pass error kind (lsync.ErrKind*) is the secret scan's.
 func brokenFilesHint(bad []string) string {
-	var markers, invalid, secret bool
+	var markers, invalid, rowFile, newer, secret bool
 	for _, b := range bad {
 		switch {
-		case strings.Contains(b, "("+brokenConflictMarkers):
+		case strings.Contains(b, "("+brokenConflictMarkers), strings.Contains(b, "("+lsync.ErrKindConflict+")"):
 			markers = true
 		case strings.Contains(b, "("+brokenInvalidJSON+")"):
 			invalid = true
+		// Kinds reported by the sync pass (lsync.Report.Errors).
+		case strings.Contains(b, "("+lsync.ErrKindInvalid+")"), strings.Contains(b, "("+lsync.ErrKindImport+")"):
+			rowFile = true
+		case strings.Contains(b, "("+lsync.ErrKindNewer+")"):
+			newer = true
 		default:
 			secret = true
 		}
@@ -841,6 +853,12 @@ func brokenFilesHint(bad []string) string {
 	var steps []string
 	if invalid {
 		steps = append(steps, "fix the JSON syntax of the files marked invalid JSON")
+	}
+	if rowFile {
+		steps = append(steps, "fix or restore the files marked "+lsync.ErrKindInvalid+" or "+lsync.ErrKindImport+" (`git checkout -- <file>` drops a hand edit)")
+	}
+	if newer {
+		steps = append(steps, "upgrade "+BinaryName+" to read the files marked "+lsync.ErrKindNewer)
 	}
 	if markers {
 		steps = append(steps, "resolve the conflict markers (or `"+BinaryName+" sync resolve`)")
