@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -23,6 +24,8 @@ import (
 	"saas/pkg/aicoder/gitremote"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/stores"
+
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Store live refs (fixed rule 3): a store keeps one live ref per store
@@ -371,6 +374,13 @@ func externalRowsHere(ctx context.Context, q cachedb.Query) ([]cachedb.Row, []st
 	rows, err := db.Rows(ctx, q)
 	if err != nil {
 		return nil, []string{err.Error()}
+	}
+	// RES 3.9: a client repo never lists store resources (fail closed when
+	// the core cannot say).
+	if coreApp == nil {
+		rows = slices.DeleteFunc(rows, func(r cachedb.Row) bool { return r.Table == schema.TableResources })
+	} else if client, cerr := coreApp.ClientRepo(ctx); cerr != nil || client {
+		rows = slices.DeleteFunc(rows, func(r cachedb.Row) bool { return r.Table == schema.TableResources })
 	}
 	return rows, plan.Notes
 }
