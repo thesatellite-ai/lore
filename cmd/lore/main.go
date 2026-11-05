@@ -129,6 +129,7 @@ func run(ctx context.Context, args []string) int {
 	root.Version = version
 	addRootFlags(root, flags)
 	hosthooks.Install(root, runner)
+	withMigrateContext(root, app) // migratehooks.go: team lock; crash/pause points in test builds only
 	h := &host{app: app, home: home, live: liveRows, render: rend.h, runner: runner}
 	h.markPrinted(root)
 	mountShortcuts(root)
