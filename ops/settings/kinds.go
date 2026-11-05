@@ -428,6 +428,15 @@ func (o ops) kindEdit(ctx context.Context, in KindEditIn) (RowOut, error) {
 
 // patchRow updates one located row and prints "<what> (<short id>)".
 func (o ops) patchRow(ctx context.Context, l located, patch map[string]value.Value, what string) (RowOut, error) {
+	if _, hasFields := patch[rFields]; hasFields && l.Row.Table == schema.TableResources {
+		d, derr := o.kindDef(ctx, text(l.Row, rKind))
+		if derr != nil {
+			return RowOut{}, derr
+		}
+		if derr = o.withHistory(ctx, d, &l, patch); derr != nil { // RES 3.22
+			return RowOut{}, derr
+		}
+	}
 	w, err := o.env.Update(ctx, engine.Ref{Store: l.Src, Table: l.Row.Table, ID: l.Row.ID}, patch)
 	if err != nil {
 		return RowOut{}, err

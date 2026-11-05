@@ -109,6 +109,9 @@ type FieldRetypeIn struct {
 	Field  string `json:"field" arg:"1" desc:"the field name"`
 	Type   string `json:"type" arg:"2" desc:"the new value type"`
 	DryRun bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"check every value; write nothing"`
+	// KeepAsText leaves values that do not fit as they are (quarantined,
+	// R10 3.15) instead of refusing the retype.
+	KeepAsText bool `json:"keep_as_text,omitempty" flag:"keep-as-text" desc:"keep values that do not fit the new type unchanged; they are quarantined (listed by show, list and lint)"`
 }
 
 func (o ops) maintOps() []op.Entry {
@@ -213,7 +216,7 @@ func (o ops) resMerge(ctx context.Context, in ResMergeIn) (ResRepointOut, error)
 		if perr != nil {
 			return ResRepointOut{}, perr
 		}
-		if _, perr = o.env.Update(ctx, engine.Ref{Store: keep.Src, Table: schema.TableResources, ID: keep.Row.ID}, patch); perr != nil {
+		if perr = o.updateResource(ctx, d, keep, patch); perr != nil {
 			return ResRepointOut{}, perr
 		}
 	}
@@ -275,6 +278,10 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 			continue
 		}
 		fixed := false
+		// R10 3.15: values that break their field's rule are listed, never dropped.
+		for _, q := range quarantineOf(d, stored) {
+			add(lintQuarantined, q.Field, q.Rule+"; fix: lore resource edit "+name+" --set "+q.Field+"=<value>")
+		}
 		for _, fname := range d.fieldNames() {
 			f := d.byName[fname]
 			fid := f.Row.ID.String()
@@ -326,7 +333,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 			if perr != nil {
 				return ResLintOut{}, perr
 			}
-			if _, perr = o.env.Update(ctx, engine.Ref{Store: r.Src, Table: schema.TableResources, ID: r.Row.ID}, patch); perr != nil {
+			if perr = o.updateResource(ctx, d, r, patch); perr != nil {
 				return ResLintOut{}, perr
 			}
 		}
@@ -413,13 +420,19 @@ func (o ops) fieldRetype(ctx context.Context, in FieldRetypeIn) (RowOut, error) 
 		stored.vals[f.Row.ID.String()] = b
 		convs = append(convs, conv{r: r, stored: stored})
 	}
-	if len(bad) > 0 {
+	if len(bad) > 0 && !in.KeepAsText {
 		// RES 3.14: values that do not fit the new type are E_RESOURCE_TYPE.
 		return RowOut{}, errs.New(errs.ResourceType, fmt.Sprintf("%d value(s) do not fit %s: %s", len(bad), in.Type, strings.Join(bad, ", "))).
-			WithHint("fix them first; nothing written")
+			WithHint("fix them, or pass --keep-as-text to keep values that do not fit as text and quarantine them; nothing written")
+	}
+	// R10 3.15: --keep-as-text leaves the misfits unchanged; quarantineOf
+	// marks them on every read once the field has its new type.
+	kept := ""
+	if len(bad) > 0 {
+		kept = fmt.Sprintf("; %d kept as text and quarantined: %s", len(bad), strings.Join(bad, ", "))
 	}
 	if in.DryRun {
-		return RowOut{DryRun: true, Human: fmt.Sprintf("all %d values fit %s (dry run, nothing written)\n", len(convs), in.Type)}, nil
+		return RowOut{DryRun: true, Human: fmt.Sprintf("%d values fit %s%s (dry run, nothing written)\n", len(convs), in.Type, kept)}, nil
 	}
 	if err = bulk.Ask(ctx, "retype "+d.name()+"."+in.Field+" "+old+" → "+in.Type+" and convert "+strconv.Itoa(len(convs))+" values?"); err != nil {
 		return RowOut{}, err
@@ -433,7 +446,7 @@ func (o ops) fieldRetype(ctx context.Context, in FieldRetypeIn) (RowOut, error) 
 		if perr != nil {
 			return RowOut{}, perr
 		}
-		if _, perr = o.env.Update(bctx, engine.Ref{Store: c.r.Src, Table: schema.TableResources, ID: c.r.Row.ID}, patch); perr != nil {
+		if perr = o.updateResource(bctx, d, c.r, patch); perr != nil {
 			return RowOut{}, perr
 		}
 	}
@@ -445,7 +458,7 @@ func (o ops) fieldRetype(ctx context.Context, in FieldRetypeIn) (RowOut, error) 
 	if err != nil {
 		return RowOut{}, err
 	}
-	out, err := o.patchRow(bctx, f, map[string]value.Value{fType: tv, fTypeHistory: hist}, fmt.Sprintf("retyped %s.%s %s → %s; %d values converted (batch %s)", d.name(), in.Field, old, in.Type, len(convs), bid))
+	out, err := o.patchRow(bctx, f, map[string]value.Value{fType: tv, fTypeHistory: hist}, fmt.Sprintf("retyped %s.%s %s → %s; %d values converted%s (batch %s)", d.name(), in.Field, old, in.Type, len(convs), kept, bid))
 	out.Batch = bid.String()
 	return out, err
 }

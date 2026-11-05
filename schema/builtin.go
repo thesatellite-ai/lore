@@ -36,7 +36,10 @@ const (
 // core declares has it, with the relation RelTags.
 const (
 	FieldTagIDs = "tag_ids"
-	RelTags     = "tags"
+	// FieldResourceHistory is a resource row's capped field-change history
+	// (RESOURCES 3.22; the git log of the row file is the full record).
+	FieldResourceHistory = "history"
+	RelTags              = "tags"
 )
 
 // Cache-only join tables filled from tag_ids (one per owning table, since
@@ -338,6 +341,9 @@ func coreDefs() []TableDef {
 			// fields: {fld_…: {name, v, strict?, sensitive?}}, merged entry by
 			// entry (RESOURCES 3.13, R4, RQ5).
 			JSON("fields", MergeBy(MergeEntriesByID)),
+			// history: capped field-change list, union by entry id (RES 3.22, OV49).
+			JSON(FieldResourceHistory, MergeBy(MergeListByID),
+				Describe("field changes [{id (the_…), at, by, batch, field_id, field, from, to}], hidden values masked (RESOURCES 3.22)")),
 			IndexOn(fieldKind, fieldName),
 			BelongsToRel("kind_def", fieldKind, TableKinds, Restrict),
 		),

@@ -641,7 +641,7 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 		if perr != nil {
 			return ResRepointOut{}, perr
 		}
-		if _, perr = o.env.Update(bctx, engine.Ref{Store: c.r.Src, Table: schema.TableResources, ID: c.r.Row.ID}, patch); perr != nil {
+		if perr = o.updateResource(bctx, c.d, c.r, patch); perr != nil {
 			return ResRepointOut{}, errors.Join(perr, errs.New(errs.ResourceInvalid, "resource repoint: stopped; the rows written are in batch "+out.Batch))
 		}
 	}

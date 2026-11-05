@@ -175,6 +175,8 @@ type Resource struct {
 	ReplacedBy string `json:"replaced_by,omitempty"`
 	// Conflicts are the fields a merge left for a person (by field name).
 	Conflicts []Conflict `json:"conflicts,omitempty"`
+	// Quarantine: values that break their field's rule (R10 3.15).
+	Quarantine []Quarantined `json:"quarantine,omitempty"`
 }
 
 // ResOut is the output of resource.show.
@@ -197,6 +199,9 @@ func (o ResOut) Text() string {
 	}
 	for _, c := range r.Conflicts {
 		fmt.Fprintf(&b, "  %s CONFLICT  ours %s | theirs %s | base %s  (settle: lore resource edit %s --set %s=…)\n", c.Field, c.Ours, c.Theirs, c.Base, r.Name, c.Field)
+	}
+	if q := quarantineLine(r.Quarantine); q != "" {
+		fmt.Fprintf(&b, "  %s  (fix: lore resource edit %s --set <field>=<value>)\n", q, r.Name)
 	}
 	if r.LastChecked != "" {
 		fmt.Fprintf(&b, "  checked %s%s\n", r.LastChecked, byWho(r.CheckedBy))
@@ -250,6 +255,9 @@ func (o ResListOut) Text() string {
 			cells = append(cells, r.Values[c])
 		}
 		b.WriteString(strings.Join(append(cells, dayOf(r.LastChecked)), "\t") + "\n")
+		if q := quarantineLine(r.Quarantine); q != "" {
+			b.WriteString("  " + r.Name + " " + q + "\n") // R10: marked, never hidden
+		}
 	}
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
@@ -298,7 +306,7 @@ func (o ops) resourceOps() []op.Entry {
 			Errors: append(slices.Clone(writeErrors), errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true}}, o.resCheck),
 		op.Define(op.Spec{Name: OpResStale, Summary: "Resources whose last_checked is older than --days, or never set", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.resStale),
-	}, append(append(o.resourceIOOps(), o.graphOps()...), o.maintOps()...)...) // import, export, repoint, clone (resources_io.go); graph, impact (resources_graph.go)
+	}, append(append(append(o.resourceIOOps(), o.graphOps()...), o.maintOps()...), o.historyOps()...)...) // history, report (resources_history.go); import, export, repoint, clone (resources_io.go); graph, impact (resources_graph.go)
 }
 
 // fieldEntry is one entry of a resource's `fields` object, the stored
@@ -646,6 +654,9 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if fields[rName], err = txt(in.Name); err != nil {
 		return RowOut{}, err
 	}
+	if err = o.withHistory(ctx, d, nil, fields); err != nil { // RES 3.22
+		return RowOut{}, err
+	}
 	w, err := o.env.Create(ctx, target, schema.TableResources, fields)
 	if err != nil {
 		return RowOut{}, err
@@ -795,7 +806,8 @@ func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
 	vals := stored.vals
 	return Resource{ID: r.Row.ID.String(), Kind: d.name(), Name: text(r.Row, rName), Store: string(r.Src),
 		Values: o.named(ctx, d, vals, show), ArchivedAt: text(r.Row, rArchivedAt), LastChecked: text(r.Row, rLastChecked),
-		CheckedBy: text(r.Row, rCheckedBy), Conflicts: o.conflictsView(d, stored, show), ReplacedBy: o.successor(ctx, r)}, nil
+		CheckedBy: text(r.Row, rCheckedBy), Conflicts: o.conflictsView(d, stored, show), ReplacedBy: o.successor(ctx, r),
+		Quarantine: quarantineOf(d, stored)}, nil
 }
 
 // successor is "<kind> <name> (<id>)" of r's replaced_by, the bare id when

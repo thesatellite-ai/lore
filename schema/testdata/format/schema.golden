@@ -260,6 +260,7 @@ repos.urls json
 resources.archived_at datetime
 resources.checked_by text
 resources.fields json
+resources.history json
 resources.kind ref required
 resources.last_checked datetime
 resources.name text required
