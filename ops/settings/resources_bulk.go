@@ -156,11 +156,15 @@ func (o ops) resEditWhere(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if in.Archive && (len(sets) > 0 || len(in.Unset) > 0) {
 		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: --archive takes no --set or --unset; run them apart")
 	}
-	if !in.Archive && len(sets) == 0 && len(in.Unset) == 0 {
+	if !in.Archive && len(sets) == 0 && len(in.Unset) == 0 && len(in.Prompt) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: nothing to change").WithHint("give --set, --unset or --archive")
 	}
 	d, hits, err := o.matchWhere(ctx, in.BulkWhere, "edit")
 	if err != nil {
+		return RowOut{}, err
+	}
+	// --prompt asks once; every matched row gets the typed value (RES 3.3).
+	if sets, err = promptSets(ctx, d, in.Prompt, sets); err != nil {
 		return RowOut{}, err
 	}
 	if in.Archive {
@@ -193,7 +197,7 @@ func (o ops) resEditWhere(ctx context.Context, in ResEditIn) (RowOut, error) {
 		one := in
 		one.Name, one.BulkWhere = r.Row.ID.String(), BulkWhere{}
 		// the stdin value was read once above; every row gets the same pairs
-		one.Set, one.SetJSON, one.SetStdin = sets, nil, ""
+		one.Set, one.SetJSON, one.SetStdin, one.Prompt = sets, nil, "", nil
 		_, eerr := o.resEdit(c, one)
 		return eerr
 	})

@@ -81,6 +81,9 @@ type ResAddIn struct {
 type ResValueFlags struct {
 	SetJSON  []string `json:"set_json,omitempty" flag:"set-json" desc:"field=<json> (repeatable; for list and json fields)"`
 	SetStdin string   `json:"set_stdin,omitempty" flag:"set-stdin" desc:"read this field's value from stdin (keeps it out of shell history)"`
+	// Prompt asks for these fields at the terminal (RES 3.3; @required =
+	// every required field not given, FA-RES-1); refused off a terminal.
+	Prompt []string `json:"prompt,omitempty" flag:"prompt" desc:"type this field's value at the terminal, hidden when sensitive (repeatable; @required = every missing required field)"`
 }
 
 // ResEditIn is the input of resource.edit.
@@ -648,6 +651,9 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
+	if sets, err = promptSets(ctx, d, in.Prompt, sets); err != nil {
+		return RowOut{}, err
+	}
 	rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TableResources)
 	if err != nil {
 		return RowOut{}, err
@@ -755,6 +761,9 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	}
 	sets, err := valueSets(in.Set, in.SetJSON, in.SetStdin)
 	if err != nil {
+		return RowOut{}, err
+	}
+	if sets, err = promptSets(ctx, d, in.Prompt, sets); err != nil {
 		return RowOut{}, err
 	}
 	if len(sets) == 0 && len(in.Unset) == 0 && in.Empty() {
