@@ -6,7 +6,9 @@ package settings
 //	  ─► withHistory: diff old fields vs patch fields ─► one entry per changed
 //	     field {id, at, by, batch, field, from, to} (sensitive/internal masked)
 //	     ─► capped at resourceHistoryMax ─► patch["history"] ─► Env.Create|Update
-//	resource history <name> [--field F] ─► decode row history ─► newest first
+//	resource history <name> [--field F] [--git] ─► decode row history
+//	     (+ --git: field diffs of the row's committed versions, OV62,
+//	     unknown fields masked) ─► newest first
 //	resource report [--kind K] [--days N] ─► count per kind, stale, unchecked,
 //	     lint findings (dangling, quarantined, …), open links, secret_ref names
 //	quarantineOf(kind, stored) ─► fields whose stored value does not fit their
@@ -31,6 +33,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -71,6 +74,9 @@ type ResHistoryEntry struct {
 	Field   string `json:"field"`
 	From    string `json:"from,omitempty"`
 	To      string `json:"to,omitempty"`
+	// Commit is set only on entries read from git (--git, OV62); entries
+	// stored on the row never carry it.
+	Commit string `json:"commit,omitempty"`
 }
 
 // actorer is the optional Env upgrade that names the caller (wire's actor).
@@ -124,39 +130,17 @@ func (o ops) withHistory(ctx context.Context, d kindDef, old *located, patch map
 		batch = b.ID.String()
 	}
 	at := opclock.Now(o.env).UTC().Format(time.RFC3339)
-	fids := make([]string, 0, len(prev.vals)+len(next.vals))
-	for id := range prev.vals {
-		fids = append(fids, id)
+	changes := fieldChanges(d, prev, next, false)
+	if len(changes) == 0 {
+		return nil
 	}
-	for id := range next.vals {
-		if _, seen := prev.vals[id]; !seen {
-			fids = append(fids, id)
-		}
-	}
-	slices.Sort(fids)
-	added := false
-	for _, fid := range fids {
-		from, to := histValue(prev.vals, fid), histValue(next.vals, fid)
-		if from == to {
-			continue
-		}
-		name := cmp.Or(next.names[fid], prev.names[fid])
-		if f, known := d.byID[fid]; known {
-			name = text(f.Row, kName)
-			// 3.8: a hidden field's values never enter history.
-			if flag(f.Row, fSensitive) || flag(f.Row, fInternal) || text(f.Row, fType) == string(value.KindSecretRef) {
-				from, to = maskIf(from), maskIf(to)
-			}
-		}
+	for _, c := range changes {
 		id, ierr := ids.New[resHistTag]()
 		if ierr != nil {
 			return ierr
 		}
-		list = append(list, ResHistoryEntry{ID: id.String(), At: at, By: by, Batch: batch, FieldID: fid, Field: name, From: from, To: to})
-		added = true
-	}
-	if !added {
-		return nil
+		c.ID, c.At, c.By, c.Batch = id.String(), at, by, batch
+		list = append(list, c)
 	}
 	if n := len(list); n > resourceHistoryMax {
 		list = list[n-resourceHistoryMax:]
@@ -169,6 +153,42 @@ func (o ops) withHistory(ctx context.Context, d kindDef, old *located, patch map
 		return errs.Wrap(errs.Internal, "resource history", err)
 	}
 	return nil
+}
+
+// fieldChanges is one entry (FieldID, Field, From, To) per field whose
+// value differs between prev and next, in field-id order. 3.8 / OV49-H2: a
+// sensitive, internal or secret_ref field's values never enter history
+// (masked by the field's CURRENT definition); unknownHidden masks a field
+// the kind no longer defines too (old git versions: its flags are unknown,
+// so fail closed, OV62).
+func fieldChanges(d kindDef, prev, next resValues, unknownHidden bool) []ResHistoryEntry {
+	fids := make([]string, 0, len(prev.vals)+len(next.vals))
+	for id := range prev.vals {
+		fids = append(fids, id)
+	}
+	for id := range next.vals {
+		if _, seen := prev.vals[id]; !seen {
+			fids = append(fids, id)
+		}
+	}
+	slices.Sort(fids)
+	var out []ResHistoryEntry
+	for _, fid := range fids {
+		from, to := histValue(prev.vals, fid), histValue(next.vals, fid)
+		if from == to {
+			continue
+		}
+		name := cmp.Or(next.names[fid], prev.names[fid])
+		f, known := d.byID[fid]
+		if known {
+			name = text(f.Row, kName)
+		}
+		if (known && (flag(f.Row, fSensitive) || flag(f.Row, fInternal) || text(f.Row, fType) == string(value.KindSecretRef))) || (!known && unknownHidden) {
+			from, to = maskIf(from), maskIf(to)
+		}
+		out = append(out, ResHistoryEntry{FieldID: fid, Field: name, From: from, To: to})
+	}
+	return out
 }
 
 // rowWith is a scratch row holding one field (decodeValues reads Fields).
@@ -242,6 +262,7 @@ func quarantineLine(q []Quarantined) string {
 type ResHistoryIn struct {
 	Name  string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	Field string `json:"field,omitempty" flag:"field" desc:"only changes of this field"`
+	Git   bool   `json:"git,omitempty" flag:"git" desc:"also read older versions from git history (beyond the row's last 100 entries)"`
 }
 
 // ResHistoryOut is the output of resource.history, newest first.
@@ -272,6 +293,9 @@ func (o ResHistoryOut) Text() string {
 		if e.Batch != "" {
 			line += "  batch " + e.Batch
 		}
+		if e.Commit != "" {
+			line += "  (git " + shortCommit(e.Commit) + ")"
+		}
 		b.WriteString(line + "\n")
 	}
 	return b.String()
@@ -284,6 +308,14 @@ func (o ops) resHistory(ctx context.Context, in ResHistoryIn) (ResHistoryOut, er
 	}
 	out := ResHistoryOut{ID: r.Row.ID.String(), Entries: []ResHistoryEntry{}}
 	all := historyOf(r)
+	if in.Git {
+		git, gerr := o.resGitHistory(ctx, r)
+		if gerr != nil {
+			return ResHistoryOut{}, gerr
+		}
+		all = append(all, dedupResGit(all, git)...)
+		slices.SortStableFunc(all, func(a, b ResHistoryEntry) int { return cmp.Compare(a.At, b.At) })
+	}
 	for i := len(all) - 1; i >= 0; i-- {
 		if in.Field == "" || all[i].Field == in.Field {
 			out.Entries = append(out.Entries, all[i])
@@ -291,6 +323,70 @@ func (o ops) resHistory(ctx context.Context, in ResHistoryIn) (ResHistoryOut, er
 	}
 	out.Count = len(out.Entries)
 	return out, nil
+}
+
+// resGitHistory is the field changes between consecutive committed
+// versions of r (OV49-H1: git is the full record past the capped list).
+//
+//	RowHistorian (wire, E_UNSUPPORTED without it) ─► versions oldest first
+//	─► kindDef of the CURRENT kind (masking by today's flags, OV49-H2)
+//	─► fieldChanges(prev, next, unknown fields masked) per version pair
+func (o ops) resGitHistory(ctx context.Context, r located) ([]ResHistoryEntry, error) {
+	h, ok := upgrade.As[task.RowHistorian](o.env)
+	if !ok {
+		return nil, errs.New(errs.Unsupported, "resource history --git: this surface cannot read git history of a row").
+			WithHint("run it from the lore CLI inside the repo")
+	}
+	vers, err := h.RowVersions(ctx, engine.Ref{Store: r.Src, Table: schema.TableResources, ID: r.Row.ID})
+	if err != nil {
+		return nil, err
+	}
+	d, err := o.kindDef(ctx, text(r.Row, rKind))
+	if err != nil {
+		return nil, err
+	}
+	var out []ResHistoryEntry
+	for i := 1; i < len(vers); i++ {
+		prev, perr := decodeValues(located{Row: vers[i-1].Row})
+		next, nerr := decodeValues(located{Row: vers[i].Row})
+		if perr != nil || nerr != nil {
+			continue // a version whose values do not decode: never guessed
+		}
+		for _, c := range fieldChanges(d, prev, next, true) {
+			c.At, c.By, c.Commit = vers[i].At.UTC().Format(time.RFC3339), vers[i].By, vers[i].Commit
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+// dedupResGit drops git entries the row's list already holds (same field,
+// from and to; counted), so --git adds only what the cap dropped.
+func dedupResGit(have, git []ResHistoryEntry) []ResHistoryEntry {
+	type change struct{ fid, from, to string }
+	seen := map[change]int{}
+	for _, e := range have {
+		seen[change{e.FieldID, e.From, e.To}]++
+	}
+	var out []ResHistoryEntry
+	for _, e := range git {
+		k := change{e.FieldID, e.From, e.To}
+		if seen[k] > 0 {
+			seen[k]--
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// shortCommit is a commit id's first 7 characters.
+func shortCommit(c string) string {
+	const n = 7
+	if len(c) > n {
+		return c[:n]
+	}
+	return c
 }
 
 // ResReportIn is the input of resource.report.
@@ -443,7 +539,7 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 func (o ops) historyOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpResHistory, Summary: "Field changes of one resource, newest first, with actor, date and batch (sensitive values masked)", Permission: op.PermRead, Access: op.AccessRead,
-			Errors:   readErrors,
+			Errors:   append(slices.Clone(readErrors), errs.Unsupported),
 			Examples: []op.Example{{Title: "one field's history", CLI: "lore resource history hub_prod --field os", Want: "os"}}}, o.resHistory),
 		op.Define(op.Spec{Name: OpResReport, Summary: "Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references to rotate", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown)}, o.resReport),

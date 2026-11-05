@@ -227,7 +227,7 @@ func (o ops) metaOps() []op.Entry {
 			Errors: readErrors}, o.metaGet),
 		op.Define(op.Spec{Name: OpMetaValueRename, Summary: "Rename an allowed value (a label change; the val_ id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.metaValueRename),
-	}, o.metaMaintOps()...), slices.Concat(o.metaIOOps(), o.metaMoveOps())...)
+	}, o.metaMaintOps()...), slices.Concat(o.metaIOOps(), o.metaMoveOps(), o.metaHistoryOps())...)
 }
 
 func (o ops) metaKey(ctx context.Context, key string) (located, error) {
