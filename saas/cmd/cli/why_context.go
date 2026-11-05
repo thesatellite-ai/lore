@@ -25,6 +25,7 @@ type whyContextFlags struct {
 	commonFlags
 	lastRender bool
 	rendered   bool
+	cut        bool
 	jsonOutput bool
 }
 
@@ -47,6 +48,7 @@ the full text.`,
 	bindCommonFlags(cmd, &f.commonFlags)
 	cmd.Flags().BoolVar(&f.lastRender, "last-render", true, "show the most recent render")
 	cmd.Flags().BoolVar(&f.rendered, "rendered", false, "print full rendered text")
+	cmd.Flags().BoolVar(&f.cut, "cut", false, "show what the last render moved out of the core of LORE.md, and why (CONTEXT_BUDGET 6.11)")
 	cmd.Flags().BoolVar(&f.jsonOutput, constants.FlagJSON, false, "JSON output")
 	return cmd
 }
@@ -78,6 +80,9 @@ func runWhyContext(ctx context.Context, f *whyContextFlags) (err error) {
 
 	r := rows[0]
 	_ = projectID // future scope filter
+	if f.cut {
+		return printWhyContextCut(r.ScopeSummary, f.jsonOutput)
+	}
 
 	if f.jsonOutput {
 		// Project ID intentionally omitted from output (privacy default)
@@ -110,5 +115,28 @@ func runWhyContext(ctx context.Context, f *whyContextFlags) (err error) {
 		fmt.Println(style.Muted("--- rendered text ---"))
 		fmt.Println(r.RenderedText)
 	}
+	return nil
+}
+
+// printWhyContextCut prints the cut_summary of the newest render (6.11).
+// A row written before 0.1.18 has none: re-render to record one.
+func printWhyContextCut(scopeSummary string, asJSON bool) error {
+	var ss renderScopeSummary
+	if err := json.Unmarshal([]byte(scopeSummary), &ss); err != nil {
+		return errcodes.New(errcodes.Internal, "render_history scope_summary").WithCause(err)
+	}
+	if ss.Cut == nil {
+		return errcodes.New(errcodes.NotFound, "the last render recorded no cut summary").
+			WithHint("run `lore render` to record one (renders before this version kept none)")
+	}
+	if asJSON {
+		data, err := json.MarshalIndent(map[string]cutSummary{"data": *ss.Cut}, "", "  ")
+		if err != nil {
+			return errcodes.New(errcodes.Internal, "encode cut summary").WithCause(err)
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+	fmt.Print(ss.Cut.text())
 	return nil
 }

@@ -44,6 +44,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/refs"
@@ -116,6 +117,10 @@ type pinnedHotfix struct {
 type pinSkips struct {
 	SupersededRules, SupersededHotfixes int
 	ManualRules                         int
+	// IDs are the skipped rows with their reason, in load order; the
+	// render history's cut_summary keeps them for `why-context --cut`
+	// (CONTEXT_BUDGET 6.11).
+	IDs []reportEntry
 }
 
 // renderSources are the stores whose rows may reach the committed render:
@@ -216,12 +221,14 @@ func loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]
 		// 6.12: a superseded rule is replaced by its successor, never pinned.
 		if renderField(r.Row, renderFieldSuperseded) != "" {
 			skips.SupersededRules++
+			skips.IDs = append(skips.IDs, reportEntry{ID: r.ID.String(), Reason: contextfit.ReasonSuperseded})
 			continue
 		}
 		act := renderField(r.Row, renderFieldActivation)
 		// 6.3: manual rules load only by lore show / lore context --topic.
 		if act == schema.RuleActivationManual {
 			skips.ManualRules++
+			skips.IDs = append(skips.IDs, reportEntry{ID: r.ID.String(), Reason: contextfit.ReasonManual})
 			continue
 		}
 		out = append(out, pinnedRule{
@@ -273,6 +280,7 @@ func loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) 
 		}
 		if renderField(r.Row, renderFieldSuperseded) != "" {
 			skips.SupersededHotfixes++
+			skips.IDs = append(skips.IDs, reportEntry{ID: r.ID.String(), Reason: contextfit.ReasonSuperseded})
 			continue
 		}
 		out = append(out, pinnedHotfix{

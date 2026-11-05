@@ -315,7 +315,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 
 	if err := persistRenderHistory(ctx, client, projectID, repoID, resolvedOut, body, renderResult{
 		Rules: len(rules), Hotfixes: len(hotfixes),
-	}); err != nil {
+	}, newCutSummary(report, skips)); err != nil {
 		// Non-fatal: file written, history failed. Log and continue
 		fmt.Fprintln(os.Stderr, style.Warn("WARN: render_history write failed: "+err.Error()))
 	}
@@ -708,10 +708,9 @@ func resolveSymlinkTarget(path string) string {
 }
 
 // persistRenderHistory writes a render_history row for `lore why-context`
-func persistRenderHistory(ctx context.Context, client *ent.Client, projectID, repoID, target, body string, summary renderResult) error {
-	scope := struct {
-		Included renderResult `json:"included"`
-	}{Included: summary}
+// with what the render left out of the core (cut, 6.11).
+func persistRenderHistory(ctx context.Context, client *ent.Client, projectID, repoID, target, body string, summary renderResult, cut cutSummary) error {
+	scope := renderScopeSummary{Included: summary, Cut: &cut}
 	scopeJSON, _ := json.Marshal(scope)
 
 	// created_at from the CLI clock, not the schema default, so a test
