@@ -23,11 +23,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
@@ -179,7 +179,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 	sort.Strings(names)
 	fp := wiringFingerprint(bin, rel, paths)
 	stamp := filepath.Join(s.stateDir, gitWiringStamp)
-	if b, rerr := os.ReadFile(stamp); rerr == nil && strings.TrimSpace(string(b)) == fp {
+	if b, rerr := os.ReadFile(filepath.Clean(stamp)); rerr == nil && strings.TrimSpace(string(b)) == fp {
 		return
 	}
 	for _, kv := range mergeDriverConfig(bin) {
@@ -208,32 +208,43 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 	}
 }
 
+// decimal is the base the fingerprint prints sizes and times in.
+const decimal = 10
+
 // wiringFingerprint hashes what is installed and the size and mtime of
 // every wired file: equal fingerprints mean nobody touched them since
 // lore last wired, so no git process is spawned.
 func wiringFingerprint(bin, rel string, paths []string) string {
-	h := sha256.New()
-	fmt.Fprintf(h, "%s\n%s\n%s\n", gitWiringVersion, bin, rel)
+	var b strings.Builder // a Builder never fails a write; the hash is taken once
+	b.WriteString(gitWiringVersion + "\n" + bin + "\n" + rel + "\n")
 	for _, l := range gitAttributeLines {
-		fmt.Fprintln(h, l)
+		b.WriteString(l + "\n")
 	}
 	sorted := append([]string(nil), paths...)
 	sort.Strings(sorted)
 	for _, p := range sorted {
 		info, err := os.Stat(p)
 		if err != nil {
-			fmt.Fprintf(h, "%s:missing\n", p)
+			b.WriteString(p + ":missing\n")
 			continue
 		}
-		fmt.Fprintf(h, "%s:%d:%d\n", p, info.Size(), info.ModTime().UnixNano())
+		b.WriteString(p + ":" + strconv.FormatInt(info.Size(), decimal) + ":" + strconv.FormatInt(info.ModTime().UnixNano(), decimal) + "\n")
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
 }
 
 // ensureFileBlock makes path hold exactly one block under marker: replaced
 // in place, else appended. Content outside the block is never touched.
 func ensureFileBlock(path, marker string, lines []string) error {
-	cur, err := os.ReadFile(path)
+	// Through a root at the file's folder, so the write stays in it.
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }() // read-and-write errors are returned below; a close error adds nothing
+	name := filepath.Base(path)
+	cur, err := root.ReadFile(name)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -259,5 +270,5 @@ func ensureFileBlock(path, marker string, lines []string) error {
 	if next == content {
 		return nil
 	}
-	return os.WriteFile(path, []byte(next), gitAttributesMode)
+	return root.WriteFile(name, []byte(next), gitAttributesMode)
 }

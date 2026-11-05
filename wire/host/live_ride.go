@@ -316,7 +316,7 @@ func (s *liveSession) waitingRows(ctx context.Context) ([]live.LandItem, error) 
 
 // noteText is a machine note of .git/lore ("" when absent or unreadable).
 func (s *liveSession) noteText(name string) string {
-	b, err := os.ReadFile(filepath.Join(s.stateDir, name))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(s.stateDir, name)))
 	if err != nil {
 		return ""
 	}
@@ -417,8 +417,14 @@ func ensureHookBlock(dir, hook, marker string, lines []string) error {
 	if err := os.MkdirAll(dir, rideHookDirMode); err != nil {
 		return err
 	}
-	path := filepath.Join(dir, hook)
-	cur, err := os.ReadFile(path)
+	// Through a root at the hooks folder: hook is one of lore's fixed
+	// names, so the file can never be outside it.
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }() // read-and-write errors are returned below; a close error adds nothing
+	cur, err := root.ReadFile(hook)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -450,16 +456,16 @@ func ensureHookBlock(dir, hook, marker string, lines []string) error {
 		}
 	}
 	if next != content {
-		if err := os.WriteFile(path, []byte(next), rideHookMode); err != nil {
+		if err = root.WriteFile(hook, []byte(next), rideHookMode); err != nil {
 			return err
 		}
 	}
-	info, err := os.Stat(path)
+	info, err := root.Stat(hook)
 	if err != nil {
 		return err
 	}
 	if info.Mode().Perm()&rideExecBits == 0 {
-		return os.Chmod(path, rideHookMode)
+		return root.Chmod(hook, rideHookMode)
 	}
 	return nil
 }

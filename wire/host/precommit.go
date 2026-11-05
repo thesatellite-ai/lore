@@ -67,7 +67,7 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	}
 	var bad []string
 	for _, p := range changed {
-		b, rerr := os.ReadFile(filepath.Join(root, filepath.FromSlash(p))) // p is a path git listed under .lore/data
+		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(p)))) // p is a path git listed under .lore/data
 		if errors.Is(rerr, os.ErrNotExist) {
 			continue // a deletion: staging records it
 		}

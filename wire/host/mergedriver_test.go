@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -82,7 +83,7 @@ func runDriver(t *testing.T, repoPath string, base, ours, theirs []byte, flags .
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 	err := cmd.ExecuteContext(context.Background())
-	out, rerr := os.ReadFile(filepath.Join(dir, "ours"))
+	out, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, "ours")))
 	if rerr != nil {
 		t.Fatal(rerr)
 	}
@@ -237,12 +238,12 @@ func TestMergeDriverThroughGit(t *testing.T) {
 	setup := func(t *testing.T, withDriver bool) (dir string, git func(...string) (string, error)) {
 		t.Helper()
 		dir = t.TempDir()
-		env := append(os.Environ(), envMergeDriverHelper+"=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+		env := []string{envMergeDriverHelper + "=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"}
 		git = func(args ...string) (string, error) {
-			c := exec.Command(gitProgram, args...)
-			c.Dir, c.Env = dir, env
-			out, err := c.CombinedOutput()
-			return string(out), err
+			// gitref.Exec runs the git program found on PATH; stdout, then
+			// git's stderr (the driver's lines) on a failure.
+			out, err := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: dir, Args: args, Env: env})
+			return string(out) + gitref.Stderr(err), err
 		}
 		must := func(args ...string) {
 			if out, err := git(args...); err != nil {
@@ -293,7 +294,7 @@ func TestMergeDriverThroughGit(t *testing.T) {
 	}
 	read := func(t *testing.T, dir string) []byte {
 		t.Helper()
-		b, err := os.ReadFile(filepath.Join(dir, rel))
+		b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, rel)))
 		if err != nil {
 			t.Fatal(err)
 		}

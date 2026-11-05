@@ -394,10 +394,10 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	// F16: the live ref and the branch of a client repo are readable by the
 	// client. Checked before any row of the batch is written, so a refusal
 	// writes nothing.
-	if err := s.h.leakCheck(ctx, leakWhereLive, b.folder, liveRows); err != nil {
+	if err = s.h.leakCheck(ctx, leakWhereLive, b.folder, liveRows); err != nil {
 		return err
 	}
-	if err := s.h.leakCheckBranch(ctx, b.folder, branch); err != nil {
+	if err = s.h.leakCheckBranch(ctx, b.folder, branch); err != nil {
 		return err
 	}
 	var companions map[live.RowKey]bool

@@ -21,7 +21,7 @@ func TestEnsureHookBlock(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, hookPrePush)
 			if tc.before != "" {
-				if err := os.WriteFile(path, []byte(tc.before), 0o644); err != nil {
+				if err := os.WriteFile(path, []byte(tc.before), 0o600); err != nil { // no exec bit: ensureHookBlock must add it
 					t.Fatal(err)
 				}
 			}
@@ -30,7 +30,7 @@ func TestEnsureHookBlock(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			b, _ := os.ReadFile(path)
+			b, _ := os.ReadFile(filepath.Clean(path))
 			got := string(b)
 			if n := strings.Count(got, "# >>> "+rideHookMarker+" >>>"); n != 1 {
 				t.Fatalf("one block expected, got %d:\n%s", n, got)

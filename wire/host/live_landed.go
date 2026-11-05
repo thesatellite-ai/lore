@@ -50,12 +50,12 @@ func (b *liveBackend) landedCopy(ctx context.Context, s *liveSession, k live.Row
 		if inHead {
 			return store.Row{}, false // removed here on purpose: E_NOT_FOUND, not a read-through
 		}
-		raw, ok, rerr := s.repo.ReadFile(ctx, remote, file)
-		if rerr != nil || !ok {
+		raw, inRemote, rerr := s.repo.ReadFile(ctx, remote, file)
+		if rerr != nil || !inRemote {
 			return store.Row{}, false
 		}
-		r, ok := decodeLanded(raw)
-		if !ok || r.ID.String() != k.ID {
+		r, decoded := decodeLanded(raw)
+		if !decoded || r.ID.String() != k.ID {
 			return store.Row{}, false
 		}
 		return r, true
