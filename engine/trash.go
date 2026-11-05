@@ -21,11 +21,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -716,13 +718,21 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 	return out, nil
 }
 
-// rescreen re-runs the secret check of a new write on every row a restore
-// brings back (DELETION 3.3 step 3, 4.6): a pattern added since the delete,
-// or a hand edit of the trashed file, refuses the whole restore with the
-// scanner's own code (E_SECRET_DETECTED, or E_NEEDS_CONFIRM under
-// secrets.on_detect ask) before anything is written; under redact the
-// match is replaced as on any write. Findings the row's secret_allows
-// already accept stay accepted.
+// rescreen re-runs the engine's write checks of a new write on every row a
+// restore brings back (DELETION 3.3 step 3, 4.6), before anything is
+// written, so a refusal leaves the whole batch in the trash:
+//   - the secret scan: a pattern added since the delete, or a hand edit of
+//     the trashed file, refuses with the scanner's own code
+//     (E_SECRET_DETECTED, or E_NEEDS_CONFIRM under secrets.on_detect ask);
+//     under redact the match is replaced as on any write. Findings the
+//     row's secret_allows already accept stay accepted;
+//   - the size limits (a-del-restore, P3-DEL-1): resources.max_bytes
+//     (E_RESOURCE_INVALID) and meta.max_bytes (E_META_SIZE), measured on
+//     the row as it comes back (delete fields cleared), so a limit lowered
+//     since the delete, or a hand edit, refuses as a create or edit would.
+//
+// The leak check in a client repo is the composition root's hook (wire's
+// Restore runs Options.GuardRepoWrite), as for a create.
 func (e *Engine) rescreen(ctx context.Context, rows []Trashed) error {
 	cl := e.callOf(ctx)
 	for i, t := range rows {
@@ -736,8 +746,39 @@ func (e *Engine) rescreen(ctx context.Context, rows []Trashed) error {
 			return err
 		}
 		rows[i].Row.Fields = sc.fields
+		if err = e.restoreSizes(sc.pol, trash.Clear(rows[i].Row)); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// restoreSizes applies the write-time size limits to r, a row as a restore
+// writes it back: the row limit a create runs (enforceRow) and the
+// metadata limit a metadata write runs (meta.max_bytes, 3.13). The 4 KB
+// metadata warning is not repeated: a restore adds no metadata.
+func (e *Engine) restoreSizes(pol policy.Set, r row.Row) error {
+	def, err := e.tableDef(r.Table)
+	if err != nil {
+		return err
+	}
+	if err = enforceRow(pol, def, r.Fields); err != nil {
+		return err
+	}
+	if len(r.Meta) == 0 {
+		return nil
+	}
+	entries := make([]meta.Entry, 0, len(r.Meta))
+	for _, id := range slices.SortedFunc(maps.Keys(r.Meta), func(a, b ids.ID[ids.MetaKey]) int { return strings.Compare(a.String(), b.String()) }) {
+		en, derr := meta.DecodeEntry(r.Meta[id])
+		if derr != nil {
+			return derr
+		}
+		entries = append(entries, en)
+	}
+	limit, _ := pol.Limit(policy.KeyMetaMaxBytes)
+	_, err = meta.CheckSize(entries, limit)
+	return err
 }
 
 // checkParents refuses to restore r while a cascade parent outside set is

@@ -11,6 +11,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/row"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/schema"
@@ -65,10 +66,39 @@ func (a *App) TableSchema(ctx context.Context, table row.Table) (schema.TableDef
 	return eng.Registry().Table(table)
 }
 
-// Restore implements opstrash.Env.
+// Restore implements opstrash.Env. Before the engine writes anything, every
+// row coming back into the repo store passes the leak check a create there
+// gets (DELETION 3.3 step 3 and 3.11, P3-DEL-1): restoreGuard.
 func (a *App) Restore(ctx context.Context, target string) (engine.TrashResult, error) {
-	return a.trashWrite(ctx, func(eng *engine.Engine) (engine.TrashResult, error) { return eng.TrashTarget(ctx, target) },
-		func(eng *engine.Engine) (engine.TrashResult, error) { return eng.Restore(ctx, target) })
+	return a.trashWriteChecked(ctx, func(eng *engine.Engine) (engine.TrashResult, error) { return eng.TrashTarget(ctx, target) },
+		func(eng *engine.Engine) (engine.TrashResult, error) { return eng.Restore(ctx, target) }, a.restoreGuard)
+}
+
+// restoreGuard runs the client-repo leak check of a create on each planned
+// row of a restore that lives in the repo store: the same
+// unreachableGuard (fail closed while an org store cannot be read) and
+// Options.GuardRepoWrite with the row's text as it comes back (delete
+// fields cleared). explicit is true: the row already lives in this repo,
+// so the restore never re-routes it (the routing default of a create does
+// not apply), while the leak check still runs. Rows in other stores pass,
+// as a create there does. A refusal leaves the whole batch in the trash.
+func (a *App) restoreGuard(ctx context.Context, st *state, planned engine.TrashResult) error {
+	for _, t := range planned.Rows {
+		if t.Store != store.SourceRepo && t.Store != "" {
+			continue
+		}
+		if err := a.unreachableGuard(ctx, st, store.SourceRepo); err != nil {
+			return err
+		}
+		q, err := a.writeQuery(st, t.Row.Table, trash.Clear(t.Row).Fields)
+		if err != nil {
+			return err
+		}
+		if err = a.guard(ctx, q, true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeTrash implements opstrash.Env.
@@ -99,11 +129,24 @@ func (a *App) PurgeOlder(ctx context.Context, cutoff time.Time, expired, dryRun 
 // written into each of their stores first, as every other write does, so
 // the updated_by of a restore or a tombstone always resolves there (OV9).
 func (a *App) trashWrite(ctx context.Context, plan, do func(*engine.Engine) (engine.TrashResult, error)) (engine.TrashResult, error) {
+	return a.trashWriteChecked(ctx, plan, do, nil)
+}
+
+// trashWriteChecked is trashWrite with check, which (when set) vets the
+// planned rows before anything is written (the restore's leak check); an
+// error refuses the write.
+func (a *App) trashWriteChecked(ctx context.Context, plan, do func(*engine.Engine) (engine.TrashResult, error),
+	check func(context.Context, *state, engine.TrashResult) error) (engine.TrashResult, error) {
 	st, err := a.writeState(ctx)
 	if err != nil {
 		return engine.TrashResult{}, err
 	}
 	if planned, perr := plan(st.eng); perr == nil { // a bad target is reported by the write itself
+		if check != nil {
+			if cerr := check(ctx, st, planned); cerr != nil {
+				return engine.TrashResult{}, cerr
+			}
+		}
 		done := map[store.Source]bool{}
 		for _, t := range planned.Rows {
 			if done[t.Store] {
