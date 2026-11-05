@@ -274,3 +274,18 @@ func TestKeyString(t *testing.T) {
 		t.Fatalf("Keys: %v %v", m.Keys(), err)
 	}
 }
+
+// TestReplaceMe: @me is swapped value by value, the input stays as it was.
+func TestReplaceMe(t *testing.T) {
+	f, err := Parse([]string{"assignees:@me,act_x status:todo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.HasValue(Me) {
+		t.Fatal("HasValue(@me) = false")
+	}
+	g := f.Replace(Me, "act_me")
+	if g.HasValue(Me) || !g.HasValue("act_me") || !g.HasValue("act_x") || !f.HasValue(Me) {
+		t.Fatalf("replace wrong: %+v (input %+v)", g, f)
+	}
+}

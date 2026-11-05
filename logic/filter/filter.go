@@ -109,6 +109,41 @@ type Filter struct {
 // Empty reports a filter with no term (no --where given).
 func (f Filter) Empty() bool { return len(f.Terms) == 0 }
 
+// Me is the value spelling of the caller (TASK 16.1/16.2: `assignee:@me`,
+// a saved view's @me resolves for whoever runs it). The filter keeps it as
+// text; the op that knows the caller swaps it with Replace before Bind.
+const Me = "@me"
+
+// HasValue reports whether any term holds v as one of its values.
+func (f Filter) HasValue(v string) bool {
+	for _, t := range f.Terms {
+		for _, x := range t.Values {
+			if x == v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Replace returns f with every value equal to old set to repl (Raw, the
+// term as written, is kept for error messages). f is not changed.
+func (f Filter) Replace(old, repl string) Filter {
+	out := Filter{Terms: make([]Term, len(f.Terms))}
+	for i, t := range f.Terms {
+		vs := make([]string, len(t.Values))
+		for j, x := range t.Values {
+			if x == old {
+				x = repl
+			}
+			vs[j] = x
+		}
+		t.Values = vs
+		out.Terms[i] = t
+	}
+	return out
+}
+
 // Parse reads the values of repeated --where flags. Each value may hold
 // several space-separated terms; quotes keep a value with spaces or commas
 // whole. An empty flag value is refused rather than read as "no filter".

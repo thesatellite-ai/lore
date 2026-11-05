@@ -1,6 +1,7 @@
 package task
 
 import (
+	"context"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,6 +24,14 @@ const (
 	keyUpdatedAt = "updated_at"
 )
 
+// People keys of --where (16.1): assignee (the lead counts, 14.2: the
+// lead is always an assignee), lead, watcher; aliases of the row fields.
+const (
+	keyAssignee = "assignee"
+	keyLead     = "lead"
+	keyWatcher  = "watcher"
+)
+
 // taskKeys are the keys of task list --where / --sort: every visible field
 // of the tasks table (internal and sensitive ones and JSON blobs are left
 // out: they are not something a person filters on) plus the envelope keys.
@@ -34,6 +43,10 @@ func taskKeys() map[string]filter.Field {
 		keyUpdatedAt: {Kind: value.KindDateTime},
 		// 18.4: the SLA state, computed on read (views.go withSLA).
 		keySLA: {Kind: value.KindText, Values: SLAStates()},
+		// 16.1 people keys (rowGetter reads them).
+		keyAssignee: {Kind: value.KindList, Elem: value.KindText},
+		keyLead:     {Kind: value.KindText},
+		keyWatcher:  {Kind: value.KindList, Elem: value.KindText},
 	}
 	for _, t := range schema.Builtin() {
 		if t.Name != table {
@@ -69,6 +82,30 @@ func listMatcher(where []string, keys map[string]filter.Field) (filter.Matcher, 
 	if err != nil {
 		return filter.Matcher{}, err
 	}
+	return bindWhere(f, keys)
+}
+
+// whereMatcher is listMatcher at an op that knows the caller: a value
+// @me becomes the caller's actor id first (16.1 `assignee:@me`, 16.2 a
+// view's @me resolves for whoever runs it); an unknown caller is the same
+// refusal --assignee @me gives.
+func (o ops) whereMatcher(ctx context.Context, where []string, keys map[string]filter.Field) (filter.Matcher, error) {
+	f, err := filter.Parse(where)
+	if err != nil {
+		return filter.Matcher{}, err
+	}
+	if f.HasValue(filter.Me) {
+		me, merr := o.actorRef(ctx, actorMe)
+		if merr != nil {
+			return filter.Matcher{}, merr
+		}
+		f = f.Replace(filter.Me, me)
+	}
+	return bindWhere(f, keys)
+}
+
+// bindWhere binds a parsed task --where to the task keys.
+func bindWhere(f filter.Filter, keys map[string]filter.Field) (filter.Matcher, error) {
 	return f.Bind(func(k filter.Key) (filter.Field, error) {
 		if fd, ok := keys[k.Name]; ok && !k.Meta {
 			return fd, nil
@@ -92,6 +129,16 @@ func rowGetter(keys map[string]filter.Field) func(r row.Row) filter.Getter {
 				return timeText(r.CreatedAt)
 			case keyUpdatedAt:
 				return timeText(r.UpdatedAt)
+			case keyAssignee:
+				p := peopleOf(r)
+				return p.assignees
+			case keyLead:
+				if l := work.Field(r, fieldAssigned); l != "" {
+					return []string{l}
+				}
+				return nil
+			case keyWatcher:
+				return value.ItemStrings(r.Fields[schema.FieldTaskWatchers])
 			}
 			if keys[k.Name].Kind == value.KindList {
 				return value.ItemStrings(r.Fields[k.Name])

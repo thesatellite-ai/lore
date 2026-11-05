@@ -738,7 +738,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	// XQ7: --where is the one filter grammar; its terms AND with the flags.
 	keys := taskKeys()
-	m, err := listMatcher(in.Where, keys)
+	m, err := o.whereMatcher(ctx, in.Where, keys)
 	if err != nil {
 		return ListOut{}, err
 	}

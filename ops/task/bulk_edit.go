@@ -82,7 +82,7 @@ func (o ops) editOp(ctx context.Context, in EditIn) (work.WriteOut, error) {
 // filter says: no hidden active-set default (the preview lists the rows).
 func (o ops) matchWhere(ctx context.Context, where []string) ([]work.Sourced, error) {
 	keys := taskKeys()
-	m, err := listMatcher(where, keys)
+	m, err := o.whereMatcher(ctx, where, keys)
 	if err != nil {
 		return nil, err
 	}
