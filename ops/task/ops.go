@@ -166,7 +166,7 @@ func Ops(env work.Env) []op.Entry {
 			// and its claimed children (bulk.Ask); it always asks.
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task delete tsk_<id> --yes", Want: "moved to the trash"}},
-		}, o.delete),
+		}, o.deleteOp),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across task title + body (BM25 ranked)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.SearchErrors,

@@ -14,9 +14,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 )
 
@@ -75,6 +77,104 @@ func (o ops) editOp(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	}
 	return work.WriteOut{ID: batch.String(), Warnings: warn,
 		Human: work.Success + " " + strconv.Itoa(len(hits)) + " tasks changed (batch " + batch.String() + "); lore batch show " + batch.String() + "\n"}, nil
+}
+
+// deleteOp is task.delete: one task (delete) or every task --where
+// matches (DELETION 3.2, FA-TASK-8):
+//
+//	matchWhere ─► drop matches under another match (the cascade takes them)
+//	  ─► --dry-run: list roots + sub-task count, write nothing
+//	  ─► bulk.Ask (always: deletes take sub-tasks and claimed work, TSQ3)
+//	  ─► bulk.Begin(delete) ─► FenceClaimed (every affected task, FA-TASK-3)
+//	  ─► work.Delete per root, one bat_ id; partial failure names the batch
+func (o ops) deleteOp(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
+	if len(in.Where) == 0 {
+		if in.DryRun {
+			return work.WriteOut{}, errs.New(errs.InvalidInput, "task delete: --dry-run needs --where")
+		}
+		if strings.TrimSpace(in.ID) == "" {
+			return work.WriteOut{}, errs.New(errs.InvalidInput, "task delete: give a task id or --where").
+				WithHint("lore task delete tsk_<id>, or lore task delete --where 'status:cancelled' --yes")
+		}
+		return o.delete(ctx, in)
+	}
+	if in.ID != "" {
+		return work.WriteOut{}, errs.New(errs.InvalidInput, "task delete: give a task id or --where, not both")
+	}
+	ctx = engine.WithDeleteReason(ctx, in.Reason)
+	hits, err := o.matchWhere(ctx, in.Where)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if len(hits) == 0 {
+		return work.WriteOut{Human: "no task matches --where; nothing deleted\n"}, nil
+	}
+	f, err := o.forest(ctx, "")
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	matched := map[string]bool{}
+	for _, s := range hits {
+		matched[s.Row.ID.String()] = true
+	}
+	var roots []work.Sourced
+	affected := map[string]work.Sourced{}
+	for _, s := range hits {
+		id := s.Row.ID.String()
+		under := false
+		for _, a := range f.tree.Ancestors(id) {
+			under = under || matched[a]
+		}
+		if under {
+			continue
+		}
+		roots = append(roots, s)
+		affected[id] = s
+		for _, d := range f.tree.Descendants(id) {
+			affected[d] = f.row(d)
+		}
+	}
+	var b strings.Builder
+	b.WriteString(strconv.Itoa(len(affected)) + " task(s): " + strconv.Itoa(len(roots)) + " matched")
+	if extra := len(affected) - len(roots); extra > 0 {
+		b.WriteString(" and " + strconv.Itoa(extra) + " sub-task(s) under them")
+	}
+	b.WriteString(":")
+	for i, s := range roots {
+		if i == confirmListed {
+			b.WriteString(" and " + strconv.Itoa(len(roots)-confirmListed) + " more")
+			break
+		}
+		b.WriteString(" " + s.Row.ID.String() + " " + work.Field(s.Row, work.FieldTitle) + ";")
+	}
+	if in.DryRun {
+		return work.WriteOut{Human: "would delete " + b.String() + " (nothing written, --dry-run)\n"}, nil
+	}
+	if err = bulk.Ask(ctx, "delete "+b.String()+" move all of them to the trash?"); err != nil {
+		return work.WriteOut{}, err
+	}
+	bctx, batch, err := bulk.Begin(ctx, bulk.KindDelete)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	all := make([]work.Sourced, 0, len(affected))
+	for _, s := range affected {
+		all = append(all, s)
+	}
+	fenced, err := FenceClaimed(bctx, o.env, all)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	for _, s := range roots {
+		if _, derr := work.Delete(bctx, o.env, Noun, table, s.Row.ID, ""); derr != nil {
+			return work.WriteOut{}, errs.Wrap(errs.CodeOf(derr), "task delete --where: "+s.Row.ID.String()+" failed after earlier tasks of batch "+batch.String()+" went to the trash (lore trash restore "+batch.String()+")", derr)
+		}
+	}
+	human := trashline.MovedBatch(strconv.Itoa(len(affected))+" tasks (--where)", batch.String())
+	if fenced > 0 {
+		human += "  fenced " + strconv.Itoa(fenced) + " claimed task(s): their holders' next write fails\n"
+	}
+	return work.WriteOut{ID: batch.String(), Human: human}, nil
 }
 
 // matchWhere is every task (any status, every attached store) the --where

@@ -322,8 +322,12 @@ type IDIn struct {
 
 // DeleteIn is the input of task.delete (DELETION 2.1 --reason).
 type DeleteIn struct {
-	ID     string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+	ID     string `json:"id,omitempty" arg:"0" desc:"the task id (tsk_…); leave out with --where"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+	// Where / DryRun are the bulk delete (DELETION 3.2, FA-TASK-8): every
+	// matching task with its subtree, one bat_ batch, always asked.
+	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk delete: every task matching this filter, with its sub-tasks (the task list --where grammar; repeatable, all must match)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list the tasks that would be deleted, write nothing"`
 }
 
 // ShowIn is the input of task.show. From is v0.1.17's `task show --from`:
