@@ -10,7 +10,8 @@ package lint
 //	  ├─ entry_too_long      body over context.entry_max default (1,500 bytes)
 //	  ├─ path_no_globs       body names a code path, rule has no globs
 //	  ├─ untagged            pinned, no tag (not in any topic of the index)
-//	  └─ near_duplicate      three-word shingle overlap over 0.5 between pinned entries
+//	  ├─ near_duplicate      three-word shingle overlap over 0.5 between pinned entries
+//	  └─ scope_missing, scope_conflict (context_scope.go: need the Env)
 
 import (
 	"regexp"
@@ -33,7 +34,7 @@ const (
 
 // ContextCodes lists the --context finding codes.
 func ContextCodes() []Code {
-	return []Code{SupersededPinned, NoSummary, EntryTooLong, PathNoGlobs, Untagged, NearDuplicate}
+	return []Code{SupersededPinned, NoSummary, EntryTooLong, PathNoGlobs, Untagged, NearDuplicate, ScopeMissing, ScopeConflict}
 }
 
 // Context check thresholds (6.12). entryMax is the context.entry_max
