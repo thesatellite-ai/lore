@@ -797,12 +797,13 @@ func TestE2E_InitOnCloneAdopts(t *testing.T) {
 
 // E33: a credential never reaches a git-tracked file.
 // D12 / O12a (owner): --allow-secrets is removed with no alias; a flagged
-// value is written only on the confirm path (a terminal yes, or --yes
-// from a person), which records the accepted match in secret_allows (SQ2).
+// value is written only on a typed choice (--not-a-secret --reason <why>
+// with --yes or a terminal yes; a bare --yes is no choice, FB-SEC-1), which
+// records the accepted match in secret_allows (SQ2).
 // Before D12 this pinned v0.1.17's "row kept in lore.db, never exported,
 // listed by sync status". Now: without a confirmation nothing is written
-// anywhere (no row file, so nothing can reach git); --yes writes the row
-// file and its secret_allows entry; the old flag is an unknown flag.
+// anywhere (no row file, so nothing can reach git); --not-a-secret writes
+// the row file and its secret_allows entry; the old flag is an unknown flag.
 func TestE2E_SecretNotExported(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
@@ -819,7 +820,9 @@ func TestE2E_SecretNotExported(t *testing.T) {
 	if r := c.w.run(c.dir, c.env, e2eBin, "rule", "add", "--allow-secrets", "--body", body); r.code == 0 || !strings.Contains(r.stderr, "unknown flag: --allow-secrets") {
 		t.Fatalf("--allow-secrets is removed with no alias: %+v", r)
 	}
-	ok := c.lore("rule", "add", "--yes", "--body", body)
+	// A bare --yes is no choice (FB-SEC-1): the confirm path is
+	// --not-a-secret with a typed reason.
+	ok := c.lore("rule", "add", "--not-a-secret", "--reason", "test fixture key", "--yes", "--body", body)
 	id := idPattern.FindString(ok.stdout)
 	b, err := os.ReadFile(c.dataFile("rules", id))
 	if err != nil || !strings.Contains(string(b), key) {

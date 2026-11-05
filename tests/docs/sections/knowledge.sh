@@ -62,7 +62,7 @@ on alice $W "lore memory show $m3 || true"
 
 note "secrets"
 on! alice $W "lore memory add --body 'The staging password is password=example-only'"
-on alice $W "lore memory add --body 'The staging password is password=example-only' --yes"
+on alice $W "lore memory add --body 'The staging password is password=example-only' --not-a-secret --reason 'example value, not a real password' --yes"
 local ms; ms=$(id mem)
 on alice $W "ls .lore/data/memories | grep -c $ms || true"
 on alice $W "lore memory delete $ms --yes"

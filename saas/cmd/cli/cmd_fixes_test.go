@@ -292,11 +292,12 @@ func TestFix_DoctorForgetsTheSecretOfADeletedRow(t *testing.T) {
 		if after := strings.Count(c.lore(kind, "list", "--json").stdout, `"id"`); after != before {
 			t.Fatalf("%s: a refused add wrote a row (%d -> %d)", kind, before, after)
 		}
-		// --yes stores it as not a secret: doctor has nothing to report
-		// while the row exists, and nothing after it is deleted.
-		id := idPattern.FindString(c.lore(kind, "add", "--yes", "--body", secretBody).stdout)
+		// --not-a-secret --reason --yes stores it as not a secret (a bare
+		// --yes is no choice, FB-SEC-1): doctor has nothing to report while
+		// the row exists, and nothing after it is deleted.
+		id := idPattern.FindString(c.lore(kind, "add", "--not-a-secret", "--reason", "test fixture key", "--yes", "--body", secretBody).stdout)
 		if id == "" {
-			t.Fatalf("%s add --yes printed no id", kind)
+			t.Fatalf("%s add --not-a-secret printed no id", kind)
 		}
 		if out := c.loreAny("doctor").stdout; strings.Contains(out, "credential pattern") {
 			t.Fatalf("%s: doctor warns about a row marked not a secret:\n%s", kind, out)
