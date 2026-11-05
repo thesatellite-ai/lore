@@ -3,6 +3,7 @@ package task_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
@@ -106,5 +107,55 @@ func TestTrashFencesHolderThroughRestore(t *testing.T) {
 	want := []fenceCall{{held, 1}, {free, 0}}
 	if len(ft.calls) != 2 || ft.calls[0] != want[0] || ft.calls[1] != want[1] {
 		t.Fatalf("fence checks after restore: %+v, want %+v", ft.calls, want)
+	}
+}
+
+// TestGroupDeleteFencesClaimed (TASK 6.12, FA-TASK-7, later 19): a
+// tasklist delete, a plan delete and their --where bulk forms raise
+// claim_epoch on every actively claimed task the cascade takes, inside the
+// delete batch ("fenced 1" line); a free task in the same cascade keeps 0
+// (checked through the holder fence after a trash restore).
+func TestGroupDeleteFencesClaimed(t *testing.T) {
+	const holder = "act_01936f0000007a1b8c2d3e4f5a6b7c8d"
+	cases := []struct {
+		name, group, link string
+		del               func(group string) string
+	}{
+		{"tasklist", "tasklist.add", "tasklist", func(g string) string { return `{"id":"` + g + `"}` }},
+		{"plan", "plan.add", "plan", func(g string) string { return `{"id":"` + g + `"}` }},
+		{"tasklist --where", "tasklist.add", "tasklist", func(string) string { return `{"where":["title=grp"]}` }},
+		{"plan --where", "plan.add", "plan", func(string) string { return `{"where":["title=grp"]}` }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := opstest.New(t, repoClient(false))
+			g := h.ID(h.Must(c.group, `{"title":"grp","body":"b"}`))
+			held := add(h, "held", `"`+c.link+`":"`+g+`"`)
+			free := add(h, "free", `"`+c.link+`":"`+g+`"`)
+			ft := &fencingTeam{fakeTeam: fakeTeam{board: &fakeBoard{claims: map[string]claim{held: {holder: holder, active: true}}}}}
+			ctx := opstask.WithTeam(context.Background(), ft)
+			e, _ := h.App.Registry().Lookup(c.link + ".delete")
+			res, err := h.App.Run(ctx, e, op.JSONDecoder{Body: []byte(c.del(g))}, op.Caller{Yes: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if txt := opstest.Text(res); !strings.Contains(txt, "fenced 1") {
+				t.Errorf("no fenced line:\n%s", txt)
+			}
+			h.Fails(opstask.OpShow, `{"id":"`+held+`"}`, errs.InTrash)
+			h.Must("trash.restore", `{"target":"`+g+`"}`)
+			for _, id := range []string{held, free} {
+				if _, rerr := h.Run(opstask.OpShow, `{"id":"`+id+`"}`); errs.Has(rerr, errs.InTrash) {
+					h.Must("trash.restore", `{"target":"`+id+`"}`)
+				}
+			}
+			ft.calls = nil
+			mustCtx(h, ctx, opstask.OpChecklistAdd, `{"id":"`+held+`","text":"after"}`)
+			mustCtx(h, ctx, opstask.OpChecklistAdd, `{"id":"`+free+`","text":"after"}`)
+			want := []fenceCall{{held, 1}, {free, 0}}
+			if len(ft.calls) != 2 || ft.calls[0] != want[0] || ft.calls[1] != want[1] {
+				t.Fatalf("fence checks: %+v, want %+v", ft.calls, want)
+			}
+		})
 	}
 }
