@@ -118,12 +118,13 @@ func (e *Engine) Overruled(ctx context.Context) ([]Overruled, error) {
 	return out, err
 }
 
-// eachStoreOnce calls fn for every attached store in precedence order,
-// once per place (a place attached under two names is read once, as
-// Trashed does).
+// eachStoreOnce calls fn for every attached store in precedence order, then
+// the machine store when attached (P3-LOCAL-1: a machine-local row is in the
+// trash, archived or overruled by the same rules as any other), once per
+// place (a place attached under two names is read once, as Trashed does).
 func (e *Engine) eachStoreOnce(fn func(store.Source, Attached) error) error {
 	seen := map[string]bool{}
-	for _, name := range e.order {
+	for _, name := range e.allStores() {
 		st := e.stores[name]
 		if st.Location != "" {
 			if seen[st.Location] {
