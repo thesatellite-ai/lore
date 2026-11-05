@@ -14,6 +14,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -58,7 +59,7 @@ func (l liveSync) pushAndLand(ctx context.Context) ([]string, error) {
 	}
 	out, err := s.landPass(ctx, folder, nil, true)
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "land", err)
+		return nil, landErr(err)
 	}
 	return landLines(out), nil
 }
@@ -98,7 +99,7 @@ func (l liveSync) Land(ctx context.Context, in opssync.LandIn) (opssync.DoneOut,
 	}
 	out, err := s.landPass(ctx, folder, sel, false)
 	if err != nil {
-		return opssync.DoneOut{}, errs.Wrap(errs.Internal, "land", err)
+		return opssync.DoneOut{}, landErr(err)
 	}
 	if len(out.Conflicts) > 0 {
 		return opssync.DoneOut{}, errs.New(errs.InvalidInput, strings.Join(out.Conflicts, ", ")+" has a conflict (conflict markers in a text field); it cannot land").
@@ -177,4 +178,14 @@ func (liveSync) SyncInstallAction(context.Context, opssync.InstallActionIn) (ops
 // Explain implements opssync.Env.
 func (liveSync) Explain(context.Context, opssync.ExplainIn) (opssync.DoneOut, error) {
 	return opssync.DoneOut{}, errs.New(errs.Unsupported, "lore explain is not available in this binary yet")
+}
+
+// landErr keeps a coded refusal of the landing pass (E_LEAK_BLOCKED, a
+// rewritten remote) as it is, and wraps any other failure as E_INTERNAL.
+func landErr(err error) error {
+	var e *errs.Error
+	if errors.As(err, &e) {
+		return err
+	}
+	return errs.Wrap(errs.Internal, "land", err)
 }

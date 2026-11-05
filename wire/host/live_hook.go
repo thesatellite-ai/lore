@@ -56,6 +56,37 @@ type LiveConfig struct {
 	Clock clock.Clock
 	// Git runs git; nil is gitref.Exec (git from PATH).
 	Git gitref.Git
+	// LeakCheck is the F16 check of rows about to reach the live ref or the
+	// default branch, both readable by the repo's client (where: "live
+	// write" or "landing"; docs: live path → row body). cmd/lore passes
+	// wire.App.LeakCheckDocs; nil checks nothing.
+	LeakCheck func(ctx context.Context, where string, docs map[string][]byte) error
+}
+
+// Leak check actions (the refusal names them).
+const (
+	leakWhereLive    = "live write"
+	leakWhereLanding = "landing"
+)
+
+// leakCheck runs cfg.LeakCheck over rows of folder (tombstones carry no
+// content and are skipped).
+func (h *liveHost) leakCheck(ctx context.Context, where, folder string, rows map[live.RowKey]live.File) error {
+	if h.cfg.LeakCheck == nil {
+		return nil
+	}
+	docs := make(map[string][]byte, len(rows))
+	for k, f := range rows {
+		if f.Deleted() {
+			continue
+		}
+		b, err := f.EncodeBody()
+		if err != nil {
+			return errs.Wrap(errs.LeakBlocked, "cannot check: encode "+k.String(), err)
+		}
+		docs[live.RowPath(folder, k.Table, k.ID)] = b
+	}
+	return h.cfg.LeakCheck(ctx, where, docs)
 }
 
 // liveHost is LiveHook's shared configuration.

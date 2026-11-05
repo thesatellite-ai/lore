@@ -63,7 +63,12 @@ func run(ctx context.Context, args []string) int {
 	// Live rows on refs/lore/live around every operation (LORE_TEAM_SPEC
 	// F1-F3, F8): the old binary has its own live wiring, so only this
 	// binary adds the hook.
-	hooks = append(hooks, hosthooks.LiveHook(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk}))
+	// F16 on live writes and landings runs over the app built below.
+	var app *wire.App
+	leak := func(ctx context.Context, where string, docs map[string][]byte) error {
+		return app.LeakCheckDocs(ctx, org, where, docs)
+	}
+	hooks = append(hooks, hosthooks.LiveHook(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak}))
 	app, err := wire.New(hosthooks.Options(base, hooks))
 	if err != nil {
 		return printHostError(err)

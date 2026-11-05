@@ -372,6 +372,10 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	if s.blocked != nil {
 		return errs.Wrap(errs.StoreReadOnly, "the remote live ref was rewritten; lore stopped writing to it", s.blocked)
 	}
+	// F16: the live ref of a client repo is readable by the client.
+	if err := s.h.leakCheck(ctx, leakWhereLive, b.folder, liveRows); err != nil {
+		return err
+	}
 	res, err := s.ref.Write(ctx, live.WriteRequest{Folder: b.folder, Rows: liveRows, BinaryVersion: s.h.cfg.Version})
 	if err != nil {
 		if len(branch) > 0 {

@@ -6,8 +6,8 @@ package host
 // branch and pushed as <sha>:refs/heads/<branch>; rows the branch holds
 // leave live. It runs from `lore sync` and `lore land` (live_sync.go).
 //
-// Not ported (P3-MODEB-3): the F16 leak check of the landing commit (the
-// core has no write-time leak check on cmd/lore yet, P3-ORG-3).
+// The landing commit gets the F16 leak check (LiveConfig.LeakCheck,
+// P3-MODEB-5): it never passes a git hook.
 
 import (
 	"context"
@@ -270,6 +270,14 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 	items = withoutLoneSupporting(items)
 	exact := map[live.RowKey]live.File{}
 	if len(items) > 0 {
+		// F16: a landing commit never passes a git hook; check it here.
+		docs := make(map[live.RowKey]live.File, len(items))
+		for _, it := range items {
+			docs[it.Key] = it.File
+		}
+		if err := s.h.leakCheck(ctx, leakWhereLanding, folder, docs); err != nil {
+			return out, err
+		}
 		res, err := s.ref.Land(ctx, live.LandRequest{Branch: out.Branch, Items: items, Layout: liveLayout})
 		if err != nil {
 			return out, err
