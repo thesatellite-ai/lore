@@ -133,8 +133,8 @@ func (f *Folder) ApplyAudited(ctx context.Context, changes []store.Change, recs 
 	}
 	full := f.root.JournalPath()
 	next := append(bytes.Clone(prev), add...)
-	if err := writeAtomic(full, next); err != nil {
-		return nil, errs.Wrap(errs.Internal, "rowfs: write the audit journal", err)
+	if werr := writeAtomic(full, next); werr != nil {
+		return nil, errs.Wrap(errs.Internal, "rowfs: write the audit journal", werr)
 	}
 	journal := undoStep{full: full, prev: prev}
 	a, err := f.Apply(ctx, changes)
@@ -188,8 +188,8 @@ func (r *Root) ackLocked(acked []store.AuditRecord) error {
 		}
 	}
 	if len(keep) == 0 {
-		if err := removeIfExists(r.JournalPath()); err != nil {
-			return errs.Wrap(errs.Internal, "rowfs: remove the audit journal", err)
+		if rmErr := removeIfExists(r.JournalPath()); rmErr != nil {
+			return errs.Wrap(errs.Internal, "rowfs: remove the audit journal", rmErr)
 		}
 		return nil
 	}
