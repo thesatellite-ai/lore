@@ -108,6 +108,25 @@ func lifecycle() []Item {
 // characters (logic/contextfit.MaxSummary, checked by the noun's add/edit).
 const FieldSummary = "summary"
 
+// FieldContextPin and FieldContextPinnedAt are a rule's or hotfix's
+// `lore pin --context full|line` (CONTEXT_BUDGET 6.4, 6.6, FA-CTX-6): a
+// full pin is always in full in LORE.md, ranked first by pin time; a line
+// pin is always the one-line form. Synced, so every machine renders alike.
+const (
+	FieldContextPin      = "context_pin"
+	FieldContextPinnedAt = "context_pinned_at"
+)
+
+// ContextPins lists the pin forms.
+func ContextPins() []string { return []string{"full", "line"} }
+
+func pinFields() []Item {
+	return []Item{
+		Text(FieldContextPin, OneOf(ContextPins()...), Describe("lore pin: full (always in full in LORE.md) or line (always one line)")),
+		DateTime(FieldContextPinnedAt, Describe("when the context pin was set (full pins rank by it)")),
+	}
+}
+
 func summaryField() Item {
 	return Text(FieldSummary, Describe("one-line short form used when the full text does not fit LORE.md (up to 200 characters)"))
 }
@@ -127,6 +146,7 @@ func knowledgeDefs() []TableDef {
 		Text("applies_to_description"),
 		Text("severity", Required(), OneOf(RuleSeverities()...)),
 		summaryField(),
+		pinFields()[0], pinFields()[1],
 		Ref("superseded_by_id", TableRules),
 		Ref(FieldScope, TableScopes),
 		Ref(FieldOverrides, TableRules),
@@ -172,6 +192,7 @@ func knowledgeDefs() []TableDef {
 		Text("body", Required(), WithWidget(WidgetMarkdown)),
 		Text("severity", Required(), OneOf(HotfixSeverities()...)),
 		summaryField(),
+		pinFields()[0], pinFields()[1],
 		Ref("superseded_by_id", TableHotfixes),
 		Ref(FieldScope, TableScopes),
 		Ref(FieldOverrides, TableHotfixes),

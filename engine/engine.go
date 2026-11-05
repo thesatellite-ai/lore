@@ -148,6 +148,9 @@ type Engine struct {
 	confirmer Confirmer
 	prov      Provenance // nil: _o is {cmd, store}, no _w (WithProvenance)
 	redact    RedactHook // nil: no write-time unstored task (WithRedactHook, D21)
+	// machinePolicy are this machine's stricter local policy values
+	// (WithMachinePolicy, FQ11); storeSettings resolves them with the rows.
+	machinePolicy []policy.Entry
 }
 
 // Option configures New.
@@ -248,6 +251,15 @@ func WithScanner(s scan.Scanner) Option { return func(e *Engine) error { e.scann
 // (storeSettings); with no such rows the built-in defaults apply
 // (secrets.on_detect: ask).
 func WithSettings(s Settings) Option { return func(e *Engine) error { e.settings = s; return nil } }
+
+// WithMachinePolicy adds this machine's local policy values (CONFIG_GUIDE
+// 5.4, FQ11: ~/.lore/config.yaml `policies:`) to every resolution of the
+// default storeSettings, at policy.LevelMachine. Stricter wins (OQ24) and
+// a machine value never replaces a default with a looser one
+// (policy.Resolve), so it can only tighten.
+func WithMachinePolicy(entries []policy.Entry) Option {
+	return func(e *Engine) error { e.machinePolicy = entries; return nil }
+}
 
 // WithActor sets the actor every write is stamped with (required).
 func WithActor(a ids.ID[ids.Actor]) Option { return func(e *Engine) error { e.actor = a; return nil } }

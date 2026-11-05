@@ -60,6 +60,7 @@ import (
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opsmission "github.com/thesatellite-ai/lore/ops/mission"
 	opspattern "github.com/thesatellite-ai/lore/ops/pattern"
+	opspin "github.com/thesatellite-ai/lore/ops/pin"
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
@@ -335,6 +336,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opshotfix.Ops(a)...)
 	// CONTEXT_BUDGET 6.2 (D12): lore scope show|list|move.
 	entries = append(entries, opsscope.Ops(a)...)
+	// CONTEXT_BUDGET 6.4 (FA-CTX-6): lore pin set|unset.
+	entries = append(entries, opspin.Ops(a)...)
 	entries = append(entries, opstag.Ops(a)...)
 	entries = append(entries, opscomment.Ops(a)...)
 	entries = append(entries, opslink.Ops(a, gitcommit.Resolver{})...)

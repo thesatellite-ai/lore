@@ -27,8 +27,10 @@ package main
 
 import (
 	"context"
+	"slices"
 
 	"github.com/thesatellite-ai/lore/logic/direction"
+	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -137,6 +139,28 @@ func leakIndexesClass(class direction.Class, client bool) bool {
 	return false // the repo store, or a class this binary does not know
 }
 
+// leakMetaTexts is the metadata of an internal row as index text (META
+// 3.15 step 1, FA-META-9): each value's string leaves, and "name: value"
+// per leaf so the text rule also sees the pair. Entries that do not decode
+// are skipped (lint reports them).
+func leakMetaTexts(r row.Row) []string {
+	var out []string
+	for _, j := range r.Meta {
+		en, err := meta.DecodeEntry(j)
+		if err != nil {
+			continue
+		}
+		for _, v := range meta.Strings(en.V) {
+			if v == "" {
+				continue
+			}
+			out = append(out, v, en.Name+": "+v)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // leakIndexRows turns live rows of one table into index rows (tombstones
 // carry no text and are skipped; their ids stay internal through any live
 // copy only).
@@ -152,6 +176,7 @@ func leakIndexRows(rows []row.Row, t row.Table, src store.Source, label string) 
 				texts = append(texts, s)
 			}
 		}
+		texts = append(texts, leakMetaTexts(r)...)
 		out = append(out, leakcheck.IndexRow{ID: r.ID.String(), Table: t.String(), Label: label, Source: string(src), Texts: texts})
 	}
 	return out

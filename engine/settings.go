@@ -77,6 +77,7 @@ func (s storeSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
 		}
 		entries = append(entries, en)
 	}
+	entries = append(entries, s.e.machinePolicy...) // FQ11: may only tighten
 	set, err := policy.Resolve(entries)
 	if err != nil {
 		return policy.Set{}, policy.Rules{}, err

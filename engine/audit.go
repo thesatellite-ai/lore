@@ -40,13 +40,21 @@ const (
 	ActionSecretAllowAdded   Action = "secret.allow_added"
 	ActionSecretAllowRemoved Action = "secret.allow_removed"
 	ActionSecretRuleChanged  Action = "secret.rule_changed"
+	// Detection and URL cleanup (16, FA-AGENT-7): secret.detected is the
+	// write path's choice on a finding (refused, redacted, unstored,
+	// not_a_secret); secret.hook_refused a commit/push hook refusal;
+	// url.credentials_stripped a URL that lost its userinfo (14.4).
+	ActionSecretDetected         Action = "secret.detected"
+	ActionSecretHookRefused      Action = "secret.hook_refused"
+	ActionURLCredentialsStripped Action = "url.credentials_stripped"
 )
 
 // SecretActions lists the secret.* actions (16).
 func SecretActions() []Action {
 	return []Action{ActionSecretRevealed, ActionSecretRevealFailed, ActionSecretVerified, ActionVaultRefsMoved,
 		ActionSecretEntryRenamed, ActionSecretLinked, ActionSecretRelabeled,
-		ActionSecretAllowAdded, ActionSecretAllowRemoved, ActionSecretRuleChanged}
+		ActionSecretAllowAdded, ActionSecretAllowRemoved, ActionSecretRuleChanged,
+		ActionSecretDetected, ActionSecretHookRefused, ActionURLCredentialsStripped}
 }
 
 // ForcedBy says why a reveal had no person's answer (16, SQ10).
