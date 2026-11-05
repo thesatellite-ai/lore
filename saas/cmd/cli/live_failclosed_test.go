@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/live"
 	"saas/pkg/aicoder/lsync"
@@ -28,7 +30,7 @@ var badPurgedLists = map[string]string{
 // liveTestRow returns a live tree file for one memories row.
 func liveTestRow(t *testing.T, id string) []byte {
 	t.Helper()
-	f := live.NewVersion(nil, map[string]any{"_v": "1", "_table": "memories", "id": id, "body": "x"}, time.Unix(1, 0).UTC(), "act_1")
+	f := live.NewVersion(nil, canonjson.Object{"_v": canonjson.String("1"), "_table": canonjson.String("memories"), "id": canonjson.String(id), "body": canonjson.String("x")}, time.Unix(1, 0).UTC(), "act_1")
 	b, err := f.Encode()
 	if err != nil {
 		t.Fatal(err)

@@ -2,17 +2,17 @@ package live
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/clock"
-	"saas/pkg/aicoder/gitremote/gitremotetest"
-	"saas/pkg/aicoder/merge3"
-	"saas/pkg/aicoder/signals"
+	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/adapters/signals"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/clock"
+	"github.com/thesatellite-ai/lore/logic/merge3"
 )
 
 // A store branch's live ref is refs/lore/live/<branch>; two branches never
@@ -84,17 +84,17 @@ func TestTreeFolders(t *testing.T) {
 
 func TestCompactOrNull(t *testing.T) {
 	cases := []struct {
-		in   any
+		in   canonjson.Value
 		want string
 	}{
-		{nil, "null"},
-		{"", ""},
-		{"plain text", "plain text"},
-		{"日本", "日本"},
-		{true, "true"},
-		{json.Number("3"), "3"},
-		{[]any{"a", json.Number("1")}, `["a",1]`},
-		{map[string]any{"b": json.Number("2"), "a": "x"}, `{"a":"x","b":2}`},
+		{canonjson.Null(), "null"},
+		{canonjson.String(""), ""},
+		{canonjson.String("plain text"), "plain text"},
+		{canonjson.String("日本"), "日本"},
+		{canonjson.Bool(true), "true"},
+		{canonjson.Number("3"), "3"},
+		{canonjson.Array(canonjson.String("a"), canonjson.Number("1")), `["a",1]`},
+		{canonjson.ObjectValue(canonjson.Object{"b": canonjson.Number("2"), "a": canonjson.String("x")}), `{"a":"x","b":2}`},
 	}
 	for _, tc := range cases {
 		if got := compactOrNull(tc.in); got != tc.want {
@@ -107,23 +107,24 @@ func TestCompactOrNull(t *testing.T) {
 // that already carries markers is left alone.
 func TestMarkNonTextConflicts(t *testing.T) {
 	marked := merge3.MarkConflict("a", "b")
-	body := map[string]any{"priority": json.Number("2"), "title": marked, "tags": []any{"x"}}
+	tags := canonjson.Array(canonjson.String("x"))
+	body := canonjson.Object{"priority": canonjson.Number("2"), "title": canonjson.String(marked), "tags": tags}
 	markNonTextConflicts(body, []merge3.Conflict{
-		{Key: "priority", Ours: json.Number("2"), Theirs: json.Number("4")},
-		{Key: "title", Ours: "a", Theirs: "b"},
-		{Key: "tags", Ours: []any{"x"}, Theirs: nil},
+		{Key: "priority", Ours: canonjson.Number("2"), Theirs: canonjson.Number("4")},
+		{Key: "title", Ours: canonjson.String("a"), Theirs: canonjson.String("b")},
+		{Key: "tags", Ours: tags, Theirs: canonjson.Null()},
 	})
-	if body["title"] != marked {
-		t.Fatalf("already-marked text must not be re-marked: %q", body["title"])
+	if body.Str("title") != marked {
+		t.Fatalf("already-marked text must not be re-marked: %q", body.Str("title"))
 	}
 	for _, k := range []string{"priority", "tags"} {
-		s, ok := body[k].(string)
+		s, ok := body[k].AsString()
 		if !ok || !merge3.ContainsConflictMarkers(s) {
 			t.Fatalf("%s must become marked text: %#v", k, body[k])
 		}
 	}
-	if !strings.Contains(body["tags"].(string), "null") || !strings.Contains(body["priority"].(string), "4") {
-		t.Fatalf("both sides are visible: %q %q", body["tags"], body["priority"])
+	if !strings.Contains(body.Str("tags"), "null") || !strings.Contains(body.Str("priority"), "4") {
+		t.Fatalf("both sides are visible: %q %q", body.Str("tags"), body.Str("priority"))
 	}
 }
 

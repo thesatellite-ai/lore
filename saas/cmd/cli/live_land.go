@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/live"
@@ -43,13 +45,12 @@ var liveFinishedStatuses = map[string]map[string]bool{
 }
 
 // liveFinished applies liveFinishedStatuses to a row body.
-func liveFinished(table string, body map[string]any) bool {
+func liveFinished(table string, body canonjson.Object) bool {
 	states, hasLifecycle := liveFinishedStatuses[table]
 	if !hasLifecycle {
 		return true
 	}
-	s, _ := body[statusField].(string)
-	return states[s]
+	return states[body.Str(statusField)]
 }
 
 // liveLayout is lore's branch layout of a live folder (§3.6).
@@ -384,7 +385,7 @@ func landSelector(args []string, kind, mission string) landSelect {
 			return false
 		}
 		if mission != "" {
-			m, _ := f.Body["mission_id"].(string)
+			m := f.Body.Str("mission_id")
 			if k.ID != mission && m != mission {
 				return false
 			}

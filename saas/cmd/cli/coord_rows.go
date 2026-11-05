@@ -277,7 +277,7 @@ func (r *liveRows) Get(ctx context.Context, id string) (coord.Doc, bool, error) 
 		if f.Deleted() {
 			return nil, false, nil
 		}
-		return coord.Doc(f.Body), true, nil
+		return coord.Doc(canonjson.FromObject(f.Body)), true, nil
 	}
 	branch, okBranch, err := r.branchDoc(ctx, tableOf(id), id)
 	if err != nil {
@@ -428,7 +428,11 @@ func (p *stagedLiveRows) Prepare(ctx context.Context) (gitremote.RefUpdate, erro
 		if f, ok := files[key]; ok {
 			prev = &f
 		}
-		f := live.NewVersion(prev, map[string]any(w.Doc), sp.clk.Now(), sp.actor)
+		body, convErr := canonjson.ToObject(w.Doc)
+		if convErr != nil {
+			return gitremote.RefUpdate{}, convErr
+		}
+		f := live.NewVersion(prev, body, sp.clk.Now(), sp.actor)
 		b, encErr := f.Encode()
 		if encErr != nil {
 			return gitremote.RefUpdate{}, encErr

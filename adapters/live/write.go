@@ -9,16 +9,17 @@ import (
 	"sort"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
 )
 
 // NewVersion builds the live file for a new or edited row body (F2): the
 // row keeps its live_since and last_copy_at, and gets an hlc strictly above
 // the version it edits.
-func NewVersion(prev *File, body map[string]any, now time.Time, actor string) File {
+func NewVersion(prev *File, body canonjson.Object, now time.Time, actor string) File {
 	var b Block
 	if prev != nil {
 		b = prev.Block
@@ -40,7 +41,7 @@ func NewVersion(prev *File, body map[string]any, now time.Time, actor string) Fi
 
 // NewTombstone builds the tombstone for a deleted row (§3.3).
 func NewTombstone(prev *File, id string, now time.Time, actor string) File {
-	f := NewVersion(prev, map[string]any{idKey: id}, now, actor)
+	f := NewVersion(prev, canonjson.Object{idKey: canonjson.String(id)}, now, actor)
 	return Tombstone(id, f.Block)
 }
 
@@ -146,7 +147,7 @@ func (r *Ref) Stage(ctx context.Context, req WriteRequest) (Staged, error) {
 		return Staged{Old: old, New: old}, err
 	}
 	c, err := r.Repo.MakeCommit(ctx, gitref.CommitRequest{
-		Base: old, Changes: ch, Message: commitMessage(tree, ch), Signature: r.sig(),
+		Base: old, Changes: ch, Message: commitMessage(ch), Signature: r.sig(),
 	})
 	if err != nil {
 		return Staged{}, err

@@ -36,7 +36,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -46,6 +45,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -54,7 +55,6 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 
-	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/live"
 	"saas/pkg/aicoder/lorecfg"
@@ -235,18 +235,18 @@ func (b *liveBackend) liveFiles(ctx context.Context, s *liveSession) (string, ma
 func liveStoreRow(k live.RowKey, f live.File) (store.Row, error) {
 	body := maps.Clone(f.Body)
 	if body == nil {
-		body = map[string]any{}
+		body = canonjson.Object{}
 	}
 	if _, has := body[row.KeyHLC]; !has {
 		if h, err := hlc.Parse(f.Block.HLC.String()); err == nil && !h.IsZero() {
-			body[row.KeyHLC] = h.String()
+			body[row.KeyHLC] = canonjson.String(h.String())
 		}
 	}
 	if _, has := body[row.KeyTable]; !has {
-		body[row.KeyTable] = k.Table
+		body[row.KeyTable] = canonjson.String(k.Table)
 	}
 	if f.Deleted() {
-		body[row.KeyDeleted] = true
+		body[row.KeyDeleted] = canonjson.Bool(true)
 		for key := range body {
 			if !strings.HasPrefix(key, "_") && key != row.KeyID && key != row.KeyUpdatedAt && key != row.KeyUpdatedBy {
 				delete(body, key) // a tombstone has no fields
@@ -850,15 +850,7 @@ func sameActorFile(cur, r store.Row) bool {
 
 // canonicalDoc re-encodes a row document canonically, so key order and
 // number spelling do not make two equal documents differ.
-func canonicalDoc(doc []byte) ([]byte, error) {
-	dec := json.NewDecoder(bytes.NewReader(doc))
-	dec.UseNumber()
-	var v map[string]any
-	if err := dec.Decode(&v); err != nil {
-		return nil, err
-	}
-	return canonjson.Encode(v)
-}
+func canonicalDoc(doc []byte) ([]byte, error) { return canonjson.Canonicalize(doc) }
 
 // prevPtr is the live file a new version edits (nil = first live write).
 func prevPtr(f live.File, ok bool) *live.File {
@@ -873,19 +865,11 @@ func prevPtr(f live.File, ok bool) *live.File {
 // tombstone keeps only the envelope (§3.3: no field survives a delete on
 // the live tree).
 func liveFileFor(ctx context.Context, r store.Row, prev *live.File, now time.Time) (live.File, error) {
-	var body map[string]any
-	dec := json.NewDecoder(strings.NewReader(string(r.Doc)))
-	dec.UseNumber()
-	if err := dec.Decode(&body); err != nil {
+	// Numbers stay as written (canonjson keeps the literal), so the body
+	// lands byte-identical to what the core wrote.
+	doc, err := canonjson.Decode(r.Doc, canonjson.DefaultMaxDepth)
+	if err != nil {
 		return live.File{}, fmt.Errorf("live: decode %s/%s: %w", r.Table, r.ID, err)
-	}
-	canon, err := canonjson.Encode(body)
-	if err != nil {
-		return live.File{}, err
-	}
-	doc, err := canonjson.Decode(canon, canonjson.DefaultMaxDepth)
-	if err != nil {
-		return live.File{}, err
 	}
 	actor := liveCoreHLCActor(ctx, r)
 	var f live.File
@@ -907,8 +891,8 @@ func liveFileFor(ctx context.Context, r store.Row, prev *live.File, now time.Tim
 }
 
 // envelopeOnly keeps a tombstone document's envelope keys and id.
-func envelopeOnly(doc map[string]any) map[string]any {
-	out := map[string]any{}
+func envelopeOnly(doc canonjson.Object) canonjson.Object {
+	out := canonjson.Object{}
 	for k, v := range doc {
 		if strings.HasPrefix(k, "_") || k == row.KeyID || k == row.KeyUpdatedAt || k == row.KeyUpdatedBy {
 			out[k] = v

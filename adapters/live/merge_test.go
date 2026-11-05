@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/merge3"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+
+	"github.com/thesatellite-ai/lore/logic/merge3"
 )
 
 // strategies: priority is a scalar (newest by hlc), title text (conflict),
@@ -38,14 +40,16 @@ const (
 
 func mk(t *testing.T, s sideSpec, hlcMin int, actor string) []byte {
 	t.Helper()
-	body := map[string]any{"id": "tsk_1", "title": "base", "priority": "medium"}
+	body := obj(map[string]string{"id": "tsk_1", "title": "base", "priority": "medium"})
 	switch s {
 	case absent:
 		return nil
 	case editTitle:
-		body["title"] = "title by " + actor
+		body["title"] = canonjson.String("title by " + actor)
 	case editPriority:
-		body["priority"] = "high-" + actor
+		body["priority"] = canonjson.String("high-" + actor)
+	case same, tomb:
+		// the base body; a tombstone is made from it below
 	}
 	f := File{Body: body, Block: Block{LiveSince: t0, HLC: HLC{Wall: t0.Add(time.Duration(hlcMin) * time.Minute), Actor: actor}}}
 	if s == tomb {
@@ -123,7 +127,7 @@ func TestMergeTreesFileMatrix(t *testing.T) {
 			if c.want.deleted {
 				return
 			}
-			title, _ := f.Body["title"].(string)
+			title, _ := f.Body["title"].AsString()
 			if c.want.conflict {
 				if !strings.Contains(title, "title by A") || !strings.Contains(title, "title by B") || !f.Block.Conflict {
 					t.Fatalf("text clash must keep both with markers and flag conflict: %q %+v", title, f.Block)
@@ -131,7 +135,7 @@ func TestMergeTreesFileMatrix(t *testing.T) {
 			} else if title != c.want.title {
 				t.Fatalf("title %q, want %q", title, c.want.title)
 			}
-			if p, _ := f.Body["priority"].(string); p != c.want.priority {
+			if p, _ := f.Body["priority"].AsString(); p != c.want.priority {
 				t.Fatalf("priority %q, want %q", p, c.want.priority)
 			}
 			wantHLC := MaxHLC(HLC{Wall: t0.Add(time.Duration(c.oursHLC) * time.Minute), Actor: "A"}, HLC{Wall: t0.Add(time.Duration(c.theirsHLC) * time.Minute), Actor: "B"})
@@ -149,7 +153,7 @@ func TestMergeTreesFileMatrix(t *testing.T) {
 
 func TestMergeTreesRefFiles(t *testing.T) {
 	purged, _ := encodePurged(map[string]bool{"tsk_gone": true})
-	gone, _ := File{Body: map[string]any{"id": "tsk_gone", "title": "x"}}.Encode()
+	gone, _ := File{Body: obj(map[string]string{"id": "tsk_gone", "title": "x"})}.Encode()
 	ours := Tree{EpochPath: encodeEpoch(2), "_root/tasks/tsk_gone.json": gone}
 	theirs := Tree{EpochPath: encodeEpoch(3), PurgedPath: purged}
 	out, _, err := MergeTrees(Tree{}, ours, theirs, strategies)
@@ -168,9 +172,9 @@ func TestMergeTreesRefFiles(t *testing.T) {
 }
 
 func TestMergeBlocksCombine(t *testing.T) {
-	base, _ := File{Body: map[string]any{"id": "tsk_1"}, Block: Block{LiveSince: t0}}.Encode()
-	o, _ := File{Body: map[string]any{"id": "tsk_1"}, Block: Block{LiveSince: t0, LastCopyAt: t0.Add(7 * 24 * time.Hour)}}.Encode()
-	th, _ := File{Body: map[string]any{"id": "tsk_1"}, Block: Block{LiveSince: t0, HLC: HLC{Wall: t0, Actor: "B"}}}.Encode()
+	base, _ := File{Body: obj(map[string]string{"id": "tsk_1"}), Block: Block{LiveSince: t0}}.Encode()
+	o, _ := File{Body: obj(map[string]string{"id": "tsk_1"}), Block: Block{LiveSince: t0, LastCopyAt: t0.Add(7 * 24 * time.Hour)}}.Encode()
+	th, _ := File{Body: obj(map[string]string{"id": "tsk_1"}), Block: Block{LiveSince: t0, HLC: HLC{Wall: t0, Actor: "B"}}}.Encode()
 	out, _, err := MergeTrees(Tree{rowP: base}, Tree{rowP: o}, Tree{rowP: th}, strategies)
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +189,7 @@ func TestMergeBlocksCombine(t *testing.T) {
 // write on either side makes it land on its own).
 func TestCompanionFlagCombines(t *testing.T) {
 	comp := func(c bool) []byte {
-		b, _ := File{Body: map[string]any{"id": "act_1", "n": "x"}, Block: Block{Companion: c}}.Encode()
+		b, _ := File{Body: obj(map[string]string{"id": "act_1", "n": "x"}), Block: Block{Companion: c}}.Encode()
 		return b
 	}
 	for _, c := range []struct{ o, th, want bool }{{true, true, true}, {true, false, false}, {false, true, false}} {
@@ -199,8 +203,8 @@ func TestCompanionFlagCombines(t *testing.T) {
 			t.Fatalf("%+v → %v", c, f.Block.Companion)
 		}
 	}
-	prev := File{Body: map[string]any{"id": "act_1"}, Block: Block{Companion: true}}
-	if NewVersion(&prev, map[string]any{"id": "act_1"}, t0, "a").Block.Companion {
+	prev := File{Body: obj(map[string]string{"id": "act_1"}), Block: Block{Companion: true}}
+	if NewVersion(&prev, obj(map[string]string{"id": "act_1"}), t0, "a").Block.Companion {
 		t.Fatal("an edit is a write on purpose: no longer a companion")
 	}
 }

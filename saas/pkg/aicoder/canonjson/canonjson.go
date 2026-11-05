@@ -100,6 +100,20 @@ func FromValue(v root.Value) any {
 	return nil
 }
 
+// ToObject converts a v0.1.17 object tree to a root Object (the value
+// types Encode accepts; anything else is an error). Old callers holding a
+// live row body as map[string]any convert with it at the edge.
+func ToObject(obj map[string]any) (root.Object, error) { return toObject(obj, 0) }
+
+// FromObject converts a root Object to the v0.1.17 tree (see FromValue); a
+// nil Object gives a nil map.
+func FromObject(o root.Object) map[string]any {
+	if o == nil {
+		return nil
+	}
+	return objectToAny(o)
+}
+
 func objectToAny(o root.Object) map[string]any {
 	out := make(map[string]any, len(o))
 	for k, v := range o {

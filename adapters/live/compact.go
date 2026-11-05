@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
 )
 
 // compactedAtPath records when the live ref was last compacted (F8), so the
@@ -171,7 +171,7 @@ func (r *Ref) compactOnce(ctx context.Context, dryRun bool) (CompactResult, erro
 	if res.Backup, err = r.Backup(ctx, s.Local); err != nil {
 		return res, err
 	}
-	if err := r.Repo.UpdateRef(ctx, r.Name, c.OID, s.Local); err != nil {
+	if err = r.Repo.UpdateRef(ctx, r.Name, c.OID, s.Local); err != nil {
 		return res, err
 	}
 	res.Commit = c.OID

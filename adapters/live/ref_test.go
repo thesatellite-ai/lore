@@ -7,10 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"saas/pkg/aicoder/clock"
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
-	"saas/pkg/aicoder/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/clock"
 )
 
 // newRef opens the live ref of a test clone with a fixed clock.
@@ -24,8 +25,18 @@ func newRef(t *testing.T, c *gitremotetest.Clone, remote gitremote.Remote) *Ref 
 	}
 }
 
-func row(id, title, prio string) map[string]any {
-	return map[string]any{"id": id, "title": title, "priority": prio}
+func row(id, title, prio string) canonjson.Object {
+	return obj(map[string]string{"id": id, "title": title, "priority": prio})
+}
+
+// obj builds a row body whose fields are all strings, the shape most
+// tests write.
+func obj(fields map[string]string) canonjson.Object {
+	o := canonjson.Object{}
+	for k, v := range fields {
+		o[k] = canonjson.String(v)
+	}
+	return o
 }
 
 func write(t *testing.T, r *Ref, rows map[RowKey]File) WriteResult {
@@ -62,9 +73,10 @@ func readRowAt(t *testing.T, r *Ref, rev, id string) (File, bool) {
 	return f, ok
 }
 
-func commitCount(t *testing.T, dir, rev string) int {
+// commitCount counts the commits on the live ref of the repo at dir.
+func commitCount(t *testing.T, dir string) int {
 	t.Helper()
-	return len(strings.Split(gitremotetest.Git(t, dir, "rev-list", rev), "\n"))
+	return len(strings.Split(gitremotetest.Git(t, dir, "rev-list", RefLive), "\n"))
 }
 
 // F2 steps 3–4 and C2: the first write is one parentless commit with the
@@ -78,7 +90,7 @@ func TestWriteFirstIsParentlessAndRepeatIsNoOp(t *testing.T) {
 	if !res.Changed || res.Old != "" {
 		t.Fatalf("first write: %+v", res)
 	}
-	if n := commitCount(t, a.Dir, RefLive); n != 1 {
+	if n := commitCount(t, a.Dir); n != 1 {
 		t.Fatalf("first write must be one parentless commit, got %d", n)
 	}
 	tr, _ := r.ReadTree(context.Background(), res.New)
@@ -92,7 +104,7 @@ func TestWriteFirstIsParentlessAndRepeatIsNoOp(t *testing.T) {
 		t.Fatalf("fixed message: %q", msg)
 	}
 	// Same body again (only updated_at moved, a new hlc): nothing to commit.
-	again := NewVersion(&f, map[string]any{"id": "tsk_1", "title": "first", "priority": "low", "updated_at": "later"}, t0, "act_a")
+	again := NewVersion(&f, obj(map[string]string{"id": "tsk_1", "title": "first", "priority": "low", "updated_at": "later"}), t0, "act_a")
 	if res2 := write(t, r, put("tsk_1", again)); res2.Changed {
 		t.Fatal("the same write twice must be a no-op")
 	}
@@ -114,7 +126,7 @@ func TestPushRaceMergesOntoRemoteTip(t *testing.T) {
 	if res, err := rb.Integrate(context.Background()); err != nil || res.Action != IntegrateTookRemote {
 		t.Fatalf("integrate: %+v %v", res, err)
 	}
-	before := commitCount(t, w.OriginDir, RefLive)
+	before := commitCount(t, w.OriginDir)
 	write(t, ra, put("tsk_1", NewVersion(&base, row("tsk_1", "renamed by a", "low"), t0, "act_a")))
 	write(t, rb, put("tsk_1", NewVersion(&base, row("tsk_1", "shared", "urgent"), t0, "act_b")))
 	mustPush(t, ra)
@@ -122,14 +134,14 @@ func TestPushRaceMergesOntoRemoteTip(t *testing.T) {
 	if out.Attempts != 2 {
 		t.Fatalf("the loser pushes twice (reject, merge, push): %+v", out)
 	}
-	if got := commitCount(t, w.OriginDir, RefLive) - before; got != 2 {
+	if got := commitCount(t, w.OriginDir) - before; got != 2 {
 		t.Fatalf("two writes add exactly two commits, added %d", got)
 	}
 	if parents := strings.Fields(gitremotetest.Git(t, w.OriginDir, "log", "-1", "--format=%P", RefLive)); len(parents) != 1 {
 		t.Fatalf("no merge commit: parents %v", parents)
 	}
 	f, _ := readRowAt(t, rb, w.OriginRef(RefLive), "tsk_1")
-	if f.Body["title"] != "renamed by a" || f.Body["priority"] != "urgent" {
+	if f.Body.Str("title") != "renamed by a" || f.Body.Str("priority") != "urgent" {
 		t.Fatalf("both edits must survive: %v", f.Body)
 	}
 }
@@ -246,10 +258,11 @@ func TestCompactedRemoteReappliesPendingWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Repo.UpdateRef(context.Background(), RefLive, c.OID, tip); err != nil {
+	if err = b.Repo.UpdateRef(context.Background(), RefLive, c.OID, tip); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := rb.ForcePush(context.Background(), tip); err != nil || out.Status != PushDone {
+	out, err := rb.ForcePush(context.Background(), tip)
+	if err != nil || out.Status != PushDone {
 		t.Fatalf("compaction push: %+v %v", out, err)
 	}
 	_ = ra.Fetch(context.Background())
@@ -337,7 +350,7 @@ func TestStageMovesNothingUntilCommitted(t *testing.T) {
 	}
 	// Re-run: integrate, stage again, push, commit.
 	_ = ra.Fetch(ctx)
-	if _, err := ra.Integrate(ctx); err != nil {
+	if _, err = ra.Integrate(ctx); err != nil {
 		t.Fatal(err)
 	}
 	st, err = ra.Stage(ctx, WriteRequest{Folder: RootFolder, BinaryVersion: "0.1.0",
@@ -356,7 +369,7 @@ func TestStageMovesNothingUntilCommitted(t *testing.T) {
 	if snap.Local != st.New || snap.Tracking != st.New || snap.Seen != st.New {
 		t.Fatalf("CommitStaged moves local, tracking and seen: %+v", snap)
 	}
-	if f, ok := readRowAt(t, ra, w.OriginRef(RefLive), "tsk_1"); !ok || f.Body["priority"] != "done" {
+	if f, ok := readRowAt(t, ra, w.OriginRef(RefLive), "tsk_1"); !ok || f.Body.Str("priority") != "done" {
 		t.Fatal("the staged change is on the remote")
 	}
 }

@@ -166,7 +166,7 @@ func TestFolderAndPaths(t *testing.T) {
 }
 
 func TestFileEncodeDecodeAndTombstone(t *testing.T) {
-	body := map[string]any{"id": "tsk_1", "title": "fix", "_v": "1"}
+	body := obj(map[string]string{"id": "tsk_1", "title": "fix", "_v": "1"})
 	f := NewVersion(nil, body, t0, "act_1")
 	b, err := f.Encode()
 	if err != nil {
@@ -182,7 +182,7 @@ func TestFileEncodeDecodeAndTombstone(t *testing.T) {
 	if _, has := back.Body[BlockKey]; has {
 		t.Fatal("decoded body must not carry the block")
 	}
-	edit := NewVersion(&back, map[string]any{"id": "tsk_1", "title": "fixed"}, t0.Add(-time.Hour), "act_2")
+	edit := NewVersion(&back, obj(map[string]string{"id": "tsk_1", "title": "fixed"}), t0.Add(-time.Hour), "act_2")
 	if edit.Block.LiveSince != t0 || edit.Block.HLC.Compare(back.Block.HLC) <= 0 {
 		t.Fatalf("an edit keeps live_since and moves hlc forward: %+v", edit.Block)
 	}
@@ -192,7 +192,7 @@ func TestFileEncodeDecodeAndTombstone(t *testing.T) {
 	if !tback.Deleted() || len(tback.Body) != 1 || tback.ID() != "tsk_1" {
 		t.Fatalf("a tombstone keeps only the id (§3.3): %+v", tback)
 	}
-	if _, err := DecodeFile([]byte(`{"id":"x","_live":"nope"}`)); err == nil {
+	if _, err = DecodeFile([]byte(`{"id":"x","_live":"nope"}`)); err == nil {
 		t.Fatal("a non-object block must be refused")
 	}
 	plain, err := DecodeFile([]byte(`{"id":"x"}`))

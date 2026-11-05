@@ -11,10 +11,10 @@ import (
 type FetchKind int
 
 const (
-	// FetchCached: an ordinary command; it fetches unless the last fetch is
+	// FetchCached is for an ordinary command: it fetches unless the last fetch is
 	// younger than live.fetch_ttl, and never when autopush is off.
 	FetchCached FetchKind = iota
-	// FetchAlways: `lore sync`, and a write whose push was rejected (its
+	// FetchAlways is for `lore sync` and for a write whose push was rejected (its
 	// compare-and-swap must never act on stale data).
 	FetchAlways
 )

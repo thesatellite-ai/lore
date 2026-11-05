@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/gitremote"
 	"saas/pkg/aicoder/live"
@@ -35,7 +37,7 @@ func TestStoreLiveSessionLandsOnTheStoreBranch(t *testing.T) {
 	if s.ref.Name != "refs/lore/live/staging" || s.defaultBranch(ctx) != "staging" {
 		t.Fatalf("ref %s, land branch %s", s.ref.Name, s.defaultBranch(ctx))
 	}
-	body := map[string]any{"_v": "1", "_table": "rules", "id": "rul_1", "body": "never deploy on Friday"}
+	body := canonjson.Object{"_v": canonjson.String("1"), "_table": canonjson.String("rules"), "id": canonjson.String("rul_1"), "body": canonjson.String("never deploy on Friday")}
 	if _, err := s.ref.Write(ctx, live.WriteRequest{Folder: "acme", BinaryVersion: version,
 		Rows: map[live.RowKey]live.File{{Table: "rules", ID: "rul_1"}: live.NewVersion(nil, body, s.clk.Now(), "act_1")}}); err != nil {
 		t.Fatal(err)

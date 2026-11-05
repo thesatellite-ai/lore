@@ -252,7 +252,7 @@ func (r *storeRows) Get(ctx context.Context, id string) (coord.Doc, bool, error)
 		if f.Deleted() {
 			return nil, false, nil
 		}
-		return coord.Doc(f.Body), true, nil
+		return coord.Doc(canonjson.FromObject(f.Body)), true, nil
 	}
 	b, ok, err := r.sp.st.Repo.ReadFile(ctx, stores.TrackingBranch(r.sp.branch), storeDataPath(r.sp.folder, tableOf(id), id))
 	if errors.Is(err, gitref.ErrNotFound) {
@@ -352,7 +352,7 @@ func (r *storeRows) listTable(ctx context.Context, table string) ([]coord.Doc, e
 			delete(byID, k.ID)
 			continue
 		}
-		byID[k.ID] = coord.Doc(f.Body)
+		byID[k.ID] = coord.Doc(canonjson.FromObject(f.Body))
 	}
 	out := make([]coord.Doc, 0, len(byID))
 	for _, d := range byID {
@@ -370,7 +370,7 @@ func (r *storeRows) RepoName(repoID string) string {
 		if _, tree, terr := r.sp.ref.LocalTree(ctx); terr == nil {
 			if rows, _ := tree.Rows(r.sp.folder); rows != nil {
 				if f, ok := rows[live.RowKey{Table: "repos", ID: repoID}]; ok {
-					return coord.Doc(f.Body).Str("mount_name")
+					return f.Body.Str("mount_name")
 				}
 			}
 		}

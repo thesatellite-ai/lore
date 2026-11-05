@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/gitremote"
-	"saas/pkg/aicoder/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
 )
 
 func TestShouldCompact(t *testing.T) {
@@ -54,7 +54,7 @@ func TestCompactKeepsRowsRaisesEpochAndSurvivesARacingWriter(t *testing.T) {
 	if err != nil || res.Status != PushDone || res.Backup == "" {
 		t.Fatalf("compact: %+v %v", res, err)
 	}
-	if n := commitCount(t, w.OriginDir, RefLive); n != 1 {
+	if n := commitCount(t, w.OriginDir); n != 1 {
 		t.Fatalf("compacted ref has %d commits", n)
 	}
 	// The racer's push made the first lease push fail; the compaction
@@ -99,7 +99,7 @@ func TestPurgeThenCompactDropsTheRowFromHistory(t *testing.T) {
 			t.Fatal("compaction must not keep the purged row")
 		}
 	}
-	if n := commitCount(t, w.OriginDir, RefLive); n != 1 {
+	if n := commitCount(t, w.OriginDir); n != 1 {
 		t.Fatalf("history rewritten to one commit, got %d", n)
 	}
 	tr, _ := r.ReadTree(context.Background(), w.OriginRef(RefLive))

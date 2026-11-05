@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/canonjson"
-	"saas/pkg/aicoder/merge3"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/merge3"
 )
 
 // BlockKey is the key of the `_live` block inside a live file (§3.3). Lore
@@ -60,14 +60,13 @@ type Block struct {
 //
 // Invariant: Body never contains BlockKey; a tombstone's Body is {"id": id}.
 type File struct {
-	Body  map[string]any
+	Body  canonjson.Object
 	Block Block
 }
 
 // ID returns the row id the file carries ("" when missing).
 func (f File) ID() string {
-	s, _ := f.Body[idKey].(string)
-	return s
+	return f.Body.Str(idKey)
 }
 
 // Deleted reports a tombstone.
@@ -78,7 +77,7 @@ func (f File) Deleted() bool { return f.Block.Deleted }
 func Tombstone(id string, b Block) File {
 	b.Deleted = true
 	b.Conflict = false
-	return File{Body: map[string]any{idKey: id}, Block: b}
+	return File{Body: canonjson.Object{idKey: canonjson.String(id)}, Block: b}
 }
 
 // DecodeFile parses a live file. A file without a block (written by hand,
@@ -94,7 +93,7 @@ func DecodeFile(b []byte) (File, error) {
 		return f, nil
 	}
 	delete(doc, BlockKey)
-	m, ok := raw.(map[string]any)
+	m, ok := raw.AsObject()
 	if !ok {
 		return File{}, fmt.Errorf("live: %s must be an object", BlockKey)
 	}
@@ -104,7 +103,7 @@ func DecodeFile(b []byte) (File, error) {
 	return f, nil
 }
 
-func decodeBlock(m map[string]any) (Block, error) {
+func decodeBlock(m canonjson.Object) (Block, error) {
 	var b Block
 	var err error
 	if b.LiveSince, err = blockTime(m, blockLiveSince); err != nil {
@@ -113,21 +112,21 @@ func decodeBlock(m map[string]any) (Block, error) {
 	if b.LastCopyAt, err = blockTime(m, blockLastCopyAt); err != nil {
 		return b, err
 	}
-	if s, ok := m[blockHLC].(string); ok {
+	if s, ok := m[blockHLC].AsString(); ok {
 		if b.HLC, err = ParseHLC(s); err != nil {
 			return b, err
 		}
 	}
 	// Flags are omitted when false (toMap), so absent reads false; a
 	// non-bool value also reads false, the conservative choice for each.
-	b.Deleted, _ = m[blockDeleted].(bool)
-	b.Conflict, _ = m[blockConflict].(bool)
-	b.Companion, _ = m[blockCompanion].(bool)
+	b.Deleted, _ = m[blockDeleted].AsBool()
+	b.Conflict, _ = m[blockConflict].AsBool()
+	b.Companion, _ = m[blockCompanion].AsBool()
 	return b, nil
 }
 
-func blockTime(m map[string]any, key string) (time.Time, error) {
-	s, ok := m[key].(string)
+func blockTime(m canonjson.Object, key string) (time.Time, error) {
+	s, ok := m[key].AsString()
 	if !ok || s == "" {
 		return time.Time{}, nil
 	}
@@ -142,9 +141,9 @@ func blockTime(m map[string]any, key string) (time.Time, error) {
 func (f File) Encode() ([]byte, error) {
 	doc := maps.Clone(f.Body)
 	if doc == nil {
-		doc = map[string]any{}
+		doc = canonjson.Object{}
 	}
-	doc[BlockKey] = f.Block.toMap()
+	doc[BlockKey] = canonjson.ObjectValue(f.Block.toMap())
 	return canonjson.Encode(doc)
 }
 
@@ -154,25 +153,25 @@ func (f File) EncodeBody() ([]byte, error) {
 	return canonjson.Encode(f.Body)
 }
 
-func (b Block) toMap() map[string]any {
-	m := map[string]any{}
+func (b Block) toMap() canonjson.Object {
+	m := canonjson.Object{}
 	if !b.LiveSince.IsZero() {
-		m[blockLiveSince] = b.LiveSince.UTC().Format(blockTimeLayout)
+		m[blockLiveSince] = canonjson.String(b.LiveSince.UTC().Format(blockTimeLayout))
 	}
 	if !b.HLC.IsZero() {
-		m[blockHLC] = b.HLC.String()
+		m[blockHLC] = canonjson.String(b.HLC.String())
 	}
 	if b.Deleted {
-		m[blockDeleted] = true
+		m[blockDeleted] = canonjson.Bool(true)
 	}
 	if !b.LastCopyAt.IsZero() {
-		m[blockLastCopyAt] = b.LastCopyAt.UTC().Format(blockTimeLayout)
+		m[blockLastCopyAt] = canonjson.String(b.LastCopyAt.UTC().Format(blockTimeLayout))
 	}
 	if b.Conflict {
-		m[blockConflict] = true
+		m[blockConflict] = canonjson.Bool(true)
 	}
 	if b.Companion {
-		m[blockCompanion] = true
+		m[blockCompanion] = canonjson.Bool(true)
 	}
 	return m
 }
@@ -181,7 +180,7 @@ func (b Block) toMap() map[string]any {
 // merge conflict markers (a text clash, F4).
 func (f File) HasConflictMarkers() bool {
 	for _, v := range f.Body {
-		if s, ok := v.(string); ok && merge3.ContainsConflictMarkers(s) {
+		if s, ok := v.AsString(); ok && merge3.ContainsConflictMarkers(s) {
 			return true
 		}
 	}
@@ -207,7 +206,7 @@ func SameBody(a, b File) (bool, error) {
 
 // stripKey returns doc without key; comparisons use it to ignore a bare
 // updated_at bump (an edit that changed nothing else is not a change).
-func stripKey(doc map[string]any, key string) map[string]any {
+func stripKey(doc canonjson.Object, key string) canonjson.Object {
 	out := maps.Clone(doc)
 	delete(out, key)
 	return out

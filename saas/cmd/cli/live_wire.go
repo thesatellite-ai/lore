@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/clock"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
@@ -42,6 +41,8 @@ import (
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/rowroute"
 	"saas/pkg/aicoder/style"
+
+	"github.com/thesatellite-ai/lore/logic/canonjson"
 
 	"github.com/thesatellite-ai/lore/store"
 )

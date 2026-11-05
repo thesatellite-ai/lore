@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"saas/pkg/aicoder/canonjson"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
 )
 
 // Meta is _live/meta.json: the oldest lore that may write this live ref and
@@ -33,11 +33,10 @@ func DefaultMeta() Meta {
 
 // Encode renders the meta canonically.
 func (m Meta) Encode() ([]byte, error) {
-	feats := make([]any, len(m.Features))
-	for i, f := range m.Features {
-		feats[i] = f
-	}
-	return canonjson.Encode(map[string]any{"min_lore_version": m.MinLoreVersion, "features": feats})
+	return canonjson.Encode(canonjson.Object{
+		"min_lore_version": canonjson.String(m.MinLoreVersion),
+		"features":         stringArray(m.Features),
+	})
 }
 
 // Meta reads _live/meta.json; ok is false when the tree has none.
@@ -128,9 +127,14 @@ func encodePurged(set map[string]bool) ([]byte, error) {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	arr := make([]any, len(ids))
-	for i, s := range ids {
-		arr[i] = s
+	return canonjson.Encode(canonjson.Object{purgedKeyIDs: stringArray(ids)})
+}
+
+// stringArray is a JSON array of strings, in the given order.
+func stringArray(ss []string) canonjson.Value {
+	arr := make([]canonjson.Value, len(ss))
+	for i, s := range ss {
+		arr[i] = canonjson.String(s)
 	}
-	return canonjson.Encode(map[string]any{purgedKeyIDs: arr})
+	return canonjson.Array(arr...)
 }

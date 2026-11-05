@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/clock"
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/logic/clock"
 )
 
 // Ref is one live ref in one local repository (a code clone, or a bare
@@ -181,7 +181,7 @@ func (r *Ref) Integrate(ctx context.Context) (IntegrateResult, error) {
 		}
 		return IntegrateResult{Action: IntegrateNothing}, nil
 	case s.Local == "":
-		if err := r.Repo.UpdateRef(ctx, r.Name, s.Tracking, ""); err != nil {
+		if err = r.Repo.UpdateRef(ctx, r.Name, s.Tracking, ""); err != nil {
 			return IntegrateResult{}, err
 		}
 		return IntegrateResult{Action: IntegrateTookRemote}, r.markSeen(s.Tracking)
@@ -189,23 +189,27 @@ func (r *Ref) Integrate(ctx context.Context) (IntegrateResult, error) {
 		return IntegrateResult{Action: IntegrateNothing}, r.markSeen(s.Tracking)
 	}
 	if s.Seen != "" && s.Seen != s.Tracking {
-		cont, err := r.Repo.IsAncestor(ctx, s.Seen, s.Tracking)
-		if err != nil {
+		var cont bool
+		if cont, err = r.Repo.IsAncestor(ctx, s.Seen, s.Tracking); err != nil {
 			return IntegrateResult{}, err
 		}
 		if !cont {
 			return r.historyReplaced(ctx, s)
 		}
 	}
-	if ok, err := r.Repo.IsAncestor(ctx, s.Tracking, s.Local); err != nil {
+	localHasRemote, err := r.Repo.IsAncestor(ctx, s.Tracking, s.Local)
+	if err != nil {
 		return IntegrateResult{}, err
-	} else if ok {
+	}
+	if localHasRemote {
 		return IntegrateResult{Action: IntegrateNothing}, r.markSeen(s.Tracking)
 	}
-	if ok, err := r.Repo.IsAncestor(ctx, s.Local, s.Tracking); err != nil {
+	remoteHasLocal, err := r.Repo.IsAncestor(ctx, s.Local, s.Tracking)
+	if err != nil {
 		return IntegrateResult{}, err
-	} else if ok {
-		if err := r.Repo.UpdateRef(ctx, r.Name, s.Tracking, s.Local); err != nil {
+	}
+	if remoteHasLocal {
+		if err = r.Repo.UpdateRef(ctx, r.Name, s.Tracking, s.Local); err != nil {
 			return IntegrateResult{}, err
 		}
 		return IntegrateResult{Action: IntegrateFastForward}, r.markSeen(s.Tracking)
@@ -284,7 +288,7 @@ func (r *Ref) mergeOnto(ctx context.Context, base, local, tip string) ([]MergeNo
 	target := tip
 	if !ch.Empty() {
 		c, err := r.Repo.MakeCommit(ctx, gitref.CommitRequest{
-			Base: tip, Changes: ch, Message: commitMessage(merged, ch), Signature: r.sig(),
+			Base: tip, Changes: ch, Message: commitMessage(ch), Signature: r.sig(),
 		})
 		if err != nil {
 			return nil, err
@@ -315,7 +319,7 @@ func diffTrees(from, to Tree) gitref.Changes {
 }
 
 // commitMessage is the fixed message of a live commit (F2 step 4).
-func commitMessage(t Tree, ch gitref.Changes) string {
+func commitMessage(ch gitref.Changes) string {
 	folders := map[string]bool{}
 	n := 0
 	for _, p := range append(keysOf(ch.Put), ch.Delete...) {
@@ -478,8 +482,10 @@ func writeState(path string, b []byte) error {
 	return nil
 }
 
+// readTrim reads a small state file under the repo's .git/lore/ (paths
+// built by stateFile, never user input).
 func readTrim(path string) string {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return ""
 	}

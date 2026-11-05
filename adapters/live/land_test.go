@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"saas/pkg/aicoder/gitremote"
-	"saas/pkg/aicoder/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
 )
 
 const week = 7 * 24 * time.Hour
 
 func openRow(since, lastCopy time.Time) File {
-	return File{Body: map[string]any{"id": "tsk_1", "title": "x", "status": "todo"}, Block: Block{LiveSince: since, LastCopyAt: lastCopy, HLC: HLC{Wall: since}}}
+	return File{Body: obj(map[string]string{"id": "tsk_1", "title": "x", "status": "todo"}), Block: Block{LiveSince: since, LastCopyAt: lastCopy, HLC: HLC{Wall: since}}}
 }
 
 func bodyOf(t *testing.T, f File) []byte {
@@ -125,9 +125,11 @@ var testLayout = Layout{
 	},
 }
 
-func landItem(id, title string, action LandAction) LandItem {
-	f := File{Body: map[string]any{"id": id, "title": title, "status": "done"}}
-	return LandItem{Folder: RootFolder, Key: RowKey{Table: "tasks", ID: id}, File: f, Action: action}
+// landItem is the done task tsk_1 with the given title, landing for good.
+func landItem(title string) LandItem {
+	const id = "tsk_1"
+	f := File{Body: obj(map[string]string{"id": id, "title": title, "status": "done"})}
+	return LandItem{Folder: RootFolder, Key: RowKey{Table: "tasks", ID: id}, File: f, Action: LandFinal}
 }
 
 // E3 / F5: landing writes the row without its block on origin/main, never
@@ -139,7 +141,7 @@ func TestLandOnMainNeverTouchesLocalMain(t *testing.T) {
 	r := newRef(t, a, a.Remote)
 	gitremotetest.Git(t, a.Dir, "commit", "-q", "--allow-empty", "-m", "local only")
 	localMain := gitremotetest.Git(t, a.Dir, "rev-parse", "refs/heads/main")
-	res, err := r.Land(context.Background(), LandRequest{Branch: "main", Items: []LandItem{landItem("tsk_1", "ship it", LandFinal)}, Layout: testLayout})
+	res, err := r.Land(context.Background(), LandRequest{Branch: "main", Items: []LandItem{landItem("ship it")}, Layout: testLayout})
 	if err != nil || res.Status != LandDone || res.Rows != 1 {
 		t.Fatalf("land: %+v %v", res, err)
 	}
@@ -156,7 +158,7 @@ func TestLandOnMainNeverTouchesLocalMain(t *testing.T) {
 	if now := gitremotetest.Git(t, a.Dir, "rev-parse", "refs/heads/main"); now != localMain {
 		t.Fatal("local main must not move")
 	}
-	again, err := r.Land(context.Background(), LandRequest{Branch: "main", Items: []LandItem{landItem("tsk_1", "ship it", LandFinal)}, Layout: testLayout})
+	again, err := r.Land(context.Background(), LandRequest{Branch: "main", Items: []LandItem{landItem("ship it")}, Layout: testLayout})
 	if err != nil || again.Status != LandNothing {
 		t.Fatalf("landing twice must commit nothing: %+v %v", again, err)
 	}
@@ -173,7 +175,7 @@ func TestLandRetriesWhenMainMoves(t *testing.T) {
 		return nil
 	})
 	r := newRef(t, a, fault)
-	res, err := r.Land(context.Background(), LandRequest{Branch: "main", Items: []LandItem{landItem("tsk_1", "x", LandFinal)}, Layout: testLayout})
+	res, err := r.Land(context.Background(), LandRequest{Branch: "main", Items: []LandItem{landItem("x")}, Layout: testLayout})
 	if err != nil || res.Status != LandDone {
 		t.Fatalf("land: %+v %v", res, err)
 	}
@@ -190,7 +192,7 @@ func TestLandProtectedMain(t *testing.T) {
 	fault.Protect("refs/heads/main")
 	r := newRef(t, a, fault)
 	before := w.OriginRef("refs/heads/main")
-	res, err := r.Land(context.Background(), LandRequest{Branch: "main", Items: []LandItem{landItem("tsk_1", "x", LandFinal)}, Layout: testLayout})
+	res, err := r.Land(context.Background(), LandRequest{Branch: "main", Items: []LandItem{landItem("x")}, Layout: testLayout})
 	if err != nil || res.Status != LandProtected {
 		t.Fatalf("want protected: %+v %v", res, err)
 	}

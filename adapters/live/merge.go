@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/canonjson"
-	"saas/pkg/aicoder/merge3"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/merge3"
 
 	rowmerge "github.com/thesatellite-ai/lore/logic/merge"
 	lorerow "github.com/thesatellite-ai/lore/model/row"
@@ -166,8 +166,9 @@ func mergeRow(p string, b []byte, inB bool, o []byte, inO bool, t []byte, inT bo
 	if inO && inT && string(o) == string(t) {
 		return o, nil, true, nil
 	}
-	if out, note, ok, err := mergeV2Row(p, bf, of, tf, reg); ok || err != nil {
-		return out, note, ok, err
+	v2out, v2note, v2ok, err := mergeV2Row(p, bf, of, tf, reg)
+	if v2ok || err != nil {
+		return v2out, v2note, v2ok, err
 	}
 	newer := merge3.SideTheirs
 	if of.block.HLC.Compare(tf.block.HLC) > 0 {
@@ -186,6 +187,8 @@ func mergeRow(p string, b []byte, inB bool, o []byte, inO bool, t []byte, inT bo
 	case merge3.DecisionFieldMerge, merge3.DecisionModifyBeatsDelete, merge3.DecisionBothDeleted:
 		// both sides changed the row: say how it was settled
 		note = &MergeNote{Path: p, Decision: res.Decision, DeletedBy: res.DeletedBy, OursHLC: of.block.HLC, TheirsHLC: tf.block.HLC}
+	case merge3.DecisionSame, merge3.DecisionOursOnly, merge3.DecisionTheirsOnly:
+		// one side (or neither) changed the row: nothing to report
 	}
 	if res.File.Kind == merge3.FileAbsent {
 		return nil, note, false, nil
@@ -349,33 +352,35 @@ func earliest(a, b time.Time) time.Time {
 	return a
 }
 
-func idOf(doc map[string]any) string {
-	s, _ := doc[idKey].(string)
-	return s
-}
+func idOf(doc canonjson.Object) string { return doc.Str(idKey) }
 
 // markNonTextConflicts makes a clash on a non-string field visible as
 // marked text, exactly like the branch merge driver does, so a conflict can
 // never hide inside a valid-looking value.
-func markNonTextConflicts(body map[string]any, cs []merge3.Conflict) {
+func markNonTextConflicts(body canonjson.Object, cs []merge3.Conflict) {
 	for _, c := range cs {
-		if s, ok := body[c.Key].(string); ok && merge3.ContainsConflictMarkers(s) {
+		if s, ok := body[c.Key].AsString(); ok && merge3.ContainsConflictMarkers(s) {
 			continue
 		}
-		body[c.Key] = merge3.MarkConflict(compactOrNull(c.Ours), compactOrNull(c.Theirs))
+		body[c.Key] = canonjson.String(merge3.MarkConflict(compactOrNull(c.Ours), compactOrNull(c.Theirs)))
 	}
 }
 
-func compactOrNull(v any) string {
-	if v == nil {
+// compactOrNull renders one side of a clash for the conflict markers: a
+// string as itself, anything else as compact JSON. CompactValue fails only
+// on a malformed number literal, which is then shown as written so the
+// clash stays visible.
+func compactOrNull(v canonjson.Value) string {
+	if v.IsNull() {
 		return "null"
 	}
-	if s, ok := v.(string); ok {
+	if s, ok := v.AsString(); ok {
 		return s
 	}
 	s, err := canonjson.CompactValue(v)
 	if err != nil {
-		return fmt.Sprint(v)
+		lit, _ := v.AsNumber()
+		return lit
 	}
 	return s
 }
@@ -423,6 +428,8 @@ func (n MergeNote) Describe() string {
 		return fmt.Sprintf("%s: merged both edits (newer by hlc: %s)", id, MaxHLC(n.OursHLC, n.TheirsHLC))
 	case merge3.DecisionBothDeleted:
 		return fmt.Sprintf("%s: deleted on both sides", id)
+	case merge3.DecisionSame, merge3.DecisionOursOnly, merge3.DecisionTheirsOnly:
+		// no note is made for these (merge3Row); the fallback names them
 	}
 	return fmt.Sprintf("%s: %s", id, n.Decision)
 }

@@ -8,20 +8,20 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/gitref"
-	"saas/pkg/aicoder/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
 )
 
 // LandAction is what ShouldLand decides for one live row (F5 "when").
 type LandAction string
 
 const (
-	// LandStay: nothing to do now (the reason says why).
+	// LandStay means nothing to do now (the reason says why).
 	LandStay LandAction = "stay"
-	// LandFinal: write the row to main; it leaves live once main is seen
+	// LandFinal writes the row to main; it leaves live once main is seen
 	// to hold the same content (Confirm).
 	LandFinal LandAction = "land"
-	// LandCopy: write the row to main but keep it live (an open row named
+	// LandCopy writes the row to main but keeps it live (an open row named
 	// by `lore land`, or at its max age: rule 6c).
 	LandCopy LandAction = "copy"
 )
