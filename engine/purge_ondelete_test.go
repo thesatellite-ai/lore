@@ -189,3 +189,26 @@ func TestDeletePurgeMatrix(t *testing.T) {
 		})
 	}
 }
+
+// TestDeletePurgeUnsupportedStoreWritesNothing: a confirmed --purge on a
+// store that keeps no purged-ids list (no Purger) is refused E_UNSUPPORTED
+// before anything is written: the row is neither trashed nor purged.
+func TestDeletePurgeUnsupportedStoreWritesNothing(t *testing.T) {
+	f := setup(t) // the repo store is a memstore: no Purger
+	ctx := context.Background()
+	mem := f.memory(t, "keep me")
+	pr := &PurgeRequest{Asked: true, Confirmed: true}
+	if _, err := f.eng.Run(ctx, deleteOp(f, pr, ""), op.ArgsDecoder{Args: []string{mem.ID.String()}}, op.Caller{Actor: testActor}); !errs.Has(err, errs.Unsupported) {
+		t.Fatalf("err = %v, want E_UNSUPPORTED", err)
+	}
+	trashed, err := f.eng.Trashed(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trashed) != 0 || len(pr.Purged) != 0 {
+		t.Fatalf("a refused purge wrote: %d trashed, %d purged", len(trashed), len(pr.Purged))
+	}
+	if _, _, err := f.eng.Get(ctx, Ref{ID: mem.ID}); err != nil {
+		t.Fatalf("the row is gone: %v", err)
+	}
+}

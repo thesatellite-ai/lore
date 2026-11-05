@@ -216,8 +216,15 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 		byStore[it.src] = append(byStore[it.src], it.row)
 	}
 	for name := range byStore {
-		if _, werr := e.writable(name); werr != nil { // check every store before writing any
+		st, werr := e.writable(name) // check every store before writing any
+		if werr != nil {
 			return Written{}, werr
+		}
+		if _, ok := st.Backend.(Purger); purge && !ok {
+			// a purge into a store that keeps no purged list would leave the
+			// group in the trash and then fail: refuse before writing
+			return Written{}, errs.New(errs.Unsupported, "engine: store "+string(name)+" cannot record purged ids").
+				WithHint("delete without --purge (the rows go to the trash)")
 		}
 	}
 	var w Written
