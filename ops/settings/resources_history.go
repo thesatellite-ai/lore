@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/resquar"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -202,11 +203,9 @@ func (o ops) updateResource(ctx context.Context, d kindDef, r located, patch map
 }
 
 // Quarantined is one stored value that breaks its field's rule (R10 3.15):
-// still visible and editable, named with the rule, never the value.
-type Quarantined struct {
-	Field string `json:"field"`
-	Rule  string `json:"rule"`
-}
+// still visible and editable, named with the rule, never the value. The
+// rule itself lives in logic/resquar (shared with the engine and cache).
+type Quarantined = resquar.Finding
 
 // quarantineOf lists d-fields of stored whose value does not fit the
 // field's type or allowed values, and values of fields d does not know.
@@ -216,20 +215,11 @@ func quarantineOf(d kindDef, stored resValues) []Quarantined {
 	for fid, raw := range stored.vals {
 		f, known := d.byID[fid]
 		if !known {
-			out = append(out, Quarantined{Field: cmp.Or(stored.names[fid], fid), Rule: "unknown field"})
+			out = append(out, Quarantined{Field: cmp.Or(stored.names[fid], fid), Rule: resquar.RuleUnknownField})
 			continue
 		}
-		name := text(f.Row, kName)
-		k, err := value.ParseKind(text(f.Row, fType))
-		if err != nil || k == value.KindRef || k == value.KindSecretRef {
-			continue
-		}
-		if _, perr := value.Parse(k, raw); perr != nil {
-			out = append(out, Quarantined{Field: name, Rule: "does not fit " + string(k)})
-			continue
-		}
-		if vs := texts(f.Row, fValues); len(vs) > 0 && !slices.Contains(vs, display(fromJSONRaw(raw))) {
-			out = append(out, Quarantined{Field: name, Rule: "not one of " + strings.Join(vs, ", ")})
+		if q, bad := resquar.Check(resquar.Field{Name: text(f.Row, kName), Type: text(f.Row, fType), Values: texts(f.Row, fValues)}, raw); bad {
+			out = append(out, q)
 		}
 	}
 	slices.SortFunc(out, func(a, b Quarantined) int { return cmp.Compare(a.Field, b.Field) })

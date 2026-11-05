@@ -165,6 +165,13 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 				return Written{}, err
 			}
 			dropped = append(append(dropped, kept...), resDropped...)
+			// BATCH 3: the client repo's own kind row (origin) and field
+			// rows, written last so a refusal above leaves nothing behind.
+			if def.Name == schema.TableResources {
+				if typed, err = e.clientKind(ctx, to, typed); err != nil {
+					return Written{}, err
+				}
+			}
 		}
 		names := slices.Sorted(maps.Keys(typed))
 		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {

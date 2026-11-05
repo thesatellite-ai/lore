@@ -70,7 +70,7 @@ func TestMoveResourceIntoClient(t *testing.T) {
 
 	fields := res("web", `{"`+notes+`":{"name":"notes","v":"x"},"`+ip+`":{"name":"ip","v":"203.0.113.10"}}`)
 	web := put(schema.TableResources, fields)
-	if _, _, err = w.eng.resourceIntoClient(ctx, store.SourceRepo, web, fields, false); !errs.Has(err, errs.LeakBlocked) {
+	if _, _, err = w.eng.resourceIntoClient(ctx, store.SourceRepo, web, fields, false); !errs.Has(err, errs.ResourceInternal) {
 		t.Fatalf("internal without --drop-internal: %v", err)
 	}
 	if _, _, err = w.eng.resourceIntoClient(ctx, store.SourceRepo, web, fields, true); !errs.Has(err, errs.NeedsConfirm) || !strings.Contains(err.Error(), "ip") {
@@ -83,4 +83,56 @@ func TestMoveResourceIntoClient(t *testing.T) {
 	if s := got["fields"].String(); strings.Contains(s, notes) || !strings.Contains(s, ip) || len(warns) != 1 || warns[0].Code != WarnResourceDropped {
 		t.Fatalf("drop-internal: fields %s warnings %v", s, warns)
 	}
+
+	// 3.15: a value outside its field's allowed values blocks the move.
+	prov := field("provider", "text", map[string]value.Value{"values": mustList(t, "aws", "gcp")})
+	odd := res("odd", `{"`+prov+`":{"name":"provider","v":"azure"}}`)
+	if _, _, err = w.eng.resourceIntoClient(ctx, store.SourceRepo, web, odd, false); !errs.Has(err, errs.ResourceQuarantined) || !strings.Contains(err.Error(), "not one of aws, gcp") {
+		t.Fatalf("quarantined: %v", err)
+	}
+
+	// BATCH 3, end to end: the client repo gets its own kind row (origin =
+	// the store kind) and the field rows the row uses, only the used
+	// allowed value; the moved row names them; a second move reuses them.
+	yes := context.WithValue(ctx, callKey{}, call{caller: op.Caller{Yes: true}})
+	cdn := put(schema.TableResources, res("cdn", `{"`+prov+`":{"name":"provider","v":"aws"},"`+ip+`":{"name":"ip","v":"203.0.113.9"}}`))
+	mv, err := w.eng.Move(yes, Ref{ID: cdn}, store.SourceRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ck, err := w.eng.List(ctx, store.SourceRepo, schema.TableKinds)
+	if err != nil || len(ck) != 1 || originID(ck[0].Fields["origin"]) != kind.String() || ck[0].ID == kind {
+		t.Fatalf("client kind: %v %v", ck, err)
+	}
+	if mv.Row.Fields["kind"].String() != ck[0].ID.String() || strings.Contains(mv.Row.Fields["fields"].String(), prov) {
+		t.Fatalf("moved row still names store definitions: kind %s fields %s", mv.Row.Fields["kind"], mv.Row.Fields["fields"])
+	}
+	cf, err := w.eng.List(ctx, store.SourceRepo, schema.TableKindFields)
+	if err != nil || len(cf) != 2 {
+		t.Fatalf("client fields: %v %v", cf, err)
+	}
+	for _, f := range cf {
+		if f.Fields["name"].String() == "provider" && strings.Join(listTexts(f.Fields["values"]), ",") != "aws" {
+			t.Fatalf("values copied beyond use: %v", f.Fields["values"])
+		}
+	}
+	cdn2 := put(schema.TableResources, res("cdn2", `{"`+prov+`":{"name":"provider","v":"gcp"}}`))
+	if _, err = w.eng.Move(yes, Ref{ID: cdn2}, store.SourceRepo); err != nil {
+		t.Fatal(err)
+	}
+	ck2, _ := w.eng.List(ctx, store.SourceRepo, schema.TableKinds)
+	cf2, _ := w.eng.List(ctx, store.SourceRepo, schema.TableKindFields)
+	if len(ck2) != 1 || len(cf2) != 2 {
+		t.Fatalf("second move: %d kinds, %d fields (want reuse)", len(ck2), len(cf2))
+	}
+}
+
+// mustList is a list-of-text value.
+func mustList(t *testing.T, items ...string) value.Value {
+	t.Helper()
+	l, err := textList(items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
 }
