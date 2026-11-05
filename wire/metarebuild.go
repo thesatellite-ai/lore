@@ -11,7 +11,10 @@ package wire
 //	       │  (skip-worktree) → Sparse
 //	       └─ each wanted row file: work tree, then HEAD and every local
 //	          and remote-tracking branch (the default branch and every
-//	          fetched ref); the first readable copy is Found[id] = where
+//	          fetched ref); the first readable copy is Found[id] = where;
+//	          a copy that exists but does not decode is Damaged[id];
+//	          AbsentOn[ref] counts the rows missing on each ref
+//	HoldStore(src) ─► store.Holder on the concrete backend (OV64-HOLD)
 //
 //	pre-commit / landing ─► KeyLoosenings(dir, base, target) ─► changed
 //	  meta_keys/*.json between base and target ("" = the index)
@@ -32,7 +35,31 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-var _ settings.KeyRowProber = (*App)(nil)
+var (
+	_ settings.KeyRowProber = (*App)(nil)
+	_ settings.StoreHolder  = (*App)(nil)
+)
+
+// HoldStore implements settings.StoreHolder: it takes src's backend lock
+// (the sync lock of the store's checkout) for ctx, so meta rebuild's
+// re-check and its writes run with no sync in between (OV64-HOLD). A
+// backend without the capability holds nothing (release is a no-op).
+func (a *App) HoldStore(ctx context.Context, src store.Source) (context.Context, func() error, error) {
+	none := func() error { return nil }
+	st, err := a.state(ctx)
+	if err != nil {
+		return ctx, none, err
+	}
+	b, ok := st.byName[src]
+	if !ok {
+		return ctx, none, errs.New(errs.NotFound, "wire: store "+string(src)+" is not attached")
+	}
+	h, ok := concrete(b).(store.Holder)
+	if !ok {
+		return ctx, none, nil
+	}
+	return h.Hold(ctx)
+}
 
 // probeWorkTree names a copy found on disk.
 const probeWorkTree = "the work tree"
@@ -55,7 +82,7 @@ func (a *App) ProbeRows(ctx context.Context, src store.Source, refs []engine.Ref
 	if !ok {
 		return settings.KeyRowProbe{Found: map[string]string{}}, nil
 	}
-	out := settings.KeyRowProbe{Git: true, Found: map[string]string{}}
+	out := settings.KeyRowProbe{Git: true, Found: map[string]string{}, Damaged: map[string]string{}, AbsentOn: map[string]int{}}
 	dir, data := gb.Dir(), gb.DataPath()
 	if sh, serr := liveGit(ctx, dir, "rev-parse", "--is-shallow-repository"); serr == nil && strings.TrimSpace(string(sh)) == "true" {
 		out.Shallow = true
@@ -81,21 +108,31 @@ func (a *App) ProbeRows(ctx context.Context, src store.Source, refs []engine.Ref
 	for _, ref := range refs {
 		rel := rowfs.RowPath(ref.Table, ref.ID)
 		path := data + "/" + rel
+		id := ref.ID.String()
+		damaged := "" // first place a copy exists but does not decode
 		if doc, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, filepath.FromSlash(path)))); rerr == nil {
 			if _, derr := rowfs.DecodeRowFile(rel, doc); derr == nil {
-				out.Found[ref.ID.String()] = probeWorkTree
+				out.Found[id] = probeWorkTree
 				continue
 			}
+			damaged = probeWorkTree
 		}
 		for _, br := range branches {
 			doc, gerr := liveGit(ctx, dir, "cat-file", "blob", br+":./"+path)
 			if gerr != nil {
-				continue // absent on that ref
+				out.AbsentOn[br]++ // OV64-SPLIT: per-ref count of absent rows
+				continue
 			}
 			if _, derr := rowfs.DecodeRowFile(rel, doc); derr == nil {
-				out.Found[ref.ID.String()] = br
+				out.Found[id] = br
 				break
 			}
+			if damaged == "" {
+				damaged = br
+			}
+		}
+		if _, ok := out.Found[id]; !ok && damaged != "" {
+			out.Damaged[id] = damaged // OV64-SPLIT: damaged, not absent
 		}
 	}
 	return out, nil

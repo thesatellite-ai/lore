@@ -16,8 +16,11 @@ package settings
 //	     (b) inferred from data rows (types never date/datetime; rebuilt,
 //	     reviewed:false, internal in a store, sensitive when the rows say;
 //	     allowed values with their own val_ ids and v_name names)
-//	  ─► --dry-run: report, stop ─► ask ─► probe again (re-check right
-//	     before writing) ─► CreateWithID per key, then its values
+//	     (a copy that exists but does not decode is damaged → E_REFUSED,
+//	     OV64-SPLIT; per-ref absent counts reported)
+//	  ─► --dry-run: report, stop ─► ask ─► hold the store's sync lock
+//	     (StoreHolder, OV64-HOLD) ─► probe again (re-check right before
+//	     writing) ─► CreateWithID per key, then its values ─► release
 
 import (
 	"bytes"
@@ -63,7 +66,18 @@ type KeyRowProbe struct {
 	// Found maps a row id to the first place a readable copy exists
 	// ("the work tree", "HEAD", a branch or remote-tracking ref).
 	Found map[string]string
-	Refs  []string // the refs searched
+	// Damaged maps a row id with no readable copy to the first place a
+	// copy exists that does not decode (OV64-SPLIT: damaged, not lost).
+	Damaged map[string]string
+	// AbsentOn counts, per ref searched, the wanted rows missing there.
+	AbsentOn map[string]int
+	Refs     []string // the refs searched
+}
+
+// StoreHolder is the optional Env upgrade that holds a store's backend
+// lock (the sync lock) for ctx (wire.App; OV64-HOLD).
+type StoreHolder interface {
+	HoldStore(ctx context.Context, src store.Source) (held context.Context, release func() error, err error)
 }
 
 // KeyRowProber is the optional Env upgrade rebuild needs (wire.App).
@@ -112,6 +126,15 @@ type MetaRebuildOut struct {
 	Elsewhere []MetaRebuildElsewhere `json:"elsewhere"`
 	DryRun    bool                   `json:"dry_run,omitempty"`
 	Written   int                    `json:"written"`
+	// Refs are the refs searched, each with how many of the missing rows
+	// it lacks (OV64-SPLIT, the per-ref counts).
+	Refs []MetaRebuildRef `json:"refs,omitempty"`
+}
+
+// MetaRebuildRef is one searched ref and its count of absent rows.
+type MetaRebuildRef struct {
+	Ref    string `json:"ref"`
+	Absent int    `json:"absent"`
 }
 
 // Text implements op.Texter (the 3.18 sample).
@@ -129,6 +152,13 @@ func (o MetaRebuildOut) Text() string {
 		}
 	}
 	fmt.Fprintf(&b, "key rows of %s: %d missing in the work tree, HEAD, every branch and fetched ref\n", place(store.Source(o.Store)), len(o.Keys))
+	if len(o.Refs) > 0 {
+		counts := make([]string, 0, len(o.Refs))
+		for _, ref := range o.Refs {
+			counts = append(counts, fmt.Sprintf("%s %d", ref.Ref, ref.Absent))
+		}
+		b.WriteString("searched (rows absent per ref): " + strings.Join(counts, ", ") + "\n")
+	}
 	if len(hist) > 0 {
 		names := make([]string, 0, len(hist))
 		for _, k := range hist {
@@ -210,8 +240,12 @@ func (o ops) metaRebuild(ctx context.Context, in MetaRebuildIn) (MetaRebuildOut,
 	if !ok {
 		return MetaRebuildOut{}, errs.New(errs.Unsupported, "meta rebuild: this surface cannot read the store's git checkout").WithHint("run it from the lore CLI")
 	}
-	if err = o.probeClean(ctx, pr, src, mine, in.AllowShallow); err != nil {
+	probe, err := o.probeClean(ctx, pr, src, mine, in.AllowShallow)
+	if err != nil {
 		return MetaRebuildOut{}, err
+	}
+	for _, ref := range probe.Refs {
+		out.Refs = append(out.Refs, MetaRebuildRef{Ref: ref, Absent: probe.AbsentOn[ref]})
 	}
 	plans := make([]rebuildPlan, 0, len(mine))
 	for _, m := range mine {
@@ -231,7 +265,17 @@ func (o ops) metaRebuild(ctx context.Context, in MetaRebuildIn) (MetaRebuildOut,
 	// Re-check right before writing: a sync or checkout since the
 	// preview may have brought a row back, which must never be overwritten
 	// (3.18 step 1). CreateWithID also refuses an id that exists (E_STALE).
-	if err = o.probeClean(ctx, pr, src, mine, in.AllowShallow); err != nil {
+	// OV64-HOLD: the store's sync lock is held from this re-check through
+	// the last write, so no sync can bring a row back in between.
+	if h, hok := upgrade.As[StoreHolder](o.env); hok {
+		held, release, herr := h.HoldStore(ctx, src)
+		if herr != nil {
+			return MetaRebuildOut{}, herr
+		}
+		defer func() { _ = release() }() // idempotent; the writes are done or failed
+		ctx = held
+	}
+	if _, err = o.probeClean(ctx, pr, src, mine, in.AllowShallow); err != nil {
 		return MetaRebuildOut{}, err
 	}
 	cr, ok := upgrade.As[idCreator](o.env)
@@ -343,19 +387,19 @@ func addValueIDs(dst map[string]string, en meta.Entry) {
 }
 
 // probeClean runs the git checks of 3.18 steps 2 and 3 over the key rows.
-func (o ops) probeClean(ctx context.Context, pr KeyRowProber, src store.Source, mine []missingKey, allowShallow bool) error {
+func (o ops) probeClean(ctx context.Context, pr KeyRowProber, src store.Source, mine []missingKey, allowShallow bool) (KeyRowProbe, error) {
 	refs := make([]engine.Ref, 0, len(mine))
 	for _, m := range mine {
 		refs = append(refs, engine.Ref{Store: src, Table: schema.TableMetaKeys, ID: m.id.Any()})
 	}
 	p, err := pr.ProbeRows(ctx, src, refs)
 	if err != nil {
-		return err
+		return KeyRowProbe{}, err
 	}
 	if !p.Git {
 		// DECISION OV64-FOLDER: a plain folder store has no refs to search
 		// and no history, so "really lost" cannot be told; refuse.
-		return errs.New(errs.Unsupported, place(src)+" is a plain folder store: lore cannot tell a lost key row from one out of reach").
+		return KeyRowProbe{}, errs.New(errs.Unsupported, place(src)+" is a plain folder store: lore cannot tell a lost key row from one out of reach").
 			WithHint("restore the meta_keys files from your backup; nothing written")
 	}
 	if (p.Shallow || p.Sparse) && !allowShallow {
@@ -363,7 +407,7 @@ func (o ops) probeClean(ctx context.Context, pr KeyRowProber, src store.Source, 
 		if p.Sparse {
 			what = "a sparse checkout that leaves meta_keys/ or meta_values/ out"
 		}
-		return errs.New(errs.Refused, place(src)+" is "+what+"; the missing rows may only be out of reach").
+		return KeyRowProbe{}, errs.New(errs.Refused, place(src)+" is "+what+"; the missing rows may only be out of reach").
 			WithHint("fetch the full history or widen the checkout, or rerun with --allow-shallow; nothing written")
 	}
 	var found []string
@@ -374,10 +418,23 @@ func (o ops) probeClean(ctx context.Context, pr KeyRowProber, src store.Source, 
 	}
 	if len(found) > 0 {
 		slices.Sort(found)
-		return errs.New(errs.Refused, "not lost: "+strings.Join(found, "; ")).
+		return KeyRowProbe{}, errs.New(errs.Refused, "not lost: "+strings.Join(found, "; ")).
 			WithHint("restore it from there (git checkout <ref> -- <path>, or merge it; lore never does this itself) or run lore sync; nothing written")
 	}
-	return nil
+	// OV64-SPLIT: a copy that exists but does not decode is damaged, not
+	// lost; rebuilding would hide the damage, so refuse and name it.
+	var damaged []string
+	for _, m := range mine {
+		if where, ok := p.Damaged[m.id.String()]; ok {
+			damaged = append(damaged, fmt.Sprintf("%s (%s) is damaged in %s", m.name, short(m.id.Any()), where))
+		}
+	}
+	if len(damaged) > 0 {
+		slices.Sort(damaged)
+		return KeyRowProbe{}, errs.New(errs.Refused, "not lost but damaged: "+strings.Join(damaged, "; ")).
+			WithHint("repair the row file (lore doctor names it; git show <ref>:<path> shows the copy); nothing written")
+	}
+	return p, nil
 }
 
 // rebuildPlan is one key row (and its values) to write.
