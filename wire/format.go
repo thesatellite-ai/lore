@@ -119,7 +119,9 @@ func readFormat(ctx context.Context, repo store.Backend, caller ids.ID[ids.Actor
 // .lore/data/_meta.json before its first use, raising min_lore_version to
 // its Since. It asks first (E_NEEDS_CONFIRM unless --yes) while the O6
 // question is open — rows written by teammates on v0.1.17 and no 0.1.18
-// write yet — because those teammates become read-only. Nothing else is
+// write yet — or while the team versions (`_w` stamps) show a writer below
+// the feature's Since, listing them (rule 2 step 4, FQ2, OV48); a feature
+// already declared asks nobody. Nothing else is
 // written; the person commits the file with their code.
 func (a *App) EnableFeature(ctx context.Context, name string) (opsmigrate.EnableOut, error) {
 	f, ok := formatgate.Lookup(name)
@@ -138,12 +140,14 @@ func (a *App) EnableFeature(ctx context.Context, name string) (opsmigrate.Enable
 	a.mu.Lock()
 	ask := st.format.ask && !st.format.written
 	a.mu.Unlock()
-	if ask && !engine.Confirmed(ctx) {
-		return opsmigrate.EnableOut{}, errs.New(errs.NeedsConfirm, "migrate: enabling "+strconvQuote(name)+" makes this repository need lore "+f.Since+
-			" or later to write; teammates who wrote its rows with lore 0.1.17 become read-only until they upgrade").
-			WithQuestion("has everyone who shares this repository upgraded to lore " + f.Since + "?").
-			WithHint("ask the person, then rerun with --yes").
-			WithNext("lore migrate enable " + name + " --yes")
+	if !engine.Confirmed(ctx) && !declared(st.repoTop, name) { // already declared: nobody's state changes
+		below, berr := writersBelow(ctx, st.caches, f.Since)
+		if berr != nil {
+			return opsmigrate.EnableOut{}, berr
+		}
+		if ask || len(below) > 0 {
+			return opsmigrate.EnableOut{}, enableConfirm(name, f.Since, ask, below)
+		}
 	}
 	added, err := rowfs.DeclareRepo(st.repoTop, []string{name})
 	if err != nil {
@@ -159,6 +163,67 @@ func (a *App) EnableFeature(ctx context.Context, name string) (opsmigrate.Enable
 		a.mu.Unlock()
 	}
 	return opsmigrate.EnableOut{Feature: name, Added: len(added) > 0, Features: d.Features, MinLoreVersion: d.MinLoreVersion}, nil
+}
+
+// declared reports whether the checkout's _meta.json already lists name
+// (an unreadable file is "no": DeclareRepo then fails closed itself).
+func declared(top, name string) bool {
+	d, exists, err := rowfs.ReadRepoFormat(top)
+	return err == nil && exists && slices.Contains(d.Features, name)
+}
+
+// writersBelow lists the writers of the repo store whose newest stamped
+// save (`_w`, team versions, FQ3/OQ7) is below since, as "actor on
+// mch_xxxxxxxx (lore v)". FMT-DEV: a dev-build stamp is never below. The
+// view shows each machine's newest WRITE, so the list errs only towards
+// asking once too often (FORMAT_EVOLUTION rule 2 "safe-direction limit").
+func writersBelow(ctx context.Context, c *caches, since string) ([]string, error) {
+	c.mu.Lock()
+	cache := c.by[store.SourceRepo]
+	if cache == nil {
+		cache = c.combined // past MaxStoreCaches every store shares one file
+	}
+	c.mu.Unlock()
+	if cache == nil {
+		return nil, nil
+	}
+	tvs, err := cache.TeamVersions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, tv := range tvs {
+		if !formatgate.VersionBelow(tv.Version, since) {
+			continue
+		}
+		machine := tv.Machine
+		if machine == "" {
+			machine = "a code repo save"
+		} else if n := len("mch_") + machineShortHex; len(machine) > n {
+			machine = machine[:n]
+		}
+		out = append(out, tv.Actor+" on "+machine+" (lore "+tv.Version+")")
+	}
+	return out, nil
+}
+
+// machineShortHex is how many hex digits of a machine id a message shows
+// (the machine profile decision: mch_ plus 8 hex).
+const machineShortHex = 8
+
+// enableConfirm is migrate.enable's E_NEEDS_CONFIRM (rule 2 step 4, FQ2):
+// who becomes read-only, the question, and the re-run with --yes.
+func enableConfirm(name, since string, v017 bool, below []string) error {
+	var who []string
+	if v017 {
+		who = append(who, "teammates who wrote this repository's rows with lore 0.1.17")
+	}
+	who = append(who, below...)
+	return errs.New(errs.NeedsConfirm, "migrate: enabling "+strconvQuote(name)+" makes this repository need lore "+since+
+		" or later to write; these writers become read-only until they upgrade: "+strings.Join(who, "; ")).
+		WithQuestion("enable " + strconvQuote(name) + " for everyone (has everyone who shares this repository upgraded to lore " + since + ")?").
+		WithHint("ask the person, then rerun with --yes").
+		WithNext("lore migrate enable " + name + " --yes")
 }
 
 // strconvQuote quotes a user-given name for a message.
