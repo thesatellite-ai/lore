@@ -31,19 +31,8 @@ lore rule add --to client2 --body "Every screen works on a phone"
 lore migrate run --dry-run                              # in a v0.1.17 Mode B repo: what moves
 ```
 
-### `lore learn-from docs`
-Ingest existing markdown (CLAUDE.md, AGENTS.md, .cursorrules, README) into `learn_candidates` for review.
-
-```bash
-lore learn-from docs                       # default sources at project root (same as `lore learn from docs`)
-lore learn-from docs --paths=foo.md        # explicit file(s)
-lore learn-from docs --paths=docs/         # directory — RECURSES for *.md
-lore learn list [--status=pending] [--json]
-lore learn promote <id> --target=memories
-lore learn reject <id>                     # single
-lore learn reject --ids=a,b,c              # batch by ID list
-lore learn reject --all                    # batch — every pending candidate
-```
+### Bringing in existing markdown
+There is no importer in 0.1.18 (`learn-from` and `learn` are dropped). Read CLAUDE.md / AGENTS.md / .cursorrules / README section by section and add each item that is still true with the matching command: `rule add` (must/should), `decision add` (a choice + why), `memory add` (a fact), `hotfix add` (a recurring trap). Then delete the old file and commit.
 
 ---
 
@@ -219,22 +208,18 @@ lore snapshot list [--json]
 lore snapshot show <id> [--json]
 lore snapshot archive / unarchive <id>
 
-# plugin — trust allowlist
-lore plugin list [--json]
-lore plugin trust --name=<n> --sha256=<sha>
-lore plugin untrust <id>
-
-# pii-pattern — custom secret detectors (disabled by default)
-lore pii-pattern list [--json]
-lore pii-pattern add --name=<n> --regex=<re> [--source=user]
-lore pii-pattern enable / disable <id>
+# secret rules — your own secret detectors (settings rows; pii-pattern add|enable|disable refuse)
+lore secrets rules
+lore secrets rule add <rule-id> --regex=<re> [--description=<d>] [--to <store>]
+lore secrets rule off|on <rule-id>
+lore pii-pattern list              # read-only: patterns copied from v0.1.17, not checked
 
 # task view — saved task-list filters (rows in .lore/data, travel with git)
 lore task view add <name> --where '<filter>' [--sort <key>[:asc|:desc]] [--group-by <field>]
 lore task view list|show|edit|delete
 lore task list --view <name>
 
-# external-source — registrations consumed by learn-from
+# external-source — registered outside sources (a list; nothing reads them yet)
 lore external-source list [--json]
 lore external-source add --name=<n> --kind=<k> [--config=<json>]
 lore external-source enable / disable <id>
@@ -243,9 +228,6 @@ lore external-source enable / disable <id>
 lore techdoc add --name=<n> [--base-url=<u>] [--description=<d>]
 lore techdoc list [--json]
 lore techdoc show <id> [--json]
-
-# mount-alias — repo-rename redirects (read-only)
-lore mount-alias list [--json] [--expiring]
 
 # config — DB-level KV (dbconfig table)
 lore config get <key>
@@ -629,27 +611,20 @@ Shows what was included/excluded and why (scope filters, dedup decisions, budget
 
 ---
 
-## Doctor / Repair / Backup / Restore
+## Doctor / Rebuild
 
 ```bash
 # health
 lore doctor [--json]              # exit 0 healthy, 1 degraded, 2 broken
 lore doctor --fix                 # repair what doctor can fix safely (--supersedes links written by older versions); safe to re-run
 
-# all-tables overview — every data table + total record count
-lore tables [--sort=name|count[:asc|desc]] [--filter=<substr>] [--json]
-#   default sort name:asc; FTS5 virtual/shadow + sqlite internals excluded
-#   Same data is also a screen in the TUI: `lore tui --kind=tables`
-#   ("Tables (overview)" in the kind picker) — interactive filter/sort
+# read-only SQL over every table (counts, joins); sensitive values masked
+lore sql "SELECT count(*) FROM rules"
 
-# backup / restore round-trip
-lore backup [--out=path]          # default: .lore/backups/<ts>.sqlite
-lore restore <path> --confirm     # replaces current DB
-
-# disaster recovery (3 tiers)
-lore repair --tier=1 --confirm    # SQLite .recover from WAL
-lore repair --tier=2 --confirm    # restore latest backup (default)
-lore repair --tier=3 --confirm    # bootstrap empty DB (last resort)
+# a damaged or lost .lore/lore.db: the files in .lore/data are the truth
+mv .lore/lore.db .lore/lore.db.old && lore sync   # rebuilds the database from .lore/data
+lore search rebuild                               # rebuilds the search index from the row files
+git checkout HEAD -- .lore/data                   # a deleted .lore/data comes back from git
 ```
 
 ---
@@ -658,9 +633,8 @@ lore repair --tier=3 --confirm    # bootstrap empty DB (last resort)
 
 ```bash
 lore identity show           # who am I, what resolution step won
-lore identity set "Alice <alice@example.com>"    # persist to ~/.lore/identity.yaml (an email is required)
-lore identity unset          # remove that file; resolution falls back down the chain
-lore identity anonymize on   # anon:<random> per session (off to stop)
+lore identity set "Alice <alice@example.com>"    # writes identity: in ~/.lore/config.yaml (an email is required)
+lore identity unset          # clears it; resolution falls back down the chain
 ```
 
 8-step fallback chain: flag → env → toml → git config → $USER → machine-id → persisted salt → ephemeral. Always resolves.
@@ -705,7 +679,7 @@ lore task next --mission mis_12                          # claims the best ready
 lore task heartbeat                                      # keep the claim alive
 lore task note tsk_30 "mutation done; tests next"
 lore task done tsk_30 --pr 412 --lesson "tokens expire in 48h"
-lore finding add --mission mis_12 "invite links must use the public website address"
+lore memory add "invite links must use the public website address"   # a fact every agent finds with lore search
 lore handoff add --for @agent-frontend-2 --task tsk_31 "form is half done"
 ```
 
@@ -742,7 +716,7 @@ lore why-context                  # the last render: what was pinned and why
 
 ```bash
 lore version [--json]             # binary + schema + bundle + plugin + mcp versions
-lore errors list [--json]         # full E_* code registry with hints + doc URLs
+# error codes: docs/reference/cli-commands.md#errors (generated by lore spec docs); --json on a failing command gives code + hint
 lore --help                       # discoverable command tree
 lore <cmd> --help                 # per-command help
 ```

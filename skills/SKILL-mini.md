@@ -34,7 +34,7 @@ Memory added:
 BAD — running setup commands on every capture trigger:
 ```bash
 lore init --non-interactive
-lore learn-from docs
+lore render
 ```
 
 ## BOOTSTRAP — ensure binary before any command
@@ -128,12 +128,12 @@ Apply these BEFORE choosing a verb. The presence of specific signal words is dec
 
 Do NOT copy any few-shot example's verb verbatim — synthesize the correct verb from the rules above, then fill in the user's actual content.
 
-## 🛑 DESTRUCTIVE OPERATIONS — never silent, always confirm + backup first
+## 🛑 DESTRUCTIVE OPERATIONS — never silent, always confirm + commit first
 
 When the user asks to **delete**, **wipe**, **drop**, **rm -rf**, **start fresh**, or **nuke** any lore data (the `.lore/` directory, the DB, all rules, all memories, etc.), DO NOT silently execute. The protocol is:
 
 1. Warn the user that the action is irreversible.
-2. Emit `lore backup` first so they have an out.
+2. Make sure `.lore/data` is committed first (git is the copy that lets them undo it).
 3. Suggest the soft-delete equivalent (`lore X archive`) if it applies.
 4. Only emit the destructive command after explicit confirmation, AND with the `--confirm` flag where the command supports it.
 
@@ -141,10 +141,10 @@ Examples:
 
 | User says | You should emit |
 |---|---|
-| "Delete the .lore dir entirely — wipe everything." | `lore backup` first, then warn: "This is irreversible. Confirm and I'll proceed." Do NOT emit `rm -rf .lore` without confirmation. |
-| "Drop all rules." | `lore backup`, then suggest `lore rule list --json` to review, then `lore rule archive` per rule (or `rule delete --confirm` for hard delete). |
-| "Reset the DB." | `lore backup`, then `lore doctor` to check state, then `lore repair` if needed — never just `rm`. |
-| "Start completely fresh." | Same as "delete": backup first, confirm, then proceed. |
+| "Delete the .lore dir entirely — wipe everything." | check `git status .lore/data` is clean first, then warn: "This is irreversible. Confirm and I'll proceed." Do NOT emit `rm -rf .lore` without confirmation. |
+| "Drop all rules." | suggest `lore rule list --json` to review, then `lore rule archive` per rule (or `rule delete --yes`, which moves it to the trash). |
+| "Reset the DB." | `lore doctor` first; the DB is a cache of `.lore/data`: `mv .lore/lore.db .lore/lore.db.old && lore sync` rebuilds it. |
+| "Start completely fresh." | Same as "delete": commit first, confirm, then proceed. |
 
 Never emit a bare `rm -rf .lore` or `DROP TABLE` or destructive SQL.
 
@@ -154,17 +154,10 @@ Run these ONCE at first setup, only if `.lore/` is absent AND user explicitly as
 
 ```bash
 [ -d .lore ] || lore init --non-interactive
-lore learn-from docs
-for id in $(lore learn list --json | jq -r '.data[].id'); do
-  lore learn promote "$id" --target=memories
-done
 lore render
 ```
 
-For explicit source files (instead of the default glob), use `--paths`:
-```bash
-lore learn-from docs --paths=docs/CLAUDE.md,docs/CONVENTIONS.md,.ai
-```
+Existing CLAUDE.md / AGENTS.md notes: no importer in 0.1.18. Read them and add each item that is still true with `rule add`, `decision add` or `memory add`.
 
 Every other user statement → TRIGGER GRAMMAR below.
 
@@ -294,18 +287,12 @@ T[show all rules including archived | audit including soft-deleted | include arc
 T[what decisions about X?]               → decision list --json | jq '.data[]|select(.title|test("X";"i"))'
 T[who am I | what identity | whoami in lore]
                                           → lore identity show
-T[anonymize captures | hide my name | anonymous mode | don't record my identity]
-                                          → lore identity anonymize
-T[restore DB from backup | restore from this file | roll back to <date> backup]
-                                          → lore restore <backup-path> --confirm
-                                          # POSITIONAL <backup-path>, not --from=
-                                          # NEVER `repair --tier=3` for this (that's nuclear / bootstrap-empty, NOT restore-from-file)
+T[DB is broken | rebuild the DB | E_DB_CORRUPT]
+                                          → mv .lore/lore.db .lore/lore.db.old && lore sync   (rebuilds from .lore/data)
 
 T[remove my persisted identity | go back to auto-detected | unset identity | reset identity file]
                                           → lore identity unset
-                                          # identity unset vs anonymize:
-                                          #   anonymize → toggles anon mode (anon:<random> per session); identity FILE stays
-                                          #   unset     → REMOVES ~/.lore/identity.yaml entirely → fall back to auto-resolve
+                                          # clears identity: in ~/.lore/config.yaml → fall back to auto-resolve
 T[set my identity to X | record me as X]  → lore identity set "<X> <email>"
 T[file a bug | make a support bundle | generate a bundle for the issue]
                                           → lore support-bundle --out=/tmp/lore-bundle.tar.gz
@@ -406,10 +393,7 @@ inc_  incident    hnd_  handoff     rmd_  reminder    cmt_  comment
 ```
 P1  bootstrap new project
     lore init --non-interactive
-    lore learn-from docs
-    for id in $(lore learn list --json | jq -r '.data[].id'); do
-      lore learn promote "$id" --target=memories
-    done
+    # existing notes: add each true item with rule add / decision add / memory add
     lore render
 
 P2  capture a correction
@@ -439,12 +423,9 @@ P6  notes shared by sibling projects (a store; Mode B is retired)
 
 P7  disaster recovery
     lore doctor --json
-    lore repair --tier=1 --confirm
-    # if still broken:
-    lore repair --tier=2 --confirm
-    # if no backup:
-    lore repair --tier=3 --confirm
-    lore learn-from docs
+    mv .lore/lore.db .lore/lore.db.old && lore sync   # rebuild the DB from .lore/data
+    lore search rebuild
+    # .lore/data itself deleted: git checkout HEAD -- .lore/data
     lore render
 
 P8  mission + tasks
@@ -461,10 +442,9 @@ P10 inspect what the agent is seeing
     lore why-context --rendered
 
 P11 migrate from .cursorrules / AGENTS.md
-    lore learn-from docs --paths=.cursorrules,AGENTS.md
-    for id in $(lore learn list --json | jq -r '.data[].id'); do
-      lore learn promote "$id" --target=memories
-    done
+    # read the file; add each true item with its own command
+    lore rule add --severity=must --body="<rule from the file>"
+    lore memory add --body="<fact from the file>"
     lore render
 
 P12 CI integration (read-only)
@@ -504,7 +484,6 @@ P15 demote rule → memory
 
 P16 periodic review
     lore doctor --json | jq '.status'
-    lore backup
     lore reminder list --json | jq '.data[] | select(.due_at <= "<7-days-out>")'
     lore hotfix list --json
     lore task list --status=in_progress --json
@@ -525,7 +504,7 @@ P19 render slice (budget control)
     lore render --dry-run | wc -c
 
 P20 migrate to new lore version
-    lore backup
+    git status --porcelain -- .lore/data   # commit first
     lore version --json | jq '.schema_version'
     lore doctor
     lore render
@@ -552,14 +531,14 @@ lore task done tsk_30 --pr 412 --lesson "what you learned"
 ```
 E_DB_LOCKED            another lore process holds write lock; wait or kill stale process
 E_LOCK_HELD            project flock held; check for stale lore procs
-E_DB_CORRUPT           run lore repair --tier=2 --confirm
+E_DB_CORRUPT           mv .lore/lore.db away and run lore sync (rebuilds from .lore/data)
 E_DB_NOT_FOUND         DB missing; run lore init or check LORE_DB env
 E_MIGRATION_INCOMPLETE run lore doctor (triggers auto-migrate)
 E_NOT_PROJECT_ROOT     cd to project root or use --db=<path>
 E_AMBIGUOUS_PROJECT    both lore.db and lore.toml exist; remove one
 E_SECRET_DETECTED      strip secret, or --secret-ref "<mgr>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes (bare --yes does not store it)
 E_ROOT_REFUSED         set MINI_ALLOW_ROOT=1 only if truly needed
-E_SYMLINK_DB           DB is a symlink; delete + restore from backup
+E_SYMLINK_DB           DB is a symlink; delete it, the next command rebuilds it
 E_READ_ONLY            drop --read-only or unset LORE_READ_ONLY
 E_NETWORK_FS           DB on iCloud/Dropbox/NFS; move to local disk
 E_NOT_FOUND            no row by that id/code
@@ -567,7 +546,7 @@ E_NOT_IMPLEMENTED      v0.2 feature; inform user, don't retry
 E_INVALID_INPUT        check flag values against ENUMS section above
 ```
 
-Match on code, not English message. Full registry: `lore errors list --json`.
+Match on code, not English message. Full registry: docs/reference/cli-commands.md#errors.
 
 ## ⚠ Enum validation (don't pass through obviously wrong values)
 
@@ -591,7 +570,6 @@ The CLI will reject invalid enums with `E_INVALID_INPUT` (and unknown flags like
 4. Don't use singular table names in `--on-table` (`--on-table=task` is wrong; use `tasks`).
 5. Don't run `lore init` on every request — session-start only, when `.lore/` is absent.
 6. Don't use `rule add` for soft preferences; use `memory add`. Reserve rules for true constraints.
-8. Don't call `repair --tier=3` first — it destroys data. Try tier=1, then tier=2. Tier 3 is last resort.
 9. Don't mix `--scope` and `--repo` carelessly; explicit form is `--repo=<mount>` for repo-scoped rows.
 10. Don't make up subcommands; canonical verbs are: `add list show edit archive search attach detach`.
 
@@ -608,11 +586,6 @@ You: (Show the command WITH `--read-only`, and explain the rejection.)
   lore rule add --read-only --severity=must --body="<text>"
   # → fails with E_READ_ONLY: write rejected; --read-only mode refuses all mutations.
   # In CI you should only run read commands (list/show/search/render --dry-run) under --read-only.
-
-User: Promote learn candidate lcd_xyz to a RULE (not a memory) — too important to be just a memory.
-You: (Use `learn promote` with `--target=rules`. Do NOT `learn list` + `rule add` separately — `promote` is the dedicated verb.)
-  lore learn promote lcd_xyz --target=rules
-  lore render
 
 User: What's the JSON envelope shape for lore commands? I'm parsing it programmatically.
 You: (This is a HOW-question — explain in prose, do NOT emit any `lore add`.)
@@ -736,13 +709,6 @@ User: Reduce the rendered file size — show me what would change.
 You: (No size flag exists. Preview the body and trim by re-scoping or down-severitying pinned rows.)
   lore render --dry-run | wc -c
 
-User: I ran lore learn-from docs and got a bunch of candidates. Show me the list and accept the first three as memories.
-You: (TWO-step workflow as ONE script; emit BOTH the list AND the promotes together — do NOT stop after the list.)
-  lore learn list --json
-  for id in $(lore learn list --json | jq -r '.data[0:3][].id'); do
-    lore learn promote "$id" --target=memories
-  done
-  lore render
 
 User: My commands keep failing with E_DB_LOCKED — what's the right way to handle this in a script?
 You: (NO capture — this is a HOW-question)

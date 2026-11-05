@@ -85,21 +85,21 @@ Free-form note on ONE specific entity?            → comment add
 ```
 Diagnose first:  lore doctor --json
 │
-├── doctor OK    → check `lore errors list --json` for the specific code you saw
+├── doctor OK    → look the code up in docs/reference/cli-commands.md#errors
 │
 └── doctor BROKEN:
     │
-    Backup exists?  ls .lore/backups/
+    .lore/data present?  ls .lore/data
     │
-    ├── Yes  → lore repair --tier=2 --confirm
+    ├── Yes  → mv .lore/lore.db .lore/lore.db.old && lore sync   (rebuild from the files)
     │
     └── No:
         │
-        Is .lore/LORE.md in git?
+        Is .lore/data in git?
         │
-        ├── Yes → lore repair --tier=3 --confirm  (then learn-from .lore/LORE.md)
+        ├── Yes → git checkout HEAD -- .lore/data && lore sync
         │
-        └── No  → support-bundle + file bug + restore from a clone if possible
+        └── No  → support-bundle + file bug + copy .lore/data from a teammate's clone if possible
 ```
 
 ## "I want to render"
@@ -146,7 +146,7 @@ JSON for piping?           → lore why-context --json
 ```
 What commands exist?   → lore --help
 What flags for X?      → lore <X> --help
-What errors can occur? → lore errors list --json
+What errors can occur? → docs/reference/cli-commands.md#errors
 What version?          → lore version --json
 ```
 
@@ -188,8 +188,8 @@ install agent directive    directive install [--target=CLAUDE.md,AGENTS.md]
 inspect render             why-context
 recompile context          render
 diagnose                   doctor
-fix DB                     repair --tier=1|2|3 --confirm
-back up DB                 backup
-restore                    restore <path> --confirm
+fix DB                     mv .lore/lore.db away + sync (rebuild from .lore/data)
+rebuild search             search rebuild
+back up notes              commit .lore/data
 report bug                 support-bundle
 ```

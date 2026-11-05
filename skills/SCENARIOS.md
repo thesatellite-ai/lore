@@ -13,7 +13,7 @@ Each entry: situation → exact commands. Stop reading at the first match.
 [ -d .lore ] && echo init-skip || echo "ask user: bootstrap?"
 # If yes:
 lore init --non-interactive
-lore learn-from docs        # if any *.md exists
+# existing *.md notes: add each true item with rule add / decision add / memory add
 lore render
 ```
 
@@ -289,39 +289,29 @@ lore doctor --json | jq '.warnings, .errors'
 
 ### F.3 "DB is corrupt"
 ```bash
-lore repair --tier=2 --confirm
+# the DB is a cache of .lore/data: move it away, lore rebuilds it
+mv .lore/lore.db .lore/lore.db.old && lore sync
+lore search rebuild
 ```
 
-### F.4 "I have no backup"
+### F.4 "I deleted .lore/data"
 ```bash
-# Tier 3 — bootstrap empty + re-learn from committed CLAUDE.md
-lore repair --tier=3 --confirm
-lore learn-from docs
-for id in $(lore learn list --json | jq -r '.data[].id'); do
-    lore learn promote "$id" --target=memories
-done
-lore render
+git checkout HEAD -- .lore/data     # the files are the truth; git has them
 ```
 
-### F.5 "Create a backup right now"
+### F.5 "Make a safe copy of my notes"
 ```bash
-lore backup
-ls -la .lore/backups/ | tail
+git add .lore/data && git status --short .lore/data   # commit them; no separate backup
 ```
 
-### F.6 "Restore from a specific backup"
-```bash
-lore restore .lore/backups/20260510-180412.sqlite --confirm
-```
-
-### F.7 "DB is locked, another process is running"
+### F.6 "DB is locked, another process is running"
 ```bash
 # Either wait, or find + kill the other process:
 lsof .lore/lore.db   # see PID
 # If stale (process is dead), lore auto-reclaims on next attempt.
 ```
 
-### F.8 "Open a bug — capture state"
+### F.7 "Open a bug — capture state"
 ```bash
 lore support-bundle --out=/tmp/lore-bug.tar.gz
 # Attach to issue. No secrets — bodies are scrubbed.
@@ -458,9 +448,9 @@ N=$(lore rule list --json | jq '.data | length')
 
 ### L.1 "Import from .cursorrules"
 ```bash
-lore learn-from docs --paths=.cursorrules
-lore learn list --json
-# Then promote selectively or in bulk.
+cat .cursorrules
+# no importer in 0.1.18: add each item that is still true with its own command
+lore rule add --severity=must --body="<rule from the file>"
 ```
 
 ### L.2 "Import from a Notion export"
@@ -535,10 +525,11 @@ LORE_ALLOW_ROOT=1 lore init
 
 ### N.3 .lore/lore.db is a symlink
 ```bash
-# Refused with E_SYMLINK_DB. Inspect target — if intentional, delete + restore.
+# Refused with E_SYMLINK_DB. Inspect the target, then delete the link;
+# the next command rebuilds the DB from .lore/data.
 ls -la .lore/lore.db
 rm .lore/lore.db
-lore repair --tier=2 --confirm   # if backup exists
+lore sync
 ```
 
 ### N.4 Two lore processes running concurrently
@@ -585,12 +576,9 @@ sqlite3 .lore/lore.db "UPDATE projects SET name='newname' WHERE id=(SELECT id FR
 
 ### N.9 User: "I deleted .lore/ by accident"
 ```bash
-# If you have a backup outside .lore/:
-mkdir .lore
-lore restore /path/to/backup.sqlite --confirm
-# If you committed CLAUDE.md to git, you can rebuild from that:
-lore init --non-interactive
-lore learn-from docs
+# If .lore/data was committed, git brings everything shared back:
+git checkout HEAD -- .lore
+lore sync                  # rebuilds .lore/lore.db from .lore/data
 ```
 
 ### N.10 User: "audit log is corrupted"

@@ -12,14 +12,12 @@ The user said "let's start using lore here" or you detected `.lore/` is missing.
 
 ```bash
 cd ~/projects/my-app
-lore init --non-interactive            # creates .lore/lore.db
-lore learn-from docs                   # ingests existing CLAUDE.md/AGENTS.md/.cursorrules
-lore learn list --json                 # review what was extracted
-
-# Accept the good ones
-for id in $(lore learn list --json | jq -r '.data[].id'); do
-    lore learn promote "$id" --target=memories
-done
+lore init --non-interactive            # creates .lore/
+# Existing CLAUDE.md / AGENTS.md / .cursorrules: no importer in 0.1.18.
+# Read them and add each item that is still true with its own command:
+lore rule add --severity=must --body="<a hard rule>"
+lore decision add --title="<choice>" --body="<the choice and why>"
+lore memory add --body="<a fact>"
 
 lore render                            # writes .lore/LORE.md + @import pointer in CLAUDE.md
 ```
@@ -146,15 +144,15 @@ User: "everything's broken."
 # 1. Diagnose
 lore doctor --json | jq '.db_ok, .errors'
 
-# 2. Attempt automatic repair (tries WAL replay first, then latest backup)
-lore repair --tier=2 --confirm
+# 2. The DB is a cache of .lore/data: move it away and let lore rebuild it
+mv .lore/lore.db .lore/lore.db.old && lore sync
+lore search rebuild
 
-# 3. If that fails, last resort: bootstrap empty + re-learn from CLAUDE.md
-lore repair --tier=3 --confirm
-lore learn-from docs
+# 3. If .lore/data itself was deleted, git has it
+git checkout HEAD -- .lore/data
 ```
 
-`tier=2` succeeds whenever a backup exists in `.lore/backups/`. Backups are created on-demand via `lore backup`; you should run that before risky operations.
+Only machine-local things (the audit trail, sessions) start empty after a rebuild. Keep `.lore/data` committed and nothing shared can be lost.
 
 ---
 
@@ -216,12 +214,8 @@ Useful when the agent is "missing" context — verify the rule/memory is actuall
 
 ```bash
 lore init --non-interactive
-lore learn-from docs --paths='.cursorrules,AGENTS.md,CLAUDE.md,docs/conventions.md'
-lore learn list                        # review proposals
-# Accept all:
-for id in $(lore learn list --json | jq -r '.data[].id'); do
-    lore learn promote "$id" --target=memories
-done
+# Read .cursorrules, AGENTS.md, CLAUDE.md, docs/conventions.md section by section;
+# add each item that is still true (rule add / decision add / memory add / hotfix add)
 lore render                            # produces .lore/LORE.md + @import pointer in CLAUDE.md
 # Optionally: tell git to ignore the old sources, keep .lore/LORE.md as the canonical surface
 ```
@@ -352,9 +346,8 @@ Run weekly:
 # 1. Health
 lore doctor --json | jq '.status'
 
-# 2. Backup
-lore backup
-ls -la .lore/backups/ | tail -3
+# 2. Shared knowledge committed?
+git status --porcelain -- .lore/data
 
 # 3. Are there active reminders due this week?
 lore reminder list --json | jq --arg until "$(date -v+7d +%Y-%m-%d)" '
@@ -424,8 +417,8 @@ lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
 ## P20 — Migrate to a new lore version
 
 ```bash
-# 1. Backup current state
-lore backup
+# 1. Commit current state
+git status --porcelain -- .lore/data   # empty = everything is in git
 
 # 2. Check the new binary's schema vs the DB's schema
 lore version --json | jq '.schema_version'
@@ -439,4 +432,4 @@ lore doctor --json | jq '.status, .db_ok'
 lore render   # confirm output unchanged
 ```
 
-If the new binary expects an OLDER schema (downgrade), lore refuses with `E_SCHEMA_VERSION_MISMATCH`. Use the matching binary version OR restore from a backup taken with the old version.
+If the new binary expects an OLDER schema (downgrade), lore refuses with `E_SCHEMA_VERSION_MISMATCH`. Use the matching binary version, or move `.lore/lore.db` away so the new binary rebuilds it from `.lore/data`.

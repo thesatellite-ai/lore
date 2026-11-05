@@ -20,7 +20,7 @@ Append-only, hash-chained ledger of every change to a shared row (lore writes, i
 Ranking function used by SQLite FTS5. Orders search hits by term frequency × inverse document frequency. Better hits = lower bm25() values; lore flips sign so "higher score = better" for callers.
 
 ## Bootstrap
-The first-time setup: `lore init` + `lore learn-from docs`. See [examples/01-bootstrap.md](./examples/01-bootstrap.md).
+The first-time setup: `lore init`, then turning existing notes into rows by hand. See [examples/01-bootstrap.md](./examples/01-bootstrap.md).
 
 ## Bundle (support bundle)
 Sanitized tarball produced by `lore support-bundle` for bug reports. Contains DB schema, doctor output, scrubbed audit log. No bodies / no credentials.
@@ -60,9 +60,6 @@ A loud recurring warning the team keeps hitting. Pinned in render output, never 
 
 ## Identity
 See **Actor**.
-
-## learn-from
-Bootstrap command that ingests existing markdown (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, README) into `learn_candidates` for review. Use `lore learn promote <id>` to accept.
 
 ## Master scope
 A row with no `repo_id` — applies to the entire project, not just one repo. The default when no `--repo` is passed.
