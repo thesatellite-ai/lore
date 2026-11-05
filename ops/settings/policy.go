@@ -128,6 +128,15 @@ func (o ops) policyShow(ctx context.Context, in PolicyShowIn) (PolicyOut, error)
 	if err != nil {
 		return PolicyOut{}, err
 	}
+	// FQ11 / FA-AGENT-6: this machine's stricter local values take part,
+	// so show names the limit a write here really meets.
+	if src, ok := o.env.(MachinePolicySource); ok {
+		mp, merr := src.MachinePolicy(ctx)
+		if merr != nil {
+			return PolicyOut{}, merr
+		}
+		entries = append(entries, mp...)
+	}
 	set, err := policy.Resolve(entries)
 	if err != nil {
 		return PolicyOut{}, err
@@ -139,7 +148,10 @@ func (o ops) policyShow(ctx context.Context, in PolicyShowIn) (PolicyOut, error)
 		}
 		eff, _ := set.Get(d.Key)
 		r := PolicyRule{Key: string(d.Key), Value: display(eff.Value), Source: sourceDefault, Doc: d.Doc}
-		if !eff.IsDefault {
+		switch {
+		case eff.Level == policy.LevelMachine:
+			r.Level, r.Source = string(eff.Level), "machine (~/.lore/config.yaml policies)"
+		case !eff.IsDefault:
 			r.Level, r.Row, r.Store = string(eff.Level), eff.Source.String(), string(where[eff.Source])
 			r.Source = fmt.Sprintf("%s %s (%s)", eff.Level, place(where[eff.Source]), short(eff.Source))
 		}
@@ -157,7 +169,14 @@ func policyValue(d policy.KeyDef, raw string) (value.Value, error) {
 	return inferText(raw)
 }
 
-// rankOf is a level's distance (0 = nearest).
+// MachinePolicySource is an optional Env upgrade: this machine's local
+// policy values (wire.App reads ~/.lore/config.yaml `policies:`, FQ11).
+type MachinePolicySource interface {
+	MachinePolicy(ctx context.Context) ([]policy.Entry, error)
+}
+
+// rankOf is a level's distance (0 = nearest; -1 for LevelMachine, which
+// holds no rows and so never blocks a policy set).
 func rankOf(l policy.Level) int { return slices.Index(policy.Levels(), l) }
 
 func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {

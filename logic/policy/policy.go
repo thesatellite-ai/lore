@@ -33,6 +33,11 @@ const (
 	LevelOrg       Level = "org"
 	LevelStoreRoot Level = "store_root"
 	LevelPersonal  Level = "personal"
+	// LevelMachine is this machine's ~/.lore/config.yaml `policies:` map
+	// (CONFIG_GUIDE 5.4, FQ11): no rows live there, so it is not in
+	// Levels (no `--to` names it); it ranks farthest and, stricter wins,
+	// can only tighten.
+	LevelMachine Level = "machine"
 )
 
 // Levels lists every level, nearest first. Its order IS the precedence of
@@ -46,11 +51,11 @@ func (l Level) rank() int {
 	if i := slices.Index(Levels(), l); i >= 0 {
 		return i
 	}
-	return len(Levels())
+	return len(Levels()) // LevelMachine, and an unknown level: farthest
 }
 
-// Valid reports a known level.
-func (l Level) Valid() bool { return slices.Contains(Levels(), l) }
+// Valid reports a known level (a row level, or LevelMachine).
+func (l Level) Valid() bool { return slices.Contains(Levels(), l) || l == LevelMachine }
 
 // Leveled is one candidate definition and the level it was found at.
 type Leveled[T any] struct {

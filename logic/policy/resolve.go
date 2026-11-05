@@ -111,6 +111,16 @@ func Resolve(entries []Entry) (Set, error) {
 // stricter folds entry e (levels arrive nearest first) into cur.
 func stricter(d KeyDef, cur Effective, e Entry) (Effective, error) {
 	take := Effective{Key: d.Key, Value: e.Value, Level: e.Level, Source: e.Source}
+	if cur.IsDefault && e.Level == LevelMachine && cur.Value != nil {
+		// FQ11: a machine value never "sets" a key; it only tightens, the
+		// built-in default included (a looser local value is ignored).
+		next, err := stricter(d, Effective{Key: d.Key, Value: cur.Value, Level: LevelMachine}, e)
+		if err != nil || next.Value == nil || value.Equal(next.Value, cur.Value) {
+			return cur, err
+		}
+		next.Level, next.IsDefault = LevelMachine, false
+		return next, nil
+	}
 	if cur.IsDefault {
 		// The default is the baseline only where no level speaks: the first
 		// level that sets a key replaces it, even with a looser value (that
