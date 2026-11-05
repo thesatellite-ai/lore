@@ -9,6 +9,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/formatgate"
+
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/gitremote"
 )
@@ -240,14 +242,19 @@ func (r *Ref) changesFor(tree Tree, req WriteRequest) (gitref.Changes, []RowKey,
 	return ch, written, nil
 }
 
-// checkFloor refuses a write by a binary below the ref's min_lore_version.
+// checkFloor refuses a write by a binary that may not write the ref: below
+// its min_lore_version, or missing one of its features (FORMAT_EVOLUTION
+// rule 2 "read-only on every path": the live ref asks the same
+// formatgate.Check as core writes, so FMT-EFF and unknown-feature blocking
+// match). The error wraps ErrBelowFloor so the CLI maps it to E_OLD_LORE.
 func checkFloor(t Tree, version string) error {
 	m, ok, err := t.Meta()
 	if err != nil || !ok || version == "" {
 		return err
 	}
-	if VersionBelow(version, m.MinLoreVersion) {
-		return fmt.Errorf("%w (this lore %s, the live ref needs %s)", ErrBelowFloor, version, m.MinLoreVersion)
+	v := formatgate.Check(version, formatgate.Declared{Features: m.Features, MinLoreVersion: m.MinLoreVersion})
+	if gerr := v.Err(); gerr != nil {
+		return fmt.Errorf("%w: %s", ErrBelowFloor, gerr.Error())
 	}
 	return nil
 }

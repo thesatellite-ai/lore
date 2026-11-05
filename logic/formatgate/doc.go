@@ -8,4 +8,5 @@
 //	Declared + binary version ──Check──► Verdict ──Err──► E_OLD_LORE (writes refused, reads work)
 //	row about to be written ──Needs──► features ──Raise──► Declared' (+ added names)
 //	two sides of a merged _meta.json ──Merge──► features ∪, floor = max (version-aware)
+//	.github/workflows/*.yml text ──CIPins──► pins ──CIPinsBelow(floor)──► doctor warnings
 package formatgate

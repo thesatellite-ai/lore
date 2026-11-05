@@ -169,6 +169,11 @@ type Store struct {
 	NoAtomic bool
 	// Trace, when set, receives one line per fetch, push and retry.
 	Trace func(format string, args ...any)
+	// Gate, when set, runs before every write and refuses it (E_OLD_LORE)
+	// when this lore may not write the project the signals belong to
+	// (FORMAT_EVOLUTION rule 2 "read-only on every path": no claim, renew
+	// or release; reading the board still works). nil = not gated.
+	Gate func(ctx context.Context) error
 }
 
 // Result reports a finished write.
@@ -319,6 +324,11 @@ func (s *Store) backoff(ctx context.Context, attempt int) error {
 // Errors from decide are returned unchanged. Offline, autopush off or
 // retries used up return an *OfflineError (fixed rule 11).
 func (s *Store) Write(ctx context.Context, decide Decide) (Result, error) {
+	if s.Gate != nil {
+		if err := s.Gate(ctx); err != nil {
+			return Result{}, err // refused before any fetch or push (format gate)
+		}
+	}
 	if !s.Autopush {
 		return Result{}, &OfflineError{Reason: "autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0)"}
 	}

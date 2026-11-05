@@ -190,6 +190,11 @@ func livePreRun(cmd *cobra.Command) error {
 	if f := cmd.Flags().Lookup(flagNoLive); f != nil && f.Changed && f.Value.String() == "true" {
 		liveCmdState.choice = rowroute.ChoiceNoLive
 	}
+	if readNoticeVerb(cmd.Name()) {
+		if wd, werr := os.Getwd(); werr == nil {
+			readOnlyNotice(os.Stderr, liveProjectRoot(wd)) // FORMAT_EVOLUTION rule 2: one stderr line, never stdout
+		}
+	}
 	for _, p := range liveSkipPrefixes {
 		if liveCmdState.path == p || strings.HasPrefix(liveCmdState.path, p+" ") {
 			return nil
@@ -231,7 +236,7 @@ func livePreRun(cmd *cobra.Command) error {
 				WithCause(err).WithHint("run `" + BinaryName + " upgrade`; reading still works") // FORMAT_EVOLUTION 8.5
 		}
 	}
-	return nil
+	return repoFormatGate(root) // rule 2: the project's _meta.json gates live writes too
 }
 
 // liveFetchAge is how old the last successful fetch is, for the offline

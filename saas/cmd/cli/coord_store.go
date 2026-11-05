@@ -157,6 +157,7 @@ func openCoordTargetFrom(ctx context.Context, w *coordWorld, id, from string) (c
 func (w *coordWorld) storeSignals(sp storeSpot) *signals.Store {
 	s := w.signalsStore(sp.st.Repo, sp.st.Remote, signals.StoreRef(sp.branch))
 	s.RemoteName = stores.RemoteName
+	s.Gate = storeSignalsGate(sp.ref) // the store's own declaration decides, not this checkout's
 	// What this machine has watched of a store's signals ref lives with the
 	// one bare clone every checkout here reads it through (§1: <clone>/lore/),
 	// so a fresh checkout or agent clone inherits the watch instead of

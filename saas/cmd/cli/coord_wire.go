@@ -209,6 +209,7 @@ func (w *coordWorld) signalsStore(repo *gitref.Repo, remote gitremote.Remote, re
 		},
 		Autopush: w.Autopush && remote != nil, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
 		Trace: traceFunc(),
+		Gate:  repoSignalsGate(w.Dir), // FORMAT_EVOLUTION rule 2: no claim/renew/release while read-only
 	}
 }
 
