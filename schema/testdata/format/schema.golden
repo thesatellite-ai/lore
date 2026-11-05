@@ -71,6 +71,8 @@ handoffs.to_actor_id ref
 hotfixes.archived_at datetime
 hotfixes.body text required
 hotfixes.confidence number
+hotfixes.context_pin text
+hotfixes.context_pinned_at datetime
 hotfixes.created_by_actor_id ref
 hotfixes.last_validated_at datetime
 hotfixes.overrides_id ref
@@ -167,6 +169,7 @@ memories.valid_until datetime
 memories.validated_by_actor_id ref
 meta_keys.added_by text
 meta_keys.changed_by json
+meta_keys.context text
 meta_keys.default text
 meta_keys.default_on json
 meta_keys.deprecated bool
@@ -286,6 +289,8 @@ rules.applies_to_description text
 rules.archived_at datetime
 rules.body text required
 rules.confidence number
+rules.context_pin text
+rules.context_pinned_at datetime
 rules.created_by_actor_id ref
 rules.globs text
 rules.last_validated_at datetime

@@ -1,5 +1,6 @@
 actors.kind human,agent,hook,plugin,cron,system
 decisions.status proposed,accepted,superseded,deprecated
+hotfixes.context_pin full,line
 hotfixes.severity low,medium,high,critical
 kind_fields.type text,number,bool,date,datetime,duration,ip,cidr,dns,url,email,json,list,ref,secret_ref
 kind_fields.widget text,markdown,code,secret,select,date,number,bool,json
@@ -8,12 +9,14 @@ knowledge_refs.confidence extracted,inferred,ambiguous
 machines.id_source os_machine_id,runtime_key,random
 memories.kind core,retrieved,episodic,procedural,archival
 meta_keys.added_by person,agent
+meta_keys.context index
 meta_keys.type text,number,bool,date,datetime,duration,ip,cidr,dns,url,email,json,list,ref,secret_ref
 missions.status active,paused,done,cancelled
 plans.status draft,approved,in_progress,done,dropped
 reminders.recurrence 7d,30d,1m,3m,6m,1y
 rule_verifier_refs.verifier_kind regex,shell,go-fn,custom
 rules.activation always,glob,semantic,manual
+rules.context_pin full,line
 rules.severity must,should,may
 secret_rules.state on,off,changed
 tasks.close_reason completed,duplicate,wont_do,obsolete,stale,cancelled,skipped

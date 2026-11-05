@@ -203,12 +203,14 @@ func newSyncStatusCommand() *cobra.Command {
 			}
 			uncommitted, gitErr := gitsetup.Uncommitted(cmd.Context(), t.root, filepath.Join(projresolve.MarkerDir, lsync.DataDirName))
 			quar := metaQuarantineLines(cmd.Context()) // METADATA 3.13 "counted"
+			regs := metaRegistryLines(cmd.Context())   // FA-META-11: registries past the key cap
 			out := struct {
 				lsync.Status
-				Uncommitted     []string `json:"uncommitted,omitempty"`
-				GitError        string   `json:"git_error,omitempty"`
-				MetaQuarantined []string `json:"meta_quarantined,omitempty"`
-			}{Status: st, Uncommitted: uncommitted, MetaQuarantined: quar}
+				Uncommitted       []string `json:"uncommitted,omitempty"`
+				GitError          string   `json:"git_error,omitempty"`
+				MetaQuarantined   []string `json:"meta_quarantined,omitempty"`
+				MetaRegistriesCap []string `json:"meta_registries_over_cap,omitempty"`
+			}{Status: st, Uncommitted: uncommitted, MetaQuarantined: quar, MetaRegistriesCap: regs}
 			if gitErr != nil && !errors.Is(gitErr, gitsetup.ErrNotRepo) {
 				out.GitError = gitErr.Error()
 			}
@@ -226,6 +228,9 @@ func newSyncStatusCommand() *cobra.Command {
 			fmt.Printf("meta quarantined: %d\n", len(quar))
 			for _, q := range quar {
 				fmt.Println(style.Error("  " + q))
+			}
+			for _, r := range regs {
+				fmt.Println(style.Error("meta registry: " + r))
 			}
 			for _, e := range st.Errors {
 				fmt.Println(style.Error(fmt.Sprintf("  %s %s: %s", e.Kind, e.Path, e.Detail)))
