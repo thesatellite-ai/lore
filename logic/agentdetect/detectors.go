@@ -143,6 +143,10 @@ func Builtin() []Detector {
 // terminalEnv are the allowlisted terminal / IDE variables (section 6.3).
 var terminalEnv = []string{"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "TERMINAL_EMULATOR"}
 
+// EnvSSHConnection marks a command run over ssh (10.2). Only its presence
+// is read; the value (client and server addresses) never reaches a result.
+const EnvSSHConnection = "SSH_CONNECTION"
+
 // AllowedNames is every variable name Detect may read a VALUE from (6.3:
 // an allowlist in code, never an env dump). The allowlist test fails if
 // any name looks token-like.
@@ -160,6 +164,7 @@ func AllowedNames(extra []Detector) []string {
 	for _, n := range terminalEnv {
 		add(n)
 	}
+	add(EnvSSHConnection)
 	for _, d := range append(Builtin(), extra...) {
 		for _, s := range append(append([]Signal{}, d.Strong...), d.Weak...) {
 			add(s.Env)

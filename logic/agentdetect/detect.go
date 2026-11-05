@@ -13,7 +13,18 @@ const (
 	FlagModelFromConfig = "model_from_config"
 	FlagCI              = "ci"
 	FlagTTY             = "tty"
+	// FlagStaleMarker: a strong marker with a TTY and no process of that
+	// tool above the shell; the person is resolved (10.4).
+	FlagStaleMarker = "stale_marker"
+	// FlagMarkersRemoved: no env marker, but the tool's process is an
+	// ancestor of a tool that sets markers (10.6: `env -u …` under the tool).
+	FlagMarkersRemoved = "markers_removed"
+	// FlagSSH: SSH_CONNECTION is set and the walk reaches sshd (10.2).
+	FlagSSH = "ssh"
 )
+
+// sshdExe is the ssh daemon's executable base name (10.2).
+const sshdExe = "sshd"
 
 // Inputs is everything Detect reads; every field is a seam.
 type Inputs struct {
@@ -44,6 +55,9 @@ type Result struct {
 	Sources         map[string]string `json:"sources,omitempty"`
 	Flags           []string          `json:"flags,omitempty"`
 	Confidence      Confidence        `json:"confidence,omitempty"`
+	// Note is one line for the person running lore ("" for none): the
+	// stale-marker notice of 10.4.
+	Note string `json:"note,omitempty"`
 }
 
 // IsAgent reports whether a tool was found.
@@ -212,6 +226,9 @@ func Detect(in Inputs) (Result, error) {
 	if res.CI != nil {
 		res.Flags = append(res.Flags, FlagCI)
 	}
+	if getenv(EnvSSHConnection) != "" && reachesSSHD(procs) {
+		res.Flags = append(res.Flags, FlagSSH) // 10.2: a remote write is visible, not fixed
+	}
 	if len(strong) == 0 {
 		if len(res.Sources) == 0 {
 			res.Sources = nil
@@ -231,7 +248,21 @@ func Detect(in Inputs) (Result, error) {
 		return a.near - b.near
 	})
 	h := strong[0]
+	if staleMarker(in.TTY, procs, h) {
+		// 10.4: the marker outlived its agent (tmux, a subshell the person
+		// attached to): resolve the person and say why. Without a walk
+		// (procs empty) the env is trusted, as the design says.
+		res.Flags = append(res.Flags, FlagStaleMarker)
+		res.Note = h.signal + " is set but no " + h.d.Tool + " process is running above this shell; treating you as a person"
+		if len(res.Sources) == 0 {
+			res.Sources = nil
+		}
+		return res, nil
+	}
 	res.Tool, res.Signal, res.Confidence = h.d.Tool, h.signal, h.d.Confidence
+	if strings.HasPrefix(h.signal, processSignalPrefix) && len(h.d.Strong) > 0 {
+		res.Flags = append(res.Flags, FlagMarkersRemoved) // 10.6: the tool sets markers, none reached lore
+	}
 	res.Sources["tool"] = sourceOfSignal(h.signal)
 	if h.weak {
 		res.Flags = append(res.Flags, FlagWeakOnly)
@@ -268,10 +299,33 @@ func Detect(in Inputs) (Result, error) {
 	return res, nil
 }
 
+// processSignalPrefix starts the signal of a hit found by the walk alone.
+const processSignalPrefix = "process:"
+
+// staleMarker is 10.4's test: an env (not weak, not walk, not plugin)
+// signal, stdin a terminal, a walk that ran, and no process of the tool
+// in it — for a tool the walk can recognise at all (Procs set).
+func staleMarker(tty bool, procs []Process, h hit) bool {
+	if !tty || len(procs) == 0 || h.weak || h.near >= 0 || len(h.d.Procs) == 0 {
+		return false
+	}
+	return !strings.HasPrefix(h.signal, processSignalPrefix) && !strings.HasPrefix(h.signal, "plugin:")
+}
+
+// reachesSSHD reports whether an ancestor is the ssh daemon (10.2).
+func reachesSSHD(procs []Process) bool {
+	for _, pr := range procs {
+		if strings.HasPrefix(baseName(pr.Exe), sshdExe) {
+			return true
+		}
+	}
+	return false
+}
+
 // sourceOfSignal names where the tool came from for Sources.
 func sourceOfSignal(sig string) string {
 	switch {
-	case strings.HasPrefix(sig, "process:"):
+	case strings.HasPrefix(sig, processSignalPrefix):
 		return "process"
 	case strings.HasPrefix(sig, "plugin:"):
 		return "plugin"
@@ -328,7 +382,7 @@ func walkHit(table []Detector, procs []Process) (hit, bool) {
 	for j, pr := range procs {
 		for _, d := range table {
 			if path, ok := procMatches(d, pr); ok {
-				return hit{d: d, signal: "process:" + baseName(path), near: j, script: path}, true
+				return hit{d: d, signal: processSignalPrefix + baseName(path), near: j, script: path}, true
 			}
 		}
 	}

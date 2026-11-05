@@ -44,6 +44,9 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 		return r, nil
 	}
 	r.Detection = &det
+	if det.Note != "" {
+		r.Notes = append(r.Notes, det.Note) // 10.4 stale marker: one line for the person
+	}
 	if r.Step == StepFlag || r.Step == StepEnv {
 		return r, nil // step 1: an explicit actor wins; detection is recorded only
 	}

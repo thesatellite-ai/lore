@@ -81,6 +81,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			return nil, err
 		}
 		st.who = who
+		// 10.4: the stale-marker line is printed once per command (the
+		// full open, never the repo-only one too).
+		if who.Detection != nil && who.Detection.Note != "" && opts.Notice != nil && !repoOnly {
+			opts.Notice(who.Detection.Note)
+		}
 	}
 	reg, err := builtinRegistry()
 	if err != nil {
