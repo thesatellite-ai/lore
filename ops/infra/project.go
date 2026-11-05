@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
@@ -20,6 +21,8 @@ import (
 // ProjectListIn is the input of project.list.
 type ProjectListIn struct {
 	Store string `json:"store,omitempty" flag:"store" desc:"only projects of this store (default every attached store)"`
+	// Trash: --include-deleted / --deleted-only (DELETION 3.2).
+	metalist.Trash
 }
 
 // Project is one project in v0.1.17's --json list form (the ent Project
@@ -42,6 +45,8 @@ type ProjectListOut struct {
 	Kind          string    `json:"kind"`
 	Count         int       `json:"count,omitempty"`
 	Data          []Project `json:"data"`
+	// Notes marks the listed rows in the trash (DEL-LIST-MARK).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text is v0.1.17's list: "<id>  <name>[  <origin>][ [archived]]".
@@ -52,6 +57,9 @@ func (o ProjectListOut) Text() string {
 	var b strings.Builder
 	for _, p := range o.Data {
 		b.WriteString(p.line)
+	}
+	for _, n := range o.Notes {
+		b.WriteString(n + "\n")
 	}
 	return b.String()
 }
@@ -114,6 +122,7 @@ func sortByCreated(rows []work.Sourced) []work.Sourced {
 // projectList lists the live projects of every attached store, oldest
 // first (v0.1.17 ordered by created_at).
 func (o ops) projectList(ctx context.Context, in ProjectListIn) (ProjectListOut, error) {
+	ctx = in.Deleted(ctx, schema.TableProjects) // DELETION 3.2: --include-deleted / --deleted-only
 	rows, err := work.ListAll(ctx, o.env, schema.TableProjects, in.Store)
 	if err != nil {
 		return ProjectListOut{}, err
@@ -128,6 +137,11 @@ func (o ops) projectList(ctx context.Context, in ProjectListIn) (ProjectListOut,
 		})
 	}
 	out.Count = len(out.Data)
+	listed := make([]row.Row, 0, len(rows))
+	for _, s := range rows {
+		listed = append(listed, s.Row)
+	}
+	out.Notes = in.TrashNotes(listed)
 	return out, nil
 }
 
