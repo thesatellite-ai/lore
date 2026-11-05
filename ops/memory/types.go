@@ -34,6 +34,9 @@ const (
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// CreateFlag: --create, read by the target step (wire) for
+	// --to <store>/<folder> on a folder that does not exist yet (PL-CREATE-1).
+	engine.CreateFlag
 	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
 	engine.LiveFlags
 
