@@ -7,6 +7,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/policy"
+	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -64,4 +65,33 @@ func (a *App) StoreLabel(name store.Source) string {
 		return string(name)
 	}
 	return string(name) + targetSep + f
+}
+
+var _ opssettings.ResourceViewer = (*App)(nil)
+
+// ResourceStores implements settings.ResourceViewer: in a client repo only
+// the repo store (RES 3.9: a client repo never lists store resources, even
+// on an agency machine with the store attached); elsewhere every attached
+// store, as Stores.
+func (a *App) ResourceStores() []store.Source {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.st == nil {
+		return nil
+	}
+	if a.st.eng.IsClient(store.SourceRepo) {
+		return []store.Source{store.SourceRepo}
+	}
+	return a.st.eng.Stores()
+}
+
+// ClientRepo reports whether the repo store is a client repo (opening the
+// App if needed), for surfaces outside the core that list store rows
+// (RES 3.9: the old external rows must leave resources out there).
+func (a *App) ClientRepo(ctx context.Context) (bool, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return false, err
+	}
+	return st.eng.IsClient(store.SourceRepo), nil
 }

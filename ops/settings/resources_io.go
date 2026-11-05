@@ -573,7 +573,7 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 		return ResRepointOut{}, errs.New(errs.ResourceInvalid, "resource repoint: "+in.New+" is archived")
 	}
 	only := splitList(strings.Join(in.Fields, ","))
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return ResRepointOut{}, err
 	}

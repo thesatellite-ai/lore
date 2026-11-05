@@ -132,7 +132,7 @@ func (o ops) buildIndex(ctx context.Context, fields []string) (resIndex, error) 
 			}
 		}
 	}
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return idx, err
 	}

@@ -358,7 +358,7 @@ func listTail(xs []string) string {
 // stale/unchecked (resource stale's rule), lint findings of those rows,
 // open links of those rows, secret_ref references (RES 3.20/3.22, OV49).
 func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error) {
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return ResReportOut{}, err
 	}

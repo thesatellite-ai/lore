@@ -184,7 +184,9 @@ func TestResourcesMatrix(t *testing.T) {
 		}
 		return out.Data
 	}
-	if got := list(`{"kind":"app"}`); len(got) != 2 {
+	// The harness repo is a client repo (no RepoIsClient hook: fail
+	// closed), so api_web in the store is left out (RES 3.9).
+	if got := list(`{"kind":"app"}`); len(got) != 1 || got[0].ID != h.ID(api) {
 		t.Errorf("app list %+v", got)
 	}
 	if got := list(`{"kind":"app","where":["port=8080"]}`); len(got) != 1 || got[0].ID != h.ID(api) {

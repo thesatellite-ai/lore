@@ -238,7 +238,7 @@ func noneIfEmpty(xs []string) string {
 // resLint checks every live resource of the view (CLI_REFERENCE 3.2 lint,
 // RES 3.4/3.6/3.14 and the 3.1 remind_before/deprecated options).
 func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return ResLintOut{}, err
 	}

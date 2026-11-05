@@ -59,7 +59,7 @@ func (o ops) matchWhere(ctx context.Context, b BulkWhere, verb string) (kindDef,
 	if err != nil {
 		return kindDef{}, nil, err
 	}
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return kindDef{}, nil, err
 	}

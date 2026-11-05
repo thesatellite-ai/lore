@@ -561,7 +561,7 @@ func (o ops) resourceByName(ctx context.Context, key, kindID string) (located, e
 	if kindID != "" {
 		extra = map[string]string{rKind: kindID}
 	}
-	return byNameOrID(ctx, o.env, o.env.Stores(), schema.TableResources, rName, key, extra)
+	return byNameOrID(ctx, o.env, o.resStores(), schema.TableResources, rName, key, extra)
 }
 
 // requireFields refuses a resource missing a required field.
@@ -817,7 +817,7 @@ func (o ops) successor(ctx context.Context, r located) string {
 	if id == "" {
 		return ""
 	}
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return id
 	}
@@ -853,7 +853,7 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	}
 	// DELETION 3.2: only the resources table reads the trash mode; the
 	// kind and ref lookups below stay live.
-	rows, err := liveRows(in.Deleted(ctx, schema.TableResources), o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(in.Deleted(ctx, schema.TableResources), o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return ResListOut{}, err
 	}
@@ -1083,7 +1083,7 @@ func (o ops) resDeleteWhere(ctx context.Context, in ResDeleteIn) (ResDeleteOut, 
 	if err != nil {
 		return ResDeleteOut{}, err
 	}
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return ResDeleteOut{}, err
 	}
@@ -1183,7 +1183,7 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 		days = defaultStaleDays
 	}
 	cut := opclock.Now(o.env).Add(-time.Duration(days) * hoursPerDay * time.Hour)
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return ResListOut{}, err
 	}
