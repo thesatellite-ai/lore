@@ -17,14 +17,14 @@ import (
 func TestTextMatchesV017(t *testing.T) {
 	h := opstest.New(t)
 	r := h.Must(memory.OpAdd, `{"body":"use pgx not database/sql","kind":"core"}`)
-	if got := opstest.IDPattern(opstest.Text(r)); got != "✓ mem_ID \n  scope: [master]\n" {
+	if got := opstest.IDPattern(opstest.Text(r)); got != "✓ mem_ID\n  scope: [master]\n" {
 		t.Fatalf("add %q", got)
 	}
 	m1 := h.ID(r)
 	steps := []struct{ op, input, want string }{
 		{memory.OpList, ``, "mem_ID [core] use pgx not database/sql\n"},
 		{memory.OpShow, `{"id":"` + m1 + `"}`, "mem_ID\n  kind:   core\n  trust:  0.50\n  source: manual\n\nuse pgx not database/sql\n"},
-		{memory.OpAdd, `{"body":"use pgx v5","supersedes":"` + m1 + `"}`, "✓ mem_ID \n  scope: [master]\n"},
+		{memory.OpAdd, `{"body":"use pgx v5","supersedes":"` + m1 + `"}`, "✓ mem_ID\n  scope: [master]\n"},
 		{memory.OpList, ``, "mem_ID [core] use pgx not database/sql\nmem_ID [retrieved] use pgx v5\n"},
 		{memory.OpArchive, `{"id":"` + m1 + `"}`, "✓ mem_ID archived\n"},
 		{memory.OpUnarchive, `{"id":"` + m1 + `"}`, "✓ mem_ID unarchived\n"},

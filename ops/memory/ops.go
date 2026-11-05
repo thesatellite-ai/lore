@@ -300,7 +300,7 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	}
 	// v0.1.17: "✓ <id> <label>" ("" in the repo, keeping its space), then
 	// the scope line.
-	out.Human = mark + " " + out.ID + " " + Label(LabelerOf(o.env), src) + "\n  scope: [" + scope + "]\n" + carry.Line()
+	out.Human = strings.TrimSpace(mark+" "+out.ID+" "+Label(LabelerOf(o.env), src)) + "\n  scope: [" + scope + "]\n" + carry.Line()
 	return out, nil
 }
 
@@ -345,7 +345,7 @@ func (o ops) existingByKey(ctx context.Context, id ids.AnyID, repo string) (Writ
 	if repo != "" {
 		scope = "repo:" + repo
 	}
-	out.Human = mark + " " + out.ID + " " + Label(LabelerOf(o.env), src) + "\n  scope: [" + scope + "]\n  already added with this --key; nothing written\n"
+	out.Human = strings.TrimSpace(mark+" "+out.ID+" "+Label(LabelerOf(o.env), src)) + "\n  scope: [" + scope + "]\n  already added with this --key; nothing written\n"
 	return out, true, nil
 }
 

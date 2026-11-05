@@ -146,11 +146,10 @@ type AddOut struct {
 	label string
 }
 
-// Text prints v0.1.17's add lines. v0.1.17 printed "✓ <id> <label>" with
-// an empty label for the repo, so the first line keeps that trailing space
-// (o.label empty).
+// Text prints v0.1.17's add lines: "✓ <id> <label>", the label left out
+// (no trailing space) for the repo, whose label is empty.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s %s\n  scope: [%s] severity: %s\n", o.ID, o.label, o.Scope, o.Severity) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings)
+	return fmt.Sprintf("✓ %s\n  scope: [%s] severity: %s\n", strings.TrimSpace(o.ID+" "+o.label), o.Scope, o.Severity) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings)
 }
 
 // carriedLine is the "carried over N keys" note of a --supersedes add.
