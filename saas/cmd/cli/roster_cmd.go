@@ -139,6 +139,11 @@ func openRosterOnCore(ctx context.Context) (*coreRoster, error) {
 	if client, cerr := coreRepoIsClient(ctx); cerr != nil || client {
 		return nil, nil
 	}
+	// No org: the repo's own actors rows are the roster (Q4) and go LIVE,
+	// so every clone resolves the handle after its next fetch (coordinator
+	// answer Q12), as the v0.1.17 path did (BUG-T1). liveBackend honours
+	// this explicit choice for the actors table (liveChoiceFor).
+	liveCmdState.table, liveCmdState.choice = tableActors, rowroute.ChoiceLive
 	return &coreRoster{app: coreApp, target: store.SourceRepo, where: repoRosterWhere}, nil
 }
 

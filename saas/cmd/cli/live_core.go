@@ -135,6 +135,16 @@ func isLiveKind(s *liveSession, table row.Table) bool {
 	return ok
 }
 
+// liveChoiceFor reports whether this command explicitly sends rows of
+// table live (liveCmdState: a no-org `lore actor register` / `agent start`
+// puts its actors row on the live ref, Q12). Such a row is written live
+// even though its table is no live kind, and is not held as a companion
+// (BUG-T1: without it the row stayed in the work tree and no other clone
+// resolved the handle).
+func liveChoiceFor(table row.Table) bool {
+	return liveCmdState.choice == rowroute.ChoiceLive && liveCmdState.table == string(table)
+}
+
 // liveReadable reports whether rows of table are read from the live ref
 // too: the live kinds, and actors, whose new rows ride live as companions
 // of the rows naming them (FLAG6, holdActorCompanions) and land on main
@@ -431,7 +441,8 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		prev, inLive := files[k]
 		// An actor row riding live as a companion (FLAG6) is edited
 		// where it is, live (rule 1: a live row stays live).
-		if !isLiveKind(s, ch.Row.Table) && (!inLive || !liveReadable(s, ch.Row.Table)) {
+		chosen := liveChoiceFor(ch.Row.Table) && liveReadable(s, ch.Row.Table)
+		if !chosen && !isLiveKind(s, ch.Row.Table) && (!inLive || !liveReadable(s, ch.Row.Table)) {
 			branch = append(branch, ch)
 			continue
 		}
@@ -446,7 +457,7 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		}
 		inBranch := berr == nil
 		place := rowroute.Decide(req, rowroute.Row{Table: k.Table, ID: k.ID, InLive: inLive, InBranch: inBranch, Deleted: ch.Row.Deleted}).Place
-		if col != nil {
+		if col != nil || chosen {
 			// A fenced coordination write takes its row live, as v0.1.17's
 			// stagedLiveRows did: only the live ref can join the atomic
 			// push with the signals ref.
@@ -565,8 +576,8 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 func (b *liveBackend) holdActorCompanions(ctx context.Context, s *liveSession, col *liveCollector, files map[live.RowKey]live.File, changes []store.Change) ([]store.Change, error) {
 	kept := changes[:0:0]
 	for _, ch := range changes {
-		if string(ch.Row.Table) != tableActors || ch.Row.Deleted {
-			kept = append(kept, ch)
+		if string(ch.Row.Table) != tableActors || ch.Row.Deleted || liveChoiceFor(ch.Row.Table) {
+			kept = append(kept, ch) // an explicitly live actors row is written live on its own (BUG-T1)
 			continue
 		}
 		k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
