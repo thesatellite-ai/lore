@@ -830,10 +830,59 @@ var _ store.AuditJournal = (*liveBackend)(nil)
 // after it, as before.
 func (b *liveBackend) WriteAudited(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
 	j, ok := b.inner.(store.AuditJournal)
-	if !ok || b.session(ctx) != nil {
+	if !ok {
 		return b.Write(ctx, changes)
 	}
+	if s := b.session(ctx); s != nil {
+		// With a live session, the journal is used only when the whole
+		// batch goes to the branch anyway (p2-audit follow-up): no
+		// collector, nothing held or holdable as an actor companion, no
+		// live kind, no row already live. Anything else is a plain Write.
+		branch, err := b.wholeBatchToBranch(ctx, s, changes)
+		if err != nil {
+			return err
+		}
+		if !branch {
+			return b.Write(ctx, changes)
+		}
+	}
 	return j.WriteAudited(ctx, changes, recs)
+}
+
+// wholeBatchToBranch reports whether Write would send every change of the
+// batch to the branch (.lore/data) with session s: the rule of Write's
+// first routing branch, checked up front so WriteAudited can journal it.
+func (b *liveBackend) wholeBatchToBranch(ctx context.Context, s *liveSession, changes []store.Change) (bool, error) {
+	if liveCollectorFrom(ctx) != nil || len(s.actorCompanions) > 0 {
+		return false, nil
+	}
+	_, files, err := b.liveFiles(ctx, s)
+	if err != nil {
+		return false, err
+	}
+	req := rowroute.Request{Defaults: liveKinds(s)}
+	for _, ch := range changes {
+		if string(ch.Row.Table) == tableActors {
+			return false, nil
+		}
+		k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
+		_, inLive := files[k]
+		if inLive {
+			return false, nil
+		}
+		if !isLiveKind(s, ch.Row.Table) {
+			continue
+		}
+		_, berr := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID)
+		if berr != nil && !errors.Is(berr, store.ErrNotFound) {
+			return false, berr
+		}
+		row := rowroute.Row{Table: k.Table, ID: k.ID, InBranch: berr == nil, Deleted: ch.Row.Deleted}
+		if rowroute.Decide(req, row).Place == rowroute.PlaceLive {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // PendingAudit implements store.AuditJournal (the repo store's journal).
