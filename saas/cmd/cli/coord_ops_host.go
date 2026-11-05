@@ -81,6 +81,12 @@ func (coordHost) TaskNote(ctx context.Context, in opscoord.NoteIn) (opscoord.Rep
 	})
 }
 
+// TaskReassignPlan implements opscoord.Host: the open tasks of --from.
+func (coordHost) TaskReassignPlan(ctx context.Context, in opscoord.ReassignIn) (opscoord.ReassignPlan, error) {
+	plan, err := planTaskReassign(ctx, in)
+	return plan, hostErr(err)
+}
+
 // TaskReassign implements opscoord.Host.
 func (coordHost) TaskReassign(ctx context.Context, in opscoord.ReassignIn) (opscoord.Report, error) {
 	return report(func(out io.Writer) error { return runTaskReassign(ctx, out, in) })

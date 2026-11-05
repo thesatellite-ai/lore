@@ -562,22 +562,6 @@ func resolveHandleActor(ctx context.Context, handle string) (string, error) {
 	return a.ID, nil
 }
 
-// openTasksAssignedTo lists open task ids assigned to actor, read through
-// the core (tasks are core-owned; every attached store).
-func openTasksAssignedTo(ctx context.Context, actorID string) ([]string, error) {
-	ts, err := coreDocs(ctx, tableTasks)
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, t := range ts {
-		if t.Str(fieldAssignedActor) == actorID && openStatus(t) {
-			out = append(out, t.Str(docKeyID))
-		}
-	}
-	return out, nil
-}
-
 // fieldAssignedActor is the task's assignee column.
 const fieldAssignedActor = "assigned_to_actor_id"
 

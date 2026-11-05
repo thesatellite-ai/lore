@@ -89,8 +89,8 @@ func Ops(env Env) []op.Entry {
 			op.Example{Title: "rank without claiming", CLI: "lore task next --mission mis_12 --why --dry-run", Want: "nothing written"}), o.next),
 		op.Define(with(write, OpTaskNote, "Record a progress note on a task (pushes your work branch)",
 			op.Example{Title: "a checkpoint note", CLI: `lore task note tsk_31 "route + loader done, form next"`, Want: "note"}), o.note),
-		op.Define(with(write, OpTaskReassign, "Assign a task to someone else, dropping any claim (human override)",
-			op.Example{Title: "offboarding", CLI: "lore task reassign --from @bob --assign @alice", Want: "reassigned"}), o.reassign),
+		op.Define(mayAsk(withErrs(with(write, OpTaskReassign, "Assign a task to someone else, dropping any claim (human override); --from reassigns every open task of a person as one batch",
+			op.Example{Title: "offboarding", CLI: "lore task reassign --from @bob --assign @alice --yes", Want: "batch"}), errs.NeedsConfirm)), o.reassign),
 		op.Define(with(write, OpTaskRelease, "Give back a claim you hold",
 			op.Example{Title: "release", CLI: "lore task release tsk_31", Want: "released"}), o.release),
 		op.Define(with(write, OpTaskRevoke, "Drop the current claim on a task (human override; the holder is fenced out)",
@@ -120,6 +120,14 @@ func with(base op.Spec, name, summary string, ex op.Example) op.Spec {
 // withErrs adds codes to s's error list (s.Errors is already a copy).
 func withErrs(s op.Spec, codes ...errs.Code) op.Spec {
 	s.Errors = append(s.Errors, codes...)
+	return s
+}
+
+// mayAsk lets the operation answer E_NEEDS_CONFIRM itself after counting
+// its rows (XQ2: reassign --from previews above batch.preview_rows), so the
+// CLI prompts a terminal and re-runs with yes.
+func mayAsk(s op.Spec) op.Spec {
+	s.Confirm = op.ConfirmRule{MayAsk: true}
 	return s
 }
 
@@ -191,14 +199,6 @@ func (o ops) note(ctx context.Context, in NoteIn) (Report, error) {
 		return Report{}, err
 	}
 	return h.TaskNote(ctx, in)
-}
-
-func (o ops) reassign(ctx context.Context, in ReassignIn) (Report, error) {
-	h, err := o.host(ctx, OpTaskReassign)
-	if err != nil {
-		return Report{}, err
-	}
-	return h.TaskReassign(ctx, in)
 }
 
 func (o ops) release(ctx context.Context, in ReleaseIn) (Report, error) {

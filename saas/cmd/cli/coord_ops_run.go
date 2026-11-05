@@ -20,6 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // runTaskNext is task.next: resume the claim held, or claim the most
@@ -189,49 +190,83 @@ func runTaskRevoke(ctx context.Context, out io.Writer, in opscoord.RevokeIn) err
 
 // runTaskReassign is task.reassign: one task, or every open task of
 // --from @handle, to --assign @handle (TASK 14.4 lead + assignees, 17.2
-// history, claim_epoch raised so the holder is fenced out).
+// history, claim_epoch raised so the holder is fenced out). The operation
+// sends --from through planTaskReassign and then one id at a time under
+// one batch (ops/coord reassign.go, TASK 18.1); the --from branch here is
+// the old cobra command's until it is unmounted.
 func runTaskReassign(ctx context.Context, out io.Writer, in opscoord.ReassignIn) error {
+	if in.ID == "" && in.From != "" {
+		plan, err := planTaskReassign(ctx, in)
+		if err != nil {
+			return err
+		}
+		for _, t := range plan.Tasks {
+			if err = runTaskReassign(ctx, out, opscoord.ReassignIn{ID: t.ID, Assign: in.Assign}); err != nil {
+				return err
+			}
+		}
+		if len(plan.Tasks) == 0 {
+			_, _ = fmt.Fprintf(out, "no open tasks assigned to %s\n", in.From)
+		}
+		return nil
+	}
+	w, to, err := reassignCaller(ctx, in)
+	if err != nil {
+		return err
+	}
+	if in.ID == "" {
+		return errcodes.New(errcodes.InvalidInput, "give a task id or --from @handle")
+	}
+	if err := reassignOne(ctx, w, in.ID, to, w.Caller().ActorID); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(out, "%s %s reassigned to %s\n", style.Success("✓"), in.ID, in.Assign)
+	return nil
+}
+
+// reassignCaller checks --assign and that a person runs the reassign
+// (requireHuman), and resolves the new assignee's actor id.
+func reassignCaller(ctx context.Context, in opscoord.ReassignIn) (*coordWorld, string, error) {
 	if in.Assign == "" {
-		return errcodes.New(errcodes.InvalidInput, "--assign @handle is required")
+		return nil, "", errcodes.New(errcodes.InvalidInput, "--assign @handle is required")
 	}
 	w, err := openCoordWorld(ctx)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 	if err = requireHuman(w, "reassign"); err != nil {
-		return err
+		return nil, "", err
 	}
 	to, err := resolveHandleActor(ctx, in.Assign)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
-	var ids []string
-	switch {
-	case in.ID != "":
-		ids = []string{in.ID}
-	case in.From != "":
-		who, err := resolveHandleActor(ctx, in.From)
-		if err != nil {
-			return err
+	return w, to, nil
+}
+
+// planTaskReassign lists the open tasks assigned to --from (todo or in
+// progress, the order the core lists them), after the same checks as one
+// reassign; nothing is written. The rows live in the repo store.
+func planTaskReassign(ctx context.Context, in opscoord.ReassignIn) (opscoord.ReassignPlan, error) {
+	w, _, err := reassignCaller(ctx, in)
+	if err != nil {
+		return opscoord.ReassignPlan{}, err
+	}
+	who, err := resolveHandleActor(ctx, in.From)
+	if err != nil {
+		return opscoord.ReassignPlan{}, err
+	}
+	ts, err := coreDocs(ctx, tableTasks)
+	if err != nil {
+		return opscoord.ReassignPlan{}, err
+	}
+	plan := opscoord.ReassignPlan{Tasks: []opscoord.ReassignTask{}, Store: store.SourceRepo, Actor: w.Caller().ActorID}
+	for _, t := range ts {
+		if t.Str(fieldAssignedActor) == who && openStatus(t) {
+			plan.Tasks = append(plan.Tasks, opscoord.ReassignTask{ID: t.Str(docKeyID), Title: t.Str(fieldTitle)})
 		}
-		ids, err = openTasksAssignedTo(ctx, who)
-		if err != nil {
-			return err
-		}
-	default:
-		return errcodes.New(errcodes.InvalidInput, "give a task id or --from @handle")
 	}
-	by := w.Caller().ActorID
-	for _, id := range ids {
-		if err := reassignOne(ctx, w, id, to, by); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(out, "%s %s reassigned to %s\n", style.Success("✓"), id, in.Assign)
-	}
-	if len(ids) == 0 {
-		_, _ = fmt.Fprintf(out, "no open tasks assigned to %s\n", in.From)
-	}
-	return nil
+	return plan, nil
 }
 
 // reassignOne reassigns task id to actor to, closing its target before

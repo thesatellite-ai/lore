@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/urgency"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Host is the coordination machinery behind these operations: the signals
@@ -21,6 +22,10 @@ type Host interface {
 	TaskNext(ctx context.Context, in NextIn) (NextOut, error)
 	TaskNote(ctx context.Context, in NoteIn) (Report, error)
 	TaskReassign(ctx context.Context, in ReassignIn) (Report, error)
+	// TaskReassignPlan lists what `task reassign --from` would change
+	// (checks --assign and the caller first, writes nothing); the op then
+	// previews it and reassigns each task by id under one batch (TASK 18.1).
+	TaskReassignPlan(ctx context.Context, in ReassignIn) (ReassignPlan, error)
 	TaskRelease(ctx context.Context, in ReleaseIn) (Report, error)
 	TaskRevoke(ctx context.Context, in RevokeIn) (Report, error)
 	HoldClaim(ctx context.Context, in HoldClaimIn) (Report, error)
@@ -132,6 +137,33 @@ type ReassignIn struct {
 	Assign string `json:"assign,omitempty" flag:"assign" desc:"the new assignee (@handle)"`
 	From   string `json:"from,omitempty" flag:"from" desc:"reassign every open task of this person"`
 }
+
+// ReassignTask is one task a `task reassign --from` batch changes.
+type ReassignTask struct {
+	ID    string // tsk_…
+	Title string // may be empty
+}
+
+// ReassignPlan is what `task reassign --from` would change: the open tasks
+// of the --from person, the store their rows live in and the acting
+// person's actor id (the batch log names it on every event).
+type ReassignPlan struct {
+	Tasks []ReassignTask
+	Store store.Source
+	Actor string // act_…
+}
+
+// ReassignOut is the output of task.reassign: the lines v0.1.17 printed,
+// the tasks reassigned and, for --from, the batch id every one of them was
+// written under (TASK 18.1, TSQ6; "" for a single task).
+type ReassignOut struct {
+	Lines []string `json:"lines"`
+	Batch string   `json:"batch,omitempty"`
+	Tasks []string `json:"tasks"`
+}
+
+// Text implements op.Texter: the lines.
+func (r ReassignOut) Text() string { return joinLines(r.Lines) }
 
 // ReleaseIn is the input of task.release.
 type ReleaseIn struct {
