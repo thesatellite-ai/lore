@@ -18,7 +18,10 @@ package rowscan
 import (
 	"maps"
 	"math"
+	"runtime"
 	"slices"
+	"sync"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -55,7 +58,19 @@ type Hit struct {
 // given, field, match). Deleted rows are skipped: they print nowhere.
 func Scan(sc scan.Scanner, rows map[row.Table][]Row) []Hit {
 	allows := Allows(rows[schema.TableSecretAllows])
-	var out []Hit
+	// Every text to scan, in the output order; the scans run in parallel
+	// and the hits are collected in this order, so the result is the same
+	// as one scan after another (BUG-TIME-BENCH: a store with 100k time
+	// entries is 100k texts). sc must be safe for concurrent use
+	// (scan.Scanner's contract).
+	type job struct {
+		table  row.Table
+		source string
+		id     ids.AnyID
+		field  string
+		text   string
+	}
+	var jobs []job
 	for _, t := range slices.Sorted(maps.Keys(rows)) {
 		if t == schema.TableSecretRules {
 			continue
@@ -66,11 +81,32 @@ func Scan(sc scan.Scanner, rows map[row.Table][]Row) []Hit {
 			}
 			for _, f := range slices.Sorted(maps.Keys(s.Row.Fields)) {
 				for _, txt := range Texts(s.Row.Fields[f]) {
-					for _, hit := range scan.Filter(s.Row.ID, sc.Scan(f, txt), allows) {
-						out = append(out, Hit{Table: t, Source: s.Source, ID: s.Row.ID, Finding: hit})
-					}
+					jobs = append(jobs, job{table: t, source: s.Source, id: s.Row.ID, field: f, text: txt})
 				}
 			}
+		}
+	}
+	found := make([][]scan.Finding, len(jobs))
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(jobs)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(jobs) {
+					return
+				}
+				found[i] = scan.Filter(jobs[i].id, sc.Scan(jobs[i].field, jobs[i].text), allows)
+			}
+		}()
+	}
+	wg.Wait()
+	var out []Hit
+	for i, j := range jobs {
+		for _, hit := range found[i] {
+			out = append(out, Hit{Table: j.table, Source: j.source, ID: j.id, Finding: hit})
 		}
 	}
 	return out
