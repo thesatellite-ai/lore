@@ -252,6 +252,7 @@ func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, expl
 			if len(fs) == 0 {
 				return nil
 			}
+			auditHookRefused(ctx, fs, lc) // SECRETS 16: secret.hook_refused
 			return leakBlockedError(fs, explain, lc)
 		}
 		return err
@@ -266,6 +267,7 @@ func runLeakCheck(ctx context.Context, root string, items []leakcheck.Item, expl
 	if len(block) == 0 {
 		return nil
 	}
+	auditHookRefused(ctx, block, lc) // SECRETS 16: secret.hook_refused
 	return leakBlockedError(block, explain, lc)
 }
 
