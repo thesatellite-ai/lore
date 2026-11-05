@@ -12,9 +12,10 @@ package host
 //     live. Live rows are one compare-and-swap commit on the local live ref;
 //     the run's finish pushes it.
 //
-// Not ported yet (P3-MODEB-1): the default-branch read-through of rows that
-// landed on origin/<default> before this checkout pulled (needs `lore land`
-// on cmd/lore first), and the fenced coordination collector (coord host).
+// The default-branch read-through of rows that landed on origin/<default>
+// before this checkout pulled is live_landed.go (Get and Write's expect;
+// not the list Read). Not ported yet: the fenced coordination collector
+// (coord host).
 
 import (
 	"bytes"
@@ -210,6 +211,9 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 	}
 	f, ok := files[k]
 	if !ok {
+		if r, landed := b.landedCopy(ctx, s, k, branchRow, berr == nil); landed {
+			return r, nil // F1 read-through (live_landed.go)
+		}
 		return branchRow, berr
 	}
 	lr, err := liveStoreRow(k, f)
@@ -336,6 +340,11 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 			}
 		case inBranch:
 			cur = branchRow
+		}
+		if !inLive {
+			if r, landed := b.landedCopy(ctx, s, k, branchRow, inBranch); landed {
+				cur = r // the copy Get showed the reader (live_landed.go)
+			}
 		}
 		if cur.HLC.Compare(ch.Expect) != 0 {
 			return errs.Wrap(errs.Stale, "live row "+k.String()+" changed since it was read", store.ErrStale)
