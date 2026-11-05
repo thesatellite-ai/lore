@@ -36,9 +36,14 @@ const (
 	// KeyResourcesAllowedIn: where resources may live, items from
 	// AllowedInPlaces (RQ2, OQ24); levels intersect, a lower one only narrows.
 	KeyResourcesAllowedIn Key = "resources.allowed_in"
-	KeyTrashRetentionDays Key = "trash.retention_days"
-	KeyAgentsPersonOnly   Key = "agents.person_only"
-	KeyTasksMaxDepth      Key = "tasks.max_depth"
+	// KeyResourcesStaleAfter: hours since the last successful fetch of a
+	// store after which a resource write checked against that store's kind
+	// rows adds "checked against store kinds as of <commit>" (RES 3.6: 24 h;
+	// P2-RES-6: whole hours, a limit, the smaller is stricter).
+	KeyResourcesStaleAfter Key = "resources.stale_after"
+	KeyTrashRetentionDays  Key = "trash.retention_days"
+	KeyAgentsPersonOnly    Key = "agents.person_only"
+	KeyTasksMaxDepth       Key = "tasks.max_depth"
 	// KeyTasksParentAutoclose is what happens when a parent's last open
 	// sub-task closes (TSQ2): off | suggest (default) | on.
 	KeyTasksParentAutoclose Key = "tasks.parent_autoclose"
@@ -130,6 +135,7 @@ const clientRouteSep = "="
 const (
 	defaultMaxBytes             int64 = 16 * 1024 // MQ3, RQ4, CFG10
 	defaultWarnBytes            int64 = 4 * 1024  // RQ4
+	defaultStaleAfterHours      int64 = 24        // RES 3.6 resources.stale_after
 	defaultTasksMaxDepth        int64 = 4         // TSQ1
 	ceilingTasksMaxDepth        int64 = 8         // TSQ1: "default 4, up to 8"
 	defaultMetaMaxDepth         int64 = 4         // METADATA 3.13
@@ -287,6 +293,7 @@ func Keys() []KeyDef {
 		{Key: KeyMetaResourceHintValues, Shape: ShapeLimit, Default: value.Int(defaultMetaResourceHint), Doc: "distinct values past which meta lint suggests a resource kind (METADATA 3.8, D39)"},
 		{Key: KeyResourcesMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest resource in bytes"},
 		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource larger than this many bytes prints a warning (RQ4)"},
+		{Key: KeyResourcesStaleAfter, Shape: ShapeLimit, Default: value.Int(defaultStaleAfterHours), Doc: "hours since a store's last fetch after which a resource write notes the store kinds' commit (RES 3.6)"},
 		{Key: KeyResourcesAllowedIn, Shape: ShapeAllow, Choices: AllowedInPlaces(), Default: mustTexts(AllowedInPlaces()...),
 			Doc: "where resources may live: store, repo, client; a lower level may only narrow (RQ2)"},
 		{Key: KeyTrashRetentionDays, Shape: ShapeLimit, Doc: "maximum days a deleted row stays in the trash; unset keeps forever"},
