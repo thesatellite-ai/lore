@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 
-	"dbent"
 	"dbent/gen/ent"
 	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/clock"
@@ -155,11 +154,12 @@ func openRepoTarget(ctx context.Context, w *coordWorld) (coordTarget, error) {
 	if err != nil {
 		return coordTarget{}, err
 	}
-	db := dbent.InitDB(rctx.DBPath)
-	if err = dbent.ApplyPragmas(db); err != nil {
-		_ = client.Close() // the pragma error is the one to report
-		_ = db.Close()     // the pragma error is the one to report
-		return coordTarget{}, errcodes.New(errcodes.Internal, "open lore.db").WithCause(err)
+	// P2B-OLD-3: a private-cache handle beside the command's main one, so a
+	// live apply here never waits forever on the shared-cache lock.
+	db, err := openPrivateLoreDB(rctx.DBPath, false)
+	if err != nil {
+		_ = client.Close() // the open error is the one to report
+		return coordTarget{}, err
 	}
 	folder := s.folderFor(root)
 	projectID, err := resolveProjectID(ctx, rctx.ProjectID)

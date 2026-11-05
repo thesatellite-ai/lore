@@ -18,7 +18,6 @@ import (
 	"strings"
 	"sync"
 
-	"dbent"
 	"saas/pkg/aicoder/audit"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lsync"
@@ -216,18 +215,13 @@ func (s *coreAuditSink) ToolSessionIDs(ctx context.Context) ([]string, error) {
 	if err != nil || !fi.Mode().IsRegular() {
 		return nil, nil // no lore.db yet (sessions are machine-local, Q-LOCAL), or a symlink lore never reads
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(rctx.DBPath), RawQuery: "mode=ro&_pragma=busy_timeout(" + strconv.Itoa(sessionIDsBusyMS) + ")"}
-	db, err := sql.Open(doctorCacheDriver, u.String())
+	db, err := openPrivateLoreDB(rctx.DBPath, true)
 	if err != nil {
-		return nil, errcodes.New(errcodes.Internal, "read tool session ids").WithCause(err)
+		return nil, err
 	}
 	ids, err := sessions.KnownToolSessionIDs(ctx, db)
 	return ids, errors.Join(err, db.Close())
 }
-
-// sessionIDsBusyMS bounds ToolSessionIDs' wait for a lock held by another
-// process (P2B-OLD-3): short, a read beside a WAL writer does not wait.
-const sessionIDsBusyMS = 2000
 
 // openCoreAuditDB opens the project's lore.db for the chain, building it
 // from .lore/data first in a fresh clone (as every old command does).
@@ -258,9 +252,35 @@ func openCoreAuditDBAt(ctx context.Context, root string) (*sql.DB, error) {
 	if li, lerr := os.Lstat(rctx.DBPath); lerr == nil && li.Mode()&os.ModeSymlink != 0 {
 		return nil, errcodes.New(errcodes.SymlinkDB, "refusing to open lore.db: it is a symlink")
 	}
-	db := dbent.InitDB(rctx.DBPath)
-	if err := dbent.ApplyPragmas(db); err != nil {
-		return nil, errcodes.New(errcodes.Internal, "apply pragmas").WithCause(errors.Join(err, db.Close()))
+	return openPrivateLoreDB(rctx.DBPath, false)
+}
+
+// privateDBBusyMS bounds how long a private lore.db handle waits for a
+// write lock held by another connection (P2B-OLD-3): the same 5 s as the
+// main handle, after which the write fails with SQLITE_BUSY instead of
+// hanging.
+const privateDBBusyMS = 5000
+
+// openPrivateLoreDB opens lore.db through a PRIVATE-cache connection
+// (readOnly: mode=ro). P2B-OLD-3: every second handle on lore.db in one
+// process (the audit chain, the session row, who, forced reveals, the
+// coordination rows) was a dbent.InitDB shared-cache handle; while the
+// main handle held a write transaction (lsync.Reconcile, a live apply) a
+// write — or materialize's pragmas — on the second one waited on the
+// shared-cache table lock forever. A private connection takes the file
+// lock like another process does: it waits busy_timeout and then fails,
+// so the worst case is an error, never a hang. The per-connection pragmas
+// sit in the DSN (a PRAGMA through *sql.DB reaches one pooled connection
+// only); journal_mode stays what the main handle set (WAL is persistent).
+func openPrivateLoreDB(path string, readOnly bool) (*sql.DB, error) {
+	q := "_pragma=foreign_keys(1)&_pragma=busy_timeout(" + strconv.Itoa(privateDBBusyMS) + ")&_pragma=synchronous(NORMAL)&_txlock=immediate"
+	if readOnly {
+		q = "mode=ro&_pragma=busy_timeout(" + strconv.Itoa(privateDBBusyMS) + ")"
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: q}
+	db, err := sql.Open(doctorCacheDriver, u.String())
+	if err != nil {
+		return nil, errcodes.New(errcodes.Internal, "open lore.db").WithCause(err)
 	}
 	return db, nil
 }
