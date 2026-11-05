@@ -86,7 +86,7 @@ func TestPackRules(t *testing.T) {
 		{RuleNPMToken, "npm_" + rep("Ab3", 12), "npm_" + "Ab3"},
 		{RuleTwilioKey, "SK" + rep(hex, 2), "SK" + hex},
 		{RuleAuthorizationBearer, "Authorization: Bearer " + alnum, "Authorization: Bearer <token>"},
-		{RulePasswordPair, "password=" + "Zq8#Lm2!Vx", "password=" + "${DB_PASSWORD}"},
+		{RulePasswordPair, "pass" + "word=" + "Zq8#Lm2!Vx", "pass" + "word=" + "${DB_PASSWORD}"},
 		{RuleURLWithPassword, "postgres://app:" + "Zq8Lm2Vx" + "@db.local:5432/x", "postgres://app:" + "${PW}" + "@db.local/x"},
 		{RuleURLUserinfoID, "https://" + "glpat-" + rep("Ab3", 7) + "@git.acme.example/a/b", "https://" + "mira" + "@git.acme.example/a/b"},
 	}
@@ -113,7 +113,10 @@ func TestPackRules(t *testing.T) {
 // TestPasswordPairStrict: a low-entropy word is not a password value.
 func TestPasswordPairStrict(t *testing.T) {
 	t.Parallel()
-	if ruleIDs(packOnly(t).Scan("body", "password = aaaaaaaaaaaa"))[RulePasswordPair] {
+	// Built at run time so the repo's own pre-commit leak check never sees a
+	// literal password pair in this file (CLAUDE.md convention 8).
+	text := "pass" + "word = " + strings.Repeat("a", 12)
+	if ruleIDs(packOnly(t).Scan("body", text))[RulePasswordPair] {
 		t.Fatal("low-entropy value detected")
 	}
 }
@@ -285,21 +288,24 @@ func TestConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
-// TestPasswordPairProseFilter pins the 3.4 table (D10).
+// TestPasswordPairProseFilter pins the 3.4 table (D10). The key word is
+// joined at run time so the repo's own pre-commit leak check never reads a
+// password pair in this file (CLAUDE.md convention 8).
 func TestPasswordPairProseFilter(t *testing.T) {
 	s := packOnly(t)
+	pw := "pass" + "word"
 	cases := []struct {
 		text string
 		hit  bool
 	}{
-		{"change that password: credentials shouldn't sit in Slack history", false},
-		{"password: " + "Sunflower42", true},
-		{"password: " + "tractor", true},
-		{`password: "` + "tractor and seeds" + `"`, true},
-		{"password = " + "tractor; restart api", false},
-		{"the password: changeme", false},
-		{"PASSWORD=${secret:gopass://acme/x}", false},
-		{"pwd: " + "hunter-hunter-2 then restart", true},
+		{"change that " + pw + ": credentials shouldn't sit in Slack history", false},
+		{pw + ": " + "Sunflower42", true},
+		{pw + ": " + "tractor", true},
+		{pw + `: "` + "tractor and seeds" + `"`, true},
+		{pw + " = " + "tractor; restart api", false},
+		{"the " + pw + ": " + "changeme", false},
+		{strings.ToUpper(pw) + "=${secret:gopass://acme/x}", false},
+		{"p" + "wd: " + "hunter-hunter-2 then restart", true},
 	}
 	for _, c := range cases {
 		if got := ruleIDs(s.Scan("body", c.text))[RulePasswordPair]; got != c.hit {
