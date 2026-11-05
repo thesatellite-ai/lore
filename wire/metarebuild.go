@@ -141,3 +141,28 @@ func KeyLoosenings(ctx context.Context, dir, base, target string) (found []error
 	}
 	return found, nil
 }
+
+// KeyLooseningsSince is KeyLoosenings over what HEAD added since it left
+// base (the merge base of base and HEAD; the landing, ci-merge and
+// `check --ci` case). base "" picks origin/HEAD, else HEAD~1; with
+// neither (a first commit) there is nothing to compare and none is found.
+// DECISION OV64-CIBASE: check --ci without a base compares with the
+// default remote branch, else the previous commit.
+func KeyLooseningsSince(ctx context.Context, dir, base string) ([]error, error) {
+	if base == "" {
+		for _, b := range []string{"origin/HEAD", "HEAD~1"} {
+			if liveRefExists(ctx, dir, b) {
+				base = b
+				break
+			}
+		}
+		if base == "" {
+			return nil, nil
+		}
+	}
+	mb, err := liveGit(ctx, dir, "merge-base", base, "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	return KeyLoosenings(ctx, dir, strings.TrimSpace(string(mb)), "HEAD")
+}

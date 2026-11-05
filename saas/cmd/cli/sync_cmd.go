@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // syncTarget is an opened Mode A project for a sync subcommand.
@@ -811,7 +812,14 @@ func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error 
 			}
 		}
 	}
-	return nil
+	// RX7 (OV64): a staged key row that drops internal, sensitive or
+	// strict without a new changed_by record refuses the commit. No HEAD
+	// yet (a first commit) means nothing to compare.
+	found, lerr := wire.KeyLoosenings(ctx, t.root, "HEAD", "")
+	if lerr != nil {
+		return nil
+	}
+	return keyLooseningError(found)
 }
 
 // Reasons brokenLoreFile gives; printed after each refused path and read

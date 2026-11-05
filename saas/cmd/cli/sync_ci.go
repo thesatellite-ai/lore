@@ -132,6 +132,11 @@ func runCIMerge(ctx context.Context, dir, base string, dryRun bool) (ciMergeResu
 		return res, errcodes.New(errcodes.InvalidInput, "the work tree has changes; ci-merge only runs on a clean checkout").
 			WithHint("commit or stash them first")
 	}
+	// RX7 at landing (OV64): a key row the branch loosened without a
+	// changed_by record is refused before any merge is tried.
+	if err := checkKeyLoosening(ctx, dir, base); err != nil {
+		return res, err
+	}
 	probe, err := gitsetup.ProbeMerge(ctx, dir, base)
 	if err != nil {
 		return res, errcodes.New(errcodes.Internal, "test merge of "+base).WithCause(err)

@@ -142,6 +142,9 @@ func Rows(p Policy, base, ours, theirs row.Row) (Result, error) {
 	if !base.ID.IsZero() && (base.Table != ours.Table || base.ID != ours.ID) {
 		return Result{}, errs.New(errs.InvalidInput, "merge: the base is a different row")
 	}
+	if r, ok := replaceRebuilt(ours, theirs); ok {
+		return Result{Row: r}, nil // METADATA 3.18: a real key row replaces a rebuilt one whole (rebuilt.go)
+	}
 	newer, older, oursNewer := order(ours, theirs)
 	switch {
 	case newer.Deleted && older.Deleted:

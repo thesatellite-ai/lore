@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,8 @@ import (
 	"saas/pkg/aicoder/projresolve"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // Flags of `lore check leaks`.
@@ -89,7 +92,7 @@ cleared; it never prints a value.`,
 				return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
 			}
 			if ci {
-				return runCheckCI(root)
+				return runCheckCI(ctx, root)
 			}
 			if asClient {
 				return runCheckAsClient(ctx, root, explain)
@@ -493,8 +496,45 @@ func stripGitComments(b []byte) []byte {
 	return []byte(strings.Join(out, "\n"))
 }
 
+// keyLooseningError turns wire.KeyLoosenings findings into one
+// E_LEAK_BLOCKED (METADATA 3.8 RX7, OV64): every meta_keys row that drops
+// internal, sensitive or strict without a new changed_by record, each
+// with the meta edit command that records it. nil when none.
+func keyLooseningError(found []error) error {
+	if len(found) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, len(found))
+	hints := make([]string, 0, len(found))
+	for _, f := range found {
+		var e *errs.Error
+		if errors.As(f, &e) {
+			lines = append(lines, e.Message)
+			hints = append(hints, e.Hint)
+			continue
+		}
+		lines = append(lines, f.Error())
+	}
+	return errcodes.New(errcodes.LeakBlocked, strings.Join(lines, "; ")).WithHint(strings.Join(hints, "; "))
+}
+
+// checkKeyLoosening runs the loosening check over what HEAD added since
+// base ("" = the default remote branch, else the previous commit): the
+// `check --ci` and ci-merge part of RX7. A directory that is not a git
+// checkout has nothing to compare.
+func checkKeyLoosening(ctx context.Context, root, base string) error {
+	found, err := wire.KeyLooseningsSince(ctx, root, base)
+	if err != nil {
+		return nil // not a git checkout, or no common history: nothing to compare
+	}
+	return keyLooseningError(found)
+}
+
 // runCheckCI is F16's CI mode over the checked-out tree's .lore/data.
-func runCheckCI(root string) error {
+func runCheckCI(ctx context.Context, root string) error {
+	if err := checkKeyLoosening(ctx, root, ""); err != nil {
+		return err
+	}
 	dataDir := filepath.Join(root, projresolve.MarkerDir, lsync.DataDirName)
 	meta, err := lsync.ReadProjectMeta(dataDir)
 	if err != nil {
