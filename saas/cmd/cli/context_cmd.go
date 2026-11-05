@@ -100,7 +100,7 @@ func newContextCommand() *cobra.Command {
   lore context --topic billing
   lore context --topics
   lore context --for-prompt "invoice rounding"
-  lore context --hook claude_code --hook-stdin < hook.json
+  cat hook.json | lore context --hook claude_code --hook-stdin
   lore context --internal --table rules --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
