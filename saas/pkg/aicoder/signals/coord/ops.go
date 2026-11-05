@@ -220,25 +220,25 @@ type ClaimResult struct {
 func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimResult, error) {
 	var out ClaimResult
 	var poisoned *PoisonedError
-	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
 		out, poisoned = ClaimResult{}, nil
 		mission := IsMission(id)
 		doc, ok, err := env.Rows.Get(ctx, id)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		if !ok {
-			return signals.Change{}, fmt.Errorf("%w: %s", ErrUnknownTask, id)
+			return signals.Change{}, nil, fmt.Errorf("%w: %s", ErrUnknownTask, id)
 		}
 		if !claimable(mission, doc.Status()) {
-			return signals.Change{}, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
+			return signals.Change{}, nil, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
 		}
 		// 6.9: a parent with open children is coordinated, never worked.
 		lease := false
 		if !mission && opts.OpenChildren != nil {
 			if kids := opts.OpenChildren(id); len(kids) > 0 {
 				if !opts.Coordinate {
-					return signals.Change{}, &HasOpenChildrenError{Task: id, Children: kids}
+					return signals.Change{}, nil, &HasOpenChildrenError{Task: id, Children: kids}
 				}
 				lease = true
 			}
@@ -253,7 +253,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		}
 		tok, err := env.Signals.Tokens.New()
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		plan, err := signals.DecideClaim(v, signals.ClaimRequest{
 			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission && !lease, Exempt: exemptFromWIP(ctx, env, v, opts),
@@ -262,16 +262,16 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			WorkBranch: workBranch, Owns: opts.Owns,
 		})
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		out.Plan = plan
 		out.Overlaps = overlaps(v, plan.Path, opts.Owns)
 		if plan.Resumed {
 			out.Doc = doc
-			return signals.Change{}, nil
+			return signals.Change{}, nil, nil
 		}
 		if mission {
-			return signals.Change{Put: map[string]signals.Signal{plan.Path: plan.Signal}}, nil
+			return signals.Change{Put: map[string]signals.Signal{plan.Path: plan.Signal}}, nil, nil
 		}
 		next := doc.Clone()
 		now := v.Now
@@ -279,11 +279,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			next[keyStatus] = statusBlocked
 			next.touch(now)
 			poisoned = &PoisonedError{Task: id, Attempts: plan.Attempts}
-			comps, err := env.Rows.Stage(ctx, RowWrite{ID: id, Doc: next})
-			if err != nil {
-				return signals.Change{}, err
-			}
-			return signals.Change{Delete: []string{plan.Path}, Companions: comps}, nil
+			return signals.Change{Delete: []string{plan.Path}}, []RowWrite{{ID: id, Doc: next}}, nil
 		}
 		next.SetInt(keyEpoch, plan.Epoch)
 		next.SetInt(keyAttempts, plan.Attempts)
@@ -303,19 +299,15 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			entry.PrevActorID = plan.Prev.Holder
 			// D3: the previous holder's span ends at its last heartbeat.
 			if err = next.closeClaimSpan(*plan.Prev, now, v.Lease.TTL, env.Time); err != nil {
-				return signals.Change{}, err
+				return signals.Change{}, nil, err
 			}
 		}
 		if err := next.AppendClaimLog(entry); err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		next.touch(now)
 		out.Doc = next
-		comps, err := env.Rows.Stage(ctx, RowWrite{ID: id, Doc: next})
-		if err != nil {
-			return signals.Change{}, err
-		}
-		return signals.Change{Put: map[string]signals.Signal{plan.Path: plan.Signal}, Companions: comps}, nil
+		return signals.Change{Put: map[string]signals.Signal{plan.Path: plan.Signal}}, []RowWrite{{ID: id, Doc: next}}, nil
 	})
 	if err != nil {
 		return ClaimResult{}, err
@@ -444,13 +436,13 @@ func prefix(tok string) string {
 // Renew is the heartbeat (F7 "renew"): signals only, never the row.
 func Renew(ctx context.Context, env Env, id string) (signals.Signal, error) {
 	var renewed signals.Signal
-	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
 		s, err := signals.DecideRenew(v, env.Caller, env.Folder, id)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		renewed = s
-		return signals.Change{Put: map[string]signals.Signal{signals.ClaimPath(env.Folder, id): s}}, nil
+		return signals.Change{Put: map[string]signals.Signal{signals.ClaimPath(env.Folder, id): s}}, nil, nil
 	})
 	if errors.Is(err, signals.ErrNotHeld) {
 		return signals.Signal{}, classify(ctx, env, id, err)
@@ -470,18 +462,18 @@ func Renew(ctx context.Context, env Env, id string) (signals.Signal, error) {
 // ref and the row gets one claim_log entry, atomically.
 func Release(ctx context.Context, env Env, id string) error {
 	now := env.Signals.Clock.Now()
-	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
 		s, err := signals.DecideRelease(v, env.Caller, env.Folder, id)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		ch := signals.Change{Delete: []string{signals.ClaimPath(env.Folder, id)}}
 		if IsMission(id) {
-			return ch, nil
+			return ch, nil, nil
 		}
 		doc, ok, err := env.Rows.Get(ctx, id)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		if !ok {
 			// FB-TASK-1: the task went to the trash (or was purged) while held.
@@ -489,23 +481,18 @@ func Release(ctx context.Context, env Env, id string) error {
 			// found it), so the release only drops it: there is no live row
 			// to log the release on, and keeping the claim would hold a WIP
 			// slot until it expires.
-			return ch, nil
+			return ch, nil, nil
 		}
 		next := doc.Clone()
 		if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		if err := next.AppendClaimLog(schema.ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: schema.ClaimEventRelease,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: s.ClaimEpoch}); err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		next.touch(v.Now)
-		comps, err := env.Rows.Stage(ctx, RowWrite{ID: id, Doc: next})
-		if err != nil {
-			return signals.Change{}, err
-		}
-		ch.Companions = comps
-		return ch, nil
+		return ch, []RowWrite{{ID: id, Doc: next}}, nil
 	})
 	if errors.Is(err, signals.ErrNotHeld) {
 		return classify(ctx, env, id, err)
@@ -529,39 +516,36 @@ func errIf(cond bool, err error) error {
 // the same commit (a note's comment). dropClaim removes the claim (done).
 func HolderWrite(ctx context.Context, env Env, id string, dropClaim bool, mutate func(doc Doc, now time.Time) ([]RowWrite, error)) (Doc, error) {
 	var written Doc
-	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
 		doc, ok, err := env.Rows.Get(ctx, id)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		if !ok {
-			return signals.Change{}, fmt.Errorf("%w: %s", ErrUnknownTask, id)
+			return signals.Change{}, nil, fmt.Errorf("%w: %s", ErrUnknownTask, id)
 		}
 		held, err := signals.CheckHolder(v, env.Caller, env.Folder, id, doc.Epoch())
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		next := doc.Clone()
 		if dropClaim { // holder done: the claim span closes in the same write (D4)
 			if err = next.closeClaimSpan(held, v.Now, v.Lease.TTL, env.Time); err != nil {
-				return signals.Change{}, err
+				return signals.Change{}, nil, err
 			}
 		}
 		extra, err := mutate(next, v.Now)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		next.touch(v.Now)
 		written = next
-		comps, err := env.Rows.Stage(ctx, append([]RowWrite{{ID: id, Doc: next}}, extra...)...)
-		if err != nil {
-			return signals.Change{}, err
-		}
-		ch := signals.Change{Companions: comps}
+		rows := append([]RowWrite{{ID: id, Doc: next}}, extra...)
+		ch := signals.Change{}
 		if dropClaim {
 			ch.Delete = []string{signals.ClaimPath(env.Folder, id)}
 		}
-		return ch, nil
+		return ch, rows, nil
 	})
 	if errors.Is(err, signals.ErrNotHeld) {
 		return nil, classify(ctx, env, id, err)
@@ -628,14 +612,14 @@ func Override(ctx context.Context, env Env, id string, kind OverrideKind, mutate
 // mutate nil is the plain override.
 func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind, mutate func(Doc, time.Time) error) (*signals.Signal, error) {
 	var removed *signals.Signal
-	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
 		removed = nil
 		doc, ok, err := env.Rows.Get(ctx, id)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		if !ok {
-			return signals.Change{}, fmt.Errorf("%w: %s", ErrUnknownTask, id)
+			return signals.Change{}, nil, fmt.Errorf("%w: %s", ErrUnknownTask, id)
 		}
 		p := signals.ClaimPath(env.Folder, id)
 		ch := signals.Change{}
@@ -650,7 +634,7 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 		if mutate != nil {
 			if err := mutate(next, v.Now); err != nil {
 				removed = nil
-				return signals.Change{}, fmt.Errorf("override %s %s: %w", kind, id, err)
+				return signals.Change{}, nil, fmt.Errorf("override %s %s: %w", kind, id, err)
 			}
 		}
 		entry := schema.ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: schema.ClaimEventRevoke,
@@ -660,21 +644,16 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 		}
 		if removed != nil { // revoke/reassign/cancel close the holder's span (D4)
 			if err = next.closeClaimSpan(*removed, v.Now, v.Lease.TTL, env.Time); err != nil {
-				return signals.Change{}, err
+				return signals.Change{}, nil, err
 			}
 		}
 		if removed != nil || kind == OverrideRevoke {
 			if err := next.AppendClaimLog(entry); err != nil {
-				return signals.Change{}, err
+				return signals.Change{}, nil, err
 			}
 		}
 		next.touch(v.Now)
-		comps, err := env.Rows.Stage(ctx, RowWrite{ID: id, Doc: next})
-		if err != nil {
-			return signals.Change{}, err
-		}
-		ch.Companions = comps
-		return ch, nil
+		return ch, []RowWrite{{ID: id, Doc: next}}, nil
 	})
 	return removed, err
 }
@@ -704,28 +683,24 @@ func Gated(d Doc) bool {
 // held task changes only through the holder or a human override.
 func Update(ctx context.Context, env Env, id string, mutate func(Doc, time.Time) error) (Doc, error) {
 	var written Doc
-	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
 		doc, ok, err := env.Rows.Get(ctx, id)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		if !ok {
-			return signals.Change{}, fmt.Errorf("%w: %s", ErrUnknownTask, id)
+			return signals.Change{}, nil, fmt.Errorf("%w: %s", ErrUnknownTask, id)
 		}
 		if s, held := v.Active(signals.ClaimPath(env.Folder, id)); held {
-			return signals.Change{}, &signals.HeldError{Path: signals.ClaimPath(env.Folder, id), By: s}
+			return signals.Change{}, nil, &signals.HeldError{Path: signals.ClaimPath(env.Folder, id), By: s}
 		}
 		next := doc.Clone()
 		if err := mutate(next, v.Now); err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		next.touch(v.Now)
 		written = next
-		comps, err := env.Rows.Stage(ctx, RowWrite{ID: id, Doc: next})
-		if err != nil {
-			return signals.Change{}, err
-		}
-		return signals.Change{Companions: comps}, nil
+		return signals.Change{}, []RowWrite{{ID: id, Doc: next}}, nil
 	})
 	return written, err
 }

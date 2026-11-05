@@ -42,16 +42,16 @@ var ErrNotGated = fmt.Errorf("coord: task has no gate")
 // approved_at and approved_hash over title + body, plus a claim_log entry.
 func Approve(ctx context.Context, env Env, req ApproveRequest) (Approval, error) {
 	var out Approval
-	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, error) {
+	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
 		doc, ok, err := env.Rows.Get(ctx, req.ID)
 		if err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		if !ok {
-			return signals.Change{}, fmt.Errorf("%w: %s", ErrUnknownTask, req.ID)
+			return signals.Change{}, nil, fmt.Errorf("%w: %s", ErrUnknownTask, req.ID)
 		}
 		if doc.Str(keyGate) == "" {
-			return signals.Change{}, fmt.Errorf("%w: %s (request one with `lore gate request %s`)", ErrNotGated, req.ID, req.ID)
+			return signals.Change{}, nil, fmt.Errorf("%w: %s (request one with `lore gate request %s`)", ErrNotGated, req.ID, req.ID)
 		}
 		next := doc.Clone()
 		at := v.Now.UTC().Truncate(time.Second)
@@ -61,14 +61,10 @@ func Approve(ctx context.Context, env Env, req ApproveRequest) (Approval, error)
 		next.SetTime(keyApprovedAt, at)
 		next.SetStr(keyApprovedSum, out.Hash)
 		if err := next.AppendClaimLog(schema.ClaimLogEntry{At: at, Event: schema.ClaimEventApprove, ActorID: req.ApproverID, Epoch: doc.Epoch()}); err != nil {
-			return signals.Change{}, err
+			return signals.Change{}, nil, err
 		}
 		next.touch(v.Now)
-		comps, err := env.Rows.Stage(ctx, RowWrite{ID: req.ID, Doc: next})
-		if err != nil {
-			return signals.Change{}, err
-		}
-		return signals.Change{Companions: comps}, nil
+		return signals.Change{}, []RowWrite{{ID: req.ID, Doc: next}}, nil
 	})
 	return out, err
 }

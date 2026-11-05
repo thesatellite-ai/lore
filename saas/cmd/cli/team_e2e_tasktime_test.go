@@ -127,14 +127,6 @@ func TestTime_ExpiredClaimDroppedByHeartbeatEndsAtLastHeartbeat(t *testing.T) {
 	expiredSpanOnce(t, cr, id, at, before, ac, bc)
 }
 
-// bugExpireStaged: a signals write whose decide already stages rows (a
-// claim of another task) drops the expired claim from the board but writes
-// no span for it (signals/coord/expire.go skips when ch.Companions is set,
-// counting on readers to compute the end), and with the claim gone no
-// reader can: the holder's time is lost, effort 300 s -> 0. Found by
-// a-task-e2e (PASS3 queue #10).
-var bugExpireStaged = th.Bug{ID: "BUG-EXPIRE-STAGED", Owner: "main (signals/coord expire.go)", Open: true}
-
 // The same with a deciding write that stages rows of its own (b claims
 // another task): the dropped claim's time must not be lost either.
 func TestTime_ExpiredClaimDroppedByAClaimEndsAtLastHeartbeat(t *testing.T) {
@@ -142,9 +134,6 @@ func TestTime_ExpiredClaimDroppedByAClaimEndsAtLastHeartbeat(t *testing.T) {
 	before := timeShow(t, bc, id)
 	other := cr.task(t, "unrelated work")
 	bc.MustLore("task", "claim", other)
-	if v := timeShow(t, bc, id); before.Data.Effort == int(leaseRenew.Seconds()) {
-		bugExpireStaged.PendingIf(t, v.Data.Effort == 0 && len(v.claimSpans()) == 0, "expired claim dropped by a staging claim, span lost")
-	}
 	expiredSpanOnce(t, cr, id, at, before, ac, bc)
 }
 

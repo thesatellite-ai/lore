@@ -7,21 +7,25 @@ package coord
 // appends an `expire` event to claim_log, in the same atomic push.
 //
 //	writeSignals(env, decide)
-//	  └► decide(v) ─► ch
-//	  └► expiredHere(v, ch): expired claims of env.Folder that ch does not
-//	     already replace or delete, tasks only
-//	  └► ch has no companion yet? ─► one Rows.Stage of every such row
+//	  └► decide(v) ─► ch + the rows the decide writes (not staged yet)
+//	  └► expiredRowWrites(v, ch, rows): expired claims of env.Folder that
+//	     ch does not already replace or delete, tasks only; a row the
+//	     decide writes gets the span on its own version
+//	  └► ONE Rows.Stage of the decide's rows + every other such row
 //	        (closeClaimSpan + AppendClaimLog{expire, holder, epoch})
 //
-// Best effort by design: the row write is a record, not a guard. When the
-// decide already staged rows (two stagings of one ref cannot ride one
-// atomic push), or a row cannot be read or staged, nothing is added and
+// One staging for both (BUG-EXPIRE-STAGED): two stagings cannot ride one
+// atomic push (one commit per ref), so the decide hands its rows back
+// instead of staging them itself. Best effort by design: the expired-claim
+// write is a record, not a guard. When a row cannot be read, or the
+// combined staging fails, the decide's own rows are staged alone and
 // readers compute the same end at read time (TIME 4.2 "readers compute the
 // same end"), so the writer's own operation never fails because of
 // somebody else's dead claim (P2-OLDSYNC-4).
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"saas/pkg/aicoder/signals"
@@ -34,31 +38,63 @@ import (
 // treat an unknown event as an ordinary log line.
 const ClaimEventExpire schema.ClaimEvent = "expire"
 
-// writeSignals is env.Signals.Write with the expired-claim row writes
-// added to the decided change (see the file comment).
-func writeSignals(ctx context.Context, env Env, decide signals.Decide) (signals.Result, error) {
+// rowDecide is a signals decide that also returns the rows to write with
+// the change. It never stages them: writeSignals stages them together with
+// the expired-claim rows, in one Rows.Stage (one commit per ref).
+type rowDecide func(v signals.View) (signals.Change, []RowWrite, error)
+
+// writeSignals is env.Signals.Write with the decide's rows and the
+// expired-claim row writes staged as the change's companions (see the file
+// comment).
+func writeSignals(ctx context.Context, env Env, decide rowDecide) (signals.Result, error) {
 	return env.Signals.Write(ctx, func(v signals.View) (signals.Change, error) {
-		ch, err := decide(v)
-		if err != nil || len(ch.Companions) > 0 || env.Rows == nil {
+		ch, rows, err := decide(v)
+		if err != nil {
 			return ch, err
 		}
-		writes := expiredRowWrites(ctx, env, v, ch)
-		if len(writes) == 0 {
+		if env.Rows == nil {
+			if len(rows) > 0 {
+				return signals.Change{}, errNoRows
+			}
 			return ch, nil
 		}
-		comps, serr := env.Rows.Stage(ctx, writes...)
-		if serr != nil {
-			return ch, nil // best effort (P2-OLDSYNC-4)
+		expired := expiredRowWrites(ctx, env, v, ch, rows)
+		if len(rows) == 0 && len(expired) == 0 {
+			return ch, nil
 		}
-		ch.Companions = comps
+		comps, serr := env.Rows.Stage(ctx, append(append([]RowWrite{}, rows...), expired...)...)
+		if serr != nil && len(expired) > 0 && len(rows) > 0 {
+			// best effort (P2-OLDSYNC-4): the decide's own rows still go
+			comps, serr = env.Rows.Stage(ctx, rows...)
+		}
+		if serr != nil {
+			if len(rows) == 0 {
+				return ch, nil // only the expired record failed: best effort
+			}
+			return signals.Change{}, serr
+		}
+		ch.Companions = append(ch.Companions, comps...)
 		return ch, nil
 	})
 }
 
+// errNoRows is a decide that writes rows on an Env without a row store
+// (a host wiring bug, never a user error).
+var errNoRows = errors.New("coord: rows to write but the env has no row store")
+
 // expiredRowWrites is the row write of every expired task claim of
-// env.Folder that ch leaves to be dropped.
-func expiredRowWrites(ctx context.Context, env Env, v signals.View, ch signals.Change) []RowWrite {
+// env.Folder that ch leaves to be dropped. When the decide itself writes
+// that task's row (a gate approve, an update of an unheld task), the span
+// is closed on the decide's version in rows (replaced in place) instead of
+// a second write of the same row; the other rows are new writes returned.
+func expiredRowWrites(ctx context.Context, env Env, v signals.View, ch signals.Change, rows []RowWrite) []RowWrite {
 	touched := map[string]bool{}
+	written := map[string]int{}
+	for i, w := range rows {
+		if w.Table == "" {
+			written[w.ID] = i
+		}
+	}
 	for _, p := range ch.Delete {
 		touched[p] = true
 	}
@@ -74,22 +110,43 @@ func expiredRowWrites(ctx context.Context, env Env, v signals.View, ch signals.C
 		if !ok || k.Kind != signals.KindClaim || k.Folder != env.Folder || IsMission(k.Subject) {
 			continue
 		}
-		sig := v.Board[p]
-		doc, found, err := env.Rows.Get(ctx, k.Subject)
-		if err != nil || !found {
+		i, inRows := written[k.Subject]
+		var base Doc
+		if inRows {
+			base = rows[i].Doc
+		} else {
+			doc, found, err := env.Rows.Get(ctx, k.Subject)
+			if err != nil || !found {
+				continue
+			}
+			base = doc
+		}
+		next, ok := expireOn(base, v.Board[p], v, env)
+		if !ok {
 			continue
 		}
-		next := doc.Clone()
-		if err := next.closeClaimSpan(sig, v.Now, v.Lease.TTL, env.Time); err != nil {
+		if inRows {
+			rows[i].Doc = next
 			continue
 		}
-		at, _ := sig.LastHeartbeat(v.Lease.TTL)
-		if err := next.AppendClaimLog(schema.ClaimLogEntry{At: at.UTC().Truncate(time.Second), Event: ClaimEventExpire,
-			ActorID: sig.Holder, Session: sig.Session, Epoch: sig.ClaimEpoch}); err != nil {
-			continue
-		}
-		next.touch(v.Now)
 		out = append(out, RowWrite{ID: k.Subject, Doc: next})
 	}
 	return out
+}
+
+// expireOn is a copy of doc with sig's claim span closed at its last
+// heartbeat and an `expire` claim_log entry; ok=false leaves doc as it was
+// (best effort, see the file comment).
+func expireOn(doc Doc, sig signals.Signal, v signals.View, env Env) (Doc, bool) {
+	next := doc.Clone()
+	if err := next.closeClaimSpan(sig, v.Now, v.Lease.TTL, env.Time); err != nil {
+		return nil, false
+	}
+	at, _ := sig.LastHeartbeat(v.Lease.TTL)
+	if err := next.AppendClaimLog(schema.ClaimLogEntry{At: at.UTC().Truncate(time.Second), Event: ClaimEventExpire,
+		ActorID: sig.Holder, Session: sig.Session, Epoch: sig.ClaimEpoch}); err != nil {
+		return nil, false
+	}
+	next.touch(v.Now)
+	return next, true
 }
