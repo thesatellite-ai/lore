@@ -55,6 +55,11 @@ func parsePath(p string) ([]pathStep, error) {
 			if f == "" {
 				return nil, bad("an empty field")
 			}
+			if strings.ContainsAny(f, "]\"* ") {
+				// a bare field holds no brackets, quotes, stars or spaces;
+				// odd names are quoted ($."odd-name")
+				return nil, bad("field " + strconv.Quote(f) + " needs quotes")
+			}
 			out = append(out, pathStep{field: f, index: -1})
 			rest = rest[1+n:]
 		case strings.HasPrefix(rest, "["):
