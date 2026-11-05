@@ -113,6 +113,24 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 			}
 		}
 	}
+	// 19.2: the joined-fields scan. A finding spanning two fields is
+	// refused in every mode; one that lies inside a single field but only
+	// shows once the fields are joined is that field's hit, as usual.
+	cross, inField := e.crossFieldFindings(fields, names, func(id string) bool { return rules.IsOff(id, own) })
+	if len(cross) > 0 {
+		return screened{}, crossErr(cross)
+	}
+	for _, f := range scan.Filter(rowID, inField, allows) {
+		dup := false
+		for _, h := range hits {
+			for _, g := range h.findings {
+				dup = dup || (h.field == f.Field && h.item < 0 && g.RuleID == f.RuleID && g.Offset == f.Offset)
+			}
+		}
+		if !dup {
+			hits = append(hits, hit{field: f.Field, item: -1, findings: []scan.Finding{f}})
+		}
+	}
 	if len(hits) == 0 {
 		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
 	}
@@ -187,6 +205,92 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	case policy.OnDetectRefuse:
 	}
 	return screened{}, secretErr(all)
+}
+
+// crossField is one finding of the joined-fields scan that crosses a
+// field boundary (19.2): the fields it spans, in write order.
+type crossField struct {
+	rule   string
+	fields []string
+}
+
+// crossFieldFindings is SECRETS 19.2: the written text fields (whole text
+// and json values, in names order) joined with newlines are scanned once
+// more. A finding spanning two or more fields is returned in cross; one
+// inside a single field is mapped back to that field (offset and line in
+// the field's own text) and returned in inField — the caller drops the
+// ones the per-field scan already had. A rule that is off is skipped; an
+// allow entry cannot name a split finding (no single field), so none
+// applies to cross. Fewer than two text fields: nothing to join.
+func (e *Engine) crossFieldFindings(fields map[string]value.Value, names []string, off func(string) bool) (cross []crossField, inField []scan.Finding) {
+	type seg struct {
+		name       string
+		start, end int
+	}
+	var segs []seg
+	var b strings.Builder
+	for _, name := range names {
+		var t string
+		switch v := fields[name].(type) {
+		case value.Text:
+			t = v.String()
+		case value.JSON:
+			t = v.String()
+		default:
+			continue
+		}
+		if t == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		segs = append(segs, seg{name: name, start: b.Len(), end: b.Len() + len(t)})
+		b.WriteString(t)
+	}
+	if len(segs) < 2 {
+		return nil, nil
+	}
+	joined := b.String()
+	found, _ := e.scanText(crossFieldName, joined)
+	for _, f := range found {
+		// The session-id rule is a literal match the per-field pass already
+		// decides (with its lore-record exception, BUG-T7): never joined.
+		if off(f.RuleID) || f.Length <= 0 || f.RuleID == scan.RuleSessionID {
+			continue
+		}
+		var spanned []string
+		for _, sg := range segs {
+			if f.Offset < sg.end && f.Offset+f.Length > sg.start {
+				spanned = append(spanned, sg.name)
+			}
+		}
+		if len(spanned) > 1 {
+			cross = append(cross, crossField{rule: f.RuleID, fields: spanned})
+			continue
+		}
+		for _, sg := range segs {
+			if len(spanned) == 1 && sg.name == spanned[0] {
+				f.Field, f.Offset = sg.name, f.Offset-sg.start
+				f.Line = strings.Count(joined[sg.start:sg.start+f.Offset], "\n") + 1
+				inField = append(inField, f)
+			}
+		}
+	}
+	return cross, inField
+}
+
+// crossFieldName is the field name the joined scan reports under.
+const crossFieldName = "(joined fields)"
+
+// crossErr refuses a split secret, naming the fields (never the text).
+func crossErr(cs []crossField) *errs.Error {
+	parts := make([]string, 0, len(cs))
+	for _, c := range cs {
+		parts = append(parts, c.rule+" across "+strings.Join(c.fields, " and "))
+	}
+	return errs.New(errs.SecretDetected, "engine: a secret is split across fields ("+strings.Join(parts, "; ")+")").
+		WithHint("fix the text: a split secret cannot be redacted or marked not a secret; store it in your vault and write ${secret:…} in one field")
 }
 
 // loreRecordFields names the fields of rowID's table marked schema
