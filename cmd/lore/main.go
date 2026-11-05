@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
@@ -153,6 +154,10 @@ func run(ctx context.Context, args []string) int {
 		}
 		return printHostError(sqlite.ExplainDiskFull(err))
 	}
+	// Once-a-day new-release notice (or opt-in auto_upgrade) after the
+	// command's output, on stderr; quiet in CI, without a tty, for --json
+	// (FORMAT_EVOLUTION 8.6, 8.7; wire.UpgradeNotice).
+	app.UpgradeNotice(ctx, args, term.IsTerminal(int(os.Stderr.Fd())), os.Stderr)
 	return 0
 }
 
