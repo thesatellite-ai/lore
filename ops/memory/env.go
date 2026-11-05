@@ -60,6 +60,14 @@ type Env interface {
 	RepoID(ctx context.Context, mountOrID string) (ids.ID[ids.Repo], error)
 }
 
+// IDCreator is the optional Env upgrade `memory add --key` needs:
+// engine.Engine.CreateWithID (the row gets the natural id of its key, so a
+// retry collides instead of duplicating). An Env without it answers --key
+// with E_UNSUPPORTED instead of pretending.
+type IDCreator interface {
+	CreateWithID(ctx context.Context, target store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) (engine.Written, error)
+}
+
 // Mover is the optional Env upgrade memory.move needs: engine.Engine.Move
 // (the row keeps its id, the old copy is tombstoned). An Env without it
 // answers memory.move with E_UNSUPPORTED instead of pretending.

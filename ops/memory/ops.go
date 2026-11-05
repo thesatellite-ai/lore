@@ -2,7 +2,9 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -160,6 +162,10 @@ type ops struct{ env Env }
 // no successor yet: nothing is written otherwise) and pointed at the new
 // one after; if that fails the new memory is deleted again, so a half
 // chain is never left (v0.1.17 supersede.go).
+//
+// With --key (CLEANUP Qs) the id is natural over (project, key): a memory
+// already stored under it is returned as is (Existing) and nothing is
+// written; else the row is created with that id and the key stored.
 func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	body, err := oneBody(in.Body, in.Text)
 	if err != nil {
@@ -168,6 +174,15 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	project, err := o.project(ctx, in.Project)
 	if err != nil {
 		return WriteOut{}, err
+	}
+	keyID, err := addKeyID(project, in.Key)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if !keyID.IsZero() {
+		if out, found, ferr := o.existingByKey(ctx, keyID, in.Repo); found || ferr != nil {
+			return out, ferr
+		}
 	}
 	fields, err := texts(map[string]string{
 		fieldBody:       body,
@@ -246,7 +261,21 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 			return WriteOut{}, err
 		}
 	}
-	w, err := o.env.Create(carry.Before(ctx), store.Source(in.To), table, fields)
+	var w engine.Written
+	if keyID.IsZero() {
+		w, err = o.env.Create(carry.Before(ctx), store.Source(in.To), table, fields)
+	} else {
+		if fields[schema.FieldIdempotencyKey], err = value.TextOf(strings.TrimSpace(in.Key)); err != nil {
+			return WriteOut{}, err
+		}
+		w, err = o.createKeyed(carry.Before(ctx), store.Source(in.To), keyID, fields)
+		if errors.Is(err, store.ErrStale) {
+			// another run with the same key stored it first (a race)
+			if out, found, ferr := o.existingByKey(ctx, keyID, in.Repo); found || ferr != nil {
+				return out, ferr
+			}
+		}
+	}
 	if err != nil {
 		return WriteOut{}, carry.Hint(err)
 	}
@@ -273,6 +302,60 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	// the scope line.
 	out.Human = mark + " " + out.ID + " " + Label(LabelerOf(o.env), src) + "\n  scope: [" + scope + "]\n" + carry.Line()
 	return out, nil
+}
+
+// maxAddKey bounds an idempotency key (it is hashed into the id and
+// stored on the row; real keys are a uuid or a short tag).
+const maxAddKey = 200
+
+// addKeyPart separates the natural-id input of a keyed add from every
+// other natural id (CLEANUP Qs).
+const addKeyPart = "memory.add.key"
+
+// addKeyID is the natural id of a keyed add: the zero id without --key.
+// Scope: the project (the same key in another project is another memory).
+func addKeyID(project ids.ID[ids.Project], raw string) (ids.AnyID, error) {
+	if raw == "" {
+		return ids.AnyID{}, nil
+	}
+	key := strings.TrimSpace(raw)
+	if key == "" || len(key) > maxAddKey || strings.ContainsAny(key, "\n\r") {
+		return ids.AnyID{}, errs.New(errs.InvalidInput, "memory add: --key must be one line of 1 to "+strconv.Itoa(maxAddKey)+" characters")
+	}
+	return engine.NaturalID(ids.PrefixMemory, addKeyPart, project.String(), key)
+}
+
+// existingByKey returns the memory a previous keyed add stored (found),
+// with nothing written. A copy in the trash is E_IN_TRASH from Get, so a
+// trashed memory is never silently re-added under its key.
+func (o ops) existingByKey(ctx context.Context, id ids.AnyID, repo string) (WriteOut, bool, error) {
+	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id})
+	if errs.Has(err, errs.NotFound) {
+		return WriteOut{}, false, nil
+	}
+	if err != nil {
+		return WriteOut{}, false, err
+	}
+	if r.Deleted {
+		return WriteOut{}, false, errs.New(errs.InvalidInput, "memory add: the memory stored with this --key ("+id.String()+") was deleted").
+			WithHint("use another --key to add it again")
+	}
+	out := WriteOut{ID: id.String(), Store: string(src), Existing: true}
+	scope := badgeMaster
+	if repo != "" {
+		scope = "repo:" + repo
+	}
+	out.Human = mark + " " + out.ID + " " + Label(LabelerOf(o.env), src) + "\n  scope: [" + scope + "]\n  already added with this --key; nothing written\n"
+	return out, true, nil
+}
+
+// createKeyed creates the memory with its key's natural id (IDCreator).
+func (o ops) createKeyed(ctx context.Context, to store.Source, id ids.AnyID, fields map[string]value.Value) (engine.Written, error) {
+	c, ok := o.env.(IDCreator)
+	if !ok {
+		return engine.Written{}, errs.New(errs.Unsupported, "memory add: --key is not supported here")
+	}
+	return c.CreateWithID(ctx, to, table, id, fields)
 }
 
 // checkSupersedes validates --supersedes before anything is written.

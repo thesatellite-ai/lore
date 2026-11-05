@@ -67,6 +67,10 @@ type AddIn struct {
 	// Tags are tag names of the project (repeatable --tag; each must exist:
 	// `lore tag add --name=<tag>`), stored as tag_ids (O11).
 	Tags []string `json:"tags,omitempty" flag:"tag" desc:"tag name (repeatable; the tag must exist)"`
+	// Key is the idempotency key (CLEANUP Qs): the memory's id is natural
+	// over (project, key), so a retry with the same key finds the row it
+	// stored and returns it without writing; stored as idempotency_key.
+	Key string `json:"key,omitempty" flag:"key" desc:"idempotency key: a retry with the same key returns the memory already added and writes nothing"`
 }
 
 // WriteOut is the output of every write operation: the row's id, the store
@@ -75,6 +79,9 @@ type WriteOut struct {
 	ID       string    `json:"id"`
 	Store    string    `json:"store"`
 	Warnings []Warning `json:"warnings,omitempty"`
+	// Existing is true when memory add --key found the memory a previous
+	// run stored with that key and wrote nothing (CLEANUP Qs).
+	Existing bool `json:"existing,omitempty"`
 	// CarriedMeta is how many metadata keys a --supersedes add copied (3.19).
 	CarriedMeta int `json:"carried_meta,omitempty"`
 	// Human is the v0.1.17 human line(s) the op set for this write (see
