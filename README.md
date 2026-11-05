@@ -246,32 +246,25 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 
 | Command | Use case |
 |---|---|
-| `lore run` | Log + inspect agent runs: `start / step / end / cancel / replay / show / list` |
+| `lore run` | Time one try at a task: `start / end / cancel`; the span lands on the task's time |
 | `lore link add --commit=<sha> --entity=<id>` | Link a git commit to any entity (task/run/mission/decision/…). Also `list` / `remove` |
-| `lore learn-from <source>` | Bootstrap knowledge from existing markdown/docs |
-| `lore learn` | Manage background-learning staging: `from / list / promote / reject` |
-| `lore external-source` | Register sources for `learn-from`: `add / enable / disable / list` (disabled by default) |
-| `lore directive` | Install/remove/show the agent-directive block |
+| `lore external-source` | Register outside sources: `add / enable / disable / list` (disabled by default) |
+| `lore directive` | Install or show the agent-directive block |
 | `lore skill` | Meta-tools for the lore skill bundle (`compile` — shorten the main bundle with a model) |
-| `lore session` / `lore querylog` | Inspect sessions and the query log |
+| `lore session` | Inspect agent sessions on this machine |
 | `lore actor` | Inspect actors (humans, agents, hooks, plugins) |
 | `lore behaviour` / `lore suggestion` | Behaviours and suggestions |
-| `lore pii-pattern` | Custom PII/secret detection patterns (capture refuses secrets by default) |
-| `lore plugin` | Manage the trusted-plugin allowlist |
+| `lore secrets rule` | Your own secret patterns (capture refuses secrets by default) |
 
-### Backup, health & recovery
+### Health & recovery
 
 | Command | Use case |
 |---|---|
-| `lore backup` | Online backup of the project DB |
-| `lore restore <file>` | Restore the DB from a backup |
-| `lore repair` | Recover from a corrupted DB |
 | `lore doctor` | Health checks (DB integrity, interrupted or mismatched schema migrations, sync state) |
 | `lore audit verify` / `lore audit log` | Hash-chained log of every change to shared knowledge; `verify` flags edited entries and rows changed outside lore |
-| `lore tables` | Every data table + total record count. Sortable (`--sort=name\|count[:asc\|desc]`), filterable (`--filter=`), `--json`. Also a TUI screen: `lore tui --kind=tables` |
+| `lore search rebuild` | Rebuild the search index from `.lore/data`; a damaged `.lore/lore.db` is rebuilt the same way after you move it away |
 | `lore support-bundle` | Produce a sanitized incident-report bundle |
 | `lore snapshot` | Point-in-time knowledge captures (logical, not file backup) |
-| `lore restore <file> --prefer db\|files\|newest` | After restoring, decide which side wins where the restored DB and `.lore/data` disagree. `db` (default) is a rollback: files of rows not in the backup are removed; `files` moves DB-only rows to the trash; `newest` keeps the later edit |
 
 ### Sharing through git
 

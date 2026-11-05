@@ -17,7 +17,7 @@ To learn lore step by step, start with the [team guide](../team/README.md) or th
 
 - The command index is written by `tests/docs/commands_index.py`, which runs `lore --help` for every command.
 - Every command output on these pages is pasted from a real run of `tests/docs/sections/reference.sh` (in a throwaway folder, with a fake git server) by `tests/docs/paste.py`. Nothing is typed by hand.
-- The full error table in [errors.md](errors.md#the-full-list-as-lore-prints-it) comes from `lore errors list`.
+- The full error table is in [cli-commands.md](cli-commands.md#errors), written by `lore spec docs` from the code.
 - Defaults and lists that the code names are marked so a change in the code flags the sentence that describes it.
 
 ## Related

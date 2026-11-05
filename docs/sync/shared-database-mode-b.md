@@ -137,7 +137,7 @@ $ lore migrate run
 count: 3
 rows: 
 steps: mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aae…a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-journal: team lock: taken on refs/lore/signals until 2026-11-02T10:13:05Z (renewed every 2m0s), backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
+journal: team lock: taken on refs/lore/signals until 2026-11-02T10:13:00Z (renewed every 2m0s), backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
 backup_ref: refs/lore-backup/migrate/2026-11-02
 $ ls .lore; cat .lore/stores.yaml
 lore-cache.db

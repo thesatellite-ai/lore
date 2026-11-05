@@ -36,7 +36,7 @@ Words used below:
    ▼
  work ─┬─ lore task heartbeat --daemon <id> &      keeps the lease alive (alive, not progress)
        ├─ lore task note <id> "<checkpoint>"        progress; also pushes your work branch
-       ├─ lore finding add --mission <id> "<fact>"  something every agent should know
+       ├─ lore memory add "<fact>"                  something every agent should know (lore search finds it)
        ├─ lore gate request <id>                    a step needs a person's go-ahead
        └─ lore check pr-body <file|->               before posting any PR text or comment
    │
@@ -57,7 +57,7 @@ Words used below:
 | a specific task | `lore task claim <id> [--owns <paths>]` | when a person told you which task |
 | during long steps (tests, builds) | `lore task heartbeat --daemon <id>` in the background, started from a process that lives as long as the step | a lease runs out after `lease.ttl` (20m) without a heartbeat; the daemon stops when the process that started it exits |
 | after each meaningful step | `lore task note <id> "…"` | a replacement agent reads your notes and fetches your pushed branch |
-| learned something others need | `lore finding add --mission <id> "…"` | it appears in every agent's inbox |
+| learned something others need | `lore memory add "…"` | every agent finds it with `lore search` |
 | about to do something risky | `lore gate request <id>`, then stop | a person approves with `lore gate approve`; you never can |
 | need the shared test suite alone | `lore hold claim full-suite --ttl 30m`, then `lore hold release full-suite` | one heavy run at a time |
 | finished | `lore task done <id> --commit <sha>` or `--pr <n>` | dependents in other repos wait until that code is merged |

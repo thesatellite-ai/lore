@@ -55,8 +55,8 @@ $ lore search WhatsApp --json
   "kind": "search.global",
   "count": 1,
   "data": {
+    "query": "WhatsApp",
     "count": 1,
-    "external": [],
     "hits": [
       {
         "entity_table": "memories",
@@ -67,7 +67,7 @@ $ lore search WhatsApp --json
         "snippet": "The client replies faster on \u003cb\u003eWhatsApp\u003c/b\u003e than email"
       }
     ],
-    "query": "WhatsApp"
+    "external": []
   }
 }
 ```
@@ -154,11 +154,11 @@ Found 1 hit for "client Fridays" across 1 entity type:
 # alice, in website
 $ lore search status
 ENTITY                 FTS_TABLE                   FTS   SOURCE STATUS
-architecturenote       architecturenote_fts          0        0 ✓ ok
-behaviour              behaviour_fts                 0        0 ✓ ok
-comment                comment_fts                   0        0 ✓ ok
-cookbookrecipe         cookbookrecipe_fts            0        0 ✓ ok
-decision               decision_fts                  1        1 ✓ ok
+architecturenote       _fts_architecture_notes        0        0 ✓ ok
+behaviour              _fts_behaviours               0        0 ✓ ok
+comment                _fts_comments                 0        0 ✓ ok
+cookbookrecipe         _fts_cookbook_recipes         0        0 ✓ ok
+decision               _fts_decisions                1        1 ✓ ok
 …
 ```
 <!-- /example -->
@@ -167,9 +167,10 @@ decision               decision_fts                  1        1 ✓ ok
 ```console
 # alice, in website
 $ lore search rebuild
-✓ rebuilt 23 entity FTS tables
+✓ rebuilt the search index of 2 stores (repo, machine)
 $ lore search rebuild --kind memory
-✓ rebuilt memory_fts
+note: the core rebuilds a store's whole cache; --kind memory included
+✓ rebuilt the search index of 2 stores (repo, machine)
 ```
 <!-- /example -->
 
@@ -179,15 +180,6 @@ $ lore search rebuild --kind memory
 - **Quote what the shell would change.** `lore search 'invoi*'` with quotes; without them the shell may turn `*` into file names first.
 - <!-- ds:block id=search-defaults-87uy20io --> **Limits.** By default each kind gives at most 10 hits (`--per-table`) and the merged list stops at 20 (`--limit`). A common word in a big project can push the row you want off the list: add a second word or narrow with `--tables`.
 - **"(no matches)" is not an error.** The command exits 0; check the words, or add `--include-archived` or `--all-repos`.
-- **`lore querylog list` stays empty.** The query log is meant to record past searches, but in this build nothing writes to it, so it always prints `(no querylogs)`.
-
-<!-- example: search#querylog -->
-```console
-# alice, in website
-$ lore querylog list
-(no querylogs)
-```
-<!-- /example -->
 
 ## Related
 

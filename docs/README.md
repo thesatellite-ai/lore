@@ -58,7 +58,7 @@ Each step builds on the one before. Every example is a script that runs the real
 - [Rules, memories and decisions](knowledge/rules-memories-decisions.md): add, list, change, replace, retire and delete the three kinds you use most, and why a password is refused.
 - [Other kinds of notes](knowledge/other-row-kinds.md): hotfixes, patterns, playbooks, prompts, snapshots and ten more.
 - [Comments and tags](knowledge/comments-and-tags.md): reply to a note, and label notes so they can be found together.
-- [Bring in notes you already have](knowledge/import-existing-notes.md): `lore learn-from`, the review tray and outside sources.
+- [Bring in notes you already have](knowledge/import-existing-notes.md): turn an old notes file into rules, decisions and memories, and outside sources.
 - [Search](knowledge/search.md): one search over every kind of note, and keeping the index healthy.
 - [Render and agent files](knowledge/render-and-agent-files.md): `lore render`, other agent files, the directive block, what the tool read, and skill files.
 - [Browse your notes in the terminal](knowledge/tui.md): `lore tui`.

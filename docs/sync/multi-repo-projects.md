@@ -102,25 +102,11 @@ rep_162d…9666  shop  https://github.com/client/website
 rep_54fe…28f2  help [archived]
 $ lore repo unarchive rep_54fe…28f2
 ✓ help unarchived
-$ lore mount-alias list
-(no mount aliases)
 $ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 ```
 <!-- /example -->
 
 `lore repo delete <id>` and `lore project delete <id>` remove a row for good; lore asks first, and without a terminal they stop with `E_NEEDS_CONFIRM` until you add `--yes`. An example with projects is on [One store for several repos](shared-database-mode-b.md#step-3--archive-or-delete-a-project).
-
-## Try it — renamed repos
-
-When a repo's mount name changes, lore keeps the old name working for a while as a redirect, so scripts that still say `--repo old-name` keep working. `lore mount-alias list` shows those redirects (`--expiring` shows only the ones that end within 7 days); a fresh project has none:
-
-<!-- example: projects#archive-a-repo only=5 -->
-```console
-# alice, in website
-$ lore mount-alias list
-(no mount aliases)
-```
-<!-- /example -->
 
 ## Pitfalls
 

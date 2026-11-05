@@ -58,18 +58,6 @@ stable:      yes
 ```
 <!-- /example -->
 
-`lore identity anonymize on` makes your next writes use a random `anon:…` name instead of yours, for example on a shared demo machine. `off` turns it back:
-
-<!-- example: people#identity only=4,5 -->
-```console
-# alice, in ~
-$ lore identity anonymize on
-✓ anon mode enabled. Future writes use anon:d5c5677250d8
-$ lore identity anonymize off
-✓ anon mode disabled
-```
-<!-- /example -->
-
 ## Step 3 — Use a different identity inside a company: `lore identity set --org`
 
 An **org** is one company's setup in your config: its stores, its people and the repos it owns. At work you usually use a different email than at home. `--org` stores that identity in the company's entry of `~/.lore/config.yaml`, and lore uses it in every repo of that company:

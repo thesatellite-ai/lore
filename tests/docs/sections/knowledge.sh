@@ -132,21 +132,15 @@ on alice $W "git add -A && git commit -qm 'lore: notes' && git log --oneline | h
 
 # --- import existing notes ----------------------------------------------------
 note "import"
-quiet alice $W "mkdir -p .ai && printf '# Team notes\n\n## Testing\n\nRun the tests before you push.\n\n## Payments\n\nWe use Stripe for payments.\n' > .ai/notes.md"
+quiet alice $W "mkdir -p .ai && printf '# Team notes\n\n## Prices\n\nAsk the client before changing any price.\n\n## Invoices\n\nThe client pays invoices on the first Monday of the month.\n' > .ai/notes.md"
 on alice $W "cat .ai/notes.md"
-on alice $W "lore learn-from docs --paths .ai/notes.md"
-on alice $W "lore learn list"
 
 note "promote"
-local c1 c2 c3
-c1=$(grep -o 'lcd_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 1p)
-c2=$(grep -o 'lcd_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 2p)
-c3=$(grep -o 'lcd_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 3p)
-on! alice $W "lore learn promote $c2 --target rules"
-on alice $W "lore learn promote $c3"
-on alice $W "lore learn reject $c1"
-on alice $W "lore learn list --status ''"
-on alice $W "lore memory list"
+# lore learn-from is not in 0.1.18 (dropped): each section becomes a row of the right
+# kind by hand, and the file is deleted once everything is in lore.
+on alice $W "lore rule add --body 'Ask the client before changing any price.'"
+on alice $W "lore memory add --body 'The client pays invoices on the first Monday of the month.'"
+on alice $W "rm .ai/notes.md && git status --short"
 
 note "external source"
 on alice $W "lore external-source add --kind wiki --name 'Team wiki'"

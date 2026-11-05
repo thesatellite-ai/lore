@@ -30,7 +30,6 @@ on! alice work/website "lore repo archive help"
 on alice work/website "lore repo archive $rep_help"
 on alice work/website "lore repo list"
 on alice work/website "lore repo unarchive $rep_help"
-on alice work/website "lore mount-alias list"
 on alice work/website "git add -A && git commit -qm 'lore: repos' && git push -q origin main"
 
 # --- docs/sync/shared-database-mode-b.md -----------------------------------------------

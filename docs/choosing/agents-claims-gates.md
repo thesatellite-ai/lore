@@ -13,7 +13,7 @@
 | **Dependencies** | "do this one after that one" | one task needs another's code first, maybe in another repo | `lore task add --after <id>` (`<id>:merged` waits for the merge) |
 | **Gate** | a "stop, ask a person" sign on a task | a step is risky: a payment change, a change to the live database, a release | `lore gate request <id>`, then a person runs `lore gate approve <id>` |
 | **Resource hold** | a key to a room only one person may use at a time | only one worker may run something heavy at once, like the full test suite | `lore hold claim full-suite --ttl 30m`, `lore hold release full-suite` |
-| **Handoff and finding** | a note left for the next worker; a fact every agent should know | an agent stops mid-way, or learns something the others need | `lore handoff add --for @agent-frontend --task <id>`, `lore finding add --mission <id>` |
+| **Handoff and memory** | a note left for the next worker; a fact every agent should know | an agent stops mid-way, or learns something the others need | `lore handoff add --for @agent-frontend --task <id>`, `lore memory add "<fact>"` |
 
 ## If this, then that
 

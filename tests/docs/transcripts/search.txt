@@ -21,8 +21,8 @@ alice (work/website)$ lore search WhatsApp --json
   "kind": "search.global",
   "count": 1,
   "data": {
+    "query": "WhatsApp",
     "count": 1,
-    "external": [],
     "hits": [
       {
         "entity_table": "memories",
@@ -33,7 +33,7 @@ alice (work/website)$ lore search WhatsApp --json
         "snippet": "The client replies faster on \u003cb\u003eWhatsApp\u003c/b\u003e than email"
       }
     ],
-    "query": "WhatsApp"
+    "external": []
   }
 }
 
@@ -48,35 +48,37 @@ Found 1 hit for "payments" across 1 entity type:
 ### status
 alice (work/website)$ lore search status
 ENTITY                 FTS_TABLE                   FTS   SOURCE STATUS
-architecturenote       architecturenote_fts          0        0 ✓ ok
-behaviour              behaviour_fts                 0        0 ✓ ok
-comment                comment_fts                   0        0 ✓ ok
-cookbookrecipe         cookbookrecipe_fts            0        0 ✓ ok
-decision               decision_fts                  1        1 ✓ ok
-handoff                handoff_fts                   0        0 ✓ ok
-hotfix                 hotfix_fts                    1        1 ✓ ok
-incident               incident_fts                  0        0 ✓ ok
-memory                 memory_fts                    2        2 ✓ ok
-mission                mission_fts                   0        0 ✓ ok
-pattern                pattern_fts                   0        0 ✓ ok
-plan                   plan_fts                      0        0 ✓ ok
-playbook               playbook_fts                  0        0 ✓ ok
-prompt                 prompt_fts                    0        0 ✓ ok
-rule                   rule_fts                      1        1 ✓ ok
-snapshot               snapshot_fts                  0        0 ✓ ok
-suggestion             suggestion_fts                0        0 ✓ ok
-task                   task_fts                      1        1 ✓ ok
-tasklist               tasklist_fts                  1        1 ✓ ok
-tastepref              tastepref_fts                 0        0 ✓ ok
-techdoc                techdoc_fts                   0        0 ✓ ok
-workflow               workflow_fts                  0        0 ✓ ok
-workspace              workspace_fts                 0        0 ✓ ok
+architecturenote       _fts_architecture_notes        0        0 ✓ ok
+behaviour              _fts_behaviours               0        0 ✓ ok
+comment                _fts_comments                 0        0 ✓ ok
+cookbookrecipe         _fts_cookbook_recipes         0        0 ✓ ok
+decision               _fts_decisions                1        1 ✓ ok
+handoff                _fts_handoffs                 0        0 ✓ ok
+hotfix                 _fts_hotfixes                 1        1 ✓ ok
+incident               _fts_incidents                0        0 ✓ ok
+memory                 _fts_memories                 2        2 ✓ ok
+mission                _fts_missions                 0        0 ✓ ok
+pattern                _fts_patterns                 0        0 ✓ ok
+plan                   _fts_plans                    0        0 ✓ ok
+playbook               _fts_playbooks                0        0 ✓ ok
+prompt                 _fts_prompts                  0        0 ✓ ok
+resource               _fts_resources                0        0 ✓ ok
+rule                   _fts_rules                    1        1 ✓ ok
+snapshot               _fts_snapshots                0        0 ✓ ok
+suggestion             _fts_suggestions              0        0 ✓ ok
+task                   _fts_tasks                    1        1 ✓ ok
+tasklist               _fts_task_lists               1        1 ✓ ok
+tastepref              _fts_taste_prefs              0        0 ✓ ok
+techdoc                _fts_tech_docs                0        0 ✓ ok
+workflow               _fts_workflows                0        0 ✓ ok
+workspace              _fts_workspaces               0        0 ✓ ok
 
 ### rebuild
 alice (work/website)$ lore search rebuild
-✓ rebuilt 23 entity FTS tables
+✓ rebuilt the search index of 2 stores (repo, machine)
 alice (work/website)$ lore search rebuild --kind memory
-✓ rebuilt memory_fts
+note: the core rebuilds a store's whole cache; --kind memory included
+✓ rebuilt the search index of 2 stores (repo, machine)
 
 ### repo scope
 alice (work/website)$ lore repo add web --origin https://github.com/client/website
@@ -119,10 +121,6 @@ alice (work/website)$ lore search 'client Fridays'
 Found 1 hit for "client Fridays" across 1 entity type:
 
 [memory    ] mem_c0f3c11a5724b0cfd74b256190d9b5b8 The client sends invoices on Fridays  (score=0.017)
-
-### querylog
-alice (work/website)$ lore querylog list
-(no querylogs)
 
 ### no results
 alice (work/website)$ lore search pineapple

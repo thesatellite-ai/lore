@@ -144,7 +144,7 @@ Binary: 0.1.0-dev
   stable:   yes
 Notes:
   - live: tracking refspec installed, not forced into refs/lore/*
-  - live: last fetch 40s ago
+  - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
   -   act_162d…9666 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
@@ -152,21 +152,16 @@ Notes:
 ```
 <!-- /example -->
 
-Two more small commands help you look around. `lore tables` counts the rows in every table, and `lore completion bash` (or `zsh`, `fish`, `powershell`) prints a script that makes the Tab key complete lore commands:
+Two more small commands help you look around. `lore sql` runs one read-only query over your notes (here: how many rules and memories there are), and `lore completion bash` (or `zsh`, `fish`, `powershell`) prints a script that makes the Tab key complete lore commands:
 
-<!-- example: start#tables lines=8 -->
+<!-- example: start#sql -->
 ```console
 # alice, in website
-$ lore tables
-TABLE                 ROWS
-_lore_live_rows       0
-_lore_sync_conflicts  0
-_lore_sync_dirty      0
-_lore_sync_errors     0
-_lore_sync_extra      4
-_lore_sync_files      4
-_lore_sync_meta       6
-…
+$ lore sql "SELECT 'rules' AS kind, count(*) AS n FROM rules UNION ALL SELECT 'memories', count(*) FROM memories"
+kind      n
+rules     1
+memories  0
+(2 rows)
 ```
 <!-- /example -->
 

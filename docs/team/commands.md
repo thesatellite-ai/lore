@@ -99,28 +99,6 @@ Flags:
 ```
 <!-- /help -->
 
-### `lore org unlink`
-
-<!-- help: org unlink -->
-Remove this repo's link to an internal project in the org's store
-
-```text
-Usage:
-  lore org unlink <org> --project <folder>
-
-Examples:
-  lore org unlink agency --project client
-  lore org unlink agency --project client --yes
-
-Flags:
-      --dry-run          show what would change, write nothing
-      --project string   the internal project folder in the store (required)
-      --remote string    which remote, when the repo has several
-      --store string     which of the org's stores (default: the one holding the folder)
-      --yes              confirm without a prompt
-```
-<!-- /help -->
-
 ### `lore org use`
 
 <!-- help: org use -->
@@ -1200,20 +1178,6 @@ Flags:
       --task string              the task it is about (its mission is recorded too)
       --to string                deprecated alias of --for
       --yes                      answer yes to the confirmation without a terminal
-```
-<!-- /help -->
-
-### `lore finding add`
-
-<!-- help: finding add -->
-Finding saves a memory pinned to a mission. It is written live (shared at once), like the mission, and shows up in the inbox of everyone working the mission.
-
-```text
-Usage:
-  lore finding add --mission <id> <text>
-
-Flags:
-      --mission string   the mission the finding belongs to
 ```
 <!-- /help -->
 

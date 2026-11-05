@@ -53,8 +53,6 @@ rep_162df51b7f78b785c97c26b41ea89666  shop  https://github.com/client/website
 rep_54fe984c9b495744c0217776765a28f2  help [archived]
 alice (work/website)$ lore repo unarchive rep_54fe984c9b495744c0217776765a28f2
 ✓ help unarchived
-alice (work/website)$ lore mount-alias list
-(no mount aliases)
 alice (work/website)$ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 
 ### one store
@@ -135,7 +133,7 @@ alice (work/infra)$ lore migrate run
 count: 3
 rows: 
 steps: mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aaebe6aca5bb46cc521869f5ba2a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-journal: team lock: taken on refs/lore/signals until 2026-11-02T10:13:05Z (renewed every 2m0s), backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
+journal: team lock: taken on refs/lore/signals until 2026-11-02T10:13:00Z (renewed every 2m0s), backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
 backup_ref: refs/lore-backup/migrate/2026-11-02
 alice (work/infra)$ ls .lore; cat .lore/stores.yaml
 lore-cache.db

@@ -64,7 +64,7 @@ cmt_71f0…c07d on decisions/dec_76bd…3f10  The client confirmed this on the c
 
 ## Pitfalls
 
-- **The table name is plural.** `--on-table decisions`, not `decision`. The names are the ones `lore tables` prints.
+- **The table name is plural.** `--on-table decisions`, not `decision`. The names are the folder names under `.lore/data`.
 - **A comment goes to main at once.** Because comments are live and count as finished on write, lore lands them on main without waiting for your next commit (see the `landed on main` line above). Write comments as if the whole team can read them immediately, because it can.
 - **Tags belong to one project.** A tag made in one repo's project does not exist in another; create it there too.
 - **Two kinds of tag.** `memory add --tag` writes a label on the memory itself; `lore tag` makes a shared label any row can carry. Use `lore tag attach` when you want `lore tag list` to see it. In the example on this page, the memory tagged `staging` while it was added does not appear in `lore tag list`.

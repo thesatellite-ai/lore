@@ -79,89 +79,18 @@ Binary: 0.1.0-dev
 
 Notes:
   - live: tracking refspec installed, not forced into refs/lore/*
-  - live: last fetch 40s ago
+  - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
   -   act_162df51b7f78b785c97c26b41ea89666 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
   - context: .lore/LORE.md 2554 of 16000 bytes (15%, profile codex); warn at 80%
 
-### tables
-alice (work/website)$ lore tables
-TABLE                 ROWS
-_lore_live_rows       0
-_lore_sync_conflicts  0
-_lore_sync_dirty      0
-_lore_sync_errors     0
-_lore_sync_extra      4
-_lore_sync_files      4
-_lore_sync_meta       6
-_lore_sync_trash      0
-activity_archives     0
-actors                1
-architecture_notes    0
-assemble_citations    0
-assemble_runs         0
-audit_logs            8
-behaviours            0
-bench_evals           0
-bench_results         0
-bench_runs            0
-code_files            0
-code_symbols          0
-comments              0
-commit_links          0
-compress_runs         0
-config                7
-cookbook_recipes      0
-decisions             0
-drafts                0
-entity_tags           0
-external_sources      0
-handoffs              0
-hotfixes              0
-identity_profiles     0
-incidents             0
-intervention_metrics  0
-knowledge_refs        0
-knowledge_revisions   0
-learn_candidates      0
-learn_runs            0
-memories              0
-memory_code_refs      0
-missions              0
-mount_alias           0
-patterns              0
-pii_patterns          0
-plans                 0
-playbooks             0
-project_configs       0
-projects              1
-prompts               0
-query_logs            0
-reminders             0
-render_histories      1
-repos                 1
-rule_verifier_refs    0
-rules                 1
-run_steps             0
-runs                  0
-schema_migrations     1
-sessions              0
-snapshots             0
-suggestions           0
-tags                  0
-task_lists            0
-task_views            0
-tasks                 0
-taste_prefs           0
-teams                 0
-tech_doc_pages        0
-tech_docs             0
-trusted_plugins       0
-users                 0
-workflows             0
-workspaces            0
-73 tables, 35 total records
+### sql
+alice (work/website)$ lore sql "SELECT 'rules' AS kind, count(*) AS n FROM rules UNION ALL SELECT 'memories', count(*) FROM memories"
+kind      n
+rules     1
+memories  0
+(2 rows)
 
 ### completion
 alice (work/website)$ lore completion bash | head -3

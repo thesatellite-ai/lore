@@ -29,8 +29,8 @@ on alice work/website "git add -A && git commit -qm 'lore: first rule' && git lo
 note "doctor"
 on alice work/website "lore doctor"
 
-note "tables"
-on alice work/website "lore tables"
+note "sql"
+on alice work/website "lore sql \"SELECT 'rules' AS kind, count(*) AS n FROM rules UNION ALL SELECT 'memories', count(*) FROM memories\""
 
 note "completion"
 on alice work/website "lore completion bash | head -3"
