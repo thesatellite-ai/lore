@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -76,8 +77,14 @@ func run(ctx context.Context, args []string) int {
 	h.markPrinted(root)
 	mountShortcuts(root)
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())
+	// git's merge.lore.driver calls it (P3-MODEB-4: a host command, not an op).
+	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
 	root.SetArgs(args)
 	if err := root.ExecuteContext(ctx); err != nil {
+		var status hosthooks.ExitStatus
+		if errors.As(err, &status) {
+			return int(status) // a chosen exit with no error line (merge driver conflict)
+		}
 		if code := cli.ExitCode(err); code != cli.ExitUnknown || h.printed {
 			return code
 		}

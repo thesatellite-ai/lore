@@ -12,6 +12,7 @@ package main
 //	lore trash [--type …]     ─► trash list
 //	lore sql "<query>"        ─► sql run
 //	lore sync / lore land     ─► sync run / land run
+//	lore commit-show <sha>    ─► commit show (hidden, v0.1.17 spelling)
 //	lore upgrade [--check …]  ─► upgrade run
 //	lore plan apply …         ─► refused, hint: lore mission apply (2.15)
 
@@ -25,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opslint "github.com/thesatellite-ai/lore/ops/lint"
 	opsplan "github.com/thesatellite-ai/lore/ops/plan"
 	opsrow "github.com/thesatellite-ai/lore/ops/row"
@@ -39,6 +41,8 @@ import (
 const (
 	rowShowVerb     = "show"
 	rowMoveVerb     = "move"
+	commitShowVerb  = "show"
+	commitShowAlias = "commit-show"
 	lintRunVerb     = "run"
 	machineListVerb = "list"
 	trashListVerb   = "list"
@@ -52,6 +56,12 @@ const (
 func mountShortcuts(root *cobra.Command) {
 	if show := find(root, opsrow.Noun, rowShowVerb); show != nil {
 		root.AddCommand(shortcutOf(show, "show <id>", "Show any row by id (--origin: where it came from)"))
+	}
+	if show := find(root, opslink.CommitNoun, commitShowVerb); show != nil {
+		// v0.1.17's spelling of `lore commit show <sha>` (CLI 2.15, D33).
+		alias := shortcutOf(show, commitShowAlias+" <sha>", "v0.1.17 spelling of `lore commit show`")
+		alias.Hidden = true
+		root.AddCommand(alias)
 	}
 	if mv := find(root, opsrow.Noun, rowMoveVerb); mv != nil {
 		root.AddCommand(shortcutOf(mv, "move <id>", "Move a row to another store (same id; asks first)"))
