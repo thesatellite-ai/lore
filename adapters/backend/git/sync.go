@@ -283,7 +283,13 @@ func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]
 }
 
 // abortMerge puts the worktree back to the local tip after a failed merge.
+// A merge that failed before it started (no MERGE_HEAD, e.g. git refused
+// for want of an identity) has nothing to abort: the abort is skipped so
+// the real cause is reported alone (r2-ident).
 func (b *Backend) abortMerge(ctx context.Context) error {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-parse", "--quiet", "--verify", "MERGE_HEAD"}}); err != nil {
+		return nil
+	}
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge", "--abort"}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: abort the merge", err)
 	}
