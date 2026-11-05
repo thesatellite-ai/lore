@@ -143,8 +143,8 @@ Linkage — optional polymorphic FK to the artifact this task exercises:
 }
 
 func runBenchEvalAdd(ctx context.Context, f *benchEvalAddFlags) (err error) {
-	if err := refuseIfReadOnly(&f.commonFlags); err != nil {
-		return err
+	if refuseErr := refuseIfReadOnly(&f.commonFlags); refuseErr != nil {
+		return refuseErr
 	}
 
 	// 1. Resolve project context
@@ -160,7 +160,7 @@ func runBenchEvalAdd(ctx context.Context, f *benchEvalAddFlags) (err error) {
 
 	// 2. Validate category
 	cat := entBenchEval.Category(f.category)
-	if err := entBenchEval.CategoryValidator(cat); err != nil {
+	if categoryErr := entBenchEval.CategoryValidator(cat); categoryErr != nil {
 		return errcodes.New(errcodes.InvalidInput,
 			fmt.Sprintf("bad --category %q (want %s)", f.category,
 				strings.Join(allEvalCategories(), " | ")))
@@ -185,7 +185,7 @@ func runBenchEvalAdd(ctx context.Context, f *benchEvalAddFlags) (err error) {
 
 	// 5. Build grader_spec JSON from convenience flags
 	graderKind := entBenchEval.GraderKind(f.graderKind)
-	if err := entBenchEval.GraderKindValidator(graderKind); err != nil {
+	if graderErr := entBenchEval.GraderKindValidator(graderKind); graderErr != nil {
 		return errcodes.New(errcodes.InvalidInput,
 			fmt.Sprintf("bad --grader-kind %q (want %s)", f.graderKind,
 				strings.Join(allGraderKinds(), " | ")))
@@ -382,8 +382,8 @@ func newBenchEvalEditCommand() *cobra.Command {
 		Short: "Update fields on an existing bench task",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f.commonFlags); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f.commonFlags); refuseErr != nil {
+				return refuseErr
 			}
 			rctx, client, err := resolveContext(&f.commonFlags)
 			if err != nil {
@@ -402,22 +402,22 @@ func newBenchEvalEditCommand() *cobra.Command {
 
 			if cmd.Flags().Changed(constants.FlagCategory) {
 				cat := entBenchEval.Category(f.category)
-				if err := entBenchEval.CategoryValidator(cat); err != nil {
+				if categoryErr := entBenchEval.CategoryValidator(cat); categoryErr != nil {
 					return errcodes.New(errcodes.InvalidInput, "bad --category")
 				}
 				upd.SetCategory(cat)
 			}
 			if cmd.Flags().Changed("prompt") || cmd.Flags().Changed("prompt-file") {
-				p, err := readPromptInput(f.prompt, f.promptFile)
-				if err != nil {
-					return errcodes.New(errcodes.InvalidInput, err.Error())
+				p, readPromptErr := readPromptInput(f.prompt, f.promptFile)
+				if readPromptErr != nil {
+					return errcodes.New(errcodes.InvalidInput, readPromptErr.Error())
 				}
 				p, _ = textnorm.Normalize(p)
 				upd.SetPrompt(p)
 			}
 			if cmd.Flags().Changed(constants.FlagGraderKind) {
 				gk := entBenchEval.GraderKind(f.graderKind)
-				if err := entBenchEval.GraderKindValidator(gk); err != nil {
+				if graderErr := entBenchEval.GraderKindValidator(gk); graderErr != nil {
 					return errcodes.New(errcodes.InvalidInput, "bad --grader-kind")
 				}
 				upd.SetGraderKind(gk)
@@ -429,9 +429,9 @@ func newBenchEvalEditCommand() *cobra.Command {
 				if cmd.Flags().Changed(constants.FlagGraderKind) {
 					gk = entBenchEval.GraderKind(f.graderKind)
 				}
-				spec, err := buildGraderSpec(gk, f)
-				if err != nil {
-					return errcodes.New(errcodes.InvalidInput, err.Error())
+				spec, buildErr := buildGraderSpec(gk, f)
+				if buildErr != nil {
+					return errcodes.New(errcodes.InvalidInput, buildErr.Error())
 				}
 				upd.SetGraderSpec(spec)
 			}
@@ -506,8 +506,8 @@ func newBenchEvalDeleteCommand() *cobra.Command {
 		Short: "Durably delete (refuses if any results reference it)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			if !confirm {
 				return errcodes.New(errcodes.InvalidInput,
@@ -555,8 +555,8 @@ func newBenchEvalDuplicateCommand() *cobra.Command {
 		Short: "Clone an existing task with --as=<new-code>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			if asCode == "" {
 				return errcodes.New(errcodes.InvalidInput, "--as=<new-code> required")
@@ -642,8 +642,8 @@ Useful for the one-shot migration from the old bench/tasks/ format
 
 Existing tasks with the same code are skipped (or replaced with --replace).`,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			if fromDir == "" {
 				return errcodes.New(errcodes.InvalidInput, "--from=<dir> required")
@@ -1006,8 +1006,8 @@ func lookupBenchEval(ctx context.Context, client *ent.Client, projectID, ref str
 }
 
 func updateBenchEvalArchive(ctx context.Context, f *commonFlags, ref string, archive bool) (err error) {
-	if err := refuseIfReadOnly(f); err != nil {
-		return err
+	if refuseErr := refuseIfReadOnly(f); refuseErr != nil {
+		return refuseErr
 	}
 	rctx, client, err := resolveContext(f)
 	if err != nil {

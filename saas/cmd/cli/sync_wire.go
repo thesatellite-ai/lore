@@ -351,12 +351,12 @@ func needsMaterialize(root string) bool {
 // minted — the project comes from the files (_meta.json pins it).
 func materializeFromData(ctx context.Context, root string) (err error) {
 	marker := filepath.Join(root, projresolve.MarkerDir)
-	if err := os.MkdirAll(filepath.Join(marker, projresolve.StateDir), syncDirMode); err != nil {
-		return fmt.Errorf("create .lore/state: %w", err)
+	if mkdirErr := os.MkdirAll(filepath.Join(marker, projresolve.StateDir), syncDirMode); mkdirErr != nil {
+		return fmt.Errorf("create .lore/state: %w", mkdirErr)
 	}
 	dbPath := filepath.Join(marker, projresolve.ModeAFile)
-	if err := createProjectDB(ctx, dbPath); err != nil {
-		return err
+	if createErr := createProjectDB(ctx, dbPath); createErr != nil {
+		return createErr
 	}
 	db := dbent.InitDB(dbPath)
 	defer func() {
@@ -366,8 +366,8 @@ func materializeFromData(ctx context.Context, root string) (err error) {
 			err = fmt.Errorf("close lore.db: %w", cerr)
 		}
 	}()
-	if err := dbent.ApplyPragmas(db); err != nil {
-		return fmt.Errorf("apply pragmas: %w", err)
+	if applyErr := dbent.ApplyPragmas(db); applyErr != nil {
+		return fmt.Errorf("apply pragmas: %w", applyErr)
 	}
 	rep, err := runSyncPass(ctx, db, root, filepath.Join(marker, lsync.DataDirName))
 	if err != nil {
@@ -596,7 +596,7 @@ func projectRelPath(toplevel, dir string) string {
 	if err != nil {
 		return ""
 	}
-	if real, err := filepath.EvalSymlinks(abs); err == nil {
+	if real, evalErr := filepath.EvalSymlinks(abs); evalErr == nil {
 		abs = real
 	}
 	rel, err := filepath.Rel(toplevel, abs)

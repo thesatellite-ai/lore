@@ -127,8 +127,8 @@ given USD threshold.`,
 }
 
 func runBenchRunStart(ctx context.Context, f *benchRunStartFlags) (err error) {
-	if err := refuseIfReadOnly(&f.commonFlags); err != nil {
-		return err
+	if refuseErr := refuseIfReadOnly(&f.commonFlags); refuseErr != nil {
+		return refuseErr
 	}
 
 	rctx, client, err := resolveContext(&f.commonFlags)
@@ -339,9 +339,9 @@ func runBenchRunStart(ctx context.Context, f *benchRunStartFlags) (err error) {
 					SetJudgeRubric(verdict.JudgeInfo.Rubric).
 					SetJudgeResponse(verdict.JudgeInfo.RawResp)
 			}
-			if _, err := create.Save(ctx); err != nil {
+			if _, saveErr := create.Save(ctx); saveErr != nil {
 				if !f.jsonOut {
-					fmt.Fprintf(os.Stderr, "  ! persist result: %v\n", err)
+					fmt.Fprintf(os.Stderr, "  ! persist result: %v\n", saveErr)
 				}
 			}
 			progress := totalCalls
@@ -450,7 +450,7 @@ func newBenchRunListCommand() *cobra.Command {
 				q = q.Where(entBenchRun.Model(model))
 			}
 			if sinceStr != "" {
-				if t, err := parseSince(sinceStr); err == nil {
+				if t, parseSinceErr := parseSince(sinceStr); parseSinceErr == nil {
 					q = q.Where(entBenchRun.StartedAtGTE(t))
 				}
 			}
@@ -551,8 +551,8 @@ func newBenchRunCancelCommand() *cobra.Command {
 		Short: "Mark a running benchmark as aborted",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			rctx, client, err := resolveContext(&f)
 			if err != nil {

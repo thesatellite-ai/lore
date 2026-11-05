@@ -45,8 +45,8 @@ func newSearchRebuildCommand() *cobra.Command {
 Pass --kind=<entity> to rebuild only one (e.g. --kind=memory). Omitting
 the flag rebuilds every registered entity.`,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			_, client, err := resolveContext(&f)
 			if err != nil {

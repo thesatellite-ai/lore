@@ -108,16 +108,16 @@ func runInit(ctx context.Context, projectRoot string) (err error) {
 	// teammate) but no local DB: adopt it instead of minting a second
 	// project (E1).
 	markerDir := filepath.Join(projectRoot, projresolve.MarkerDir)
-	if err := checkNetworkFS(projectRoot); err != nil {
-		return err
+	if checkErr := checkNetworkFS(projectRoot); checkErr != nil {
+		return checkErr
 	}
 	if needsMaterialize(projectRoot) {
-		if err := materializeFromData(ctx, projectRoot); err != nil {
-			return errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(err)
+		if materializeErr := materializeFromData(ctx, projectRoot); materializeErr != nil {
+			return errcodes.New(errcodes.Internal, "build lore.db from .lore/data").WithCause(materializeErr)
 		}
-		meta, err := lsync.ReadProjectMeta(filepath.Join(markerDir, lsync.DataDirName))
-		if err != nil {
-			return errcodes.New(errcodes.Internal, "read .lore/data/_meta.json").WithCause(err)
+		meta, readProjectErr := lsync.ReadProjectMeta(filepath.Join(markerDir, lsync.DataDirName))
+		if readProjectErr != nil {
+			return errcodes.New(errcodes.Internal, "read .lore/data/_meta.json").WithCause(readProjectErr)
 		}
 		fmt.Printf("%s adopted the shared lore project at %s\n", style.Success("✓"), projectRoot)
 		fmt.Printf("    project_id: %s\n", style.Code(meta.ProjectID))
@@ -131,7 +131,7 @@ func runInit(ctx context.Context, projectRoot string) (err error) {
 		return retiredModeBError(p) // Q-MODEB: convert it, never init over it
 	}
 	for _, f := range projresolve.ProjectMarkerFiles() {
-		if _, err := os.Lstat(filepath.Join(markerDir, f)); err == nil {
+		if _, lstatErr := os.Lstat(filepath.Join(markerDir, f)); lstatErr == nil {
 			return errcodes.New(errcodes.AlreadyInitialized,
 				fmt.Sprintf("a lore project already exists at %s (.lore/%s)", projectRoot, f)).
 				WithHint("delete .lore/" + f + " first if you intend to re-init")
@@ -164,19 +164,19 @@ func runInit(ctx context.Context, projectRoot string) (err error) {
 	}
 
 	// 3. Create marker dir + state subdir
-	if err := os.MkdirAll(filepath.Join(markerDir, projresolve.StateDir), cliDirMode); err != nil {
-		return errcodes.New(errcodes.Internal, "create .lore/state").WithCause(err)
+	if mkdirErr := os.MkdirAll(filepath.Join(markerDir, projresolve.StateDir), cliDirMode); mkdirErr != nil {
+		return errcodes.New(errcodes.Internal, "create .lore/state").WithCause(mkdirErr)
 	}
 
 	// 4. Create .lore/lore.db with schema, config singletons and FTS
 	dbPath := filepath.Join(markerDir, projresolve.ModeAFile)
-	if err := createProjectDB(ctx, dbPath); err != nil {
-		return err
+	if createErr := createProjectDB(ctx, dbPath); createErr != nil {
+		return createErr
 	}
 	db := dbent.InitDB(dbPath)
 	defer joinClose(&err, db, "the DB")
-	if err := dbent.ApplyPragmas(db); err != nil {
-		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
+	if applyErr := dbent.ApplyPragmas(db); applyErr != nil {
+		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(applyErr)
 	}
 	entdb := dbent.New(db)
 	client := entdb.Client()
@@ -380,13 +380,13 @@ const (
 // must produce an identical cache before importing .lore/data.
 func createProjectDB(ctx context.Context, dbPath string) (err error) {
 	db := dbent.InitDB(dbPath)
-	if err := dbent.ApplyPragmas(db); err != nil {
+	if applyErr := dbent.ApplyPragmas(db); applyErr != nil {
 		_ = db.Close() // the pragma error is the one to report
-		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
+		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(applyErr)
 	}
 	// Migrate closes the handle it is given (it wraps it in its own client).
-	if err := dbent_migrate.Migrate(ctx, db); err != nil {
-		return errcodes.New(errcodes.Internal, "migrate schema").WithCause(err)
+	if migrateErr := dbent_migrate.Migrate(ctx, db); migrateErr != nil {
+		return errcodes.New(errcodes.Internal, "migrate schema").WithCause(migrateErr)
 	}
 	db = dbent.InitDB(dbPath)
 	defer joinClose(&err, db, "the DB")
@@ -494,7 +494,7 @@ func ensureGitignore(ctx context.Context, projectRoot string) (err error) {
 	}
 
 	existing := ""
-	if data, err := os.ReadFile(filepath.Clean(gi)); err == nil {
+	if data, readFileErr := os.ReadFile(filepath.Clean(gi)); readFileErr == nil {
 		existing = string(data)
 	}
 

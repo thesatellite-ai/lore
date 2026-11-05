@@ -149,17 +149,17 @@ func doctorCheckStore(ctx context.Context, m *stores.Manager, v *storeView) {
 	}
 	v.DefaultBranch = st.DefaultBranch()
 	for _, b := range v.Branches {
-		_, ok, err := st.Tip(ctx, b)
-		if err != nil {
-			v.Problems = append(v.Problems, fmt.Sprintf("branch %s: %s", b, redactIfQuiet(err.Error())))
+		_, ok, tipErr := st.Tip(ctx, b)
+		if tipErr != nil {
+			v.Problems = append(v.Problems, fmt.Sprintf("branch %s: %s", b, redactIfQuiet(tipErr.Error())))
 			continue
 		}
 		if !ok {
 			v.Problems = append(v.Problems, fmt.Sprintf("branch %s does not exist (make a store with `lore store init <name> <url>`; attach an existing branch with `lore store add <name> <url> --branch %s`)", b, b))
 			continue
 		}
-		if err := st.Check(ctx, b); err != nil {
-			v.Problems = append(v.Problems, redactIfQuiet(err.Error()))
+		if checkErr := st.Check(ctx, b); checkErr != nil {
+			v.Problems = append(v.Problems, redactIfQuiet(checkErr.Error()))
 		}
 	}
 	un, err := st.Unpushed(ctx)
@@ -359,8 +359,8 @@ worktree is never written by lore).`,
 			if err != nil {
 				return storeCLIError(err, "open the store clone")
 			}
-			if _, err := st.Fetch(ctx, false); err != nil {
-				return storeCLIError(err, "fetch the store")
+			if _, fetchErr := st.Fetch(ctx, false); fetchErr != nil {
+				return storeCLIError(fetchErr, "fetch the store")
 			}
 			if branch == "" {
 				branch = st.DefaultBranch()
@@ -454,8 +454,8 @@ func newStoreForgetCommand() *cobra.Command {
 			// Try to deliver waiting work first (PushPending takes the
 			// clone's lock itself); whatever still waits blocks the forget.
 			if storeAutopush(cfg, org) {
-				if _, _, err := st.PushPending(ctx, storeSignature(org)); err != nil {
-					fmt.Fprintln(os.Stderr, "lore: push waiting store writes: "+redactIfQuiet(err.Error()))
+				if _, _, pushErr := st.PushPending(ctx, storeSignature(org)); pushErr != nil {
+					fmt.Fprintln(os.Stderr, "lore: push waiting store writes: "+redactIfQuiet(pushErr.Error()))
 				}
 			}
 			unlock, err := st.Lock()

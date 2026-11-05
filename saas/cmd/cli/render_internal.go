@@ -107,8 +107,8 @@ func excludeInGit(ctx context.Context, root, name string) error {
 		add = "\n"
 	}
 	add += "# lore: internal context import (never commit)\n" + pattern + "\n"
-	if err := os.MkdirAll(filepath.Dir(excl), renderDirMode); err != nil {
-		return errcodes.New(errcodes.Internal, "create info dir").WithCause(err)
+	if mkdirErr := os.MkdirAll(filepath.Dir(excl), renderDirMode); mkdirErr != nil {
+		return errcodes.New(errcodes.Internal, "create info dir").WithCause(mkdirErr)
 	}
 	f, err := os.OpenFile(filepath.Clean(excl), os.O_APPEND|os.O_CREATE|os.O_WRONLY, excludeFileMode)
 	if err != nil {

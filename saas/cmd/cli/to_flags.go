@@ -80,12 +80,12 @@ func resolveWriteTarget(ctx context.Context, f toFlags, text string) (writeTarge
 		return writeTarget{}, orgResolveCLIError(s.ResolveErr)
 	}
 	org := s.Result.OrgName()
-	if err := personalplace.CheckTo(t, org, f.Everywhere); err != nil {
-		return writeTarget{}, errcodes.New(errcodes.InvalidInput, err.Error()).
+	if checkErr := personalplace.CheckTo(t, org, f.Everywhere); checkErr != nil {
+		return writeTarget{}, errcodes.New(errcodes.InvalidInput, checkErr.Error()).
 			WithHint("orgs never mix: a repo writes only into the org it resolved to (`lore whoami`)")
 	}
-	if err := s.Result.CheckWrite(f.ForceOrg, t.Explicit()); err != nil {
-		return writeTarget{}, orgResolveCLIError(err)
+	if checkErr := s.Result.CheckWrite(f.ForceOrg, t.Explicit()); checkErr != nil {
+		return writeTarget{}, orgResolveCLIError(checkErr)
 	}
 	wt := writeTarget{Target: t, Situation: s}
 	if !t.IsPersonal() {

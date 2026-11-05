@@ -612,7 +612,7 @@ func (s *liveSession) importLandedOnDefault(ctx context.Context, db *sql.DB, fol
 		if p == "" || !strings.HasSuffix(p, ".json") || strings.HasPrefix(filepath.Base(p), "_") {
 			continue
 		}
-		if b, found, err := s.repo.ReadFile(ctx, tip, p); err == nil && found {
+		if b, found, readFileErr := s.repo.ReadFile(ctx, tip, p); readFileErr == nil && found {
 			docs = append(docs, b)
 		}
 	}
@@ -669,9 +669,9 @@ func (s *liveSession) store(ctx context.Context, db *sql.DB, folder string, dive
 			rows[k] = live.NewTombstone(prev, d.ID, now, actor)
 			continue
 		}
-		body, err := canonjson.Decode(d.Doc, canonjson.DefaultMaxDepth)
-		if err != nil {
-			return fmt.Errorf("%s/%s: %w", d.Table, d.ID, err)
+		body, decodeErr := canonjson.Decode(d.Doc, canonjson.DefaultMaxDepth)
+		if decodeErr != nil {
+			return fmt.Errorf("%s/%s: %w", d.Table, d.ID, decodeErr)
 		}
 		f := live.NewVersion(prev, body, now, actor)
 		if prev == nil && liveCompanions[lsync.LiveKey{Table: d.Table, ID: d.ID}] {
@@ -684,16 +684,16 @@ func (s *liveSession) store(ctx context.Context, db *sql.DB, folder string, dive
 	// it). A refused write fails the command (exit 19) and leaves nothing
 	// to push later: rows that were never shared leave lore.db (kept in the
 	// sync trash), edits of shared rows stay unpushed and are refused again.
-	if err := leakCheckDocs(ctx, "live write", liveDocs(folder, rows)); err != nil {
+	if leakErr := leakCheckDocs(ctx, "live write", liveDocs(folder, rows)); leakErr != nil {
 		never, serr := neverSharedRows(ctx, db, diverted)
 		if serr != nil {
 			// Which rows were never shared is unknown: drop nothing.
-			return fmt.Errorf("%w (and no row was removed from lore.db: %v)", err, serr) // %v: the leak refusal stays the one classified cause (exit 19)
+			return fmt.Errorf("%w (and no row was removed from lore.db: %v)", leakErr, serr) // %v: the leak refusal stays the one classified cause (exit 19)
 		}
 		if derr := lsync.DropRows(ctx, db, never, "refused by the leak check"); derr != nil {
-			return fmt.Errorf("%w (and %v)", err, derr) // %v: the leak refusal stays the one classified cause (exit 19)
+			return fmt.Errorf("%w (and %v)", leakErr, derr) // %v: the leak refusal stays the one classified cause (exit 19)
 		}
-		return err
+		return leakErr
 	}
 	res, err := s.ref.Write(ctx, live.WriteRequest{Folder: folder, Rows: rows, BinaryVersion: version})
 	if err != nil {

@@ -184,13 +184,13 @@ func updateSchema(ctx context.Context, dbPath, stamped string) error {
 // gets the time appended, so a second update never overwrites a backup.
 func backupBeforeSchema(ctx context.Context, dbPath, old string) (_ string, err error) {
 	dir := filepath.Join(filepath.Dir(dbPath), schemaBackupDir)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", errcodes.New(errcodes.Internal, "mkdir "+dir).WithCause(err)
+	if mkdirErr := os.MkdirAll(dir, 0o700); mkdirErr != nil {
+		return "", errcodes.New(errcodes.Internal, "mkdir "+dir).WithCause(mkdirErr)
 	}
 	now := time.Now().UTC()
 	name := fmt.Sprintf("pre-schema-%s-to-%s-%s.sqlite", old, version, now.Format("2006-01-02"))
 	path := filepath.Join(dir, name)
-	if _, err := os.Stat(path); err == nil {
+	if _, statErr := os.Stat(path); statErr == nil {
 		path = filepath.Join(dir, strings.TrimSuffix(name, ".sqlite")+"-"+now.Format("150405.000000000")+".sqlite")
 	}
 	abs, err := filepath.Abs(path)

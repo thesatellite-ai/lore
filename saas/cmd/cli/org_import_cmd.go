@@ -87,8 +87,8 @@ func newOrgImportCommand() *cobra.Command {
 			if branch == "" {
 				branch = st.DefaultBranch()
 			}
-			if err := st.Check(ctx, branch); err != nil {
-				return storeCLIError(err, "check the store")
+			if checkErr := st.Check(ctx, branch); checkErr != nil {
+				return storeCLIError(checkErr, "check the store")
 			}
 			sugg, orgFolder, err := readSuggestion(ctx, st, branch)
 			if err != nil {
@@ -230,8 +230,8 @@ func appendOrgEntry(ctx context.Context, home string, entry lorecfg.Org) error {
 	}
 	var doc yaml.Node
 	if len(old) > 0 {
-		if err := yaml.Unmarshal(old, &doc); err != nil {
-			return errcodes.New(errcodes.ConfigInvalid, "~/.lore/config.yaml does not parse").WithCause(err)
+		if unmarshalErr := yaml.Unmarshal(old, &doc); unmarshalErr != nil {
+			return errcodes.New(errcodes.ConfigInvalid, "~/.lore/config.yaml does not parse").WithCause(unmarshalErr)
 		}
 	}
 	if doc.Kind == 0 {
@@ -249,8 +249,8 @@ func appendOrgEntry(ctx context.Context, home string, entry lorecfg.Org) error {
 		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "orgs"}, orgs)
 	}
 	var item yaml.Node
-	if err := item.Encode(entry); err != nil {
-		return errcodes.New(errcodes.Internal, "encode the entry").WithCause(err)
+	if encodeErr := item.Encode(entry); encodeErr != nil {
+		return errcodes.New(errcodes.Internal, "encode the entry").WithCause(encodeErr)
 	}
 	orgs.Content = append(orgs.Content, &item)
 	out, err := yaml.Marshal(&doc)

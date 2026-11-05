@@ -110,8 +110,8 @@ func addLinkedMemory(ctx context.Context, c *commonFlags, text, sourceKind, sour
 	if err != nil {
 		return "", errcodes.New(errcodes.EmptyBody, err.Error())
 	}
-	if err := refuseSecretsCtx(ctx, body); err != nil {
-		return "", err
+	if refuseErr := refuseSecretsCtx(ctx, body); refuseErr != nil {
+		return "", refuseErr
 	}
 	// The memory is written by the 0.1.18 core (memory.add) into the repo
 	// store. v0.1.17 routed it to the store holding the task or mission

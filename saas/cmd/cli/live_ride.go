@@ -91,8 +91,8 @@ func livePrePushHook(ctx context.Context, stdin io.Reader, args []string) error 
 	if len(args) > 0 {
 		remote = args[0]
 	}
-	if err := prePushLeakCheck(ctx, cwd, remote, parsePushUpdates(in)); err != nil {
-		return err
+	if preErr := prePushLeakCheck(ctx, cwd, remote, parsePushUpdates(in)); preErr != nil {
+		return preErr
 	}
 	s := liveRepoHere(ctx)
 	if s == nil {

@@ -112,8 +112,8 @@ func (p *externalPlan) addOrgSources(ctx context.Context, s *orgSituation) error
 			p.Notes = append(p.Notes, fmt.Sprintf("%s: no branch %s", st.Norm, branch))
 			continue
 		}
-		if err := st.Check(ctx, branch); err != nil {
-			return storeCLIError(err, "check the store")
+		if checkErr := st.Check(ctx, branch); checkErr != nil {
+			return storeCLIError(checkErr, "check the store")
 		}
 		key := st.Norm + "@" + branch
 		p.Key.Commits[key] = tip
@@ -228,8 +228,8 @@ func (p *externalPlan) addPersonalSources(ctx context.Context, s *orgSituation) 
 	if err != nil {
 		return storeCLIError(err, "open the personal store")
 	}
-	if _, err := st.Fetch(ctx, false); err != nil {
-		return storeCLIError(err, "fetch the personal store")
+	if _, fetchErr := st.Fetch(ctx, false); fetchErr != nil {
+		return storeCLIError(fetchErr, "fetch the personal store")
 	}
 	branch := st.DefaultBranch()
 	tip, ok, err := st.Tip(ctx, branch)
@@ -317,10 +317,10 @@ func openExternalCache(ctx context.Context, s *orgSituation, use cacheUse) (*cac
 		return nil, nil, errcodes.New(errcodes.Internal, "open the external cache").WithCause(err)
 	}
 	if len(plan.Unreadable) > 0 {
-		built, err := db.Built(ctx)
-		if err != nil {
+		built, builtErr := db.Built(ctx)
+		if builtErr != nil {
 			_ = db.Close() // the read error is the one to report
-			return nil, nil, errcodes.New(errcodes.Internal, "read the external cache").WithCause(err)
+			return nil, nil, errcodes.New(errcodes.Internal, "read the external cache").WithCause(builtErr)
 		}
 		if built {
 			// Offline: the last complete cache is the best answer there is.

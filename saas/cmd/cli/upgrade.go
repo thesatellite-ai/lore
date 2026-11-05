@@ -266,8 +266,8 @@ func upgradeByScript(ctx context.Context, out io.Writer, rc releaseClient, exe, 
 	if err != nil {
 		return err
 	}
-	if err := verifySHA(archive, sums, name); err != nil {
-		return err
+	if verifyErr := verifySHA(archive, sums, name); verifyErr != nil {
+		return verifyErr
 	}
 	if _, werr := fmt.Fprintf(out, "  sha256 ok (%s of %s)\n", checksumsFile, tag); werr != nil {
 		return werr
@@ -282,13 +282,13 @@ func upgradeByScript(ctx context.Context, out io.Writer, rc releaseClient, exe, 
 	}
 	// Written owner-only first, then given the running binary's mode, so the
 	// new binary is never readable or runnable by more users than the old one.
-	if err := os.WriteFile(tmp, files.binary, cliFileMode); err != nil {
-		return errcodes.New(errcodes.Code(errs.UpgradePermission), "write "+tmp).WithCause(err).
+	if writeFileErr := os.WriteFile(tmp, files.binary, cliFileMode); writeFileErr != nil {
+		return errcodes.New(errcodes.Code(errs.UpgradePermission), "write "+tmp).WithCause(writeFileErr).
 			WithHint("run `sudo " + BinaryName + " upgrade`")
 	}
-	if err := os.Chmod(tmp, binaryMode(exe)); err != nil {
+	if chmodErr := os.Chmod(tmp, binaryMode(exe)); chmodErr != nil {
 		_ = os.Remove(tmp) // best effort: never leave a half-installed binary behind
-		return errcodes.New(errcodes.Code(errs.UpgradePermission), "make "+tmp+" executable").WithCause(err).
+		return errcodes.New(errcodes.Code(errs.UpgradePermission), "make "+tmp+" executable").WithCause(chmodErr).
 			WithHint("run `sudo " + BinaryName + " upgrade`")
 	}
 	keep := false

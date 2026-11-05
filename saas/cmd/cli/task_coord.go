@@ -255,13 +255,13 @@ Examples:
 			}
 			if dryRun {
 				// TASK 13.3: rank and explain, write nothing.
-				v, err := w.env(t).Signals.Read(ctx)
-				if err != nil {
-					return coordError(err)
+				v, readErr := w.env(t).Signals.Read(ctx)
+				if readErr != nil {
+					return coordError(readErr)
 				}
-				res, err := coord.Queue(ctx, w.env(t), v, req)
-				if err != nil {
-					return coordError(err)
+				res, readErr := coord.Queue(ctx, w.env(t), v, req)
+				if readErr != nil {
+					return coordError(readErr)
 				}
 				return printNextDryRun(res, why, asJSON)
 			}

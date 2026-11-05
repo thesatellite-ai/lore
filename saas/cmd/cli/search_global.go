@@ -655,9 +655,9 @@ func searchResourceFields(ctx context.Context, eng *engine.Engine, t globalSearc
 	}
 	var only map[string]bool
 	if text != "" {
-		ft, err := coreApp.Search(ctx, t.table, quoteSearchTerms(text), searchFetch)
-		if err != nil {
-			return nil, err
+		ft, searchErr := coreApp.Search(ctx, t.table, quoteSearchTerms(text), searchFetch)
+		if searchErr != nil {
+			return nil, searchErr
 		}
 		only = map[string]bool{}
 		for _, h := range ft {
@@ -814,9 +814,9 @@ func searchMetaTable(ctx context.Context, eng *engine.Engine, t globalSearchTarg
 	}
 	var only map[string]bool
 	if ftsText != "" {
-		ft, err := coreApp.Search(ctx, t.table, ftsText, searchFetch)
-		if err != nil {
-			return nil, err
+		ft, searchErr := coreApp.Search(ctx, t.table, ftsText, searchFetch)
+		if searchErr != nil {
+			return nil, searchErr
 		}
 		only = map[string]bool{}
 		for _, h := range ft {

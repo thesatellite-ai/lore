@@ -112,14 +112,14 @@ func (modeBExporter) ExportModeB(ctx context.Context, pointerPath string) (_ wir
 	if !filepath.IsAbs(dbPath) {
 		dbPath = filepath.Join(root, dbPath)
 	}
-	if _, err := os.Stat(dbPath); err != nil {
-		return wire.ModeBExport{}, errcodes.New(errcodes.NotFound, "migrate: the shared lore.db "+dbPath+" named by "+pointerPath+" is not there").WithCause(err)
+	if _, statErr := os.Stat(dbPath); statErr != nil {
+		return wire.ModeBExport{}, errcodes.New(errcodes.NotFound, "migrate: the shared lore.db "+dbPath+" named by "+pointerPath+" is not there").WithCause(statErr)
 	}
 	db := dbent.InitDB(dbPath)
 	defer joinClose(&err, db, "the DB")
 	out := wire.ModeBExport{DBPath: dbPath, ProjectID: ptr.ProjectID}
-	if err := db.QueryRowContext(ctx, `SELECT name FROM `+projectsTable+` WHERE id = ?`, ptr.ProjectID).Scan(&out.ProjectName); err != nil {
-		return wire.ModeBExport{}, errcodes.New(errcodes.NotFound, "migrate: project "+ptr.ProjectID+" is not in "+dbPath).WithCause(err)
+	if scanErr := db.QueryRowContext(ctx, `SELECT name FROM `+projectsTable+` WHERE id = ?`, ptr.ProjectID).Scan(&out.ProjectName); scanErr != nil {
+		return wire.ModeBExport{}, errcodes.New(errcodes.NotFound, "migrate: project "+ptr.ProjectID+" is not in "+dbPath).WithCause(scanErr)
 	}
 	ids, err := modeBRowIDs(ctx, db, ptr.ProjectID)
 	if err != nil {
@@ -127,9 +127,9 @@ func (modeBExporter) ExportModeB(ctx context.Context, pointerPath string) (_ wir
 	}
 	exported := map[string]bool{}
 	for _, tr := range ids {
-		b, ok, err := lsync.RowDoc(ctx, db, tr.table, tr.id)
-		if err != nil {
-			return wire.ModeBExport{}, errcodes.New(errcodes.Internal, "migrate: read "+tr.table+"/"+tr.id).WithCause(err)
+		b, ok, rowErr := lsync.RowDoc(ctx, db, tr.table, tr.id)
+		if rowErr != nil {
+			return wire.ModeBExport{}, errcodes.New(errcodes.Internal, "migrate: read "+tr.table+"/"+tr.id).WithCause(rowErr)
 		}
 		if ok {
 			out.Docs = append(out.Docs, b)

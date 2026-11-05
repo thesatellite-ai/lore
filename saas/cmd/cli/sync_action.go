@@ -485,7 +485,7 @@ func uninstallSyncAction(ctx context.Context, dir string, force bool) (syncActio
 	}
 	prefix := lorePathPrefix(repo.Toplevel, dir)
 	file := filepath.Join(repo.Toplevel, filepath.FromSlash(syncActionFileRel(prefix)))
-	if _, err := os.Stat(file); errors.Is(err, fs.ErrNotExist) {
+	if _, statErr := os.Stat(file); errors.Is(statErr, fs.ErrNotExist) {
 		if legacy := legacySyncActionFor(repo.Toplevel, prefix); legacy != "" {
 			file = legacy
 		}
@@ -774,9 +774,9 @@ func refreshSyncActionPin(ctx context.Context, repo gitsetup.Repo, root, own str
 	// Triggers come from the installed file, never from install-action's
 	// default: a version bump must not start or stop a workflow's runs.
 	o := syncActionOptions{branches: s.branches, manual: s.manual, pin: syncActionPinAuto}
-	if edited, err := syncActionEdited(ctx, repo.Toplevel, root, content, s, o); err != nil || edited {
-		if err != nil {
-			return syncActionRefresh{}, err
+	if edited, syncErr := syncActionEdited(ctx, repo.Toplevel, root, content, s, o); syncErr != nil || edited {
+		if syncErr != nil {
+			return syncActionRefresh{}, syncErr
 		}
 		return syncActionRefresh{Path: file, Note: "edited by hand, so lore no longer updates it; re-run `lore sync install-action` to take " + target}, nil
 	}

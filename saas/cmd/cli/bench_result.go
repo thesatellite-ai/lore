@@ -228,16 +228,16 @@ func newBenchResultListCommand() *cobra.Command {
 			}
 			q := client.BenchResult.Query().Where(entBenchResult.ProjectID(projectID))
 			if runRef != "" {
-				run, err := lookupBenchRun(cmd.Context(), client, projectID, runRef)
-				if err != nil {
-					return err
+				run, lookupErr := lookupBenchRun(cmd.Context(), client, projectID, runRef)
+				if lookupErr != nil {
+					return lookupErr
 				}
 				q = q.Where(entBenchResult.BenchRunID(run.ID))
 			}
 			if evalRef != "" {
-				ev, err := lookupBenchEval(cmd.Context(), client, projectID, evalRef)
-				if err != nil {
-					return err
+				ev, lookupErr := lookupBenchEval(cmd.Context(), client, projectID, evalRef)
+				if lookupErr != nil {
+					return lookupErr
 				}
 				q = q.Where(entBenchResult.BenchEvalID(ev.ID))
 			}
@@ -402,8 +402,8 @@ Either pass a single <result-id> OR use --run=<id-or-code> [--all] to
 regrade a whole run.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			rctx, client, err := resolveContext(&f)
 			if err != nil {
@@ -420,9 +420,9 @@ regrade a whole run.`,
 			case len(args) == 1:
 				q = q.Where(entBenchResult.ID(args[0]))
 			case runRef != "":
-				run, err := lookupBenchRun(cmd.Context(), client, projectID, runRef)
-				if err != nil {
-					return err
+				run, lookupErr := lookupBenchRun(cmd.Context(), client, projectID, runRef)
+				if lookupErr != nil {
+					return lookupErr
 				}
 				q = q.Where(entBenchResult.BenchRunID(run.ID))
 			default:

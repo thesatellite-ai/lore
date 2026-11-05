@@ -90,8 +90,8 @@ func newRunStartCommand() *cobra.Command {
 		Use:   "start",
 		Short: "Open a run (records what agent is attempting which task with which model)",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			_, client, err := resolveContext(&f)
 			if err != nil {
@@ -106,16 +106,16 @@ func newRunStartCommand() *cobra.Command {
 			// Validate the opaque ids (tsk_… / msn_…) before storing them in the notes payload
 			var taskID, missionID string
 			if task != "" {
-				resolvedTask, err := resolvePrettyID(cmd.Context(), client, task)
-				if err == nil {
+				resolvedTask, resolveErr := resolvePrettyID(cmd.Context(), client, task)
+				if resolveErr == nil {
 					taskID = resolvedTask
 				} else {
 					taskID = task // pass through as-is
 				}
 			}
 			if mission != "" {
-				resolvedMission, err := resolvePrettyID(cmd.Context(), client, mission)
-				if err == nil {
+				resolvedMission, resolveErr := resolvePrettyID(cmd.Context(), client, mission)
+				if resolveErr == nil {
 					missionID = resolvedMission
 				} else {
 					missionID = mission
@@ -185,8 +185,8 @@ func newRunStepCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			passedSet = cmd.Flags().Changed("passed")
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			_, client, err := resolveContext(&f)
 			if err != nil {
@@ -201,9 +201,9 @@ func newRunStepCommand() *cobra.Command {
 
 			// Stdin payload trumps --summary if both passed
 			if payloadStdin {
-				b, err := io.ReadAll(os.Stdin)
-				if err != nil {
-					return errcodes.New(errcodes.InvalidInput, "read stdin").WithCause(err)
+				b, readAllErr := io.ReadAll(os.Stdin)
+				if readAllErr != nil {
+					return errcodes.New(errcodes.InvalidInput, "read stdin").WithCause(readAllErr)
 				}
 				body = string(b)
 			}
@@ -279,8 +279,8 @@ func newRunEndCommand() *cobra.Command {
 		Short: "Close a run with outcome (success | partial | failed | cancelled)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			if outcome == "" {
 				return errcodes.New(errcodes.InvalidInput,
@@ -383,8 +383,8 @@ func newRunCancelCommand() *cobra.Command {
 		Short: "Cancel a run (alias for `end --outcome=cancelled`)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			_, client, err := resolveContext(&f)
 			if err != nil {

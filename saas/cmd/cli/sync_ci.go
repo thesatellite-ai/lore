@@ -134,8 +134,8 @@ func runCIMerge(ctx context.Context, dir, base string, dryRun bool) (ciMergeResu
 	}
 	// RX7 at landing (OV64): a key row the branch loosened without a
 	// changed_by record is refused before any merge is tried.
-	if err := checkKeyLoosening(ctx, dir, base); err != nil {
-		return res, err
+	if checkErr := checkKeyLoosening(ctx, dir, base); checkErr != nil {
+		return res, checkErr
 	}
 	probe, err := gitsetup.ProbeMerge(ctx, dir, base)
 	if err != nil {
@@ -167,16 +167,16 @@ func runCIMerge(ctx context.Context, dir, base string, dryRun bool) (ciMergeResu
 		res.Outcome, res.Merged = ciMergeMerged, probe.Conflicted
 		return res, nil
 	}
-	if err := gitsetup.MergeNoCommit(ctx, dir, base, mergeDriverConfig()); err != nil {
-		return res, errcodes.New(errcodes.Internal, "merge "+base).WithCause(err)
+	if mergeErr := gitsetup.MergeNoCommit(ctx, dir, base, mergeDriverConfig()); mergeErr != nil {
+		return res, errcodes.New(errcodes.Internal, "merge "+base).WithCause(mergeErr)
 	}
 	left, err := gitsetup.Unmerged(ctx, dir)
 	if err != nil {
 		return res, abortCIMerge(ctx, dir, errcodes.New(errcodes.Internal, "list unmerged files").WithCause(err))
 	}
 	if len(left) > 0 {
-		if err := gitsetup.AbortMerge(ctx, dir); err != nil {
-			return res, errcodes.New(errcodes.Internal, "abort merge").WithCause(err)
+		if abortErr := gitsetup.AbortMerge(ctx, dir); abortErr != nil {
+			return res, errcodes.New(errcodes.Internal, "abort merge").WithCause(abortErr)
 		}
 		res.Outcome, res.Blocking = ciMergeNeedsHuman, left
 		res.Reason = "the same text was changed on both sides; settle it with `lore <entity> edit` after merging locally"

@@ -69,7 +69,7 @@ func gatherOrgSituation(ctx context.Context, dir string) (*orgSituation, error) 
 	}
 	s := &orgSituation{Dir: dir, ConfigDir: cfgDir, Config: cfg, ConfigPath: loc.Path, HasConfig: loc.Exists}
 
-	if m, err := lsync.ReadProjectMeta(filepath.Join(dir, projresolve.MarkerDir, lsync.DataDirName)); err == nil {
+	if m, readProjectErr := lsync.ReadProjectMeta(filepath.Join(dir, projresolve.MarkerDir, lsync.DataDirName)); readProjectErr == nil {
 		s.ProjectID = m.ProjectID
 	}
 	s.Remotes, s.RemoteNotes = gitRemotes(ctx, dir)

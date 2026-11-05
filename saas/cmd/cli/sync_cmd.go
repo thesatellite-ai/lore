@@ -255,11 +255,11 @@ the DB with tools that bypassed lore (its triggers normally catch those).`,
 				return err
 			}
 			defer t.close()
-			if err := t.catchUp(cmd.Context()); err != nil {
-				return err
+			if catchErr := t.catchUp(cmd.Context()); catchErr != nil {
+				return catchErr
 			}
-			if err := lsync.MarkAllForExport(cmd.Context(), t.db, t.dataDir); err != nil {
-				return errcodes.New(errcodes.Internal, "mark rows for export").WithCause(err)
+			if markErr := lsync.MarkAllForExport(cmd.Context(), t.db, t.dataDir); markErr != nil {
+				return errcodes.New(errcodes.Internal, "mark rows for export").WithCause(markErr)
 			}
 			// Rewriting files changes no data: no audit entries.
 			o := syncOptions(t.db, t.root, t.dataDir, lsync.ChangeLocal)
@@ -356,18 +356,18 @@ func newSyncResolveCommand() *cobra.Command {
 				return err
 			}
 			defer t.close()
-			if err := t.catchUp(cmd.Context()); err != nil {
-				return err
+			if catchErr := t.catchUp(cmd.Context()); catchErr != nil {
+				return catchErr
 			}
-			if err := lsync.ResolveConflict(cmd.Context(), t.db, id, choice); err != nil {
-				if errors.Is(err, lsync.ErrCoreOwned) {
+			if resolveErr := lsync.ResolveConflict(cmd.Context(), t.db, id, choice); resolveErr != nil {
+				if errors.Is(resolveErr, lsync.ErrCoreOwned) {
 					// a63c6f8: the message names the way that works for a core row.
-					return errcodes.New(errcodes.InvalidInput, err.Error())
+					return errcodes.New(errcodes.InvalidInput, resolveErr.Error())
 				}
-				if errors.Is(err, lsync.ErrNotFound) {
-					return errcodes.New(errcodes.NotFound, err.Error()).WithHint("see `lore sync conflicts`")
+				if errors.Is(resolveErr, lsync.ErrNotFound) {
+					return errcodes.New(errcodes.NotFound, resolveErr.Error()).WithHint("see `lore sync conflicts`")
 				}
-				return errcodes.New(errcodes.Internal, "resolve conflict").WithCause(err)
+				return errcodes.New(errcodes.Internal, "resolve conflict").WithCause(resolveErr)
 			}
 			rep, err := runSyncPass(cmd.Context(), t.db, t.root, t.dataDir)
 			if err != nil {
@@ -436,18 +436,18 @@ restored row is exported again like any edit.`,
 				return err
 			}
 			defer t.close()
-			if err := t.catchUp(cmd.Context()); err != nil {
-				return err
+			if catchErr := t.catchUp(cmd.Context()); catchErr != nil {
+				return catchErr
 			}
-			if err := lsync.RestoreTrash(cmd.Context(), t.db, id); err != nil {
-				if errors.Is(err, lsync.ErrCoreOwned) {
+			if restoreErr := lsync.RestoreTrash(cmd.Context(), t.db, id); restoreErr != nil {
+				if errors.Is(restoreErr, lsync.ErrCoreOwned) {
 					// a63c6f8: the message names the way that works for a core row.
-					return errcodes.New(errcodes.InvalidInput, err.Error())
+					return errcodes.New(errcodes.InvalidInput, restoreErr.Error())
 				}
-				if errors.Is(err, lsync.ErrNotFound) {
-					return errcodes.New(errcodes.NotFound, err.Error()).WithHint("see `lore trash --local`")
+				if errors.Is(restoreErr, lsync.ErrNotFound) {
+					return errcodes.New(errcodes.NotFound, restoreErr.Error()).WithHint("see `lore trash --local`")
 				}
-				return errcodes.New(errcodes.Internal, "restore from trash").WithCause(err)
+				return errcodes.New(errcodes.Internal, "restore from trash").WithCause(restoreErr)
 			}
 			rep, err := runSyncPass(cmd.Context(), t.db, t.root, t.dataDir)
 			if err != nil {
@@ -505,8 +505,8 @@ back. Run it on main and commit the result. Rows go to the local trash first.
 			defer t.close()
 			// The dry run counts what --confirm would purge, so it catches up
 			// first too (it said 0 while --confirm then purged 1).
-			if err := t.catchUp(cmd.Context()); err != nil {
-				return err
+			if catchErr := t.catchUp(cmd.Context()); catchErr != nil {
+				return catchErr
 			}
 			// Core-owned rows are not lsync's to remove (lsync 8cd677d skips
 			// them): they go through the core's own archived purge over the
@@ -521,9 +521,9 @@ back. Run it on main and commit the result. Rows go to the local trash first.
 				return err
 			}
 			if dryRun {
-				n, err := lsync.CountArchivedBefore(cmd.Context(), t.db, cutoff)
-				if err != nil {
-					return errcodes.New(errcodes.Internal, "count archived rows").WithCause(err)
+				n, countErr := lsync.CountArchivedBefore(cmd.Context(), t.db, cutoff)
+				if countErr != nil {
+					return errcodes.New(errcodes.Internal, "count archived rows").WithCause(countErr)
 				}
 				fmt.Printf("would purge %d archived row(s) archived before %s\n", n+len(coreRes.Rows), cutoff.Format(time.RFC3339))
 				return nil
@@ -597,14 +597,14 @@ and re-point every row at it. Commit the result.`,
 			defer t.close()
 			if dryRun {
 				var n int
-				if err := t.db.QueryRowContext(cmd.Context(), `SELECT COUNT(*) FROM projects`).Scan(&n); err != nil {
-					return errcodes.New(errcodes.Internal, "count projects").WithCause(err)
+				if scanErr := t.db.QueryRowContext(cmd.Context(), `SELECT COUNT(*) FROM projects`).Scan(&n); scanErr != nil {
+					return errcodes.New(errcodes.Internal, "count projects").WithCause(scanErr)
 				}
 				fmt.Printf("%d project row(s); %d would be merged\n", n, max(n-1, 0))
 				return nil
 			}
-			if err := t.catchUp(cmd.Context()); err != nil {
-				return err
+			if catchErr := t.catchUp(cmd.Context()); catchErr != nil {
+				return catchErr
 			}
 			kept, merged, err := lsync.FixProjects(cmd.Context(), t.db, t.dataDir, keep)
 			if err != nil {
@@ -1028,14 +1028,14 @@ branch you are on.`,
 			}
 			defer t.close()
 			// Export pending changes first so the files are current.
-			if _, err := runSyncPass(cmd.Context(), t.db, t.root, t.dataDir); err != nil {
-				return errcodes.New(errcodes.Internal, "sync pass").WithCause(err)
+			if _, runSyncErr := runSyncPass(cmd.Context(), t.db, t.root, t.dataDir); runSyncErr != nil {
+				return errcodes.New(errcodes.Internal, "sync pass").WithCause(runSyncErr)
 			}
 			files := map[string][]byte{}
 			for _, id := range args {
-				rel, b, err := findRowFile(t.dataDir, id)
-				if err != nil {
-					return err
+				rel, b, findErr := findRowFile(t.dataDir, id)
+				if findErr != nil {
+					return findErr
 				}
 				files[filepath.ToSlash(filepath.Join(projresolve.MarkerDir, lsync.DataDirName, rel))] = b
 			}
@@ -1139,18 +1139,18 @@ func newSyncMergeRowsCommand() *cobra.Command {
 				return err
 			}
 			defer t.close()
-			if err := t.catchUp(cmd.Context()); err != nil {
-				return err
+			if catchErr := t.catchUp(cmd.Context()); catchErr != nil {
+				return catchErr
 			}
-			if err := lsync.MergeRows(cmd.Context(), t.db, args[0], keep, drop); err != nil {
-				if errors.Is(err, lsync.ErrCoreOwned) {
+			if mergeErr := lsync.MergeRows(cmd.Context(), t.db, args[0], keep, drop); mergeErr != nil {
+				if errors.Is(mergeErr, lsync.ErrCoreOwned) {
 					// a63c6f8: the message names the way that works for a core row.
-					return errcodes.New(errcodes.InvalidInput, err.Error())
+					return errcodes.New(errcodes.InvalidInput, mergeErr.Error())
 				}
-				if errors.Is(err, lsync.ErrNotFound) {
-					return errcodes.New(errcodes.NotFound, err.Error())
+				if errors.Is(mergeErr, lsync.ErrNotFound) {
+					return errcodes.New(errcodes.NotFound, mergeErr.Error())
 				}
-				return errcodes.New(errcodes.InvalidInput, "merge rows").WithCause(err)
+				return errcodes.New(errcodes.InvalidInput, "merge rows").WithCause(mergeErr)
 			}
 			rep, err := runSyncPass(cmd.Context(), t.db, t.root, t.dataDir)
 			if err != nil {

@@ -913,8 +913,8 @@ func coreAddMemory(ctx context.Context, body, sourceKind, sourceRef string) (str
 	if err != nil {
 		return "", errcodes.New(errcodes.Internal, "encode memory").WithCause(err)
 	}
-	if err := ensureCoreGitignore(ctx); err != nil {
-		return "", coreErr(err)
+	if ensureErr := ensureCoreGitignore(ctx); ensureErr != nil {
+		return "", coreErr(ensureErr)
 	}
 	res, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: stdinIsTTY()})
 	if err != nil {
@@ -949,8 +949,8 @@ func newAPICommand() *cobra.Command {
 			}
 			// Open the core now so a broken store fails at start, not on
 			// the first request.
-			if _, err := coreApp.Engine(ctx); err != nil {
-				return err
+			if _, engineErr := coreApp.Engine(ctx); engineErr != nil {
+				return engineErr
 			}
 			defer func() { _ = coreApp.Close() }() // the server's error is what the caller needs
 			actor, err := coreApp.Actor(ctx)
@@ -983,8 +983,8 @@ func newAPICommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := rest.RotateToken(home); err != nil {
-				return err
+			if _, rotateErr := rest.RotateToken(home); rotateErr != nil {
+				return rotateErr
 			}
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "new token written to "+rest.TokenPath(home))
 			return err
@@ -1013,8 +1013,8 @@ func newSpecCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := docs.CheckError(drift); err != nil {
-					return err // E_CONFIG_INVALID naming every stale file + "run: lore spec docs && lore spec openapi"
+				if checkErr := docs.CheckError(drift); checkErr != nil {
+					return checkErr // E_CONFIG_INVALID naming every stale file + "run: lore spec docs && lore spec openapi"
 				}
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), "current "+path)
 				return err

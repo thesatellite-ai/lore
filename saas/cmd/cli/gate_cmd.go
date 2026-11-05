@@ -117,8 +117,8 @@ func runGateApprove(ctx context.Context, id, from string) error {
 		return errcodes.New(errcodes.InvalidInput, "only a person approves a gate (TEAM-028); you are "+w.Ident.StableKey).
 			WithHint("set your identity with `lore identity set` and approve from your own shell")
 	}
-	if err := checkApprover(ctx, id, w.ActorID); err != nil {
-		return err
+	if checkErr := checkApprover(ctx, id, w.ActorID); checkErr != nil {
+		return checkErr
 	}
 	ap, err := coord.Approve(ctx, w.env(t), coord.ApproveRequest{ID: id, ApproverID: w.ActorID})
 	if err != nil {

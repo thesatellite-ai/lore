@@ -238,7 +238,7 @@ func newBenchReportTrendCommand() *cobra.Command {
 				q = q.Where(entBenchRun.Model(model))
 			}
 			if sinceStr != "" {
-				if t, err := parseSince(sinceStr); err == nil {
+				if t, parseSinceErr := parseSince(sinceStr); parseSinceErr == nil {
 					q = q.Where(entBenchRun.StartedAtGTE(t))
 				}
 			}

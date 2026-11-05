@@ -67,9 +67,9 @@ func routeWrite(ctx context.Context, c *commonFlags, f toFlags, kind, text strin
 	s := wt.Situation
 	route := writeRoute{Situation: s}
 	if wt.Personal != nil {
-		p, err := openPersonalProject(ctx, s.Config, wt.Personal.Folder)
-		if err != nil {
-			return writeRoute{}, err
+		p, openPersonalErr := openPersonalProject(ctx, s.Config, wt.Personal.Folder)
+		if openPersonalErr != nil {
+			return writeRoute{}, openPersonalErr
 		}
 		useExternalProject(c, p)
 		route.Project, route.Label, route.Rule = p, p.Label, "--to me → personal "+wt.Personal.Folder+"/"
@@ -88,8 +88,8 @@ func routeWrite(ctx context.Context, c *commonFlags, f toFlags, kind, text strin
 		route.Repo = true
 		// F16 at write time (trial F8, F9): a row routed to this repo is
 		// leak-checked before anything is written (leak_write.go).
-		if err := leakCheckRouteWrite(ctx, route, kind, text); err != nil {
-			return writeRoute{}, err
+		if leakErr := leakCheckRouteWrite(ctx, route, kind, text); leakErr != nil {
+			return writeRoute{}, leakErr
 		}
 		return route, nil
 	}
@@ -212,8 +212,8 @@ func storeOrgDefaults(ctx context.Context, cfg *lorecfg.Config, org *lorecfg.Org
 	if err != nil {
 		return nil, storeCLIError(err, "open the store")
 	}
-	if _, err := st.Fetch(ctx, false); err != nil {
-		return nil, storeCLIError(err, "fetch the store")
+	if _, fetchErr := st.Fetch(ctx, false); fetchErr != nil {
+		return nil, storeCLIError(fetchErr, "fetch the store")
 	}
 	f, ok, err := st.ReadOrgFile(ctx, sc.EffectiveBranch(), sc.OrgFolder)
 	if err != nil {

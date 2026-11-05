@@ -123,9 +123,9 @@ func runLocalPurged(cmd *cobra.Command) error {
 	ctx := cmd.Context()
 	if !dry && !confirm {
 		// DQ2: a permanent removal asks for --confirm; list what it would drop.
-		found, err := lsync.DropPurgedCopies(ctx, t.db, t.dataDir, true)
-		if err != nil {
-			return errcodes.New(errcodes.Internal, "list local copies of purged rows").WithCause(err)
+		found, dropErr := lsync.DropPurgedCopies(ctx, t.db, t.dataDir, true)
+		if dropErr != nil {
+			return errcodes.New(errcodes.Internal, "list local copies of purged rows").WithCause(dropErr)
 		}
 		if len(found) == 0 {
 			fmt.Println(style.Muted("· no local copies of purged rows"))

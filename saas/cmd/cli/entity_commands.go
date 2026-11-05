@@ -145,11 +145,11 @@ func newPluginTrustCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "trust", Short: "Trust a plugin by name + sha256",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
-			if err := validPluginSHA256(sha); err != nil {
-				return err
+			if validErr := validPluginSHA256(sha); validErr != nil {
+				return validErr
 			}
 			_, client, err := resolveContext(&f)
 			if err != nil {
@@ -187,8 +187,8 @@ func newPluginUntrustCommand() *cobra.Command {
 		Use: "untrust <id>", Short: "Remove a trusted-plugin entry",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := refuseIfReadOnly(&f); err != nil {
-				return err
+			if refuseErr := refuseIfReadOnly(&f); refuseErr != nil {
+				return refuseErr
 			}
 			_, client, err := resolveContext(&f)
 			if err != nil {

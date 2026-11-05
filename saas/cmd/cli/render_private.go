@@ -279,9 +279,9 @@ func planPrivate(ctx context.Context, root string) (*privatePlan, error) {
 		}
 	}
 	for _, s := range internal {
-		body, n, err := buildPrivateStore(ctx, ex, repoName, p.repoKey, s)
-		if err != nil {
-			return nil, err
+		body, n, buildErr := buildPrivateStore(ctx, ex, repoName, p.repoKey, s)
+		if buildErr != nil {
+			return nil, buildErr
 		}
 		p.rows += n
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, s.stem+privateFileExt), body: body})

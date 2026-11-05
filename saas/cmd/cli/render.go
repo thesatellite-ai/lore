@@ -647,29 +647,29 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 
 	cleanup := func() { _ = os.Remove(tmpName) }
 
-	if _, err := tmp.Write(data); err != nil {
+	if _, writeErr := tmp.Write(data); writeErr != nil {
 		_ = tmp.Close()
 		cleanup()
-		return fmt.Errorf("write: %w", err)
+		return fmt.Errorf("write: %w", writeErr)
 	}
-	if err := tmp.Sync(); err != nil {
+	if syncErr := tmp.Sync(); syncErr != nil {
 		_ = tmp.Close()
 		cleanup()
-		return fmt.Errorf("fsync temp: %w", err)
+		return fmt.Errorf("fsync temp: %w", syncErr)
 	}
-	if err := tmp.Chmod(perm); err != nil {
+	if chmodErr := tmp.Chmod(perm); chmodErr != nil {
 		_ = tmp.Close()
 		cleanup()
-		return fmt.Errorf("chmod: %w", err)
+		return fmt.Errorf("chmod: %w", chmodErr)
 	}
-	if err := tmp.Close(); err != nil {
+	if closeErr := tmp.Close(); closeErr != nil {
 		cleanup()
-		return fmt.Errorf("close temp: %w", err)
+		return fmt.Errorf("close temp: %w", closeErr)
 	}
 
-	if err := os.Rename(tmpName, path); err != nil {
+	if renameErr := os.Rename(tmpName, path); renameErr != nil {
 		cleanup()
-		return fmt.Errorf("rename: %w", err)
+		return fmt.Errorf("rename: %w", renameErr)
 	}
 
 	// fsync parent directory for durability

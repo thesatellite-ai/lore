@@ -134,9 +134,9 @@ func runAuditVerify(ctx context.Context, db *sql.DB, rctx *projresolve.Context) 
 	}
 	res.Entries, res.ChainBrokenAt = n, broken
 	if syncApplies(rctx) {
-		changed, err := lsync.UnexportedChanges(ctx, db)
-		if err != nil {
-			return res, errcodes.New(errcodes.Internal, "compare rows with the synced state").WithCause(err)
+		changed, unexportedErr := lsync.UnexportedChanges(ctx, db)
+		if unexportedErr != nil {
+			return res, errcodes.New(errcodes.Internal, "compare rows with the synced state").WithCause(unexportedErr)
 		}
 		res.ChangedOutside = changed
 	}

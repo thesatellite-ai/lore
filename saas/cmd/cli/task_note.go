@@ -65,8 +65,8 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 	if err != nil {
 		return errcodes.New(errcodes.EmptyBody, err.Error())
 	}
-	if err := refuseSecretsCtx(ctx, body); err != nil {
-		return err
+	if refuseErr := refuseSecretsCtx(ctx, body); refuseErr != nil {
+		return refuseErr
 	}
 	w, t, err := openTaskCoord(ctx, id, from)
 	if err != nil {
@@ -245,8 +245,8 @@ func agentSharedNote(ctx context.Context, id, body, owner string) error {
 	if !ok {
 		return errRowsNotWired()
 	}
-	if _, err := rows.refresh(ctx); err != nil {
-		return coordError(err)
+	if _, refreshErr := rows.refresh(ctx); refreshErr != nil {
+		return coordError(refreshErr)
 	}
 	cid, doc, err := newCommentDoc(id, body, owner, w.Clock.Now())
 	if err != nil {

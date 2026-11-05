@@ -205,12 +205,12 @@ func (s *liveSession) restore(ctx context.Context) error {
 		return errcodes.New(errcodes.Internal, "read live ref").WithCause(err)
 	}
 	if snap.Local != c.OID {
-		if err := s.repo.UpdateRef(ctx, s.ref.Name, c.OID, snap.Local); err != nil {
-			return errcodes.New(errcodes.Internal, "move local live ref").WithCause(err)
+		if updateErr := s.repo.UpdateRef(ctx, s.ref.Name, c.OID, snap.Local); updateErr != nil {
+			return errcodes.New(errcodes.Internal, "move local live ref").WithCause(updateErr)
 		}
 	}
-	if err := s.ref.ClearSeen(); err != nil {
-		return errcodes.New(errcodes.Internal, "reset seen marker").WithCause(err)
+	if clearErr := s.ref.ClearSeen(); clearErr != nil {
+		return errcodes.New(errcodes.Internal, "reset seen marker").WithCause(clearErr)
 	}
 	out, err := s.ref.ForcePush(ctx, snap.Tracking)
 	if err != nil {

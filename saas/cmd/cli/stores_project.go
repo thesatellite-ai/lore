@@ -163,8 +163,8 @@ func findStoreFolderOpt(ctx context.Context, cfg *lorecfg.Config, org *lorecfg.O
 		if err != nil {
 			return storeProjectRef{}, storeCLIError(err, "open the store")
 		}
-		if _, err := st.Fetch(ctx, false); err != nil {
-			return storeProjectRef{}, storeCLIError(err, "fetch the store")
+		if _, fetchErr := st.Fetch(ctx, false); fetchErr != nil {
+			return storeProjectRef{}, storeCLIError(fetchErr, "fetch the store")
 		}
 		ok, err := st.FolderExists(ctx, sc.EffectiveBranch(), folder)
 		if err != nil {
@@ -208,8 +208,8 @@ func openStoreProject(ctx context.Context, cfg *lorecfg.Config, ref storeProject
 	if err != nil {
 		return nil, storeCLIError(err, "fetch the store")
 	}
-	if err := refuseNewFormatProject(ctx, st, ref, branch); err != nil {
-		return nil, err
+	if refuseErr := refuseNewFormatProject(ctx, st, ref, branch); refuseErr != nil {
+		return nil, refuseErr
 	}
 	files, stored, projectID, err := readStoreFolder(ctx, st, ref, branch)
 	if err != nil {
@@ -255,13 +255,13 @@ func openStoreProject(ctx context.Context, cfg *lorecfg.Config, ref storeProject
 		if _, err := st.Fetch(ctx, true); err != nil {
 			return storeCLIError(err, "fetch the store")
 		}
-		files, stored, _, err := readStoreFolder(ctx, st, ref, branch)
+		readStoreFiles, readStoreStored, _, err := readStoreFolder(ctx, st, ref, branch)
 		if err != nil {
 			return err
 		}
 		p.fetchCached = false
-		p.skeleton = skeletonPaths(files, stored)
-		return p.materialize(ctx, files, stored)
+		p.skeleton = skeletonPaths(readStoreFiles, readStoreStored)
+		return p.materialize(ctx, readStoreFiles, readStoreStored)
 	}
 	if err := p.materialize(ctx, files, stored); err != nil {
 		return nil, err
@@ -276,13 +276,13 @@ func openStoreProject(ctx context.Context, cfg *lorecfg.Config, ref storeProject
 // mirror gets, stored what the store holds now (the flush commits the
 // difference), projectID the folder's project.
 func readStoreFolder(ctx context.Context, st *stores.Store, ref storeProjectRef, branch string) (files, stored map[string][]byte, projectID string, err error) {
-	if _, ok, err := st.Tip(ctx, branch); err != nil {
-		return nil, nil, "", storeCLIError(err, "read the store")
+	if _, ok, tipErr := st.Tip(ctx, branch); tipErr != nil {
+		return nil, nil, "", storeCLIError(tipErr, "read the store")
 	} else if !ok {
 		return nil, nil, "", storeCLIError(fmt.Errorf("%w: %s has no branch %s; a store branch is made only by the store's own lore (0.1.18: `lore store init <name> <url>` makes a new store)", stores.ErrNoBranch, st.Norm, branch), "open")
 	}
-	if err := st.Check(ctx, branch); err != nil {
-		return nil, nil, "", storeCLIError(err, "check the store")
+	if checkErr := st.Check(ctx, branch); checkErr != nil {
+		return nil, nil, "", storeCLIError(checkErr, "check the store")
 	}
 	files, _, err = st.ReadProject(ctx, branch, ref.Folder)
 	if err != nil {
@@ -509,28 +509,28 @@ func (p *externalProject) materialize(ctx context.Context, files, base map[strin
 	}
 	for rel := range existing {
 		if _, keep := files[rel]; !keep {
-			if err := os.Remove(filepath.Join(data, filepath.FromSlash(rel))); err != nil {
-				return errcodes.New(errcodes.Internal, "refresh mirror").WithCause(err)
+			if removeErr := os.Remove(filepath.Join(data, filepath.FromSlash(rel))); removeErr != nil {
+				return errcodes.New(errcodes.Internal, "refresh mirror").WithCause(removeErr)
 			}
 		}
 	}
 	for rel, b := range files {
 		full := filepath.Join(data, filepath.FromSlash(rel))
-		if cur, err := os.ReadFile(filepath.Clean(full)); err == nil && bytes.Equal(cur, b) {
+		if cur, readFileErr := os.ReadFile(filepath.Clean(full)); readFileErr == nil && bytes.Equal(cur, b) {
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(full), externalDirMode); err != nil {
-			return errcodes.New(errcodes.Internal, "refresh mirror").WithCause(err)
+		if mkdirErr := os.MkdirAll(filepath.Dir(full), externalDirMode); mkdirErr != nil {
+			return errcodes.New(errcodes.Internal, "refresh mirror").WithCause(mkdirErr)
 		}
-		if err := os.WriteFile(full, b, externalFileMode); err != nil {
-			return errcodes.New(errcodes.Internal, "refresh mirror").WithCause(err)
+		if writeFileErr := os.WriteFile(full, b, externalFileMode); writeFileErr != nil {
+			return errcodes.New(errcodes.Internal, "refresh mirror").WithCause(writeFileErr)
 		}
 	}
 	p.base = base
 	p.DBPath = filepath.Join(p.Root, projresolve.MarkerDir, externalDBFile)
-	if _, err := os.Stat(p.DBPath); err != nil {
-		if err := createProjectDB(ctx, p.DBPath); err != nil {
-			return err
+	if _, statErr := os.Stat(p.DBPath); statErr != nil {
+		if createErr := createProjectDB(ctx, p.DBPath); createErr != nil {
+			return createErr
 		}
 	}
 	_, err = p.pass(ctx, false)

@@ -133,17 +133,17 @@ newest (later updated_at wins; the other version is kept under
 			}
 
 			src := args[0]
-			if _, err := os.Stat(src); err != nil {
+			if _, statErr := os.Stat(src); statErr != nil {
 				return errcodes.New(errcodes.NotFound,
-					fmt.Sprintf("backup file %q not found", src)).WithCause(err)
+					fmt.Sprintf("backup file %q not found", src)).WithCause(statErr)
 			}
 
 			// Move current DB aside (forensics)
 			dst := rctx.DBPath
 			brokenName := dst + ".broken." + cliClock().Now().UTC().Format(brokenDBStamp)
-			if _, err := os.Stat(dst); err == nil {
-				if err := os.Rename(dst, brokenName); err != nil {
-					return errcodes.New(errcodes.Internal, "preserve old DB").WithCause(err)
+			if _, statErr := os.Stat(dst); statErr == nil {
+				if renameErr := os.Rename(dst, brokenName); renameErr != nil {
+					return errcodes.New(errcodes.Internal, "preserve old DB").WithCause(renameErr)
 				}
 			}
 			// Also move sidecars
@@ -152,10 +152,10 @@ newest (later updated_at wins; the other version is kept under
 			}
 
 			// Copy src → dst
-			if err := copyFile(src, dst); err != nil {
+			if copyErr := copyFile(src, dst); copyErr != nil {
 				// Best-effort restore previous on error
 				_ = os.Rename(brokenName, dst)
-				return errcodes.New(errcodes.Internal, "copy backup").WithCause(err)
+				return errcodes.New(errcodes.Internal, "copy backup").WithCause(copyErr)
 			}
 
 			fmt.Printf("%s restored from %s\n", style.Success("✓"), src)
@@ -304,15 +304,15 @@ func repairTier2(ctx context.Context, rctx *projresolve.Context) (err error) {
 	}
 
 	brokenName := rctx.DBPath + ".broken." + cliClock().Now().UTC().Format(brokenDBStamp)
-	if _, err := os.Stat(rctx.DBPath); err == nil {
+	if _, statErr := os.Stat(rctx.DBPath); statErr == nil {
 		_ = os.Rename(rctx.DBPath, brokenName)
 	}
 	for _, suffix := range []string{"-wal", "-shm"} {
 		_ = os.Remove(rctx.DBPath + suffix)
 	}
-	if err := copyFile(newestPath, rctx.DBPath); err != nil {
+	if copyErr := copyFile(newestPath, rctx.DBPath); copyErr != nil {
 		_ = os.Rename(brokenName, rctx.DBPath)
-		return errcodes.New(errcodes.Internal, "restore from backup").WithCause(err)
+		return errcodes.New(errcodes.Internal, "restore from backup").WithCause(copyErr)
 	}
 
 	// Verify by opening + quick_check
@@ -334,7 +334,7 @@ func repairTier2(ctx context.Context, rctx *projresolve.Context) (err error) {
 
 func repairTier3(rctx *projresolve.Context) (err error) {
 	brokenName := rctx.DBPath + ".broken." + cliClock().Now().UTC().Format(brokenDBStamp)
-	if _, err := os.Stat(rctx.DBPath); err == nil {
+	if _, statErr := os.Stat(rctx.DBPath); statErr == nil {
 		_ = os.Rename(rctx.DBPath, brokenName)
 	}
 	for _, suffix := range []string{"-wal", "-shm"} {

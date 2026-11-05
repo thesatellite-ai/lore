@@ -172,17 +172,17 @@ func runSetup(ctx context.Context, dbPath string, o setupOptions) (err error) {
 	logVersion := 0
 	{
 		pre := dbent.InitDB(dbPath)
-		v, err := migrationlog.Begin(ctx, pre)
+		v, beginErr := migrationlog.Begin(ctx, pre)
 		_ = pre.Close() // read/insert done; close errors are not actionable
-		if err != nil {
-			return errcodes.New(errcodes.Internal, "record schema migration").WithCause(err)
+		if beginErr != nil {
+			return errcodes.New(errcodes.Internal, "record schema migration").WithCause(beginErr)
 		}
 		logVersion = v
 	}
 	{
 		db := dbent.InitDB(dbPath)
-		if err := dbent_migrate.Migrate(ctx, db); err != nil {
-			return errcodes.New(errcodes.Internal, "ent migrate").WithCause(err)
+		if migrateErr := dbent_migrate.Migrate(ctx, db); migrateErr != nil {
+			return errcodes.New(errcodes.Internal, "ent migrate").WithCause(migrateErr)
 		}
 		// Migrate already closed db via the ent driver; don't double-close
 	}
@@ -190,8 +190,8 @@ func runSetup(ctx context.Context, dbPath string, o setupOptions) (err error) {
 	// 2-4. FTS5 + fingerprint stamp on a fresh connection
 	db := dbent.InitDB(dbPath)
 	defer joinClose(&err, db, "the DB")
-	if err := dbent.ApplyPragmas(db); err != nil {
-		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(err)
+	if applyErr := dbent.ApplyPragmas(db); applyErr != nil {
+		return errcodes.New(errcodes.Internal, "apply pragmas").WithCause(applyErr)
 	}
 	if logVersion != 0 {
 		err = migrationlog.Complete(ctx, db, logVersion)

@@ -76,9 +76,9 @@ func newOrgUseCommand() *cobra.Command {
 				if len(args) > 0 {
 					return errcodes.New(errcodes.InvalidInput, "pass an entry or --clear, not both")
 				}
-				removed, err := lorecfg.RemoveRepoOrg(ctx, s.ConfigDir, s.ProjectID, lorecfg.Options{})
-				if err != nil {
-					return errcodes.New(errcodes.ConfigInvalid, "update ~/.lore/config.yaml").WithCause(err)
+				removed, removeErr := lorecfg.RemoveRepoOrg(ctx, s.ConfigDir, s.ProjectID, lorecfg.Options{})
+				if removeErr != nil {
+					return errcodes.New(errcodes.ConfigInvalid, "update ~/.lore/config.yaml").WithCause(removeErr)
 				}
 				if !removed {
 					fmt.Println("(no choice was recorded for this project)")
@@ -138,8 +138,8 @@ Commit the file with git afterwards.`,
 				return err
 			}
 			f := &lorecfg.OrgFile{Org: args[0], Project: project}
-			if err := f.Validate(); err != nil {
-				return errcodes.New(errcodes.InvalidInput, err.Error())
+			if validateErr := f.Validate(); validateErr != nil {
+				return errcodes.New(errcodes.InvalidInput, validateErr.Error())
 			}
 			// Dry-run F10 with the file in place: rule 3 must accept it,
 			// or teammates would get a file lore ignores.

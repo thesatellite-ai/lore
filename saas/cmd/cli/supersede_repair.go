@@ -291,8 +291,8 @@ func doctorSupersedes(ctx context.Context, f *doctorFlags, plain *ent.Client, r 
 		degrade(r)
 		return
 	}
-	if err := refuseIfReadOnly(&f.commonFlags); err != nil {
-		r.Errors = append(r.Errors, "supersede links: not repaired: "+err.Error())
+	if refuseErr := refuseIfReadOnly(&f.commonFlags); refuseErr != nil {
+		r.Errors = append(r.Errors, "supersede links: not repaired: "+refuseErr.Error())
 		degrade(r)
 		return
 	}

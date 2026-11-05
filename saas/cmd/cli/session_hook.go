@@ -60,13 +60,13 @@ func agentHook(ctx context.Context, tool, session, model string, hookStdin bool,
 		if !ok {
 			return fmt.Errorf("no confirmed session hook input for %s; pass --session and --model instead", tool)
 		}
-		raw, err := io.ReadAll(io.LimitReader(stdin, hookStdinMax))
-		if err != nil {
-			return fmt.Errorf("read the hook input: %w", err)
+		raw, readAllErr := io.ReadAll(io.LimitReader(stdin, hookStdinMax))
+		if readAllErr != nil {
+			return fmt.Errorf("read the hook input: %w", readAllErr)
 		}
-		in, err := h.Parse(raw)
-		if err != nil {
-			return fmt.Errorf("the %s hook input is not the expected JSON: %w", tool, err)
+		in, readAllErr := h.Parse(raw)
+		if readAllErr != nil {
+			return fmt.Errorf("the %s hook input is not the expected JSON: %w", tool, readAllErr)
 		}
 		if session == "" {
 			session = in.SessionID
