@@ -57,8 +57,11 @@ const envBenchOQ6 = "LORE_BENCH_OQ6"
 
 // bugTimeBench: on a store of 20 tasks × 5,000 time entries, import, time
 // show, lint and a plain task add each take from about a minute to over six
-// minutes (see benchLimits). Found by a-task-e2e (PASS3 queue #10).
-var bugTimeBench = th.Bug{ID: "BUG-TIME-BENCH", Owner: "main (row read/write path on big rows)", Open: true}
+// minutes (see benchLimits). Found by a-task-e2e (PASS3 queue #10). Closed
+// 2026-11-05 at 5c79f3d (row decode + read memo, list reads its own table,
+// parallel rowscan, per-write task_tree P3-PERF-1): import 7.4 s, time show
+// 1.4 s, --entries 1.7 s, lint 3.7 s, one task add 2.5 s, all within limits.
+var bugTimeBench = th.Bug{ID: "BUG-TIME-BENCH", Owner: "main (row read/write path on big rows)", Open: false}
 
 // benchEntryID is a tme_ id: prefix + 32 hex of a UUIDv7 (version 7,
 // variant 10) whose time part is at.
