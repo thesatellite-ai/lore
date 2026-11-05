@@ -8,7 +8,8 @@ import (
 // The v0.1.17 spellings the core's commands answer through the compat
 // mount (core_mount addCompatFlags; spec-deltas memparity): --read-only and
 // LORE_READ_ONLY=1 refuse writes and allow reads, --db is E_UNSUPPORTED
-// (the core never opens lore.db), --confirm is refused naming --yes,
+// (the core never opens lore.db), a delete's --confirm is accepted again
+// as a soft delete plus a hint at lore trash purge (FA-DEL-1, DQ8),
 // --allow-secrets is an unknown flag (O12a), and every refusal prints its
 // error once and writes nothing. Matrix: noun × spelling × read/write verb.
 func TestCompatFlags_CoreNouns(t *testing.T) {
@@ -41,7 +42,6 @@ func TestCompatFlags_CoreNouns(t *testing.T) {
 			{"add LORE_READ_ONLY=1", add, []string{"LORE_READ_ONLY=1"}, "E_READ_ONLY", "LORE_READ_ONLY"},
 			{"delete --read-only", []string{n.name, "delete", id, "--yes", "--read-only"}, nil, "E_READ_ONLY", "read-only"},
 			{"add --db", append(append([]string(nil), add...), "--db", "/nonexistent/lore.db"), nil, "E_UNSUPPORTED", "--db"},
-			{"delete --confirm", []string{n.name, "delete", id, "--confirm"}, nil, "E_INVALID_INPUT", "--yes"},
 			{"add --allow-secrets", append(append([]string(nil), add...), "--allow-secrets"), nil, "unknown flag", "--allow-secrets"},
 			{"list --read-only", []string{n.name, "list", "--read-only"}, nil, "", id},
 			{"show LORE_READ_ONLY=1", []string{n.name, "show", id}, []string{"LORE_READ_ONLY=1"}, "", id},
@@ -71,7 +71,19 @@ func TestCompatFlags_CoreNouns(t *testing.T) {
 				t.Fatalf("%s %s: a refused command changed the row files (%d -> %d)", n.name, tc.name, before, after)
 			}
 		}
-		// The refusals left the row in place: a real delete still works.
-		c.lore(n.name, "delete", id, "--yes")
+		// The refusals left the row in place. v0.1.17's delete --confirm is
+		// accepted (FA-DEL-1, DQ8): a soft delete (the row file stays, in the
+		// trash) with a hint at the permanent purge, never a silent purge.
+		before := ucCountFiles(t, c, n.table)
+		r := c.loreAny(n.name, "delete", id, "--confirm")
+		if r.code != 0 || !strings.Contains(r.stdout, "moved to the trash") || !strings.Contains(r.stdout, "lore trash purge <id> --confirm") {
+			t.Fatalf("%s delete --confirm: want a soft delete with the purge hint, got %d %s %s", n.name, r.code, r.stdout, r.stderr)
+		}
+		if after := ucCountFiles(t, c, n.table); after != before {
+			t.Fatalf("%s delete --confirm purged the row file (%d -> %d)", n.name, before, after)
+		}
+		if !strings.Contains(c.lore("trash", "list").stdout, id) {
+			t.Fatalf("%s delete --confirm: the row is not in the trash", n.name)
+		}
 	}
 }
