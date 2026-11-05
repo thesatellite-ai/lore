@@ -6,6 +6,7 @@
 package origin
 
 import (
+	"cmp"
 	"path"
 	"path/filepath"
 	"strings"
@@ -67,6 +68,52 @@ type Import struct {
 
 // IsZero reports an absent import block.
 func (i Import) IsZero() bool { return i == Import{} }
+
+// Key is PROVENANCE_DESIGN 11.4's import key: (src, ext_id), or
+// (source, ext_id) when no source record exists (a one-off CSV).
+func (i Import) Key() ImportKey { return ImportKey{Source: cmp.Or(i.Src, i.Source), ExtID: i.ExtID} }
+
+// ImportKey identifies one external item across re-imports (11.4, PROV9).
+type ImportKey struct {
+	Source string // the ext_ id when registered, else the importer kind
+	ExtID  string
+}
+
+// ImportOf reads the import slot of an `_o` block; ok is false when the
+// row was not imported (no block, no ext_id) or `_o` is unreadable. The one
+// reader of the slot, so importers (task, resource) and the
+// duplicate_import check agree on its keys (r3-batch).
+func ImportOf(o value.JSON) (Import, bool) {
+	if o.IsZero() {
+		return Import{}, false
+	}
+	ms, err := canon.Members(o.Raw())
+	if err != nil {
+		return Import{}, false
+	}
+	for _, m := range ms {
+		if m.Key != KeyImport {
+			continue
+		}
+		im, ierr := canon.Members(m.Raw)
+		if ierr != nil {
+			return Import{}, false
+		}
+		var out Import
+		for _, f := range im {
+			switch f.Key {
+			case importSource:
+				out.Source = textOf(f.Raw)
+			case importSrc:
+				out.Src = textOf(f.Raw)
+			case importExtID:
+				out.ExtID = textOf(f.Raw)
+			}
+		}
+		return out, out.ExtID != ""
+	}
+	return Import{}, false
+}
 
 // Facts are what one create knows about where it happened.
 type Facts struct {
