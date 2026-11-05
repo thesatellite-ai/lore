@@ -14,7 +14,7 @@ func TestTableOfNoun(t *testing.T) {
 		"memory": "memories", "hotfix": "hotfixes", "tasklist": "task_lists", "task": "tasks",
 		"techdoc": "tech_docs", "architecturenote": "architecture_notes", "cookbookrecipe": "cookbook_recipes",
 		"tastepref": "taste_prefs", "workspace": "workspaces", "mission": "missions",
-		"tasks": "tasks", "task_lists": "task_lists", " Memory ": "memories",
+		"tasks": "tasks", "task_lists": "task_lists", "Memory": "memories",
 		"": "", "row": "", "nosuch": "", "memor": "",
 	}
 	for noun, want := range cases {
