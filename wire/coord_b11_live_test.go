@@ -5,6 +5,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,11 @@ func TestWorkBranchHead_NeverRecordsMergedHEAD(t *testing.T) {
 	clone := filepath.Join(root, "clone")
 	gitIn(t, root, b11GitEnv, "clone", "-q", origin, clone)
 	commit := func(name string) string {
-		if err := os.WriteFile(filepath.Join(clone, name), []byte(name+"\n"), 0o600); err != nil {
+		root, err := os.OpenRoot(clone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := errors.Join(root.WriteFile(name, []byte(name+"\n"), 0o600), root.Close()); err != nil {
 			t.Fatal(err)
 		}
 		gitIn(t, clone, b11GitEnv, "add", name)

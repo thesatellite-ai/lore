@@ -102,6 +102,7 @@ func ChainRecordOf(ctx context.Context, ev engine.Event, session string) auditch
 	switch ev.Action {
 	case engine.ActionDelete, engine.ActionTrash, engine.ActionRestore, engine.ActionPurge:
 		kind = string(ev.Action)
+	default: // create, update and every secret.* event are a write; a secret event's own action is set below
 	}
 	reason := ev.Op
 	if !ev.Cascade.IsZero() {

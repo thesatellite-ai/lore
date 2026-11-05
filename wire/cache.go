@@ -152,11 +152,16 @@ func asideBase(path string) string {
 	if filepath.Base(dir) != repoMarkerDir {
 		return path
 	}
-	bk := filepath.Join(dir, repoBackupsDir)
-	if err := os.MkdirAll(bk, cacheDirMode); err != nil {
+	// The backups folder is made inside .lore through os.Root, so a
+	// swapped-in symlink at .lore/backups cannot place it elsewhere.
+	root, err := os.OpenRoot(dir)
+	if err != nil {
 		return path
 	}
-	return filepath.Join(bk, filepath.Base(path))
+	if err := errors.Join(root.MkdirAll(repoBackupsDir, cacheDirMode), root.Close()); err != nil {
+		return path
+	}
+	return filepath.Join(dir, repoBackupsDir, filepath.Base(path))
 }
 
 // fileExists reports whether p names anything on disk.
