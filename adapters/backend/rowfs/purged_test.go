@@ -20,7 +20,8 @@ import (
 // a project folder; it unions with ids already listed, keeps keys another
 // writer added, leaves a file that already lists every id byte for byte,
 // and Purged reads back exactly the union. A file that is not an object,
-// or whose ids is not a list, is an error (never an empty set).
+// whose ids is not a list, or whose _v is missing, not an integer, below 1
+// or newer than 1 (P3-LIVE-2), is an error (never an empty set).
 func TestPurgedFileMatrix(t *testing.T) {
 	ctx := context.Background()
 	a, b, c := newID(t), newID(t), newID(t)
@@ -97,7 +98,15 @@ func TestPurgedFileMatrix(t *testing.T) {
 			})
 		}
 	}
-	for name, bad := range map[string]string{"not an object": `["x"]`, "ids not a list": `{"ids":"x"}`, "not json": `{`} {
+	for name, bad := range map[string]string{
+		"not an object": `["x"]`, "ids not a list": `{"_v":1,"ids":"x"}`, "not json": `{`,
+		// P3-LIVE-2: the format version fails closed, as v0.1.17 did.
+		"no version":      `{"ids":["x"]}`,
+		"version is text": `{"_v":"1","ids":["x"]}`,
+		"version zero":    `{"_v":0,"ids":["x"]}`,
+		"version 1.5":     `{"_v":1.5,"ids":["x"]}`,
+		"newer version":   `{"_v":2,"ids":["x"]}`,
+	} {
 		t.Run("bad/"+name, func(t *testing.T) {
 			f := folder(t, openRoot(t), FolderRoot)
 			if err := os.MkdirAll(f.dataDir, 0o750); err != nil {

@@ -54,6 +54,9 @@ func (f *Folder) readPurged() (object, map[string]bool, error) {
 	if err != nil {
 		return nil, nil, errs.Wrap(errs.InvalidInput, "rowfs: "+rel+" is not a JSON object", err)
 	}
+	if err := purgedVersionOK(o, rel); err != nil {
+		return nil, nil, err
+	}
 	set := map[string]bool{}
 	raw, has := o[purgedKeyIDs]
 	if !has {
@@ -147,5 +150,29 @@ func (f *Folder) addPurged(a *Applied, add []ids.AnyID) error {
 	}
 	a.undo = append(a.undo, undoStep{full: full, prev: prev})
 	a.Paths = append(a.Paths, f.rel+"/"+PurgedFileName)
+	return nil
+}
+
+// purgedVersionOK checks a _purged.json's "_v" (P3-LIVE-2, as v0.1.17
+// lsync.PurgedIDs): present, an integer, at least 1 and not above
+// purgedFormatV1. A file without it, or from a newer lore, may hold ids in
+// a shape this lore cannot read, and reading it as fewer ids would bring
+// purged rows back, so it is an error, never an empty or partial set.
+func purgedVersionOK(o object, rel string) error {
+	raw, has := o[metaKeyVersion]
+	if !has {
+		return errs.New(errs.InvalidInput, "rowfs: "+rel+": missing \""+metaKeyVersion+"\"")
+	}
+	var v int
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return errs.Wrap(errs.InvalidInput, "rowfs: "+rel+": \""+metaKeyVersion+"\" is not an integer", err)
+	}
+	if v < 1 {
+		return errs.New(errs.InvalidInput, "rowfs: "+rel+": bad \""+metaKeyVersion+"\" "+strconv.Itoa(v))
+	}
+	if v > purgedFormatV1 {
+		return errs.New(errs.InvalidInput, "rowfs: "+rel+": \""+metaKeyVersion+"\" is "+strconv.Itoa(v)+", this lore understands "+strconv.Itoa(purgedFormatV1)).
+			WithHint("upgrade lore")
+	}
 	return nil
 }
