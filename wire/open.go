@@ -24,7 +24,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
-	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -714,7 +713,7 @@ func wrapBackend(ctx context.Context, opts Options, name store.Source, folder st
 }
 
 // cleanStoresFileURLs rewrites .lore/stores.yaml when a url in it holds a
-// credential (a password or a token-shaped user, repourl.Strip): the file
+// credential (a password or a token-shaped user, attach.NormalizeURL): the file
 // keeps everything else, the url loses the credential, and one line on
 // stderr says so, naming the store and never the removed text (DECISION
 // P2-CTX-6: SECRETS 14.2 row 16 cleans on read and writes back "on the
@@ -725,8 +724,15 @@ func cleanStoresFileURLs(top string, cfg attach.Config) error {
 	dirty := map[string]string{} // raw url → clean url
 	var names []string
 	for _, s := range cfg.Stores {
-		clean, removed, err := repourl.Strip(s.URL)
-		if err == nil && removed.Warn() {
+		// NormalizeURL is the add-time judge (password or token user, in
+		// https, ssh:// and scp form); CleanURL is the url without it. A
+		// scp url with a token user becomes ssh:// (the scp form has no
+		// way to drop its user); one Strip cannot read stays as written
+		// and Open refuses it.
+		if _, err := attach.NormalizeURL(s.URL); !errs.Has(err, errs.URLUserinfo) {
+			continue
+		}
+		if clean, err := attach.CleanURL(s.URL); err == nil {
 			dirty[s.URL] = clean
 			names = append(names, string(s.Name))
 		}
