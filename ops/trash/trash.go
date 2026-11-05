@@ -90,6 +90,8 @@ type ListIn struct {
 	Page   int    `json:"page,omitempty" flag:"page" desc:"page number, from 1 (with --limit)"`
 	// FromHistory lists purged and hard-deleted rows from git history (3.6).
 	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"list rows purged or hard-deleted, read from this place's git history"`
+	// Local lists this machine's safety copies instead (local.go, DQ1).
+	Local bool `json:"local,omitempty" flag:"local" desc:"this machine's safety copies (_lore_sync_trash), this machine only; replaces lore sync trash"`
 }
 
 // defaultPageRows is --limit when only --page is given (DELETION 4.5:
@@ -119,6 +121,9 @@ type TargetIn struct {
 	Plan       string `json:"plan,omitempty" flag:"plan" desc:"new plan id for the restored row"`
 	// FromHistory is refused: purged rows never come back (DQ4, 3.6).
 	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"refused: a purged row never comes back; read it with trash show --from-history"`
+	// Local takes Target as the number of this machine's safety copy
+	// (local.go, DQ1).
+	Local bool `json:"local,omitempty" flag:"local" desc:"restore this machine's safety copy <n> (lore trash list --local lists them); replaces lore sync trash restore"`
 }
 
 // PurgeIn is the input of trash.purge.
@@ -167,6 +172,10 @@ type ListOut struct {
 	From  int `json:"from,omitempty"`
 	// History marks a --from-history listing (purged rows, 3.6).
 	History bool `json:"from_history,omitempty"`
+	// Local marks a --local listing: Copies holds this machine's safety
+	// copies and Data stays empty (local.go).
+	Local  bool        `json:"local,omitempty"`
+	Copies []LocalCopy `json:"copies,omitempty"`
 }
 
 // ShowOut is the output of trash.show.
@@ -219,7 +228,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: append(slices.Clone(read), errs.NeedsConfirm, errs.Cancelled),
 			Confirm: op.ConfirmRule{When: showSensitiveField}}, o.show),
 		op.Define(op.Spec{Name: OpRestore, Summary: "Bring a row (with its dependents) or a whole batch back from the trash, same ids",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.SecretDetected),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.SecretDetected, errs.Unsupported), // Unsupported: --local without safety copies
 			// MayAsk: the restore re-scan may ask about a secret (P2-DEL-3,
 			// FB-SEC-1), so the answer flags (--secret-ref,
 			// --secret-unstored, --not-a-secret --reason) and --yes exist.
@@ -245,6 +254,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	by, err := o.actorOf(ctx, string(in.By))
 	if err != nil {
 		return ListOut{}, err
+	}
+	if in.Local {
+		return o.listLocal(ctx, in)
 	}
 	if in.Overruled {
 		return o.overruled(ctx, in)
@@ -360,6 +372,9 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
 	if in.FromHistory {
 		return ResultOut{}, purgedForever(in.Target)
+	}
+	if in.Local {
+		return o.restoreLocal(ctx, in)
 	}
 	homes, err := homesOf(in)
 	if err != nil {
@@ -731,6 +746,9 @@ func durationOf(s string) (time.Duration, error) {
 
 // Text implements op.Texter.
 func (o ListOut) Text() string {
+	if o.Local {
+		return o.localText()
+	}
 	if o.Overruled {
 		var b strings.Builder
 		for _, it := range o.Data {

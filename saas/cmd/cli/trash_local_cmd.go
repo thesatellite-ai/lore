@@ -55,6 +55,9 @@ func attachTrashLocal(root *cobra.Command) {
 		return
 	}
 	for _, sub := range g.Commands() {
+		if sub.Name() != trashVerbPurge && sub.Flags().Lookup(flagTrashLocal) != nil {
+			continue // P3-TRASHLOCAL-1: the op serves list/restore --local itself (ops/trash/local.go)
+		}
 		switch sub.Name() {
 		case trashVerbList:
 			wrapTrashLocal(sub, "this machine's safety copies (_lore_sync_trash), this machine only; replaces lore sync trash",
