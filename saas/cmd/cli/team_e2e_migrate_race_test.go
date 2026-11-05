@@ -16,9 +16,9 @@ package main
 //	                            actors, commit, push one, pull into the other: no conflict,
 //	                            the same tree
 //
-// Not built here (FORMAT_EVOLUTION 7.8 rows that need hooks the binary does
-// not have yet): RaceDuringSync, RaceLiveWritesAndClaims, LockHolderCrash,
-// RollbackAfterTeammatesPushed, CrashMidway, TestLockOrderRanks.
+// The rows that stop a run at a named point (crash, pause) are in
+// team_e2e_migrate_hooks_test.go; TestLockOrderRanks is in
+// team_e2e_lockrank_test.go.
 
 import (
 	"fmt"

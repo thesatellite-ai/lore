@@ -161,6 +161,9 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	if teamLine != "" {
 		out.Journal = append(out.Journal, teamLine)
 	}
+	if err := At(ctx, PointTeamLocked); err != nil {
+		return RunOut{}, err
+	}
 	j, journaled := rw.(Journal)
 	if journaled && !in.DryRun {
 		b, err := j.Begin(ctx, in.Offline)
@@ -169,6 +172,9 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 		out.BackupRef = b.BackupRef
 		out.Journal = append(out.Journal, b.Lines...)
+		if err := At(ctx, PointBegun); err != nil {
+			return RunOut{}, err
+		}
 	}
 	rewrite := rw.RewriteV1
 	if in.Offline && journaled {
@@ -181,11 +187,17 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 		out.Steps = append(out.Steps, settings.Steps...)
 		out.Count += settings.Rows
+		if err = At(ctx, PointSettings); err != nil {
+			return RunOut{}, err
+		}
 		live, err := rw.MigrateLive(ctx, in.DryRun)
 		if err != nil {
 			return RunOut{}, err
 		}
 		out.Rows = append(out.Rows, live...)
+		if err := At(ctx, PointLive); err != nil {
+			return RunOut{}, err
+		}
 	}
 	for _, t := range rw.MigratedTables() {
 		got, err := rewrite(ctx, t, in.DryRun)
@@ -195,8 +207,18 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		for _, id := range got {
 			out.Rows = append(out.Rows, t.String()+"/"+id.String())
 		}
+		if len(got) > 0 && !in.DryRun { // a table with nothing to rewrite is no boundary
+			if err := At(ctx, PointTable); err != nil {
+				return RunOut{}, err
+			}
+		}
 	}
 	out.Count += len(out.Rows)
+	if !in.DryRun {
+		if err := At(ctx, PointFinish); err != nil {
+			return RunOut{}, err
+		}
+	}
 	if journaled && !in.DryRun {
 		lines, err := j.Finish(ctx, !in.NoPush && !in.Offline, out.Count)
 		if err != nil {

@@ -49,7 +49,7 @@ func withMigrateTeamLock(root *cobra.Command) {
 		}
 		run := c.RunE
 		c.RunE = func(cmd *cobra.Command, args []string) error {
-			cmd.SetContext(opsmigrate.WithTeamLock(cmd.Context(), cliMigrateLock{}))
+			cmd.SetContext(migrateTestHooks(opsmigrate.WithTeamLock(cmd.Context(), cliMigrateLock{}))) // hooks: test builds only
 			return run(cmd, args)
 		}
 	}

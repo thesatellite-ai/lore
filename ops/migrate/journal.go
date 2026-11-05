@@ -147,6 +147,9 @@ func journalOps(rw Rewriter, j Journal) []op.Entry {
 				return RollbackOut{}, err
 			}
 			defer func() { _ = releaseTeam() }() // an unreleased hold expires (7.2)
+			if err := At(ctx, PointRollbackLocked); err != nil {
+				return RollbackOut{}, err
+			}
 			return j.Rollback(ctx)
 		}),
 		op.Define(op.Spec{

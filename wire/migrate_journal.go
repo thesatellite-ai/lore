@@ -396,15 +396,19 @@ func (a *App) Rollback(ctx context.Context) (opsmigrate.RollbackOut, error) {
 	if err != nil {
 		return opsmigrate.RollbackOut{}, err
 	}
-	out := opsmigrate.RollbackOut{BackupRef: j.BackupRef, Lines: []string{}, Kept: []string{}}
-	plans, lost, err := a.rollbackPlans(ctx, snaps, top, &j, &out)
-	if err != nil {
+	// Check, then check again right before the restore (7.6): an edit that
+	// lands between the two (a teammate's pull, a local write) makes the
+	// second check refuse, so the restore never runs on stale plans.
+	// PointRollbackChecked is the test build's pause between them.
+	if _, _, err = a.checkRollback(ctx, snaps, top, &j); err != nil {
 		return opsmigrate.RollbackOut{}, err
 	}
-	if len(lost) > 0 {
-		return opsmigrate.RollbackOut{}, errs.New(errs.MigrateRollbackLoses,
-			"migrate: rolling back would lose "+strconv.Itoa(len(lost))+" changes made after the migration: "+strings.Join(lost, ", ")+"; nothing changed").
-			WithHint("undo those edits, or keep the migration")
+	if err = opsmigrate.At(ctx, opsmigrate.PointRollbackChecked); err != nil {
+		return opsmigrate.RollbackOut{}, err
+	}
+	out, plans, err := a.checkRollback(ctx, snaps, top, &j)
+	if err != nil {
+		return opsmigrate.RollbackOut{}, err
 	}
 	reset := map[string]bool{}
 	for _, pl := range plans {
@@ -436,6 +440,22 @@ func (a *App) Rollback(ctx context.Context) (opsmigrate.RollbackOut, error) {
 	}
 	j.Phase = phaseRolledBack
 	return out, writeJournal(path, j)
+}
+
+// checkRollback plans the rollback of every place and refuses with
+// E_MIGRATE_ROLLBACK_LOSES when a migrated row changed since the migration.
+func (a *App) checkRollback(ctx context.Context, snaps git.Snapshots, top string, j *migrateJournal) (opsmigrate.RollbackOut, []rollbackPlan, error) {
+	out := opsmigrate.RollbackOut{BackupRef: j.BackupRef, Lines: []string{}, Kept: []string{}}
+	plans, lost, err := a.rollbackPlans(ctx, snaps, top, j, &out)
+	if err != nil {
+		return opsmigrate.RollbackOut{}, nil, err
+	}
+	if len(lost) > 0 {
+		return opsmigrate.RollbackOut{}, nil, errs.New(errs.MigrateRollbackLoses,
+			"migrate: rolling back would lose "+strconv.Itoa(len(lost))+" changes made after the migration: "+strings.Join(lost, ", ")+"; nothing changed").
+			WithHint("undo those edits, or keep the migration")
+	}
+	return out, plans, nil
 }
 
 // rollbackPlan is what Rollback does in one place.
