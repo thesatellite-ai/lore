@@ -64,6 +64,10 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	res := StandaloneOrgResolution(home, dir)
 	res.Interactive = stdinTTY
 	res.Apply(&o)
+	// cmd/lore's org and whoami hosts (P3-CMDLORE-4): built on the same
+	// resolution the write hooks use, so whoami shows what a write does.
+	o.OrgCommands = &standaloneOrg{home: home, res: res}
+	o.Whoami = &standaloneWhoami{opts: o, res: res}
 	return o, res
 }
 
