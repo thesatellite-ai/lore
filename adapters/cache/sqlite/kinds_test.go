@@ -145,3 +145,47 @@ func TestBrokenKindSkipped(t *testing.T) {
 		t.Fatal("broken kind got a table")
 	}
 }
+
+// TestQuarantineLeftOut: a resource whose value breaks its field's allowed
+// values or type stays in resources but is left out of res_<kind> and
+// search; widening the values brings it back (RES 3.15, R10).
+func TestQuarantineLeftOut(t *testing.T) {
+	f := newFixture(t)
+	c := f.open("c.db")
+	kind, provF, sizeF := must(ids.New[ids.Kind]()), must(ids.New[ids.KindField]()), must(ids.New[ids.KindField]())
+	good, odd, bent := must(ids.New[ids.Resource]()), must(ids.New[ids.Resource]()), must(ids.New[ids.Resource]())
+	prov := func(vals ...string) store.Row {
+		r := f.fieldRow(provF, kind, "provider", "text", ids.ID[ids.Kind]{})
+		d := must(r.Decode())
+		items := make([]value.Value, 0, len(vals))
+		for _, v := range vals {
+			items = append(items, text(t, v))
+		}
+		d.Fields["values"] = must(value.ListOf(value.KindText, items...))
+		return must(store.FromRow(d))
+	}
+	f.apply(c, store.SourceRepo, "q1",
+		f.kindRow(kind, "host"), prov("aws", "gcp"),
+		f.fieldRow(sizeF, kind, "size", "number", ids.ID[ids.Kind]{}),
+		f.resource(good, kind, "goodhost", map[ids.ID[ids.KindField]][2]string{provF: {"provider", `"aws"`}}),
+		f.resource(odd, kind, "oddhost", map[ids.ID[ids.KindField]][2]string{provF: {"provider", `"azure"`}}),
+		f.resource(bent, kind, "benthost", map[ids.ID[ids.KindField]][2]string{sizeF: {"size", `"big"`}}))
+	if n := count(t, c, `SELECT COUNT(*) FROM "res_host"`); n != 1 {
+		t.Fatalf("res_host has %d rows, want only the valid one", n)
+	}
+	if n := count(t, c, `SELECT COUNT(*) FROM "resources"`); n != 3 {
+		t.Fatalf("resources has %d rows, want all 3 (quarantined rows stay visible)", n)
+	}
+	for _, q := range []string{"oddhost", "benthost"} {
+		if hits, err := c.Search(t.Context(), schema.TableResources, q, 10); err != nil || len(hits) != 0 {
+			t.Fatalf("search %s: %v %v (quarantined rows are left out)", q, hits, err)
+		}
+	}
+	if hits, err := c.Search(t.Context(), schema.TableResources, "goodhost", 10); err != nil || len(hits) != 1 {
+		t.Fatalf("search goodhost: %v %v", hits, err)
+	}
+	f.apply(c, store.SourceRepo, "q2", prov("aws", "gcp", "azure"))
+	if n := count(t, c, `SELECT COUNT(*) FROM "res_host" WHERE id = ?`, odd.String()); n != 1 {
+		t.Fatal("widened values did not bring oddhost back into res_host")
+	}
+}

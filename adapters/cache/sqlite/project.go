@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/resquar"
+
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -27,6 +29,7 @@ const (
 	fieldResKind = "kind"    // resources.kind
 	fieldResVals = "fields"  // resources.fields: {fld_id: {name, v}}
 	resValueKey  = "v"       // the value inside one resources.fields entry
+	fieldValues  = "values"  // kind_fields.values: the allowed values
 )
 
 // project brings the typed tables in line with one applied row.
@@ -104,8 +107,12 @@ func (c *Cache) upsertKind(ctx context.Context, tx *sql.Tx, st state, kind ids.I
 			}
 		}
 	}
-	if err := c.upsertTyped(ctx, tx, st.plans[info.table], source, r, vals); err != nil {
-		return err
+	// RES 3.15: a quarantined resource is left out of res_<kind> (project
+	// already removed its old copy) and, through indexResource, search.
+	if !quarantined(r, info.quar) {
+		if err := c.upsertTyped(ctx, tx, st.plans[info.table], source, r, vals); err != nil {
+			return err
+		}
 	}
 	// Re-index now that the kind is known (see indexResource). During a
 	// table sync the kind table may be refilled before the resources FTS
@@ -441,12 +448,15 @@ func (c *Cache) expandField(ctx context.Context, tx *sql.Tx, table row.Table, id
 type resFTSInfo struct {
 	kindName  string
 	indexable map[string]bool
+	// quar holds each field's quarantine rule; a quarantined resource is
+	// left out of search (RES 3.15).
+	quar map[string]resquar.Field
 }
 
 // ftsInfoOf reads it from the kind's state (upsertKind: always current,
 // built from `_rows` before the batch is projected).
 func ftsInfoOf(info kindInfo) resFTSInfo {
-	out := resFTSInfo{kindName: strings.TrimPrefix(info.table.String(), schema.KindTablePrefix), indexable: map[string]bool{}}
+	out := resFTSInfo{kindName: strings.TrimPrefix(info.table.String(), schema.KindTablePrefix), indexable: map[string]bool{}, quar: info.quar}
 	for id, f := range info.fields {
 		out.indexable[id] = !f.Sensitive && f.Kind != value.KindSecretRef
 	}
@@ -456,7 +466,8 @@ func ftsInfoOf(info kindInfo) resFTSInfo {
 // The fixed statements of ftsInfoFromTables (constant identifiers only).
 const (
 	kindNameQuery      = `SELECT "` + fieldName + `" FROM "` + schema.TableKinds + `" WHERE id = ? ORDER BY "` + colSource + `" LIMIT 1`
-	kindFieldsFTSQuery = `SELECT id, "type", MAX(COALESCE("` + fieldSensitive + `", 0)) FROM "` + schema.TableKindFields + `" WHERE "` + fieldKindID + `" = ? GROUP BY id, "type"`
+	kindFieldsFTSQuery = `SELECT id, "type", MAX(COALESCE("` + fieldSensitive + `", 0)), MAX(COALESCE("` + fieldName + `", '')), MAX(COALESCE("` + fieldValues + `", '')) FROM "` +
+		schema.TableKindFields + `" WHERE "` + fieldKindID + `" = ? GROUP BY id, "type"`
 )
 
 // ftsInfoFromTables reads it from the kinds / kind_fields tables (the
@@ -466,7 +477,7 @@ const (
 // resources when the kind's table is filled. Any copy calling a field
 // sensitive hides it (the safe answer when two sources disagree).
 func ftsInfoFromTables(ctx context.Context, tx *sql.Tx, kind ids.ID[ids.Kind]) (resFTSInfo, error) {
-	out := resFTSInfo{indexable: map[string]bool{}}
+	out := resFTSInfo{indexable: map[string]bool{}, quar: map[string]resquar.Field{}}
 	var name sql.NullString
 	err := tx.QueryRowContext(ctx, kindNameQuery, kind.String()).Scan(&name)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -478,12 +489,13 @@ func ftsInfoFromTables(ctx context.Context, tx *sql.Tx, kind ids.ID[ids.Kind]) (
 		return out, dbErr("read kind fields", err)
 	}
 	for rs.Next() {
-		var id, typ string
+		var id, typ, fname, vals string
 		var sensitive int
-		if err := rs.Scan(&id, &typ, &sensitive); err != nil {
+		if err := rs.Scan(&id, &typ, &sensitive, &fname, &vals); err != nil {
 			return out, errors.Join(dbErr("read kind fields", err), rs.Close())
 		}
 		out.indexable[id] = sensitive == 0 && typ != string(value.KindSecretRef)
+		out.quar[id] = resquar.Field{Name: fname, Type: typ, Values: valuesCell(vals)}
 	}
 	if err := errors.Join(rs.Err(), rs.Close()); err != nil {
 		return out, dbErr("read kind fields", err)
@@ -496,6 +508,13 @@ func ftsInfoFromTables(ctx context.Context, tx *sql.Tx, kind ids.ID[ids.Kind]) (
 // value whose field is unknown is left out (fail closed: it might be
 // sensitive).
 func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row.Row, info resFTSInfo) error {
+	if quarantined(r, info.quar) {
+		// RES 3.15: left out of search until fixed.
+		if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, source, r.ID.String()); err != nil {
+			return dbErr("fts delete", err)
+		}
+		return nil
+	}
 	vals := map[string]value.Value{}
 	if v, ok := r.Fields[fieldName]; ok {
 		vals[fieldName] = v
@@ -550,4 +569,67 @@ func resourceValueText(r row.Row, indexable map[string]bool) (string, error) {
 		}
 	}
 	return strings.Join(parts, " "), nil
+}
+
+// quarantined reports whether any of r's stored values breaks its field's
+// rule (RES 3.15, logic/resquar). A field id the kind does not know is not
+// a reason (3.1: kept and reported by lint).
+func quarantined(r row.Row, quar map[string]resquar.Field) bool {
+	if len(quar) == 0 {
+		return false
+	}
+	raw, ok := value.ObjectForm(r.Fields[fieldResVals])
+	if !ok {
+		return false
+	}
+	members, err := canon.Members(raw.Raw())
+	if err != nil {
+		return false
+	}
+	for _, m := range members {
+		f, known := quar[m.Key]
+		if !known {
+			continue
+		}
+		entry, err := canon.Members(m.Raw)
+		if err != nil {
+			continue
+		}
+		for _, e := range entry {
+			if e.Key == resValueKey {
+				if _, bad := resquar.Check(f, e.Raw); bad {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// quarField is a kind_fields row's quarantine rule.
+func quarField(fr row.Row) resquar.Field {
+	f := resquar.Field{}
+	if v, ok := fr.Fields[fieldName]; ok && v != nil {
+		f.Name = v.String()
+	}
+	if v, ok := fr.Fields["type"]; ok && v != nil {
+		f.Type = v.String()
+	}
+	if v, ok := fr.Fields[fieldValues]; ok && v != nil && v.Kind() != value.KindNull {
+		f.Values = value.ItemStrings(v)
+	}
+	return f
+}
+
+// valuesCell reads a kind_fields.values cell (a JSON array as TEXT, "" when
+// unset) as its items.
+func valuesCell(cell string) []string {
+	if cell == "" {
+		return nil
+	}
+	var out []string
+	if json.Unmarshal([]byte(cell), &out) != nil {
+		return nil
+	}
+	return out
 }

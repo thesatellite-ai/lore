@@ -58,6 +58,10 @@
 // filled from the `resources` rows of that kind (values keyed by fld_ id,
 // so a field rename keeps its values), plus the stable view
 // `res_<knd id>` (spec 16.6) for scripts that must survive a kind rename.
+// A quarantined resource (a value breaking its field's type or allowed
+// values, logic/resquar; RES 3.15) stays in `resources` but is left out of
+// `res_<kind>` and of search; the allowed values are in the kind table's
+// fingerprint, so changing them refills it.
 //
 // # Full text
 //

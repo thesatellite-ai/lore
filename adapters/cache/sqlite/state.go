@@ -2,10 +2,16 @@ package sqlite
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
+	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/resquar"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -28,6 +34,9 @@ type kindInfo struct {
 	// fields maps a kind_fields row id (the key of a resource's `fields`
 	// object, stable across renames) to the field's definition.
 	fields map[string]schema.FieldDef
+	// quar is each field's quarantine rule (RES 3.15: type and allowed
+	// values; FieldDef has no values for kind fields).
+	quar map[string]resquar.Field
 }
 
 // names returns the plan names sorted, for deterministic statement order.
@@ -94,8 +103,7 @@ func (c *Cache) loadState(ctx context.Context, tx *sql.Tx) (state, error) {
 		if err != nil {
 			continue
 		}
-		st.plans[def.Name] = p
-		info := kindInfo{table: def.Name, fields: map[string]schema.FieldDef{}}
+		info := kindInfo{table: def.Name, fields: map[string]schema.FieldDef{}, quar: map[string]resquar.Field{}}
 		for _, fr := range byKind[k.ID.String()] {
 			name, ok := fr.Fields[fieldName]
 			if !ok {
@@ -103,8 +111,13 @@ func (c *Cache) loadState(ctx context.Context, tx *sql.Tx) (state, error) {
 			}
 			if f, ok := def.Field(name.String()); ok {
 				info.fields[fr.ID.String()] = f
+				info.quar[fr.ID.String()] = quarField(fr)
 			}
 		}
+		// 3.14/3.15: a change of allowed values changes no column but does
+		// change which rows are quarantined, so it refills the kind table.
+		p.fingerprint = quarFingerprint(p.fingerprint, info.quar)
+		st.plans[def.Name] = p
 		st.kinds[kindID] = info
 	}
 	return st, nil
@@ -344,4 +357,16 @@ func kindOf(r row.Row) ids.ID[ids.Kind] {
 		return ids.ID[ids.Kind]{}
 	}
 	return k
+}
+
+// quarFingerprint folds a kind's quarantine rules into its table's
+// fingerprint (fields sorted by id, so the same rules give the same value).
+func quarFingerprint(base string, quar map[string]resquar.Field) string {
+	h := sha256.New()
+	h.Write([]byte(base))
+	for _, id := range slices.Sorted(maps.Keys(quar)) {
+		f := quar[id]
+		h.Write([]byte("\x00" + id + "\x00" + f.Type + "\x00" + strings.Join(f.Values, "\x01")))
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
