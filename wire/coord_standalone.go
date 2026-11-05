@@ -70,10 +70,14 @@ const fromRepo = "repo"
 //     person) the plain comment row; any other failure to open the
 //     coordination world fails closed (closeWorld, B11).
 //
-// Refused, nothing written: --to / --from another place (the note's place
-// is decided by store links, FA-OLDCODE-1).
+// `--to repo` is the deliberate share (§7.6): one unfenced comment row in
+// this repo, written as any repo row (in a client repo the engine records
+// an agent as its owning person, D8/Q11).
+//
+// Refused, nothing written: --to any other place, --from another place
+// (the note's place is decided by store links, FA-OLDCODE-1).
 func (h standaloneCoord) TaskNote(ctx context.Context, in opscoord.NoteIn) (opscoord.Report, error) {
-	if in.ShareTo != "" || (in.From != "" && in.From != fromRepo) {
+	if (in.ShareTo != "" && in.ShareTo != fromRepo) || (in.From != "" && in.From != fromRepo) {
 		return opscoord.Report{}, coordUnsupported(opscoord.OpTaskNote)
 	}
 	body := strings.TrimSpace(in.Body())
@@ -90,6 +94,9 @@ func (h standaloneCoord) TaskNote(ctx context.Context, in opscoord.NoteIn) (opsc
 	src, _, err := h.a.Get(ctx, engine.Ref{Table: schema.TableTasks, ID: tid})
 	if err != nil {
 		return opscoord.Report{}, err
+	}
+	if in.ShareTo == fromRepo {
+		return h.sharedNote(ctx, tid, body)
 	}
 	if rep, done, cerr := h.clientTaskNote(ctx, src, tid, body); done || cerr != nil {
 		return rep, cerr
@@ -120,11 +127,12 @@ func (h standaloneCoord) TaskNote(ctx context.Context, in opscoord.NoteIn) (opsc
 }
 
 // clientTaskNote is the note on a client repo's own task (D8, §7.6): its
-// claim is on the linked store, and its notes are internal, so a note by
-// anyone but the holder is a comment row in the linked store folder,
-// never in the client repo. A holder's note on such a task needs the
-// internal-details path, not built here (E_UNSUPPORTED). done=false: not
-// a client repo's own task, the usual note applies.
+// claim is on the linked store, and its notes are internal, so the
+// holder's note is the fenced note staged through clientRows (the comment
+// in the linked store) and a note by anyone else is a comment row in the
+// linked store folder, never in the client repo. done=false: not a client
+// repo's own task, or an org that shares agent details (agent_details:
+// client), the usual note applies.
 func (h standaloneCoord) clientTaskNote(ctx context.Context, src store.Source, tid ids.AnyID, body string) (opscoord.Report, bool, error) {
 	if src != store.SourceRepo {
 		return opscoord.Report{}, false, nil
@@ -133,16 +141,20 @@ func (h standaloneCoord) clientTaskNote(ctx context.Context, src store.Source, t
 	if err != nil || w.sit.Role != orgresolve.RoleClient || len(w.sit.Links) == 0 {
 		return opscoord.Report{}, false, nil // closeWorld decides the other cases
 	}
-	if err = w.useStore(ctx); err != nil {
+	if !clientRowsFor(w).internal {
+		return opscoord.Report{}, false, nil
+	}
+	if err = w.forTask(ctx, tid.String()); err != nil {
 		return opscoord.Report{}, true, err
 	}
-	hs, err := w.heldOf(ctx, w.env(ctx), tid.String())
+	env := w.env(ctx)
+	hs, err := w.heldOf(ctx, env, tid.String())
 	if err != nil {
 		return opscoord.Report{}, true, err
 	}
 	if hs.mine || hs.hadClaim {
-		return opscoord.Report{}, true, errs.New(errs.Unsupported, "a holder's note on a client repo's own task stays internal on the store, which this binary does not do yet").
-			WithHint("run it with the release binary")
+		rep, nerr := w.heldNote(ctx, env, tid, body)
+		return rep, true, nerr
 	}
 	fields, err := noteFields(tid, body)
 	if err != nil {
@@ -153,6 +165,24 @@ func (h standaloneCoord) clientTaskNote(ctx context.Context, src store.Source, t
 		return opscoord.Report{}, true, err
 	}
 	return opscoord.Report{Lines: []string{"✓ note " + wr.Row.ID.String() + " on " + tid.String()}}, true, nil
+}
+
+// sharedNote is `task note --to repo`: a comment row in the repo store
+// (v0.1.17 sharedNote / agentSharedNote), whatever store holds the task.
+func (h standaloneCoord) sharedNote(ctx context.Context, tid ids.AnyID, body string) (opscoord.Report, error) {
+	fields, err := noteFields(tid, body)
+	if err != nil {
+		return opscoord.Report{}, err
+	}
+	wr, err := h.a.Create(ctx, store.SourceRepo, schema.TableComments, fields)
+	if err != nil {
+		return opscoord.Report{}, err
+	}
+	line := "✓ note " + wr.Row.ID.String() + " on " + tid.String()
+	if w, werr := h.openWorld(ctx); werr == nil && w.isAgent() && w.sit.Role == orgresolve.RoleClient && clientRowsFor(w).internal {
+		line += " (shared with the client repo)" // v0.1.17 agentSharedNote
+	}
+	return opscoord.Report{Lines: []string{line}}, nil
 }
 
 // commentTag types a note's comment id (cmt_…).

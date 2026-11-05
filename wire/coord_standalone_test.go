@@ -55,8 +55,8 @@ func noteLines(t *testing.T, a *App, input string) ([]string, error) {
 
 // TestStandaloneNote (P3-COORD-3): without host coordination a note is a
 // comment row on the task ("✓ note cmt_… on tsk_…"); an empty note, a
-// non-task id, a missing task and --to are refused with nothing written,
-// and every claim verb keeps ops/coord's E_UNSUPPORTED.
+// non-task id, a missing task and --to anything but repo are refused with
+// nothing written; --to repo is the one deliberate share (one more comment).
 func TestStandaloneNote(t *testing.T) {
 	a, _, id := standaloneTask(t)
 	lines, err := noteLines(t, a, `{"id":"`+id+`","text":["route","done"]}`)
@@ -73,7 +73,7 @@ func TestStandaloneNote(t *testing.T) {
 		{"empty", `{"id":"` + id + `","text":["  "]}`, errs.EmptyBody},
 		{"not a task id", `{"id":"mem_01a1ac2f60977e82abe757a9387b48bc","text":["x"]}`, errs.InvalidInput},
 		{"no such task", `{"id":"tsk_01a1ac2f60977e82abe757a9387b48bc","text":["x"]}`, errs.NotFound},
-		{"shared with --to", `{"id":"` + id + `","text":["x"],"share_to":"repo"}`, errs.Unsupported},
+		{"shared with --to another place", `{"id":"` + id + `","text":["x"],"share_to":"acme"}`, errs.Unsupported},
 		{"from another place", `{"id":"` + id + `","text":["x"],"from":"acme"}`, errs.Unsupported},
 	}
 	for _, c := range refusals {
@@ -83,6 +83,12 @@ func TestStandaloneNote(t *testing.T) {
 	}
 	if n := countRows(t, a, schema.TableComments); n != 1 {
 		t.Fatalf("a refused note wrote a row: %d comments", n)
+	}
+	if lines, err = noteLines(t, a, `{"id":"`+id+`","text":["shared"],"share_to":"repo"}`); err != nil || len(lines) != 1 || !strings.HasPrefix(lines[0], "✓ note cmt_") {
+		t.Fatalf("--to repo = %q, %v", lines, err)
+	}
+	if n := countRows(t, a, schema.TableComments); n != 2 {
+		t.Fatalf("--to repo writes one comment: %d comments", n)
 	}
 	// Claims are taken here now (P3-SIGCOORD-2); a repo without a remote
 	// cannot confirm one, so the write fails closed and nothing is queued.

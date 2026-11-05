@@ -339,7 +339,7 @@ func (a *App) patchDoc(ctx context.Context, id string, patch coord.Doc) error {
 	for k, v := range patch {
 		d[k] = v
 	}
-	return a.writeDoc(ctx, schema.TableTasks, id, d)
+	return a.writeDoc(ctx, schema.TableTasks, id, d, "")
 }
 
 // stepNames are the identity steps as v0.1.17's approve line named them.

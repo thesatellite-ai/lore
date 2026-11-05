@@ -81,6 +81,9 @@ type coordWorld struct {
 	// spot is where claims go: this repo's own signals ref, or the linked
 	// store's (useStore, D8).
 	spot sigSpot
+	// client: the task is a client repo's own task coordinated on the
+	// linked store (forTask); its rows are clientRows.
+	client bool
 }
 
 // sigSpot is one signals ref: the git repo holding it, its remote, the
@@ -230,7 +233,7 @@ func (w *coordWorld) linked() bool {
 //   - a repo without store links: its own signals ref;
 //   - a linked repo's own row (in the repo store): an own repo keeps it
 //     on its own ref (§7.6); a client repo's own task keeps its claim on
-//     the store with the agent details internal, not built here;
+//     the store, its rows split by clientRows (agent details internal);
 //   - any other id, or "" (task next): the linked store's signals ref.
 func (w *coordWorld) forTask(ctx context.Context, id string) error {
 	if !w.linked() {
@@ -241,11 +244,14 @@ func (w *coordWorld) forTask(ctx context.Context, id string) error {
 			return err
 		} else if ok && src == store.SourceRepo {
 			if w.sit.Role == orgresolve.RoleClient && len(w.sit.Links) > 0 {
-				// A client repo with no store link (client by repos:
-				// pattern only) has no store to keep the claim on: its
-				// own signals ref, as v0.1.17 (p3-cmdlore NOTE).
-				return errs.New(errs.Unsupported, "a client repo's own task keeps its claim on the store with agent details internal, which this binary does not do yet").
-					WithHint("run it with the release binary")
+				// The claim on the linked store, the rows split by
+				// clientRows (D8). A client repo with no store link (client
+				// by repos: pattern only) has no store to keep the claim
+				// on: its own signals ref, as v0.1.17 (p3-cmdlore NOTE).
+				if err = w.useStore(ctx); err != nil {
+					return err
+				}
+				w.client = true
 			}
 			return nil
 		}
@@ -453,7 +459,11 @@ func signatureEmail(stableKey string) string {
 
 // env is the coord.Env of this repo.
 func (w *coordWorld) env(ctx context.Context) coord.Env {
-	e := coord.Env{Signals: w.signalsStore(), Folder: w.folder, Rows: engineRows{a: w.a}, Caller: w.caller(), Agents: w.agents, Held: w.held()}
+	var rows coord.Rows = engineRows{a: w.a}
+	if w.client {
+		rows = clientRowsFor(w)
+	}
+	e := coord.Env{Signals: w.signalsStore(), Folder: w.folder, Rows: rows, Caller: w.caller(), Agents: w.agents, Held: w.held()}
 	if set, err := w.a.Policy(ctx, store.SourceRepo); err == nil {
 		// OV15B-URG, OV7-6: the repo's urgency weights and claim-span keys;
 		// a policy that cannot be read leaves the built-in defaults.
@@ -631,6 +641,10 @@ func (a *App) locateRow(ctx context.Context, table row.Table, id string) (store.
 type engineCompanion struct {
 	a    *App
 	rows []coord.RowWrite
+	// targets: the store a new row of this id is created in (clientRows:
+	// the linked row and an internal note go to the org store); absent =
+	// newRowTarget.
+	targets map[string]store.Source
 }
 
 var _ signals.RemoteCompanion = (*engineCompanion)(nil)
@@ -649,7 +663,7 @@ func (c *engineCompanion) Prepare(ctx context.Context) (gitremote.RefUpdate, err
 // create with the row's id when the engine has none yet (a note).
 func (c *engineCompanion) PushSelf(ctx context.Context) error {
 	for _, w := range c.rows {
-		if err := c.a.writeDoc(ctx, rowTable(w), w.ID, w.Doc); err != nil {
+		if err := c.a.writeDoc(ctx, rowTable(w), w.ID, w.Doc, c.targets[w.ID]); err != nil {
 			return err
 		}
 	}
@@ -704,8 +718,8 @@ func docOfRow(r row.Row) (coord.Doc, error) {
 // writeDoc writes doc as the next version of table/id: every field of the
 // table the document names or the current row has (a field the document
 // leaves out is cleared: a whole staged row); a new row is created in the
-// repo store under its id.
-func (a *App) writeDoc(ctx context.Context, table row.Table, id string, doc coord.Doc) error {
+// repo store under its id, or in target when set.
+func (a *App) writeDoc(ctx context.Context, table row.Table, id string, doc coord.Doc, target store.Source) error {
 	def, ok := a.TableSchema(ctx, table)
 	if !ok {
 		return errs.New(errs.Internal, "coordination rows: unknown table "+string(table))
@@ -753,7 +767,10 @@ func (a *App) writeDoc(ctx context.Context, table row.Table, id string, doc coor
 				delete(patch, docKeyAuthor)
 			}
 		}
-		_, err = a.CreateWithID(ctx, a.newRowTarget(ctx, doc), table, aid, patch)
+		if target == "" {
+			target = a.newRowTarget(ctx, doc)
+		}
+		_, err = a.CreateWithID(ctx, target, table, aid, patch)
 		return err
 	}
 	if len(patch) == 0 {
