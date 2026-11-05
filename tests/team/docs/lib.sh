@@ -69,10 +69,13 @@ CFG
 }
 
 # envfor NAME: the environment one person's commands run with (no LORE_*/GIT_* leaks from the caller).
+# LORE_HUMAN=1: the person is a human at a terminal, so a run started from a coding-agent session
+# does not attribute every write to "<person> via <tool>" (agent detection walks the parent processes);
+# an agent example sets LORE_ACTOR, which wins over it.
 envfor() {
   local home="$HOMES/$1"
   echo env -i "HOME=$home" "PATH=$SHIM:/usr/local/bin:/usr/bin:/bin" "USER=$1" "TERM=dumb" "NO_COLOR=1" \
-    "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8"
+    "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8" "LORE_HUMAN=1"
 }
 
 # TRANSCRIPT is the file `on` appends to; examples set it per page section.
