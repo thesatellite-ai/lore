@@ -42,20 +42,34 @@ func (a *agency) storeHas(t *testing.T, folder, text string) bool {
 	return false
 }
 
-// projectID reads the checkout's project id from .lore/data/_meta.json.
-func projectID(t *testing.T, c *th.Clone) string {
+// checkoutMeta is the part of .lore/data/_meta.json these tests read.
+type checkoutMeta struct {
+	RepoID string `json:"repo_id"`
+}
+
+// readCheckoutMeta reads the checkout's .lore/data/_meta.json.
+func readCheckoutMeta(t *testing.T, c *th.Clone) checkoutMeta {
 	t.Helper()
 	body, ok := c.ReadFile(dataDir + "/" + metaFile)
 	if !ok {
 		t.Fatal("no _meta.json")
 	}
-	var m struct {
-		ProjectID string `json:"project_id"`
+	var m checkoutMeta
+	if err := json.Unmarshal([]byte(body), &m); err != nil {
+		t.Fatalf("_meta.json: %v %s", err, body)
 	}
-	if err := json.Unmarshal([]byte(body), &m); err != nil || m.ProjectID == "" {
-		t.Fatalf("project id: %v %s", err, body)
+	return m
+}
+
+// repoID reads the checkout's repo id (rep_) from .lore/data/_meta.json:
+// private render files live under ~/.lore/render/<repo_id>/ (CFG6).
+func repoID(t *testing.T, c *th.Clone) string {
+	t.Helper()
+	m := readCheckoutMeta(t, c)
+	if m.RepoID == "" {
+		t.Fatal("_meta.json names no repo_id")
 	}
-	return m.ProjectID
+	return m.RepoID
 }
 
 // ---------------------------------------------------------------- F12 store checks
@@ -621,8 +635,13 @@ func TestF20_RenderKeepsInternalContextOutsideTheCheckout(t *testing.T) {
 	memID := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", internalNote), "mem")
 	a.aliceApp.MustLore("memory", "add", "--body", "I forget the staging VPN", "--to", "me")
 	a.aliceApp.MustLore("rule", "add", "--body", "money is stored in minor units", "--to", "repo")
+	// P2-CTX-1 (FQ13): the private import file is the target profile's
+	// private_file, written only for the repo's context.targets; claude_code's
+	// is CLAUDE.local.md (a codex-only repo gets none and reads internal
+	// context through lore context + hooks). Q-R2-3: the policy row names them.
+	a.aliceApp.MustLore("policy", "set", "context.targets", "claude_code", "--to", "repo", "--yes")
 	a.aliceApp.MustLore("render")
-	pid := projectID(t, a.aliceApp)
+	pid := repoID(t, a.aliceApp)
 
 	// CONFIG_GUIDE CFG6 / STORE_SERVER_SPEC 7.3 (privrender 307e9f4): one
 	// private render file per internal store, ~/.lore/render/<repo_id>/<store_id>.md,
@@ -677,6 +696,10 @@ func TestF20_RenderKeepsInternalContextOutsideTheCheckout(t *testing.T) {
 func TestF20_RenderRefusesASymlinkOrTrackedClaudeLocal(t *testing.T) {
 	a := newAgency(t)
 	a.aliceApp.MustLore("memory", "add", "--body", internalNote)
+	// P2-CTX-1 (FQ13): CLAUDE.local.md is claude_code's private_file and is
+	// written only when the repo's context.targets name claude_code (Q-R2-3:
+	// the policy row); v0.1.17 wrote it on every render.
+	a.aliceApp.MustLore("policy", "set", "context.targets", "claude_code", "--to", "repo", "--yes")
 	target := filepath.Join(a.aliceApp.Dir, "docs", "leak.md")
 	a.aliceApp.WriteFile("docs/leak.md", "public\n")
 	if err := os.Symlink(target, filepath.Join(a.aliceApp.Dir, "CLAUDE.local.md")); err != nil {

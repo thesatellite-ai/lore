@@ -41,7 +41,11 @@ func TestStoreLiveSessionLandsOnTheStoreBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.wrote = 1
-	s.finishStore(ctx, "acme")
+	// Every production caller (coord_store.go, stores_project.go) ends a
+	// store session with withStoreWrite: the F16 leak check guards client
+	// repos and is skipped for the org's own store. Without the mark the
+	// check ran against the test's cwd and refused the landing.
+	s.finishStore(withStoreWrite(ctx), "acme")
 	got := gitT(t, origin, "show", "staging:acme/.lore/data/rules/rul_1.json")
 	if !strings.Contains(got, "never deploy on Friday") || strings.Contains(got, "_live") {
 		t.Fatalf("the rule lands on the store branch without its block: %s", got)
