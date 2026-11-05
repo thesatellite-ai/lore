@@ -27,24 +27,26 @@ var _ store.Freshness = (*Backend)(nil)
 // stampFetch records a successful fetch run in dir (best effort: a stamp
 // that cannot be written only makes Fresh report "unknown").
 func (b *Backend) stampFetch(ctx context.Context, dir string) {
-	p, err := b.stampPath(ctx, dir)
+	root, err := b.stampRoot(ctx, dir)
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(p, []byte(b.cfg.now().UTC().Format(time.RFC3339)+"\n"), 0o600) // best effort, see doc
+	defer func() { _ = root.Close() }()
+	_ = root.WriteFile(fetchStampFile, []byte(b.cfg.now().UTC().Format(time.RFC3339)+"\n"), 0o600) // best effort, see doc
 }
 
-// stampPath is the stamp file of the clone dir belongs to.
-func (b *Backend) stampPath(ctx context.Context, dir string) (string, error) {
+// stampRoot opens the git common directory of the clone dir belongs to;
+// the stamp is read and written only inside it (os.Root).
+func (b *Backend) stampRoot(ctx context.Context, dir string) (*os.Root, error) {
 	out, err := b.git.run(ctx, call{dir: dir, args: []string{"rev-parse", "--git-common-dir"}})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	common := trimmed(out)
 	if !filepath.IsAbs(common) {
 		common = filepath.Join(dir, common)
 	}
-	return filepath.Join(common, fetchStampFile), nil
+	return os.OpenRoot(common)
 }
 
 // Fresh implements store.Freshness. A repo-mode backend (the repo store,
@@ -53,11 +55,12 @@ func (b *Backend) Fresh(ctx context.Context) (store.Fresh, error) {
 	if b.mode != modeClone {
 		return store.Fresh{}, nil
 	}
-	p, err := b.stampPath(ctx, b.work)
+	root, err := b.stampRoot(ctx, b.work)
 	if err != nil {
 		return store.Fresh{}, errs.Wrap(errs.Internal, "git: find the fetch stamp", err)
 	}
-	raw, err := os.ReadFile(p)
+	defer func() { _ = root.Close() }()
+	raw, err := root.ReadFile(fetchStampFile)
 	if err != nil {
 		return store.Fresh{}, nil // never fetched here
 	}
