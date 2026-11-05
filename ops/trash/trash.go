@@ -14,6 +14,9 @@
 //	    └► Env.PurgeTrash / Env.PurgeOlder ─► tombstones kept forever (DQ4)
 //	    └► --archived-before: ArchivedPurger.PurgeArchived (DEL-ARCH, 3.12):
 //	       archived rows of the row files ─► tombstones (not lore.db)
+//	lore trash purge --local --purged [--dry-run | --confirm]
+//	    └► this machine's safety copies of ids in .lore/data/_purged.json
+//	       ─► LocalCopyDropper (local_purged.go, DELETION 3.10)
 //
 // Nothing here purges in the background (DQ3): retention acts only through
 // `purge --expired --confirm`.
@@ -136,6 +139,10 @@ type PurgeIn struct {
 	ArchivedBefore string `json:"archived_before,omitempty" flag:"archived-before" desc:"purge archived rows archived before a date (2006-01-02) or an age (90d)"`
 	DryRun         bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be purged; write nothing"`
 	Confirm        bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: purge removes content for good (DQ2)"`
+	// Local and Purged together drop this machine's safety copies of rows
+	// the repo's _purged.json lists (local_purged.go, DELETION 3.10).
+	Local  bool `json:"local,omitempty" flag:"local" desc:"with --purged: this machine's safety copies (_lore_sync_trash) only"`
+	Purged bool `json:"purged,omitempty" flag:"purged" desc:"with --local: drop this machine's safety copies of rows purged elsewhere (listed in .lore/data/_purged.json)"`
 }
 
 // Item is one row in the trash as listed.
@@ -213,6 +220,10 @@ type ResultOut struct {
 	Rows   []Item `json:"rows"`
 	Count  int    `json:"count"`
 	DryRun bool   `json:"dry_run,omitempty"`
+	// Local marks `purge --local --purged`: Copies are this machine's
+	// safety copies it dropped (or would drop); Rows stays empty.
+	Local  bool        `json:"local,omitempty"`
+	Copies []LocalCopy `json:"copies,omitempty"`
 }
 
 // Ops returns the trash operations bound to env, for op.NewRegistry.
@@ -393,6 +404,9 @@ func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
 // purge is trash.purge (DELETION 3.5, 2.6): by target, --older-than or
 // --expired; DQ2: only the literal --confirm purges (a dry run needs none).
 func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
+	if in.Local || in.Purged {
+		return o.purgeLocalPurged(ctx, in)
+	}
 	target := strings.TrimSpace(in.Target)
 	modes := 0
 	before := strings.TrimSpace(in.ArchivedBefore)
@@ -854,6 +868,9 @@ func (o ListOut) historyText() string {
 
 // Text implements op.Texter.
 func (o ResultOut) Text() string {
+	if o.Local {
+		return o.localPurgedText()
+	}
 	var b strings.Builder
 	b.WriteString(o.Action + " " + strconv.Itoa(o.Count) + " rows")
 	if o.Batch != "" {

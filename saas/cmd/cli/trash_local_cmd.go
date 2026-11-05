@@ -55,8 +55,8 @@ func attachTrashLocal(root *cobra.Command) {
 		return
 	}
 	for _, sub := range g.Commands() {
-		if sub.Name() != trashVerbPurge && sub.Flags().Lookup(flagTrashLocal) != nil {
-			continue // P3-TRASHLOCAL-1: the op serves list/restore --local itself (ops/trash/local.go)
+		if sub.Flags().Lookup(flagTrashLocal) != nil {
+			continue // P3-TRASHLOCAL-1: the op serves list/restore --local and purge --local --purged itself (ops/trash/local.go, local_purged.go)
 		}
 		switch sub.Name() {
 		case trashVerbList:

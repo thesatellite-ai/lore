@@ -9,7 +9,8 @@ import (
 // 9): a warning when rows are past trash.retention_days (it names the one
 // command that purges them; nothing purges in the background, DQ3) and a
 // note with the trash and tombstone counts (tombstones are kept forever,
-// DQ4). It reads only.
+// DQ4), and a warning when this machine still holds safety copies of rows
+// the repo lists as purged (DELETION 3.10). It reads only.
 func Doctor(ctx context.Context, env Env) (warnings, notes []string, err error) {
 	st, err := env.TrashStats(ctx)
 	if err != nil {
@@ -17,6 +18,10 @@ func Doctor(ctx context.Context, env Env) (warnings, notes []string, err error) 
 	}
 	if st.Expired > 0 {
 		warnings = append(warnings, "trash: "+strconv.Itoa(st.Expired)+" rows past trash.retention_days; purge with lore trash purge --expired --confirm")
+	}
+	// DELETION 3.10: copies of rows purged elsewhere still hold the content.
+	if w := localPurgedWarning(ctx, env); w != "" {
+		warnings = append(warnings, w)
 	}
 	tombs := 0
 	for _, n := range st.Tombstones {
