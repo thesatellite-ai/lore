@@ -77,7 +77,10 @@ func TestF01_TombstoneStopsLookup(t *testing.T) {
 	rt.c2.Git("checkout", "-q", "-b", "feat/old")
 
 	rt.c1.MustLore("task", "edit", id, "--title", "doomed (live)", "--live")
-	rt.c1.MustLore("task", "delete", id, "--confirm")
+	// Ported to DQ8 / FA-DEL-1: a plain `delete --confirm` is a soft delete
+	// (the row goes to the trash with its body), so the body-less tombstone
+	// this case checks is what `--purge --confirm` writes.
+	rt.c1.MustLore("task", "delete", id, "--purge", "--confirm")
 	tomb := mustRow(t, rt.app, refLive, liveRowPath(rootFolder, tblTasks, id))
 	if tomb.Live == nil || !tomb.Live.Deleted || tomb.Title != "" || tomb.Body != "" {
 		t.Fatalf("a deleted live row is a tombstone without its body (§3.3): %+v", tomb)
@@ -260,10 +263,13 @@ func TestF02_OldBinaryBelowVersionFloorIsReadOnly(t *testing.T) {
 }
 
 // F2 + side effect 32: a delete writes a tombstone, never removes the file.
+// Ported to DELETION SYSTEM (owner, meta-decisions): delete is soft by
+// default (the row goes to the trash with its content, deleted_at set), and
+// only --purge leaves a tombstone, so the tombstone is checked after a purge.
 func TestF02_DeleteWritesATombstone(t *testing.T) {
 	rt := newRepoTeam(t)
 	id := rt.addTask(t, rt.c1, "to delete")
-	rt.c1.MustLore("task", "delete", id, "--confirm")
+	rt.c1.MustLore("task", "delete", id, "--purge", "--confirm")
 	tomb := mustRow(t, rt.app, refLive, liveRowPath(rootFolder, tblTasks, id))
 	if tomb.Live == nil || !tomb.Live.Deleted {
 		t.Fatalf("tombstone expected: %+v", tomb)
