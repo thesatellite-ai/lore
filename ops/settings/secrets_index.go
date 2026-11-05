@@ -48,6 +48,9 @@ type SecretUse struct {
 	Alt int `json:"alt,omitempty"`
 	// State is present | missing | not_checked after a check; "" otherwise.
 	State string `json:"state,omitempty"`
+	// CheckedAt is the date of the stored check State came from (a plain
+	// list, FA-AGENT-3); "" for a fresh check or none.
+	CheckedAt string `json:"checked_at,omitempty"`
 	// Kind says where the reference sits: text, resource, var.
 	Kind string `json:"kind"`
 }

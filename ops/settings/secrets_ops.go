@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/thesatellite-ai/lore/adapters/secretmgr"
@@ -221,6 +222,8 @@ func usesText(us []SecretUse, tail string) string {
 		state := u.State
 		if state == "" {
 			state = "-"
+		} else if u.CheckedAt != "" {
+			state += " (checked " + u.CheckedAt + ")"
 		}
 		rows[u.Row] = true
 		fmt.Fprintf(&b, "%s\t%s\t%s\t%s\n", u.Ref, holder, used, state)
@@ -252,8 +255,18 @@ func (o ops) secretsList(ctx context.Context, in SecretsListIn) (SecretsOut, err
 			return SecretsOut{}, err
 		}
 		us = slices.DeleteFunc(us, func(u SecretUse) bool { return u.State != stateMissing })
+		return SecretsOut{Count: len(us), Data: us, Human: usesText(us, "")}, nil
 	}
-	return SecretsOut{Count: len(us), Data: us, Human: usesText(us, "")}, nil
+	// FA-AGENT-3: a plain list shows this machine's last check, opening no vault.
+	tail := ""
+	last, err := o.loadChecks(ctx, us)
+	if err != nil {
+		return SecretsOut{}, err
+	}
+	if !last.IsZero() {
+		tail = " State from the last lore secrets check on this machine, " + last.UTC().Format(time.DateOnly) + "."
+	}
+	return SecretsOut{Count: len(us), Data: us, Human: usesText(us, tail)}, nil
 }
 
 // verify checks each distinct manager target once: Reveal, drop the
@@ -280,6 +293,10 @@ func (o ops) verify(ctx context.Context, us []SecretUse) ([]SecretUse, error) {
 			}
 		}
 		us[i].State = st
+	}
+	// FA-AGENT-3: remember this machine's result for the plain listing.
+	if err := o.saveChecks(ctx, us, time.Now()); err != nil {
+		return nil, err
 	}
 	return us, nil
 }
