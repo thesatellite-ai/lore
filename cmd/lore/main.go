@@ -67,6 +67,9 @@ func run(ctx context.Context, args []string) int {
 	}
 	wd, home := dirs()
 	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
+	if commandName(args) == initCmdName {
+		initScope(&base) // init.go: init opens no org store (TestE8, TestE10)
+	}
 	// `lore sync` refreshes the org stores' link index now (F11): every
 	// other command reads it within live.fetch_ttl.
 	if commandName(args) == syncCommand {
