@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -111,6 +114,44 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	for _, h := range hits {
 		all = append(all, h.findings...)
 	}
+	// SECRETS 4: a choice given up front (--not-a-secret --reason,
+	// --secret-ref, --secret-unstored) applies in every on_detect mode.
+	if ch := cl.caller.Secret; ch.Any() {
+		if err := checkChoice(ch, len(all)); err != nil {
+			return screened{}, err
+		}
+		if ch.NotASecret {
+			if err := e.confirm(ctx, cl, describe(all)+": keep it as not a secret ("+ch.Reason+")?"); err != nil {
+				return screened{}, err
+			}
+			out.accepted = all // allowRows records ch.Reason (D12, SQ2)
+			return out, e.refuseClientSecretRefs(target, rowID, out.fields)
+		}
+		n := 0
+		red := maps.Clone(fields)
+		for _, h := range hits {
+			repl := make([]string, len(h.findings))
+			for i := range h.findings {
+				repl[i] = refs.Unstored
+				if len(ch.Refs) == 1 {
+					repl[i] = secretRefText(ch.Refs[0])
+				} else if len(ch.Refs) > 0 {
+					repl[i] = secretRefText(ch.Refs[n])
+				}
+				n++
+			}
+			v, err := redactValueWith(red[h.field], h.item, h.findings, repl)
+			if err != nil {
+				return screened{}, err
+			}
+			red[h.field] = v
+		}
+		out.fields = red
+		if ch.Unstored {
+			out.redacted = all // the D21 task follows (RedactHook)
+		}
+		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
+	}
 	switch pol.OnDetect() {
 	case policy.OnDetectAsk:
 		if err := e.confirm(ctx, cl, describe(all)+": store it anyway as not a secret?"); err != nil {
@@ -152,9 +193,9 @@ type RefreshingScanner interface {
 }
 
 // allowReasonPrefix starts the reason of a secret_allows row a confirmed
-// write records. The confirm carries no typed reason (op.Caller has none),
-// so the reason is this fixed text plus the actor and the command, which
-// is enough for lore doctor and the commit hook to say who accepted it.
+// write records: this fixed text plus the actor and the command, which is
+// enough for lore doctor and the commit hook to say who accepted it; a
+// --not-a-secret --reason answer puts the typed reason first.
 const allowReasonPrefix = "confirmed not a secret by "
 
 // allowRows turns the findings a caller accepted as not secrets (on_detect
@@ -170,6 +211,9 @@ func (e *Engine) allowRows(cl call, accepted []scan.Finding, rowID ids.AnyID, ac
 	reasonText := allowReasonPrefix + actor.String()
 	if cl.op != "" {
 		reasonText += " (" + strings.ReplaceAll(cl.op, ".", " ") + ")"
+	}
+	if r := strings.TrimSpace(cl.caller.Secret.Reason); cl.caller.Secret.NotASecret && r != "" {
+		reasonText = r + " (" + reasonText + ")" // D12/SQ2: the typed reason first
 	}
 	reason, err := value.TextOf(reasonText)
 	if err != nil {
@@ -237,16 +281,26 @@ func (e *Engine) scanText(field, text string) ([]scan.Finding, *Warning) {
 // unstored-secret reference. A json field cannot be redacted safely in
 // place (a match may straddle its syntax), so it is refused instead.
 func redactValue(v value.Value, item int, fs []scan.Finding) (value.Value, error) {
+	repl := make([]string, len(fs))
+	for i := range repl {
+		repl[i] = refs.Unstored
+	}
+	return redactValueWith(v, item, fs, repl)
+}
+
+// redactValueWith is redactValue with one replacement per finding (repl[i]
+// replaces fs[i]): ${secret:unstored} or a --secret-ref reference.
+func redactValueWith(v value.Value, item int, fs []scan.Finding, repl []string) (value.Value, error) {
 	switch x := v.(type) {
 	case value.Text:
-		return value.TextOf(redactText(x.String(), fs))
+		return value.TextOf(redactText(x.String(), fs, repl))
 	case value.List:
 		items := x.Items()
 		t, ok := items[item].(value.Text)
 		if !ok {
 			return nil, secretErr(fs)
 		}
-		nt, err := value.TextOf(redactText(t.String(), fs))
+		nt, err := value.TextOf(redactText(t.String(), fs, repl))
 		if err != nil {
 			return nil, err
 		}
@@ -258,19 +312,58 @@ func redactValue(v value.Value, item int, fs []scan.Finding) (value.Value, error
 
 // redactText replaces each finding's span, last first so earlier offsets
 // stay valid; an overlapping span is covered by the one already replaced.
-func redactText(s string, fs []scan.Finding) string {
-	sorted := slices.Clone(fs)
-	slices.SortFunc(sorted, func(a, b scan.Finding) int { return b.Offset - a.Offset })
+func redactText(s string, fs []scan.Finding, repl []string) string {
+	order := make([]int, len(fs))
+	for i := range order {
+		order[i] = i
+	}
+	slices.SortFunc(order, func(a, b int) int { return fs[b].Offset - fs[a].Offset })
 	end := len(s) + 1
-	for _, f := range sorted {
+	for _, i := range order {
+		f := fs[i]
 		lo, hi := f.Offset, f.Offset+f.Length
 		if lo < 0 || hi > len(s) || hi > end {
 			continue
 		}
-		s = s[:lo] + refs.Unstored + s[hi:]
+		s = s[:lo] + repl[i] + s[hi:]
 		end = lo
 	}
 	return s
+}
+
+// secretRefText is the reference a --secret-ref value becomes.
+func secretRefText(uri string) string { return "${" + string(refs.SchemeSecret) + ":" + uri + "}" }
+
+// checkChoice validates an up-front secret choice against n findings
+// (SECRETS 4): one kind only, a typed reason for --not-a-secret (D12),
+// one --secret-ref for all or one per finding, each a valid
+// <manager>://<locator> reference.
+func checkChoice(ch op.SecretChoice, n int) error {
+	kinds := 0
+	for _, on := range []bool{ch.NotASecret, ch.Unstored, len(ch.Refs) > 0} {
+		if on {
+			kinds++
+		}
+	}
+	if kinds > 1 {
+		return errs.New(errs.InvalidInput, "engine: use only one of --not-a-secret, --secret-ref and --secret-unstored")
+	}
+	if ch.NotASecret && strings.TrimSpace(ch.Reason) == "" {
+		return errs.New(errs.InvalidInput, "engine: --not-a-secret needs a typed reason").WithHint(`add --reason "<why it is not a secret>"`)
+	}
+	if len(ch.Refs) > 1 && len(ch.Refs) != n {
+		return errs.New(errs.InvalidInput, fmt.Sprintf("engine: %d findings but %d --secret-ref values", n, len(ch.Refs))).
+			WithHint("give one --secret-ref for every finding, or one per finding in finding order")
+	}
+	for _, r := range ch.Refs {
+		if !strings.Contains(r, "://") || r == refs.TargetUnstored || r == refs.TargetRedacted {
+			return errs.New(errs.InvalidInput, "engine: --secret-ref needs <manager>://<locator>")
+		}
+		if err := refs.Validate(secretRefText(r)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // describe names findings for a message: field, rule, line, masked preview.

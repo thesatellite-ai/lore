@@ -266,6 +266,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 	if asksFirst {
 		c.Flags().BoolVar(yes, FlagYes, false, "answer yes to the confirmation without a terminal")
 	}
+	sf := secretFlags(c, s, values)
 	// A cobra flag parse error (unknown flag, unknown shorthand flag,
 	// missing value) is a usage error: exit 1 (CLI_REFERENCE 1.5).
 	c.SetFlagErrorFunc(usageError)
@@ -276,7 +277,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 				flags[name] = rf.vals
 			}
 		}
-		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags}, *yes)
+		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags}, *yes, sf.choice(cmd))
 		out := cmd.OutOrStdout()
 		if err != nil {
 			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON), cause: err}
@@ -300,7 +301,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 // Why here: the Runner decides THAT an operation asks; only the surface can
 // talk to a person. A non-interactive caller gets the error back unchanged
 // (the agent asks its human and re-runs with --yes).
-func run(cmd *cobra.Command, e op.Entry, runner op.Runner, cfg config, d op.Decoder, yes bool) (op.Result, error) {
+func run(cmd *cobra.Command, e op.Entry, runner op.Runner, cfg config, d op.Decoder, yes bool, secret op.SecretChoice) (op.Result, error) {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -311,6 +312,7 @@ func run(cmd *cobra.Command, e op.Entry, runner op.Runner, cfg config, d op.Deco
 	}
 	caller.Interactive = cfg.interactive()
 	caller.Yes = yes
+	caller.Secret = secret
 	res, err := runner.Run(ctx, e, d, caller)
 	if !errs.Has(err, errs.NeedsConfirm) || !caller.Interactive || caller.Yes {
 		return res, err

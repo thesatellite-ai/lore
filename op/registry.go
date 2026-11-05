@@ -118,7 +118,32 @@ type Caller struct {
 	Interactive bool
 	// Yes: the caller already confirmed (--yes, "yes": true).
 	Yes bool
+	// Secret is the caller's answer to a secret finding given up front
+	// (SECRETS 4 flags: --not-a-secret --reason, --secret-ref,
+	// --secret-unstored); the zero value answers nothing.
+	Secret SecretChoice
 }
+
+// SecretChoice is how a write treats the scanner's findings, valid in
+// every secrets.on_detect mode (SECRETS 4). At most one of NotASecret,
+// Refs and Unstored is set; the engine refuses a mix (E_INVALID_INPUT).
+type SecretChoice struct {
+	// NotASecret keeps the text and writes one allow entry per finding
+	// with Reason (required; D12). Needs a terminal or Yes.
+	NotASecret bool
+	// Reason is the person's typed reason for NotASecret (SQ2).
+	Reason string
+	// Refs redact the findings with these vault references
+	// (<manager>://<locator>): one for every finding, or one per finding
+	// in finding order.
+	Refs []string
+	// Unstored redacts every finding as ${secret:unstored} and adds the
+	// store-then-rotate task (D21).
+	Unstored bool
+}
+
+// Any reports whether the caller answered anything.
+func (c SecretChoice) Any() bool { return c.NotASecret || c.Unstored || len(c.Refs) > 0 }
 
 // Runner is the one Run path every surface calls (spec 9.2): decode,
 // resolve the store, check permission, scan text, check policy, confirm,
