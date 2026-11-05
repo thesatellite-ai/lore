@@ -820,15 +820,6 @@ func liveCollectorFrom(ctx context.Context) *liveCollector {
 	c, _ := ctx.Value(liveCollectorKey{}).(*liveCollector)
 	return c
 }
-		case !ch.Expect.IsZero():
-			// r2-regress: a row that landed on origin/<default> and left
-			// live is read through landedOnDefault (Get); a fenced
-			// coordination write of it (the merged_at stamp) is forced
-			// live above, so its expected copy is that landed one, not
-			// "none" (it was E_STALE on every lazy merged check).
-			if landed, ok := b.landedOnDefault(ctx, s, k); ok {
-				cur = landed
-			}
 
 var _ store.AuditJournal = (*liveBackend)(nil)
 
