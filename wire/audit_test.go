@@ -32,7 +32,8 @@ func (s *sinkLog) Record(_ context.Context, ev engine.Event) error {
 }
 
 // TestAuditSinkInjected: with Options.Audit set every core write (create,
-// update, delete) reaches the sink in order, with store, table, id and
+// update, delete — a soft delete, recorded as trash per OV9/DQ8) reaches
+// the sink in order, with store, table, id and
 // actor, and AuditFile is never written.
 func TestAuditSinkInjected(t *testing.T) {
 	repo := gitRepo(t)
@@ -51,8 +52,10 @@ func TestAuditSinkInjected(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(actions(mine), ",") != "create,update,delete" {
-		t.Fatalf("sink got %v for %s, want create,update,delete", mine, id)
+	// OV9 (DQ8 delete = soft delete): the delete sets the trash fields, so
+	// its event is ActionTrash, not ActionDelete (a tombstone is purge's).
+	if strings.Join(actions(mine), ",") != "create,update,trash" {
+		t.Fatalf("sink got %v for %s, want create,update,trash", mine, id)
 	}
 	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(AuditFile))); !os.IsNotExist(err) {
 		t.Fatalf("AuditFile written although a sink is set: %v", err)
@@ -88,7 +91,8 @@ func TestAuditFileFallback(t *testing.T) {
 			got = append(got, l.Action)
 		}
 	}
-	if strings.Join(got, ",") != "create,update,delete" {
+	// OV9 (DQ8 delete = soft delete): the delete line says trash.
+	if strings.Join(got, ",") != "create,update,trash" {
 		t.Fatalf("file lines for %s = %v", id, got)
 	}
 }

@@ -102,9 +102,11 @@ func TestV017LocalPersonalStore(t *testing.T) {
 	if got := string(mustRead(t, filepath.Join(home, ConfigFile))); got != cfg {
 		t.Fatalf("a dry run changed config.yaml: %q", got)
 	}
-	// everywhere/ holds the project row and two memories: the dry run
-	// counts them and the run reports the same count (it moved them)
-	const movedRows = 3
+	// everywhere/ holds the project row, two memories and this machine's
+	// profile row (OV28 MACH-AUTO: refreshed into an own store after every
+	// successful write, here the memory add --to me): the dry run counts
+	// them and the run reports the same count (it moved them)
+	const movedRows = 4
 	if dry := migrateOut(t, out); dry.Count != movedRows {
 		t.Fatalf("dry run count %d, want %d: %s", dry.Count, movedRows, out)
 	}

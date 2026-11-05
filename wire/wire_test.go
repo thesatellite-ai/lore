@@ -138,8 +138,10 @@ func TestMemoryEndToEnd(t *testing.T) {
 	if _, err = run(t, a, opsmemory.OpDelete, `{"id":"`+id+`"}`, true); err != nil {
 		t.Fatal(err)
 	}
-	if f = rowFile(t, memPath(repo, id)); string(f["_deleted"]) != "true" {
-		t.Fatalf("no tombstone: %v", f)
+	// OV9 (DQ8 delete = soft delete): the row file stays a live row with
+	// deleted_at/deleted_by set (DEL-R2); a tombstone is written only by purge.
+	if f = rowFile(t, memPath(repo, id)); len(f["deleted_at"]) == 0 || len(f["deleted_by"]) == 0 || string(f["_deleted"]) == "true" {
+		t.Fatalf("not trashed (want deleted_at/deleted_by, no tombstone): %v", f)
 	}
 	b := newTestApp(t, repo)
 	if out, err = run(t, b, opsmemory.OpList, `{}`, false); err != nil || strings.Contains(out, id) {

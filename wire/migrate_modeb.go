@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -241,7 +242,12 @@ func modeBChanges(exp ModeBExport) ([]store.Change, error) {
 	})
 	changes := make([]store.Change, 0, len(order))
 	for _, k := range order {
-		up, err := store.FromRow(*rows[k])
+		// audit_fields (FORMAT_EVOLUTION step 9) on the export itself, as
+		// the v1 rewrite does (rewriteStore): a v0.1.17 row has no *_by
+		// actors, and a row written without them made the next run rewrite
+		// it (a second or resumed run must change nothing).
+		filled, _ := auditfill.Defaults(*rows[k])
+		up, err := store.FromRow(filled)
 		if err != nil {
 			return nil, err
 		}

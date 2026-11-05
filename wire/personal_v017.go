@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -291,6 +292,12 @@ func flattenFolder(ctx context.Context, dir, f string, root store.Backend, oo st
 			if r.Origin, err = withOldFolder(r.Origin, f); err != nil {
 				return moved, err
 			}
+			// audit_fields (FORMAT_EVOLUTION step 9) on the move itself: the
+			// audit_fields step skips the me attachments under a flatten, so a
+			// v0.1.17 row without *_by actors would otherwise land at the root
+			// unfilled and the next run would rewrite it (a second run must
+			// change nothing).
+			r, _ = auditfill.Defaults(r)
 			up, ferr := store.FromRow(r)
 			if ferr != nil {
 				return moved, ferr
