@@ -9,9 +9,11 @@
 //	    └► Env.Trashed ─► the one row (body kept; sensitive masked unless asked)
 //	lore trash restore <id|bat_> [--parent|--tasklist|--mission|--plan <id>, --no-parent|--no-tasklist]
 //	    └► engine.WithRestoreHome (4.2) ─► Env.Restore (same ids, E_PARENT_*)
-//	lore trash purge <id|bat_> | --older-than <d> | --expired  --confirm
+//	lore trash purge <id|bat_> | --older-than <d> | --expired | --archived-before <date|age>  --confirm
 //	    └► no --confirm: E_NEEDS_CONFIRM naming --confirm (DQ2, never --yes)
 //	    └► Env.PurgeTrash / Env.PurgeOlder ─► tombstones kept forever (DQ4)
+//	    └► --archived-before: ArchivedPurger.PurgeArchived (DEL-ARCH, 3.12):
+//	       archived rows of the row files ─► tombstones (not lore.db)
 //
 // Nothing here purges in the background (DQ3): retention acts only through
 // `purge --expired --confirm`.
@@ -111,8 +113,11 @@ type PurgeIn struct {
 	Target    string `json:"target,omitempty" arg:"0" desc:"a row id or a batch id (bat_…); or use --older-than / --expired"`
 	OlderThan string `json:"older_than,omitempty" flag:"older-than" desc:"purge rows deleted longer ago than this (180d, 720h)"`
 	Expired   bool   `json:"expired,omitempty" flag:"expired" desc:"purge rows past trash.retention_days"`
-	DryRun    bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be purged; write nothing"`
-	Confirm   bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: purge removes content for good (DQ2)"`
+	// ArchivedBefore purges archived rows (archived_at before a date or
+	// an age), the v0.1.17 `lore sync purge --archived-before` (DEL-ARCH).
+	ArchivedBefore string `json:"archived_before,omitempty" flag:"archived-before" desc:"purge archived rows archived before a date (2006-01-02) or an age (90d)"`
+	DryRun         bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be purged; write nothing"`
+	Confirm        bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: purge removes content for good (DQ2)"`
 }
 
 // Item is one row in the trash as listed.
@@ -193,7 +198,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: OpRestore, Summary: "Bring a row (with its dependents) or a whole batch back from the trash, same ids",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: write}, o.restore),
 		op.Define(op.Spec{Name: OpPurge, Summary: "Remove rows from the trash for good (a tombstone stays forever); needs --confirm",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm)}, o.purge),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported)}, o.purge),
 		op.Define(op.Spec{Name: OpStats, Summary: "Count the trash per type, store and deleter, rows past retention, and tombstones",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: read,
 			Examples: []op.Example{{Title: "trash counts as JSON", CLI: "lore trash stats --json", Want: `"tombstones"`}}}, o.stats),
@@ -297,13 +302,17 @@ func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
 func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 	target := strings.TrimSpace(in.Target)
 	modes := 0
-	for _, set := range []bool{target != "", in.OlderThan != "", in.Expired} {
+	before := strings.TrimSpace(in.ArchivedBefore)
+	for _, set := range []bool{target != "", in.OlderThan != "", in.Expired, before != ""} {
 		if set {
 			modes++
 		}
 	}
 	if modes != 1 {
-		return ResultOut{}, errs.New(errs.InvalidInput, "trash purge: give exactly one of <id|batch>, --older-than or --expired")
+		return ResultOut{}, errs.New(errs.InvalidInput, "trash purge: give exactly one of <id|batch>, --older-than, --expired or --archived-before")
+	}
+	if before != "" {
+		return o.purgeArchived(ctx, before, in.DryRun, in.Confirm)
 	}
 	if target != "" {
 		if in.DryRun {
@@ -340,6 +349,43 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		return ResultOut{}, err
 	}
 	if in.DryRun {
+		return resultOf("would purge", res, true), nil
+	}
+	return resultOf("purged", res, false), nil
+}
+
+// ArchivedPurger is the optional Env upgrade `purge --archived-before`
+// uses (wire.App has it): purge, or with dryRun list, every row of the
+// attached stores archived before cutoff (DELETION 3.12, DEL-ARCH).
+type ArchivedPurger interface {
+	PurgeArchived(ctx context.Context, cutoff time.Time, dryRun bool) (engine.TrashResult, error)
+}
+
+// purgeArchived is `trash purge --archived-before <date|age>` (DEL-ARCH):
+//
+//	cutoff ─► dry run: list ─► else no --confirm: E_NEEDS_CONFIRM (DQ2)
+//	       ─► ArchivedPurger.PurgeArchived ─► tombstones in the row files
+//
+// It replaces the v0.1.17 lore.db purge (lsync); rows in the trash that
+// were archived are purged too.
+func (o ops) purgeArchived(ctx context.Context, before string, dry, confirm bool) (ResultOut, error) {
+	cutoff, err := sinceOf(before, time.Now())
+	if err != nil {
+		return ResultOut{}, err
+	}
+	p, ok := upgrade.As[ArchivedPurger](o.env)
+	if !ok {
+		return ResultOut{}, errs.New(errs.Unsupported, "trash purge: --archived-before is not available here")
+	}
+	if !dry && !confirm {
+		return ResultOut{}, needsConfirm("purge removes every row archived before "+before+" for good; only tombstones stay",
+			"trash", "purge", "--archived-before", before, "--confirm")
+	}
+	res, err := p.PurgeArchived(ctx, cutoff, dry)
+	if err != nil {
+		return ResultOut{}, err
+	}
+	if dry {
 		return resultOf("would purge", res, true), nil
 	}
 	return resultOf("purged", res, false), nil
