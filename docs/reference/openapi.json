@@ -638,10 +638,20 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the row id",
+            "description": "the actor id",
             "schema": {
               "type": "string",
-              "description": "the row id"
+              "description": "the actor id"
+            }
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "show this store's copy of the actor (default: the first attached store that has it, the repo first)",
+            "schema": {
+              "type": "string",
+              "description": "show this store's copy of the actor (default: the first attached store that has it, the repo first)"
             }
           }
         ],
@@ -81222,9 +81232,17 @@
                     "type": "boolean",
                     "description": "purge rows past trash.retention_days"
                   },
+                  "local": {
+                    "type": "boolean",
+                    "description": "with --purged: this machine's safety copies (_lore_sync_trash) only"
+                  },
                   "older_than": {
                     "type": "string",
                     "description": "purge rows deleted longer ago than this (180d, 720h)"
+                  },
+                  "purged": {
+                    "type": "boolean",
+                    "description": "with --local: drop this machine's safety copies of rows purged elsewhere (listed in .lore/data/_purged.json)"
                   },
                   "target": {
                     "type": "string",
@@ -81250,10 +81268,43 @@
                     "batch": {
                       "type": "string"
                     },
+                    "copies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "row_id": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "row_id",
+                          "reason",
+                          "at"
+                        ]
+                      }
+                    },
                     "count": {
                       "type": "integer"
                     },
                     "dry_run": {
+                      "type": "boolean"
+                    },
+                    "local": {
                       "type": "boolean"
                     },
                     "rows": {
@@ -81456,10 +81507,43 @@
                     "batch": {
                       "type": "string"
                     },
+                    "copies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "row_id": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "row_id",
+                          "reason",
+                          "at"
+                        ]
+                      }
+                    },
                     "count": {
                       "type": "integer"
                     },
                     "dry_run": {
+                      "type": "boolean"
+                    },
+                    "local": {
                       "type": "boolean"
                     },
                     "rows": {
