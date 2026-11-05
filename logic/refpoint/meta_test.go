@@ -49,7 +49,7 @@ func TestMetaOf(t *testing.T) {
 		"büro":        `"köln"`,
 		"api.hint":    `"tk-not-printed"`,
 	}, "api.hint")
-	get := MetaOf(r)
+	get := MetaOfWith(r, nil)
 	cases := []struct {
 		key       string
 		ok        bool
@@ -81,7 +81,7 @@ func TestMetaOf(t *testing.T) {
 			t.Errorf("MetaOf(%q) = %+v %v; want %q sensitive=%v ok=%v", c.key, v, ok, c.text, c.sensitive, c.ok)
 		}
 	}
-	if _, ok := MetaOf(row.Row{})("owner"); ok {
+	if _, ok := MetaOfWith(row.Row{}, nil)("owner"); ok {
 		t.Error("a row without meta must miss")
 	}
 }
@@ -103,7 +103,7 @@ func TestMetaExpansionPoints(t *testing.T) {
 		{Render, text},
 		{Client, text},
 	} {
-		got, err := Expand(Options{Point: c.point, Meta: MetaOf(r)}, "body", text)
+		got, err := Expand(Options{Point: c.point, Meta: MetaOfWith(r, nil)}, "body", text)
 		if err != nil {
 			t.Fatalf("%s: %v", c.point, err)
 		}
