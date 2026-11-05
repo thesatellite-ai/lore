@@ -247,6 +247,13 @@ func (o ops) metaMoveKey(ctx context.Context, in MetaMoveIn) (MetaMoveOut, error
 		return MetaMoveOut{}, errs.New(errs.MetaTaken, fmt.Sprintf("%s already defines %s (%s)", place(to), name, c)).
 			WithHint("settle it with lore meta rename or lore meta edit " + name + " --merge-into <key> first; nothing written")
 	}
+	// OV58-2 / FB-META-5 (after the name clash, which is settled first): a move goes strictly outward in the level order
+	// (repo → folder → org → store root → personal, policy.Levels); a
+	// sideways or inward move would hide the key from places that use it.
+	if fromL, toL := storeLevel(o.env, k.Src), storeLevel(o.env, to); levelRank(toL) <= levelRank(fromL) {
+		return MetaMoveOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("meta move moves a key outward; %s is at level %s in %s and %s is at level %s", name, fromL, place(k.Src), place(to), toL)).
+			WithHint("pick a place farther out (a project folder, the org folder, the store root), or use lore meta adopt --from <place> --to <place> to move keys between places")
+	}
 	vs, err := o.metaValues(ctx, k)
 	if err != nil {
 		return MetaMoveOut{}, err
