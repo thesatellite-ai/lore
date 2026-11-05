@@ -359,6 +359,7 @@ func (o ops) projectFilter(ctx context.Context, flag string) (string, error) {
 
 // list returns the live memories of every attached store (or one).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, table) // DELETION 3.2: --include-deleted / --deleted-only
 	sc, repo, err := o.readScope(ctx, in.Repo, in.NoInherit, in.MasterOnly, in.AllRepos)
 	if err != nil {
 		return ListOut{}, err
@@ -398,10 +399,13 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
+	listed := make([]row.Row, 0, len(sel.Order))
 	for _, i := range sel.Order {
 		out.Data = append(out.Data, recordOf(LabelerOf(o.env), keptSrc[i], kept[i]))
+		listed = append(listed, kept[i])
 	}
 	out.Notes = sel.Notes
+	out.Notes = append(out.Notes, in.TrashNotes(listed)...)
 	out.Count = len(out.Data)
 	return out, nil
 }

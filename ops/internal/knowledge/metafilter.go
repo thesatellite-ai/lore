@@ -17,7 +17,7 @@ type MetaFlags = metalist.Flags
 // not checked) the list prints after its rows.
 func Narrow(ctx context.Context, env Env, items []Item, f MetaFlags) ([]Item, []string, error) {
 	if f.Empty() {
-		return items, nil, nil
+		return items, f.TrashNotes(rowsOf(items)), nil
 	}
 	rows := make([]row.Row, len(items))
 	for i, it := range items {
@@ -31,7 +31,7 @@ func Narrow(ctx context.Context, env Env, items []Item, f MetaFlags) ([]Item, []
 	for _, i := range res.Order {
 		out = append(out, items[i])
 	}
-	return out, res.Notes, nil
+	return out, append(res.Notes, f.TrashNotes(rowsOf(out))...), nil
 }
 
 // NotesText is the notes as lines after a list ("" for none).
@@ -40,4 +40,13 @@ func NotesText(notes []string) string {
 		return ""
 	}
 	return strings.Join(notes, "\n") + "\n"
+}
+
+// rowsOf is the rows of listed items (for the trash note).
+func rowsOf(items []Item) []row.Row {
+	out := make([]row.Row, len(items))
+	for i, it := range items {
+		out[i] = it.Row
+	}
+	return out
 }

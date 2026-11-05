@@ -117,6 +117,7 @@ func (o ops) enable(ctx context.Context, raw string, on bool) (content.WriteOut,
 
 // list returns the live sources, every project unless --project.
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, o.c.Table) // DELETION 3.2: --include-deleted / --deleted-only
 	project, err := o.c.ProjectFilter(ctx, in.Project)
 	if err != nil {
 		return ListOut{}, err

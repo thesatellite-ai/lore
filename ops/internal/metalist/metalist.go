@@ -15,6 +15,10 @@ package metalist
 import (
 	"context"
 	"slices"
+	"strings"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/trash"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/metafilter"
@@ -36,6 +40,43 @@ type Flags struct {
 	// archived rows count as in use but are hidden from filters unless
 	// --archived; memory and rule lists also show them only with it).
 	Archived bool `json:"archived,omitempty" flag:"archived" desc:"include archived rows (also in --meta filters)"`
+	// IncludeDeleted / DeletedOnly let the list's own rows in the trash
+	// through (DELETION 3.2: a deleted row is invisible to every read but
+	// the trash commands and these flags); trashed rows are marked.
+	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also list rows in the trash (marked in the trash)"`
+	DeletedOnly    bool `json:"deleted_only,omitempty" flag:"deleted-only" desc:"list only rows in the trash"`
+}
+
+// Deleted returns ctx whose list of table follows --include-deleted /
+// --deleted-only (engine.WithDeleted; --deleted-only wins). Lookups of
+// other tables made on the way stay live.
+func (f Flags) Deleted(ctx context.Context, table row.Table) context.Context {
+	switch {
+	case f.DeletedOnly:
+		return engine.WithDeleted(ctx, engine.DeletedOnly, table)
+	case f.IncludeDeleted:
+		return engine.WithDeleted(ctx, engine.DeletedInclude, table)
+	}
+	return ctx
+}
+
+// TrashNotes is the note that marks the listed rows in the trash (with
+// --include-deleted / --deleted-only only; a list that adds trashed rows
+// by its own flag marks them itself).
+func (f Flags) TrashNotes(rows []row.Row) []string {
+	if !f.IncludeDeleted && !f.DeletedOnly {
+		return nil
+	}
+	var in []string
+	for _, r := range rows {
+		if trash.Is(r) {
+			in = append(in, r.ID.String())
+		}
+	}
+	if len(in) == 0 {
+		return nil
+	}
+	return []string{"in the trash: " + strings.Join(in, ", ") + " (lore trash show <id>; lore trash restore <id>)"}
 }
 
 // Empty reports that no flag was given (the list is unchanged).

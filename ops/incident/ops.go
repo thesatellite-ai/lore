@@ -179,6 +179,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
 
 // list returns the live rows, every project unless --project.
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, o.c.Table) // DELETION 3.2: --include-deleted / --deleted-only
 	project, err := o.c.ProjectFilter(ctx, in.Project)
 	if err != nil {
 		return ListOut{}, err

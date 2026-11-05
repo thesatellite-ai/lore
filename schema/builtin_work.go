@@ -246,7 +246,8 @@ func workDefs() []TableDef {
 			// DQ6: deleting a tasklist takes its tasks with it (one batch,
 			// behind the op's confirm).
 			BelongsToRel("tasklist", "tasklist_id", TableTasklists, Cascade),
-			BelongsToRel("plan", "plan_id", TablePlans, SetNull),
+			// DELETION 3.4: a plan's tasks go to the trash with it.
+			BelongsToRel("plan", "plan_id", TablePlans, Cascade),
 			// DQ5/TSQ3: children are dependents of their parent; a delete
 			// takes the subtree (the op asks first when there is a child).
 			SelfRel("parent", FieldTaskParent, Cascade),
@@ -295,7 +296,8 @@ func workDefs() []TableDef {
 			IndexOn("project_id", "idempotency_key"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 			BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
-			BelongsToRel("plan", "plan_id", TablePlans, SetNull),
+			// DELETION 3.4: a plan's tasks go to the trash with it.
+			BelongsToRel("plan", "plan_id", TablePlans, Cascade),
 			HasManyRel("tasks", TableTasks, "mission_id"),
 			tagIDs(),
 			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinMissionTags, Cascade),

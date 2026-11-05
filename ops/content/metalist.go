@@ -18,7 +18,7 @@ type MetaFlags = metalist.Flags
 // its rows. No flag: rows unchanged, nothing read.
 func (o Ops) Narrow(ctx context.Context, rows []Listed, f MetaFlags) ([]Listed, []string, error) {
 	if f.Empty() {
-		return rows, nil, nil
+		return rows, f.TrashNotes(rowsOf(rows)), nil
 	}
 	plain := make([]row.Row, len(rows))
 	for i, l := range rows {
@@ -32,7 +32,7 @@ func (o Ops) Narrow(ctx context.Context, rows []Listed, f MetaFlags) ([]Listed, 
 	for _, i := range res.Order {
 		out = append(out, rows[i])
 	}
-	return out, res.Notes, nil
+	return out, append(res.Notes, f.TrashNotes(rowsOf(out))...), nil
 }
 
 // NotesText is the notes as lines after a list ("" for none).
@@ -41,4 +41,13 @@ func NotesText(notes []string) string {
 		return ""
 	}
 	return strings.Join(notes, "\n") + "\n"
+}
+
+// rowsOf is the rows of listed items (for the trash note).
+func rowsOf(items []Listed) []row.Row {
+	out := make([]row.Row, len(items))
+	for i, it := range items {
+		out[i] = it.Row
+	}
+	return out
 }

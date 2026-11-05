@@ -671,33 +671,6 @@ func (e *Engine) Get(ctx context.Context, ref Ref) (store.Source, row.Row, error
 	return e.locate(ctx, ref)
 }
 
-// List returns the live rows of table in one store, sorted by id. It reads
-// the backend (the cache port has no query yet); search and sql read the
-// cache lens instead.
-func (e *Engine) List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error) {
-	a, err := e.attached(source)
-	if err != nil {
-		return nil, err
-	}
-	rows, _, err := e.readRows(ctx, a.Name, "")
-	if err != nil {
-		return nil, err
-	}
-	var out []row.Row
-	for _, sr := range rows {
-		if sr.Table != table || sr.Deleted {
-			continue
-		}
-		r, err := sr.Decode()
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	slices.SortFunc(out, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
-	return out, nil
-}
-
 // locate finds ref's row and the store holding it. A purged id whose live
 // file came back reads as a tombstone (hidePurged).
 func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, error) {

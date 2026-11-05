@@ -143,6 +143,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 
 // list returns the live playbooks (archived ones too, as v0.1.17).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, o.c.Table) // DELETION 3.2: --include-deleted / --deleted-only
 	project, err := o.c.ProjectFilter(ctx, in.Project)
 	if err != nil {
 		return ListOut{}, err

@@ -320,6 +320,7 @@ func (o ops) currentActor(ctx context.Context) value.Value {
 // list returns pending (or done) reminders of every attached store, oldest
 // due first, at most listLimit (v0.1.17).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, table) // DELETION 3.2: --include-deleted / --deleted-only
 	rows, err := work.ListAll(ctx, o.env, table, in.Store)
 	if err != nil {
 		return ListOut{}, err

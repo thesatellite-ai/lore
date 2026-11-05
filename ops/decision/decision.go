@@ -408,6 +408,7 @@ func addRefs(ctx context.Context, env kn.Env, it kn.Item, raw []string, relation
 
 // list returns the decisions in scope (archived included, as v0.1.17).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, noun.Table) // DELETION 3.2: --include-deleted / --deleted-only
 	keep, err := kn.HasTags(ctx, o.env, in.Tags)
 	if err != nil {
 		return ListOut{}, err

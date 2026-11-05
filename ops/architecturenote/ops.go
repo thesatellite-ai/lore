@@ -123,6 +123,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 
 // list returns the live rows in scope, every project unless --project.
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, o.c.Table) // DELETION 3.2: --include-deleted / --deleted-only
 	sc, repo, err := o.c.ReadScope(ctx, in.Repo, in.NoInherit, in.MasterOnly, in.AllRepos)
 	if err != nil {
 		return ListOut{}, err

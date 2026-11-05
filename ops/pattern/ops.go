@@ -193,6 +193,7 @@ func (o ops) finishSupersedes(ctx context.Context, oldSrc store.Source, old ids.
 
 // list returns the live patterns in scope (archived ones too, as v0.1.17).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, o.c.Table) // DELETION 3.2: --include-deleted / --deleted-only
 	sc, repo, err := o.c.ReadScope(ctx, in.Repo, in.NoInherit, in.MasterOnly, in.AllRepos)
 	if err != nil {
 		return ListOut{}, err

@@ -327,6 +327,7 @@ func (o ShowOut) baseText() string {
 
 // list returns the missions of every attached store (open by default).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
+	ctx = in.Deleted(ctx, table) // DELETION 3.2: --include-deleted / --deleted-only
 	project, err := work.ProjectFilter(ctx, o.env, Noun, in.Project)
 	if err != nil {
 		return ListOut{}, err
