@@ -193,7 +193,13 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 	if err != nil {
 		return nil, 0, err
 	}
-	return append(steps, piiSteps...), rows + n, nil
+	steps, rows = append(steps, piiSteps...), rows+n
+	// P3-LOCAL-3: the checkout's v0.1.17 machine-local rows, copied once
+	machineSteps, n, err := a.migrateMachineLocal(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	return append(steps, machineSteps...), rows + n, nil
 }
 
 // StepPIIPatterns names the pii_patterns step (3.3, SETTINGS ARE DATA).
