@@ -193,6 +193,11 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 					return Written{}, err
 				}
 			}
+		} else if n, secs := movedTime(typed); n > 0 {
+			// TIME 11.5 (FA-LTASK-4): the entries travel with the row; the
+			// line tells the old project its history went too.
+			dropped = append(dropped, Warning{Code: WarnTimeMoved, Field: fieldTimeEntries,
+				Message: strconv.Itoa(n) + " time entries (" + timeentry.FormatSeconds(secs) + ") moved with the task"})
 		}
 		names := slices.Sorted(maps.Keys(typed))
 		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {
@@ -495,7 +500,21 @@ const (
 	WarnInternalKeptBack WarnCode = "W_INTERNAL_KEPT_BACK"
 	// WarnTimeTotals: the move carried totals only.
 	WarnTimeTotals WarnCode = "W_TIME_TOTALS"
+	// WarnTimeMoved: a move between our own places carried the task's time
+	// entries with it (TIME 11.5); a notice, nothing was dropped.
+	WarnTimeMoved WarnCode = "W_TIME_MOVED"
 )
+
+// movedTime counts the live closed time entries of a row's fields and
+// their seconds (TIME 11.5).
+func movedTime(fields map[string]value.Value) (int, int64) {
+	entries, _ := decodeTime(fields)
+	var secs int64
+	for _, en := range entries {
+		secs += en.Seconds
+	}
+	return len(entries), secs
+}
 
 // TimeTotalsDoc is the time_totals object (design 8 point 4): per worker
 // label and kind (display name only, the client projection), seconds, and
