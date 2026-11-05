@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -224,6 +225,13 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
+	// CONTEXT_BUDGET 6.1 / D8 (FA-CTX-8): a budget above 80% of the tool's
+	// documented limit is allowed (this write already asked) and warned.
+	bn, err := o.budgetNote(ctx, d.Key, v)
+	if err != nil {
+		return RowOut{}, err
+	}
+	note += bn
 	jv, err := asJSON(v)
 	if err != nil {
 		return RowOut{}, err
@@ -248,6 +256,35 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
 		Human: fmt.Sprintf("✓ %s = %s (%s, %s)\n", in.Key, display(v), place(target), short(w.Row.ID)) + note}, nil
 }
+
+// budgetNote is the warning line for a context.budget.<profile> value
+// above toolprofile.LimitWarnPct of that profile's documented limit; ""
+// for any other key, an unknown profile or a profile with no limit.
+func (o ops) budgetNote(ctx context.Context, key policy.Key, v value.Value) (string, error) {
+	name, ok := strings.CutPrefix(string(key), contextBudgetPrefix)
+	if !ok {
+		return "", nil
+	}
+	n, err := strconv.Atoi(v.String())
+	if err != nil {
+		return "", nil // not a byte count (the key's shape already checked it)
+	}
+	reg, err := toolRegistry(ctx, o.env)
+	if err != nil {
+		return "", err
+	}
+	p, found := reg.Lookup(name)
+	if !found {
+		return "", nil
+	}
+	if w := p.LimitNote(n); w != "" {
+		return w + "\n", nil
+	}
+	return "", nil
+}
+
+// contextBudgetPrefix starts every per-profile budget key (6.1).
+const contextBudgetPrefix = "context.budget."
 
 // unitNote is the line `policy set tasks.estimate_unit` prints when the
 // unit changes and tasks carry estimates (TSQ4, OV59): the change asks
