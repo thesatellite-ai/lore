@@ -3,8 +3,10 @@ package trash
 // `lore trash list|show|restore --from-history` (DELETION 2.7, 3.6):
 //
 //	list --from-history ─► HistoryReader.PurgedHistory (wire: git log of
-//	    .lore/data in the repo checkout, D = old hard delete, M to a
-//	    tombstone = purge) ─► filters (--type, --since, --search, --by)
+//	    .lore/data in the repo checkout and each git store clone, D = old
+//	    hard delete, M to a tombstone = purge; then the live refs, rows
+//	    their store no longer holds) ─► filters (--type, --since, --search,
+//	    --by, --to)
 //	show <id> --from-history ─► the same rows ─► the last content, decoded
 //	    (sensitive fields hidden unless --show-sensitive, 3.11)
 //	restore <id> --from-history ─► E_PURGED, always (DQ4: a purged id never
@@ -37,6 +39,9 @@ type HistoryRow struct {
 	// from its parent (Commit^), dated CommitAt.
 	Commit   string
 	CommitAt time.Time
+	// Ref is the live ref the row was read from ("" = the checkout's
+	// branch history; P3-DEL-HIST-1).
+	Ref string
 	// Doc is the row file as it was in Commit^.
 	Doc []byte
 }
@@ -77,6 +82,9 @@ func historyItem(h HistoryRow) (Item, row.Row, bool) {
 		sha = sha[:shortSHA]
 	}
 	it.LastIn = sha + "^ (" + h.CommitAt.Local().Format(dateLayout) + ")"
+	if h.Ref != "" {
+		it.LastIn = sha + "^ on " + h.Ref + " (" + h.CommitAt.Local().Format(dateLayout) + ")"
+	}
 	r, err := row.Decode(h.Doc)
 	if err != nil {
 		it.Title = "(content not readable by this lore)"
