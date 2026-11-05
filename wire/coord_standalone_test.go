@@ -85,13 +85,10 @@ func TestStandaloneNote(t *testing.T) {
 	}
 	// Claims are taken here now (P3-SIGCOORD-2); a repo without a remote
 	// cannot confirm one, so the write fails closed and nothing is queued.
-	for name, input := range map[string]string{opscoord.OpTaskClaim: `{"id":"` + id + `"}`, opscoord.OpTaskRelease: `{"id":"` + id + `"}`} {
+	for name, input := range map[string]string{opscoord.OpTaskClaim: `{"id":"` + id + `"}`, opscoord.OpTaskRelease: `{"id":"` + id + `"}`, opscoord.OpHoldRelease: `{"name":"suite"}`} {
 		if _, err := run(t, a, name, input, true); !errs.Has(err, errs.Offline) {
 			t.Errorf("%s: %v, want E_OFFLINE", name, err)
 		}
-	}
-	if _, err := run(t, a, opscoord.OpHoldRelease, `{"name":"suite"}`, true); !errs.Has(err, errs.Unsupported) {
-		t.Errorf("hold.release: %v, want E_UNSUPPORTED", err)
 	}
 }
 

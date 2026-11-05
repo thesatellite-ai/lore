@@ -313,16 +313,20 @@ func (w *coordWorld) workBranch(ctx context.Context) string {
 		return ""
 	}
 	b := strings.TrimSpace(string(out))
-	def := fallbackDefaultBranch
-	if o, derr := w.repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "refs/remotes/" + w.remoteName + "/HEAD"}}); derr == nil {
-		if d := strings.TrimPrefix(strings.TrimSpace(string(o)), w.remoteName+"/"); d != "" {
-			def = d
-		}
-	}
-	if b == "" || b == def {
+	if b == "" || b == w.defaultBranch(ctx) {
 		return ""
 	}
 	return b
+}
+
+// defaultBranch reads <remote>/HEAD (fixed rule 1), falling back to main.
+func (w *coordWorld) defaultBranch(ctx context.Context) string {
+	if o, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "refs/remotes/" + w.remoteName + "/HEAD"}}); err == nil {
+		if d := strings.TrimPrefix(strings.TrimSpace(string(o)), w.remoteName+"/"); d != "" {
+			return d
+		}
+	}
+	return fallbackDefaultBranch
 }
 
 // requireHuman refuses agents for human overrides (§7.4).
