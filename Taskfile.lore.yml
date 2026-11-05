@@ -45,16 +45,6 @@ tasks:
       - CGO_ENABLED=0 go build -trimpath -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.LORE_BIN}} ./cmd/lore
       - echo "Built {{.LORE_BIN}} ({{.VERSION}})"
 
-  build:old:
-    desc: "Build the old v0.1.17-layout binary from ./saas/cmd/cli into tmp/bin/lore-old (kept while saas exists: the team e2e and docs-example tasks still build it; removed in phase E)"
-    vars:
-      VERSION:
-        sh: git describe --tags --always --dirty 2>/dev/null || echo dev
-    cmds:
-      - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -trimpath -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.BIN_DIR}}/lore-old ./saas/cmd/cli
-      - echo "Built {{.BIN_DIR}}/lore-old ({{.VERSION}})"
-
   spec:
     desc: "Regenerate docs/reference/cli-commands.md and openapi.json from the 0.1.18 operation registry (the wire drift test fails until this is run). Runs the binary from a temp folder so it never touches this repo's hooks"
     deps: [build]
@@ -91,20 +81,18 @@ tasks:
       - task: skill:install
 
   test:
-    desc: "Unit + integration tests for mini's code"
+    desc: "Unit + integration tests of the root module, with the race detector"
     cmds:
-      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./saas/cmd/cli/... ./saas/pkg/aicoder/...
-      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./dbent/schema/...
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./...
 
   test:all:
-    desc: "Every Go test in the workspace modules (dbent, lace, saas), incl. the CLI end-to-end suite and the docs drift test"
+    desc: "Every Go test of the root module, incl. cmd/lore's docs drift test (the team suite is lore:test:team)"
     cmds:
       # No -count=1: go test reruns a package when its code, the env vars or the files it reads change.
-      - go test ./dbent/... ./lace/... ./saas/...
+      - go test ./...
 
   check:tidy:
-    desc: "Fail when `go mod tidy` would change saas/go.mod or go.sum (leaves the files as they were)"
-    dir: saas
+    desc: "Fail when `go mod tidy` would change go.mod or go.sum (leaves the files as they were)"
     cmds:
       - |
         set -e
@@ -113,7 +101,7 @@ tasks:
         go mod tidy
         if ! cmp -s go.mod "$keep/go.mod" || ! cmp -s go.sum "$keep/go.sum"; then
           cp "$keep/go.mod" "$keep/go.sum" .
-          echo "✘ go mod tidy would change saas/go.mod or go.sum — run it in saas/ and commit the result"
+          echo "✘ go mod tidy would change go.mod or go.sum — run it and commit the result"
           exit 1
         fi
         echo "✓ go mod tidy: no changes"
@@ -182,10 +170,9 @@ tasks:
       - echo "✓ hooks installed (core.hooksPath = .githooks)"
 
   test:sync:
-    desc: "Git-sync tests only: lsync engine, merge3, canonjson, gitsetup, ids + the CLI e2e suite (real git, real binary)"
+    desc: "Git-sync tests only: row merge (logic/merge, merge3, canonjson), the live ref, branch sync and the sync operations; the end-to-end sync tests are in lore:test:team"
     cmds:
-      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./saas/pkg/aicoder/lsync/... ./saas/pkg/aicoder/merge3/... ./saas/pkg/aicoder/canonjson/... ./saas/pkg/aicoder/gitsetup/... ./saas/pkg/aicoder/ids/...
-      - go test ./saas/cmd/cli/...
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./logic/merge/... ./logic/merge3/... ./logic/canonjson/... ./adapters/live/... ./adapters/reposync/... ./ops/sync/...
 
   test:team:
     desc: "Team e2e suite (LORE_TEAM_SPEC.md): real binary, real git, many actors. Not built yet = PENDING (skip); LORE_TEAM_STRICT=1 fails pending tests, LORE_TEAM_FORCE=1 skips the capability probe. Extra go test flags after --"
@@ -245,7 +232,7 @@ tasks:
     cmds:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW, so transcripts are stable.
-      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./cmd/lore
       - LORE_BIN={{.DOCS_BIN}} tests/team/docs/run-examples.sh {{.CLI_ARGS}}
       - LORE_BIN={{.DOCS_BIN}} python3 tests/team/docs/paste.py
 
@@ -261,7 +248,7 @@ tasks:
     cmds:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW, so transcripts are stable.
-      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./cmd/lore
       - LORE_BIN={{.DOCS_BIN}} tests/docs/run-examples.sh {{.CLI_ARGS}}
       - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/paste.py
       - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/commands_index.py
@@ -272,14 +259,9 @@ tasks:
       DOCS_BIN: "{{.BIN_DIR}}/lore-docs"
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./cmd/lore
       - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/paste.py --check
       - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/commands_index.py --check
-
-  bench:sync:
-    desc: "Sync performance: no-op pass, bootstrap and fresh-clone adopt at 1k/10k rows (numbers recorded in LORE_SYNC_SPEC.md)"
-    cmds:
-      - go test ./saas/pkg/aicoder/lsync/ -run xxx -bench . -benchtime 3x
 
   bench:meta:
     desc: "Metadata cache bench (METADATA 4, OQ6): generated store, rows x 20 keys; fails when first build, cache size or a warm two-filter search exceed the gate in metabench_test.go. ROWS=N overrides the row count"
@@ -289,85 +271,44 @@ tasks:
       - LORE_BENCH_META=1 {{if .ROWS}}LORE_BENCH_META_ROWS={{.ROWS}} {{end}}go test ./adapters/cache/sqlite/ -run '^TestMetaBench$' -v -timeout 60m
 
   test:cover:
-    desc: "Coverage of unit AND end-to-end tests (the e2e binary is built with -cover); lists functions no test reaches"
+    desc: "Coverage of the root module's tests; lists functions no test reaches"
     cmds:
       - |
         set -e
-        dir=$(mktemp -d)
-        unit=$(mktemp -d)
-        # -count=1 kept: the run must write fresh coverage files; a cache replay writes none.
-        LORE_E2E_COVERDIR="$dir" go test -count=1 -cover -coverpkg=./saas/... ./saas/cmd/cli/... ./saas/pkg/aicoder/... -args -test.gocoverdir="$unit" >/dev/null
-        go tool covdata textfmt -i="$dir,$unit" -o coverage.out
+        # -count=1 kept: the run must write a fresh coverage profile; a cache replay writes none.
+        go test -count=1 -coverpkg=./... -coverprofile=coverage.out ./... >/dev/null
         go tool cover -func=coverage.out | tail -1
-        echo "functions no test reaches (lore CLI + sync packages):"
-        go tool cover -func=coverage.out | grep -E "saas/(cmd/cli|pkg/aicoder/(lsync|gitsetup|merge3|canonjson|guard|migrationlog))/" | awk '$NF == "0.0%"' || true
+        echo "functions no test reaches:"
+        go tool cover -func=coverage.out | awk '$NF == "0.0%"' || true
 
   build:cross:
-    desc: "Cross-compile the release binary (./cmd/lore) and, while saas exists, the old one for every shipped OS/arch (platform code must build everywhere, not just on the host)"
+    desc: "Cross-compile the release binary (./cmd/lore) for every shipped OS/arch (platform code must build everywhere, not just on the host)"
     cmds:
       - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/lore
-      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
       - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/lore
-      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
       - CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/lore
-      - CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
       - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./cmd/lore
-      - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
       - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/lore
-      - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
       - CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o /dev/null ./cmd/lore
-      - CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
 
   lint:
     desc: "Static checks: vet + fmt + staticcheck + cross-OS build"
     cmds:
       - task: build:cross
-      - go vet ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...
-      - 'test -z "$(gofmt -l ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/)" || (echo "gofmt failures:"; gofmt -l ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/; exit 1)'
-      - if which staticcheck > /dev/null; then staticcheck ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...; else echo "staticcheck not installed; skipping"; fi
+      - go vet ./...
+      - go vet -tags teame2e ./tests/...
+      - 'test -z "$(gofmt -l .)" || (echo "gofmt failures:"; gofmt -l .; exit 1)'
+      - if which staticcheck > /dev/null; then staticcheck ./...; else echo "staticcheck not installed; skipping"; fi
 
   fmt:
     desc: "Format code"
     cmds:
-      - gofmt -w ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/
-
-  schema:gen:
-    desc: "Regenerate ent code from schema (after editing dbent/schema/*.go)"
-    cmds:
-      # dbent/cmd/entg runs the entgql extension, which reads ../apidash/gqlgen.yml
-      # and writes ../apidash/internal/graph/schemas/ent.graphql. This repo has no
-      # apidash module, so when it is absent a throwaway one is created for the run
-      # and removed afterwards (also on failure). The gql_*.go files in dbent/gen
-      # come from the extension itself, not from that config.
-      - |
-        made=""
-        if [ ! -e apidash ]; then
-          made=1
-          mkdir -p apidash/internal/graph/schemas
-          printf 'schema:\n  - internal/graph/schemas/*.graphqls\n' > apidash/gqlgen.yml
-        fi
-        # task's shell has no reliable EXIT trap: capture the status, clean, re-raise.
-        rc=0
-        (cd dbent && go run ./cmd/entg .) || rc=$?
-        if [ -n "$made" ]; then rm -rf apidash; fi
-        exit $rc
-
-  schema:migrate:
-    desc: "Apply schema to SQLite DB"
-    cmds:
-      - cd dbent && go run ./cmd/migrate .
-
-  tui:gen:
-    desc: "Regenerate the enttui register glue (saas/pkg/aicoder/tuigen) after a dbent schema change"
-    cmds:
-      # Stage on the generated ent client; tuigen imports dbent/gen/ent.
-      - task: schema:gen
-      - go generate ./saas/pkg/aicoder/tuigen
+      - gofmt -w .
 
   tui:run:
-    desc: "Launch the lore TUI on the current .lore DB (flags after --, e.g. task lore:tui:run -- --kind task)"
+    desc: "Launch the lore TUI on the current project's stores (flags after --, e.g. task lore:tui:run -- --kind task)"
     cmds:
-      - CGO_ENABLED=0 go run ./saas/cmd/cli tui {{.CLI_ARGS}}
+      - CGO_ENABLED=0 go run ./cmd/lore tui {{.CLI_ARGS}}
 
   scenarios:
     desc: "Run all acceptance scenarios (tests/scenarios/SC-*.sh)"
