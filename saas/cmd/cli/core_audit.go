@@ -12,6 +12,8 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"dbent"
@@ -115,22 +117,52 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 	return nil
 }
 
-// projectRoot is the folder lore.db is resolved at: the git top of root
-// (root is any folder inside the repo, like wire.Options.RepoDir; the
-// git backend finds its store by the same rev-parse), else root itself
-// ("" = working directory). OVERNIGHT Qs subfolder: a write run from
-// repo/sub must chain into repo/.lore/lore.db.
+// projectRoot is the folder lore.db is resolved at: the nearest folder
+// at or above root that holds a .lore marker, never climbing past the
+// git top (root is any folder inside the repo, like wire.Options.RepoDir).
+// OVERNIGHT Qs subfolder: a write run from repo/sub must chain into
+// repo/.lore/lore.db; a project that lives in a sub-folder of the repo
+// (repo/svc/.lore, several projects sharing one git repo) must chain into
+// its own lore.db, not the git top's. With no marker on the way up it is
+// the git top, else root itself ("" = working directory).
 func (s *coreAuditSink) projectRoot(ctx context.Context) string {
 	s.topOnce.Do(func() {
 		s.top = s.root
 		if s.root == "" {
 			return
 		}
-		if top, err := gitOutput(ctx, s.root, "rev-parse", "--show-toplevel"); err == nil && top != "" {
-			s.top = top
+		top, err := gitOutput(ctx, s.root, "rev-parse", "--show-toplevel")
+		if err != nil || top == "" {
+			return
 		}
+		s.top = nearestMarkerDir(s.root, top)
 	})
 	return s.top
+}
+
+// nearestMarkerDir walks from dir up to stop (inclusive) and returns the
+// first folder that holds a projresolve.MarkerDir; stop when none does.
+// dir must lie inside stop; a dir outside it returns stop at once.
+func nearestMarkerDir(dir, stop string) string {
+	stop = filepath.Clean(stop)
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	if real, err := filepath.EvalSymlinks(stop); err == nil {
+		stop = real
+	}
+	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
+		if fi, err := os.Stat(filepath.Join(d, projresolve.MarkerDir)); err == nil && fi.IsDir() {
+			return d
+		}
+		rel, err := filepath.Rel(stop, d)
+		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.Dir(d) == d {
+			return stop
+		}
+	}
 }
 
 // Session implements wire.SessionSource: this process's ses_ id in the
