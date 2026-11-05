@@ -202,7 +202,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	actor = st.actor
-	scanner, err := newScanner(ctx, backends, withRepoGitleaks(st.repoTop))
+	scanner, err := newScanner(ctx, backends, withRepoGitleaks(st.repoTop), withFolders(st.folders)) // D9: team stores nearest-first
 	if err != nil {
 		return fail(err)
 	}
