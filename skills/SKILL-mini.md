@@ -459,7 +459,9 @@ P13 onboard new teammate
 
 TEAM SYNC (.lore/data/ = one committed JSON file per shared row; automatic)
     commit .lore/data + .gitattributes WITH the code change that produced the knowledge
-    lore sync status | conflicts | trash | dupes      inspect
+    lore sync status | conflicts                      inspect
+    lore trash list --local                           rows sync removed (file disappeared)
+    lore sync merge-rows <table> --keep <id> --drop <id>   fold a duplicate (refs move, drop → trash)
     lore sync resolve <n> --take kept|other           after the user picks a side
     lore sync peek origin/<branch> [table]            another branch, read-only
     lore sync promote <id> --to main                  local commit on main (confirm first)
@@ -522,6 +524,8 @@ lore agent start --label agent-backend --owner @alice     # export what it print
 lore inbox
 lore task next --mission mis_12                       # exit 10 = no ready work
 lore task heartbeat
+lore hold claim full-suite --ttl 30m                  # one heavy run at a time; hold release after
+lore context --internal                               # internal notes as text; never paste where the client reads
 lore task note tsk_30 "progress"
 lore task done tsk_30 --pr 412 --lesson "what you learned"
 ```
@@ -534,7 +538,7 @@ E_LOCK_HELD            project flock held; check for stale lore procs
 E_DB_CORRUPT           mv .lore/lore.db away and run lore sync (rebuilds from .lore/data)
 E_DB_NOT_FOUND         DB missing; run lore init or check LORE_DB env
 E_MIGRATION_INCOMPLETE run lore doctor (triggers auto-migrate)
-E_NOT_PROJECT_ROOT     cd to project root or use --db=<path>
+E_NOT_PROJECT_ROOT     cd to project root (--db is refused on row commands)
 E_AMBIGUOUS_PROJECT    both lore.db and lore.toml exist; remove one
 E_SECRET_DETECTED      strip secret, or --secret-ref "<mgr>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes (bare --yes does not store it)
 E_ROOT_REFUSED         set MINI_ALLOW_ROOT=1 only if truly needed

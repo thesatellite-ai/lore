@@ -569,7 +569,7 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 | "make this rule apply on main now" | `lore sync promote <id> --to main` (local commit on main, never pushes; confirm with the user first) |
 | "lore says conflict" | `lore sync conflicts` → show both versions → `lore sync resolve <n> --take kept\|other` after the user chooses |
 | "I lost a memory after git clean / revert" | `lore trash list --local` → `git checkout HEAD -- .lore/data/<table>/<id>.json` (core rows come back from git) |
-| "same fact recorded twice" | `lore search "<text>"` → keep one, `lore <kind> delete <other-id>` |
+| "same fact recorded twice" | `lore search "<text>"` → `lore sync merge-rows <table> --keep <id> --drop <other-id>` (references move to the kept row; the dropped one goes to the trash) |
 | ".lore/data got deleted" | `git checkout HEAD -- .lore/data` (the files are the truth) |
 | "two project ids after a merge" | `lore sync fix-projects` |
 | "remove archived stuff for good" | `lore trash purge --archived-before 90d --dry-run`, then `--confirm` with user OK |
@@ -771,6 +771,13 @@ lore
 ├── doctor                     health check, exit 0/1/2
 ├── search rebuild             rebuild the search index from .lore/data
 ├── sql "<query>"               read-only SQL over every table
+├── context --internal         internal + personal notes for this repo as text (--table, --search)
+├── config check|get|set|list  validate and edit ~/.lore/config.yaml
+├── org create|import|link|rename|set|use
+│                              which org a repo belongs to (internal notes stay in its store)
+├── hold claim|release <name>  one shared resource (a test suite) at a time, with a lease
+├── cache prune                drop cache files of stores no repo here attaches (lists, asks)
+├── upgrade [--check]          install the newest release (or the project's pinned one)
 ├── identity show|set          actor identity (8-step fallback chain)
 ├── support-bundle             sanitized incident-report tarball
 ├── run start|end|cancel       time one try at a task
@@ -778,7 +785,7 @@ lore
 └── version                    binary + schema + bundle + plugin + mcp versions
 ```
 
-**Universal flags** (work on every command): `--db PATH`, `--project NAME`, `--repo NAME`, `--read-only`, `--json`, `--color auto|always|never`.
+**Universal flags:** every command takes `--color auto|always|never` and `--trace`; most take `--json`. Commands that open the local database take `--project NAME`, `--repo NAME` and `--read-only`; `--db PATH` is refused on row commands (`E_UNSUPPORTED`: their rows are files in the repository, so run the command inside it).
 
 ---
 
@@ -824,7 +831,6 @@ Eager-loaded relationships (per spec):
 | `plan show --json` | `tasks[]` |
 | `tasklist show --json` | `tasks[]` |
 | `project show --json` | `repos[]` |
-| `run show --json` | `steps[]` |
 | (v0.2) `techdoc show --json` | `pages[]` — schema exists, CLI deferred |
 
 **Rely on `kind` and `schema_version` — never on field order.** New fields may be added in v0.2 without bumping schema_version (additive); removed fields bump it.
@@ -858,7 +864,7 @@ Quick reactions:
 |---|---|
 | `E_DB_LOCKED` / `E_LOCK_HELD` | Wait + retry, or kill the other process. |
 | `E_DB_CORRUPT` / `E_DB_NOT_FOUND` | `mv .lore/lore.db .lore/lore.db.old && lore sync` (rebuilds from `.lore/data`). |
-| `E_NOT_PROJECT_ROOT` | Either `cd` to the project, or use `--db=<path>`. |
+| `E_NOT_PROJECT_ROOT` | `cd` into the project (`--db` is refused on row commands: their rows are files in the repository). |
 | `E_AMBIGUOUS_PROJECT` | Both `lore.db` and `lore.toml` exist — remove one. |
 | `E_SECRET_DETECTED` / `E_NEEDS_CONFIRM` on a secret | Strip the secret, or rerun with `--secret-ref "<manager>://<entry>"` or `--secret-unstored`. A bare `--yes` does not store it; `--not-a-secret --reason "<why>" --yes` only with explicit user consent. |
 | `E_ROOT_REFUSED` | Set `MINI_ALLOW_ROOT=1` (only if user explicitly wants). |

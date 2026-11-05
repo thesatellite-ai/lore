@@ -97,7 +97,7 @@ $ lore doctor --json | head -8
 
 ## Step 4 — Repair what doctor can fix
 
-`--fix` — repair what doctor can fix safely: `--supersedes` links written by older versions. Safe to re-run.
+`--fix` — repair what doctor can fix safely: reversed `--supersedes` links written by older versions, and a task lead missing from the task's assignees. Safe to re-run.
 
 Doctor lists those links in its report, then `lore doctor --fix` turns each one around so the old row records the row that replaced it. A second `--fix` finds nothing left to change.
 

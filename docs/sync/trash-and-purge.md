@@ -115,6 +115,7 @@ Purge empties each purged row's file to a deletion marker (only its id and `"_de
 - **The trash is local.** It lives in your `lore.db` only, and core notes are restored from git, not from it: an old file comes back from history (`git log --diff-filter=D -- .lore/data/memories/<id>.json`).
 - **Restore numbers are per machine.** `#4` is the number in your trash list, not a row id.
 - **`lore <kind> delete` moves a note to the shared trash, not this local one.** `lore trash list` shows it and `lore trash restore <id>` brings it back; this page's `--local` trash only holds rows whose file disappeared. Prefer `archive` for notes you may still want to read.
+- **`lore sync trash` is the old spelling.** It still works in 0.1.18 (`lore sync trash list`, `lore sync trash restore <n>`), prints a note that names the new command, and goes away in the next release. Use `lore trash list --local` and `lore trash restore <n> --local`.
 - **Purge only touches archived rows.** A row that is not archived is never purged, however old it is.
 - **Run purge on main and commit `_purged.json`.** Purged on a feature branch only, the rows come back from main when the branch merges.
 

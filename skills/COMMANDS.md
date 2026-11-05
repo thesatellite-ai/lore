@@ -4,7 +4,7 @@
 
 Every command is listed below with: signature, key flags, example, and JSON output sample.
 
-All commands accept the universal flags from SKILL.md (`--db`, `--project`, `--repo`, `--read-only`, `--json`, `--color`).
+Every command takes `--color auto|always|never` and `--trace`; most take `--json`. Commands that open the local database also take `--project`, `--repo` and `--read-only` (`--db` is refused on row commands: their rows are files in the repository). See SKILL.md.
 
 ## Bootstrap
 
@@ -454,8 +454,8 @@ The CLI ships a loud, prescriptive directive block you can pin to the top of any
 lore directive install                                # default: CLAUDE.md at cwd
 lore directive install --target=AGENTS.md             # any file
 lore directive install --target=CLAUDE.md,AGENTS.md   # repeatable
-lore directive show                                   # print block to stdout
-lore directive remove                                 # strip the block
+lore directive show [--full]                          # print block to stdout (--full: the long form)
+# to remove the block, delete the lines between the sentinel markers by hand
 ```
 
 Idempotent — re-running `install` replaces the block in place via sentinel markers (`<!-- lore:directive:start -->` … `:end -->`). Creates the file if missing.
@@ -616,7 +616,7 @@ Shows what was included/excluded and why (scope filters, dedup decisions, budget
 ```bash
 # health
 lore doctor [--json]              # exit 0 healthy, 1 degraded, 2 broken
-lore doctor --fix                 # repair what doctor can fix safely (--supersedes links written by older versions); safe to re-run
+lore doctor --fix                 # repair what doctor can fix safely (reversed --supersedes links, a task lead missing from assignees); safe to re-run
 
 # read-only SQL over every table (counts, joins); sensitive values masked
 lore sql "SELECT count(*) FROM rules"
@@ -625,6 +625,10 @@ lore sql "SELECT count(*) FROM rules"
 mv .lore/lore.db .lore/lore.db.old && lore sync   # rebuilds the database from .lore/data
 lore search rebuild                               # rebuilds the search index from the row files
 git checkout HEAD -- .lore/data                   # a deleted .lore/data comes back from git
+
+# caches and the binary itself (both list or check first, then ask)
+lore cache prune --dry-run                        # cache files of stores no repo here attaches any more
+lore upgrade --check                              # is there a newer release? `lore upgrade` installs it
 ```
 
 ---
@@ -664,6 +668,8 @@ Orgs and stores (internal notes never go into a client repo):
 ```bash
 lore store init git@github.com:agency/notes            # once, in an empty repo
 lore org link agency --project client                   # tie this client repo to its internal project
+lore org use agency                                     # pick the org entry for this project on this machine (not committed)
+lore context --internal [--table rules] [--search <text>]   # internal and personal notes for this repo as text (never paste where the client reads)
 lore memory add --body "client prefers calls" --to agency
 lore memory add --body "my own reminder" --to me
 lore move mem_01 --to repo                               # move to the client on purpose (asks)
@@ -677,6 +683,7 @@ lore agent start --label agent-backend --owner @alice        # prints LORE_ACTOR
 lore inbox
 lore task next --mission mis_12                          # claims the best ready task (exit 10 = no work)
 lore task heartbeat                                      # keep the claim alive
+lore hold claim full-suite --ttl 30m                     # one heavy run at a time; lore hold release full-suite after
 lore task note tsk_30 "mutation done; tests next"
 lore task done tsk_30 --pr 412 --lesson "tokens expire in 48h"
 lore memory add "invite links must use the public website address"   # a fact every agent finds with lore search
@@ -822,7 +829,7 @@ lore trash list --local [--json]   # rows sync removed because their file disapp
 lore trash restore <n> --local     # core rows refuse and name the `git checkout` that brings the file back
 lore sync peek <git-ref> [table] [--json]          # rows on another branch, nothing imported
 lore sync promote <id>... --to <branch> [--dry-run]  # new local commit on <branch>; never pushes; not the current branch
-lore sync merge-rows <table> --keep <id> --drop <id>   # core rows: keep one, delete the other with its command
+lore sync merge-rows <table> --keep <id> --drop <id>   # fold a duplicate: references move to --keep, --drop goes to the trash
 lore trash purge --archived-before <date|90d|720h> (--dry-run | --confirm)
 lore sync fix-projects [--keep <prj_id>] [--dry-run]
 lore sync ci-merge --base <ref> [--dry-run] [--json]

@@ -119,7 +119,7 @@ E_DB_LOCKED / E_LOCK_HELD
 E_NOT_PROJECT_ROOT
     → cwd has no .lore/. Either:
         cd to the project root, OR
-        run with --db=<path> to override (no walk-up by design)
+        run `lore init` there (--db is refused on row commands)
 
 E_AMBIGUOUS_PROJECT
     → both lore.db and lore.toml exist in .lore/. Remove one.

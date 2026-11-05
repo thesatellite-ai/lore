@@ -155,6 +155,7 @@ $ lore link add --entity tsk_2ad3…f891 --commit HEAD
 - **`lore commit-show HEAD` finds nothing.** It only matches the full 40-character sha. Use `lore commit-show $(git rev-parse HEAD)`, or `lore link list --commit <full sha>`.
 - **A rebase changes the sha.** `git pull --rebase` gives your commit a new id. Link the commit after you push, as in Step 1 to 2, so the link points at the commit that is really on `main`.
 - **`lore task show` does not print the commit.** Its `commit:` line is the task's commitment (how sure it is), not a git commit. Use `lore link list --entity <id>` or `lore task list --status done`.
+- **A squash merge keeps the link through the `Lore-Task` trailer.** While you hold a claim on a task, lore's `commit-msg` hook adds a `Lore-Task: <id>` line to the end of your commit messages (only when the task row lives in the repo you commit to). A squash or rebase merge that keeps that line lets lore find the merge on `main` even though the commit sha changed; without it, use Step 5. See [How it works](../team/how-it-works.md).
 - **Links are saved like other rows.** `link add` writes a file to `.lore/data` ("not committed — commit them with your change"); commit it, or your teammates will not see the link.
 
 ## Related

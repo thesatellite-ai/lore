@@ -204,4 +204,4 @@ lore <command> --help
 lore doctor               # what is wrong right now
 ```
 
-Every list/show command supports `--json`. Every error has a code starting with `E_`. Every command accepts the universal flags (`--db`, `--project`, `--repo`, `--read-only`, `--color`).
+Every list/show command supports `--json`. Every error has a code starting with `E_`. Every command takes `--color auto|always|never` and `--trace`; commands that open the local database also take `--project`, `--repo` and `--read-only` (`--db` is refused on row commands).

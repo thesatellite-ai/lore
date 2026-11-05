@@ -119,7 +119,7 @@ A conflict between the file and `lore.db` can still happen for the few rows `lor
 
 ## Step 4 — The same fact written twice
 
-Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, both rows are there; `lore memory list` (or `lore search`) shows them side by side. Memories are core notes whose files are the truth, so `lore sync merge-rows` does not fold them in the database; it refuses and names the fix: keep one row (edit it if it should carry the other's text) and delete the other with its own command:
+Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, both rows are there; `lore memory list` (or `lore search`) shows them side by side. `lore sync merge-rows <table> --keep <id> --drop <id>` folds them: every reference to the dropped row (links, comments, tags, `${…}` references in other rows) moves to the row you keep, and the dropped row goes to the trash, so `lore trash restore` can bring it back. Edit the kept row first if it should carry some of the other's text. Deleting the duplicate with its own command also works, but leaves references to it dangling (`lore lint` reports them).
 
 <!-- example: sync#duplicates only=2,3,4,5,6,7,8 -->
 ```console
@@ -192,7 +192,7 @@ lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a 
 - **GitHub's merge button does not run lore's driver.** On a pull request, two edits of the same note show as a conflict even when lore could merge them. Merge main into your branch locally (`git pull origin main`), or install [the GitHub workflow](github-workflow.md).
 - **A clone that never ran lore has no driver.** If someone merges in a fresh clone before running any lore command, git falls back to line merging. Run `lore sync` once after cloning.
 - **Conflict markers in a value are imported, not hidden.** Until you settle them, `lore rule list` shows the markers in the text, and every command repeats the warning. That is deliberate, so the conflict is not forgotten.
-- **`dupes` finds exact text only.** "We use Stripe" and "Payments go through Stripe" are not duplicates to lore. Fold those by hand when you see them: edit the one you keep, delete the other.
+- **lore does not look for duplicates for you.** Find them with `lore search` or `lore memory list`; "We use Stripe" and "Payments go through Stripe" are the same fact to you, not to lore. Then fold them with `lore sync merge-rows`.
 - **Resolve numbers are per machine.** `#1` in `lore sync conflicts` is a local number, not a row id; it means nothing on a teammate's machine.
 
 ## Related

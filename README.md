@@ -189,11 +189,14 @@ Bodies can be passed with `--body="…"` or piped: `echo "text" | lore memory ad
 |---|---|
 | `lore init [path]` | Create a new project (`.lore/lore.db`, schema, gitignore, Project row). `--name`, `--non-interactive` |
 | `lore setup` | One-time post-install/upgrade migrations (builds the search index). Run once per project after install/upgrade |
-| `lore directive install` | Inject the lore agent-directive block into `CLAUDE.md` / `AGENTS.md` so agents know to use lore (`remove` to undo, `show` to print it) |
-| `lore identity` | Manage your identity: the fallback one in `~/.lore/identity.yaml` (migrated from `identity.toml`), and one per org with `lore identity set --org <org>` |
+| `lore directive install` | Inject the lore agent-directive block into `CLAUDE.md` / `AGENTS.md` so agents know to use lore (`show` to print it; delete the block to remove it) |
+| `lore identity` | Manage your identity: `identity:` in `~/.lore/config.yaml`, and one per org with `lore identity set --org <org>` |
 | `lore whoami` | The org this repo resolves to and why, your identity, and what loads here |
 | `lore config check` | Validate `~/.lore/config.yaml` (orgs, stores, patterns, durations) and say where each problem is |
-| `lore config` | Get/set DB-level config keys (`dbconfig` table) |
+| `lore config get` / `set` / `list` | Read and change keys of `~/.lore/config.yaml` (a dotted path such as `live.autopush`; keeps comments and order) |
+| `lore org use` / `link` / `create` / `import` / `rename` / `set` | Choose and set up which org a repo belongs to |
+| `lore cache prune` | Remove cache files of stores no repo on this machine attaches any more (lists them and asks first; `--dry-run`) |
+| `lore upgrade` | Install the newest release, or the project's pinned version (`--check` only reports) |
 | `lore version` | Version, schema version, build info (`--json`) |
 | `lore doctor` | Health checks; exit 0 healthy / 1 degraded / 2 broken |
 
@@ -278,7 +281,7 @@ A sync pass runs automatically before and after every command; these subcommands
 | `lore trash list --local` | Rows removed because their file disappeared (revert, `git clean`, stash); the file comes back with `git checkout` |
 | `lore sync peek <ref> [table]` | Read another branch's rows without checking it out (`origin/feature/x`) |
 | `lore sync promote <id> --to <branch>` | Commit a row onto another local branch (an urgent rule onto `main`) — never pushes |
-| `lore sync merge-rows <table> --keep <id> --drop <id>` | Fold rows two clones recorded independently |
+| `lore sync merge-rows <table> --keep <id> --drop <id>` | Fold a duplicate row into another: references move to the kept row, the dropped one goes to the trash |
 | `lore trash purge --archived-before 90d --confirm` | Durably remove archived rows; records them in `_purged.json` so old clones never resurrect them |
 | `lore sync fix-projects` | Collapse duplicate project ids after two people bootstrapped in parallel |
 | `lore sync install-action` | Opt in to a GitHub workflow that settles lore-data conflicts in pull requests; runs only by hand unless `--auto`; `--branch`, `--dry-run`; delete the file to remove it |
@@ -298,6 +301,7 @@ lore task add "Send the invoice reminder before Friday's demo" --assign @bob  # 
 lore org link agency --project client                     # once: tie a client repo to an internal project
 lore memory add --body "The client replies faster on WhatsApp than email"  # in a client repo: goes to the store, not the repo
 lore task next --mission msn_01a1…                        # an agent takes the next ready task
+lore hold claim full-suite --ttl 30m                      # one heavy test run at a time (lore hold release full-suite)
 ```
 
 Read on in [docs/team](docs/team/README.md): [overview](docs/team/overview.md), [concepts](docs/team/concepts.md), [getting started](docs/team/getting-started.md), [use cases](docs/team/README.md#use-cases) (small team, agency and client repo, group of repos, contractor, two companies, personal notes, agents on one mission), [how it works](docs/team/how-it-works.md), [agents](docs/team/agents.md), [commands reference](docs/team/commands.md) and [troubleshooting](docs/team/troubleshooting.md). The design and every rule: [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md).
@@ -323,15 +327,15 @@ lore keeps a fast SQLite cache in `.lore/lore.db` (gitignored) and writes every 
 <!-- ds:block id=sync-syncedtables-rgmtjeph -->
 <!-- ds:block id=sync-localtables-dcpb69pj -->
 <!-- ds:block id=sync-volatile-4t6jsc7v -->
-**What syncs.** Knowledge and work tracking (rules, decisions, memories, patterns, hotfixes, playbooks, prompts, tasks, missions, plans, tags, comments, …). Telemetry stays local: search logs, render history, run logs, audit chains, the search index, embeddings and access counters.
+**What syncs.** Knowledge and work tracking (rules, decisions, memories, patterns, hotfixes, playbooks, prompts, tasks, missions, plans, tags, comments, …). Machine-local data stays local: runs, the audit trail, the search index and usage counters.
 
 <!-- ds:block id=sync-mergedriver-config-bur8yta8 -->
 <!-- ds:block id=sync-strategyfor-ycedma28 -->
 **Merges.** One file per row means two people adding knowledge never conflict. Editing *different fields* of the same row merges cleanly through lore's git merge driver; editing the *same text* on two branches is a real conflict that a person settles. List fields that are sets (labels, approvers, team members, project links) merge both sides' additions and never conflict, and an edit beats a delete. Details, and what happens in pull requests, in [Merges and pull requests](#merges-and-pull-requests).
 
-**Every write is captured.** Database triggers record every change to a shared table, so `lore tui`, raw SQL and `sqlite3` edits are exported too. A row whose file disappears goes to `lore trash list --local` first, and its file is still in git, so a `git clean` or a stash is always recoverable.
+**The files are the truth.** Every lore command writes the row file and updates the cache in the same step; `.lore/lore.db` is only a cache, rebuilt from `.lore/data` at any time, so never edit it by hand. A row whose file disappears goes to `lore trash list --local` first, and its file is still in git, so a `git clean` or a stash is always recoverable.
 
-**Existing projects.** The first command of the new version backs up `lore.db` and exports everything to `.lore/data` ("bootstrap"). A teammate who pulls that adopts it: their project id is switched to the shared one, their private rows are exported onto their branch, and any row both sides changed keeps the newer version with the other saved under `lore sync conflicts`. Roll out by having one person bootstrap on `main` first; everyone else pulls and runs any lore command.
+**Existing projects.** A repo with v0.1.17 data is converted once with `lore migrate run`: it keeps a local backup ref, and `lore migrate rollback` undoes it. `--dry-run` lists what it would change first.
 
 **Fresh clones.** `git clone` brings `.lore/data` but no database; the first lore command (or `lore init`) builds `lore.db` from the files.
 
@@ -393,12 +397,13 @@ These work across most commands:
 | `--json` | Machine-readable JSON envelope (use this from scripts/agents) |
 | `--repo <mount\|rep_id>` | Scope to one repo instead of project-master |
 | `--project <id\|name>` | Operate on a specific project |
-| `--db <path>` | Override the DB path (default: cwd's `.lore/lore.db`; also `LORE_DB`) |
+| `--db <path>` | Refused on row commands (`E_UNSUPPORTED`): their rows are files in the repository, so run the command inside it (`LORE_DB` is refused the same way) |
 | `--read-only` | Skip lock acquisition; refuse writes (safe for inspection) |
-| `--include-archived` / `--archived` | Include soft-deleted rows |
-| `--color auto\|always\|never` | Color output control |
+| `--archived` (lists) / `--include-archived` (search) | Include archived rows |
+| `--color auto\|always\|never` | Colour on every command; `auto` (default) colours only a terminal and follows `NO_COLOR` / `FORCE_COLOR` |
+| `--trace` | Print every git command lore runs for live rows, with timing (`LORE_TRACE=1`) |
 
-Env: `LORE_DB`, `LORE_PROJECT_ID`, `LORE_REPO`, `LORE_HOME` mirror the flags.
+Env: `LORE_PROJECT_ID`, `LORE_REPO`, `LORE_READ_ONLY=1`, `LORE_TRACE=1` mirror the flags.
 
 Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses a project or DB inside iCloud/Dropbox/OneDrive/Google Drive or on NFS/SMB, where SQLite corrupts silently (`LORE_ALLOW_NETWORK_FS=1` overrides — share knowledge through git instead).
 
