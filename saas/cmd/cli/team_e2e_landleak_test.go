@@ -9,6 +9,7 @@ package main
 // cmd/lore, the live wiring of the old binary).
 
 import (
+	"strings"
 	"testing"
 
 	th "saas/cmd/cli/internal/teamharness"
@@ -55,4 +56,46 @@ func TestLeak_LandingOfClientRowQuotingAPersonalNoteIsBlocked(t *testing.T) {
 
 	c.Lore("task", "add", quote+" again", "--tasklist", tl, "--to", "repo", "--live").
 		Refused(t, "E_LEAK_BLOCKED", mem).Never(t, "forty percent")
+}
+
+// The commit and push hooks refuse a credential in every repo (no org, no
+// store), in a code file and in a hand-made .lore/data row, naming the
+// file and the rule, never the value; a commit made with --no-verify is
+// still refused by pre-push.
+func TestLeak_HooksRefuseASecretInAPlainRepo(t *testing.T) {
+	w := newTeamWorld(t)
+	solo := w.Human("solo", "solo@example.com")
+	solo.WriteConfig(th.Config{Live: th.FreshFetch()})
+	c := solo.Clone(w.Remote("github.com/solo/app"), "app")
+	c.MustLore("init", "--non-interactive", "--name=app")
+	c.CommitAll("lore")
+	c.AdminPush("origin", "main")
+	c.MustLore("rule", "add", "--body", "keep migrations reversible") // wires the hooks
+	key := "AKIA" + "IOSFODNN7EXAMPLE"                                // the AWS example key, built at run time (convention 8)
+
+	c.WriteFile("src/config.ts", "export const key = '"+key+"'\n")
+	c.Git("add", "src/config.ts")
+	r := c.TryGit("commit", "-m", "config")
+	if r.Code == 0 || !strings.Contains(r.Out(), "src/config.ts") || !strings.Contains(r.Out(), "secret") || strings.Contains(r.Out(), key) {
+		t.Fatalf("a staged credential must block the commit, naming the file, never the value: %s", r.Out())
+	}
+	c.Git("reset", "-q", "--hard", "HEAD")
+
+	c.WriteFile(".lore/data/rules/rul_01a1a67a33b7777587cca0cfc9e5d8ef.json", `{"_table":"rules","_v":2,"id":"rul_01a1a67a33b7777587cca0cfc9e5d8ef","body":"use `+key+`"}`)
+	c.Git("add", "-A")
+	if r := c.TryGit("commit", "-m", "hand rule"); r.Code == 0 || !strings.Contains(r.Out(), "rul_01a1a67a33b7777587cca0cfc9e5d8ef.json") || strings.Contains(r.Out(), key) {
+		t.Fatalf("a credential in a hand-made row must block the commit and name the file: %s", r.Out())
+	}
+	c.Git("reset", "-q", "--hard", "HEAD")
+
+	c.Git("switch", "-q", "-c", "feat/key")
+	c.WriteFile("src/config.ts", "export const key = '"+key+"'\n")
+	c.Git("add", "src/config.ts")
+	c.Git("commit", "-q", "--no-verify", "-m", "hooks skipped")
+	if r := c.TryGit("push", "-u", "origin", "feat/key"); r.Code == 0 || !strings.Contains(r.Out(), "secret") {
+		t.Fatalf("pre-push must refuse the credential a --no-verify commit carries: %s", r.Out())
+	}
+	if found := w.Remote("github.com/solo/app").AllObjectsContain(key); len(found) != 0 {
+		t.Fatalf("the credential reached origin: %v", found)
+	}
 }

@@ -98,6 +98,10 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	if err != nil {
 		return opscheck.LeaksOut{}, err
 	}
+	// Secrets first, in every repo (hooksecrets.go), then F16 (client repos).
+	if serr := a.HookSecrets(ctx, root, checkWhereCommit, docs); serr != nil {
+		return opscheck.LeaksOut{}, serr
+	}
 	return opscheck.LeaksOut{}, a.LeakCheckDocs(ctx, l.res, checkWhereCommit, docs) // silent when clean
 }
 

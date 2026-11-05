@@ -78,6 +78,11 @@ func run(ctx context.Context, args []string) int {
 	// F16 on live writes and landings runs over the app built below.
 	var app *wire.App
 	leak := func(ctx context.Context, where string, docs map[string][]byte) error {
+		if where == wire.LeakWherePush { // a pushed credential is refused in every repo (hooksecrets.go)
+			if err := app.HookSecrets(ctx, wd, where, docs); err != nil {
+				return err
+			}
+		}
 		return app.LeakCheckDocs(ctx, org, where, docs)
 	}
 	// F16 at write time for a row written into a client repo (GuardRepoWrite):
