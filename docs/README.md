@@ -47,7 +47,6 @@ Each step builds on the one before. Every example is a script that runs the real
 | recover from a broken database | [Back up, restore and repair](operations/backup-restore-repair.md) | [`ops`](../tests/docs/sections/ops.sh) |
 | run lore in CI | [Use lore in CI](operations/ci.md) | [`ops`](../tests/docs/sections/ops.sh) |
 | find out what an error means | [Error codes and exit statuses](reference/errors.md), [Troubleshooting](team/troubleshooting.md) | [`reference`](../tests/docs/sections/reference.sh), [`errors`](../tests/team/docs/transcripts/errors.txt) |
-| check that my notes really help an agent | [Check that your notes help, with lore bench](operations/bench.md) | [`bench`](../tests/docs/sections/bench.sh) |
 | look up one command, flag or setting | [Reference](reference/README.md), [Feature index](reference/features.md) | — |
 
 ## Every page
@@ -95,7 +94,6 @@ Each step builds on the one before. Every example is a script that runs the real
 - [Secrets and personal data](operations/secrets-and-pii.md): why passwords are refused, your own patterns, and the safety switches.
 - [Use lore in CI](operations/ci.md): read-only mode, quiet hints, and failing a job on a bad health check.
 - [Plugin allow-list and database settings](operations/plugins-and-db-config.md): trusted plugin files and small per-machine settings.
-- [Check that your notes help, with lore bench](operations/bench.md): an exam for your notes.
 
 ### Lore for teams
 

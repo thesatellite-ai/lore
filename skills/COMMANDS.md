@@ -749,166 +749,13 @@ lore <cmd> --help                 # per-command help
 
 ---
 
-## Bench — evaluation engine
-
-DB-backed benchmark framework for measuring coding agent performance with vs without lore context. Three nouns: `eval` (task templates), `run` (one benchmark execution), `result` (one task × arm × attempt). Plus `report`/`grader`/`config` for analysis.
-
-See `BENCH_DESIGN.md` and `EVAL_PLAN.md` at repo root for full methodology.
-
-### `lore bench eval` — task definitions (templates)
-
-```bash
-# Author a task
-lore bench eval add \
-    --category=rule-trigger \
-    --link=rule:rul_<id> \
-    --prompt-file=task.md \
-    --grader-kind=programmatic \
-    --grader-cmd='! grep -qE "fmt\.Errorf" "$OUTPUT_FILE"' \
-    --expected-with=0.90 --expected-baseline=0.30 \
-    --notes="..."
-
-# Categories (typed enum):
-#   rule-trigger | hotfix-avoid | decision-respect | convention |
-#   capture-back | custom
-#
-# Linkage (--link=kind:id): rule:rul_<id> | hotfix:hfx_<id> | decision:dec_<id> |
-# memory:mem_<id>. Auto-snapshots the body at author-time.
-#
-# Grader kinds:
-#   programmatic → --grader-cmd='shell command; exit 0 = PASS'
-#   llm-judge    → --grader-rubric="..." [--grader-judge=claude-opus-4-7]
-#   golden-diff  → --grader-spec='{"golden_file":"…","threshold":0.85}'
-#   composite    → --grader-spec='{"checks":[…],"policy":"all-must-pass"}'
-
-# Inspect
-lore bench eval list [--category=… --linked-kind=… --include-archived] [--json]
-lore bench eval show E1-001 [--json]   # accepts code OR opaque id
-
-# Lifecycle
-lore bench eval edit E1-001 --grader-cmd='…'   # update any field subset
-lore bench eval archive E1-001                 # soft-delete (preserves history)
-lore bench eval unarchive E1-001
-lore bench eval delete E1-001 --confirm        # hard delete (refuses if any
-                                                  # bench_result rows reference it)
-lore bench eval duplicate E1-001 --as=E1-001b  # clone for editing
-
-# Bulk
-lore bench eval import --from=bench/tasks/     # one-shot YAML → DB migration
-lore bench eval export --to=bench/tasks/       # DB → YAML for git diff'ing
-```
-
-JSON envelope shape:
-```json
-{
-  "schema_version": 1,
-  "kind": "bench.eval.show",
-  "data": {
-    "id": "bve_019e...",
-    "code": "E1-001",
-    "category": "rule-trigger",
-    "linked_kind": "rule",
-    "linked_id": "rul_019e...",
-    "linked_body_snapshot": "Never wrap stdlib errors with fmt.Errorf",
-    "prompt": "Write a Go function that ...",
-    "grader_kind": "programmatic",
-    "grader_spec": {"cmd": "..."},
-    "expected_pass_with": 0.90,
-    "expected_pass_baseline": 0.30,
-    "archived_at": null,
-    "created_at": "2026-05-11T..."
-  }
-}
-```
-
-### `lore bench run` — execute
-
-```bash
-lore bench run start --model=<model> [--runs-per-arm=N] [--parallel=N] \
-    [--code=<human-code>] [--claude-md=<path>] \
-    [--eval-set=all|<category>|<code,code,...>] \
-    [--arms=baseline,with_skill] \
-    [--budget-cap=<usd>] [--temperature=<f>]
-
-# Models (router picks provider per call by prefix):
-#   claude-haiku-4-5-20251001    → hosted API ($ANTHROPIC_API_KEY) or
-#   claude-sonnet-4-6              local `claude` CLI on PATH
-#   claude-opus-4-7
-#   ollama:qwen3-coder:latest    → local Ollama (set $OLLAMA_HOST to override
-#   ollama:qwen2.5:32b             default http://localhost:11434);
-#   ollama:qwen2.5-coder:1.5b      cost = $0 so budget-cap doesn't trip
-#
-# --parallel=N (default 8): concurrent model calls in flight. Tune to your
-# provider's rate limit (4-8 for hosted API tier 1, 16-32 for tier 4,
-# 8-20 for Ollama which serializes internally per model).
-
-lore bench run list [--model=… --since=7d] [--json]
-lore bench run show <run-id-or-code> [--json]
-lore bench run cancel <run-id>
-lore bench run retry <run-id> --only-failed
-```
-
-### `lore bench result` — individual outcomes
-
-```bash
-lore bench result list  --run=<id> [--eval=E1-008] [--arm=with_skill]
-                           [--grade=pass|fail|error|skipped] [--json]
-lore bench result show  <result-id> [--json]
-lore bench result stats [--run=<id> | --latest] [--json]
-    # Arm × grade tally for one run. Works MID-RUN — read whatever is
-    # persisted so far. Default with no args = latest run.
-lore bench result compare <id-a> <id-b>   # side-by-side diff
-lore bench result regrade <id>            # re-run grader on stored output,
-                                              # NO model call required
-lore bench result replay  <id>            # re-run the model call entirely
-```
-
-### `lore bench report` — analysis
-
-```bash
-lore bench report summary [<run-id-or-code> | --latest] [--json|--md]
-    # No-arg form = newest run for current project. Use --latest for the
-    # same explicitly, e.g. in scripts.
-lore bench report compare <run-a> <run-b> [--json]
-lore bench report trend --since=30d [--by-model] [--json]
-lore bench report by-category <run-id> [--json]
-lore bench report regressions --since=last-week
-lore bench report analyze <run-id> [--json]   # paired t-test, Cohen's d,
-                                                  # 95% CI, power analysis
-```
-
-### `lore bench grader` — meta-tools (coming next)
-
-```bash
-lore bench grader test E1-001 --output-file=/tmp/sample.txt
-lore bench grader debug <result-id>
-lore bench grader audit                  # flags too-strict/too-loose/flaky
-```
-
-### Status of phases
-
-| Phase | Surface | Status |
-|---|---|---|
-| P2.1 | `bench_eval/run/result` schemas with full design + ent regen | ✅ shipped |
-| P2.2 | `bench eval add/list/show/edit/archive/unarchive/delete/duplicate/import/export` | ✅ shipped |
-| P2.3 | `bench run start/list/show/tail/cancel/retry` | next |
-| P2.4 | Grader runner refactor (Python → Go in-process) | |
-| P2.5 | `bench result list/show/compare/regrade/replay` | |
-| P2.6 | `bench report summary/compare/trend/by-category/analyze` | |
-| P2.7 | Statistical layer (t-test, Cohen's d, 95% CI) | |
-| P2.8 | `bench grader test/debug/audit` | |
-| P2.9 | Integration scenarios (SC-31..40 covering bench surface) | |
-| P2.10 | Skill `bench.md` + shell-completion polish | |
-
----
-
 ## Skill — meta-tools for the bundle itself
 
 The `skill` group manages the SKILL.md bundle (the docs you're reading right now).
 
 ### `lore skill compile` — model-compressed bundle (DRAFT GENERATOR — not ship-ready)
 
-> **⚠ Status: draft generator, not ship-ready.** Head-to-head benching showed the auto-compiled output scores ~70-75% on the 30-eval suite vs the hand-tuned canonical `SKILL-mini.md` at 100%. Treat compiler output as a starting draft for human review; never ship un-bench-verified.
+> **⚠ Status: draft generator, not ship-ready.** Hand-tuned `SKILL-mini.md` has been better than compiled output so far. Treat compiler output as a starting draft for human review.
 
 Reads every `.md` under `--source-dir` and asks a model to produce a compressed `SKILL-mini.md` (~13-25KB) suitable for small-context (≤32K) or weak-instruction-following models. The compiler's editorial rules are baked into the command (see `skill_compile.go::compressionRules`); update them there, then re-run.
 
@@ -928,7 +775,7 @@ lore skill compile --target=mini \
 - **`--temperature=`** at 0.2 is stable; raise to 0.5+ for more aggressive editorial trimming on retry.
 - **`--dry-run`** prints the compiled output to stdout instead of writing the file. Use to A/B before overwriting.
 
-**Non-determinism note:** the compiler is a model call. Same input does NOT produce the same output across runs. Always `git diff` before committing. Bench-verify the new bundle against your eval set before promoting it.
+**Non-determinism note:** the compiler is a model call. Same input does NOT produce the same output across runs. Always `git diff` before committing.
 
 **Mandatory workflow — DO NOT ship compiler output without these steps:**
 
@@ -939,28 +786,12 @@ lore skill compile --target=mini --output=skill/SKILL-mini-draft.md
 # 2. Diff structurally
 diff -u skill/SKILL-mini.md skill/SKILL-mini-draft.md | less
 
-# 3. Bench-verify against the FULL eval set (not just smoke)
-cd ../ai_coder_mini_skill_bench
-ln -sf ../ai_coder_mini_go/skill/SKILL-mini-draft.md bench-CLAUDE.md
-lore bench run start --model=ollama:qwen3-coder:latest \
-    --eval-set=all --parallel=12 \
-    --code=mini-draft-verify-$(date +%Y%m%d)
-lore bench report summary
-
-# 4. Compare to the canonical baseline
-ln -sf ../ai_coder_mini_go/skill/SKILL-mini.md bench-CLAUDE.md
-lore bench run start --model=ollama:qwen3-coder:latest \
-    --eval-set=all --parallel=12 \
-    --code=mini-canonical-$(date +%Y%m%d)
-lore bench report compare mini-draft-verify-$(date +%Y%m%d) mini-canonical-$(date +%Y%m%d)
-
-# 5. If draft >= canonical → promote with `mv` and `git diff` review.
-#    If draft <  canonical → tweak compressionRules() in
-#    saas/cmd/cli/skill_compile.go, recompile, re-bench.
-#    NEVER promote a draft that scored below canonical.
+# 3. Read the draft against the canonical file: every example and rule it dropped
+#    is a regression. Promote with `mv` only after that review; otherwise tweak
+#    compressionRules() in the compile command and recompile.
 ```
 
-**Why the bench-verify is non-negotiable:** the model-based compiler partially follows the editorial brief but consistently drops 1-2 critical examples per regen. Without an A/B vs canonical, those regressions ship silently.
+**Why the review is non-negotiable:** the model-based compiler partially follows the editorial brief but consistently drops 1-2 critical examples per regen.
 
 JSON envelope:
 ```json
@@ -1000,13 +831,7 @@ Intent                                       → Command
 "refresh the agent context file"             → render
 "why does the agent see X?"                  → why-context
 "is my project healthy?"                     → doctor
-"my DB is broken"                            → repair --tier=2 --confirm
-"what error codes exist?"                    → errors list --json
-"author a benchmark task"                    → bench eval add
-"list / show benchmark tasks"                → bench eval list / show
-"migrate YAML test set to DB"                → bench eval import --from=…
-"run the benchmark"                          → bench run start (v0.2.3+)
-"see benchmark results"                      → bench report summary (v0.2.3+)
+"my cache is broken"                         → search rebuild (the cache rebuilds from .lore/data)
 ```
 
 ## Sync (git-tracked `.lore/data/`)

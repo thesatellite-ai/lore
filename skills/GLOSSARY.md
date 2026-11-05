@@ -16,18 +16,6 @@ A file name several coding tools read for agent context. `lore render --target=A
 ## Audit log
 Append-only, hash-chained ledger of every change to a shared row (lore writes, imports from .lore/data, merges, and external writes found in the DB). `lore audit verify` checks the chain and flags rows changed outside lore; `lore audit log` lists entries.
 
-## Bench
-The DB-backed evaluation engine. Three nouns: **eval** (task template), **run** (one execution), **result** (task × arm × attempt outcome). Replaces the Phase-1 YAML + bash runner. See `BENCH_DESIGN.md`.
-
-## Bench eval
-A benchmark task template — independent of any run. Has `code` (e.g. `E1-001`), category enum, prompt, polymorphic link to a captured rule/hotfix/decision/memory, and a grader spec. Authored via `lore bench eval add`.
-
-## Bench run
-One benchmark execution. Captures `model + temperature + runs_per_arm + claude_md_sha256` (for reproducibility). Status flow: `running → complete | aborted | failed`. The 1:N parent of bench_results.
-
-## Bench result
-One row per (run × eval × arm × attempt). Stores `prompt_sent + output_received` verbatim so the grader can be re-run after a bug fix without paying for model calls again. `grade` enum: `pass | fail | error | skipped`. The unit of statistical analysis.
-
 ## BM25
 Ranking function used by SQLite FTS5. Orders search hits by term frequency × inverse document frequency. Better hits = lower bm25() values; lore flips sign so "higher score = better" for callers.
 

@@ -80,7 +80,6 @@ After capture, **always** run `lore render`. Without render, the captured knowle
 | **[SCENARIOS.md](./SCENARIOS.md)** | Concrete "the user said X" → "you run Y" — 60+ situations across 15 sections (first contact, capture, work tracking, search, render, recovery, scope, Mode B, tags, identity, CI, migration, inspection, edge cases, what to refuse). |
 | **[ERRORS.md](./ERRORS.md)** | A command failed with `E_*` code. Full registry of 37 codes + recovery decision tree. |
 | **[GLOSSARY.md](./GLOSSARY.md)** | You're unsure what a term means (activation, canary, master scope, polymorphic FK, mode A/B, etc.). |
-| **[bench.md](./bench.md)** | Anything bench engine — eval / run / result / report / grader. Full command tree + worked flows + anti-patterns. |
 | **[SKILL-mini.md](./SKILL-mini.md)** | Compressed (~16KB) bundle for small-context / weak-instruction-following models. Same teaching as SKILL.md in trigger-DSL form. Regenerate via `lore skill compile --target=mini`. |
 | **[examples/01-bootstrap.md](./examples/01-bootstrap.md)** | Setting up lore for the first time in an existing project. |
 | **[examples/02-capture-correction.md](./examples/02-capture-correction.md)** | User corrected your approach; capture the corrected way as a rule. |
@@ -538,30 +537,6 @@ The agent's **directive step 5** (rendered into `.lore/LORE.md`, reached via the
 
 | User says | Run |
 |---|---|
-| "set up a benchmark eval for X / author a bench task for rule rul_<id>" | `lore bench eval add --category=… --link=<kind>:<id> --prompt-file=- --grader-kind=programmatic --grader-cmd='…'` — **META, not capture**. Do NOT emit `rule add` for "set up an eval *for* rule rul_<id>" requests; the user wants to test the rule, not re-capture it. |
-| "set up a benchmark task" | `lore bench eval add --category=… --link=rule:rul_<id> --prompt-file=… --grader-kind=…` |
-| "list benchmark tasks" | `lore bench eval list [--category=…] [--json]` |
-| "show task E1-001" | `lore bench eval show E1-001 --json` |
-| "edit the grader" | `lore bench eval edit E1-001 --grader-cmd='…'` |
-| "soft-delete a task" | `lore bench eval archive E1-001` |
-| "clone a task to tweak" | `lore bench eval duplicate E1-001 --as=E1-001b` |
-| "import YAML test set" | `lore bench eval import --from=bench/tasks/` |
-| "export task set for git" | `lore bench eval export --to=bench/tasks/` |
-| "run the benchmark" | `lore bench run start --model=… --runs-per-arm=3 --parallel=8` |
-| "free local benchmark" | `lore bench run start --model=ollama:qwen3-coder:latest --parallel=12` |
-| "live stats during a run" | `lore bench result stats` (no args = latest) |
-| "summarize the latest run" | `lore bench report summary` (no args = latest) |
-| "compare runs" | `lore bench report compare <a> <b>` |
-| "summary of run X (or latest)" | `lore bench report summary [<X>\|--latest]` |
-| "trend over 30 days, by model" | `lore bench report trend --since=30d --by-model` |
-| "is the delta significant?" | `lore bench report analyze <run>` (paired t-test, Cohen's d) |
-| "per-category breakdown" | `lore bench report by-category <run>` |
-| "which evals regressed?" | `lore bench report regressions --since=last-week` |
-| "test grader against a sample file (no model call)" | `lore bench grader test E1-001 --output-file=<path>` |
-| "why did result X fail (grader trace)" | `lore bench grader debug <result-id>` |
-| "audit graders for flakiness" | `lore bench grader audit` |
-| "regrade after fixing the grader (free)" | `lore bench result regrade --run=<run>` |
-| "replay (call the model again for) one result" | `lore bench result replay <result-id>` ($, vs free `regrade`) |
 | "compile a small-model skill bundle" | `lore skill compile --target=mini --model=claude-sonnet-4-6` |
 
 ### Health / recovery
@@ -834,7 +809,6 @@ The DB has ~63 ent entities. ~32 have user-facing CLI commands (above). The rest
 | `interventionmetric`, `taskview`, `knowledge_revision`, `activityarchive` | analytics + history; read via SQL or v0.2 |
 | `assemble_run`, `assemble_citation` | retrieval pipeline runs |
 | `compress_run`, `learn_run` | background runs |
-| `bench_run`, `bench_eval`, `bench_result` | benchmark harness (v0.2) |
 | `external_source` | plugin protocol (v0.2) |
 | `identity_profile` | actor backing; manage via `identity` cmd |
 | `pii_pattern`, `trusted_plugin` | security registries (v0.2) |

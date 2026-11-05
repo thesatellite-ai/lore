@@ -307,62 +307,6 @@ T[remove my persisted identity | go back to auto-detected | unset identity | res
                                           #   anonymize → toggles anon mode (anon:<random> per session); identity FILE stays
                                           #   unset     → REMOVES ~/.lore/identity.yaml entirely → fall back to auto-resolve
 T[set my identity to X | record me as X]  → lore identity set "<X> <email>"
-T[set up a benchmark eval for X | author a bench task for rule rul_<id>]
-                                          → lore bench eval add --category=<rule-trigger|hotfix-avoid|...> --link=<kind>:<id> --prompt-file=- --grader-kind=programmatic --grader-cmd='...'
-                                          # --link kinds (SINGULAR): rule | hotfix | decision | memory
-                                          # NOT supported by --link: task, mission, pattern, playbook, etc.
-                                          # NOTE: this is META (defining a benchmark eval), NOT capturing knowledge.
-                                          # Do NOT emit `rule add` for "set up an eval for rule rul_<id>" requests.
-T[run the benchmark | execute the eval set]
-                                          → lore bench run start --model=<m> --runs-per-arm=<n> --parallel=<p>
-T[run a multi-arm bench | bench with baseline + with_skill + ablation arms]
-                                          → lore bench run start --model=<m> --arms=baseline,with_skill,ablation_<X> --runs-per-arm=<n>
-                                          # ONE run with multiple ARMS, not multiple evals; --arms is comma-separated
-T[re-run only failed evals from run X | retry failed | resume failed evals]
-                                          → lore bench run retry <run-id-or-code> --only-failed
-                                          # creates a NEW run that re-executes only the (eval, arm) tuples that failed in the parent run; do NOT invent --resume= on `run start`
-T[cancel the running bench | abort run X]
-                                          → lore bench run cancel <run-id-or-code>
-T[list benchmark evals | show me the eval set]
-                                          → lore bench eval list --json
-T[clone | copy | duplicate eval X as Y]
-                                          → lore bench eval duplicate X --as=Y   (canonical verb is `duplicate`, NOT `clone` or `copy`)
-T[archive eval X | soft-delete eval]      → lore bench eval archive X
-T[export evals to YAML | dump eval set for git | save evals to disk]
-                                          → lore bench eval export --to=bench/tasks/
-T[import evals from YAML | load eval set from disk]
-                                          → lore bench eval import --from=bench/tasks/
-T[delete eval X durably]              → lore bench eval delete X --confirm   (refuses if bench_result rows reference it)
-T[show me eval E1-001 | inspect the grader for X]
-                                          → lore bench eval show <code>
-T[regrade after fixing the grader]        → lore bench result regrade --run=<run>   (free; no model cost)
-T[re-run the model call entirely for X | replay result br_X | fresh sampling]
-                                          → lore bench result replay <result-id>      (DOES cost model calls; vs regrade which uses stored output)
-                                          # replay vs regrade:
-                                          #   regrade → re-evaluate against stored output (free)
-                                          #   replay  → re-call the model (costs $); use when you want fresh sampling
-T[test the grader against a sample file | check if X would pass without running the model]
-                                          → lore bench grader test <eval-code> --output-file=<path>   (offline grader probe — no model call)
-T[why did this result fail | grader trace for one result]
-                                          → lore bench grader debug <result-id>
-T[which graders are broken | audit graders for flakiness]
-                                          → lore bench grader audit
-T[live tally during a bench run]          → lore bench result stats                  (no args = latest run)
-T[compare result A against B | side-by-side two results | diff bench results]
-                                          → lore bench result compare <id-a> <id-b>   (do NOT emit two `result show` calls; use the dedicated compare verb)
-T[show one result | inspect a specific result | what did model emit for X]
-                                          → lore bench result show <result-id>
-T[summary of run X | headline numbers for X]
-                                          → lore bench report summary <X>            (no arg = latest)
-T[compare run A and run B | diff two runs]
-                                          → lore bench report compare <A> <B>
-T[trend over time | how have we improved | bench progress]
-                                          → lore bench report trend --since=30d [--by-model]
-T[is the delta significant | statistical analysis | p-value]
-                                          → lore bench report analyze <run>
-T[which evals regressed | what got worse]
-                                          → lore bench report regressions --since=last-week
-T[per-category breakdown for run X]       → lore bench report by-category <X>
 T[file a bug | make a support bundle | generate a bundle for the issue]
                                           → lore support-bundle --out=/tmp/lore-bundle.tar.gz
                                           # (default omits memory/rule content; pass --include-content if rule bodies should be in the bundle)
@@ -684,10 +628,6 @@ User: Pattern pat_019e... is obsolete now — archive it but don't delete.
 You: (User already gave the opaque ID. Do NOT pipeline `pattern list | jq | xargs` — just archive directly.)
   lore pattern archive pat_019e...
   lore render
-
-User: Here's the raw output of 'lore bench result list --run=foo': [data]. Just tell me what this means in plain English. Don't capture anything.
-You: (Explicit "don't capture anything" + "tell me what this means" — respond in prose ONLY, NO `lore add` regardless of the content.)
-  These are two bench results. br_111 is the baseline arm (no skill bundle in context); br_222 is the with_skill arm (skill bundle loaded). Both passed, with similar latencies (~1.2-1.5s). Same eval (01234567), one attempt each.
 
 User: DB feels slow lately, queries are taking longer — what should I check first?
 You: (Symptom + "what should I check?" → DIAGNOSTIC question. Do NOT capture as a hotfix; emit doctor + investigation steps.)

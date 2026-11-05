@@ -251,7 +251,6 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 | `lore learn-from <source>` | Bootstrap knowledge from existing markdown/docs |
 | `lore learn` | Manage background-learning staging: `from / list / promote / reject` |
 | `lore external-source` | Register sources for `learn-from`: `add / enable / disable / list` (disabled by default) |
-| `lore bench` | Benchmark engine — define, run, and report on eval tasks: `eval / run / report / result / grader` |
 | `lore directive` | Install/remove/show the agent-directive block |
 | `lore skill` | Meta-tools for the lore skill bundle (`compile` — shorten the main bundle with a model) |
 | `lore session` / `lore querylog` | Inspect sessions and the query log |
@@ -331,7 +330,7 @@ lore keeps a fast SQLite cache in `.lore/lore.db` (gitignored) and writes every 
 <!-- ds:block id=sync-syncedtables-rgmtjeph -->
 <!-- ds:block id=sync-localtables-dcpb69pj -->
 <!-- ds:block id=sync-volatile-4t6jsc7v -->
-**What syncs.** Knowledge and work tracking (rules, decisions, memories, patterns, hotfixes, playbooks, prompts, tasks, missions, plans, tags, comments, …). Telemetry stays local: search logs, render history, run logs, audit chains, benchmark results, the search index, embeddings and access counters.
+**What syncs.** Knowledge and work tracking (rules, decisions, memories, patterns, hotfixes, playbooks, prompts, tasks, missions, plans, tags, comments, …). Telemetry stays local: search logs, render history, run logs, audit chains, the search index, embeddings and access counters.
 
 <!-- ds:block id=sync-mergedriver-config-bur8yta8 -->
 <!-- ds:block id=sync-strategyfor-ycedma28 -->

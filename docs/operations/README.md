@@ -12,7 +12,6 @@
 | [Secrets and personal data](secrets-and-pii.md) | understand why lore refuses a note, keep one on your machine only, add your own patterns, or use the `LORE_ALLOW_*` safety switches |
 | [Use lore in CI](ci.md) | run lore read-only on a build machine, quiet the setup hint and fail the job when lore is not healthy |
 | [Plugin allow-list and database settings](plugins-and-db-config.md) | trust a plugin file by its fingerprint, or read and write settings stored in the database |
-| [Check that your notes help, with `lore bench`](bench.md) | write test questions with automatic markers and run them against a local model |
 
 ## Commands on these pages
 
@@ -24,7 +23,6 @@
 | `lore pii-pattern add/list/enable/disable`, `--secret-ref` / `--secret-unstored` / `--not-a-secret` on a secret warning, `LORE_ALLOW_ROOT`, `LORE_ALLOW_NETWORK_FS`, `LORE_ALLOW_DB_PATH_OUTSIDE` | [secrets-and-pii](secrets-and-pii.md) |
 | `--read-only`, `LORE_READ_ONLY`, `LORE_NO_STALE_WARN`, `lore context --internal` | [ci](ci.md) |
 | `lore plugin list/trust/untrust`, `lore config get/set/list` | [plugins-and-db-config](plugins-and-db-config.md) |
-| `lore bench eval/run/result/grader/report`, `OLLAMA_HOST` | [bench](bench.md) |
 
 ## Related
 

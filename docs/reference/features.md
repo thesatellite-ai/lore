@@ -34,7 +34,7 @@ The commands were collected from `lore --help` of the current build, the config 
 - [Search](#search)
 - [Projects and repos](#projects-and-repos)
 - [Safety, audit and recovery](#safety-audit-and-recovery)
-- [Browse and evaluate](#browse-and-evaluate)
+- [Browse](#browse)
 - [Config file keys (`~/.lore/config.yaml`)](#config-file-keys-loreconfigyaml)
 - [Environment variables](#environment-variables)
 - [Error codes and exit statuses](#error-codes-and-exit-statuses)
@@ -247,16 +247,11 @@ The commands were collected from `lore --help` of the current build, the config 
 | `--read-only` / `LORE_READ_ONLY` | Run without taking the write lock; any write is refused. | `saas/pkg/aicoder/processlock` | [operations/ci › Step 1 — Make every write fail](../../docs/operations/ci.md#step-1--make-every-write-fail) | [docs example `ops`](../../tests/docs/sections/ops.sh), [docs example `reference`](../../tests/docs/sections/reference.sh) |
 | `lore errors list` | List every error code with a one-line meaning. | `saas/pkg/aicoder/errcodes` | [operations/doctor › Look up an error code](../../docs/operations/doctor.md#look-up-an-error-code) | [docs example `ops`](../../tests/docs/sections/ops.sh), [docs example `reference`](../../tests/docs/sections/reference.sh) |
 
-## Browse and evaluate
+## Browse
 
 | Feature | What it is for | Package | Guide | Example |
 |---|---|---|---|---|
 | `lore tui` | Browse every row in a terminal app with vim keys (`?` shows the keys). | `saas/cmd/cli` (tui.go) | [knowledge/tui › Step 1 — Open it](../../docs/knowledge/tui.md#step-1--open-it) *(brief)* | none: an interactive terminal app, not a command with output to show |
-| `lore bench eval` (add, list, show, edit, duplicate, import, export, archive, delete) | Write test questions to check how well your notes help an agent. | `saas/cmd/cli` (bench_eval.go) | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) | [docs example `bench`](../../tests/docs/sections/bench.sh) |
-| `lore bench run` (start, list, show, cancel, retry) | Run the test questions. | `saas/cmd/cli` (bench_run.go) | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) | [docs example `bench`](../../tests/docs/sections/bench.sh) |
-| `lore bench result` (list, show, compare, regrade, replay, stats) | Look at the answers of a run. | `saas/cmd/cli` (bench_result.go) | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) | [docs example `bench`](../../tests/docs/sections/bench.sh) |
-| `lore bench grader` (test, debug, audit) | Check the grader that scores answers. | `saas/cmd/cli` (bench_grader.go) | [operations/bench › Step 2 — Check the marker before any model sees it](../../docs/operations/bench.md#step-2--check-the-marker-before-any-model-sees-it) | [docs example `bench`](../../tests/docs/sections/bench.sh) |
-| `lore bench report` (summary, trend, compare, regressions, by-category, analyze) | Reports over many runs. | `saas/cmd/cli` (bench_report.go) | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) | [docs example `bench`](../../tests/docs/sections/bench.sh) |
 
 ## Config file keys (`~/.lore/config.yaml`)
 
@@ -301,7 +296,7 @@ The commands were collected from `lore --help` of the current build, the config 
 | `LORE_TRACE` | `1` prints every git command lore runs for live rows, like `--trace`. | `saas/cmd/cli` | [reference/environment › Live rows and the network](../../docs/reference/environment.md#live-rows-and-the-network) *(brief)* | [docs example `environment`](../../tests/docs/sections/environment.sh) |
 | `LORE_NOW` | A fixed clock for test builds only (`-tags loretest`); normal builds ignore it. | `saas/cmd/cli` | [reference/environment › Set by lore itself](../../docs/reference/environment.md#set-by-lore-itself) *(brief)* | none: only test builds read it; the example runners use it to fix the clock |
 | `LORE_RIDE_ACTIVE` | Set by lore itself during a ride-along commit; never set it by hand. | `saas/cmd/cli` | [reference/environment › Set by lore itself](../../docs/reference/environment.md#set-by-lore-itself) *(brief)* | none: lore sets it itself during a ride-along commit |
-| `OLLAMA_HOST` | Address of a local model server for `lore bench` and `lore skill compile` (default localhost:11434). | `saas/pkg/aicoder/llmcall` | [operations/bench › Before you start](../../docs/operations/bench.md#before-you-start) *(brief)* | none: it needs a running model server |
+| `OLLAMA_HOST` | Address of a local model server for `lore skill compile` (default localhost:11434). | `saas/pkg/aicoder/llmcall` | [reference/environment](../../docs/reference/environment.md) *(brief)* | none: it needs a running model server |
 | `NO_COLOR / FORCE_COLOR` | Turn colours off or on. | `saas/pkg/aicoder/style` | [reference/environment › Output](../../docs/reference/environment.md#output) *(brief)* | [docs example `environment`](../../tests/docs/sections/environment.sh) |
 
 ## Error codes and exit statuses

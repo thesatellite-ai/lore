@@ -99,8 +99,6 @@ lore.
   upgrading the binary.
 - `--scope=foobar` and other invalid enum values: the skill bundle says to
   surface the error rather than forward.
-- `bench eval --link` only supports `rule | hotfix | decision | memory`
-  (not `task`, `pattern`, etc.).
 
 ## When you're done
 

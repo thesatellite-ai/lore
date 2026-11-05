@@ -231,7 +231,7 @@ trace: git config --get user.email (<time>, ok)
 |---|---|
 | `NO_COLOR` | any non-empty value turns colours off (when `--color` is `auto`) |
 | `FORCE_COLOR` | any non-empty value turns colours on (when `--color` is `auto` and `NO_COLOR` is not set) |
-| `OLLAMA_HOST` | address of a local model server for `lore bench` and `lore skill compile` (default `localhost:11434`; `http://` is added when missing) |
+| `OLLAMA_HOST` | address of a local model server for `lore skill compile` (default `localhost:11434`; `http://` is added when missing) |
 
 Into a pipe lore prints no colours; `FORCE_COLOR` turns them on (`cat -v` shows the colour codes), and `NO_COLOR` wins when both are set. The example shell sets `NO_COLOR` for every command, hence the `unset`:
 
