@@ -86,4 +86,4 @@ mem_54fe…28f2  the client invoice template lives in the shared drive  [me]
 - **Filing is by place, not by text.** Lore never guesses the company from what you wrote. It files the note under the org of the repo you are in. To file a note for every repo, write it from a repo that belongs to no org.
 - **Never in the checkout.** Personal notes are rendered into `~/.lore/render/…`, outside the repo, like internal notes. Nothing personal is written to a committed file.
 - **A personal store repo is a lore store**: create it with `lore store init` on a new, empty, private repo.
-- Personal notes are for you. To give one to your team, use `lore share <id> --to agency`; see [Sharing an internal note with the client](sharing-a-note.md) for how sharing works.
+- Personal notes are for you. To give one to your team, use `lore move <id> --to agency` (it keeps the id); see [Sharing an internal note with the client](sharing-a-note.md) for how moving works.

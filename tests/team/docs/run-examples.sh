@@ -296,7 +296,7 @@ s_agency() {
   actor=$(grep -o 'LORE_ACTOR=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2); session=$(grep -o 'LORE_SESSION=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2)
   EXTRA_ENV="LORE_ACTOR=$actor LORE_SESSION=$session" on! alice work/website "lore rule add --body 'require prepayment from this client'"
 
-  note "share"
+  note "move"
   on alice work/website "lore memory add --body 'checkout must support INR and USD'"
   local m2; m2=$(id mem)
   # 0.1.18: lore share is removed (a row has one home); lore move gives it to the client repo, same id.

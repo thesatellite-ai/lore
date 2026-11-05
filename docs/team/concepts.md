@@ -192,7 +192,7 @@ The **repo role** decides which guards apply. A leak guard is a check that stops
    --to me        --to agency           --to agency/org    --to repo
 ```
 
-`--to` picks **who** sees a row. `--live` picks **when**. The two are independent. In a client repo, a row written without `--to` goes to the org's default for its kind. By default, tasks and memories go to the linked internal project, and rules and decisions need a person at a terminal or an explicit `--to`. So forgetting a flag puts a note in the safe place. Moving a row to a wider audience is always one deliberate step: `lore share` shows the text, asks, and writes a new copy with a new id. A pointer (a row that names another row's id) never goes from a wider layer to a narrower one, because the pointer alone would show that the hidden row exists.
+`--to` picks **who** sees a row. `--live` picks **when**. The two are independent. In a client repo, a row written without `--to` goes to the org's default for its kind. By default, tasks and memories go to the linked internal project, and rules and decisions need a person at a terminal or an explicit `--to`. So forgetting a flag puts a note in the safe place. Moving a row to a wider audience is always one deliberate step: `lore move <id> --to <target>` shows the text, asks, and moves the row with the same id (a row has one home, so there is never a second copy). A pointer (a row that names another row's id) never goes from a wider layer to a narrower one, because the pointer alone would show that the hidden row exists.
 
 ## The fixed rules in plain words
 

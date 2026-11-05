@@ -204,7 +204,7 @@ To give the client an internal note on purpose: lore move <id> --to repo (it kee
 - The text should not be there: remove it, or `lore move <id> --to <org>` if a note was filed in the wrong place.
 - When the leaking file is a lore row of this repo (a rule, memory or task file), the hint names that row: `lore move <row> --to <org>` to keep it internal, or `lore <kind> delete <row> --confirm` to remove it.
 - When a `lore <kind> add --to repo` is refused, the hint says "Nothing written": nothing was saved; write it with `--to <org>` instead.
-- It really should be shared with the client: `lore share <id> --to repo` (see [Sharing an internal note](use-cases/sharing-a-note.md)).
+- It really should be shared with the client: `lore move <id> --to repo` (it keeps the id; see [Sharing an internal note](use-cases/sharing-a-note.md)).
 - `lore check leaks --explain` shows the rule and the matched words.
 
 The same check runs again at push (the `pre-push` hook), on every commit the push would send; there the fix is to rewrite the commits that carry the text (`git commit --amend`, or `git rebase`). Never bypass either check with `git commit --no-verify` or `git push --no-verify` in a client repo: they skip every local check, and only `lore check leaks --ci` in the client's CI (ids, not sentences) is left. If something already reached the client, follow [Cleaning up after a leak](use-cases/leak-cleanup.md).

@@ -431,8 +431,8 @@ A **leak** is internal or personal content reaching anything the client can read
                       run at: pre-commit (all staged files), commit-msg, pre-push (every commit
                       and file version the push sends), every write to the client's live ref,
                       every landing commit, `lore check pr-body`; unsure → block
- 4. one deliberate    `lore share` shows the text, asks, writes a copy with a new id
-    step to share     (agents cannot pass --yes)
+ 4. one deliberate    `lore move` shows the text, asks, moves the row with the same id
+    step to share     (one home: never a second copy)
 ```
 
 <!-- example: agency#leak-blocked only=1,2 -->

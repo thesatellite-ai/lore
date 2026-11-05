@@ -470,25 +470,6 @@ Usage:
 
 ## Moving rows between audiences
 
-### `lore share`
-
-<!-- help: share -->
-Copy a row to a wider audience (new id; shows the text and asks)
-
-```text
-Usage:
-  lore share <id> --to <target>
-
-Examples:
-  lore share mem_0c12 --to repo
-  lore share mem_77 --to agency
-
-Flags:
-      --to string   the target: repo | <org> | <org>/<folder> | me (required)
-      --yes         confirm without a prompt
-```
-<!-- /help -->
-
 ### `lore move`
 
 <!-- help: move -->
