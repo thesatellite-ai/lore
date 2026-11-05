@@ -73,10 +73,22 @@ func (e *Engine) scanMeta(ctx context.Context, cl call, target store.Source, row
 		}
 		// 19.1: the key name is scanned too (an identifier, never redacted)
 		leaves = append([]meta.Leaf{{Text: en.Name, Key: true}}, leaves...)
-		for _, l := range leaves {
-			field := row.KeyMeta + "." + en.Name
-			if ps := l.PathString(); ps != "" {
-				field += "." + ps
+		base := row.KeyMeta + "." + en.Name
+		for i, l := range leaves {
+			// a finding's field goes into the error, the audit and the
+			// warnings, so an identifier that holds the secret is never part
+			// of it: the key name's own finding is "meta.(key name)", a member
+			// name's is "<key> (member name)" without the path (P3-METASEC-1)
+			field := base
+			switch {
+			case i == 0:
+				field = row.KeyMeta + ".(key name)"
+			case l.Key:
+				field += " (member name)"
+			default:
+				if ps := l.PathString(); ps != "" {
+					field += "." + ps
+				}
 			}
 			found, warn := e.scanText(field, l.Text)
 			if warn != nil {
@@ -213,6 +225,10 @@ func redactableMeta(t meta.Type) bool {
 		return true
 	case value.KindList:
 		return t.Elem == "" || t.Elem == value.KindText
+	case value.KindNumber, value.KindBool, value.KindDate, value.KindDateTime, value.KindDuration,
+		value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef,
+		value.KindNull, value.KindSecretRef:
+		// a typed value: a reference would break its type
 	}
 	return false
 }
