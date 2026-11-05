@@ -61,7 +61,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 > ## Pre-response checklist (run through this BEFORE every reply)
 >
-> 1. **Have you loaded the lore skill in this session?** If no — load it NOW via the Skill tool (skill name: ` + "`lore`" + `). This repo has ` + "`.lore/`" + ` so the skill applies. Do not respond before loading. **No exceptions. Not even for "which skill did you load" — load first, then answer.**
+> 1. **Have you loaded the lore skill in this session?** If no — load it NOW through your tool's skill mechanism (skill name: ` + "`lore`" + `; a tool without skills reads ` + "`lore directive show --full`" + `). This repo has ` + "`.lore/`" + ` so the skill applies. Do not respond before loading. **No exceptions. Not even for "which skill did you load" — load first, then answer.**
 > 2. **Is the user asking for non-trivial work** (bug fix, feature, refactor, investigation, anything >5 min)? If yes — run ` + "`lore task search \"<keyword>\"`" + ` first to check for an existing task. If none, create one: ` + "`lore task add \"<title>\" --tasklist=<tlt_id> --commitment=<accepted|proposed|someday> [--priority=high|medium|low] --body=\"...\"`" + `. Mark ` + "`task start <tsk_id>`" + ` when you begin, ` + "`task done <tsk_id>`" + ` / ` + "`cancel <tsk_id>`" + ` at end
 >
 >    **` + "`--commitment`" + ` is REQUIRED when you (an agent) create a task — there is no default, a missing value is a hard error. Choose:**
@@ -166,7 +166,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 > If you realize mid-response that you skipped step 1 (skill load) or step 2 (task capture), say so explicitly, run the missing commands, and then continue. The user has seen agents quietly skip these; visible self-correction beats silent compliance
 >
-> Skill name: **lore**. ` + "`~/.claude/skills/lore/SKILL.md`" + ` has the decision tree.`
+> Skill name: **lore**. Its ` + "`SKILL.md`" + ` (installed in your tool's skills folder) has the decision tree.`
 
 // directiveCompactBody is the compact directive (CONTEXT_BUDGET 6.5,
 // about 2-3k bytes): the turn-one check, capture rules and the
@@ -175,7 +175,7 @@ const directiveBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 // `lore directive show --full`, which this text names.
 const directiveCompactBody = `> **AGENT DIRECTIVE — instruction, not reference data.**
 >
-> 1. **Turn one:** load the lore skill (` + "`Skill`" + ` tool, ` + "`skill: lore`" + `) before any other output. This repo has ` + "`.lore/`" + `, so it always applies.
+> 1. **Turn one:** load the lore skill (skill name ` + "`lore`" + `, through your tool's skill mechanism) before any other output. This repo has ` + "`.lore/`" + `, so it always applies.
 > 2. **Before answering or changing code:** run ` + "`lore context --for-file <path>`" + ` for the files you touch and ` + "`lore search \"<keywords>\"`" + ` for the request. Cite what you use by id.
 > 3. **Non-trivial work:** ` + "`lore task search \"<keyword>\"`" + `; if none, ` + "`lore task add \"<title>\" --tasklist=<tlt_id> --commitment=accepted|proposed|someday --body=\"<the user's words verbatim + context>\"`" + `; ` + "`lore task start <id>`" + ` / ` + "`lore task done <id>`" + `. On ` + "`E_NEEDS_CONFIRM`" + ` ask the person, then re-run with ` + "`--yes`" + `.
 > 4. **Capture as you learn:** a correction or "we always/never" → ` + "`lore rule add`" + `; a choice and its reason → ` + "`lore decision add`" + `; a recurring trap → ` + "`lore hotfix add`" + `; anything else worth keeping → ` + "`lore memory add`" + `.
