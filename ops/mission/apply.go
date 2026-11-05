@@ -74,6 +74,24 @@ type ApplyIn struct {
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be written; write nothing"`
 }
 
+// TargetName implements op.TargetNamer: the plan's mission.to, so the
+// Runner attaches a `<store>/<folder>` target before the run the same way
+// it does for `mission add --to` (BUG-T8). It reads the file only; a bad
+// file is reported by apply itself.
+func (in ApplyIn) TargetName() (string, error) {
+	raw, err := os.ReadFile(in.File)
+	if err != nil {
+		return "", err
+	}
+	var p File
+	if err := yaml.Unmarshal(raw, &p); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(p.Mission.To), nil
+}
+
+var _ op.TargetNamer = ApplyIn{}
+
 // ApplyOut is the output of mission.apply.
 type ApplyOut struct {
 	MissionID string `json:"mission_id"`
@@ -171,7 +189,8 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 			extra += "  gate " + g
 		}
 		title := work.Field(t, work.FieldTitle)
-		b.WriteString("  " + t.ID.String() + " " + title + strings.Repeat(" ", max(0, applyTitleWidth-len(title))) + extra + "\n")
+		line := "  " + t.ID.String() + " " + title + strings.Repeat(" ", max(0, applyTitleWidth-len(title))) + extra
+		b.WriteString(strings.TrimRight(line, " ") + "\n") // no padding left at the end of a line with no extras
 	}
 	out.Human = b.String()
 	return out, nil

@@ -132,6 +132,35 @@ func (i Input) Texts() []TextValue {
 	return out
 }
 
+// TargetNamer is an optional method of an input struct whose target store
+// is not a `to` field the caller types but is named elsewhere (mission
+// apply: the plan file's `to:`). The Runner reads it to attach a
+// `<store>/<folder>` target before the run, exactly as for `--to`, so
+// both spellings resolve the same way (BUG-T8). An error means the name
+// cannot be read yet; the Runner leaves the reporting to the operation.
+type TargetNamer interface {
+	TargetName() (string, error)
+}
+
+// NamedTarget returns the target an input names through TargetNamer; ok
+// is false when the input has no such method or it could not be read.
+func (i Input) NamedTarget() (name string, ok bool) {
+	if !i.v.IsValid() || !i.v.CanInterface() {
+		return "", false
+	}
+	// reflect.Value.Interface returns the stdlib's untyped value; it is
+	// narrowed to TargetNamer on this line and never kept untyped.
+	t, isNamer := i.v.Interface().(TargetNamer)
+	if !isNamer {
+		return "", false
+	}
+	n, err := t.TargetName()
+	if err != nil {
+		return "", false
+	}
+	return n, true
+}
+
 // Bool returns the value of the bool field with json name name; ok is false
 // when there is no such bool field.
 func (i Input) Bool(name string) (value, ok bool) {

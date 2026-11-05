@@ -54,9 +54,17 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 			to = tv.Text
 		}
 	}
+	named := false
+	if to == "" {
+		// mission apply names its target in the plan file (BUG-T8)
+		to, named = in.NamedTarget()
+	}
 	base, folderName, ok := strings.Cut(to, targetSep)
 	if !ok || base == "" || folderName == "" {
 		return "", "", nil
+	}
+	if named && folderName == rowfs.FolderRoot {
+		return "", "", nil // `<store>/.` is rewritten in a to field only; the run answers it
 	}
 	name := store.Source(to)
 	a.mu.Lock()
