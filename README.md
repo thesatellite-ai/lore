@@ -150,7 +150,7 @@ lore decision add --title="Payments" --body="We use Stripe for payments"
 lore search "whatsapp"           # search across all knowledge
 lore render                      # compile knowledge → .lore/LORE.md + @import pointer in CLAUDE.md
 
-lore tui                         # browse everything interactively
+lore tui                         # browse everything (read-only)
 
 # share it with your team: the knowledge is plain files under .lore/data/
 git add .lore/data .gitattributes && git commit -m "lore knowledge"
@@ -161,7 +161,8 @@ git add .lore/data .gitattributes && git commit -m "lore knowledge"
 - **Project** — a local database under `.lore/` per repo (created by `lore init`), mirrored to committed JSON files under `.lore/data/` so it travels with the code (see [Team sync through git](#team-sync-through-git)).
 - **Entities** — typed knowledge records: `memory`, `rule`, `decision`, `pattern`, `hotfix`, `snapshot`, `playbook`, `prompt`, `task`, `mission`, `plan`, `reminder`, `handoff`, `incident`, `techdoc`, and more.
 - **Scope** — knowledge is scoped to the whole project (`master`) or a specific `--repo`. `add` persists `repo_id`; `list` and `search` filter by it with identical semantics (`--repo`, `--all-repos`, `--master-only`, `--no-inherit`). Real per-repo scoping — no body prefix-tag convention needed. Re-scope an existing row with `edit --rebind-repo=<mount>` / `edit --rebind-master`. Bare `--repo` on `edit` is context-only (never mutates scope; warns loudly). For audited body+scope change use `add --supersedes=<old_id> --repo=<mount>`.
-- **Render** — `lore render` compiles the relevant scoped knowledge into a generated file (default `.lore/LORE.md`) and stitches an idempotent `@import` pointer into your agent file (`CLAUDE.md` by default, or `AGENTS.md` / `.cursorrules` via `--target`) — so your hand-written `CLAUDE.md` content is never clobbered. Use `--no-pointer` to write only the generated file, or `--out` to change its path.
+- **Render** — `lore render` compiles a small **core** of the project's knowledge into a generated file (default `.lore/LORE.md`), kept inside a byte budget: must rules, critical and high hotfixes, the agent's operating rules and an index of topics. It stitches an idempotent `@import` pointer into the file your coding tool reads (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/lore.mdc`, `GEMINI.md`, … chosen with `--target`; with no tool file in the repo, `lore init` picks `AGENTS.md`), so your hand-written content is never clobbered. Use `--no-pointer` to write only the generated file, or `--out` to change its path.
+- **Agent workflow** — the agent reads the core (it is already loaded through the pointer file), runs `lore context --for-file <path>` before it touches a path (the rules, hotfixes and notes for that file and its folders), and `lore search "<keywords>"` for everything else. `lore setup --agent-hooks` makes Claude Code, Codex and Gemini CLI fetch the per-file context by themselves.
 
 ### The common verb pattern
 
@@ -228,7 +229,8 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 | `lore <entity> search "<q>"` | Scope search to a single entity type |
 | `lore search status` | Per-entity search-index counts + health |
 | `lore search rebuild` | Rebuild the search index from source rows |
-| `lore render` | Compile scoped knowledge → `.lore/LORE.md` and stitch an `@import` pointer into the agent file. `--out`, `--target AGENTS.md`, `--no-pointer`, `--dry-run`, `--repo`, `--project` |
+| `lore context --for-file <path>` | What applies to one file before the agent touches it; also `--for-task <id>`, `--topic <t>`, `--topics`, `--for-prompt "<text>"` |
+| `lore render` | Compile the core → `.lore/LORE.md` and stitch an `@import` pointer into the agent file. `--out`, `--target <profile>`, `--no-pointer`, `--dry-run`, `--check`, `--report` |
 | `lore why-context` | Show the last rendered context (exactly what the agent saw) |
 | `lore commit-show <sha>` | Show every entity linked to a git commit |
 
@@ -409,14 +411,7 @@ Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses 
 
 ## Interactive TUI
 
-`lore tui` opens a full terminal UI to browse, filter, view, and edit every entity in the DB — vim-style keys, fuzzy search, live theme toggle.
-
-![lore TUI — main list view](docs/screenshots/main.jpg)
-
-| | |
-|---|---|
-| ![lore TUI — entity detail view](docs/screenshots/view.jpg) | ![lore TUI — edit form](docs/screenshots/edit.jpg) |
-| ![lore TUI — actions menu](docs/screenshots/actions.jpg) | ![lore TUI — quick help](docs/screenshots/quick-help.jpg) |
+`lore tui` is a read-only browser in the terminal: a screen of every table with its row count, then one page of rows per table (type `/text` to filter, `n`/`p` to page), then every field of one row (sensitive values masked). `lore tui --kind decision` opens on one table first. It reads every attached store and changes nothing; add and edit rows with the `lore <kind> add|edit` commands. The full-screen editing TUI of v0.1.17 is gone in 0.1.18.
 
 ## FAQ
 

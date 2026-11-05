@@ -4,6 +4,49 @@ All notable changes to lore are recorded here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+lore 0.1.18: a new core under every command. The release version, date and install lines are added when it is tagged.
+
+### Added
+
+- **The files are the truth.** Every shared row is one `_v: 2` JSON file under `.lore/data` (or in an attached store); the local SQLite cache is built from those files at run time and rebuilds itself when it is missing or damaged. Every write goes through one path: secret scan, validation, references, policy, the store, the cache, then the audit trail.
+- **Stores:** git stores (a store branch, pushed at once, two clones converge) and folder stores (`file://`), attached per repo in `.lore/stores.yaml`; `--to` picks where a row is written.
+- **`lore api`:** a local REST server on 127.0.0.1 with an OpenAPI description, built from the same operation list as the CLI, so every command has the same inputs, checks and errors over HTTP.
+- **`lore migrate run`** converts v0.1.17 data (`_v: 1` rows, org links and roster, shared-database Mode B config) with `--dry-run`, `rollback`, a crash journal and `lore migrate unlock`; old config files are moved aside as `*.migrated`, never deleted (`~/.lore/identity.yaml` becomes `identity.yaml.migrated`).
+- **Trash:** `delete` moves rows to the trash; `lore trash list|show|restore|purge`, `delete --purge` and the `trash.purge_on_delete` policy, `--from-history` to bring back a row from git history, and `lore batch undo` for a delete or create batch (an edit batch with later changes is refused whole with `E_STALE`).
+- **Context budget:** `lore render` writes a small core into `.lore/LORE.md` inside a byte budget (must rules, critical and high hotfixes, the operating rules, an index of topics) with `--report`, `--check`, `--trend` and `.lore/LORE.full.md`; folder scopes get their own `LORE.md`; `lore context --for-file|--for-task|--topic|--topics|--for-prompt` fetches the rest; `lore setup --agent-hooks` wires it into Claude Code, Codex and Gemini CLI; `lore lint --context`; `lore pin set|unset`.
+- **Tool profiles:** no tool is the default. `lore init` detects the tool file in the repo (or writes `AGENTS.md` when there is none) and saves the choice as the `context.targets` policy; profiles cover `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/lore.mdc`, `GEMINI.md`, `.github/copilot-instructions.md` and user profiles.
+- **Metadata, resources, variables and secret references:** `lore meta`, `lore resource`, `lore vars` and `${var:…}` references in any text field; `lore secrets` keeps references to a vault entry instead of the value.
+- **Task trees and templates:** sub-tasks with `task split`, tree limits, `auto_start_parent`, task templates; time spans and estimates in hours and minutes.
+- **Provenance and machines:** an origin block `_o` on every row (`--origin`), a `repos` row per checkout and machine rows; `lore repo fork --new-project`.
+- `lore trash`, `lore sql` (read-only SQL over the cache with joins from the table definitions), `lore policy set|unset|show`, `lore cache prune`, `lore upgrade`, `lore hold claim`, `lore context --internal`, `--archived` on every list, `--color` and `--trace` on every command.
+- Agent detection: the CLI records which coding agent ran a command, and `lore api` reads `X-Lore-Agent`, so `agents.person_only` applies on both.
+
+### Changed
+
+- **Breaking: exit statuses follow the error class** (`lore spec` writes the table into the reference): bad input 20 (a missing argument was 1), ambiguous 21, refused 23, needs confirmation 26 (a declined prompt is `E_NEEDS_CONFIRM`, never success), not found 27; coordination codes keep 10–18.
+- **Breaking: `--db` is refused on row commands**; the core never opens `lore.db` for shared rows. `LORE_READ_ONLY` and `--read-only` still apply.
+- **Breaking: identifiers are snake_case.** Tag names, metadata keys (each dot segment), resource kind and field names and allowed values are refused with a suggested snake_case name; nothing is converted silently.
+- **Breaking: `lore tui` is a read-only browser** (tables, rows, one row; sensitive values masked) over every attached store. The full-screen editing TUI of 0.1.17 is gone; add and edit rows with the commands.
+- Identity lives in `identity:` of `~/.lore/config.yaml`; `lore config get|set|list` edits that file.
+- Titles, bodies, descriptions and notes are trimmed of leading and trailing whitespace on add and edit.
+- `_source` in `--json` output names the store instead of `store:<org>/<folder>`.
+- Under `secrets.on_detect: ask`, a bare `--yes` never stores a detected secret: answer with a reference, `--secret-unstored` or `--not-a-secret` with a reason.
+- lore's git wiring (merge driver, `.gitattributes`, hook blocks) runs after every command in a git checkout, read-only commands included, so a CI clone is wired by its first command; `lore sync` fails with `E_SYNC_DATA_IGNORED` (exit 23, nothing pushed) when git still ignores row files under `.lore/data`.
+- The audit chain stays on this machine (`lore audit log|verify`); attached-store writes keep a machine-local trail. Nothing about who did what is committed or synced.
+- `lore sync trash` is the old spelling of `lore trash list --local` and works for one release with a note.
+- `delete --confirm` is accepted again next to `--yes`.
+- Tags written by the 0.1.18 core are not copied into `lore.db`'s `entity_tags`, so a v0.1.17 binary filtering by tag does not see them.
+
+### Removed
+
+- `lore learn list|promote|reject` and `lore learn-from docs` (a future import goes with the lessons work), `lore plugin list|trust|untrust` (the plugin system is a later release), and `lore bench` with its tables.
+- `lore sync dupes`, `lore sync export`, `lore sync install-git` (the wiring runs by itself) and `lore sync uninstall-action` (delete `.github/workflows/lore-sync-merge.yml`).
+- `lore backup`, `lore restore` and `lore repair`: the cache is rebuilt from the row files (`lore search rebuild`), and single rows come back with `lore trash restore`.
+- `lore errors list` (the error table is in the reference, written from the code), `lore tables` (use `lore sql`), `lore querylog list`, `lore renderhistory list` (use `lore why-context` and `lore render --trend`), `lore mount-alias`.
+- `lore run step|show|replay|list` (`lore run start|end|cancel` stay), `lore finding add` (use `lore memory add`; findings still show in `lore inbox`), `lore team add|list` (use `lore actor register|deactivate|delete`), `lore identity anonymize`, `lore org unlink`, `lore directive remove` (delete the block by hand), `lore meta keys --copies-in` (use `lore sql`).
+- The `--db`, `--project`, `--repo` and `--read-only` flags of `lore render` and `lore support-bundle`.
+
+
 ## [0.1.17] - 2026-11-03
 
 Lore for teams: everything in [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md) phases P1–P4.

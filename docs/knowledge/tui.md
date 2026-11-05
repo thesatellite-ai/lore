@@ -1,70 +1,63 @@
 # Browse your notes in the terminal
 
-**In short:** `lore tui` opens a full-screen browser for every note in the repo, right in your terminal. You move with the keyboard, open a row to read it, filter a long list, and edit a row in a form. Press `?` at any time to see the keys.
+**In short:** `lore tui` is a read-only browser for every note in the repo, right in your terminal. You pick a table, page through its rows, filter them by a word, and open one row to read every field. It changes nothing; you add and edit rows with the normal `lore <kind> add|edit` commands.
 
 ## What it is and when you want it
 
-A *TUI* (terminal user interface) is an app that runs inside the terminal window, like a text-only spreadsheet. `lore tui` shows the same database every other lore command uses, one table per kind of row: memories, rules, decisions, tasks and the rest.
+A *TUI* (terminal user interface) is an app that runs inside the terminal window. `lore tui` reads the same rows every other lore command reads, from every store attached to the repo, one table per kind of row: memories, rules, decisions, tasks and the rest.
 
-Use it when you want to look around rather than type exact commands: to read through all your decisions, to find a memory you half remember, or to fix a few typos one after another.
+Use it when you want to look around rather than type exact commands: to read through all your decisions, or to find a memory you half remember.
 
-![lore TUI — main list view](../screenshots/main.jpg)
+The full-screen editing TUI of lore 0.1.17 (forms, an actions menu, vim keys) is gone in 0.1.18: every change goes through the one write path the commands use.
 
 ## Before you start
 
 - A repo with lore set up: see [Your first project](first-project.md).
-- A real terminal window. The TUI does not run inside a script, a pipe or a CI job.
 
 ## Step 1 — Open it
 
-Run it in the top folder of the repo. It opens on memories, in a table.
+Run it in the repo. It opens on the tables screen: every table with its number of rows.
 
 ```console
 $ lore tui
 ```
 
-`--kind` picks the table it opens on, and `--view list` shows rows as a list instead of a table:
+`--kind` opens one table's rows first, by its name (`decisions`) or the singular (`decision`):
 
 ```console
-$ lore tui --kind decision --view list
+$ lore tui --kind decision
 ```
 
 ## Step 2 — Move around
 
-The keys follow the vim editor (for example `j` moves down and `k` moves up). `?` shows every key, and `,` opens the menu of actions for the row you are on.
+Each screen prints its keys. Type a key and press Enter:
 
-| Open a row | Edit it in a form |
+| Screen | Keys |
 |---|---|
-| ![lore TUI — entity detail view](../screenshots/view.jpg) | ![lore TUI — edit form](../screenshots/edit.jpg) |
-| **The actions menu (`,`)** | **The key list (`?`)** |
-| ![lore TUI — actions menu](../screenshots/actions.jpg) | ![lore TUI — quick help](../screenshots/quick-help.jpg) |
+| Tables | a number opens that table; `q` quits |
+| Rows (20 per page: id, store, label) | a number opens that row; `n` / `p` next or previous page; `/text` keeps rows that contain the text; `b` back; `q` quits |
+| One row | every field, sensitive values shown as `••••`; `b` back; `q` quits |
 
 ## Try it
 
-Open the TUI on your decisions, press `?` to read the keys, then open a decision to read it in full. These are all the flags:
+Open the TUI on your decisions and open one to read it in full. These are all the flags:
 
 <!-- help: tui -->
-tui opens the current project's .lore/lore.db in an interactive, schema-driven terminal UI (powered by enttui)
+Browse every table of the attached stores in the terminal (read-only)
 
 ```text
 Usage:
   lore tui
 
 Flags:
-      --db string        override DB path (default: cwd's .lore/lore.db)
-      --kind string      kind to open first (e.g. memory, task, decision) (default "memory")
-      --project string   override project (id or name)
-      --read-only        skip lock acquisition; refuse writes
-      --repo string      scope to a specific repo (mount_name or rep_id)
-      --view string      initial view mode: table | list (default "table")
+      --kind string   table to open first (e.g. memory, task, decision); default the tables screen
 ```
 <!-- /help -->
 
 ## Pitfalls
 
-- **It needs a terminal.** Run from a script or with input from a pipe, it stops with `open /dev/tty: no such device or address`. Use `lore <kind> list` or `lore search` there instead.
-- **Commit afterwards.** A change made in the TUI is a change to a row like any other. Run `lore sync` so `.lore/data` gets it, then commit.
-- **One project at a time.** The TUI shows the project of the folder you start it in. Pass `--project` to open another one.
+- **It does not edit.** To change a row, copy its id from the row screen and run `lore <kind> edit <id>`.
+- **Sensitive values stay hidden.** A field marked sensitive shows `••••`; use `lore show <id> --show-sensitive` when you really need the value.
 
 ## Related
 

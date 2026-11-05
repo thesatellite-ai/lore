@@ -62,28 +62,20 @@ $ lore session list
 ```
 <!-- /example -->
 
-## Step 3 — Wire git once in the fresh clone
+## Step 3 — Look at the fresh clone
 
-> **OPEN (owner question):** `lore sync install-git` is dropped in 0.1.18, and nothing else wires git in a read-only clone yet, so the commands below fail today. How a read-only CI clone gets lore's git wiring is not decided.
+A CI clone has the `.lore/data` files but not the local database, and not lore's git settings. The first lore command builds the database from the files, even in read-only mode (the database is only a local copy; no note changes), and wires git in the clone: lore's merge helper, the `.gitattributes` check and its hook blocks. That wiring runs after every command in a git checkout, read-only ones included, because it writes only git's own config and hook files, never your notes. There is no separate install step:
 
-A CI clone has the `.lore/data` files but not the database, and not lore's git settings. The first lore command builds the database from the files, even in read-only mode (the database is only a local copy; no note changes). `lore doctor` then says DEGRADED, because lore's git merge helper and hooks are missing in this clone. `lore sync install-git` adds them (it changes git settings in the clone, not your notes, so it works in read-only mode too):
-
-<!-- example: ops#ci only=1,2,3 keep=lore|rul_|Status|merge|config: -->
+<!-- example: ops#ci only=1,2 keep=lore|rul_|Status|merge|exit -->
 ```console
 # alice, in ci-clone
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_2ad3…f891 [must/always] Never put passwords in the code
-$ lore doctor
-Status: BROKEN
+$ lore doctor; echo "doctor exit $?"
+Status: HEALTHY
   …
-  - resolve: projresolve: cwd is not an aicoder project root (no .lore/lore.db or lore.yaml)
-  …
-  -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000003Z)
-  …
-$ lore sync install-git
-ERROR: [E_INVALID_INPUT] unknown command "install-git" for "lore sync"
-  hint: see `lore sync --help`
+doctor exit 0
 ```
 <!-- /example -->
 
@@ -91,16 +83,15 @@ ERROR: [E_INVALID_INPUT] unknown command "install-git" for "lore sync"
 
 Check the audit log, save the JSON report and act on the exit code. Read `status` from the JSON, not from the text output, because the JSON shape is fixed:
 
-<!-- example: ops#ci only=4,5,6 -->
+<!-- example: ops#ci only=3,4,5 -->
 ```console
 # alice, in ci-clone
 $ lore audit verify
-ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
-  hint: run `lore init` here, or cd into a project root
+✓ audit chain intact (0 entries)
 $ lore doctor --json > doctor.json; echo "doctor exit $?"
-doctor exit 2
+doctor exit 0
 $ grep '"status"' doctor.json
-  "status": "broken",
+  "status": "healthy",
 ```
 <!-- /example -->
 
@@ -108,7 +99,6 @@ A complete CI step, as a shell script:
 
 ```sh
 export LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1
-lore sync install-git > /dev/null   # lore's git settings for this fresh clone
 lore audit verify                   # stops on a broken audit chain or an edit made outside lore
 lore doctor --json > doctor.json
 case $? in
@@ -122,7 +112,7 @@ esac
 
 Some tools read one context file and cannot follow an import line to other files. `lore context --internal` prints the internal, personal and global notes that apply in this repo, as one block of text you can pass on. In a repo with no such notes it says so:
 
-<!-- example: ops#ci only=7 -->
+<!-- example: ops#ci only=6 -->
 ```console
 # alice, in ci-clone
 $ lore context --internal
@@ -137,7 +127,7 @@ $ lore context --internal
 
 - **Only `1` turns a switch on.** `LORE_READ_ONLY=true` or `yes` is ignored and lore writes as usual. The same holds for `LORE_NO_STALE_WARN` and the `LORE_ALLOW_*` switches.
 - **Read-only still builds the local database.** On a fresh clone the first command builds `.lore/lore.db` from `.lore/data` even with `LORE_READ_ONLY=1`. That is a local copy, not a change to your notes; nothing is written to `.lore/data` or git.
-- **A fresh clone is DEGRADED until you wire git.** The warning says "any lore command installs it", but in a clone with only read commands nothing does; run `lore sync install-git` (Step 3). Then decide on purpose whether exit 1 fails your job.
+- **There is no `lore sync install-git` in 0.1.18.** Older CI scripts ran it before anything else; drop that line. Any lore command, read-only ones included, wires git in the clone (Step 3). If doctor still says DEGRADED, decide on purpose whether exit 1 fails your job.
 - **Do not run `lore setup` in read-only mode.** It is a write and is refused; run it once on a normal machine and commit.
 
 ## Related

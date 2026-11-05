@@ -351,6 +351,12 @@ lore why-context --json      # pipe-friendly
 lore doctor                        # DB integrity + FTS5 check; exit 0/1/2
 ```
 
+## AGENT WORKFLOW (every session)
+
+1. Read the core: `.lore/LORE.md` is already loaded through the pointer file (must rules, critical/high hotfixes, topic index). Obey it.
+2. Before touching a path: `lore context --for-file <path>` (rules, hotfixes, notes for that file and its folders). Task: `lore context --for-task <tsk_id>`. Topic from the index: `lore context --topic <t>`.
+3. Everything else: `lore search "<keywords>"` before a substantive answer; cite hits by id.
+
 ## SEARCH (FTS5 BM25)
 
 ```bash

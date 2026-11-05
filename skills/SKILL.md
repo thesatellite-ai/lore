@@ -522,16 +522,23 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 
 ### What's pinned in `.lore/LORE.md` vs searched on demand
 
-`lore render` follows a **hybrid model**. The pinned content goes into the generated `.lore/LORE.md` (which CLAUDE.md `@import`s); it's intentionally kept small so it doesn't bloat as project knowledge accumulates:
+`lore render` writes a small **core** into `.lore/LORE.md` (which the tool's pointer file, e.g. CLAUDE.md, `@import`s) and keeps it inside a byte budget, so it does not grow as project knowledge accumulates. Everything else stays one command away:
 
-| Entity | Pinned in `.lore/LORE.md` | Searched on demand via `lore search` |
+| Entity | In the core (always loaded) | Fetched on demand |
 |---|---|---|
-| Directive | always | — |
-| Rules | `severity=must` | `severity=should` / `may` |
-| Hotfixes | `severity=critical` + `high` | `severity=medium` / `low` |
-| Memories, decisions, patterns, architecturenotes, taste prefs, playbooks, … | — | always |
+| Directive (your operating rules) | always | — |
+| Rules | `severity=must`: in full when they fit, else one line with the id | `should` / `may` via `lore context` / `lore search` |
+| Hotfixes | `critical` in full; `high` as one line each (id + fetch command) | `medium` / `low` |
+| Folder knowledge (`--scope <dir>`) | in that folder's own `LORE.md`, which the tool loads when it works there | `lore context --for-file <path>` |
+| Memories, decisions, patterns, architecture notes, taste prefs, playbooks, … | an index of topics only | `lore context --topic <t>` / `lore search` |
 
-The agent's **directive step 5** (rendered into `.lore/LORE.md`, reached via the CLAUDE.md `@import`) mandates `lore search "<keywords>"` before substantive responses — that's how the non-pinned content reaches the agent. Cite hits by ID (`per dec_<id>, …`).
+**The agent workflow (every session):**
+
+1. **Read the core.** It is already in your context through the pointer file; obey its must rules and hotfixes.
+2. **Before you touch a path, run `lore context --for-file <path>`.** It prints the rules, hotfixes and notes that apply to that file and its folders, including the ones the core shows as one line. For a task: `lore context --for-task <tsk_id>`; for a topic from the core's index: `lore context --topic <topic>` (`--topics` lists them).
+3. **For everything else, `lore search "<keywords>"`** before a substantive answer (directive step 5). Cite hits by id (`per dec_<id>, …`).
+
+With `lore setup --agent-hooks`, Claude Code, Codex and Gemini CLI run step 2 for you on each file the tool reads or edits; run it yourself anyway when a hook is not installed.
 
 ### Benchmark / evaluation
 
