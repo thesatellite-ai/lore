@@ -1029,8 +1029,27 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	}
 	out.Notes = append(out.Notes, in.TrashNotes(shown)...)
 	out.Notes = append(out.Notes, d.noteLines()...) // RES 3.13 last good warning
+	if !in.ShowSensitive && filtersSensitive(d, m) {
+		out.Notes = append(out.Notes, noteSensitiveFilter)
+	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// noteSensitiveFilter is RES 3.12's line under a list whose --where
+// matched a sensitive field: the filter compared the stored values, the
+// table prints them masked.
+const noteSensitiveFilter = "note: filtered on a sensitive field; values are masked"
+
+// filtersSensitive reports whether a --where term of m names a sensitive
+// field of d.
+func filtersSensitive(d kindDef, m filter.Matcher) bool {
+	for _, k := range m.Keys() {
+		if def, ok := d.byName[k.Name]; ok && !k.Meta && flag(def.Row, fSensitive) {
+			return true
+		}
+	}
+	return false
 }
 
 // resourceMatcher binds --where to a kind's fields (XQ7): the key part of
