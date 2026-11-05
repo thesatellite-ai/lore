@@ -67,6 +67,7 @@ type LiveConfig struct {
 const (
 	leakWhereLive    = "live write"
 	leakWhereLanding = "landing"
+	leakWhereRepo    = "repo write"
 )
 
 // leakCheck runs cfg.LeakCheck over rows of folder (tombstones carry no
@@ -87,6 +88,23 @@ func (h *liveHost) leakCheck(ctx context.Context, where, folder string, rows map
 		docs[live.RowPath(folder, k.Table, k.ID)] = b
 	}
 	return h.cfg.LeakCheck(ctx, where, docs)
+}
+
+// leakCheckBranch runs cfg.LeakCheck over the branch rows of a write (the
+// repo store's .lore/data, which the client reads once committed); the
+// documents are the rows' own bytes, tombstones skipped.
+func (h *liveHost) leakCheckBranch(ctx context.Context, folder string, changes []store.Change) error {
+	if h.cfg.LeakCheck == nil || len(changes) == 0 {
+		return nil
+	}
+	docs := make(map[string][]byte, len(changes))
+	for _, ch := range changes {
+		if ch.Row.Deleted || len(ch.Row.Doc) == 0 {
+			continue
+		}
+		docs[mainDataPath(folder, string(ch.Row.Table)+"/"+ch.Row.ID.String()+rowFileExt)] = ch.Row.Doc
+	}
+	return h.cfg.LeakCheck(ctx, leakWhereRepo, docs)
 }
 
 // liveHost is LiveHook's shared configuration.

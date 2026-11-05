@@ -123,6 +123,7 @@ func leakBlocked(where string, fs []leakcheck.Finding) error {
 		}
 		fmt.Fprintf(&b, "\n  %-40s %s", f.Where, detail)
 	}
+	b.WriteString("\nNothing written.")
 	return errs.New(errs.LeakBlocked, b.String()).
 		WithHint("move the row to the org (`lore move <id> --to <org>`) or delete it; the rows stay on the live ref until then")
 }

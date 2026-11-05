@@ -359,6 +359,15 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		}
 		liveRows[k] = f
 	}
+	// F16: the live ref and the branch of a client repo are readable by the
+	// client. Checked before any row of the batch is written, so a refusal
+	// writes nothing.
+	if err := s.h.leakCheck(ctx, leakWhereLive, b.folder, liveRows); err != nil {
+		return err
+	}
+	if err := s.h.leakCheckBranch(ctx, b.folder, branch); err != nil {
+		return err
+	}
 	var companions map[live.RowKey]bool
 	if len(liveRows) > 0 {
 		if companions, err = s.companionFiles(now, liveRows); err != nil {
@@ -380,10 +389,6 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	}
 	if s.blocked != nil {
 		return errs.Wrap(errs.StoreReadOnly, "the remote live ref was rewritten; lore stopped writing to it", s.blocked)
-	}
-	// F16: the live ref of a client repo is readable by the client.
-	if err := s.h.leakCheck(ctx, leakWhereLive, b.folder, liveRows); err != nil {
-		return err
 	}
 	res, err := s.ref.Write(ctx, live.WriteRequest{Folder: b.folder, Rows: liveRows, BinaryVersion: s.h.cfg.Version})
 	if err != nil {
@@ -566,6 +571,9 @@ func (b *liveBackend) WriteAudited(ctx context.Context, changes []store.Change, 
 		}
 		if !branch {
 			return b.Write(ctx, changes)
+		}
+		if err := s.h.leakCheckBranch(ctx, b.folder, changes); err != nil {
+			return err // F16 before the branch write, as Write does
 		}
 	}
 	return j.WriteAudited(ctx, changes, recs)
