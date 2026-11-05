@@ -114,6 +114,8 @@ func Ops(env kn.Env) []op.Entry {
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
+	engine.LiveFlags
 
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
 	Text       string   `json:"text,omitempty" arg:"0" desc:"the rule text, instead of --body"`
@@ -303,6 +305,8 @@ func (o ShowOut) baseText() string {
 type EditIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
+	engine.LiveFlags
 
 	ID           string   `json:"id" arg:"0" desc:"the rule id (rul_…)"`
 	Body         string   `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

@@ -142,8 +142,42 @@ func isLiveKind(s *liveSession, table row.Table) bool {
 // even though its table is no live kind, and is not held as a companion
 // (BUG-T1: without it the row stayed in the work tree and no other clone
 // resolved the handle).
-func liveChoiceFor(table row.Table) bool {
+//
+// PENDING-60: a core write's --live (engine.LiveFlags) arrives on ctx as a
+// store.LiveChoice for the operation's own table and counts the same.
+func liveChoiceFor(ctx context.Context, table row.Table) bool {
+	if store.LiveChoiceFrom(ctx).For(table) == store.LiveOn {
+		return true
+	}
 	return liveCmdState.choice == rowroute.ChoiceLive && liveCmdState.table == string(table)
+}
+
+// liveFlagTables are the core tables whose add / edit take --live /
+// --no-live (PENDING-60, as v0.1.17): a row of one of them can sit on the
+// live ref even when its table is no live kind (`lore rule add --live`),
+// so they are read from the live ref too.
+var liveFlagTables = map[row.Table]bool{
+	row.Table(tableTasks): true, row.Table(tableRules): true, row.Table(tableMemories): true,
+}
+
+// tableRules is the rules table (a --live / --no-live kind).
+const tableRules = "rules"
+
+// liveRequest is the routing input of one backend write: the core
+// operation's --live / --no-live from ctx (store.LiveChoice, PENDING-60),
+// else this command's old-binary flag (liveCmdState), plus live.defaults.
+func liveRequest(ctx context.Context, s *liveSession) rowroute.Request {
+	req := rowroute.Request{Defaults: liveKinds(s)}
+	c := store.LiveChoiceFrom(ctx)
+	switch c.Mode {
+	case store.LiveOn:
+		req.Choice, req.ChoiceTable = rowroute.ChoiceLive, string(c.Table)
+	case store.LiveOff:
+		req.Choice, req.ChoiceTable = rowroute.ChoiceNoLive, string(c.Table)
+	case store.LiveDefault:
+		req.Choice, req.ChoiceTable = liveCmdState.choice, liveCmdState.table
+	}
+	return req
 }
 
 // liveReadable reports whether rows of table are read from the live ref
@@ -152,7 +186,7 @@ func liveChoiceFor(table row.Table) bool {
 // with them. Without it another clone saw the row name an act_ id while
 // its actor row waited on the live ref or on a fetched, unpulled main.
 func liveReadable(s *liveSession, table row.Table) bool {
-	return isLiveKind(s, table) || string(table) == tableActors
+	return isLiveKind(s, table) || string(table) == tableActors || liveFlagTables[table]
 }
 
 // liveFiles is the live folder of the local live ref: its commit ("" when
@@ -513,7 +547,7 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	if err != nil {
 		return err
 	}
-	req := rowroute.Request{Defaults: liveKinds(s)}
+	req := liveRequest(ctx, s)
 	col := liveCollectorFrom(ctx)
 	if changes, err = b.holdActorCompanions(ctx, s, col, files, changes); err != nil || len(changes) == 0 {
 		return err
@@ -526,7 +560,7 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		prev, inLive := files[k]
 		// An actor row riding live as a companion (FLAG6) is edited
 		// where it is, live (rule 1: a live row stays live).
-		chosen := liveChoiceFor(ch.Row.Table) && liveReadable(s, ch.Row.Table)
+		chosen := liveChoiceFor(ctx, ch.Row.Table) && liveReadable(s, ch.Row.Table)
 		if !chosen && !isLiveKind(s, ch.Row.Table) && (!inLive || !liveReadable(s, ch.Row.Table)) {
 			if ch, err = b.landedExpect(ctx, s, ch); err != nil {
 				return err
@@ -665,7 +699,7 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 func (b *liveBackend) holdActorCompanions(ctx context.Context, s *liveSession, col *liveCollector, files map[live.RowKey]live.File, changes []store.Change) ([]store.Change, error) {
 	kept := changes[:0:0]
 	for _, ch := range changes {
-		if string(ch.Row.Table) != tableActors || ch.Row.Deleted || liveChoiceFor(ch.Row.Table) {
+		if string(ch.Row.Table) != tableActors || ch.Row.Deleted || liveChoiceFor(ctx, ch.Row.Table) {
 			kept = append(kept, ch) // an explicitly live actors row is written live on its own (BUG-T1)
 			continue
 		}
@@ -1026,7 +1060,7 @@ func (b *liveBackend) wholeBatchToBranch(ctx context.Context, s *liveSession, ch
 	if err != nil {
 		return false, err
 	}
-	req := rowroute.Request{Defaults: liveKinds(s)}
+	req := liveRequest(ctx, s)
 	for _, ch := range changes {
 		if string(ch.Row.Table) == tableActors {
 			return false, nil
@@ -1036,7 +1070,7 @@ func (b *liveBackend) wholeBatchToBranch(ctx context.Context, s *liveSession, ch
 		if inLive {
 			return false, nil
 		}
-		if !isLiveKind(s, ch.Row.Table) {
+		if !isLiveKind(s, ch.Row.Table) && !liveChoiceFor(ctx, ch.Row.Table) {
 			continue
 		}
 		_, berr := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID)

@@ -7,8 +7,8 @@
 // Flag spellings follow v0.1.17 `lore task …`. The coordination verbs
 // (claim, next, heartbeat, release, revoke, reassign, note, merged) stay
 // on the signals machinery of the old binary (TSQ / p4 brief); done and
-// cancel here are the unclaimed path. --live/--no-live are gone (rows are
-// files of a store; there is no live ref on the core), as for memories.
+// cancel here are the unclaimed path. --live / --no-live are back on add
+// and edit (PENDING-60, as v0.1.17): engine.LiveFlags, read by the engine.
 package task
 
 import (

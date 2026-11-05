@@ -34,6 +34,8 @@ const (
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
+	engine.LiveFlags
 
 	// Body is v0.1.17's --body. Text is the same value given positionally
 	// (`lore memory add "…"`); exactly one of them must be set.
@@ -197,6 +199,8 @@ type ShowOut struct {
 type EditIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
+	engine.LiveFlags
 
 	ID        string `json:"id" arg:"0" desc:"the memory id (mem_…)"`
 	Body      string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`

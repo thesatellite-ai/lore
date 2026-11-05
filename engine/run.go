@@ -93,6 +93,11 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 	if merr != nil {
 		return op.Result{}, merr
 	}
+	// --live / --no-live of any input (engine/live.go, PENDING-60)
+	ctx, lerr := bindInputLive(ctx, in)
+	if lerr != nil {
+		return op.Result{}, lerr
+	}
 	res, ierr := entry.Invoke(context.WithValue(ctx, callKey{}, cl), in)
 	if ierr == nil {
 		ierr = metaUsed()

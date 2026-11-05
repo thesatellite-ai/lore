@@ -31,6 +31,8 @@ const (
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
+	engine.LiveFlags
 	// Title is v0.1.17's positional <title> (quote a title of several
 	// words: an op argument is one value).
 	Title      string `json:"title,omitempty" arg:"0" rest:"true" desc:"the task title (several words are joined; omitted with --template)"`
@@ -360,6 +362,8 @@ type ShowOut struct {
 type EditIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
+	engine.LiveFlags
 	ID string `json:"id,omitempty" arg:"0" desc:"the task id (tsk_…); leave out with --where"`
 	// Where / DryRun are the bulk edit (TASK 18.1): every matching task gets
 	// the same flags in one bat_ batch, previewed above batch.preview_rows.
