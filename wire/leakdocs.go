@@ -105,7 +105,7 @@ func (a *App) LeakCheckDocs(ctx context.Context, res *OrgResolution, where strin
 		items = append(items, leakcheck.Item{Where: where + " " + p, Path: p, Content: b})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
-	fs := leakcheck.Blocking(leakcheck.Check(items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client}))
+	fs := leakcheck.Blocking(a.leakCheckByProject(ctx, items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client})) // per monorepo project folder (leakdocs_projects.go)
 	fs, moved := withoutSelfMatches(fs, rows)
 	if len(fs) == 0 {
 		return nil
