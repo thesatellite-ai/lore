@@ -3,6 +3,7 @@
 package procwalk
 
 import (
+	"math"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -56,6 +57,9 @@ func parentOlder(pid, ppid int) bool {
 
 // created is pid's creation time as a FILETIME count of 100 ns ticks.
 func created(pid int) (int64, bool) {
+	if pid <= 0 || pid > math.MaxUint32 {
+		return 0, false // not a Windows pid (they are DWORDs)
+	}
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
 	if err != nil {
 		return 0, false
