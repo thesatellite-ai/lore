@@ -95,7 +95,7 @@ $ cat .lore/data/rules/rul_2ad3…f891.json
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "93577ef19dfd",
+      "commit": "d61580d42875",
       "state": "branch"
     },
     "repo": "rep_54fe…28f2",
@@ -265,6 +265,7 @@ $ lore memory add --yes --body 'The staging password is password=example-only'
 $ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
 1
 $ LORE_SYNC_ALLOW_SECRETS=1 lore sync
+lore: warning: LORE_SYNC_ALLOW_SECRETS is ignored since 0.1.18: every secret finding is refused; keep a false positive with `lore secrets allow <row> --rule <id> --reason …`
 · already in sync
 $ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
 1

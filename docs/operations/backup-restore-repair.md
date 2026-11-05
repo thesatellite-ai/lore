@@ -27,7 +27,7 @@ You want this page when you are about to try something risky, when you deleted s
 ```console
 # alice, in website
 $ lore backup --out .lore/backups/before-buttons.sqlite
-✓ ~/work/website/.lore/backups/before-buttons.sqlite (1449984 bytes)
+✓ ~/work/website/.lore/backups/before-buttons.sqlite (1458176 bytes)
 $ ls .lore/backups
 20261102-100000.000000000-pre-sync.sqlite
 before-buttons.sqlite
@@ -48,7 +48,7 @@ $ lore rule add --body 'Buttons are blue'
   scope: [master] severity: must
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_d431…313a [must/always] Buttons are blue
 $ lore restore .lore/backups/before-buttons.sqlite
 ERROR: [E_INVALID_INPUT] refusing to overwrite DB without --confirm
@@ -71,10 +71,10 @@ The restored database and the files in `.lore/data` may now disagree. The first 
 # alice, in website
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_d431…313a [must/always] Buttons are blue
 $ git status --short
-?? .lore/data/rules/rul_7a67…9504.json
+?? .lore/data/rules/rul_2ad3…f891.json
 ?? .lore/data/rules/rul_d431…313a.json
 ```
 <!-- /example -->
@@ -106,10 +106,14 @@ Binary: 0.1.0-dev
   stable:   yes
 Errors:
   - E_DB_CORRUPT: DB file is corrupt (pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)); recover with `lore repair --tier=2 --confirm` (latest backup) — shared rows also rebuild from .lore/data
+Notes:
+  - Team versions (newest save per writer and machine):
+  -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000002Z)
+  - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_d431…313a [must/always] Buttons are blue
 ```
 <!-- /example -->
@@ -133,7 +137,7 @@ $ lore repair --tier=2 --confirm
   previous (broken) DB at: ~/work/website/.lore/lore.db.broken.20261102-100001
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_d431…313a [must/always] Buttons are blue
 ```
 <!-- /example -->
@@ -160,7 +164,7 @@ When there is no backup you trust, move the database out of the way. Shared note
 $ mv .lore/lore.db .lore/lore.db.old && rm -f .lore/lore.db-wal .lore/lore.db-shm
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_d431…313a [must/always] Buttons are blue
 $ lore sync
 · already in sync

@@ -102,6 +102,7 @@ alice (work/website)$ lore memory add --yes --body 'The staging password is pass
 alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
 1
 alice (work/website)$ LORE_SYNC_ALLOW_SECRETS=1 lore sync
+lore: warning: LORE_SYNC_ALLOW_SECRETS is ignored since 0.1.18: every secret finding is refused; keep a false positive with `lore secrets allow <row> --rule <id> --reason …`
 · already in sync
 alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
 1
@@ -127,6 +128,8 @@ alice (work/blog)$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 count: 2
 rows: 
 steps: mode-b: repos/rep_b4f4765e593d51fd1352985e8af3a5b0 → store shared (~/work/stores/blog), mode-b: rules/rul_28f8d32584b2db54ffb146bede5b03df → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+journal: team lock: this repo has no remote origin; nobody to race, none taken, backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
+backup_ref: refs/lore-backup/migrate/2026-11-02
 alice (work/blog)$ lore rule list
 rul_28f8d32584b2db54ffb146bede5b03df  Posts go out on Tuesdays  [shared]
 
@@ -142,6 +145,8 @@ alice (work/docs)$ LORE_HOME=~/shared-dbs lore migrate run
 count: 2
 rows: 
 steps: mode-b: repos/rep_b4f4765e593d51fd1352985e8af3a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: rules/rul_28f8d32584b2db54ffb146bede5b03df → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+journal: team lock: this repo has no remote origin; nobody to race, none taken, backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
+backup_ref: refs/lore-backup/migrate/2026-11-02
 alice (work/docs)$ lore rule list
 rul_28f8d32584b2db54ffb146bede5b03df  Posts go out on Tuesdays  [shared]
 alice$ ls ~/shared-dbs ~/shared-dbs/stores

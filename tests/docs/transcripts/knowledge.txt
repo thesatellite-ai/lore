@@ -114,12 +114,12 @@ alice (work/website)$ lore memory add --body 'Lunch is at noon'
 ✓ mem_28f8d32584b2db54ffb146bede5b03df 
   scope: [master]
 alice (work/website)$ lore memory delete mem_28f8d32584b2db54ffb146bede5b03df --yes
-✓ mem_28f8d32584b2db54ffb146bede5b03df deleted
+✓ mem_28f8d32584b2db54ffb146bede5b03df moved to the trash (restore: lore trash restore mem_28f8d32584b2db54ffb146bede5b03df)
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 alice (work/website)$ lore memory show mem_28f8d32584b2db54ffb146bede5b03df || true
-ERROR: [E_NOT_FOUND] memory mem_28f8d32584b2db54ffb146bede5b03df is deleted
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main memories`
+ERROR: [E_IN_TRASH] engine: mem_28f8d32584b2db54ffb146bede5b03df is in the trash (deleted by act_4c590afb2a0cc7ae1b97b7e4e62d6c38 on 2026-11-02 10:02)
+  hint: lore trash show mem_28f8d32584b2db54ffb146bede5b03df; bring it back with lore trash restore mem_28f8d32584b2db54ffb146bede5b03df
 
 ### secrets
 alice (work/website)$ lore memory add --body 'The staging password is password=example-only'
@@ -127,107 +127,107 @@ ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (password_pair) at lin
   hint: store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret
 (exit 26)
 alice (work/website)$ lore memory add --body 'The staging password is password=example-only' --yes
-✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 
+✓ mem_3b6283bc4392c556bbae5f094246e913 
   scope: [master]
-alice (work/website)$ ls .lore/data/memories | grep -c mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 || true
+alice (work/website)$ ls .lore/data/memories | grep -c mem_3b6283bc4392c556bbae5f094246e913 || true
 1
-alice (work/website)$ lore memory delete mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 --yes
-✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 deleted
+alice (work/website)$ lore memory delete mem_3b6283bc4392c556bbae5f094246e913 --yes
+✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore mem_3b6283bc4392c556bbae5f094246e913)
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 
 ### hotfix
 alice (work/website)$ lore hotfix add --title 'Checkout button is broken on Safari' --body 'Use the old button until the fix ships.' --severity critical
-⚠ hfx_3b6283bc4392c556bbae5f094246e913 — Checkout button is broken on Safari [critical]
+⚠ hfx_f147dd95f1aaf742dd4f5214843a5139 — Checkout button is broken on Safari [critical]
 alice (work/website)$ lore hotfix list
-hfx_3b6283bc4392c556bbae5f094246e913 [critical] Use the old button until the fix ships.
+hfx_f147dd95f1aaf742dd4f5214843a5139 [critical] Use the old button until the fix ships.
 
 ### pattern
 alice (work/website)$ lore pattern add --title 'Load data in one place' --body 'Each page loads its data in its loader, never inside a button handler.'
-✓ pat_f147dd95f1aaf742dd4f5214843a5139
+✓ pat_2537f9b2f7de77bfe5ca958860216bbb
 
 ### playbook
 alice (work/website)$ lore playbook add --title 'How to release' --body '1. Run the tests. 2. Tag the release. 3. Post in the team chat.'
-✓ pbk_2537f9b2f7de77bfe5ca958860216bbb
+✓ pbk_b69e8368dd4986838455061d5d9e5ed7
 
 ### prompt
 alice (work/website)$ lore prompt add --title 'Review a pull request' --description 'Bugs first, then style' --body 'Read the change, list bugs first, then style notes.'
-✓ prm_b69e8368dd4986838455061d5d9e5ed7
+✓ prm_0aaebe6aca5bb46cc521869f5ba2a61f
 
 ### snapshot
 alice (work/website)$ lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'
-✓ snp_0aaebe6aca5bb46cc521869f5ba2a61f — Week 44
+✓ snp_6a866bb99ce08addfe04ea845052ed8c — Week 44
 alice (work/website)$ lore snapshot list
-snp_0aaebe6aca5bb46cc521869f5ba2a61f Week 44   (2026-11-02)
+snp_6a866bb99ce08addfe04ea845052ed8c Week 44   (2026-11-02)
 
 ### incident
 alice (work/website)$ lore incident add --title 'Site down for 20 minutes' --body 'The disk filled up with logs. We now rotate logs daily.'
-✓ inc_6a866bb99ce08addfe04ea845052ed8c
+✓ inc_4f89f5fcb1d81152bdf3f52979ebb64b
 
 ### behaviour
 alice (work/website)$ lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete any file you did not create.'
-✓ bhv_4f89f5fcb1d81152bdf3f52979ebb64b
+✓ bhv_77cb2df809cef85479f6587c4a7d76c4
 
 ### architecturenote
 alice (work/website)$ lore architecturenote add --title 'How the site is built' --body 'The website reads products from the shop API and caches them for 5 minutes.'
-✓ anr_77cb2df809cef85479f6587c4a7d76c4
+✓ anr_d191616cfa49f94ede5d5148b8b045c2
 
 ### cookbookrecipe
 alice (work/website)$ lore cookbookrecipe add --title 'Add a new page' --body 'Copy pages/about, rename it, add a link in the menu.'
-✓ cbr_d191616cfa49f94ede5d5148b8b045c2
+✓ cbr_b4d3d8fc9a019dca1371ad55c6a611aa
 
 ### suggestion
 alice (work/website)$ lore suggestion add --title 'Add dark mode' --body 'Several users asked for it.'
-✓ sug_b4d3d8fc9a019dca1371ad55c6a611aa
+✓ sug_9a34c925c88945140e68f54b1ba3b418
 
 ### tastepref
 alice (work/website)$ lore tastepref add --body 'Buttons are blue'
-✓ tst_9a34c925c88945140e68f54b1ba3b418
+✓ tst_bfed655e145f36ce2ef425180e72eeea
 
 ### techdoc
 alice (work/website)$ lore techdoc add --name 'Payments docs' --base-url https://docs.example.com/payments --description 'How to take a card payment'
-✓ tdc_bfed655e145f36ce2ef425180e72eeea Payments docs
+✓ tdc_376c6af9f6ebb2ad01d8b3c0201b8e1a Payments docs
 
 ### workflow
 alice (work/website)$ lore workflow add --title 'Code review' --body 'One approval from a second developer before merge.'
-✓ wfl_376c6af9f6ebb2ad01d8b3c0201b8e1a
+✓ wfl_67e20cdd829de837b50a73f9dc3c291e
 
 ### workspace
 alice (work/website)$ lore workspace add --title 'Website redesign' --body 'Everything for the new look of the site.'
-✓ wsp_67e20cdd829de837b50a73f9dc3c291e
+✓ wsp_8567cf97b52ccbe51c3bd8cd91d6366f
 
 ### other kinds listed
 alice (work/website)$ lore incident list; lore tastepref list; lore techdoc list
-IN  inc_6a866bb99ce08addfe04ea845052ed8c
-TA  tst_9a34c925c88945140e68f54b1ba3b418
-tdc_bfed655e145f36ce2ef425180e72eeea Payments docs https://docs.example.com/payments
+IN  inc_4f89f5fcb1d81152bdf3f52979ebb64b
+TA  tst_bfed655e145f36ce2ef425180e72eeea
+tdc_376c6af9f6ebb2ad01d8b3c0201b8e1a Payments docs https://docs.example.com/payments
 
 ### comment
 alice (work/website)$ lore comment add --on-table decisions --on-id dec_76bd560aff0771fab8457dbfa9823f10 --body 'The client confirmed this on the call.'
-✓ comment cmt_8567cf97b52ccbe51c3bd8cd91d6366f on decisions/dec_76bd560aff0771fab8457dbfa9823f10 
+✓ comment cmt_71f07e3f4ec7ebaeff7d0686d814c07d on decisions/dec_76bd560aff0771fab8457dbfa9823f10 
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
 alice (work/website)$ lore comment list --on-table decisions --on-id dec_76bd560aff0771fab8457dbfa9823f10
-cmt_8567cf97b52ccbe51c3bd8cd91d6366f on decisions/dec_76bd560aff0771fab8457dbfa9823f10  The client confirmed this on the call.
+cmt_71f07e3f4ec7ebaeff7d0686d814c07d on decisions/dec_76bd560aff0771fab8457dbfa9823f10  The client confirmed this on the call.
 
 ### tag
 alice (work/website)$ lore tag add --name payments
-✓ tag payments tag_71f07e3f4ec7ebaeff7d0686d814c07d
+✓ tag payments tag_ada321d27469d49114b952fdeed0c018
 alice (work/website)$ lore tag attach --tag payments --on-table decisions --on-id dec_76bd560aff0771fab8457dbfa9823f10
 ✓ tag "payments" attached to decisions/dec_76bd560aff0771fab8457dbfa9823f10
 alice (work/website)$ lore tag list
-payments             tag_71f07e3f4ec7ebaeff7d0686d814c07d  (1 uses)
+payments             tag_ada321d27469d49114b952fdeed0c018  (1 uses)
 staging              tag_05e99e22e9e86e96fe4daa7777994603  (1 uses)
 alice (work/website)$ lore tag detach --tag payments --on-table decisions --on-id dec_76bd560aff0771fab8457dbfa9823f10
 ✓ detached 1 tag binding(s)
 
 ### commit
 alice (work/website)$ git status --short | head -5
+ M .lore/data/_meta.json
+?? .lore/LORE.full.md
 ?? .lore/LORE.md
 ?? .lore/data/architecture_notes/
 ?? .lore/data/behaviours/
-?? .lore/data/cookbook_recipes/
-?? .lore/data/decisions/
 alice (work/website)$ git add -A && git commit -qm 'lore: notes' && git log --oneline | head -1
 86dbae4 lore: notes
 
@@ -245,7 +245,7 @@ We use Stripe for payments.
 alice (work/website)$ lore learn-from docs --paths .ai/notes.md
 ✓ learn-from docs complete
   snapshots:  1
-  candidates: 3 (job_id=lcd_ada321d27469d49114b952fdeed0c018)
+  candidates: 3 (job_id=lcd_78c802586e1d1bcbd68d3bc11b965b6c)
 
   next:
     lore learn list                       # review pending candidates
@@ -253,38 +253,38 @@ alice (work/website)$ lore learn-from docs --paths .ai/notes.md
     lore learn reject <id>                # drop one
 alice (work/website)$ lore learn list
 lore sync: imported 1
-[pending] lcd_78c802586e1d1bcbd68d3bc11b965b6c → memories   # Team notes  
-[pending] lcd_d7c7956f4acfc4409bcde8bcf2627fe6 → memories    Run the tests before you push.  
-[pending] lcd_06b12747c0fad05aadf714f05f1d3d1c → memories    We use Stripe for payments. 
+[pending] lcd_d7c7956f4acfc4409bcde8bcf2627fe6 → memories   # Team notes  
+[pending] lcd_06b12747c0fad05aadf714f05f1d3d1c → memories    Run the tests before you push.  
+[pending] lcd_7289a21d2911016c7434415f3dccc813 → memories    We use Stripe for payments. 
 
 ### promote
-alice (work/website)$ lore learn promote lcd_d7c7956f4acfc4409bcde8bcf2627fe6 --target rules
+alice (work/website)$ lore learn promote lcd_06b12747c0fad05aadf714f05f1d3d1c --target rules
 ERROR: [E_NOT_IMPLEMENTED] promote target "rules" not yet supported in v0.1
   hint: only --target=memories is implemented
 (exit 23)
-alice (work/website)$ lore learn promote lcd_06b12747c0fad05aadf714f05f1d3d1c
-✓ promoted lcd_06b12747c0fad05aadf714f05f1d3d1c → memories
-alice (work/website)$ lore learn reject lcd_78c802586e1d1bcbd68d3bc11b965b6c
+alice (work/website)$ lore learn promote lcd_7289a21d2911016c7434415f3dccc813
+✓ promoted lcd_7289a21d2911016c7434415f3dccc813 → memories
+alice (work/website)$ lore learn reject lcd_d7c7956f4acfc4409bcde8bcf2627fe6
 lore sync: imported 1
 ✓ rejected 1 candidate(s)
 alice (work/website)$ lore learn list --status ''
-[rejected] lcd_78c802586e1d1bcbd68d3bc11b965b6c → memories   # Team notes  
-[pending] lcd_d7c7956f4acfc4409bcde8bcf2627fe6 → memories    Run the tests before you push.  
-[accepted] lcd_06b12747c0fad05aadf714f05f1d3d1c → memories    We use Stripe for payments. 
+[rejected] lcd_d7c7956f4acfc4409bcde8bcf2627fe6 → memories   # Team notes  
+[pending] lcd_06b12747c0fad05aadf714f05f1d3d1c → memories    Run the tests before you push.  
+[accepted] lcd_7289a21d2911016c7434415f3dccc813 → memories    We use Stripe for payments. 
 alice (work/website)$ lore memory list
 mem_54fe984c9b495744c0217776765a28f2 [retrieved] The client replies faster on WhatsApp than email, even on weekends
 mem_c0f3c11a5724b0cfd74b256190d9b5b8 [retrieved] The staging site is reset every Monday morning
 mem_b4f4765e593d51fd1352985e8af3a5b0 [retrieved] The office printer is on the second floor
-mem_7289a21d2911016c7434415f3dccc813 [retrieved] 
+mem_4bfb87cc09d6de92e5bba3810c3d19ce [retrieved] 
 We use Stripe for payments.
 
 ### external source
 alice (work/website)$ lore external-source add --kind wiki --name 'Team wiki'
 ✓ external-source Team wiki added
 alice (work/website)$ lore external-source list
-[off] Team wiki (wiki) ext_4bfb87cc09d6de92e5bba3810c3d19ce
-alice (work/website)$ lore external-source enable ext_4bfb87cc09d6de92e5bba3810c3d19ce && lore external-source list
-✓ external-source ext_4bfb87cc09d6de92e5bba3810c3d19ce enabled
-[on] Team wiki (wiki) ext_4bfb87cc09d6de92e5bba3810c3d19ce
-alice (work/website)$ lore external-source disable ext_4bfb87cc09d6de92e5bba3810c3d19ce
-✓ external-source ext_4bfb87cc09d6de92e5bba3810c3d19ce disabled
+[off] Team wiki (wiki) ext_2e0cd393bb97706e9e7cc8959c630b6d
+alice (work/website)$ lore external-source enable ext_2e0cd393bb97706e9e7cc8959c630b6d && lore external-source list
+✓ external-source ext_2e0cd393bb97706e9e7cc8959c630b6d enabled
+[on] Team wiki (wiki) ext_2e0cd393bb97706e9e7cc8959c630b6d
+alice (work/website)$ lore external-source disable ext_2e0cd393bb97706e9e7cc8959c630b6d
+✓ external-source ext_2e0cd393bb97706e9e7cc8959c630b6d disabled

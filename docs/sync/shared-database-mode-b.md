@@ -38,8 +38,8 @@ url: file://~/stores/client2
 # alice, in app
 $ lore store list
 stores:
-  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL
-  client2  file://~/stores/client2          false              false
+  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  VISIBILITY  REACH
+  client2  file://~/stores/client2          false              false     internal    ok
 count: 1
 ```
 <!-- /example -->
@@ -106,9 +106,9 @@ ERROR: [E_NEEDS_CONFIRM] engine: run project delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore project delete prj_4c59…6c38 --yes
-✓ scratch deleted
+✓ scratch (and this repo's row) moved to the trash (batch bat_3b62…e913; restore: lore trash restore bat_3b62…e913)
 lore sync: trashed rows 2
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 $ lore project list
 (no projects)
 ```
@@ -123,7 +123,7 @@ A repo set up with an older lore may still hold a two-line pointer file, `.lore/
 # alice, in infra
 $ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
-project_id: prj_3b62…e913
+project_id: prj_f147…5139
 $ lore rule list
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`
   hint: `lore migrate run --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
@@ -132,11 +132,13 @@ $ lore migrate run --dry-run
 dry_run: true
 count: 3
 rows: 
-steps: mode-b: memories/mem_f147…5139 → store shared (~/.lore/stores/infra), mode-b: repos/rep_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: rules/rul_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aae…a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 $ lore migrate run
 count: 3
 rows: 
-steps: mode-b: memories/mem_f147…5139 → store shared (~/.lore/stores/infra), mode-b: repos/rep_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: rules/rul_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+steps: mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aae…a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+journal: team lock: taken on refs/lore/signals until 2026-11-02T10:13:05Z (renewed every 2m0s), backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
+backup_ref: refs/lore-backup/migrate/2026-11-02
 $ ls .lore; cat .lore/stores.yaml
 lore-cache.db
 lore-cache.db-shm
@@ -148,8 +150,8 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 $ lore rule list; lore memory list
-rul_b69e…5ed7  Terraform changes need a plan in the pull request.  [shared]
-mem_f147…5139  The staging cluster sleeps at night.  [shared]
+rul_0aae…a61f  Terraform changes need a plan in the pull request.  [shared]
+mem_2537…6bbb  The staging cluster sleeps at night.  [shared]
 ```
 <!-- /example -->
 

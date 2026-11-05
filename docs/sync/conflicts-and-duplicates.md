@@ -142,9 +142,9 @@ $ lore sync merge-rows memories --keep mem_4c59…6c38 --drop mem_3b62…e913
 ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_4c59…6c38 (edit it with its lore command if it should carry the other's text), then delete mem_3b62…e913 with its lore command
 (exit 20)
 $ lore memory delete mem_3b62…e913 --yes
-✓ mem_3b62…e913 deleted
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 $ lore memory list
 mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
@@ -178,10 +178,14 @@ lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a 
 lore sync: re-pointed 2 row file(s) from local project prj_2537…6bbb to shared project prj_f147…5139
 lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 lore sync: repos/rep_b69e…5ed7.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 ✓ kept prj_f147…5139, merged prj_2537…6bbb
 $ lore project list
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 prj_f147…5139  app  https://github.com/client2/app
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 $ git add -A && git commit -qm 'lore: one project' && git push -q origin main
+lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 ```
 <!-- /example -->
 

@@ -48,10 +48,10 @@ $ git pull -q --rebase origin main && git push -q origin main
 ```console
 # alice, in website
 $ lore link add --entity tsk_2ad3…f891 --commit HEAD
-✓ linked 05513aa2 → tasks/tsk_2ad3…f891  (cml_6a86…ed8c)
+✓ linked 9b40ce71 → tasks/tsk_2ad3…f891  (cml_6a86…ed8c)
   message: Fix the Pro plan price on the pricing page
 $ lore link list --entity tsk_2ad3…f891
-cml_6a86…ed8c  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
+cml_6a86…ed8c  9b40ce71 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
 ```
 <!-- /example -->
 
@@ -63,7 +63,7 @@ cml_6a86…ed8c  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price o
 ```console
 # alice, in website
 $ lore commit-show $(git rev-parse HEAD)
-Commit 05513aa29b78 — 1 linked entities:
+Commit 9b40ce71af28 — 1 linked entities:
   tasks/tsk_2ad3…f891
 $ lore commit-show HEAD
 (no entities linked to this commit)
@@ -80,14 +80,14 @@ The second command shows the trap: `commit-show` does not understand `HEAD` or a
 ```console
 # alice, in website
 $ lore task done tsk_2ad3…f891 --commit $(git rev-parse HEAD) --no-lesson
-✓ tsk_2ad3…f891 done (commit 05513aa); waiting for merge
+✓ tsk_2ad3…f891 done (commit 9b40ce7); waiting for merge
 lore live: (live, pushed)
-lore live: landed on main (dfd8dc8); leaves live once main is fetched
+lore live: landed on main (05513aa); leaves live once main is fetched
 $ lore sync
 · already in sync
 lore live: 1 row(s) left live (main holds them)
 $ lore task list --status done
-lore: tsk_2ad3…f891 merged 10:04 (found by: ancestry, 05513aa) but it could not be recorded: write tsk_2ad3…f891: signals: prepare companion: [E_STALE] engine: tsk_2ad3…f891 kept changing while it was merged: [E_STALE] live row tasks/tsk_2ad3…f891 changed since it was read: [E_STALE] store: row changed since it was read; the next lore command retries
+lore: tsk_2ad3…f891 merged 10:04 (found by: ancestry, 9b40ce7) but it could not be recorded: write tsk_2ad3…f891: signals: prepare companion: [E_STALE] engine: tsk_2ad3…f891 kept changing while it was merged: [E_STALE] live row tasks/tsk_2ad3…f891 changed since it was read: [E_STALE] store: row changed since it was read; the next lore command retries
 ✓ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
 ✓ tsk_2ad3…f891 Fix the typo on the pricing page [medium]  ✓ done · not merged yet
 ```
@@ -106,10 +106,10 @@ lore live: (live, pushed)
 $ lore task done tsk_4f89…b64b --no-lesson
 ✓ tsk_4f89…b64b done
 lore live: (live, pushed)
-lore live: landed on main (cf563f3); leaves live once main is fetched
+lore live: landed on main (dfd8dc8); leaves live once main is fetched
 $ lore task merged tsk_4f89…b64b
 ✓ tsk_4f89…b64b merged (marked by hand, 10:05)
-lore live: landed on main (df3a55c); leaves live once main is fetched
+lore live: landed on main (cf563f3); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -123,7 +123,7 @@ Merged matters when another task waits for this one with `--after <id>:merged` (
 ```console
 # alice, in website
 $ lore link list
-cml_6a86…ed8c  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
+cml_6a86…ed8c  9b40ce71 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
 $ lore link remove cml_6a86…ed8c
 ERROR: [E_NEEDS_CONFIRM] engine: run link remove?
   hint: ask the person, then rerun with --yes
@@ -131,7 +131,7 @@ ERROR: [E_NEEDS_CONFIRM] engine: run link remove?
 $ lore link remove cml_6a86…ed8c --yes
 ✓ link cml_6a86…ed8c removed
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ```
 <!-- /example -->
 
@@ -143,7 +143,7 @@ The shortest path from a commit to its task, using the commands above:
 ```console
 # alice, in website
 $ lore link add --entity tsk_2ad3…f891 --commit HEAD
-✓ linked 05513aa2 → tasks/tsk_2ad3…f891  (cml_6a86…ed8c)
+✓ linked 9b40ce71 → tasks/tsk_2ad3…f891  (cml_6a86…ed8c)
   message: Fix the Pro plan price on the pricing page
 ```
 <!-- /example -->

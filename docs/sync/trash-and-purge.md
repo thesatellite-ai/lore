@@ -29,14 +29,16 @@ Alice deletes a memory's file (here with `git rm`, as a teammate's commit or a r
 $ git rm -q .lore/data/memories/mem_05e9…4603.json
 $ lore memory list
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ lore sync trash
+note: lore sync trash is now lore trash --local; this spelling goes away in the next release
 #4 memories/mem_05e9…4603  2026-11-02T10:05:40Z  (file deleted)
 #3 memories/mem_c0f3…b5b8  2026-11-02T10:02:50Z  (file deleted)
 #2 rules/rul_76bd…3f10  2026-11-02T10:02:00Z  (file deleted)
 #1 memories/mem_c0f3…b5b8  2026-11-02T10:02:00Z  (file deleted)
 $ lore sync trash restore 4
+note: lore sync trash restore is now lore trash restore --local 4; this spelling goes away in the next release
 ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: a trash restore of memories is not done in lore.db (the row files are the truth): restore the file from git (`git checkout HEAD -- .lore/data/memories/mem_05e9…4603.json`, or from the commit before the one that deleted it: `git log --diff-filter=D -- .lore/data/memories/mem_05e9…4603.json`)
 (exit 20)
 $ git checkout HEAD -- .lore/data/memories/mem_05e9…4603.json
@@ -100,7 +102,7 @@ ERROR: [E_INVALID_INPUT] purge is durable; pass --confirm (or --dry-run to previ
 (exit 20)
 $ lore sync purge --archived-before 0d --confirm
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ✓ purged 1 row(s)
 $ cat .lore/data/_purged.json
 {

@@ -262,7 +262,7 @@ This table is made from `lore errors list` and the exit table in the code, so it
 | `E_NOT_A_STORE` | 19 | the repo is not a lore store (no lore-store.yaml marker, or it holds non-lore files) |
 | `E_LEAK_BLOCKED` | 19 | the write would put internal content where the client can read it; see `lore check leaks --explain` |
 | `E_CYCLE` | 19 | the dependency would create a cycle between tasks |
-| `E_OLD_LORE` | 19 | this lore binary is below the live ref's min_lore_version; upgrade lore (reads still work) |
+| `E_OLD_LORE` | 19 | this lore binary is below the live ref's min_lore_version; run lore upgrade (reads still work) |
 | `E_CONFIG_INVALID` | 1 | ~/.lore/config.yaml failed validation; run `lore config check` |
 | `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule and what to do instead |
 <!-- /errors -->

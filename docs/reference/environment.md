@@ -46,6 +46,8 @@ $ LORE_HOME=~/shared-dbs lore migrate run
 count: 2
 rows: 
 steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+journal: team lock: this repo has no remote origin; nobody to race, none taken, backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
+backup_ref: refs/lore-backup/migrate/2026-11-02
 $ lore rule list
 rul_28f8…03df  Posts go out on Tuesdays  [shared]
 
@@ -74,6 +76,8 @@ $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 count: 2
 rows: 
 steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+journal: team lock: this repo has no remote origin; nobody to race, none taken, backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
+backup_ref: refs/lore-backup/migrate/2026-11-02
 $ lore rule list
 rul_28f8…03df  Posts go out on Tuesdays  [shared]
 ```

@@ -42,7 +42,7 @@ We use Stripe for payments.
 $ lore learn-from docs --paths .ai/notes.md
 ✓ learn-from docs complete
   snapshots:  1
-  candidates: 3 (job_id=lcd_ada3…c018)
+  candidates: 3 (job_id=lcd_78c8…5b6c)
 …
 ```
 <!-- /example -->
@@ -56,9 +56,9 @@ $ lore learn-from docs --paths .ai/notes.md
 # alice, in website
 $ lore learn list
 lore sync: imported 1
-[pending] lcd_78c8…5b6c → memories   # Team notes  
-[pending] lcd_d7c7…7fe6 → memories    Run the tests before you push.  
-[pending] lcd_06b1…3d1c → memories    We use Stripe for payments. 
+[pending] lcd_d7c7…7fe6 → memories   # Team notes  
+[pending] lcd_06b1…3d1c → memories    Run the tests before you push.  
+[pending] lcd_7289…c813 → memories    We use Stripe for payments. 
 ```
 <!-- /example -->
 
@@ -71,15 +71,15 @@ The first candidate is the file's title line with nothing under it; you will dro
 <!-- example: knowledge#promote only=2,3,4 -->
 ```console
 # alice, in website
-$ lore learn promote lcd_06b1…3d1c
-✓ promoted lcd_06b1…3d1c → memories
-$ lore learn reject lcd_78c8…5b6c
+$ lore learn promote lcd_7289…c813
+✓ promoted lcd_7289…c813 → memories
+$ lore learn reject lcd_d7c7…7fe6
 lore sync: imported 1
 ✓ rejected 1 candidate(s)
 $ lore learn list --status ''
-[rejected] lcd_78c8…5b6c → memories   # Team notes  
-[pending] lcd_d7c7…7fe6 → memories    Run the tests before you push.  
-[accepted] lcd_06b1…3d1c → memories    We use Stripe for payments. 
+[rejected] lcd_d7c7…7fe6 → memories   # Team notes  
+[pending] lcd_06b1…3d1c → memories    Run the tests before you push.  
+[accepted] lcd_7289…c813 → memories    We use Stripe for payments. 
 ```
 <!-- /example -->
 
@@ -92,7 +92,7 @@ $ lore memory list
 mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email, even on weekends
 mem_c0f3…b5b8 [retrieved] The staging site is reset every Monday morning
 mem_b4f4…a5b0 [retrieved] The office printer is on the second floor
-mem_7289…c813 [retrieved] 
+mem_4bfb…19ce [retrieved] 
 We use Stripe for payments.
 ```
 <!-- /example -->
@@ -107,12 +107,12 @@ We use Stripe for payments.
 $ lore external-source add --kind wiki --name 'Team wiki'
 ✓ external-source Team wiki added
 $ lore external-source list
-[off] Team wiki (wiki) ext_4bfb…19ce
-$ lore external-source enable ext_4bfb…19ce && lore external-source list
-✓ external-source ext_4bfb…19ce enabled
-[on] Team wiki (wiki) ext_4bfb…19ce
-$ lore external-source disable ext_4bfb…19ce
-✓ external-source ext_4bfb…19ce disabled
+[off] Team wiki (wiki) ext_2e0c…0b6d
+$ lore external-source enable ext_2e0c…0b6d && lore external-source list
+✓ external-source ext_2e0c…0b6d enabled
+[on] Team wiki (wiki) ext_2e0c…0b6d
+$ lore external-source disable ext_2e0c…0b6d
+✓ external-source ext_2e0c…0b6d disabled
 ```
 <!-- /example -->
 
@@ -123,7 +123,7 @@ $ lore external-source disable ext_4bfb…19ce
 <!-- example: knowledge#promote only=1 -->
 ```console
 # alice, in website
-$ lore learn promote lcd_d7c7…7fe6 --target rules
+$ lore learn promote lcd_06b1…3d1c --target rules
 ERROR: [E_NOT_IMPLEMENTED] promote target "rules" not yet supported in v0.1
   hint: only --target=memories is implemented
 (exit 23)

@@ -47,6 +47,9 @@ Notes:
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
+  - Team versions (newest save per writer and machine):
+  -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
+  - context: .lore/LORE.md not rendered yet (lore render)
 ```
 <!-- /example -->
 
@@ -117,6 +120,10 @@ Binary: 0.1.0-dev
   stable:   yes
 Errors:
   - E_DB_CORRUPT: DB file is corrupt (pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)); recover with `lore repair --tier=2 --confirm` (latest backup) — shared rows also rebuild from .lore/data
+Notes:
+  - Team versions (newest save per writer and machine):
+  -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000002Z)
+  - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
 ```
 <!-- /example -->
@@ -174,7 +181,7 @@ When you report a problem, attach a support bundle: one JSON file with the docto
 ```console
 # alice, in website
 $ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (1615 bytes)
+✓ wrote support bundle to bundle.json (1894 bytes)
 $ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
   "binary_version": "0.1.0-dev",
     "status": "healthy",

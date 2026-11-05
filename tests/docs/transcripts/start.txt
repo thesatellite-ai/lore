@@ -42,7 +42,8 @@ rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push
 
 ### render
 alice (work/website)$ lore render
-✓ .lore/LORE.md (12324 bytes; 1R + 0HF)
+✓ .lore/LORE.md (2527 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topics)
+✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
 alice (work/website)$ cat AGENTS.md
 <!-- lore:pointer:start -->
@@ -80,6 +81,9 @@ Notes:
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 40s ago
   - live: post-commit and pre-push hook blocks installed
+  - Team versions (newest save per writer and machine):
+  -   act_162df51b7f78b785c97c26b41ea89666 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
+  - context: .lore/LORE.md 2527 of 16000 bytes (15%, profile codex); warn at 80%
 
 ### tables
 alice (work/website)$ lore tables
@@ -107,7 +111,7 @@ code_symbols          0
 comments              0
 commit_links          0
 compress_runs         0
-config                6
+config                7
 cookbook_recipes      0
 decisions             0
 drafts                0
@@ -142,7 +146,7 @@ rules                 1
 run_steps             0
 runs                  0
 schema_migrations     1
-sessions              0
+sessions              1
 snapshots             0
 suggestions           0
 tags                  0
@@ -157,7 +161,7 @@ trusted_plugins       0
 users                 0
 workflows             0
 workspaces            0
-73 tables, 34 total records
+73 tables, 36 total records
 
 ### completion
 alice (work/website)$ lore completion bash | head -3

@@ -28,7 +28,7 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 (exit 23)
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_d431…313a [must/always] Buttons are blue
 $ lore rule add --read-only --body 'Buttons are blue'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
@@ -72,12 +72,14 @@ A CI clone has the `.lore/data` files but not the database, and not lore's git s
 # alice, in ci-clone
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_d431…313a [must/always] Buttons are blue
 $ lore doctor
 Status: BROKEN
   …
   - resolve: projresolve: cwd is not an aicoder project root (no .lore/lore.db or lore.yaml)
+  …
+  -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000003Z)
   …
 $ lore sync install-git
 ✓ git wired for lore data

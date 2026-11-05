@@ -37,9 +37,9 @@ A hotfix has a `--severity`: `low`, `medium`, `high` (the default) or `critical`
 ```console
 # alice, in website
 $ lore hotfix add --title 'Checkout button is broken on Safari' --body 'Use the old button until the fix ships.' --severity critical
-⚠ hfx_3b62…e913 — Checkout button is broken on Safari [critical]
+⚠ hfx_f147…5139 — Checkout button is broken on Safari [critical]
 $ lore hotfix list
-hfx_3b62…e913 [critical] Use the old button until the fix ships.
+hfx_f147…5139 [critical] Use the old button until the fix ships.
 ```
 <!-- /example -->
 
@@ -53,7 +53,7 @@ Each kind is one `add` command. Here are the ones with a title and a body:
 ```console
 # alice, in website
 $ lore pattern add --title 'Load data in one place' --body 'Each page loads its data in its loader, never inside a button handler.'
-✓ pat_f147…5139
+✓ pat_2537…6bbb
 ```
 <!-- /example -->
 
@@ -61,7 +61,7 @@ $ lore pattern add --title 'Load data in one place' --body 'Each page loads its 
 ```console
 # alice, in website
 $ lore playbook add --title 'How to release' --body '1. Run the tests. 2. Tag the release. 3. Post in the team chat.'
-✓ pbk_2537…6bbb
+✓ pbk_b69e…5ed7
 ```
 <!-- /example -->
 
@@ -71,7 +71,7 @@ A playbook and a prompt also keep a one-line summary. `--description` sets it; w
 ```console
 # alice, in website
 $ lore prompt add --title 'Review a pull request' --description 'Bugs first, then style' --body 'Read the change, list bugs first, then style notes.'
-✓ prm_b69e…5ed7
+✓ prm_0aae…a61f
 ```
 <!-- /example -->
 
@@ -81,9 +81,9 @@ A snapshot is stamped with today's date, which `lore snapshot list` shows. `--so
 ```console
 # alice, in website
 $ lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'
-✓ snp_0aae…a61f — Week 44
+✓ snp_6a86…ed8c — Week 44
 $ lore snapshot list
-snp_0aae…a61f Week 44   (2026-11-02)
+snp_6a86…ed8c Week 44   (2026-11-02)
 ```
 <!-- /example -->
 
@@ -91,7 +91,7 @@ snp_0aae…a61f Week 44   (2026-11-02)
 ```console
 # alice, in website
 $ lore incident add --title 'Site down for 20 minutes' --body 'The disk filled up with logs. We now rotate logs daily.'
-✓ inc_6a86…ed8c
+✓ inc_4f89…b64b
 ```
 <!-- /example -->
 
@@ -99,7 +99,7 @@ $ lore incident add --title 'Site down for 20 minutes' --body 'The disk filled u
 ```console
 # alice, in website
 $ lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete any file you did not create.'
-✓ bhv_4f89…b64b
+✓ bhv_77cb…76c4
 ```
 <!-- /example -->
 
@@ -107,7 +107,7 @@ $ lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete
 ```console
 # alice, in website
 $ lore architecturenote add --title 'How the site is built' --body 'The website reads products from the shop API and caches them for 5 minutes.'
-✓ anr_77cb…76c4
+✓ anr_d191…45c2
 ```
 <!-- /example -->
 
@@ -115,7 +115,7 @@ $ lore architecturenote add --title 'How the site is built' --body 'The website 
 ```console
 # alice, in website
 $ lore cookbookrecipe add --title 'Add a new page' --body 'Copy pages/about, rename it, add a link in the menu.'
-✓ cbr_d191…45c2
+✓ cbr_b4d3…11aa
 ```
 <!-- /example -->
 
@@ -123,7 +123,7 @@ $ lore cookbookrecipe add --title 'Add a new page' --body 'Copy pages/about, ren
 ```console
 # alice, in website
 $ lore suggestion add --title 'Add dark mode' --body 'Several users asked for it.'
-✓ sug_b4d3…11aa
+✓ sug_9a34…b418
 ```
 <!-- /example -->
 
@@ -131,7 +131,7 @@ $ lore suggestion add --title 'Add dark mode' --body 'Several users asked for it
 ```console
 # alice, in website
 $ lore workflow add --title 'Code review' --body 'One approval from a second developer before merge.'
-✓ wfl_376c…8e1a
+✓ wfl_67e2…291e
 ```
 <!-- /example -->
 
@@ -139,7 +139,7 @@ $ lore workflow add --title 'Code review' --body 'One approval from a second dev
 ```console
 # alice, in website
 $ lore workspace add --title 'Website redesign' --body 'Everything for the new look of the site.'
-✓ wsp_67e2…291e
+✓ wsp_8567…366f
 ```
 <!-- /example -->
 
@@ -149,7 +149,7 @@ $ lore workspace add --title 'Website redesign' --body 'Everything for the new l
 ```console
 # alice, in website
 $ lore tastepref add --body 'Buttons are blue'
-✓ tst_9a34…b418
+✓ tst_bfed…eeea
 ```
 <!-- /example -->
 
@@ -157,7 +157,7 @@ $ lore tastepref add --body 'Buttons are blue'
 ```console
 # alice, in website
 $ lore techdoc add --name 'Payments docs' --base-url https://docs.example.com/payments --description 'How to take a card payment'
-✓ tdc_bfed…eeea Payments docs
+✓ tdc_376c…8e1a Payments docs
 ```
 <!-- /example -->
 
@@ -167,9 +167,9 @@ $ lore techdoc add --name 'Payments docs' --base-url https://docs.example.com/pa
 ```console
 # alice, in website
 $ lore incident list; lore tastepref list; lore techdoc list
-IN  inc_6a86…ed8c
-TA  tst_9a34…b418
-tdc_bfed…eeea Payments docs https://docs.example.com/payments
+IN  inc_4f89…b64b
+TA  tst_bfed…eeea
+tdc_376c…8e1a Payments docs https://docs.example.com/payments
 ```
 <!-- /example -->
 

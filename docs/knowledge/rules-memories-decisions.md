@@ -173,12 +173,12 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 ```console
 # alice, in website
 $ lore memory delete mem_28f8…03df --yes
-✓ mem_28f8…03df deleted
+✓ mem_28f8…03df moved to the trash (restore: lore trash restore mem_28f8…03df)
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 $ lore memory show mem_28f8…03df || true
-ERROR: [E_NOT_FOUND] memory mem_28f8…03df is deleted
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main memories`
+ERROR: [E_IN_TRASH] engine: mem_28f8…03df is in the trash (deleted by act_4c59…6c38 on 2026-11-02 10:02)
+  hint: lore trash show mem_28f8…03df; bring it back with lore trash restore mem_28f8…03df
 ```
 <!-- /example -->
 
@@ -194,14 +194,14 @@ ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (password_pair) at lin
   hint: store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret
 (exit 26)
 $ lore memory add --body 'The staging password is password=example-only' --yes
-✓ mem_4c59…6c38 
+✓ mem_3b62…e913 
   scope: [master]
-$ ls .lore/data/memories | grep -c mem_4c59…6c38 || true
+$ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
-$ lore memory delete mem_4c59…6c38 --yes
-✓ mem_4c59…6c38 deleted
+$ lore memory delete mem_3b62…e913 --yes
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ```
 <!-- /example -->
 

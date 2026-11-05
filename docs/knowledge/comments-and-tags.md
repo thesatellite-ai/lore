@@ -21,7 +21,7 @@ Both point at a row by its *table* (the kind of row, in the plural: `rules`, `me
 ```console
 # alice, in website
 $ lore comment add --on-table decisions --on-id dec_76bd…3f10 --body 'The client confirmed this on the call.'
-✓ comment cmt_8567…366f on decisions/dec_76bd…3f10 
+✓ comment cmt_71f0…c07d on decisions/dec_76bd…3f10 
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
 ```
@@ -37,11 +37,11 @@ Create the tag with `lore tag add --name`, then attach it. Tag names are lowerca
 ```console
 # alice, in website
 $ lore tag add --name payments
-✓ tag payments tag_71f0…c07d
+✓ tag payments tag_ada3…c018
 $ lore tag attach --tag payments --on-table decisions --on-id dec_76bd…3f10
 ✓ tag "payments" attached to decisions/dec_76bd…3f10
 $ lore tag list
-payments             tag_71f0…c07d  (1 uses)
+payments             tag_ada3…c018  (1 uses)
 staging              tag_05e9…4603  (1 uses)
 $ lore tag detach --tag payments --on-table decisions --on-id dec_76bd…3f10
 ✓ detached 1 tag binding(s)
@@ -58,7 +58,7 @@ $ lore tag detach --tag payments --on-table decisions --on-id dec_76bd…3f10
 ```console
 # alice, in website
 $ lore comment list --on-table decisions --on-id dec_76bd…3f10
-cmt_8567…366f on decisions/dec_76bd…3f10  The client confirmed this on the call.
+cmt_71f0…c07d on decisions/dec_76bd…3f10  The client confirmed this on the call.
 ```
 <!-- /example -->
 

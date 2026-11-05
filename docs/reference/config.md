@@ -348,7 +348,7 @@ $ lore config list
 (no config keys)
 $ lore config get default_branch || echo 'not set'
 ERROR: [E_NOT_FOUND] config key "default_branch" not found
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main`
+  hint: `lore config list` shows the keys set in ~/.lore/config.yaml
 not set
 ```
 <!-- /example -->

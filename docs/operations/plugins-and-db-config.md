@@ -29,7 +29,7 @@ $ lore plugin list
 $ printf '#!/bin/sh\necho hello\n' > hello.sh
 $ lore plugin trust --name hello --sha256 $(sha256sum hello.sh | cut -c1-64)
 ✓ plugin trusted: hello (sha256:bfdeaeb08cff)
-lore sync: actors/act_2ad3…f891.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+lore sync: actors/act_7a67…9504.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
 $ lore plugin list
 tpg_b4f4…a5b0 hello  sha256:bfdeaeb08cff
 ```
@@ -56,7 +56,7 @@ ERROR: [E_INVALID_INPUT] config key "team.note" is not a key lore reads (unknown
 (exit 20)
 $ lore config get color
 ERROR: [E_NOT_FOUND] config key "color" not found
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main`
+  hint: `lore config list` shows the keys set in ~/.lore/config.yaml
 (exit 27)
 ```
 <!-- /example -->

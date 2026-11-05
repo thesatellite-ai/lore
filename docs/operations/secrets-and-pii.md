@@ -52,9 +52,9 @@ Delete the row (or edit the key out) before you commit:
 ```console
 # alice, in website
 $ lore memory delete mem_28f8…03df --yes
-✓ mem_28f8…03df deleted
+✓ mem_28f8…03df moved to the trash (restore: lore trash restore mem_28f8…03df)
 lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore sync trash` (undo: `lore sync trash restore <id>`)
+lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ```
 <!-- /example -->
 
@@ -125,6 +125,8 @@ $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 count: 2
 rows: 
 steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+journal: team lock: this repo has no remote origin; nobody to race, none taken, backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
+backup_ref: refs/lore-backup/migrate/2026-11-02
 $ lore rule list
 rul_28f8…03df  Posts go out on Tuesdays  [shared]
 ```

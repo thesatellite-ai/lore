@@ -163,9 +163,8 @@ ERROR: [E_NEEDS_CONFIRM] engine: run mission delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore mission delete msn_05e9…4603 --yes
-✓ msn_05e9…4603 deleted
+✓ msn_05e9…4603 moved to the trash (restore: lore trash restore msn_05e9…4603)
 lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 

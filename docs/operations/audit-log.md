@@ -27,19 +27,19 @@ Alice (an agency developer) adds a rule, then reads the log. Each line is: time,
 ```console
 # alice, in website
 $ lore rule add --body 'Never put passwords in the code'
-✓ rul_7a67…9504 
+✓ rul_2ad3…f891 
   scope: [master] severity: must
 $ lore audit log
-2026-11-02T10:00:00Z  rules.write                  rules/rul_7a67…9504  by act_2ad3…f891
-2026-11-02T10:00:00Z  memories.write               memories/mem_162d…9666  by act_2ad3…f891
-2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe…28f2  by act_2ad3…f891
-2026-11-02T10:00:00Z  repos.import                 repos/rep_05e9…4603  by act_2ad3…f891
-2026-11-02T10:00:00Z  projects.import              projects/prj_c0f3…b5b8  by act_2ad3…f891
-2026-11-02T10:00:00Z  actors.import                actors/act_2ad3…f891  by act_2ad3…f891
-2026-11-02T10:00:00Z  repos.write                  repos/rep_05e9…4603  by act_2ad3…f891
-2026-11-02T10:00:00Z  policies.write               policies/pol_76bd…3f10  by act_2ad3…f891
-2026-11-02T10:00:00Z  projects.write               projects/prj_c0f3…b5b8  by act_2ad3…f891
-2026-11-02T10:00:00Z  actors.write                 actors/act_2ad3…f891  by act_2ad3…f891
+2026-11-02T10:00:00Z  rules.write                  rules/rul_2ad3…f891  by act_7a67…9504
+2026-11-02T10:00:00Z  memories.write               memories/mem_162d…9666  by act_7a67…9504
+2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe…28f2  by act_7a67…9504
+2026-11-02T10:00:00Z  repos.import                 repos/rep_05e9…4603  by act_7a67…9504
+2026-11-02T10:00:00Z  projects.import              projects/prj_c0f3…b5b8  by act_7a67…9504
+2026-11-02T10:00:00Z  actors.import                actors/act_7a67…9504  by act_7a67…9504
+2026-11-02T10:00:00Z  repos.write                  repos/rep_05e9…4603  by act_7a67…9504
+2026-11-02T10:00:00Z  policies.write               policies/pol_76bd…3f10  by act_7a67…9504
+2026-11-02T10:00:00Z  projects.write               projects/prj_c0f3…b5b8  by act_7a67…9504
+2026-11-02T10:00:00Z  actors.write                 actors/act_7a67…9504  by act_7a67…9504
 $ lore audit verify
 ✓ audit chain intact (10 entries)
 ```
@@ -71,12 +71,12 @@ Run `verify` **first** when you investigate. Any other lore command notices the 
 $ lore rule list
 lore sync: rules/rul_54fe…28f2.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_7a67…9504 [must/always] Never put passwords in the code
+rul_2ad3…f891 [must/always] Never put passwords in the code
 $ lore sync
 · already in sync
 $ lore audit log --limit 2
-2026-11-02T10:00:00Z  rules.external-write         rules/rul_54fe…28f2  by act_2ad3…f891
-2026-11-02T10:00:00Z  rules.write                  rules/rul_7a67…9504  by act_2ad3…f891
+2026-11-02T10:00:00Z  rules.external-write         rules/rul_54fe…28f2  by act_7a67…9504
+2026-11-02T10:00:00Z  rules.write                  rules/rul_2ad3…f891  by act_7a67…9504
 ```
 <!-- /example -->
 
