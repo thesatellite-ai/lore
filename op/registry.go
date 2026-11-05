@@ -72,6 +72,10 @@ func checkSpec(e Entry) []error {
 			p = append(p, errors.New(s.Name+": unknown error code "+string(c)))
 		}
 	}
+	// P3-CFG-1: a Local operation runs without the engine, so nothing could ask.
+	if s.Local && s.Confirm.CanAsk() {
+		p = append(p, errors.New(s.Name+": a local operation cannot ask for confirmation"))
+	}
 	if s.Confirm.When != "" {
 		found := false
 		for _, f := range e.InputFields() {

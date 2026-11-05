@@ -99,6 +99,15 @@ type Spec struct {
 	// plural of the last noun is wrong ("policy" → "policy" instead of
 	// "policies"). Empty means the default.
 	RESTNoun string
+	// Local marks an operation that works on this machine's own files
+	// (~/.lore/config.yaml, the staged files of a checkout, a store clone)
+	// and never on rows: the composition root runs it without opening a
+	// repository or any store, so it works outside a repo and while a
+	// store is unreachable or the config is invalid (`lore config check`).
+	// The engine's confirm and policy steps do not run for it, so a Local
+	// operation may not ask (NewRegistry refuses Local with a Confirm
+	// rule). P3-CFG-1.
+	Local bool
 }
 
 // namePart is one snake_case segment of an operation name.
