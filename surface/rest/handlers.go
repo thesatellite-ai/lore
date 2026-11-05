@@ -48,7 +48,12 @@ func (h *handlers) operation(e op.Entry, rt op.Route) http.Handler {
 		}
 		// OV3/REST: the agent is the HTTP client's (X-Lore-Agent or none), never
 		// the `lore api` server process's own detection (AgentFixed).
-		caller := op.Caller{Actor: h.opts.Actor, Agent: agent, AgentFixed: true, Interactive: false, Yes: yes}
+		secret, err := secretChoiceOf(r) // SECRETS 4 over REST (P2-CTX-5)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		caller := op.Caller{Actor: h.opts.Actor, Agent: agent, AgentFixed: true, Interactive: false, Yes: yes, Secret: secret}
 		res, err := h.runner.Run(r.Context(), e, op.JSONDecoder{Body: body}, caller)
 		if err != nil {
 			writeError(w, err)
