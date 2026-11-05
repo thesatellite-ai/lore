@@ -5,8 +5,8 @@
 // (task, meta, delete, resource, import, secrets), and that id is carried on
 // the audit event of each row it wrote; a batch is never a row. So these
 // operations only read the batch log (Env.BatchEvents). In 0.1.18 that log
-// is machine-local (Q-R3-8: a batch is visible on the machine that ran it),
-// and `lore batch undo` is deferred (Q-R3-1).
+// is machine-local (Q-R3-8: a batch is visible on the machine that ran it).
+// `lore batch undo` (undo.go) reverts delete and create batches (FA-DEL-3).
 package batch
 
 import (
@@ -150,6 +150,7 @@ func Ops(env Env) []op.Entry {
 			Examples: []op.Example{{Title: "import batches as JSON", CLI: "lore batch list --kind import --json", Want: `"data"`}}}, o.list),
 		op.Define(op.Spec{Name: OpShow, Summary: "Show one batch: its kind, who ran it and the rows it wrote",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: errsRead}, o.show),
+		undoEntry(o),
 	}
 }
 
