@@ -37,6 +37,7 @@ const (
 	flagCheckExplain   = "explain"
 	flagCheckStaged    = "staged"
 	flagCheckCommitMsg = "commit-msg"
+	flagCheckAsClient  = "as-client"
 )
 
 // Places a finding can be in.
@@ -56,7 +57,7 @@ func newCheckCommand() *cobra.Command {
 }
 
 func newCheckLeaksCommand() *cobra.Command {
-	var ci, explain, staged bool
+	var ci, explain, staged, asClient bool
 	var commitMsg string
 	cmd := &cobra.Command{
 		Use:   "leaks",
@@ -68,10 +69,17 @@ or a secret. It fails closed when it cannot read the store.
 
 --ci needs no store access: it checks only ids and structure of .lore/data
 (a row of another project, a reference field pointing outside) and its output
-names no internal id, store or org.`,
+names no internal id, store or org.
+
+--as-client checks this repo as the client would see it, before handing an
+own repo over (RES 3.9): every tracked file against the internal rows,
+resources with internal, secret_ref or sensitive values, refs and kinds that
+name store rows, and those values in git history. It refuses until each is
+cleared; it never prints a value.`,
 		Example: `  lore check leaks                 # staged files, as the pre-commit hook does
   lore check leaks --commit-msg .git/COMMIT_EDITMSG
   lore check leaks --ci            # in the client's CI
+  lore check leaks --as-client     # before handing an own repo to the client
   lore check leaks --explain`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -82,6 +90,9 @@ names no internal id, store or org.`,
 			}
 			if ci {
 				return runCheckCI(root)
+			}
+			if asClient {
+				return runCheckAsClient(ctx, root, explain)
 			}
 			var items []leakcheck.Item
 			if commitMsg != "" {
@@ -105,6 +116,8 @@ names no internal id, store or org.`,
 	cmd.Flags().BoolVar(&explain, flagCheckExplain, false, "print the rule, the source and the matched words of each finding")
 	cmd.Flags().BoolVar(&staged, flagCheckStaged, false, "check the staged files (default unless --commit-msg is given alone)")
 	cmd.Flags().StringVar(&commitMsg, flagCheckCommitMsg, "", "also check this commit message file (the commit-msg hook's $1)")
+	cmd.Flags().BoolVar(&asClient, flagCheckAsClient, false, "check the whole repo as the client would see it (before a hand-over)")
+	cmd.MarkFlagsMutuallyExclusive(flagCheckCI, flagCheckAsClient)
 	return cmd
 }
 
@@ -148,6 +161,12 @@ func newCheckPRBodyCommand() *cobra.Command {
 // the v0.1.17 cache's plus the core's attached stores (coreLeakRows).
 // Fails closed.
 func leakIndexFor(ctx context.Context, root string) (*leakcheck.Index, string, bool, error) {
+	return leakIndexWith(ctx, root, false)
+}
+
+// leakIndexWith is leakIndexFor; asClient reads an own repo as a client
+// repo (`--as-client`, RES 3.9): every internal row is indexed.
+func leakIndexWith(ctx context.Context, root string, asClient bool) (*leakcheck.Index, string, bool, error) {
 	s, err := gatherOrgSituation(ctx, root)
 	if err != nil {
 		return nil, "", false, err
@@ -156,6 +175,9 @@ func leakIndexFor(ctx context.Context, root string) (*leakcheck.Index, string, b
 		return nil, "", false, orgResolveCLIError(s.ResolveErr)
 	}
 	role := s.Result.Role
+	if asClient {
+		role = orgresolve.RoleClient
+	}
 	client := role == orgresolve.RoleClient
 	if role == orgresolve.RoleOwn && !s.Result.LinkUnknown {
 		return nil, s.ProjectID, false, nil
