@@ -132,6 +132,41 @@ func Members(b []byte) ([]Member, error) {
 	return out, nil
 }
 
+// MembersInspected is Members plus each member's value inspected
+// (Inspect) from the same parse: parsed[i] belongs to members[i]. A row
+// decode reads every field this way, so a big field is parsed once, not
+// twice (BUG-TIME-BENCH).
+func MembersInspected(b []byte) (members []Member, parsed []Parsed, err error) {
+	n, err := parse(b)
+	if err != nil {
+		return nil, nil, err
+	}
+	if n.kind != KindObject {
+		return nil, nil, ErrNotObject
+	}
+	n.sortMembers()
+	members = make([]Member, len(n.members))
+	parsed = make([]Parsed, len(n.members))
+	for i, m := range n.members {
+		members[i] = Member{Key: m.key, Raw: m.val.appendCompact(nil)}
+		parsed[i] = m.val.inspected(members[i].Raw)
+	}
+	return members, parsed, nil
+}
+
+// inspected is Inspect's result for n; compact is n's canonical compact
+// form, already written by the caller.
+func (n node) inspected(compact []byte) Parsed {
+	if n.kind != KindArray {
+		return Parsed{Kind: n.kind, Compact: compact}
+	}
+	elems := make([][]byte, len(n.elems))
+	for i, e := range n.elems {
+		elems[i] = e.appendCompact(nil)
+	}
+	return Parsed{Kind: KindArray, Elems: elems}
+}
+
 // Elements parses a JSON array and returns each element in canonical compact
 // form; any other value is an error.
 func Elements(b []byte) ([][]byte, error) {
@@ -149,6 +184,31 @@ func Elements(b []byte) ([][]byte, error) {
 	return out, nil
 }
 
+// Parsed is one JSON value parsed once (Inspect): its kind and its
+// canonical form. For an array, Elems holds each element's canonical
+// compact form and Compact is nil; for every other kind Compact holds the
+// value's canonical compact form and Elems is nil.
+type Parsed struct {
+	Kind    Kind
+	Compact []byte
+	Elems   [][]byte
+}
+
+// Inspect parses b once and returns its kind with its canonical form, so a
+// caller that needs both does not parse twice (BUG-TIME-BENCH: a task row
+// with thousands of time entries was parsed five times per decode). It
+// fails exactly when KindOf returns KindInvalid.
+func Inspect(b []byte) (Parsed, error) {
+	n, err := parse(b)
+	if err != nil {
+		return Parsed{}, err
+	}
+	if n.kind != KindArray {
+		return n.inspected(n.appendCompact(nil)), nil
+	}
+	return n.inspected(nil), nil
+}
+
 // KindOf reports the JSON type of b (KindInvalid when b does not parse).
 func KindOf(b []byte) Kind {
 	n, err := parse(b)
@@ -161,6 +221,14 @@ func KindOf(b []byte) Kind {
 // String returns s encoded as a JSON string exactly as encoding/json writes it
 // with HTML escaping off (so `<`, `>` and `&` stay literal).
 func String(s string) []byte {
+	if plainASCII(s) {
+		// Fast path (BUG-TIME-BENCH): printable ASCII with no quote or
+		// backslash is written as is by encoding/json, so skip the encoder.
+		out := make([]byte, 0, len(s)+2)
+		out = append(out, '"')
+		out = append(out, s...)
+		return append(out, '"')
+	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -169,6 +237,19 @@ func String(s string) []byte {
 		return []byte(`""`)
 	}
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
+}
+
+// plainASCII reports whether every byte of s is printable ASCII (0x20 to
+// 0x7e) other than '"' and '\\': the strings encoding/json (HTML escaping
+// off) writes between two quotes byte for byte.
+func plainASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c > 0x7e || c == '"' || c == '\\' {
+			return false
+		}
+	}
+	return true
 }
 
 // indent turns canonical compact JSON into the document form.

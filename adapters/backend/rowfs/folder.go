@@ -30,6 +30,9 @@ type Folder struct {
 	// metaSource, when set, is asked for the shared copy of the folder's
 	// _meta.json before a first write creates one (SetMetaSource).
 	metaSource MetaSource
+	// memo keeps the rows Read decoded (readmemo.go); a Folder is only
+	// used through its pointer, so the memo is never copied.
+	memo readMemo
 }
 
 // MetaSource returns the shared (remote) copy of a store file, by its path
@@ -226,20 +229,27 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 		return nil, "", err
 	}
 	next := StatCursor{At: at, Files: make([]FileStat, 0, len(files))}
-	var out []store.Row
-	for _, rel := range sortedKeys(files) {
-		if cerr := ctx.Err(); cerr != nil {
-			return nil, "", cerr
-		}
+	rels := sortedKeys(files)
+	// Files are checked (read, hashed, decoded) in parallel and collected in
+	// path order, so the result is the same as a sequential loop
+	// (BUG-TIME-BENCH: decoding a store of big task rows one by one).
+	results := make([]checked, len(rels))
+	if err = parallel(ctx, len(rels), func(i int) {
+		rel := rels[i]
 		p, known := seen[rel]
-		stat, changed, ok := f.check(rel, files[rel], p, known, prev.At)
-		if !ok {
+		results[i].stat, results[i].row, results[i].ok = f.check(rel, files[rel], p, known, prev.At, at)
+	}); err != nil {
+		return nil, "", err
+	}
+	var out []store.Row
+	for _, c := range results {
+		if !c.ok {
 			continue
 		}
-		if changed != nil {
-			out = append(out, *changed)
+		if c.row != nil {
+			out = append(out, *c.row)
 		}
-		next.Files = append(next.Files, stat)
+		next.Files = append(next.Files, c.stat)
 	}
 	c, err := next.Encode()
 	if err != nil {
@@ -253,9 +263,18 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 // cursor, the row when the file changed, and ok false when the file must
 // stay out of the cursor (gone since the scan, or unreadable: Problems
 // reports it, and leaving it out makes the next Read try again).
-func (f *Folder) check(rel string, st entry, p FileStat, known bool, prevAt int64) (FileStat, *store.Row, bool) {
+func (f *Folder) check(rel string, st entry, p FileStat, known bool, prevAt, at int64) (FileStat, *store.Row, bool) {
 	if known && p.Size == st.size && p.MTime == st.mtime && !racy(st.mtime, prevAt) {
 		return p, nil, true
+	}
+	// An unchanged file this process already decoded (readmemo.go).
+	if m, ok := f.memo.fresh(rel, st); ok {
+		stat := FileStat{Path: rel, Size: m.size, MTime: st.mtime, SHA256: m.sha}
+		if known && stat.SHA256 == p.SHA256 {
+			return stat, nil, true
+		}
+		r := m.row
+		return stat, &r, true
 	}
 	b, err := readCapped(filepath.Join(f.dataDir, filepath.FromSlash(rel)), rel)
 	if err != nil {
@@ -265,11 +284,15 @@ func (f *Folder) check(rel string, st entry, p FileStat, known bool, prevAt int6
 	if known && stat.SHA256 == p.SHA256 {
 		return stat, nil, true
 	}
-	r, err := DecodeRowFile(rel, b)
-	if err != nil {
-		return FileStat{}, nil, false
+	r, ok := f.memo.bySHA(rel, stat.SHA256)
+	if !ok {
+		if r.row, err = DecodeRowFile(rel, b); err != nil {
+			return FileStat{}, nil, false
+		}
 	}
-	return stat, &r, true
+	f.memo.put(rel, memoRow{size: stat.Size, mtime: st.mtime, at: at, sha: stat.SHA256, row: r.row})
+	decoded := r.row
+	return stat, &decoded, true
 }
 
 // Problems lists every entry of the data folder that is not a usable row:

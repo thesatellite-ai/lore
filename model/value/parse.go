@@ -99,7 +99,18 @@ func ParseList(elem Kind, raw []byte) (List, error) {
 // of text), otherwise JSON. Every inferred value re-marshals to the
 // canonical form of raw, so decode → encode never changes bytes.
 func Infer(raw []byte) (Value, error) {
-	switch canon.KindOf(raw) {
+	p, err := canon.Inspect(raw)
+	if err != nil {
+		return nil, invalid(KindJSON, "invalid JSON")
+	}
+	return InferInspected(raw, p)
+}
+
+// InferInspected is Infer for a value the caller already parsed with
+// canon.Inspect or canon.MembersInspected (p must be raw's result), so a
+// row decode parses each field once (BUG-TIME-BENCH).
+func InferInspected(raw []byte, p canon.Parsed) (Value, error) {
+	switch p.Kind {
 	case canon.KindString:
 		return Parse(KindText, raw)
 	case canon.KindNumber:
@@ -109,9 +120,10 @@ func Infer(raw []byte) (Value, error) {
 	case canon.KindNull:
 		return Null{}, nil
 	case canon.KindObject:
-		return JSONOf(raw)
+		// p.Compact is what JSONOf(raw) would compute, without a second parse.
+		return JSON{raw: p.Compact}, nil
 	case canon.KindArray:
-		l, err := parseInferredList(raw)
+		l, err := inferElements(p.Elems)
 		if err != nil {
 			return JSONOf(raw)
 		}
@@ -127,11 +139,23 @@ func parseInferredList(raw []byte) (List, error) {
 	if err != nil {
 		return List{}, invalid(KindList, "want a JSON array")
 	}
+	return inferElements(items)
+}
+
+// inferElements infers each canonical compact item (from canon.Elements or
+// canon.Inspect) and requires one shared kind. An object item is already
+// canonical compact JSON, so it becomes a JSON value without the second
+// parse Infer would do (BUG-TIME-BENCH: thousands of time entries).
+func inferElements(items [][]byte) (List, error) {
 	if len(items) == 0 {
 		return ListOf(KindText)
 	}
 	vals := make([]Value, len(items))
 	for i, it := range items {
+		if len(it) > 0 && it[0] == '{' {
+			vals[i] = JSON{raw: it}
+			continue
+		}
 		v, err := Infer(it)
 		if err != nil {
 			return List{}, err

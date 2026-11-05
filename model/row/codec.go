@@ -103,7 +103,7 @@ func (r Row) check() error {
 // registry (steps.go): v1 gets "_hlc" from updated_at, counter 0 and
 // updated_by (spec 12).
 func Decode(b []byte) (Row, error) {
-	ms, err := canon.Members(b)
+	ms, parsed, err := canon.MembersInspected(b)
 	if err != nil {
 		return Row{}, errs.Wrap(errs.InvalidInput, "row: not a JSON object", err)
 	}
@@ -121,7 +121,7 @@ func Decode(b []byte) (Row, error) {
 	if err = r.decodeAudit(by); err != nil {
 		return Row{}, err
 	}
-	if err = r.decodeBody(ms); err != nil {
+	if err = r.decodeBody(ms, parsed); err != nil {
 		return Row{}, err
 	}
 	if r, err = upcast(r, r.SourceVersion); err != nil {
@@ -195,9 +195,10 @@ func (r *Row) decodeAudit(by map[string][]byte) error {
 	return err
 }
 
-// decodeBody reads _o, meta, the table fields and unknown underscore keys.
-func (r *Row) decodeBody(ms []canon.Member) error {
-	for _, m := range ms {
+// decodeBody reads _o, meta, the table fields and unknown underscore keys;
+// parsed[i] is ms[i]'s value from the same parse (canon.MembersInspected).
+func (r *Row) decodeBody(ms []canon.Member, parsed []canon.Parsed) error {
+	for i, m := range ms {
 		switch {
 		case m.Key == KeyOrigin:
 			o, err := value.JSONOf(m.Raw)
@@ -212,7 +213,7 @@ func (r *Row) decodeBody(ms []canon.Member) error {
 		case ReservedName(m.Key):
 			// handled by decodeHeader / decodeAudit
 		case strings.HasPrefix(m.Key, "_"):
-			v, err := value.Infer(m.Raw)
+			v, err := value.InferInspected(m.Raw, parsed[i])
 			if err != nil {
 				return err
 			}
@@ -224,7 +225,7 @@ func (r *Row) decodeBody(ms []canon.Member) error {
 			if !ValidName(m.Key) {
 				return bad("field name " + quote(m.Key))
 			}
-			v, err := value.Infer(m.Raw)
+			v, err := value.InferInspected(m.Raw, parsed[i])
 			if err != nil {
 				return err
 			}

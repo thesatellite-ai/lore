@@ -2,6 +2,7 @@ package canon
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -103,4 +104,33 @@ func FuzzCompact(f *testing.F) {
 			t.Fatalf("compact not a fixed point: %q -> %q (%v)", c, c2, err)
 		}
 	})
+}
+
+// String's printable-ASCII fast path (BUG-TIME-BENCH) writes exactly what
+// encoding/json writes with HTML escaping off: every single byte, every
+// pair of ASCII bytes, and a few mixed strings.
+func TestStringFastPathMatchesEncoder(t *testing.T) {
+	t.Parallel()
+	enc := func(s string) string {
+		var buf bytes.Buffer
+		e := json.NewEncoder(&buf)
+		e.SetEscapeHTML(false)
+		if err := e.Encode(s); err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSuffix(buf.String(), "\n")
+	}
+	var cases []string
+	for b := 0; b < 256; b++ {
+		cases = append(cases, string([]byte{byte(b)}))
+		for c := 0; c < 128; c++ {
+			cases = append(cases, string([]byte{byte(b), byte(c)}))
+		}
+	}
+	cases = append(cases, "", "plain text 123", "<a & b>", "tab\there", "é", " ", "x\x7fy", `q"uote`, `back\slash`)
+	for _, s := range cases {
+		if got, want := string(String(s)), enc(s); got != want {
+			t.Fatalf("String(%q) = %s, encoding/json = %s", s, got, want)
+		}
+	}
 }
