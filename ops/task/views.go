@@ -468,6 +468,27 @@ func slaState(r row.Row, hours map[string]int64, now time.Time) string {
 	return SLAStateOf(slaClockOf(r), hours, now)
 }
 
+// SLALate is the open (not done, not cancelled, live) tasks among rows
+// whose SLA is at risk or breached on read (18.4: doctor's SLA line), each
+// list in rows' order; both empty when hours is empty.
+func SLALate(rows []row.Row, hours map[string]int64, now time.Time) (atRisk, breached []string) {
+	if len(hours) == 0 {
+		return nil, nil
+	}
+	for _, r := range rows {
+		if st := work.Field(r, work.FieldStatus); r.Deleted || st == schema.TaskStatusDone || st == schema.TaskStatusCancelled {
+			continue
+		}
+		switch slaState(r, hours, now) {
+		case SLAAtRisk:
+			atRisk = append(atRisk, r.ID.String())
+		case SLABreached:
+			breached = append(breached, r.ID.String())
+		}
+	}
+	return atRisk, breached
+}
+
 // SLAStateOf is the SLA state on read (18.4): elapsed from creation to done
 // (or now), minus the time spent deferred (snoozed on purpose; blocked time
 // still counts), against the priority's SLA; at_risk from 80%.
