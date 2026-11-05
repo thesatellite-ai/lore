@@ -432,11 +432,18 @@ type CancelIn struct {
 
 // SplitIn is the input of task.split (TASK 6.3).
 type SplitIn struct {
-	ID     string   `json:"id" arg:"0" desc:"the task to split (tsk_…)"`
-	Titles []string `json:"titles,omitempty" flag:"title" desc:"a sub-task title; repeatable, one sub-task each, in order"`
-	From   string   `json:"from,omitempty" flag:"from" desc:"read titles from a file (- = stdin): one per line, or YAML: a list of titles or of {title, priority, commitment, body}"`
-	Key    string   `json:"key,omitempty" flag:"key" desc:"idempotency key: child n gets <key>/<n>, so a re-run adds nothing"`
-	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be added, write nothing"`
+	ID string `json:"id" arg:"0" desc:"the task to split (tsk_…)"`
+	// TitleArgs are the positional titles after the id (OV2-2 positional
+	// lists, FB-TASK-2): one sub-task per argument, before any --title.
+	TitleArgs []string `json:"title_args,omitempty" arg:"1" rest:"true" desc:"sub-task titles, one per argument, in order (added before any --title)"`
+	Titles    []string `json:"titles,omitempty" flag:"title" desc:"a sub-task title; repeatable, one sub-task each, in order"`
+	// Priority and Commitment are shared by every sub-task (FB-TASK-2:
+	// per-child values go through --from YAML, where a piece's own value wins).
+	Priority   string `json:"priority,omitempty" flag:"priority" desc:"priority of every sub-task (low | medium | high | urgent; default: inherited from the parent)"`
+	Commitment string `json:"commitment,omitempty" flag:"commitment" desc:"commitment of every sub-task (accepted | proposed | someday; default: inherited from the parent)"`
+	From       string `json:"from,omitempty" flag:"from" desc:"read titles from a file (- = stdin): one per line, or YAML: a list of titles or of {title, priority, commitment, body}"`
+	Key        string `json:"key,omitempty" flag:"key" desc:"idempotency key: child n gets <key>/<n>, so a re-run adds nothing"`
+	DryRun     bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be added, write nothing"`
 }
 
 // SplitAdded is one sub-task of a split.

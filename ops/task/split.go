@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -35,7 +36,7 @@ type splitPiece struct {
 
 // split adds several sub-tasks under one task in one bat_ batch:
 //
-//	titles (--title…, --from file|-) → checks of the first child (project,
+//	titles (positional…, --title…, --from file|-; shared --priority/--commitment) → checks of the first child (project,
 //	depth, closed parent: add --parent's rules) → --dry-run prints and
 //	stops → bulk.Begin(task) → add --parent per child, rank after the last
 //	sibling, --key <key>/<n> per child (a re-run adds nothing).
@@ -53,7 +54,7 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 		return SplitOut{}, err
 	}
 	project := work.Field(pr, work.FieldProject)
-	probe := AddIn{Parent: id.String()}
+	probe := AddIn{Parent: id.String(), Priority: in.Priority, Commitment: in.Commitment} // shared flags are not inherited
 	par, err := o.addParent(ctx, &probe, project)
 	if err != nil {
 		return SplitOut{}, err
@@ -132,7 +133,7 @@ const maxSplitBytes = 1 << 20
 // splitPieces collects --title values and --from contents, in order.
 func splitPieces(in SplitIn) ([]splitPiece, error) {
 	var out []splitPiece
-	for _, t := range in.Titles {
+	for _, t := range append(slices.Clone(in.TitleArgs), in.Titles...) {
 		if t = strings.TrimSpace(t); t != "" {
 			out = append(out, splitPiece{Title: t})
 		}
@@ -150,7 +151,16 @@ func splitPieces(in SplitIn) ([]splitPiece, error) {
 	}
 	if len(out) == 0 {
 		return nil, errs.New(errs.InvalidInput, "task split: no sub-task titles").
-			WithHint(`lore task split <id> --title "First" --title "Second", or --from <file|->`)
+			WithHint(`lore task split <id> "First" "Second" (or --title …), or --from <file|->`)
+	}
+	// FB-TASK-2: the shared flags fill what a piece does not set itself.
+	for i := range out {
+		if out[i].Priority == "" {
+			out[i].Priority = in.Priority
+		}
+		if out[i].Commitment == "" {
+			out[i].Commitment = in.Commitment
+		}
 	}
 	return out, nil
 }
