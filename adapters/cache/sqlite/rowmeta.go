@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -124,12 +125,14 @@ func sensitiveMetaKeys(ctx context.Context, tx *sql.Tx, r row.Row) (map[string]b
 }
 
 // metaText is the searchable text of r's metadata (3.17 step 1): every
-// string, number and date leaf of each value, an allowed value by its name,
-// separated by spaces. Left out (3.20, 3.21): any entry the row or the
+// string, number and date leaf of each value, an allowed value by its name
+// (the entry's v_name, plus the current name and label of its meta_values
+// row from labels, MQ14 + R8: `lore search Urgent` finds the rows whose
+// value is the allowed value labelled Urgent), separated by spaces. Left out (3.20, 3.21): any entry the row or the
 // registry marks sensitive (fail closed: either says so), an entry that
 // does not decode, and any text holding a ${secret:…} reference. Key names
 // are not indexed (they are reached with name:value).
-func metaText(r row.Row, sensitive map[string]bool) string {
+func metaText(r row.Row, sensitive map[string]bool, labels map[string][]string) string {
 	keys := make([]string, 0, len(r.Meta))
 	for k := range r.Meta {
 		keys = append(keys, k.String())
@@ -145,11 +148,21 @@ func metaText(r row.Row, sensitive map[string]bool) string {
 			if err != nil || e.Sensitive || sensitive[k] {
 				continue
 			}
-			src := e.V
-			if len(e.VName) > 0 {
-				src = e.VName // allowed values: the name, never the val_ id
+			if len(e.VName) == 0 {
+				parts = appendLeaves(parts, e.V)
+				continue
 			}
-			parts = appendLeaves(parts, src)
+			// allowed values: the name, never the val_ id; then the
+			// current name and label of each value, once each
+			own := appendLeaves(nil, e.VName)
+			for _, vid := range valueIDs(e.V) {
+				for _, w := range labels[vid] {
+					if !slices.Contains(own, w) {
+						own = append(own, w)
+					}
+				}
+			}
+			parts = append(parts, own...)
 		}
 	}
 	return strings.Join(parts, " ")
@@ -191,13 +204,18 @@ func appendLeaves(parts []string, raw []byte) []string {
 	return parts // true/false/null: not text to find
 }
 
-// withMeta is vals plus the FTS meta text of r (an empty text adds nothing).
-func withMeta(ctx context.Context, tx *sql.Tx, vals map[string]value.Value, r row.Row) (map[string]value.Value, error) {
+// withMeta is vals plus the FTS meta text of r, a row of source (an empty
+// text adds nothing).
+func withMeta(ctx context.Context, tx *sql.Tx, source string, vals map[string]value.Value, r row.Row) (map[string]value.Value, error) {
 	sensitive, err := sensitiveMetaKeys(ctx, tx, r)
 	if err != nil {
 		return nil, err
 	}
-	text := metaText(r, sensitive)
+	labels, err := valueLabels(ctx, tx, source, r)
+	if err != nil {
+		return nil, err
+	}
+	text := metaText(r, sensitive, labels)
 	if text == "" {
 		return vals, nil
 	}
@@ -211,6 +229,75 @@ func withMeta(ctx context.Context, tx *sql.Tx, vals map[string]value.Value, r ro
 		out[k] = v
 	}
 	out[ftsMeta] = t
+	return out, nil
+}
+
+// valueLabelQuery reads one allowed value's name and label.
+const valueLabelQuery = `SELECT COALESCE("` + fieldName + `", ''), COALESCE("` + fieldValueLabel + `", '') FROM "` +
+	schema.TableMetaValues + `" WHERE id = ? ORDER BY ("` + colSource + `" = ?) DESC LIMIT 1`
+
+// fieldValueLabel is meta_values' display label column.
+const fieldValueLabel = "label"
+
+// metaValuePrefix starts an allowed value id ("val_").
+const metaValuePrefix = string(ids.PrefixMetaValue) + "_"
+
+// valueIDs lists the allowed value ids among v's leaves (a scalar, or the
+// items of a list), in order.
+func valueIDs(v []byte) []string {
+	var out []string
+	for _, leaf := range appendLeaves(nil, v) {
+		if strings.HasPrefix(leaf, metaValuePrefix) {
+			out = append(out, leaf)
+		}
+	}
+	return out
+}
+
+// valueLabels reads the current name and label (non-empty, distinct) of
+// every allowed value r's metadata names, by val_ id, the copy in r's own
+// source first. A cache without the meta_values table, or a value not
+// applied yet, adds nothing (reindexMetaKey fills it in when the value row
+// arrives, project).
+func valueLabels(ctx context.Context, tx *sql.Tx, source string, r row.Row) (map[string][]string, error) {
+	var vids []string
+	for _, j := range r.Meta {
+		if e, err := meta.DecodeEntry(j); err == nil && len(e.VName) > 0 {
+			vids = append(vids, valueIDs(e.V)...)
+		}
+	}
+	if len(vids) == 0 {
+		return nil, nil
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, schema.TableMetaValues).Scan(&n); err != nil {
+		return nil, dbErr("find meta_values", err)
+	}
+	if n == 0 {
+		return nil, nil
+	}
+	out := map[string][]string{}
+	for _, vid := range vids {
+		if _, done := out[vid]; done {
+			continue
+		}
+		var name, label string
+		err := tx.QueryRowContext(ctx, valueLabelQuery, vid, source).Scan(&name, &label)
+		if errors.Is(err, sql.ErrNoRows) {
+			out[vid] = nil
+			continue
+		}
+		if err != nil {
+			return nil, dbErr("read allowed value labels", err)
+		}
+		var ws []string
+		for _, w := range []string{name, label} {
+			if w != "" && !slices.Contains(ws, w) {
+				ws = append(ws, w)
+			}
+		}
+		out[vid] = ws
+	}
 	return out, nil
 }
 

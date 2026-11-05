@@ -31,7 +31,9 @@ const (
 	resValueKey  = "v"       // the value inside one resources.fields entry
 	resVNameKey  = "v_name"  // a closed value's name label beside its val_ id in v (OQ-AV)
 	fieldValIDs  = "value_ids"
-	fieldValues  = "values" // kind_fields.values: the allowed values
+	// fieldMetaValueKey is meta_values' key column (the key the value belongs to).
+	fieldMetaValueKey = "key_id"
+	fieldValues       = "values" // kind_fields.values: the allowed values
 )
 
 // project brings the typed tables in line with one applied row.
@@ -71,6 +73,22 @@ func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.
 	if sr.Table == schema.TableMetaKeys {
 		// 3.20: a key turning sensitive (or back) re-indexes its rows
 		return c.reindexMetaKey(ctx, tx, st, sr.ID.String())
+	}
+	if sr.Table == schema.TableMetaValues {
+		// MQ14 + R8: an allowed value renamed or relabelled, or applied
+		// after the rows naming it, re-indexes the rows of its key
+		var key string
+		switch k := r.Fields[fieldMetaValueKey].(type) {
+		case value.Ref:
+			key = k.ID().String()
+		case value.Text: // a decoded row file carries the ref as its id text
+			key = k.String()
+		default: // no key: a broken value row names no rows
+		}
+		// only a well-formed key id reaches the JSON path of the lookup
+		if _, perr := ids.Parse[ids.MetaKey](key); perr == nil {
+			return c.reindexMetaKey(ctx, tx, st, key)
+		}
 	}
 	if isResource {
 		return c.upsertKind(ctx, tx, st, kindOf(r), string(source), r)
@@ -184,7 +202,7 @@ func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 		}
 	} else {
 		// METADATA 3.17: the row's non-sensitive meta values in f_meta
-		ftsVals, metaErr := withMeta(ctx, tx, vals, r)
+		ftsVals, metaErr := withMeta(ctx, tx, source, vals, r)
 		if metaErr != nil {
 			return metaErr
 		}
@@ -543,7 +561,7 @@ func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row
 	if t, terr := value.TextOf(text); terr == nil && text != "" {
 		vals[ftsResValues] = t
 	}
-	if vals, err = withMeta(ctx, tx, vals, r); err != nil {
+	if vals, err = withMeta(ctx, tx, source, vals, r); err != nil {
 		return err
 	}
 	return upsertFTS(ctx, tx, p, source, r.ID, vals)
