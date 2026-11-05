@@ -201,6 +201,8 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 		// --fix writes are exported by the end-of-command sync pass.
 		if r.DBOK {
 			doctorSupersedes(ctx, f, dbent.New(db).Client(), r)
+			// 6.7: a tool seen here without a render target (doctor_targets.go).
+			doctorTargetSuggest(ctx, dbent.New(db).Client(), filepath.Dir(filepath.Dir(rctx.DBPath)), r)
 		}
 		r.WALSizeBytes = walSize(rctx.DBPath)
 		if r.WALSizeBytes > 100*1024*1024 {
