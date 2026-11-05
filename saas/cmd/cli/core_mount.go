@@ -193,6 +193,7 @@ func mountCore(root *cobra.Command) {
 			}
 		}
 	}
+	withDeletePurgeFlags(root, runner) // PASS3: resource/meta delete --purge/--confirm (core_delete_purge.go)
 	markCorePrinted(root)
 	mountSQLShortcut(root)
 	mountRowShortcuts(root)   // CLI 2.7/2.13: lore show <id>, bare lore lint
