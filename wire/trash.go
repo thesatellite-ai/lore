@@ -114,3 +114,21 @@ func (a *App) lensTrash(ctx context.Context, mask bool) ([]sqlite.TrashRow, erro
 	}
 	return out, nil
 }
+
+// TrashStats implements opstrash.Env.
+func (a *App) TrashStats(ctx context.Context) (engine.TrashStats, error) {
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return engine.TrashStats{}, err
+	}
+	return eng.TrashStats(ctx)
+}
+
+// Overruled implements opstrash.Env.
+func (a *App) Overruled(ctx context.Context) ([]engine.Overruled, error) {
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return eng.Overruled(ctx)
+}

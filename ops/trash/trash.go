@@ -3,6 +3,8 @@
 //
 //	lore trash list [--type --by --since --reason --batch --to --with-dependents]
 //	    └► Env.Trashed ─► filter ─► roots (dependents counted) ─► newest first
+//	lore trash list --overruled ─► Env.Overruled (alive rows with delete_overruled, 3.7)
+//	lore trash stats ─► Env.TrashStats (per type/store/deleter, expired, tombstones, 4.5)
 //	lore trash show <id> [--show-sensitive]
 //	    └► Env.Trashed ─► the one row (body kept; sensitive masked unless asked)
 //	lore trash restore <id|bat_> [--parent|--tasklist|--mission|--plan <id>, --no-parent|--no-tasklist]
@@ -40,6 +42,7 @@ const (
 	OpShow     = "trash.show"
 	OpRestore  = "trash.restore"
 	OpPurge    = "trash.purge"
+	OpStats    = "trash.stats"
 	timeLayout = "2006-01-02 15:04"
 	dateLayout = "2006-01-02"
 	daySuffix  = "d"
@@ -58,6 +61,8 @@ type Env interface {
 	PurgeTrash(ctx context.Context, target string) (engine.TrashResult, error)
 	PurgeOlder(ctx context.Context, cutoff time.Time, expired, dryRun bool) (engine.TrashResult, error)
 	TrashTarget(ctx context.Context, target string) (engine.TrashResult, error)
+	TrashStats(ctx context.Context) (engine.TrashStats, error)
+	Overruled(ctx context.Context) ([]engine.Overruled, error)
 	// TableSchema returns the definition of a table (sensitive fields stay hidden in show).
 	TableSchema(ctx context.Context, table row.Table) (schema.TableDef, bool)
 }
@@ -74,6 +79,9 @@ type ListIn struct {
 	// of another row (links, comments, tag attachments) instead of counting
 	// them under it (CLI_REFERENCE 3.9).
 	WithDependents bool `json:"with_dependents,omitempty" flag:"with-dependents" desc:"list dependents (links, comments, tag attachments) instead of counting them"`
+	// Overruled lists the alive rows a merge kept although one side had
+	// deleted them (DELETION 3.7, delete_overruled) instead of the trash.
+	Overruled bool `json:"overruled,omitempty" flag:"overruled" desc:"list rows a merge kept alive over a delete (the other side edited them)"`
 }
 
 // ShowIn is the input of trash.show.
@@ -118,6 +126,9 @@ type Item struct {
 	Reason    string `json:"reason,omitempty"`
 	Batch     string `json:"batch"`
 	Dependent bool   `json:"dependent,omitempty"`
+	// Overruled is the delete_overruled note of a row listed by
+	// --overruled (JSON as stored).
+	Overruled string `json:"overruled,omitempty"`
 	at        time.Time
 }
 
@@ -128,12 +139,34 @@ type ListOut struct {
 	// Dependents is how many dependents of the listed rows are in the
 	// trash and not listed (0 with --with-dependents).
 	Dependents int `json:"dependents"`
+	// Overruled marks a --overruled listing (alive rows, not the trash).
+	Overruled bool `json:"overruled,omitempty"`
 }
 
 // ShowOut is the output of trash.show.
 type ShowOut struct {
 	Data   Item              `json:"data"`
 	Fields map[string]string `json:"fields"`
+}
+
+// StatsIn is the input of trash.stats (none).
+type StatsIn struct{}
+
+// Count is one named count of trash.stats.
+type Count struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// StatsOut is the output of trash.stats (DELETION 4.5).
+type StatsOut struct {
+	Rows       int     `json:"rows"`
+	Dependents int     `json:"dependents"`
+	Expired    int     `json:"expired"`
+	ByTable    []Count `json:"by_table"`
+	ByStore    []Count `json:"by_store"`
+	ByDeleter  []Count `json:"by_deleter"`
+	Tombstones []Count `json:"tombstones"`
 }
 
 // ResultOut is the output of restore and purge.
@@ -161,6 +194,9 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: write}, o.restore),
 		op.Define(op.Spec{Name: OpPurge, Summary: "Remove rows from the trash for good (a tombstone stays forever); needs --confirm",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm)}, o.purge),
+		op.Define(op.Spec{Name: OpStats, Summary: "Count the trash per type, store and deleter, rows past retention, and tombstones",
+			Permission: op.PermRead, Access: op.AccessRead, Errors: read,
+			Examples: []op.Example{{Title: "trash counts as JSON", CLI: "lore trash stats --json", Want: `"tombstones"`}}}, o.stats),
 	}
 }
 
@@ -177,6 +213,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	by, err := o.actorOf(ctx, string(in.By))
 	if err != nil {
 		return ListOut{}, err
+	}
+	if in.Overruled {
+		return o.overruled(ctx, in)
 	}
 	all, err := o.env.Trashed(ctx)
 	if err != nil {
@@ -304,6 +343,75 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		return resultOf("would purge", res, true), nil
 	}
 	return resultOf("purged", res, false), nil
+}
+
+// overruled is `trash list --overruled` (DELETION 3.7): the alive rows a
+// merge kept over a delete, so the deleter can look again; --to and
+// --type narrow it like the trash.
+func (o ops) overruled(ctx context.Context, in ListIn) (ListOut, error) {
+	rows, err := o.env.Overruled(ctx)
+	if err != nil {
+		return ListOut{}, err
+	}
+	out := ListOut{Data: []Item{}, Overruled: true}
+	for _, r := range rows {
+		it := Item{ID: r.Row.ID.String(), Table: r.Row.Table.String(), Store: string(r.Store), Title: titleOf(r.Row), Overruled: r.Note}
+		if (in.To != "" && it.Store != strings.TrimSpace(in.To)) || (in.Type != "" && it.Table != in.Type && strings.TrimSuffix(it.Table, "s") != in.Type) {
+			continue
+		}
+		out.Data = append(out.Data, it)
+	}
+	out.Count = len(out.Data)
+	return out, nil
+}
+
+// stats is trash.stats (DELETION 4.5).
+func (o ops) stats(ctx context.Context, _ StatsIn) (StatsOut, error) {
+	st, err := o.env.TrashStats(ctx)
+	if err != nil {
+		return StatsOut{}, err
+	}
+	return StatsOut{Rows: st.Rows, Dependents: st.Dependents, Expired: st.Expired,
+		ByTable: counts(st.ByTable), ByStore: counts(st.ByStore), ByDeleter: counts(st.ByDeleter), Tombstones: counts(st.Tombstones)}, nil
+}
+
+// counts is m as a list, largest first, then by name.
+func counts(m map[string]int) []Count {
+	out := make([]Count, 0, len(m))
+	for k, v := range m {
+		out = append(out, Count{Name: k, Count: v})
+	}
+	slices.SortFunc(out, func(a, b Count) int {
+		if a.Count != b.Count {
+			return b.Count - a.Count
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	return out
+}
+
+// Text implements op.Texter.
+func (o StatsOut) Text() string {
+	var b strings.Builder
+	b.WriteString(strconv.Itoa(o.Rows) + " rows in the trash (" + strconv.Itoa(o.Dependents) + " dependents), " +
+		strconv.Itoa(o.Expired) + " past trash.retention_days\n")
+	for _, sec := range []struct {
+		name string
+		c    []Count
+	}{{"by type", o.ByTable}, {"by store", o.ByStore}, {"by deleter", o.ByDeleter}, {"tombstones (kept forever)", o.Tombstones}} {
+		if len(sec.c) == 0 {
+			continue
+		}
+		b.WriteString(sec.name + "\n")
+		for _, c := range sec.c {
+			name := c.Name
+			if name == "" {
+				name = "(unknown)"
+			}
+			b.WriteString("  " + name + "  " + strconv.Itoa(c.Count) + "\n")
+		}
+	}
+	return b.String()
 }
 
 // homesOf turns the restore home flags into engine.RestoreHomes (4.2):
@@ -499,6 +607,14 @@ func durationOf(s string) (time.Duration, error) {
 
 // Text implements op.Texter.
 func (o ListOut) Text() string {
+	if o.Overruled {
+		var b strings.Builder
+		for _, it := range o.Data {
+			b.WriteString(it.line())
+		}
+		b.WriteString(strconv.Itoa(o.Count) + " rows kept alive over a delete; delete one again to settle it\n")
+		return b.String()
+	}
 	if len(o.Data) == 0 {
 		return "the trash is empty\n"
 	}
@@ -516,6 +632,9 @@ func (o ListOut) Text() string {
 
 // line is one row of `lore trash list`.
 func (it Item) line() string {
+	if it.Overruled != "" {
+		return it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  kept over a delete: " + it.Overruled + "\n"
+	}
 	s := it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  " + it.DeletedAt + "  by " + it.DeletedBy
 	if it.Reason != "" {
 		s += "  reason " + strconv.Quote(it.Reason)
