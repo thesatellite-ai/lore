@@ -15,7 +15,8 @@
 //     (to count pushes) and can SIGKILL lore at a chosen git step (crash injection).
 //
 // Nothing here is hidden state: every path lives under t.TempDir(), the binary
-// path is passed in, and no package-level variable is mutated.
+// path is passed in, and no package-level variable is mutated except the
+// clock-probe cache (clockguard.go: one result per binary path, this process only).
 package teamharness
 
 import (
