@@ -9,12 +9,16 @@
 //	~/.lore/render/<repo_id>/<store_id>.md   one per internal store
 //	~/.lore/render/<repo_id>/index.md        readable id → name map, never imported
 //
-// and the checkout's uncommitted CLAUDE.local.md carries one
-// `@~/.lore/render/<repo_id>/<store_id>.md` line per store, hidden through
-// .git/info/exclude (never the client's .gitignore). Committed renders
+// and each target tool's uncommitted private file (toolprofile
+// Profile.PrivateFile: CLAUDE.local.md for claude_code, a Cursor rule file
+// for cursor, a user profile's private_file; FQ13, DECISION P2-CTX-1)
+// carries one import per store (`@~/.lore/render/<repo_id>/<store_id>.md`,
+// or a "Read …" line for tools without @ imports), hidden through
+// .git/info/exclude (never the client's .gitignore). A target without a
+// private file gets internal context through `lore context` and the hooks. Committed renders
 // (.lore/LORE.md) hold only the repo's rows and shareable stores' rows
 // (render_core.go). The same holds in own repos and client repos: nothing
-// here is ever written inside the checkout except CLAUDE.local.md.
+// here is ever written inside the checkout except those private files.
 //
 // File names use permanent ids so a renamed repo or store keeps its file.
 // The repo id is `repo_id` from .lore/data/_meta.json; a repo whose
@@ -85,10 +89,10 @@ const (
 	privateTaskCancelled = "cancelled"
 )
 
-// privateImportPrefix starts every CLAUDE.local.md line lore owns; the
+// privateImportDir starts the path of every private line lore owns; the
 // v0.1.17 single-file import (`@~/.lore/render/<project-id>.md`) has the
 // same prefix, so the first 0.1.18 render replaces it.
-var privateImportPrefix = "@~/.lore/" + stores.RenderDir + "/"
+var privateImportDir = "~/.lore/" + stores.RenderDir + "/"
 
 // privateStemUnsafe matches characters a store name may hold that a file
 // stem must not.
@@ -128,10 +132,26 @@ type privatePlan struct {
 	repoKey   string
 	projectID string // names the v0.1.17 single file this render replaces
 	stores    []privateStore
-	files     []privateFile // store files, then index.md
-	local     string        // the new CLAUDE.local.md content
-	localIn   string        // the current CLAUDE.local.md content ("" if none)
+	files     []privateFile  // store files, then index.md
+	locals    []privateLocal // one per profile private file to write or clean
 	rows      int
+}
+
+// privateLocal is one tool's private import file in the checkout.
+type privateLocal struct {
+	rel     string // slash path relative to the repo root
+	in, out string // current ("" if none) and new content ("" = delete)
+}
+
+// privateLocalsChanged reports whether any private import file exists or
+// would be written.
+func (p *privatePlan) privateLocalsChanged() bool {
+	for _, l := range p.locals {
+		if l.in != "" || l.out != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // renderPrivate writes (or, with dryRun, prints) the private per-store
@@ -151,15 +171,24 @@ func renderPrivate(ctx context.Context, root string, dryRun, quiet bool) error {
 			fmt.Printf("\n==> %s (private, not written: --dry-run)\n%s", f.path, f.body)
 		}
 		if len(p.files) > 0 {
-			fmt.Printf("\n==> %s (not written: --dry-run)\n%s", claudeLocalFile, p.local)
+			for _, l := range p.locals {
+				if l.out != "" {
+					fmt.Printf("\n==> %s (not written: --dry-run)\n%s", l.rel, l.out)
+				}
+			}
 		}
 		return nil
 	}
-	if len(p.stores) == 0 && p.localIn == "" {
+	if len(p.stores) == 0 && !p.privateLocalsChanged() {
 		return nil // nothing internal here and nothing stale to drop
 	}
-	if err := checkClaudeLocal(ctx, root); err != nil {
-		return err
+	for _, l := range p.locals {
+		if l.in == l.out {
+			continue
+		}
+		if err := checkLocalFile(ctx, root, l.rel); err != nil {
+			return err
+		}
 	}
 	if len(p.stores) > 0 {
 		if err := os.MkdirAll(p.dir, renderDirMode); err != nil {
@@ -174,12 +203,26 @@ func renderPrivate(ctx context.Context, root string, dryRun, quiet bool) error {
 	if err := prunePrivate(p); err != nil {
 		return err
 	}
-	if err := writeClaudeLocalLines(ctx, root, p); err != nil {
-		return err
+	var wrote []string
+	for _, l := range p.locals {
+		if err := writeLocalLines(ctx, root, l); err != nil {
+			return err
+		}
+		if l.out != "" {
+			wrote = append(wrote, l.rel)
+		}
 	}
 	if !quiet && len(p.stores) > 0 {
-		fmt.Printf("%s private context → %s (%d stores, %d rows, outside the checkout); %s holds only the import lines\n",
-			style.Success("✓"), redactIfQuiet(p.dir), len(p.stores), p.rows, claudeLocalFile)
+		where := "no target tool has a private file: agents get it through `lore context` and the hooks"
+		if len(wrote) > 0 {
+			verb := " hold"
+			if len(wrote) == 1 {
+				verb = " holds"
+			}
+			where = strings.Join(wrote, ", ") + verb + " only the import lines"
+		}
+		fmt.Printf("%s private context → %s (%d stores, %d rows, outside the checkout); %s\n",
+			style.Success("✓"), redactIfQuiet(p.dir), len(p.stores), p.rows, where)
 	}
 	return nil
 }
@@ -215,9 +258,6 @@ func planPrivate(ctx context.Context, root string) (*privatePlan, error) {
 	}
 
 	p := &privatePlan{stores: internal}
-	if cur, err := os.ReadFile(filepath.Join(root, claudeLocalFile)); err == nil {
-		p.localIn = string(cur)
-	}
 	pid, err := coreApp.Project(ctx)
 	if err != nil {
 		return nil, coreErr(err)
@@ -245,13 +285,56 @@ func planPrivate(ctx context.Context, root string) (*privatePlan, error) {
 		}
 		p.rows += n
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, s.stem+privateFileExt), body: body})
-		imports = append(imports, privateImportPrefix+p.repoKey+"/"+s.stem+privateFileExt)
+		imports = append(imports, privateImportDir+p.repoKey+"/"+s.stem+privateFileExt)
 	}
 	if len(internal) > 0 {
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, privateIndexFile), body: buildPrivateIndex(repoName, p.repoKey, internal)})
 	}
-	p.local = claudeLocalWith(p.localIn, imports)
+	if p.locals, err = planPrivateLocals(ctx, root, imports); err != nil {
+		return nil, err
+	}
 	return p, nil
+}
+
+// planPrivateLocals plans each tool's private import file: the repo's
+// target profiles that name one get the imports; every other registry
+// profile's private file that exists only loses lore's stale lines (a tool
+// the repo no longer targets). FQ13 / DECISION P2-CTX-1.
+func planPrivateLocals(ctx context.Context, root string, imports []string) ([]privateLocal, error) {
+	reg, err := loadToolRegistry(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pick, err := resolveTargets(ctx, root, nil, coreContextTargets)
+	if err != nil {
+		return nil, err
+	}
+	target := map[string]bool{}
+	for _, t := range pick.targets {
+		target[t.profile.Name] = true
+	}
+	var out []privateLocal
+	seen := map[string]bool{}
+	for _, prof := range reg.Profiles() {
+		if !prof.HasPrivateFile() || seen[prof.PrivateFile] {
+			continue
+		}
+		seen[prof.PrivateFile] = true
+		l := privateLocal{rel: prof.PrivateFile}
+		if cur, rerr := os.ReadFile(filepath.Join(root, filepath.FromSlash(l.rel))); rerr == nil {
+			l.in = string(cur)
+		}
+		var lines []string
+		if target[prof.Name] {
+			lines = imports
+		}
+		if l.in == "" && len(lines) == 0 {
+			continue
+		}
+		l.out = prof.PrivateContent(l.in, privateImportDir, lines)
+		out = append(out, l)
+	}
+	return out, nil
 }
 
 // privateRepoKey is the repo's permanent id for the render dir: _meta.json's
@@ -418,49 +501,29 @@ func buildPrivateIndex(repoName, repoKey string, ss []privateStore) string {
 	return b.String()
 }
 
-// claudeLocalWith returns cur with every lore import line replaced by
-// imports (appended at the end); the person's own lines are kept as is.
-func claudeLocalWith(cur string, imports []string) string {
-	var keep []string
-	for _, line := range strings.Split(strings.TrimRight(cur, "\n"), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), privateImportPrefix) {
-			continue
-		}
-		keep = append(keep, line)
-	}
-	for len(keep) > 0 && strings.TrimSpace(keep[len(keep)-1]) == "" {
-		keep = keep[:len(keep)-1]
-	}
-	out := strings.Join(keep, "\n")
-	if out != "" {
-		out += "\n"
-	}
-	for _, l := range imports {
-		out += l + "\n"
-	}
-	return out
-}
-
-// writeClaudeLocalLines writes CLAUDE.local.md when its content changes
+// writeLocalLines writes one private import file when its content changes
 // (deleting it when only lore lines were in it and none remain) and keeps
 // it excluded through .git/info/exclude.
-func writeClaudeLocalLines(ctx context.Context, root string, p *privatePlan) error {
-	path := filepath.Join(root, claudeLocalFile)
-	if p.local != p.localIn {
-		if p.local == "" {
+func writeLocalLines(ctx context.Context, root string, l privateLocal) error {
+	path := filepath.Join(root, filepath.FromSlash(l.rel))
+	if l.out != l.in {
+		if l.out == "" {
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return errcodes.New(errcodes.Internal, "remove "+claudeLocalFile).WithCause(err)
+				return errcodes.New(errcodes.Internal, "remove "+l.rel).WithCause(err)
 			}
 			return nil
 		}
-		if err := atomicWriteFile(path, []byte(p.local), renderFileMode); err != nil {
-			return errcodes.New(errcodes.Internal, "write "+claudeLocalFile).WithCause(err)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return errcodes.New(errcodes.Internal, "create the folder of "+l.rel).WithCause(err)
+		}
+		if err := atomicWriteFile(path, []byte(l.out), renderFileMode); err != nil {
+			return errcodes.New(errcodes.Internal, "write "+l.rel).WithCause(err)
 		}
 	}
-	if p.local == "" {
+	if l.out == "" {
 		return nil
 	}
-	return excludeInGit(ctx, root, claudeLocalFile)
+	return excludeInGit(ctx, root, l.rel)
 }
 
 // prunePrivate removes lore's own stale render files: store files in the

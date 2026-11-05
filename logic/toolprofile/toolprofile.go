@@ -100,6 +100,12 @@ type Profile struct {
 	Import Import `yaml:"import" json:"import"`
 	// Budget is the tool's context budget in bytes; 0 means DefaultBudget.
 	Budget int `yaml:"budget,omitempty" json:"budget,omitempty"`
+	// PrivateFile is the tool's uncommitted local file (a slash path
+	// relative to the repo root) that carries one import of each private
+	// store render (CFG6, FQ13): lore writes it and hides it through
+	// .git/info/exclude. Empty when the tool has no such file; that tool
+	// gets internal context through `lore context` and the hooks only.
+	PrivateFile string `yaml:"private_file,omitempty" json:"private_file,omitempty"`
 }
 
 // EffectiveBudget returns Budget, or DefaultBudget when unset.
@@ -118,9 +124,9 @@ func (p Profile) HasPointerFile() bool { return p.Import != ImportNone && p.Poin
 // profile is resolved by exactly the same code.
 func Builtins() []Profile {
 	return []Profile{
-		{Name: NameClaudeCode, PointerFile: "CLAUDE.md", Import: ImportAt, Budget: largeBudget},
+		{Name: NameClaudeCode, PointerFile: "CLAUDE.md", Import: ImportAt, Budget: largeBudget, PrivateFile: "CLAUDE.local.md"},
 		{Name: NameCodex, PointerFile: "AGENTS.md", Import: ImportRead, Budget: DefaultBudget},
-		{Name: NameCursor, PointerFile: ".cursor/rules/lore.mdc", Import: ImportMDC, Budget: DefaultBudget},
+		{Name: NameCursor, PointerFile: ".cursor/rules/lore.mdc", Import: ImportMDC, Budget: DefaultBudget, PrivateFile: ".cursor/rules/lore-private.mdc"},
 		{Name: NameGeminiCLI, PointerFile: "GEMINI.md", Import: ImportAt, Budget: largeBudget},
 		{Name: NameCopilot, PointerFile: ".github/copilot-instructions.md", Import: ImportRead, Budget: DefaultBudget},
 		{Name: NameGeneric, Import: ImportNone, Budget: DefaultBudget},
@@ -155,6 +161,10 @@ func New(user []Profile) (*Registry, error) {
 		p.PointerFile = path.Clean(p.PointerFile)
 		if p.Import == ImportNone {
 			p.PointerFile = ""
+			p.PrivateFile = "" // no import syntax to carry the private lines
+		}
+		if p.PrivateFile != "" {
+			p.PrivateFile = path.Clean(p.PrivateFile)
 		}
 		r.profiles = append(r.profiles, p)
 	}
@@ -184,6 +194,9 @@ func (r *Registry) validate(p Profile) error {
 	if p.Import == ImportNone {
 		return nil
 	}
+	if err := r.validatePrivate(p); err != nil {
+		return err
+	}
 	f := p.PointerFile
 	if f == "" {
 		return fmt.Errorf("tool profile %q: pointer_file is required unless import is none", p.Name)
@@ -197,6 +210,11 @@ func (r *Registry) validate(p Profile) error {
 	}
 	if other, ok := r.ByPointerFile(clean); ok {
 		return fmt.Errorf("tool profile %q: pointer_file %q already belongs to profile %q", p.Name, f, other.Name)
+	}
+	for _, o := range r.profiles {
+		if o.HasPrivateFile() && o.PrivateFile == clean {
+			return fmt.Errorf("tool profile %q: pointer_file %q is the private file of profile %q", p.Name, f, o.Name)
+		}
 	}
 	return nil
 }
@@ -286,6 +304,12 @@ type Selection struct {
 	// name (ReasonSetting): never wired silently, so the caller can tell
 	// the user how to add them.
 	Unwired []Profile
+	// Unlisted are tools whose pointer file already carries lore's block
+	// but that the context.targets row does not name (ReasonSetting only).
+	// Render leaves such a file exactly as it is (never re-wired, never
+	// stripped); the caller says so, so the gap is never silent
+	// (DECISION P2-OLDCLI-2, r3-targets).
+	Unlisted []Profile
 }
 
 // Resolve returns the repo's context targets (see the package doc). TOOL
@@ -375,6 +399,8 @@ func (r *Registry) Select(names []string, probe Probe) (Selection, error) {
 			sel.Profiles = append(sel.Profiles, p)
 		case p.HasPointerFile() && probe.State(p.PointerFile) == FilePresent:
 			sel.Unwired = append(sel.Unwired, p)
+		case p.HasPointerFile() && probe.State(p.PointerFile) == FileWired:
+			sel.Unlisted = append(sel.Unlisted, p)
 		}
 	}
 	return sel, nil

@@ -34,23 +34,24 @@ const (
 	excludeFileMode = 0o644
 )
 
-// errRenderTarget is a refusal about CLAUDE.local.md (symlink, tracked).
-var errRenderTarget = errors.New("refusing to write " + claudeLocalFile)
+// errRenderTarget is a refusal about a private import file (symlink, tracked).
+var errRenderTarget = errors.New("refusing to write a private import file")
 
-// checkClaudeLocal refuses a CLAUDE.local.md that is a symlink (writing
-// would go wherever it points, maybe a tracked file) or that git tracks
-// (its content would be committed).
-func checkClaudeLocal(ctx context.Context, root string) error {
-	path := filepath.Join(root, claudeLocalFile)
+// checkLocalFile refuses a private import file (rel, a slash path relative
+// to root: CLAUDE.local.md or another profile's private file) that is a
+// symlink (writing would go wherever it points, maybe a tracked file) or
+// that git tracks (its content would be committed).
+func checkLocalFile(ctx context.Context, root, rel string) error {
+	path := filepath.Join(root, filepath.FromSlash(rel))
 	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		return errcodes.New(errcodes.LeakBlocked, fmt.Sprintf("%v: it is a symlink (the import line would be written wherever it points)", errRenderTarget)).
-			WithHint("delete the symlink; lore writes a plain one-line " + claudeLocalFile)
+		return errcodes.New(errcodes.LeakBlocked, fmt.Sprintf("%v %s: it is a symlink (the import lines would be written wherever it points)", errRenderTarget, rel)).
+			WithHint("delete the symlink; lore writes a plain " + rel)
 	}
-	if tracked, err := gitTracks(ctx, root, claudeLocalFile); err != nil {
-		return errcodes.New(errcodes.Internal, "ask git about "+claudeLocalFile).WithCause(err)
+	if tracked, err := gitTracks(ctx, root, rel); err != nil {
+		return errcodes.New(errcodes.Internal, "ask git about "+rel).WithCause(err)
 	} else if tracked {
-		return errcodes.New(errcodes.LeakBlocked, fmt.Sprintf("%v: git tracks it, so its content would be committed", errRenderTarget)).
-			WithHint("`git rm --cached " + claudeLocalFile + "` and commit, then render again")
+		return errcodes.New(errcodes.LeakBlocked, fmt.Sprintf("%v %s: git tracks it, so its content would be committed", errRenderTarget, rel)).
+			WithHint("`git rm --cached " + rel + "` and commit, then render again")
 	}
 	return nil
 }
