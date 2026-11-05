@@ -177,9 +177,13 @@ func (e *Engine) recreateNatural(ctx context.Context, st Attached, def schema.Ta
 		// purged and its tombstone file gone: the id is still taken for good
 	case err != nil:
 		return stored{}, err
-	case !cur.Deleted:
+	case !cur.Deleted && sameKey(cur.Fields, r.Fields, keyFields):
 		return stored{}, exists(r.ID)
 	}
+	// A live row at the natural id whose key fields were edited since
+	// (`lore scope move` relabels a scope: ids never follow a label)
+	// does not hold this key any more: like a tombstone, the new row
+	// takes a fresh random id unless another live row holds the key.
 	live, err := e.List(ctx, st.Name, def.Name)
 	if err != nil {
 		return stored{}, err
