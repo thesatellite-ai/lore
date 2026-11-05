@@ -496,6 +496,11 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if ctx, d, err = a.prepareTarget(ctx, e, d, c); err != nil {
 		return op.Result{}, err
 	}
+	// F17 under STORE TARGETS (PL-PORT-1): a note for a personal place
+	// every repo reads that names a known org asks first.
+	if err = a.confirmPersonalMentions(ctx, e, d, c); err != nil {
+		return op.Result{}, err
+	}
 	if err = a.prepareSource(ctx, e, d); err != nil {
 		return op.Result{}, err
 	}
