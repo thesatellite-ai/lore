@@ -36,6 +36,10 @@ const (
 // core declares has it, with the relation RelTags.
 const (
 	FieldTagIDs = "tag_ids"
+	// FieldIdempotencyKey is the caller's retry key of a create that takes
+	// one (`lore memory add --key`, CLEANUP Qs): the same key returns the
+	// existing row and writes nothing.
+	FieldIdempotencyKey = "idempotency_key"
 	// FieldResourceHistory is a resource row's capped field-change history
 	// (RESOURCES 3.22; the git log of the row file is the full record).
 	FieldResourceHistory = "history"
@@ -192,6 +196,9 @@ func coreDefs() []TableDef {
 			DateTime("archived_at"),
 			Text("source_kind", Required()),
 			Text("source_ref"),
+			// CLEANUP Qs: `memory add --key` stores its idempotency key here;
+			// the row's id is natural over it, so a retry finds the row.
+			Text(FieldIdempotencyKey),
 			IndexOn("project_id", "repo_id"),
 			IndexOn("project_id", fieldKind),
 			IndexOn("archived_at"),

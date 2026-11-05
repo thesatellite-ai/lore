@@ -145,6 +145,7 @@ memories.archived_at datetime
 memories.body text required
 memories.confidence number
 memories.created_by_actor_id ref
+memories.idempotency_key text
 memories.kind text required
 memories.last_validated_at datetime
 memories.project_id ref required
