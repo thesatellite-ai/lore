@@ -208,9 +208,17 @@ func group(parent *cobra.Command, name string) *cobra.Command {
 	if c := child(parent, name); c != nil {
 		return c
 	}
+	// Help from the noun table (nouns.go); a group missing from it keeps the
+	// placeholder, which cmd/lore TestEveryNounGroupHasHelp refuses.
+	full := strings.TrimSpace(parent.CommandPath() + " " + name)
+	doc, ok := nounDoc(strings.TrimSpace(strings.TrimPrefix(full, RootName)))
+	if !ok {
+		doc = NounDoc{Short: full + genericGroupSuffix}
+	}
 	g := &cobra.Command{
 		Use:           name,
-		Short:         strings.TrimSpace(parent.CommandPath()+" "+name) + " commands",
+		Short:         doc.Short,
+		Long:          doc.Long,
 		Annotations:   map[string]string{annotationOwner: annotationValue},
 		SilenceErrors: true,
 		SilenceUsage:  true,
