@@ -8,6 +8,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -345,27 +346,52 @@ func TestRecipe05_PersonalNotesSyncBetweenMachines(t *testing.T) {
 // legacyIdentityTOML is ~/.lore/identity.toml as lore wrote it before YAML.
 const legacyIdentityTOML = "display_name = \"Alice Doe\"\nstable_key = \"human:alice@legacy.example\"\n"
 
-// E13 / F19: upgrading the binary over old TOML files migrates them once,
-// keeps the old file as *.toml.migrated and says so in one line.
+// The v0.1.17 F19 cases (identity.toml migrated to identity.yaml on first
+// read) are ported to OV31-d (CLI_REFERENCE 3.22, P3-ORG-4): identity.toml
+// is never read nor migrated (`identity unset` removes it), identity.yaml
+// is read below identity: of ~/.lore/config.yaml until `lore migrate run`,
+// and `identity show` writes nothing and names each old file still there.
+
+// assertOldFilesUntouched: a show wrote nothing next to the old files.
+func assertOldFilesUntouched(t *testing.T, a *th.Actor, present ...string) {
+	t.Helper()
+	for _, f := range present {
+		if _, err := os.Stat(a.LorePath(f)); err != nil {
+			t.Fatalf("%s must be left in place by identity show: %v", f, err)
+		}
+	}
+	for _, f := range []string{"identity.toml.migrated", "identity.yaml.migrated"} {
+		if _, err := os.Stat(a.LorePath(f)); !os.IsNotExist(err) {
+			t.Fatalf("identity show must not migrate (%s exists)", f)
+		}
+	}
+	if !slices.Contains(present, "identity.yaml") {
+		if _, err := os.Stat(a.LorePath("identity.yaml")); !os.IsNotExist(err) {
+			t.Fatal("identity show must not write identity.yaml")
+		}
+	}
+}
+
+// E13 / OV31-d: upgrading the binary over an old identity.toml: show names
+// the file and does not take the identity from it; identity set writes
+// config.yaml; identity unset removes the old file.
 func TestE13_UpgradeOverOldTomlFiles(t *testing.T) {
 	w := newTeamWorld(t)
 	a := w.Human("alice", "alice@git.example")
 	a.WriteHomeFile(".lore/identity.toml", legacyIdentityTOML)
-	r := a.Lore("", "identity", "show").OK(t)
-	r.Says(t, "human:alice@legacy.example", "migrated")
-	for _, f := range []string{"identity.yaml", "identity.toml.migrated"} {
-		if _, err := os.Stat(a.LorePath(f)); err != nil {
-			t.Fatalf("%s must exist after migration: %v", f, err)
-		}
-	}
+	a.Lore("", "identity", "show").OK(t).Says(t, "identity.toml is from before v0.1.17 and is not read", "lore identity set").Never(t, "human:alice@legacy.example")
+	assertOldFilesUntouched(t, a, "identity.toml")
+	a.Lore("", "identity", "set", "Alice Doe <alice@legacy.example>").OK(t)
+	a.Lore("", "identity", "show").OK(t).Says(t, "human:alice@legacy.example", "identity.toml is from before v0.1.17 and is not read")
+	a.Lore("", "identity", "unset").OK(t)
 	if _, err := os.Stat(a.LorePath("identity.toml")); !os.IsNotExist(err) {
-		t.Fatal("identity.toml must be renamed away")
+		t.Fatal("identity unset must remove a pre-0.1.17 identity.toml")
 	}
-	a.Lore("", "identity", "show").OK(t).Says(t, "human:alice@legacy.example").Never(t, "migrated")
+	a.Lore("", "identity", "show").OK(t).Never(t, "identity.toml", "human:alice@legacy.example")
 }
 
-// F19 edge case + §12 "to verify": two lore processes migrating at once both
-// succeed and the end state is one YAML read by both.
+// F19 edge case ported: show is a read, so two at once both succeed with
+// the same answer and leave the old file as it was.
 func TestF19_Race_TwoProcessesMigrateAtOnce(t *testing.T) {
 	w := newTeamWorld(t)
 	a := w.Human("alice", "alice@git.example")
@@ -374,39 +400,37 @@ func TestF19_Race_TwoProcessesMigrateAtOnce(t *testing.T) {
 	c := a.Clone(repo, "tool")
 	res := w.Simultaneously(c.Prepare("identity", "show"), c.Prepare("identity", "show"))
 	for _, r := range res {
-		r.OK(t).Says(t, "human:alice@legacy.example")
+		r.OK(t).Says(t, "identity.toml is from before v0.1.17 and is not read").Never(t, "human:alice@legacy.example")
 	}
-	if _, err := os.Stat(a.LorePath("identity.yaml")); err != nil {
-		t.Fatalf("identity.yaml must exist: %v", err)
-	}
-	a.Lore("", "identity", "show").OK(t).Says(t, "human:alice@legacy.example").Never(t, "migrated")
+	assertOldFilesUntouched(t, a, "identity.toml")
 }
 
-// F19: both files present → YAML wins and lore warns that the TOML is ignored.
+// F19 ported: both old files present → the v0.1.17 identity.yaml wins (the
+// chain still reads it until `lore migrate run`), the TOML is not read, and
+// show names both.
 func TestF19_BothFilesYAMLWins(t *testing.T) {
 	w := newTeamWorld(t)
 	a := w.Human("alice", "alice@git.example")
 	a.WriteHomeFile(".lore/identity.toml", legacyIdentityTOML)
 	a.WriteHomeFile(".lore/identity.yaml", "display_name: Alice Doe\nstable_key: human:alice@yaml.example\n")
-	a.Lore("", "identity", "show").OK(t).Says(t, "human:alice@yaml.example", "identity.toml").Never(t, "human:alice@legacy.example")
+	a.Lore("", "identity", "show").OK(t).
+		Says(t, "human:alice@yaml.example", "identity.yaml is from v0.1.17", "lore migrate run", "identity.toml is from before v0.1.17 and is not read").
+		Never(t, "human:alice@legacy.example")
+	assertOldFilesUntouched(t, a, "identity.toml", "identity.yaml")
 }
 
-// F19: malformed TOML is not migrated and the error names the line.
+// F19 ported: a malformed old TOML is never parsed, so show still works,
+// names it, and leaves it in place.
 func TestF19_MalformedTomlIsNotMigrated(t *testing.T) {
 	w := newTeamWorld(t)
 	a := w.Human("alice", "alice@git.example")
 	a.WriteHomeFile(".lore/identity.toml", "display_name = \"Alice\"\nstable_key = \"unterminated\n")
-	r := a.Lore("", "identity", "show")
-	r.Says(t, "line 2")
-	if _, err := os.Stat(a.LorePath("identity.yaml")); !os.IsNotExist(err) {
-		t.Fatal("a malformed TOML must not produce a YAML")
-	}
-	if _, err := os.Stat(a.LorePath("identity.toml")); err != nil {
-		t.Fatal("a malformed TOML must be left in place")
-	}
+	a.Lore("", "identity", "show").OK(t).Says(t, "identity.toml is from before v0.1.17 and is not read")
+	assertOldFilesUntouched(t, a, "identity.toml")
 }
 
-// F19: a read-only ~/.lore cannot be migrated; lore reads the TOML and warns.
+// F19 ported: a read-only ~/.lore changes nothing for show (it writes
+// nothing); the old file is still named.
 func TestF19_ReadOnlyFolderReadsTomlAndWarns(t *testing.T) {
 	w := newTeamWorld(t)
 	a := w.Human("alice", "alice@git.example")
@@ -416,10 +440,8 @@ func TestF19_ReadOnlyFolderReadsTomlAndWarns(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
-	a.Lore("", "identity", "show").OK(t).Says(t, "human:alice@legacy.example", "identity.toml")
-	if _, err := os.Stat(a.LorePath("identity.yaml")); !os.IsNotExist(err) {
-		t.Fatal("nothing can be written to a read-only folder")
-	}
+	a.Lore("", "identity", "show").OK(t).Says(t, "identity.toml is from before v0.1.17 and is not read")
+	assertOldFilesUntouched(t, a, "identity.toml")
 }
 
 // whoamiField returns the value of one `lore whoami` line ("org", "identity",

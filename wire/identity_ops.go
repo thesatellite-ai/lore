@@ -22,7 +22,7 @@ import (
 )
 
 // legacyIdentityTOML is the pre-0.1.17 identity file `identity unset`
-// removes (OV31-d).
+// removes (OV31-d); `identity show` names it but never reads it (P3-ORG-4).
 const legacyIdentityTOML = "identity.toml"
 
 var _ opsidentity.Manager = (*App)(nil)
@@ -81,6 +81,40 @@ func (a *App) ShowIdentity(ctx context.Context) (opsidentity.Shown, error) {
 	if err != nil {
 		return opsidentity.Shown{}, err
 	}
+	notes, err := oldIdentityFileNotes(a.opts.Home)
+	if err != nil {
+		return opsidentity.Shown{}, err
+	}
 	return opsidentity.Shown{Org: r.Org, StableKey: r.StableKey, DisplayName: r.DisplayName, Kind: r.Kind,
-		Source: string(r.Step), Stable: r.Stable(), Notes: r.Notes}, nil
+		Source: string(r.Step), Stable: r.Stable(), Notes: append(r.Notes, notes...)}, nil
+}
+
+// oldIdentityFileNotes names each old identity file still in home and how
+// to retire it (P3-ORG-4), so a person sees where an old identity went
+// after the upgrade:
+//
+//   - a v0.1.17 identity.yaml is still read by the chain, below identity:
+//     of config.yaml, until `lore migrate run` moves it in (CFG9,
+//     AGENT_IDENTITY_DESIGN "Who is writing");
+//   - a pre-0.1.17 identity.toml is never read (OV31-d; `identity unset`
+//     removes it).
+//
+// `identity show` is a read: it never migrates, renames or parses these
+// files, so it works the same in a read-only ~/.lore and with a malformed
+// old file, and two shows at once cannot race.
+func oldIdentityFileNotes(home string) ([]string, error) {
+	var notes []string
+	for _, f := range []struct{ name, note string }{
+		{identity.LegacyFile, "is from v0.1.17 and is read only while identity: in ~/.lore/" + ConfigFile + " is unset: `lore migrate run` moves it into identity:"},
+		{legacyIdentityTOML, "is from before v0.1.17 and is not read: set who you are with `lore identity set <email>`; `lore identity unset` removes the old file"},
+	} {
+		switch _, err := os.Stat(filepath.Join(home, f.name)); {
+		case err == nil:
+			notes = append(notes, "~/.lore/"+f.name+" "+f.note)
+		case errors.Is(err, fs.ErrNotExist):
+		default:
+			return nil, errs.Wrap(errs.Internal, "wire: check ~/.lore/"+f.name, err)
+		}
+	}
+	return notes, nil
 }
