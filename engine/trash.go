@@ -46,6 +46,29 @@ const (
 // BatchKindDelete is the kind of a delete batch (XQ1, `lore batch list --kind delete`).
 const BatchKindDelete = "delete"
 
+// Commit trailers of trash writes (DELETION 2.1, 2.6, 3.3, 3.4): a backend
+// that commits appends them (store.WithCommitTrailers), so `git log
+// --grep` finds every commit of one batch or purge.
+const (
+	DeleteBatchTrailer = "Lore-Delete-Batch" // value: the bat_ id of the soft delete
+	RestoreTrailer     = "Lore-Restore"      // value: the bat_ id restored
+	PurgeTrailer       = "Lore-Purge"        // value: the purge date (UTC), then the batch id when one was named
+)
+
+// purgeTrailerDay is the date a Lore-Purge trailer carries (2.6).
+const purgeTrailerDay = "2006-01-02"
+
+// withPurgeTrailer is ctx carrying "Lore-Purge: <day> [<batch>]"; every
+// purge path (trash purge by target, --older-than, --expired, delete
+// --purge) sets it once before its writes.
+func withPurgeTrailer(ctx context.Context, at time.Time, batch string) context.Context {
+	v := at.UTC().Format(purgeTrailerDay)
+	if batch != "" {
+		v += " " + batch
+	}
+	return store.WithCommitTrailers(ctx, PurgeTrailer+": "+v)
+}
+
 // defaultPreviewRows is batch.preview_rows when no level sets it (XQ2).
 const defaultPreviewRows = 20
 
@@ -127,6 +150,7 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 		b = Batch{ID: bid, Kind: BatchKindDelete}
 		ctx = WithBatch(ctx, b)
 	}
+	ctx = store.WithCommitTrailers(ctx, DeleteBatchTrailer+": "+b.ID.String()) // 2.1, 3.4
 	cl := e.callOf(ctx)
 	actor := e.actorOf(cl)
 	byStore := map[store.Source][]row.Row{}
@@ -503,6 +527,7 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 		if _, ok := BatchOf(ctx); !ok {
 			ctx = WithBatch(ctx, Batch{ID: b, Kind: BatchKindDelete})
 		}
+		ctx = store.WithCommitTrailers(ctx, RestoreTrailer+": "+b.String()) // 3.3 step 4
 	}
 	cl := e.callOf(ctx)
 	actor := e.actorOf(cl)
@@ -623,6 +648,10 @@ func (e *Engine) PurgeTrash(ctx context.Context, target string) (TrashResult, er
 // trashed dependents are already in res.
 func (e *Engine) purgeRows(ctx context.Context, res TrashResult) (TrashResult, error) {
 	out := TrashResult{Batch: res.Batch}
+	if len(res.Rows) == 0 {
+		return out, nil
+	}
+	ctx = withPurgeTrailer(ctx, e.clock.Now(hlc.HLC{}).Wall, res.Batch) // 2.6
 	for _, t := range res.Rows {
 		if _, err := e.remove(ctx, t.Store, t.Row, true); err != nil {
 			return out, err
