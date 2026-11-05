@@ -381,6 +381,7 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	}
 	s.dropCompanions(companions)
 	s.wrote += len(res.Written)
+	s.markFolder(b.folder)
 	return nil
 }
 

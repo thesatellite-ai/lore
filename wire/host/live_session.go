@@ -19,6 +19,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -83,10 +84,12 @@ type liveSession struct {
 	blocked  error
 	prepared bool
 	finished bool
-	// wrote counts rows this run committed to the local live ref.
-	wrote int
-	notes []live.MergeNote
-	lock  *liveLock
+	// wrote counts rows this run committed to the local live ref;
+	// folders are the live folders they went to (the landing pass).
+	wrote   int
+	folders map[string]bool
+	notes   []live.MergeNote
+	lock    *liveLock
 	// companions are new supporting rows held until a content row of the
 	// run carries them (FLAG6); companionInner writes any left over.
 	companions     map[live.RowKey]store.Change
@@ -224,8 +227,36 @@ func (s *liveSession) finish(ctx context.Context) {
 	if err := s.flushCompanions(ctx); err != nil {
 		s.warn("supporting rows (actors, metadata keys) were not written: " + err.Error())
 	}
+	if !s.push(ctx) {
+		return
+	}
+	s.autoLand(ctx)
 	if s.push(ctx) {
 		s.autoCompact(ctx)
+	}
+}
+
+// autoLand is the landing pass at the end of a run that wrote live rows
+// (v0.1.17 finish → autoLand): every folder written this run, then its
+// status lines. Best effort: a failure is a stderr line, the rows stay live.
+func (s *liveSession) autoLand(ctx context.Context) {
+	if s.blocked != nil || s.ref.Remote == nil || s.wrote == 0 || (!s.autopush && s.kind != live.FetchAlways) {
+		return
+	}
+	folders := make([]string, 0, len(s.folders))
+	for f := range s.folders {
+		folders = append(folders, f)
+	}
+	sort.Strings(folders)
+	for _, f := range folders {
+		out, err := s.landPass(ctx, f, nil, true)
+		if err != nil {
+			s.warn("land: " + err.Error())
+			continue
+		}
+		for _, l := range landLines(out) {
+			s.h.line(l)
+		}
 	}
 }
 
@@ -362,4 +393,12 @@ func mainDataPath(folder, rel string) string {
 		return p
 	}
 	return folder + "/" + p
+}
+
+// markFolder records a live folder this run wrote to.
+func (s *liveSession) markFolder(folder string) {
+	if s.folders == nil {
+		s.folders = map[string]bool{}
+	}
+	s.folders[folder] = true
 }

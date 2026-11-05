@@ -14,6 +14,7 @@ package host
 
 import (
 	"context"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
@@ -55,7 +56,7 @@ func (l liveSync) pushAndLand(ctx context.Context) ([]string, error) {
 	if !s.push(ctx) || s.ref.Remote == nil {
 		return nil, nil
 	}
-	out, err := s.landPass(ctx, folder)
+	out, err := s.landPass(ctx, folder, nil, true)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "land", err)
 	}
@@ -71,17 +72,46 @@ func (l liveSync) SyncRun(ctx context.Context, _ opssync.RunIn) (opssync.RunOut,
 	return opssync.RunOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindReport, Data: opssync.RunData{Pass: syncPassLive}, Lines: lines}, nil
 }
 
-// Land implements opssync.Env: the automatic pass; row filters and the
-// dry-run plan are not ported.
+// Land implements opssync.Env (v0.1.17 `lore land`): the named rows (an
+// id, --all, --kind, --mission) land now; --dry-run prints the plan.
 func (l liveSync) Land(ctx context.Context, in opssync.LandIn) (opssync.DoneOut, error) {
-	if in.ID != "" || in.Kind != "" || in.Mission != "" || in.DryRun {
-		return opssync.DoneOut{}, unsupported("land with a row filter or --dry-run")
+	if in.ID == "" && !in.All && in.Kind == "" && in.Mission == "" {
+		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "name a row id, or use --all, --kind or --mission")
 	}
-	lines, err := l.pushAndLand(ctx)
+	s, folder, err := l.here(ctx)
 	if err != nil {
 		return opssync.DoneOut{}, err
 	}
-	return opssync.DoneOut{Lines: lines}, nil
+	if s == nil {
+		return opssync.DoneOut{}, errs.New(errs.Unsupported, liveUnsupported)
+	}
+	sel := landSelector(in.ID, in.Kind, in.Mission)
+	if in.DryRun {
+		lines, perr := s.planLines(ctx, folder, sel)
+		if perr != nil {
+			return opssync.DoneOut{}, errs.Wrap(errs.Internal, "land plan", perr)
+		}
+		return opssync.DoneOut{Lines: lines}, nil
+	}
+	if !s.push(ctx) {
+		return opssync.DoneOut{}, errs.New(errs.Offline, "the live ref could not be pushed; nothing was landed").WithHint("run `lore land` again when the remote is reachable")
+	}
+	out, err := s.landPass(ctx, folder, sel, false)
+	if err != nil {
+		return opssync.DoneOut{}, errs.Wrap(errs.Internal, "land", err)
+	}
+	if len(out.Conflicts) > 0 {
+		return opssync.DoneOut{}, errs.New(errs.InvalidInput, strings.Join(out.Conflicts, ", ")+" has a conflict (conflict markers in a text field); it cannot land").
+			WithHint("settle it with `lore sync conflicts` / `lore sync resolve`, then land again")
+	}
+	if out.Status == "" {
+		done := "nothing to land: " + out.Branch + " already holds every named row"
+		return opssync.DoneOut{Done: done, Lines: []string{done}}, nil
+	}
+	for _, line := range landLines(out) {
+		s.h.line(line) // v0.1.17 printed the landing outcome on stderr
+	}
+	return opssync.DoneOut{Done: string(out.Status)}, nil
 }
 
 // SyncStatus implements opssync.Env.

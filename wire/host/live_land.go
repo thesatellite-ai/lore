@@ -7,8 +7,7 @@ package host
 // leave live. It runs from `lore sync` and `lore land` (live_sync.go).
 //
 // Not ported (P3-MODEB-3): the F16 leak check of the landing commit (the
-// core has no write-time leak check on cmd/lore yet, P3-ORG-3), and
-// `lore land`'s row filters and --dry-run plan.
+// core has no write-time leak check on cmd/lore yet, P3-ORG-3).
 
 import (
 	"context"
@@ -16,6 +15,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
@@ -151,9 +151,39 @@ type landPlanRow struct {
 	Leave    bool
 }
 
+// landSelect picks the rows `lore land` names; nil = an automatic pass.
+type landSelect func(k live.RowKey, f live.File) bool
+
+// fieldMission is the mission reference of a task body.
+const fieldMission = "mission_id"
+
+// landSelector is `lore land`'s row filter: an id, a kind (tasks or task),
+// a mission (the mission row and its tasks).
+func landSelector(id, kind, mission string) landSelect {
+	table := kind
+	if t, ok := nounTables[kind]; ok {
+		table = t
+	} else if kind != "" && !strings.HasSuffix(kind, "s") {
+		table = kind + "s"
+	}
+	return func(k live.RowKey, f live.File) bool {
+		if id != "" && k.ID != id {
+			return false
+		}
+		if table != "" && k.Table != table {
+			return false
+		}
+		if mission != "" && k.ID != mission && f.Body.Str(fieldMission) != mission {
+			return false
+		}
+		return true
+	}
+}
+
 // plan decides, for every live row of folder, whether it leaves live and
-// whether it lands (F5 Confirm + ShouldLand).
-func (s *liveSession) plan(ctx context.Context, folder string) ([]landPlanRow, error) {
+// whether it lands (F5 Confirm + ShouldLand). With named, only the rows it
+// picks are planned, and they land now (a named row is never left).
+func (s *liveSession) plan(ctx context.Context, folder string, named landSelect) ([]landPlanRow, error) {
 	_, tree, err := s.ref.LocalTree(ctx)
 	if err != nil {
 		return nil, err
@@ -178,9 +208,13 @@ func (s *liveSession) plan(ctx context.Context, folder string) ([]landPlanRow, e
 		if rerr != nil || !ok {
 			mainBody = nil
 		}
+		isNamed := named != nil && named(k, f)
+		if named != nil && !isNamed {
+			continue // rows outside `lore land`'s filter are not shown or touched
+		}
 		p := landPlanRow{Key: k, File: f}
-		p.Leave = live.Confirm(live.ConfirmInputs{File: f, Finished: finished, Now: now, MaxAge: s.cfg.MaxAge, MainBody: mainBody, MainPurged: purged[k.ID]})
-		p.Decision = live.ShouldLand(live.LandInputs{File: f, Finished: finished, Now: now, MaxAge: s.cfg.MaxAge, MainBody: mainBody, MainPurged: purged[k.ID]})
+		p.Leave = !isNamed && live.Confirm(live.ConfirmInputs{File: f, Finished: finished, Now: now, MaxAge: s.cfg.MaxAge, MainBody: mainBody, MainPurged: purged[k.ID]})
+		p.Decision = live.ShouldLand(live.LandInputs{File: f, Finished: finished, Named: isNamed, Now: now, MaxAge: s.cfg.MaxAge, MainBody: mainBody, MainPurged: purged[k.ID]})
 		out = append(out, p)
 	}
 	return out, nil
@@ -195,27 +229,30 @@ type landOutcome struct {
 	Status live.LandStatus
 	Commit string
 	Detail string
+	// Conflicts are named rows that cannot land (conflict markers).
+	Conflicts []string
 }
 
 // liveNoteProtected records that the branch refused a direct landing.
 const liveNoteProtected = "land-protected"
 
 // landPass runs one landing pass for folder: rows the branch already holds
-// leave live, finished rows land, open rows at max age are copied.
-func (s *liveSession) landPass(ctx context.Context, folder string) (landOutcome, error) {
+// leave live (only when leave is set), finished and named rows land, open
+// rows at max age are copied.
+func (s *liveSession) landPass(ctx context.Context, folder string, named landSelect, leave bool) (landOutcome, error) {
 	var out landOutcome
 	if s.blocked != nil {
 		return out, s.blocked
 	}
 	out.Branch = s.defaultBranch(ctx)
-	plan, err := s.plan(ctx, folder)
+	plan, err := s.plan(ctx, folder, named)
 	if err != nil {
 		return out, err
 	}
 	removeIf := map[live.RowKey][]byte{}
 	var items []live.LandItem
 	for _, p := range plan {
-		if p.Leave {
+		if p.Leave && leave {
 			if b, err := p.File.Encode(); err == nil {
 				removeIf[p.Key] = b
 			}
@@ -225,6 +262,9 @@ func (s *liveSession) landPass(ctx context.Context, folder string) (landOutcome,
 		case live.LandFinal, live.LandCopy:
 			items = append(items, live.LandItem{Folder: folder, Key: p.Key, File: p.File, Action: p.Decision.Action})
 		case live.LandStay:
+			if named != nil && strings.HasPrefix(p.Decision.Reason, "conflict") {
+				out.Conflicts = append(out.Conflicts, p.Key.ID)
+			}
 		}
 	}
 	items = withoutLoneSupporting(items)
@@ -315,4 +355,23 @@ func landLines(out landOutcome) []string {
 		lines = append(lines, fmt.Sprintf("%s%d row(s) left live (%s holds them)", liveLogPrefix, out.Left, branch))
 	}
 	return lines
+}
+
+// planLines is `lore land --dry-run`'s plan (v0.1.17 printLandPlan text).
+func (s *liveSession) planLines(ctx context.Context, folder string, named landSelect) ([]string, error) {
+	plan, err := s.plan(ctx, folder, named)
+	if err != nil {
+		return nil, err
+	}
+	n := 0
+	for _, p := range plan {
+		if p.Decision.Action != live.LandStay {
+			n++
+		}
+	}
+	lines := []string{fmt.Sprintf("would land %d row(s) to %s (%s/):", n, s.defaultBranch(ctx), folder)}
+	for _, p := range plan {
+		lines = append(lines, fmt.Sprintf("  %-40s %-5s %s", p.Key.ID, p.Decision.Action, p.Decision.Reason))
+	}
+	return lines, nil
 }

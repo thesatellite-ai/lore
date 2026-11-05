@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -127,6 +128,34 @@ func TestLiveFinished(t *testing.T) {
 		body := canonjson.Object{"status": canonjson.String(c.status)}
 		if got := liveFinished(c.table, body); got != c.want {
 			t.Errorf("liveFinished(%s, %s) = %v, want %v", c.table, c.status, got, c.want)
+		}
+	}
+}
+
+// TestLandSelector: `lore land`'s id, kind (singular or plural) and mission
+// filters; a mission names its own row and its tasks.
+func TestLandSelector(t *testing.T) {
+	task := live.File{Body: canonjson.Object{"mission_id": canonjson.String("msn_1")}}
+	other := live.File{Body: canonjson.Object{}}
+	tk := live.RowKey{Table: "tasks", ID: "tsk_1"}
+	mk := live.RowKey{Table: "missions", ID: "msn_1"}
+	for _, c := range []struct {
+		sel  landSelect
+		k    live.RowKey
+		f    live.File
+		want bool
+	}{
+		{landSelector("tsk_1", "", ""), tk, other, true},
+		{landSelector("tsk_2", "", ""), tk, other, false},
+		{landSelector("", "task", ""), tk, other, true},
+		{landSelector("", "tasks", ""), mk, other, false},
+		{landSelector("", "memory", ""), live.RowKey{Table: "memories", ID: "mem_1"}, other, true},
+		{landSelector("", "", "msn_1"), tk, task, true},
+		{landSelector("", "", "msn_1"), mk, other, true},
+		{landSelector("", "", "msn_1"), tk, other, false},
+	} {
+		if got := c.sel(c.k, c.f); got != c.want {
+			t.Errorf("select %v = %v, want %v", c.k, got, c.want)
 		}
 	}
 }
