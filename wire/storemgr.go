@@ -218,6 +218,19 @@ func (s storeSigner) fallback(ctx context.Context) git.Signature {
 	return git.Signature{Name: name, Email: email}
 }
 
+// LoreSignature is the lore identity as a commit signature, the same
+// FLAG4 fallback every core store commit uses (`lore whoami`: display name
+// + the identity key's e-mail; storeSigner.fallback). The old binary's
+// storeSignature calls it so both paths name the same signer (r3-sign).
+// ok is false when the identity cannot be resolved.
+func (a *App) LoreSignature(ctx context.Context) (name, email string, ok bool) {
+	sig := storeIdentityFunc(a.opts).fallback(ctx)
+	if sig.Name == "" && sig.Email == "" {
+		return "", "", false
+	}
+	return sig.Name, sig.Email, true
+}
+
 // owner is the org identity that signs the store at raw (any spelling of
 // its url, folder and branch ignored), when raw is a store of an org with
 // an identity (Q-R2-1). A failing or absent Options.OrgSigners hook names
