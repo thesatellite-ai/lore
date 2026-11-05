@@ -18,7 +18,8 @@ package engine
 //	─► clientKind (after every other client check, BATCH 3): the client
 //	   repo's own kind row (origin = store kind id) and the field rows the
 //	   row uses, found again by origin and name or written now; the row's
-//	   kind and fields keys are re-pointed at them
+//	   kind and fields keys are re-pointed at them; the store kind's copies
+//	   gets "<client place>=<client kind id>" (MQ15, R2-Q1)
 import (
 	"context"
 	"encoding/json"
@@ -202,7 +203,29 @@ func listTexts(v value.Value) []string {
 const (
 	kindOrigin     = "origin"
 	kindNameFormat = "name_format"
+	kindCopies     = "copies"
+	// copySep joins the client place and its kind id in a copies item.
+	copySep = "="
 )
+
+// recordCopy adds "<client place>=<client kind id>" to the store kind's
+// copies (MQ15, R2-Q1: the store side of the both-ways link; set union, so
+// a rerun after an interrupted move adds nothing twice). A failed write
+// refuses the move; the client kind already written is found again by
+// origin on the next run, which then records the copy.
+func (e *Engine) recordCopy(ctx context.Context, ksrc store.Source, skind row.Row, to store.Source, ckind ids.AnyID) error {
+	item := e.placeOf(to) + copySep + ckind.String()
+	cur := listTexts(skind.Fields[kindCopies])
+	if slices.Contains(cur, item) {
+		return nil
+	}
+	vals, err := textList(append(slices.Clone(cur), item))
+	if err != nil {
+		return err
+	}
+	_, err = e.Update(ctx, Ref{Store: ksrc, Table: schema.TableKinds, ID: skind.ID}, map[string]value.Value{kindCopies: vals})
+	return err
+}
 
 // clientKind gives the client repo to its own minimal definition of the
 // kind of a resource moving there (RES 3.9 "The client repo's kind
@@ -230,13 +253,16 @@ func (e *Engine) clientKind(ctx context.Context, to store.Source, fields map[str
 	if _, live, gerr := e.getRow(ctx, to, schema.TableKinds, kid); gerr == nil && live {
 		return fields, nil
 	}
-	_, skind, err := e.locateExcept(ctx, Ref{Table: schema.TableKinds, ID: kid}, to)
+	ksrc, skind, err := e.locateExcept(ctx, Ref{Table: schema.TableKinds, ID: kid}, to)
 	if err != nil || skind.Deleted {
 		return nil, errs.New(errs.LeakBlocked, "engine: the kind "+kid.String()+" of this resource is not visible here; the client repo's own kind cannot be written; nothing written").
 			WithHint("run lore sync on a machine that reads the store, then move again")
 	}
 	ckind, err := e.clientKindRow(ctx, to, skind)
 	if err != nil {
+		return nil, err
+	}
+	if err = e.recordCopy(ctx, ksrc, skind, to, ckind); err != nil {
 		return nil, err
 	}
 	cfields, err := e.clientFieldsOf(ctx, to, ckind)

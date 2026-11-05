@@ -253,6 +253,10 @@ func coreDefs() []TableDef {
 			// secret_manager is the manager a bare secret_ref path means for this kind (RES 3.1 --secret-manager); empty = the policy default.
 			Text("secret_manager"),
 			JSON("origin"),
+			// copies: the client repos' own kinds made from this one, as
+			// "<client place>=<knd id>" (MQ15, R2-Q1: the link kept both ways;
+			// written by a move into a client repo, engine/move_resource.go).
+			List("copies", value.KindText, MergeBy(MergeSetUnion)),
 			UniqueOn(fieldName),
 			HasManyRel("fields", TableKindFields, "kind_id"),
 		),

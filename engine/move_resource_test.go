@@ -104,6 +104,10 @@ func TestMoveResourceIntoClient(t *testing.T) {
 	if err != nil || len(ck) != 1 || originID(ck[0].Fields["origin"]) != kind.String() || ck[0].ID == kind {
 		t.Fatalf("client kind: %v %v", ck, err)
 	}
+	// MQ15/R2-Q1: the store kind records the client kind in copies.
+	if _, sk, lerr := w.eng.locateExcept(ctx, Ref{Table: schema.TableKinds, ID: kind}, store.SourceRepo); lerr != nil || strings.Join(listTexts(sk.Fields["copies"]), ",") != w.eng.placeOf(store.SourceRepo)+"="+ck[0].ID.String() {
+		t.Fatalf("store kind copies: %v %v", sk.Fields["copies"], lerr)
+	}
 	if mv.Row.Fields["kind"].String() != ck[0].ID.String() || strings.Contains(mv.Row.Fields["fields"].String(), prov) {
 		t.Fatalf("moved row still names store definitions: kind %s fields %s", mv.Row.Fields["kind"], mv.Row.Fields["fields"])
 	}
@@ -124,6 +128,9 @@ func TestMoveResourceIntoClient(t *testing.T) {
 	cf2, _ := w.eng.List(ctx, store.SourceRepo, schema.TableKindFields)
 	if len(ck2) != 1 || len(cf2) != 2 {
 		t.Fatalf("second move: %d kinds, %d fields (want reuse)", len(ck2), len(cf2))
+	}
+	if _, sk, _ := w.eng.locateExcept(ctx, Ref{Table: schema.TableKinds, ID: kind}, store.SourceRepo); len(listTexts(sk.Fields["copies"])) != 1 {
+		t.Fatalf("second move recorded the copy twice: %v", sk.Fields["copies"])
 	}
 }
 
