@@ -12,7 +12,8 @@
 // only row ids, never text, and the session id is hashed in the name. A
 // hook input without a session id has no set: every call answers in full.
 // Files older than hookSeenTTL are removed on the next write.
-package main
+
+package renderhost
 
 import (
 	"bufio"
@@ -37,6 +38,8 @@ const hookSeenHashLen = 16
 type hookSeen struct {
 	file string
 	ids  map[string]bool
+	// now is the clock of the TTL prune (nil: the system clock).
+	now func() time.Time
 }
 
 // hookSeenFile is the set's path, "" without a session id or home folder.
@@ -82,7 +85,7 @@ func (s hookSeen) add(ids []string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	pruneHookSeen(dir, s.file)
+	pruneHookSeen(dir, s.file, s.clock())
 	fh, err := os.OpenFile(s.file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
@@ -101,13 +104,22 @@ func (s hookSeen) add(ids []string) error {
 	return fh.Close()
 }
 
-// pruneHookSeen removes sets older than hookSeenTTL except keep; best effort.
-func pruneHookSeen(dir, keep string) {
+// clock is the prune's "now".
+func (s hookSeen) clock() time.Time {
+	if s.now == nil {
+		return time.Now()
+	}
+	return s.now()
+}
+
+// pruneHookSeen removes sets older than hookSeenTTL (from now) except
+// keep; best effort.
+func pruneHookSeen(dir, keep string, now time.Time) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
-	cut := cliClock().Now().Add(-hookSeenTTL)
+	cut := now.Add(-hookSeenTTL)
 	for _, e := range ents {
 		p := filepath.Join(dir, e.Name())
 		if p == keep || e.IsDir() || !strings.HasSuffix(e.Name(), ".ids") {

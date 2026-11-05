@@ -228,3 +228,9 @@ func OneLine(s string) string { return oneLine(s) }
 
 // Sha256Hex is the hex sha256 of data.
 func Sha256Hex(data []byte) string { return sha256Hex(data) }
+
+// ScopeRenameHints are the `lore scope move` hints for folders git saw
+// renamed (the old binary's sync report).
+func (h *Host) ScopeRenameHints(ctx context.Context, root string) []string {
+	return h.scopeRenameHints(ctx, root)
+}

@@ -13,7 +13,8 @@
 // line form (id + short form), so the agent fetches the full row with
 // `lore show <id>`; these ids are NOT added to the hook's seen set, so the
 // per-file hook still sends a changed rule in full when its file is opened.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -21,12 +22,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/errcodes"
+	"github.com/thesatellite-ai/lore/model/errs"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/op"
@@ -50,23 +50,23 @@ const (
 )
 
 // contextSessionStart builds the SessionStart answer and stamps now.
-func contextSessionStart(ctx context.Context) (contextResult, error) {
+func (h *Host) contextSessionStart(ctx context.Context) (contextResult, error) {
 	stamp := sessionStartFile()
 	last := readSessionStart(stamp)
-	now := cliClock().Now()
+	now := h.now()
 	var picks []contextPick
 	// A task.list failure (no actor row yet on a fresh machine) leaves the
 	// task lines out and is logged; the changed rows still answer.
-	tasks, err := inFlightTasks(ctx)
+	tasks, err := h.inFlightTasks(ctx)
 	if err != nil {
-		logHookError(err)
+		h.logHookError(err)
 	}
 	for _, t := range tasks {
 		line := contextfit.LineForm(t.ID, t.Title+" ("+t.Priority+")")
 		picks = append(picks, contextPick{ID: t.ID, Kind: ctxKindTask, Why: "in progress", Bytes: len(line), full: line, line: line, group: groupInFlight})
 	}
 	if !last.IsZero() {
-		rows, kerr := loadKnowledge(ctx)
+		rows, kerr := h.loadKnowledge(ctx)
 		if kerr != nil {
 			return contextResult{}, kerr
 		}
@@ -88,36 +88,36 @@ func contextSessionStart(ctx context.Context) (contextResult, error) {
 const taskAssigneeMe = "@me"
 
 // inFlightTasks runs task.list for in-progress tasks assigned to the caller.
-func inFlightTasks(ctx context.Context) ([]opstask.Brief, error) {
-	if coreApp == nil {
-		return nil, errcodes.New(errcodes.Internal, "the core is not mounted")
+func (h *Host) inFlightTasks(ctx context.Context) ([]opstask.Brief, error) {
+	if h.app == nil {
+		return nil, errs.New(errs.Internal, "the core is not mounted")
 	}
-	e, ok := coreApp.Registry().Lookup(opstask.OpList)
+	e, ok := h.app.Registry().Lookup(opstask.OpList)
 	if !ok {
-		return nil, errcodes.New(errcodes.Internal, opstask.OpList+" is not registered")
+		return nil, errs.New(errs.Internal, opstask.OpList+" is not registered")
 	}
 	in, err := json.Marshal(opstask.ListIn{Status: schema.TaskStatusInProgress, Assignee: taskAssigneeMe})
 	if err != nil {
-		return nil, errcodes.New(errcodes.Internal, "encode task.list").WithCause(err)
+		return nil, errs.Wrap(errs.Internal, "encode task.list", err)
 	}
-	res, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{})
+	res, err := h.app.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{})
 	if err != nil {
-		return nil, coreErr(err)
+		return nil, err
 	}
 	b, err := res.JSON()
 	if err != nil {
-		return nil, coreErr(err)
+		return nil, err
 	}
 	var out opstask.ListOut
 	if err := json.Unmarshal(b, &out); err != nil {
-		return nil, errcodes.New(errcodes.Internal, "decode task.list").WithCause(err)
+		return nil, errs.Wrap(errs.Internal, "decode task.list", err)
 	}
 	return out.Data, nil
 }
 
 // sessionStartFile is this repo's stamp path, "" outside a work tree.
 func sessionStartFile() string {
-	top, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	top, err := runGit(context.Background(), false, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return ""
 	}

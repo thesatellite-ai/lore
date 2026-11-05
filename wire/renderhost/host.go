@@ -17,6 +17,7 @@ package renderhost
 import (
 	"context"
 	"io/fs"
+	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
@@ -65,6 +66,15 @@ type Options struct {
 	RepoIsClient func(ctx context.Context) (bool, error)
 	// Redact masks repo references in non-terminal output (nil: as is).
 	Redact func(string) string
+	// External prints the internal and personal rows of `lore context
+	// --internal` (table and text filter; "" = all) to w and returns how
+	// many and their --json array (nil: E_UNSUPPORTED; the old binary reads
+	// them from its attached store caches).
+	External func(ctx context.Context, w *strings.Builder, table, text string) (int, []byte, error)
+	// DetectedTool is the coding tool this process runs under, when known
+	// (`lore context --for-file` picks the tool's path rules by it; nil:
+	// the core's caller detection, App.Who, else wire.DetectAgent).
+	DetectedTool func(ctx context.Context) (string, bool)
 	// HostError maps an error on its way out of Render / LastRender (nil:
 	// as is; the old binary turns its v0.1.17 codes into core errors).
 	HostError func(error) error
@@ -156,4 +166,20 @@ func (h *Host) hostError(err error) error {
 func (h *Host) recordRender(ctx context.Context, rec wire.RenderRecord) error {
 	_, err := h.app.RecordRender(ctx, rec)
 	return err
+}
+
+// detectedTool is the coding tool this process runs under (Options.
+// DetectedTool, else the resolved caller's detection, else the process
+// environment's), false when none is known.
+func (h *Host) detectedTool(ctx context.Context) (string, bool) {
+	if h.opts.DetectedTool != nil {
+		return h.opts.DetectedTool(ctx)
+	}
+	if who, err := h.app.Who(ctx); err == nil && who.Detection != nil {
+		return who.Detection.Tool, who.Detection.Tool != ""
+	}
+	if det, err := wire.DetectAgent(); err == nil {
+		return det.Tool, det.Tool != ""
+	}
+	return "", false
 }

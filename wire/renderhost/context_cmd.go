@@ -25,7 +25,8 @@
 // line, or the output ends with "more: <command>". Committed-render rules
 // apply: only the repo's rows and shareable stores (renderSources); the
 // internal rows print only with --internal.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -40,7 +41,7 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/errcodes"
+	"github.com/thesatellite-ai/lore/model/errs"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -74,44 +75,49 @@ type contextFlags struct {
 	maxBytes                        int
 }
 
-// contextHost implements contextop.Host: `lore context` is the operation
-// context.fetch (ops/context); this binary answers it with the machinery
-// below (PASS3 ONE-PATH, P3-MISC-6).
-type contextHost struct{}
-
-// Fetch implements contextop.Host.
-func (contextHost) Fetch(ctx context.Context, in contextop.FetchIn, hookIn io.Reader) (a contextop.Answer, err error) {
-	defer asHostError(&err)
+// Fetch implements contextop.Host: `lore context` is the operation
+// context.fetch (ops/context), answered by the machinery below (PASS3
+// ONE-PATH, P3-MISC-6).
+func (h *Host) Fetch(ctx context.Context, in contextop.FetchIn, hookIn io.Reader) (a contextop.Answer, err error) {
+	defer func() { err = h.hostError(err) }()
 	f := &contextFlags{internal: in.Internal, topics: in.Topics, hookStdin: in.HookStdin, sessionStart: in.SessionStart,
 		withMeta: in.Meta, table: in.Table, search: in.Search, forFile: in.ForFile, topic: in.Topic,
 		forPrompt: in.ForPrompt, hook: in.Hook, forTask: in.ForTask, maxBytes: in.MaxBytes}
-	return contextAnswer(ctx, f, hookIn)
+	return h.contextAnswer(ctx, f, hookIn)
 }
 
 // contextAnswer is one fetch: the text and the --json data. The mode
 // order is v0.1.17's (internal, hook, topics, then the row modes).
-func contextAnswer(ctx context.Context, f *contextFlags, stdin io.Reader) (contextop.Answer, error) {
+func (h *Host) contextAnswer(ctx context.Context, f *contextFlags, stdin io.Reader) (contextop.Answer, error) {
 	switch {
 	case f.internal:
+		if h.opts.External == nil {
+			return contextop.Answer{}, errs.New(errs.Unsupported, "context --internal: not available in this build").
+				WithHint("the internal and personal rows load through the release binary for now")
+		}
 		var b strings.Builder
 		b.WriteString(renderHeader + "\n")
-		if n := printExternalRows(ctx, &b, f.table, f.search); n == 0 {
+		n, data, err := h.opts.External(ctx, &b, f.table, f.search)
+		if err != nil {
+			return contextop.Answer{}, err
+		}
+		if n == 0 {
 			b.WriteString("(nothing internal or personal loads in this repo)\n")
 		}
-		return answerOf(b.String(), externalJSONRows(ctx, f.table, f.search))
+		return contextop.Answer{Text: b.String(), Data: data}, nil
 	case f.hook != "":
 		// 6.9: a hook never blocks the tool (2 s timeout); every error
 		// prints nothing and goes to ~/.lore/logs/hooks.log.
 		hctx, cancel := context.WithTimeout(ctx, hookTimeout)
 		defer cancel()
 		var b strings.Builder
-		if err := runContextHook(hctx, f, stdin, &b); err != nil {
-			logHookError(err)
+		if err := h.runContextHook(hctx, f, stdin, &b); err != nil {
+			h.logHookError(err)
 			return contextop.Answer{}, nil
 		}
 		return contextop.Answer{Text: b.String()}, nil
 	case f.topics:
-		topics, err := loadTopicIndex(ctx)
+		topics, err := h.loadTopicIndex(ctx)
 		if err != nil {
 			return contextop.Answer{}, err
 		}
@@ -128,22 +134,22 @@ func contextAnswer(ctx context.Context, f *contextFlags, stdin io.Reader) (conte
 	var err error
 	switch {
 	case f.forFile != "":
-		res, err = contextForFile(ctx, f.forFile)
+		res, err = h.contextForFile(ctx, f.forFile)
 	case f.forTask != "":
-		res, err = contextForTask(ctx, f.forTask)
+		res, err = h.contextForTask(ctx, f.forTask)
 	case f.topic != "":
-		res, err = contextForTopic(ctx, f.topic)
+		res, err = h.contextForTopic(ctx, f.topic)
 	case f.forPrompt != "":
-		res, err = contextForPrompt(ctx, f.forPrompt)
+		res, err = h.contextForPrompt(ctx, f.forPrompt)
 	default:
-		return contextop.Answer{}, errcodes.New(errcodes.InvalidInput, errContextNeedsMode.Error())
+		return contextop.Answer{}, errs.New(errs.InvalidInput, errContextNeedsMode.Error())
 	}
 	if err != nil {
 		return contextop.Answer{}, err
 	}
 	// 6.13: metadata only on request.
 	if f.withMeta {
-		if res, err = withMeta(ctx, res); err != nil {
+		if res, err = h.withMeta(ctx, res); err != nil {
 			return contextop.Answer{}, err
 		}
 	}
@@ -155,7 +161,7 @@ func contextAnswer(ctx context.Context, f *contextFlags, stdin io.Reader) (conte
 	// 6.12 "not used in 60 days" (context_usage.go). P3-MISC-6: one fetch
 	// answers both forms, so the usage count takes the rows the text
 	// printed (a --json caller gets every pick, as before).
-	recordUsage(ctx, printed)
+	h.recordUsage(ctx, printed)
 	return answerOf(text, res.picks)
 }
 
@@ -163,7 +169,7 @@ func contextAnswer(ctx context.Context, f *contextFlags, stdin io.Reader) (conte
 func answerOf[T any](text string, data T) (contextop.Answer, error) {
 	b, err := json.Marshal(data)
 	if err != nil {
-		return contextop.Answer{}, errcodes.New(errcodes.Internal, "encode json").WithCause(err)
+		return contextop.Answer{}, errs.Wrap(errs.Internal, "encode json", err)
 	}
 	return contextop.Answer{Text: text, Data: b}, nil
 }
@@ -261,10 +267,10 @@ var contextKinds = []struct {
 
 // loadKnowledge lists the live, not superseded rows of every context
 // table across the committed-render sources.
-func loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
+func (h *Host) loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
 	var out []knowledgeRow
 	for _, k := range contextKinds {
-		rows, err := renderLiveRows(ctx, k.table)
+		rows, err := h.renderLiveRows(ctx, k.table)
 		if err != nil {
 			return nil, err
 		}
@@ -316,13 +322,13 @@ func sortPicks(ps []contextPick) {
 }
 
 // contextForFile is the 6.8 --for-file pick for the detected tool.
-func contextForFile(ctx context.Context, p string) (contextResult, error) {
-	return contextForFileTool(ctx, p, "")
+func (h *Host) contextForFile(ctx context.Context, p string) (contextResult, error) {
+	return h.contextForFileTool(ctx, p, "")
 }
 
 // contextForFileTool is --for-file for tool ("" = detect; 6.2.8).
-func contextForFileTool(ctx context.Context, p, tool string) (contextResult, error) {
-	rows, err := loadKnowledge(ctx)
+func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextResult, error) {
+	rows, err := h.loadKnowledge(ctx)
 	if err != nil {
 		return contextResult{}, err
 	}
@@ -337,7 +343,7 @@ func contextForFileTool(ctx context.Context, p, tool string) (contextResult, err
 			picks = append(picks, pickOf(k, why))
 		}
 	}
-	fs := newFileScope(ctx, rel, tool)
+	fs := h.newFileScope(ctx, rel, tool)
 	// 1. globs match the path; a glob rule the tool loads from its own
 	// path rule file is not repeated (6.9).
 	for _, k := range rows {
@@ -372,7 +378,7 @@ func contextForFileTool(ctx context.Context, p, tool string) (contextResult, err
 		}
 	}
 	// 4. rows tagged with a topic whose glob set covers the path (6.10).
-	topicGlobPicks(ctx, rel, rows, add)
+	h.topicGlobPicks(ctx, rel, rows, add)
 	// 5. semantic rules on the path's words (context_semantic.go).
 	semanticRulePicks(rows, words, add)
 	// 6. notes on the path's words, best first, up to 5; notes scoped to
@@ -415,8 +421,8 @@ func contextForFileTool(ctx context.Context, p, tool string) (contextResult, err
 }
 
 // contextForTopic returns every row tagged name.
-func contextForTopic(ctx context.Context, name string) (contextResult, error) {
-	tags, err := renderLiveRows(ctx, schema.TableTags)
+func (h *Host) contextForTopic(ctx context.Context, name string) (contextResult, error) {
+	tags, err := h.renderLiveRows(ctx, schema.TableTags)
 	if err != nil {
 		return contextResult{}, err
 	}
@@ -427,10 +433,9 @@ func contextForTopic(ctx context.Context, name string) (contextResult, error) {
 		}
 	}
 	if len(want) == 0 {
-		return contextResult{}, errcodes.New(errcodes.NotFound, "no topic (tag) named "+name).
-			WithHint("list them with `lore context --topics`")
+		return contextResult{}, errs.New(errs.NotFound, "no topic (tag) named "+name).WithHint("list them with `lore context --topics`")
 	}
-	rows, err := loadKnowledge(ctx)
+	rows, err := h.loadKnowledge(ctx)
 	if err != nil {
 		return contextResult{}, err
 	}
@@ -448,9 +453,9 @@ func contextForTopic(ctx context.Context, name string) (contextResult, error) {
 }
 
 // contextForPrompt returns rows matching the prompt's words, best first.
-func contextForPrompt(ctx context.Context, text string) (contextResult, error) {
+func (h *Host) contextForPrompt(ctx context.Context, text string) (contextResult, error) {
 	words := contextfit.Words(text)
-	rows, err := loadKnowledge(ctx)
+	rows, err := h.loadKnowledge(ctx)
 	if err != nil {
 		return contextResult{}, err
 	}
@@ -551,7 +556,7 @@ const hookTimeout = 2 * time.Second
 // maxHookInput bounds the hook stdin read.
 const maxHookInput = 1 << 20
 
-func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out io.Writer) error {
+func (h *Host) runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out io.Writer) error {
 	if !hookTools[f.hook] {
 		return fmt.Errorf("no hook format for tool %q", f.hook)
 	}
@@ -570,7 +575,7 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 	startEvent := f.sessionStart || in.HookEventName == hookEventSessionStart
 	switch {
 	case startEvent:
-		res, err = contextSessionStart(ctx)
+		res, err = h.contextSessionStart(ctx)
 	case in.hookFilePath() != "":
 		p := in.hookFilePath()
 		if filepath.IsAbs(p) {
@@ -582,9 +587,9 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 				p = r
 			}
 		}
-		res, err = contextForFileTool(ctx, p, f.hook)
+		res, err = h.contextForFileTool(ctx, p, f.hook)
 	case in.Prompt != "":
-		res, err = contextForPrompt(ctx, in.Prompt)
+		res, err = h.contextForPrompt(ctx, in.Prompt)
 	default:
 		return nil
 	}
@@ -594,6 +599,7 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 	// 6.9: skip ids this session was already sent (machine-local seen set,
 	// keyed by the tool's session id; no id, no memory).
 	seen := loadHookSeen(f.hook, in.SessionID)
+	seen.now = h.now
 	if startEvent {
 		seen = hookSeen{} // the start lines never mute the per-file hook
 	}
@@ -608,7 +614,7 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 		capB = contextSessionStartCap
 	default:
 		capB = contextHookCapFall
-		if set, ok := policySet(ctx); ok {
+		if set, ok := h.policySet(ctx); ok {
 			if n, found := set.Limit(policy.KeyContextHookCap); found {
 				capB = int(n)
 			}
@@ -622,7 +628,7 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 		event = hookDefaultEvent(f.hook)
 	}
 	text, sent := res.fit(capB)
-	recordUsage(ctx, sent)
+	h.recordUsage(ctx, sent)
 	if err = json.NewEncoder(out).Encode(hookOutput{HookSpecificOutput: hookSpecific{HookEventName: event, AdditionalContext: text}}); err != nil {
 		return err
 	}
@@ -630,7 +636,7 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 }
 
 // logHookError appends err to ~/.lore/logs/hooks.log (6.9); best effort.
-func logHookError(err error) {
+func (h *Host) logHookError(err error) {
 	home, herr := os.UserHomeDir()
 	if herr != nil {
 		return
@@ -643,6 +649,6 @@ func logHookError(err error) {
 	if ferr != nil {
 		return
 	}
-	_, _ = fmt.Fprintf(fh, "%s lore context --hook: %v\n", cliClock().Now().Format(time.RFC3339), err)
+	_, _ = fmt.Fprintf(fh, "%s lore context --hook: %v\n", h.now().Format(time.RFC3339), err)
 	_ = fh.Close() // best effort: a hook log failure must not reach the tool
 }

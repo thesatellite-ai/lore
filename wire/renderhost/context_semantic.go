@@ -6,7 +6,8 @@
 //
 //	words(path | task | prompt) ─► semantic rules, best match first,
 //	  at most contextNotesMax ─► add(k, "semantic <matched words>")
-package main
+
+package renderhost
 
 import (
 	"sort"

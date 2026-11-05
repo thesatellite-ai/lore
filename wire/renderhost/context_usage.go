@@ -11,7 +11,8 @@
 // DECISION FA-CTX-3: usage is best effort and silent: a local-state
 // failure never fails or slows the command (hooks must not block, 6.9);
 // key = the row's permanent id, doc = rowUsage.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -27,16 +28,16 @@ type rowUsage struct {
 }
 
 // recordUsage stamps every id as used now; errors are dropped (FA-CTX-3).
-func recordUsage(ctx context.Context, ids []string) {
-	if coreApp == nil || len(ids) == 0 {
+func (h *Host) recordUsage(ctx context.Context, ids []string) {
+	if h.app == nil || len(ids) == 0 {
 		return
 	}
-	s, err := coreApp.LocalState(ctx)
+	s, err := h.app.LocalState(ctx)
 	if err != nil {
 		return
 	}
 	defer func() { _ = s.Close() }() // best effort: usage never fails a command
-	now := cliClock().Now().UTC()
+	now := h.now().UTC()
 	for _, id := range ids {
 		u, _, gerr := localstate.GetJSON[rowUsage](ctx, s, localstate.Usage, id)
 		if gerr != nil {

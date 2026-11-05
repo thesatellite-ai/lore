@@ -1,6 +1,7 @@
 package main
 
-// render_shim.go — `lore render` and `lore why-context` run on
+// render_shim.go — `lore render`, `lore why-context`, `lore context` and
+// the agent-hooks half of `lore setup` run on
 // wire/renderhost (P3-CMDLORE2: the machinery moved to the root module so
 // cmd/lore serves them too). This file builds the old binary's Host (its
 // v0.1.17 project resolution, colours, LORE_NOW clock and error mapping)
@@ -10,6 +11,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"strings"
 	"time"
 
@@ -18,7 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/row"
-	"github.com/thesatellite-ai/lore/store"
+	contextop "github.com/thesatellite-ai/lore/ops/context"
 	"github.com/thesatellite-ai/lore/wire"
 	"github.com/thesatellite-ai/lore/wire/renderhost"
 )
@@ -38,9 +41,6 @@ const (
 	claudeLocalFile         = renderhost.ClaudeLocalFile
 	renderHeader            = renderhost.Header
 )
-
-// renderRow is a live row and the store it came from.
-type renderRow = renderhost.Row
 
 // rh is the render Host over the mounted core (coreApp may be nil before
 // the mount; every Host method that needs it then fails as before).
@@ -71,8 +71,14 @@ func rh() *renderhost.Host {
 			return cfg.Context.Profiles, nil
 		},
 		RepoIsClient: coreRepoIsClient,
-		Redact:       redactIfQuiet,
-		HostError:    asCoreError,
+		// lore context --internal: the attached store caches (stores_reads.go).
+		External: func(ctx context.Context, w *strings.Builder, table, text string) (int, []byte, error) {
+			n := printExternalRows(ctx, w, table, text)
+			b, err := json.Marshal(externalJSONRows(ctx, table, text))
+			return n, b, err
+		},
+		Redact:    redactIfQuiet,
+		HostError: asCoreError,
 	})
 }
 
@@ -104,20 +110,6 @@ func rerenderPrivateQuiet(ctx context.Context, root string) { rh().RerenderPriva
 func policySet(ctx context.Context) (policy.Set, bool) { return rh().PolicySet(ctx) }
 
 func renderField(r row.Row, name string) string { return renderhost.Field(r, name) }
-
-func renderTagIDs(r row.Row) []string { return renderhost.TagIDs(r) }
-
-func countsText(c map[string]int) string { return renderhost.CountsText(c) }
-
-func renderLiveRows(ctx context.Context, table row.Table) ([]renderRow, error) {
-	return rh().LiveRows(ctx, table)
-}
-
-func renderSources(ctx context.Context) ([]store.Source, error) { return rh().Sources(ctx) }
-
-func loadTopicIndex(ctx context.Context) ([]renderhost.TopicLine, error) { return rh().TopicIndex(ctx) }
-
-func scopePathsOfRepo(ctx context.Context) map[string]string { return rh().ScopePathsOfRepo(ctx) }
 
 func contextDoctor(ctx context.Context, root string) (warnings, notes []string) {
 	return rh().ContextDoctor(ctx, root)
@@ -193,5 +185,18 @@ func gitTracks(ctx context.Context, root, path string) (bool, error) {
 	return renderhost.GitTracks(ctx, root, path)
 }
 
-func oneLine(s string) string      { return renderhost.OneLine(s) }
-func sha256Hex(data []byte) string { return renderhost.Sha256Hex(data) }
+func oneLine(s string) string { return renderhost.OneLine(s) }
+
+// contextHost implements contextop.Host: `lore context` (ops/context) on
+// wire/renderhost (P3-CMDLORE2).
+type contextHost struct{}
+
+// Fetch implements contextop.Host.
+func (contextHost) Fetch(ctx context.Context, in contextop.FetchIn, hookIn io.Reader) (contextop.Answer, error) {
+	return rh().Fetch(ctx, in, hookIn)
+}
+
+// scopeRenameHints are the lore scope move hints of the sync report.
+func scopeRenameHints(ctx context.Context, root string) []string {
+	return rh().ScopeRenameHints(ctx, root)
+}

@@ -13,13 +13,13 @@
 //	  ├─ 6 notes: scoped memories/decisions of the chain rank first
 //	  └─ applyOverrides: a wider rule some picked rule overrides becomes a
 //	       one-line note ("rul_… is overridden here by rul_…", 6.2.2)
-package main
+
+package renderhost
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -58,8 +58,8 @@ type fileScope struct {
 
 // newFileScope resolves the folder chain of rel; tool is the hook's tool
 // or the detected one.
-func newFileScope(ctx context.Context, rel, tool string) fileScope {
-	fs := fileScope{rel: rel, path: scopePathsOfRepo(ctx), tool: tool}
+func (h *Host) newFileScope(ctx context.Context, rel, tool string) fileScope {
+	fs := fileScope{rel: rel, path: h.scopePathsOfRepo(ctx), tool: tool}
 	dirs := make([]string, 0, len(fs.path))
 	for _, p := range fs.path {
 		dirs = append(dirs, p)
@@ -68,25 +68,25 @@ func newFileScope(ctx context.Context, rel, tool string) fileScope {
 	for i := len(outer) - 1; i >= 0; i-- {
 		fs.chain = append(fs.chain, outer[i])
 	}
-	if top, err := exec.Command("git", "rev-parse", "--show-toplevel").Output(); err == nil {
+	if top, err := runGit(ctx, false, "rev-parse", "--show-toplevel"); err == nil {
 		fs.root = strings.TrimSpace(string(top))
 	}
 	if fs.tool == "" {
-		if who, err := detectedWho(ctx); err == nil && who.Detection != nil {
-			fs.tool = who.Detection.Tool
+		if tool, ok := h.detectedTool(ctx); ok {
+			fs.tool = tool
 		}
 	}
-	fs.pathRules = toolPathRulesText(ctx, fs.root, fs.tool)
+	fs.pathRules = h.toolPathRulesText(ctx, fs.root, fs.tool)
 	return fs
 }
 
 // toolPathRulesText reads the lore-path-* rule files the tool loads by
 // itself ("" when the tool has no path loader or none are written).
-func toolPathRulesText(ctx context.Context, root, tool string) string {
+func (h *Host) toolPathRulesText(ctx context.Context, root, tool string) string {
 	if root == "" || tool == "" {
 		return ""
 	}
-	reg, err := loadToolRegistry(ctx)
+	reg, err := h.loadToolRegistry(ctx)
 	if err != nil {
 		return ""
 	}
@@ -171,8 +171,8 @@ func scopeChainPicks(fs fileScope, rows []knowledgeRow, add func(knowledgeRow, s
 
 // topicGlobPicks is step 4: rows tagged with a topic whose glob set covers
 // the path.
-func topicGlobPicks(ctx context.Context, rel string, rows []knowledgeRow, add func(knowledgeRow, string)) {
-	tags, err := renderLiveRows(ctx, schema.TableTags)
+func (h *Host) topicGlobPicks(ctx context.Context, rel string, rows []knowledgeRow, add func(knowledgeRow, string)) {
+	tags, err := h.renderLiveRows(ctx, schema.TableTags)
 	if err != nil {
 		return // a topic lookup failure only drops step 4
 	}

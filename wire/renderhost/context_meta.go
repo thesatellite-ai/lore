@@ -6,7 +6,8 @@
 //	--meta ─► withMeta: registry sensitive flags (App.MetaKeyFlags, METADATA 3.20)
 //	       ─► one "meta: k=v …" line after each row (full and line form),
 //	          sensitive values masked; --json: pick.meta {name: value}
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -48,10 +49,10 @@ func metasOf(r row.Row) []pickMeta {
 // withMeta adds each pick's metadata line and JSON map. A pick without
 // metadata is unchanged. The registry flags are read once; failing to read
 // them fails the command rather than printing a value unmasked (3.20).
-func withMeta(ctx context.Context, res contextResult) (contextResult, error) {
-	flags, err := coreApp.MetaKeyFlags(ctx)
+func (h *Host) withMeta(ctx context.Context, res contextResult) (contextResult, error) {
+	flags, err := h.app.MetaKeyFlags(ctx)
 	if err != nil {
-		return res, coreErr(err)
+		return res, err
 	}
 	for i := range res.picks {
 		p := &res.picks[i]

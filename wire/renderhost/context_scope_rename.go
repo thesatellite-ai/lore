@@ -7,7 +7,8 @@
 //	  ─▶ git log -1 -- <path>/, then git show -M --diff-filter=R <that commit>
 //	  ─▶ new folder = the renamed file's path minus its path inside the old folder
 //	  ─▶ print "lore scope move <old> <new>" (never run)
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -27,11 +28,11 @@ const renameStatusPrefix = "R"
 // gone and whose files git saw renamed into one existing folder. Read
 // errors and a checkout without git give no hint (a hint is best effort;
 // lint --context still reports the missing folder).
-func scopeRenameHints(ctx context.Context, root string) []string {
-	if coreApp == nil {
+func (h *Host) scopeRenameHints(ctx context.Context, root string) []string {
+	if h.app == nil {
 		return nil
 	}
-	rows, err := coreApp.List(ctx, store.SourceRepo, schema.TableScopes)
+	rows, err := h.app.List(ctx, store.SourceRepo, schema.TableScopes)
 	if err != nil {
 		return nil
 	}

@@ -13,7 +13,8 @@
 //
 // Output fits like every other mode (contextResult.fit: never splits an
 // entry; "more: lore search …").
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -23,7 +24,7 @@ import (
 	"sort"
 	"strings"
 
-	"saas/pkg/aicoder/errcodes"
+	"github.com/thesatellite-ai/lore/model/errs"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/contextfit"
@@ -51,24 +52,24 @@ const (
 var taskPathRe = regexp.MustCompile(`[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)+/?|[A-Za-z0-9_\-]+\.[A-Za-z][A-Za-z0-9]{0,5}\b`)
 
 // contextForTask is the 6.8 --for-task pick.
-func contextForTask(ctx context.Context, raw string) (contextResult, error) {
-	t, err := loadTaskForContext(ctx, raw)
+func (h *Host) contextForTask(ctx context.Context, raw string) (contextResult, error) {
+	t, err := h.loadTaskForContext(ctx, raw)
 	if err != nil {
 		return contextResult{}, err
 	}
-	srcs, err := renderSources(ctx)
+	srcs, err := h.renderSources(ctx)
 	if err != nil {
 		return contextResult{}, err
 	}
 	var picks []contextPick
 	seen := map[string]bool{}
 	// The task and what it points at (plan, mission, --ref targets).
-	picks = append(picks, linkedPick(ctx, srcs, ctxKindTask, t.ID, "the task"))
+	picks = append(picks, h.linkedPick(ctx, srcs, ctxKindTask, t.ID, "the task"))
 	seen[t.ID] = true
 	for _, l := range []struct{ kind, id string }{{ctxKindPlan, t.PlanID}, {ctxKindMission, t.MissionID}} {
 		if l.id != "" && !seen[l.id] {
 			seen[l.id] = true
-			picks = append(picks, linkedPick(ctx, srcs, l.kind, l.id, l.kind+" of the task"))
+			picks = append(picks, h.linkedPick(ctx, srcs, l.kind, l.id, l.kind+" of the task"))
 		}
 	}
 	for _, r := range t.Refs {
@@ -76,10 +77,10 @@ func contextForTask(ctx context.Context, raw string) (contextResult, error) {
 			continue
 		}
 		seen[r.ID] = true
-		picks = append(picks, linkedPick(ctx, srcs, ctxKindLinked, r.ID, "ref of the task ("+r.Relation+")"))
+		picks = append(picks, h.linkedPick(ctx, srcs, ctxKindLinked, r.ID, "ref of the task ("+r.Relation+")"))
 	}
 
-	rows, err := loadKnowledge(ctx)
+	rows, err := h.loadKnowledge(ctx)
 	if err != nil {
 		return contextResult{}, err
 	}
@@ -91,7 +92,7 @@ func contextForTask(ctx context.Context, raw string) (contextResult, error) {
 	}
 	// What applies to the files the task names (the --for-file picks).
 	for _, p := range taskPaths(t.Title + "\n" + t.Body) {
-		fr, ferr := contextForFile(ctx, p)
+		fr, ferr := h.contextForFile(ctx, p)
 		if ferr != nil {
 			return contextResult{}, ferr
 		}
@@ -105,7 +106,7 @@ func contextForTask(ctx context.Context, raw string) (contextResult, error) {
 	}
 	// Rows sharing a tag with the task.
 	if len(t.TagIDs) > 0 {
-		names := tagNames(ctx)
+		names := h.tagNames(ctx)
 		for _, k := range rows {
 			for _, tid := range renderTagIDs(k.r.Row) {
 				if slices.Contains(t.TagIDs, tid) {
@@ -149,29 +150,29 @@ func contextForTask(ctx context.Context, raw string) (contextResult, error) {
 
 // loadTaskForContext runs task.show (the same read and refs as `lore task
 // show`) and returns its data.
-func loadTaskForContext(ctx context.Context, raw string) (opstask.Full, error) {
-	if coreApp == nil {
-		return opstask.Full{}, errcodes.New(errcodes.Internal, "the core is not mounted")
+func (h *Host) loadTaskForContext(ctx context.Context, raw string) (opstask.Full, error) {
+	if h.app == nil {
+		return opstask.Full{}, errs.New(errs.Internal, "the core is not mounted")
 	}
-	e, ok := coreApp.Registry().Lookup(opstask.OpShow)
+	e, ok := h.app.Registry().Lookup(opstask.OpShow)
 	if !ok {
-		return opstask.Full{}, errcodes.New(errcodes.Internal, opstask.OpShow+" is not registered")
+		return opstask.Full{}, errs.New(errs.Internal, opstask.OpShow+" is not registered")
 	}
 	in, err := json.Marshal(opstask.ShowIn{ID: strings.TrimSpace(raw)})
 	if err != nil {
-		return opstask.Full{}, errcodes.New(errcodes.Internal, "encode the task id").WithCause(err)
+		return opstask.Full{}, errs.Wrap(errs.Internal, "encode the task id", err)
 	}
-	res, err := coreApp.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{})
+	res, err := h.app.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{})
 	if err != nil {
-		return opstask.Full{}, coreErr(err)
+		return opstask.Full{}, err
 	}
 	b, err := res.JSON()
 	if err != nil {
-		return opstask.Full{}, coreErr(err)
+		return opstask.Full{}, err
 	}
 	var out opstask.ShowOut
 	if err := json.Unmarshal(b, &out); err != nil {
-		return opstask.Full{}, errcodes.New(errcodes.Internal, "decode task.show").WithCause(err)
+		return opstask.Full{}, errs.Wrap(errs.Internal, "decode task.show", err)
 	}
 	return out.Data, nil
 }
@@ -179,7 +180,7 @@ func loadTaskForContext(ctx context.Context, raw string) (opstask.Full, error) {
 // linkedPick is one row the task points at. A row outside the committed
 // render sources (an internal or personal store) prints as its id only
 // (CFG6: internal text only through --internal or the private files).
-func linkedPick(ctx context.Context, srcs []store.Source, kind, rawID, why string) contextPick {
+func (h *Host) linkedPick(ctx context.Context, srcs []store.Source, kind, rawID, why string) contextPick {
 	pick := contextPick{ID: rawID, Kind: kind, Why: why, group: groupTask}
 	unseen := func(note string) contextPick {
 		pick.line = contextfit.LineForm(rawID, note)
@@ -191,7 +192,7 @@ func linkedPick(ctx context.Context, srcs []store.Source, kind, rawID, why strin
 	if err != nil {
 		return unseen("(not a row id)")
 	}
-	src, r, err := coreApp.Get(ctx, engine.Ref{ID: id})
+	src, r, err := h.app.Get(ctx, engine.Ref{ID: id})
 	if err != nil || r.Deleted {
 		return unseen("(not available here)")
 	}
@@ -243,9 +244,9 @@ func taskPaths(s string) []string {
 }
 
 // tagNames maps tag ids to names across the render sources.
-func tagNames(ctx context.Context) map[string]string {
+func (h *Host) tagNames(ctx context.Context) map[string]string {
 	out := map[string]string{}
-	tags, err := renderLiveRows(ctx, schema.TableTags)
+	tags, err := h.renderLiveRows(ctx, schema.TableTags)
 	if err != nil {
 		return out
 	}
