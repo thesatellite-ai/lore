@@ -6,7 +6,7 @@ package wire
 // machine's clones of a store (the core's git-backend clone and its branch
 // clones, and the shared v0.1.17 link clone) are deleted, refused while any
 // of them holds unpushed commits or uncommitted changes (side effect 20).
-// store show|open|doctor are not ported to cmd/lore yet (E_UNSUPPORTED).
+// store show|open|doctor forward to storeshow_standalone.go.
 
 import (
 	"context"
@@ -36,19 +36,19 @@ type standaloneClones struct{ home string }
 
 var _ opsstores.Cloner = (*standaloneClones)(nil)
 
-// ShowClones implements opsstores.Cloner (not ported).
-func (*standaloneClones) ShowClones(context.Context, opsstores.ShowIn) (opsstores.ClonesOut, error) {
-	return opsstores.ClonesOut{}, unsupported("store show")
+// ShowClones implements opsstores.Cloner (storeshow_standalone.go).
+func (c *standaloneClones) ShowClones(ctx context.Context, in opsstores.ShowIn) (opsstores.ClonesOut, error) {
+	return c.showClones(ctx, in)
 }
 
-// OpenClone implements opsstores.Cloner (not ported).
-func (*standaloneClones) OpenClone(context.Context, opsstores.OpenIn) (opsstores.OpenOut, error) {
-	return opsstores.OpenOut{}, unsupported("store open")
+// OpenClone implements opsstores.Cloner (storeshow_standalone.go).
+func (c *standaloneClones) OpenClone(ctx context.Context, in opsstores.OpenIn) (opsstores.OpenOut, error) {
+	return c.openClone(ctx, in)
 }
 
-// DoctorClones implements opsstores.Cloner (not ported).
-func (*standaloneClones) DoctorClones(context.Context) (opsstores.ClonesOut, error) {
-	return opsstores.ClonesOut{}, unsupported("store doctor")
+// DoctorClones implements opsstores.Cloner (storeshow_standalone.go).
+func (c *standaloneClones) DoctorClones(ctx context.Context) (opsstores.ClonesOut, error) {
+	return c.doctorClones(ctx)
 }
 
 // cloneDirs is one clone: its git dir and the folders a forget removes.
