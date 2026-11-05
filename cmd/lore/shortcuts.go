@@ -93,27 +93,38 @@ func defaultVerb(root *cobra.Command, noun, verb string) *cobra.Command {
 // shortcutOf is a top-level command that parses its arguments with target's
 // flags and runs target, so both spellings share one implementation.
 func shortcutOf(target *cobra.Command, use, short string) *cobra.Command {
-	return &cobra.Command{
+	sc := &cobra.Command{
 		Use: use, Short: short, Long: target.Long, Example: target.Example,
 		DisableFlagParsing: true,
-		RunE:               forward(target),
 	}
+	// --help prints the shortcut's own usage ("lore move <id>", CLI_REFERENCE
+	// 2.7) with target's flags listed; the flags are shown here only, target
+	// still parses them (P3-CMDLORE-3).
+	sc.Flags().AddFlagSet(target.NonInheritedFlags())
+	sc.RunE = forwardHelp(target, sc)
+	return sc
 }
 
-// forward runs target with args parsed by target's own flag set.
+// forward runs target with args parsed by target's own flag set; --help
+// prints target's help.
 func forward(target *cobra.Command) func(*cobra.Command, []string) error {
+	return forwardHelp(target, target)
+}
+
+// forwardHelp is forward with --help printing help's help instead.
+func forwardHelp(target, help *cobra.Command) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		target.SetContext(cmd.Context())
 		target.SetOut(cmd.OutOrStdout())
 		target.SetErr(cmd.ErrOrStderr())
 		if err := target.ParseFlags(args); err != nil {
 			if errors.Is(err, pflag.ErrHelp) {
-				return target.Help()
+				return help.Help()
 			}
 			return target.FlagErrorFunc()(target, err)
 		}
 		if h, _ := target.Flags().GetBool("help"); h {
-			return target.Help()
+			return help.Help()
 		}
 		rest := target.Flags().Args()
 		if err := target.ValidateArgs(rest); err != nil {
