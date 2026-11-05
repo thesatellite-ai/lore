@@ -43,6 +43,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 
@@ -116,7 +117,7 @@ func newContextCommand() *cobra.Command {
 	fl.StringVar(&f.topic, flagContextTopic, "", "every row tagged with this topic")
 	fl.BoolVar(&f.topics, flagContextTopics, false, "list the topics with their counts")
 	fl.StringVar(&f.forPrompt, flagContextForPrompt, "", "rows matching this free text")
-	fl.StringVar(&f.hook, flagContextHook, "", "answer a tool hook (claude_code, codex)")
+	fl.StringVar(&f.hook, flagContextHook, "", "answer a tool hook (claude_code, codex, gemini_cli)")
 	fl.BoolVar(&f.hookStdin, flagContextHookStdin, false, "with --hook: read the hook input JSON from stdin")
 	fl.BoolVar(&f.sessionStart, flagContextSessionStart, false, "with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)")
 	fl.IntVar(&f.maxBytes, flagContextMaxBytes, 0, "cap the output in bytes (default 16000; hooks: context.hook_cap)")
@@ -524,7 +525,30 @@ type hookInput struct {
 	Cwd           string `json:"cwd"`
 	ToolInput     struct {
 		FilePath string `json:"file_path"`
+		// Command is Codex's apply_patch text (FA-CTX-5); its file
+		// headers name the paths the patch touches.
+		Command string `json:"command"`
 	} `json:"tool_input"`
+}
+
+// patchFileHeaders are the apply_patch lines that name a file.
+var patchFileHeaders = []string{"*** Update File: ", "*** Add File: ", "*** Delete File: "}
+
+// hookFilePath is the file a hook input is about: tool_input.file_path
+// (Claude Code, Gemini CLI), else the first file header of a Codex
+// apply_patch; "" when none.
+func (in hookInput) hookFilePath() string {
+	if in.ToolInput.FilePath != "" {
+		return in.ToolInput.FilePath
+	}
+	for _, l := range strings.Split(in.ToolInput.Command, "\n") {
+		for _, h := range patchFileHeaders {
+			if p, ok := strings.CutPrefix(strings.TrimSpace(l), h); ok && strings.TrimSpace(p) != "" {
+				return strings.TrimSpace(p)
+			}
+		}
+	}
+	return ""
 }
 
 // hookOutput is the answer shape (hookSpecificOutput.additionalContext).
@@ -538,7 +562,16 @@ type hookSpecific struct {
 }
 
 // hookTools are the tools whose hook format lore answers (6.9 table).
-var hookTools = map[string]bool{"claude_code": true, "codex": true}
+var hookTools = map[string]bool{toolprofile.NameClaudeCode: true, toolprofile.NameCodex: true, toolprofile.NameGeminiCLI: true}
+
+// hookDefaultEvent is the event a tool's file hook answers when the input
+// names none (Gemini CLI's file hook is AfterTool, FA-CTX-5).
+func hookDefaultEvent(tool string) string {
+	if tool == toolprofile.NameGeminiCLI {
+		return "AfterTool"
+	}
+	return "PreToolUse"
+}
 
 // hookTimeout is the 6.9 hook deadline.
 const hookTimeout = 2 * time.Second
@@ -566,8 +599,8 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 	switch {
 	case startEvent:
 		res, err = contextSessionStart(ctx)
-	case in.ToolInput.FilePath != "":
-		p := in.ToolInput.FilePath
+	case in.hookFilePath() != "":
+		p := in.hookFilePath()
 		if filepath.IsAbs(p) {
 			base := in.Cwd
 			if base == "" {
@@ -614,7 +647,7 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 	case startEvent:
 		event = hookEventSessionStart
 	case event == "":
-		event = "PreToolUse"
+		event = hookDefaultEvent(f.hook)
 	}
 	text, sent := res.fit(capB)
 	recordUsage(ctx, sent)
