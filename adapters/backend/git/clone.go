@@ -308,8 +308,9 @@ func (b *Backend) resolve(ctx context.Context, dir, ref string) (string, error) 
 func (b *Backend) head(ctx context.Context) (string, error) { return b.resolve(ctx, b.work, "HEAD") }
 
 // checkMarker reads lore-store.yaml at HEAD. An empty store has no commit
-// and passes (its first writer adds the marker); a store with commits but
-// no marker is not a lore store (store.ErrNotAStore).
+// and passes (its first writer adds the marker), as does one whose commits
+// hold only hosting starter files (OV59, adopt.go); a store with commits,
+// no marker and other files is not a lore store (store.ErrNotAStore).
 func (b *Backend) checkMarker(ctx context.Context) error {
 	h, err := b.head(ctx)
 	if err != nil || h == "" {
@@ -322,7 +323,17 @@ func (b *Backend) checkMarker(ctx context.Context) error {
 	}
 	raw, ok := blobs[name]
 	if !ok {
-		return errs.Wrap(errs.NotAStore, "git: the repository has no "+rowfs.MarkerFile, store.ErrNotAStore)
+		// OV59: a repo holding only hosting starter files (README, LICENSE,
+		// .gitignore) is adopted like an empty one; anything else is refused
+		// naming the files (adopt.go).
+		foreign, ferr := b.foreignFiles(ctx, h)
+		if ferr != nil {
+			return ferr
+		}
+		if len(foreign) == 0 {
+			return nil
+		}
+		return notAStore(foreign)
 	}
 	m, err := rowfs.ParseMarker(raw)
 	if err != nil {

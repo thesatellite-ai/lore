@@ -48,7 +48,7 @@ func tryGit(t *testing.T, dir string, args ...string) (string, error) {
 }
 
 // newRemote makes a bare store remote whose first commit holds the marker
-// (withMarker false leaves a plain repo with one unrelated file).
+// (withMarker false leaves a plain repo with one code file).
 func newRemote(t *testing.T, withMarker bool) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -56,7 +56,7 @@ func newRemote(t *testing.T, withMarker bool) string {
 	gitT(t, dir, "init", "--quiet", "--bare", "--initial-branch="+testBranch, remote)
 	seed := filepath.Join(dir, "seed")
 	gitT(t, dir, "init", "--quiet", "--initial-branch="+testBranch, seed)
-	name, body := "README.md", []byte("code\n")
+	name, body := "main.go", []byte("package main\n")
 	if withMarker {
 		id, err := ids.New[ids.Store]()
 		if err != nil {
