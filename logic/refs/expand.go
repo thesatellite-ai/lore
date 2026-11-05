@@ -182,9 +182,10 @@ func (x *run) unresolved(p Part, chain []string) (string, error) {
 		return x.text(p.Ref.Fallback, chain)
 	case ModRequired:
 		return "", errs.New(errs.RefRequired, p.Ref.Fallback).WithHint(p.Raw + " did not resolve")
+	default: // ModNone: a plain dangling reference stays as written and is reported
+		x.dangle(p.Raw)
+		return p.Raw, nil
 	}
-	x.dangle(p.Raw)
-	return p.Raw, nil
 }
 
 func (x *run) dangle(raw string) {

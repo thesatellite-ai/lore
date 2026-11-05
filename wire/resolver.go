@@ -69,10 +69,12 @@ func (rv *resolver) Resolve(ref refs.Ref) (refs.Resolved, error) {
 		return rv.resolveRes(ref)
 	case refs.SchemeRow:
 		return rv.resolveRow(ref)
+	default:
+		// meta needs the row the text sits in, which this port does not
+		// carry; it stays as written (as lore_expand leaves it, 12.1). env
+		// and secret are never resolved through this port either.
+		return refs.Resolved{}, refs.ErrUnresolved
 	}
-	// meta needs the row the text sits in, which this port does not carry;
-	// it stays as written (as lore_expand leaves it, 12.1).
-	return refs.Resolved{}, refs.ErrUnresolved
 }
 
 // invalidate drops the snapshot (a var, resource or kind row changed).
@@ -400,16 +402,16 @@ func (c reexpandCache) Apply(ctx context.Context, source store.Source, rows []st
 // reexpand runs Reexpand for each id and ReexpandMatching for needles in
 // every distinct cache file.
 func (c reexpandCache) reexpand(ctx context.Context, changed, needles []string) error {
-	c.caches.mu.Lock()
+	c.mu.Lock()
 	var files []reexpander
 	seen := map[reexpander]bool{}
-	for _, s := range c.caches.order {
-		if f := c.caches.by[s]; f != nil && !seen[f] {
+	for _, s := range c.order {
+		if f := c.by[s]; f != nil && !seen[f] {
 			seen[f] = true
 			files = append(files, f)
 		}
 	}
-	c.caches.mu.Unlock()
+	c.mu.Unlock()
 	slices.Sort(needles)
 	needles = slices.Compact(needles)
 	for _, f := range files {
