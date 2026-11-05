@@ -62,6 +62,14 @@ const (
 	// largeBudget is for tools whose context comfortably holds 32k of
 	// pinned project knowledge (claude_code, gemini_cli; CQ1).
 	largeBudget = 32000
+	// claudeCodeLimit is the smallest per-file limit Claude Code documents
+	// (40,000 characters on a 200K window; CQ1 table).
+	claudeCodeLimit = 40000
+	// codexLimit is Codex's combined project_doc_max_bytes (32 KiB).
+	codexLimit = 32768
+	// LimitWarnPct: a budget above this share of a tool's documented limit
+	// gets LimitNote's warning (6.1).
+	LimitWarnPct = 80
 )
 
 // Import is how a pointer file makes its tool load LORE.md.
@@ -100,6 +108,10 @@ type Profile struct {
 	Import Import `yaml:"import" json:"import"`
 	// Budget is the tool's context budget in bytes; 0 means DefaultBudget.
 	Budget int `yaml:"budget,omitempty" json:"budget,omitempty"`
+	// Limit is the per-file size the tool itself documents, in bytes; 0
+	// when it documents none. Raising a budget above LimitWarnPct of it
+	// gets a warning (CONTEXT_BUDGET 6.1, D8; LimitNote).
+	Limit int `yaml:"limit,omitempty" json:"limit,omitempty"`
 	// PrivateFile is the tool's uncommitted local file (a slash path
 	// relative to the repo root) that carries one import of each private
 	// store render (CFG6, FQ13): lore writes it and hides it through
@@ -128,9 +140,9 @@ func (p Profile) HasPointerFile() bool { return p.Import != ImportNone && p.Poin
 // profile is resolved by exactly the same code.
 func Builtins() []Profile {
 	return []Profile{
-		{Name: NameClaudeCode, PointerFile: "CLAUDE.md", Import: ImportAt, Budget: largeBudget, PrivateFile: "CLAUDE.local.md",
+		{Name: NameClaudeCode, PointerFile: "CLAUDE.md", Import: ImportAt, Budget: largeBudget, Limit: claudeCodeLimit, PrivateFile: "CLAUDE.local.md",
 			PathRules: PathRules{Dir: ".claude/rules/lore", Style: PathRulesPaths}},
-		{Name: NameCodex, PointerFile: "AGENTS.md", Import: ImportRead, Budget: DefaultBudget},
+		{Name: NameCodex, PointerFile: "AGENTS.md", Import: ImportRead, Budget: DefaultBudget, Limit: codexLimit},
 		{Name: NameCursor, PointerFile: ".cursor/rules/lore.mdc", Import: ImportMDC, Budget: DefaultBudget, PrivateFile: ".cursor/rules/lore-private.mdc",
 			PathRules: PathRules{Dir: ".cursor/rules", Style: PathRulesMDCGlobs}},
 		{Name: NameGeminiCLI, PointerFile: "GEMINI.md", Import: ImportAt, Budget: largeBudget},
@@ -196,6 +208,9 @@ func (r *Registry) validate(p Profile) error {
 	}
 	if p.Budget < 0 {
 		return fmt.Errorf("tool profile %q: budget must not be negative", p.Name)
+	}
+	if p.Limit < 0 {
+		return fmt.Errorf("tool profile %q: limit must not be negative", p.Name)
 	}
 	if p.Import == ImportNone {
 		return nil
@@ -413,4 +428,15 @@ func (r *Registry) Select(names []string, probe Probe) (Selection, error) {
 		}
 	}
 	return sel, nil
+}
+
+// LimitNote is the warning for a budget of n bytes on p: "" unless p
+// documents a limit and n is above LimitWarnPct of it (CONTEXT_BUDGET 6.1:
+// raising a budget near a tool's limit is allowed but said out loud; the
+// policy write itself always confirms).
+func (p Profile) LimitNote(n int) string {
+	if p.Limit <= 0 || n*100 <= p.Limit*LimitWarnPct {
+		return ""
+	}
+	return fmt.Sprintf("WARN: %d bytes is %d%% of %s's documented %d-byte limit; sessions may see a size warning or a cut file", n, n*100/p.Limit, p.Name, p.Limit)
 }
