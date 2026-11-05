@@ -279,3 +279,18 @@ func (b *Backend) Problems(ctx context.Context) ([]rowfs.Problem, error) {
 	}
 	return b.folder.Problems(ctx)
 }
+
+var _ store.Holder = (*Backend)(nil)
+
+// Hold implements store.Holder: the store lock, reentrant for the
+// returned ctx (rowfs.Root.Hold; OV21/OV62 meta rebuild).
+func (b *Backend) Hold(ctx context.Context) (context.Context, func() error, error) {
+	if err := b.usable(ctx); err != nil {
+		return ctx, nil, err
+	}
+	held, lock, err := b.root.Hold(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	return held, lock.Release, nil
+}

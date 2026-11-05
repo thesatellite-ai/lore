@@ -141,3 +141,15 @@ var (
 	// errs.InvalidInput).
 	ErrBatch = errors.New("store: a batch names the same row twice")
 )
+
+// Holder is an optional capability of a backend whose writes take a store
+// lock (OV21/OV62: meta rebuild holds the lock across its reads, writes
+// and syncs). Hold takes the lock and returns a ctx carrying it: every
+// Write, Sync or other locking call made with that ctx (on this backend or
+// another folder of the same store) reuses the held lock instead of
+// waiting, so it cannot deadlock on itself. release drops it; it is
+// idempotent. Holding with a ctx that already holds is a no-op whose
+// release does nothing.
+type Holder interface {
+	Hold(ctx context.Context) (held context.Context, release func() error, err error)
+}

@@ -263,3 +263,20 @@ func subject(op string, changes []store.Change) string {
 	}
 	return s
 }
+
+var _ store.Holder = (*Backend)(nil)
+
+// Hold implements store.Holder: the store lock (the clone's lock beside
+// the worktree, or the repo's .lore/lock), reentrant for the returned ctx,
+// so WriteBatch, WritePurge and Sync called with it reuse the hold
+// (rowfs.Root.Hold; OV21/OV62 meta rebuild).
+func (b *Backend) Hold(ctx context.Context) (context.Context, func() error, error) {
+	if err := b.usable(ctx); err != nil {
+		return ctx, nil, err
+	}
+	held, lock, err := b.root.Hold(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	return held, lock.Release, nil
+}

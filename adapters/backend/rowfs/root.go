@@ -112,26 +112,71 @@ func (r *Root) Folder(name string) (*Folder, error) {
 }
 
 // Lock is the held store lock. Release is idempotent.
+//
+// A nested Lock (taken with a ctx from Hold that already holds this lock
+// file) owns nothing: its Release is a no-op and the outer holder releases
+// (OV21/OV62 reentrant lock for meta rebuild).
 type Lock struct {
-	once sync.Once
-	file *fileLock
-	gate chan struct{}
-	err  error
+	once   sync.Once
+	file   *fileLock
+	gate   chan struct{}
+	err    error
+	nested bool
+	mu     sync.Mutex
+	done   bool // released (read by nested lookups)
 }
 
 // Release drops the OS lock and lets the next writer of this process in.
 func (l *Lock) Release() error {
+	if l.nested {
+		return nil
+	}
 	l.once.Do(func() {
+		l.mu.Lock()
+		l.done = true
+		l.mu.Unlock()
 		l.err = l.file.release()
 		<-l.gate
 	})
 	return l.err
 }
 
+// held reports whether l is still held.
+func (l *Lock) held() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return !l.done
+}
+
+// heldKey is the context key of a lock held through Hold, per lock file:
+// keyed by path, not by *Root, so every Root of one store (the folders of
+// one clone open their own) sees the same hold.
+type heldKey struct{ path string }
+
+// Hold takes the store lock (as Lock does) and returns ctx carrying it:
+// every Lock call made with the returned ctx, on any Root with the same
+// lock file, reuses the held lock instead of waiting for it (a reentrant
+// lock), so a caller can hold the store across several writes and syncs
+// (meta rebuild, OV21/OV62). The caller releases the returned Lock;
+// after that the ctx no longer counts as holding.
+func (r *Root) Hold(ctx context.Context) (context.Context, *Lock, error) {
+	l, err := r.Lock(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	if l.nested {
+		return ctx, l, nil // already held by ctx: the outer holder releases
+	}
+	return context.WithValue(ctx, heldKey{path: r.lockPath}, l), l, nil
+}
+
 // Lock takes the exclusive store lock, waiting up to the lock timeout, then
 // store.ErrLocked (E_STORE_LOCKED). Reads never need it: every file is
 // replaced by rename (spec 6.2 Locking).
 func (r *Root) Lock(ctx context.Context) (*Lock, error) {
+	if outer, ok := ctx.Value(heldKey{path: r.lockPath}).(*Lock); ok && outer.held() {
+		return &Lock{nested: true}, nil // reentrant: ctx already holds it (Hold)
+	}
 	deadline := time.NewTimer(r.lockWait)
 	defer deadline.Stop()
 	start := time.Now()
