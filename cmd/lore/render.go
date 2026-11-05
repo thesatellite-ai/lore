@@ -8,8 +8,10 @@ package main
 
 import (
 	"context"
+	"io"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	contextop "github.com/thesatellite-ai/lore/ops/context"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opswhycontext "github.com/thesatellite-ai/lore/ops/whycontext"
@@ -17,7 +19,7 @@ import (
 )
 
 // lateRender forwards to the Host set after the app is built
-// (opsrender.Host and wire.RenderHistory).
+// (opsrender.Host, wire.RenderHistory and contextop.Host).
 type lateRender struct{ h *renderhost.Host }
 
 // errRenderUnset is the answer before the Host is set (a programmer error:
@@ -38,6 +40,15 @@ func (l *lateRender) LastRender(ctx context.Context) (opswhycontext.Record, erro
 		return opswhycontext.Record{}, errRenderUnset()
 	}
 	return l.h.LastRender(ctx)
+}
+
+// Fetch implements contextop.Host (lore context; --internal is
+// E_UNSUPPORTED on this binary until it reads the attached stores' rows).
+func (l *lateRender) Fetch(ctx context.Context, in contextop.FetchIn, hookIn io.Reader) (contextop.Answer, error) {
+	if l.h == nil {
+		return contextop.Answer{}, errRenderUnset()
+	}
+	return l.h.Fetch(ctx, in, hookIn)
 }
 
 // lateSetup forwards `lore setup` to renderhost's SetupHost (agent hooks)
