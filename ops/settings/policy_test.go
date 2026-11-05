@@ -221,3 +221,42 @@ func TestEstimateUnitNote(t *testing.T) {
 		t.Fatalf("same unit again, got a note: %q", got)
 	}
 }
+
+// TestPolicyTextShape (FB-TASK-3, FB-TASK-4): a text key is never
+// "looser", so either level may set it in either order; the NEAREST level
+// wins and unsetting it hands the key back to the farther one; empty or
+// blank text is refused with nothing written; time.client_key shows its
+// default, tasks.triage_owner has no value (unset = nobody).
+func TestPolicyTextShape(t *testing.T) {
+	const key = "tasks.triage_owner"
+	for _, order := range [][2]string{{"kb", "repo"}, {"repo", "kb"}} {
+		t.Run(order[0]+"_first", func(t *testing.T) {
+			h := multiStore(t)
+			if r := showRules(t, h, "tasks.triage")[key]; r.Source != "default" || r.Value != "" {
+				t.Errorf("default %+v", r)
+			}
+			if r := showRules(t, h, "time.client_key")["time.client_key"]; r.Value != "client" || r.Source != "default" {
+				t.Errorf("client_key default %+v", r)
+			}
+			vals := map[string]string{"kb": "@Ann", "repo": "bob"}
+			for _, lvl := range order {
+				h.MustYes(settings.OpPolicySet, setIn(key, vals[lvl], lvl))
+			}
+			if r := showRules(t, h, key)[key]; r.Value != "bob" || r.Level != "repo" {
+				t.Errorf("nearest level does not win: %+v", r)
+			}
+			h.MustYes(settings.OpPolicyUnset, `{"key":"`+key+`"}`)
+			if r := showRules(t, h, key)[key]; r.Value != "@Ann" || r.Store != "kb" {
+				t.Errorf("after unsetting the repo row: %+v", r)
+			}
+			for _, bad := range []string{"", "   "} {
+				if _, err := h.RunYes(settings.OpPolicySet, setIn(key, bad, "repo")); !errs.Has(err, errs.InvalidInput) {
+					t.Errorf("%q: %v, want E_INVALID_INPUT", bad, err)
+				}
+			}
+			if r := showRules(t, h, key)[key]; r.Value != "@Ann" {
+				t.Errorf("a refused set wrote: %+v", r)
+			}
+		})
+	}
+}
