@@ -132,7 +132,8 @@ func run(ctx context.Context, args []string) int {
 	h := &host{app: app, home: home, live: liveRows, render: rend.h, runner: runner}
 	h.markPrinted(root)
 	mountShortcuts(root)
-	mountSQLHelp(root) // sqlhelp.go: bare `lore sql` prints help (after mountShortcuts)
+	h.mountTaskHook(root) // taskhook.go: the commit-msg hook's Lore-Task trailer (F9)
+	mountSQLHelp(root)    // sqlhelp.go: bare `lore sql` prints help (after mountShortcuts)
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())
 	// git's merge.lore.driver calls it (P3-MODEB-4: a host command, not an op).
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
