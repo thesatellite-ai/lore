@@ -508,16 +508,6 @@ func (d DuplicateImport) FixCommand() []string {
 	return out
 }
 
-// importSlot is the `_o.import` object as this file reads it (the keys of
-// logic/origin's import block).
-type importSlot struct {
-	Import *struct {
-		Source string `json:"source"`
-		Src    string `json:"src"`
-		ExtID  string `json:"ext_id"`
-	} `json:"import"`
-}
-
 // FindDuplicateImports lists every (import source or src, ext_id) that
 // more than one live task in the attached stores carries. PROV9: they are
 // reported, never merged on their own, because the copies may have been
@@ -527,8 +517,8 @@ func FindDuplicateImports(ctx context.Context, env work.Env) ([]DuplicateImport,
 	if err != nil {
 		return nil, err
 	}
-	groups := map[importID][]string{}
-	var order []importID
+	groups := map[origin.ImportKey][]string{}
+	var order []origin.ImportKey
 	for _, s := range rows {
 		k, ok := importKey(s.Row)
 		if !ok {
@@ -543,29 +533,18 @@ func FindDuplicateImports(ctx context.Context, env work.Env) ([]DuplicateImport,
 	for _, k := range order {
 		if got := groups[k]; len(got) > 1 {
 			slices.Sort(got)
-			out = append(out, DuplicateImport{Source: k.source, ExtID: k.ext, IDs: got})
+			out = append(out, DuplicateImport{Source: k.Source, ExtID: k.ExtID, IDs: got})
 		}
 	}
 	return out, nil
 }
 
-// importID is PROVENANCE 11.4's import key: (import.src, ext_id), or
-// (import.source, ext_id) when no source record exists.
-type importID struct{ source, ext string }
-
-// importKey reads r's import key; ok is false for a row not imported.
-func importKey(r row.Row) (importID, bool) {
-	var zero importID
-	if r.Origin.IsZero() {
-		return zero, false
+// importKey reads r's import key (PROVENANCE 11.4, through the one
+// reader origin.ImportOf); ok is false for a row not imported.
+func importKey(r row.Row) (origin.ImportKey, bool) {
+	imp, ok := origin.ImportOf(r.Origin)
+	if !ok {
+		return origin.ImportKey{}, false
 	}
-	var slot importSlot
-	if err := json.Unmarshal(r.Origin.Raw(), &slot); err != nil || slot.Import == nil || slot.Import.ExtID == "" {
-		return zero, false
-	}
-	src := slot.Import.Src
-	if src == "" {
-		src = slot.Import.Source
-	}
-	return importID{src, slot.Import.ExtID}, true
+	return imp.Key(), true
 }
