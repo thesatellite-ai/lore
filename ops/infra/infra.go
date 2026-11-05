@@ -7,10 +7,9 @@
 // other row hangs off; they share the archive/unarchive/delete verbs and
 // the project lookup, so they share one Env and one set of helpers.
 //
-// What is NOT here, on purpose: the roster writes (`lore actor
-// register|deactivate`, `lore team add|list`) write the org folder of the
-// org's store, which the 0.1.18 core does not attach yet, so they stay on
-// the v0.1.17 code; the machine-local tables (identity_profiles,
+// The roster verbs (`lore actor register|deactivate|delete`) are in
+// roster.go: the host chooses the roster (Roster, an Env upgrade).
+// What is NOT here, on purpose: the machine-local tables (identity_profiles,
 // mount_alias, pii_patterns, trusted_plugins, task_views, config,
 // schema_migrations, users) never travel in a row and stay in lore.db.
 //
