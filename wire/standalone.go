@@ -69,6 +69,9 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	o.OrgCommands = &standaloneOrg{home: home, res: res}
 	o.Whoami = &standaloneWhoami{opts: o, res: res}
 	o.Sessions.Agent = &standaloneAgent{opts: o}
+	if o.Local.Clones == nil {
+		o.Local.Clones = &standaloneClones{home: home}
+	}
 	if o.Local.Leaks == nil {
 		o.Local.Leaks = &standaloneLeaks{opts: o, res: res} // its own App: check is Local (P3-CMDLORE-8)
 	}
