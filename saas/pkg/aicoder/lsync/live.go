@@ -310,6 +310,14 @@ func LiveApply(ctx context.Context, o LiveApplyOptions) (LiveApplyReport, error)
 	return rep, err
 }
 
+// liveInTrash reports whether a live row body is a row in the core's trash
+// (DEL-R2: it leaves lore.db like a deleted live row). A body that does not
+// decode is not, so the normal path reports it.
+func liveInTrash(b []byte) bool {
+	doc, err := decodeDoc(b)
+	return err == nil && inTrash(doc)
+}
+
 func (e *engine) applyLive(ctx context.Context, k LiveKey, d LiveDoc, recorded map[LiveKey]LiveState, rep *LiveApplyReport) error {
 	t, ok := e.reg.Table(k.Table)
 	if !ok {
@@ -320,7 +328,7 @@ func (e *engine) applyLive(ctx context.Context, k LiveKey, d LiveDoc, recorded m
 		return nil
 	}
 	rk := rowKey{k.Table, k.ID}
-	if d.Deleted {
+	if d.Deleted || liveInTrash(d.Body) {
 		if err := e.deleteRowToTrash(ctx, rk, t, "deleted in live"); err != nil {
 			return err
 		}
@@ -386,6 +394,13 @@ func (e *engine) importLanded(ctx context.Context, k LiveKey, b []byte, rep *Liv
 		return nil
 	}
 	rk := rowKey{k.Table, k.ID}
+	if inTrash(doc) { // DEL-R2: a landed copy in the trash leaves lore.db
+		if err := e.deleteRowToTrash(ctx, rk, t, "landed in the trash"); err != nil {
+			return err
+		}
+		rep.Deleted = append(rep.Deleted, k)
+		return nil
+	}
 	if err := e.importDoc(ctx, rk, t, doc); err != nil {
 		rep.Errors = append(rep.Errors, FileError{Path: "main:" + rk.rel(), Kind: ErrKindImport, Detail: err.Error()})
 		return nil

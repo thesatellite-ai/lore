@@ -892,7 +892,11 @@ func StrategyForTable(name string) func(string) merge3.Strategy {
 func (e *engine) parseRowFile(ctx context.Context, rel string, k rowKey, b []byte) (map[string]any, error) {
 	kind, detail := validateRowFile(b, k.table, k.id)
 	if kind == "" {
-		return decodeDoc(b)
+		doc, err := decodeDoc(b)
+		if err == nil && inTrash(doc) {
+			return nil, nil // DEL-R2: a row in the trash imports as a delete, like a tombstone
+		}
+		return doc, err
 	}
 	if kind == ErrKindConflict {
 		if doc, err := decodeDoc(b); err == nil {

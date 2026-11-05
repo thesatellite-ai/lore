@@ -401,13 +401,6 @@ func upcast(doc map[string]any, from int64) (map[string]any, error) {
 		if doc[keyDeleted] == true {
 			return nil, nil
 		}
-		// A row in the trash (OV9/DQ8 soft delete: the file stays, with
-		// deleted_at set) is not live either: DEL-R2 trashed rows never
-		// reach a cache, so it reads as nil and leaves lore.db, the same
-		// as a tombstone (sync dupes and every lore.db reader skip it).
-		if at, ok := doc[trash.FieldDeletedAt].(string); ok && at != "" {
-			return nil, nil
-		}
 		out := make(map[string]any, len(doc))
 		for k, v := range doc {
 			if strings.HasPrefix(k, "_") && k != keyTable {
@@ -420,6 +413,17 @@ func upcast(doc map[string]any, from int64) (map[string]any, error) {
 		return out, nil
 	}
 	return nil, fmt.Errorf("lsync: no upcaster from _v=%d", from)
+}
+
+// inTrash reports whether a decoded row document sits in the core's trash
+// (OV9/DQ8 soft delete: the file stays, with deleted_at set). Only the
+// imports into lore.db use it: DEL-R2 trashed rows never reach a cache, so
+// they leave lore.db like a tombstone (sync dupes and every lore.db reader
+// skip them). Every other reader (merge driver, hygiene, live writes) must
+// still see the file as the real row it is, so upcast keeps it.
+func inTrash(doc map[string]any) bool {
+	at, ok := doc[trash.FieldDeletedAt].(string)
+	return ok && at != ""
 }
 
 func hashBytes(b []byte) string {
