@@ -2,9 +2,11 @@ package engine
 
 import (
 	"context"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Batch is one bulk action (XQ1): every row it writes carries its one
@@ -21,9 +23,35 @@ func (b Batch) IsZero() bool { return b.ID.IsZero() }
 // batchKey is the context key of the current batch.
 type batchKey struct{}
 
+// BatchTrailer is the commit trailer key naming the bulk action a store
+// commit belongs to (XQ1, r3-batch): "Lore-Batch: bat_… <kind>".
+const BatchTrailer = "Lore-Batch"
+
 // WithBatch marks every write made with ctx as part of b (XQ1).
 func WithBatch(ctx context.Context, b Batch) context.Context {
 	return context.WithValue(ctx, batchKey{}, b)
+}
+
+// withBatchTrailer attaches the Lore-Batch commit trailer of ctx's batch
+// (XQ1, r3-batch), so a backend that commits (a git store clone) names the
+// bulk action in its commit; a backend without commits ignores it. It is
+// skipped when ctx already carries a trailer naming the same bat_ id (a
+// soft delete's Lore-Delete-Batch), so a commit never names it twice.
+func withBatchTrailer(ctx context.Context) context.Context {
+	b, ok := BatchOf(ctx)
+	if !ok {
+		return ctx
+	}
+	for _, t := range store.CommitTrailers(ctx) {
+		if strings.Contains(t, b.ID.String()) {
+			return ctx
+		}
+	}
+	line := BatchTrailer + ": " + b.ID.String()
+	if b.Kind != "" && !strings.ContainsAny(b.Kind, "\n\r") {
+		line += " " + b.Kind
+	}
+	return store.WithCommitTrailers(ctx, line)
 }
 
 // BatchOf returns the batch ctx carries.

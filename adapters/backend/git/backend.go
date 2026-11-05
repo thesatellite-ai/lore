@@ -180,6 +180,38 @@ func (b *Backend) Write(ctx context.Context, changes []store.Change) error {
 // Clone mode then stages them and makes ONE commit for the batch; if the
 // commit fails the files are restored. Repo mode writes files only.
 func (b *Backend) WriteBatch(ctx context.Context, batch Batch, changes []store.Change) error {
+	return b.writeBatch(ctx, batch, changes, nil)
+}
+
+var _ store.AuditJournal = (*Backend)(nil)
+
+// WriteAudited implements store.AuditJournal (CLEANUP Qs): the rows and
+// their audit records in one batch. Clone mode: the records go to the
+// pending journal outside the worktree and the rows into ONE commit; a
+// failed commit restores the files and the journal. Repo mode: files and
+// journal (.lore/state, git-ignored), all or none.
+func (b *Backend) WriteAudited(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
+	return b.writeBatch(ctx, Batch{}, changes, recs)
+}
+
+// PendingAudit implements store.AuditJournal.
+func (b *Backend) PendingAudit(ctx context.Context) ([]store.AuditRecord, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, err
+	}
+	return b.root.PendingJournal()
+}
+
+// AckAudit implements store.AuditJournal.
+func (b *Backend) AckAudit(ctx context.Context, recs []store.AuditRecord) error {
+	if err := b.usable(ctx); err != nil {
+		return err
+	}
+	return b.root.AckJournal(ctx, recs)
+}
+
+// writeBatch is WriteBatch with optional audit records (WriteAudited).
+func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.Change, recs []store.AuditRecord) error {
 	if err := b.usable(ctx); err != nil {
 		return err
 	}
@@ -202,7 +234,7 @@ func (b *Backend) WriteBatch(ctx context.Context, batch Batch, changes []store.C
 	if err != nil {
 		return err
 	}
-	applied, err := b.folder.Apply(ctx, changes)
+	applied, err := b.folder.ApplyAudited(ctx, changes, recs)
 	if err == nil && b.mode == modeClone {
 		err = b.commitBatch(ctx, batch, changes, applied)
 	}

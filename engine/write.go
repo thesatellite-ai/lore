@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/scan"
@@ -134,9 +135,10 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err != nil {
 		return Written{}, err
 	}
-	ev := Event{Op: cl.op, Action: ActionCreate, Store: target, Table: table, ID: id, HLC: stamp, Actor: actor,
+	ev := Event{Op: cl.op, Action: ActionCreate, Store: target, Table: table, ID: id, HLC: got.row.HLC, Actor: actor,
 		SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
-	return Written{Row: got.row, Warnings: sc.warnings}, e.finish(ctx, target, got.docs(), append(got.allowEvents(cl.op, target), ev)...)
+	aw, err := e.finishW(ctx, target, got.docs(), append(got.allowEvents(cl.op, target), ev)...)
+	return Written{Row: got.row, Warnings: append(sc.warnings, aw...)}, err
 }
 
 // recreateNatural handles a natural-id create whose id is taken (stale is
@@ -264,7 +266,8 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	}
 	ev := Event{Op: cl.op, Action: ActionUpdate, Store: src, Table: cur.Table, ID: cur.ID, HLC: got.row.HLC, Actor: actor,
 		Merged: merged, SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
-	return Written{Row: got.row, Warnings: sc.warnings}, e.finish(ctx, src, got.docs(), append(got.allowEvents(cl.op, src), ev)...)
+	aw, err := e.finishW(ctx, src, got.docs(), append(got.allowEvents(cl.op, src), ev)...)
+	return Written{Row: got.row, Warnings: append(sc.warnings, aw...)}, err
 }
 
 // retype returns a copy of a stored row's fields with every field the
@@ -487,7 +490,7 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 		if p, ok := st.Backend.(Purger); purge && ok && len(purged) > 0 {
 			werr = p.WritePurge(ctx, changes, purged)
 		} else {
-			werr = st.Backend.Write(ctx, changes)
+			werr = e.writeChanges(ctx, st, changes, events) // CLEANUP Qs: audit in the same batch
 		}
 		if err := werr; err != nil {
 			if errors.Is(err, store.ErrStale) {
@@ -798,10 +801,27 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 		out.extra = append(out.extra, x)
 		out.extraDocs = append(out.extraDocs, xr)
 	}
-	if err := st.Backend.Write(ctx, changes); err != nil {
+	// CLEANUP Qs: the audit record rides in the row's own batch.
+	evs := make([]Event, 0, 1+len(out.extra))
+	evs = append(evs, Event{Op: e.callOf(ctx).op, Action: putAction(expect, r), Store: st.Name, Table: r.Table, ID: r.ID, HLC: r.HLC, Actor: r.UpdatedBy})
+	evs = append(evs, out.allowEvents(e.callOf(ctx).op, st.Name)...)
+	if err := e.writeChanges(ctx, st, changes, evs); err != nil {
 		return stored{}, err
 	}
 	return out, nil
+}
+
+// putAction is the action a put records in the backend's audit journal
+// (the caller's full event replaces it once the sink takes it).
+func putAction(expect hlc.HLC, r row.Row) Action {
+	switch {
+	case r.Deleted:
+		return ActionDelete
+	case expect.IsZero():
+		return ActionCreate
+	default:
+		return ActionUpdate
+	}
 }
 
 // stored is one row as the backend accepted it, with the extra rows of
@@ -826,34 +846,156 @@ func (s stored) allowEvents(opName string, target store.Source) []Event {
 }
 
 // finish refreshes the cache with the stored rows and records the audit
-// events. The cache cursor is left where it was (the rows are re-read by the
-// next Refresh, an idempotent upsert), so a write never moves a cursor past
-// changes it has not seen.
+// events (finishW without the warnings: a deferred audit record stays in
+// the backend's journal and is replayed, so it is not an error here).
 func (e *Engine) finish(ctx context.Context, source store.Source, rows []store.Row, evs ...Event) error {
+	_, err := e.finishW(ctx, source, rows, evs...)
+	return err
+}
+
+// finishW refreshes the cache with the stored rows and records the audit
+// events. The cache cursor is left where it was (the rows are re-read by
+// the next Refresh, an idempotent upsert), so a write never moves a cursor
+// past changes it has not seen.
+//
+//	cache.Apply → per event: sink.Record
+//	  ok     → ack the backend's journal record of that row (CLEANUP Qs)
+//	  failed → journaled: W_AUDIT_DEFERRED (kept, replayed by a later write)
+//	           not journaled: the error, naming its cause (cl-wire)
+//	→ replay older pending records of this store (best effort)
+func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.Row, evs ...Event) ([]Warning, error) {
 	cur, err := e.cache.Cursor(ctx, source)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := e.cache.Apply(ctx, source, rows, cur); err != nil {
-		return err
+		return nil, err
 	}
+	j, _ := e.stores[source].Backend.(store.AuditJournal)
+	mine := make(map[store.Key]hlc.HLC, len(rows))
+	for _, r := range rows {
+		mine[r.Key()] = r.HLC
+	}
+	var acks []store.AuditRecord
+	var warns []Warning
+	var pending map[store.Key]bool // lazily read on the first failure
 	for _, ev := range evs {
-		if as := e.stores[source].ActorAs; as != nil && !ev.Actor.IsZero() {
+		ev = e.auditView(ctx, source, ev)
+		key := store.Key{Table: ev.Table, ID: ev.ID}
+		h, ours := mine[key]
+		rerr := e.audit.Record(ctx, ev)
+		if rerr == nil {
+			if j != nil && ours {
+				acks = append(acks, store.AuditRecord{Key: key, HLC: h})
+			}
+			continue
+		}
+		if j != nil && ours && pending == nil {
+			pending = map[store.Key]bool{}
+			if recs, perr := j.PendingAudit(ctx); perr == nil {
+				for _, rc := range recs {
+					if mine[rc.Key].Compare(rc.HLC) == 0 {
+						pending[rc.Key] = true
+					}
+				}
+			}
+		}
+		if pending[key] {
+			warns = append(warns, Warning{Code: WarnAuditDeferred, Message: "the audit record of " + ev.ID.String() +
+				" is kept with the row and will be added to the audit log by a later write: " + rerr.Error()})
+			continue
+		}
+		return warns, auditFailed(ev.ID, rerr)
+	}
+	if j != nil {
+		if aerr := j.AckAudit(ctx, acks); aerr != nil {
+			warns = append(warns, Warning{Code: WarnAuditDeferred, Message: "the audit journal could not be cleared (a later write may record these events again): " + aerr.Error()})
+		}
+		e.replayJournal(ctx, source, j, mine)
+	}
+	return warns, nil
+}
+
+// auditView is ev as the sink sees it: the store's actor mapping (ActorAs)
+// and the running bulk action's batch (XQ1). put uses it too, so the
+// journal holds the same event the sink would have got.
+func (e *Engine) auditView(ctx context.Context, source store.Source, ev Event) Event {
+	if as := e.stores[source].ActorAs; as != nil {
+		if !ev.Actor.IsZero() {
 			ev.Actor = as(ev.Actor)
 		}
 		if !ev.HLC.Actor.IsZero() {
-			if as := e.stores[source].ActorAs; as != nil {
-				ev.HLC.Actor = as(ev.HLC.Actor)
-			}
-		}
-		if b, ok := BatchOf(ctx); ok {
-			ev.Batch = b // XQ1: every row of a bulk action carries its one batch id
-		}
-		if err := e.audit.Record(ctx, ev); err != nil {
-			return errs.Wrap(errs.Internal, "engine: the row is stored but its audit record failed", err)
+			ev.HLC.Actor = as(ev.HLC.Actor)
 		}
 	}
-	return nil
+	if b, ok := BatchOf(ctx); ok {
+		ev.Batch = b // XQ1: every row of a bulk action carries its one batch id
+	}
+	return ev
+}
+
+// auditFailed is the error of a row stored without its audit record: the
+// message names the row and the cause, and the code is the cause's own
+// (cl-wire: the cause was hidden, also under --json).
+func auditFailed(id ids.AnyID, cause error) error {
+	code := errs.CodeOf(cause)
+	return errs.Wrap(code, "engine: the row "+id.String()+" is stored but its audit record failed: "+cause.Error(), cause).
+		WithHint("do not rerun the write (it would store the row again); fix the cause, then check `lore audit verify`")
+}
+
+// writeChanges writes changes and, when the backend can (store.AuditJournal),
+// the audit records of evs in the SAME batch: both land or neither does
+// (CLEANUP Qs). Other backends get a plain Write and finish records the
+// audit after it, as before.
+func (e *Engine) writeChanges(ctx context.Context, st Attached, changes []store.Change, evs []Event) error {
+	ctx = withBatchTrailer(ctx) // XQ1: the commit names its bulk action
+	j, ok := st.Backend.(store.AuditJournal)
+	if !ok || len(evs) == 0 {
+		return st.Backend.Write(ctx, changes)
+	}
+	recs := make([]store.AuditRecord, 0, len(evs))
+	for _, ev := range evs {
+		rec, err := journalRecord(e.auditView(ctx, st.Name, ev))
+		if err != nil {
+			return err
+		}
+		recs = append(recs, rec)
+	}
+	return j.WriteAudited(ctx, changes, recs)
+}
+
+// journalReplayAge is how old a pending record must be before another
+// write replays it: younger ones may belong to a write still on its way
+// to its own finish (another process), which records and acks them itself.
+const journalReplayAge = time.Minute
+
+// replayJournal records this store's older pending audit records (left by
+// a write whose sink failed, or a crash) and acks each one recorded. Best
+// effort: a record that fails again stays pending for the next write.
+func (e *Engine) replayJournal(ctx context.Context, source store.Source, j store.AuditJournal, mine map[store.Key]hlc.HLC) {
+	recs, err := j.PendingAudit(ctx)
+	if err != nil || len(recs) == 0 {
+		return
+	}
+	now := e.wall()
+	var done []store.AuditRecord
+	for _, rc := range recs {
+		if _, ours := mine[rc.Key]; ours || now.Sub(rc.HLC.Wall) < journalReplayAge {
+			continue
+		}
+		ev, derr := eventOfRecord(rc)
+		if derr != nil {
+			done = append(done, rc) // unreadable: never recordable, drop it
+			continue
+		}
+		ev.Store = source
+		if e.audit.Record(ctx, ev) == nil {
+			done = append(done, rc)
+		}
+	}
+	if len(done) > 0 {
+		_ = j.AckAudit(ctx, done) // best effort: a failed ack replays them again
+	}
 }
 
 // dropNulls removes cleared fields: a null field is stored as absent.

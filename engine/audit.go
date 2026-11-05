@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -131,8 +132,11 @@ type Event struct {
 }
 
 // AuditSink stores audit events (the audit table, phase 2). Record is
-// called after the backend accepted the write; an error is returned to the
-// caller (the row IS stored; the missing audit record must not be silent).
+// called after the backend accepted the write. When the backend kept the
+// record in the row's own batch (store.AuditJournal, CLEANUP Qs) a failed
+// Record becomes W_AUDIT_DEFERRED and the record is replayed later;
+// otherwise the error is returned to the caller (the row IS stored; the
+// missing audit record must not be silent).
 type AuditSink interface {
 	Record(ctx context.Context, ev Event) error
 }
@@ -145,7 +149,92 @@ const (
 	// WarnScanDegraded: the scanner skipped part of its rules on a field
 	// (the SQ7 size gate); the field may hold a secret it did not look for.
 	WarnScanDegraded WarnCode = "W_SCAN_DEGRADED"
+	// WarnAuditDeferred: the row is stored and its audit record was
+	// written with it (the backend's journal, CLEANUP Qs), but the audit
+	// log could not take it yet; a later write adds it. Not an error, so
+	// a retry never stores the row twice.
+	WarnAuditDeferred WarnCode = "W_AUDIT_DEFERRED"
 )
+
+// journalEvent is the JSON form of an Event in a backend's pending audit
+// journal (store.AuditRecord.Line): names and ids only, never a field
+// value, a finding or the machine-local session id.
+type journalEvent struct {
+	Op        string `json:"op,omitempty"`
+	Action    string `json:"action"`
+	Store     string `json:"store"`
+	Table     string `json:"table"`
+	ID        string `json:"id"`
+	HLC       string `json:"hlc"`
+	Actor     string `json:"actor,omitempty"`
+	Merged    bool   `json:"merged,omitempty"`
+	Cascade   string `json:"cascade,omitempty"`
+	Batch     string `json:"batch,omitempty"`
+	BatchKind string `json:"batch_kind,omitempty"`
+}
+
+// journalRecord encodes ev for the backend's journal (CLEANUP Qs).
+func journalRecord(ev Event) (store.AuditRecord, error) {
+	line, err := json.Marshal(journalEvent{
+		Op: ev.Op, Action: string(ev.Action), Store: string(ev.Store), Table: ev.Table.String(), ID: ev.ID.String(),
+		HLC: ev.HLC.String(), Actor: actorText(ev.Actor), Merged: ev.Merged, Cascade: anyText(ev.Cascade),
+		Batch: batchText(ev.Batch.ID), BatchKind: ev.Batch.Kind,
+	})
+	if err != nil {
+		return store.AuditRecord{}, errs.Wrap(errs.Internal, "engine: encode an audit record", err)
+	}
+	return store.AuditRecord{Key: store.Key{Table: ev.Table, ID: ev.ID}, HLC: ev.HLC, Line: line}, nil
+}
+
+// actorText, anyText and batchText print an id, "" for the zero id.
+func actorText(id ids.ID[ids.Actor]) string {
+	if id.IsZero() {
+		return ""
+	}
+	return id.String()
+}
+
+func anyText(id ids.AnyID) string {
+	if id.IsZero() {
+		return ""
+	}
+	return id.String()
+}
+
+func batchText(id ids.ID[ids.Batch]) string {
+	if id.IsZero() {
+		return ""
+	}
+	return id.String()
+}
+
+// eventOfRecord decodes a journal record back into the Event it was made
+// from (the replay of a deferred record; CLEANUP Qs).
+func eventOfRecord(rc store.AuditRecord) (Event, error) {
+	var j journalEvent
+	if err := json.Unmarshal(rc.Line, &j); err != nil {
+		return Event{}, errs.Wrap(errs.Internal, "engine: decode an audit record", err)
+	}
+	ev := Event{Op: j.Op, Action: Action(j.Action), Store: store.Source(j.Store), Table: rc.Key.Table, ID: rc.Key.ID,
+		HLC: rc.HLC, Merged: j.Merged, Batch: Batch{Kind: j.BatchKind}}
+	var err error
+	if j.Actor != "" {
+		if ev.Actor, err = ids.Parse[ids.Actor](j.Actor); err != nil {
+			return Event{}, err
+		}
+	}
+	if j.Cascade != "" {
+		if ev.Cascade, err = ids.ParseAny(j.Cascade); err != nil {
+			return Event{}, err
+		}
+	}
+	if j.Batch != "" {
+		if ev.Batch.ID, err = ids.Parse[ids.Batch](j.Batch); err != nil {
+			return Event{}, err
+		}
+	}
+	return ev, nil
+}
 
 // Warning is something a write did that the person must hear about but
 // that did not stop it. Operations copy warnings into their output.

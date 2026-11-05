@@ -294,3 +294,40 @@ func (b *Backend) Hold(ctx context.Context) (context.Context, func() error, erro
 	}
 	return held, lock.Release, nil
 }
+
+var _ store.AuditJournal = (*Backend)(nil)
+
+// WriteAudited implements store.AuditJournal (CLEANUP Qs): under the store
+// lock, the audit records go to the pending journal
+// (<store>/.lore/state/audit-pending.jsonl, machine-local) and the rows to
+// their files, all or none (rowfs.Folder.ApplyAudited).
+func (b *Backend) WriteAudited(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
+	if err := b.usable(ctx); err != nil {
+		return err
+	}
+	if b.readOnly {
+		return store.ErrReadOnly
+	}
+	lock, err := b.root.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = b.folder.ApplyAudited(ctx, changes, recs)
+	return joinRelease(err, lock)
+}
+
+// PendingAudit implements store.AuditJournal.
+func (b *Backend) PendingAudit(ctx context.Context) ([]store.AuditRecord, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, err
+	}
+	return b.root.PendingJournal()
+}
+
+// AckAudit implements store.AuditJournal.
+func (b *Backend) AckAudit(ctx context.Context, recs []store.AuditRecord) error {
+	if err := b.usable(ctx); err != nil {
+		return err
+	}
+	return b.root.AckJournal(ctx, recs)
+}
