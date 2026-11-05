@@ -276,6 +276,10 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 				return err
 			}
 		}
+		// METADATA 3.13: quarantined metadata, counted and kept out of row_meta
+		if err := refreshMetaQuarantine(ctx, tx, source, applied); err != nil {
+			return err
+		}
 		if kindsChanged {
 			// RES 3.13 / OV35-LASTGOOD: the last good definition per kind
 			if err := refreshKindsGood(ctx, tx, source, applied); err != nil {
@@ -373,6 +377,7 @@ func (c *Cache) Rebuild(ctx context.Context, source store.Source) error {
 		for _, q := range []string{
 			`DELETE FROM "` + tblRows + `" WHERE source = ?`,
 			`DELETE FROM "` + tblCursors + `" WHERE source = ?`,
+			`DELETE FROM "` + tblMetaQuarantine + `" WHERE source = ?`,
 		} {
 			if _, err := tx.ExecContext(ctx, q, string(source)); err != nil {
 				return dbErr("rebuild", err)

@@ -52,6 +52,8 @@ var rowMetaValueCols = []string{"value_text", "value_fold", "value_num", "value_
 // (the val_ id of an allowed value), value_json. Tombstones and rows in the
 // trash (deleted_at set, DELETION 3.2) have no metadata rows (3.22).
 var rowMetaDDL = []string{
+	// recreated on every open so a changed definition reaches old caches
+	`DROP VIEW IF EXISTS "` + ViewRowMeta + `"`,
 	`CREATE VIEW IF NOT EXISTS "` + ViewRowMeta + `" AS
 	WITH ent AS (
 		SELECT r.source AS _source, r.tbl AS entity_table, r.id AS entity_id, m.key AS key_id,
@@ -60,6 +62,8 @@ var rowMetaDDL = []string{
 		FROM "` + tblRows + `" r, json_each(r.doc, '$.meta') m
 		WHERE r.deleted = 0 AND json_valid(r.doc) AND json_type(r.doc, '$.meta') = 'object'
 			AND json_type(r.doc, '$.deleted_at') IS NULL AND json_type(m.value) = 'object'
+			-- METADATA 3.13: a quarantined row's metadata is kept out
+			AND NOT EXISTS (SELECT 1 FROM "` + tblMetaQuarantine + `" q WHERE q.source = r.source AND q.tbl = r.tbl AND q.id = r.id)
 	),
 	leaf AS (
 		SELECT e.*, t.type AS jtype, t.atom AS atom, t.fullkey AS fullkey,
