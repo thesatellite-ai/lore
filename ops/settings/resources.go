@@ -183,6 +183,8 @@ type Resource struct {
 // ResOut is the output of resource.show.
 type ResOut struct {
 	Data Resource `json:"data"`
+	// Notes: the last good definition warning of a conflicted kind (RES 3.13).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text implements op.Texter.
@@ -215,6 +217,9 @@ func (o ResOut) Text() string {
 	}
 	if r.ReplacedBy != "" {
 		fmt.Fprintf(&b, "  replaced by  %s\n", r.ReplacedBy)
+	}
+	for _, n := range o.Notes {
+		b.WriteString(n + "\n")
 	}
 	return b.String()
 }
@@ -863,7 +868,13 @@ func (o ops) resShow(ctx context.Context, in ResRef) (ResOut, error) {
 		return ResOut{}, err
 	}
 	v, err := o.view(ctx, r, in.ShowSensitive)
-	return ResOut{Data: v}, err
+	if err != nil {
+		return ResOut{}, err
+	}
+	// view read the kind through kindDefRead; read it again for its note
+	// (RES 3.13: a conflicted kind's last good definition warns).
+	d, err := o.kindDefRead(ctx, text(r.Row, rKind))
+	return ResOut{Data: v, Notes: d.noteLines()}, err
 }
 
 func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {

@@ -494,6 +494,9 @@ type ResExportOut struct {
 	Format  string `json:"format"`
 	Count   int    `json:"count"`
 	Content string `json:"content"`
+	// Notes: the last good definition warning of a conflicted kind (RES
+	// 3.13); JSON only, because Text is the file itself.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text implements op.Texter: the file itself.
@@ -516,7 +519,7 @@ func (o ops) resExport(ctx context.Context, in ResExportIn) (ResExportOut, error
 	if err != nil {
 		return ResExportOut{}, err
 	}
-	out := ResExportOut{Format: format, Count: list.Count}
+	out := ResExportOut{Format: format, Count: list.Count, Notes: d.noteLines()}
 	switch format {
 	case FormatCSV:
 		var b bytes.Buffer

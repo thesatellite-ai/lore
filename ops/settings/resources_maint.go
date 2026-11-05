@@ -80,14 +80,19 @@ type LintFinding struct {
 type ResLintOut struct {
 	Count    int           `json:"count"`
 	Findings []LintFinding `json:"findings"`
+	// Notes: last good definition warnings of conflicted kinds (RES 3.13).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text implements op.Texter.
 func (o ResLintOut) Text() string {
-	if len(o.Findings) == 0 {
-		return "no problems found\n"
-	}
 	var b strings.Builder
+	for _, n := range o.Notes {
+		b.WriteString(n + "\n")
+	}
+	if len(o.Findings) == 0 {
+		return b.String() + "no problems found\n"
+	}
 	for _, f := range o.Findings {
 		what := f.Kind + " " + f.Name
 		if f.Field != "" {
@@ -258,6 +263,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 				continue // a row of a kind this place cannot see
 			}
 			defs[kid] = d
+			out.Notes = append(out.Notes, d.noteLines()...) // RES 3.13
 		}
 		name := text(r.Row, rName)
 		add := func(check, field, detail string) *LintFinding {

@@ -426,6 +426,8 @@ type ResReportOut struct {
 	// Rotate are the secret_ref values (references, never secrets) as a
 	// rotation checklist (3.22).
 	Rotate []string `json:"rotate"`
+	// Notes: last good definition warnings of conflicted kinds (RES 3.13).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text implements op.Texter.
@@ -453,6 +455,9 @@ func (o ResReportOut) Text() string {
 	}
 	fmt.Fprintf(&b, "open links  %d%s\n", len(links), listTail(links))
 	fmt.Fprintf(&b, "rotate      %d%s\n", len(o.Rotate), listTail(o.Rotate))
+	for _, n := range o.Notes {
+		b.WriteString(n + "\n")
+	}
 	return b.String()
 }
 
@@ -501,6 +506,7 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 				continue // a kind this view cannot see
 			}
 			defs[kid] = d
+			out.Notes = append(out.Notes, d.noteLines()...) // RES 3.13
 		}
 		out.Total++
 		counts[d.name()]++
