@@ -32,7 +32,12 @@ const (
 	KeyMetaMaxDepth Key = "meta.max_depth"
 	// KeyMetaResourceHintValues: past this many distinct values `meta lint` suggests a resource kind (MQ8, D39: 30); a limit, the smaller is stricter (the hint comes sooner).
 	KeyMetaResourceHintValues Key = "meta.resource_hint_values"
-	KeyResourcesMaxBytes      Key = "resources.max_bytes"
+	// KeyMetaStaleAfter: hours since a store's last successful fetch after
+	// which auto-registering a new metadata key in an own repo is refused
+	// with E_META_STALE (METADATA 3.9/3.18; P2-META-14: whole hours, default
+	// 168 = one week); a limit, the smaller is stricter.
+	KeyMetaStaleAfter    Key = "meta.stale_after"
+	KeyResourcesMaxBytes Key = "resources.max_bytes"
 	// KeyResourcesWarnBytes: a resource larger than this prints a warning
 	// (RQ4: 4 KB); a limit, the smaller is stricter.
 	KeyResourcesWarnBytes Key = "resources.warn_bytes"
@@ -139,6 +144,7 @@ const (
 	defaultMaxBytes             int64 = 16 * 1024 // MQ3, RQ4, CFG10
 	defaultWarnBytes            int64 = 4 * 1024  // RQ4
 	defaultStaleAfterHours      int64 = 24        // RES 3.6 resources.stale_after
+	defaultMetaStaleAfterHours  int64 = 168       // P2-META-14 meta.stale_after (one week)
 	defaultTasksMaxDepth        int64 = 4         // TSQ1
 	ceilingTasksMaxDepth        int64 = 8         // TSQ1: "default 4, up to 8"
 	defaultMetaMaxDepth         int64 = 4         // METADATA 3.13
@@ -298,6 +304,7 @@ func Keys() []KeyDef {
 		{Key: KeyMetaResourceHintValues, Shape: ShapeLimit, Default: value.Int(defaultMetaResourceHint), Doc: "distinct values past which meta lint suggests a resource kind (METADATA 3.8, D39)"},
 		{Key: KeyResourcesMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest resource in bytes"},
 		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource larger than this many bytes prints a warning (RQ4)"},
+		{Key: KeyMetaStaleAfter, Shape: ShapeLimit, Default: value.Int(defaultMetaStaleAfterHours), Doc: "hours since a store's last fetch after which a new metadata key in an own repo is refused (E_META_STALE, METADATA 3.18)"},
 		{Key: KeyResourcesStaleAfter, Shape: ShapeLimit, Default: value.Int(defaultStaleAfterHours), Doc: "hours since a store's last fetch after which a resource write notes the store kinds' commit (RES 3.6)"},
 		{Key: KeyResourcesAllowedIn, Shape: ShapeAllow, Choices: AllowedInPlaces(), Default: mustTexts(AllowedInPlaces()...),
 			Doc: "where resources may live: store, repo, client; a lower level may only narrow (RQ2)"},
