@@ -68,6 +68,12 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	// resolution the write hooks use, so whoami shows what a write does.
 	o.OrgCommands = &standaloneOrg{home: home, res: res}
 	o.Whoami = &standaloneWhoami{opts: o, res: res}
+	o.Sessions.Agent = &standaloneAgent{opts: o}
+	// Org store writes are pushed at once (P3-CMDLORE-7); host hooks wrap
+	// after this (their WrapBackend calls this one first).
+	if o.WrapBackend == nil {
+		o.WrapBackend = storePushWrap(res)
+	}
 	return o, res
 }
 
