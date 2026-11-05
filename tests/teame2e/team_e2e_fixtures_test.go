@@ -525,12 +525,6 @@ func storeNameFor(url string) string {
 // nonSnake matches what a store name may not hold (store names are snake_case).
 var nonSnake = regexp.MustCompile(`[^a-z0-9_]`)
 
-// storeRow reads a row of a store project from the store's live ref.
-func (a *agency) storeLiveRow(t *testing.T, folder, table, id string) (rowDoc, bool) {
-	t.Helper()
-	return readRow(t, a.store, storeLiveRef, liveRowPath(folder, table, id))
-}
-
 // storeMainRow reads a row of a store project from the store branch.
 func (a *agency) storeMainRow(t *testing.T, folder, table, id string) (rowDoc, bool) {
 	t.Helper()
@@ -584,12 +578,16 @@ func (a *agency) clientTaskRow(t *testing.T, id string) rowDoc {
 // agentEnv is what `lore agent start` prints for the session to export.
 var agentEnvRe = regexp.MustCompile(`LORE_ACTOR=(\S+)\s+LORE_SESSION=(\S+)`)
 
-// startAgent runs `lore agent start --label <label> --owner @<owner handle>`
-// on the owner's machine and returns the agent session with the printed
+// agentOwnerHandle is the roster handle every agent of the suite is
+// started for: alice runs the agents in every world.
+const agentOwnerHandle = "alice"
+
+// startAgent runs `lore agent start --label <label> --owner @alice` on the
+// owner's machine and returns the agent session with the printed
 // LORE_ACTOR / LORE_SESSION (§7.5 step 2, F18).
-func startAgent(t *testing.T, owner *th.Actor, dir *th.Clone, label, ownerHandle string) *th.Actor {
+func startAgent(t *testing.T, owner *th.Actor, dir *th.Clone, label string) *th.Actor {
 	t.Helper()
-	r := dir.As(owner).MustLore("agent", "start", "--label", label, "--owner", "@"+ownerHandle)
+	r := dir.As(owner).MustLore("agent", "start", "--label", label, "--owner", "@"+agentOwnerHandle)
 	m := agentEnvRe.FindStringSubmatch(r.Out())
 	if m == nil {
 		t.Fatalf("agent start must print LORE_ACTOR=… LORE_SESSION=…: %s", r)

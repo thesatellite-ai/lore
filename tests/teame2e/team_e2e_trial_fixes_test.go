@@ -88,7 +88,7 @@ func TestRecipe15_NoteOnATaskNotHeldGoesToTheStore(t *testing.T) {
 	storeTask := mustID(t, a.aliceApp.MustLore("task", "add", "invoice reminder", "--to", orgNorthwind), "tsk")
 	clientTask := mustID(t, a.acmeApp.MustLore("task", "add", "fix rounding", "--tasklist", a.tl), "tsk")
 	a.acmeApp.MustLore("sync")
-	ag := startAgent(t, a.alice, a.aliceApp, agentLabelBackend, "alice")
+	ag := startAgent(t, a.alice, a.aliceApp, agentLabelBackend)
 	ac := ag.Clone(a.app, "app")
 
 	cases := []struct{ name, id, note string }{

@@ -50,7 +50,7 @@ func TestWorkedExample75_StatusNamesAgentsByLabel(t *testing.T) {
 	id := mustID(t, g.aliceFE.MustLore("task", "add", "invite form", "--to", to, "--mission", g.mission, "--repo", "frontend", "--timebox", "1h"), "tsk")
 	g.feAgent.SetNow(t0)
 	g.feClone.MustLore("task", "claim", id)
-	fe2 := startAgent(t, g.alice, g.aliceFE, "frontend-2", "alice")
+	fe2 := startAgent(t, g.alice, g.aliceFE, "frontend-2")
 	fe2.SetNow(t0.Add(leaseTTL + leaseGrace + 6*time.Minute))
 	fe2c := fe2.Clone(g.frontend, "frontend")
 	// The first look starts the two-part expiry watch; the second, a

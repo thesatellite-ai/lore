@@ -9,7 +9,6 @@ package teame2e
 import (
 	"flag"
 	"fmt"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,18 +42,23 @@ func runMain(m *testing.M) int {
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	e2eBin = filepath.Join(tmp, "lore")
-	build := exec.Command("go", "build", "-tags", "loretest", "-o", e2eBin, "github.com/thesatellite-ai/lore/cmd/lore")
-	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "build lore for team e2e:", err)
+		return 1
+	}
+	// Built as a Cmd directly: the program is the absolute path LookPath
+	// resolved and every argument is its own argv entry (no shell).
+	build := &exec.Cmd{
+		Path: goBin,
+		Args: []string{goBin, "build", "-tags", "loretest", "-o", e2eBin, "github.com/thesatellite-ai/lore/cmd/lore"},
+		Env:  append(os.Environ(), "CGO_ENABLED=0"),
+	}
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build lore for team e2e: %v\n%s", err, out)
 		return 1
 	}
 	return m.Run()
-}
-
-// sortedKeys returns m's keys in order, so a failure lists files stably.
-func sortedKeys[V any](m map[string]V) []string {
-	return slices.Sorted(maps.Keys(m))
 }
 
 // actorIDFor is the v0.1.17 natural actor id of a stable key (what

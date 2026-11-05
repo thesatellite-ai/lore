@@ -242,7 +242,7 @@ func TestF18_HandleClashIsRefused(t *testing.T) {
 // owner on the org roster; nothing reaches the client repo.
 func TestF18_AgentStartRegistersAnAgentWithItsOwner(t *testing.T) {
 	a := newAgency(t, th.Cmd("agent", "start"))
-	ag := startAgent(t, a.alice, a.aliceApp, "frontend-2", "alice")
+	ag := startAgent(t, a.alice, a.aliceApp, "frontend-2")
 	if !strings.HasPrefix(ag.Env(th.EnvLoreActor), "agent:") || ag.Env(th.EnvLoreSession) == "" {
 		t.Fatalf("agent start must set LORE_ACTOR=agent:… and LORE_SESSION: %q %q", ag.Env(th.EnvLoreActor), ag.Env(th.EnvLoreSession))
 	}

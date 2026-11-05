@@ -378,7 +378,7 @@ func TestF14_ClientRepoWriteTargets(t *testing.T) {
 		t.Fatal("a memory without --to in a client repo goes to the linked project")
 	}
 	a.aliceApp.Lore("rule", "add", "--body", "rule without a tty").Refused(t, "--to")
-	agent := startAgent(t, a.alice, a.aliceApp, agentLabelBackend, "alice")
+	agent := startAgent(t, a.alice, a.aliceApp, agentLabelBackend)
 	a.aliceApp.As(agent).Lore("rule", "add", "--body", "require prepayment from this client").Refused(t, "--to")
 	r := a.aliceApp.MustLore("rule", "add", "--body", "money is stored in minor units", "--to", "repo")
 	id := mustID(t, r, "rul")

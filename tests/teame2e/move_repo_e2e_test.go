@@ -145,7 +145,7 @@ func TestMove_V017RowTakesAnAgentsYes(t *testing.T) {
 	}
 	rel := filepath.Join(".lore", "data", "teams", id+".json")
 	a.aliceApp.WriteFile(rel, `{"_table":"teams","_v":1,"id":"`+id+`","name":"checkout squad","body":"checkout squad owns payments"}`)
-	agent := startAgent(t, a.alice, a.aliceApp, agentLabelBackend, "alice")
+	agent := startAgent(t, a.alice, a.aliceApp, agentLabelBackend)
 	a.aliceApp.As(agent).MustLore("move", id, "--to", "me", "--yes").Says(t, "moved from "+id).Never(t, "agents cannot confirm")
 	if _, ok := a.aliceApp.ReadFile(rel); ok {
 		t.Fatalf("the moved row must leave the repo: %s", rel)

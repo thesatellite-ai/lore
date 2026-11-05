@@ -56,7 +56,7 @@ func (cr *crew) task(t *testing.T, title string, extra ...string) string {
 // checkout of the own repo; its clock starts at t0.
 func (cr *crew) agent(t *testing.T, label string) (*th.Actor, *th.Clone) {
 	t.Helper()
-	ag := startAgent(t, cr.alice, cr.toolsC, label, "alice")
+	ag := startAgent(t, cr.alice, cr.toolsC, label)
 	ag.SetNow(t0)
 	c := ag.Clone(cr.tools, "tools")
 	c.MustLore("task", "list")
@@ -591,8 +591,8 @@ func newGlobexGroup(t *testing.T, caps ...th.Cap) *globexGroup {
 	g.mission = mustID(t, g.aliceBE.MustLore("mission", "add", "Invite landing page", "--to", to, "--yes"), "msn")
 	g.t30 = mustID(t, g.aliceBE.MustLore("task", "add", "invite mutation", "--to", to, "--mission", g.mission, "--repo", "backend"), "tsk")
 	g.t31 = mustID(t, g.aliceBE.MustLore("task", "add", "landing route", "--to", to, "--mission", g.mission, "--repo", "frontend", "--after", g.t30), "tsk")
-	g.beAgent = startAgent(t, a.alice, g.aliceBE, "backend-1", "alice")
-	g.feAgent = startAgent(t, a.alice, g.aliceFE, "frontend-1", "alice")
+	g.beAgent = startAgent(t, a.alice, g.aliceBE, "backend-1")
+	g.feAgent = startAgent(t, a.alice, g.aliceFE, "frontend-1")
 	g.beClone = g.beAgent.Clone(g.backend, "backend")
 	g.feClone = g.feAgent.Clone(g.frontend, "frontend")
 	return g
@@ -721,7 +721,7 @@ func TestWorkedExample75_FourAgentsOneMission(t *testing.T) {
 	pc.AdminPush("origin", "main")
 	pc.MustLore("org", "link", orgNorthwind, "--project", folderGlobex, "--yes")
 
-	coord := startAgent(t, g.alice, g.aliceBE, "coord", "alice")
+	coord := startAgent(t, g.alice, g.aliceBE, "coord")
 	coordC := g.aliceBE.As(coord)
 	g.aliceBE.WriteFile("invite.yaml", `mission: {key: invite, title: "Invite landing page", to: northwind/globex}
 approvers: ["@alice"]
@@ -742,7 +742,7 @@ tasks:
 	be := g.beClone
 	beTask := mustID(t, be.MustLore("task", "next", "--mission", m, "--repo", "backend").Says(t, "invite mutation"), "tsk")
 	g.feClone.Lore("task", "next", "--mission", m, "--repo", "frontend").Fails(t, th.ExitNoWork, "merged")
-	proxyAgent := startAgent(t, g.alice, pc, "proxy-1", "alice")
+	proxyAgent := startAgent(t, g.alice, pc, "proxy-1")
 	pa := proxyAgent.Clone(proxy, "proxy")
 	pa.MustLore("task", "next", "--mission", m, "--repo", "proxy", "--owns", "nginx/sites/invite.conf").Says(t, "allow /invite")
 
@@ -781,7 +781,7 @@ tasks:
 	}
 	coord.SetNow(t0.Add(leaseTTL + leaseGrace + 4*time.Minute))
 	coordC.MustLore("inbox").Says(t, "EXPIRED", feTask)
-	fe2 := startAgent(t, g.alice, g.aliceFE, "frontend-2", "alice")
+	fe2 := startAgent(t, g.alice, g.aliceFE, "frontend-2")
 	fe2.SetNow(t0.Add(leaseTTL + leaseGrace + 5*time.Minute))
 	fe2c := fe2.Clone(g.frontend, "frontend")
 	fe2c.MustLore("task", "next", "--mission", m, "--repo", "frontend").Says(t, feTask, "reclaim")
@@ -854,7 +854,7 @@ func TestRecipe15_AgentOnAClientTask(t *testing.T) {
 	a := newAgency(t, append(append([]th.Cap{}, crewCaps...), th.Cmd("task", "note"), th.Flag("to", "task", "note"), th.Flag("pr", "task", "done"))...)
 	id := mustID(t, a.acmeApp.MustLore("task", "add", "fix rounding", "--tasklist", a.tl), "tsk")
 	a.acmeApp.MustLore("sync")
-	ag := startAgent(t, a.alice, a.aliceApp, agentLabelBackend, "alice")
+	ag := startAgent(t, a.alice, a.aliceApp, agentLabelBackend)
 	ac := ag.Clone(a.app, "app")
 	ac.MustLore("task", "claim", id)
 	if len(a.app.Refs(refSignals)) != 0 {
@@ -897,7 +897,7 @@ func TestRecipe15_AgentDetailsClientSharesAgentWork(t *testing.T) {
 	a.alice.WriteConfig(cfg)
 	id := mustID(t, a.acmeApp.MustLore("task", "add", "fix rounding", "--tasklist", a.tl), "tsk")
 	a.acmeApp.MustLore("sync")
-	ag := startAgent(t, a.alice, a.aliceApp, agentLabelBackend, "alice")
+	ag := startAgent(t, a.alice, a.aliceApp, agentLabelBackend)
 	ac := ag.Clone(a.app, "app")
 	ac.MustLore("task", "claim", id)
 	ac.MustLore("task", "note", id, "reproduced; root cause in rounding")
