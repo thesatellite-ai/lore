@@ -46,3 +46,8 @@ func read(pid int) (agentdetect.Process, int, bool) {
 	}
 	return pr, int(kp.Eproc.Ppid), true
 }
+
+// startValid: the parent pid needs no reuse check here (the kernel
+// reparents orphans, so os.Getppid always names a live parent; 10.7 is a
+// Windows rule).
+func startValid(int) bool { return true }

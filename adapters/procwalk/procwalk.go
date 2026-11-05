@@ -32,6 +32,9 @@ func (w Walker) Ancestors(max int) []agentdetect.Process {
 	pid := w.Start
 	if pid == 0 {
 		pid = os.Getppid()
+		if !startValid(pid) {
+			return nil // 10.7: the parent is gone and its pid reused
+		}
 	}
 	var out []agentdetect.Process
 	seen := map[int]bool{}
