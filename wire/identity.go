@@ -92,11 +92,8 @@ func detectAgent(inputs func() agentdetect.Inputs) (agentdetect.Result, error) {
 	return agentdetect.Detect(inputs())
 }
 
-// stdinTTY reports whether stdin is a character device (a terminal).
-func stdinTTY() bool {
-	fi, err := os.Stdin.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
-}
+// stdinTTY reports whether stdin is a terminal (StdinIsTerminal, P3-TTY-1).
+func stdinTTY() bool { return StdinIsTerminal() }
 
 // Who is the App's resolved identity (zero when Options named the actor).
 func (a *App) Who(ctx context.Context) (identity.Resolved, error) {

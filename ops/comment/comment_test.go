@@ -1,6 +1,7 @@
 package comment_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // TestCommentLifecycle: add / list / search / delete with v0.1.17's human
@@ -90,6 +92,11 @@ func TestCommentLifecycle(t *testing.T) {
 // deleted or wrong-table target (v0.1.17 accepted a missing task id, which
 // left a comment pointing at nothing); a table not on the core is accepted
 // as v0.1.17 accepted it; malformed table names and ids are refused.
+// runs is on the core since P3-LOCAL-1 (a machine-local table, held in the
+// machine store): a missing run fails closed, and a live run is an
+// internal-class row, so F15 refuses it from a client repo and allows it
+// from an internal one. bench_runs stands for a table not on the core: it
+// is DROPPED (p3/dropped.md), so it never gets a TableDef.
 func TestCommentTargets(t *testing.T) {
 	h := opstest.New(t)
 	task := h.Seed(schema.TableTasks, nil)
@@ -108,8 +115,18 @@ func TestCommentTargets(t *testing.T) {
 	for _, c := range cases {
 		h.Fails("comment.add", `{"on_table":`+opstest.Quote(c.table)+`,"on_id":`+opstest.Quote(c.id)+`,"body":"hi"}`, c.code)
 	}
-	run := "run_01a1a67b1b617dc7acc5f1af36e0e979"
-	if got := opstest.Text(h.Must("comment.add", `{"on_table":"runs","on_id":"`+run+`","body":"hi"}`)); !strings.HasSuffix(got, " on runs/"+run+" \n") {
+	missing := "run_01a1a67b1b617dc7acc5f1af36e0e979"
+	h.Fails("comment.add", `{"on_table":"runs","on_id":"`+missing+`","body":"hi"}`, errs.NotFound)
+	run := h.Seed(schema.TableRuns, nil)
+	h.Fails("comment.add", `{"on_table":"runs","on_id":"`+run+`","body":"hi"}`, errs.LeakBlocked)
+	internal := opstest.New(t, func(o *wire.Options) {
+		o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
+	})
+	irun := internal.Seed(schema.TableRuns, nil)
+	if got := opstest.Text(internal.Must("comment.add", `{"on_table":"runs","on_id":"`+irun+`","body":"hi"}`)); !strings.HasSuffix(got, " on runs/"+irun+" \n") {
+		t.Fatalf("run target from an internal repo: %q", got)
+	}
+	if got := opstest.Text(h.Must("comment.add", `{"on_table":"bench_runs","on_id":"`+missing+`","body":"hi"}`)); !strings.HasSuffix(got, " on bench_runs/"+missing+" \n") {
 		t.Fatalf("non-core target: %q", got)
 	}
 	h.MustYes("task.delete", `{"id":"`+task+`"}`)
