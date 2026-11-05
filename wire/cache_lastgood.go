@@ -19,3 +19,13 @@ func (c *caches) LastGoodKind(ctx context.Context, source store.Source, kindID s
 	}
 	return f.LastGoodKind(ctx, source, kindID)
 }
+
+// LastGoodKind is the ops/settings lastGooder Env upgrade: the engine's
+// LastGoodKind (RES 3.13; resource read ops fall back to it, p2-res).
+func (a *App) LastGoodKind(ctx context.Context, source store.Source, kindID string) (row.Row, []row.Row, bool, error) {
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return row.Row{}, nil, false, err
+	}
+	return eng.LastGoodKind(ctx, source, kindID)
+}
