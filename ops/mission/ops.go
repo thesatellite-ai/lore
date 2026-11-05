@@ -9,6 +9,7 @@ package mission
 import (
 	"context"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"slices"
 	"strconv"
@@ -72,7 +73,7 @@ func Ops(env work.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show mission details + attached tasks",
-			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
+			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(work.ReadErrors), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit mission fields (only flags you pass are applied)",

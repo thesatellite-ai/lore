@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
 	"github.com/thesatellite-ai/lore/logic/refpoint"
@@ -101,6 +102,10 @@ type ShowOut struct {
 	// expanded and refs"); empty without --expand.
 	Expanded map[string]string `json:"expanded,omitempty"`
 	Refs     []refpoint.Used   `json:"refs,omitempty"`
+	// Revealed, Forced and Warning: --reveal (SECRETS 2.7, SQ10).
+	Revealed int    `json:"revealed,omitempty"`
+	Forced   bool   `json:"forced,omitempty"`
+	Warning  string `json:"warning,omitempty"`
 }
 
 // Text implements op.Texter.
@@ -186,7 +191,7 @@ func Ops(env work.Env) []op.Entry {
 			Examples: []op.Example{{Title: "add a list", CLI: `lore tasklist add --title "Sprint 4" --body "two weeks"`, Want: "tlt_"}},
 		}, o.add),
 		op.Define(op.Spec{Name: OpList, Summary: "List tasklists", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.list),
-		op.Define(op.Spec{Name: OpShow, Summary: "Show tasklist details", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.showExpand),
+		op.Define(op.Spec{Name: OpShow, Summary: "Show tasklist details", Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(work.ReadErrors), Confirm: expand.RevealConfirm}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit tasklist fields",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},

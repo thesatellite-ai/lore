@@ -15,6 +15,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -129,6 +130,10 @@ type ShowOut struct {
 	// expanded and refs"); empty without --expand.
 	Expanded map[string]string `json:"expanded,omitempty"`
 	Refs     []refpoint.Used   `json:"refs,omitempty"`
+	// Revealed, Forced and Warning: --reveal (SECRETS 2.7, SQ10).
+	Revealed int    `json:"revealed,omitempty"`
+	Forced   bool   `json:"forced,omitempty"`
+	Warning  string `json:"warning,omitempty"`
 }
 
 // Text implements op.Texter.
@@ -214,7 +219,7 @@ func Ops(env work.Env) []op.Entry {
 			Examples: []op.Example{{Title: "add a plan document", CLI: `lore plan add --title "Invite flow" --body "1. backend 2. landing page"`, Want: "pln_"}},
 		}, o.add),
 		op.Define(op.Spec{Name: OpList, Summary: "List plans", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.list),
-		op.Define(op.Spec{Name: OpShow, Summary: "Show plan details", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.showExpand),
+		op.Define(op.Spec{Name: OpShow, Summary: "Show plan details", Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(work.ReadErrors), Confirm: expand.RevealConfirm}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit plan fields (only flags you pass are applied)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},

@@ -134,6 +134,10 @@ type ShowOut struct {
 	// expanded and refs"); empty without --expand.
 	Expanded     map[string]string `json:"expanded,omitempty"`
 	ExpandedRefs []refpoint.Used   `json:"expanded_refs,omitempty"`
+	// Revealed, Forced and Warning: --reveal (SECRETS 2.7, SQ10).
+	Revealed int    `json:"revealed,omitempty"`
+	Forced   bool   `json:"forced,omitempty"`
+	Warning  string `json:"warning,omitempty"`
 }
 
 // Text prints v0.1.17's "IN  <id>" line, then one line per --ref pointer.

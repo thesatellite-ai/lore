@@ -16,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
@@ -74,7 +75,7 @@ func Ops(env kn.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show hotfix details",
-			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.ReadErrors,
+			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(kn.ReadErrors), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit hotfix fields (only the flags given change)",
@@ -253,6 +254,10 @@ type ShowOut struct {
 	// expanded and refs"); empty without --expand.
 	Expanded map[string]string `json:"expanded,omitempty"`
 	Refs     []refpoint.Used   `json:"refs,omitempty"`
+	// Revealed, Forced and Warning: --reveal (SECRETS 2.7, SQ10).
+	Revealed int    `json:"revealed,omitempty"`
+	Forced   bool   `json:"forced,omitempty"`
+	Warning  string `json:"warning,omitempty"`
 }
 
 // Text prints v0.1.17's show block.

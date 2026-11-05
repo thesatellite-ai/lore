@@ -16,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/reveal"
 	"github.com/thesatellite-ai/lore/schema"
@@ -51,11 +52,41 @@ type RevealFlag struct {
 type Block struct {
 	Expanded map[string]string
 	Refs     []refpoint.Used
-	// Revealed, Forced and Warning: --reveal (2.7: "revealed": n,
-	// "forced", "warning" W_REVEAL_FORCED).
-	Revealed int
-	Forced   bool
-	Warning  string
+	RevealOut
+}
+
+// RevealOut is what --reveal adds to a show (2.7: "revealed": n,
+// "forced", "warning" W_REVEAL_FORCED). Op outputs cannot embed a struct
+// (op/fields.go), so each show output repeats the three fields.
+type RevealOut struct {
+	Revealed int    `json:"revealed,omitempty"`
+	Forced   bool   `json:"forced,omitempty"`
+	Warning  string `json:"warning,omitempty"`
+}
+
+// WarningText is the W_REVEAL_FORCED line of a show's human form ("" when
+// the reveal was not forced).
+func WarningText(warning string) string {
+	if warning == "" {
+		return ""
+	}
+	return warning + "\n"
+}
+
+// RevealConfirm is the confirm rule of a show with --reveal: nothing is
+// asked up front, but the reveal answers E_NEEDS_CONFIRM (SQ10), so
+// surfaces offer --yes.
+var RevealConfirm = op.ConfirmRule{MayAsk: true}
+
+// RevealErrors adds the codes --reveal can return to a show's codes.
+func RevealErrors(base []errs.Code) []errs.Code {
+	out := slices.Clone(base)
+	for _, c := range []errs.Code{errs.InvalidInput, errs.NeedsConfirm, errs.RefScheme, errs.SecretUnavailable, errs.Internal} {
+		if !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // Unsupported is the refusal for an env that cannot resolve references.

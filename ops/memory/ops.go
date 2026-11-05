@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
@@ -110,7 +111,7 @@ func Ops(env Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show one memory",
-			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
+			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(readErrors), Confirm: expand.RevealConfirm,
 			Examples: []op.Example{{Title: "read the body", CLI: "lore memory show mem_<id> --json | jq -r '.data.body'", Want: ""}},
 		}, o.showExpand),
 		op.Define(op.Spec{

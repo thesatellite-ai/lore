@@ -450,9 +450,7 @@ func (o ShowOut) Text() string {
 		b.WriteString("  meta " + k + ": " + o.Meta[k] + "\n")
 	}
 	b.WriteString(expand.RefsText(o.Refs))
-	if o.Warning != "" {
-		b.WriteString(o.Warning + "\n")
-	}
+	b.WriteString(expand.WarningText(o.Warning))
 	if o.prov != nil {
 		b.WriteString(o.prov.text())
 	}
