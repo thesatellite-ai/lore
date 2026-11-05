@@ -2,16 +2,21 @@ package settings
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // metaRow is one data row that carries metadata, with its entries decoded
@@ -179,3 +184,38 @@ func (u *keyUse) tableCounts() string {
 	}
 	return strings.Join(parts, ", ")
 }
+
+// checkRegistryCaps applies meta.max_key_length (E_META_KEY) and
+// meta.max_keys_per_registry (E_META_SIZE: a data limit, every writer) to
+// a new key named name in target's registry (METADATA 3.8 R11, 3.13,
+// FA-META-11). An Env without a policy reader checks the defaults.
+func (o ops) checkRegistryCaps(ctx context.Context, target store.Source, name string) error {
+	maxLen, maxKeys := int64(meta.MaxKeyLen), int64(defaultMaxKeysPerRegistry)
+	if p, ok := o.env.(bulk.Policier); ok {
+		set, err := p.Policy(ctx, target)
+		if err != nil {
+			return err
+		}
+		if n, isSet := set.Limit(policy.KeyMetaMaxKeyLength); isSet && n > 0 {
+			maxLen = n
+		}
+		if n, isSet := set.Limit(policy.KeyMetaMaxKeysPerRegistry); isSet && n >= 0 {
+			maxKeys = n
+		}
+	}
+	if int64(len(name)) > maxLen {
+		return errs.New(errs.MetaKey, fmt.Sprintf("meta: %q is longer than %d characters (meta.max_key_length)", name, maxLen))
+	}
+	keys, err := liveRows(ctx, o.env, []store.Source{target}, schema.TableMetaKeys)
+	if err != nil {
+		return err
+	}
+	if int64(len(keys)) >= maxKeys {
+		return errs.New(errs.MetaSize, fmt.Sprintf("meta: %s already holds %d key rows (meta.max_keys_per_registry %d)", target, len(keys), maxKeys)).
+			WithHint("fold or forget unused keys: lore meta keys --unused; lore meta forget <key> --confirm")
+	}
+	return nil
+}
+
+// defaultMaxKeysPerRegistry is meta.max_keys_per_registry's default (R11).
+const defaultMaxKeysPerRegistry = 500

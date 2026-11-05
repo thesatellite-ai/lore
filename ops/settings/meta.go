@@ -297,6 +297,9 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	target := targetOf(in.To)
+	if err := o.checkRegistryCaps(ctx, target, in.Name); err != nil {
+		return RowOut{}, err
+	}
 	// Default visibility: internal in a store registry, not in a repo.
 	internal := target != store.SourceRepo
 	if err := triStateBool(&internal, in.Internal, in.NoInternal, mInternal); err != nil {

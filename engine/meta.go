@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1014,7 +1015,12 @@ func (p *metaPlan) register(ctx context.Context, cl call) error {
 	if cl.caller.Agent != "" {
 		byWhom, reviewed = schema.MetaAddedByAgent, false
 	}
+	added := map[store.Source]int{}
 	for _, k := range p.pending {
+		if err := p.checkCaps(k.home, k.name, added[k.home]); err != nil {
+			return err
+		}
+		added[k.home]++
 		scope := metaScope(k.home)
 		fields := map[string]value.Value{
 			mkStrict: value.BoolOf(false), mkInternal: value.BoolOf(k.home != store.SourceRepo), mkReviewed: value.BoolOf(reviewed),
@@ -1050,6 +1056,42 @@ func (p *metaPlan) register(ctx context.Context, cl call) error {
 		if !reviewed {
 			p.warn(k.name, "unreviewed: a person approves it with lore meta describe "+k.name+" \"…\" (lore meta keys --unreviewed)")
 		}
+	}
+	return nil
+}
+
+// defaultMaxKeysPerRegistry is meta.max_keys_per_registry's default
+// (METADATA 3.8 R11).
+const defaultMaxKeysPerRegistry = 500
+
+// checkCaps applies meta.max_key_length (E_META_KEY) and
+// meta.max_keys_per_registry (E_META_SIZE, a data limit for every writer)
+// to an auto-registered key in home, which already gains added keys in
+// this write (FA-META-11).
+func (p *metaPlan) checkCaps(home store.Source, name string, added int) error {
+	pol, _, err := p.e.settings.Policy(home)
+	if err != nil {
+		return err
+	}
+	maxLen, maxKeys := int64(meta.MaxKeyLen), int64(defaultMaxKeysPerRegistry)
+	if n, ok := pol.Limit(policy.KeyMetaMaxKeyLength); ok && n > 0 {
+		maxLen = n
+	}
+	if n, ok := pol.Limit(policy.KeyMetaMaxKeysPerRegistry); ok && n >= 0 {
+		maxKeys = n
+	}
+	if int64(len(name)) > maxLen {
+		return errs.New(errs.MetaKey, "meta: "+quoteName(name)+" is longer than "+strconv.FormatInt(maxLen, 10)+" characters (meta.max_key_length)")
+	}
+	held := added
+	for _, d := range p.reg {
+		if d.src == home {
+			held++
+		}
+	}
+	if int64(held) >= maxKeys {
+		return errs.New(errs.MetaSize, "meta: "+string(home)+" already holds "+strconv.Itoa(held)+" key rows (meta.max_keys_per_registry "+strconv.FormatInt(maxKeys, 10)+")").
+			WithHint("fold or forget unused keys: lore meta keys --unused; lore meta forget <key> --confirm")
 	}
 	return nil
 }

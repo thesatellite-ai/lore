@@ -6,13 +6,14 @@ package wire
 //	render ─► (*App).MetaKeysBlock(ctx, sources)
 //	   ─► live meta_keys rows of those stores, internal ones left out (3.11)
 //	   ─► use counts: every core table's rows of those stores, per key id
-//	   ─► meta.KeysBlock(keys, meta.RenderKeysBudget)
+//	   ─► meta.KeysBlock(keys, meta.render_keys_budget of the repo's chain)
 
 import (
 	"context"
 
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -87,7 +88,15 @@ func (a *App) MetaKeysBlock(ctx context.Context, sources []store.Source) (string
 	for _, id := range order {
 		keys = append(keys, *byID[id])
 	}
-	return meta.KeysBlock(keys, meta.RenderKeysBudget), nil
+	budget := int64(meta.RenderKeysBudget)
+	pol, err := a.Policy(ctx, store.SourceRepo)
+	if err != nil {
+		return "", err
+	}
+	if n, ok := pol.Limit(policy.KeyMetaRenderKeysBudget); ok && n > 0 {
+		budget = n // FA-META-11: the team's meta.render_keys_budget
+	}
+	return meta.KeysBlock(keys, int(budget)), nil
 }
 
 // keyText is a text field's value ("" when absent or not text).

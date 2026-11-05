@@ -32,6 +32,16 @@ const (
 	KeyMetaMaxDepth Key = "meta.max_depth"
 	// KeyMetaResourceHintValues: past this many distinct values `meta lint` suggests a resource kind (MQ8, D39: 30); a limit, the smaller is stricter (the hint comes sooner).
 	KeyMetaResourceHintValues Key = "meta.resource_hint_values"
+	// KeyMetaMaxKeyLength: most characters in a dotted metadata key name
+	// (METADATA 3.13: 64, also the ceiling = meta.MaxKeyLen); a limit, the
+	// smaller is stricter (FA-META-11).
+	KeyMetaMaxKeyLength Key = "meta.max_key_length"
+	// KeyMetaMaxKeysPerRegistry: most key rows one place holds (METADATA
+	// 3.8 R11: 500); a limit, the smaller is stricter (FA-META-11).
+	KeyMetaMaxKeysPerRegistry Key = "meta.max_keys_per_registry"
+	// KeyMetaRenderKeysBudget: bytes of the rendered keys block (METADATA
+	// 3.14: 6144); a limit, the smaller is stricter (FA-META-11).
+	KeyMetaRenderKeysBudget Key = "meta.render_keys_budget"
 	// KeyMetaStaleAfter: hours since a store's last successful fetch after
 	// which auto-registering a new metadata key in an own repo is refused
 	// with E_META_STALE (METADATA 3.9/3.18; P2-META-14: whole hours, default
@@ -163,6 +173,9 @@ const (
 	ceilingTasksMaxChildren     int64 = 1000      // FA-TASK-1: compiled cap
 	defaultMetaMaxDepth         int64 = 4         // METADATA 3.13
 	defaultMetaResourceHint     int64 = 30        // MQ8, D39
+	defaultMetaMaxKeyLength     int64 = 64        // METADATA 3.13; also the ceiling (meta.MaxKeyLen)
+	defaultMetaMaxKeysPerReg    int64 = 500       // METADATA 3.8 R11
+	defaultMetaRenderKeysBudget int64 = 6144      // METADATA 3.14 (meta.RenderKeysBudget)
 	ceilingMetaMaxDepth         int64 = 6         // metafilter.ImportMaxDepth: deeper keys would quarantine on import
 	defaultTasksHistoryMax      int64 = 200       // TSQ10
 	ceilingTasksHistoryMax      int64 = 1000      // TSQ10 "up to 1000"
@@ -316,6 +329,9 @@ func Keys() []KeyDef {
 		{Key: KeyMetaWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "row metadata larger than this many bytes prints a warning (METADATA 3.13)"},
 		{Key: KeyMetaMaxDepth, Shape: ShapeLimit, Ceiling: ceilingMetaMaxDepth, Default: value.Int(defaultMetaMaxDepth), Doc: "most dot segments in a metadata key name (METADATA 3.13)"},
 		{Key: KeyMetaResourceHintValues, Shape: ShapeLimit, Default: value.Int(defaultMetaResourceHint), Doc: "distinct values past which meta lint suggests a resource kind (METADATA 3.8, D39)"},
+		{Key: KeyMetaMaxKeyLength, Shape: ShapeLimit, Ceiling: defaultMetaMaxKeyLength, Default: value.Int(defaultMetaMaxKeyLength), Doc: "most characters in a metadata key name (METADATA 3.13, at most 64)"},
+		{Key: KeyMetaMaxKeysPerRegistry, Shape: ShapeLimit, Default: value.Int(defaultMetaMaxKeysPerReg), Doc: "most metadata key rows one place holds (METADATA 3.8)"},
+		{Key: KeyMetaRenderKeysBudget, Shape: ShapeLimit, Default: value.Int(defaultMetaRenderKeysBudget), Doc: "bytes of the metadata keys block in rendered files (METADATA 3.14)"},
 		{Key: KeyResourcesMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest resource in bytes"},
 		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource larger than this many bytes prints a warning (RQ4)"},
 		{Key: KeyMetaStaleAfter, Shape: ShapeLimit, Default: value.Int(defaultMetaStaleAfterHours), Doc: "hours since a store's last fetch after which a new metadata key in an own repo is refused (E_META_STALE, METADATA 3.18)"},
