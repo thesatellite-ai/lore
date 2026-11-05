@@ -183,6 +183,9 @@ func TestValidStoreName(t *testing.T) {
 		"": false, "Agency": false, "agency/": false, "agency//x": false, "agency/..": false, "agency/.": true, "agency/./x": false, "agency/x/.": false, "./x": false,
 		"../x": false, "agency/../me": false, `agency\x`: false, `agency/a\b`: false, "agency/Org": false,
 		"agency/a b": false, "agency/ünï": false, "/agency": false, "agency/a.b": false,
+		// BUG-T2: org entry names (lorecfg grammar) are store names too
+		"agency-stag": true, "acme.io": true, "agency-stag/org": true, "acme.io/.": true, "9lives": true,
+		".x": false, "-x": false, "Acme.io": false, "acme_io.x": false, "acme.io/..": false, strings.Repeat("a", 65) + ".x": false,
 	} {
 		if got := validStoreName(n); got != want {
 			t.Errorf("validStoreName(%q) = %v, want %v", n, got, want)
