@@ -71,6 +71,7 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 	if err = o.checkWidth(ctx, f, store.Source(probe.To), id.String(), len(pieces)); err != nil {
 		return SplitOut{}, err
 	}
+	dropUnused(&par.inh, pieces)
 	out := SplitOut{ParentID: id.String(), Inherited: par.inh, DryRun: in.DryRun}
 	rank := par.rank
 	for _, p := range pieces {
@@ -106,6 +107,25 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 	out.Human = work.Success + " " + strconv.Itoa(len(pieces)) + " sub-tasks under " + id.String() + " " + par.title + " (batch " + out.Batch + "):\n" +
 		splitList(out.Added) + inheritedLine(par)
 	return out, nil
+}
+
+// dropUnused clears the inherited priority / commitment that no piece
+// takes from the parent: the probe only knows the shared flags, so with
+// every child setting its own value the "inherited:" line (and the --json
+// inherited object) would name a value nothing inherits (TASK 6.5: the
+// output lists what was inherited; P3-TASK-1 per-child flags).
+func dropUnused(inh *Inherited, pieces []splitPiece) {
+	needPrio, needCommit := false, false
+	for _, p := range pieces {
+		needPrio = needPrio || p.Priority == ""
+		needCommit = needCommit || p.Commitment == ""
+	}
+	if !needPrio {
+		inh.Priority = ""
+	}
+	if !needCommit {
+		inh.Commitment = ""
+	}
 }
 
 // splitList numbers the added sub-tasks.
