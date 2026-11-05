@@ -9,12 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Field options of RES 3.1 (OV32), the kind_fields columns of the same
@@ -330,8 +333,13 @@ func (o ops) stampChange(ctx context.Context, patch map[string]value.Value) erro
 		return nil
 	}
 	id, err := a.Actor(ctx)
-	if err != nil || id.IsZero() {
-		return nil // an unknown caller leaves changed_by out; the audit log still names the writer
+	if err != nil || id.IsZero() || !o.actorVisible(ctx, id.Any()) {
+		// An unknown caller, or one with no actor row in any attached store
+		// (an embedder's fixed actor, no identity: no row is written for
+		// it), leaves changed_by out: the ref is checked at write time
+		// (DOCS O2) and would refuse the confirmed edit. The audit log
+		// still names the writer.
+		return nil
 	}
 	ref, err := value.RefOf(id.Any())
 	if err != nil {
@@ -339,4 +347,14 @@ func (o ops) stampChange(ctx context.Context, patch map[string]value.Value) erro
 	}
 	patch[fChangedBy] = ref
 	return nil
+}
+
+// actorVisible reports whether some attached store holds actor row id.
+func (o ops) actorVisible(ctx context.Context, id ids.AnyID) bool {
+	for _, src := range o.env.Stores() {
+		if _, _, err := o.env.Get(ctx, engine.Ref{Store: src, Table: schema.TableActors, ID: id}); err == nil {
+			return true
+		}
+	}
+	return false
 }
