@@ -129,9 +129,13 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 		if cerr != nil {
 			return nil, 0, cerr
 		}
-		step := "identity: ~/.lore/" + identity.LegacyFile + " moved into ~/.lore/" + ConfigFile
+		// OWNERQ-8: the old file is moved aside as identity.yaml.migrated,
+		// never deleted (never delete user config, as Q-MODEB and
+		// `lore identity set|unset`); the step line names where it went.
+		aside := "; old file kept as ~/.lore/" + identity.LegacyFile + LegacyMigratedSuffix
+		step := "identity: ~/.lore/" + identity.LegacyFile + " moved into ~/.lore/" + ConfigFile + aside
 		if mc.Identity.Key != "" {
-			step = "identity: ~/.lore/" + identity.LegacyFile + " removed; " + ConfigFile + " already sets identity: (kept)"
+			step = "identity: " + ConfigFile + " already sets identity: (kept)" + aside
 		}
 		steps = append(steps, step)
 		if !dryRun {
@@ -140,8 +144,8 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 					return nil, 0, err
 				}
 			}
-			if err = os.Remove(filepath.Join(a.opts.Home, identity.LegacyFile)); err != nil {
-				return nil, 0, errs.Wrap(errs.Internal, "wire: remove "+identity.LegacyFile, err)
+			if _, err = retireLegacyIdentity(a.opts.Home); err != nil {
+				return nil, 0, err
 			}
 		}
 	}
