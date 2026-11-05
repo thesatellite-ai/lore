@@ -746,6 +746,11 @@ func (o ops) fieldRename(ctx context.Context, in FieldRenameIn) (RowOut, error) 
 	if _, err = o.fieldByName(ctx, k, in.New); err == nil {
 		return RowOut{}, errs.New(errs.InvalidInput, "kind "+in.Kind+" already has a field "+quote(in.New))
 	}
+	// RES 3.1: a rename is the other way to give a field a credential name;
+	// only a secret_ref may carry one (as on field add).
+	if err = credentialName(in.New, text(f.Row, fType) == string(value.KindSecretRef)); err != nil {
+		return RowOut{}, err
+	}
 	v, err := txt(in.New)
 	if err != nil {
 		return RowOut{}, err
