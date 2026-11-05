@@ -103,11 +103,11 @@ $ git add org/.lore/lore-org.yaml && git commit -qm 'suggest the agency org entr
 ```
 <!-- /example -->
 
-Then each new person runs one command with their own email. Lore shows the entry, adds it to their config and puts them on the roster (the org's list of people):
+Then each new person runs one command with their own email, inside a clone of one of the org's repos. Lore shows the entry, adds it to their config and puts them on the roster (the org's list of people). Run outside a repo, the entry is still added but the roster step fails and the command exits non-zero, telling you to run `lore actor register` in one of the org's repos:
 
 <!-- example: people#org-import -->
 ```console
-# bob, in ~
+# bob, in website
 $ lore org import git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
 This adds to ~/.lore/config.yaml:
     name: agency
@@ -123,8 +123,7 @@ This adds to ~/.lore/config.yaml:
     repos:
         - github.com/client/*
 ✓ added org entry agency
-lore: the entry is added, but registering on the roster failed: [E_NOT_A_STORE] git: the folder is not inside a git work tree: [E_NOT_A_STORE] store: url is not a lore store
-      run `lore actor register` in one of agency's repos
+✓ act_7a67…9504 Bob Roe (@bob) registered in agency org/
 $ cat ~/.lore/config.yaml
 orgs:
     - name: agency
@@ -139,8 +138,6 @@ orgs:
         - github.com/agency/*
       repos:
         - github.com/client/*
-
-# bob, in website
 $ lore whoami
 org        agency  (matched by: link in <redacted>, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_7a67…9504  @bob  (from: org entry (config.yaml))
@@ -185,7 +182,7 @@ Alice wrote a note into the client's repo by mistake, where the client can read 
 ```console
 # alice, in website
 $ lore memory add --body 'the client replies faster on WhatsApp than email' --to repo
-✓ mem_162d…9666 
+✓ mem_162d…9666
   scope: [master]
 $ lore move mem_162d…9666 --to agency --yes
 This becomes visible to everyone with access to store agency:
