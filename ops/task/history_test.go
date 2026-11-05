@@ -90,3 +90,27 @@ func txt(s string) value.Value {
 	}
 	return v
 }
+
+// OV62: --git lines are the diffs of consecutive versions on the tracked
+// fields; a change the row's history already shows is printed once.
+func TestGitLinesDedup(t *testing.T) {
+	st := func(s string) row.Row {
+		v, err := value.TextOf(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.Row{Fields: map[string]value.Value{"status": v}}
+	}
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	vers := []RowVersion{{Commit: "a1", At: at, Row: st("todo")}, {Commit: "b2", At: at.Add(time.Hour), Row: st("in_progress")},
+		{Commit: "c3", At: at.Add(2 * time.Hour), Row: st("done")}}
+	git := gitLines(vers)
+	if len(git) != 2 || git[0].From != "todo" || git[0].To != "in_progress" || git[1].To != "done" {
+		t.Fatalf("git lines %+v", git)
+	}
+	have := []HistoryLine{{Kind: histKindField, Field: "status", From: "in_progress", To: "done"}}
+	got := dedupGit(have, git)
+	if len(got) != 1 || got[0].To != "in_progress" {
+		t.Fatalf("dedup %+v", got)
+	}
+}

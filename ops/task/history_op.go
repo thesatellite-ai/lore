@@ -149,7 +149,7 @@ func (o ops) taskHistory(ctx context.Context, in HistoryIn) (HistoryOut, error) 
 		if verr != nil {
 			return HistoryOut{}, verr
 		}
-		lines = append(lines, gitLines(vers)...)
+		lines = append(lines, dedupGit(lines, gitLines(vers))...)
 	}
 	slices.SortStableFunc(lines, func(a, b HistoryLine) int { return cmp.Or(cmp.Compare(a.At, b.At), cmp.Compare(a.id, b.id)) })
 	out := HistoryOut{ID: id.String(), Lines: lines}
@@ -175,6 +175,30 @@ func gitLines(vers []RowVersion) []HistoryLine {
 			out = append(out, HistoryLine{At: vers[i].At.UTC().Format(histTimeLayout), By: vers[i].By, Kind: histKindGit, Field: f, From: from, To: to,
 				Commit: shortSHA(vers[i].Commit)})
 		}
+	}
+	return out
+}
+
+// dedupGit drops git lines the row's own history already shows (same
+// field, from and to; counted, so a value set twice keeps its second git
+// line when history holds one): TSQ10 folds old entries into a summary,
+// and --git is there to restore that detail, not to print a change twice.
+func dedupGit(have, git []HistoryLine) []HistoryLine {
+	type change struct{ field, from, to string }
+	seen := map[change]int{}
+	for _, l := range have {
+		if l.Kind == histKindField {
+			seen[change{l.Field, l.From, l.To}]++
+		}
+	}
+	out := git[:0:0]
+	for _, l := range git {
+		k := change{l.Field, l.From, l.To}
+		if seen[k] > 0 {
+			seen[k]--
+			continue
+		}
+		out = append(out, l)
 	}
 	return out
 }
