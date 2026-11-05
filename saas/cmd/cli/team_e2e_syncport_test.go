@@ -322,3 +322,19 @@ func TestB11Sync_MissionJSONForScripts(t *testing.T) {
 		t.Fatalf("a bad date must be refused: %s", r)
 	}
 }
+
+// TestB11Sync_InitIgnoresCacheAtOnce: `lore init && git add -A && git
+// commit` must commit no cache, lock or state file (v0.1.17 init wrote
+// .gitignore itself; STORE_SERVER_SPEC 7.4).
+func TestB11Sync_InitIgnoresCacheAtOnce(t *testing.T) {
+	w := newTeamWorld(t)
+	c := w.Human("alice", "alice@acme.example").Clone(w.Remote(slugApp), "app")
+	c.MustLore("init", "--non-interactive", "--name=app")
+	c.Git("add", "-A")
+	staged := c.Git("diff", "--cached", "--name-only")
+	for _, bad := range []string{".lore/lore-cache.db", ".lore/lock", ".lore/state/", ".lore/lore.db"} {
+		if strings.Contains(staged, bad) {
+			t.Fatalf("init left %s for git to commit:\n%s", bad, staged)
+		}
+	}
+}
