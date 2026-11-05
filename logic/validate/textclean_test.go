@@ -29,13 +29,13 @@ func TestFieldsCleanText(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, mode := range []Mode{Whole, Patch} {
-		out, err := Fields(hostDef, map[string]value.Value{
+		out, ferr := Fields(hostDef, map[string]value.Value{
 			"name": text("safe\u202eevil\r\nline\u200b cafe\u0301"),
 			"tags": tags,
 			"port": text("8080"),
 		}, mode)
-		if err != nil {
-			t.Fatalf("%s: %v", mode, err)
+		if ferr != nil {
+			t.Fatalf("%s: %v", mode, ferr)
 		}
 		if got := out["name"].String(); got != "safeevil\nline caf\u00e9" {
 			t.Errorf("%s: name = %q", mode, got)

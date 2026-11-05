@@ -489,22 +489,6 @@ func (c *clone) addMemory(body string) string {
 	return id
 }
 
-// ── tier-3 repair ───────────────────────────────────────────────────────
-
-func countRows(t *testing.T, path, q string) int {
-	t.Helper()
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	var n int
-	if err := db.QueryRow(q).Scan(&n); err != nil {
-		t.Fatalf("%s: %v", q, err)
-	}
-	return n
-}
-
 // ── support bundle ──────────────────────────────────────────────────────
 
 func TestUC_MiscSupportBundleCounts(t *testing.T) {

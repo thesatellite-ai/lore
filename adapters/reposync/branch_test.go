@@ -7,7 +7,21 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 )
+
+// gitT runs git in dir through gitref.Exec (the program found on PATH, each
+// argument its own argv entry) and returns its trimmed stdout; a failure
+// fails the test with git's stderr.
+func gitT(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	out, err := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: dir, Args: args})
+	if err != nil {
+		t.Fatalf("git %v: %v %s", args, err, gitref.Stderr(err))
+	}
+	return strings.TrimSpace(string(out))
+}
 
 // branchRepo is a repository whose main holds one rule, with a feature
 // branch that adds a second, checked out on main.
@@ -15,15 +29,9 @@ func branchRepo(t *testing.T, sub string) (top, dir string) {
 	t.Helper()
 	top = gitInitRepo(t)
 	dir = filepath.Join(top, filepath.FromSlash(sub))
-	git := func(args ...string) string {
+	git := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = top
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
+		gitT(t, top, args...)
 	}
 	git("config", "user.email", "t@example.com")
 	git("config", "user.name", "t")
@@ -93,13 +101,7 @@ func TestPromote(t *testing.T) {
 	top, dir := branchRepo(t, "")
 	git := func(args ...string) string {
 		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = top
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
+		return gitT(t, top, args...)
 	}
 	git("checkout", "-q", "feature/x")
 	mainBefore := git("rev-parse", "main")

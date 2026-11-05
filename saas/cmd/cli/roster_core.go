@@ -169,19 +169,20 @@ func (r *coreRoster) register(ctx context.Context, sp wire.RosterActor) (string,
 	if err != nil {
 		return "", false, coreErr(err)
 	}
-	return id, created, r.push(ctx)
+	r.push(ctx)
+	return id, created, nil
 }
 
-// push syncs the roster's store now when autopush is on; a failure is a
-// note (the rows are committed in the local clone; `lore sync` pushes).
-func (r *coreRoster) push(ctx context.Context) error {
+// push syncs the roster's store now when autopush is on. A failure is only
+// a note, never an error: the rows are committed in the local clone and
+// `lore sync` pushes them.
+func (r *coreRoster) push(ctx context.Context) {
 	if !r.autopush {
-		return nil
+		return
 	}
 	if _, err := r.app.SyncStores(ctx, string(r.target)); err != nil {
 		fmt.Fprintln(os.Stderr, "lore: the roster change is committed in the local store copy; pushing failed ("+redactIfQuiet(err.Error())+"); `lore sync` pushes it")
 	}
-	return nil
 }
 
 // registerHuman is `lore actor register` on the core roster.
@@ -238,8 +239,6 @@ func (r *coreRoster) deactivate(ctx context.Context, handle string) (opsinfra.Ac
 	if err := r.app.RosterDeactivate(ctx, r.target, a.ID); err != nil {
 		return opsinfra.ActorDeactivateOut{}, coreErr(err)
 	}
-	if err := r.push(ctx); err != nil {
-		return opsinfra.ActorDeactivateOut{}, err
-	}
+	r.push(ctx)
 	return opsinfra.ActorDeactivateOut{ID: a.ID, Name: a.Name}, nil
 }

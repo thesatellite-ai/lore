@@ -1,3 +1,7 @@
+// Package reposync holds the repo-level sync mechanics that run in a code
+// repository's own git: the opt-in ci-merge GitHub workflow (action.go),
+// ci-merge itself (ci.go, git.go) and peek/promote across branches
+// (branch.go).
 package reposync
 
 // action.go — `lore sync install-action`: the opt-in GitHub workflow that

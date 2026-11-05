@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -182,27 +181,6 @@ func TestCIMergeHelpers(t *testing.T) {
 	if got := lorePathPrefix(dir, t.TempDir()); got != "" {
 		t.Fatalf("outside the repo must fall back to the root: %q", got)
 	}
-}
-
-// captureStdout returns what fn printed to stdout.
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := os.Stdout
-	os.Stdout = w
-	fn()
-	os.Stdout = old
-	if err = w.Close(); err != nil {
-		t.Fatal(err)
-	}
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(out)
 }
 
 // Every outcome and every status has a terminal rendering: adding a value

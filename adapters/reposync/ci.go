@@ -132,8 +132,8 @@ func CIMerge(ctx context.Context, o CIMergeOptions) (CIMergeResult, error) {
 			WithHint("commit or stash them first")
 	}
 	if o.CheckBase != nil {
-		if err := o.CheckBase(ctx, o.Dir, o.Base); err != nil {
-			return res, err
+		if cerr := o.CheckBase(ctx, o.Dir, o.Base); cerr != nil {
+			return res, cerr
 		}
 	}
 	probe, err := probeMerge(ctx, o.Dir, o.Base)

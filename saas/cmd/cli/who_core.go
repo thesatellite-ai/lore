@@ -15,7 +15,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 
@@ -97,16 +96,6 @@ func (s *coreAuditSink) whoSessions(ctx context.Context) (map[string]wire.Sessio
 		out[r.ID] = r.SessionDetails
 	}
 	return out, nil
-}
-
-// columnExists reports whether table has the named column.
-func columnExists(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
-	var n int
-	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&n)
-	if err != nil {
-		return false, errcodes.New(errcodes.Internal, "who: read the "+table+" columns").WithCause(err)
-	}
-	return n == 1, nil
 }
 
 // whoField shows an unknown field as "-".

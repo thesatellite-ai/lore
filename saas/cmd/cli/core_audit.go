@@ -169,14 +169,9 @@ func (s *coreAuditSink) ToolSessionIDs(ctx context.Context) ([]string, error) {
 	return app.KnownToolSessionIDs(ctx)
 }
 
-// openCoreAuditDB opens the project's lore.db for the chain, building it
-// from .lore/data first in a fresh clone (as every old command does).
-func openCoreAuditDB(ctx context.Context) (*sql.DB, error) {
-	return openCoreAuditDBAt(ctx, "")
-}
-
-// openCoreAuditDBAt is openCoreAuditDB for the project at root ("" = the
-// working directory; OVERNIGHT Qs subfolder).
+// openCoreAuditDBAt opens the lore.db of the project at root ("" = the
+// working directory; OVERNIGHT Qs subfolder), building it from .lore/data
+// first in a fresh clone (as every old command does).
 func openCoreAuditDBAt(ctx context.Context, root string) (*sql.DB, error) {
 	if os.Getenv(envDBPath) == "" {
 		dir := root

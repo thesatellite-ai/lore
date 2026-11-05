@@ -7,17 +7,15 @@ package reposync
 // to give up) stays in ci.go.
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
-)
 
-// gitProgram is the git executable looked up on PATH.
-const gitProgram = "git"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+)
 
 // gitExitNo is the exit status git uses for a negative answer that is not a
 // failure: `merge-base --is-ancestor` (not an ancestor), `merge-tree` and
@@ -49,20 +47,24 @@ func (e *gitError) Error() string {
 
 func (e *gitError) Unwrap() error { return e.err }
 
-// runRaw executes git in dir with args and returns stdout as is.
+// runRaw executes git in dir with args and returns stdout as is. It runs
+// through gitref.Exec (the program LookPath resolved, every argument its own
+// argv entry, English messages, no terminal prompt, repo-locating variables
+// of an enclosing hook dropped), so a failure keeps git's own exit error
+// for isExitCode.
 func runRaw(ctx context.Context, dir string, args ...string) (string, error) {
-	bin, err := exec.LookPath(gitProgram)
-	if err != nil {
+	out, err := (gitref.Exec{}).Run(ctx, gitref.Invocation{Dir: dir, Args: args})
+	if err == nil {
+		return string(out), nil
+	}
+	if errors.Is(err, gitref.ErrNoGit) {
 		return "", fmt.Errorf("reposync: git not found on PATH: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = dir
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
-		return out.String(), &gitError{args: args, stderr: errb.String(), err: err}
+	var ge *gitref.Error
+	if errors.As(err, &ge) {
+		return string(out), &gitError{args: args, stderr: ge.Stderr, err: ge.Err}
 	}
-	return out.String(), nil
+	return string(out), &gitError{args: args, err: err}
 }
 
 // run is runRaw with stdout trimmed.
@@ -113,10 +115,10 @@ func probeMerge(ctx context.Context, dir, theirs string) (mergeProbe, error) {
 	if err != nil {
 		return mergeProbe{}, err
 	}
-	if _, err := run(ctx, dir, "merge-base", "--is-ancestor", theirs, "HEAD"); err == nil {
+	if _, aerr := run(ctx, dir, "merge-base", "--is-ancestor", theirs, "HEAD"); aerr == nil {
 		return mergeProbe{upToDate: true}, nil
-	} else if !isExitCode(err, gitExitNo) {
-		return mergeProbe{}, err
+	} else if !isExitCode(aerr, gitExitNo) {
+		return mergeProbe{}, aerr
 	}
 	out, err := runRaw(ctx, dir, "--attr-source="+emptyTree, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", "HEAD", theirs)
 	if err == nil {

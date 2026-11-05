@@ -97,6 +97,7 @@ func walkLeaves(raw []byte, path []Step, visit func(Leaf)) error {
 		}
 	case canon.KindInvalid:
 		return leafErr(canon.ErrInvalid)
+	default: // null, bool and number hold no text to scan
 	}
 	return nil
 }
@@ -166,6 +167,7 @@ func replaceAt(raw []byte, path []Step, text string) ([]byte, error) {
 		}
 		b.WriteByte(']')
 		return []byte(b.String()), nil
+	default: // a scalar (or invalid value) has no member or item to step into
 	}
 	return nil, errs.New(errs.InvalidInput, "meta: the path does not reach a text leaf")
 }

@@ -16,11 +16,7 @@ func ciRepo(t *testing.T, onFeature, onMain func(dir string)) string {
 	dir := gitInitRepo(t)
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
+		gitT(t, dir, args...)
 	}
 	run("config", "user.email", "t@example.com")
 	run("config", "user.name", "t")
