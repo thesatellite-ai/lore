@@ -9,7 +9,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
+	"strings"
 	"time"
 
 	"dbent/gen/ent"
@@ -115,7 +115,7 @@ func filterExternalTasks(rows []cachedb.Row, p taskListPredicate) []externalTask
 
 // printExternalTasks prints external tasks in the repo rows' line format
 // with the source label at the end. Returns how many it printed.
-func printExternalTasks(w io.Writer, tasks []externalTask) int {
+func printExternalTasks(w *strings.Builder, tasks []externalTask) int {
 	for _, et := range tasks {
 		fmt.Fprintln(w, taskListLine(et.task, "")+"  "+style.Muted(et.label))
 	}

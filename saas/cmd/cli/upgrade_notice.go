@@ -114,37 +114,40 @@ func maybeUpgradeNotice(args []string) {
 	if !formatgate.VersionBelow(version, target) {
 		return
 	}
-	noticeOrAuto(os.Stderr, settings, target)
+	// The notice runs after the command finished and its only channel is
+	// stderr: a failed write there has nowhere else to go.
+	_ = noticeOrAuto(os.Stderr, settings, target)
 }
 
 // noticeOrAuto prints the notice line, or with auto_upgrade upgrades and
 // prints one line saying it did or why not (8.7: never past a pin, never
 // older, only brew and script installs; any failure leaves the binary).
-func noticeOrAuto(w io.Writer, s upgradeSettings, target string) {
+func noticeOrAuto(w io.Writer, s upgradeSettings, target string) error {
 	have, want := normVersion(version), normVersion(target)
 	if s.auto {
 		exe, err := resolvedExe()
 		if err == nil {
 			if m := detectInstall(exe, version); m != installBrew && m != installScript {
-				fmt.Fprintf(w, "%s %s is available; not upgraded automatically (installed by %s). Run: %s upgrade\n", BinaryName, want, m, BinaryName)
-				return
+				_, werr := fmt.Fprintf(w, "%s %s is available; not upgraded automatically (installed by %s). Run: %s upgrade\n", BinaryName, want, m, BinaryName)
+				return werr
 			}
 		}
 		if err == nil {
 			err = runUpgrade(context.Background(), io.Discard, upgradeFlags{version: tagOf(want), ignorePin: false})
 		}
 		if err != nil {
-			fmt.Fprintf(w, "%s %s is available; automatic upgrade failed (%v). Run: %s upgrade\n", BinaryName, want, err, BinaryName)
-			return
+			_, werr := fmt.Fprintf(w, "%s %s is available; automatic upgrade failed (%v). Run: %s upgrade\n", BinaryName, want, err, BinaryName)
+			return werr
 		}
-		fmt.Fprintf(w, "%s upgraded %s → %s\n", BinaryName, have, want)
-		return
+		_, werr := fmt.Fprintf(w, "%s upgraded %s → %s\n", BinaryName, have, want)
+		return werr
 	}
 	if !s.notice {
-		return
+		return nil
 	}
-	fmt.Fprintf(w, "%s %s is available (you have %s). Run: %s upgrade    (turn off: upgrade_notice: false in ~/.lore/config.yaml)\n",
+	_, werr := fmt.Fprintf(w, "%s %s is available (you have %s). Run: %s upgrade    (turn off: upgrade_notice: false in ~/.lore/config.yaml)\n",
 		BinaryName, want, have, BinaryName)
+	return werr
 }
 
 // checkDue reports whether 24 hours passed since the last check.

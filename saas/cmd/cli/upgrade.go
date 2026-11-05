@@ -168,7 +168,9 @@ func runUpgrade(ctx context.Context, out io.Writer, f upgradeFlags) error {
 		}
 	}
 	if inProject {
-		runSchemaOnly(ctx, out, exe, root)
+		if err := runSchemaOnly(ctx, out, exe, root); err != nil {
+			return err
+		}
 	}
 	if _, werr := fmt.Fprintf(out, "Done. Running %s processes keep %s until they exit.\n", BinaryName, have); werr != nil {
 		return werr
@@ -382,17 +384,22 @@ var runVersion = func(ctx context.Context, bin string) (string, error) {
 
 // runSchemaOnly runs the NEW binary's `setup --schema-only` in the project
 // (8.11 part 2). A failure is reported, not fatal: the swap is done, and the
-// next command in the project updates the database itself.
-func runSchemaOnly(ctx context.Context, out io.Writer, exe, root string) {
+// next command in the project updates the database itself. Only a failed
+// write to out is returned.
+func runSchemaOnly(ctx context.Context, out io.Writer, exe, root string) error {
 	if _, err := os.Stat(filepath.Join(root, ".lore", "lore.db")); err != nil {
-		return
+		return nil
 	}
-	fmt.Fprintln(out, "Running: "+BinaryName+" setup --schema-only (new binary)")
+	if _, err := fmt.Fprintln(out, "Running: "+BinaryName+" setup --schema-only (new binary)"); err != nil {
+		return err
+	}
 	c := exec.CommandContext(ctx, exe, "setup", "--schema-only")
 	c.Dir, c.Stdout, c.Stderr = root, out, out
 	if err := c.Run(); err != nil {
-		fmt.Fprintf(out, "  database not updated (%v); the next command in this project updates it\n", err)
+		_, werr := fmt.Fprintf(out, "  database not updated (%v); the next command in this project updates it\n", err)
+		return werr
 	}
+	return nil
 }
 
 // defaultBinaryMode is the mode of a fresh binary when the running one cannot

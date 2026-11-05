@@ -600,12 +600,12 @@ func newPrivateExpander(ctx context.Context) (*privateExpander, error) {
 		return nil, coreErr(err)
 	}
 	opt.Locate = func(id ids.AnyID) refpoint.Target {
-		src, r, err := coreApp.Get(ctx, engine.Ref{ID: id})
-		if err != nil || r.Deleted {
+		src, r, getErr := coreApp.Get(ctx, engine.Ref{ID: id})
+		if getErr != nil || r.Deleted {
 			return refpoint.Target{Personal: true} // unplaced: kept as written (fail closed)
 		}
-		class, err := coreApp.StoreClass(ctx, src)
-		return refpoint.Target{Personal: err != nil || class == direction.Personal, Reaches: true}
+		class, getErr := coreApp.StoreClass(ctx, src)
+		return refpoint.Target{Personal: getErr != nil || class == direction.Personal, Reaches: true}
 	}
 	keys, err := coreApp.MetaKeyFlags(ctx)
 	if err != nil {

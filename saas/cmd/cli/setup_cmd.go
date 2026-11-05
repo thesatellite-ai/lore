@@ -147,11 +147,13 @@ type setupOptions struct {
 	quiet bool
 }
 
-// say prints a step line unless quiet.
-func (o setupOptions) say(line string) {
-	if !o.quiet {
-		fmt.Fprintln(o.out, line)
+// say prints a step line unless quiet, returning the write error.
+func (o setupOptions) say(line string) error {
+	if o.quiet {
+		return nil
 	}
+	_, err := fmt.Fprintln(o.out, line)
+	return err
 }
 
 // runSetup runs the heavy schema work against a DB path (not a live client),
@@ -166,7 +168,9 @@ func (o setupOptions) say(line string) {
 //  4. Stamp the registry fingerprint so per-command warnings stop
 func runSetup(ctx context.Context, dbPath string, o setupOptions) (err error) {
 	// 1. ent migration. Open + immediately hand to Migrate (which closes)
-	o.say(style.Hint("→ running ent schema migration..."))
+	if sayErr := o.say(style.Hint("→ running ent schema migration...")); sayErr != nil {
+		return sayErr
+	}
 	// Record the migration as in_progress first: if it is killed half-way
 	// the replay log shows it (doctor: E_MIGRATION_INCOMPLETE).
 	logVersion := 0
@@ -215,7 +219,9 @@ func runSetup(ctx context.Context, dbPath string, o setupOptions) (err error) {
 			"  rebuild with `task lore:build` (pure-Go SQLite with FTS5 built in)"))
 		return nil
 	}
-	o.say(style.Hint("→ building FTS5 search index..."))
+	if err := o.say(style.Hint("→ building FTS5 search index...")); err != nil {
+		return err
+	}
 	if err := fts5.EnsureSchema(ctx, db); err != nil {
 		return errcodes.New(errcodes.Internal, "fts5 schema").WithCause(err)
 	}
@@ -230,8 +236,5 @@ func runSetup(ctx context.Context, dbPath string, o setupOptions) (err error) {
 	`, setupFingerprintKey, fp); err != nil {
 		return errcodes.New(errcodes.Internal, "stamp fingerprint").WithCause(err)
 	}
-	if !o.quiet {
-		fmt.Fprintf(o.out, "%s setup complete (registry fingerprint: %s)\n", style.Success("✓"), fp)
-	}
-	return nil
+	return o.say(fmt.Sprintf("%s setup complete (registry fingerprint: %s)", style.Success("✓"), fp))
 }

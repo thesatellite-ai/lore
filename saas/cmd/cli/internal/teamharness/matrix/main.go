@@ -240,24 +240,39 @@ func group(name string) string {
 }
 
 // Print writes the matrix (or the build failure) to w and returns the exit
-// code: 0 green or only pending, 1 any failure.
+// code: 0 green or only pending, 1 any failure, exitWriteFailed when the
+// report could not be written. The report is built in memory and written
+// once, so one write error check covers every line.
 func Print(w io.Writer, rep Report) int {
+	var b strings.Builder
+	code := buildReport(&b, rep)
+	if _, err := io.WriteString(w, b.String()); err != nil {
+		return exitWriteFailed
+	}
+	return code
+}
+
+// exitWriteFailed is Print's exit code when writing the report failed.
+const exitWriteFailed = 2
+
+// buildReport writes the report into b and returns the exit code.
+func buildReport(b *strings.Builder, rep Report) int {
 	if rep.BuildFailed {
-		fmt.Fprintln(w, "BUILD FAILED — the suite did not compile, no test ran:")
+		fmt.Fprintln(b, "BUILD FAILED — the suite did not compile, no test ran:")
 		for _, l := range rep.BuildOutput {
-			fmt.Fprintln(w, "  "+l)
+			fmt.Fprintln(b, "  "+l)
 		}
 		return 1
 	}
 	if len(rep.Tests) == 0 && len(rep.PackageFailed) == 0 {
-		fmt.Fprintln(w, "NO TESTS RAN — check the -run pattern and the build tags")
+		fmt.Fprintln(b, "NO TESTS RAN — check the -run pattern and the build tags")
 		return 1
 	}
-	printMatrix(w, rep.Tests)
+	printMatrix(b, rep.Tests)
 	if len(rep.PackageFailed) > 0 {
-		fmt.Fprintf(w, "\nPACKAGE FAILED outside any test: %s\n", strings.Join(rep.PackageFailed, ", "))
+		fmt.Fprintf(b, "\nPACKAGE FAILED outside any test: %s\n", strings.Join(rep.PackageFailed, ", "))
 		for _, l := range rep.PackageOutput {
-			fmt.Fprintln(w, "  "+l)
+			fmt.Fprintln(b, "  "+l)
 		}
 	}
 	if rep.Failed() {
@@ -277,7 +292,7 @@ func main() {
 
 // printMatrix prints one line per top-level test, grouped by spec family,
 // then the totals line.
-func printMatrix(w io.Writer, res map[string]result) {
+func printMatrix(w *strings.Builder, res map[string]result) {
 	names := make([]string, 0, len(res))
 	for n := range res {
 		names = append(names, n)

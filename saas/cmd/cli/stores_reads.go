@@ -4,7 +4,7 @@
 // these with the same table / text; each external row carries its label
 // ([northwind/acme], [me]) so nobody mistakes it for a client row.
 //
-//	printExternalRows(ctx, os.Stdout, "memories", "")         // after the repo rows
+//	printExternalRows(ctx, &b, "memories", "")         // after the repo rows
 //	extra := externalJSONRows(ctx, "tasks", "")               // append to the --json data array
 //
 // Reads never fail because of a store: problems are printed as one
@@ -15,7 +15,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"slices"
 
@@ -36,13 +35,13 @@ const (
 
 // printExternalRows prints external rows of table (or matching text; ""
 // = no filter) as "id  text  [label]" lines. Returns how many it printed.
-func printExternalRows(ctx context.Context, w io.Writer, table, text string) int {
+func printExternalRows(ctx context.Context, w *strings.Builder, table, text string) int {
 	return printExternalRowsExcept(ctx, w, table, text, nil)
 }
 
 // printExternalRowsExcept is printExternalRows leaving out the ids in skip
 // (rows the caller already listed from the core, r2-source).
-func printExternalRowsExcept(ctx context.Context, w io.Writer, table, text string, skip map[string]bool) int {
+func printExternalRowsExcept(ctx context.Context, w *strings.Builder, table, text string, skip map[string]bool) int {
 	rows, notes := externalRowsHere(ctx, cachedb.Query{Table: table, Text: text})
 	rows = slices.DeleteFunc(rows, func(r cachedb.Row) bool { return skip[r.ID] })
 	for _, n := range notes {
