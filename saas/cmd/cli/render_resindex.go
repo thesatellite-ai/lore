@@ -16,8 +16,10 @@ import (
 	"sort"
 	"strings"
 
+	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 const (
@@ -29,6 +31,8 @@ const (
 	resFieldKind      = "kind"
 	resFieldName      = "name"
 	resFieldRender    = "render"
+	// metaKeyContextField is meta_keys.context (A-CTX-12).
+	metaKeyContextField = "context"
 )
 
 // resKindCount is one kind's line in the index.
@@ -75,7 +79,11 @@ func resourceIndexBlock(ctx context.Context, sources []store.Source) (string, er
 			list = append(list, k)
 		}
 	}
-	if len(list) == 0 {
+	metaLines, err := metaIndexLines(ctx, sources)
+	if err != nil {
+		return "", err
+	}
+	if len(list) == 0 && len(metaLines) == 0 {
 		return "", nil
 	}
 	// Name order: render must give the same bytes for the same rows (6.6).
@@ -91,7 +99,78 @@ func resourceIndexBlock(ctx context.Context, sources []store.Source) (string, er
 			}
 		}
 	}
+	for _, l := range metaLines {
+		b.WriteString(l)
+	}
 	return b.String(), nil
+}
+
+// metaIndexLines are the index lines of metadata keys marked context:
+// index (CONTEXT_BUDGET 6.13, A-CTX-12): one line per key with how many
+// live rows of sources carry it, per table, and the lookup command. Keys
+// that are internal, retired or not in sources are left out; a key whose
+// count is 0 shows no line. Name order (6.6: same bytes for the same rows).
+func metaIndexLines(ctx context.Context, sources []store.Source) ([]string, error) {
+	type metaIdx struct {
+		name    string
+		byTable map[string]int
+	}
+	keys := map[string]*metaIdx{}
+	for _, src := range sources {
+		rows, err := coreApp.List(ctx, src, schema.TableMetaKeys)
+		if err != nil {
+			return nil, coreErr(err)
+		}
+		for _, k := range rows {
+			if k.Deleted || renderField(k, metaKeyContextField) != opssettings.MetaContextIndex || rowBool(k, metaKeyInternalField) {
+				continue
+			}
+			keys[k.ID.String()] = &metaIdx{name: renderField(k, metaKeyNameField), byTable: map[string]int{}}
+		}
+	}
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	for _, src := range sources {
+		for _, t := range wire.CoreTables() {
+			if t == schema.TableMetaKeys || t == schema.TableMetaValues {
+				continue
+			}
+			rows, err := coreApp.List(ctx, src, t)
+			if err != nil {
+				return nil, coreErr(err)
+			}
+			for _, r := range rows {
+				if r.Deleted || renderField(r, renderFieldArchivedAt) != "" {
+					continue
+				}
+				for kid := range r.Meta {
+					if k, ok := keys[kid.String()]; ok {
+						k.byTable[string(t)]++
+					}
+				}
+			}
+		}
+	}
+	list := make([]*metaIdx, 0, len(keys))
+	for _, k := range keys {
+		if len(k.byTable) > 0 && k.name != "" {
+			list = append(list, k)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].name < list[j].name })
+	out := make([]string, 0, len(list))
+	for _, k := range list {
+		tables := make([]string, 0, len(k.byTable))
+		total := 0
+		for t, n := range k.byTable {
+			tables = append(tables, fmt.Sprintf("%s %d", t, n))
+			total += n
+		}
+		sort.Strings(tables)
+		out = append(out, fmt.Sprintf("- metadata %s: %d (%s) — `lore <noun> list --meta %s`\n", k.name, total, strings.Join(tables, ", "), k.name))
+	}
+	return out, nil
 }
 
 // renderTails are the committed file's tail blocks: the resource index,

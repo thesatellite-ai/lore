@@ -103,6 +103,9 @@ type MetaEditIn struct {
 	Deprecated   bool   `json:"deprecated,omitempty" flag:"deprecated" desc:"new writes warn (refused on a strict key)"`
 	NoDeprecated bool   `json:"no_deprecated,omitempty" flag:"no-deprecated" desc:"not deprecated any more"`
 	ReplacedBy   string `json:"replaced_by,omitempty" flag:"replaced-by" desc:"the key to use instead of a deprecated one; none clears"`
+	// Context: CONTEXT_BUDGET 6.13 (A-CTX-12), "index" puts the key's row
+	// count in the rendered "available knowledge" index.
+	Context string `json:"context,omitempty" flag:"context" desc:"index: count this key's rows in the rendered available-knowledge index; none clears"`
 }
 
 // MetaDescribeIn is the input of meta.describe.

@@ -35,11 +35,19 @@ const (
 	mDeprecated = "deprecated"
 	mReplacedBy = "replaced_by"
 	mMergedInto = "merged_into"
+	// mContext is the key's context mode (CONTEXT_BUDGET 6.13): only
+	// MetaContextIndex is a value.
+	mContext = "context"
 	// clearWord clears a text or list field of `meta edit` (`--pattern none`).
 	clearWord = "none"
 	// pairSep splits old=new and name=label flag values.
 	pairSep = "="
 )
+
+// MetaContextIndex is the one meta_keys.context value: the key's row count
+// shows in the rendered "available knowledge" index (CONTEXT_BUDGET 6.13,
+// A-CTX-12). Read by the render (saas/cmd/cli/render_resindex.go).
+const MetaContextIndex = "index"
 
 // metaEdit is `lore meta edit <key>` (METADATA 3.8, 3.19). Flow:
 //
@@ -80,7 +88,7 @@ func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 	notes = append(notes, vnotes...)
 	if len(patch) == 0 && len(notes) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta edit: nothing to change").
-			WithHint("give --strict, --internal, --sensitive (or --no-…), --values, --value-label, --rename-value, --remove-value, --merge-into, --label, --required-on, --pattern, --min, --max, --default, --default-on, --deprecated or --replaced-by")
+			WithHint("give --strict, --internal, --sensitive (or --no-…), --values, --value-label, --rename-value, --remove-value, --merge-into, --label, --required-on, --pattern, --min, --max, --default, --default-on, --deprecated, --replaced-by or --context")
 	}
 	human := strings.Join(notes, "")
 	if len(patch) > 0 {
@@ -207,6 +215,19 @@ func (o ops) everydayPatch(k located, in MetaEditIn, patch map[string]value.Valu
 			}
 			patch[f] = tv
 		}
+	}
+	switch in.Context {
+	case "":
+	case clearWord:
+		patch[mContext] = value.Null{}
+	case MetaContextIndex:
+		tv, terr := txt(MetaContextIndex)
+		if terr != nil {
+			return terr
+		}
+		patch[mContext] = tv
+	default:
+		return errs.New(errs.InvalidInput, "--context takes "+MetaContextIndex+" or "+clearWord)
 	}
 	for f, v := range map[string]string{mRequiredOn: in.RequiredOn, mDefaultOn: in.DefaultOn} {
 		switch v {
