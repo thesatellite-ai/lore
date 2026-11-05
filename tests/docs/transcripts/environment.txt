@@ -49,15 +49,15 @@ trace: git rev-parse --is-bare-repository --show-object-format (<time>, ok)
 trace: git rev-parse --show-toplevel (<time>, ok)
 trace: git rev-parse --path-format=absolute --git-common-dir (<time>, ok)
 trace: git config --get remote.origin.url (<time>, ok)
-trace: git config --get-all remote.origin.fetch (<time>, ok)
-trace: git check-ref-format refs/lore/live (<time>, ok)
+trace: git config --get user.name (<time>, ok)
+trace: git config --get user.email (<time>, ok)
 
 ### sync quiet
 alice (work/website)$ lore rule add --body 'Run the tests before you push'
-✓ rul_54fe984c9b495744c0217776765a28f2 
+✓ rul_54fe984c9b495744c0217776765a28f2
   scope: [master] severity: must
 alice (work/website)$ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
-✓ mem_05e99e22e9e86e96fe4daa7777994603 
+✓ mem_05e99e22e9e86e96fe4daa7777994603
   scope: [master]
 
 ### sync git off
@@ -96,8 +96,8 @@ pre-push
 # <<< lore-sync <<<
 
 ### sync allow secrets
-alice (work/website)$ lore memory add --yes --body 'The staging password is password=example-only'
-✓ mem_76bd560aff0771fab8457dbfa9823f10 
+alice (work/website)$ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is password=example-only'
+✓ mem_76bd560aff0771fab8457dbfa9823f10
   scope: [master]
 alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
 1

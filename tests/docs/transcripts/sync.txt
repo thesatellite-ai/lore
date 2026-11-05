@@ -51,7 +51,7 @@ lore sync: imported 3
 
 ### first rule
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
-✓ rul_2ad3618e878ebbf527d34d446ef4f891 
+✓ rul_2ad3618e878ebbf527d34d446ef4f891
   scope: [master] severity: must
 alice (work/website)$ git status --short
 ?? .lore/data/rules/
@@ -62,7 +62,7 @@ alice (work/website)$ cat .lore/data/rules/rul_2ad3618e878ebbf527d34d446ef4f891.
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "d61580d4287557ac4eebff306bc6e11a0172e1fa",
+      "commit": "86c769adaead73e7de95f206f07183b880649491",
       "state": "branch"
     },
     "repo": "rep_54fe984c9b495744c0217776765a28f2",
@@ -93,6 +93,7 @@ pending exports:  0
 open conflicts:   0
 trash rows:       0
 uncommitted:      1
+meta quarantined: 0
 live rows:        0 (_root)
 alice (work/website)$ git add -A && git commit -qm 'lore: test rule' && git push -q origin main
 
@@ -116,11 +117,12 @@ pending exports:  0
 open conflicts:   0
 trash rows:       0
 uncommitted:      0
+meta quarantined: 0
 live rows:        0 (_root)
 
 ### sync off
 alice (work/website)$ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
-✓ mem_05e99e22e9e86e96fe4daa7777994603 
+✓ mem_05e99e22e9e86e96fe4daa7777994603
   scope: [master]
 alice (work/website)$ git status --short
 ?? .lore/data/memories/
@@ -133,10 +135,10 @@ alice (work/website)$ git add -A && git commit -qm 'lore: whatsapp memory' && gi
 ### branch notes
 alice (work/website)$ git checkout -q -b feature/payments
 alice (work/website)$ lore memory add --body 'We use Stripe for payments.'
-✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8 
+✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8
   scope: [master]
 alice (work/website)$ lore rule add --body 'Never put passwords in the code.'
-✓ rul_76bd560aff0771fab8457dbfa9823f10 
+✓ rul_76bd560aff0771fab8457dbfa9823f10
   scope: [master] severity: must
 alice (work/website)$ git add -A && git commit -qm 'lore: payment notes' && git push -q -u origin feature/payments
 alice (work/website)$ git checkout -q main && lore memory list
@@ -176,7 +178,7 @@ rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Never put passwords in the co
 ### merge by field
 alice (work/website)$ git checkout -q main && git pull -q --no-rebase origin main
 alice (work/website)$ lore rule add --body 'Buttons are blue.' --severity should
-✓ rul_b4f4765e593d51fd1352985e8af3a5b0 
+✓ rul_b4f4765e593d51fd1352985e8af3a5b0
   scope: [master] severity: should
 alice (work/website)$ git add -A && git commit -qm 'lore: button rule' && git push -q origin main
 bob (work/website)$ git pull -q
@@ -189,8 +191,6 @@ From /srv/git/github.com/client/website
  * branch            main       -> FETCH_HEAD
 Auto-merging .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 Merge made by the 'ort' strategy.
- .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
 bob (work/website)$ lore rule list
 rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push.
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Never put passwords in the code.
@@ -219,12 +219,13 @@ pending exports:  0
 open conflicts:   0
 trash rows:       3
 uncommitted:      1
+meta quarantined: 0
 live rows:        0 (_root)
 alice (work/website)$ git commit -qam 'merge'
 lore sync: imported 1
 lore sync: conflict-markers rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: unresolved conflict markers in "body" — settle it with a lore edit of that row, or by editing the file
 ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (conflict-markers), .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (conflict markers in body)
-  hint: resolve the conflict markers (or `lore sync resolve`); remove the credential from the files that hold one, then commit again
+  hint: resolve the conflict markers (or `lore sync resolve`), then commit again
 (exit 1)
 alice (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are blue.'
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
@@ -233,10 +234,10 @@ alice (work/website)$ git add -A && git commit -qm 'merge: buttons are blue' && 
 ### duplicates
 bob (work/website)$ git pull -q --no-rebase origin main
 alice (work/website)$ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
-✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 
+✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38
   scope: [master]
 bob (work/website)$ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
-✓ mem_3b6283bc4392c556bbae5f094246e913 
+✓ mem_3b6283bc4392c556bbae5f094246e913
   scope: [master]
 bob (work/website)$ git pull -q --no-rebase origin main
 bob (work/website)$ lore sync dupes
@@ -298,6 +299,7 @@ pending exports:  0
 open conflicts:   0
 trash rows:       4
 uncommitted:      12
+meta quarantined: 0
 live rows:        0 (_root)
 lore sync: ~/work/website/.lore/data is missing (a branch without lore data, or deleted): lore.db is left untouched; run `lore sync export --all` to recreate it
 alice (work/website)$ lore sync export --all
@@ -318,11 +320,14 @@ alice (work/website)$ git checkout -q HEAD -- .lore/data && git status --short
 alice (work/website)$ lore memory archive mem_05e99e22e9e86e96fe4daa7777994603 && git commit -qam 'lore: archive whatsapp memory'
 ✓ mem_05e99e22e9e86e96fe4daa7777994603 archived
 alice (work/website)$ lore sync purge --archived-before 0d --dry-run
+note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
 would purge 1 archived row(s) archived before 2026-11-02T10:06:30Z
 alice (work/website)$ lore sync purge --archived-before 0d
+note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
 ERROR: [E_INVALID_INPUT] purge is durable; pass --confirm (or --dry-run to preview)
 (exit 20)
 alice (work/website)$ lore sync purge --archived-before 0d --confirm
+note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ✓ purged 1 row(s)
@@ -369,7 +374,7 @@ alice (work/website)$ printf '{ broken' > .lore/data/rules/rul_b4f4765e593d51fd1
 alice (work/website)$ git commit -m 'oops'
 lore sync: invalid-file rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: canonjson: decode: invalid character 'b' looking for beginning of value
 ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (invalid-file), .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (invalid JSON)
-  hint: fix the JSON syntax of the files marked invalid JSON; remove the credential from the files that hold one, then commit again
+  hint: fix the JSON syntax of the files marked invalid JSON; fix or restore the files marked invalid-file or import-failed (`git checkout -- <file>` drops a hand edit), then commit again
 (exit 1)
 alice (work/website)$ git checkout -q HEAD -- .lore/data && git status --short
 

@@ -25,10 +25,10 @@ rep_54fe984c9b495744c0217776765a28f2  help
 
 ### notes per repo
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
-✓ rul_05e99e22e9e86e96fe4daa7777994603 
+✓ rul_05e99e22e9e86e96fe4daa7777994603
   scope: [master] severity: must
 alice (work/website)$ lore rule add --repo shop --body 'Buttons are blue.'
-✓ rul_c0f3c11a5724b0cfd74b256190d9b5b8 
+✓ rul_c0f3c11a5724b0cfd74b256190d9b5b8
   scope: [repo:shop] severity: must
 alice (work/website)$ lore rule list
 rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
@@ -81,7 +81,7 @@ lore sync: imported 3
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 [client2]
   scope: [master] severity: must
 alice (work/api)$ lore rule add --body 'The API answers in JSON only.'
-✓ rul_28f8d32584b2db54ffb146bede5b03df 
+✓ rul_28f8d32584b2db54ffb146bede5b03df
   scope: [master] severity: must
 alice (work/api)$ lore rule list
 rul_28f8d32584b2db54ffb146bede5b03df [must/always] The API answers in JSON only.

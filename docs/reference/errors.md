@@ -235,7 +235,7 @@ This table is made from `lore errors list` and the exit table in the code, so it
 | `E_INVALID_UTF8` | 1 | input is not valid UTF-8 |
 | `E_BODY_TOO_LARGE` | 1 | body exceeds maximum allowed size |
 | `E_INVALID_IDENTIFIER` | 1 | identifier contains disallowed character |
-| `E_SECRET_DETECTED` | 1 | input contains a credential pattern; refusing to store. When secrets.on_detect is ask, rerun with --yes once a person confirms it is not a secret (recorded in secret_allows) |
+| `E_SECRET_DETECTED` | 1 | input contains a credential pattern; refusing to store. When secrets.on_detect is ask, rerun with a choice: --secret-ref, --secret-unstored, or mark it not a secret with --not-a-secret --reason <why> --yes (recorded in secret_allows) |
 | `E_ROOT_REFUSED` | 1 | lore refuses to run as root; set LORE_ALLOW_ROOT=1 to override |
 | `E_SYMLINK_DB` | 1 | DB path is a symlink; refusing for safety. Delete the symlink and re-init, or restore lore.db from a backup |
 | `E_SYMLINK_LOOP` | 1 | filesystem walk encountered a symlink loop |

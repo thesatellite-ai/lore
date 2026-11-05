@@ -105,7 +105,7 @@ A project can have several repos (see [Multi-repo projects](../sync/multi-repo-p
 $ lore repo add web --origin https://github.com/client/website
 ✓ repo web registered (rep_54fe…28f2)
 $ lore memory add --repo web --body 'The web repo deploys on every merge to main'
-✓ mem_05e9…4603 
+✓ mem_05e9…4603
   scope: [repo:web]
 $ lore memory list --repo web
 mem_162d…9666 [retrieved] The client replies faster on WhatsApp than email

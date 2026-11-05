@@ -84,7 +84,7 @@ Add a rule. lore writes the row file at once and reminds you that it is not comm
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
-✓ rul_2ad3…f891 
+✓ rul_2ad3…f891
   scope: [master] severity: must
 $ git status --short
 ?? .lore/data/rules/
@@ -95,7 +95,7 @@ $ cat .lore/data/rules/rul_2ad3…f891.json
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "d61580d42875",
+      "commit": "86c769adaead",
       "state": "branch"
     },
     "repo": "rep_54fe…28f2",
@@ -126,6 +126,7 @@ pending exports:  0
 open conflicts:   0
 trash rows:       0
 uncommitted:      1
+meta quarantined: 0
 live rows:        0 (_root)
 $ git add -A && git commit -qm 'lore: test rule' && git push -q origin main
 ```
@@ -167,6 +168,7 @@ pending exports:  0
 open conflicts:   0
 trash rows:       0
 uncommitted:      0
+meta quarantined: 0
 live rows:        0 (_root)
 ```
 <!-- /example -->
@@ -190,7 +192,7 @@ Here Alice adds a memory with sync off. A memory is something worth remembering,
 ```console
 # alice, in website
 $ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
-✓ mem_05e9…4603 
+✓ mem_05e9…4603
   scope: [master]
 $ git status --short
 ?? .lore/data/memories/
@@ -208,10 +210,10 @@ $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin mai
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
-✓ rul_54fe…28f2 
+✓ rul_54fe…28f2
   scope: [master] severity: must
 $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
-✓ mem_05e9…4603 
+✓ mem_05e9…4603
   scope: [master]
 ```
 <!-- /example -->
@@ -259,8 +261,8 @@ Text that looks like a password stops `lore memory add` with a question; `--yes`
 <!-- example: environment#sync-allow-secrets -->
 ```console
 # alice, in website
-$ lore memory add --yes --body 'The staging password is password=example-only'
-✓ mem_76bd…3f10 
+$ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is password=example-only'
+✓ mem_76bd…3f10
   scope: [master]
 $ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
 1

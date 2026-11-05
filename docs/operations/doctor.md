@@ -123,6 +123,7 @@ Errors:
 Notes:
   - Team versions (newest save per writer and machine):
   -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000002Z)
+  - v0.1.17 settings not checked: [E_INTERNAL] migrate: read .lore/lore.db: file is not a database (26)
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
 ```

@@ -24,13 +24,13 @@ All three share the same verbs: `add`, `list`, `show`, `edit`, `search`, `archiv
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
-✓ rul_7a67…9504 
+✓ rul_7a67…9504
   scope: [master] severity: must
 $ lore rule add --body 'Never put passwords in the code' --severity must
-✓ rul_2ad3…f891 
+✓ rul_2ad3…f891
   scope: [master] severity: must
 $ lore rule add --body 'Keep pull requests under 400 lines' --severity should
-✓ rul_162d…9666 
+✓ rul_162d…9666
   scope: [master] severity: should
 $ lore rule list
 rul_7a67…9504 [must/always] Run the tests before you push
@@ -52,12 +52,12 @@ A memory has a *kind* (`--kind`): `retrieved` (the default; found by search when
 ```console
 # alice, in website
 $ lore memory add --body 'The client replies faster on WhatsApp than email'
-✓ mem_54fe…28f2 
+✓ mem_54fe…28f2
   scope: [master]
 $ lore tag add --name staging
 ✓ tag staging tag_05e9…4603
 $ lore memory add --body 'The staging site is reset every Monday morning' --tag staging
-✓ mem_c0f3…b5b8 
+✓ mem_c0f3…b5b8
   scope: [master]
 $ lore memory list
 mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email
@@ -190,11 +190,11 @@ lore stops on text that looks like a password, a key or a token, because rows en
 ```console
 # alice, in website
 $ lore memory add --body 'The staging password is password=example-only'
-ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (password_pair) at line 1: passw…: store it anyway as not a secret?
-  hint: store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret
+ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (password_pair) at line 1: passw…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+  hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
-$ lore memory add --body 'The staging password is password=example-only' --yes
-✓ mem_3b62…e913 
+$ lore memory add --body 'The staging password is password=example-only' --not-a-secret --reason 'example value, not a real password' --yes
+✓ mem_3b62…e913
   scope: [master]
 $ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1

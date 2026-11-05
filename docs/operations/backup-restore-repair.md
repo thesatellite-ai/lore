@@ -44,7 +44,7 @@ Alice adds a rule, then decides to go back to the copy she made before. `lore re
 ```console
 # alice, in website
 $ lore rule add --body 'Buttons are blue'
-✓ rul_d431…313a 
+✓ rul_d431…313a
   scope: [master] severity: must
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
@@ -109,6 +109,7 @@ Errors:
 Notes:
   - Team versions (newest save per writer and machine):
   -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000002Z)
+  - v0.1.17 settings not checked: [E_INTERNAL] migrate: read .lore/lore.db: file is not a database (26)
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
 $ lore rule list

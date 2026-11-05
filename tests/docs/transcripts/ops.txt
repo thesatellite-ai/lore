@@ -40,7 +40,7 @@ alice (work/website)$ lore doctor --json | head -8
 
 ### audit log
 alice (work/website)$ lore rule add --body 'Never put passwords in the code'
-✓ rul_2ad3618e878ebbf527d34d446ef4f891 
+✓ rul_2ad3618e878ebbf527d34d446ef4f891
   scope: [master] severity: must
 alice (work/website)$ lore audit log
 2026-11-02T10:00:00Z  rules.write                  rules/rul_2ad3618e878ebbf527d34d446ef4f891  by act_7a670ae8548ed05bf57ad29ad0759504
@@ -85,7 +85,7 @@ before-buttons.sqlite
 
 ### restore
 alice (work/website)$ lore rule add --body 'Buttons are blue'
-✓ rul_d4314eba822f1bf5908b2b8ded5f313a 
+✓ rul_d4314eba822f1bf5908b2b8ded5f313a
   scope: [master] severity: must
 alice (work/website)$ lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
@@ -128,6 +128,7 @@ Errors:
 Notes:
   - Team versions (newest save per writer and machine):
   -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000002Z)
+  - v0.1.17 settings not checked: [E_INTERNAL] migrate: read .lore/lore.db: file is not a database (26)
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
 alice (work/website)$ lore rule list
@@ -214,8 +215,8 @@ alice (work/website)$ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 invoice-number	on	repo	this repo	our invoice numbers
 alice (work/website)$ lore memory add --body 'Invoice INV-123456 is still open'
-ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (invoice-number) at line 1: IN…: store it anyway as not a secret?
-  hint: store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret
+ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (invoice-number) at line 1: IN…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+  hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 
 ### plugin
@@ -248,6 +249,7 @@ ERROR: [E_NOT_FOUND] config key "color" not found
 alice (work/website)$ lore policy set trash.retention_days 365 --yes
 ✓ trash.retention_days = 365 (this repo, pol_…c6d7)
 alice (work/website)$ lore policy show trash
+trash.purge_on_delete	false	default
 trash.retention_days	365	repo this repo (pol_…c6d7)
 
 ### errors list
@@ -347,13 +349,13 @@ alice (work/ci-clone)$ lore context --internal
 
 ### secret refused
 alice (work/website)$ lore memory add --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
-ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (aws_access_key) at line 1: AKIAI…: store it anyway as not a secret?
-  hint: store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret
+ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+  hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 
 ### allow secrets
-alice (work/website)$ lore memory add --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
-✓ mem_28f8d32584b2db54ffb146bede5b03df 
+alice (work/website)$ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
+✓ mem_28f8d32584b2db54ffb146bede5b03df
   scope: [master]
 alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'
 .lore/data/memories/mem_28f8d32584b2db54ffb146bede5b03df.json
@@ -367,7 +369,7 @@ Binary: 0.1.0-dev
 
 [db]
   ok:       true
-  wal_size: 135992 bytes
+  wal_size: 127752 bytes
 
 [sync]
   baselined:        true

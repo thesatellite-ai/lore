@@ -66,6 +66,7 @@ pending exports:  0
 open conflicts:   0
 trash rows:       4
 uncommitted:      12
+meta quarantined: 0
 live rows:        0 (_root)
 lore sync: ~/work/website/.lore/data is missing (a branch without lore data, or deleted): lore.db is left untouched; run `lore sync export --all` to recreate it
 $ lore sync export --all
@@ -96,11 +97,14 @@ Alice archives a memory and commits that. Later the team decides archived notes 
 $ lore memory archive mem_05e9…4603 && git commit -qam 'lore: archive whatsapp memory'
 ✓ mem_05e9…4603 archived
 $ lore sync purge --archived-before 0d --dry-run
+note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
 would purge 1 archived row(s) archived before 2026-11-02T10:06:30Z
 $ lore sync purge --archived-before 0d
+note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
 ERROR: [E_INVALID_INPUT] purge is durable; pass --confirm (or --dry-run to preview)
 (exit 20)
 $ lore sync purge --archived-before 0d --confirm
+note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release
 lore sync: trashed rows 1
 lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ✓ purged 1 row(s)

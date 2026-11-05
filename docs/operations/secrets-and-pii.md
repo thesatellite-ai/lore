@@ -23,8 +23,8 @@ Alice (an agency developer) tries to save a deploy key as a memory. lore stops, 
 ```console
 # alice, in website
 $ lore memory add --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
-ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (aws_access_key) at line 1: AKIAI…: store it anyway as not a secret?
-  hint: store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret
+ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+  hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 ```
 <!-- /example -->
@@ -38,8 +38,8 @@ When the match is not a real secret (a sample value like this one, a test string
 <!-- example: ops#allow-secrets only=1,2 -->
 ```console
 # alice, in website
-$ lore memory add --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
-✓ mem_28f8…03df 
+$ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
+✓ mem_28f8…03df
   scope: [master]
 $ grep -rl AKIA .lore/data || echo 'not in .lore/data'
 .lore/data/memories/mem_28f8…03df.json
@@ -73,8 +73,8 @@ $ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 invoice-number	on	repo	this repo	our invoice numbers
 $ lore memory add --body 'Invoice INV-123456 is still open'
-ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (invoice-number) at line 1: IN…: store it anyway as not a secret?
-  hint: store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret
+ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (invoice-number) at line 1: IN…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+  hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 ```
 <!-- /example -->

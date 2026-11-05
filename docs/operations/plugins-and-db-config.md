@@ -71,6 +71,7 @@ A note such as "ask Bob before changing the build" is a rule: add it with `lore 
 $ lore policy set trash.retention_days 365 --yes
 ✓ trash.retention_days = 365 (this repo, pol_…c6d7)
 $ lore policy show trash
+trash.purge_on_delete	false	default
 trash.retention_days	365	repo this repo (pol_…c6d7)
 ```
 <!-- /example -->

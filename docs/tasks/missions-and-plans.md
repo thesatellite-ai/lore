@@ -159,7 +159,7 @@ $ lore mission add 'Test mission, please ignore'
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
 $ lore mission delete msn_05e9…4603
-ERROR: [E_NEEDS_CONFIRM] engine: run mission delete?
+ERROR: [E_NEEDS_CONFIRM] run mission delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore mission delete msn_05e9…4603 --yes
@@ -262,6 +262,7 @@ A handoff is for someone on the repo's *roster* (the list of people and agents l
 # alice, in website
 $ lore actor register
 ✓ act_4c59…6c38 alice (@alice) already registered (refreshed) in this repo
+lore live: (live, pushed)
 ```
 <!-- /example -->
 
@@ -271,12 +272,13 @@ lore already knew Alice from `lore init`, so it says `already registered (refres
 ```console
 # alice, in website
 $ lore task add 'Write the about page'
-lore sync: imported 1
 ✓ tsk_3b62…e913 — Write the about page [medium]
 lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 $ lore handoff add --for @alice --task tsk_3b62…e913 'Two of the three sections are written; the team photo is still missing'
 ✓ handoff hnd_f147…5139 for @alice
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 $ lore inbox
 -  handoff  @alice       tsk_3b62…e913  Two of the three sections are written; the team photo is still missing
 ```

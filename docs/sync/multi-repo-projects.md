@@ -64,10 +64,10 @@ Without `--repo`, a rule applies to the whole project. With `--repo shop` it app
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
-✓ rul_05e9…4603 
+✓ rul_05e9…4603
   scope: [master] severity: must
 $ lore rule add --repo shop --body 'Buttons are blue.'
-✓ rul_c0f3…b5b8 
+✓ rul_c0f3…b5b8
   scope: [repo:shop] severity: must
 $ lore rule list
 rul_05e9…4603 [must/always] Run the tests before you push.

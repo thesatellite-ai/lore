@@ -79,7 +79,7 @@ lore sync: exported 0 rows to .lore/data — review and commit it
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2742 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topics)
+✓ .lore/LORE.md (2769 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topics)
 ✓ .lore/LORE.full.md (520 bytes, every pinned entry in full; not imported)
 = ~/work/website/CLAUDE.md (pointer present)
 $ cat CLAUDE.md
@@ -142,7 +142,7 @@ $ lore render --dry-run | head -12
 ```console
 # alice, in website
 $ lore render --target AGENTS.md
-✓ .lore/LORE.md (2736 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topics)
+✓ .lore/LORE.md (2763 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topics)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 $ cat AGENTS.md
 <!-- lore:pointer:start -->
@@ -155,7 +155,7 @@ Read `.lore/LORE.md` (at the repository root) before answering: it holds this pr
 ```console
 # alice, in website
 $ lore render --out docs/agent-notes.md --target AGENTS.md
-✓ docs/agent-notes.md (2736 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topics)
+✓ docs/agent-notes.md (2763 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topics)
 ✓ docs/LORE.full.md (520 bytes, every pinned entry in full; not imported)
 ✓ ~/work/website/AGENTS.md (pointer → docs/agent-notes.md)
 $ cat AGENTS.md; ls docs
@@ -173,7 +173,7 @@ agent-notes.md
 ```console
 # alice, in website
 $ lore render --no-pointer
-✓ .lore/LORE.md (2742 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topics)
+✓ .lore/LORE.md (2769 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topics)
 ```
 <!-- /example -->
 
@@ -206,9 +206,9 @@ $ lore why-context
 render_id:    rnd_2ad3…f891
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
-total_bytes:  2742
+total_bytes:  2769
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
-scope:        {"included":{"rules":1,"hotfixes":1,"memories":0}}
+scope:        {"included":{"rules":1,"hotfixes":1,"memories":0},"cut_summary":{"file":".lore/LORE.md","profile":"claude_code","budget":32000,"before":520,"after":2769,"budget_exceeded":false,"index_collapsed":false,"entries":[]}}
 ```
 <!-- /example -->
 

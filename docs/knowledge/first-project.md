@@ -76,7 +76,7 @@ A *rule* is a hard "always" or "never", like a sign on the office wall. Give the
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
-✓ rul_2ad3…f891 
+✓ rul_2ad3…f891
   scope: [master] severity: must
 $ lore rule list
 rul_2ad3…f891 [must/always] Run the tests before you push
@@ -93,7 +93,7 @@ rul_2ad3…f891 [must/always] Run the tests before you push
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2527 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topics)
+✓ .lore/LORE.md (2554 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topics)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
 $ cat AGENTS.md
@@ -148,7 +148,7 @@ Notes:
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
   -   act_162d…9666 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
-  - context: .lore/LORE.md 2527 of 16000 bytes (15%, profile codex); warn at 80%
+  - context: .lore/LORE.md 2554 of 16000 bytes (15%, profile codex); warn at 80%
 ```
 <!-- /example -->
 

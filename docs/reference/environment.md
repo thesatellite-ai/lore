@@ -210,8 +210,8 @@ trace: git rev-parse --is-bare-repository --show-object-format (<time>, ok)
 trace: git rev-parse --show-toplevel (<time>, ok)
 trace: git rev-parse --path-format=absolute --git-common-dir (<time>, ok)
 trace: git config --get remote.origin.url (<time>, ok)
-trace: git config --get-all remote.origin.fetch (<time>, ok)
-trace: git check-ref-format refs/lore/live (<time>, ok)
+trace: git config --get user.name (<time>, ok)
+trace: git config --get user.email (<time>, ok)
 ```
 <!-- /example -->
 

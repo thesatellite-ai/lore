@@ -64,7 +64,7 @@ lore sync: imported 3
 ✓ rul_b4f4…a5b0 [client2]
   scope: [master] severity: must
 $ lore rule add --body 'The API answers in JSON only.'
-✓ rul_28f8…03df 
+✓ rul_28f8…03df
   scope: [master] severity: must
 $ lore rule list
 rul_28f8…03df [must/always] The API answers in JSON only.

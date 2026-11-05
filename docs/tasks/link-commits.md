@@ -87,9 +87,10 @@ $ lore sync
 · already in sync
 lore live: 1 row(s) left live (main holds them)
 $ lore task list --status done
-lore: tsk_2ad3…f891 merged 10:04 (found by: ancestry, 9b40ce7) but it could not be recorded: write tsk_2ad3…f891: signals: prepare companion: [E_STALE] engine: tsk_2ad3…f891 kept changing while it was merged: [E_STALE] live row tasks/tsk_2ad3…f891 changed since it was read: [E_STALE] store: row changed since it was read; the next lore command retries
+✓ tsk_2ad3…f891 merged 10:04 (found by: ancestry, 9b40ce7)
 ✓ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
-✓ tsk_2ad3…f891 Fix the typo on the pricing page [medium]  ✓ done · not merged yet
+✓ tsk_2ad3…f891 Fix the typo on the pricing page [medium]  ✓ done · merged 10:04
+lore live: landed on main (dfd8dc8); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -103,13 +104,14 @@ Sometimes lore cannot see the merge: the task has no commit, or the change reach
 $ lore task add 'Shrink the hero image'
 ✓ tsk_4f89…b64b — Shrink the hero image [medium]
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 $ lore task done tsk_4f89…b64b --no-lesson
 ✓ tsk_4f89…b64b done
 lore live: (live, pushed)
-lore live: landed on main (dfd8dc8); leaves live once main is fetched
+lore live: landed on main (cf563f3); leaves live once main is fetched
 $ lore task merged tsk_4f89…b64b
 ✓ tsk_4f89…b64b merged (marked by hand, 10:05)
-lore live: landed on main (cf563f3); leaves live once main is fetched
+lore live: landed on main (df3a55c); leaves live once main is fetched
 ```
 <!-- /example -->
 

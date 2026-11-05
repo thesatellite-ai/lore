@@ -27,7 +27,7 @@ Alice (an agency developer) adds a rule, then reads the log. Each line is: time,
 ```console
 # alice, in website
 $ lore rule add --body 'Never put passwords in the code'
-✓ rul_2ad3…f891 
+✓ rul_2ad3…f891
   scope: [master] severity: must
 $ lore audit log
 2026-11-02T10:00:00Z  rules.write                  rules/rul_2ad3…f891  by act_7a67…9504

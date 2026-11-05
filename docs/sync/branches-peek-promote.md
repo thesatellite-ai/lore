@@ -25,10 +25,10 @@ Alice (an agency developer) starts a branch for the client's payment page and wr
 # alice, in website
 $ git checkout -q -b feature/payments
 $ lore memory add --body 'We use Stripe for payments.'
-✓ mem_c0f3…b5b8 
+✓ mem_c0f3…b5b8
   scope: [master]
 $ lore rule add --body 'Never put passwords in the code.'
-✓ rul_76bd…3f10 
+✓ rul_76bd…3f10
   scope: [master] severity: must
 $ git add -A && git commit -qm 'lore: payment notes' && git push -q -u origin feature/payments
 $ git checkout -q main && lore memory list

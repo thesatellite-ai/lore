@@ -44,8 +44,6 @@ From /srv/git/github.com/client/website
  * branch            main       -> FETCH_HEAD
 Auto-merging .lore/data/rules/rul_b4f4…a5b0.json
 Merge made by the 'ort' strategy.
- .lore/data/rules/rul_b4f4…a5b0.json | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
 $ lore rule list
 rul_2ad3…f891 [must/always] Run the tests before you push.
 rul_76bd…3f10 [must/always] Never put passwords in the code.
@@ -88,7 +86,7 @@ $ git commit -qam 'merge'
 lore sync: imported 1
 lore sync: conflict-markers rules/rul_b4f4…a5b0.json: unresolved conflict markers in "body" — settle it with a lore edit of that row, or by editing the file
 ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4…a5b0.json (conflict-markers), .lore/data/rules/rul_b4f4…a5b0.json (conflict markers in body)
-  hint: resolve the conflict markers (or `lore sync resolve`); remove the credential from the files that hold one, then commit again
+  hint: resolve the conflict markers (or `lore sync resolve`), then commit again
 (exit 1)
 $ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue.'
 ✓ rul_b4f4…a5b0 updated
@@ -127,12 +125,12 @@ Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" o
 ```console
 # alice, in website
 $ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
-✓ mem_4c59…6c38 
+✓ mem_4c59…6c38
   scope: [master]
 
 # bob, in website
 $ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
-✓ mem_3b62…e913 
+✓ mem_3b62…e913
   scope: [master]
 $ git pull -q --no-rebase origin main
 $ lore sync dupes
