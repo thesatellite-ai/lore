@@ -245,6 +245,17 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		a.Place = placeOf(ctx, a) // FQ4: sto_ id (+ "/<folder prj_ id>") of a marked store; "" keeps the attached name
 		engOpts = append(engOpts, engine.WithStore(a))
 	}
+	// FQ11 / FA-AGENT-6: this machine's stricter local policy values.
+	machinePol, polNotes, err := machinePolicy(opts.Home)
+	if err != nil {
+		return fail(err)
+	}
+	if opts.Notice != nil && !repoOnly {
+		for _, n := range polNotes {
+			opts.Notice(n)
+		}
+	}
+	engOpts = append(engOpts, engine.WithMachinePolicy(machinePol))
 	st.defaultTarget = store.SourceRepo
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
