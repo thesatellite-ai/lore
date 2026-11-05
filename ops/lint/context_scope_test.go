@@ -1,6 +1,10 @@
 package lint
 
 import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -43,5 +47,67 @@ func TestScopeConflicts(t *testing.T) {
 	}
 	if ids2[id(t, ids.PrefixRule, 2).String()] != 1 || ids2[id(t, ids.PrefixRule, 5).String()] != 1 || len(got) != 2 {
 		t.Fatalf("conflicts = %+v", got)
+	}
+}
+
+// topEnv is an Env whose only upgrade is RepoTop (contextScopeFindings
+// calls nothing else); err makes RepoTop fail.
+type topEnv struct {
+	Env
+	top string
+	err error
+}
+
+func (e topEnv) RepoTop(context.Context) (string, error) { return e.top, e.err }
+
+// TestScopeMissing (CONTEXT_BUDGET 6.2.3, 6.12, later:472): a scp_ row
+// whose folder is gone, or is now a file, is flagged once with the
+// `lore scope move` fix; an existing folder, a nested existing folder and a
+// row with no path are not; without the RepoTop upgrade, or when RepoTop
+// fails, the check is skipped (no false "missing" for every scope).
+func TestScopeMissing(t *testing.T) {
+	top := t.TempDir()
+	for _, d := range []string{"src/booking", "src/a/b"} {
+		if err := os.MkdirAll(filepath.Join(top, filepath.FromSlash(d)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(top, "README"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	n := byte(0)
+	scp := func(path string) sourced {
+		n++
+		f := map[string]value.Value{}
+		if path != "" {
+			f[schema.FieldScopePath] = tx(t, path)
+		}
+		return sourced{src: store.SourceRepo, r: row.Row{ID: id(t, ids.PrefixScope, n), Fields: f}}
+	}
+	all := map[row.Table][]sourced{schema.TableScopes: {
+		scp("src/booking"), scp("src/a/b"), scp(""), scp("src/gone"), scp("README"),
+	}}
+	missing := func(env Env) map[string]Finding {
+		out := map[string]Finding{}
+		for _, f := range (ops{env: env}).contextScopeFindings(context.Background(), all) {
+			if f.Code == ScopeMissing {
+				out[f.ID] = f
+			}
+		}
+		return out
+	}
+	got := missing(topEnv{top: top})
+	gone, file := id(t, ids.PrefixScope, 4).String(), id(t, ids.PrefixScope, 5).String()
+	if len(got) != 2 || got[gone].ID == "" || got[file].ID == "" {
+		t.Fatalf("scope_missing = %+v, want %s and %s", got, gone, file)
+	}
+	if f := got[gone]; f.Fix != "lore scope move src/gone <new-path>" || f.Store != string(store.SourceRepo) {
+		t.Fatalf("finding = %+v", f)
+	}
+	if got := missing(topEnv{err: errors.New("no repo")}); len(got) != 0 {
+		t.Fatalf("RepoTop error: %+v, want skipped", got)
+	}
+	if got := missing(nil); len(got) != 0 {
+		t.Fatalf("no RepoTop upgrade: %+v, want skipped", got)
 	}
 }
