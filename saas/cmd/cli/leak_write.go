@@ -19,18 +19,19 @@ import (
 	"saas/pkg/aicoder/orgresolve"
 )
 
-// sharedSourceKey marks the context of `lore share`: the write-time check
-// allows the text of exactly that row (the copy is meant to carry it).
-type sharedSourceKey struct{}
+// movedSourceKey marks the context of a v0.1.17-path `lore move`: the
+// write-time check allows the text of exactly that row (the moved row is
+// meant to carry it).
+type movedSourceKey struct{}
 
-// withSharedSource marks ctx as a share of row id.
-func withSharedSource(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, sharedSourceKey{}, id)
+// withMovedSource marks ctx as a move of row id.
+func withMovedSource(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, movedSourceKey{}, id)
 }
 
-// sharedSource returns the row a share context copies ("" = not a share).
-func sharedSource(ctx context.Context) string {
-	id, _ := ctx.Value(sharedSourceKey{}).(string) // absent key reads "": not a share
+// movedSource returns the row a move context carries ("" = not a move).
+func movedSource(ctx context.Context) string {
+	id, _ := ctx.Value(movedSourceKey{}).(string) // absent key reads "": not a move
 	return id
 }
 
@@ -65,9 +66,9 @@ func leakCheckRouteWrite(ctx context.Context, route writeRoute, kind, text strin
 	}
 	it := leakcheck.Item{Where: "this " + kind, Content: []byte(text)}
 	lc := leakContext{action: leakActionWrite, what: "this " + kind}
-	if src := sharedSource(ctx); src != "" {
+	if src := movedSource(ctx); src != "" {
 		it.AllowRows = []string{src}
-		lc = leakContext{action: leakActionShare, what: "this share", source: src}
+		lc = leakContext{action: leakActionMove, what: "this move", source: src}
 	}
 	return runLeakCheck(ctx, root, []leakcheck.Item{it}, false, lc)
 }

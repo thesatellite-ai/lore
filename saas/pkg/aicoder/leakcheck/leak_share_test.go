@@ -5,10 +5,11 @@ import (
 	"testing"
 )
 
-// A deliberate share (§6.4) may carry the text of exactly the row it
-// copies, nothing else: F11 found `lore share` refused by its own guard.
-// Matrix: how the copy is allowed (AllowRows on the item, or shared_as on
-// the internal row) × what the content quotes (only the source, the
+// A deliberate transfer (§6.4) may carry the text of exactly the row it
+// carries, nothing else: F11 found v0.1.17's `lore share` refused by its
+// own guard; `lore move` passes AllowRows the same way, and copies v0.1.17
+// shared stay allowed through shared_as. Matrix: how the copy is allowed
+// (AllowRows on the item, or shared_as on the internal row) × what the content quotes (only the source, the
 // source plus a second internal note, only the second note) × where the
 // content is (the copy's row file, another row file, a source file).
 

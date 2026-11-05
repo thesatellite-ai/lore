@@ -1,10 +1,14 @@
-// share_cmd.go — `lore share <id> --to <target>` and `lore move <id> --to
-// <target>` (LORE_TEAM_SPEC §6.4, guard 4): widening who can read a row is
-// one deliberate step. Lore shows the text and asks; agents can never pass
-// --yes (a prompt injected into a client-writable row cannot make an agent
-// share); the copy gets a NEW id and no pointer back to the narrower row,
-// so the id rule never fires on a shared copy and the wider audience
-// learns nothing about the original. `move` also deletes the original.
+// move_cmd.go — `lore move <id> --to <target>` (BATCH 2: the one command
+// that gives a row to another place; `lore share` is removed, a row has one
+// home). Rows of core nouns move on the 0.1.18 core and keep their id
+// (runCoreMove, PROV5). Rows still on the v0.1.17 path are written to the
+// target under a NEW id with no pointer back (§6.4), then the original is
+// deleted. Lore shows the text and asks first.
+//
+//	runMove ─┬─ core table ─▶ runCoreMove (row_shortcut.go)
+//	         └─ v0.1.17 ─▶ findMoveSource ─▶ routeWrite (write-time leak
+//	              check) ─▶ ask ─▶ copyForMove ─▶ leakCheckMoveCopy ─▶ write
+//	              ─▶ deleteMoved
 package main
 
 import (
@@ -28,96 +32,72 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Fields a shared copy never carries: they would point back at the
+// Fields a moved v0.1.17 row never carries: they would point back at the
 // narrower row or its project, or carry the old row's live state. The names
 // are the real columns (dbent/schema: superseded_by_id, source_ref, …).
-var shareDropFields = []string{"_live", "superseded_by_id", "source_ref", "origin_id", "origin_url", "repo_id"}
+var moveDropFields = []string{"_live", "superseded_by_id", "source_ref", "origin_id", "origin_url", "repo_id"}
 
-// Actor columns of a shared copy (§6.4: no origin fields). The copy is the
-// sharer's statement, so created_by_actor_id names the sharer; every other
+// Actor columns of a moved v0.1.17 row (§6.4: no origin fields). The new
+// row is the mover's statement, so created_by_actor_id names the mover; every other
 // *_actor_id / *_actor_ids column (validated by, reviewed by, assigned to,
 // members …) would tell the wider audience who handled the original, so it
 // is cleared.
 const (
-	shareCreatorField     = "created_by_actor_id"
-	shareActorFieldSuffix = "_actor_id"
-	shareActorListSuffix  = "_actor_ids"
+	moveCreatorField     = "created_by_actor_id"
+	moveActorFieldSuffix = "_actor_id"
+	moveActorListSuffix  = "_actor_ids"
 )
 
-// shareFlags are the flags of share and move.
-type shareFlags struct {
+// moveFlags are the flags of move.
+type moveFlags struct {
 	to  toFlags
 	yes bool
-	// move only, rows of core nouns (CLI_REFERENCE 2.7): --drop-internal
+	// rows of core nouns (CLI_REFERENCE 2.7): --drop-internal
 	// (MQ11, BATCH 7) and --with-time totals|none (TQ3).
 	dropInternal bool
 	withTime     string
 	withChildren bool // --with-children: a task with its subtree (TASK 6.14, B7)
-	// asJSON (move only, CLI_REFERENCE 2.7 --json): the core move result as
+	// asJSON (CLI_REFERENCE 2.7 --json): the core move result as
 	// JSON on stdout; the preview line goes to stderr so stdout parses.
 	asJSON bool
 }
 
-func newShareCommand() *cobra.Command { return newShareLikeCommand(false) }
-func newMoveCommand() *cobra.Command  { return newShareLikeCommand(true) }
-
-func newShareLikeCommand(move bool) *cobra.Command {
-	f := &shareFlags{}
-	use, short, example := "share <id> --to <target>", "Copy a row to a wider audience (new id; shows the text and asks)",
-		`  lore share mem_0c12 --to repo
-  lore share mem_77 --to agency`
-	if move {
-		use, short, example = "move <id> --to <target>", "Move a row to another store (same id for rows on the core; asks first)",
-			`  lore move mem_0b77 --to agency
-  lore move tsk_0201 --to repo --drop-internal`
-	}
+func newMoveCommand() *cobra.Command {
+	f := &moveFlags{}
 	cmd := &cobra.Command{
-		Use: use, Short: short, Example: example,
+		Use:   "move <id> --to <target>",
+		Short: "Move a row to another store (same id for rows on the core; asks first)",
+		Example: `  lore move mem_0b77 --to agency
+  lore move tsk_0201 --to repo --drop-internal`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runShare(cmd.Context(), args[0], f, move)
+			return runMove(cmd.Context(), args[0], f)
 		},
 	}
 	cmd.Flags().StringVar(&f.to.To, flagTo, "", "the target: repo | <org> | <org>/<folder> | me (required)")
 	cmd.Flags().BoolVar(&f.yes, flagYes, false, "confirm without a prompt")
-	if move {
-		cmd.Flags().BoolVar(&f.dropInternal, flagDropInternal, false, "into a client repo: remove the row's internal metadata values instead of refusing (MQ11)")
-		cmd.Flags().StringVar(&f.withTime, flagWithTime, "", "totals | none (default none): time totals for a task moved into a client repo (TQ3; totals not built yet)")
-		cmd.Flags().BoolVar(&f.withChildren, "with-children", false, "a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14)")
-		cmd.Flags().BoolVar(&f.asJSON, flagJSONOut, false, "print the result as JSON (rows on the 0.1.18 core)")
-	}
+	cmd.Flags().BoolVar(&f.dropInternal, flagDropInternal, false, "into a client repo: remove the row's internal metadata values instead of refusing (MQ11)")
+	cmd.Flags().StringVar(&f.withTime, flagWithTime, "", "totals | none (default none): time totals for a task moved into a client repo (TQ3; totals not built yet)")
+	cmd.Flags().BoolVar(&f.withChildren, "with-children", false, "a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14)")
+	cmd.Flags().BoolVar(&f.asJSON, flagJSONOut, false, "print the result as JSON (rows on the 0.1.18 core)")
 	return cmd
 }
 
-// sharedRow is the row being shared and where it lives.
-type sharedRow struct {
+// moveSource is the row being moved and where it lives.
+type moveSource struct {
 	table, id string
 	doc       map[string]any
 	// file is its .lore/data file (checkout or mirror); "" when it is only
-	// on a live ref (its owner's live writer must delete it for move).
+	// on a live ref (its owner's live writer must delete it).
 	file string
 	// project is the external project holding it (nil = this checkout).
 	project *externalProject
 }
 
-// shareTarget is the --to of the share refusal hint: the given target,
-// else the placeholder CLI_REFERENCE 2.6 prints (never a blank `--to `).
-func shareTarget(to string) string {
-	if to == "" {
-		return "<target>"
-	}
-	return to
-}
-
-func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
+func runMove(ctx context.Context, id string, f *moveFlags) error {
 	if table, ok := coreTableOf(id); ok {
 		// Core-owned rows are written only by the 0.1.18 core: a move
-		// keeps the id (PROV5) and `lore share` is removed (BATCH 2: no
-		// copies).
-		if !move {
-			return errcodes.New(errcodes.Unsupported, "lore share is removed for "+string(table)+" (decision BATCH 2: a row has one home, no copies)").
-				WithHint("move it instead: `lore move " + id + " --to " + shareTarget(f.to.To) + "`")
-		}
+		// keeps the id (PROV5).
 		return runCoreMove(ctx, table, id, f)
 	}
 	if f.dropInternal || f.withTime != "" || f.withChildren || f.asJSON {
@@ -131,34 +111,27 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 		return err
 	}
 	if f.yes && me.Kind == identityKindAgent {
-		return errcodes.New(errcodes.InvalidInput, "agents cannot confirm a share with --yes; a person must run it (§6.4)").
-			WithHint("ask the owner to run `lore share " + id + " --to " + f.to.To + "`")
+		return errcodes.New(errcodes.InvalidInput, "agents cannot confirm a move with --yes; a person must run it (§6.4)").
+			WithHint("ask the owner to run `lore move " + id + " --to " + f.to.To + "`")
 	}
-	src, err := findRowForShare(ctx, id)
+	src, err := findMoveSource(ctx, id)
 	if err != nil {
 		return err
 	}
 	var c commonFlags
-	// The copy is meant to carry this row's text: routeWrite's write-time
-	// leak check allows exactly this row (leak_write.go).
-	route, err := routeWrite(withSharedSource(ctx, id), &c, f.to, singularKind(src.table), rowText(src.doc))
+	// The moved row is meant to carry its own text: routeWrite's
+	// write-time leak check allows exactly this row (leak_write.go).
+	route, err := routeWrite(withMovedSource(ctx, id), &c, f.to, singularKind(src.table), rowText(src.doc))
 	if err != nil {
 		return err
-	}
-	if route.Repo && src.project == nil && !move {
-		return errcodes.New(errcodes.InvalidInput, id+" is already in this repo")
 	}
 	who := "everyone with access to " + targetAudience(route)
 	fmt.Printf("This becomes visible to %s:\n  %q\n", who, oneLine(rowText(src.doc)))
 	if !f.yes {
 		if !stdinIsTTY() || me.Kind == identityKindAgent {
-			return errcodes.New(errcodes.InvalidInput, "not shared: confirm on a terminal (or --yes, people only); nothing written")
+			return errcodes.New(errcodes.InvalidInput, "not moved: confirm on a terminal (or --yes, people only); nothing written")
 		}
-		verb := "Share"
-		if move {
-			verb = "Move"
-		}
-		if !confirmYes(verb + " it? [y/N] ") {
+		if !confirmYes("Move it? [y/N] ") {
 			fmt.Println("nothing written")
 			return nil
 		}
@@ -171,29 +144,29 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 	if err != nil {
 		return err
 	}
-	sharer := actorIDFor(me.StableKey)
-	doc := copyForShare(src.doc, newID, targetPID, sharer, cliClock().Now())
+	mover := actorIDFor(me.StableKey)
+	doc := copyForMove(src.doc, newID, targetPID, mover, cliClock().Now())
 	body, err := canonjson.Encode(doc)
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "encode the copy").WithCause(err)
+		return errcodes.New(errcodes.Internal, "encode the moved row").WithCause(err)
 	}
 	if err := checkReferences(ctx, route, docRefs(doc, newID)); err != nil {
 		return err
 	}
 	if route.Repo {
-		if err := leakCheckShare(ctx, id, filepath.ToSlash(filepath.Join(".lore/data", src.table, newID+".json")), body); err != nil {
+		if err := leakCheckMoveCopy(ctx, id, filepath.ToSlash(filepath.Join(".lore/data", src.table, newID+".json")), body); err != nil {
 			return err
 		}
 	}
 	dst := filepath.Join(targetRoot, projresolve.MarkerDir, lsync.DataDirName, src.table, newID+".json")
 	if err := os.MkdirAll(filepath.Dir(dst), externalDirMode); err != nil {
-		return errcodes.New(errcodes.Internal, "write the copy").WithCause(err)
+		return errcodes.New(errcodes.Internal, "write the moved row").WithCause(err)
 	}
 	if err := atomicWriteFile(dst, body, externalFileMode); err != nil {
-		return errcodes.New(errcodes.Internal, "write the copy").WithCause(err)
+		return errcodes.New(errcodes.Internal, "write the moved row").WithCause(err)
 	}
 	if route.Repo {
-		if err := ensureSharerProjection(targetRoot, sharer, me.DisplayName); err != nil {
+		if err := ensureMoverProjection(targetRoot, mover, me.DisplayName); err != nil {
 			return err
 		}
 	}
@@ -202,27 +175,14 @@ func runShare(ctx context.Context, id string, f *shareFlags, move bool) error {
 			return err
 		}
 	}
-	if !move && src.project != nil {
-		if err := recordShareProvenance(ctx, src, newID); err != nil {
-			return err
-		}
-	}
-	verb := "shared copy of"
-	if move {
-		verb = "moved from"
-		if err := deleteShared(ctx, src); err != nil {
-			return err
-		}
+	if err := deleteMoved(ctx, src); err != nil {
+		return err
 	}
 	label := route.Label
 	if label == "" {
 		label = "this repo"
 	}
-	note := "the copy has no pointer back"
-	if !move && src.project != nil {
-		note += "; the original records the copy"
-	}
-	fmt.Printf("✓ %s %s %s, in %s (%s)\n", newID, verb, id, redactIfQuiet(label), note)
+	fmt.Printf("✓ %s moved from %s, in %s (the copy has no pointer back)\n", newID, id, redactIfQuiet(label))
 	return nil
 }
 
@@ -258,33 +218,33 @@ func routeRoot(route writeRoute) (string, string, error) {
 	return root, m.ProjectID, nil
 }
 
-// copyForShare is the shared copy: new id, the target's project id, fresh
-// timestamps, none of shareDropFields, the sharer as its creator and no
-// other actor column (see shareCreatorField).
-func copyForShare(doc map[string]any, newID, projectID, sharer string, now time.Time) map[string]any {
+// copyForMove is a v0.1.17 row as written to the move target: new id, the
+// target's project id, fresh timestamps, none of moveDropFields, the mover
+// as its creator and no other actor column (see moveCreatorField).
+func copyForMove(doc map[string]any, newID, projectID, mover string, now time.Time) map[string]any {
 	out := make(map[string]any, len(doc))
 	for k, v := range doc {
 		out[k] = v
 	}
-	for _, k := range shareDropFields {
+	for _, k := range moveDropFields {
 		delete(out, k)
 	}
 	for k := range out {
 		switch {
-		case k == shareCreatorField:
-		case strings.HasSuffix(k, shareActorFieldSuffix):
+		case k == moveCreatorField:
+		case strings.HasSuffix(k, moveActorFieldSuffix):
 			out[k] = nil
-		case strings.HasSuffix(k, shareActorListSuffix):
+		case strings.HasSuffix(k, moveActorListSuffix):
 			out[k] = []any{}
 		}
 	}
-	if _, ok := out[shareCreatorField]; ok {
+	if _, ok := out[moveCreatorField]; ok {
 		// Only tables that have the column: an unknown key would land in
 		// the row's extra fields.
-		if sharer == "" {
-			out[shareCreatorField] = nil
+		if mover == "" {
+			out[moveCreatorField] = nil
 		} else {
-			out[shareCreatorField] = sharer
+			out[moveCreatorField] = mover
 		}
 	}
 	out["id"] = newID
@@ -337,9 +297,9 @@ func singularKind(table string) string {
 	return table
 }
 
-// findRowForShare locates id in this checkout's .lore/data or, failing
+// findMoveSource locates id in this checkout's .lore/data or, failing
 // that, in an external source loaded here (store or personal).
-func findRowForShare(ctx context.Context, id string) (*sharedRow, error) {
+func findMoveSource(ctx context.Context, id string) (*moveSource, error) {
 	root, err := os.Getwd()
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "getwd").WithCause(err)
@@ -362,7 +322,7 @@ func findRowForShare(ctx context.Context, id string) (*sharedRow, error) {
 			if err := json.Unmarshal(row.Doc, &doc); err != nil {
 				return nil, errcodes.New(errcodes.Internal, "read "+id).WithCause(err)
 			}
-			r = &sharedRow{table: row.Table, id: id, doc: doc}
+			r = &moveSource{table: row.Table, id: id, doc: doc}
 		}
 		r.project = p
 		return r, nil
@@ -371,7 +331,7 @@ func findRowForShare(ctx context.Context, id string) (*sharedRow, error) {
 }
 
 // findInData finds <table>/<id>.json under a data dir.
-func findInData(data, id string) (*sharedRow, bool) {
+func findInData(data, id string) (*moveSource, bool) {
 	matches, _ := filepath.Glob(filepath.Join(data, "*", id+".json"))
 	if len(matches) != 1 {
 		return nil, false
@@ -384,7 +344,7 @@ func findInData(data, id string) (*sharedRow, bool) {
 	if json.Unmarshal(b, &doc) != nil {
 		return nil, false
 	}
-	return &sharedRow{table: filepath.Base(filepath.Dir(matches[0])), id: id, doc: doc, file: matches[0]}, true
+	return &moveSource{table: filepath.Base(filepath.Dir(matches[0])), id: id, doc: doc, file: matches[0]}, true
 }
 
 // openSourceProject opens the external project a cache source names.
@@ -413,11 +373,11 @@ func openSourceProject(ctx context.Context, source string) (*externalProject, er
 	return openStoreProject(ctx, s.Config, ref)
 }
 
-// deleteShared removes the original after a move (a file delete; the
+// deleteMoved removes the original after a move (a file delete; the
 // project's flush or the checkout's next sync carries it).
-func deleteShared(ctx context.Context, src *sharedRow) error {
+func deleteMoved(ctx context.Context, src *moveSource) error {
 	if src.file == "" {
-		return errcodes.New(errcodes.NotImplemented, src.id+" exists only on a live ref; delete it with `lore "+singularKind(src.table)+" delete` after the copy")
+		return errcodes.New(errcodes.NotImplemented, src.id+" exists only on a live ref; delete it with `lore "+singularKind(src.table)+" delete` after the move")
 	}
 	if err := os.Remove(src.file); err != nil {
 		return errcodes.New(errcodes.Internal, "delete the original").WithCause(err)
@@ -435,12 +395,12 @@ func (p *externalProject) importFiles(ctx context.Context) error {
 	return err
 }
 
-// ensureSharerProjection makes sure the client repo holds an actor file for
-// the person a shared copy names (created_by_actor_id), so every clone can
+// ensureMoverProjection makes sure the client repo holds an actor file for
+// the person a moved v0.1.17 row names (created_by_actor_id), so every clone can
 // resolve the name. It is written as the F18 client projection {id, display
 // name, kind} and never replaces an existing file: the export keeps an
 // existing one projected (client_actor_export.go).
-func ensureSharerProjection(root, actorID, displayName string) error {
+func ensureMoverProjection(root, actorID, displayName string) error {
 	if actorID == "" {
 		return nil
 	}
@@ -463,41 +423,4 @@ func ensureSharerProjection(root, actorID, displayName string) error {
 		return errcodes.New(errcodes.Internal, "write the actor projection").WithCause(err)
 	}
 	return nil
-}
-
-// shareProvenanceField lists, on the internal (narrower) row, the ids of the
-// copies shared from it (§6.4: "the internal row records the copy"). The
-// copy itself never points back; the wider audience cannot read this field.
-// It is not a schema column: lsync keeps it as one of the row's extra
-// fields, so it travels with the row file.
-const shareProvenanceField = "shared_as"
-
-// recordShareProvenance appends copyID to the source row's
-// shareProvenanceField in its store or personal project and imports the
-// change, so the command's flush commits it to that project.
-func recordShareProvenance(ctx context.Context, src *sharedRow, copyID string) error {
-	doc := make(map[string]any, len(src.doc)+1)
-	for k, v := range src.doc {
-		doc[k] = v
-	}
-	var list []any
-	if prev, ok := doc[shareProvenanceField].([]any); ok {
-		list = append(list, prev...)
-	}
-	doc[shareProvenanceField] = append(list, copyID)
-	path := src.file
-	if path == "" {
-		path = filepath.Join(src.project.Root, projresolve.MarkerDir, lsync.DataDirName, src.table, src.id+".json")
-	}
-	b, err := canonjson.Encode(doc)
-	if err != nil {
-		return errcodes.New(errcodes.Internal, "encode the provenance").WithCause(err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), externalDirMode); err != nil {
-		return errcodes.New(errcodes.Internal, "record the provenance").WithCause(err)
-	}
-	if err := atomicWriteFile(path, b, externalFileMode); err != nil {
-		return errcodes.New(errcodes.Internal, "record the provenance").WithCause(err)
-	}
-	return src.project.importFiles(ctx)
 }

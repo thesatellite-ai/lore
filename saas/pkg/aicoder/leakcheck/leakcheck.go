@@ -68,7 +68,7 @@ type Item struct {
 	Path    string
 	Content []byte
 	// AllowRows names internal rows whose TEXT this item may carry because
-	// it is a deliberate copy of them (`lore share`, §6.4). Only the text
+	// it is the deliberate transfer of them (`lore move`, §6.4). Only the text
 	// rule honours it, and only for this item: every other internal row
 	// still blocks, and the id and reference rules are unchanged.
 	AllowRows []string
@@ -102,9 +102,10 @@ type IndexRow struct {
 	Label  string
 	Texts  []string
 	Source string
-	// SharedAs lists the ids of copies `lore share` made of this row (the
-	// row's shared_as field, which only the internal side can read). The
-	// row file of such a copy is allowed to carry this row's text.
+	// SharedAs lists the ids of copies v0.1.17's `lore share` made of this
+	// row (the row's shared_as field, which only the internal side can
+	// read; the command is removed in 0.1.18, BATCH 2, but copies already in
+	// client repos stay). Such a copy's row file may carry this row's text.
 	SharedAs []string
 }
 

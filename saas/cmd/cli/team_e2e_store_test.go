@@ -552,19 +552,6 @@ func TestF16_PRBodyCheck(t *testing.T) {
 	a.aliceApp.Lore("check", "pr-body", ".git/pr-bad.md").Fails(t, th.ExitGuard, "E_LEAK_BLOCKED")
 }
 
-// §6.4: sharing is one deliberate step; agents can never pass --yes, so an
-// injected "run lore share … --yes" cannot make an agent share.
-func TestLeak_AgentsCannotConfirmAShare(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"), th.Cmd("agent", "start"))
-	mem := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", internalNote), "mem")
-	agent := startAgent(t, a.alice, a.aliceApp, agentLabelBackend, "alice")
-	a.aliceApp.As(agent).Lore("share", mem, "--to", "repo", "--yes").Refused(t)
-	a.aliceApp.Lore("share", mem, "--to", "repo").Refused(t)
-	if f := a.clientSees(t, "send the estimate before the call", agentLabelBackend, agent.Env(th.EnvLoreActor), agentActorID(t, a.store, agentLabelBackend)); len(f) != 0 {
-		t.Fatalf("an unconfirmed share (or the agent's label/id, Q11) reached the client: %v", f)
-	}
-}
-
 // §6.5 redacted output: without a TTY or with CI set, whoami and guard errors
 // name no store URL, internal folder or org.
 func TestLeak_RedactedOutputWithoutATTY(t *testing.T) {
@@ -761,18 +748,15 @@ func TestRecipe08_ClientDevelopersSeeOnlyClientRows(t *testing.T) {
 	}
 }
 
-// Cookbook 10: a note grows private → team → company; each share asks, gets
-// a new id, and nothing points from a wider audience back to a narrower one.
-func TestRecipe10_ShareChainMintsNewIds(t *testing.T) {
-	// BATCH 2 (owner): share is removed; widening a note's audience is a
-	// move, which keeps the id (one home), so the chain no longer mints ids.
-	// Pinned: share refused naming the move; an unconfirmed move without a
-	// terminal writes nothing; each confirmed move lands the row in the next
-	// audience's folder under the same id and leaves only a tombstone behind.
-	a := newAgency(t, th.Cmd("share"), th.Cmd("move"), th.Flag("to", "memory", "add"))
+// Cookbook 10: a note grows private → team → company. BATCH 2 (owner):
+// widening a note's audience is `lore move`, which keeps the id (one home).
+// Pinned: an unconfirmed move without a terminal writes nothing; each
+// confirmed move lands the row in the next audience's folder under the same
+// id and leaves only a tombstone behind.
+func TestRecipe10_MoveChainKeepsTheId(t *testing.T) {
+	a := newAgency(t, th.Cmd("move"), th.Flag("to", "memory", "add"))
 	const text = "prune the pnpm store before the Docker build"
 	mine := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", text, "--to", "me"), "mem")
-	a.aliceApp.Lore("share", mine, "--to", orgNorthwind, "--yes").Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+mine)
 	a.aliceApp.Lore("move", mine, "--to", orgNorthwind).Refused(t)
 	if a.storeHas(t, folderAcme, text) {
 		t.Fatal("a refused move writes nothing")
@@ -1120,20 +1104,17 @@ func (a *agency) clientRepoRow(t *testing.T, table, id string) (string, bool) {
 	return a.app.Read(refLive, liveRowPath(rootFolder, table, id))
 }
 
-// BUG-D1 / §6.4, after BATCH 2 (owner: `lore share` is removed; a row has
-// one home and `lore move` hands it over keeping its id). Before BATCH 2
-// this pinned share's new-id copy; it now pins the refusal naming the move,
-// and the move: the row lands in the client repo's .lore/data under the
-// same id with its text and no origin field, and the store keeps only a
-// tombstone (no second live copy anywhere).
-func TestLeak_ShareInternalMemoryToClientRepoMintsAPointerFreeCopy(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
+// BUG-D1 / §6.4, after BATCH 2 (owner: a row has one home and `lore move`
+// hands it over keeping its id): the row lands in the client repo's
+// .lore/data under the same id with its text and no origin field, and the
+// store keeps only a tombstone (no second live copy anywhere).
+func TestLeak_MoveInternalMemoryToClientRepoKeepsIdNoOrigin(t *testing.T) {
+	a := newAgency(t, th.Cmd("move"))
 	const text = "checkout must support INR and USD"
 	internal := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", text), "mem")
 	if !a.storeHas(t, folderAcme, internal) {
 		t.Fatal("the memory must start in the store's acme/ project")
 	}
-	a.aliceApp.Lore("share", internal, "--to", "repo", "--yes").Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+internal)
 	a.aliceApp.MustLore("move", internal, "--to", "repo", "--yes")
 	body, ok := a.clientRepoRow(t, tblMemories, internal)
 	if !ok || !strings.Contains(body, text) {

@@ -2,12 +2,12 @@
 
 package main
 
-// share_repo_e2e_test.go — BUG-D1 and BUG-D2 (coordinator ruling 18:40),
+// move_repo_e2e_test.go — BUG-D1 and BUG-D2 (coordinator ruling 18:40),
 // real binary in the agency world:
 //
-//   - D1: `lore share <internal mem> --to repo` writes a NEW row into the
-//     client's .lore/data with no pointer back (§6.4), named by the sharer,
-//     and the commit carrying it passes the leak hook.
+//   - D1 (after BATCH 2): `lore move <internal mem> --to repo` lands the row
+//     in the client's .lore/data under its id, the mover's actor file is the
+//     projection, and the commit carrying it passes the leak hook.
 //   - D2: an org person's actor copy in a client repo is only the F18
 //     projection {id, display name, kind}; a copy holding stable_key (an
 //     email) blocks the commit (fail closed).
@@ -21,8 +21,8 @@ import (
 	th "saas/cmd/cli/internal/teamharness"
 )
 
-// sharedBody is internal text the client is meant to receive by a share.
-const sharedBody = "checkout must support INR and USD"
+// movedBody is internal text the client is meant to receive by a move.
+const movedBody = "checkout must support INR and USD"
 
 // actorFile is the client repo path of an actor's row file.
 func actorFile(id string) string {
@@ -59,26 +59,20 @@ func mustProjection(t *testing.T, c *th.Clone, rel string) {
 	}
 }
 
-// BATCH 2 (owner): `lore share` is removed; `lore move` is the one way to
-// give a row to another place, keeping its id (a row has one home, no
-// copies). Before BATCH 2 this test pinned share's unlinked copy; it now
-// pins the refusal and the move that replaces it: the row lands in the
-// client repo under the same id with its text, the store keeps only a
-// tombstone, and the deliberate transfer passes the leak hook.
-func TestLeak_ShareToRepoWritesAnUnlinkedCopy(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
-	mem := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", sharedBody), "mem")
+// BATCH 2 (owner): `lore move` is the one way to give a row to another
+// place, keeping its id (a row has one home, no copies): the row lands in
+// the client repo under the same id with its text, and the deliberate
+// transfer passes the leak hook.
+func TestLeak_MoveToRepoKeepsTheIdAndPassesTheHook(t *testing.T) {
+	a := newAgency(t, th.Cmd("move"))
+	mem := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", movedBody), "mem")
 	rel := filepath.Join(".lore", "data", tblMemories, mem+".json")
 	if _, ok := a.aliceApp.ReadFile(rel); ok {
 		t.Fatalf("precondition: the memory must go to the store, not the repo")
 	}
-	a.aliceApp.Lore("share", mem, "--to", "repo", "--yes").Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+mem)
-	if _, ok := a.aliceApp.ReadFile(rel); ok {
-		t.Fatal("a refused share writes nothing")
-	}
 	a.aliceApp.MustLore("move", mem, "--to", "repo", "--yes")
 	body, ok := a.aliceApp.ReadFile(rel)
-	if !ok || !strings.Contains(body, sharedBody) {
+	if !ok || !strings.Contains(body, movedBody) {
 		t.Fatalf("the moved row keeps its id and text in the client's .lore/data: %v %s", ok, body)
 	}
 	alice := actorIDFor(aliceKey)

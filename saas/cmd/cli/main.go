@@ -140,7 +140,6 @@ func init() {
 	rootCmd.AddCommand(newStoreCommand())
 	rootCmd.AddCommand(newCacheCommand())
 	rootCmd.AddCommand(newCheckCommand())
-	rootCmd.AddCommand(newShareCommand())
 	rootCmd.AddCommand(newMoveCommand())
 	rootCmd.AddCommand(newContextCommand())
 	rootCmd.AddCommand(newSupportBundleCommand())

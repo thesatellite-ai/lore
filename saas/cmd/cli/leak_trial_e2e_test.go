@@ -6,8 +6,8 @@ package main
 // (F7–F11), real binary and real git in the agency world: alice's notes go
 // to the northwind store, acme/app is the client repo (bare origin).
 //
-//   - F11: `lore share <mem> --to repo --yes` of a note long enough for the
-//     text rule works, commits and pushes; a share whose text also quotes a
+//   - F11: `lore move <mem> --to repo --yes` of a note long enough for the
+//     text rule works, commits and pushes; a move whose text also quotes a
 //     second internal note is refused, and the hint is not the same command.
 //   - F7: a `git commit --no-verify` carrying an internal sentence is
 //     refused by the pre-push hook and nothing reaches origin; a clean push
@@ -61,14 +61,12 @@ func repoRows(t *testing.T, c *th.Clone, table string) []string {
 	return out
 }
 
-// BATCH 2 (owner): `lore share` is removed for `lore move` (same id, one
-// home). The trial's F11 finding was that a long shared note must pass the
-// commit and push checks once it is deliberately in the client repo; the
-// same holds for the moved row. Share itself is refused naming the move.
-func TestLeak_TrialF11_ShareLongNoteToRepo(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
+// The trial's F11 finding: a long internal note deliberately given to the
+// client repo must pass the commit and push checks. BATCH 2 (owner): the
+// transfer is `lore move` (same id, one home; `lore share` is removed).
+func TestLeak_TrialF11_MoveLongNoteToRepo(t *testing.T) {
+	a := newAgency(t, th.Cmd("move"))
 	mem := a.storeMem(t, leakShared)
-	a.aliceApp.Lore("share", mem, "--to", "repo", "--yes").Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+mem)
 	a.aliceApp.MustLore("move", mem, "--to", "repo", "--yes")
 	body, ok := a.aliceApp.ReadFile(filepath.Join(".lore", "data", tblMemories, mem+".json"))
 	if !ok || !strings.Contains(body, leakShared) {
@@ -88,20 +86,14 @@ func TestLeak_TrialF11_ShareLongNoteToRepo(t *testing.T) {
 }
 
 // The trial's F11 refusal: a note quoting ANOTHER internal note must not
-// reach the client repo whole. With share removed (BATCH 2) the transfer is
-// `lore move`, and a move is a write (coordinator decision, fail closed):
-// the leak check runs before anything is asked or written, naming the
-// quoted note, exactly as the old share refusal did (exit 19, no success
-// line, no row in the client repo, the row still in its store).
-func TestLeak_TrialF11_ShareQuotingAnotherNoteRefused(t *testing.T) {
-	a := newAgency(t, th.Cmd("share"), th.Cmd("move"))
+// reach the client repo whole. The transfer is `lore move` (BATCH 2), and a
+// move is a write (coordinator decision, fail closed): the leak check runs
+// before anything is asked or written, naming the quoted note (exit 19, no
+// success line, no row in the client repo, the row still in its store).
+func TestLeak_TrialF11_MoveQuotingAnotherNoteRefused(t *testing.T) {
+	a := newAgency(t, th.Cmd("move"))
 	other := a.storeMem(t, leakOther)
 	mem := a.storeMem(t, leakShared+"; as noted, "+leakOther)
-	r := a.aliceApp.Lore("share", mem, "--to", "repo", "--yes")
-	r.Fails(t, th.ExitRefused, "E_UNSUPPORTED", "lore move "+mem)
-	if rows := repoRows(t, a.aliceApp, tblMemories); len(rows) != 0 {
-		t.Fatalf("a refused share writes nothing: %v", rows)
-	}
 	m := a.aliceApp.Lore("move", mem, "--to", "repo", "--yes")
 	m.Fails(t, 19, "E_LEAK_BLOCKED", other, "Remove that part from "+mem)
 	m.Never(t, "✓", "This becomes visible")
@@ -209,7 +201,7 @@ func TestLeak_TrialF10_CommitHintNamesRepoRow(t *testing.T) {
 	a.aliceApp.Git("add", "-A")
 	r := a.aliceApp.TryGit("commit", "-m", "add a rule")
 	r.Fails(t, 1, "E_LEAK_BLOCKED", "lore move "+rul+" --to <org>", "lore rule delete "+rul+" --confirm")
-	r.Never(t, "lore move "+mem, "lore share "+mem)
+	r.Never(t, "lore move "+mem)
 }
 
 // The write-time check costs a plain repo (no org, no store) nothing.

@@ -131,8 +131,8 @@ func TestLeakFixNamesTheActionableRow(t *testing.T) {
 			leakContext{action: leakActionCommit}, []string{"Remove the internal text from src/a.ts"}, []string{"lore move"}},
 		{"commit message", leakcheck.Finding{Rule: leakcheck.RuleText, RowID: mem},
 			leakContext{action: leakActionCommit}, []string{"the commit message"}, nil},
-		{"share quoting another note", leakcheck.Finding{Rule: leakcheck.RuleText, RowID: other},
-			leakContext{action: leakActionShare, source: mem}, []string{other, "Remove that part from " + mem}, []string{"lore share"}},
+		{"move quoting another note", leakcheck.Finding{Rule: leakcheck.RuleText, RowID: other},
+			leakContext{action: leakActionMove, source: mem}, []string{"Not moved", other, "Remove that part from " + mem}, []string{"lore move"}},
 		{"write --to repo", leakcheck.Finding{Rule: leakcheck.RuleText, RowID: mem},
 			leakContext{action: leakActionWrite}, []string{"Nothing written", "--to <org>"}, []string{"lore move " + mem}},
 	}
@@ -151,9 +151,9 @@ func TestLeakFixNamesTheActionableRow(t *testing.T) {
 			}
 		})
 	}
-	// The share refusal's whole message never offers the same command.
-	err := leakBlockedError([]leakcheck.Finding{{Rule: leakcheck.RuleText, Where: "share x", RowID: other, Words: 9}}, false, leakContext{action: leakActionShare, what: "this share", source: mem})
-	if strings.Contains(err.Error(), "lore share") {
-		t.Fatalf("a share refusal must not tell the user to share again: %s", err)
+	// The move refusal's whole message never offers the same command.
+	err := leakBlockedError([]leakcheck.Finding{{Rule: leakcheck.RuleText, Where: "move x", RowID: other, Words: 9}}, false, leakContext{action: leakActionMove, what: "this move", source: mem})
+	if strings.Contains(err.Error(), "lore move <id> --to repo") {
+		t.Fatalf("a move refusal must not tell the user to move again: %s", err)
 	}
 }

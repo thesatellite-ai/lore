@@ -1,7 +1,7 @@
 // row_shortcut.go — the generic row commands of the 0.1.18 core under
 // their short CLI words (CLI_REFERENCE 2.7, 2.13): `lore show <id>` runs
 // the registry's `lore row show`, `lore lint` runs `lore lint run`, and
-// `lore move <id>` (share_cmd.go) runs row.move for rows of core nouns.
+// `lore move <id>` (move_cmd.go) runs row.move for rows of core nouns.
 //
 //	lore show <id> [--origin] ─► row show (same flags, one implementation)
 //	lore lint [--code c]      ─► lint run
@@ -137,7 +137,7 @@ func forward(target *cobra.Command) func(*cobra.Command, []string) error {
 // OQ25), then row.move, which keeps the id (PROV5, XQ5) and refuses
 // secret references (BATCH 5) and internal metadata without
 // --drop-internal (MQ11) into a client repo.
-func runCoreMove(ctx context.Context, table row.Table, id string, f *shareFlags) error {
+func runCoreMove(ctx context.Context, table row.Table, id string, f *moveFlags) error {
 	if coreApp == nil {
 		return errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
 	}

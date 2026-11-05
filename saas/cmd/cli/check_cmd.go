@@ -217,8 +217,10 @@ func leakIndexWith(ctx context.Context, root string, asClient bool) (*leakcheck.
 	return leakcheck.NewIndex(ir, projects), s.ProjectID, client, nil
 }
 
-// sharedCopies reads an internal row's shareProvenanceField: the ids of
-// the copies `lore share` made of it, whose row files may carry its text.
+// sharedCopies reads an internal row's shared_as field: the ids of the
+// copies v0.1.17's `lore share` made of it (the command is removed in
+// 0.1.18, BATCH 2; copies already in client repos keep their allowance),
+// whose row files may carry its text.
 // A document without the field (or unreadable) has none: the safe answer.
 func sharedCopies(doc []byte) []string {
 	var d struct {
@@ -297,8 +299,8 @@ func leakBlockedError(fs []leakcheck.Finding, explain bool, lc leakContext) erro
 	for _, fix := range fixes {
 		b.WriteString(fix + "\n")
 	}
-	if lc.action != leakActionShare && lc.action != leakActionMove {
-		// BATCH 2: share is removed; a move hands the row over, same id.
+	if lc.action != leakActionMove {
+		// BATCH 2: a move hands the row over, same id.
 		b.WriteString("To give the client an internal note on purpose: lore move <id> --to repo (it keeps the id; it shows the text and asks)\n")
 	}
 	b.WriteString("(a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)")
@@ -325,9 +327,6 @@ const (
 	// leakActionWrite: a row about to be written to this repo; nothing was
 	// written.
 	leakActionWrite
-	// leakActionShare: `lore share … --to repo`; the copy carries text of
-	// an internal row other than the one shared.
-	leakActionShare
 	// leakActionLive: a live write or landing commit to this repo's refs.
 	leakActionLive
 	// leakActionMove: `lore move <id> --to repo` in a client repo; the row
@@ -340,8 +339,7 @@ type leakContext struct {
 	action leakAction
 	// what names the refused thing in the first line ("this commit").
 	what string
-	// source is the row being shared or moved (leakActionShare,
-	// leakActionMove).
+	// source is the row being moved (leakActionMove).
 	source string
 }
 
@@ -368,11 +366,6 @@ func leakFix(f leakcheck.Finding, lc leakContext) string {
 		return fix
 	}
 	switch lc.action {
-	case leakActionShare:
-		if f.RowID == "" || f.RowID == lc.source {
-			return "Not shared: the copy breaks a leak rule that sharing does not lift; nothing written"
-		}
-		return fmt.Sprintf("Not shared: %s also carries text of internal note %s, which stays internal. Remove that part from %s, then share it again; nothing written", lc.source, f.RowID, lc.source)
 	case leakActionMove:
 		if f.RowID == "" || f.RowID == lc.source {
 			return "Not moved: the row breaks a leak rule that a move does not lift; nothing written"
@@ -392,7 +385,7 @@ func leakFix(f leakcheck.Finding, lc leakContext) string {
 			return fmt.Sprintf("%s (a %s in this repo) is in a commit you are pushing: rewrite that commit without it (git commit --amend, or git rebase), then keep it internal: lore move %s --to <org>", id, kind, id)
 		case leakActionLive:
 			return fmt.Sprintf("Keep %s internal: lore move %s --to <org>, or edit it so it no longer carries the internal text", id, id)
-		case leakActionCommit, leakActionText, leakActionWrite, leakActionShare, leakActionMove:
+		case leakActionCommit, leakActionText, leakActionWrite, leakActionMove:
 			// the general repo-row advice below
 		}
 		return fmt.Sprintf("%s is a %s in this repo. Keep it internal: lore move %s --to <org>   or remove it: lore %s delete %s --confirm", id, kind, id, kind, id)
@@ -600,15 +593,16 @@ func leakCheckDocs(ctx context.Context, where string, docs map[string][]byte) er
 	return runLeakCheck(ctx, root, items, false, leakContext{action: leakActionLive, what: "this " + where})
 }
 
-// leakCheckShare is the F16 check of a `lore share … --to repo` copy before
-// it is written. Only the text of the shared row itself is allowed in the
-// copy (§6.4: sharing is the deliberate exception); every other internal
-// row, the id and reference rules and the secret rule still block.
-func leakCheckShare(ctx context.Context, sourceID, path string, body []byte) error {
+// leakCheckMoveCopy is the F16 check of a v0.1.17-path `lore move … --to
+// repo` row file before it is written. Only the text of the moved row
+// itself is allowed in it (the move is the deliberate transfer); every
+// other internal row, the id and reference rules and the secret rule still
+// block.
+func leakCheckMoveCopy(ctx context.Context, sourceID, path string, body []byte) error {
 	root, err := os.Getwd()
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
 	}
-	items := []leakcheck.Item{{Where: "share " + path, Path: path, Content: body, AllowRows: []string{sourceID}}}
-	return runLeakCheck(ctx, root, items, false, leakContext{action: leakActionShare, what: "this share", source: sourceID})
+	items := []leakcheck.Item{{Where: "move " + path, Path: path, Content: body, AllowRows: []string{sourceID}}}
+	return runLeakCheck(ctx, root, items, false, leakContext{action: leakActionMove, what: "this move", source: sourceID})
 }
