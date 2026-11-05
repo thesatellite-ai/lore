@@ -4,13 +4,14 @@ package main
 
 // team_e2e_repowrite_paths_test.go — F16 on every path that writes a row
 // into a client repo's own .lore/data (the branch, which the client reads
-// once committed), with live rows off so the live-ref check is not what
-// refuses. The engine's repo-write check (org.RepoWriteCheck, run by
-// GuardRepoWrite) is asked only on a create or restore of a routed kind
-// (memory, rule, decision, comment, task, mission); an edit, or a create
-// of any other table, reaches the branch only through cmd/lore's live
-// backend check (wire/host leakCheckBranch). This test names each path, so
-// dropping either check shows which paths lose F16.
+// once committed), with --no-live and with live rows off (LORE_LIVE=0), so
+// the live-ref check is not what refuses. The engine's repo-write check
+// (org.RepoWriteCheck, run by GuardRepoWrite) is asked only on a create or
+// restore of a routed kind (memory, rule, decision, comment, task,
+// mission); an edit, or a create of any other table, reaches the branch
+// only through cmd/lore's live backend check (wire/host leakCheckBranch,
+// and noSessionLeakCheck when there is no live session). This test names
+// each path, so dropping any of the checks shows which paths lose F16.
 
 import (
 	"bytes"
@@ -41,6 +42,23 @@ func TestF16_EveryRepoWritePathIsChecked(t *testing.T) {
 	for _, p := range paths {
 		t.Run(p.name, func(t *testing.T) {
 			a.aliceApp.Lore(p.args...).Fails(t, th.ExitGuard, "E_LEAK_BLOCKED")
+		})
+	}
+	// The same edits and creates with live rows off (LORE_LIVE=0): no live
+	// session, so the branch check must not depend on one.
+	off := a.aliceApp.With("LORE_LIVE=0")
+	offPaths := []struct {
+		name string
+		args []string
+	}{
+		{"live off: create of a routed kind (task add)", []string{"task", "add", quote, "--to", "repo", "--tasklist", a.tl}},
+		{"live off: create of another table (hotfix add)", []string{"hotfix", "add", "--title", "pay", "--body", quote, "--to", "repo"}},
+		{"live off: edit (task edit --body)", []string{"task", "edit", task, "--body", quote}},
+		{"live off: edit (memory edit --body)", []string{"memory", "edit", mem, "--body", quote}},
+	}
+	for _, p := range offPaths {
+		t.Run(p.name, func(t *testing.T) {
+			off.Lore(p.args...).Fails(t, th.ExitGuard, "E_LEAK_BLOCKED")
 		})
 	}
 	// The same paths over `lore api` (REST runs the same engine; the CLI

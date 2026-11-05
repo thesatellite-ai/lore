@@ -247,7 +247,8 @@ type dirMem struct {
 func (d dirMem) Dir() string { return d.dir }
 
 // TestLiveWrap_OnlyTheRepoStoreWithLiveOn: LORE_LIVE=0 / LORE_SYNC=0 keep
-// every row in .lore/data, and only the repo store is wrapped.
+// every row in .lore/data (the wrapper has no live session), and only the
+// repo store is wrapped.
 func TestLiveWrap_OnlyTheRepoStoreWithLiveOn(t *testing.T) {
 	h := &liveHost{}
 	inner := dirMem{Backend: memstore.NewData().Open(store.OpenOptions{}), dir: t.TempDir()}
@@ -259,8 +260,11 @@ func TestLiveWrap_OnlyTheRepoStoreWithLiveOn(t *testing.T) {
 	for _, env := range []string{EnvLive, EnvSync} {
 		t.Run(env+"=0", func(t *testing.T) {
 			t.Setenv(env, envOff)
-			if got := h.wrap(store.SourceRepo, inner); got != store.Backend(inner) {
-				t.Fatalf("%s=0 keeps every row in .lore/data", env)
+			// Still wrapped (F16 on branch writes, noSessionLeakCheck), but
+			// with no live overlay: every row stays in .lore/data.
+			lb, ok := h.wrap(store.SourceRepo, inner).(*liveBackend)
+			if !ok || !lb.off || lb.session(t.Context()) != nil {
+				t.Fatalf("%s=0 keeps every row in .lore/data (no live session)", env)
 			}
 		})
 	}

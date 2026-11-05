@@ -237,7 +237,7 @@ type dirBackend interface {
 // wrap puts liveBackend in front of the repo store (live mode on, a
 // folder backend).
 func (h *liveHost) wrap(name store.Source, b store.Backend) store.Backend {
-	if name != store.SourceRepo || liveDisabled() {
+	if name != store.SourceRepo {
 		return b
 	}
 	d, ok := b.(dirBackend)
@@ -245,7 +245,7 @@ func (h *liveHost) wrap(name store.Source, b store.Backend) store.Backend {
 		return b
 	}
 	top, folder := livePlace(d.Dir())
-	return &liveBackend{inner: d, top: top, folder: folder}
+	return &liveBackend{inner: d, top: top, folder: folder, h: h, off: liveDisabled()}
 }
 
 // livePlace is the git top level holding dir and the live folder of the
@@ -304,6 +304,26 @@ var fetchAlways = map[string]bool{
 	opslive.OpRestore: true, opslive.OpCompact: true,
 }
 
+// leakExemptOps are the nouns whose branch writes skip the write-time F16
+// check (noSessionLeakCheck): migrate rewrites the rows a repo already
+// holds into the 0.1.18 format and adds no text of its own.
+var leakExemptOps = map[string]bool{"migrate": true}
+
+// leakExemptKey marks a run of a leakExemptOps operation on its context.
+type leakExemptKey struct{}
+
+// leakExempt reports whether ctx is a run of a leakExemptOps operation.
+func leakExempt(ctx context.Context) bool {
+	v, _ := ctx.Value(leakExemptKey{}).(bool)
+	return v
+}
+
+// noun is the first word of an operation name ("memory" of "memory.add").
+func noun(name string) string {
+	n, _, _ := strings.Cut(name, ".")
+	return n
+}
+
 func skipLive(name string) bool {
 	noun, _, _ := strings.Cut(name, ".")
 	for _, s := range liveSkip {
@@ -317,6 +337,9 @@ func skipLive(name string) bool {
 // around is LiveHook's Around (see the file comment).
 func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, error) {
 	spec := run.Entry.Spec()
+	if leakExemptOps[noun(spec.Name)] {
+		ctx = context.WithValue(ctx, leakExemptKey{}, true)
+	}
 	if liveDisabled() || skipLive(spec.Name) {
 		return next(ctx)
 	}

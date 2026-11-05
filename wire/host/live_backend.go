@@ -69,6 +69,12 @@ type liveBackend struct {
 	// live folder (`_root` or a monorepo subproject path).
 	top    string
 	folder string
+	// h is the host (its LeakCheck runs on writes with no live session).
+	h *liveHost
+	// off: live rows are disabled (LORE_LIVE / LORE_SYNC off). The backend
+	// then has no live overlay at all, but still checks F16 on every
+	// branch write (noSessionLeakCheck).
+	off bool
 }
 
 var (
@@ -79,6 +85,9 @@ var (
 
 // session is the run's prepared session (nil: no live overlay).
 func (b *liveBackend) session(ctx context.Context) *liveSession {
+	if b.off {
+		return nil
+	}
 	r := runFrom(ctx)
 	if r == nil {
 		return nil
@@ -307,6 +316,9 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	s := b.session(ctx)
 	if s == nil {
+		if err := b.noSessionLeakCheck(ctx, changes); err != nil {
+			return err
+		}
 		return b.inner.Write(ctx, changes)
 	}
 	_, files, err := b.liveFiles(ctx, s)
@@ -608,6 +620,8 @@ func (b *liveBackend) WriteAudited(ctx context.Context, changes []store.Change, 
 		if err := s.h.leakCheckBranch(ctx, b.folder, changes); err != nil {
 			return err // F16 before the branch write, as Write does
 		}
+	} else if err := b.noSessionLeakCheck(ctx, changes); err != nil {
+		return err
 	}
 	return j.WriteAudited(ctx, changes, recs)
 }
@@ -739,4 +753,18 @@ func (b *liveBackend) overLanded(ctx context.Context, s *liveSession, ch store.C
 		ch.Expect = hlc.HLC{}
 	}
 	return ch
+}
+
+// noSessionLeakCheck is F16 on a branch write that has no live session: live
+// rows off, an operation the live hook skips (config, identity, org, stores,
+// init), or a caller outside the host runner. The client reads the branch
+// rows once committed, so they get the same write-time check as a live
+// run's branch rows (leakCheckBranch); before this, only the commit and
+// push hooks caught them. migrate is exempt (leakExempt): it rewrites rows
+// the repo already holds, it does not add text.
+func (b *liveBackend) noSessionLeakCheck(ctx context.Context, changes []store.Change) error {
+	if b.h == nil || leakExempt(ctx) {
+		return nil
+	}
+	return b.h.leakCheckBranch(ctx, b.folder, changes)
 }
