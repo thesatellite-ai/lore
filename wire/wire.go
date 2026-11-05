@@ -484,7 +484,7 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opssupportbundle.Ops(a)...)
 	entries = append(entries, contextop.Ops(a)...)
 	// PASS3 ONE-PATH: lore sync …, land, explain (the host is Options.Sync).
-	entries = append(entries, opssync.Ops(a.opts.Sync)...)
+	entries = append(entries, opssync.Ops(a.syncEnv())...)
 	entries = append(entries, opsrender.Ops(a)...)
 	entries = append(entries, opsdoctor.Ops(a)...)
 	// CLI 3.8 / 2.11: lore session list, lore agent start (P3-RUNS-4, P3-RUNS-6).
