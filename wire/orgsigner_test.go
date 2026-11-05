@@ -68,3 +68,34 @@ func TestStoreSignerEnvForOrgStoreWorktree(t *testing.T) {
 		t.Fatalf("plain store env = %v, %v; want none (git identity wins, FLAG4)", env, err)
 	}
 }
+
+// FLAG4/r3-sign: App.LoreSignature is exactly storeSigner.fallback for the
+// App's options (the signer a core store commit uses when git has no
+// identity), so the old binary's storeSignature, which calls it, names the
+// same signer as a core store commit. A human key with an e-mail signs with
+// that e-mail; an agent key signs with a synthetic address.
+func TestLoreSignatureIsStoreFallback(t *testing.T) {
+	for _, c := range []struct{ actor, email string }{
+		{testEmail, "alice@example.com"},
+		{"agent:frontend_2", "agent.frontend_2@"},
+	} {
+		t.Run(c.actor, func(t *testing.T) {
+			a, err := New(Options{RepoDir: gitRepo(t), Home: t.TempDir(), FlagActor: c.actor})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = a.Close() })
+			name, email, ok := a.LoreSignature(background())
+			if !ok || name == "" {
+				t.Fatalf("LoreSignature = %q %q %v", name, email, ok)
+			}
+			fb := storeIdentityFunc(a.opts).fallback(background())
+			if fb.Name != name || fb.Email != email {
+				t.Fatalf("LoreSignature %q <%s> differs from the store fallback %q <%s>", name, email, fb.Name, fb.Email)
+			}
+			if !strings.HasPrefix(email, c.email) {
+				t.Fatalf("email %q, want prefix %q", email, c.email)
+			}
+		})
+	}
+}
