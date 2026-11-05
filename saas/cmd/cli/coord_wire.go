@@ -303,7 +303,15 @@ func coordError(err error) error {
 		if coord.IsMission(he.By.Task) && !he.SameActor {
 			msg = fmt.Sprintf("%s is coordinated by %s (until %s)", he.By.Task, holderLabel(he.By), he.By.Expires.UTC().Format(time.Kitchen))
 		}
-		return errcodes.New(errcodes.InvalidInput, msg)
+		// EXACT ERRORS (P2-TASK-3): a hold is contention, not bad input.
+		// Someone else holds it → E_CONTENDED (CLI_REFERENCE 5: a claim on
+		// a name someone else holds); your own actor in another session →
+		// E_REFUSED (waiting will not help; the message names the
+		// LORE_ACTOR fix).
+		if he.SameActor {
+			return errcodes.New(errcodes.Refused, msg)
+		}
+		return errcodes.New(errcodes.Contended, msg).WithHint("retry after the hold ends, or pick other work with `lore task next`")
 	case errors.As(err, &we):
 		return errcodes.New(errcodes.InvalidInput, we.Error())
 	case errors.As(err, &nw):

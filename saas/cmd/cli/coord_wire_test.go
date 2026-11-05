@@ -34,8 +34,8 @@ func TestCoordErrorExitCodes(t *testing.T) {
 		{"contended", coord.ErrContended, errcodes.Contended, 11, ""},
 		{"bare not held", fmt.Errorf("x: %w", signals.ErrNotHeld), errcodes.LostClaim, 12, ""},
 		// Q-R2-5 / FLAG2: E_INVALID_INPUT exits 20 on old commands too (was 1).
-		{"mission held", &signals.HeldError{By: held}, errcodes.InvalidInput, 20, "coordinated by coord-1"},
-		{"same actor", &signals.HeldError{By: held, SameActor: true}, errcodes.InvalidInput, 20, "LORE_ACTOR"},
+		{"mission held", &signals.HeldError{By: held}, errcodes.Contended, 11, "coordinated by coord-1"},
+		{"same actor", &signals.HeldError{By: held, SameActor: true}, errcodes.Refused, 23, "LORE_ACTOR"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
