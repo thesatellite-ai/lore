@@ -69,6 +69,9 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	o.OrgCommands = &standaloneOrg{home: home, res: res}
 	o.Whoami = &standaloneWhoami{opts: o, res: res}
 	o.Sessions.Agent = &standaloneAgent{opts: o}
+	if o.Local.Leaks == nil {
+		o.Local.Leaks = &standaloneLeaks{opts: o, res: res} // its own App: check is Local (P3-CMDLORE-8)
+	}
 	// Org store writes are pushed at once (P3-CMDLORE-7); host hooks wrap
 	// after this (their WrapBackend calls this one first).
 	if o.WrapBackend == nil {
