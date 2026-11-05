@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/zricethezav/gitleaks/v8/config"
 	"github.com/zricethezav/gitleaks/v8/detect"
@@ -46,9 +45,11 @@ var _ scan.Reporter = (*Scanner)(nil)
 // by Rules; it is immutable afterwards and safe for concurrent use.
 type Scanner struct {
 	regex *scan.RegexScanner // lore pack + store rules
-	// mu serialises the gitleaks detector: its Detect is not documented as
-	// safe for concurrent use (it updates counters on the detector).
-	mu       sync.Mutex
+	// detector is shared by concurrent scans without a lock (P3-PERF-1,
+	// BUG-TIME-BENCH: `lore lint` scans 100k texts in parallel): gitleaks
+	// scans files on many goroutines with one Detector itself, its byte
+	// counters are atomic and its findings list and commit map have their
+	// own mutexes; TestScanConcurrent pins this under -race.
 	detector *detect.Detector // nil when no gitleaks rule is on
 	// builtin: rule ids still in their built-in form (post-filters run
 	// only on these); allow: the repo .gitleaks.toml allow (D8).
@@ -160,9 +161,7 @@ func (s *Scanner) ScanReport(field, text string) Report {
 		return rep
 	}
 	var gl []scan.Finding
-	s.mu.Lock()
 	found := s.detector.DetectString(text)
-	s.mu.Unlock()
 	for _, f := range found {
 		gl = append(gl, convert(field, text, f.RuleID, f.StartLine, f.Match, f.Secret))
 	}
