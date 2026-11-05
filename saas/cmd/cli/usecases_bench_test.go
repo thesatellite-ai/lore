@@ -168,20 +168,20 @@ func TestUC_BenchIOReadAll(t *testing.T) {
 		"byte-wise": iotest.OneByteReader(strings.NewReader(long)),
 		"data+EOF":  iotest.DataErrReader(strings.NewReader(long)),
 	} {
-		got, err := io_ReadAll(r)
+		got, err := readAllInput(r)
 		if err != nil || string(got) != long {
 			t.Fatalf("%s: %d bytes, %v", name, len(got), err)
 		}
 	}
 	boom := errors.New("boom")
-	got, err := io_ReadAll(iotest.TimeoutReader(strings.NewReader("ab")))
+	got, err := readAllInput(iotest.TimeoutReader(strings.NewReader("ab")))
 	if err == nil || len(got) == 0 {
 		t.Fatalf("a read error after data must be returned with the data: %q %v", got, err)
 	}
-	if _, err := io_ReadAll(iotest.ErrReader(boom)); !errors.Is(err, boom) {
+	if _, err := readAllInput(iotest.ErrReader(boom)); !errors.Is(err, boom) {
 		t.Fatalf("read error lost: %v", err)
 	}
-	if got, err := io_ReadAll(strings.NewReader("")); err != nil || len(got) != 0 {
+	if got, err := readAllInput(strings.NewReader("")); err != nil || len(got) != 0 {
 		t.Fatalf("empty input: %q %v", got, err)
 	}
 }
