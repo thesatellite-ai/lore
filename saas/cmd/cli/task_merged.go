@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"saas/pkg/constants"
 
 	"github.com/spf13/cobra"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -213,59 +215,65 @@ Example:
   lore task merged tsk_30`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
 			if err := refuseIfReadOnly(&f); err != nil {
 				return err
 			}
-			// A coordinated row (a store task, or this repo's own row when
-			// live rows apply) is stamped on its live ref and lands from
-			// there; writing it through lore.db would leave an uncommitted
-			// .lore/data change in this checkout (trial finding F5).
-			if w, t, err := openTaskCoord(ctx, args[0], from); err == nil {
-				defer t.Close()
-				if d, ok, gerr := t.Rows.Get(ctx, args[0]); gerr == nil && ok && d.Status() == schema.TaskStatusDone {
-					if prev := d.Time(keyMergedAtDoc); !prev.IsZero() {
-						fmt.Printf("%s %s was already merged at %s\n", style.Success("✓"), args[0], prev.UTC().Format("2006-01-02 15:04"))
-						return nil
-					}
-				}
-				at := w.Clock.Now().UTC()
-				if _, err := coord.Update(ctx, w.env(t), args[0], func(d coord.Doc, _ time.Time) error {
-					if d.Status() != schema.TaskStatusDone {
-						return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", args[0], d.Status()))
-					}
-					if d.Str("merged_at") == "" {
-						d.SetTime("merged_at", at)
-					}
-					return nil
-				}); err != nil {
-					return coordError(err)
-				}
-				fmt.Printf("%s %s merged (marked by hand, %s)\n", style.Success("✓"), args[0], at.Format("15:04"))
-				return nil
-			}
-			t, err := lookupTask(ctx, args[0])
-			if err != nil {
-				return err
-			}
-			if t.Status() != schema.TaskStatusDone {
-				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", args[0], t.Status()))
-			}
-			if prev := t.Time(keyMergedAtDoc); !prev.IsZero() {
-				fmt.Printf("%s %s was already merged at %s\n", style.Success("✓"), args[0], prev.UTC().Format("2006-01-02 15:04"))
-				return nil
-			}
-			at := cliClock().Now().UTC()
-			if err := corePatchDoc(ctx, tableTasks, args[0], coord.Doc{keyMergedAtDoc: at.Format(time.RFC3339Nano)}); err != nil {
-				return err
-			}
-			fmt.Printf("%s %s merged (marked by hand, %s)\n", style.Success("✓"), args[0], at.Format("15:04"))
-			return nil
+			return runTaskMerged(cmd.Context(), os.Stdout, opscoord.MergedIn{ID: args[0], From: from})
 		},
 	}
 	bindCommonFlags(cmd, &f)
 	bindFromFlag(cmd, &from)
 	return cmd
+}
+
+// runTaskMerged is task.merged: record merged_at by hand on a done task
+// whose merge lore cannot see (F9). A coordinated row is stamped on its
+// live ref; any other through the core.
+func runTaskMerged(ctx context.Context, out io.Writer, in opscoord.MergedIn) error {
+	// A coordinated row (a store task, or this repo's own row when
+	// live rows apply) is stamped on its live ref and lands from
+	// there; writing it through lore.db would leave an uncommitted
+	// .lore/data change in this checkout (trial finding F5).
+	if w, t, err := openTaskCoord(ctx, in.ID, in.From); err == nil {
+		defer t.Close()
+		if d, ok, gerr := t.Rows.Get(ctx, in.ID); gerr == nil && ok && d.Status() == schema.TaskStatusDone {
+			if prev := d.Time(keyMergedAtDoc); !prev.IsZero() {
+				fmt.Fprintf(out, "%s %s was already merged at %s\n", style.Success("✓"), in.ID, prev.UTC().Format("2006-01-02 15:04"))
+				return nil
+			}
+		}
+		at := w.Clock.Now().UTC()
+		if _, err := coord.Update(ctx, w.env(t), in.ID, func(d coord.Doc, _ time.Time) error {
+			if d.Status() != schema.TaskStatusDone {
+				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", in.ID, d.Status()))
+			}
+			if d.Str("merged_at") == "" {
+				d.SetTime("merged_at", at)
+			}
+			return nil
+		}); err != nil {
+			return coordError(err)
+		}
+		fmt.Fprintf(out, "%s %s merged (marked by hand, %s)\n", style.Success("✓"), in.ID, at.Format("15:04"))
+		return nil
+	}
+	t, err := lookupTask(ctx, in.ID)
+	if err != nil {
+		return err
+	}
+	if t.Status() != schema.TaskStatusDone {
+		return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", in.ID, t.Status()))
+	}
+	if prev := t.Time(keyMergedAtDoc); !prev.IsZero() {
+		fmt.Fprintf(out, "%s %s was already merged at %s\n", style.Success("✓"), in.ID, prev.UTC().Format("2006-01-02 15:04"))
+		return nil
+	}
+	at := cliClock().Now().UTC()
+	if err := corePatchDoc(ctx, tableTasks, in.ID, coord.Doc{keyMergedAtDoc: at.Format(time.RFC3339Nano)}); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s %s merged (marked by hand, %s)\n", style.Success("✓"), in.ID, at.Format("15:04"))
+	return nil
 }
 
 // taskListMergedCheck is the merged check `lore task list` runs before it

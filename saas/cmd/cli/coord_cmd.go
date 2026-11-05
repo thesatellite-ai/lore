@@ -6,9 +6,12 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
 	"regexp"
 	"time"
 
@@ -19,6 +22,7 @@ import (
 	"saas/pkg/aicoder/style"
 
 	"github.com/spf13/cobra"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 )
 
 // addCoordCommands registers every top-level command this file family adds
@@ -174,43 +178,7 @@ Example:
   lore hold claim full-suite --ttl 30m && task test && lore hold release full-suite`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if scope == scopeMachine {
-				return errcodes.New(errcodes.NotImplemented, "--on machine defers to a machine-wide lock; run the command under your machine's own lock tool (for example flock) instead")
-			}
-			ctx := cmd.Context()
-			w, err := openCoordWorld(ctx)
-			if err != nil {
-				return err
-			}
-			if err = w.requireActor(); err != nil {
-				return err
-			}
-			st, err := w.repoSignalsChecked()
-			if err != nil {
-				return err
-			}
-			d := ttl
-			if d <= defaultHoldTTL {
-				d = w.Lease.TTL
-			}
-			var held signals.Signal
-			_, err = st.Write(ctx, func(v signals.View) (signals.Change, error) {
-				tok, terr := st.Tokens.New()
-				if terr != nil {
-					return signals.Change{}, terr
-				}
-				s, derr := signals.DecideHold(v, signals.HoldRequest{Caller: w.Caller(), Folder: w.Folder, Name: args[0], TTL: d, Token: tok})
-				if derr != nil {
-					return signals.Change{}, derr
-				}
-				held = s
-				return signals.Change{Put: map[string]signals.Signal{signals.ResourcePath(w.Folder, args[0]): s}}, nil
-			})
-			if err != nil {
-				return coordError(err)
-			}
-			fmt.Printf("%s holding %s until %s\n", style.Success("✓"), args[0], held.Expires.UTC().Format(time.RFC3339))
-			return nil
+			return runHoldClaim(cmd.Context(), os.Stdout, opscoord.HoldClaimIn{Name: args[0], TTL: ttl, On: scope})
 		},
 	}
 	claim.Flags().DurationVar(&ttl, flagTTL, 0, "how long the hold lasts (default: lease.ttl)")
@@ -220,31 +188,80 @@ Example:
 		Short: "Release a resource you hold",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			w, err := openCoordWorld(ctx)
-			if err != nil {
-				return err
-			}
-			if err = w.requireActor(); err != nil {
-				return err
-			}
-			st, err := w.repoSignalsChecked()
-			if err != nil {
-				return err
-			}
-			_, err = st.Write(ctx, func(v signals.View) (signals.Change, error) {
-				p, derr := signals.DecideUnhold(v, w.Caller(), w.Folder, args[0])
-				return signals.Change{Delete: []string{p}}, derr
-			})
-			if err != nil {
-				return coordError(err)
-			}
-			fmt.Printf("%s released %s\n", style.Success("✓"), args[0])
-			return nil
+			return runHoldRelease(cmd.Context(), os.Stdout, opscoord.HoldReleaseIn{Name: args[0]})
 		},
 	}
 	cmd.AddCommand(claim, release)
 	return cmd
+}
+
+// runHoldClaim is hold.claim (RES 3.17): hold a named resource on the
+// project's signals ref, exclusively, until the ttl passes (default
+// lease.ttl); claiming again renews. --on machine is not built.
+func runHoldClaim(ctx context.Context, out io.Writer, in opscoord.HoldClaimIn) error {
+	if in.On == scopeMachine {
+		return errcodes.New(errcodes.NotImplemented, "--on machine defers to a machine-wide lock; run the command under your machine's own lock tool (for example flock) instead")
+	}
+	if in.On != "" && in.On != scopeProject {
+		return errcodes.New(errcodes.InvalidInput, "--on is project or machine, not "+in.On)
+	}
+	w, err := openCoordWorld(ctx)
+	if err != nil {
+		return err
+	}
+	if err = w.requireActor(); err != nil {
+		return err
+	}
+	st, err := w.repoSignalsChecked()
+	if err != nil {
+		return err
+	}
+	d := in.TTL
+	if d <= defaultHoldTTL {
+		d = w.Lease.TTL
+	}
+	var held signals.Signal
+	_, err = st.Write(ctx, func(v signals.View) (signals.Change, error) {
+		tok, terr := st.Tokens.New()
+		if terr != nil {
+			return signals.Change{}, terr
+		}
+		s, derr := signals.DecideHold(v, signals.HoldRequest{Caller: w.Caller(), Folder: w.Folder, Name: in.Name, TTL: d, Token: tok})
+		if derr != nil {
+			return signals.Change{}, derr
+		}
+		held = s
+		return signals.Change{Put: map[string]signals.Signal{signals.ResourcePath(w.Folder, in.Name): s}}, nil
+	})
+	if err != nil {
+		return coordError(err)
+	}
+	fmt.Fprintf(out, "%s holding %s until %s\n", style.Success("✓"), in.Name, held.Expires.UTC().Format(time.RFC3339))
+	return nil
+}
+
+// runHoldRelease is hold.release: remove your own hold.
+func runHoldRelease(ctx context.Context, out io.Writer, in opscoord.HoldReleaseIn) error {
+	w, err := openCoordWorld(ctx)
+	if err != nil {
+		return err
+	}
+	if err = w.requireActor(); err != nil {
+		return err
+	}
+	st, err := w.repoSignalsChecked()
+	if err != nil {
+		return err
+	}
+	_, err = st.Write(ctx, func(v signals.View) (signals.Change, error) {
+		p, derr := signals.DecideUnhold(v, w.Caller(), w.Folder, in.Name)
+		return signals.Change{Delete: []string{p}}, derr
+	})
+	if err != nil {
+		return coordError(err)
+	}
+	fmt.Fprintf(out, "%s released %s\n", style.Success("✓"), in.Name)
+	return nil
 }
 
 // agentLabelPattern is what a label may hold: it becomes part of the

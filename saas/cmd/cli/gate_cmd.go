@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -43,7 +44,9 @@ fenced like any holder write (exit 12–14 when the claim is gone).
 Example:
   lore gate request tsk_33`,
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error { return runGateRequest(cmd.Context(), args[0], reqFrom) },
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runGateRequest(cmd.Context(), os.Stdout, args[0], reqFrom)
+		},
 	}
 	ap := &cobra.Command{
 		Use:   "approve <id>",
@@ -56,7 +59,9 @@ the mission names approvers. Fails closed (exit 15) when the push is not confirm
 Example:
   lore gate approve tsk_33`,
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error { return runGateApprove(cmd.Context(), args[0], apFrom) },
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runGateApprove(cmd.Context(), os.Stdout, args[0], apFrom)
+		},
 	}
 	bindFromFlag(req, &reqFrom)
 	bindFromFlag(ap, &apFrom)
@@ -64,7 +69,7 @@ Example:
 	return cmd
 }
 
-func runGateRequest(ctx context.Context, id, from string) error {
+func runGateRequest(ctx context.Context, out io.Writer, id, from string) error {
 	w, t, err := openTaskCoord(ctx, id, from)
 	if err == nil {
 		defer t.Close()
@@ -76,7 +81,7 @@ func runGateRequest(ctx context.Context, id, from string) error {
 			if _, err := coord.HolderWrite(ctx, w.env(t), id, false, coord.RequestGate); err != nil {
 				return coordError(err)
 			}
-			fmt.Printf("%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
+			fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
 			return nil
 		}
 		if isStoreTarget(t) {
@@ -86,7 +91,7 @@ func runGateRequest(ctx context.Context, id, from string) error {
 			}); err != nil {
 				return coordError(err)
 			}
-			fmt.Printf("%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
+			fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
 			return nil
 		}
 	}
@@ -99,11 +104,11 @@ func runGateRequest(ctx context.Context, id, from string) error {
 	}); err != nil {
 		return err
 	}
-	fmt.Printf("%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
+	fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
 	return nil
 }
 
-func runGateApprove(ctx context.Context, id, from string) error {
+func runGateApprove(ctx context.Context, out io.Writer, id, from string) error {
 	if v := strings.TrimSpace(os.Getenv(identity.EnvActor)); v != "" {
 		return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("approvals come from your identity file, never from %s (%s is set here)", identity.EnvActor, identity.EnvActor)).
 			WithHint("an agent session cannot approve; run `lore gate approve` in your own shell")
@@ -124,7 +129,7 @@ func runGateApprove(ctx context.Context, id, from string) error {
 	if err != nil {
 		return coordError(err)
 	}
-	fmt.Printf("%s %s approved by %s (%s), hash %s…\n", style.Success("✓"), id, w.Ident.DisplayName, w.Ident.Step.String(), ap.Hash[:gateHashShown])
+	fmt.Fprintf(out, "%s %s approved by %s (%s), hash %s…\n", style.Success("✓"), id, w.Ident.DisplayName, w.Ident.Step.String(), ap.Hash[:gateHashShown])
 	return nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -113,10 +115,10 @@ func defaultBranchName(ctx context.Context, r *gitref.Repo) string {
 	return fallbackDefaultBranch
 }
 
-func printClaim(id string, cr coord.ClaimResult, w *coordWorld, ref string) {
+func printClaim(out io.Writer, id string, cr coord.ClaimResult, w *coordWorld, ref string) {
 	s := cr.Plan.Signal
 	if cr.Plan.Resumed {
-		fmt.Printf("you hold %s already (until %s); resume, or `lore task release %s`\n", id, s.Expires.UTC().Format(time.Kitchen), id)
+		fmt.Fprintf(out, "you hold %s already (until %s); resume, or `lore task release %s`\n", id, s.Expires.UTC().Format(time.Kitchen), id)
 		return
 	}
 	extra := ""
@@ -127,13 +129,13 @@ func printClaim(id string, cr coord.ClaimResult, w *coordWorld, ref string) {
 	if cr.Doc != nil {
 		title = " " + cr.Doc.Str("title")
 	}
-	fmt.Printf("%s claimed %s%s (lease %s, token %s…) on %s%s\n", style.Success("✓"), id, title,
+	fmt.Fprintf(out, "%s claimed %s%s (lease %s, token %s…) on %s%s\n", style.Success("✓"), id, title,
 		shortDuration(w.Lease.TTL), s.ClaimToken[:min(len(s.ClaimToken), coord.TokenPrefixLen)], ref, extra)
 	if s.WorkBranch != "" {
-		fmt.Printf("  work branch %s\n", s.WorkBranch)
+		fmt.Fprintf(out, "  work branch %s\n", s.WorkBranch)
 	}
 	for _, o := range cr.Overlaps {
-		fmt.Printf("%s file ownership overlaps: %s\n", style.Warn("!"), o)
+		fmt.Fprintf(out, "%s file ownership overlaps: %s\n", style.Warn("!"), o)
 	}
 }
 
@@ -168,43 +170,7 @@ Examples:
   lore task claim mis_12          # a coordinator's lease on a mission`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			w, t, err := openTaskCoord(ctx, args[0], from)
-			if err != nil {
-				return err
-			}
-			defer t.Close()
-			opts := coord.ClaimOptions{Owns: owns, WorkBranch: currentWorkBranch(ctx, w.Repo), Repo: t.Repo, InRepo: !isStoreTarget(t), Coordinate: coordinate}
-			// TASK 6.9: a parent with open sub-tasks is refused unless
-			// --coordinate (a coordinator lease, WIP-exempt).
-			if list, ok := t.Rows.(coordLister); ok {
-				docs, lerr := list.List(ctx)
-				if lerr != nil {
-					return coordError(lerr)
-				}
-				opts.OpenChildren = coord.OpenChildrenOf(docs)
-			}
-			cr, err := coord.Claim(ctx, w.env(t), args[0], opts)
-			var hoc *coord.HasOpenChildrenError
-			if errors.As(err, &hoc) {
-				return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim " + hoc.Children[0] + "   (or: lore task claim " + hoc.Task + " --coordinate)")
-			}
-			if err != nil {
-				return coordError(err)
-			}
-			if coordinate && len(opts.OpenChildren(args[0])) > 0 {
-				fmt.Printf("you now coordinate %s; claim a child to work: lore task claim %s\n", args[0], opts.OpenChildren(args[0])[0])
-			}
-			if strict && len(cr.Overlaps) > 0 && !cr.Plan.Resumed {
-				// The claim is taken; --strict gives it back at once.
-				if rerr := coord.Release(ctx, w.env(t), args[0]); rerr != nil {
-					return coordError(rerr)
-				}
-				return errcodes.New(errcodes.InvalidInput, "file ownership overlaps: "+strings.Join(cr.Overlaps, "; ")).
-					WithHint("drop --strict to claim with a warning")
-			}
-			printClaim(args[0], cr, w, t.Signals.Ref)
-			return nil
+			return runTaskClaim(cmd.Context(), os.Stdout, opscoord.ClaimIn{ID: args[0], Owns: owns, Strict: strict, Coordinate: coordinate, From: from})
 		},
 	}
 	cmd.Flags().StringSliceVar(&owns, flagOwns, nil, "paths this claim owns (directory prefixes ending in / or exact files)")
@@ -212,6 +178,47 @@ Examples:
 	cmd.Flags().BoolVar(&coordinate, flagCoordinate, false, "take a coordinator lease on a parent with open sub-tasks (TASK 6.9)")
 	bindFromFlag(cmd, &from)
 	return cmd
+}
+
+// runTaskClaim is task.claim (ops/coord): claim a task, or coordinate a
+// parent with open sub-tasks, on its signals ref.
+func runTaskClaim(ctx context.Context, out io.Writer, in opscoord.ClaimIn) error {
+	w, t, err := openTaskCoord(ctx, in.ID, in.From)
+	if err != nil {
+		return err
+	}
+	defer t.Close()
+	opts := coord.ClaimOptions{Owns: in.Owns, WorkBranch: currentWorkBranch(ctx, w.Repo), Repo: t.Repo, InRepo: !isStoreTarget(t), Coordinate: in.Coordinate}
+	// TASK 6.9: a parent with open sub-tasks is refused unless
+	// --coordinate (a coordinator lease, WIP-exempt).
+	if list, ok := t.Rows.(coordLister); ok {
+		docs, lerr := list.List(ctx)
+		if lerr != nil {
+			return coordError(lerr)
+		}
+		opts.OpenChildren = coord.OpenChildrenOf(docs)
+	}
+	cr, err := coord.Claim(ctx, w.env(t), in.ID, opts)
+	var hoc *coord.HasOpenChildrenError
+	if errors.As(err, &hoc) {
+		return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim " + hoc.Children[0] + "   (or: lore task claim " + hoc.Task + " --coordinate)")
+	}
+	if err != nil {
+		return coordError(err)
+	}
+	if in.Coordinate && len(opts.OpenChildren(in.ID)) > 0 {
+		fmt.Fprintf(out, "you now coordinate %s; claim a child to work: lore task claim %s\n", in.ID, opts.OpenChildren(in.ID)[0])
+	}
+	if in.Strict && len(cr.Overlaps) > 0 && !cr.Plan.Resumed {
+		// The claim is taken; --strict gives it back at once.
+		if rerr := coord.Release(ctx, w.env(t), in.ID); rerr != nil {
+			return coordError(rerr)
+		}
+		return errcodes.New(errcodes.InvalidInput, "file ownership overlaps: "+strings.Join(cr.Overlaps, "; ")).
+			WithHint("drop --strict to claim with a warning")
+	}
+	printClaim(out, in.ID, cr, w, t.Signals.Ref)
+	return nil
 }
 
 func newTaskNextCommand() *cobra.Command {
@@ -233,60 +240,15 @@ Examples:
   lore task next --mission mis_12 --role coordinator`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-			w, t, err := openTaskCoord(ctx, "", "")
-			if err != nil {
-				return err
-			}
-			defer t.Close()
-			list, ok := t.Rows.(coordLister)
-			if !ok {
-				return errRowsNotWired()
-			}
-			if mc, ok := t.Rows.(interface{ MergedCheck(context.Context) }); ok {
-				mc.MergedCheck(ctx)
-			}
 			repo, _ := cmd.Flags().GetString(constants.FlagRepo) // registered below: GetString errors only for an unknown flag name
-			f.Repo = repo
-			f.Here = t.Repo
-			req := coord.NextRequest{
-				Filter: f, Opts: coord.ClaimOptions{Owns: owns, WorkBranch: currentWorkBranch(ctx, w.Repo), InRepo: !isStoreTarget(t)},
-				List: list.List, RepoName: list.RepoName, Pick: cryptoPick, Urgency: urgencyContext(ctx),
+			res, err := runTaskNext(cmd.Context(), opscoord.NextIn{Mission: f.Mission, Role: f.Role, Repo: repo, Owns: owns, Why: why, DryRun: dryRun})
+			if asJSON && dryRun {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return errors.Join(enc.Encode(res), err)
 			}
-			if dryRun {
-				// TASK 13.3: rank and explain, write nothing.
-				v, readErr := w.env(t).Signals.Read(ctx)
-				if readErr != nil {
-					return coordError(readErr)
-				}
-				res, readErr := coord.Queue(ctx, w.env(t), v, req)
-				if readErr != nil {
-					return coordError(readErr)
-				}
-				return printNextDryRun(res, why, asJSON)
-			}
-			res, err := coord.Next(ctx, w.env(t), req)
-			for _, p := range res.Poisoned {
-				fmt.Printf("%s %s failed %d times and is now blocked (owner's inbox)\n", style.Warn("!"), p, w.Agents.MaxAttempts)
-			}
-			if err != nil {
-				return coordError(err)
-			}
-			if res.Resumed {
-				fmt.Printf("you hold %s; resume, or `lore task release %s`\n", res.Task, res.Task)
-				return nil
-			}
-			printClaim(res.Task, res.Claim, w, t.Signals.Ref)
-			if why {
-				if s, ok := res.Scores[res.Task]; ok {
-					fmt.Printf("  urgency %s\n", urgency.Format(s.Total))
-					for _, l := range s.Lines() {
-						fmt.Println("    " + l)
-					}
-				}
-			}
-			fmt.Printf("  read its notes: lore task show %s\n", res.Task)
-			return nil
+			_, werr := io.WriteString(os.Stdout, res.Text())
+			return errors.Join(err, werr)
 		},
 	}
 	cmd.Flags().StringVar(&f.Mission, flagMission, "", "only tasks of this mission")
@@ -339,65 +301,32 @@ const (
 	fieldTargetDate = "target_date"
 )
 
-// nextRanked is one --dry-run --json entry.
-type nextRanked struct {
-	ID      string         `json:"id"`
-	Title   string         `json:"title"`
-	Urgency string         `json:"urgency"`
-	Terms   []urgency.Part `json:"terms"`
-}
-
-// nextWaiting is one waiting entry of --dry-run --json.
-type nextWaiting struct {
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	Reason string `json:"reason"`
-}
-
 // printNextDryRun prints 13.3's ranking: the would-be claim, the ranked
 // ready tasks and why every other matched task waits.
-func printNextDryRun(res queue.Result, why, asJSON bool) error {
-	if asJSON {
-		out := struct {
-			Ready   []nextRanked  `json:"ready"`
-			Waiting []nextWaiting `json:"waiting"`
-			DryRun  bool          `json:"dry_run"`
-		}{DryRun: true, Ready: []nextRanked{}, Waiting: []nextWaiting{}}
-		for _, t := range res.Ready {
-			s := res.Scores[t.ID]
-			out.Ready = append(out.Ready, nextRanked{ID: t.ID, Title: t.Title, Urgency: urgency.Format(s.Total), Terms: s.Terms})
-		}
-		for _, wt := range res.Waiting {
-			out.Waiting = append(out.Waiting, nextWaiting{ID: wt.Task.ID, Kind: string(wt.Kind), Reason: wt.Reason})
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(out)
-	}
+func printNextDryRun(out io.Writer, res queue.Result, why bool) {
 	if len(res.Ready) == 0 {
-		fmt.Println("nothing ready")
+		fmt.Fprintln(out, "nothing ready")
 	} else {
 		top := res.Ready[0]
 		s := res.Scores[top.ID]
-		fmt.Printf("would claim %s %s   urgency %s\n", top.ID, top.Title, urgency.Format(s.Total))
+		fmt.Fprintf(out, "would claim %s %s   urgency %s\n", top.ID, top.Title, urgency.Format(s.Total))
 		if why {
 			for _, l := range s.Lines() {
-				fmt.Println("  " + l)
+				fmt.Fprintln(out, "  "+l)
 			}
 		}
-		fmt.Println("ranked:")
+		fmt.Fprintln(out, "ranked:")
 		for i, t := range res.Ready {
-			fmt.Printf("  %d  %s  %s\n", i+1, t.ID, urgency.Format(res.Scores[t.ID].Total))
+			fmt.Fprintf(out, "  %d  %s  %s\n", i+1, t.ID, urgency.Format(res.Scores[t.ID].Total))
 		}
 	}
 	if len(res.Waiting) > 0 {
-		fmt.Println("waiting:")
+		fmt.Fprintln(out, "waiting:")
 		for _, wt := range res.Waiting {
-			fmt.Printf("  %s  %s\n", wt.Task.ID, wt.Reason)
+			fmt.Fprintf(out, "  %s  %s\n", wt.Task.ID, wt.Reason)
 		}
 	}
-	fmt.Println("nothing written (--dry-run)")
-	return nil
+	fmt.Fprintln(out, "nothing written (--dry-run)")
 }
 
 // coordLister is the optional listing half of a row store (task next).
@@ -425,38 +354,11 @@ Examples:
   lore task heartbeat --daemon tsk_31 &`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			w, err := openCoordWorld(ctx)
-			if err != nil {
-				return err
+			in := opscoord.HeartbeatIn{Daemon: daemon}
+			if len(args) == 1 {
+				in.ID = args[0]
 			}
-			if err := w.requireActor(); err != nil {
-				return err
-			}
-			ids := args
-			if len(ids) == 0 {
-				for _, r := range w.held().List(w.Session()) {
-					ids = append(ids, r.Task)
-				}
-				if len(ids) == 0 {
-					fmt.Println("no claims held by this session")
-					return nil
-				}
-			}
-			if daemon {
-				return heartbeatDaemon(ctx, w, ids)
-			}
-			for _, id := range ids {
-				if len(args) == 0 && renewedRecently(w, id) {
-					continue
-				}
-				s, err := renewOne(ctx, w, id)
-				if err != nil {
-					return err
-				}
-				fmt.Printf("%s %s renewed until %s (seq %d)\n", style.Success("✓"), id, s.Expires.UTC().Format(time.RFC3339), s.RenewedSeq)
-			}
-			return nil
+			return runTaskHeartbeat(cmd.Context(), os.Stdout, in)
 		},
 	}
 	cmd.Flags().BoolVar(&daemon, flagDaemon, false, "keep renewing until the claim ends or the parent exits")
@@ -572,17 +474,7 @@ func newTaskReleaseCommand() *cobra.Command {
 		Short: "Give back a claim you hold",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			w, t, err := openTaskCoord(ctx, args[0], from)
-			if err != nil {
-				return err
-			}
-			defer t.Close()
-			if err := coord.Release(ctx, w.env(t), args[0]); err != nil {
-				return coordError(err)
-			}
-			fmt.Printf("%s released %s\n", style.Success("✓"), args[0])
-			return nil
+			return runTaskRelease(cmd.Context(), os.Stdout, opscoord.ReleaseIn{ID: args[0], From: from})
 		},
 	}
 	bindFromFlag(cmd, &from)
@@ -605,25 +497,7 @@ func newTaskRevokeCommand() *cobra.Command {
 		Short: "Drop the current claim on a task (human override; the holder is fenced out)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			w, t, err := openTaskCoord(ctx, args[0], from)
-			if err != nil {
-				return err
-			}
-			defer t.Close()
-			if err = requireHuman(w, "revoke"); err != nil {
-				return err
-			}
-			removed, err := coord.Override(ctx, w.env(t), args[0], coord.OverrideRevoke, nil)
-			if err != nil {
-				return coordError(err)
-			}
-			who := "no one held it"
-			if removed != nil {
-				who = "was held by " + holderLabel(*removed)
-			}
-			fmt.Printf("%s revoked the claim on %s (%s)\n", style.Success("✓"), args[0], who)
-			return nil
+			return runTaskRevoke(cmd.Context(), os.Stdout, opscoord.RevokeIn{ID: args[0], From: from})
 		},
 	}
 	bindFromFlag(cmd, &from)
@@ -644,62 +518,11 @@ Examples:
   lore task reassign --from @bob --assign @alice`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			if assign == "" {
-				return errcodes.New(errcodes.InvalidInput, "--assign @handle is required")
+			in := opscoord.ReassignIn{Assign: assign, From: from}
+			if len(args) == 1 {
+				in.ID = args[0]
 			}
-			w, err := openCoordWorld(ctx)
-			if err != nil {
-				return err
-			}
-			if err = requireHuman(w, "reassign"); err != nil {
-				return err
-			}
-			to, err := resolveHandleActor(ctx, assign)
-			if err != nil {
-				return err
-			}
-			var ids []string
-			switch {
-			case len(args) == 1:
-				ids = args
-			case from != "":
-				who, err := resolveHandleActor(ctx, from)
-				if err != nil {
-					return err
-				}
-				ids, err = openTasksAssignedTo(ctx, who)
-				if err != nil {
-					return err
-				}
-			default:
-				return errcodes.New(errcodes.InvalidInput, "give a task id or --from @handle")
-			}
-			for _, id := range ids {
-				t, err := openCoordTarget(ctx, w, id)
-				if err != nil {
-					return err
-				}
-				defer t.Close()
-				// TASK 14.4: reassign sets the lead and replaces the assignees
-				// list with that one actor (the lead is always an assignee).
-				// TASK 17.2 (OV59): the lead and assignees change is recorded in
-				// the row's history in the same write.
-				by := w.Caller().ActorID
-				if _, err := coord.OverrideChecked(ctx, w.env(t), id, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
-					prevLead, prevAll := d.Str(fieldTaskLead), d.Strs(schema.FieldTaskAssignees)
-					d.SetStr(fieldTaskLead, to)
-					d[schema.FieldTaskAssignees] = []string{to}
-					return appendReassignHistory(d, by, now, prevLead, prevAll, to)
-				}); err != nil {
-					return coordError(err)
-				}
-				fmt.Printf("%s %s reassigned to %s\n", style.Success("✓"), id, assign)
-			}
-			if len(ids) == 0 {
-				fmt.Printf("no open tasks assigned to %s\n", from)
-			}
-			return nil
+			return runTaskReassign(cmd.Context(), os.Stdout, in)
 		},
 	}
 	cmd.Flags().StringVar(&assign, flagAssign, "", "the new assignee (@handle)")

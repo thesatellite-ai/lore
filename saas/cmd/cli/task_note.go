@@ -8,6 +8,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -49,10 +51,11 @@ Example:
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			text := strings.Join(args[1:], " ")
+			out := os.Stdout
 			if to.To != "" {
-				return sharedNote(cmd.Context(), args[0], text, to)
+				return sharedNote(cmd.Context(), out, args[0], text, to)
 			}
-			return runTaskNote(cmd.Context(), args[0], text, from)
+			return runTaskNote(cmd.Context(), out, args[0], text, from)
 		},
 	}
 	bindToFlags(cmd, &to, false)
@@ -60,7 +63,7 @@ Example:
 	return cmd
 }
 
-func runTaskNote(ctx context.Context, id, text, from string) error {
+func runTaskNote(ctx context.Context, out io.Writer, id, text, from string) error {
 	body, err := textnorm.Normalize(text)
 	if err != nil {
 		return errcodes.New(errcodes.EmptyBody, err.Error())
@@ -79,7 +82,7 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 		if ferr := plainRowFallback(ctx, err); ferr != nil {
 			return ferr
 		}
-		return plainNote(ctx, id, body)
+		return plainNote(ctx, out, id, body)
 	}
 	defer t.Close()
 	cs, err := readClaim(ctx, w, t, id)
@@ -87,7 +90,7 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 		return coordError(err)
 	}
 	if !cs.mine && !cs.hadClaim {
-		return unheldNote(ctx, w, t, id, body)
+		return unheldNote(ctx, out, w, t, id, body)
 	}
 	branch := currentWorkBranch(ctx, w.Repo)
 	// Comments are core-owned (lsync.CoreOwned): the note is a document
@@ -110,12 +113,12 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 		return coordError(err)
 	}
 	pushed := pushWorkBranch(ctx, w)
-	fmt.Printf("%s note %s on %s\n", style.Success("✓"), cid, id)
+	fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
 	switch {
 	case pushed:
-		fmt.Printf("  work branch %s pushed\n", branch)
+		fmt.Fprintf(out, "  work branch %s pushed\n", branch)
 	case branch != "":
-		fmt.Printf("  %s work branch %s NOT pushed (offline or no remote); a replacement cannot fetch it yet\n", style.Warn("!"), branch)
+		fmt.Fprintf(out, "  %s work branch %s NOT pushed (offline or no remote); a replacement cannot fetch it yet\n", style.Warn("!"), branch)
 	}
 	return nil
 }
@@ -129,13 +132,13 @@ func runTaskNote(ctx context.Context, id, text, from string) error {
 // store's live ref. Before N2 every unheld note went to this checkout, so a
 // note on a store task was routed to the client repo and refused by the
 // leak check after a ✓ had already been printed.
-func unheldNote(ctx context.Context, w *coordWorld, t coordTarget, id, body string) error {
+func unheldNote(ctx context.Context, out io.Writer, w *coordWorld, t coordTarget, id, body string) error {
 	switch r := t.Rows.(type) {
 	case *liveRows:
-		return plainNote(ctx, id, body)
+		return plainNote(ctx, out, id, body)
 	case *clientRows:
 		if !r.internalNote() {
-			return plainNote(ctx, id, body)
+			return plainNote(ctx, out, id, body)
 		}
 	}
 	if _, found, err := t.Rows.Get(ctx, id); err != nil {
@@ -157,7 +160,7 @@ func unheldNote(ctx context.Context, w *coordWorld, t coordTarget, id, body stri
 			return err
 		}
 	}
-	fmt.Printf("%s note %s on %s\n", style.Success("✓"), cid, id)
+	fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
 	return nil
 }
 
@@ -209,7 +212,7 @@ func newCommentDoc(taskID, body, actorID string, now time.Time) (string, coord.D
 // sharedNote writes one note where --to says (a deliberate share, §7.6:
 // `--to repo` puts this note in the client repo). Not fenced: sharing is a
 // person's or an agent's explicit choice about one text, not claim work.
-func sharedNote(ctx context.Context, id, text string, to toFlags) error {
+func sharedNote(ctx context.Context, out io.Writer, id, text string, to toFlags) error {
 	body, err := textnorm.Normalize(text)
 	if err != nil {
 		return errcodes.New(errcodes.EmptyBody, err.Error())
@@ -218,20 +221,20 @@ func sharedNote(ctx context.Context, id, text string, to toFlags) error {
 		return err
 	}
 	if owner, projected := clientAuthor(ctx); projected && to.To == toRepo {
-		return agentSharedNote(ctx, id, body, owner)
+		return agentSharedNote(ctx, out, id, body, owner)
 	}
 	var f commonFlags
 	if _, err := routeWrite(ctx, &f, to, kindComment, body); err != nil {
 		return err
 	}
-	return plainNoteIn(ctx, &f, id, body)
+	return plainNoteIn(ctx, out, &f, id, body)
 }
 
 // agentSharedNote puts an agent's deliberately shared note into the client
 // repo as its owning person: the comment row and its live block name the
 // owner, never the agent (D8, Q11). It is written straight to the client's
 // live ref (not through lore.db, whose live writer stamps the caller).
-func agentSharedNote(ctx context.Context, id, body, owner string) error {
+func agentSharedNote(ctx context.Context, out io.Writer, id, body, owner string) error {
 	w, err := openCoordWorld(ctx)
 	if err != nil {
 		return err
@@ -256,7 +259,7 @@ func agentSharedNote(ctx context.Context, id, body, owner string) error {
 	if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
 		return err
 	}
-	fmt.Printf("%s note %s on %s (shared with the client repo)\n", style.Success("✓"), cid, id)
+	fmt.Fprintf(out, "%s note %s on %s (shared with the client repo)\n", style.Success("✓"), cid, id)
 	return nil
 }
 
@@ -279,11 +282,11 @@ const kindComment = "comment"
 
 // plainNote is a note by someone who does not hold the task: a normal
 // comment row.
-func plainNote(ctx context.Context, id, body string) error {
-	return plainNoteIn(ctx, &commonFlags{}, id, body)
+func plainNote(ctx context.Context, out io.Writer, id, body string) error {
+	return plainNoteIn(ctx, out, &commonFlags{}, id, body)
 }
 
-func plainNoteIn(ctx context.Context, f *commonFlags, id, body string) (err error) {
+func plainNoteIn(ctx context.Context, out io.Writer, f *commonFlags, id, body string) (err error) {
 	by, projected := clientAuthor(ctx)
 	_, client, err := resolveContext(f)
 	if err != nil {
@@ -302,6 +305,6 @@ func plainNoteIn(ctx context.Context, f *commonFlags, id, body string) (err erro
 	if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
 		return err
 	}
-	fmt.Printf("%s note %s on %s\n", style.Success("✓"), cid, id)
+	fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
 	return nil
 }
