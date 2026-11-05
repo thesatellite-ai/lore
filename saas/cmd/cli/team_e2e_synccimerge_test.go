@@ -20,11 +20,10 @@ import (
 	th "saas/cmd/cli/internal/teamharness"
 )
 
-// bugRepoSyncHost: cmd/lore's sync host answers E_UNSUPPORTED for
-// install-action and ci-merge until wire/host/live_sync.go delegates them to
-// wire.RepoSync (patch fixall/b11-sync/live_sync-repo.diff). Flip Open to
-// false when it lands.
-var bugRepoSyncHost = th.Bug{ID: "BUG-REPOSYNC-HOST", Owner: "p3-modeb (wire/host/live_sync.go)", Open: true}
+// bugRepoSyncHost: cmd/lore's sync host answered E_UNSUPPORTED for
+// install-action, ci-merge and peek until wire/host/live_sync.go delegated
+// them to wire.RepoSync (2fe8c14). Closed: the symptom now fails the test.
+var bugRepoSyncHost = th.Bug{ID: "BUG-REPOSYNC-HOST", Owner: "p3-modeb (wire/host/live_sync.go)", Open: false}
 
 // ciMergeBaseRef is the --base every test merges from.
 const ciMergeBaseRef = "origin/main"
