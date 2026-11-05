@@ -17,6 +17,7 @@ package host
 // sync commands, which move with `lore sync` (P3-HOOKS-2).
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opslive "github.com/thesatellite-ai/lore/ops/live"
 )
 
 // GitignoreLines are the lore paths every project's .gitignore lists: the
@@ -63,8 +65,8 @@ const gitignoreMode = 0o600
 func GitignoreHook(workDir string) Hook {
 	var once sync.Once
 	return Hook{Name: HookGitignore, Before: func(ctx context.Context, run *Run) error {
-		if run.ReadOnly {
-			return nil // --read-only writes nothing, not even .gitignore (v0.1.17)
+		if !NeedsGitignore(run) {
+			return nil
 		}
 		var err error
 		once.Do(func() {
@@ -78,6 +80,17 @@ func GitignoreHook(workDir string) Hook {
 		})
 		return err
 	}}
+}
+
+// NeedsGitignore reports whether run may add the .gitignore lines: never
+// under --read-only (v0.1.17 wrote nothing then), and never for a live ref
+// operation (ops/live), which writes no row file; v0.1.17's `lore live …`
+// left the checkout as it was (P3-LIVE-1).
+func NeedsGitignore(run *Run) bool {
+	if run.ReadOnly {
+		return false
+	}
+	return run.Entry == nil || !opslive.IsOp(run.Entry.Spec().Name)
 }
 
 // EnsureGitignore appends to root/.gitignore every GitignoreLines entry it
@@ -123,15 +136,42 @@ func gitIgnores(ctx context.Context, root, path string) bool {
 	if strings.HasSuffix(path, "/") {
 		probe += "/x" // check-ignore needs a path inside an ignored folder
 	}
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "check-ignore", "-q", "--", probe)
-	return cmd.Run() == nil
+	_, err := gitOutput(ctx, "-C", root, "check-ignore", "-q", "--", probe)
+	return err == nil
+}
+
+// gitProgram is the git executable looked up on PATH.
+const gitProgram = "git"
+
+// gitOutput runs git with args and returns its stdout. The Cmd is built
+// directly rather than through exec.CommandContext (as adapters/gitcommit
+// does): bin is the absolute path exec.LookPath resolved and every argument
+// is a separate argv entry built here, so no shell parses them; ctx ending
+// kills it.
+func gitOutput(ctx context.Context, args ...string) ([]byte, error) {
+	bin, err := exec.LookPath(gitProgram)
+	if err != nil {
+		return nil, err
+	}
+	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...)}
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	stop := context.AfterFunc(ctx, func() { _ = cmd.Process.Kill() }) // a kill of an exited process has nothing to report
+	defer stop()
+	if err := cmd.Wait(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), ctx.Err()
 }
 
 // projectRoot is the lore project dir works in: the nearest folder at or
 // above dir that holds .lore/, never above the git top; "" when there is
 // none (not a git checkout, or no lore project on the way up).
 func projectRoot(ctx context.Context, dir string) string {
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	out, err := gitOutput(ctx, "-C", dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return ""
 	}

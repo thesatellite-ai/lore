@@ -47,6 +47,7 @@ import (
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
+	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
 	opssuggestion "github.com/thesatellite-ai/lore/ops/suggestion"
@@ -99,6 +100,7 @@ var CompatNouns = []string{
 	opsarchitecturenote.Noun, opsbehaviour.Noun, opscookbookrecipe.Noun, opsincident.Noun,
 	opssuggestion.Noun, opstastepref.Noun, opsworkflow.Noun, opsworkspace.Noun,
 	opshandoff.Noun, opssnapshot.Noun, opstechdoc.Noun, ExternalSourceNoun,
+	opssearch.Noun,
 }
 
 // CompatOptions are the binary-specific parts of the compat flags.

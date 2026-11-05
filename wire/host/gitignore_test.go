@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/op"
+	opslive "github.com/thesatellite-ai/lore/ops/live"
 )
 
 // gitInit makes dir a git work tree, or skips when git is missing.
@@ -15,8 +18,8 @@ func gitInit(t *testing.T, dir string) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
 	}
-	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v %s", err, out)
+	if _, err := gitOutput(context.Background(), "-C", dir, "init", "-q"); err != nil {
+		t.Fatalf("git init: %v", err)
 	}
 }
 
@@ -34,7 +37,7 @@ func TestEnsureGitignoreAppendsOnlyMissingLines(t *testing.T) {
 	if err := EnsureGitignore(ctx, root); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := os.ReadFile(gi)
+	b, _ := os.ReadFile(filepath.Clean(gi))
 	got := string(b)
 	if !strings.HasPrefix(got, "node_modules\n.lore/state/\n.lore/backups/*\nbuild\n\n# lore\n") {
 		t.Fatalf("prefix: %q", got)
@@ -50,7 +53,7 @@ func TestEnsureGitignoreAppendsOnlyMissingLines(t *testing.T) {
 	if err := EnsureGitignore(ctx, root); err != nil {
 		t.Fatal(err)
 	}
-	if b2, _ := os.ReadFile(gi); string(b2) != got {
+	if b2, _ := os.ReadFile(filepath.Clean(gi)); string(b2) != got {
 		t.Fatalf("second run changed the file: %q", b2)
 	}
 }
@@ -86,7 +89,7 @@ func TestGitignoreHook(t *testing.T) {
 	if err := h.Before(ctx, &Run{}); err != nil {
 		t.Fatal(err)
 	}
-	if b, err := os.ReadFile(gi); err != nil || !strings.Contains(string(b), ".lore/lock") {
+	if b, err := os.ReadFile(filepath.Clean(gi)); err != nil || !strings.Contains(string(b), ".lore/lock") {
 		t.Fatalf("not written at the project root: %q %v", b, err)
 	}
 	if err := os.Remove(gi); err != nil {
@@ -97,5 +100,33 @@ func TestGitignoreHook(t *testing.T) {
 	}
 	if _, err := os.Stat(gi); err == nil {
 		t.Fatal("hook ran twice in one process")
+	}
+}
+
+// specEntry is an op.Entry whose only answered method is Spec.
+type specEntry struct {
+	op.Entry
+	spec op.Spec
+}
+
+func (e specEntry) Spec() op.Spec { return e.spec }
+
+// TestNeedsGitignore: a write adds the lines; --read-only and a live ref
+// operation (it writes no row file) never do.
+func TestNeedsGitignore(t *testing.T) {
+	cases := []struct {
+		name string
+		run  Run
+		want bool
+	}{
+		{"no entry", Run{}, true},
+		{"write op", Run{Entry: specEntry{spec: op.Spec{Name: "memory.add"}}}, true},
+		{"read-only", Run{ReadOnly: true, Entry: specEntry{spec: op.Spec{Name: "memory.add"}}}, false},
+		{"live op", Run{Entry: specEntry{spec: op.Spec{Name: opslive.OpPurge}}}, false},
+	}
+	for _, c := range cases {
+		if got := NeedsGitignore(&c.run); got != c.want {
+			t.Errorf("%s: NeedsGitignore = %v, want %v", c.name, got, c.want)
+		}
 	}
 }
