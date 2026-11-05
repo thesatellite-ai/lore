@@ -201,8 +201,8 @@ patterns.language text
 patterns.last_validated_at datetime
 patterns.project_id ref required
 patterns.repo_id ref
-patterns.source_kind text required
 patterns.scope_id ref
+patterns.source_kind text required
 patterns.source_ref text
 patterns.superseded_by_id ref
 patterns.tag_ids list[ref]
