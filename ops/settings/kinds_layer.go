@@ -282,6 +282,9 @@ func (o ops) extendField(ctx context.Context, k, f located, target store.Source,
 				vals = append(vals, v)
 			}
 		}
+		if err = checkValuesCap(in.Kind+"."+in.Field, append(slices.Clone(texts(f.Row, fValues)), vals...)); err != nil {
+			return RowOut{}, err
+		}
 		if patch[fValues], err = textList(vals); err != nil {
 			return RowOut{}, err
 		}

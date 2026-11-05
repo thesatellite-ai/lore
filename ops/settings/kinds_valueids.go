@@ -20,6 +20,7 @@ package settings
 import (
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -157,4 +158,26 @@ func valueWords(f Field) []string {
 		}
 	}
 	return out
+}
+
+// Kind caps (RES 3.1, A-RES-6, FA-RES-5): fixed for every actor, not
+// policy keys; over one is E_KIND_LIMIT.
+const (
+	maxKindsPerPlace = 200
+	maxFieldsPerKind = 150 // counted on the effective kind (levels combined)
+	maxValuesField   = 200
+)
+
+// kindLimit is the E_KIND_LIMIT refusal.
+func kindLimit(what string, limit int) error {
+	return errs.New(errs.KindLimit, what+": over the cap of "+strconv.Itoa(limit)+"; nothing written").
+		WithHint("split the kind, or remove fields or values")
+}
+
+// checkValuesCap refuses more than maxValuesField allowed values.
+func checkValuesCap(field string, vals []string) error {
+	if len(vals) > maxValuesField {
+		return kindLimit(field+" has "+strconv.Itoa(len(vals))+" allowed values", maxValuesField)
+	}
+	return nil
 }

@@ -46,12 +46,12 @@ func actions(out settings.ResImportOut) map[string]string {
 //   - a row unchanged since the last import is updated in place;
 //   - a row edited in lore since is kept, with the "kept" line;
 //   - --overwrite replaces the edited row too;
-//   - the same name from another source (csv after json) is E_NAME_TAKEN
+//   - the same name from another source (csv after json) is E_RESOURCE_TAKEN
 //     (inside the all-or-nothing E_RESOURCE_INVALID);
 //   - a row imported before the history mark (no import:true entry) counts
 //     as edited and is kept;
 //   - in a client repo (no import slot is kept) a re-import never
-//     overwrites: E_NAME_TAKEN.
+//     overwrites: E_RESOURCE_TAKEN.
 func TestResourceReimportMatrix(t *testing.T) {
 	h := opstest.New(t, ownRepo)
 	mustAll(t, h,
@@ -129,7 +129,7 @@ func TestResourceReimportMatrix(t *testing.T) {
 	// Another source names the same row: not a re-import.
 	csv := write("hosts.csv", "name,os\nh1,win\n")
 	_, err = h.RunYes(settings.OpResImport, `{"file":"`+csv+`","kind":"host"}`)
-	if !errs.Has(err, errs.ResourceInvalid) || !strings.Contains(err.Error(), string(errs.NameTaken)) {
+	if !errs.Has(err, errs.ResourceBatch) || !strings.Contains(err.Error(), string(errs.ResourceTaken)) {
 		t.Fatalf("csv after json: %v", err)
 	}
 	if !strings.Contains(show("h1"), "os = linux-2") {
@@ -144,7 +144,7 @@ func TestResourceReimportMatrix(t *testing.T) {
 		[2]string{settings.OpFieldAdd, `{"kind":"host","field":"os","type":"text"}`},
 	)
 	importOut(t, c, `{"file":"`+v1+`"}`)
-	if _, err = c.RunYes(settings.OpResImport, `{"file":"`+v2+`"}`); err == nil || !strings.Contains(err.Error(), string(errs.NameTaken)) {
+	if _, err = c.RunYes(settings.OpResImport, `{"file":"`+v2+`"}`); err == nil || !strings.Contains(err.Error(), string(errs.ResourceTaken)) {
 		t.Fatalf("client re-import: %v", err)
 	}
 }

@@ -299,14 +299,14 @@ func dayOf(s string) string {
 func (o ops) resourceOps() []op.Entry {
 	return append([]op.Entry{
 		op.Define(op.Spec{Name: OpResAdd, Summary: "Add a resource of a kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourcePlace), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourcePlace, errs.ResourceTaken, errs.ResourceArchived, errs.ResourceAmbiguous), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "add a host", CLI: "lore resource add host hub_prod --set provider=hetzner", Want: "res_"}}}, o.resAdd),
 		op.Define(op.Spec{Name: OpResEdit, Summary: "Edit a resource's values (stamps last_checked)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourceArchived, errs.ResourceAmbiguous), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "bulk edit", CLI: "lore resource edit --kind service --where runs_on=hub_prod --set runs_on=hub_prod_2 --yes", Want: "batch bat_"}}}, o.resEdit),
 		op.Define(op.Spec{Name: OpResShow, Summary: "Show one resource", Permission: op.PermRead, Access: op.AccessRead,
 			// XQ3: --show-sensitive always confirms; without a terminal it needs --yes.
-			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resShow),
+			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm, errs.ResourceAmbiguous), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resShow),
 		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resList),
 		// XQ2: MayAsk, not Always: the bulk form must count its rows before
@@ -564,7 +564,13 @@ func (o ops) fieldValue(ctx context.Context, d kindDef, name string, def located
 			return nil, invalid(d, name, fname+": "+rerr.Error())
 		}
 		if text(target.Row, rArchivedAt) != "" {
-			return nil, invalid(d, name, fname+": "+raw+" is archived")
+			// RES 3.4: a new ref to an archived resource is refused, naming
+			// its replacement when repoint recorded one.
+			e := errs.New(errs.ResourceArchived, d.name()+" "+name+": "+fname+": "+raw+" is archived")
+			if rb := text(target.Row, rReplacedBy); rb != "" {
+				return nil, e.WithHint("ref its replacement " + o.resourceLabel(ctx, rb) + ", or unarchive " + raw)
+			}
+			return nil, e.WithHint("unarchive it, or ref another resource")
 		}
 		return ref(target.Row.ID)
 	}
@@ -589,7 +595,21 @@ func (o ops) resourceByName(ctx context.Context, key, kindID string) (located, e
 	if kindID != "" {
 		extra = map[string]string{rKind: kindID}
 	}
-	return byNameOrID(ctx, o.env, o.resStores(), schema.TableResources, rName, key, extra)
+	l, err := byNameOrID(ctx, o.env, o.resStores(), schema.TableResources, rName, key, extra)
+	if errs.Has(err, errs.AmbiguousID) { // RES 3.4: the resource code
+		return located{}, errs.Wrap(errs.ResourceAmbiguous, errs.EnvelopeOf(err).Error.Message, err).
+			WithHint("name it by its res_ id (lore resource list shows them)")
+	}
+	return l, err
+}
+
+// resourceLabel is a resource id's "<kind> <name>" (the id when unseen).
+func (o ops) resourceLabel(ctx context.Context, id string) string {
+	r, err := o.resourceByName(ctx, id, "")
+	if err != nil {
+		return id
+	}
+	return o.kindName(ctx, text(r.Row, rKind)) + " " + text(r.Row, rName)
 }
 
 // requireFields refuses a resource missing a required field.
@@ -660,7 +680,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	if hit := where(rows, map[string]string{rKind: d.kind.Row.ID.String(), rName: in.Name}); len(hit) > 0 {
-		return RowOut{}, errs.New(errs.NameTaken, d.name()+" "+in.Name+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")")
+		return RowOut{}, errs.New(errs.ResourceTaken, d.name()+" "+in.Name+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")")
 	}
 	vals := map[string]json.RawMessage{}
 	if err = o.applySets(ctx, d, in.Name, sets, vals); err != nil {

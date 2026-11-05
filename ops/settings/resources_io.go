@@ -156,14 +156,14 @@ type resRecord struct {
 func (o ops) resourceIOOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpResImport, Summary: "Import resources from a csv, json or yaml file (one batch, all or nothing)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourcePlace, errs.NameTaken), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourcePlace, errs.ResourceTaken, errs.ResourceBatch), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "import hosts", CLI: "lore resource import hosts.csv --kind host --yes", Want: "imported"}}}, o.resImport),
 		op.Define(op.Spec{Name: OpResExport, Summary: "Export resources of a kind in the import format (sensitive values masked)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resExport),
 		op.Define(op.Spec{Name: OpResRepoint, Summary: "Move every ref from one resource to another of the same kind, then archive the old one", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceKindMismatch), Confirm: op.ConfirmRule{MayAsk: true}}, o.resRepoint),
 		op.Define(op.Spec{Name: OpResClone, Summary: "Add a resource with another resource's values (--set overrides)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.ResourcePlace, errs.NameTaken), Confirm: op.ConfirmRule{MayAsk: true}}, o.resClone),
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.ResourcePlace, errs.ResourceTaken), Confirm: op.ConfirmRule{MayAsk: true}}, o.resClone),
 	}
 }
 
@@ -485,7 +485,7 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 				case reimport:
 					line.Action, line.ID, existing[r.extID] = actUpdate, id, id
 				case in.UpsertBy == "":
-					cerr = errs.New(errs.NameTaken, r.kind+" "+r.name+" already exists in "+string(target)+" ("+id+")").WithHint("--upsert-by name updates it")
+					cerr = errs.New(errs.ResourceTaken, r.kind+" "+r.name+" already exists in "+string(target)+" ("+id+")").WithHint("--upsert-by name updates it")
 				default:
 					line.Action, line.ID, existing[r.extID] = actUpdate, id, id
 				}
@@ -495,7 +495,7 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 			line.Action, line.Error = actError, cerr.Error()
 			out.Errors++
 			if !in.SkipErrors && !in.DryRun {
-				return ResImportOut{}, errs.Wrap(errs.ResourceInvalid, "resource import: "+r.kind+" "+r.name+": nothing written (all or nothing; --skip-errors writes the valid rows)", cerr)
+				return ResImportOut{}, errs.Wrap(errs.ResourceBatch, "resource import: "+r.kind+" "+r.name+": nothing written (all or nothing; --skip-errors writes the valid rows)", cerr)
 			}
 		} else {
 			good = append(good, r)
@@ -506,7 +506,7 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 	// that cannot be written is refused with nothing written (dry run too).
 	plan, err := importPlan(good, o.refFieldOf(ctx))
 	if err != nil {
-		return ResImportOut{}, errs.Wrap(errs.ResourceInvalid, "resource import: nothing written (all or nothing)", err)
+		return ResImportOut{}, errs.Wrap(errs.ResourceBatch, "resource import: nothing written (all or nothing)", err)
 	}
 	if in.DryRun {
 		return out, nil
@@ -702,7 +702,7 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 		return ResRepointOut{}, errs.Wrap(errs.ResourceInvalid, "resource repoint: "+in.New+" must be a live resource of the same kind as "+in.Old, err)
 	}
 	if text(newR.Row, rArchivedAt) != "" {
-		return ResRepointOut{}, errs.New(errs.ResourceInvalid, "resource repoint: "+in.New+" is archived")
+		return ResRepointOut{}, errs.New(errs.ResourceArchived, "resource repoint: "+in.New+" is archived").WithHint("repoint to its replaced_by, or unarchive it")
 	}
 	only := splitList(strings.Join(in.Fields, ","))
 	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)

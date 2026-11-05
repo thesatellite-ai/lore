@@ -48,7 +48,7 @@ func TestResourceImportExportRepointClone(t *testing.T) {
 	if !strings.Contains(got, "imported 2 rows (2 created, 0 updated)") {
 		t.Fatalf("import %q", got)
 	}
-	if _, err := h.RunYes(settings.OpResImport, `{"file":"`+doc+`"}`); !errs.Has(err, errs.ResourceInvalid) {
+	if _, err := h.RunYes(settings.OpResImport, `{"file":"`+doc+`"}`); !errs.Has(err, errs.ResourceBatch) {
 		t.Fatalf("re-import without upsert: %v", err)
 	}
 	h.MustYes(settings.OpResImport, `{"file":"`+write("up.json", `{"resources":[{"kind":"service","name":"api","fields":{"port":9090}}]}`)+`","upsert_by":"name"}`)
@@ -60,7 +60,7 @@ func TestResourceImportExportRepointClone(t *testing.T) {
 		t.Fatalf("export %q", csvOut)
 	}
 	h.MustYes(settings.OpResAdd, `{"kind":"host","name":"h2","set":["ip=203.0.113.11"]}`)
-	if _, err := h.RunYes(settings.OpResImport, `{"file":"`+write("hosts.csv", strings.Replace(csvOut, "h1", "h3", 1))+`","kind":"host"}`); !errs.Has(err, errs.ResourceInvalid) {
+	if _, err := h.RunYes(settings.OpResImport, `{"file":"`+write("hosts.csv", strings.Replace(csvOut, "h1", "h3", 1))+`","kind":"host"}`); !errs.Has(err, errs.ResourceBatch) {
 		t.Fatalf("masked re-import: %v", err)
 	}
 	if s := opstest.Text(h.MustYes(settings.OpResRepoint, `{"old":"h1","new":"h2"}`)); !strings.Contains(s, "repointed 1 rows from h1 to h2") {

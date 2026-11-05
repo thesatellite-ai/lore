@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -12,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Resource kind and field operations (CLI_REFERENCE 3.2 "lore resource
@@ -301,7 +303,7 @@ var nameErrors = append(slices.Clone(layerErrors), errs.ResourceName)
 
 // layerErrors are the write errors of a kind or field op under kind
 // layering (RES 3.6): a conflicting definition, missing store kind rows.
-var layerErrors = append(slices.Clone(writeErrors), errs.KindConflict, errs.ResourceStale)
+var layerErrors = append(slices.Clone(writeErrors), errs.KindConflict, errs.ResourceStale, errs.KindLimit)
 
 func (o ops) kindOps() []op.Entry {
 	return append([]op.Entry{
@@ -427,6 +429,12 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 	target := targetOf(in.To)
 	if err := o.kindNameClash(ctx, in.Kind, target); err != nil {
 		return RowOut{}, err
+	}
+	// RES 3.1 cap: kinds per place (FA-RES-5).
+	if ks, lerr := liveRows(ctx, o.env, []store.Source{target}, schema.TableKinds); lerr != nil {
+		return RowOut{}, lerr
+	} else if len(ks) >= maxKindsPerPlace {
+		return RowOut{}, kindLimit(place(target)+" has "+strconv.Itoa(len(ks))+" kinds", maxKindsPerPlace)
 	}
 	w, err := create(ctx, o.env, target, schema.TableKinds, map[string]string{kName: in.Kind}, fields)
 	if err != nil {
@@ -624,6 +632,9 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 		}
 	}
 	vs := splitList(in.Values)
+	if err = checkValuesCap(in.Kind+"."+in.Field, vs); err != nil {
+		return RowOut{}, err
+	}
 	if len(vs) > 0 {
 		if fields[fValues], err = textList(vs); err != nil {
 			return RowOut{}, err
@@ -641,6 +652,10 @@ func (o ops) fieldAdd(ctx context.Context, in FieldAddIn) (RowOut, error) {
 	siblings, err := o.fieldMap(ctx, k)
 	if err != nil {
 		return RowOut{}, err
+	}
+	// RES 3.1 cap: fields per effective kind (FA-RES-5).
+	if len(siblings) >= maxFieldsPerKind {
+		return RowOut{}, kindLimit("kind "+in.Kind+" has "+strconv.Itoa(len(siblings))+" fields", maxFieldsPerKind)
 	}
 	if err = fieldOptions(in.Type, vs, siblings, in.FieldRuleFlags, fields); err != nil {
 		return RowOut{}, err
@@ -752,6 +767,9 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 			vals = slices.DeleteFunc(vals, func(x string) bool { return x == v })
 		}
 		if renames, vals, err = renamePairs(in.Kind+"."+in.Field, in.RenameValues, vals); err != nil {
+			return RowOut{}, err
+		}
+		if err = checkValuesCap(in.Kind+"."+in.Field, vals); err != nil {
 			return RowOut{}, err
 		}
 		if patch[fValues], err = textList(vals); err != nil {

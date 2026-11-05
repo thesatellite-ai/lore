@@ -67,7 +67,7 @@ func TestResourceImportRefMatrix(t *testing.T) {
 			}
 			in := `{"file":"` + p + `"}`
 			if c.refuse != "" {
-				if msg := h.Fails(settings.OpResImport, in, errs.ResourceInvalid); !strings.Contains(msg, c.refuse) || !strings.Contains(msg, "nothing written") {
+				if msg := h.Fails(settings.OpResImport, in, errs.ResourceBatch); !strings.Contains(msg, c.refuse) || !strings.Contains(msg, "nothing written") {
 					t.Fatalf("refusal %q, want %q and nothing written", msg, c.refuse)
 				}
 				if _, err := h.RunYes(settings.OpResImport, in); err == nil {

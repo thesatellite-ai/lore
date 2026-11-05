@@ -155,7 +155,7 @@ func TestResourcesMatrix(t *testing.T) {
 		{settings.OpResAdd, `{"kind":"server","name":"web2.example.com","set":["env=prod"]}`, errs.ResourceInvalid, "required field ip is missing"},
 		{settings.OpResAdd, `{"kind":"server","name":"web3.example.com","set":["ip=10.0.0.3","env=dev"]}`, errs.ResourceInvalid, `env "dev" is not one of prod, staging`},
 		{settings.OpResAdd, `{"kind":"server","name":"web4.example.com","set":["ip=999.1.1.1"]}`, errs.ResourceInvalid, ""},
-		{settings.OpResAdd, `{"kind":"server","name":"web1.example.com","set":["ip=10.0.0.9"]}`, errs.NameTaken, "server web1.example.com already exists in repo"},
+		{settings.OpResAdd, `{"kind":"server","name":"web1.example.com","set":["ip=10.0.0.9"]}`, errs.ResourceTaken, "server web1.example.com already exists in repo"},
 		{settings.OpResAdd, `{"kind":"server","name":"not a host","set":["ip=10.0.0.9"]}`, errs.ResourceName, ""},
 		{settings.OpResAdd, `{"kind":"db","name":"Main DB"}`, errs.ResourceName, "the name does not fit the kind's name format"},
 		{settings.OpResAdd, `{"kind":"app","name":"api2","set":["db=nope"]}`, errs.ResourceInvalid, `no resources row named "nope"`},

@@ -152,7 +152,7 @@ func (o ops) resRename(ctx context.Context, in ResRenameIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	if hit := where(rows, map[string]string{rKind: d.kind.Row.ID.String(), rName: in.New}); len(hit) > 0 {
-		return RowOut{}, errs.New(errs.NameTaken, d.name()+" "+in.New+" already exists in "+string(r.Src)+" ("+hit[0].Row.ID.String()+")")
+		return RowOut{}, errs.New(errs.ResourceTaken, d.name()+" "+in.New+" already exists in "+string(r.Src)+" ("+hit[0].Row.ID.String()+")")
 	}
 	v, err := txt(in.New)
 	if err != nil {
