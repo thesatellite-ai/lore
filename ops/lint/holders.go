@@ -15,8 +15,16 @@ import (
 // stale, ids do not; `lore secrets relabel` fixes them in one batch).
 const StaleHolderLabel Code = "stale_holder_label"
 
+// HolderArchived is a ${secret:…} reference still held by an actor who
+// was archived (active false: the person left, SECRETS 19.6): the holder
+// is that actor's id, or a machine label whose handle part is theirs.
+const HolderArchived Code = "secret_holder_archived"
+
 // fieldActorHandle is the actors table's handle field (schema.Builtin).
 const fieldActorHandle = "handle"
+
+// fieldActorActive is the actors table's active flag ("false" = archived).
+const fieldActorActive = "active"
 
 // holderLabelSep separates the person handle from the machine label in a
 // holder label ("mira.studio_mac", SECRETS 5.2).
@@ -43,9 +51,17 @@ func holderFindings(all map[row.Table][]sourced) []Finding {
 		}
 	}
 	handles := map[string]string{} // act_ id → handle (an actor holder's label, 5.2)
+	gone := map[string]bool{}      // archived actors by act_ id and by handle (19.6)
 	for _, a := range all[schema.TableActors] {
-		if h := text(a.r, fieldActorHandle); h != "" {
+		h := text(a.r, fieldActorHandle)
+		if h != "" {
 			handles[a.r.ID.String()] = h
+		}
+		if text(a.r, fieldActorActive) == "false" {
+			gone[a.r.ID.String()] = true
+			if h != "" {
+				gone[h] = true
+			}
 		}
 	}
 	if len(labels) == 0 && len(handles) == 0 {
@@ -63,6 +79,13 @@ func holderFindings(all map[row.Table][]sourced) []Finding {
 						}
 						for _, alt := range r.Alternates {
 							holder, label := option(alt, refs.OptHolder), option(alt, refs.OptLabel)
+							person, _, _ := strings.Cut(label, holderLabelSep)
+							if gkey := s.r.ID.String() + "\x00gone\x00" + holder + "\x00" + label; (gone[holder] || (person != "" && gone[person])) && !seen[gkey] {
+								seen[gkey] = true
+								out = append(out, Finding{Code: HolderArchived, ID: s.r.ID.String(), Store: string(s.src),
+									Message: f + ": a secret reference is still held by " + label + " (" + holder + "), whose actor is archived",
+									Fix:     "lore secrets move --from " + holder + " --to <holder>, then rotate the secret"})
+							}
 							want, known := labels[holder]
 							machine := label
 							if hd, isActor := handles[holder]; isActor {
