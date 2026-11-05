@@ -1,17 +1,15 @@
 
 ### teams
-alice (work/billing)$ lore team add @frontend --name 'Frontend' --members @alice,@bob
-✓ tem_7a670ae8548ed05bf57ad29ad0759504 @frontend (2 member(s)) in this repo
-alice (work/billing)$ lore team list
-@frontend         Frontend                 2 member(s)
-alice (work/billing)$ lore task add 'make the buttons blue' --assign @frontend
-lore sync: imported 1
-✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — make the buttons blue [medium]
+alice (work/billing)$ lore actor list
+act_7a670ae8548ed05bf57ad29ad0759504 [human] bob
+act_2ad3618e878ebbf527d34d446ef4f891 [human] alice
+alice (work/billing)$ lore task add 'make the buttons blue' --assign @bob
 lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
+lore live: (live, pushed)
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — make the buttons blue [medium]
 bob (work/billing)$ lore task list
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/billing/.git/hooks)
-○ tsk_2ad3618e878ebbf527d34d446ef4f891 make the buttons blue [medium]
+○ tsk_162df51b7f78b785c97c26b41ea89666 make the buttons blue [medium]
 
 ### resource
 alice (work/billing)$ lore hold claim full-suite --ttl 30m

@@ -188,28 +188,27 @@ When someone leaves the team, `lore task reassign --from @bob --assign @alice` m
 
 ## Teams
 
-A **team** is a name for a group of people, like a mailing list: `--assign @frontend` reaches everyone in it. Make one with `lore team add`, list them with `lore team list`. This example runs in the agency's own repo with no org config, like [A small team in one repo](use-cases/small-team.md):
+`--assign @handle` names someone on the roster. Everyone who writes joins it with `lore actor register` (an agent with `--kind agent`), and `lore actor list` shows who is on it. This example runs in the agency's own repo with no org config, like [A small team in one repo](use-cases/small-team.md):
 
 <!-- example: team-ops#teams -->
 ```console
 # alice, in billing
-$ lore team add @frontend --name 'Frontend' --members @alice,@bob
-✓ tem_7a67…9504 @frontend (2 member(s)) in this repo
-$ lore team list
-@frontend         Frontend                 2 member(s)
-$ lore task add 'make the buttons blue' --assign @frontend
-lore sync: imported 1
-✓ tsk_2ad3…f891 — make the buttons blue [medium]
+$ lore actor list
+act_7a67…9504 [human] bob
+act_2ad3…f891 [human] alice
+$ lore task add 'make the buttons blue' --assign @bob
 lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
+lore live: (live, pushed)
+✓ tsk_162d…9666 — make the buttons blue [medium]
 
 # bob, in billing
 $ lore task list
-○ tsk_2ad3…f891 make the buttons blue [medium]
+○ tsk_162d…9666 make the buttons blue [medium]
 ```
 <!-- /example -->
 
-In a linked client repo you cannot assign a whole team: team names are internal to the agency, so lore refuses it. Assign a person, or keep the task internal with `--to <org>`.
+A **team** is a name for a group of people, like a mailing list: `--assign @frontend` reaches everyone in it. 0.1.18 has no command to add or list teams; the teams of a v0.1.17 roster come over with `lore migrate run` and keep working, and a handle that names no person resolves to the team of that name. In a linked client repo you cannot assign a whole team: team names are internal to the agency, so lore refuses it. Assign a person, or keep the task internal with `--to <org>`.
 
 ## Sharing one thing nobody may use twice at once: `lore hold`
 
@@ -260,7 +259,7 @@ Running `lore hold claim` again while you hold it renews your hold. A typical li
 - **A released task stays `in_progress`.** `lore task release` drops only the claim. If nobody should work on it, cancel it or move it back yourself.
 - **Revoke and reassign need the holder to write once more to notice.** The agent finds out on its next heartbeat, note or `done`. An agent that never writes again keeps working on its copy. The claim is still gone, and its `done` is refused.
 - **Resources are per project in a repo without a store.** In a linked client repo, `lore hold claim` is not available yet (it answers `E_NOT_IMPLEMENTED`); run shared-resource scripts from the agency's own repos.
-- **Teams live where `lore team add` ran.** In a repo with no org, the team is a row in that repo's `.lore/data`, so commit it with your change, like any other row.
+- **The roster lives where `lore actor register` ran.** In a repo with no org, each person is a row in that repo's `.lore/data`, so commit it with your change, like any other row.
 - **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`lore sync` always fetches). A teammate's claim from a few seconds ago may not be visible yet; a claim itself always checks the remote.
 - **One label per session.** Two sessions started with the same `--label` are one actor, and their claims collide.
 
@@ -269,5 +268,5 @@ Running `lore hold claim` again while you hold it renews your hold. A typical li
 - [Agents on one mission](use-cases/agents-mission.md): the full worked example (plan, claims, crash and reclaim, gate).
 - [Concepts](concepts.md): live rows, signals, stores.
 - [How it works](how-it-works.md#signals-claim-renew-expire-reclaim): what a claim writes in git.
-- [Commands](commands.md): every flag of `task claim`, `task release`, `task revoke`, `task reassign`, `hold claim`, `team add`.
+- [Commands](commands.md): every flag of `task claim`, `task release`, `task revoke`, `task reassign`, `hold claim`, `actor register`.
 - [Troubleshooting](troubleshooting.md): error codes and exit statuses.

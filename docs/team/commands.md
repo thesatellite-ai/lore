@@ -206,21 +206,6 @@ Flags:
 ```
 <!-- /help -->
 
-### `lore team`
-
-<!-- help: team -->
-Teams on the org roster (@handle resolves to a person or a team)
-
-```text
-Usage:
-  lore team <command>
-
-Available Commands:
-  add         Create or update a team; @handle then resolves to the team
-  list        List the roster's teams
-```
-<!-- /help -->
-
 ## Stores
 
 ### `lore store init`

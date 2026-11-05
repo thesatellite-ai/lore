@@ -764,22 +764,21 @@ s_internals() {
 }
 
 # ---------------------------------------------------------------------------
-# team-ops: teams, and the claim commands a person uses on an agent's work
+# team-ops: assigning by @handle, and the claim commands a person uses on an agent's work
 # (release, revoke, reassign) plus shared resources (docs/team/agents.md).
 s_team_ops() {
   section team-ops
   person alice alice@agency.example; person bob bob@agency.example
   # 70 s per step: past lore's 60 s fetch cache, so each person sees the other's last write.
   STEP=70
-  # First a repo with no org config (like the small-team page): teams and shared resources.
+  # First a repo with no org config (like the small-team page): the roster and shared resources.
   remote agency/billing
   quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main && lore actor register"
   quiet bob work "git clone -q https://github.com/agency/billing && cd billing && lore actor register"
 
   note "teams"
-  on alice work/billing "lore team add @frontend --name 'Frontend' --members @alice,@bob"
-  on alice work/billing "lore team list"
-  on alice work/billing "lore task add 'make the buttons blue' --assign @frontend"
+  on alice work/billing "lore actor list"
+  on alice work/billing "lore task add 'make the buttons blue' --assign @bob"
   on bob work/billing "lore task list"
 
   note "resource"
