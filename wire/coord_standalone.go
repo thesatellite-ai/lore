@@ -54,16 +54,6 @@ var _ opscoord.Host = standaloneCoord{}
 // coordUnsupported is ops/coord's refusal for the verb name.
 func coordUnsupported(name string) error { return opscoord.Unsupported(name) }
 
-// Inbox implements opscoord.Host.
-func (standaloneCoord) Inbox(context.Context, opscoord.InboxIn) (opscoord.InboxOut, error) {
-	return opscoord.InboxOut{}, coordUnsupported(opscoord.OpInbox)
-}
-
-// MissionStatus implements opscoord.Host.
-func (standaloneCoord) MissionStatus(context.Context, opscoord.MissionStatusIn) (opscoord.MissionStatusOut, error) {
-	return opscoord.MissionStatusOut{}, coordUnsupported(opscoord.OpMissionStatus)
-}
-
 // fromRepo is the --from value naming this repo's own project.
 const fromRepo = "repo"
 

@@ -133,6 +133,11 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 		return nil, errs.New(errs.LinkUnknown, "cannot tell whether this repo is a client repo; refusing to write coordination data").
 			WithHint("`lore whoami` shows the link status; fetch the store and retry")
 	}
+	if who.Kind == identity.KindAgent && sit.Result.Org != nil {
+		if err = a.requireRosterAgent(ctx, who.StableKey, sit.Result.Org.Name); err != nil {
+			return nil, err
+		}
+	}
 	w := &coordWorld{
 		a: a, repo: repo, stateDir: filepath.Join(strings.TrimSpace(string(gitDir)), signalsStateDir),
 		folder: signalsRootFolder, who: who, actorID: actor.String(), sit: sit.Result,
@@ -192,6 +197,27 @@ func (w *coordWorld) remoteRepoName(ctx context.Context) string {
 		u = u[i+1:]
 	}
 	return u
+}
+
+// requireRosterAgent refuses an agent the org roster does not list (F18,
+// §7.4: v0.1.17's identity chain failed with ErrAgentNotOnRoster); a
+// roster that cannot be read refuses too (fail closed).
+func (a *App) requireRosterAgent(ctx context.Context, stableKey, org string) error {
+	r, err := a.coordRoster(ctx)
+	if err != nil {
+		return err
+	}
+	actors, err := a.RosterActors(ctx, r.src)
+	if err != nil {
+		return err
+	}
+	for _, x := range actors {
+		if x.Active && x.StableKey == stableKey {
+			return nil
+		}
+	}
+	return errs.New(errs.IdentityFailed, identity.EnvActor+"="+stableKey+" is not on "+org+"'s roster (register it with `lore agent start --label …`)").
+		WithHint("its owner runs `lore agent start --label <l>` first")
 }
 
 // linked reports a repo with store links (a group or client repo).
