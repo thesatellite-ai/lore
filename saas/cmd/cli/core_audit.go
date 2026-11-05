@@ -272,12 +272,22 @@ const privateDBBusyMS = 5000
 // so the worst case is an error, never a hang. The per-connection pragmas
 // sit in the DSN (a PRAGMA through *sql.DB reaches one pooled connection
 // only); journal_mode stays what the main handle set (WAL is persistent).
+//
+// FB-SESS-1: path is made absolute before it becomes a file: URI. A
+// resolved DBPath may be relative (".lore/lore.db", or a v0.1.17 pointer's
+// "../client.db"); url.URL renders that as "file://../client.db", whose
+// authority ".." SQLite refuses ("unable to open database file"), so every
+// write that refreshed the tool session ids failed E_INTERNAL.
 func openPrivateLoreDB(path string, readOnly bool) (*sql.DB, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, errcodes.New(errcodes.Internal, "resolve the lore.db path").WithCause(err)
+	}
 	q := "_pragma=foreign_keys(1)&_pragma=busy_timeout(" + strconv.Itoa(privateDBBusyMS) + ")&_pragma=synchronous(NORMAL)&_txlock=immediate"
 	if readOnly {
 		q = "mode=ro&_pragma=busy_timeout(" + strconv.Itoa(privateDBBusyMS) + ")"
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: q}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs), RawQuery: q}
 	db, err := sql.Open(doctorCacheDriver, u.String())
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "open lore.db").WithCause(err)
