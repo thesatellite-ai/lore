@@ -1036,8 +1036,9 @@ func (e *Engine) writeChanges(ctx context.Context, st Attached, changes []store.
 		return st.Backend.Write(ctx, changes)
 	}
 	recs := make([]store.AuditRecord, 0, len(evs))
+	machine := e.thisMachine()
 	for _, ev := range evs {
-		rec, err := journalRecord(e.auditView(ctx, st.Name, ev))
+		rec, err := journalRecord(e.auditView(ctx, st.Name, ev), machine)
 		if err != nil {
 			return err
 		}
@@ -1054,21 +1055,28 @@ const journalReplayAge = time.Minute
 // replayJournal records this store's older pending audit records (left by
 // a write whose sink failed, or a crash) and acks each one recorded. Best
 // effort: a record that fails again stays pending for the next write.
+// Only this machine's records are replayed (G-DECIDE-1): a folder store
+// on a shared folder may hold another machine's journal, whose records
+// belong to that machine's trail; they stay pending, never acked here.
 func (e *Engine) replayJournal(ctx context.Context, source store.Source, j store.AuditJournal, mine map[store.Key]hlc.HLC) {
 	recs, err := j.PendingAudit(ctx)
 	if err != nil || len(recs) == 0 {
 		return
 	}
 	now := e.wall()
+	machine := e.thisMachine()
 	var done []store.AuditRecord
 	for _, rc := range recs {
 		if _, ours := mine[rc.Key]; ours || now.Sub(rc.HLC.Wall) < journalReplayAge {
 			continue
 		}
-		ev, derr := eventOfRecord(rc)
+		ev, by, derr := eventOfRecord(rc)
 		if derr != nil {
 			done = append(done, rc) // unreadable: never recordable, drop it
 			continue
+		}
+		if by != machine {
+			continue // another machine's record: its own writes replay it
 		}
 		ev.Store = source
 		if e.audit.Record(ctx, ev) == nil {

@@ -175,8 +175,12 @@ const (
 
 // journalEvent is the JSON form of an Event in a backend's pending audit
 // journal (store.AuditRecord.Line): names and ids only, never a field
-// value, a finding or the machine-local session id.
+// value, a finding or the machine-local session id. Machine is the writing
+// machine's id (Provenance.Writer, "" when unknown): a folder store on a
+// shared folder can hold another machine's pending records, and only the
+// machine that wrote a record replays it (G-DECIDE-1).
 type journalEvent struct {
+	Machine   string `json:"machine,omitempty"`
 	Op        string `json:"op,omitempty"`
 	Action    string `json:"action"`
 	Store     string `json:"store"`
@@ -190,10 +194,11 @@ type journalEvent struct {
 	BatchKind string `json:"batch_kind,omitempty"`
 }
 
-// journalRecord encodes ev for the backend's journal (CLEANUP Qs).
-func journalRecord(ev Event) (store.AuditRecord, error) {
+// journalRecord encodes ev, written by machine, for the backend's journal
+// (CLEANUP Qs, G-DECIDE-1).
+func journalRecord(ev Event, machine string) (store.AuditRecord, error) {
 	line, err := json.Marshal(journalEvent{
-		Op: ev.Op, Action: string(ev.Action), Store: string(ev.Store), Table: ev.Table.String(), ID: ev.ID.String(),
+		Machine: machine, Op: ev.Op, Action: string(ev.Action), Store: string(ev.Store), Table: ev.Table.String(), ID: ev.ID.String(),
 		HLC: ev.HLC.String(), Actor: actorText(ev.Actor), Merged: ev.Merged, Cascade: anyText(ev.Cascade),
 		Batch: batchText(ev.Batch.ID), BatchKind: ev.Batch.Kind,
 	})
@@ -225,32 +230,45 @@ func batchText(id ids.ID[ids.Batch]) string {
 	return id.String()
 }
 
+// thisMachine is the id journal records of this engine carry: the
+// Provenance writer's machine id, "" without one (G-DECIDE-1).
+func (e *Engine) thisMachine() string {
+	if e.prov == nil {
+		return ""
+	}
+	if _, m := e.prov.Writer(); !m.IsZero() {
+		return m.String()
+	}
+	return ""
+}
+
 // eventOfRecord decodes a journal record back into the Event it was made
-// from (the replay of a deferred record; CLEANUP Qs).
-func eventOfRecord(rc store.AuditRecord) (Event, error) {
+// from and the machine that wrote it (the replay of a deferred record;
+// CLEANUP Qs, G-DECIDE-1).
+func eventOfRecord(rc store.AuditRecord) (Event, string, error) {
 	var j journalEvent
 	if err := json.Unmarshal(rc.Line, &j); err != nil {
-		return Event{}, errs.Wrap(errs.Internal, "engine: decode an audit record", err)
+		return Event{}, "", errs.Wrap(errs.Internal, "engine: decode an audit record", err)
 	}
 	ev := Event{Op: j.Op, Action: Action(j.Action), Store: store.Source(j.Store), Table: rc.Key.Table, ID: rc.Key.ID,
 		HLC: rc.HLC, Merged: j.Merged, Batch: Batch{Kind: j.BatchKind}}
 	var err error
 	if j.Actor != "" {
 		if ev.Actor, err = ids.Parse[ids.Actor](j.Actor); err != nil {
-			return Event{}, err
+			return Event{}, "", err
 		}
 	}
 	if j.Cascade != "" {
 		if ev.Cascade, err = ids.ParseAny(j.Cascade); err != nil {
-			return Event{}, err
+			return Event{}, "", err
 		}
 	}
 	if j.Batch != "" {
 		if ev.Batch.ID, err = ids.Parse[ids.Batch](j.Batch); err != nil {
-			return Event{}, err
+			return Event{}, "", err
 		}
 	}
-	return ev, nil
+	return ev, j.Machine, nil
 }
 
 // Warning is something a write did that the person must hear about but
