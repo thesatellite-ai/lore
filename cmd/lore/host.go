@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/surface/docs"
 	"github.com/thesatellite-ai/lore/surface/rest"
 	"github.com/thesatellite-ai/lore/wire"
@@ -42,13 +43,17 @@ type host struct {
 	render *renderhost.Host
 	// printed is set when a host command printed its own error.
 	printed bool
+	// runner is the CLI's host runner (every hook); `lore api` serves
+	// through it too (apirunner.go). Nil only in tests that build no
+	// runner: the API then serves through the bare app.
+	runner op.Runner
 }
 
 // apiCommand is `lore api [--port]` and `lore api token rotate`.
 //
 // Flow: open the engine (a broken store fails at start) → actor → token
 // (created on first use, never printed) → rest.New over the same registry
-// and the app as runner → listen on 127.0.0.1 → serve until interrupted.
+// and the CLI's host runner (apirunner.go) → listen on 127.0.0.1 → serve until interrupted.
 func (h *host) apiCommand() *cobra.Command {
 	port := apiDefaultPort
 	cmd := &cobra.Command{
@@ -68,7 +73,11 @@ func (h *host) apiCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			srv, err := rest.New(h.app.Registry(), h.app, rest.Options{Token: tok, Actor: actor, LoreVersion: version})
+			var runner op.Runner = h.app
+			if h.runner != nil {
+				runner = &apiRunner{inner: h.runner}
+			}
+			srv, err := rest.New(h.app.Registry(), runner, rest.Options{Token: tok, Actor: actor, LoreVersion: version})
 			if err != nil {
 				return err
 			}

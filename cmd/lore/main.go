@@ -125,7 +125,7 @@ func run(ctx context.Context, args []string) int {
 	root.Version = version
 	addRootFlags(root, flags)
 	hosthooks.Install(root, runner)
-	h := &host{app: app, home: home, live: liveRows, render: rend.h}
+	h := &host{app: app, home: home, live: liveRows, render: rend.h, runner: runner}
 	h.markPrinted(root)
 	mountShortcuts(root)
 	mountSQLHelp(root) // sqlhelp.go: bare `lore sql` prints help (after mountShortcuts)
