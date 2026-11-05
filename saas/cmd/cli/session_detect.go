@@ -11,13 +11,11 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"dbent"
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/sessions"
 
@@ -158,15 +156,20 @@ func detectedWhoOf(ctx context.Context, app *wire.App) (identity.Resolved, error
 	return who, nil
 }
 
-// currentSession finds or creates this process's session row in db and
-// returns its ses_ id; "" when no session applies, the core is not
-// mounted, or lore.db predates the 0.1.18 columns (the change is still
-// audited, only without the link; `lore doctor` reports the schema drift).
-// root is the project root lore.db belongs to ("" = the working
+// currentSession finds or creates this process's session row in the
+// machine store (P3-LOCAL-5) and returns its ses_ id; "" when no session
+// applies or the core is not mounted (the change is still audited, only
+// without the link). root is the project root ("" = the working
 // directory; the core audit sink passes the repo top, OVERNIGHT Qs
-// subfolder).
-// app is the App whose write is audited (nil = the package's coreApp).
-func currentSession(ctx context.Context, app *wire.App, db *sql.DB, root string) (string, error) {
+// subfolder). app is the App whose write is audited (nil = the package's
+// coreApp); the row is written through that App's engine.
+//
+// Called from inside that App's audit sink (routedAudit → Session): safe
+// because the engine holds no lock across AuditSink.Record and the
+// session row's own audit event is not linked again (wire routedAudit
+// skips the session lookup for the sessions table), see
+// wire.TestSessionWriteFromInsideTheAuditSink.
+func currentSession(ctx context.Context, app *wire.App, root string) (string, error) {
 	if app == nil {
 		app = coreApp
 	}
@@ -185,50 +188,48 @@ func currentSession(ctx context.Context, app *wire.App, db *sql.DB, root string)
 	if !ok {
 		return "", nil
 	}
-	return currentSessionAt(ctx, db, d, root)
+	return currentSessionWith(ctx, app, d, root)
 }
 
-// currentSessionWith finds or creates d's row in db ("" on a lore.db
-// without the 0.1.18 columns).
-func currentSessionWith(ctx context.Context, db *sql.DB, d sessions.Details) (string, error) {
-	return currentSessionAt(ctx, db, d, "")
-}
-
-// currentSessionAt is currentSessionWith resolving the project at root
-// ("" = the working directory; OVERNIGHT Qs subfolder).
-func currentSessionAt(ctx context.Context, db *sql.DB, d sessions.Details, root string) (string, error) {
-	ready, err := sessions.Ready(ctx, db)
-	if err != nil || !ready {
-		return "", err
+// currentSessionWith finds or creates d's row through app (nil = coreApp)
+// for the project at root ("" = the working directory).
+func currentSessionWith(ctx context.Context, app *wire.App, d sessions.Details, root string) (string, error) {
+	if app == nil {
+		app = coreApp
+	}
+	if app == nil {
+		return "", nil
 	}
 	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: root})
 	if err != nil {
 		return "", mapResolveError(err)
 	}
-	client := dbent.New(db).Client()
 	project, perr := resolveProjectID(ctx, rctx.ProjectID)
 	if perr != nil || project == "" {
 		return "", nil // `lore init` before the project row exists has no session link yet
 	}
-	return sessions.FindOrCreate(ctx, client, project, d)
+	return app.FindOrCreateSession(ctx, project, wireSessionDetails(d))
 }
 
 // knownSessionIDs are the raw tool session ids on this machine for the
-// leak check's session rule (section 9). Best effort: no lore.db (a fresh
-// clone, outside a repo) means no session ids are known, so none can leak.
+// leak check's session rule (section 9), from the machine store. Best
+// effort: no core or an unreadable store means none are known.
 func knownSessionIDs(ctx context.Context) []string {
-	rctx, err := projresolve.Resolve(projresolve.Inputs{})
-	if err != nil {
+	if coreApp == nil {
 		return nil
 	}
-	if _, serr := os.Stat(rctx.DBPath); serr != nil {
-		return nil
-	}
-	db := dbent.InitDB(rctx.DBPath)
-	defer func() { _ = db.Close() }() // read-only use
-	out, err := sessions.KnownToolSessionIDs(ctx, db)
+	out, err := coreApp.KnownToolSessionIDs(ctx)
 	if err != nil {
 		return nil
 	}
 	return out
+}
+
+// wireSessionDetails maps the detector's details to the core's, field for
+// field.
+func wireSessionDetails(d sessions.Details) wire.SessionDetails {
+	return wire.SessionDetails{ActorID: d.ActorID, Tool: d.Tool, ToolSessionID: d.ToolSessionID, ToolVersion: d.ToolVersion,
+		Model: d.Model, MachineID: d.MachineID, RunID: d.RunID, Repo: d.Repo, Branch: d.Branch, Cwd: d.Cwd, Terminal: d.Terminal,
+		CI: d.CI, ParentSessionID: d.ParentSessionID, Signal: d.Signal, Sources: d.Sources, OuterTools: d.OuterTools,
+		DeclaredHuman: d.DeclaredHuman, Flags: d.Flags}
 }

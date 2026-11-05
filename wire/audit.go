@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -92,7 +93,7 @@ type auditLine struct {
 
 // SessionSource is an optional capability of the repo audit sink
 // (Options.Audit): it knows this process's session row (the old binary's
-// lore.db sessions table, machine-local per Q-LOCAL). routedAudit asks it
+// machine store's sessions table, P3-LOCAL-5). routedAudit asks it
 // once per event that lacks a session, so the attached-store trail and
 // the batch log carry the same ses_ id as the repo chain.
 type SessionSource interface {
@@ -205,7 +206,10 @@ func (r *routedAudit) Record(ctx context.Context, ev engine.Event) error {
 	// 6.6: the session link and the --yes mark, filled once here so every
 	// sink below records the same values.
 	ev.Confirmed = ev.Confirmed || engine.Confirmed(ctx)
-	if src, ok := r.repo.(SessionSource); ok && ev.Session == "" {
+	// P3-LOCAL-5: a session row's own event is never linked: the session
+	// source writes that row from inside this call (the first write of a
+	// process), and asking it again would re-enter it.
+	if src, ok := r.repo.(SessionSource); ok && ev.Session == "" && ev.Table != schema.TableSessions {
 		ses, err := src.Session(ctx)
 		if err != nil {
 			return err

@@ -22,7 +22,6 @@ import (
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/sessions"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -187,45 +186,32 @@ func nearestMarkerDir(dir, stop string) string {
 }
 
 // Session implements wire.SessionSource: this process's ses_ id in the
-// repo's lore.db (machine-local, OQ14), "" when no session applies or
-// there is no lore.db here. Found or created once per process.
+// machine store (machine-local, OQ14, P3-LOCAL-5), "" when no session
+// applies or there is no project here. Found or created once per process.
 func (s *coreAuditSink) Session(ctx context.Context) (string, error) {
 	s.sesOnce.Do(func() {
-		s.once.Do(func() { s.db, s.err = openCoreAuditDBAt(ctx, s.projectRoot(ctx)) })
-		if s.err != nil {
-			return // no repo lore.db (attached-store-only run): no session link
+		if _, err := projresolve.Resolve(projresolve.Inputs{Dir: s.projectRoot(ctx)}); err != nil {
+			return // no project (attached-store-only run): no session link
 		}
-		s.ses, s.sesErr = currentSession(ctx, s.app, s.db, s.projectRoot(ctx))
+		s.ses, s.sesErr = currentSession(ctx, s.app, s.projectRoot(ctx))
 	})
 	return s.ses, s.sesErr
 }
 
 // ToolSessionIDs implements wire.ToolSessionSource: the raw tool session
-// ids in the repo's lore.db (OV11: the scanner refuses them at write time);
-// none when there is no lore.db here.
-//
-// P2B-OLD-3: it reads through its own read-only handle, never s.db. The
-// core scanner is built lazily inside lsync.Reconcile's write transaction
-// (exportDoc → exportSecretCheck → coreApp.HookScanner → wire scanner
-// Refresh → here); opening s.db there ran materialize and ApplyPragmas on a
-// second shared-cache connection while the first held the write lock, and
-// `lore sync` deadlocked. A private-cache mode=ro handle with a busy
-// timeout reads beside the writer and cannot wait forever.
+// ids of this machine's machine store (OV11: the scanner refuses them at
+// write time). It reads through s.app's engine, never lore.db, so the
+// P2B-OLD-3 lsync deadlock (a second lore.db connection inside the
+// reconcile write transaction) cannot come back.
 func (s *coreAuditSink) ToolSessionIDs(ctx context.Context) ([]string, error) {
-	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: s.projectRoot(ctx)})
-	if err != nil {
-		return nil, nil // no project here (attached-store-only run): no ids known
+	app := s.app
+	if app == nil {
+		app = coreApp
 	}
-	fi, err := os.Lstat(rctx.DBPath)
-	if err != nil || !fi.Mode().IsRegular() {
-		return nil, nil // no lore.db yet (sessions are machine-local, Q-LOCAL), or a symlink lore never reads
+	if app == nil {
+		return nil, nil
 	}
-	db, err := openPrivateLoreDB(rctx.DBPath, true)
-	if err != nil {
-		return nil, err
-	}
-	ids, err := sessions.KnownToolSessionIDs(ctx, db)
-	return ids, errors.Join(err, db.Close())
+	return app.KnownToolSessionIDs(ctx)
 }
 
 // openCoreAuditDB opens the project's lore.db for the chain, building it

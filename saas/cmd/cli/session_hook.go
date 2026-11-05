@@ -10,7 +10,7 @@
 //	  ├─ --hook-stdin → toolprofile.SessionHookFor(tool).Parse(stdin)
 //	  ├─ clean each value (one line, ≤ 200 chars, no control chars; 6.3)
 //	  ├─ actor: the detected agent (same tool) else agent:auto/<tool>/<owner short> (OQ9)
-//	  └─ sessions.FindOrCreate in lore.db (machine-local, OQ14)
+//	  └─ wire.App.FindOrCreateSession in the machine store (machine-local, OQ14, P3-LOCAL-5)
 package main
 
 import (
@@ -101,12 +101,7 @@ func agentHook(ctx context.Context, tool, session, model string, hookStdin bool,
 	if d.ToolSessionID == "" {
 		return errors.New("no session id: the tool gave none and LORE_SESSION is unset")
 	}
-	db, err := openCoreAuditDB(ctx)
-	if err != nil {
-		return err
-	}
-	defer joinClose(&err, db, "the DB")
-	if _, err := currentSessionWith(ctx, db, d); err != nil {
+	if _, err := currentSessionWith(ctx, nil, d, ""); err != nil {
 		return err
 	}
 	return nil
