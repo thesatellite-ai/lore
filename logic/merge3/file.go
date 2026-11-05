@@ -1,6 +1,10 @@
 package merge3
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+)
 
 // File-level merge (LORE_TEAM_SPEC.md F4 step 1, C12).
 //
@@ -45,17 +49,17 @@ func (k FileKind) String() string {
 // Invariant: Doc is nil exactly when Kind is FileAbsent.
 type File struct {
 	Kind FileKind
-	Doc  map[string]any
+	Doc  canonjson.Object
 }
 
 // Absent is the "no file" side.
 func Absent() File { return File{Kind: FileAbsent} }
 
 // Row wraps a row document.
-func Row(doc map[string]any) File { return File{Kind: FileRow, Doc: doc} }
+func Row(doc canonjson.Object) File { return File{Kind: FileRow, Doc: doc} }
 
 // Tombstone wraps a tombstone document.
-func Tombstone(doc map[string]any) File { return File{Kind: FileTombstone, Doc: doc} }
+func Tombstone(doc canonjson.Object) File { return File{Kind: FileTombstone, Doc: doc} }
 
 // deleted reports whether the side removed the row (no file or tombstone).
 func (f File) deleted() bool { return f.Kind != FileRow }
@@ -65,19 +69,19 @@ func (f File) deleted() bool { return f.Kind != FileRow }
 type FileDecision int
 
 const (
-	// DecisionSame: both sides hold the same file.
+	// DecisionSame means both sides hold the same file.
 	DecisionSame FileDecision = iota
-	// DecisionOursOnly: only ours changed it (or only ours added it).
+	// DecisionOursOnly means only ours changed it (or only ours added it).
 	DecisionOursOnly
-	// DecisionTheirsOnly: only theirs changed it (or only theirs added it).
+	// DecisionTheirsOnly means only theirs changed it (or only theirs added it).
 	DecisionTheirsOnly
-	// DecisionFieldMerge: both edited (or both added) a row; Merge settled
+	// DecisionFieldMerge means both edited (or both added) a row; Merge settled
 	// the keys (an add/add merges with an empty base).
 	DecisionFieldMerge
-	// DecisionModifyBeatsDelete: one side deleted the row, the other edited
+	// DecisionModifyBeatsDelete means one side deleted the row, the other edited
 	// it; the edited row is kept, the deletion dropped (F4: modify wins).
 	DecisionModifyBeatsDelete
-	// DecisionBothDeleted: both sides removed it, differently (one by a
+	// DecisionBothDeleted means both sides removed it, differently (one by a
 	// tombstone, or two different tombstones); the result is a tombstone.
 	DecisionBothDeleted
 )
@@ -162,7 +166,7 @@ func MergeFile(base, ours, theirs File, p Policy) (FileResult, error) {
 	}
 	switch {
 	case !ours.deleted() && !theirs.deleted():
-		var baseDoc map[string]any
+		var baseDoc canonjson.Object
 		if base.Kind == FileRow {
 			baseDoc = base.Doc
 		}
@@ -196,5 +200,5 @@ func sameFile(a, b File) (bool, error) {
 	if a.Kind == FileAbsent {
 		return true, nil
 	}
-	return samePresence(presence{ok: true, val: a.Doc}, presence{ok: true, val: b.Doc})
+	return samePresence(presence{ok: true, val: canonjson.ObjectValue(a.Doc)}, presence{ok: true, val: canonjson.ObjectValue(b.Doc)})
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	gt "github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/merge3"
 )
 
 const (
@@ -722,5 +724,88 @@ func TestManyPlainWritersRaceOnLive(t *testing.T) {
 	}
 	if ok != 1 {
 		t.Fatalf("%d pushes applied, want 1", ok)
+	}
+}
+
+// deleteEditRow is the one row TestDeleteVersusEditAcrossClones edits.
+const deleteEditRow = "_root/tasks/tsk_02.json"
+
+// loadFile reads the row file of rev as a merge3.File: absent, a row, or a
+// tombstone (`_live.deleted: true`, the marker F2 writes).
+func loadFile(t *testing.T, r *gitref.Repo, rev string) merge3.File {
+	t.Helper()
+	b, ok, err := r.ReadFile(context.Background(), rev, deleteEditRow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		return merge3.Absent()
+	}
+	doc, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lv, _ := doc["_live"].AsObject(); lv != nil {
+		if del, _ := lv["deleted"].AsBool(); del {
+			return merge3.Tombstone(doc)
+		}
+	}
+	return merge3.Row(doc)
+}
+
+// TestDeleteVersusEditAcrossClones is the F4 E2E shape on the primitives:
+// clone A tombstones a live row and pushes; clone B edits it, loses the
+// push race, fetches, merges file-level (modify beats delete) and pushes a
+// merge commit. The row survives with B's edit; nothing is half a row.
+func TestDeleteVersusEditAcrossClones(t *testing.T) {
+	ctx := context.Background()
+	const row = deleteEditRow
+	w := gt.NewWorld(t)
+	a, b := w.Clone("a"), w.Clone("b")
+	a.Write(live, row, `{"id":"tsk_02","status":"todo","title":"fix login"}`)
+	a.MustPush(live)
+	b.SyncRef(live)
+
+	a.Write(live, row, `{"_live":{"deleted":true},"id":"tsk_02"}`)
+	a.MustPush(live)
+	bEdit := b.Write(live, row, `{"id":"tsk_02","status":"todo","title":"fix login timeout"}`)
+	res := push(t, b.Remote, gitremote.PushRequest{Updates: []gitremote.RefUpdate{{Src: bEdit, Dst: live}}})
+	if status(t, res, live) != gitremote.StatusNonFastForward {
+		t.Fatalf("B's push = %+v", res)
+	}
+
+	b.Fetch()
+	theirs := b.Ref("refs/lore-remote/origin/live")
+	baseRev, ok, err := b.Repo.MergeBase(ctx, bEdit, theirs)
+	if err != nil || !ok {
+		t.Fatalf("merge base = %v %v", ok, err)
+	}
+	fr, err := merge3.MergeFile(loadFile(t, b.Repo, baseRev), loadFile(t, b.Repo, bEdit), loadFile(t, b.Repo, theirs), merge3.Policy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fr.Decision != merge3.DecisionModifyBeatsDelete || fr.DeletedBy != merge3.SideTheirs || fr.File.Kind != merge3.FileRow {
+		t.Fatalf("merge = %v deleted by %v kind %v", fr.Decision, fr.DeletedBy, fr.File.Kind)
+	}
+	out, err := canonjson.Encode(fr.File.Doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := b.Repo.MakeCommit(ctx, gitref.CommitRequest{Base: bEdit, MergeParents: []string{theirs}, Message: "lore: live merge", Signature: gt.Sig,
+		Changes: gitref.Changes{Put: map[string][]byte{row: out}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Repo.UpdateRef(ctx, live, m.OID, bEdit); err != nil {
+		t.Fatal(err)
+	}
+	b.MustPush(live)
+
+	final := loadFile(t, w.Origin, live)
+	if final.Kind != merge3.FileRow || final.Doc.Str("title") != "fix login timeout" {
+		t.Fatalf("origin row = %v %v", final.Kind, final.Doc)
+	}
+	if n := gt.Git(t, w.OriginDir, "rev-list", "--count", live); n != "4" {
+		t.Fatalf("live history has %s commits, want 4 (seed, tombstone, edit, merge)", n)
 	}
 }
