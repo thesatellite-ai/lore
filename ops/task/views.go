@@ -11,7 +11,8 @@ package task
 //	            minus claimed, active mission, future due, open children,
 //	            recurring ─► --close: preview + one bat_ batch, cancel with
 //	            close_reason stale (18.5)
-//	slaState ─► tasks.sla.<priority> hours vs created → done|now (18.4)
+//	slaState ─► tasks.sla.<priority> hours vs created → done|now, minus
+//	            deferred time from the deferred_until history (18.4)
 
 import (
 	"cmp"
@@ -415,46 +416,145 @@ func slaKeys() map[string]policy.Key {
 
 // slaHours reads the SLA per priority for target (unset priorities absent).
 func (o ops) slaHours(ctx context.Context, target store.Source) (map[string]int64, error) {
-	out := map[string]int64{}
 	p, ok := upgrade.As[bulk.Policier](o.env)
 	if !ok {
-		return out, nil
+		return map[string]int64{}, nil
 	}
 	set, err := p.Policy(ctx, target)
 	if err != nil {
 		return nil, err
 	}
+	return SLAHours(set), nil
+}
+
+// SLAHours is the SLA in hours per priority of a policy set (18.4); a
+// priority without a positive tasks.sla.<priority> is absent. Exported for
+// the old binary's inbox, which reads the policy itself.
+func SLAHours(set policy.Set) map[string]int64 {
+	out := map[string]int64{}
 	for prio, k := range slaKeys() {
 		if n, isSet := set.Limit(k); isSet && n > 0 {
 			out[prio] = n
 		}
 	}
-	return out, nil
+	return out
 }
 
-// slaState is the SLA state of r on read (18.4): elapsed from creation to
-// done (or now) against the priority's SLA; at_risk from 80%. Deferred
-// time is not yet subtracted (history does not track deferral; see report).
+// SLAClock is what the SLA state of one task is computed from (18.4).
+type SLAClock struct {
+	Priority, Status   string
+	Created, Completed time.Time
+	// DeferredUntil is the task's deferred_until now; History its history
+	// (deferred_until changes are tracked, 17.2) for the deferred time.
+	DeferredUntil time.Time
+	History       []HistoryEntry
+}
+
+// slaClockOf is the SLA clock of a task row.
+func slaClockOf(r row.Row) SLAClock {
+	return SLAClock{
+		Priority: work.Field(r, fieldPriority), Status: work.Field(r, work.FieldStatus),
+		Created: r.CreatedAt, Completed: work.Time(r, work.FieldCompleted),
+		DeferredUntil: work.Time(r, fieldDeferred), History: History(r),
+	}
+}
+
+// slaState is the SLA state of r on read (18.4).
 func slaState(r row.Row, hours map[string]int64, now time.Time) string {
-	h, ok := hours[work.Field(r, fieldPriority)]
-	if !ok || r.CreatedAt.IsZero() {
-		return SLANone
+	return SLAStateOf(slaClockOf(r), hours, now)
+}
+
+// SLAStateOf is the SLA state on read (18.4): elapsed from creation to done
+// (or now), minus the time spent deferred (snoozed on purpose; blocked time
+// still counts), against the priority's SLA; at_risk from 80%.
+func SLAStateOf(c SLAClock, hours map[string]int64, now time.Time) string {
+	st, _ := slaOf(c, hours, now)
+	return st
+}
+
+// slaOf is the SLA state and the elapsed (deferred-free) time.
+func slaOf(c SLAClock, hours map[string]int64, now time.Time) (string, time.Duration) {
+	h, ok := hours[c.Priority]
+	if !ok || c.Created.IsZero() {
+		return SLANone, 0
 	}
 	end := now
-	if !open(r) {
-		if c := work.Time(r, work.FieldCompleted); !c.IsZero() {
-			end = c
-		}
+	if (c.Status == schema.TaskStatusDone || c.Status == schema.TaskStatusCancelled) && !c.Completed.IsZero() {
+		end = c.Completed
 	}
-	elapsed := end.Sub(r.CreatedAt)
+	elapsed := end.Sub(c.Created) - deferredWithin(c, end)
 	limit := time.Duration(h) * time.Hour
 	switch {
 	case elapsed > limit:
-		return SLABreached
+		return SLABreached, elapsed
 	case elapsed*100 >= limit*slaAtRiskPercent:
-		return SLAAtRisk
+		return SLAAtRisk, elapsed
 	}
-	return SLAOK
+	return SLAOK, elapsed
+}
+
+// deferredWithin is the time between creation and end the task was
+// deferred (18.4). The deferred_until history splits that span into
+// segments, each with the value it held (the first entry's from is the
+// value at creation; with no entry the current value held throughout); a
+// segment counts as deferred from its start until the earlier of its value
+// and its end.
+func deferredWithin(c SLAClock, end time.Time) time.Duration {
+	type seg struct {
+		start time.Time
+		until time.Time
+	}
+	segs := []seg{{start: c.Created, until: c.DeferredUntil}}
+	first := true
+	for _, e := range c.History {
+		if e.Field != fieldDeferred {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339Nano, e.At)
+		if err != nil {
+			continue
+		}
+		if first {
+			segs[0].until, first = histTime(e.From), false
+		}
+		segs = append(segs, seg{start: at, until: histTime(e.To)})
+	}
+	var d time.Duration
+	for i, s := range segs {
+		segEnd := end
+		if i+1 < len(segs) && segs[i+1].start.Before(segEnd) {
+			segEnd = segs[i+1].start
+		}
+		stop := s.until
+		if stop.After(segEnd) {
+			stop = segEnd
+		}
+		if stop.After(s.start) {
+			d += stop.Sub(s.start)
+		}
+	}
+	return d
+}
+
+// slaWords is an SLA state as words ("at risk").
+func slaWords(state string) string { return strings.ReplaceAll(state, "_", " ") }
+
+// histTime parses a history datetime text; "" or bad text is zero.
+func histTime(s string) time.Time {
+	if dt, err := value.DateTimeOf(s); err == nil {
+		return dt.Time()
+	}
+	return time.Time{}
+}
+
+// slaLine is the human SLA of a task with one: "SLA 48h · breached".
+func slaLine(c SLAClock, hours map[string]int64, now time.Time) string {
+	st, elapsed := slaOf(c, hours, now)
+	if st == SLANone {
+		return ""
+	}
+	return strconv.FormatInt(hours[c.Priority], 10) + "h · " + slaWords(st) + " · open " +
+		strconv.FormatInt(int64(elapsed/time.Hour), 10) + "h (deferred time not counted)"
 }
 
 // keySLA is the computed --where key sla:ok|at_risk|breached (18.4).

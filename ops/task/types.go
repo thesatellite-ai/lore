@@ -192,6 +192,10 @@ type Full struct {
 	Watchers  []string `json:"watchers,omitempty"`
 	// Checklist is the live checklist (7.3).
 	Checklist []ChecklistItemOut `json:"checklist,omitempty"`
+	// SLA is ok | at_risk | breached when the priority has an SLA (18.4);
+	// SLALine its human show line.
+	SLA     string `json:"sla,omitempty"`
+	SLALine string `json:"-"`
 	// PeopleLine / EstimateLine are the human show lines.
 	PeopleLine   string `json:"-"`
 	EstimateLine string `json:"-"`

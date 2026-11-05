@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
@@ -417,5 +418,12 @@ func (o ops) showMore(ctx context.Context, full *Full, src store.Source, r row.R
 	e := estimateInfo(f, r, unit)
 	full.Estimate, full.EstimateUnit, full.EstimateSubtree, full.EstimateDone, full.EstimateOpen = e.Estimate, e.Unit, e.Subtree, e.SubtreeDone, e.SubtreeOpen
 	full.Unestimated, full.TrackedSeconds, full.Ratio, full.EstimateLine = e.Unestimated, e.TrackedSeconds, e.Ratio, e.Line()
+	// 18.4: the SLA on read, deferred time left out.
+	hours, err := o.slaHours(ctx, src)
+	if err != nil {
+		return err
+	}
+	now := opclock.Now(o.env)
+	full.SLA, full.SLALine = slaState(r, hours, now), slaLine(slaClockOf(r), hours, now)
 	return nil
 }

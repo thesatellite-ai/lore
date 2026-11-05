@@ -74,6 +74,8 @@ func trackedFields() []string {
 	return []string{
 		work.FieldStatus, schema.FieldTaskParent, fieldAssigned, schema.FieldTaskAssignees, fieldPriority, fieldDue,
 		fieldEstimate, work.FieldMission, fieldCommitment, schema.FieldTaskCloseReason, "gate", fieldRecur,
+		// OV47: deferred_until too, so the SLA can leave deferred time out (18.4).
+		fieldDeferred,
 	}
 }
 

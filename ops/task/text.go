@@ -110,9 +110,20 @@ func (o ListOut) rowsText() string {
 	}
 	var b strings.Builder
 	for _, t := range o.Data {
-		b.WriteString(t.Line + "\n")
+		b.WriteString(withSLAColumn(t) + "\n")
 	}
 	return b.String()
+}
+
+// withSLAColumn is t's list line with an SLA column before the store
+// label when the SLA is at risk or breached (18.4); "ok" adds nothing, so
+// a list without SLA trouble prints v0.1.17's lines.
+func withSLAColumn(t Brief) string {
+	if t.SLA != SLAAtRisk && t.SLA != SLABreached {
+		return t.Line
+	}
+	label := storeLabel(t.Label)
+	return strings.TrimSuffix(t.Line, label) + "  SLA " + slaWords(t.SLA) + label
 }
 
 // Text prints v0.1.17's task show: id, the fields, a blank line and the
@@ -174,6 +185,9 @@ func (o ShowOut) baseText() string {
 	}
 	if t.EstimateLine != "" {
 		b.WriteString("  estimate: " + t.EstimateLine + "\n")
+	}
+	if t.SLALine != "" {
+		b.WriteString("  sla:      " + t.SLALine + "\n")
 	}
 	if t.PeopleLine != "" {
 		b.WriteString("  " + t.PeopleLine + "\n")

@@ -296,6 +296,31 @@ func (cv *coordView) assignedItem(ctx context.Context, w *taskWatch, role string
 	return it
 }
 
+// slaItem is the "sla" inbox item of a task me leads, is assigned to or
+// watches whose SLA is at risk or breached (TASK 20, 18.4: computed on
+// read, deferred time left out).
+func slaItem(t *ent.Task, w *taskWatch, me string, hours map[string]int64, now time.Time) (inboxItem, bool) {
+	if len(hours) == 0 || (w.assignedRole(me) == "" && !slices.Contains(w.Watchers, me)) {
+		return inboxItem{}, false
+	}
+	c := opstask.SLAClock{Priority: string(t.Priority), Status: string(t.Status), Created: t.CreatedAt,
+		Completed: timeOrZero(t.CompletedAt), DeferredUntil: timeOrZero(t.DeferredUntil), History: w.History}
+	st := opstask.SLAStateOf(c, hours, now)
+	if (st != opstask.SLAAtRisk && st != opstask.SLABreached) || c.Status == string(entTask.StatusDone) || c.Status == string(entTask.StatusCancelled) {
+		return inboxItem{}, false
+	}
+	return inboxItem{Mission: w.Mission, Kind: inboxSLA, At: now,
+		Text: fmt.Sprintf("%s %s: SLA %s (%s, %dh)", t.ID, t.Title, strings.ReplaceAll(st, "_", " "), t.Priority, hours[c.Priority])}, true
+}
+
+// timeOrZero is *p, or zero for nil.
+func timeOrZero(p *time.Time) time.Time {
+	if p == nil {
+		return time.Time{}
+	}
+	return *p
+}
+
 // fieldTaskLead is the tasks column holding the lead (TASK 14.2).
 const fieldTaskLead = "assigned_to_actor_id"
 
@@ -541,6 +566,7 @@ const (
 	inboxFinding  = "finding"
 	inboxOverdue  = "overdue"
 	inboxWatched  = "watched"
+	inboxSLA      = "sla"
 )
 
 func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
@@ -577,6 +603,10 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 	involved := map[string]bool{}
 	var out []inboxItem
 	isHuman := !cv.w.IsAgent()
+	slaHours := map[string]int64{}
+	if set, ok := policySet(ctx); ok {
+		slaHours = opstask.SLAHours(set) // no policy: no SLA items
+	}
 	for _, t := range tasks {
 		mission := deref(t.MissionID)
 		mine := t.CreatedByActorID != nil && *t.CreatedByActorID == me
@@ -597,6 +627,9 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 		if role := w.assignedRole(me); open && role != "" && !heldByOther {
 			involved[mission] = true
 			out = append(out, cv.assignedItem(ctx, w, role, t.UpdatedAt))
+		}
+		if it, ok := slaItem(t, w, me, slaHours, cv.now()); ok {
+			out = append(out, it)
 		}
 		if open && claimed && !active && ownsIt {
 			wb := "work lost: never pushed"
