@@ -28,10 +28,17 @@ import (
 	"github.com/thesatellite-ai/lore/wire"
 )
 
-// coreAuditDeleteKind is the action suffix of a core tombstone write (the
-// v0.1.17 chain recorded every local change as "<table>.write"; a core
-// delete is named so the log says what happened).
-const coreAuditDeleteKind = "delete"
+// coreAuditKinds names the chain action suffix of every core row action
+// that is not a plain create/update (the v0.1.17 chain recorded every local
+// change as "<table>.write"; a delete, trash, restore or purge is named so
+// the log says what happened, OV9 / later.md cl-wire). The suffix is the
+// engine action's own wire value, so the chain and the core agree.
+var coreAuditKinds = map[engine.Action]string{
+	engine.ActionDelete:  string(engine.ActionDelete),
+	engine.ActionTrash:   string(engine.ActionTrash),
+	engine.ActionRestore: string(engine.ActionRestore),
+	engine.ActionPurge:   string(engine.ActionPurge),
+}
 
 // coreAuditSink is the engine.AuditSink of the old binary: one chain entry
 // per core event, in its own immediate transaction (the DSN's
@@ -83,8 +90,8 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 		return s.err
 	}
 	kind := string(lsync.ChangeLocal)
-	if ev.Action == engine.ActionDelete {
-		kind = coreAuditDeleteKind
+	if k, ok := coreAuditKinds[ev.Action]; ok {
+		kind = k
 	}
 	reason := ev.Op
 	if !ev.Cascade.IsZero() {
