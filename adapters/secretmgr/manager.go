@@ -187,8 +187,9 @@ func (r runner) run(ctx context.Context, manager, bin, path string, args []strin
 	return trimNewline(out.Bytes()), nil
 }
 
-// runKillable starts cmd and kills it when ctx ends first.
+// runKillable starts cmd and kills its process tree when ctx ends first.
 func runKillable(ctx context.Context, cmd *exec.Cmd) error {
+	startGroup(cmd) // killtree_*.go: the whole tree goes on timeout (OV13b)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -198,7 +199,7 @@ func runKillable(ctx context.Context, cmd *exec.Cmd) error {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		_ = cmd.Process.Kill() // the process may have just exited; Wait reports it
+		killTree(cmd)
 		<-done
 		return ctx.Err()
 	}
