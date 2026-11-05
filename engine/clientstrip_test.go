@@ -112,7 +112,7 @@ func csCases(t *testing.T) []csCase {
 					"approved_hash": txt("sha256:abc"),
 				}
 			},
-			internal: []string{"time_entries", "time_open", "claim_log", "claim_epoch", "attempts", "approved_hash"},
+			internal: []string{"time_entries", "time_open", "claim_log", "attempts"},
 			plain:    "title",
 		},
 		{
@@ -284,8 +284,9 @@ func contains(list []string, s string) bool {
 }
 
 // TestStripInternalEveryTable: for every built-in table, a client store
-// drops exactly the fields the schema marks Internal() and keeps the rest;
-// an internal store keeps all. Guards against a per-table list creeping in.
+// drops exactly the fields the schema marks Internal() but for the named
+// clientKeptFields, and keeps the rest; an internal store keeps all.
+// Guards against a per-table list creeping in.
 func TestStripInternalEveryTable(t *testing.T) {
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
@@ -305,7 +306,7 @@ func TestStripInternalEveryTable(t *testing.T) {
 			if fd.Internal {
 				seen++
 			}
-			if has == fd.Internal {
+			if want := !fd.Internal || clientKept(def.Name, fd.Name); has != want {
 				t.Errorf("%s.%s internal=%v kept=%v", def.Name, fd.Name, fd.Internal, has)
 			}
 			if _, orig := in.Fields[fd.Name]; !orig {
@@ -318,5 +319,28 @@ func TestStripInternalEveryTable(t *testing.T) {
 	}
 	if seen == 0 {
 		t.Fatal("no built-in table has an internal field: the test checks nothing")
+	}
+}
+
+// TestClientWriteKeepsClaimEpoch: tasks.claim_epoch and approved_hash are
+// Internal() but stay on a client copy: holder writes of a client task are
+// fenced against claim_epoch (D8), so stripping it fails every claim with
+// E_LOST_CLAIM; an approved gate is checked against approved_hash, so
+// stripping it leaves the gate stale (FB-TEAM-1).
+func TestClientWriteKeepsClaimEpoch(t *testing.T) {
+	reg, err := schema.NewRegistry(schema.Builtin()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{reg: reg}
+	in := row.Row{Table: schema.TableTasks, Fields: map[string]value.Value{fieldClaimEpoch: num(t, "1"), fieldApprovedHash: txt("h"), "claim_log": txt("x")}}
+	out := e.stripInternal(Attached{Client: true}, in)
+	for _, k := range []string{fieldClaimEpoch, fieldApprovedHash} {
+		if _, has := out.Fields[k]; !has {
+			t.Fatalf("client write dropped %s", k)
+		}
+	}
+	if _, has := out.Fields["claim_log"]; has {
+		t.Fatal("client write kept claim_log (PC-LEAK-1)")
 	}
 }

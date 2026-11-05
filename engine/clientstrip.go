@@ -29,6 +29,34 @@ func (e *Engine) forStore(st Attached, r row.Row) row.Row {
 	return e.stripInternal(st, stampAs(st, r))
 }
 
+// clientKeptFields are the Internal() fields a client-class store still
+// receives, by table. tasks.claim_epoch is a bare fencing counter: a claim
+// on a client task (its signal on the store's signals ref) is checked
+// against the epoch of the client copy, and a reassign, cancel or delete
+// fence raises it there; dropping it makes every holder write of a client
+// task fail E_LOST_CLAIM ("claim epoch 1 does not match the task's 0").
+// D8 (coordinator, LORE_TEAM_SPEC 7.6) keeps claim_epoch on the client copy
+// and nothing else of the claim; PC-LEAK-1 strips the rest.
+// tasks.approved_hash is the sha256 of the title and body the client copy
+// already holds, so it tells the client nothing; without it an approved
+// gate reads as stale (coord.Gated) and the task can never be claimed
+// (FB-TEAM-1).
+var clientKeptFields = map[row.Table]map[string]bool{
+	schema.TableTasks: {fieldClaimEpoch: true, fieldApprovedHash: true},
+}
+
+// Field names of clientKeptFields (schema/builtin_work.go).
+const (
+	fieldClaimEpoch   = "claim_epoch"
+	fieldApprovedHash = "approved_hash"
+)
+
+// clientKept reports whether field of table stays on a client write
+// although the schema marks it Internal().
+func clientKept(table row.Table, field string) bool {
+	return clientKeptFields[table][field]
+}
+
 // planStatus is plans.status, the field status_str folds into.
 const planStatus = "status"
 
@@ -58,7 +86,7 @@ func (e *Engine) stripInternal(st Attached, r row.Row) row.Row {
 		}
 	}
 	for _, f := range def.Fields {
-		if !f.Internal {
+		if !f.Internal || clientKept(r.Table, f.Name) {
 			continue
 		}
 		if _, has := r.Fields[f.Name]; !has {

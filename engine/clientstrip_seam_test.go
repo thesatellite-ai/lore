@@ -20,7 +20,7 @@ import (
 // commands in an internal repo record them (the strip is the client's
 // only, not a lost write).
 func TestTaskDoneIntoClientRepoWritesNoInternalField(t *testing.T) {
-	internalFields := []string{"time_entries", "time_open", "claim_log", "claim_epoch", "attempts", "approved_hash"}
+	internalFields := []string{"time_entries", "time_open", "claim_log", "attempts"}
 	for _, client := range []bool{true, false} {
 		name := "internal repo"
 		if client {
