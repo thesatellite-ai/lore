@@ -158,7 +158,7 @@ func TestAddRefusals(t *testing.T) {
 // a reserved word and a large body round-trip unchanged.
 func TestPositionalBodyAndUnicode(t *testing.T) {
 	h := opstest.New(t)
-	for _, body := range []string{"select", "日本語のルール — ünïcödé ✓", strings.Repeat("long body ", 2000)} {
+	for _, body := range []string{"select", "日本語のルール — ünïcödé ✓", strings.Repeat("long body ", 2000) + "end"} {
 		id := add(t, h, `{"text":`+opstest.Quote(body)+`}`)
 		var show struct {
 			Data rule.Record `json:"data"`

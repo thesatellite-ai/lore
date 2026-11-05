@@ -8,6 +8,8 @@
 // Every text value (a text field, or each text item of a list) is cleaned
 // by logic/textnorm before it is stored (P3-TEXT-1): bidi controls and
 // zero-width characters dropped, CRLF to LF, NFC; a NUL byte is refused.
+// A built-in table's title, body, description and note are then trimmed of
+// edge whitespace (OWNERQ-3, trimmedFields).
 //
 // Layer L1: pure, no I/O; imports model, schema and logic/textnorm only.
 //
@@ -60,6 +62,12 @@ func Fields(def schema.TableDef, in map[string]value.Value, mode Mode) (map[stri
 		if err != nil {
 			problems = append(problems, err.Error())
 			continue
+		}
+		if trims(def, f) {
+			if v, err = trimEdges(f, v); err != nil {
+				problems = append(problems, err.Error())
+				continue
+			}
 		}
 		out[name] = v
 	}
@@ -184,6 +192,41 @@ func sortedKeys(m map[string]value.Value) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// trimmedFields are the row text fields trimmed of leading and trailing
+// whitespace on every write (OWNERQ-3, P3-TEXT-1: v0.1.17's
+// textnorm.Normalize ran on every add/edit title and body, playbook and
+// prompt description, comment and task note, and rows written by both
+// binaries must not differ only in edge whitespace). Task notes are
+// comment bodies, so "body" covers them. Inner whitespace and line breaks
+// are kept. Every other text field (metadata values, names, ids) keeps its
+// whitespace.
+var trimmedFields = []string{"title", "body", "description", "note"}
+
+// trims reports whether f's value is trimmed: a text field named in
+// trimmedFields of a built-in table. A resource kind's own fields
+// (def.Kind set) are user data and keep their whitespace (OWNERQ-3).
+func trims(def schema.TableDef, f schema.FieldDef) bool {
+	return def.Kind.IsZero() && f.Kind == value.KindText && slices.Contains(trimmedFields, f.Name)
+}
+
+// trimEdges trims a cleaned text value. A required field that is blank
+// once trimmed is refused, as v0.1.17's Normalize refused it (the error
+// names the field, never the value); an optional one is stored empty.
+func trimEdges(f schema.FieldDef, v value.Value) (value.Value, error) {
+	t, isText := v.(value.Text)
+	if !isText {
+		return v, nil // null (clearing an optional field) passes as is
+	}
+	c := strings.TrimSpace(t.String())
+	if c == "" && f.Required {
+		return nil, fieldErr{"field " + f.Name + " is required and cannot be blank"}
+	}
+	if c == t.String() {
+		return v, nil
+	}
+	return value.TextOf(c)
 }
 
 // cleanText runs textnorm.Clean over a text value, or over every text item

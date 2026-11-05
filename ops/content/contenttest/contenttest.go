@@ -100,8 +100,20 @@ type Case struct {
 	Name, Title, Body string
 }
 
+// Stored is the case as a row stores it under titleKey (Spec.TitleKey):
+// a title and the body trimmed of edge whitespace (OWNERQ-3, logic/validate
+// trimmedFields), inner whitespace and every other byte kept; a name key
+// (playbook, prompt, behaviour) keeps its whitespace as names do.
+func (c Case) Stored(titleKey string) (title, body string) {
+	title = c.Title
+	if titleKey == "title" {
+		title = strings.TrimSpace(title)
+	}
+	return title, strings.TrimSpace(c.Body)
+}
+
 // Matrix is the add input matrix every noun runs: each must be accepted
-// and read back byte for byte.
+// and read back byte for byte, edges trimmed (Case.Stored).
 func Matrix() []Case {
 	return []Case{
 		{Name: "plain", Title: "Retry wrapper", Body: "Wrap calls in retry.Do"},
@@ -109,7 +121,7 @@ func Matrix() []Case {
 		{Name: "sql reserved", Title: "SELECT * FROM t; DROP TABLE x --", Body: "'; DELETE FROM patterns; -- null NULL"},
 		{Name: "fts operators", Title: "NOT AND OR NEAR", Body: `"quoted" prefix* AND OR NOT ( ) ^`},
 		{Name: "json-ish", Title: "null", Body: `{"a":[1,2,{"b":null}]}`},
-		{Name: "padded", Title: "  padded  ", Body: "  leading and trailing spaces kept  \n\n"},
+		{Name: "padded", Title: "  padded  ", Body: "  edges trimmed,\n\n  inner  whitespace kept  \n\n"},
 		{Name: "huge", Title: strings.Repeat("t", 300), Body: strings.Repeat("0123456789abcdef", 4096)},
 	}
 }
@@ -313,17 +325,18 @@ func checkAddMatrix(t *testing.T, s Spec, r Runner) {
 	for _, c := range Matrix() {
 		id := add(t, s, r, c.Title, c.Body)
 		added = append(added, id)
-		titles[id] = c.Title
+		wantTitle, wantBody := c.Stored(s.TitleKey)
+		titles[id] = wantTitle
 		show := JSON(t, must(t, r, s.Noun+".show", `{"id":"`+id+`"}`))
 		if Str(t, show, "kind") != s.KindShow {
 			t.Errorf("%s: show kind %q, want %q", c.Name, Str(t, show, "kind"), s.KindShow)
 		}
-		if got := Str(t, show, "data", "body"); got != c.Body {
-			t.Errorf("%s: body not read back byte for byte (got %d bytes, want %d)", c.Name, len(got), len(c.Body))
+		if got := Str(t, show, "data", "body"); got != wantBody {
+			t.Errorf("%s: body not read back byte for byte (got %d bytes, want %d)", c.Name, len(got), len(wantBody))
 		}
 		if s.TitleKey != "" {
-			if got := Str(t, show, "data", s.TitleKey); got != c.Title {
-				t.Errorf("%s: %s %q, want %q", c.Name, s.TitleKey, got, c.Title)
+			if got := Str(t, show, "data", s.TitleKey); got != wantTitle {
+				t.Errorf("%s: %s %q, want %q", c.Name, s.TitleKey, got, wantTitle)
 			}
 		}
 	}
