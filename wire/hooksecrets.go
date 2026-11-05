@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -60,7 +61,7 @@ func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[stri
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
-	var lines []string
+	var lines, refused []string
 	for _, p := range paths {
 		for _, h := range scanDoc(sc, allows, p, docs[p]) {
 			at := fmt.Sprintf("%s:%d", p, h.Line)
@@ -68,11 +69,13 @@ func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[stri
 				at += " (field " + h.Field + ")"
 			}
 			lines = append(lines, fmt.Sprintf("  %-40s secret: rule %s matched %s", at, h.Rule, h.Preview))
+			refused = append(refused, "path="+p+" rule="+h.Rule)
 		}
 	}
 	if len(lines) == 0 {
 		return nil
 	}
+	a.auditHookRefused(ctx, where, refused)
 	return errs.New(errs.LeakBlocked, "blocked, this "+where+" carries a secret:\n"+strings.Join(lines, "\n")).
 		WithHint("store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <hash> --reason \"<why>\", add the new .lore/data/secret_allows file, then commit again")
 }
@@ -214,4 +217,32 @@ func hitsOf(content, field string, fs []scan.Finding) []leakcheck.SecretHit {
 		out = append(out, leakcheck.SecretHit{Line: line, Rule: f.RuleID, Preview: f.Preview, Field: field})
 	}
 	return out
+}
+
+// Hook names of secret.hook_refused (v0.1.17 secrets_hookaudit.go).
+const (
+	hookPreCommit = "pre-commit"
+	hookPrePush   = "pre-push"
+)
+
+// auditHookRefused records secret.hook_refused for every finding a commit
+// or push check refused (SECRETS 16, FA-AGENT-7): hook, path and rule id,
+// never the text or its preview. Other checks record nothing. Best effort
+// by design: the check already refuses, so a failed audit append must not
+// turn the refusal into another error; it goes to the notice sink.
+func (a *App) auditHookRefused(ctx context.Context, where string, refused []string) {
+	hook := ""
+	switch where {
+	case checkWhereCommit:
+		hook = hookPreCommit
+	case LeakWherePush:
+		hook = hookPrePush
+	default:
+		return
+	}
+	for _, r := range refused {
+		if err := a.AuditSecret(ctx, engine.ActionLeakHookRefused, engine.SecretAudit{Command: hook, Result: "hook=" + hook + " " + r}); err != nil {
+			a.notice("lore: warning: secret.hook_refused was not recorded: " + err.Error())
+		}
+	}
 }
