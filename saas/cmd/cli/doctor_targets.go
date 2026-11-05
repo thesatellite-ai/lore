@@ -18,8 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"dbent/gen/ent"
-
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
@@ -44,8 +42,8 @@ func profileOfTool(reg *toolprofile.Registry, tool string) string {
 
 // doctorTargetSuggest adds one warning per tool seen here without a
 // target. Any read failure is skipped (other rows report the store).
-func doctorTargetSuggest(ctx context.Context, c *ent.Client, root string, r *doctorReport) {
-	if coreApp == nil || c == nil || root == "" {
+func doctorTargetSuggest(ctx context.Context, root string, r *doctorReport) {
+	if coreApp == nil || root == "" {
 		return
 	}
 	rows, err := coreApp.Sessions(ctx, 0) // the machine store (P3-COORD-SESS-1)
