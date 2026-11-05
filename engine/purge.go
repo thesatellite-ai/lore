@@ -75,7 +75,7 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 		// the live file an old clone put back: write the tombstone over it
 		// again (Expect = the file's HLC, which the hidden row kept)
 		next, _ := e.applyStep(step{row: cur}, e.actorOf(cl))
-		sr, ferr := store.FromRow(stampAs(st, next))
+		sr, ferr := store.FromRow(e.forStore(st, next))
 		if ferr != nil {
 			return Written{}, ferr
 		}

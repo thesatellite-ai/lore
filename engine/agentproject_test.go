@@ -188,16 +188,21 @@ func TestClientWriteProjectsAgentIDs(t *testing.T) {
 			q := `"` + exp + `"`
 			for k, sub := range map[string][]string{
 				schema.FieldTaskHistory:   {`"by":` + q, `"to":` + q},
-				"time_entries":            {`"actor_id":` + q, `"created_by":` + q, `"updated_by":` + q, `"deleted_by":` + q, `"note":"by ` + id + `"`},
-				"time_open":               {`"actor_id":` + q},
 				schema.FieldTaskChecklist: {`"done_by":` + q, `"created_by":` + q, `"updated_by":` + q},
-				"claim_log":               {`"actor_id":` + q, `"prev_actor_id":` + q},
 			} {
 				got := r.Fields[k].String()
 				for _, s := range sub {
 					if !strings.Contains(got, s) {
 						t.Errorf("%s = %s, want it to contain %s", k, got, s)
 					}
+				}
+			}
+			// time_entries, time_open and claim_log are Internal(): a client
+			// repo row never holds them at all (PC-LEAK-1, clientstrip.go),
+			// so no id of theirs can reach it either.
+			for _, k := range []string{"time_entries", "time_open", "claim_log"} {
+				if v, has := r.Fields[k]; has {
+					t.Errorf("client row holds internal field %s = %s", k, v)
 				}
 			}
 			// The writer is the owned agent: the envelope, the HLC actor and

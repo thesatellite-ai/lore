@@ -317,6 +317,11 @@ func (e *Engine) putMerging(ctx context.Context, st Attached, def schema.TableDe
 	if err != nil {
 		return stored{}, false, err
 	}
+	// Rows read back carry inferred kinds (a JSON array reads as a list):
+	// retype base and theirs as Update retypes cur, or the merged row fails
+	// the whole-row check on every json field (found by PC-LEAK-1's merge
+	// matrix: a merged task update with time_entries was E_RESOURCE_INVALID).
+	base.Fields, theirs.Fields = retype(def, base.Fields), retype(def, theirs.Fields)
 	res, err := merge.Rows(merge.PolicyFor(def), base, ours, theirs)
 	if err != nil {
 		return stored{}, false, err
@@ -467,7 +472,7 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 				purged = append(purged, next.ID)
 				action = ActionPurge
 			}
-			next = stampAs(st, next)
+			next = e.forStore(st, next)
 			if next, err = e.stampWrite(st, next); err != nil { // a set_null clear changes content: _w (OQ7)
 				return Written{}, err
 			}
@@ -780,7 +785,7 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 	if err := e.gate(ctx, st, append([]row.Row{r}, extra...)...); err != nil {
 		return stored{}, err // FORMAT_EVOLUTION rule 2: read-only for a format this lore cannot write
 	}
-	r = stampAs(st, r)
+	r = e.forStore(st, r)
 	r, err := e.stampWrite(st, r)
 	if err != nil {
 		return stored{}, err
@@ -792,7 +797,7 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 	changes := []store.Change{{Row: sr, Expect: expect}}
 	out := stored{row: r, doc: sr}
 	for _, x := range extra {
-		x = stampAs(st, x)
+		x = e.forStore(st, x)
 		xr, xerr := store.FromRow(x)
 		if xerr != nil {
 			return stored{}, xerr

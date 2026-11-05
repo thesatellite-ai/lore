@@ -180,7 +180,7 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 			if next, err = trash.Mark(next, trash.Stamp{At: h.Wall, By: actor, Reason: reason, Batch: b.ID}); err != nil {
 				return Written{}, err
 			}
-			next = stampAs(st, next)
+			next = e.forStore(st, next)
 			if next, err = e.stampWrite(st, next); err != nil {
 				return Written{}, err
 			}
@@ -593,7 +593,7 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 			h := e.clock.Now(r.HLC)
 			n := trash.Clear(r)
 			n.HLC, n.UpdatedAt, n.UpdatedBy = h, h.Wall, actor
-			n = stampAs(st, n)
+			n = e.forStore(st, n)
 			var serr error
 			if n, serr = e.stampWrite(st, n); serr != nil {
 				return TrashResult{}, serr
