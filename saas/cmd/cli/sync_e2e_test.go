@@ -852,14 +852,15 @@ func TestE2E_DoctorAndStatus(t *testing.T) {
 	if rep.Status != "healthy" || r.code != 0 {
 		t.Fatalf("fresh project must be healthy: %s %d %v", rep.Status, r.code, rep.Warnings)
 	}
-	// A broken file degrades.
+	// A broken file is an error: doctor exits 2 since 0db8158 (the core
+	// row_file check fails closed on a row file it cannot read; P3-GATED-2).
 	mem := idPattern.FindString(c.lore("rule", "list").stdout)
 	if err := os.WriteFile(c.dataFile("rules", mem), []byte("{broken"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r2 := c.loreAny("doctor", "--json")
-	if r2.code != 1 || !strings.Contains(r2.stdout, "lore file rules/") {
-		t.Fatalf("broken file must degrade doctor: %d %s", r2.code, r2.stdout)
+	if r2.code != 2 || !strings.Contains(r2.stdout, "lore file rules/") {
+		t.Fatalf("broken file must fail doctor with exit 2: %d %s", r2.code, r2.stdout)
 	}
 	// The [sync] file-error list is exactly what the warnings report.
 	var broken struct {
