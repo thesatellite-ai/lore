@@ -46,7 +46,7 @@ The same command moves a note between other places: from your personal notes to 
 
 ## Pitfalls
 
-- **There is no `lore share`.** It was removed in 0.1.18 (lore answers "unknown command"): a row has one home and lore never makes a second copy, so `lore move` is the one command.
+- **There is no share command.** It was removed in 0.1.18 (lore answers "unknown command"): a row has one home and lore never makes a second copy, so `lore move` is the one command.
 - **Moving is the only door.** If you paste the same text into a file of the client repo, the leak check (a check that stops internal notes reaching the client) blocks the commit, and the push if the commit got past it. `lore move` is the deliberate way through. A move into a client repo is refused if the note also quotes another internal note: remove that part from the note and move it again.
 - **A moved note is the client's now.** Commit `.lore/data/memories/` in the client repo like any other change.
 - Removing something that reached the client by mistake is a different job: see [Cleaning up after a leak](leak-cleanup.md).

@@ -73,7 +73,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Put a row into the client repo on purpose | `--to repo` |
 | A private note only you see | `--to me` (`--everywhere` to load it in every repo) |
 | Choose an org for this repo on this machine | `lore org use <entry>` (one command: `LORE_ORG=<entry> lore …`) |
-| Share an internal note with the client on purpose | `lore share <id> --to repo` (shows the text, asks) |
+| Share an internal note with the client on purpose | `lore move <id> --to repo` (shows the text, asks) |
 | A row was filed in the wrong place | `lore move <id> --to <target>` |
 | Check a PR body for internal content before posting | `lore check pr-body <file>` (or `-` for stdin) |
 | An internal row reached the client's live ref | `lore live purge <id>`, then `lore live compact` |

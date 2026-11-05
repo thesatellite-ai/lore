@@ -706,7 +706,7 @@ lore store init git@github.com:agency/notes            # once, in an empty repo
 lore org link agency --project client                   # tie this client repo to its internal project
 lore memory add --body "client prefers calls" --to agency
 lore memory add --body "my own reminder" --to me
-lore share mem_01 --to repo                              # copy to the client on purpose (asks)
+lore move mem_01 --to repo                               # move to the client on purpose (asks)
 lore check pr-body body.md                               # before posting a PR body or comment
 ```
 

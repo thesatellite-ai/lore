@@ -594,7 +594,7 @@ Tasks are live: they reach everyone at once on any branch and land on main when 
 ```bash
 lore whoami                                           # org, why, identity: run once per repo
 lore check pr-body body.md                            # before posting a PR body or comment
-lore share mem_01 --to repo                           # deliberate share into the client repo
+lore move mem_01 --to repo                            # deliberate move into the client repo
 lore agent start --label agent-backend --owner @alice     # export what it prints
 lore inbox
 lore task next --mission mis_12                       # exit 10 = no ready work
