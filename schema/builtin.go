@@ -134,6 +134,11 @@ func coreDefs() []TableDef {
 			Text("handle"),
 			Bool("active"),
 			DateTime("left_at"),
+			// merged_into: the actor this one was merged into (TIME 11.11,
+			// FA-TASK-6): time reports follow the chain at read time
+			// (ops/task mergedActors); entries keep their actor. Internal:
+			// the F18 projection never carries it.
+			Text("merged_into", Internal()),
 			UniqueOn("stable_key"),
 			IndexOn(fieldKind),
 			IndexOn("handle"),

@@ -4,6 +4,7 @@ actors.handle text
 actors.kind text required
 actors.label text
 actors.left_at datetime
+actors.merged_into text
 actors.owner_actor_id ref
 actors.stable_key text
 actors.tag_ids list[ref]
