@@ -436,45 +436,31 @@ lore link remove cml_xxx --confirm
 
 **Duplicates**: a `(entity, sha)` pair is unique — re-linking the same commit to the same entity errors. Link the same sha to a *different* entity is fine.
 
-## Run logging (descriptive, agent-driven)
+## Run timing (agent-driven)
 
-Track every agent attempt at a task — what model, which agent, tokens, cost, transcript. Mini does NOT execute runs; the agent (a coding tool, a human or a hook) records what happened.
+A run times one attempt at a task: which agent, which model, how it ended, tokens and cost. Lore does NOT execute runs; the agent (a coding tool, a human or a hook) opens and closes them. When the run names a task, `run end` / `run cancel` add the run's span to that task's time (`lore task time show <task-id>`). The run row itself stays on this machine.
 
 ```bash
-# Open a run before starting work; returns run-id on stdout
+# Open a run before starting work; prints "<run-id> started"
 RID=$(lore run start \
     --task=tsk_<id> \
-    --model=claude-opus-4-7 \
+    --model=<model-id> \
     --agent=my-agent \
-    --goal="wire auth middleware against JWT provider" | tail -1)
-
-# Append steps as the agent works
-lore run step $RID --kind=prompt --name="kickoff" --tokens-in=1200 --tokens-out=340 --cost=0.05 --duration-ms=1450
-lore run step $RID --kind=tool   --name="bash"   --summary="ran go build" --duration-ms=830
-lore run step $RID --kind=verify --name="tests"  --summary="all green" --passed=true
-
-# Long payload via stdin
-echo "<full prompt or response>" | lore run step $RID --kind=prompt --name=initial --payload-stdin
+    --goal="wire auth middleware against JWT provider" | awk '{print $1}')
 
 # Close
-lore run end $RID --outcome=success --summary="shipped"
+lore run end $RID --outcome=success --summary="shipped" --tokens-in=1200 --tokens-out=340 --cost=0.05
 # Or fail / cancel
 lore run end $RID --outcome=failed --error="timeout fetching JWKS"
 lore run cancel $RID --reason="scope changed"
 
-# Inspect later
-lore run list                  # recent runs
-lore run show $RID             # metadata
-lore run replay $RID           # full step-by-step transcript
-lore run show $RID --json
-lore run replay $RID --json    # programmatic
+# The time it added to the task
+lore task time show tsk_<id>
 ```
-
-**Step kinds:** `prompt`, `tool`, `verify`, `reflect`, `decide`, `error`, `note`.
 
 **Outcomes:** `success`, `partial`, `failed`, `cancelled`.
 
-**Tokens / cost** auto-sum from `run step` calls if not given on `run end`. Override with `--tokens-in / --tokens-out / --cost` on end.
+**No steps, list, show or replay.** A run is a timer, not a transcript. Record what was tried or decided as a memory or decision row instead.
 
 **Retries**: pass `--retry-of=<prior-run-id>` on `run start` to link the chain. Useful for "tsk_<id> failed twice before succeeding".
 
@@ -746,10 +732,8 @@ Strips bodies/comments — only structure + metadata.
 ## Inspectors (read-only)
 
 ```bash
-lore run         list [--json]    # background runs (learn, assemble, bench, …)
-lore session     list [--json]    # CLI sessions
-lore querylog    list [--json]    # search queries history
-lore renderhistory list [--json]  # past renders w/ canary IDs
+lore session     list [--json]    # agent sessions on this machine
+lore why-context                  # the last render: what was pinned and why
 ```
 
 ---

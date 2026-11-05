@@ -6,84 +6,30 @@ lore live: (live, pushed)
 
 ### run start
 alice (work/website)$ lore run start --task tsk_7a670ae8548ed05bf57ad29ad0759504 --agent manual --goal 'Find and fix the wrong price'
-✓ run_2ad3618e878ebbf527d34d446ef4f891 started
-run_2ad3618e878ebbf527d34d446ef4f891
-
-### run step
-alice (work/website)$ lore run step run_2ad3618e878ebbf527d34d446ef4f891 --kind tool --name grep --summary 'Found 9 instead of 19 in pricing.html'
-✓ step #1 [tool/pending] rst_162df51b7f78b785c97c26b41ea89666
-alice (work/website)$ lore run step run_2ad3618e878ebbf527d34d446ef4f891 --kind decide --summary 'Change pricing.html only; the price list file is right'
-✓ step #2 [decide/pending] rst_54fe984c9b495744c0217776765a28f2
-alice (work/website)$ lore run step run_2ad3618e878ebbf527d34d446ef4f891 --kind verify --name tests --passed --summary 'The page tests pass'
-✓ step #3 [verify/passed] rst_05e99e22e9e86e96fe4daa7777994603
-alice (work/website)$ printf 'Changed line 42 of pricing.html\nfrom: 9 a month\nto:   19 a month\n' | lore run step run_2ad3618e878ebbf527d34d446ef4f891 --kind note --name diff --summary 'What changed' --payload-stdin
-✓ step #4 [note/pending] rst_c0f3c11a5724b0cfd74b256190d9b5b8
+run_2ad3618e878ebbf527d34d446ef4f891 started
 
 ### run end
 alice (work/website)$ lore run end run_2ad3618e878ebbf527d34d446ef4f891 --outcome success --summary 'The price now says 19'
-✓ run_2ad3618e878ebbf527d34d446ef4f891 [success] (25s)
+run_2ad3618e878ebbf527d34d446ef4f891 ended  (10m 0s)
 lore live: (live, pushed)
 
-### run show
-alice (work/website)$ lore run show run_2ad3618e878ebbf527d34d446ef4f891
-run_2ad3618e878ebbf527d34d446ef4f891
-  kind:     task
-  status:   success
-  started:  2026-11-02T10:00:10Z
-  ended:    2026-11-02T10:00:35Z (took 25s)
-  task:     tsk_7a670ae8548ed05bf57ad29ad0759504
-  agent:    manual
-  goal:     Find and fix the wrong price
-  outcome:  success
-  summary:  The price now says 19
-  steps:    4
+### task time
+alice (work/website)$ lore task time show tsk_7a670ae8548ed05bf57ad29ad0759504
+tsk_7a670ae8548ed05bf57ad29ad0759504  Fix the typo on the pricing page   (todo)
 
-### run replay
-alice (work/website)$ lore run replay run_2ad3618e878ebbf527d34d446ef4f891
-run_2ad3618e878ebbf527d34d446ef4f891  [success]
+effort   10m     elapsed  10m     manual  0m   (included in effort)
 
-#1 [tool/pending]  grep
-  Found 9 instead of 19 in pricing.html
-
-#2 [decide/pending]
-  Change pricing.html only; the price list file is right
-
-#3 [verify/passed]  tests
-  The page tests pass
-
-#4 [note/pending]  diff
-  What changed
-
-Changed line 42 of pricing.html
-from: 9 a month
-to:   19 a month
+WORKER                        AUTO      MANUAL    TOTAL     LAST
+alice                         10m       0m        10m       2026-11-02 10:10
 
 ### run cancel
 alice (work/website)$ lore run start --agent manual --goal 'Try a new logo colour'
-✓ run_76bd560aff0771fab8457dbfa9823f10 started
-run_76bd560aff0771fab8457dbfa9823f10
-alice (work/website)$ lore run cancel run_76bd560aff0771fab8457dbfa9823f10 --reason 'The client wants to keep the old logo'
-✓ run_76bd560aff0771fab8457dbfa9823f10 cancelled
-alice (work/website)$ lore run show run_76bd560aff0771fab8457dbfa9823f10
-run_76bd560aff0771fab8457dbfa9823f10
-  kind:     general
-  status:   cancelled
-  started:  2026-11-02T10:00:50Z
-  ended:    2026-11-02T10:00:55Z (took 5s)
-  agent:    manual
-  goal:     Try a new logo colour
-  outcome:  cancelled
-  summary:  The client wants to keep the old logo
-  steps:    0
-
-### run list
-alice (work/website)$ lore run list
-run_76bd560aff0771fab8457dbfa9823f10
-run_2ad3618e878ebbf527d34d446ef4f891
+run_162df51b7f78b785c97c26b41ea89666 started
+alice (work/website)$ lore run cancel run_162df51b7f78b785c97c26b41ea89666 --reason 'The client wants to keep the old logo'
+run_162df51b7f78b785c97c26b41ea89666 cancelled
 
 ### run stays local
-alice (work/website)$ lore sync && git status --short
-· already in sync
+alice (work/website)$ git status --short
 ?? .lore/data/task_lists/
 
 ### session list

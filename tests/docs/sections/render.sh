@@ -39,14 +39,13 @@ note "directive"
 on alice $W "lore directive show | head -8"
 on alice $W "lore directive install --target AGENTS.md"
 on alice $W "head -3 AGENTS.md"
-on alice $W "lore directive remove --target AGENTS.md"
 
 note "why context"
 on alice $W "lore why-context"
 on alice $W "lore why-context --rendered | head -8"
 
-note "renderhistory"
-on alice $W "lore renderhistory list"
+note "render trend"
+on alice $W "lore render --trend"
 
 note "commit"
 on alice $W "git status --short"

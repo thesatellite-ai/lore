@@ -72,7 +72,7 @@ Each step builds on the one before. Every example is a script that runs the real
 - [Reminders](tasks/reminders.md): notes with a date, including ones that repeat.
 - [Link commits to tasks](tasks/link-commits.md): which commit finished which task, and when it reached `main`.
 - [Missions and plans](tasks/missions-and-plans.md): bigger goals, written plans, plan files and handoffs.
-- [Run log](tasks/run-log.md): a diary of one try at a piece of work.
+- [Run log](tasks/run-log.md): one timed try at a piece of work.
 
 ### Notes that travel with git
 

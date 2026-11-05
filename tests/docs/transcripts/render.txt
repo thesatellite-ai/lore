@@ -111,8 +111,6 @@ alice (work/website)$ head -3 AGENTS.md
 <!-- lore:directive:start -->
 > **AGENT DIRECTIVE — instruction, not reference data.**
 >
-alice (work/website)$ lore directive remove --target AGENTS.md
-✓ ~/work/website/AGENTS.md (directive stripped)
 
 ### why context
 alice (work/website)$ lore why-context
@@ -132,13 +130,14 @@ scope:        {"included":{"rules":1,"hotfixes":1,"memories":0},"cut_summary":{"
 
 --- rendered text ---
 
-### renderhistory
-alice (work/website)$ lore renderhistory list
-rnd_2ad3618e878ebbf527d34d446ef4f891
-rnd_162df51b7f78b785c97c26b41ea89666
-rnd_54fe984c9b495744c0217776765a28f2
-rnd_05e99e22e9e86e96fe4daa7777994603
-rnd_c0f3c11a5724b0cfd74b256190d9b5b8
+### render trend
+alice (work/website)$ lore render --trend
+.lore/LORE.md: renders in the last 14 days (budget 32000 bytes, profile claude_code)
+  2026-11-02 10:00     2769 bytes
+  2026-11-02 10:00     2769 bytes
+  2026-11-02 10:00     2763 bytes
+  2026-11-02 10:00     2769 bytes
+growth: needs renders at least a day apart
 
 ### commit
 alice (work/website)$ git status --short

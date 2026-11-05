@@ -134,7 +134,7 @@ def render_example(spec: str) -> str:
 def lore(*args: str) -> str:
     binary = os.environ.get("LORE_BIN", "lore")
     env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "/tmp"), "NO_COLOR": "1"}
-    return subprocess.run([binary, *args], capture_output=True, text=True, env=env, check=True).stdout
+    return subprocess.run([binary, *args], capture_output=True, text=True, env=env, check=True, stdin=subprocess.DEVNULL).stdout
 
 
 def render_help(spec: str) -> str:

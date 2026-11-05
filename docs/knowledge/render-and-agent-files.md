@@ -179,9 +179,9 @@ $ lore render --no-pointer
 
 ## Step 6 — Add only the directive
 
-`lore directive` manages the directive block on its own, for a tool file where you want the "use lore" instructions but not the pointer. `show` prints it, `install` puts it at the top of the repo's tool files (or of `--target <profile or file>`) and refreshes it, and `remove` takes it out again (with no `--target`, from every tool file that has it).
+`lore directive` manages the directive block on its own, for a tool file where you want the "use lore" instructions but not the pointer. `show` prints it, and `install` puts it at the top of the repo's tool files (or of `--target <profile or file>`) and refreshes it. To take it out again, delete the lines from `<!-- lore:directive:start -->` to `<!-- lore:directive:end -->`.
 
-<!-- example: render#directive only=2,3,4 -->
+<!-- example: render#directive only=2,3 -->
 ```console
 # alice, in website
 $ lore directive install --target AGENTS.md
@@ -190,8 +190,6 @@ $ head -3 AGENTS.md
 <!-- lore:directive:start -->
 > **AGENT DIRECTIVE — instruction, not reference data.**
 >
-$ lore directive remove --target AGENTS.md
-✓ ~/work/website/AGENTS.md (directive stripped)
 ```
 <!-- /example -->
 
@@ -212,17 +210,18 @@ scope:        {"included":{"rules":1,"hotfixes":1,"memories":0},"cut_summary":{"
 ```
 <!-- /example -->
 
-`lore renderhistory list` lists every render by id:
+`lore render --trend` shows how big each render was over the last 14 days, how fast LORE.md grows and when it reaches its budget. It writes nothing:
 
-<!-- example: render#renderhistory -->
+<!-- example: render#render-trend -->
 ```console
 # alice, in website
-$ lore renderhistory list
-rnd_2ad3…f891
-rnd_162d…9666
-rnd_54fe…28f2
-rnd_05e9…4603
-rnd_c0f3…b5b8
+$ lore render --trend
+.lore/LORE.md: renders in the last 14 days (budget 32000 bytes, profile claude_code)
+  2026-11-02 10:00     2769 bytes
+  2026-11-02 10:00     2769 bytes
+  2026-11-02 10:00     2763 bytes
+  2026-11-02 10:00     2769 bytes
+growth: needs renders at least a day apart
 ```
 <!-- /example -->
 

@@ -161,4 +161,4 @@ $ lore link add --entity tsk_2ad3…f891 --commit HEAD
 
 - [Tasks](tasks.md): add, finish and order tasks.
 - [Team commands › lore task done](../team/commands.md#lore-task-done) and [lore task merged](../team/commands.md#lore-task-merged): `--pr` and how merges are found in a team.
-- [Run log](run-log.md): a step-by-step record of how the work was done.
+- [Run log](run-log.md): how long each try at the work took.

@@ -46,7 +46,7 @@
 | What a claim writes in git | [How it works: signals](../team/how-it-works.md#signals-claim-renew-expire-reclaim) | [`internals`](../../tests/team/docs/transcripts/internals.txt) |
 | Release, revoke, reassign, resources, teams | [Agents: taking work back](../team/agents.md#taking-work-back-from-an-agent-people-only) | [`team-ops`](../../tests/team/docs/transcripts/team-ops.txt) |
 | Missions, plans, handoffs | [Missions and plans](../tasks/missions-and-plans.md) | [`missions`](../../tests/docs/sections/missions.sh) ([output](../../tests/docs/transcripts/missions.txt)) |
-| A diary of one agent's run | [Run log](../tasks/run-log.md) | [`runs`](../../tests/docs/sections/runs.sh) ([output](../../tests/docs/transcripts/runs.txt)) |
+| How long one agent's run took | [Run log](../tasks/run-log.md) | [`runs`](../../tests/docs/sections/runs.sh) ([output](../../tests/docs/transcripts/runs.txt)) |
 | Offline claim and other errors | [Troubleshooting](../team/troubleshooting.md) | [`errors`](../../tests/team/docs/transcripts/errors.txt) |
 
 ## Related

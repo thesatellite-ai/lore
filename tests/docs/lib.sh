@@ -99,7 +99,9 @@ _on() {
     code=$?
   else
     # shellcheck disable=SC2046
-    out=$(cd "$home/$dir" && $(envfor "$name") ${EXTRA_ENV:-} bash -c "$cmd" 2>&1)
+    # stdin is /dev/null: examples are non-interactive by design, so a prompt (the
+    # secret menu, a confirm) fails at once instead of waiting on the terminal.
+    out=$(cd "$home/$dir" && $(envfor "$name") ${EXTRA_ENV:-} bash -c "$cmd" 2>&1 </dev/null)
     code=$?
   fi
   set -e
@@ -148,7 +150,7 @@ quiet() {
   local extra="${EXTRA_ENV:-}"
   [ -n "${CLOCK:-}" ] && extra="$extra LORE_NOW=$CLOCK GIT_AUTHOR_DATE=$CLOCK GIT_COMMITTER_DATE=$CLOCK"
   # shellcheck disable=SC2046
-  if ! (cd "$home/$dir" && $(envfor "$name") $extra bash -c "$cmd") > "$WORLD/quiet.log" 2>&1; then
+  if ! (cd "$home/$dir" && $(envfor "$name") $extra bash -c "$cmd") > "$WORLD/quiet.log" 2>&1 </dev/null; then
     FAILURES=$((FAILURES + 1))
     echo "SETUP FAILED: $name ($dir) \$ $cmd" >&2
     cat "$WORLD/quiet.log" >&2

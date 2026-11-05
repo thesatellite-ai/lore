@@ -11,7 +11,7 @@
 | [Missions and plans](missions-and-plans.md) | group tasks under a goal, see the whole goal at a glance, write plans, turn a plan file into tasks, leave a handoff and read your inbox |
 | [Reminders](reminders.md) | dates you must not forget, once or on repeat |
 | [Link commits](link-commits.md) | record which commit did a task, find the task behind a commit, and see when the change reached `main` |
-| [Run log](run-log.md) | a step-by-step diary of one try at a piece of work, and how to replay it |
+| [Run log](run-log.md) | one timed try at a piece of work, and the time it adds to its task |
 
 ## Where to start
 

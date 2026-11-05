@@ -64,7 +64,7 @@ FOLD_CHILDREN = {"completion"}
 def lore_help(path):
     binary = os.environ.get("LORE_BIN", "lore")
     env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "/tmp"), "NO_COLOR": "1"}
-    return subprocess.run([binary, *path, "--help"], capture_output=True, text=True, env=env, check=True).stdout
+    return subprocess.run([binary, *path, "--help"], capture_output=True, text=True, env=env, check=True, stdin=subprocess.DEVNULL).stdout
 
 
 def subcommands(text):
