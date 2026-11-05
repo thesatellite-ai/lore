@@ -53,7 +53,7 @@ type upgradeSettings struct{ notice, auto bool }
 // unreadable config keeps the defaults (the notice must never fail a command).
 func readUpgradeSettings(home string) upgradeSettings {
 	s := upgradeSettings{notice: true}
-	b, err := os.ReadFile(filepath.Join(home, "config.yaml"))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(home, "config.yaml")))
 	if err != nil {
 		return s
 	}
@@ -149,7 +149,7 @@ func noticeOrAuto(w io.Writer, s upgradeSettings, target string) {
 
 // checkDue reports whether 24 hours passed since the last check.
 func checkDue(path string, now time.Time) bool {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return true
 	}

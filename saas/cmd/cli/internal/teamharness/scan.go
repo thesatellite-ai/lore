@@ -38,7 +38,7 @@ func (c *Clone) LeakScan(needles ...string) []Finding {
 		if !d.Type().IsRegular() {
 			return nil
 		}
-		b, err := os.ReadFile(path)
+		b, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return err
 		}

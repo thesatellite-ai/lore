@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"saas/pkg/constants"
 
 	entBenchEval "dbent/gen/ent/bencheval"
@@ -44,7 +45,7 @@ func newBenchGraderTestCommand() *cobra.Command {
 			if outputFile == "" {
 				return errcodes.New(errcodes.InvalidInput, "--output-file=<path> required")
 			}
-			data, err := os.ReadFile(outputFile)
+			data, err := os.ReadFile(filepath.Clean(outputFile))
 			if err != nil {
 				return errcodes.New(errcodes.NotFound, "output file not found: "+outputFile)
 			}

@@ -762,7 +762,7 @@ func preCommitCheck(ctx context.Context, t *syncTarget, rep lsync.Report) error 
 	changed, shadowed := withoutLiveRows(ctx, t.db, changed)
 	scan := secretCheck()
 	for _, p := range changed {
-		b, rerr := os.ReadFile(filepath.Join(t.root, p))
+		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(t.root, p)))
 		if rerr != nil {
 			continue // deleted file: staging records the deletion
 		}
@@ -1074,7 +1074,7 @@ func findRowFile(dataDir, id string) (string, []byte, error) {
 			continue
 		}
 		rel := filepath.Join(e.Name(), id+".json")
-		b, err := os.ReadFile(filepath.Join(dataDir, rel))
+		b, err := os.ReadFile(filepath.Clean(filepath.Join(dataDir, rel)))
 		if err == nil {
 			return rel, b, nil
 		}

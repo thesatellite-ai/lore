@@ -93,10 +93,10 @@ By default, NO memory/decision/rule content is included. Pass
 				return nil
 			}
 
-			if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(out), cliDirMode); err != nil {
 				return errcodes.New(errcodes.Internal, "mkdir output").WithCause(err)
 			}
-			if err := os.WriteFile(out, data, 0o644); err != nil {
+			if err := os.WriteFile(out, data, cliFileMode); err != nil {
 				return errcodes.New(errcodes.Internal, "write bundle").WithCause(err)
 			}
 			fmt.Printf("%s wrote support bundle to %s (%d bytes)\n",

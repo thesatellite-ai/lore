@@ -50,7 +50,7 @@ on a fresh machine without right-click-Open friction.`,
 			// ds:def id=backup-default-path-hccatu2u owner=@khanakia stability=stable desc="lore backup default output (.lore/backups/<ts>.sqlite)"
 			if out == "" {
 				dir := filepath.Join(rctx.ProjectRoot, projresolve.MarkerDir, projresolve.BackupDir)
-				if err := os.MkdirAll(dir, 0o755); err != nil {
+				if err := os.MkdirAll(dir, cliDirMode); err != nil {
 					return errcodes.New(errcodes.Internal, "mkdir backups").WithCause(err)
 				}
 				out = filepath.Join(dir, fmt.Sprintf("%s.sqlite", time.Now().UTC().Format("20060102-150405")))
@@ -211,11 +211,11 @@ func preferLabel(m lsync.PreferMode) string {
 }
 
 func copyFile(src, dst string) error {
-	in, err := os.ReadFile(src)
+	in, err := os.ReadFile(filepath.Clean(src))
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, in, 0o644)
+	return os.WriteFile(dst, in, cliFileMode)
 }
 
 // repair.go — `lore repair` (S2.6)

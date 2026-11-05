@@ -315,7 +315,7 @@ func newIdentityAnonymizeCommand() *cobra.Command {
 			}
 			switch state {
 			case "on":
-				if err := os.MkdirAll(filepath.Dir(markerPath), 0o755); err != nil {
+				if err := os.MkdirAll(filepath.Dir(markerPath), cliDirMode); err != nil {
 					return errcodes.New(errcodes.Internal, "mkdir").WithCause(err)
 				}
 				rnd := make([]byte, 8)

@@ -166,7 +166,7 @@ func resolveCreateStore(arg string) (string, error) {
 	if err != nil {
 		return "", errcodes.New(errcodes.Internal, "getwd").WithCause(err)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, projresolve.MarkerDir, filepath.Base(attach.FileName)))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, projresolve.MarkerDir, filepath.Base(attach.FileName))))
 	if err == nil {
 		c, perr := attach.Parse(b)
 		if perr != nil {

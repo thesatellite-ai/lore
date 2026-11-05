@@ -21,6 +21,7 @@ package teamharness
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -338,16 +339,25 @@ func (w *World) GitPushes(actor string) []string {
 	return w.GitSubcommandCalls(actor, "push")
 }
 
+// Modes of what the harness writes into its temp world: owner-only, since
+// only the test process reads them; scripts also need the owner exec bit
+// (git and the PATH shims exec them).
+const (
+	harnessDirMode  fs.FileMode = 0o750
+	harnessFileMode fs.FileMode = 0o600
+	harnessExecMode fs.FileMode = 0o700
+)
+
 func mustMkdir(t testing.TB, dir string) {
 	t.Helper()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, harnessDirMode); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func writeExec(t testing.TB, path, body string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(body), harnessExecMode); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -355,7 +365,7 @@ func writeExec(t testing.TB, path, body string) {
 func writeFile(t testing.TB, path, body string) {
 	t.Helper()
 	mustMkdir(t, filepath.Dir(path))
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(body), harnessFileMode); err != nil {
 		t.Fatal(err)
 	}
 }

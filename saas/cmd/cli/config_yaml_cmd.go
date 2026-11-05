@@ -54,7 +54,7 @@ func configPath() (string, error) {
 // file's mode.
 func readConfigDoc(path string) (*yaml.Node, fs.FileMode, error) {
 	perm := configFileMode
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(filepath.Clean(path))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		raw = nil

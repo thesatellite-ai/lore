@@ -516,7 +516,7 @@ func (p *externalProject) materialize(ctx context.Context, files, base map[strin
 	}
 	for rel, b := range files {
 		full := filepath.Join(data, filepath.FromSlash(rel))
-		if cur, err := os.ReadFile(full); err == nil && bytes.Equal(cur, b) {
+		if cur, err := os.ReadFile(filepath.Clean(full)); err == nil && bytes.Equal(cur, b) {
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(full), externalDirMode); err != nil {
@@ -652,7 +652,7 @@ func (p *externalProject) diff() (stores.RowChanges, error) {
 			return nil
 		}
 		seen[rel] = true
-		b, err := os.ReadFile(path)
+		b, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return err
 		}

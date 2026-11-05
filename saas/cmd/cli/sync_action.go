@@ -343,7 +343,7 @@ func installSyncAction(ctx context.Context, dir string, o syncActionOptions) (sy
 		res.Status, res.Content = syncActionDryRun, content
 		return res, nil
 	}
-	existing, err := os.ReadFile(file)
+	existing, err := os.ReadFile(filepath.Clean(file))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		res.Status = syncActionCreated
@@ -405,10 +405,10 @@ func resolveSyncActionTriggers(toplevel, prefix, file string, o syncActionOption
 // when there is none, it is someone else's file, or it cannot be parsed;
 // a read error that matters surfaces later, when install-action writes.
 func installedSyncActionSettings(toplevel, prefix, file string) (syncActionSettings, bool) {
-	b, err := os.ReadFile(file)
+	b, err := os.ReadFile(filepath.Clean(file))
 	if errors.Is(err, fs.ErrNotExist) {
 		if legacy := legacySyncActionFor(toplevel, prefix); legacy != "" {
-			b, err = os.ReadFile(legacy)
+			b, err = os.ReadFile(filepath.Clean(legacy))
 		}
 	}
 	if err != nil || !strings.HasPrefix(string(b), syncActionMarker) {
@@ -457,7 +457,7 @@ func legacySyncActionFor(toplevel, prefix string) string {
 		return "" // the root project's name never changed
 	}
 	file := filepath.Join(toplevel, filepath.FromSlash(syncActionFileRel("")))
-	b, err := os.ReadFile(file)
+	b, err := os.ReadFile(filepath.Clean(file))
 	if err != nil || !strings.HasPrefix(string(b), syncActionMarker) {
 		return ""
 	}
@@ -491,7 +491,7 @@ func uninstallSyncAction(ctx context.Context, dir string, force bool) (syncActio
 		}
 	}
 	res := syncActionResult{Path: file}
-	existing, err := os.ReadFile(file)
+	existing, err := os.ReadFile(filepath.Clean(file))
 	if errors.Is(err, fs.ErrNotExist) {
 		res.Status = syncActionAbsent
 		return res, nil
@@ -744,11 +744,11 @@ func refreshSyncActionPin(ctx context.Context, repo gitsetup.Repo, root, own str
 	}
 	prefix := lorePathPrefix(repo.Toplevel, root)
 	file := filepath.Join(repo.Toplevel, filepath.FromSlash(syncActionFileRel(prefix)))
-	b, err := os.ReadFile(file)
+	b, err := os.ReadFile(filepath.Clean(file))
 	if errors.Is(err, fs.ErrNotExist) {
 		if legacy := legacySyncActionFor(repo.Toplevel, prefix); legacy != "" {
 			file = legacy
-			b, err = os.ReadFile(file)
+			b, err = os.ReadFile(filepath.Clean(file))
 		}
 	}
 	if errors.Is(err, fs.ErrNotExist) {

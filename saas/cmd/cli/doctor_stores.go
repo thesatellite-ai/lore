@@ -71,7 +71,7 @@ func doctorStores(ctx context.Context, r *doctorReport) {
 				if tracked, _ := gitTracks(ctx, root, claudeLocalFile); tracked {
 					warn(claudeLocalFile + " is tracked by git: its content would be committed (`git rm --cached " + claudeLocalFile + "`)")
 				}
-				if b, err := os.ReadFile(local); err == nil && strings.Count(strings.TrimSpace(string(b)), "\n") > 0 {
+				if b, err := os.ReadFile(filepath.Clean(local)); err == nil && strings.Count(strings.TrimSpace(string(b)), "\n") > 0 {
 					warn(claudeLocalFile + " holds more than the one import line; internal context belongs in ~/.lore/render")
 				}
 			}

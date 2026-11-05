@@ -525,7 +525,7 @@ func launchSet(root string, p toolprofile.Profile, loreSize int) string {
 	}
 	parts = append(parts, fmt.Sprintf("%s %d", toolprofile.CanonicalOutput, loreSize))
 	local := strings.TrimSuffix(p.PointerFile, ".md") + ".local.md"
-	if data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(local))); err == nil {
+	if data, err := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(local)))); err == nil {
 		total += len(data)
 		parts = append(parts, fmt.Sprintf("%s %d", local, len(data)))
 		priv, privBytes := 0, 0

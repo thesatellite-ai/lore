@@ -79,7 +79,7 @@ var metaRelPath = filepath.Join(".lore", "data", "_meta.json")
 // _meta.json. ok is false outside a project (or with no _meta.json yet).
 func findProjectMeta(dir string) (root string, m projectMeta, ok bool, err error) {
 	for d := dir; ; {
-		b, rerr := os.ReadFile(filepath.Join(d, metaRelPath))
+		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(d, metaRelPath)))
 		switch {
 		case rerr == nil:
 			if jerr := json.Unmarshal(b, &m); jerr != nil {
@@ -254,10 +254,10 @@ func copySkills(dest string, files map[string][]byte) (bool, error) {
 	}
 	for rel, b := range files {
 		p := filepath.Join(dest, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(p), cliDirMode); err != nil {
 			return false, err
 		}
-		if err := os.WriteFile(p, b, 0o644); err != nil { // skill files are public docs, 0644 like install.sh
+		if err := os.WriteFile(p, b, cliFileMode); err != nil {
 			return false, err
 		}
 	}

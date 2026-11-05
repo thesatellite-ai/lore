@@ -321,7 +321,7 @@ func planPrivateLocals(ctx context.Context, root string, imports []string) ([]pr
 		}
 		seen[prof.PrivateFile] = true
 		l := privateLocal{rel: prof.PrivateFile}
-		if cur, rerr := os.ReadFile(filepath.Join(root, filepath.FromSlash(l.rel))); rerr == nil {
+		if cur, rerr := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(l.rel)))); rerr == nil {
 			l.in = string(cur)
 		}
 		var lines []string
@@ -341,7 +341,7 @@ func planPrivateLocals(ctx context.Context, root string, imports []string) ([]pr
 // repo_id, else the prj_ project id (see the file comment).
 func privateRepoKey(root, projectID string) string {
 	metaPath := filepath.Join(root, projresolve.MarkerDir, lsync.DataDirName, lsync.MetaFileName)
-	if b, err := os.ReadFile(metaPath); err == nil {
+	if b, err := os.ReadFile(filepath.Clean(metaPath)); err == nil {
 		var meta map[string]json.RawMessage
 		if json.Unmarshal(b, &meta) == nil {
 			var id string
@@ -513,7 +513,7 @@ func writeLocalLines(ctx context.Context, root string, l privateLocal) error {
 			}
 			return nil
 		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), cliDirMode); err != nil {
 			return errcodes.New(errcodes.Internal, "create the folder of "+l.rel).WithCause(err)
 		}
 		if err := atomicWriteFile(path, []byte(l.out), renderFileMode); err != nil {

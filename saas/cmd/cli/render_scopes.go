@@ -339,10 +339,10 @@ func buildDirFiles(plan dirPlan, entryMax int) (map[string]string, []dirReport) 
 // writeIfChanged writes data to path when its bytes differ; it reports
 // whether it wrote.
 func writeIfChanged(path, data string) (bool, error) {
-	if old, err := os.ReadFile(path); err == nil && string(old) == data {
+	if old, err := os.ReadFile(filepath.Clean(path)); err == nil && string(old) == data {
 		return false, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), cliDirMode); err != nil {
 		return false, err
 	}
 	return true, atomicWriteFile(path, []byte(data), 0o644)
@@ -375,7 +375,7 @@ func writeDirs(root string, plan dirPlan, bodies map[string]string, targets []co
 			}
 			tf := filepath.Join(root, filepath.FromSlash(rel))
 			existing := ""
-			if data, rerr := os.ReadFile(tf); rerr == nil {
+			if data, rerr := os.ReadFile(filepath.Clean(tf)); rerr == nil {
 				existing = string(data)
 			}
 			if w, werr := writeIfChanged(tf, t.profile.DirContent(kind, existing, g.Path, bodies[g.Path])); werr != nil {
@@ -423,7 +423,7 @@ func cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(st
 		}
 		dir := filepath.Join(root, filepath.FromSlash(p))
 		lore := filepath.Join(dir, dirFileName)
-		if data, err := os.ReadFile(lore); err == nil && strings.HasPrefix(string(data), dirHeaderPrefix) {
+		if data, err := os.ReadFile(filepath.Clean(lore)); err == nil && strings.HasPrefix(string(data), dirHeaderPrefix) {
 			if err := os.Remove(lore); err != nil {
 				return err
 			}
@@ -435,7 +435,7 @@ func cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(st
 				continue
 			}
 			f := filepath.Join(root, filepath.FromSlash(rel))
-			data, err := os.ReadFile(f)
+			data, err := os.ReadFile(filepath.Clean(f))
 			if err != nil {
 				continue
 			}
@@ -446,7 +446,7 @@ func cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(st
 			if empty {
 				err = os.Remove(f)
 			} else {
-				err = os.WriteFile(f, []byte(rest), 0o644)
+				err = os.WriteFile(f, []byte(rest), cliFileMode)
 			}
 			if err != nil {
 				return err

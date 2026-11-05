@@ -732,7 +732,7 @@ func ensureDataNotIgnored(ctx context.Context, root string) (bool, []string, err
 		return false, nil, err
 	}
 	gitignore := filepath.Join(root, ".gitignore")
-	original, readErr := os.ReadFile(gitignore)
+	original, readErr := os.ReadFile(filepath.Clean(gitignore))
 	existed := readErr == nil
 	before := len(ignored)
 	changed, err := gitsetup.EnsureBlock(gitignore, gitBlockMarker, dataUnignoreLines)

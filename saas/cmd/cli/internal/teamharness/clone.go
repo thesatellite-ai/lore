@@ -91,7 +91,7 @@ func (c *Clone) WriteFile(rel, body string) {
 
 // ReadFile reads a file relative to the clone; ok is false when absent.
 func (c *Clone) ReadFile(rel string) (string, bool) {
-	b, err := os.ReadFile(filepath.Join(c.Dir, rel))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(c.Dir, rel)))
 	if errors.Is(err, os.ErrNotExist) {
 		return "", false
 	}

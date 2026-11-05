@@ -664,7 +664,7 @@ Existing tasks with the same code are skipped (or replaced with --replace).`,
 			}
 			added, skipped, replaced := 0, 0, 0
 			for _, path := range entries {
-				data, err := os.ReadFile(path)
+				data, err := os.ReadFile(filepath.Clean(path))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "skip %s: %v\n", path, err)
 					continue
@@ -794,7 +794,7 @@ func newBenchEvalExportCommand() *cobra.Command {
 			if err != nil {
 				return errcodes.New(errcodes.Internal, "list bench evals").WithCause(err)
 			}
-			if err := os.MkdirAll(toDir, 0o755); err != nil {
+			if err := os.MkdirAll(toDir, cliDirMode); err != nil {
 				return errcodes.New(errcodes.Internal, "mkdir").WithCause(err)
 			}
 			for _, r := range rows {
@@ -827,7 +827,7 @@ func newBenchEvalExportCommand() *cobra.Command {
 				}
 				out, _ := yaml.Marshal(y)
 				path := filepath.Join(toDir, r.Code+".yaml")
-				if err := os.WriteFile(path, out, 0o644); err != nil {
+				if err := os.WriteFile(path, out, cliFileMode); err != nil {
 					return errcodes.New(errcodes.Internal, "write yaml").WithCause(err)
 				}
 			}
@@ -893,7 +893,7 @@ func readPromptInput(inline, file string) (string, error) {
 		data, err := io_ReadAll(os.Stdin)
 		return string(data), err
 	}
-	data, err := os.ReadFile(file)
+	data, err := os.ReadFile(filepath.Clean(file))
 	return string(data), err
 }
 

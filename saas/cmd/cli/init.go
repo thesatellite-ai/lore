@@ -17,13 +17,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/thesatellite-ai/lore/wire"
 	"os"
 	"path/filepath"
 	"saas/pkg/constants"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/thesatellite-ai/lore/wire"
 
 	"dbent"
 	"dbent/gen/ent"
@@ -163,7 +164,7 @@ func runInit(ctx context.Context, projectRoot string) error {
 	}
 
 	// 3. Create marker dir + state subdir
-	if err := os.MkdirAll(filepath.Join(markerDir, projresolve.StateDir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(markerDir, projresolve.StateDir), cliDirMode); err != nil {
 		return errcodes.New(errcodes.Internal, "create .lore/state").WithCause(err)
 	}
 
@@ -493,7 +494,7 @@ func ensureGitignore(ctx context.Context, projectRoot string) error {
 	}
 
 	existing := ""
-	if data, err := os.ReadFile(gi); err == nil {
+	if data, err := os.ReadFile(filepath.Clean(gi)); err == nil {
 		existing = string(data)
 	}
 
@@ -508,7 +509,7 @@ func ensureGitignore(ctx context.Context, projectRoot string) error {
 		return nil
 	}
 
-	f, err := os.OpenFile(gi, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(filepath.Clean(gi), os.O_CREATE|os.O_WRONLY|os.O_APPEND, cliFileMode)
 	if err != nil {
 		return err
 	}

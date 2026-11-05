@@ -93,7 +93,7 @@ func excludeInGit(ctx context.Context, root, name string) error {
 		return errcodes.New(errcodes.Internal, "locate "+name).WithCause(err)
 	}
 	pattern := "/" + filepath.ToSlash(rel)
-	cur, err := os.ReadFile(excl)
+	cur, err := os.ReadFile(filepath.Clean(excl))
 	if err != nil && !os.IsNotExist(err) {
 		return errcodes.New(errcodes.Internal, "read info/exclude").WithCause(err)
 	}
@@ -110,7 +110,7 @@ func excludeInGit(ctx context.Context, root, name string) error {
 	if err := os.MkdirAll(filepath.Dir(excl), renderDirMode); err != nil {
 		return errcodes.New(errcodes.Internal, "create info dir").WithCause(err)
 	}
-	f, err := os.OpenFile(excl, os.O_APPEND|os.O_CREATE|os.O_WRONLY, excludeFileMode)
+	f, err := os.OpenFile(filepath.Clean(excl), os.O_APPEND|os.O_CREATE|os.O_WRONLY, excludeFileMode)
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "open info/exclude").WithCause(err)
 	}

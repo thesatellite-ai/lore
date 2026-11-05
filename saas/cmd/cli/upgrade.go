@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -241,8 +242,15 @@ func upgradeByScript(ctx context.Context, out io.Writer, rc releaseClient, exe, 
 	if runtime.GOOS == goosWindows {
 		tmp += ".exe"
 	}
-	if err := os.WriteFile(tmp, files.binary, 0o755); err != nil { // an executable must be 0755
+	// Written owner-only first, then given the running binary's mode, so the
+	// new binary is never readable or runnable by more users than the old one.
+	if err := os.WriteFile(tmp, files.binary, cliFileMode); err != nil {
 		return errcodes.New(errcodes.Code(errs.UpgradePermission), "write "+tmp).WithCause(err).
+			WithHint("run `sudo " + BinaryName + " upgrade`")
+	}
+	if err := os.Chmod(tmp, binaryMode(exe)); err != nil {
+		_ = os.Remove(tmp) // best effort: never leave a half-installed binary behind
+		return errcodes.New(errcodes.Code(errs.UpgradePermission), "make "+tmp+" executable").WithCause(err).
 			WithHint("run `sudo " + BinaryName + " upgrade`")
 	}
 	keep := false
@@ -337,4 +345,20 @@ func runSchemaOnly(ctx context.Context, out io.Writer, exe, root string) {
 	if err := c.Run(); err != nil {
 		fmt.Fprintf(out, "  database not updated (%v); the next command in this project updates it\n", err)
 	}
+}
+
+// defaultBinaryMode is the mode of a fresh binary when the running one cannot
+// be read: rwxr-xr-x, the mode install.sh and the release archives use, since
+// a binary on a shared PATH must be runnable by every user.
+const defaultBinaryMode fs.FileMode = 0o755
+
+// binaryMode returns the permission bits the upgraded binary gets: the
+// running binary's own, so an upgrade never widens or narrows who can run
+// lore, or defaultBinaryMode when exe cannot be read or is not executable.
+func binaryMode(exe string) fs.FileMode {
+	info, err := os.Stat(exe)
+	if err != nil || info.Mode().Perm()&0o100 == 0 {
+		return defaultBinaryMode
+	}
+	return info.Mode().Perm()
 }

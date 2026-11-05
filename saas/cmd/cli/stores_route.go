@@ -302,7 +302,7 @@ func readDirFiles(dir string) (map[string][]byte, error) {
 			return nil
 		}
 		rel, _ := filepath.Rel(dir, path)
-		b, err := os.ReadFile(path)
+		b, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return err
 		}

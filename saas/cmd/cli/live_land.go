@@ -504,7 +504,7 @@ func printLiveStatus(ctx context.Context, projectRoot string) {
 }
 
 func readLiveNoteText(stateDir, name string) string {
-	b, err := os.ReadFile(filepath.Join(stateDir, name))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(stateDir, name)))
 	if err != nil {
 		return ""
 	}

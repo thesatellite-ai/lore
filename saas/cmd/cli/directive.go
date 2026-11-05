@@ -352,7 +352,7 @@ func installDirective(root string, t contextTarget, full bool) error {
 	}
 
 	existing := ""
-	if data, err := os.ReadFile(abs); err == nil {
+	if data, err := os.ReadFile(filepath.Clean(abs)); err == nil {
 		existing = string(data)
 	} else if !os.IsNotExist(err) {
 		return errcodes.New(errcodes.Internal, "read "+abs).WithCause(err)
@@ -369,10 +369,10 @@ func installDirective(root string, t contextTarget, full bool) error {
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(abs), cliDirMode); err != nil {
 		return errcodes.New(errcodes.Internal, "mkdir parent").WithCause(err)
 	}
-	if err := os.WriteFile(abs, []byte(out), 0o644); err != nil {
+	if err := os.WriteFile(abs, []byte(out), cliFileMode); err != nil {
 		return errcodes.New(errcodes.Internal, "write "+abs).WithCause(err)
 	}
 	fmt.Printf("%s %s\n", style.Success("✓"), abs)
@@ -384,7 +384,7 @@ func removeDirective(target string) error {
 	if err != nil {
 		return errcodes.New(errcodes.BadPath, "resolve "+target).WithCause(err)
 	}
-	data, err := os.ReadFile(abs)
+	data, err := os.ReadFile(filepath.Clean(abs))
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Printf("%s %s (not present)\n", style.Muted("="), abs)
@@ -400,7 +400,7 @@ func removeDirective(target string) error {
 	stripped := directiveRegex.ReplaceAllString(existing, "")
 	// Collapse any leading blank-line residue
 	stripped = strings.TrimLeft(stripped, "\n")
-	if err := os.WriteFile(abs, []byte(stripped), 0o644); err != nil {
+	if err := os.WriteFile(abs, []byte(stripped), cliFileMode); err != nil {
 		return errcodes.New(errcodes.Internal, "write "+abs).WithCause(err)
 	}
 	fmt.Printf("%s %s (directive stripped)\n", style.Success("✓"), abs)

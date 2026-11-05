@@ -16,10 +16,11 @@ package main
 
 import (
 	"context"
+	crand "crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/rand/v2"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
@@ -299,7 +300,18 @@ func liveStrategies(table string) func(string) merge3.Strategy {
 
 // liveBackoff is the pause before push retry n.
 func liveBackoff(n int) time.Duration {
-	return time.Duration(n)*liveBackoffBase + rand.N(liveBackoffJitter)
+	return time.Duration(n)*liveBackoffBase + liveJitter(liveBackoffJitter)
+}
+
+// liveJitter is a random pause in [0, limit), from crypto/rand: the jitter
+// only spreads retries, but one random source for the whole binary keeps
+// math/rand out of it. A failed read means no jitter.
+func liveJitter(limit time.Duration) time.Duration {
+	n, err := crand.Int(crand.Reader, big.NewInt(int64(limit)))
+	if err != nil {
+		return 0
+	}
+	return time.Duration(n.Int64())
 }
 
 // acquire takes the per-repo live lock for the rest of the command.

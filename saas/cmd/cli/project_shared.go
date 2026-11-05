@@ -214,13 +214,13 @@ func modeBRowIDs(ctx context.Context, db *sql.DB, projectID string) ([]tableRow,
 		var refs []string
 		for _, c := range cols {
 			if c != colID && strings.HasSuffix(c, idColSuffix) {
-				refs = append(refs, `"`+c+`"`)
+				refs = append(refs, sqlIdent(c))
 			}
 		}
 		if len(refs) == 0 {
 			continue
 		}
-		rows, err := db.QueryContext(ctx, `SELECT id, `+strings.Join(refs, ", ")+` FROM "`+t+`" ORDER BY id`)
+		rows, err := db.QueryContext(ctx, selectRefsQuery(t, refs))
 		if err != nil {
 			return nil, errcodes.New(errcodes.Internal, "migrate: list "+t).WithCause(err)
 		}
@@ -306,4 +306,23 @@ func queryIDs(ctx context.Context, db *sql.DB, q string, args ...any) ([]string,
 		out = append(out, id)
 	}
 	return out, rows.Err()
+}
+
+// sqlIdent quotes a SQLite identifier read from the database's own schema
+// (a table or column name), doubling any embedded quote, so a name can never
+// end the identifier early.
+func sqlIdent(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+// selectRefsQuery is `SELECT id, <refs> FROM <table> ORDER BY id`; refs are
+// already quoted with sqlIdent and table is quoted here.
+func selectRefsQuery(table string, refs []string) string {
+	var b strings.Builder
+	b.WriteString("SELECT id, ")
+	b.WriteString(strings.Join(refs, ", "))
+	b.WriteString(" FROM ")
+	b.WriteString(sqlIdent(table))
+	b.WriteString(" ORDER BY id")
+	return b.String()
 }

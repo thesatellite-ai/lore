@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"saas/pkg/constants"
 	"strings"
 	"sync"
@@ -684,7 +685,7 @@ func loadClaudeMd(explicit string) (string, string, string, error) {
 	}
 	candidates = append(candidates, "bench-CLAUDE.md", "CLAUDE.md")
 	for _, p := range candidates {
-		data, err := os.ReadFile(p)
+		data, err := os.ReadFile(filepath.Clean(p))
 		if err == nil {
 			h := sha256.Sum256(data)
 			return p, string(data), hex.EncodeToString(h[:]), nil

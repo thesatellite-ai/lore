@@ -224,7 +224,7 @@ func indentBlock(s string) string {
 // whole file and restores the old bytes if it no longer validates.
 func appendOrgEntry(ctx context.Context, home string, entry lorecfg.Org) error {
 	path := filepath.Join(home, lorecfg.TeamFileBase+lorecfg.ExtYAML)
-	old, err := os.ReadFile(path)
+	old, err := os.ReadFile(filepath.Clean(path))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return errcodes.New(errcodes.Internal, "read config.yaml").WithCause(err)
 	}

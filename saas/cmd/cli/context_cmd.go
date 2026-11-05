@@ -625,7 +625,7 @@ func logHookError(err error) {
 	if os.MkdirAll(dir, 0o700) != nil {
 		return
 	}
-	fh, ferr := os.OpenFile(filepath.Join(dir, "hooks.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	fh, ferr := os.OpenFile(filepath.Clean(filepath.Join(dir, "hooks.log")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if ferr != nil {
 		return
 	}

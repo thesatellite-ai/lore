@@ -179,7 +179,7 @@ type hookEntry map[string]json.RawMessage
 
 // readSettings reads path ("" content = an empty document).
 func readSettings(path string) (settingsDoc, error) {
-	b, err := os.ReadFile(path) // repo-relative settings file named by the hook table
+	b, err := os.ReadFile(filepath.Clean(path)) // repo-relative settings file named by the hook table
 	if os.IsNotExist(err) {
 		return settingsDoc{}, nil
 	}

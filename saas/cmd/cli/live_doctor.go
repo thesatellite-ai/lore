@@ -157,7 +157,7 @@ func doctorLiveHooks(ctx context.Context, s *liveSession, warn, note func(string
 	dir := strings.TrimSpace(string(out))
 	var missing []string
 	for _, h := range []string{hookPostCommit, hookPrePush} {
-		b, err := os.ReadFile(filepath.Join(dir, h))
+		b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, h)))
 		if err != nil || !strings.Contains(string(b), liveHookMarker) {
 			missing = append(missing, h)
 		}

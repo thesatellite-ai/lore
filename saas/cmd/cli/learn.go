@@ -179,7 +179,7 @@ func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []strin
 	candidates := 0
 
 	for _, path := range sources {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "skipped %s: %v\n", path, err)
 			continue

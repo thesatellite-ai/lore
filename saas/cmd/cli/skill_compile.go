@@ -174,7 +174,7 @@ func runSkillCompile(ctx context.Context, f *skillCompileFlags) error {
 		return nil
 	}
 
-	if err := os.WriteFile(f.output, []byte(compressed), 0o644); err != nil {
+	if err := os.WriteFile(f.output, []byte(compressed), cliFileMode); err != nil {
 		return errcodes.New(errcodes.Internal, "write output").WithCause(err)
 	}
 
@@ -219,7 +219,7 @@ func collectSkillSources(sourceDir string, globs []string) (map[string]string, i
 			if err != nil || info.IsDir() {
 				continue
 			}
-			content, err := os.ReadFile(m)
+			content, err := os.ReadFile(filepath.Clean(m))
 			if err != nil {
 				return nil, 0, errcodes.New(errcodes.Internal,
 					fmt.Sprintf("read %s: %v", m, err))

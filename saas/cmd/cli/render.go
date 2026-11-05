@@ -269,7 +269,7 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	// Skip rename if content unchanged (R29 #53) — but still re-stitch the
 	// pointer: a tool file may have lost it even when the body is identical
 	unchanged := false
-	if existing, err := os.ReadFile(resolvedOut); err == nil {
+	if existing, err := os.ReadFile(filepath.Clean(resolvedOut)); err == nil {
 		unchanged = sha256Hex(existing) == sha256Hex([]byte(body))
 	}
 
@@ -576,7 +576,7 @@ func stitchPointer(root string, t contextTarget, outFile string) error {
 	link := toolprofile.Link{FromPointer: relSlash(filepath.Dir(absAgent), absOut, outFile), FromRoot: relSlash(root, absOut, outFile)}
 
 	existing := ""
-	if data, err := os.ReadFile(absAgent); err == nil {
+	if data, err := os.ReadFile(filepath.Clean(absAgent)); err == nil {
 		existing = string(data)
 	} else if !os.IsNotExist(err) {
 		return errcodes.New(errcodes.Internal, "read "+absAgent).WithCause(err)
@@ -587,10 +587,10 @@ func stitchPointer(root string, t contextTarget, outFile string) error {
 		fmt.Printf("%s %s (pointer present)\n", style.Muted("="), absAgent)
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(absAgent), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(absAgent), cliDirMode); err != nil {
 		return errcodes.New(errcodes.Internal, "mkdir parent").WithCause(err)
 	}
-	if err := os.WriteFile(absAgent, []byte(out), 0o644); err != nil {
+	if err := os.WriteFile(absAgent, []byte(out), cliFileMode); err != nil {
 		return errcodes.New(errcodes.Internal, "write "+absAgent).WithCause(err)
 	}
 	fmt.Printf("%s %s (pointer → %s)\n", style.Success("✓"), absAgent, link.FromPointer)
@@ -612,7 +612,7 @@ const fullFileName = "LORE.full.md"
 
 // writeFullFile writes LORE.full.md when its bytes changed.
 func writeFullFile(path, body string, quiet bool) error {
-	if existing, err := os.ReadFile(path); err == nil && sha256Hex(existing) == sha256Hex([]byte(body)) {
+	if existing, err := os.ReadFile(filepath.Clean(path)); err == nil && sha256Hex(existing) == sha256Hex([]byte(body)) {
 		return nil
 	}
 	if err := atomicWriteFile(path, []byte(body), 0o644); err != nil {
@@ -635,7 +635,7 @@ func writeFullFile(path, body string, quiet bool) error {
 // Returns the first error from any step
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, cliDirMode); err != nil {
 		return fmt.Errorf("mkdir parent: %w", err)
 	}
 
@@ -673,7 +673,7 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	}
 
 	// fsync parent directory for durability
-	dirf, err := os.Open(dir)
+	dirf, err := os.Open(filepath.Clean(dir))
 	if err == nil {
 		_ = dirf.Sync()
 		_ = dirf.Close()
