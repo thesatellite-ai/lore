@@ -342,11 +342,12 @@ func printWhoami(s *orgSituation, id identity.Resolved, idErr error, explain boo
 		printWhoamiRow("org", style.Bold(r.Org.Name)+"  "+style.Muted("(matched by: "+red.str(r.MatchedBy)+")"))
 	}
 
-	if s.ResolveErr != nil {
+	switch {
+	case s.ResolveErr != nil:
 		printWhoamiRow("identity", style.Muted("(not resolved: the org is refused above)"))
-	} else if idErr != nil {
+	case idErr != nil:
 		printWhoamiRow("identity", style.Error("missing")+"  "+style.Muted(idErr.Error()))
-	} else {
+	default:
 		v := fmt.Sprintf("%s <%s>   %s", id.DisplayName, id.StableKey, actorIDFor(id.StableKey))
 		if id.Handle != "" {
 			v += "  @" + id.Handle
@@ -452,6 +453,8 @@ func printOrgTrace(trace []orgresolve.RuleTrace) {
 			mark = style.Success("✓")
 		case orgresolve.OutcomeMiss:
 			mark = style.Muted("✗")
+		case orgresolve.OutcomeNotReached:
+			// keeps the muted dot
 		}
 		fmt.Printf("  %s %d. %-16s %s\n", mark, int(t.Step), t.Step.String(), t.Reason)
 	}

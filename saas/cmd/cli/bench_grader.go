@@ -189,6 +189,8 @@ all stored BenchResult rows. Flags:
 						pass++
 					case entBenchResult.GradeError:
 						errCount++
+					case entBenchResult.GradeFail, entBenchResult.GradeSkipped:
+						// counted in N only
 					}
 				}
 				a := audit{

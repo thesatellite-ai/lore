@@ -382,6 +382,8 @@ func leakFix(f leakcheck.Finding, lc leakContext) string {
 		return "Nothing written. Keep it internal: write it with --to <org> instead of --to repo, or leave out the internal text"
 	case leakActionText:
 		return "Remove the internal text before posting"
+	case leakActionCommit, leakActionPush, leakActionLive:
+		// advice depends on the path: below
 	}
 	if id, table, ok := repoRowOf(f.Path); ok {
 		kind := singularKind(table)
@@ -390,6 +392,8 @@ func leakFix(f leakcheck.Finding, lc leakContext) string {
 			return fmt.Sprintf("%s (a %s in this repo) is in a commit you are pushing: rewrite that commit without it (git commit --amend, or git rebase), then keep it internal: lore move %s --to <org>", id, kind, id)
 		case leakActionLive:
 			return fmt.Sprintf("Keep %s internal: lore move %s --to <org>, or edit it so it no longer carries the internal text", id, id)
+		case leakActionCommit, leakActionText, leakActionWrite, leakActionShare, leakActionMove:
+			// the general repo-row advice below
 		}
 		return fmt.Sprintf("%s is a %s in this repo. Keep it internal: lore move %s --to <org>   or remove it: lore %s delete %s --confirm", id, kind, id, kind, id)
 	}

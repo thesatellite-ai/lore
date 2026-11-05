@@ -864,7 +864,7 @@ func wireGit(ctx context.Context, db *sql.DB, root string) {
 	}
 	res, err := ensureGitWiring(ctx, root)
 	if err != nil {
-		if err != gitsetup.ErrNotRepo && err != gitsetup.ErrNoGit {
+		if !errors.Is(err, gitsetup.ErrNotRepo) && !errors.Is(err, gitsetup.ErrNoGit) {
 			fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"git wiring: "+err.Error()))
 		}
 		return

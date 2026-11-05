@@ -173,7 +173,7 @@ func mountCore(root *cobra.Command) {
 	runner := &compatRunner{app: app}
 	coreRunner = runner
 	if err := cli.Mount(root, app.Registry(), runner,
-		cli.WithInteractive(func() bool { return stdinIsTTY() }),
+		cli.WithInteractive(stdinIsTTY),
 	); err != nil {
 		panic(err)
 	}

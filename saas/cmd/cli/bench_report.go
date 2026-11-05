@@ -174,11 +174,12 @@ func newBenchReportCompareCommand() *cobra.Command {
 					"b_with":     db.withSkill,
 					"diff_pp":    diffPP,
 				}
-				if diffPP > 0 {
+				switch {
+				case diffPP > 0:
 					improved = append(improved, code)
-				} else if diffPP < 0 {
+				case diffPP < 0:
 					regressed = append(regressed, code)
-				} else {
+				default:
 					unchanged = append(unchanged, code)
 				}
 			}

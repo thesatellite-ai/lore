@@ -95,6 +95,8 @@ func configChild(n *yaml.Node, part string) *yaml.Node {
 		if i, err := strconv.Atoi(part); err == nil && i >= 0 && i < len(n.Content) {
 			return n.Content[i]
 		}
+	case yaml.DocumentNode, yaml.ScalarNode, yaml.AliasNode:
+		// no named children
 	}
 	return nil
 }

@@ -710,6 +710,8 @@ Existing tasks with the same code are skipped (or replaced with --replace).`,
 					if y.Grader.JudgeModel != "" {
 						spec["judge_model"] = y.Grader.JudgeModel
 					}
+				case entBenchEval.GraderKindGoldenDiff, entBenchEval.GraderKindComposite:
+					// the yaml import carries no spec fields for these kinds
 				}
 
 				if existing != nil && replace {
@@ -890,15 +892,15 @@ func readPromptInput(inline, file string) (string, error) {
 		return "", fmt.Errorf("either --prompt or --prompt-file required")
 	}
 	if file == "-" {
-		data, err := io_ReadAll(os.Stdin)
+		data, err := readAllInput(os.Stdin)
 		return string(data), err
 	}
 	data, err := os.ReadFile(filepath.Clean(file))
 	return string(data), err
 }
 
-// io_ReadAll wraps io.ReadAll without an extra import line at the file head
-func io_ReadAll(r interface {
+// readAllInput reads r to EOF, like io.ReadAll.
+func readAllInput(r interface {
 	Read(p []byte) (n int, err error)
 }) ([]byte, error) {
 	var out []byte
@@ -951,6 +953,8 @@ func resolveLink(ctx context.Context, client *ent.Client, projectID, linkArg, ov
 			body, resolvedID = lookupDecisionBody(ctx, client, projectID, ref)
 		case entBenchEval.LinkedKindMemory:
 			body, resolvedID = lookupMemoryBody(ctx, client, projectID, ref)
+		case entBenchEval.LinkedKindNone, entBenchEval.LinkedKindPattern:
+			// no row to snapshot: the body stays empty unless --linked-body set it
 		}
 	}
 	return kind, resolvedID, body, nil

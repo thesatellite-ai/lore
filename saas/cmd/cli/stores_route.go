@@ -164,6 +164,8 @@ func targetInputs(ctx context.Context, s *orgSituation, t personalplace.Target, 
 		in.To = stores.ToOrg
 	case personalplace.TargetOrgFolder:
 		in.To, in.Folder = stores.ToOrgFolder, t.Folder
+	case personalplace.TargetNone, personalplace.TargetPersonal, personalplace.TargetPersonalOrg:
+		// no store --to (none given, or a personal target): in.To stays unset
 	}
 	links := r.Links
 	if r.Org != nil && len(links) == 0 && s.ProjectID != "" {

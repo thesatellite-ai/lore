@@ -688,10 +688,10 @@ func (s *liveSession) store(ctx context.Context, db *sql.DB, folder string, dive
 		never, serr := neverSharedRows(ctx, db, diverted)
 		if serr != nil {
 			// Which rows were never shared is unknown: drop nothing.
-			return fmt.Errorf("%w (and no row was removed from lore.db: %v)", leakErr, serr) // %v: the leak refusal stays the one classified cause (exit 19)
+			return fmt.Errorf("%w (and no row was removed from lore.db: %w)", leakErr, serr) // leakErr first: errors.As finds the leak refusal before serr, so it stays the classified cause (exit 19)
 		}
 		if derr := lsync.DropRows(ctx, db, never, "refused by the leak check"); derr != nil {
-			return fmt.Errorf("%w (and %v)", leakErr, derr) // %v: the leak refusal stays the one classified cause (exit 19)
+			return fmt.Errorf("%w (and %w)", leakErr, derr) // leakErr first: errors.As finds the leak refusal before derr, so it stays the classified cause (exit 19)
 		}
 		return leakErr
 	}
@@ -959,6 +959,8 @@ func (s *liveSession) push(ctx context.Context, report bool) bool {
 
 func (s *liveSession) reportPush(out live.PushOutcome) {
 	switch out.Status {
+	case live.PushNothing:
+		// nothing was waiting: nothing to report
 	case live.PushDone:
 		if s.wrote > 0 {
 			fmt.Fprintln(os.Stderr, style.Success(liveLogPrefix+"(live, pushed)"))

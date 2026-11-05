@@ -323,6 +323,8 @@ It also runs by itself once the ref has more than live.compact_after commits.`,
 			case live.PushNothing:
 				fmt.Println("nothing to compact: no live ref yet")
 				return nil
+			case live.PushOffline, live.PushRefused, live.PushRetriesOut:
+				// not confirmed: the error below
 			}
 			return errcodes.New(errcodes.Offline, "compaction not confirmed by the remote ("+string(res.Status)+")").
 				WithHint("nothing was lost; run it again when the remote is reachable")

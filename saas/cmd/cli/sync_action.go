@@ -872,6 +872,8 @@ func printSyncAction(res syncActionResult) {
 	case syncActionUnchanged:
 		fmt.Printf("· %s is already up to date\n", res.Path)
 		return
+	case syncActionCreated, syncActionUpdated:
+		// the write lines below
 	}
 	fmt.Printf("%s %s %s\n", style.Success("✓"), res.Status, res.Path)
 	if res.Pin == syncActionPinFixed {
