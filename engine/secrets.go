@@ -57,6 +57,25 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		return screened{}, err
 	}
 	out := screened{fields: fields, pol: pol, warnings: urlWarns}
+	// 14.4 / FA-AGENT-7: url.credentials_stripped names the field, the row
+	// and the clean URL (in the warning), never the removed text.
+	for _, w := range urlWarns {
+		if err := e.AuditSecret(ctx, ActionURLCredentialsStripped, SecretAudit{Command: cl.op, Row: rowID, Result: "field=" + w.Field + " " + w.Message}); err != nil {
+			return screened{}, err
+		}
+	}
+	mode := string(pol.OnDetect())
+	// detected records secret.detected (16, FA-AGENT-7) once per finding:
+	// field, rule, mode and the choice; never the value or a preview.
+	detected := func(choice string, fs []scan.Finding) error {
+		for _, f := range fs {
+			if err := e.AuditSecret(ctx, ActionSecretDetected, SecretAudit{Command: cl.op, Row: rowID,
+				Result: "field=" + f.Field + " rule=" + f.RuleID + " mode=" + mode + " choice=" + choice}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	// BATCH 8: a rule the personal store turned off covers only that
 	// person's own captures, i.e. a write stamped as the engine's own actor
 	// (the person whose personal store is attached). A write a surface
@@ -118,6 +137,12 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 	// shows once the fields are joined is that field's hit, as usual.
 	cross, inField := e.crossFieldFindings(fields, names, func(id string) bool { return rules.IsOff(id, own) })
 	if len(cross) > 0 {
+		for _, c := range cross {
+			if err := e.AuditSecret(ctx, ActionSecretDetected, SecretAudit{Command: cl.op, Row: rowID,
+				Result: "field=" + strings.Join(c.fields, "+") + " rule=" + c.rule + " mode=" + mode + " choice=" + choiceRefused}); err != nil {
+				return screened{}, err
+			}
+		}
 		return screened{}, crossErr(cross)
 	}
 	for _, f := range scan.Filter(rowID, inField, allows) {
@@ -146,6 +171,9 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 		}
 		if ch.NotASecret {
 			if err := e.confirm(ctx, cl, describe(all)+": keep it as not a secret ("+ch.Reason+")?"); err != nil {
+				return screened{}, errors.Join(err, detected(choiceCancelled, all))
+			}
+			if err := detected(choiceNotASecret, all); err != nil {
 				return screened{}, err
 			}
 			out.accepted = all // allowRows records ch.Reason (D12, SQ2)
@@ -171,18 +199,29 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 			red[h.field] = v
 		}
 		out.fields = red
+		choice := choiceRedacted // replaced by the reference(s) given
 		if ch.Unstored {
 			out.redacted = all // the D21 task follows (RedactHook)
+			choice = choiceUnstored
+		}
+		if err := detected(choice, all); err != nil {
+			return screened{}, err
 		}
 		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
 	}
 	switch pol.OnDetect() {
 	case policy.OnDetectAsk:
 		if err := e.confirm(ctx, cl, describe(all)+": store it anyway as not a secret?"); err != nil {
+			if derr := detected(choiceCancelled, all); derr != nil {
+				return screened{}, derr
+			}
 			var ee *errs.Error
 			if errors.As(err, &ee) && ee.Code == errs.NeedsConfirm {
 				return screened{}, ee.WithHint("store it in your vault and write ${secret:…} instead, or rerun with --yes to mark it not a secret")
 			}
+			return screened{}, err
+		}
+		if err := detected(choiceNotASecret, all); err != nil {
 			return screened{}, err
 		}
 		out.accepted = all
@@ -199,13 +238,28 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 			}
 			red[h.field] = v
 		}
+		if err := detected(choiceUnstored, all); err != nil {
+			return screened{}, err
+		}
 		out.fields, out.redacted = red, all
 		// a redacted ${secret:unstored} is a secret reference too
 		return out, e.refuseClientSecretRefs(target, rowID, out.fields)
 	case policy.OnDetectRefuse:
 	}
+	if err := detected(choiceRefused, all); err != nil {
+		return screened{}, err
+	}
 	return screened{}, secretErr(all)
 }
+
+// secret.detected choices (SECRETS 16).
+const (
+	choiceRefused    = "refused"
+	choiceRedacted   = "redacted"
+	choiceUnstored   = "unstored"
+	choiceNotASecret = "not_a_secret"
+	choiceCancelled  = "cancelled"
+)
 
 // crossField is one finding of the joined-fields scan that crosses a
 // field boundary (19.2): the fields it spans, in write order.
