@@ -15,11 +15,15 @@ type Key string
 // Keys of the log whose values have no "stricter" (estimate units, budgets)
 // join with their noun and a declared order; an unknown key is refused.
 const (
-	KeyOnDetect          Key = "secrets.on_detect"
-	KeyAgentReveal       Key = "secrets.agent_reveal"
-	KeyUseRepoGitleaks   Key = "secrets.use_repo_gitleaks"
-	KeyMetaMaxBytes      Key = "meta.max_bytes"
-	KeyResourcesMaxBytes Key = "resources.max_bytes"
+	KeyOnDetect        Key = "secrets.on_detect"
+	KeyAgentReveal     Key = "secrets.agent_reveal"
+	KeyUseRepoGitleaks Key = "secrets.use_repo_gitleaks"
+	// KeySecretsManagerTimeout: seconds each secret manager call may run
+	// (SECRETS_AND_REFERENCES 6: default 5, max 30); a limit, the smaller
+	// is stricter (a hung vault CLI is killed sooner).
+	KeySecretsManagerTimeout Key = "secrets.manager_timeout"
+	KeyMetaMaxBytes          Key = "meta.max_bytes"
+	KeyResourcesMaxBytes     Key = "resources.max_bytes"
 	// KeyResourcesWarnBytes: a resource larger than this prints a warning
 	// (RQ4: 4 KB); a limit, the smaller is stricter.
 	KeyResourcesWarnBytes Key = "resources.warn_bytes"
@@ -133,6 +137,8 @@ const (
 	defaultContextBudgetDir     int64 = 8000
 	defaultContextDirMinEntries int64 = 3
 	defaultContextChainMaxCodex int64 = 32768
+	defaultManagerTimeoutSec    int64 = 5  // SECRETS 6
+	ceilingManagerTimeoutSec    int64 = 30 // SECRETS 6: "max 30 s"
 )
 
 // OnDetect is the value of secrets.on_detect.
@@ -212,6 +218,8 @@ func Keys() []KeyDef {
 			Default: mustText(string(AgentRevealAsk)), Doc: "whether an agent may reveal a secret without asking (SQ10)"},
 		{Key: KeyUseRepoGitleaks, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true),
 			Doc: "read a repo's .gitleaks.toml allowlists (D8); reading fewer allowlists is stricter"},
+		{Key: KeySecretsManagerTimeout, Shape: ShapeLimit, Ceiling: ceilingManagerTimeoutSec, Default: value.Int(defaultManagerTimeoutSec),
+			Doc: "seconds a secret manager CLI may run per call (reveal, verify) before lore kills it (SECRETS 6, max 30)"},
 		{Key: KeyMetaMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest metadata value in bytes"},
 		{Key: KeyResourcesMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest resource in bytes"},
 		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource larger than this many bytes prints a warning (RQ4)"},

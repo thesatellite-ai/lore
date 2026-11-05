@@ -173,9 +173,9 @@ func (o ops) secretIndexOps() []op.Entry {
 }
 
 // managers is the manager set of this Env.
-func (o ops) managers() secretmgr.Set {
+func (o ops) managers(ctx context.Context) (secretmgr.Set, error) {
 	src, _ := o.env.(SecretManagerSource)
-	return reveal.Managers(src)
+	return reveal.Managers(ctx, src)
 }
 
 // filterUses keeps the uses matching holder and manager.
@@ -255,7 +255,10 @@ func (o ops) secretsList(ctx context.Context, in SecretsListIn) (SecretsOut, err
 // verify checks each distinct manager target once: Reveal, drop the
 // Secret unread, record secret.verified (6: present, missing, not_checked).
 func (o ops) verify(ctx context.Context, us []SecretUse) ([]SecretUse, error) {
-	set := o.managers()
+	set, err := o.managers(ctx)
+	if err != nil {
+		return nil, err
+	}
 	done := map[string]string{}
 	for i, u := range us {
 		if u.Manager == "" {
@@ -392,7 +395,10 @@ func (o ops) secretsShow(ctx context.Context, in SecretsShowIn) (SecretsOut, err
 	if !ok {
 		return SecretsOut{}, errs.New(errs.Internal, "this surface cannot audit a reveal, so lore does not reveal here")
 	}
-	set := o.managers()
+	set, err := o.managers(ctx)
+	if err != nil {
+		return SecretsOut{}, err
+	}
 	var b strings.Builder
 	for _, grp := range groups {
 		one, rerr := reveal.Group(ctx, set, auditor, grp, g, cmdSecretsShow, us[0].Row)
@@ -755,7 +761,11 @@ func (o ops) secretsRename(ctx context.Context, in SecretsRenameIn) (SecretsBatc
 	if in.Manager == "" || in.From == "" || in.To == "" {
 		return SecretsBatchOut{}, errs.New(errs.InvalidInput, "give --manager, --from and --to")
 	}
-	if m, ok := o.managers().Get(in.Manager); !ok {
+	set, err := o.managers(ctx)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	if m, ok := set.Get(in.Manager); !ok {
 		return SecretsBatchOut{}, errs.New(errs.RefScheme, "no secret manager "+quote(in.Manager))
 	} else if err := m.ValidateLocator(secretmgr.Locator{Path: in.To}); err != nil && in.Manager != secretmgr.Vault {
 		return SecretsBatchOut{}, err
@@ -815,8 +825,12 @@ func (o ops) secretsLink(ctx context.Context, in SecretsLinkIn) (SecretsBatchOut
 	if newT.Fixed != "" {
 		return SecretsBatchOut{}, errs.New(errs.RefSyntax, "--ref takes manager://entry, not "+newT.Fixed)
 	}
-	if m, ok := o.managers().Get(newT.Manager); ok {
-		if err := m.ValidateLocator(secretmgr.Locator{Path: newT.Locator, Fragment: newT.Fragment}); err != nil {
+	set, err := o.managers(ctx)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	if m, ok := set.Get(newT.Manager); ok {
+		if err = m.ValidateLocator(secretmgr.Locator{Path: newT.Locator, Fragment: newT.Fragment}); err != nil {
 			return SecretsBatchOut{}, err
 		}
 	}

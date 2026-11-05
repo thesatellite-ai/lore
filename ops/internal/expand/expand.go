@@ -182,7 +182,10 @@ func Reveal(ctx context.Context, env Env, r row.Row, force bool) (Block, error) 
 		return Block{}, errs.New(errs.Internal, "this surface cannot audit a reveal, so lore does not reveal here")
 	}
 	src, _ := env.(reveal.ManagerSource)
-	set := reveal.Managers(src)
+	set, err := reveal.Managers(ctx, src)
+	if err != nil {
+		return Block{}, err
+	}
 	got := map[string]reveal.One{}
 	for i, grp := range groups {
 		one, rerr := reveal.Group(ctx, set, auditor, grp, g, cmdShow, r.ID.String())

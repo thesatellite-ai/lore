@@ -26,15 +26,16 @@ type Auditor interface {
 // passes secrets.manager_timeout; tests hand in fakes). Without it the
 // built-in managers with their default timeout are used.
 type ManagerSource interface {
-	SecretManagers() secretmgr.Set
+	SecretManagers(ctx context.Context) (secretmgr.Set, error)
 }
 
-// Managers is the manager set of an env (built-ins when it has none).
-func Managers(env ManagerSource) secretmgr.Set {
+// Managers is the manager set of an env (built-ins with the default
+// timeout when it has none).
+func Managers(ctx context.Context, env ManagerSource) (secretmgr.Set, error) {
 	if env != nil {
-		return env.SecretManagers()
+		return env.SecretManagers(ctx)
 	}
-	return secretmgr.Builtin(secretmgr.Options{})
+	return secretmgr.Builtin(secretmgr.Options{}), nil
 }
 
 // Target is one manager target of a secret reference.
