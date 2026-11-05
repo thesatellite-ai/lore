@@ -185,6 +185,10 @@ func (w *World) baseEnv(home, actorName string) []string {
 		// (the ancestor-process walk, AGENT_IDENTITY 6.1) and every write is
 		// attributed to "alice via <tool>" instead of alice.
 		"LORE_HUMAN=1",
+		// LORE_NO_DETECT=1 (loretest builds only): agent detection sees
+		// nothing, so whoami's agent line does not depend on where the run
+		// starts either.
+		"LORE_NO_DETECT=1",
 		EnvRealGit+"="+w.realGit,
 		EnvGitLog+"="+w.gitLog,
 		EnvActorName+"="+actorName,

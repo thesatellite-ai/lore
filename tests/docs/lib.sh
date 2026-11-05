@@ -54,10 +54,11 @@ CFG
 # LORE_HUMAN=1: the person is a human at a terminal, so a run started from a coding-agent session
 # does not attribute every write to "<person> via <tool>" (agent detection walks the parent processes);
 # an agent example sets LORE_ACTOR, which wins over it.
+# LORE_NO_DETECT=1 (loretest builds only): agent detection sees nothing, so whoami lines do not depend on where the run starts.
 envfor() {
   local home="$HOMES/$1"
   echo env -i "HOME=$home" "PATH=$SHIM:/usr/local/bin:/usr/bin:/bin" "USER=$1" "TERM=dumb" "NO_COLOR=1" \
-    "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8" "LORE_HUMAN=1"
+    "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8" "LORE_HUMAN=1" "LORE_NO_DETECT=1"
 }
 
 # TRANSCRIPT is the file `on` appends to; run-examples.sh sets it per section.
