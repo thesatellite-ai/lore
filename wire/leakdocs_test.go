@@ -7,6 +7,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -226,6 +227,79 @@ func TestLeakRowsFailsClosed(t *testing.T) {
 			}
 			if !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), "cannot check") {
 				t.Fatalf("want E_LEAK_BLOCKED cannot check, got %v", err)
+			}
+			if got != nil {
+				t.Fatalf("a refusal returns no partial index: %v", got)
+			}
+		})
+	}
+}
+
+// faultyLeakReader is the real App with injected read failures: the store
+// list, one store's class, or one store's table listing.
+type faultyLeakReader struct {
+	*App
+	identsErr error
+	classErr  map[store.Source]error
+	listErr   map[store.Source]error
+}
+
+func (f faultyLeakReader) StoreIdentities(ctx context.Context) ([]StoreIdentity, error) {
+	if f.identsErr != nil {
+		return nil, f.identsErr
+	}
+	return f.App.StoreIdentities(ctx)
+}
+
+func (f faultyLeakReader) StoreClass(ctx context.Context, name store.Source) (direction.Class, error) {
+	if err := f.classErr[name]; err != nil {
+		return "", err
+	}
+	return f.App.StoreClass(ctx, name)
+}
+
+func (f faultyLeakReader) List(ctx context.Context, src store.Source, t row.Table) ([]row.Row, error) {
+	if err := f.listErr[src]; err != nil && t == schema.TableRules {
+		return nil, err
+	}
+	return f.App.List(ctx, src, t)
+}
+
+// TestLeakRowsFailsClosedOnReadFailures: a store or table of the index that
+// cannot be read refuses the check (E_LEAK_BLOCKED "cannot check", no
+// partial index) instead of counting as empty; a failure in a store the
+// index does not read changes nothing.
+func TestLeakRowsFailsClosedOnReadFailures(t *testing.T) {
+	boom := errors.New("disk on fire")
+	cases := []struct {
+		name    string
+		client  bool
+		fault   faultyLeakReader
+		refused bool
+	}{
+		{"store list fails", true, faultyLeakReader{identsErr: boom}, true},
+		{"store list fails, own repo", false, faultyLeakReader{identsErr: boom}, true},
+		{"internal class unreadable", true, faultyLeakReader{classErr: map[store.Source]error{"agency": boom}}, true},
+		{"personal class unreadable, own repo", false, faultyLeakReader{classErr: map[store.Source]error{"me": boom}}, true},
+		{"internal table unlistable", true, faultyLeakReader{listErr: map[store.Source]error{"agency": boom}}, true},
+		{"personal table unlistable, own repo", false, faultyLeakReader{listErr: map[store.Source]error{"me": boom}}, true},
+		{"internal unlistable, own repo (not indexed)", false, faultyLeakReader{listErr: map[store.Source]error{"agency": boom}}, false},
+		{"repo store unlistable, client repo (not indexed)", true, faultyLeakReader{listErr: map[store.Source]error{store.SourceRepo: boom}}, false},
+		{"shareable store's class unreadable (skipped first)", true, faultyLeakReader{classErr: map[store.Source]error{"handbook": boom}}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := tc.fault
+			f.App = leakWorld(t, tc.client)
+			got, err := leakRowsFrom(background(), f, tc.client, nil)
+			if !tc.refused {
+				if err != nil {
+					t.Fatalf("want no refusal, got %v", err)
+				}
+				return
+			}
+			if !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), "cannot check") || !errors.Is(err, boom) {
+				t.Fatalf("want E_LEAK_BLOCKED cannot check carrying the cause, got %v", err)
 			}
 			if got != nil {
 				t.Fatalf("a refusal returns no partial index: %v", got)

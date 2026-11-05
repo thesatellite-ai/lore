@@ -226,9 +226,26 @@ func singularKind(table string) string {
 	return strings.TrimSuffix(table, "s")
 }
 
+// leakReader is what the leak index reads of the App: the attached stores,
+// their classes and their rows. *App is the one implementation; tests pass
+// a reader whose calls fail, to prove every read failure refuses.
+type leakReader interface {
+	StoreIdentities(ctx context.Context) ([]StoreIdentity, error)
+	StoreClass(ctx context.Context, name store.Source) (direction.Class, error)
+	List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error)
+}
+
+var _ leakReader = (*App)(nil)
+
 // leakRows is the index rows of every attached store internal to this repo
 // (see the file comment); expected stores must be attached.
 func (a *App) leakRows(ctx context.Context, client bool, expected []store.Source) ([]leakcheck.IndexRow, error) {
+	return leakRowsFrom(ctx, a, client, expected)
+}
+
+// leakRowsFrom is leakRows over any leakReader; a read that fails refuses
+// (E_LEAK_BLOCKED "cannot check"), never counts as empty.
+func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []store.Source) ([]leakcheck.IndexRow, error) {
 	idents, err := a.StoreIdentities(ctx)
 	if err != nil {
 		return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck, err)
