@@ -264,6 +264,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	doctorRepoAddresses(ctx, r)
 	// 10. Duplicate imports (PROV9).
 	doctorDuplicateImports(ctx, r)
+	doctorTaskTree(ctx, r)
 	// 10b. Secret rules that are off + leftover LORE_SYNC_ALLOW_SECRETS (D2/D3, doctor_secrets.go).
 	doctorSecretRules(ctx, r)
 	// 11. Context budget and launch set (CONTEXT_BUDGET 6.11, CQ7).
@@ -583,6 +584,33 @@ func doctorDuplicateImports(ctx context.Context, r *doctorReport) {
 	for _, d := range dups {
 		r.Warnings = append(r.Warnings, "duplicate_import "+d.Source+" "+d.ExtID+": "+strings.Join(d.IDs, ", ")+
 			"; keep the oldest: "+strings.Join(d.FixCommand(), "; "))
+		degrade(r)
+	}
+}
+
+// doctorTaskTree is the sub-task tree check (TASK_SYSTEM_DESIGN 6.13: a
+// merged cycle is shown in doctor): cycles, orphans, open children of closed
+// parents, depth over tasks.max_depth. Shared sibling ranks are info only
+// ("none needed") and skipped. Repair: lore task tree check --fix.
+func doctorTaskTree(ctx context.Context, r *doctorReport) {
+	if coreApp == nil {
+		return
+	}
+	found, err := opstask.CheckTree(ctx, coreApp)
+	if err != nil {
+		r.Warnings = append(r.Warnings, "task_tree: the tasks could not be read: "+err.Error())
+		degrade(r)
+		return
+	}
+	for _, f := range found {
+		if f.Kind == opstask.FindSharedRank {
+			continue
+		}
+		line := "task_tree " + string(f.Kind) + ": " + f.Message
+		if f.Fix != "" {
+			line += "; fix: " + f.Fix
+		}
+		r.Warnings = append(r.Warnings, line)
 		degrade(r)
 	}
 }
