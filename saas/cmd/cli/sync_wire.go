@@ -163,7 +163,7 @@ func finishSyncSessions(ctx context.Context) error {
 			// writes (it printed them): not news from teammates.
 			rep.Imported = nil
 		}
-		printSyncReport(rep)
+		printSyncReport(withoutPurgedThisRun(rep)) // PASS3-A-4: a purged row is not "kept"
 		s.wroteFiles = s.wroteFiles || len(rep.Exported)+len(rep.Removed) > 0
 		liveStoreAndApply(ctx, db, s.root, rep.Diverted)
 		liveFinishProject(ctx, db, s.root)
@@ -178,7 +178,10 @@ func finishSyncSessions(ctx context.Context) error {
 		}
 		_ = db.Close() // finished with it; close errors are not actionable
 	}
-	return finishLive(ctx)
+	err := finishLive(ctx)
+	// PASS3-A-4: after every pass that may still trash a row.
+	dropPurgedCopiesThisRun(ctx)
+	return err
 }
 
 // runSyncPass runs one pass that exports the running command's own writes

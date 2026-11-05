@@ -239,13 +239,29 @@ func DropPurgedCopies(ctx context.Context, db *sql.DB, dataDir string, dryRun bo
 	if err != nil {
 		return nil, err
 	}
+	return DropCopies(ctx, db, purged, dryRun)
+}
+
+// DropCopies removes this machine's safety copies (_lore_sync_trash) of
+// the row ids in rowIDs and returns them (with dryRun: lists them only),
+// newest first. A purge run on this machine calls it with the ids it just
+// purged, so the purged content does not stay behind in lore.db
+// (PASS3-A-4, DELETION 3.10); copies of rows purged elsewhere stay for
+// `lore trash purge --local --purged --confirm` (DropPurgedCopies, OV31).
+// No ids = nothing read, nothing dropped.
+//
+//	ListTrash ─► keep row_id ∈ rowIDs ─► DELETE each (one transaction)
+func DropCopies(ctx context.Context, db *sql.DB, rowIDs map[string]bool, dryRun bool) ([]TrashRecord, error) {
+	if len(rowIDs) == 0 {
+		return nil, nil
+	}
 	all, err := ListTrash(ctx, db)
 	if err != nil {
 		return nil, err
 	}
 	var out []TrashRecord
 	for _, r := range all {
-		if purged[r.RowID] {
+		if rowIDs[r.RowID] {
 			out = append(out, r)
 		}
 	}
@@ -418,8 +434,8 @@ func MarkRerendered(ctx context.Context, db *sql.DB) error {
 // archivedAtColumn marks soft-deleted rows (LifecycleMixin and friends).
 const archivedAtColumn = "archived_at"
 
-// PurgeArchived durably removes rows archived before cutoff: each goes
-// to the trash, its id is appended to _purged.json (so an old clone's ADOPT
+// PurgeArchived durably removes rows archived before cutoff: each leaves
+// lore.db with no local safety copy (PASS3-A-4), its id is appended to _purged.json (so an old clone's ADOPT
 // never resurrects it, E47), and the next Reconcile removes its file.
 // Returns the purged "table/id" keys.
 func PurgeArchived(ctx context.Context, db *sql.DB, dataDir string, cutoff time.Time, opts ...dbOnlyOpt) ([]string, error) {
@@ -461,6 +477,14 @@ func PurgeArchived(ctx context.Context, db *sql.DB, dataDir string, cutoff time.
 	}
 	if len(out) == 0 {
 		return nil, nil
+	}
+	// PASS3-A-4 (DELETION 3.10): deleteRowToTrash kept a safety copy of
+	// each row; a purge removes content for good, so this machine's copies
+	// of the rows it purged go in the same transaction.
+	for _, k := range keys {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+tblTrash+` WHERE table_name = ? AND row_id = ?`, k.table, k.id); err != nil {
+			return nil, fmt.Errorf("lsync: drop purged copy %s: %w", k.rel(), err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("lsync: commit purge: %w", err)

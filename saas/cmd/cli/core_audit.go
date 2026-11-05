@@ -87,6 +87,11 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 	if ev.Store != store.SourceRepo {
 		return nil
 	}
+	if ev.Action == engine.ActionPurge {
+		// PASS3-A-4: the end-of-command pass drops lore.db's safety copy
+		// of every repo row this command purged (purge_local_copies.go).
+		notePurgedThisRun(s.projectRoot(ctx), ev.ID)
+	}
 	s.once.Do(func() { s.db, s.err = openCoreAuditDBAt(ctx, s.projectRoot(ctx)) })
 	if s.err != nil {
 		return s.err
