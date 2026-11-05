@@ -236,8 +236,7 @@ func runInit(ctx context.Context, projectRoot string) (err error) {
 	if err := wireToolFiles(ctx, projectRoot, initFlagTargets); err != nil {
 		fmt.Fprintln(os.Stderr, style.Warn("WARN: could not wire AI tool files: "+err.Error()))
 	}
-	fmt.Println(style.Hint("  next: lore learn-from docs   to bootstrap from existing markdown"))
-	fmt.Println(style.Hint("        lore render            to write .lore/LORE.md for those tools"))
+	fmt.Println(style.Hint("  next: lore render            to write .lore/LORE.md for those tools"))
 
 	// 10. First sync pass: writes .lore/data (the git-tracked copy of the
 	// project + actor rows) so the very first commit already carries it.

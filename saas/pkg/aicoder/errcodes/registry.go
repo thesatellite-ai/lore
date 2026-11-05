@@ -192,7 +192,7 @@ func ExitCode(c Code) int {
 func Description(c Code) string {
 	descs := map[Code]string{
 		DBLocked:              "another lore process is holding the DB write lock",
-		DBCorrupt:             "DB file failed quick_check; run `lore repair`",
+		DBCorrupt:             "DB file failed quick_check; move .lore/lore.db away, run `lore sync` to rebuild it from .lore/data, then `lore search rebuild`",
 		DBNotFound:            "DB file does not exist at the configured path",
 		SchemaVersionMismatch: "DB was migrated by a newer lore; upgrade or use a different DB",
 		MigrationIncomplete:   "a schema migration did not finish; run `lore setup`",

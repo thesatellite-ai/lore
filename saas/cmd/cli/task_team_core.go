@@ -47,7 +47,7 @@ func (cliTeam) ResolveHandle(ctx context.Context, handle string, allowTeam bool)
 	if tm != "" {
 		return opstask.Assignee{TeamID: tm}, nil
 	}
-	hint := "people join with `lore actor register`; teams with `lore team add`"
+	hint := "people join with `lore actor register`"
 	var miss *errcodes.CLIError
 	if errors.As(actorErr, &miss) && miss.Hint == rosterMissHint {
 		hint = rosterMissHint

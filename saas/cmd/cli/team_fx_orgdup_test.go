@@ -189,7 +189,7 @@ func TestRosterMissFetchesFreshBeforeRefusing(t *testing.T) {
 	if res.Code == 0 {
 		t.Fatalf("an unknown handle must be refused: %s", res)
 	}
-	res.Says(t, "lore sync", "lore team list").Never(t, "landed on main", "sync peek")
+	res.Says(t, "lore sync", "lore actor register").Never(t, "landed on main", "sync peek")
 }
 
 // In a repo with no org (the roster is the repo's own actors table) there

@@ -769,7 +769,7 @@ func refuseNewFormatProject(ctx context.Context, st *stores.Store, ref storeProj
 		org = ref.Org.Name
 	}
 	return errcodes.New(errcodes.Unsupported, fmt.Sprintf("%s is a 0.1.18 store (lore-store.yaml version %d); this command still runs on the v0.1.17 store code, which cannot read or write it", redactIfQuiet(st.Norm), v)).
-		WithHint(fmt.Sprintf("use the 0.1.18 commands: write with --to %s (the linked folder) or --to %s/<folder>, roster with `lore actor register` / `lore team add`, links with `lore org link`; a v0.1.17 store is converted with `lore migrate run`", orgOr(org), orgOr(org)))
+		WithHint(fmt.Sprintf("use the 0.1.18 commands: write with --to %s (the linked folder) or --to %s/<folder>, roster with `lore actor register`, links with `lore org link`; a v0.1.17 store is converted with `lore migrate run`", orgOr(org), orgOr(org)))
 }
 
 // orgOr is name, or a placeholder for messages when no org is known.

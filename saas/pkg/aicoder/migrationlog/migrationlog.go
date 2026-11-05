@@ -203,7 +203,7 @@ func Check(ctx context.Context, db *sql.DB) ([]Finding, error) {
 			return nil, err
 		}
 		out = append(out, Finding{Fatal: true, Message: fmt.Sprintf(
-			"E_MIGRATION_INCOMPLETE: schema migration v%d is in_progress (interrupted); run `lore setup` to finish it, or `lore repair --tier=2` to restore a backup", v)})
+			"E_MIGRATION_INCOMPLETE: schema migration v%d is in_progress (interrupted); run `lore setup` to finish it, or move .lore/lore.db away, run `lore sync` to rebuild it from .lore/data, then `lore search rebuild`", v)})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()

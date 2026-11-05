@@ -122,7 +122,7 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 	if err := dbent.QuickCheck(db); err != nil {
 		return nil, nil, errcodes.New(errcodes.DBCorrupt, "DB failed quick_check").
 			WithCause(errors.Join(err, db.Close())).
-			WithHint("run `lore repair` to attempt recovery")
+			WithHint("move .lore/lore.db away, run `lore sync` to rebuild it from .lore/data, then `lore search rebuild`")
 	}
 
 	// One-query staleness check (no schema work done here). Per-command

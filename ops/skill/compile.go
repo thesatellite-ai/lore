@@ -347,7 +347,6 @@ suitable for small-context (32K) and weak-instruction-following models
 5. **Collapse playbooks to command sequences.** Each P1..P20 becomes:
         P1 bootstrap:
           lore init --non-interactive
-          lore learn-from docs
           lore render
    Drop the "when" / "why" prose around each step
 
@@ -449,8 +448,6 @@ suitable for small-context (32K) and weak-instruction-following models
 21. **TRIGGER GRAMMAR must include identity + support-bundle triggers:**
     T[who am I | what identity | whoami in aicoder]
         → lore identity show
-    T[anonymize captures | hide my name | anonymous mode | don't record my identity]
-        → lore identity anonymize
     T[set my identity to X | record me as X]
         → lore identity set --actor="<X>"
     T[file a bug | make a support bundle | generate a bundle for the issue]
@@ -462,41 +459,13 @@ suitable for small-context (32K) and weak-instruction-following models
     T[my taste preference is X | I prefer X | I strongly prefer X]
         → tastepref add "<X>"   (NOT memory_add)
 
-23. **FEW-SHOTS must include a learn-workflow example** (two-step list+promote as ONE atomic script):
-    User: I ran lore learn-from docs and got a bunch of candidates. Show me the list and accept the first three as memories
-    You:
-        lore learn list --json
-        for id in $(lore learn list --json | jq -r '.data[0:3][].id'); do
-          lore learn promote "$id" --target=memories
-        done
-        lore render
-    Weak models stop at `+"`learn list`"+` if shown as multi-step "Step 1 / Step 2". Always use the atomic-script form for sequential ops
+23. **No learn or bench examples.** `+"`lore learn`"+`, `+"`lore learn-from`"+` and `+"`lore bench`"+` are not commands of this release; drop every trigger, playbook step or few-shot that uses them
 
 24. **Note the CLI gaps that don't have direct verbs.** Mention briefly that:
     - There is NO `+"`lore task block <tsk_id>`"+` transition (despite `+"`blocked`"+` being a valid status enum); the workaround is `+"`lore comment add --on-table=tasks --on-id=tsk_<id> --body=\"blocked: <reason>\"`"+`
     - There is NO `+"`lore audit`"+` CLI verb yet; audit-log access is raw SQL (covered in rule 20)
 
-25. **TRIGGER GRAMMAR must include bench-meta triggers** (meta != capture). The bench commands MANAGE eval suites; do not confuse "set up an eval FOR rule rul_<id>" with "capture rule rul_<id>":
-    T[set up a benchmark eval for X | author a bench task for rule rul_<id>]
-        → lore bench eval add --category=<…> --link=<kind>:<id> --prompt-file=- --grader-kind=programmatic --grader-cmd='…'
-        # CRITICAL: do NOT emit `+"`rule add`"+` for "set up an eval for rule rul_<id>" — that's the META verb, not capture
-    T[run the benchmark | execute the eval set]
-        → lore bench run start --model=<m> --runs-per-arm=<n> --parallel=<p>
-    T[list benchmark evals | show me the eval set]
-        → lore bench eval list --json
-    T[regrade after fixing the grader]    → lore bench result regrade --run=<run>  (free; no model cost)
-    T[live tally during a bench run]      → lore bench result stats                (no args = latest run)
-    T[summary of run X | headline numbers for X]
-        → lore bench report summary <X>          (no arg = latest)
-    T[compare run A and run B | diff two runs]
-        → lore bench report compare <A> <B>
-    T[trend over time | how have we improved | bench progress]
-        → lore bench report trend --since=30d [--by-model]
-    T[is the delta significant | statistical analysis | p-value]
-        → lore bench report analyze <run>
-    T[which evals regressed | what got worse]
-        → lore bench report regressions --since=last-week
-    T[per-category breakdown for run X]   → lore bench report by-category <X>
+25. **No bench triggers** (see rule 23)
 
 26. **TRIGGER GRAMMAR must distinguish workflow from playbook** (both are "named procedures" and weak models default to `+"`playbook`"+`):
     T[capture our X workflow | deploy workflow | CI workflow | release workflow]
@@ -531,13 +500,7 @@ suitable for small-context (32K) and weak-instruction-following models
           OR: lore tag attach --on-table=decisions --on-id=dec_<id> --name=revisit
     Critical: do NOT create a NEW decision when the user wants to flag an existing one. The old decision stays active until explicitly archived
 
-32. **TRIGGER GRAMMAR must include bench grader meta-tools:**
-    T[test the grader against a sample file | check if X would pass without running a model]
-        → lore bench grader test <eval-code> --output-file=<path>   (offline; no model cost)
-    T[why did this result fail | grader trace for one result]
-        → lore bench grader debug <result-id>
-    T[which graders are broken | audit graders for flakiness]
-        → lore bench grader audit
+32. **No bench grader triggers** (see rule 23)
 
 33. **TRIGGER GRAMMAR must include cancel-with-reason pattern** (CLI has no native --reason flag, so workaround is cancel + comment):
     T[cancel tsk_<id> because <reason> | cancel with note]

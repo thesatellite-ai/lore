@@ -58,7 +58,7 @@ var cliHintOverrides = map[string]string{
 	"Project":         "use the CLI: `lore project …`",
 	"Repo":            "use the CLI: `lore repo add|archive|delete …`",
 	"RuleVerifierRef": "no lore command writes rule verifier refs; they arrive with the rule's row files",
-	"Team":            "use the CLI: `lore team add …`",
+	"Team":            "no lore command writes teams in this release; they arrive with the store's row files",
 }
 
 // hintOfType is the refusal hint for a core-owned type: the CLI command that

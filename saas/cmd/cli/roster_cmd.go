@@ -268,7 +268,7 @@ func (r *roster) resolveHandle(ctx context.Context, h string) (*ent.Actor, error
 // repo roster (no org) has no store copy, so the person has not
 // registered (or their registration is not pulled yet).
 const (
-	rosterMissHint     = "run `lore sync` (your store copy may be older than a teammate's registration), or check the handle with `lore team list`"
+	rosterMissHint     = "run `lore sync` (your store copy may be older than a teammate's registration), or check the handle (`lore actor register` puts that person on the roster)"
 	repoRosterMissHint = "register first: `lore actor register` (as that person)"
 )
 

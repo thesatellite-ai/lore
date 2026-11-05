@@ -85,14 +85,7 @@ const fullBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 >    ` + "`RID=$(lore run start --task=<tsk_id> --model=<your-model-id> --agent=<your-agent-name> --goal=\"<one-line description>\")`" + `
 >
->    Keep ` + "`$RID`" + ` in scope for the rest of the turn. Log significant steps as you go:
->
->    - ` + "`lore run step $RID --kind=tool --name=<tool> --summary=\"...\" --duration-ms=<n>`" + ` for tool calls
->    - ` + "`lore run step $RID --kind=decide --name=<short> --summary=\"...\"`" + ` for design choices
->    - ` + "`lore run step $RID --kind=verify --name=<check> --passed=true|false`" + ` for tests / build / lint
->    - ` + "`lore run step $RID --kind=error --summary=\"...\" --payload-stdin <<<\"<full stack>\"`" + ` for failures
->
->    Close the run at the end of the turn:
+>    Keep ` + "`$RID`" + ` in scope for the rest of the turn. Close the run at the end of the turn:
 >
 >    - ` + "`lore run end $RID --outcome=success --summary=\"...\"`" + ` if shipped
 >    - ` + "`lore run end $RID --outcome=partial --summary=\"...\"`" + ` if partially done
@@ -133,7 +126,6 @@ const fullBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 > - **Track work** → ` + "`task add`" + ` / ` + "`mission add`" + ` / ` + "`tasklist add`" + ` / ` + "`plan add`" + `
 > - **Edit existing rows** → ` + "`lore <kind> edit <id>`" + ` (16 entities). For audited body changes on knowledge entities: ` + "`<kind> add ... --supersedes=<old_id>`" + `
 > - **Find anything** → ` + "`lore <kind> search \"<query>\"`" + ` — FTS5 across 23 entities. Run this BEFORE creating a new row, every time
-> - **Ingest external sources** (PR reviews, commit logs, postmortems, markdown docs) → ` + "`lore learn-from docs`" + ` — stages ` + "`learn_candidate`" + ` rows for review
 > - **Share with the team** → every lore write is mirrored to ` + "`.lore/data/`" + ` (one JSON file per row). When the user commits the work, include ` + "`.lore/data/`" + ` and ` + "`.gitattributes`" + ` in that commit; never commit ` + "`.lore/lore.db`" + `. If ` + "`lore sync`" + ` reports a conflict, show both versions and let the user choose (` + "`lore sync conflicts`" + ` / ` + "`resolve`" + `)
 >
 > ## Hard prohibitions

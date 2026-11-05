@@ -281,7 +281,7 @@ func Resolve(in Inputs) (Result, error) {
 		trace(StepLink, OutcomeMiss, fmt.Sprintf("linked by %d entries: %s", len(linkedEntries), strings.Join(linkedEntries, ", ")))
 		return r, &Error{Kind: KindAmbiguous,
 			Message:    fmt.Sprintf("this repo is linked by %d org entries at once (%s)", len(linkedEntries), strings.Join(linkedEntries, ", ")),
-			Hint:       "choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or remove the extra link with `lore org unlink`",
+			Hint:       "choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id)",
 			Candidates: linkedEntries}
 	default:
 		o := cfg.FindOrg(linkedEntries[0])

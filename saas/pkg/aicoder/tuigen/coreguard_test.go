@@ -240,7 +240,7 @@ func TestHintOfType(t *testing.T) {
 		ent.TypeExternalSource: "`lore external-source add|edit|delete …`",
 		ent.TypeKnowledgeRef:   "`lore task add|edit --ref …`",
 		ent.TypeActor:          "`lore actor register|deactivate …`",
-		ent.TypeTeam:           "`lore team add …`",
+		ent.TypeTeam:           "no lore command writes teams",
 	} {
 		if got := hintOfType(typ); !strings.Contains(got, want) {
 			t.Errorf("hintOfType(%s) = %q, want it to contain %s", typ, got, want)
