@@ -161,6 +161,7 @@ func newTeamWorld(t *testing.T, caps ...th.Cap) *th.World {
 	t.Helper()
 	t.Parallel()
 	w := th.New(t, teamBin())
+	w.RequireTestClock() // LORE_NOW is honoured only by -tags loretest builds
 	w.Require(caps...)
 	if os.Getenv(envLockRanks) == "1" { // FORMAT_EVOLUTION 7.8 TestLockOrderRanks over the whole suite
 		w.CheckLockRanks(knownLockOrderDefect)
