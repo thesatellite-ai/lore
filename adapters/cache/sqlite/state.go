@@ -367,6 +367,9 @@ func quarFingerprint(base string, quar map[string]resquar.Field) string {
 	for _, id := range slices.Sorted(maps.Keys(quar)) {
 		f := quar[id]
 		h.Write([]byte("\x00" + id + "\x00" + f.Type + "\x00" + strings.Join(f.Values, "\x01")))
+		for _, vid := range slices.Sorted(maps.Keys(f.ValueIDs)) { // OQ-AV: a value rename refills
+			h.Write([]byte("\x02" + vid + "=" + f.ValueIDs[vid]))
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

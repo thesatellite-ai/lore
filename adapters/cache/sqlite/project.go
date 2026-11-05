@@ -29,7 +29,9 @@ const (
 	fieldResKind = "kind"    // resources.kind
 	fieldResVals = "fields"  // resources.fields: {fld_id: {name, v}}
 	resValueKey  = "v"       // the value inside one resources.fields entry
-	fieldValues  = "values"  // kind_fields.values: the allowed values
+	resVNameKey  = "v_name"  // a closed value's name label beside its val_ id in v (OQ-AV)
+	fieldValIDs  = "value_ids"
+	fieldValues  = "values" // kind_fields.values: the allowed values
 )
 
 // project brings the typed tables in line with one applied row.
@@ -101,7 +103,7 @@ func (c *Cache) upsertKind(ctx context.Context, tx *sql.Tx, st state, kind ids.I
 			if !known {
 				continue
 			}
-			v, ok := entryValue(f, m.Raw)
+			v, ok := entryValue(f, m.Raw, info.quar[m.Key])
 			if ok {
 				vals[f.Name] = v
 			}
@@ -133,12 +135,12 @@ func (c *Cache) upsertKind(ctx context.Context, tx *sql.Tx, st state, kind ids.I
 
 // entryValue reads the "v" of one resources.fields entry as f's kind,
 // falling back to the inferred kind.
-func entryValue(f schema.FieldDef, entry []byte) (value.Value, bool) {
+func entryValue(f schema.FieldDef, entry []byte, q resquar.Field) (value.Value, bool) {
 	members, err := canon.Members(entry)
 	if err != nil {
 		return nil, false
 	}
-	for _, m := range members {
+	for _, m := range shownEntry(members, q) {
 		if m.Key != resValueKey {
 			continue
 		}
@@ -470,7 +472,7 @@ func ftsInfoOf(info kindInfo) resFTSInfo {
 // The fixed statements of ftsInfoFromTables (constant identifiers only).
 const (
 	kindNameQuery      = `SELECT "` + fieldName + `" FROM "` + schema.TableKinds + `" WHERE id = ? ORDER BY "` + colSource + `" LIMIT 1`
-	kindFieldsFTSQuery = `SELECT id, "type", MAX(COALESCE("` + fieldSensitive + `", 0)), MAX(COALESCE("` + fieldName + `", '')), MAX(COALESCE("` + fieldValues + `", '')) FROM "` +
+	kindFieldsFTSQuery = `SELECT id, "type", MAX(COALESCE("` + fieldSensitive + `", 0)), MAX(COALESCE("` + fieldName + `", '')), MAX(COALESCE("` + fieldValues + `", '')), MAX(COALESCE("` + fieldValIDs + `", '')) FROM "` +
 		schema.TableKindFields + `" WHERE "` + fieldKindID + `" = ? GROUP BY id, "type"`
 )
 
@@ -493,13 +495,13 @@ func ftsInfoFromTables(ctx context.Context, tx *sql.Tx, kind ids.ID[ids.Kind]) (
 		return out, dbErr("read kind fields", err)
 	}
 	for rs.Next() {
-		var id, typ, fname, vals string
+		var id, typ, fname, vals, valIDs string
 		var sensitive int
-		if err := rs.Scan(&id, &typ, &sensitive, &fname, &vals); err != nil {
+		if err := rs.Scan(&id, &typ, &sensitive, &fname, &vals, &valIDs); err != nil {
 			return out, errors.Join(dbErr("read kind fields", err), rs.Close())
 		}
 		out.indexable[id] = sensitive == 0 && typ != string(value.KindSecretRef)
-		out.quar[id] = resquar.Field{Name: fname, Type: typ, Values: valuesCell(vals)}
+		out.quar[id] = resquar.Field{Name: fname, Type: typ, Values: valuesCell(vals), ValueIDs: resquar.ValueIDsOf([]byte(valIDs))}
 	}
 	if err := errors.Join(rs.Err(), rs.Close()); err != nil {
 		return out, dbErr("read kind fields", err)
@@ -526,7 +528,7 @@ func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row
 	if t, err := value.TextOf(info.kindName); err == nil && info.kindName != "" {
 		vals[ftsResKind] = t
 	}
-	text, err := resourceValueText(r, info.indexable)
+	text, err := resourceValueText(r, info.indexable, info.quar)
 	if err != nil {
 		return err
 	}
@@ -550,7 +552,7 @@ func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row
 // resourceValueText is the searchable text of r's indexable field values,
 // separated by spaces (a JSON string as its text, anything else as its
 // canonical JSON, whose string and number leaves the tokenizer splits).
-func resourceValueText(r row.Row, indexable map[string]bool) (string, error) {
+func resourceValueText(r row.Row, indexable map[string]bool, quar map[string]resquar.Field) (string, error) {
 	raw, ok := value.ObjectForm(r.Fields[fieldResVals])
 	if !ok {
 		return "", nil
@@ -568,7 +570,7 @@ func resourceValueText(r row.Row, indexable map[string]bool) (string, error) {
 		if err != nil {
 			continue // a broken entry: the validator reports it
 		}
-		for _, e := range entry {
+		for _, e := range shownEntry(entry, quar[m.Key]) {
 			if e.Key != resValueKey {
 				continue
 			}
@@ -581,6 +583,34 @@ func resourceValueText(r row.Row, indexable map[string]bool) (string, error) {
 		}
 	}
 	return strings.Join(parts, " "), nil
+}
+
+// shownEntry is a fields entry as readers see it: a closed value's val_
+// id(s) in v replaced by the current name(s) from f's value ids, else by
+// the v_name label; v_name itself dropped (OQ-AV, FA-RES-OQAV: typed
+// column, search and quarantine read names). An entry without a val_ id
+// comes back unchanged.
+func shownEntry(entry []canon.Member, f resquar.Field) []canon.Member {
+	var vName []byte
+	for _, m := range entry {
+		if m.Key == resVNameKey {
+			vName = m.Raw
+		}
+	}
+	if vName == nil && len(f.ValueIDs) == 0 {
+		return entry
+	}
+	out := make([]canon.Member, 0, len(entry))
+	for _, m := range entry {
+		switch m.Key {
+		case resVNameKey:
+		case resValueKey:
+			out = append(out, canon.Member{Key: resValueKey, Raw: resquar.Shown(f, m.Raw, vName)})
+		default:
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // quarantined reports whether any of r's stored values breaks its field's
@@ -607,7 +637,7 @@ func quarantined(r row.Row, quar map[string]resquar.Field) bool {
 		if err != nil {
 			continue
 		}
-		for _, e := range entry {
+		for _, e := range shownEntry(entry, f) {
 			if e.Key == resValueKey {
 				if _, bad := resquar.Check(f, e.Raw); bad {
 					return true
@@ -629,6 +659,11 @@ func quarField(fr row.Row) resquar.Field {
 	}
 	if v, ok := fr.Fields[fieldValues]; ok && v != nil && v.Kind() != value.KindNull {
 		f.Values = value.ItemStrings(v)
+	}
+	if v, ok := fr.Fields[fieldValIDs]; ok && v != nil && v.Kind() != value.KindNull {
+		if b, err := v.MarshalJSON(); err == nil {
+			f.ValueIDs = resquar.ValueIDsOf(b)
+		}
 	}
 	return f
 }

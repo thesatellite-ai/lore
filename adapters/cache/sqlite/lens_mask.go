@@ -181,7 +181,7 @@ func (m mask) fieldsExpr(cq string) string {
 	}
 	masked := literal(MaskedValue)
 	entry := "CASE WHEN key IN (" + strings.Join(idList, ", ") + ") THEN " +
-		"CASE WHEN type = 'object' THEN json_set(value, " + literal("$."+resValueKey) + ", " + masked + ") ELSE " + masked + " END " +
+		"CASE WHEN type = 'object' THEN json_replace(json_set(value, " + literal("$."+resValueKey) + ", " + masked + "), " + literal("$."+resVNameKey) + ", " + masked + ") ELSE " + masked + " END " +
 		"WHEN type IN ('object', 'array') THEN json(value) " +
 		"WHEN type = 'true' THEN json('true') WHEN type = 'false' THEN json('false') WHEN type = 'null' THEN json('null') " +
 		"ELSE value END"
