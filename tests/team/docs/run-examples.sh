@@ -369,11 +369,11 @@ Y
   on alice work/website "lore org use agency-stag"
   on alice work/website "lore whoami"
   on alice work/website "lore org link agency-stag --project client --yes"
-  on_known BUG-T2 alice work/website "lore task add 'seed staging with demo data' --to agency-stag"
-  on_known BUG-T2 alice work/website "lore task list"
+  on alice work/website "lore task add 'seed staging with demo data' --to agency-stag"
+  on alice work/website "lore task list"
   on alice work/website "lore org use agency"
   on alice work/website "lore task list"
-  on_known BUG-T2 alice work/website "LORE_ORG=agency-stag lore task list"
+  on alice work/website "LORE_ORG=agency-stag lore task list"
   on alice work/website "git ls-remote https://github.com/agency/notes"
 }
 

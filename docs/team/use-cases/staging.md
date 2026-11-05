@@ -59,16 +59,16 @@ and the leak guards turn on for everyone in agency-stag.
 ✓ github.com/client/website (prj_2ad3…f891, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 $ lore task add 'seed staging with demo data' --to agency-stag
-ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
+✓ tsk_54fe…28f2 — seed staging with demo data [medium] → [agency-stag/client]
 $ lore task list
-ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
+○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
 $ lore org use agency
 ✓ prj_2ad3…f891 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore task list
 (no tasks)
 $ LORE_ORG=agency-stag lore task list
-ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
+○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
 $ git ls-remote https://github.com/agency/notes
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main

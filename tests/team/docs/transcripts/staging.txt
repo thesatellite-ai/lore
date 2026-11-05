@@ -30,16 +30,16 @@ lore sync: configured git for lore data (merge driver, .gitattributes, hooks in 
 lore sync: built .lore/lore.db from .lore/data (3 rows)
 lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
 lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
+✓ tsk_54fe984c9b495744c0217776765a28f2 — seed staging with demo data [medium] → [agency-stag/client]
 alice (work/website)$ lore task list
-ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
+○ tsk_54fe984c9b495744c0217776765a28f2 seed staging with demo data [medium]  [agency-stag/client]
 alice (work/website)$ lore org use agency
 ✓ prj_2ad3618e878ebbf527d34d446ef4f891 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 alice (work/website)$ lore task list
 (no tasks)
 alice (work/website)$ LORE_ORG=agency-stag lore task list
-ERROR: [E_CONFIG_INVALID] engine: a store needs a snake_case name (or <name>/<folder>) and a backend
+○ tsk_54fe984c9b495744c0217776765a28f2 seed staging with demo data [medium]  [agency-stag/client]
 alice (work/website)$ git ls-remote https://github.com/agency/notes
 601d2850ffd047c2890d2472633cc4dbdabe12fd	HEAD
 601d2850ffd047c2890d2472633cc4dbdabe12fd	refs/heads/main
