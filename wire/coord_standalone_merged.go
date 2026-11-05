@@ -11,8 +11,9 @@ package wire
 //	MergedCheck
 //	  ├► candidates: done tasks without merged_at (repo rows of this
 //	  │  project, a linked store's rows of the group)   ── none: return, no git
-//	  ├► openWorldFor("") ─► the checkout's repo, its remote's default
-//	  │  branch, merge_check.adapter, the repo this checkout is
+//	  ├► openWorld ─► the checkout's repo, its remote's default branch,
+//	  │  merge_check.adapter, the repo this checkout is; a linked
+//	  │  checkout's store (linkedStoreOpens)  ── cannot open: one warning
 //	  ├► mergewatch.Checker.Sweep(here)                  ── writes nothing
 //	  └► per merge found: openWorldFor(id) ─► stampMerged (fresh row,
 //	     merged_at = the carrier commit's date, updated_at untouched)
@@ -49,8 +50,11 @@ func (a *App) MergedCheck(ctx context.Context, out io.Writer) {
 	if !a.hasMergeCandidates(ctx) {
 		return
 	}
-	w, err := h.openWorldFor(ctx, "")
+	w, err := h.openWorld(ctx)
 	if err != nil {
+		return // no coordination here: nothing to say
+	}
+	if !linkedStoreOpens(out, w, func() error { return w.forTask(ctx, "") }) {
 		return
 	}
 	cands := a.mergeCandidates(ctx, w)
@@ -69,6 +73,29 @@ func (a *App) MergedCheck(ctx context.Context, out io.Writer) {
 			_, _ = fmt.Fprintln(out, mergewatch.Line(f, rerr))
 		}
 	}
+}
+
+// mergeUncheckedPrefix starts the one warning line the lazy merged check
+// prints when it could not run; scripts and tests match on it (v0.1.17
+// coord_store.go, word for word).
+const mergeUncheckedPrefix = "lore: warning: merge state not checked: "
+
+// linkedStoreOpens points a linked checkout's world at its store (open)
+// and reports whether the check can go on. A checkout with no link has
+// nothing to open (true, silent); a linked one whose store cannot be
+// opened gets one warning line on out, and the command still succeeds:
+// done tasks of the store keep showing "not merged yet" until a later
+// command reaches it (later.md 606, v0.1.17 groupMergedCheckIn).
+func linkedStoreOpens(out io.Writer, w *coordWorld, open func() error) bool {
+	if !w.linked() {
+		return true
+	}
+	if err := open(); err != nil {
+		_, _ = fmt.Fprintf(out, "%sopen the linked store: %s; done tasks may show as not merged yet (the next lore command retries)\n",
+			mergeUncheckedPrefix, oneLine(err.Error())) // the output is gone: nothing left to report to
+		return false
+	}
+	return true
 }
 
 // hasMergeCandidates is the cheap first look: any done task without

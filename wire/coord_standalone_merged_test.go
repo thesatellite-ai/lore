@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/signals"
 	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/logic/merge"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -269,5 +270,56 @@ func TestCoordUnknownTaskLeavesTheHintToTheHost(t *testing.T) {
 	}
 	if err := coordErr(coord.ErrContended); !errors.As(err, &e) || e.Code != errs.Contended || e.Hint == "" {
 		t.Fatalf("a contended claim keeps its hint: %v", err)
+	}
+}
+
+// TestMergedCheckWarnsWhenStoreUnreachable (later.md 606, port of v0.1.17
+// merge_unchecked_test.go): the lazy merged check must not look as if it
+// ran when the linked store could not be opened: one warning line says the
+// merge state was not checked and why; an unlinked checkout opens nothing
+// and says nothing, and a store that opens says nothing either.
+func TestMergedCheckWarnsWhenStoreUnreachable(t *testing.T) {
+	t.Parallel()
+	unreachable := errors.New("fetch git@example.com:acme/store.git: connection refused\nexit status 128")
+	linked := orgresolve.Result{Links: []orgresolve.Link{{Entry: "acme"}}}
+	cases := []struct {
+		name               string
+		sit                orgresolve.Result
+		openErr            error
+		wantGo, wantOpened bool
+	}{
+		{"no links: nothing to open, silent", orgresolve.Result{}, unreachable, true, false},
+		{"client role without links: the store is opened", orgresolve.Result{Role: orgresolve.RoleClient}, unreachable, false, true},
+		{"linked, store opens: silent", linked, nil, true, true},
+		{"linked, store unreachable: one warning", linked, unreachable, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var out strings.Builder
+			opened := false
+			goOn := linkedStoreOpens(&out, &coordWorld{sit: tc.sit}, func() error {
+				opened = true
+				return tc.openErr
+			})
+			got := out.String()
+			if goOn != tc.wantGo || opened != tc.wantOpened {
+				t.Fatalf("go on=%v opened=%v, want %v %v", goOn, opened, tc.wantGo, tc.wantOpened)
+			}
+			if tc.wantGo {
+				if got != "" {
+					t.Fatalf("want silence, got %q", got)
+				}
+				return
+			}
+			if strings.Count(got, "\n") != 1 || !strings.HasSuffix(got, "\n") {
+				t.Fatalf("want exactly one warning line, got %q", got)
+			}
+			for _, want := range []string{mergeUncheckedPrefix, "open the linked store", "connection refused exit status 128", "not merged yet"} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("warning %q lacks %q", got, want)
+				}
+			}
+		})
 	}
 }
