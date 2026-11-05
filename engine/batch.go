@@ -85,3 +85,12 @@ func Confirmed(ctx context.Context) bool {
 	c, ok := ctx.Value(callKey{}).(call)
 	return ok && c.caller.Yes
 }
+
+// Interactive reports whether the running operation's caller is a person
+// at a terminal (op.Caller.Interactive): an op that reads a value from the
+// terminal (resource --prompt, RES 3.3) refuses otherwise, so REST and
+// pipes never wait. Outside Run: false.
+func Interactive(ctx context.Context) bool {
+	c, ok := ctx.Value(callKey{}).(call)
+	return ok && c.caller.Interactive
+}

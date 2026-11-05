@@ -7,7 +7,8 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.19.0
 	github.com/zricethezav/gitleaks/v8 v8.30.1
-	golang.org/x/sys v0.42.0
+	golang.org/x/sys v0.44.0
+	golang.org/x/term v0.43.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.50.1
 )
