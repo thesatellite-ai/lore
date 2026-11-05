@@ -12,6 +12,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -329,7 +331,7 @@ func (b *Backend) resolveRow(ctx context.Context, path string) (ids.AnyID, *stor
 	if !ok {
 		return ids.AnyID{}, nil, errs.New(errs.Stale, "git: the store file "+quotePath(path)+" changed on both sides and is not a row")
 	}
-	_, id, _ := rowfs.ParseRowPath(rel)
+	table, id, _ := rowfs.ParseRowPath(rel)
 	stages, err := b.readBlobs(ctx, []string{stageBase + path, stageOurs + path, stageTheirs + path})
 	if err != nil {
 		return ids.AnyID{}, nil, err
@@ -349,7 +351,7 @@ func (b *Backend) resolveRow(ctx context.Context, path string) (ids.AnyID, *stor
 			return ids.AnyID{}, nil, errs.Wrap(errs.Internal, "git: merge a row", merr)
 		}
 		if conflict {
-			return id, &store.Refusal{ID: id, Code: errs.Stale, Reason: "both sides changed the row and it cannot be merged automatically"}, nil
+			return id, &store.Refusal{ID: id, Code: conflictCode(table), Reason: "both sides changed the row and it cannot be merged automatically"}, nil
 		}
 		result = m
 	}
@@ -363,6 +365,18 @@ func (b *Backend) resolveRow(ctx context.Context, path string) (ids.AnyID, *stor
 		return ids.AnyID{}, nil, errs.Wrap(errs.Internal, "git: stage a merged row", err)
 	}
 	return id, nil, nil
+}
+
+// conflictCode is the refusal code of a row the Merger could not merge:
+// a resource, kind or kind field row is E_RESOURCE_CONFLICT (RES 3.13,
+// 3.19: the local commit stays unpushed until a person settles it), any
+// other row E_STALE.
+func conflictCode(t row.Table) errs.Code {
+	switch t {
+	case schema.TableResources, schema.TableKinds, schema.TableKindFields:
+		return errs.ResourceConflict
+	}
+	return errs.Stale
 }
 
 // checkMerged refuses a merge result that is not a canonical document of
