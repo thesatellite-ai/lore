@@ -194,7 +194,13 @@ func newAuditLogCommand() *cobra.Command {
 				fmt.Println(style.Muted("· audit log is empty"))
 			}
 			for _, r := range recs {
-				fmt.Printf("%s  %-28s %s/%s  by %s\n", r.CreatedAt, r.Action, r.TargetTable, r.TargetID, r.ActorID)
+				// SECRETS 16 / SQ10: a forced reveal is printed loudly
+				// (core_audit.go writes the marker into the reason).
+				loud := ""
+				if strings.Contains(r.Reason, forcedMarker) {
+					loud = "  " + style.Warn(inboxForced+" ("+strings.TrimSuffix(strings.SplitN(r.Reason, forcedMarker, 2)[1], ")")+")")
+				}
+				fmt.Printf("%s  %-28s %s/%s  by %s%s\n", r.CreatedAt, r.Action, r.TargetTable, r.TargetID, r.ActorID, loud)
 			}
 			return nil
 		},
