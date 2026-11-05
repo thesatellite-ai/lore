@@ -5,10 +5,11 @@
 //	opstask.who → (*wire.App).WhoLines → (*coreAuditSink).WhoLines
 //	  ├─ open lore.db (the sink's handle; none here → no lines)
 //	  ├─ audit_logs rows of the target with a session_id, grouped per session
-//	  └─ LEFT JOIN sessions (tool, tool session id, model) when the 0.1.18
-//	     columns exist; the tool session id is redacted off-terminal / in CI
+//	  └─ each ses_ id looked up in the machine store's sessions (tool, tool
+//	     session id, model; P3-COORD-SESS-1); the tool session id is
+//	     redacted off-terminal / in CI
 //
-// Both tables are machine-local (Q-LOCAL): nothing here reaches .lore/data.
+// Both are machine-local (Q-LOCAL): nothing here reaches .lore/data.
 package main
 
 import (
@@ -18,7 +19,6 @@ import (
 	"strings"
 
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/sessions"
 
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -29,19 +29,11 @@ var _ wire.WhoSource = (*coreAuditSink)(nil)
 // guessed).
 const whoNone = "-"
 
-// whoSelectJoined and whoSelectBare list the sessions that wrote one row, oldest first. The
-// sessions join is added only when lore.db has the 0.1.18 columns.
-const (
-	whoSelectJoined = `SELECT a.session_id, MAX(COALESCE(a.confirmed, 0)), COUNT(*),
-	COALESCE(s.tool, ''), COALESCE(s.tool_session_id, ''), COALESCE(s.model, '')
-	FROM audit_logs a LEFT JOIN sessions s ON s.id = a.session_id
-	WHERE a.target_id = ? AND COALESCE(a.session_id, '') <> ''
-	GROUP BY a.session_id ORDER BY MIN(a.created_at)`
-	whoSelectBare = `SELECT a.session_id, MAX(COALESCE(a.confirmed, 0)), COUNT(*), '', '', ''
+// whoSelect lists the sessions that wrote one row, oldest first.
+const whoSelect = `SELECT a.session_id, MAX(COALESCE(a.confirmed, 0)), COUNT(*)
 	FROM audit_logs a
 	WHERE a.target_id = ? AND COALESCE(a.session_id, '') <> ''
 	GROUP BY a.session_id ORDER BY MIN(a.created_at)`
-)
 
 // WhoLines implements wire.WhoSource: one line per session that wrote
 // rowID — ses_ id, tool, tool session (redacted), model, confirmed, writes.
@@ -53,29 +45,49 @@ func (s *coreAuditSink) WhoLines(ctx context.Context, rowID string) ([]string, e
 	if ok, err := columnExists(ctx, s.db, "audit_logs", "session_id"); err != nil || !ok {
 		return nil, err // a v0.1.17 lore.db not migrated yet: no session links
 	}
-	q := whoSelectBare
-	if ready, err := sessions.Ready(ctx, s.db); err != nil {
-		return nil, errcodes.New(errcodes.Internal, "who: read the sessions columns").WithCause(err)
-	} else if ready {
-		q = whoSelectJoined
+	known, err := s.whoSessions(ctx)
+	if err != nil {
+		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, q, rowID)
+	rows, err := s.db.QueryContext(ctx, whoSelect, rowID)
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "who: read the audit log").WithCause(err)
 	}
 	defer func() { _ = rows.Close() }() // read-only
 	var out []string
 	for rows.Next() {
-		var ses, tool, toolSes, model string
+		var ses string
 		var confirmed, writes int
-		if err := rows.Scan(&ses, &confirmed, &writes, &tool, &toolSes, &model); err != nil {
+		if err := rows.Scan(&ses, &confirmed, &writes); err != nil {
 			return nil, errcodes.New(errcodes.Internal, "who: scan the audit log").WithCause(err)
 		}
+		d := known[ses]
 		out = append(out, fmt.Sprintf("%s  tool %s  session %s  model %s  confirmed %s  (%d writes)",
-			ses, whoField(tool), whoField(redactToolSession(toolSes)), whoField(model), yesNoWho(confirmed != 0), writes))
+			ses, whoField(d.Tool), whoField(redactToolSession(d.ToolSessionID)), whoField(d.Model), yesNoWho(confirmed != 0), writes))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, errcodes.New(errcodes.Internal, "who: read the audit log").WithCause(err)
+	}
+	return out, nil
+}
+
+// whoSessions maps each machine-store ses_ id to its details (empty when
+// the core is not mounted: the lines then show "-").
+func (s *coreAuditSink) whoSessions(ctx context.Context) (map[string]wire.SessionDetails, error) {
+	app := s.app
+	if app == nil {
+		app = coreApp
+	}
+	out := map[string]wire.SessionDetails{}
+	if app == nil {
+		return out, nil
+	}
+	rows, err := app.Sessions(ctx, 0)
+	if err != nil {
+		return nil, errcodes.New(errcodes.Internal, "who: read the sessions").WithCause(err)
+	}
+	for _, r := range rows {
+		out[r.ID] = r.SessionDetails
 	}
 	return out, nil
 }

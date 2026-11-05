@@ -28,10 +28,8 @@ const driverName = "sqlite"
 // Bump it when the internal tables change shape: a file with another
 // version is emptied and rebuilt (it is a cache), never migrated.
 // 2: typed tables keyed by (_source, id); join tables filled from
-// list-of-ref fields (O10, O11). 3: _task_nodes, the parent/rank copy the
-// task_tree closure is built from per write (P3-PERF-1); a layout-2 file
-// has no nodes and an older binary would not keep them.
-const layoutVersion = 3
+// list-of-ref fields (O10, O11).
+const layoutVersion = 2
 
 // busyTimeoutMS is how long a writer waits for another process's lock
 // before failing with SQLITE_BUSY.
@@ -249,8 +247,7 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 	st := c.st
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
 		applied := make([]store.Row, 0, len(rows))
-		kindsChanged := false
-		var taskIDs []string // the applied tasks rows, for the closure (P3-PERF-1)
+		kindsChanged, tasksChanged := false, false
 		for _, r := range rows {
 			newer, err := keepRaw(ctx, tx, source, r)
 			if err != nil {
@@ -260,9 +257,7 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 				continue
 			}
 			applied = append(applied, r)
-			if r.Table == schema.TableTasks {
-				taskIDs = append(taskIDs, r.ID.String())
-			}
+			tasksChanged = tasksChanged || r.Table == schema.TableTasks
 			if r.Table == schema.TableKinds || r.Table == schema.TableKindFields {
 				kindsChanged = true
 			}
@@ -291,11 +286,8 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 				return err
 			}
 		}
-		if len(taskIDs) > 0 {
-			if err := syncTaskNodes(ctx, tx, string(source), taskIDs); err != nil {
-				return err
-			}
-			if err := updateTaskTree(ctx, tx); err != nil {
+		if tasksChanged {
+			if err := refreshTaskTree(ctx, tx); err != nil {
 				return err
 			}
 		}
@@ -390,9 +382,6 @@ func (c *Cache) Rebuild(ctx context.Context, source store.Source) error {
 			if _, err := tx.ExecContext(ctx, q, string(source)); err != nil {
 				return dbErr("rebuild", err)
 			}
-		}
-		if err := dropTaskNodes(ctx, tx, string(source)); err != nil {
-			return err
 		}
 		if err := refreshTaskTree(ctx, tx); err != nil {
 			return err

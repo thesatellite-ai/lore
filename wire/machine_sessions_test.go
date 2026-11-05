@@ -78,3 +78,32 @@ func TestSessionsThroughTheMachineStore(t *testing.T) {
 		}
 	}
 }
+
+// TestDefaultSessionHostReadsTheMachineStore: a binary that supplies no
+// Options.Sessions.Session (cmd/lore) still serves session.list from the
+// machine store, raw ids in the rows (session.list redacts), counts zero,
+// and never reveals raw tool session ids (P3-COORD-SESS-1).
+func TestDefaultSessionHostReadsTheMachineStore(t *testing.T) {
+	ctx := context.Background()
+	h := opstest.New(t)
+	id, err := h.App.FindOrCreateSession(ctx, "prj_a", wire.SessionDetails{ActorID: opstest.Actor, Tool: "codex", ToolSessionID: toolSession, Model: "gpt-5"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, err := h.App.SessionHost(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.RevealToolSessions(ctx) {
+		t.Fatal("the default host revealed raw tool session ids")
+	}
+	rows, err := host.ListSessions(ctx, 0)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("ListSessions = %v, %v; want the one session", rows, err)
+	}
+	r := rows[0]
+	if r.ID != id || r.Tool != "codex" || r.ToolSessionID != toolSession || r.Model != "gpt-5" || r.ActorID != opstest.Actor ||
+		r.StartedAt == "" || r.LastWriteAt == "" || r.Writes != 0 || r.NewKeys != 0 {
+		t.Fatalf("row = %+v", r)
+	}
+}

@@ -7,10 +7,10 @@
 //	                interactive AND Host.RevealToolSessions (a terminal, CI
 //	                unset); otherwise "<redacted>" (OV11-f, the whoami rule)
 //
-// The session rows are machine-local and live in the binary's lore.db (as
-// built in 0.1.18: "machine-local tables stay in lore.db"), so this is a
-// Local operation over a host port the binary supplies (PASS3 ONE-PATH,
-// P3-RUNS-4).
+// The session rows are machine-local and live in the machine store
+// (P3-COORD-SESS-1); this is a Local operation over a host port: the App
+// supplies one over the machine store, and a binary may supply its own
+// (the old binary adds the audit counts; PASS3 ONE-PATH, P3-RUNS-4).
 package session
 
 import (

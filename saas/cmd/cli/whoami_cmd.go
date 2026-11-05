@@ -11,14 +11,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
-	"dbent"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/identity"
 	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/lorecfg"
 	"saas/pkg/aicoder/orgresolve"
-	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/sessions"
 	"saas/pkg/aicoder/style"
 
@@ -99,25 +98,22 @@ func whoamiAgent() *whoamiAgentJSON {
 
 // hookReportedModel is the model the session hook recorded on this
 // machine's session row for (tool, tool session id), "" when there is
-// none. It only reads an existing lore.db (never builds one: whoami must
-// not write) and answers "" on any error or a pre-0.1.18 table.
+// none. It reads the machine store (P3-COORD-SESS-1) and answers "" on any
+// error or when the core is not mounted.
 func hookReportedModel(ctx context.Context, tool, toolSession string) string {
-	rctx, err := projresolve.Resolve(projresolve.Inputs{})
-	if err != nil {
+	if coreApp == nil {
 		return ""
 	}
-	if li, lerr := os.Lstat(rctx.DBPath); lerr != nil || !li.Mode().IsRegular() {
-		return "" // missing, or a symlink (never followed)
-	}
-	db := dbent.InitDB(rctx.DBPath)
-	defer func() { _ = db.Close() }() // read-only use: a close error loses nothing
-	if ok, rerr := sessions.Ready(ctx, db); rerr != nil || !ok {
+	rows, err := coreApp.Sessions(ctx, 0)
+	if err != nil {
 		return ""
 	}
 	var model string
-	err = db.QueryRowContext(ctx, `SELECT model FROM sessions WHERE tool = ? AND tool_session_id = ? AND model <> '' ORDER BY started_at DESC LIMIT 1`, tool, toolSession).Scan(&model)
-	if err != nil {
-		return ""
+	var at time.Time
+	for _, r := range rows {
+		if r.Tool == tool && r.ToolSessionID == toolSession && r.Model != "" && (model == "" || r.StartedAt.After(at)) {
+			model, at = r.Model, r.StartedAt
+		}
 	}
 	return model
 }

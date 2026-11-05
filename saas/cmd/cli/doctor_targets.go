@@ -20,8 +20,6 @@ import (
 
 	"dbent/gen/ent"
 
-	"saas/pkg/aicoder/sessions"
-
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
@@ -50,7 +48,7 @@ func doctorTargetSuggest(ctx context.Context, c *ent.Client, root string, r *doc
 	if coreApp == nil || c == nil || root == "" {
 		return
 	}
-	rows, err := sessions.List(ctx, c, 0)
+	rows, err := coreApp.Sessions(ctx, 0) // the machine store (P3-COORD-SESS-1)
 	if err != nil {
 		return
 	}

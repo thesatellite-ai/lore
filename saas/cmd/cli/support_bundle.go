@@ -12,13 +12,11 @@ import (
 	"context"
 	"encoding/json"
 
-	"dbent"
-	"dbent/gen/ent"
 	"saas/pkg/aicoder/identity"
-	"saas/pkg/aicoder/sessions"
 
 	opssupportbundle "github.com/thesatellite-ai/lore/ops/supportbundle"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // supportBundleHost implements opssupportbundle.Host over lore.db.
@@ -127,21 +125,15 @@ func coreRowCount(ctx context.Context, table string) (int, bool) {
 // supportSessionLimit is how many sessions a bundle describes.
 const supportSessionLimit = 10
 
-// supportSessions reads the newest sessions from lore.db, stripped; empty
-// when there is no lore.db or it predates the 0.1.18 columns.
-func supportSessions(ctx context.Context, f *doctorFlags) []opssupportbundle.Session {
+// supportSessions reads the newest sessions from the machine store
+// (P3-COORD-SESS-1), stripped; empty when the core is not mounted or the
+// read fails.
+func supportSessions(ctx context.Context, _ *doctorFlags) []opssupportbundle.Session {
 	out := []opssupportbundle.Session{}
-	rctx, client, err := resolveContext(&f.commonFlags)
-	if err != nil {
+	if coreApp == nil {
 		return out
 	}
-	defer func() { _ = client.Close() }() // read-only use
-	db := dbent.InitDB(rctx.DBPath)
-	defer func() { _ = db.Close() }() // read-only use
-	if ok, rerr := sessions.Ready(ctx, db); rerr != nil || !ok {
-		return out
-	}
-	rows, err := sessions.List(ctx, client, supportSessionLimit)
+	rows, err := coreApp.Sessions(ctx, supportSessionLimit)
 	if err != nil {
 		return out
 	}
@@ -152,8 +144,8 @@ func supportSessions(ctx context.Context, f *doctorFlags) []opssupportbundle.Ses
 }
 
 // stripSession is r without the four private fields (section 9).
-func stripSession(r *ent.Session) opssupportbundle.Session {
+func stripSession(r wire.SessionRow) opssupportbundle.Session {
 	return opssupportbundle.Session{Tool: r.Tool, ToolVersion: r.ToolVersion, Signal: r.Signal, Flags: r.Flags,
 		DeclaredHuman: r.DeclaredHuman, HasToolSessionID: r.ToolSessionID != "", HasModel: r.Model != "",
-		HasCwd: r.Cwd != "", HasCI: r.Ci != ""}
+		HasCwd: r.Cwd != "", HasCI: r.CI != ""}
 }

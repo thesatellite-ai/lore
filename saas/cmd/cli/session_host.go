@@ -1,8 +1,9 @@
 // session_host.go — the old binary's opssession.Host (PASS3 ONE-PATH,
-// P3-RUNS-4): `lore session list` is the operation session.list; this
-// reads the machine-local session rows from the repo's lore.db.
+// P3-RUNS-4): `lore session list` is the operation session.list; the
+// session rows come from the machine store (P3-COORD-SESS-1), the counts
+// from the repo's lore.db audit chain.
 //
-//	session.list ─▶ sessionHost.ListSessions ─▶ sessions.List (newest first)
+//	session.list ─▶ sessionHost.ListSessions ─▶ coreApp.SessionOpRows (newest first)
 //	                                         └▶ audit_logs counts per session:
 //	                                            WRITES = entries, NEW KEYS = distinct meta_keys rows (P3-RUNS-5)
 package main
@@ -10,10 +11,10 @@ package main
 import (
 	"context"
 	"database/sql"
-	"time"
+	"os"
 
-	"dbent/gen/ent"
-	"saas/pkg/aicoder/sessions"
+	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/projresolve"
 
 	opssession "github.com/thesatellite-ai/lore/ops/session"
 	"github.com/thesatellite-ai/lore/schema"
@@ -30,15 +31,19 @@ func (sessionHost) RevealToolSessions(context.Context) bool { return !quietOutpu
 
 // ListSessions implements opssession.Host.
 func (sessionHost) ListSessions(ctx context.Context, limit int) (_ []opssession.Row, err error) {
-	var f commonFlags
-	rctx, client, err := resolveContext(&f)
-	if err != nil {
-		return nil, asCoreError(err)
+	if coreApp == nil {
+		return nil, errcodes.New(errcodes.Internal, "the 0.1.18 core is not mounted")
 	}
-	defer joinClose(&err, client, "the project DB")
-	rows, err := sessions.List(ctx, client, limit)
+	out, err := coreApp.SessionOpRows(ctx, limit)
+	if err != nil || len(out) == 0 {
+		return out, err
+	}
+	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: oldProjectDir()})
 	if err != nil {
-		return nil, err
+		return out, nil // no project here: the rows without counts
+	}
+	if fi, lerr := os.Lstat(rctx.DBPath); lerr != nil || !fi.Mode().IsRegular() {
+		return out, nil // no lore.db audit chain (or a symlink lore never reads): counts stay zero
 	}
 	// the counts read through a private read-only handle (P2B-OLD-3)
 	db, err := openPrivateLoreDB(rctx.DBPath, true)
@@ -46,13 +51,13 @@ func (sessionHost) ListSessions(ctx context.Context, limit int) (_ []opssession.
 		return nil, err
 	}
 	defer joinClose(&err, db, "the project DB (read-only)")
-	out := make([]opssession.Row, 0, len(rows))
-	for _, s := range rows {
-		r := sessionOpRow(s)
-		if err := sessionCounts(ctx, db, &r); err != nil {
+	if ok, cerr := columnExists(ctx, db, "audit_logs", "session_id"); cerr != nil || !ok {
+		return out, cerr // a v0.1.17 lore.db not migrated yet: no session links
+	}
+	for i := range out {
+		if err := sessionCounts(ctx, db, &out[i]); err != nil {
 			return nil, err
 		}
-		out = append(out, r)
 	}
 	return out, nil
 }
@@ -73,20 +78,4 @@ func sessionCounts(ctx context.Context, db *sql.DB, r *opssession.Row) error {
 		r.Writes, r.NewKeys = int(writes.Int64), int(keys.Int64)
 	}
 	return rows.Err()
-}
-
-// sessionOpRow maps one lore.db session row (raw ids; session.list redacts).
-func sessionOpRow(s *ent.Session) opssession.Row {
-	r := opssession.Row{ID: s.ID, Tool: s.Tool, ToolSessionID: s.ToolSessionID, ToolVersion: s.ToolVersion,
-		Model: s.Model, MachineID: s.MachineID, RunID: s.RunID, Repo: s.Repo, Branch: s.Branch, Cwd: s.Cwd,
-		Terminal: s.Terminal, CI: s.Ci, ParentSessionID: s.ParentSessionID, Signal: s.Signal,
-		Sources: s.Sources, OuterTools: s.OuterTools, DeclaredHuman: s.DeclaredHuman, Flags: s.Flags,
-		StartedAt: s.StartedAt.UTC().Format(time.RFC3339)}
-	if s.ActorID != nil {
-		r.ActorID = *s.ActorID
-	}
-	if s.EndedAt != nil {
-		r.LastWriteAt = s.EndedAt.UTC().Format(time.RFC3339)
-	}
-	return r
 }
