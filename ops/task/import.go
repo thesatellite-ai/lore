@@ -54,7 +54,28 @@ const (
 	colPlan       = "plan"
 	colRole       = "role"
 	colKey        = "key"
+	// The titles of the tasklist, mission and plan, beside their ids: an
+	// import matches by name when the id is not in the target (G-DECIDE-5).
+	colTasklistName = "tasklist_name"
+	colMissionName  = "mission_name"
+	colPlanName     = "plan_name"
 )
+
+// refColumn is one reference an import file may carry: the id column, its
+// name column, the task field and the table the id names.
+type refColumn struct {
+	col, nameCol, field string
+	tbl                 row.Table
+}
+
+// refColumns lists the tasklist, mission and plan references.
+func refColumns() []refColumn {
+	return []refColumn{
+		{colTasklist, colTasklistName, work.FieldTasklist, schema.TableTasklists},
+		{colMission, colMissionName, work.FieldMission, schema.TableMissions},
+		{colPlan, colPlanName, work.FieldPlan, schema.TablePlans},
+	}
+}
 
 // Import words.
 const (
@@ -74,14 +95,15 @@ const (
 
 // importColumns lists every column an import reads, in a fixed order.
 func importColumns() []string {
-	return []string{colExtID, colTitle, colBody, colPriority, colCommitment, colDue, colDeferUntil, colTasklist, colMission, colPlan, colRole, colKey}
+	return []string{colExtID, colTitle, colBody, colPriority, colCommitment, colDue, colDeferUntil, colTasklist, colMission, colPlan, colRole, colKey,
+		colTasklistName, colMissionName, colPlanName}
 }
 
 // ImportIn is the input of task.import.
 type ImportIn struct {
 	File   string   `json:"file" arg:"0" desc:"the file to import"`
 	From   string   `json:"from,omitempty" flag:"from" desc:"csv | json (default: from the file extension)"`
-	Map    []string `json:"map,omitempty" flag:"map" desc:"rename columns: <file column>=<task field>[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key)"`
+	Map    []string `json:"map,omitempty" flag:"map" desc:"rename columns: <file column>=<task field>[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be created; write nothing"`
 	To     string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
 }
@@ -212,22 +234,24 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	out.Count = len(recs)
 	// PC-TASK-1: a tasklist / mission / plan id the target does not hold
 	// (an export from another repo) is dropped with a warning and a note.
-	dropped, err := o.dropDanglingRefs(ctx, recs)
+	// G-DECIDE-5: an id the target does not hold falls back to the
+	// export's name column before it is dropped.
+	target := store.Source(in.To)
+	if target == "" {
+		target = store.SourceRepo
+	}
+	dropped, err := o.resolveRefs(ctx, recs, target)
 	if err != nil {
 		return ImportOut{}, err
 	}
 	for i, ds := range dropped {
 		for _, d := range ds {
 			out.Warnings = append(out.Warnings, Warning{Code: WarnImportDroppedRef, Field: d.field,
-				Message: recs[i].extID + ": dropped " + d.field + " " + d.id + " (not in this repo)"})
+				Message: recs[i].extID + ": dropped " + d.field + " " + d.text()})
 		}
 	}
 	if in.DryRun || len(recs) == 0 {
 		return out, nil
-	}
-	target := store.Source(in.To)
-	if target == "" {
-		target = store.SourceRepo
 	}
 	if err = bulk.Preview(ctx, o.env, target, "task import", items); err != nil {
 		return ImportOut{}, err
@@ -282,52 +306,138 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 // droppedRef is one reference an import dropped (PC-TASK-1).
 type droppedRef struct {
 	field string // the task field: tasklist_id, mission_id, plan_id
-	id    string
+	id    string // the file's id ("" when the file named it only)
+	// why is the name part of the reason (G-DECIDE-5): "" when the file
+	// carried no name, else no row or several rows of that name.
+	why string
 }
 
-// note is the comment the imported task gets for d.
+// note is the comment the imported task gets for d (one line).
 func (d droppedRef) note() string {
-	return "import: dropped " + d.field + " " + d.id + " (not in this repo)"
+	return "import: dropped " + d.field + " " + d.text()
 }
 
-// dropDanglingRefs clears every tasklist / mission / plan column whose id
-// is well formed but names no row in the attached stores, and returns
-// what it cleared per record. A malformed id is left for task add to
-// refuse; an id that exists (even in the trash) is kept, so add's own
-// checks apply. The import file creates no tasklists, missions or plans,
-// so the target is the only place such an id can exist (PC-TASK-1).
-func (o ops) dropDanglingRefs(ctx context.Context, recs []importRecord) (map[int][]droppedRef, error) {
-	refCols := []struct {
-		col, field string
-		tbl        row.Table
-	}{
-		{colTasklist, work.FieldTasklist, schema.TableTasklists},
-		{colMission, work.FieldMission, schema.TableMissions},
-		{colPlan, work.FieldPlan, schema.TablePlans},
+// text is the reference and the reason, after the field name.
+func (d droppedRef) text() string {
+	ref := d.id
+	if ref == "" {
+		ref = "(no id)"
+	}
+	reason := "not in this repo"
+	if d.why != "" {
+		reason += "; " + d.why
+	}
+	return ref + " (" + reason + ")"
+}
+
+// resolveRefs settles every tasklist / mission / plan reference of the
+// records against the target (G-DECIDE-5, PC-TASK-1): an id that names a
+// row in the attached stores (even in the trash, so task add's own checks
+// apply) is kept; otherwise the name column picks the one live row of
+// that title in this project in the target store; otherwise the reference
+// is dropped and returned per record. A malformed id with no name is left
+// for task add to refuse. The name columns never reach task add. The file
+// creates no tasklists, missions or plans, so the target is the only
+// place a reference can resolve.
+func (o ops) resolveRefs(ctx context.Context, recs []importRecord, target store.Source) (map[int][]droppedRef, error) {
+	byName := map[row.Table]map[string][]string{} // table -> title -> ids, loaded on first use
+	named := func(tbl row.Table, name string) ([]string, error) {
+		m, ok := byName[tbl]
+		if !ok {
+			var err error
+			if m, err = o.titlesIn(ctx, target, tbl); err != nil {
+				return nil, err
+			}
+			byName[tbl] = m
+		}
+		return m[name], nil
 	}
 	out := map[int][]droppedRef{}
 	for i, r := range recs {
-		for _, c := range refCols {
-			raw := strings.TrimSpace(r.cols[c.col])
-			if raw == "" {
+		for _, c := range refColumns() {
+			raw, name := strings.TrimSpace(r.cols[c.col]), strings.TrimSpace(r.cols[c.nameCol])
+			delete(r.cols, c.nameCol)
+			if raw == "" && name == "" {
 				continue
 			}
-			id, perr := ids.ParseAny(raw)
-			if perr != nil {
-				continue
+			if raw != "" {
+				id, perr := ids.ParseAny(raw)
+				if perr != nil && name == "" {
+					continue
+				}
+				if perr == nil {
+					_, _, gerr := o.env.Get(ctx, engine.Ref{Table: c.tbl, ID: id})
+					if gerr == nil {
+						continue
+					}
+					if !errs.Has(gerr, errs.NotFound) {
+						return nil, gerr
+					}
+				}
 			}
-			_, _, gerr := o.env.Get(ctx, engine.Ref{Table: c.tbl, ID: id})
-			if gerr == nil {
-				continue
-			}
-			if !errs.Has(gerr, errs.NotFound) {
-				return nil, gerr
+			d := droppedRef{field: c.field, id: raw}
+			if name != "" {
+				hits, err := named(c.tbl, name)
+				if err != nil {
+					return nil, err
+				}
+				if len(hits) == 1 {
+					r.cols[c.col] = hits[0]
+					continue
+				}
+				if len(hits) == 0 && c.tbl == schema.TableTasklists && name == DefaultTasklistTitle {
+					// The other repo's default list: the task lands in this
+					// repo's default list (created by the import), nothing lost.
+					delete(r.cols, c.col)
+					continue
+				}
+				d.why = refNoun(c.tbl) + " named " + strconv.Quote(name)
+				if len(hits) == 0 {
+					d.why = "no " + d.why
+				} else {
+					d.why = strconv.Itoa(len(hits)) + " " + refNoun(c.tbl) + "s named " + strconv.Quote(name)
+				}
 			}
 			delete(r.cols, c.col)
-			out[i] = append(out[i], droppedRef{field: c.field, id: raw})
+			out[i] = append(out[i], d)
 		}
 	}
 	return out, nil
+}
+
+// refNoun is the word for a reference table in a drop reason.
+func refNoun(tbl row.Table) string {
+	switch tbl {
+	case schema.TableTasklists:
+		return "tasklist"
+	case schema.TableMissions:
+		return "mission"
+	default:
+		return "plan"
+	}
+}
+
+// titlesIn maps title -> ids of the live rows of tbl in target that
+// belong to this project (G-DECIDE-5 name matching).
+func (o ops) titlesIn(ctx context.Context, target store.Source, tbl row.Table) (map[string][]string, error) {
+	project, err := work.Project(ctx, o.env, Noun, "")
+	if err != nil {
+		return nil, err
+	}
+	rows, err := o.env.List(ctx, target, tbl)
+	if err != nil {
+		return nil, err
+	}
+	slices.SortFunc(rows, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
+	m := map[string][]string{}
+	for _, r := range rows {
+		if r.Deleted || work.Field(r, work.FieldProject) != project.String() {
+			continue
+		}
+		t := strings.TrimSpace(work.Field(r, work.FieldTitle))
+		m[t] = append(m[t], r.ID.String())
+	}
+	return m, nil
 }
 
 // importChecklist writes a record's checklist onto the task just added

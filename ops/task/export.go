@@ -23,9 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/direction"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
@@ -126,7 +128,11 @@ func (o ops) export(ctx context.Context, in ExportIn) (ExportOut, error) {
 	slices.SortStableFunc(rows, func(a, b row.Row) int {
 		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), cmp.Compare(a.ID.String(), b.ID.String()))
 	})
-	opt := exportOpt{children: in.WithChildren, checklist: in.WithChecklist, internal: in.Internal}
+	names, err := o.refNames(ctx, rows)
+	if err != nil {
+		return ExportOut{}, err
+	}
+	opt := exportOpt{children: in.WithChildren, checklist: in.WithChecklist, internal: in.Internal, names: names}
 	var content string
 	switch format {
 	case FormatCSV:
@@ -142,8 +148,11 @@ func (o ops) export(ctx context.Context, in ExportIn) (ExportOut, error) {
 	return ExportOut{Format: format, Count: len(rows), Content: content}, nil
 }
 
-// importShape is one task in task import's columns (import.go).
-func importShape(r row.Row) map[string]string {
+// importShape is one task in task import's columns (import.go). names
+// maps a tasklist / mission / plan id to its title (refNames): the export
+// writes both, so an import into another repo can match by name
+// (G-DECIDE-5).
+func importShape(r row.Row, names map[string]string) map[string]string {
 	m := map[string]string{
 		colExtID: r.ID.String(), colTitle: work.Field(r, work.FieldTitle), colBody: work.Field(r, work.FieldBody),
 		colPriority: work.Field(r, fieldPriority), colCommitment: work.Field(r, fieldCommitment),
@@ -151,12 +160,49 @@ func importShape(r row.Row) map[string]string {
 		colTasklist: work.Field(r, work.FieldTasklist), colMission: work.Field(r, work.FieldMission),
 		colPlan: work.Field(r, work.FieldPlan), colRole: work.Field(r, fieldRole),
 	}
+	for _, rc := range refColumns() {
+		if id := m[rc.col]; id != "" {
+			m[rc.nameCol] = names[id]
+		}
+	}
 	for k, v := range m {
 		if v == "" {
 			delete(m, k)
 		}
 	}
 	return m
+}
+
+// refNames looks up the title of every tasklist, mission and plan the
+// rows point at (id -> title). A reference whose row is gone gets no
+// name: the import then drops it unless the id exists in the target.
+func (o ops) refNames(ctx context.Context, rows []row.Row) (map[string]string, error) {
+	names := map[string]string{}
+	for _, r := range rows {
+		for _, rc := range refColumns() {
+			raw := work.Field(r, rc.field)
+			if raw == "" {
+				continue
+			}
+			if _, seen := names[raw]; seen {
+				continue
+			}
+			names[raw] = ""
+			id, perr := ids.ParseAny(raw)
+			if perr != nil {
+				continue
+			}
+			_, ref, gerr := o.env.Get(ctx, engine.Ref{Table: rc.tbl, ID: id})
+			if errs.Has(gerr, errs.NotFound) {
+				continue
+			}
+			if gerr != nil {
+				return nil, gerr
+			}
+			names[raw] = work.Field(ref, work.FieldTitle)
+		}
+	}
+	return names, nil
 }
 
 // exportDate is a date field in the form task import (and --due) reads
@@ -175,8 +221,12 @@ func exportDate(r row.Row, name string) string {
 	return t.Format(time.RFC3339)
 }
 
-// exportOpt is the 19.2 extras of one export.
-type exportOpt struct{ children, checklist, internal bool }
+// exportOpt is the 19.2 extras of one export, plus the reference titles
+// (refNames).
+type exportOpt struct {
+	children, checklist, internal bool
+	names                         map[string]string
+}
 
 // internalPlace refuses --internal unless the repo store is internal
 // (leak rules, 19.2); an Env that cannot classify stores fails closed.
@@ -248,7 +298,7 @@ func exportRecord(r row.Row, kids map[string][]row.Row, opt exportOpt) (map[stri
 		rec[k] = raw
 		return nil
 	}
-	for k, v := range importShape(r) {
+	for k, v := range importShape(r, opt.names) {
 		raw, err := json.Marshal(v)
 		if perr := put(k, raw, err); perr != nil {
 			return nil, perr
@@ -366,7 +416,7 @@ func exportCSV(rows []row.Row, opt exportOpt) (string, error) {
 		return "", errs.Wrap(errs.Internal, "task export: csv", err)
 	}
 	for _, r := range rows {
-		m := importShape(r)
+		m := importShape(r, opt.names)
 		m[colStatus] = work.Field(r, work.FieldStatus)
 		m[colParent] = work.Field(r, schema.FieldTaskParent)
 		m[colEstimate] = work.Field(r, fieldEstimate)
