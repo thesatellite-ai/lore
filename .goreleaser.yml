@@ -3,17 +3,10 @@ version: 2
 project_name: lore
 
 # The release binary is ./cmd/lore in the root module
-# (github.com/thesatellite-ai/lore). While the old modules still exist,
-# go.work stitches the root with ./dbent ./lace ./saas (`enttui` resolves
-# from the module proxy), so `go work sync` stays until phase E deletes
-# them along with go.work. cmd/lore imports none of the old modules.
+# (github.com/thesatellite-ai/lore), the only module in the repo.
 # Pure-Go sqlite (modernc.org/sqlite) => CGO_ENABLED=0 => cross-compile
 # every target from a single Linux runner. FTS5 is built into modernc;
 # no build tag needed.
-before:
-  hooks:
-    - go work sync
-
 builds:
   - id: lore
     main: ./cmd/lore

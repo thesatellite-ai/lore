@@ -73,13 +73,6 @@ jobs:
           go-version: "1.26.x"
           cache: false
 
-      # go.work stitches the local modules (dbent/lace/saas); enttui
-      # resolves from the proxy. Keep the graph consistent before the
-      # GoReleaser cross-compile.
-      - name: go work sync
-        if: steps.skip.outputs.skip != 'true'
-        run: go work sync
-
       # Resolve the release tag for this run.
       #   tag:      version string (empty on snapshot)
       #   create:   "true" => git tag && git push

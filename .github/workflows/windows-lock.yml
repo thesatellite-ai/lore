@@ -1,14 +1,13 @@
 name: windows lock tests
 
-# Runs the cross-process lock tests on a real Windows runner, including the
-# Windows-only LockFileEx tests (flock_windows_test.go) that no Linux or
-# macOS build can execute. It runs only when the lock package or this file
+# Runs the store lock tests (adapters/backend/rowfs, LockFileEx on Windows)
+# on a real Windows runner, which no Linux or macOS build can execute. It runs only when the lock package or this file
 # changes, or by hand. The repo is public, so Actions minutes are not billed.
 on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'saas/pkg/aicoder/processlock/**'
+      - 'adapters/backend/rowfs/**'
       - '.github/workflows/windows-lock.yml'
 
 permissions:
@@ -26,12 +25,8 @@ jobs:
           go-version: "1.26.x"
           cache: false
 
-      # The lock package imports no other workspace module, so the saas
-      # module builds on its own; GOWORK=off keeps the workspace's other
-      # modules out of the build. -race needs cgo (the runner ships gcc).
-      - name: go test -race (processlock)
-        working-directory: saas
+      # -race needs cgo (the runner ships gcc).
+      - name: go test -race (store lock)
         env:
-          GOWORK: "off"
           CGO_ENABLED: "1"
-        run: go test -race ./pkg/aicoder/processlock/...
+        run: go test -race ./adapters/backend/rowfs/...
