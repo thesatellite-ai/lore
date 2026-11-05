@@ -278,7 +278,8 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 	// 10. Duplicate imports (PROV9).
 	doctorDuplicateImports(ctx, r)
 	doctorTaskTree(ctx, r)
-	doctorTrash(ctx, r) // DELETION 3.8: rows past trash.retention_days, tombstones
+	doctorTrash(ctx, r)                // DELETION 3.8: rows past trash.retention_days, tombstones
+	doctorUnclassifiedSettings(ctx, r) // CFG12: v0.1.17 settings left in place (doctor_local.go)
 	// 10b. Secret rules that are off + leftover LORE_SYNC_ALLOW_SECRETS (D2/D3, doctor_secrets.go).
 	doctorSecretRules(ctx, r)
 	// 11. Context budget and launch set (CONTEXT_BUDGET 6.11, CQ7).

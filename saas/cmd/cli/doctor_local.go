@@ -87,3 +87,23 @@ func doctorPurgedCopies(ctx context.Context, db *sql.DB, dataDir string, r *doct
 		"%d local cop(ies) of purged rows on this machine; drop them with lore trash purge --local --purged --confirm", len(found)))
 	degrade(r)
 }
+
+// doctorUnclassifiedSettings lists the v0.1.17 settings lore cannot
+// classify (CFG12: reported by doctor, left in place, never guessed).
+// FB-DOC-4: a note, not a warning: nothing is broken, the setting simply
+// has no effect in 0.1.18, and no lore command can fix it for the person
+// (set the 0.1.18 key by hand with lore config set or lore policy set).
+// A failing read is a note too; the store checks report the cause.
+func doctorUnclassifiedSettings(ctx context.Context, r *doctorReport) {
+	if coreApp == nil {
+		return
+	}
+	lines, err := coreApp.UnclassifiedSettings(ctx)
+	if err != nil {
+		r.Notes = append(r.Notes, "v0.1.17 settings not checked: "+err.Error())
+		return
+	}
+	for _, l := range lines {
+		r.Notes = append(r.Notes, "v0.1.17 setting not moved: "+l+" (it has no effect in 0.1.18; set the new key with lore config set or lore policy set)")
+	}
+}
