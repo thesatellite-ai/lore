@@ -236,7 +236,7 @@ func runHoldClaim(ctx context.Context, out io.Writer, in opscoord.HoldClaimIn) e
 	if err != nil {
 		return coordError(err)
 	}
-	fmt.Fprintf(out, "%s holding %s until %s\n", style.Success("✓"), in.Name, held.Expires.UTC().Format(time.RFC3339))
+	_, _ = fmt.Fprintf(out, "%s holding %s until %s\n", style.Success("✓"), in.Name, held.Expires.UTC().Format(time.RFC3339))
 	return nil
 }
 
@@ -260,7 +260,7 @@ func runHoldRelease(ctx context.Context, out io.Writer, in opscoord.HoldReleaseI
 	if err != nil {
 		return coordError(err)
 	}
-	fmt.Fprintf(out, "%s released %s\n", style.Success("✓"), in.Name)
+	_, _ = fmt.Fprintf(out, "%s released %s\n", style.Success("✓"), in.Name)
 	return nil
 }
 

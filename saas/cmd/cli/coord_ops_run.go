@@ -29,7 +29,7 @@ import (
 func runTaskNext(ctx context.Context, in opscoord.NextIn) (opscoord.NextOut, error) {
 	var b bytes.Buffer
 	res, err := taskNext(ctx, &b, in)
-	res.Lines = splitLines(b.String())
+	res.Lines = plainLines(b.String())
 	return res, err
 }
 
@@ -67,25 +67,25 @@ func taskNext(ctx context.Context, out io.Writer, in opscoord.NextIn) (opscoord.
 	}
 	res, err := coord.Next(ctx, w.env(t), req)
 	for _, p := range res.Poisoned {
-		fmt.Fprintf(out, "%s %s failed %d times and is now blocked (owner's inbox)\n", style.Warn("!"), p, w.Agents.MaxAttempts)
+		_, _ = fmt.Fprintf(out, "%s %s failed %d times and is now blocked (owner's inbox)\n", style.Warn("!"), p, w.Agents.MaxAttempts)
 	}
 	if err != nil {
 		return opscoord.NextOut{}, coordError(err)
 	}
 	if res.Resumed {
-		fmt.Fprintf(out, "you hold %s; resume, or `lore task release %s`\n", res.Task, res.Task)
+		_, _ = fmt.Fprintf(out, "you hold %s; resume, or `lore task release %s`\n", res.Task, res.Task)
 		return opscoord.NextOut{Claimed: res.Task}, nil
 	}
 	printClaim(out, res.Task, res.Claim, w, t.Signals.Ref)
 	if in.Why {
 		if s, ok := res.Scores[res.Task]; ok {
-			fmt.Fprintf(out, "  urgency %s\n", urgency.Format(s.Total))
+			_, _ = fmt.Fprintf(out, "  urgency %s\n", urgency.Format(s.Total))
 			for _, l := range s.Lines() {
-				fmt.Fprintln(out, "    "+l)
+				_, _ = fmt.Fprintln(out, "    "+l)
 			}
 		}
 	}
-	fmt.Fprintf(out, "  read its notes: lore task show %s\n", res.Task)
+	_, _ = fmt.Fprintf(out, "  read its notes: lore task show %s\n", res.Task)
 	return opscoord.NextOut{Claimed: res.Task}, nil
 }
 
@@ -130,7 +130,7 @@ func runTaskHeartbeat(ctx context.Context, out io.Writer, in opscoord.HeartbeatI
 			ids = append(ids, r.Task)
 		}
 		if len(ids) == 0 {
-			fmt.Fprintln(out, "no claims held by this session")
+			_, _ = fmt.Fprintln(out, "no claims held by this session")
 			return nil
 		}
 	}
@@ -145,7 +145,7 @@ func runTaskHeartbeat(ctx context.Context, out io.Writer, in opscoord.HeartbeatI
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "%s %s renewed until %s (seq %d)\n", style.Success("✓"), id, s.Expires.UTC().Format(time.RFC3339), s.RenewedSeq)
+		_, _ = fmt.Fprintf(out, "%s %s renewed until %s (seq %d)\n", style.Success("✓"), id, s.Expires.UTC().Format(time.RFC3339), s.RenewedSeq)
 	}
 	return nil
 }
@@ -160,7 +160,7 @@ func runTaskRelease(ctx context.Context, out io.Writer, in opscoord.ReleaseIn) e
 	if err := coord.Release(ctx, w.env(t), in.ID); err != nil {
 		return coordError(err)
 	}
-	fmt.Fprintf(out, "%s released %s\n", style.Success("✓"), in.ID)
+	_, _ = fmt.Fprintf(out, "%s released %s\n", style.Success("✓"), in.ID)
 	return nil
 }
 
@@ -183,7 +183,7 @@ func runTaskRevoke(ctx context.Context, out io.Writer, in opscoord.RevokeIn) err
 	if removed != nil {
 		who = "was held by " + holderLabel(*removed)
 	}
-	fmt.Fprintf(out, "%s revoked the claim on %s (%s)\n", style.Success("✓"), in.ID, who)
+	_, _ = fmt.Fprintf(out, "%s revoked the claim on %s (%s)\n", style.Success("✓"), in.ID, who)
 	return nil
 }
 
@@ -226,10 +226,10 @@ func runTaskReassign(ctx context.Context, out io.Writer, in opscoord.ReassignIn)
 		if err := reassignOne(ctx, w, id, to, by); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "%s %s reassigned to %s\n", style.Success("✓"), id, in.Assign)
+		_, _ = fmt.Fprintf(out, "%s %s reassigned to %s\n", style.Success("✓"), id, in.Assign)
 	}
 	if len(ids) == 0 {
-		fmt.Fprintf(out, "no open tasks assigned to %s\n", in.From)
+		_, _ = fmt.Fprintf(out, "no open tasks assigned to %s\n", in.From)
 	}
 	return nil
 }

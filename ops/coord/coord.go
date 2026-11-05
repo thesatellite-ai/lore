@@ -95,8 +95,8 @@ func Ops(env Env) []op.Entry {
 			op.Example{Title: "release", CLI: "lore task release tsk_31", Want: "released"}), o.release),
 		op.Define(with(write, OpTaskRevoke, "Drop the current claim on a task (human override; the holder is fenced out)",
 			op.Example{Title: "revoke", CLI: "lore task revoke tsk_31", Want: "revoked"}), o.revoke),
-		op.Define(with(write, OpHoldClaim, "Hold a resource exclusively (same lease, token and renew as a task claim)",
-			op.Example{Title: "hold a test suite", CLI: "lore hold claim full-suite --ttl 30m", Want: "holding"}), o.holdClaim),
+		op.Define(withErrs(with(write, OpHoldClaim, "Hold a resource exclusively (same lease, token and renew as a task claim)",
+			op.Example{Title: "hold a test suite", CLI: "lore hold claim full-suite --ttl 30m", Want: "holding"}), errs.NotImplemented), o.holdClaim),
 		op.Define(with(write, OpHoldRelease, "Release a resource you hold",
 			op.Example{Title: "release a hold", CLI: "lore hold release full-suite", Want: "released"}), o.holdRelease),
 		op.Define(with(write, OpGateRequest, "Put a gate on a task (agents stop at it until a person approves)",
@@ -116,6 +116,18 @@ func with(base op.Spec, name, summary string, ex op.Example) op.Spec {
 	base.Errors = append([]errs.Code(nil), base.Errors...)
 	return base
 }
+
+// withErrs adds codes to s's error list (s.Errors is already a copy).
+func withErrs(s op.Spec, codes ...errs.Code) op.Spec {
+	s.Errors = append(s.Errors, codes...)
+	return s
+}
+
+// Values of hold claim --on (CLI_REFERENCE 3.3, XQ6).
+const (
+	holdOnProject = "project"
+	holdOnMachine = "machine"
+)
 
 // ops binds the run functions to one Env.
 type ops struct{ env Env }
@@ -206,6 +218,17 @@ func (o ops) revoke(ctx context.Context, in RevokeIn) (Report, error) {
 }
 
 func (o ops) holdClaim(ctx context.Context, in HoldClaimIn) (Report, error) {
+	// CLI_REFERENCE 3.3: --on machine is not built in 0.1.18 (it needs the
+	// machine-local store attached in wire, phase C; PASS3-A, P3-RES-3), on
+	// every binary, before the host is asked; any other value is a typo.
+	switch in.On {
+	case "", holdOnProject:
+	case holdOnMachine:
+		return Report{}, errs.New(errs.NotImplemented, "lore hold claim --on machine is not built yet").
+			WithHint("run the command under your machine's own lock tool (for example flock) instead")
+	default:
+		return Report{}, errs.New(errs.InvalidInput, "lore hold claim --on "+in.On+": use project or machine")
+	}
 	h, err := o.host(ctx, OpHoldClaim)
 	if err != nil {
 		return Report{}, err

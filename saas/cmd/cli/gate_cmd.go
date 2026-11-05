@@ -81,7 +81,7 @@ func runGateRequest(ctx context.Context, out io.Writer, id, from string) error {
 			if _, err := coord.HolderWrite(ctx, w.env(t), id, false, coord.RequestGate); err != nil {
 				return coordError(err)
 			}
-			fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
+			_, _ = fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
 			return nil
 		}
 		if isStoreTarget(t) {
@@ -91,7 +91,7 @@ func runGateRequest(ctx context.Context, out io.Writer, id, from string) error {
 			}); err != nil {
 				return coordError(err)
 			}
-			fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
+			_, _ = fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
 			return nil
 		}
 	}
@@ -104,7 +104,7 @@ func runGateRequest(ctx context.Context, out io.Writer, id, from string) error {
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
+	_, _ = fmt.Fprintf(out, "%s gate requested on %s; agents stop until a person runs `lore gate approve %s`\n", style.Success("✓"), id, id)
 	return nil
 }
 
@@ -129,7 +129,7 @@ func runGateApprove(ctx context.Context, out io.Writer, id, from string) error {
 	if err != nil {
 		return coordError(err)
 	}
-	fmt.Fprintf(out, "%s %s approved by %s (%s), hash %s…\n", style.Success("✓"), id, w.Ident.DisplayName, w.Ident.Step.String(), ap.Hash[:gateHashShown])
+	_, _ = fmt.Fprintf(out, "%s %s approved by %s (%s), hash %s…\n", style.Success("✓"), id, w.Ident.DisplayName, w.Ident.Step.String(), ap.Hash[:gateHashShown])
 	return nil
 }
 

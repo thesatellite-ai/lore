@@ -238,7 +238,7 @@ func runTaskMerged(ctx context.Context, out io.Writer, in opscoord.MergedIn) err
 		defer t.Close()
 		if d, ok, gerr := t.Rows.Get(ctx, in.ID); gerr == nil && ok && d.Status() == schema.TaskStatusDone {
 			if prev := d.Time(keyMergedAtDoc); !prev.IsZero() {
-				fmt.Fprintf(out, "%s %s was already merged at %s\n", style.Success("✓"), in.ID, prev.UTC().Format("2006-01-02 15:04"))
+				_, _ = fmt.Fprintf(out, "%s %s was already merged at %s\n", style.Success("✓"), in.ID, prev.UTC().Format("2006-01-02 15:04"))
 				return nil
 			}
 		}
@@ -254,7 +254,7 @@ func runTaskMerged(ctx context.Context, out io.Writer, in opscoord.MergedIn) err
 		}); err != nil {
 			return coordError(err)
 		}
-		fmt.Fprintf(out, "%s %s merged (marked by hand, %s)\n", style.Success("✓"), in.ID, at.Format("15:04"))
+		_, _ = fmt.Fprintf(out, "%s %s merged (marked by hand, %s)\n", style.Success("✓"), in.ID, at.Format("15:04"))
 		return nil
 	}
 	t, err := lookupTask(ctx, in.ID)
@@ -265,14 +265,14 @@ func runTaskMerged(ctx context.Context, out io.Writer, in opscoord.MergedIn) err
 		return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", in.ID, t.Status()))
 	}
 	if prev := t.Time(keyMergedAtDoc); !prev.IsZero() {
-		fmt.Fprintf(out, "%s %s was already merged at %s\n", style.Success("✓"), in.ID, prev.UTC().Format("2006-01-02 15:04"))
+		_, _ = fmt.Fprintf(out, "%s %s was already merged at %s\n", style.Success("✓"), in.ID, prev.UTC().Format("2006-01-02 15:04"))
 		return nil
 	}
 	at := cliClock().Now().UTC()
 	if err := corePatchDoc(ctx, tableTasks, in.ID, coord.Doc{keyMergedAtDoc: at.Format(time.RFC3339Nano)}); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s %s merged (marked by hand, %s)\n", style.Success("✓"), in.ID, at.Format("15:04"))
+	_, _ = fmt.Fprintf(out, "%s %s merged (marked by hand, %s)\n", style.Success("✓"), in.ID, at.Format("15:04"))
 	return nil
 }
 

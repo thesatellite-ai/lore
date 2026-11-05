@@ -113,12 +113,12 @@ func runTaskNote(ctx context.Context, out io.Writer, id, text, from string) erro
 		return coordError(err)
 	}
 	pushed := pushWorkBranch(ctx, w)
-	fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
+	_, _ = fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
 	switch {
 	case pushed:
-		fmt.Fprintf(out, "  work branch %s pushed\n", branch)
+		_, _ = fmt.Fprintf(out, "  work branch %s pushed\n", branch)
 	case branch != "":
-		fmt.Fprintf(out, "  %s work branch %s NOT pushed (offline or no remote); a replacement cannot fetch it yet\n", style.Warn("!"), branch)
+		_, _ = fmt.Fprintf(out, "  %s work branch %s NOT pushed (offline or no remote); a replacement cannot fetch it yet\n", style.Warn("!"), branch)
 	}
 	return nil
 }
@@ -160,7 +160,7 @@ func unheldNote(ctx context.Context, out io.Writer, w *coordWorld, t coordTarget
 			return err
 		}
 	}
-	fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
+	_, _ = fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
 	return nil
 }
 
@@ -259,7 +259,7 @@ func agentSharedNote(ctx context.Context, out io.Writer, id, body, owner string)
 	if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s note %s on %s (shared with the client repo)\n", style.Success("✓"), cid, id)
+	_, _ = fmt.Fprintf(out, "%s note %s on %s (shared with the client repo)\n", style.Success("✓"), cid, id)
 	return nil
 }
 
@@ -305,6 +305,6 @@ func plainNoteIn(ctx context.Context, out io.Writer, f *commonFlags, id, body st
 	if err := coreWriteDoc(ctx, tableComments, cid, doc); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
+	_, _ = fmt.Fprintf(out, "%s note %s on %s\n", style.Success("✓"), cid, id)
 	return nil
 }

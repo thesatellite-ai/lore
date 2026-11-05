@@ -28,6 +28,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/timeentry"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -63,12 +65,12 @@ const (
 // CLI output: never rename one. Waiting and gated rows take the queue's
 // own wait kind, so those two are defined from it.
 const (
-	missionStateDone      = "done"
-	missionStateCancelled = "cancelled"
-	missionStateBlocked   = "blocked"
-	missionStateClaimed   = "claimed"
-	missionStateExpired   = "expired"
-	missionStateReady     = "ready"
+	missionStateDone      = opscoord.StateDone
+	missionStateCancelled = opscoord.StateCancelled
+	missionStateBlocked   = opscoord.StateBlocked
+	missionStateClaimed   = opscoord.StateClaimed
+	missionStateExpired   = opscoord.StateExpired
+	missionStateReady     = opscoord.StateReady
 	missionStateWaiting   = string(queue.WaitDependency)
 	missionStateGated     = string(queue.WaitGate)
 )
@@ -428,17 +430,24 @@ func (cv *coordView) actorLabel(ctx context.Context, id string) string {
 	return cv.labels.label(ctx, id)
 }
 
-// leaseTime is the task's active lease time across holders (time boxes).
-func (cv *coordView) leaseTime(t *ent.Task) (time.Duration, []coord.HolderTime) {
-	var done time.Time
-	if t.CompletedAt != nil {
-		done = *t.CompletedAt
-	}
+// leaseTime is the task's active lease time across holders (time boxes):
+// the core row's closed claim spans plus the claim still on the board,
+// the numbers `lore task time` reads (TIME_TRACKING 4.2, P3-TASK-LEASE-1).
+// A row the core cannot read counts the open claim only.
+func (cv *coordView) leaseTime(ctx context.Context, t *ent.Task) (time.Duration, []coord.HolderTime) {
 	ttl := time.Duration(0)
 	if cv.w != nil {
 		ttl = cv.w.Lease.TTL
 	}
-	return coord.LeaseTime(t.ClaimLog, done, cv.now(), ttl)
+	var open *signals.Signal
+	if s, ok, _ := cv.claim(t.ID); ok {
+		open = &s
+	}
+	var entries []timeentry.Entry
+	if d, found, err := coreDoc(ctx, tableTasks, t.ID); err == nil && found {
+		entries = d.TimeEntries()
+	}
+	return coord.LeaseTimeSpans(entries, open, cv.now(), ttl)
 }
 
 // timeboxText renders "55m (timebox 1h; frontend-1 18m + frontend-2 37m)".
@@ -470,14 +479,8 @@ func (cv *coordView) now() time.Time {
 
 // ---------------------------------------------------------------- inbox
 
-// inboxItem is one line of `lore inbox`.
-type inboxItem struct {
-	Mission string    `json:"mission"`
-	Kind    string    `json:"kind"`
-	Who     string    `json:"who,omitempty"`
-	Text    string    `json:"text"`
-	At      time.Time `json:"at"`
-}
+// inboxItem is one line of `lore inbox`: the operation's item (inbox.show).
+type inboxItem = opscoord.InboxItem
 
 // inboxMarker is the per (actor, checkout) ack time (§7.2 "Inbox").
 type inboxMarker struct {
@@ -507,65 +510,15 @@ Example:
   lore inbox --since 2h`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-			cv, done, err := openCoordView(ctx)
+			out, err := runInbox(cmd.Context(), opscoord.InboxIn{Since: since, Ack: ack})
 			if err != nil {
 				return err
 			}
-			defer done()
-			if cv.w == nil {
-				return errcodes.New(errcodes.Unsupported, "the inbox needs a git repo")
+			if jsonOut {
+				printJSON(out.Kind, out.Data, out.Count)
+				return nil
 			}
-			items, err := cv.inbox(ctx)
-			if err != nil {
-				return err
-			}
-			// SECRETS 16 / SQ10: every forced reveal since the last ack
-			// (secrets_forced.go).
-			forced, err := forcedRevealItems(ctx)
-			if err != nil {
-				return err
-			}
-			items = append(items, forced...)
-			var marker inboxMarker
-			if b, err := os.ReadFile(inboxMarkerPath(cv.w)); err == nil {
-				// A corrupt marker reads as "never acked": the inbox shows
-				// everything, which is the safe direction.
-				_ = json.Unmarshal(b, &marker)
-			}
-			cut := marker.Acked
-			if since > 0 {
-				cut = cv.now().Add(-since)
-			}
-			var shown []inboxItem
-			for _, it := range items {
-				if it.At.IsZero() || it.At.After(cut) || it.Kind == inboxExpired || it.Kind == inboxGate || it.Kind == inboxBlocked {
-					shown = append(shown, it)
-				}
-			}
-			switch {
-			case jsonOut:
-				printJSON(constants.KindTaskList, shown, len(shown))
-			case len(shown) == 0:
-				fmt.Println(style.Muted("(inbox empty)"))
-			default:
-				for _, it := range shown {
-					m := it.Mission
-					if m == "" {
-						m = "-"
-					}
-					fmt.Printf("%s  %-8s %-12s %s\n", m, it.Kind, it.Who, it.Text)
-				}
-			}
-			if ack {
-				// Best effort: the ack marker is a display convenience. Marshal of
-				// a struct holding one time.Time cannot fail, and a failed write
-				// only means the next `inbox` shows the same items again.
-				b, _ := json.Marshal(inboxMarker{Acked: cv.now()})
-				if err := os.MkdirAll(cv.w.StateDir, inboxStateDirMode); err == nil {
-					_ = os.WriteFile(inboxMarkerPath(cv.w), b, 0o600)
-				}
-			}
+			fmt.Print(out.Text())
 			return nil
 		},
 	}
@@ -574,6 +527,61 @@ Example:
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
 	return cmd
 }
+
+// runInbox is inbox.show: the items that need the caller since the last
+// ack (or --since), and --ack records now as seen (PASS3 ONE-PATH,
+// P3-COORD-1). Expired claims, gates and blocked tasks always show.
+func runInbox(ctx context.Context, in opscoord.InboxIn) (opscoord.InboxOut, error) {
+	cv, done, err := openCoordView(ctx)
+	if err != nil {
+		return opscoord.InboxOut{}, err
+	}
+	defer done()
+	if cv.w == nil {
+		return opscoord.InboxOut{}, errcodes.New(errcodes.Unsupported, "the inbox needs a git repo")
+	}
+	items, err := cv.inbox(ctx)
+	if err != nil {
+		return opscoord.InboxOut{}, err
+	}
+	// SECRETS 16 / SQ10: every forced reveal since the last ack
+	// (secrets_forced.go).
+	forced, err := forcedRevealItems(ctx)
+	if err != nil {
+		return opscoord.InboxOut{}, err
+	}
+	items = append(items, forced...)
+	var marker inboxMarker
+	if b, err := os.ReadFile(inboxMarkerPath(cv.w)); err == nil {
+		// A corrupt marker reads as "never acked": the inbox shows
+		// everything, which is the safe direction.
+		_ = json.Unmarshal(b, &marker)
+	}
+	cut := marker.Acked
+	if in.Since > 0 {
+		cut = cv.now().Add(-in.Since)
+	}
+	shown := []inboxItem{} // data is [] when empty, never null (R25 #3)
+	for _, it := range items {
+		if it.At.IsZero() || it.At.After(cut) || it.Kind == inboxExpired || it.Kind == inboxGate || it.Kind == inboxBlocked {
+			shown = append(shown, it)
+		}
+	}
+	if in.Ack {
+		// Best effort: the ack marker is a display convenience. Marshal of
+		// a struct holding one time.Time cannot fail, and a failed write
+		// only means the next `inbox` shows the same items again.
+		b, _ := json.Marshal(inboxMarker{Acked: cv.now()})
+		if err := os.MkdirAll(cv.w.StateDir, inboxStateDirMode); err == nil {
+			_ = os.WriteFile(inboxMarkerPath(cv.w), b, 0o600)
+		}
+	}
+	return opscoord.InboxOut{SchemaVersion: coordJSONSchemaVersion, Kind: constants.KindTaskList, Count: len(shown), Data: shown}, nil
+}
+
+// coordJSONSchemaVersion is the schema_version of the inbox and mission
+// status JSON envelopes (printJSON's, v0.1.17).
+const coordJSONSchemaVersion = 1
 
 // Inbox item kinds.
 const (
@@ -664,12 +672,13 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 		if open && isHuman && t.Gate != nil && coord.Gated(gateDoc(t)) && approverOf[mission] {
 			out = append(out, inboxItem{Mission: mission, Kind: inboxGate, Text: fmt.Sprintf("%s %s: gate needs approval (lore gate approve %s)", t.ID, t.Title, t.ID)})
 		}
-		if used, _ := cv.leaseTime(t); open && claimed && active && ownsIt && t.TimeboxSeconds != nil && used > time.Duration(*t.TimeboxSeconds)*time.Second {
+		if used, _ := cv.leaseTime(ctx, t); open && claimed && active && ownsIt && t.TimeboxSeconds != nil && used > time.Duration(*t.TimeboxSeconds)*time.Second {
 			out = append(out, inboxItem{Mission: mission, Kind: inboxOverdue, Who: holderLabel(sig), Text: fmt.Sprintf("%s over its time box (%s)", t.ID, time.Duration(*t.TimeboxSeconds)*time.Second)})
 		}
 	}
 	out = append(out, cv.watchedItems(ctx, docs, me)...)
 	out = append(out, cv.moreInboxItems(ctx, docs, me)...) // TASK 20 rest (FB-TASK-3)
+	out = append(out, cv.metaReviewItems(ctx)...)          // AGENT_IDENTITY 8.3 review queue (P3-AGENT-2)
 	hs, err := cv.projectDocs(ctx, tableHandoffs)
 	if err == nil {
 		for _, h := range hs {
@@ -733,7 +742,16 @@ func newMissionStatusCommand() *cobra.Command {
 				return err
 			}
 			defer done()
-			return cv.missionStatus(ctx, args[0], jsonOut)
+			out, err := cv.missionStatus(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				printJSON(out.Kind, out.Data, out.Count)
+				return nil
+			}
+			fmt.Print(out.Text())
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, constants.FlagJSON, false, "JSON output")
@@ -742,31 +760,34 @@ func newMissionStatusCommand() *cobra.Command {
 	return cmd
 }
 
-// missionRow is one task line of `mission status`.
-type missionRow struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Repo   string `json:"repo,omitempty"`
-	State  string `json:"state"`
-	Who    string `json:"who,omitempty"`
-	Detail string `json:"detail,omitempty"`
-	// SLA is ok | at_risk | breached, "" when the priority has no SLA
-	// (TASK 18.4, mission_sla.go).
-	SLA string `json:"sla,omitempty"`
+// missionRow is one task line of `mission status`: the operation's row
+// (mission.status).
+type missionRow = opscoord.MissionRow
+
+// runMissionStatus is mission.status (PASS3 ONE-PATH, P3-COORD-1).
+func runMissionStatus(ctx context.Context, in opscoord.MissionStatusIn) (opscoord.MissionStatusOut, error) {
+	cv, done, err := openCoordView(ctx)
+	if err != nil {
+		return opscoord.MissionStatusOut{}, err
+	}
+	defer done()
+	return cv.missionStatus(ctx, in.ID)
 }
 
-func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool) error {
+// missionStatus is mission id at a glance: every task row with its state,
+// the counts per state and per SLA state, and the v0.1.17 text table.
+func (cv *coordView) missionStatus(ctx context.Context, id string) (opscoord.MissionStatusOut, error) {
 	m, ok, err := coreDoc(ctx, tableMissions, id)
 	if err != nil {
-		return err
+		return opscoord.MissionStatusOut{}, err
 	}
 	if !ok {
-		return errcodes.New(errcodes.NotFound, "no mission "+id)
+		return opscoord.MissionStatusOut{}, errcodes.New(errcodes.NotFound, "no mission "+id)
 	}
 	mID, mTitle := m.Str(docKeyID), m.Str(fieldTitle)
 	all, err := cv.tasks(ctx)
 	if err != nil {
-		return err
+		return opscoord.MissionStatusOut{}, err
 	}
 	var qs []queue.Task
 	byID := map[string]*ent.Task{}
@@ -789,10 +810,10 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 	}
 	res := queue.Next(queue.Input{Tasks: qs, Filter: queue.Filter{Mission: id, AnyRepoRole: true}, Now: cv.now(), MaxAttempts: cv.maxAttempts(),
 		Weights: urgencyWeights(ctx)})
-	counts := map[string]int{}
-	slaCounts := map[string]int{}
+	var counts opscoord.StateCounts
+	var slaCounts opscoord.SLACounts
 	sla := cv.newMissionSLA(ctx)
-	var rows []missionRow
+	rows := []missionRow{} // tasks is [] when empty, never null
 	waiting := map[string]queue.Waiting{}
 	for _, w := range res.Waiting {
 		waiting[w.Task.ID] = w
@@ -837,34 +858,39 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 				row.State = missionStateGated
 			}
 		}
-		if used, per := cv.leaseTime(t); used > 0 || t.TimeboxSeconds != nil {
+		if used, per := cv.leaseTime(ctx, t); used > 0 || t.TimeboxSeconds != nil {
 			row.Detail = strings.TrimSpace(row.Detail + " " + cv.timeboxText(ctx, t, used, per))
 		}
 		// 18.4: SLA on read; a closed task keeps its state in --json, the
 		// text calls out only open late ones.
 		if row.SLA = sla.state(t); row.SLA != "" {
-			slaCounts[row.SLA]++
+			slaCounts.Add(row.SLA)
 			if slaLate(row.SLA) && row.State != missionStateDone && row.State != missionStateCancelled {
 				row.Detail = strings.TrimSpace(row.Detail + " " + sla.slaText(t, row.SLA))
 			}
 		}
-		counts[row.State]++
+		counts.Add(row.State)
 		rows = append(rows, row)
 	}
-	if jsonOut {
-		printJSON(constants.KindTaskList, map[string]any{"mission": mID, "title": mTitle, "counts": counts, "sla": slaCounts, "tasks": rows}, len(rows))
-		return nil
-	}
+	data := opscoord.MissionStatus{Mission: mID, Title: mTitle, Counts: counts, SLA: slaCounts, Tasks: rows}
+	return opscoord.MissionStatusOut{SchemaVersion: coordJSONSchemaVersion, Kind: constants.KindTaskList, Count: len(rows),
+		Data: data, Lines: missionStatusLines(data)}, nil
+}
+
+// missionStatusLines is the v0.1.17 text of mission status: a summary line
+// and one line per task.
+func missionStatusLines(d opscoord.MissionStatus) []string {
+	c := d.Counts
 	slaLine := ""
-	if n, b := slaCounts[opstask.SLAAtRisk], slaCounts[opstask.SLABreached]; n+b > 0 {
+	if n, b := d.SLA.AtRisk, d.SLA.Breached; n+b > 0 {
 		slaLine = fmt.Sprintf(" · SLA: %d at risk, %d breached", n, b)
 	}
-	fmt.Printf("%s %s   %d tasks · %d done · %d claimed · %d ready · %d waiting · %d gated · %d expired · %d blocked%s\n",
-		mID, mTitle, len(rows), counts[missionStateDone], counts[missionStateClaimed], counts[missionStateReady], counts[missionStateWaiting], counts[missionStateGated], counts[missionStateExpired], counts[missionStateBlocked], slaLine)
-	for _, r := range rows {
-		fmt.Printf("  %-9s %s  %-28s %-12s %s\n", r.State, r.ID, r.Title, r.Who, r.Detail)
+	lines := []string{fmt.Sprintf("%s %s   %d tasks · %d done · %d claimed · %d ready · %d waiting · %d gated · %d expired · %d blocked%s",
+		d.Mission, d.Title, len(d.Tasks), c.Done, c.Claimed, c.Ready, c.Waiting, c.Gated, c.Expired, c.Blocked, slaLine)}
+	for _, r := range d.Tasks {
+		lines = append(lines, fmt.Sprintf("  %-9s %s  %-28s %-12s %s", r.State, r.ID, r.Title, r.Who, r.Detail))
 	}
-	return nil
+	return lines
 }
 
 // urgencyWeights are the repo's tasks.urgency.* weights over the 13.2

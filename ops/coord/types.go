@@ -241,13 +241,14 @@ type MissionStatusOut struct {
 // Text implements op.Texter.
 func (o MissionStatusOut) Text() string { return joinLines(o.Lines) }
 
-// MissionStatus is the mission at a glance.
+// MissionStatus is the mission at a glance. The fields are in key order:
+// v0.1.17 printed a map, so its JSON keys came out sorted.
 type MissionStatus struct {
-	Mission string       `json:"mission"`
-	Title   string       `json:"title"`
 	Counts  StateCounts  `json:"counts"`
+	Mission string       `json:"mission"`
 	SLA     SLACounts    `json:"sla"`
 	Tasks   []MissionRow `json:"tasks"`
+	Title   string       `json:"title"`
 }
 
 // StateCounts counts the mission's rows per state. v0.1.17 printed a map
@@ -284,4 +285,75 @@ type MissionRow struct {
 	Detail string `json:"detail,omitempty"`
 	// SLA is ok | at_risk | breached, "" when the priority has no SLA.
 	SLA string `json:"sla,omitempty"`
+}
+
+// Mission row states (the closed set of MissionRow.State and the keys of
+// StateCounts). They are CLI output and JSON keys: never rename one.
+const (
+	StateBlocked   = "blocked"
+	StateCancelled = "cancelled"
+	StateClaimed   = "claimed"
+	StateCycle     = "cycle"
+	StateDone      = "done"
+	StateExpired   = "expired"
+	StateGated     = "gated"
+	StatePoison    = "poison"
+	StateReady     = "ready"
+	StateWaiting   = "waiting"
+)
+
+// field is the counter of state in c, nil for a state outside the set.
+func (c *StateCounts) field(state string) *int {
+	switch state {
+	case StateBlocked:
+		return &c.Blocked
+	case StateCancelled:
+		return &c.Cancelled
+	case StateClaimed:
+		return &c.Claimed
+	case StateCycle:
+		return &c.Cycle
+	case StateDone:
+		return &c.Done
+	case StateExpired:
+		return &c.Expired
+	case StateGated:
+		return &c.Gated
+	case StatePoison:
+		return &c.Poison
+	case StateReady:
+		return &c.Ready
+	case StateWaiting:
+		return &c.Waiting
+	}
+	return nil
+}
+
+// Add counts one row in state. A state outside the closed set is a
+// programming error upstream; it is not counted rather than invented as a
+// new JSON key.
+func (c *StateCounts) Add(state string) {
+	if p := c.field(state); p != nil {
+		*p++
+	}
+}
+
+// SLA states (MissionRow.SLA, the keys of SLACounts).
+const (
+	SLAOK       = "ok"
+	SLAAtRisk   = "at_risk"
+	SLABreached = "breached"
+)
+
+// Add counts one row in SLA state st ("" and unknown states are not
+// counted).
+func (c *SLACounts) Add(st string) {
+	switch st {
+	case SLAOK:
+		c.OK++
+	case SLAAtRisk:
+		c.AtRisk++
+	case SLABreached:
+		c.Breached++
+	}
 }

@@ -118,7 +118,7 @@ func defaultBranchName(ctx context.Context, r *gitref.Repo) string {
 func printClaim(out io.Writer, id string, cr coord.ClaimResult, w *coordWorld, ref string) {
 	s := cr.Plan.Signal
 	if cr.Plan.Resumed {
-		fmt.Fprintf(out, "you hold %s already (until %s); resume, or `lore task release %s`\n", id, s.Expires.UTC().Format(time.Kitchen), id)
+		_, _ = fmt.Fprintf(out, "you hold %s already (until %s); resume, or `lore task release %s`\n", id, s.Expires.UTC().Format(time.Kitchen), id)
 		return
 	}
 	extra := ""
@@ -129,13 +129,13 @@ func printClaim(out io.Writer, id string, cr coord.ClaimResult, w *coordWorld, r
 	if cr.Doc != nil {
 		title = " " + cr.Doc.Str("title")
 	}
-	fmt.Fprintf(out, "%s claimed %s%s (lease %s, token %s…) on %s%s\n", style.Success("✓"), id, title,
+	_, _ = fmt.Fprintf(out, "%s claimed %s%s (lease %s, token %s…) on %s%s\n", style.Success("✓"), id, title,
 		shortDuration(w.Lease.TTL), s.ClaimToken[:min(len(s.ClaimToken), coord.TokenPrefixLen)], ref, extra)
 	if s.WorkBranch != "" {
-		fmt.Fprintf(out, "  work branch %s\n", s.WorkBranch)
+		_, _ = fmt.Fprintf(out, "  work branch %s\n", s.WorkBranch)
 	}
 	for _, o := range cr.Overlaps {
-		fmt.Fprintf(out, "%s file ownership overlaps: %s\n", style.Warn("!"), o)
+		_, _ = fmt.Fprintf(out, "%s file ownership overlaps: %s\n", style.Warn("!"), o)
 	}
 }
 
@@ -207,7 +207,7 @@ func runTaskClaim(ctx context.Context, out io.Writer, in opscoord.ClaimIn) error
 		return coordError(err)
 	}
 	if in.Coordinate && len(opts.OpenChildren(in.ID)) > 0 {
-		fmt.Fprintf(out, "you now coordinate %s; claim a child to work: lore task claim %s\n", in.ID, opts.OpenChildren(in.ID)[0])
+		_, _ = fmt.Fprintf(out, "you now coordinate %s; claim a child to work: lore task claim %s\n", in.ID, opts.OpenChildren(in.ID)[0])
 	}
 	if in.Strict && len(cr.Overlaps) > 0 && !cr.Plan.Resumed {
 		// The claim is taken; --strict gives it back at once.
@@ -305,28 +305,28 @@ const (
 // ready tasks and why every other matched task waits.
 func printNextDryRun(out io.Writer, res queue.Result, why bool) {
 	if len(res.Ready) == 0 {
-		fmt.Fprintln(out, "nothing ready")
+		_, _ = fmt.Fprintln(out, "nothing ready")
 	} else {
 		top := res.Ready[0]
 		s := res.Scores[top.ID]
-		fmt.Fprintf(out, "would claim %s %s   urgency %s\n", top.ID, top.Title, urgency.Format(s.Total))
+		_, _ = fmt.Fprintf(out, "would claim %s %s   urgency %s\n", top.ID, top.Title, urgency.Format(s.Total))
 		if why {
 			for _, l := range s.Lines() {
-				fmt.Fprintln(out, "  "+l)
+				_, _ = fmt.Fprintln(out, "  "+l)
 			}
 		}
-		fmt.Fprintln(out, "ranked:")
+		_, _ = fmt.Fprintln(out, "ranked:")
 		for i, t := range res.Ready {
-			fmt.Fprintf(out, "  %d  %s  %s\n", i+1, t.ID, urgency.Format(res.Scores[t.ID].Total))
+			_, _ = fmt.Fprintf(out, "  %d  %s  %s\n", i+1, t.ID, urgency.Format(res.Scores[t.ID].Total))
 		}
 	}
 	if len(res.Waiting) > 0 {
-		fmt.Fprintln(out, "waiting:")
+		_, _ = fmt.Fprintln(out, "waiting:")
 		for _, wt := range res.Waiting {
-			fmt.Fprintf(out, "  %s  %s\n", wt.Task.ID, wt.Reason)
+			_, _ = fmt.Fprintf(out, "  %s  %s\n", wt.Task.ID, wt.Reason)
 		}
 	}
-	fmt.Fprintln(out, "nothing written (--dry-run)")
+	_, _ = fmt.Fprintln(out, "nothing written (--dry-run)")
 }
 
 // coordLister is the optional listing half of a row store (task next).
