@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -126,8 +127,11 @@ type TimeData struct {
 	// OpenClaims is the claim still on the board, counted live (5.1 rule 1).
 	OpenClaims []TimeClaim `json:"open_claims,omitempty"`
 	// InTrash: read with --include-deleted from the trash (DQ10).
-	InTrash bool     `json:"in_trash,omitempty"`
-	Notes   []string `json:"notes,omitempty"`
+	InTrash bool `json:"in_trash,omitempty"`
+	// Reopened is the day of the last done → open change (TIME 11.1),
+	// "" when the task was never reopened.
+	Reopened string   `json:"reopened,omitempty"`
+	Notes    []string `json:"notes,omitempty"`
 	// Subtree is the parent's own time plus its live sub-tasks' (TASK
 	// 6.11); empty for a task without sub-tasks or with --no-children.
 	Subtree     TimeSubtree `json:"subtree,omitzero"`
@@ -176,6 +180,21 @@ func timeOps(o ops) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.timeStop),
 	}
+}
+
+// reopenedDay is the local day of the newest history entry that moved
+// status from done to an open status (TIME 11.1); "" when none.
+func reopenedDay(r row.Row, loc *time.Location) string {
+	last := ""
+	for _, h := range History(r) {
+		if h.Field == work.FieldStatus && h.From == schema.TaskStatusDone && h.To != schema.TaskStatusDone && h.To != schema.TaskStatusCancelled && h.At > last {
+			last = h.At
+		}
+	}
+	if t, err := time.Parse(time.RFC3339Nano, last); err == nil {
+		return t.In(loc).Format(timeentry.DayLayout)
+	}
+	return ""
 }
 
 // TimeSubtree is a parent's subtree time (TASK 6.11): every live
@@ -303,7 +322,8 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		return (since == "" || day >= since) && (until == "" || day <= until)
 	}
 	d := TimeData{TaskID: id.String(), Title: work.Field(r, work.FieldTitle), Status: work.Field(r, work.FieldStatus), GroupBy: group, showEntries: in.Entries, loc: loc, InTrash: trashed, names: map[string]string{}}
-	nameOf := func(actor string) { // WHO column: display name, not the actor id
+	d.Reopened = reopenedDay(r, loc) // TIME 11.1
+	nameOf := func(actor string) {   // WHO column: display name, not the actor id
 		if _, ok := d.names[actor]; !ok {
 			d.names[actor] = o.actorName(ctx, actor)
 		}
@@ -525,6 +545,9 @@ func (o TimeOut) Text() string {
 	status := d.Status
 	if d.InTrash {
 		status += ", in the trash"
+	}
+	if d.Reopened != "" {
+		status += ", reopened " + d.Reopened
 	}
 	b.WriteString(d.TaskID + "  " + d.Title + "   (" + status + ")\n\n")
 	b.WriteString("effort   " + timeentry.FormatSeconds(d.EffortSeconds) + "     elapsed  " + timeentry.FormatSeconds(d.ElapsedSeconds) +
