@@ -219,7 +219,6 @@ func Ops(env Env) []op.Entry {
 			Name: OpDetach, Summary: "Detach a tag from an entity",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 		}, o.detach),
-		o.editEntry(),
 	}
 }
 
