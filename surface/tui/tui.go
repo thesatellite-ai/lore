@@ -9,20 +9,26 @@
 //	Run ─▶ tables screen: every synced table with its live-row count
 //	   │      <n> opens table n · q quits
 //	   ├─▶ rows screen: one page of rows (id, store, label)
-//	   │      <n> shows row n · n/p next/previous page · /text filters · b back
+//	   │      <n> shows row n · n/p next/previous page · /text filters ·
+//	   │      b back · q quits
 //	   └─▶ row screen: every field (sensitive fields masked, FA-OLDCODE-3)
-//	          b back
+//	          b back · q quits
+//
+// Options.Kind opens on one table's rows screen first (`lore tui --kind
+// decision`, P3-TUI-1); b from there goes to the tables screen.
 package tui
 
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -55,6 +61,16 @@ const (
 // labelFields are tried in order for a row's one-line label.
 var labelFields = []string{"title", "name", "body", "text", "key", "url"}
 
+// errQuit unwinds every screen when the person types q (never returned by Run).
+var errQuit = errors.New("tui: quit")
+
+// Options tune one session.
+type Options struct {
+	// Kind is the table to open first, by table name ("decisions") or its
+	// singular ("decision"); empty opens on the tables screen.
+	Kind string
+}
+
 // hit is one row with the store it came from.
 type hit struct {
 	src store.Source
@@ -69,10 +85,63 @@ type browser struct {
 	out io.Writer
 }
 
-// Run browses src until the person quits or in ends.
-func Run(ctx context.Context, src Source, in io.Reader, out io.Writer) error {
+// Run browses src until the person quits or in ends. opts is optional (at
+// most one is read; variadic so existing callers keep compiling). An unknown
+// Kind is E_INVALID_INPUT naming the tables, before anything is shown.
+func Run(ctx context.Context, src Source, in io.Reader, out io.Writer, opts ...Options) error {
 	b := &browser{ctx: ctx, src: src, in: bufio.NewScanner(in), out: out}
-	return b.tables()
+	defs := b.defs()
+	var o Options
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	if o.Kind != "" {
+		d, err := resolve(defs, o.Kind)
+		if err != nil {
+			return err
+		}
+		if err := b.table(d); err != nil {
+			return quitOK(err)
+		}
+	}
+	return quitOK(b.tables(defs))
+}
+
+// quitOK maps the quit unwind to a clean end.
+func quitOK(err error) error {
+	if errors.Is(err, errQuit) {
+		return nil
+	}
+	return err
+}
+
+// defs is every synced table, sorted by name.
+func (b *browser) defs() []schema.TableDef {
+	defs := slices.DeleteFunc(slices.Clone(b.src.Tables()), func(d schema.TableDef) bool { return !d.Synced })
+	slices.SortFunc(defs, func(x, y schema.TableDef) int { return strings.Compare(string(x.Name), string(y.Name)) })
+	return defs
+}
+
+// resolve finds kind among defs: the table name, or its singular as
+// v0.1.17's --kind spelled it (memory → memories, decision → decisions).
+func resolve(defs []schema.TableDef, kind string) (schema.TableDef, error) {
+	k := strings.ToLower(strings.TrimSpace(kind))
+	want := []string{k, k + "s", k + "es"}
+	if base, ok := strings.CutSuffix(k, "y"); ok {
+		want = append(want, base+"ies")
+	}
+	for _, w := range want {
+		for _, d := range defs {
+			if string(d.Name) == w {
+				return d, nil
+			}
+		}
+	}
+	names := make([]string, len(defs))
+	for i, d := range defs {
+		names[i] = string(d.Name)
+	}
+	return schema.TableDef{}, errs.New(errs.InvalidInput, fmt.Sprintf("unknown kind %q for lore tui --kind; tables: %s", kind, strings.Join(names, ", ")))
 }
 
 // read prints the prompt and returns the next trimmed line; ok=false at EOF.
@@ -90,9 +159,7 @@ func (b *browser) put(s string) {
 }
 
 // tables is the first screen.
-func (b *browser) tables() error {
-	defs := slices.DeleteFunc(slices.Clone(b.src.Tables()), func(d schema.TableDef) bool { return !d.Synced })
-	slices.SortFunc(defs, func(x, y schema.TableDef) int { return strings.Compare(string(x.Name), string(y.Name)) })
+func (b *browser) tables(defs []schema.TableDef) error {
 	for {
 		b.put("\nlore tables (live rows in every attached store)\n")
 		for i, d := range defs {
@@ -132,7 +199,7 @@ func (b *browser) rows(table row.Table) ([]hit, error) {
 	return out, nil
 }
 
-// table is the rows screen of d. Returns nil on back or EOF.
+// table is the rows screen of d. Returns nil on back, errQuit on q or EOF.
 func (b *browser) table(d schema.TableDef) error {
 	all, err := b.rows(d.Name)
 	if err != nil {
@@ -151,10 +218,12 @@ func (b *browser) table(d schema.TableDef) error {
 		for i, h := range shown[lo:hi] {
 			b.put(fmt.Sprintf("%3d  %s  %-8s %s\n", lo+i+1, h.r.ID, h.src, label(d, h.r)))
 		}
-		b.put("<n> show · n/p page · /text filter · b back\n")
+		b.put("<n> show · n/p page · /text filter · b back · q quit\n")
 		line, ok := b.read()
 		switch {
-		case !ok || line == cmdBack || line == cmdQuit:
+		case !ok || line == cmdQuit:
+			return errQuit
+		case line == cmdBack:
 			return nil
 		case line == cmdNext:
 			page++
@@ -166,14 +235,14 @@ func (b *browser) table(d schema.TableDef) error {
 		default:
 			if i, err := strconv.Atoi(line); err == nil && i >= 1 && i <= len(shown) {
 				if !b.show(d, shown[i-1]) {
-					return nil
+					return errQuit
 				}
 			}
 		}
 	}
 }
 
-// show prints every field of one row; false at EOF.
+// show prints every field of one row; false on q or EOF.
 func (b *browser) show(d schema.TableDef, h hit) bool {
 	b.put(fmt.Sprintf("\n%s  %s  store %s\n", h.r.ID, d.Name, h.src))
 	names := make([]string, 0, len(h.r.Fields))
@@ -187,9 +256,9 @@ func (b *browser) show(d schema.TableDef, h hit) bool {
 	if !h.r.UpdatedAt.IsZero() {
 		b.put(fmt.Sprintf("  updated: %s by %s\n", h.r.UpdatedAt.UTC().Format("2006-01-02 15:04"), h.r.UpdatedBy))
 	}
-	b.put("b back\n")
-	_, ok := b.read()
-	return ok
+	b.put("b back · q quit\n")
+	line, ok := b.read()
+	return ok && line != cmdQuit
 }
 
 // fieldText is a field's text; a sensitive field is masked (FA-OLDCODE-3:
