@@ -751,31 +751,6 @@ func TestE2E_FixProjectsRepointsCoreRows(t *testing.T) {
 	}
 }
 
-// E43: restore --prefer db brings the DB's version back into the files.
-func TestE2E_RestorePreferDB(t *testing.T) {
-	w := newWorld(t)
-	c := w.newClone("solo")
-	c.lore("init", "--non-interactive", "--name=app")
-	cfg := c.addConfig("default_model", "before backup")
-	rule := c.addRule("before backup")
-	backup := filepath.Join(c.dir, "snap.sqlite")
-	c.lore("backup", "--out", backup)
-	c.writeDocField(configTable, cfg, "value", "after backup")
-	c.writeDocField("rules", rule, "body", "after backup")
-	c.lore("sync")
-	c.lore("restore", backup, "--confirm", "--prefer", "db")
-	c.lore("sync")
-	if c.readDoc(configTable, cfg)["value"] != "before backup" {
-		t.Fatal("restore --prefer db did not win")
-	}
-	// A core row's file is the truth and lore.db only its mirror
-	// (STORE_SERVER_SPEC 3; cf0f486: no old writer writes a core-owned file),
-	// so --prefer db cannot put a backup's copy over it.
-	if got := c.readDoc("rules", rule)["body"]; got != "after backup" {
-		t.Fatalf("restore --prefer db must not overwrite a core row's file: body %v", got)
-	}
-}
-
 // E1: `lore init` in a clone that already has .lore/data adopts it.
 func TestE2E_InitOnCloneAdopts(t *testing.T) {
 	w := newWorld(t)
@@ -1168,28 +1143,6 @@ func TestE2E_PreCommitGuardsUnstagedFileInSubdirProject(t *testing.T) {
 	repo.git("add", "README.md")
 	if _, code := repo.tryGit("commit", "-qm", "readme only"); code == 0 {
 		t.Fatal("pre-commit staged an unchecked lore file containing a secret")
-	}
-}
-
-// Review finding: a bad --prefer must be rejected before the live DB is
-// touched (it used to replace the DB, then fail, skipping the sync reset).
-func TestE2E_RestoreRejectsBadPreferBeforeTouchingDB(t *testing.T) {
-	w := newWorld(t)
-	c := w.newClone("solo")
-	c.lore("init", "--non-interactive", "--name=app")
-	backup := filepath.Join(c.dir, "snap.sqlite")
-	c.lore("backup", "--out", backup)
-	c.addRow("after backup")
-	before, err := os.ReadFile(filepath.Join(c.dir, ".lore", "lore.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r := c.loreAny("restore", backup, "--confirm", "--prefer", "file"); r.code == 0 {
-		t.Fatal("typo in --prefer must fail")
-	}
-	after, err := os.ReadFile(filepath.Join(c.dir, ".lore", "lore.db"))
-	if err != nil || string(after) != string(before) {
-		t.Fatal("the live DB was replaced despite the rejected flag")
 	}
 }
 

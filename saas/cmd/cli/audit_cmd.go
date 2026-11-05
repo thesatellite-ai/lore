@@ -21,7 +21,6 @@ import (
 	"database/sql"
 	"os"
 	"slices"
-	"strings"
 
 	"dbent"
 	"saas/pkg/aicoder/lsync"
@@ -30,6 +29,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/auditchain"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 var _ opsaudit.Env = (*coreAuditSink)(nil)
@@ -66,7 +66,7 @@ func (s *coreAuditSink) AuditLog(ctx context.Context, limit int) ([]opsaudit.Ent
 	}
 	out := make([]opsaudit.Entry, 0, len(recs))
 	for _, r := range recs {
-		out = append(out, entryOf(r))
+		out = append(out, wire.AuditEntryOf(r))
 	}
 	return out, nil
 }
@@ -83,11 +83,7 @@ func (s *coreAuditSink) AuditVerify(ctx context.Context) (opsaudit.Report, error
 	}
 	var rep opsaudit.Report
 	rep.BrokenAt, rep.Entries = auditchain.Verify(recs)
-	for _, r := range recs {
-		if strings.HasSuffix(r.Action, "."+string(lsync.ChangeExternal)) {
-			rep.ExternalWrites++
-		}
-	}
+	rep.ExternalWrites = wire.ExternalWrites(recs)
 	// 2. rows changed in lore.db by something other than lore (the sync
 	// bridge's lore.db, not the chain): only where lore.db exists.
 	if fi, lerr := os.Lstat(dbPath); lerr != nil || !fi.Mode().IsRegular() {
@@ -108,13 +104,4 @@ func (s *coreAuditSink) AuditVerify(ctx context.Context) (opsaudit.Report, error
 		}
 	}
 	return rep, nil
-}
-
-// entryOf is one chain record in the operation's shape (same JSON keys).
-func entryOf(r auditchain.Record) opsaudit.Entry {
-	return opsaudit.Entry{
-		ActingProjectID: r.ActingProjectID, TargetProjectID: r.TargetProjectID, ActorID: r.ActorID, Action: r.Action,
-		TargetTable: r.TargetTable, TargetID: r.TargetID, Override: r.Override, BeforeHash: r.BeforeHash, AfterHash: r.AfterHash,
-		Reason: r.Reason, SessionID: r.SessionID, Confirmed: r.Confirmed, ID: r.ID, CreatedAt: r.CreatedAt, PrevLogHash: r.PrevLogHash,
-	}
 }

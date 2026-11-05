@@ -9,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/logic/auditchain"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // auditLogsDDL is the v0.1.17 audit_logs columns the chain writer uses.
@@ -53,7 +54,7 @@ func TestLoreDBAuditMovesToTheMachineChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = ch.Close() }() // test handle
-	key := auditChainKey(dbPath)
+	key := wire.AuditChainKey(dbPath)
 	for range 2 {
 		if err = importLoreDBAudit(ctx, ch, key, dbPath); err != nil {
 			t.Fatal(err)
@@ -75,10 +76,10 @@ func TestLoreDBAuditMovesToTheMachineChain(t *testing.T) {
 	}
 	// a project with no lore.db imports nothing, once
 	empty := filepath.Join(dir, "none", "lore.db")
-	if err = importLoreDBAudit(ctx, ch, auditChainKey(empty), empty); err != nil {
+	if err = importLoreDBAudit(ctx, ch, wire.AuditChainKey(empty), empty); err != nil {
 		t.Fatal(err)
 	}
-	if done, ierr := ch.Imported(ctx, auditChainKey(empty)); ierr != nil || !done {
+	if done, ierr := ch.Imported(ctx, wire.AuditChainKey(empty)); ierr != nil || !done {
 		t.Fatalf("Imported(no lore.db) = %v, %v", done, ierr)
 	}
 }

@@ -20,11 +20,7 @@ package main
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
-	"slices"
 
-	"saas/pkg/aicoder/audit"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/projresolve"
 
@@ -32,20 +28,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/auditchain"
 	"github.com/thesatellite-ai/lore/wire"
 )
-
-// auditChainKey is the chain name of the project whose lore.db is at
-// dbPath: the absolute path (symlinks of its folder resolved), so a
-// subfolder run and a top-level run name the same chain.
-func auditChainKey(dbPath string) string {
-	abs, err := filepath.Abs(dbPath)
-	if err != nil {
-		return dbPath
-	}
-	if dir, derr := filepath.EvalSymlinks(filepath.Dir(abs)); derr == nil {
-		return filepath.Join(dir, filepath.Base(abs))
-	}
-	return abs
-}
 
 // auditDBPath is the lore.db path of the project at root ("" = working
 // directory), the chain's key source.
@@ -70,57 +52,16 @@ func openAuditChain(ctx context.Context, app *wire.App, dbPath string) (*sqlite.
 	if err != nil {
 		return nil, "", errcodes.New(errcodes.Internal, "audit: open the chain").WithCause(err)
 	}
-	key := auditChainKey(dbPath)
+	key := wire.AuditChainKey(dbPath)
 	if err := importLoreDBAudit(ctx, ch, key, dbPath); err != nil {
 		return nil, "", errors.Join(err, ch.Close())
 	}
 	return ch, key, nil
 }
 
-// importLoreDBAudit copies dbPath's audit_logs into chain key once. No
-// lore.db, a symlink (never followed) or no audit table imports nothing
-// but still sets the marker, so a later lore.db is never spliced in front
-// of entries already chained here.
+// importLoreDBAudit is wire.ImportLoreDBAudit on the CLI clock.
 func importLoreDBAudit(ctx context.Context, ch *sqlite.AuditChain, key, dbPath string) error {
-	done, err := ch.Imported(ctx, key)
-	if err != nil || done {
-		return err
-	}
-	var recs []auditchain.Record
-	if fi, lerr := os.Lstat(dbPath); lerr == nil && fi.Mode().IsRegular() {
-		db, oerr := openPrivateLoreDB(dbPath, true)
-		if oerr != nil {
-			return oerr
-		}
-		var has int
-		qerr := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'audit_logs'`).Scan(&has)
-		var old []audit.Record
-		if qerr == nil && has == 1 {
-			old, qerr = audit.List(ctx, db, 0)
-		}
-		if cerr := db.Close(); qerr == nil {
-			qerr = cerr
-		}
-		if qerr != nil {
-			return errcodes.New(errcodes.Internal, "audit: read lore.db audit_logs for the move to the machine store").WithCause(qerr)
-		}
-		slices.Reverse(old) // List is newest first; the chain is oldest first
-		for _, r := range old {
-			recs = append(recs, chainRecordOf(r))
-		}
-	}
-	if _, err := ch.Import(ctx, key, dbPath, recs, cliClock().Now()); err != nil {
-		return errcodes.New(errcodes.Internal, "audit: move lore.db audit_logs to the machine store").WithCause(err)
-	}
-	return nil
-}
-
-// chainRecordOf is one v0.1.17 record, field for field.
-func chainRecordOf(r audit.Record) auditchain.Record {
-	return auditchain.Record{ID: r.ID, CreatedAt: r.CreatedAt, ActingProjectID: r.ActingProjectID, TargetProjectID: r.TargetProjectID,
-		ActorID: r.ActorID, Action: r.Action, TargetTable: r.TargetTable, TargetID: r.TargetID, Override: r.Override,
-		BeforeHash: r.BeforeHash, AfterHash: r.AfterHash, Reason: r.Reason, SessionID: r.SessionID, Confirmed: r.Confirmed,
-		PrevLogHash: r.PrevLogHash}
+	return wire.ImportLoreDBAudit(ctx, ch, key, dbPath, cliClock().Now())
 }
 
 // appendAudit appends e to the chain of dbPath.

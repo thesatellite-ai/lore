@@ -23,6 +23,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -74,6 +75,11 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	}
 	if o.Local.Leaks == nil {
 		o.Local.Leaks = &standaloneLeaks{opts: o, res: res} // its own App: check is Local (P3-CMDLORE-8)
+	}
+	// P3-LOCAL-7: the repo's hash-chained audit log in the machine store,
+	// the same chain the old binary appends (lore audit log|verify work).
+	if o.Audit == nil {
+		o.Audit = NewChainAudit(home, dir, time.Now)
 	}
 	// Org store writes are pushed at once (P3-CMDLORE-7); host hooks wrap
 	// after this (their WrapBackend calls this one first).

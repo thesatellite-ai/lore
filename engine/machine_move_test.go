@@ -33,8 +33,8 @@ func TestMachineLocalNeverMoves(t *testing.T) {
 		"machine row by table": {Ref{Table: tableTestSessions, ID: ses.Row.ID}, store.SourceRepo},
 		"shared row into it":   {Ref{ID: prj.Row.ID}, store.SourceMachine},
 	} {
-		if _, err := w.eng.Move(ctx, c.ref, c.to); !errs.Has(err, errs.InvalidInput) {
-			t.Errorf("%s: err = %v, want E_INVALID_INPUT", name, err)
+		if _, merr := w.eng.Move(ctx, c.ref, c.to); !errs.Has(merr, errs.InvalidInput) {
+			t.Errorf("%s: err = %v, want E_INVALID_INPUT", name, merr)
 		}
 	}
 	if _, err = w.repo.Open(store.OpenOptions{}).Get(ctx, tableTestSessions, ses.Row.ID); err == nil {

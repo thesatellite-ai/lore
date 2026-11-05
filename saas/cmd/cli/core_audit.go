@@ -18,27 +18,13 @@ import (
 	"sync"
 
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
 
 	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/logic/auditchain"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 )
-
-// coreAuditKinds names the chain action suffix of every core row action
-// that is not a plain create/update (the v0.1.17 chain recorded every local
-// change as "<table>.write"; a delete, trash, restore or purge is named so
-// the log says what happened, OV9 / later.md cl-wire). The suffix is the
-// engine action's own wire value, so the chain and the core agree.
-var coreAuditKinds = map[engine.Action]string{
-	engine.ActionDelete:  string(engine.ActionDelete),
-	engine.ActionTrash:   string(engine.ActionTrash),
-	engine.ActionRestore: string(engine.ActionRestore),
-	engine.ActionPurge:   string(engine.ActionPurge),
-}
 
 // coreAuditSink is the engine.AuditSink of the old binary: one chain entry
 // per core event, in its own immediate transaction (the DSN's
@@ -96,24 +82,6 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 	if s.err != nil {
 		return s.err
 	}
-	kind := string(lsync.ChangeLocal)
-	if k, ok := coreAuditKinds[ev.Action]; ok {
-		kind = k
-	}
-	reason := ev.Op
-	if !ev.Cascade.IsZero() {
-		reason += " (cascade of " + ev.Cascade.String() + ")"
-	}
-	table := ev.Table.String()
-	action := table + "." + kind
-	if ev.Secret != (engine.SecretAudit{}) {
-		// a secret.* event (SECRETS 16): no row write; FORCED is loud.
-		action = string(ev.Action)
-		reason += " " + ev.Secret.Command + " " + ev.Secret.Result
-		if ev.Secret.Forced {
-			reason += " FORCED (" + string(ev.Secret.ForcedBy) + ")"
-		}
-	}
 	ses := ev.Session
 	if ses == "" {
 		var serr error
@@ -121,11 +89,7 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 			return serr
 		}
 	}
-	return appendAudit(ctx, s.app, s.dbPath, auditchain.Record{
-		ActorID: ev.Actor.String(), Action: action,
-		TargetTable: table, TargetID: ev.ID.String(), Reason: reason,
-		SessionID: ses, Confirmed: ev.Confirmed || engine.Confirmed(ctx), // 6.6, hashed only when set (OQ10)
-	})
+	return appendAudit(ctx, s.app, s.dbPath, wire.ChainRecordOf(ctx, ev, ses)) // session/confirmed hashed only when set (OQ10)
 }
 
 // projectRoot is the folder lore.db is resolved at: the nearest folder

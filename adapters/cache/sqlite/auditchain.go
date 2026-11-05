@@ -24,8 +24,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/auditchain"
@@ -253,4 +255,69 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// The v0.1.17 lore.db audit_logs reader (the one import read, P3-LOCAL-7).
+const (
+	legacyAuditHasTable = `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'audit_logs'`
+	legacyAuditHasSes   = `SELECT COUNT(*) FROM pragma_table_info('audit_logs') WHERE name IN ('session_id', 'confirmed')`
+	legacyAuditCols     = `id, created_at, COALESCE(acting_project_id, ''), COALESCE(target_project_id, ''), actor_id, action,
+		COALESCE(target_table, ''), COALESCE(target_id, ''), override, COALESCE(before_hash, ''), COALESCE(after_hash, ''),
+		COALESCE(reason, ''), COALESCE(prev_log_hash, '')`
+	legacyAuditAll    = `SELECT ` + legacyAuditCols + `, '', 0 FROM audit_logs ORDER BY rowid`
+	legacyAuditAllSes = `SELECT ` + legacyAuditCols + `, COALESCE(session_id, ''), confirmed FROM audit_logs ORDER BY rowid`
+)
+
+// ReadLegacyAuditLog reads the v0.1.17 hash chain of the lore.db at path,
+// oldest first, read-only, as saas/pkg/aicoder/audit stored it (a lore.db
+// without the 0.1.18 session columns reads them as empty, as v0.1.17's
+// reader did). A file without the table reads as no records. created_at is
+// RFC 3339 UTC seconds, the form `lore audit log` always printed.
+func ReadLegacyAuditLog(ctx context.Context, path string) (_ []auditchain.Record, err error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, errs.Wrap(errs.BadPath, "audit chain: lore.db path", err)
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs), RawQuery: "mode=ro&_pragma=busy_timeout(" + strconv.Itoa(busyTimeoutMS) + ")"}
+	db, err := sql.Open(driverName, u.String())
+	if err != nil {
+		return nil, dbErr("open lore.db for the audit import", err)
+	}
+	defer func() { err = errors.Join(err, db.Close()) }()
+	var n int
+	if err = db.QueryRowContext(ctx, legacyAuditHasTable).Scan(&n); err != nil {
+		return nil, dbErr("lore.db: read the tables", err)
+	}
+	if n == 0 {
+		return nil, nil
+	}
+	if err = db.QueryRowContext(ctx, legacyAuditHasSes).Scan(&n); err != nil {
+		return nil, dbErr("lore.db: read the audit columns", err)
+	}
+	q := legacyAuditAll
+	if n == 2 {
+		q = legacyAuditAllSes
+	}
+	rows, err := db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, dbErr("lore.db: read audit_logs", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	var out []auditchain.Record
+	for rows.Next() {
+		var r auditchain.Record
+		var created sql.NullTime
+		if err = rows.Scan(&r.ID, &created, &r.ActingProjectID, &r.TargetProjectID, &r.ActorID, &r.Action, &r.TargetTable,
+			&r.TargetID, &r.Override, &r.BeforeHash, &r.AfterHash, &r.Reason, &r.PrevLogHash, &r.SessionID, &r.Confirmed); err != nil {
+			return nil, dbErr("lore.db: scan audit_logs", err)
+		}
+		if created.Valid {
+			r.CreatedAt = created.Time.UTC().Format(time.RFC3339)
+		}
+		out = append(out, r)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, dbErr("lore.db: read audit_logs", err)
+	}
+	return out, nil
 }
