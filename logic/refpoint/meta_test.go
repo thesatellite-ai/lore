@@ -1,6 +1,7 @@
 package refpoint
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
@@ -46,8 +47,8 @@ func TestMetaOf(t *testing.T) {
 		"tags":        `["a","b"]`,
 		"empty":       `""`,
 		"büro":        `"köln"`,
-		"api.token":   `"tk-not-printed"`,
-	}, "api.token")
+		"api.hint":    `"tk-not-printed"`,
+	}, "api.hint")
 	get := MetaOf(r)
 	cases := []struct {
 		key       string
@@ -67,7 +68,7 @@ func TestMetaOf(t *testing.T) {
 		{key: "tags", ok: true, text: `["a","b"]`},
 		{key: "empty", ok: true, text: ""},
 		{key: "büro", ok: true, text: "köln"},
-		{key: "api.token", ok: true, text: "tk-not-printed", sensitive: true},
+		{key: "api.hint", ok: true, text: "tk-not-printed", sensitive: true},
 		{key: "missing"},
 		{key: "smtp.nope"},
 		{key: "owner.inner"}, // a string has no fields
@@ -127,5 +128,47 @@ func TestMetaExpansionPoints(t *testing.T) {
 	// nil Meta: nothing filled at any point
 	if got, err := Expand(Options{Point: Show}, "body", "${meta:owner}"); err != nil || got.Text != "${meta:owner}" {
 		t.Fatalf("nil Meta: %q %v", got.Text, err)
+	}
+}
+
+// TestMetaOfWithRegistry pins METADATA 3.20 on ${meta:…}: a value is
+// masked when the entry's label OR the registry (KeyFlags) says
+// sensitive, including a field inside an object value; nil flags and a
+// nil KeyFlagsFunc fall back to the entry label only.
+func TestMetaOfWithRegistry(t *testing.T) {
+	r := metaRow(t, map[string]string{"owner": `"mira"`, "vpn": `"probe-reg-1"`, "smtp": `{"url":"probe-reg-2"}`, "pin": `"probe-entry-3"`}, "pin")
+	ids := map[string]string{}
+	for kid, j := range r.Meta {
+		e, err := meta.DecodeEntry(j)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[e.Name] = kid.String()
+	}
+	reg := KeyFlagsFunc(func(id string) bool { return id == ids["vpn"] || id == ids["smtp"] })
+	text := "o=${meta:owner} v=${meta:vpn} s=${meta:smtp.url} p=${meta:pin}"
+	for _, point := range []Point{Show, Private} {
+		got, err := Expand(Options{Point: point, Meta: MetaOfWith(r, reg)}, "body", text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "o=mira v=" + Mask + " s=" + Mask + " p=" + Mask
+		if got.Text != want {
+			t.Errorf("%s: %q, want %q", point, got.Text, want)
+		}
+		for _, u := range got.Refs {
+			if strings.Contains(u.Value, "probe") {
+				t.Errorf("%s: refs report leaks %q", point, u.Value)
+			}
+		}
+	}
+	for name, flags := range map[string]KeyFlags{"nil": nil, "nil func": KeyFlagsFunc(nil)} {
+		v, ok := MetaOfWith(r, flags)("vpn")
+		if !ok || v.Sensitive || v.Text != "probe-reg-1" {
+			t.Errorf("%s flags: %+v %v", name, v, ok)
+		}
+		if v, _ := MetaOfWith(r, flags)("pin"); !v.Sensitive {
+			t.Errorf("%s flags lost the entry label", name)
+		}
 	}
 }

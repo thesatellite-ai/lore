@@ -479,7 +479,10 @@ func member(obj []byte, k string) ([]byte, bool) {
 // (3.12; logic/merge writes it).
 const entryConflict = "conflict"
 
-// display is a JSON scalar as text (strings unquoted).
+// display is a JSON scalar as text (strings unquoted). It never masks:
+// a filter on a sensitive key compares the STORED value (OV34/OV39-
+// SENSCOND); masking is the printer's job, and nothing here prints a value
+// (notes name keys and kinds only).
 func display(raw []byte) string {
 	if canon.KindOf(raw) == canon.KindString {
 		var e meta.Entry
