@@ -708,11 +708,11 @@ func TestF09_MergeCommitFoundByAncestryAndCheckWritesNothing(t *testing.T) {
 
 // ---------------------------------------------------------------- §7.5 worked example
 
-// §7.5 walked end to end: plan → workers → finding → done/merged → crash and
+// §7.5 walked end to end: plan → workers → finding (a team memory) → done/merged → crash and
 // reclaim with the pushed work branch → gate → mission status. The plan step
 // is ported to `lore mission apply` (TSQ9: lore plan apply removed).
 func TestWorkedExample75_FourAgentsOneMission(t *testing.T) {
-	g := newGlobexGroup(t, th.Cmd("mission", "apply"), th.Cmd("inbox"), th.Cmd("finding", "add"), th.Cmd("task", "note"),
+	g := newGlobexGroup(t, th.Cmd("mission", "apply"), th.Cmd("inbox"), th.Flag("to", "memory", "add"), th.Cmd("search"), th.Cmd("task", "note"),
 		th.Cmd("gate", "approve"), th.Cmd("mission", "status"), th.Flag("pr", "task", "done"), th.Flag("lesson", "task", "done"))
 	proxy := g.w.Remote("github.com/globex/proxy")
 	pc := g.alice.Clone(proxy, "proxy")
@@ -746,8 +746,11 @@ tasks:
 	pa := proxyAgent.Clone(proxy, "proxy")
 	pa.MustLore("task", "next", "--mission", m, "--repo", "proxy", "--owns", "nginx/sites/invite.conf").Says(t, "allow /invite")
 
-	pa.MustLore("finding", "add", "--mission", m, "the proxy strips X-Forwarded-Host; links must use the public base URL")
-	be.MustLore("inbox").Says(t, "X-Forwarded-Host")
+	// The finding is shared as a memory in the store folder the mission lives
+	// in (was `finding add --mission`, dropped in 0.1.18: p3/dropped.md), and
+	// the backend agent finds it with a search.
+	pa.MustLore("memory", "add", "--to", "team", "the proxy strips X-Forwarded-Host; links must use the public base URL")
+	be.MustLore("search", "X-Forwarded-Host").Says(t, "X-Forwarded-Host")
 
 	be.MustLore("task", "note", beTask, "mutation inviteUser(email) returns token")
 	be.Git("checkout", "-q", "-b", "agent/backend-1/invite")

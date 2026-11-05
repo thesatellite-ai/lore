@@ -50,7 +50,7 @@ type orgRace struct {
 
 func newOrgRace(t *testing.T, caps ...th.Cap) *orgRace {
 	t.Helper()
-	w := newTeamWorld(t, append(append([]th.Cap{}, agencyCaps...), append([]th.Cap{th.Cmd("sync"), th.Cmd("team", "list")}, caps...)...)...)
+	w := newTeamWorld(t, append(append([]th.Cap{}, agencyCaps...), append([]th.Cap{th.Cmd("sync"), th.Cmd("actor", "list")}, caps...)...)...)
 	store := w.Remote(slugStore)
 	app := w.Remote(slugApp)
 	dev1, dev2, acmedev := w.Human("dev1", "dev1@northwind.example"), w.Human("dev2", "dev2@northwind.example"), w.Human("acmedev", "dev@acme.example")
@@ -88,8 +88,8 @@ func TestRosterFolderCreatedFromStaleClonesHasOneProjectRow(t *testing.T) {
 	if id := orgFolderMetaProject(t, r.store); strings.TrimSuffix(path.Base(rows[0]), ".json") != id {
 		t.Fatalf("_meta.json names %s, the row is %s", id, rows[0])
 	}
-	r.dev1.MustLore("team", "list").Never(t, "E_AMBIGUOUS_PROJECT")
-	r.dev2.MustLore("team", "list").Never(t, "E_AMBIGUOUS_PROJECT")
+	r.dev1.MustLore("actor", "list").Never(t, "E_AMBIGUOUS_PROJECT")
+	r.dev2.MustLore("actor", "list").Never(t, "E_AMBIGUOUS_PROJECT")
 	r.dev1.MustLore("task", "add", "review the invoice", "--to", orgNorthwind, "--assign", "@dev2").Never(t, "E_AMBIGUOUS_PROJECT")
 	r.dev2.MustLore("task", "add", "send the invoice", "--to", orgNorthwind, "--assign", "@dev1").Never(t, "E_AMBIGUOUS_PROJECT")
 }
@@ -119,7 +119,7 @@ func TestRosterFolderWithOldDuplicateProjectRowsStillResolves(t *testing.T) {
 
 	r.dev2.MustLore("sync")
 	r.dev2.MustLore("actor", "register").Never(t, "E_AMBIGUOUS_PROJECT")
-	r.dev2.MustLore("team", "list").Says(t, strayID).Never(t, "E_AMBIGUOUS_PROJECT")
+	r.dev2.MustLore("actor", "list").Says(t, strayID).Never(t, "E_AMBIGUOUS_PROJECT")
 	r.dev1.MustLore("task", "add", "review the invoice", "--to", orgNorthwind, "--assign", "@dev2").Never(t, "E_AMBIGUOUS_PROJECT")
 	r.dev2.MustLore("task", "add", "send the invoice", "--to", orgNorthwind, "--assign", "@dev1").Never(t, "E_AMBIGUOUS_PROJECT")
 	if id := orgFolderMetaProject(t, r.store); id != keep {
@@ -129,9 +129,11 @@ func TestRosterFolderWithOldDuplicateProjectRowsStillResolves(t *testing.T) {
 
 // A refused @handle writes nothing anywhere: every command that resolves a
 // handle refuses before a row (or the roster folder's skeleton, on a store
-// nobody registered in yet) can reach the store.
+// nobody registered in yet) can reach the store. (The `team add` cases went
+// with `lore team add|list`, dropped in 0.1.18: p3/dropped.md; the roster
+// reads below use `lore actor list`.)
 func TestUnknownHandleRefusalLeavesTheStoreUntouched(t *testing.T) {
-	r := newOrgRace(t, th.Flag("to", "task", "add"), th.Flag("assign", "task", "add"), th.Cmd("team", "add"),
+	r := newOrgRace(t, th.Flag("to", "task", "add"), th.Flag("assign", "task", "add"),
 		th.Cmd("agent", "start"), th.Flag("for", "handoff", "add"), th.Flag("assign", "task", "reassign"))
 	for _, c := range []struct {
 		name string
@@ -139,7 +141,6 @@ func TestUnknownHandleRefusalLeavesTheStoreUntouched(t *testing.T) {
 	}{
 		// Before anyone registered: no org/ folder exists yet.
 		{"task add, no roster yet", []string{"task", "add", "review the invoice", "--to", orgNorthwind, "--assign", "@nobody"}},
-		{"team add, no roster yet", []string{"team", "add", "@backend", "--members", "@nobody"}},
 		{"agent start, no roster yet", []string{"agent", "start", "--label", "agent-x", "--owner", "@nobody"}},
 		{"handoff add, no roster yet", []string{"handoff", "add", "pick this up", "--for", "@nobody"}},
 	} {
@@ -159,7 +160,6 @@ func TestUnknownHandleRefusalLeavesTheStoreUntouched(t *testing.T) {
 		args []string
 	}{
 		{"task add", []string{"task", "add", "review the invoice", "--to", orgNorthwind, "--assign", "@nobody"}},
-		{"team add", []string{"team", "add", "@backend", "--members", "@dev1,@nobody"}},
 		{"agent start", []string{"agent", "start", "--label", "agent-x", "--owner", "@nobody"}},
 		{"task reassign", []string{"task", "reassign", id, "--assign", "@nobody"}},
 	} {
@@ -179,11 +179,10 @@ func TestUnknownHandleRefusalLeavesTheStoreUntouched(t *testing.T) {
 // fetch cache fetches once fresh and retries. A real miss says to sync or
 // check the handle, never the live "landed on main" peek hint.
 func TestRosterMissFetchesFreshBeforeRefusing(t *testing.T) {
-	r := newOrgRace(t, th.Flag("to", "task", "add"), th.Flag("assign", "task", "add"), th.Cmd("team", "add"))
+	r := newOrgRace(t, th.Flag("to", "task", "add"), th.Flag("assign", "task", "add"))
 	r.dev1.MustLore("actor", "register") // after dev2's last fetch (1h cache)
 	r.dev2.MustLore("task", "add", "review the invoice", "--to", orgNorthwind, "--assign", "@dev1").Never(t, "E_NOT_FOUND")
 	r.dev2.MustLore("actor", "register")
-	r.dev1.MustLore("team", "add", "@backend", "--members", "@dev1,@dev2")
 
 	res := r.dev2.Lore("task", "add", "nobody's task", "--to", orgNorthwind, "--assign", "@nobody")
 	if res.Code == 0 {

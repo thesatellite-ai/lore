@@ -226,9 +226,10 @@ func TestF12_EntriesOnOneURLShareOneBareClone(t *testing.T) {
 
 // E9 / F11: a link made on one machine is seen by a teammate's next command;
 // nothing is written to the client repo; a fork with the same project id is
-// not linked and lore says so; unlink and relink work.
+// not linked and lore says so. (The unlink/relink step went with `lore org
+// unlink`, which the 0.1.18 design drops: p3/dropped.md.)
 func TestE09_LinkSeenByTeammateNotByFork(t *testing.T) {
-	a := newAgency(t, th.Cmd("org", "unlink"))
+	a := newAgency(t)
 	if a.app.Rev(refMain) != a.acmeApp.Head() || len(a.app.Refs("refs/lore/")) != 0 {
 		t.Fatal("linking must write nothing to the client repo")
 	}
@@ -237,10 +238,7 @@ func TestE09_LinkSeenByTeammateNotByFork(t *testing.T) {
 	a.aliceApp.Git("push", "-q", fork.URL(), "+refs/heads/*:refs/heads/*")
 	fc := a.dev1.Clone(fork, "app-fork")
 	fc.MustLore("whoami").Says(t, "shares a project id", "lore project reid").Never(t, "matched by: link")
-	a.aliceApp.MustLore("org", "unlink", orgNorthwind, "--project", folderAcme, "--yes")
-	a.dev1App.MustLore("whoami").Never(t, "matched by: link")
-	a.aliceApp.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes")
-	a.dev1App.MustLore("whoami").Says(t, "link")
+	a.dev1App.MustLore("whoami").Says(t, "link", folderAcme)
 }
 
 // F11 / F4: two people linking two repos to one folder at once both win
