@@ -72,7 +72,7 @@ func (e *Engine) List(ctx context.Context, source store.Source, table row.Table)
 	mode := deletedFor(ctx, table)
 	var rows []store.Row
 	if mode == DeletedHide {
-		rows, _, err = e.readRows(ctx, a.Name, "")
+		rows, err = e.readTable(ctx, a.Name, table) // BUG-TIME-BENCH: only this table's rows
 	} else {
 		rows, err = e.rawRows(ctx, a.Name)
 	}

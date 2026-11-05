@@ -227,6 +227,37 @@ func (e *Engine) readRows(ctx context.Context, name store.Source, cursor store.C
 	return rows, next, nil
 }
 
+// readTable is readRows from the start narrowed to one table before the
+// purge and trash filters, which look at each row on its own, so the rows
+// are the same as readRows' rows of that table. A read of a small table
+// (policies, actors) then never searches every big row file's bytes for a
+// trash mark (BUG-TIME-BENCH).
+func (e *Engine) readTable(ctx context.Context, name store.Source, table row.Table) ([]store.Row, error) {
+	st := e.stores[name]
+	all, _, err := st.Backend.Read(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	set, err := purgedSet(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	var rows []store.Row
+	for _, sr := range all {
+		if sr.Table != table {
+			continue
+		}
+		if sr, _, err = hidePurged(sr, set); err != nil {
+			return nil, err
+		}
+		if sr, err = hideTrashed(sr); err != nil { // DELETION 3.2
+			return nil, err
+		}
+		rows = append(rows, sr)
+	}
+	return rows, nil
+}
+
 // Resurrected is one row file that holds a live row of an id its folder
 // lists as purged: an old clone or a hand copy brought it back. Reads hide
 // it (hidePurged); `lore doctor` names it so it can be removed, and
