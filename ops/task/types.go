@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/op"
 	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 
@@ -330,6 +331,8 @@ type DeleteIn struct {
 	// matching task with its subtree, one bat_ batch, always asked.
 	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk delete: every task matching this filter, with its sub-tasks (the task list --where grammar; repeatable, all must match)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list the tasks that would be deleted, write nothing"`
+	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
+	op.PurgeFlags
 }
 
 // ShowIn is the input of task.show. From is v0.1.17's `task show --from`:

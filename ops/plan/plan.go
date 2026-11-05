@@ -182,6 +182,8 @@ type DeleteIn struct {
 	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk delete: every plan matching this filter (field=value, field:a,b, created_at<2026-06-01; repeatable, all must match)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list what would be deleted, write nothing"`
 	Reason string   `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
+	op.PurgeFlags
 }
 
 // EditIn is the input of plan.edit (only the flags given change).

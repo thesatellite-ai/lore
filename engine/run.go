@@ -57,6 +57,12 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 	if err != nil {
 		return op.Result{}, err
 	}
+	// --purge / --confirm of a delete input (engine/purgeflags.go, P3-DEL-1):
+	// refused or bound before anything else runs; --confirm sets c.Yes.
+	ctx, purge, err := bindInputPurge(ctx, in, &c)
+	if err != nil {
+		return op.Result{}, err
+	}
 	cl := call{op: spec.Name, caller: c, target: e.target}
 	for _, tv := range in.Texts() {
 		if tv.Field == InputTarget && tv.Text != "" {
@@ -101,6 +107,10 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 	res, ierr := entry.Invoke(context.WithValue(ctx, callKey{}, cl), in)
 	if ierr == nil {
 		ierr = metaUsed()
+	}
+	if ierr == nil && purge != nil {
+		confirm := purge.Confirmed
+		res = res.WithTextEdit(func(t string) string { return purgedText(t, purge, confirm) })
 	}
 	return res, ierr
 }

@@ -439,6 +439,8 @@ func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
 type MetaDeleteIn struct {
 	Key    string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why (deleted_reason on the key row, shown by lore trash)"`
+	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
+	op.PurgeFlags
 }
 
 func (o ops) metaDelete(ctx context.Context, in MetaDeleteIn) (RowOut, error) {

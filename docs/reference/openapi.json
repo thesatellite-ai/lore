@@ -1117,6 +1117,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -2083,7 +2103,7 @@
     "/v1/batches/{id}/undo": {
       "post": {
         "operationId": "batch.undo",
-        "summary": "Undo a bulk action: restore a delete batch, or move the rows a create batch added to the trash",
+        "summary": "Undo a bulk action: restore a delete batch, put the rows an edit batch changed back, or move the rows a create batch added to the trash",
         "tags": [
           "batch"
         ],
@@ -2136,6 +2156,15 @@
                         "type": "string"
                       }
                     },
+                    "reverted": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "reverts": {
+                      "type": "string"
+                    },
                     "skipped": {
                       "type": "array",
                       "items": {
@@ -2165,6 +2194,7 @@
                     "batch",
                     "restored",
                     "trashed",
+                    "reverted",
                     "skipped"
                   ]
                 }
@@ -2202,7 +2232,7 @@
             }
           },
           "409": {
-            "description": "E_CANCELLED, E_PARENT_DELETED, E_UNSUPPORTED",
+            "description": "E_CANCELLED, E_PARENT_DELETED, E_STALE, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -2918,6 +2948,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -4131,6 +4181,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -5125,6 +5195,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -6556,6 +6646,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -9055,6 +9165,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -10455,6 +10585,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -12159,6 +12309,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -14931,6 +15101,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -18241,6 +18431,26 @@
             "schema": {
               "type": "string",
               "description": "why (deleted_reason on the key row, shown by lore trash)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -22067,6 +22277,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -24192,6 +24422,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -26271,6 +26521,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -27583,6 +27853,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -29189,6 +29479,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -30511,6 +30821,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -31923,6 +32253,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -34882,6 +35232,9 @@
                         "name_format": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "render": {
                           "type": "string"
                         },
@@ -36746,6 +37099,9 @@
                           "name_format": {
                             "type": "string"
                           },
+                          "note": {
+                            "type": "string"
+                          },
                           "render": {
                             "type": "string"
                           },
@@ -37892,6 +38248,26 @@
             "schema": {
               "type": "boolean",
               "description": "also delete every resource that refers to it, recursively (one batch; asks and lists them)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -39645,6 +40021,10 @@
                   "new_name": {
                     "type": "string",
                     "description": "the new name (the kind's name format)"
+                  },
+                  "rewrite_rows": {
+                    "type": "boolean",
+                    "description": "also rewrite the ref label in every resource that refs this one now (one batch)"
                   }
                 },
                 "required": [
@@ -41288,6 +41668,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -45291,7 +45691,7 @@
                   },
                   "holder": {
                     "type": "string",
-                    "description": "the holder id to record (default this machine, when known)"
+                    "description": "the holder id to record (default this machine for a personal manager; none for op, vault, aws-secrets)"
                   },
                   "ref": {
                     "type": "string",
@@ -46130,6 +46530,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -48788,6 +49208,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -50479,7 +50919,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_LOST_CLAIM, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -50692,7 +51132,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_LOST_CLAIM, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -50904,7 +51344,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_LOST_CLAIM, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -51119,7 +51559,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_LOST_CLAIM, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH",
             "content": {
               "application/json": {
                 "schema": {
@@ -51327,7 +51767,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_LOST_CLAIM, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -51535,7 +51975,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_LOST_CLAIM, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -51743,7 +52183,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_LOST_CLAIM, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -56957,6 +57397,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -61367,6 +61827,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -65587,6 +66067,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -66864,6 +67364,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {
@@ -69966,6 +70486,26 @@
             }
           },
           {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -71227,6 +71767,26 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
             }
           },
           {

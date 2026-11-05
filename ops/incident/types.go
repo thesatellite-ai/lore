@@ -6,6 +6,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
 
 	"github.com/thesatellite-ai/lore/ops/internal/rowref"
@@ -121,6 +122,8 @@ type IDIn struct {
 type DeleteIn struct {
 	ID     string `json:"id" arg:"0" desc:"the incident id (inc_…)"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
+	op.PurgeFlags
 }
 
 // ShowOut is v0.1.17's show envelope.

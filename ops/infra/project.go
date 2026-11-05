@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
@@ -202,6 +203,13 @@ type DeletePreviewer interface {
 	PreviewDelete(ctx context.Context, refs ...engine.Ref) (engine.DeletePreview, error)
 }
 
+// ProjectDeleteIn is the input of project.delete.
+type ProjectDeleteIn struct {
+	ID string `json:"id" arg:"0" desc:"the row id"`
+	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
+	op.PurgeFlags
+}
+
 // projectDelete deletes a project together with the checkout's own repos
 // row.
 //
@@ -215,7 +223,7 @@ type DeletePreviewer interface {
 // deleted. An Env without RepoIdentifier, or a checkout without an
 // identity, keeps every repos row a dependent (fail closed, today's
 // refusal).
-func (o ops) projectDelete(ctx context.Context, in IDIn) (work.WriteOut, error) {
+func (o ops) projectDelete(ctx context.Context, in ProjectDeleteIn) (work.WriteOut, error) {
 	id, err := work.ParseID(NounProject, ids.PrefixProject, in.ID)
 	if err != nil {
 		return work.WriteOut{}, err

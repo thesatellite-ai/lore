@@ -215,6 +215,41 @@ func (i Input) Op() string { return i.op }
 type Result struct {
 	v      reflect.Value
 	fields []FieldInfo
+	// edit rewrites the human text (Texter) after the operation ran: the
+	// Runner's step for something no single operation knows (a delete the
+	// engine purged instead of trashing, P3-DEL-1). Nil = none.
+	edit func(string) string
+}
+
+// WithTextEdit returns r whose human text (Text) is passed through edit
+// after any edit already set. The JSON form is never edited: it carries the
+// operation's own fields.
+func (r Result) WithTextEdit(edit func(string) string) Result {
+	if prev := r.edit; prev != nil {
+		r.edit = func(s string) string { return edit(prev(s)) }
+		return r
+	}
+	r.edit = edit
+	return r
+}
+
+// Text returns the output's own human form (Texter) with the Runner's
+// edits applied; ok is false when the output has none (the surface then
+// prints its generic `name: value` form).
+func (r Result) Text() (text string, ok bool) {
+	if !r.v.IsValid() || !r.v.CanInterface() {
+		return "", false
+	}
+	// Interface() is the reflect boundary; it is narrowed at once.
+	t, isTexter := r.v.Interface().(Texter)
+	if !isTexter {
+		return "", false
+	}
+	text = t.Text()
+	if r.edit != nil {
+		text = r.edit(text)
+	}
+	return text, true
 }
 
 // Fields describes the output struct.

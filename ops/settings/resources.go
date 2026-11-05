@@ -115,6 +115,8 @@ type ResDeleteIn struct {
 	// WithDependents puts every resource that refers to it (recursively,
 	// the impact set of 3.21) into the same batch (RES 3.23); always asks.
 	WithDependents bool `json:"with_dependents,omitempty" flag:"with-dependents" desc:"also delete every resource that refers to it, recursively (one batch; asks and lists them)"`
+	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
+	op.PurgeFlags
 }
 
 // ResDeleteOut is the output of resource.delete: the one row's id and

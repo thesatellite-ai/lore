@@ -131,8 +131,9 @@ func TestDeletedRowHiddenOnEveryList(t *testing.T) {
 var purgeModes = []string{`{"target":"%s"}`, `{"older_than":"0d"}`, `{"expired":true}`, `{"archived_before":"0d"}`}
 
 // TestEveryPurgePathRefusesYes (DQ2, DELETION 709): every operation in
-// wire's registry that can purge — trash.purge in each mode, and any
-// operation whose name or input names "purge" — answers E_NEEDS_CONFIRM
+// wire's registry that can purge — trash.purge in each mode, every delete
+// with --purge (op.PurgeFlags), and any operation whose name or input
+// names "purge" — answers E_NEEDS_CONFIRM
 // for a caller that passed --yes but not --confirm, names --confirm in
 // next, and removes nothing. An unknown purge-like operation fails the
 // test until its modes are listed here.
@@ -161,11 +162,18 @@ func TestEveryPurgePathRefusesYes(t *testing.T) {
 			continue
 		}
 		purgers++
-		if name != "trash.purge" {
+		modes := purgeModes
+		switch {
+		case hasInput(e, "purge") && hasInput(e, "confirm"):
+			// A delete's op.PurgeFlags (P3-DEL-1): the engine refuses
+			// before the id is looked up, so the memory's id serves every
+			// noun and nothing is removed either way.
+			modes = []string{`{"id":"%s","purge":true}`}
+		case name != "trash.purge":
 			t.Errorf("%s can purge but is not walked: add its modes to this test", name)
 			continue
 		}
-		for _, mode := range purgeModes {
+		for _, mode := range modes {
 			in := strings.Replace(mode, "%s", id, 1)
 			_, err := h.RunYes(name, in)
 			var e *errs.Error

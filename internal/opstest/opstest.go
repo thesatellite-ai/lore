@@ -210,17 +210,12 @@ func (h *H) JSON(res op.Result) string {
 	return string(b)
 }
 
-// Text is the result's human form: Text() when the output is an
-// op.Texter, else "" (the CLI then prints a generic dump).
+// Text is the result's human form as the CLI prints it: Text() when the
+// output is an op.Texter, with the Runner's edits (a purged delete's line),
+// else "" (the CLI then prints a generic dump).
 func Text(res op.Result) string {
-	v := res.Value()
-	if !v.IsValid() {
-		return ""
-	}
-	if t, ok := v.Interface().(op.Texter); ok {
-		return t.Text()
-	}
-	return ""
+	t, _ := res.Text()
+	return t
 }
 
 // Field reads a top-level string field of the result's JSON ("" when

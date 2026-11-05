@@ -175,6 +175,8 @@ type IDIn struct {
 type DeleteIn struct {
 	ID     string `json:"id" arg:"0" desc:"the reminder id (rmd_…)"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
+	op.PurgeFlags
 }
 
 // DoneOut is the output of reminder.done.
