@@ -151,7 +151,9 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	if in.Context {
 		// 6.12: the context checks alone, read-only, each with its command.
 		out := append(contextFindings(all), o.contextScopeFindings(ctx, all)...)
-		out = append(out, ageFindings(all, opclock.Now(o.env))...)
+		now := opclock.Now(o.env)
+		out = append(out, ageFindings(all, now)...)
+		out = append(out, o.usageFindings(ctx, all, now)...)
 		if len(want) > 0 {
 			out = slices.DeleteFunc(out, func(f Finding) bool { return !want[f.Code] })
 		}

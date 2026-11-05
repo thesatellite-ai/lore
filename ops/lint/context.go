@@ -35,7 +35,7 @@ const (
 
 // ContextCodes lists the --context finding codes.
 func ContextCodes() []Code {
-	return []Code{SupersededPinned, NoSummary, EntryTooLong, PathNoGlobs, Untagged, NearDuplicate, ScopeMissing, ScopeConflict, HighHotfixOld, NotValidated}
+	return []Code{SupersededPinned, NoSummary, EntryTooLong, PathNoGlobs, Untagged, NearDuplicate, ScopeMissing, ScopeConflict, HighHotfixOld, NotValidated, NotUsed}
 }
 
 // Context check thresholds (6.12). entryMax is the context.entry_max

@@ -180,13 +180,20 @@ func runContext(ctx context.Context, f *contextFlags, stdin io.Reader, out io.Wr
 		return err
 	}
 	if f.asJSON {
+		ids := make([]string, 0, len(res.picks))
+		for _, p := range res.picks {
+			ids = append(ids, p.ID)
+		}
+		recordUsage(ctx, ids)
 		return writeJSONOut(map[string]any{"data": res.picks})
 	}
 	maxB := f.maxBytes
 	if maxB <= 0 {
 		maxB = contextDefaultMax
 	}
-	return writeOut(out, res.text(maxB))
+	text, printed := res.fit(maxB)
+	recordUsage(ctx, printed) // 6.12 "not used in 60 days" (context_usage.go)
+	return writeOut(out, text)
 }
 
 // writeOut writes s to out.
@@ -610,6 +617,7 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 		event = "PreToolUse"
 	}
 	text, sent := res.fit(capB)
+	recordUsage(ctx, sent)
 	if err = json.NewEncoder(out).Encode(hookOutput{HookSpecificOutput: hookSpecific{HookEventName: event, AdditionalContext: text}}); err != nil {
 		return err
 	}
