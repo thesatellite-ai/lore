@@ -192,7 +192,7 @@ func runCoreMove(ctx context.Context, table row.Table, id string, f *shareFlags)
 	if !ok {
 		return errcodes.New(errcodes.Internal, opsrow.OpMove+" is not registered")
 	}
-	in, err := json.Marshal(opsrow.MoveIn{ID: id, To: to, DropInternal: f.dropInternal, WithTime: f.withTime})
+	in, err := json.Marshal(opsrow.MoveIn{ID: id, To: to, DropInternal: f.dropInternal, WithTime: f.withTime, WithChildren: f.withChildren})
 	if err != nil {
 		return errcodes.New(errcodes.Internal, "encode the move").WithCause(err)
 	}

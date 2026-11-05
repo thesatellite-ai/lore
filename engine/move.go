@@ -81,6 +81,10 @@ type MoveOptions struct {
 	// time.client_share policy (default none), TimeNone carries no time for
 	// this move, TimeTotals writes the time_totals projection.
 	WithTime TimeShare
+	// WithChildren is --with-children (TASK 6.14, B7): a task moves with
+	// its whole subtree; every child keeps its id and parent_id. Without
+	// it a task moves alone (its children stay where they are).
+	WithChildren bool
 }
 
 // WarnMetaDropped names a metadata value --drop-internal removed (MQ11).
@@ -91,6 +95,7 @@ const WarnMetaDropped WarnCode = "W_META_DROPPED"
 //	locate the one live copy ─► refuse (target tombstone, secret refs,
 //	internal meta into a client repo: E_META_INTERNAL unless DropInternal)
 //	─► write at to (+ moves entry, or the client _o) ─► tombstone at src
+//	─► WithChildren: each sub-task the same way, parents first (B7)
 func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt MoveOptions) (Written, error) {
 	switch opt.WithTime {
 	case "", TimeNone, TimeTotals:
@@ -116,6 +121,21 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	def, err := e.tableDef(cur.Table)
 	if err != nil {
 		return Written{}, err
+	}
+	// TASK 6.14: a sub-task never reaches a client repo without its parent.
+	if def.Name == schema.TableTasks && dst.Client {
+		if err = e.refuseOrphanChild(ctx, to, cur); err != nil {
+			return Written{}, err
+		}
+	}
+	var kids []ids.AnyID
+	if opt.WithChildren {
+		if def.Name != schema.TableTasks {
+			return Written{}, errs.New(errs.InvalidInput, "engine: --with-children moves a task's sub-tasks; "+cur.ID.String()+" is not a task")
+		}
+		if kids, err = e.taskDescendants(ctx, to, cur.ID); err != nil { // read before the parent leaves src
+			return Written{}, err
+		}
 	}
 	actor := e.actorOf(cl)
 	there, _, err := e.getRow(ctx, to, cur.Table, cur.ID)
@@ -224,7 +244,11 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 			WithHint("run the same move again: it only removes the old copy")
 	}
 	ev := Event{Op: cl.op, Action: ActionDelete, Store: src, Table: cur.Table, ID: cur.ID, HLC: h, Actor: actor}
-	return Written{Row: moved, Warnings: dropped}, e.finish(ctx, src, []store.Row{got.doc}, ev)
+	w := Written{Row: moved, Warnings: dropped}
+	if err = e.finish(ctx, src, []store.Row{got.doc}, ev); err != nil {
+		return w, err
+	}
+	return w, e.moveChildren(ctx, to, kids, opt, &w) // B7: parents first, ids kept
 }
 
 // internalMeta returns r's metadata without its internal keys' values, for

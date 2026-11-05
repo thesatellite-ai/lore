@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +72,7 @@ type MoveIn struct {
 	To           string `json:"to" flag:"to" desc:"the target store: repo | me | <store>[/<folder>]"`
 	DropInternal bool   `json:"drop_internal,omitempty" flag:"drop-internal" desc:"into a client repo: remove the row's internal metadata values instead of refusing (MQ11, BATCH 7)"`
 	WithTime     string `json:"with_time,omitempty" flag:"with-time" desc:"totals | none: per-worker time totals for a task moved into a client repo (TQ3; default: the time.client_share policy, none)"`
+	WithChildren bool   `json:"with_children,omitempty" flag:"with-children" desc:"a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14, B7)"`
 }
 
 // Actor is an actor as show names it.
@@ -194,12 +196,17 @@ type MoveOut struct {
 	// Notes are the client-move lines of TQ3 ("kept back: time (12
 	// entries)", "time: totals only (…)"): expected, not warnings.
 	Notes []string `json:"notes,omitempty"`
+	// Children are the sub-tasks --with-children moved, parents first.
+	Children []string `json:"children,omitempty"`
 }
 
 // Text is the human form of a move.
 func (o MoveOut) Text() string {
 	var b strings.Builder
 	b.WriteString("✓ " + o.ID + " moved to store " + o.To + " (same id; the old copy is tombstoned)\n")
+	if len(o.Children) > 0 {
+		b.WriteString("  with " + strconv.Itoa(len(o.Children)) + " sub-task(s), same ids: " + strings.Join(o.Children, ", ") + "\n")
+	}
 	for _, n := range o.Notes {
 		b.WriteString("  " + n + "\n")
 	}
@@ -571,11 +578,14 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 	if !ok {
 		return MoveOut{}, errs.New(errs.Unsupported, "move: this build's store wiring cannot move rows")
 	}
-	w, err := mv.MoveWith(ctx, engine.Ref{ID: id}, store.Source(to), engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt})
+	w, err := mv.MoveWith(ctx, engine.Ref{ID: id}, store.Source(to), engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt, WithChildren: in.WithChildren})
 	if err != nil {
 		return MoveOut{}, err
 	}
 	out := MoveOut{ID: id.String(), Table: string(w.Row.Table), To: to}
+	for _, c := range w.Also { // --with-children: the sub-tasks moved with it
+		out.Children = append(out.Children, c.Row.ID.String())
+	}
 	for _, wn := range w.Warnings {
 		switch wn.Code {
 		case engine.WarnTimeKeptBack, engine.WarnInternalKeptBack, engine.WarnTimeTotals:
