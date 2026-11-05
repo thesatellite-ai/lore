@@ -52,6 +52,7 @@ type Scanner struct {
 	// only on these); allow: the repo .gitleaks.toml allow (D8).
 	builtin map[string]bool
 	allow   []compiledAllow
+	noProse bool // Options.NoProseFilter
 }
 
 // Detector settings (3.1). D7: a "gitleaks:allow" comment pasted into
@@ -67,6 +68,10 @@ type Options struct {
 	// RepoAllow is the repo .gitleaks.toml allow (D8), read by the caller
 	// only while secrets.use_repo_gitleaks is on.
 	RepoAllow RepoAllow
+	// NoProseFilter turns the password_pair prose post-filter off (policy
+	// secrets.password_pair_prose_filter: off, SECRETS 3.4): every match
+	// is kept, the stricter choice.
+	NoProseFilter bool
 }
 
 var _ scan.Scanner = (*Scanner)(nil)
@@ -114,7 +119,7 @@ func NewWith(rules []scan.Rule, opts Options) (*Scanner, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Scanner{regex: rs, builtin: builtin, allow: compileAllow(opts.RepoAllow)}
+	s := &Scanner{regex: rs, builtin: builtin, allow: compileAllow(opts.RepoAllow), noProse: opts.NoProseFilter}
 	if len(glRules) > 0 {
 		base, err := gitleaksDefaults()
 		if err != nil {

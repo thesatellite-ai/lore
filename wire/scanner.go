@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -156,7 +157,11 @@ func (s *liveScanner) Refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	key += "\n#repo-gitleaks:" + allowKey
+	noProse, err := s.proseFilterOff()
+	if err != nil {
+		return err
+	}
+	key += "\n#repo-gitleaks:" + allowKey + "\n#prose-filter-off:" + strconv.FormatBool(noProse)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cur != nil && key == s.key {
@@ -170,7 +175,7 @@ func (s *liveScanner) Refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	next, err := gitleaks.NewWith(rules, gitleaks.Options{RepoAllow: allow})
+	next, err := gitleaks.NewWith(rules, gitleaks.Options{RepoAllow: allow, NoProseFilter: noProse})
 	if err != nil {
 		return err
 	}
@@ -184,6 +189,28 @@ func (s *liveScanner) usePolicy(fn func() (policy.Set, error)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.policy = fn
+}
+
+// proseFilterOff reports whether policy secrets.password_pair_prose_filter
+// is off (SECRETS 3.4: off keeps every password_pair match, stricter); no
+// policy reader yet, or the key unset, means the default (filter on).
+func (s *liveScanner) proseFilterOff() (bool, error) {
+	s.mu.Lock()
+	pol := s.policy
+	s.mu.Unlock()
+	if pol == nil {
+		return false, nil
+	}
+	set, err := pol()
+	if err != nil {
+		return false, err
+	}
+	if e, ok := set.Get(policy.KeyPasswordPairProseFilter); ok {
+		if b, isBool := e.Value.(value.Bool); isBool && !b.Bool() {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // repoAllow reads the repo .gitleaks.toml allow when the policy allows it

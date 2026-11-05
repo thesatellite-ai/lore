@@ -222,7 +222,7 @@ func (s *Scanner) keep(text string, fs []scan.Finding) []scan.Finding {
 	for _, f := range fs {
 		in := f.Offset >= 0 && f.Offset+f.Length <= len(text)
 		if in && s.builtin[f.RuleID] {
-			if pf, ok := postFilters[f.RuleID]; ok && !pf(text[f.Offset:f.Offset+f.Length], lineRest(text, f.Offset+f.Length)) {
+			if pf, ok := postFilters[f.RuleID]; ok && !(s.noProse && f.RuleID == RulePasswordPair) && !pf(text[f.Offset:f.Offset+f.Length], lineRest(text, f.Offset+f.Length)) {
 				continue
 			}
 		}
