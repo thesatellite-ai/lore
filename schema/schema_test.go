@@ -340,4 +340,21 @@ func TestFormatgateTableNames(t *testing.T) {
 	if formatgate.TablePolicies != TablePolicies || formatgate.TablePlans != TablePlans || formatgate.KindTablePrefix != KindTablePrefix {
 		t.Fatal("formatgate table names drifted from schema")
 	}
+	if formatgate.TableTasks != TableTasks {
+		t.Fatal("formatgate tasks table drifted from schema")
+	}
+	want := []string{FieldTaskParent, FieldTaskRank, FieldTaskCloseReason, FieldTaskChecklist, FieldTaskAssignees, FieldTaskWatchers, FieldTaskEstimate, FieldTaskRecur, FieldTaskHistory}
+	if !slices.Equal(formatgate.TaskTreeFields(), want) {
+		t.Fatalf("formatgate.TaskTreeFields %v drifted from schema %v", formatgate.TaskTreeFields(), want)
+	}
+	i := slices.IndexFunc(Builtin(), func(d TableDef) bool { return d.Name.String() == TableTasks })
+	if i < 0 {
+		t.Fatal("no tasks table")
+	}
+	tasks := Builtin()[i]
+	for _, f := range want {
+		if _, has := tasks.Field(f); !has {
+			t.Errorf("tasks has no field %s", f)
+		}
+	}
 }
