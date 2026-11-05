@@ -1,146 +1,120 @@
-// Package canonjson produces canonical, byte-stable JSON for JSON objects
-// stored in version control.
-//
-// Why it exists: lore commits one JSON file per row (LORE_SYNC_SPEC.md §6).
-// If two writes of the same data produced different bytes — reordered keys,
-// different indentation, HTML-escaped characters, a float printed two ways —
-// every read would show up as a git diff and every merge would conflict on
-// noise. Encode guarantees: identical data ⇒ identical bytes, on every
-// machine and every run.
-//
-// Canonical form:
-//   - object keys sorted (byte order), recursively, including inside
-//     embedded raw JSON values
-//   - two-space indent, one key per line (git's line merge can then combine
-//     edits to different keys of the same object)
-//   - no HTML escaping (`<`, `>`, `&` stay literal so bodies stay readable)
-//   - numbers kept as written (json.Number) so integers never become floats
-//   - exactly one trailing newline (POSIX text file; no "\ No newline" diffs)
-//
-// The package is generic: it knows nothing about lore, tables, or git.
+// Package canonjson is a forwarding shell: the code moved to
+// github.com/thesatellite-ai/lore/logic/canonjson (PASS3 P3-PORT-LIVE),
+// which holds JSON as the closed canonjson.Value type instead of `any`.
+// This shell keeps the v0.1.17 map[string]any API for the old saas
+// importers and converts at the edge (ToValue / FromValue); the bytes it
+// writes are the root package's, so both paths produce the same files. New
+// code imports the root package directly.
 package canonjson
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
+
+	root "github.com/thesatellite-ai/lore/logic/canonjson"
 )
 
-// indentUnit is the per-level indent of canonical output. Changing it would
-// rewrite every committed lore file, so it is a format-version decision.
-const indentUnit = "  "
+// DefaultMaxDepth forwards to the root package.
+const DefaultMaxDepth = root.DefaultMaxDepth
 
-// DefaultMaxDepth bounds nesting accepted by Decode. Real lore rows are flat
-// objects with at most a couple of levels inside JSON columns; anything
-// deeper is malformed or hostile (a teammate's branch is untrusted input).
-const DefaultMaxDepth = 32
-
-// ErrTooDeep is returned when input nests deeper than the allowed depth.
-var ErrTooDeep = errors.New("canonjson: nesting too deep")
-
-// ErrNotObject is returned when the top-level value is not a JSON object.
-var ErrNotObject = errors.New("canonjson: top-level value is not an object")
+// Errors forwarded from the root package.
+var (
+	ErrTooDeep   = root.ErrTooDeep
+	ErrNotObject = root.ErrNotObject
+)
 
 // Encode renders obj in canonical form.
 //
 // Accepted value types (anything else is an error, never a silent string):
 // nil, string, bool, int, int64, float64, json.Number, json.RawMessage,
-// map[string]any, []any. json.RawMessage values are themselves
-// canonicalized, so callers can pass a JSON column's stored text verbatim.
+// map[string]any, []any, and root canonjson Value / Object.
 func Encode(obj map[string]any) ([]byte, error) {
-	norm, err := normalize(obj, 0)
+	o, err := toObject(obj, 0)
 	if err != nil {
 		return nil, err
 	}
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", indentUnit)
-	if err := enc.Encode(norm); err != nil {
-		return nil, fmt.Errorf("canonjson: encode: %w", err)
-	}
-	// json.Encoder.Encode already appends exactly one '\n'.
-	return buf.Bytes(), nil
+	return root.Encode(o)
 }
 
-// Decode parses a JSON object, keeping numbers as json.Number and refusing
-// trailing data, non-object top levels, and nesting deeper than maxDepth
-// (pass DefaultMaxDepth unless you have a reason).
+// Decode parses a JSON object, numbers as json.Number (see the root
+// package for the refusals).
 func Decode(b []byte, maxDepth int) (map[string]any, error) {
-	if err := checkDepth(b, maxDepth); err != nil {
-		return nil, err
-	}
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("canonjson: decode: %w", err)
-	}
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("canonjson: trailing data after object")
-	}
-	obj, ok := v.(map[string]any)
-	if !ok {
-		return nil, ErrNotObject
-	}
-	return obj, nil
-}
-
-// Canonicalize re-encodes an arbitrary JSON object in canonical form.
-func Canonicalize(b []byte) ([]byte, error) {
-	obj, err := Decode(b, DefaultMaxDepth)
+	o, err := root.Decode(b, maxDepth)
 	if err != nil {
 		return nil, err
 	}
-	return Encode(obj)
+	return objectToAny(o), nil
 }
 
-// CompactValue renders any JSON value (object, array, scalar) compactly with
-// sorted keys. Used to turn a canonical embedded value back into the compact
-// text a JSON column stores.
+// Canonicalize forwards to the root package.
+func Canonicalize(b []byte) ([]byte, error) { return root.Canonicalize(b) }
+
+// CompactValue renders any JSON value compactly with sorted keys.
 func CompactValue(v any) (string, error) {
-	norm, err := normalizeValue(v, 0)
+	rv, err := ToValue(v)
 	if err != nil {
 		return "", err
 	}
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(norm); err != nil {
-		return "", fmt.Errorf("canonjson: compact: %w", err)
-	}
-	return string(bytes.TrimRight(buf.Bytes(), "\n")), nil
+	return root.CompactValue(rv)
 }
 
 // ParseValue parses one JSON value of any kind (numbers as json.Number).
 func ParseValue(s string) (any, error) {
-	if err := checkDepth([]byte(s), DefaultMaxDepth); err != nil {
+	v, err := root.ParseValue(s)
+	if err != nil {
 		return nil, err
 	}
-	dec := json.NewDecoder(bytes.NewReader([]byte(s)))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("canonjson: parse value: %w", err)
-	}
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("canonjson: trailing data after value")
-	}
-	return v, nil
+	return FromValue(v), nil
 }
 
-// normalize converts an object to the closed set of types encoding/json
-// sorts and prints deterministically (map[string]any keys are sorted by the
-// encoder).
-func normalize(obj map[string]any, depth int) (map[string]any, error) {
+// ToValue converts a v0.1.17 value tree to a root Value. It refuses any
+// type outside the accepted set listed on Encode.
+func ToValue(v any) (root.Value, error) { return toValue(v, 0) }
+
+// FromValue converts a root Value to the v0.1.17 tree: nil, bool, string,
+// json.Number, []any, map[string]any.
+func FromValue(v root.Value) any {
+	switch v.Kind() {
+	case root.KindBool:
+		b, _ := v.AsBool()
+		return b
+	case root.KindNumber:
+		n, _ := v.AsNumber()
+		return json.Number(n)
+	case root.KindString:
+		s, _ := v.AsString()
+		return s
+	case root.KindArray:
+		arr, _ := v.AsArray()
+		out := make([]any, len(arr))
+		for i, e := range arr {
+			out[i] = FromValue(e)
+		}
+		return out
+	case root.KindObject:
+		o, _ := v.AsObject()
+		return objectToAny(o)
+	case root.KindNull:
+		return nil
+	}
+	return nil
+}
+
+func objectToAny(o root.Object) map[string]any {
+	out := make(map[string]any, len(o))
+	for k, v := range o {
+		out[k] = FromValue(v)
+	}
+	return out
+}
+
+func toObject(obj map[string]any, depth int) (root.Object, error) {
 	if depth > DefaultMaxDepth {
 		return nil, ErrTooDeep
 	}
-	out := make(map[string]any, len(obj))
+	out := make(root.Object, len(obj))
 	for k, v := range obj {
-		nv, err := normalizeValue(v, depth+1)
+		nv, err := toValue(v, depth+1)
 		if err != nil {
 			return nil, fmt.Errorf("key %q: %w", k, err)
 		}
@@ -149,70 +123,52 @@ func normalize(obj map[string]any, depth int) (map[string]any, error) {
 	return out, nil
 }
 
-func normalizeValue(v any, depth int) (any, error) {
+func toValue(v any, depth int) (root.Value, error) {
 	if depth > DefaultMaxDepth {
-		return nil, ErrTooDeep
+		return root.Value{}, ErrTooDeep
 	}
 	switch x := v.(type) {
-	case nil, string, bool, json.Number:
-		return x, nil
+	case nil:
+		return root.Null(), nil
+	case string:
+		return root.String(x), nil
+	case bool:
+		return root.Bool(x), nil
+	case json.Number:
+		return root.Number(string(x)), nil
 	case int:
-		return json.Number(fmt.Sprint(x)), nil
+		return root.Int(int64(x)), nil
 	case int64:
-		return json.Number(fmt.Sprint(x)), nil
+		return root.Int(x), nil
 	case float64:
-		// encoding/json's float formatting is deterministic (shortest
-		// round-trip representation), so pass the float through.
-		return x, nil
-	case json.RawMessage:
-		parsed, err := ParseValue(string(x))
-		if err != nil {
-			return nil, err
+		f, ok := root.Float(x)
+		if !ok {
+			return root.Value{}, fmt.Errorf("canonjson: unsupported float value %v", x)
 		}
-		return normalizeValue(parsed, depth)
+		return f, nil
+	case json.RawMessage:
+		return root.Raw(x)
+	case root.Value:
+		return x, nil
+	case root.Object:
+		return root.ObjectValue(x), nil
 	case map[string]any:
-		return normalize(x, depth)
+		o, err := toObject(x, depth)
+		if err != nil {
+			return root.Value{}, err
+		}
+		return root.ObjectValue(o), nil
 	case []any:
-		out := make([]any, len(x))
+		out := make([]root.Value, len(x))
 		for i, e := range x {
-			ne, err := normalizeValue(e, depth+1)
+			ne, err := toValue(e, depth+1)
 			if err != nil {
-				return nil, fmt.Errorf("index %d: %w", i, err)
+				return root.Value{}, fmt.Errorf("index %d: %w", i, err)
 			}
 			out[i] = ne
 		}
-		return out, nil
+		return root.Array(out...), nil
 	default:
-		return nil, fmt.Errorf("canonjson: unsupported value type %T", v)
-	}
-}
-
-// checkDepth walks the token stream and fails once nesting exceeds max. It
-// runs before the real decode so a hostile, deeply nested file cannot make
-// the decoder recurse arbitrarily.
-func checkDepth(b []byte, max int) error {
-	dec := json.NewDecoder(bytes.NewReader(b))
-	depth := 0
-	for {
-		tok, err := dec.Token()
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("canonjson: decode: %w", err)
-		}
-		d, ok := tok.(json.Delim)
-		if !ok {
-			continue
-		}
-		switch d {
-		case '{', '[':
-			depth++
-			if depth > max {
-				return ErrTooDeep
-			}
-		case '}', ']':
-			depth--
-		}
+		return root.Value{}, fmt.Errorf("canonjson: unsupported value type %T", v)
 	}
 }
