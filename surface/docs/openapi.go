@@ -163,7 +163,8 @@ func (a additional) MarshalJSON() ([]byte, error) {
 }
 
 // OpenAPI returns the OpenAPI 3.1 document of every non-hidden operation in
-// reg, as indented JSON ending in a newline. kinds adds one component schema
+// reg, plus the collection twin (BulkRoute) of every edit or delete whose id
+// is optional, as indented JSON ending in a newline. kinds adds one component schema
 // per dynamic kind: nil for the written openapi.json (fixed operations
 // only), the attached stores' kinds for the document `lore api` serves.
 //
@@ -180,15 +181,30 @@ func OpenAPI(reg *op.Registry, kinds []schema.TableDef) ([]byte, error) {
 			SecuritySchemes: map[string]securityScheme{SecurityScheme: {Type: schemeHTTP, Scheme: SecurityScheme}},
 		},
 	}
+	type twin struct {
+		e  op.Entry
+		rt op.Route
+	}
+	var twins []twin
 	for _, e := range reg.Entries() {
 		rt, ok := op.RouteOf(e.Spec(), e.InputFields())
 		if !ok {
 			continue
 		}
-		if doc.Paths[rt.Path] == nil {
-			doc.Paths[rt.Path] = map[string]*operation{}
+		addOperation(&doc, rt, operationOf(e, rt))
+		if bt, bulk := BulkRoute(e, rt); bulk {
+			twins = append(twins, twin{e, bt})
 		}
-		doc.Paths[rt.Path][strings.ToLower(rt.Method)] = operationOf(e, rt)
+	}
+	// Twins after every registry route: a registry operation keeps its
+	// path and method, the twin never shadows it (surface/rest served()).
+	for _, t := range twins {
+		if _, taken := doc.Paths[t.rt.Path][strings.ToLower(t.rt.Method)]; taken {
+			continue
+		}
+		o := operationOf(t.e, t.rt)
+		o.OperationID += BulkOperationSuffix
+		addOperation(&doc, t.rt, o)
 	}
 	for _, k := range kinds {
 		doc.Components.Schemas[KindSchemaPrefix+string(k.Name)] = kindSchema(k)
@@ -199,6 +215,42 @@ func OpenAPI(reg *op.Registry, kinds []schema.TableDef) ([]byte, error) {
 		return nil, errs.Wrap(errs.Internal, "docs: encode openapi", err)
 	}
 	return append(b, '\n'), nil
+}
+
+// addOperation puts o at rt's path and method.
+func addOperation(doc *document, rt op.Route, o *operation) {
+	if doc.Paths[rt.Path] == nil {
+		doc.Paths[rt.Path] = map[string]*operation{}
+	}
+	doc.Paths[rt.Path][strings.ToLower(rt.Method)] = o
+}
+
+// BulkOperationSuffix ends the operationId of a collection twin
+// ("resource.delete.bulk"): OpenAPI needs every operationId unique, and the
+// twin runs the same registry operation as its /{id} route.
+const BulkOperationSuffix = ".bulk"
+
+// BulkRoute is the collection-path twin of an edit or delete route whose
+// id is optional (the bulk form --kind/--where, CLI_REFERENCE 3.2):
+// DELETE /v1/resources?kind=host&where=… runs resource.delete without an
+// id, so REST reaches every form the CLI has (ONE OPERATION SPEC; r3-batch,
+// P2-RES-1). An operation whose id is required, or that is not an edit or
+// delete, has no twin. surface/rest serves the same twins, so the document
+// and the server agree.
+func BulkRoute(e op.Entry, rt op.Route) (op.Route, bool) {
+	if rt.Method != http.MethodDelete && rt.Method != http.MethodPatch {
+		return op.Route{}, false
+	}
+	base, ok := strings.CutSuffix(rt.Path, "/{"+IDParam+"}")
+	if !ok {
+		return op.Route{}, false
+	}
+	for _, f := range e.InputFields() {
+		if f.Name == IDParam {
+			return op.Route{Method: rt.Method, Path: base, Status: rt.Status}, !f.Required
+		}
+	}
+	return op.Route{}, false
 }
 
 // QueryInput reports whether a route takes its input from the query string

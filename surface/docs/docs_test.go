@@ -381,3 +381,56 @@ func TestRenderRefuses(t *testing.T) {
 		t.Errorf("missing md: %v", err)
 	}
 }
+
+type bulkIn struct {
+	ID    string   `arg:"0" json:"id,omitempty" desc:"one row; omit for the bulk form"`
+	Kind  string   `flag:"kind" json:"kind,omitempty" desc:"every row of this kind"`
+	Where []string `flag:"where" json:"where,omitempty" desc:"filter"`
+}
+
+// TestOpenAPIBulkTwins: an edit or delete whose id is optional also gets
+// its collection twin (DELETE|PATCH /v1/<noun>, the routes surface/rest
+// serves, P2-RES-1) with a unique operationId and the id as an optional
+// input; an op whose id is required, and a non-edit/delete verb, get none.
+func TestOpenAPIBulkTwins(t *testing.T) {
+	t.Parallel()
+	reg, err := op.NewRegistry(
+		op.Define(op.Spec{Name: "host.delete", Summary: "Delete hosts", Permission: op.PermWrite, Access: op.AccessWrite}, noop[bulkIn]),
+		op.Define(op.Spec{Name: "host.edit", Summary: "Edit hosts", Permission: op.PermWrite, Access: op.AccessWrite}, noop[bulkIn]),
+		op.Define(op.Spec{Name: "host.show", Summary: "Show a host", Permission: op.PermRead, Access: op.AccessRead}, noop[bulkIn]),
+		op.Define(op.Spec{Name: "memory.delete", Summary: "Delete a memory", Permission: op.PermWrite, Access: op.AccessWrite}, noop[idIn]),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := OpenAPI(reg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := parse(t, b)
+	del, ok := d.Paths["/v1/hosts"]["delete"]
+	if !ok || del.OperationID != "host.delete"+BulkOperationSuffix {
+		t.Fatalf("no DELETE twin: %+v", d.Paths["/v1/hosts"])
+	}
+	for _, p := range del.Parameters {
+		if p.Name == IDParam && (p.In != inQuery || p.Required) {
+			t.Errorf("twin id param %+v, want optional query", p)
+		}
+	}
+	patch, ok := d.Paths["/v1/hosts"]["patch"]
+	if !ok || patch.OperationID != "host.edit"+BulkOperationSuffix || patch.RequestBody == nil {
+		t.Fatalf("no PATCH twin: %+v", d.Paths["/v1/hosts"])
+	}
+	if _, ok := patch.RequestBody.Content[mediaJSON].Schema.Properties[IDParam]; !ok {
+		t.Error("PATCH twin body lacks the optional id")
+	}
+	if len(d.Paths["/v1/hosts"]) != 2 {
+		t.Errorf("/v1/hosts methods %v, want delete and patch only (show has no twin)", d.Paths["/v1/hosts"])
+	}
+	if _, ok := d.Paths["/v1/hosts/{id}"]["delete"]; !ok {
+		t.Error("the /{id} route itself is gone")
+	}
+	if _, ok := d.Paths["/v1/memories"]; ok {
+		t.Error("a required id got a twin")
+	}
+}

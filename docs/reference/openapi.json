@@ -11,6 +11,77 @@
   ],
   "paths": {
     "/v1/actors": {
+      "delete": {
+        "operationId": "actor.delete.bulk",
+        "summary": "Refused: actors are never deleted (use `lore actor deactivate`)",
+        "tags": [
+          "actor"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "the actor id (refused either way)",
+            "schema": {
+              "type": "string",
+              "description": "the actor id (refused either way)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_REFUSED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "actor.list",
         "summary": "List actors",
@@ -18152,6 +18223,220 @@
       }
     },
     "/v1/memories": {
+      "delete": {
+        "operationId": "memory.delete.bulk",
+        "summary": "Delete a memory (it goes to the trash; lore trash restore brings it back)",
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "the memory id (mem_…); leave out with --where",
+            "schema": {
+              "type": "string",
+              "description": "the memory id (mem_…); leave out with --where"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every memory matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every memory matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)",
+            "schema": {
+              "type": "string",
+              "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "carried_meta": {
+                      "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "memory.list",
         "summary": "List memories of every attached store (active by default)",
@@ -24823,6 +25108,214 @@
       }
     },
     "/v1/missions": {
+      "delete": {
+        "operationId": "mission.delete.bulk",
+        "summary": "Delete a mission (its tasks go with it: one batch, to the trash)",
+        "tags": [
+          "mission"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "the mission id (msn_…); leave out with --where",
+            "schema": {
+              "type": "string",
+              "description": "the mission id (msn_…); leave out with --where"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every mission matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every mission matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)",
+            "schema": {
+              "type": "string",
+              "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT, E_REASON_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "mission.list",
         "summary": "List missions (with attached tasks in --json mode)",
@@ -31021,6 +31514,214 @@
       }
     },
     "/v1/plans": {
+      "delete": {
+        "operationId": "plan.delete.bulk",
+        "summary": "Move a plan to the trash, with its tasks (one batch; restore with lore trash restore)",
+        "tags": [
+          "plan"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "the plan id (pln_…); leave out with --where",
+            "schema": {
+              "type": "string",
+              "description": "the plan id (pln_…); leave out with --where"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every plan matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every plan matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)",
+            "schema": {
+              "type": "string",
+              "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT, E_REASON_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "plan.list",
         "summary": "List plans",
@@ -41382,6 +42083,233 @@
       }
     },
     "/v1/resources": {
+      "delete": {
+        "operationId": "resource.delete.bulk",
+        "summary": "Delete a resource, or every resource of a kind matching --where (to the trash)",
+        "tags": [
+          "resource"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "the resource (name or res_ id); leave out for the bulk form --kind --where",
+            "schema": {
+              "type": "string",
+              "description": "the resource (name or res_ id); leave out for the bulk form --kind --where"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "why (recorded in the audit log)",
+            "schema": {
+              "type": "string",
+              "description": "why (recorded in the audit log)"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "bulk: delete every resource of this kind matching --where (one batch)",
+            "schema": {
+              "type": "string",
+              "description": "bulk: delete every resource of this kind matching --where (one batch)"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk: filter on a field, as resource list --where (repeatable; all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk: filter on a field, as resource list --where (repeatable; all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "bulk: list what would be deleted; write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "bulk: list what would be deleted; write nothing"
+            }
+          },
+          {
+            "name": "with_dependents",
+            "in": "query",
+            "required": false,
+            "description": "also delete every resource that refers to it, recursively (one batch; asks and lists them)",
+            "schema": {
+              "type": "boolean",
+              "description": "also delete every resource that refers to it, recursively (one batch; asks and lists them)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_IN_USE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "resource.list",
         "summary": "List resources of a kind",
@@ -41659,6 +42587,229 @@
           },
           "409": {
             "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "resource.edit.bulk",
+        "summary": "Edit a resource's values (stamps last_checked)",
+        "tags": [
+          "resource"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "archive": {
+                    "type": "boolean",
+                    "description": "bulk: archive every matching resource"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "bulk: list what would change; write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the resource (name or res_ id); leave out for the bulk form --where"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "description": "bulk: the kind of the rows --where matches"
+                  },
+                  "meta": {
+                    "type": "array",
+                    "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_json": {
+                    "type": "array",
+                    "description": "set a JSON value: key=\u003cjson\u003e, key=@file.json or key=- for stdin (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_stdin": {
+                    "type": "string",
+                    "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "prompt": {
+                    "type": "array",
+                    "description": "type this field's value at the terminal, hidden when sensitive (repeatable; @required = every missing required field)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "set": {
+                    "type": "array",
+                    "description": "field=value (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "set_json": {
+                    "type": "array",
+                    "description": "field=\u003cjson\u003e (repeatable; for list and json fields)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "set_stdin": {
+                    "type": "string",
+                    "description": "read this field's value from stdin (keeps it out of shell history)"
+                  },
+                  "unset": {
+                    "type": "array",
+                    "description": "field to remove (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk: filter on a field, as resource list --where (repeatable; all must match)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_RESOURCE_INVALID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_RESOURCE_ARCHIVED, E_RESOURCE_IN_USE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -46470,6 +47621,224 @@
       }
     },
     "/v1/rules": {
+      "delete": {
+        "operationId": "rule.delete.bulk",
+        "summary": "Delete a rule (it goes to the trash; lore trash restore brings it back)",
+        "tags": [
+          "rule"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "the rule id (rul_…); leave out with --where",
+            "schema": {
+              "type": "string",
+              "description": "the rule id (rul_…); leave out with --where"
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "required": false,
+            "description": "accepted for v0.1.17 scripts; the id already names its project",
+            "schema": {
+              "type": "string",
+              "description": "accepted for v0.1.17 scripts; the id already names its project"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every rule matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every rule matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)",
+            "schema": {
+              "type": "string",
+              "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT, E_REASON_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "rule.list",
         "summary": "List rules (archived ones only with --archived)",
@@ -66363,6 +67732,214 @@
       }
     },
     "/v1/tasklists": {
+      "delete": {
+        "operationId": "tasklist.delete.bulk",
+        "summary": "Delete a tasklist and its tasks, with their sub-tasks (one batch, to the trash)",
+        "tags": [
+          "tasklist"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "the tasklist id (tlt_…); leave out with --where",
+            "schema": {
+              "type": "string",
+              "description": "the tasklist id (tlt_…); leave out with --where"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every tasklist matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every tasklist matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)",
+            "schema": {
+              "type": "string",
+              "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT, E_REASON_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "tasklist.list",
         "summary": "List tasklists",
@@ -67831,6 +69408,214 @@
       }
     },
     "/v1/tasks": {
+      "delete": {
+        "operationId": "task.delete.bulk",
+        "summary": "Delete a task and its sub-tasks (it goes to the trash; lore trash restore brings it back)",
+        "tags": [
+          "task"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "the task id (tsk_…); leave out with --where",
+            "schema": {
+              "type": "string",
+              "description": "the task id (tsk_…); leave out with --where"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)",
+            "schema": {
+              "type": "string",
+              "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every task matching this filter, with its sub-tasks (the task list --where grammar; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every task matching this filter, with its sub-tasks (the task list --where grammar; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list the tasks that would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list the tasks that would be deleted, write nothing"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)",
+            "schema": {
+              "type": "boolean",
+              "description": "skip the trash: remove for good, only a tombstone stays (needs --confirm)"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": false,
+            "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes",
+            "schema": {
+              "type": "boolean",
+              "description": "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT, E_REASON_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "task.list",
         "summary": "List tasks",
@@ -68398,6 +70183,367 @@
           },
           "409": {
             "description": "E_AMBIGUOUS_ID, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "task.edit.bulk",
+        "summary": "Edit task fields (only flags you pass are applied)",
+        "tags": [
+          "task"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "add_assignee": {
+                    "type": "array",
+                    "description": "add an assignee (repeatable); the first one on a task with no lead leads",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "add_watcher": {
+                    "type": "array",
+                    "description": "add a watcher (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "after": {
+                    "type": "array",
+                    "description": "dependencies: \u003cid\u003e[:done|:merged][,…] (replaces the list)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "after_sibling": {
+                    "type": "string",
+                    "description": "place just after this sibling (tsk_…)"
+                  },
+                  "assign": {
+                    "type": "array",
+                    "description": "set the assignees: @handle or actor, repeatable; the first is the lead (a team sets the assigned team)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "assigned_to": {
+                    "type": "string",
+                    "description": "actor_id (act_*) to assign to"
+                  },
+                  "before": {
+                    "type": "string",
+                    "description": "place just before this sibling (tsk_…)"
+                  },
+                  "body": {
+                    "type": "string",
+                    "description": "new body"
+                  },
+                  "clear_assignee": {
+                    "type": "boolean",
+                    "description": "unassign"
+                  },
+                  "clear_defer": {
+                    "type": "boolean",
+                    "description": "un-defer (clear deferred_until)"
+                  },
+                  "clear_due": {
+                    "type": "boolean",
+                    "description": "remove due date"
+                  },
+                  "clear_estimate": {
+                    "type": "boolean",
+                    "description": "remove the estimate"
+                  },
+                  "clear_mission": {
+                    "type": "boolean",
+                    "description": "detach from mission"
+                  },
+                  "clear_plan": {
+                    "type": "boolean",
+                    "description": "detach from plan"
+                  },
+                  "commitment": {
+                    "type": "string",
+                    "description": "accepted | proposed | someday"
+                  },
+                  "defer_until": {
+                    "type": "string",
+                    "description": "snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: list the tasks that would change, write nothing"
+                  },
+                  "due": {
+                    "type": "string",
+                    "description": "due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"
+                  },
+                  "estimate": {
+                    "type": "string",
+                    "description": "estimate in the project's unit (tasks.estimate_unit)"
+                  },
+                  "first": {
+                    "type": "boolean",
+                    "description": "place first among its siblings"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the task id (tsk_…); leave out with --where"
+                  },
+                  "last": {
+                    "type": "boolean",
+                    "description": "place last among its siblings"
+                  },
+                  "lead": {
+                    "type": "string",
+                    "description": "make this person the lead (added to the assignees if missing)"
+                  },
+                  "live": {
+                    "type": "boolean",
+                    "description": "share this row with everyone at once on the live ref (refs/lore/live)"
+                  },
+                  "meta": {
+                    "type": "array",
+                    "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_json": {
+                    "type": "array",
+                    "description": "set a JSON value: key=\u003cjson\u003e, key=@file.json or key=- for stdin (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_stdin": {
+                    "type": "string",
+                    "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "mission": {
+                    "type": "string",
+                    "description": "attach to mission_id (msn_*)"
+                  },
+                  "no_live": {
+                    "type": "boolean",
+                    "description": "keep this row with the code (this branch's .lore/data)"
+                  },
+                  "no_parent": {
+                    "type": "boolean",
+                    "description": "detach: make it a top-level task"
+                  },
+                  "parent": {
+                    "type": "string",
+                    "description": "move under this task (tsk_…), with its subtree"
+                  },
+                  "plan": {
+                    "type": "string",
+                    "description": "attach to plan_id (pln_*)"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "low | medium | high | urgent"
+                  },
+                  "recur": {
+                    "type": "string",
+                    "description": "set or change the recurrence rule (applies to this and later instances)"
+                  },
+                  "ref": {
+                    "type": "array",
+                    "description": "a pointer to another row (\u003cid\u003e or \u003cproject\u003e:\u003cid\u003e) or a commit (commit:\u003csha\u003e); repeatable",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "relation": {
+                    "type": "string",
+                    "description": "the relation each --ref records (snake_case; default mentions)"
+                  },
+                  "remove_assignee": {
+                    "type": "array",
+                    "description": "remove an assignee (repeatable); removing the lead needs --lead",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "remove_watcher": {
+                    "type": "array",
+                    "description": "remove a watcher (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "reopen_parent": {
+                    "type": "boolean",
+                    "description": "the parent is closed: reopen it to in_progress in the same write"
+                  },
+                  "role": {
+                    "type": "string",
+                    "description": "plan role matched by task next --role (e.g. coordinator)"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "todo | in_progress | done | cancelled | blocked"
+                  },
+                  "tasklist": {
+                    "type": "string",
+                    "description": "move to tasklist_id (tlt_*)"
+                  },
+                  "timebox": {
+                    "type": "integer",
+                    "format": "duration-ns",
+                    "description": "time box, e.g. 60m"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "new title"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk edit: every task matching this filter (the task list --where grammar; repeatable, all must match)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_CYCLE, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
