@@ -164,14 +164,7 @@ func coreOrgSigners(ctx context.Context) ([]wire.OrgSigner, error) {
 // here is a programmer error (a registry or mount clash) and stops the
 // binary, like op.Define's panics.
 func mountCore(root *cobra.Command) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		cwd = "."
-	}
-	home, herr := loreHome()
-	if herr != nil {
-		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
-	}
+	cwd, home := coreMountDirs() // cl-gate: a test binary points this at a temp repo (main.go)
 	app, err := wire.New(coreOptions(cwd, home))
 	if err != nil {
 		panic(err)
