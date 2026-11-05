@@ -131,3 +131,34 @@ func TestKindNeverSeenGood(t *testing.T) {
 	h.Fails(settings.OpResShow, `{"id":"h1"}`, errs.KindConflict)
 	h.Fails(settings.OpResAdd, `{"kind":"host","name":"h2"}`, errs.KindConflict)
 }
+
+// TestKindShowLastGood (RES 3.13, P3-RES-2): kind show and kinds of a kind
+// with conflict markers show its last good definition with the warning
+// naming the row; on a machine that never saw it good they show the rows
+// as stored, with a warning saying so, so a person sees what to resolve.
+func TestKindShowLastGood(t *testing.T) {
+	h := lastGoodHarness(t)
+	kid := kindID(t, h, "host")
+	markRow(t, h, schema.TableKinds, kid, "description")
+	warm := h.Reopen()
+	for _, r := range []struct{ op, in string }{
+		{settings.OpKindShow, `{"id":"host"}`},
+		{settings.OpKinds, `{}`},
+	} {
+		s := opstest.Text(warm.Must(r.op, r.in))
+		if !strings.Contains(s, "showing its last good definition (read-only)") || !strings.Contains(s, kid) {
+			t.Errorf("%s: no last-good warning naming %s: %s", r.op, kid, s)
+		}
+		if strings.Contains(s, "<<<<<<<") {
+			t.Errorf("%s shows the marked row, not the last good one: %s", r.op, s)
+		}
+	}
+	if s := opstest.Text(warm.Must(settings.OpKindShow, `{"id":"host"}`)); !strings.Contains(s, "os  text") {
+		t.Errorf("last good fields missing: %s", s)
+	}
+	cold := h.ReopenCold()
+	s := opstest.Text(cold.Must(settings.OpKindShow, `{"id":"host"}`))
+	if !strings.Contains(s, "no last good definition on this machine") || !strings.Contains(s, "<<<<<<<") {
+		t.Errorf("never seen good: %s", s)
+	}
+}

@@ -51,6 +51,10 @@ const (
 type ResRenameIn struct {
 	Old string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	New string `json:"new_name" arg:"1" desc:"the new name (the kind's name format)"`
+	// RewriteRows rewrites the ref label of every resource that refs this
+	// one now, in one batch (PASS3-A-3); without it each label refreshes
+	// on that row's next write (RES 3.4).
+	RewriteRows bool `json:"rewrite_rows,omitempty" flag:"rewrite-rows" desc:"also rewrite the ref label in every resource that refs this one now (one batch)"`
 }
 
 // ResMergeIn is the input of resource.merge.
@@ -134,7 +138,8 @@ func (o ops) maintOps() []op.Entry {
 }
 
 // resRename: a resource name is a label: the row keeps its id, refs hold the
-// id, so nothing else changes (RES 3.4).
+// id, so no meaning changes (RES 3.4). Referrers' stored ref labels refresh
+// on their next write, or all at once with --rewrite-rows (PASS3-A-3).
 func (o ops) resRename(ctx context.Context, in ResRenameIn) (RowOut, error) {
 	r, err := o.resourceByName(ctx, in.Old, "")
 	if err != nil {
@@ -158,7 +163,22 @@ func (o ops) resRename(ctx context.Context, in ResRenameIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	return o.patchRow(ctx, r, map[string]value.Value{rName: v}, "renamed "+d.name()+" "+text(r.Row, rName)+" → "+in.New+"; ids and refs unchanged")
+	out, err := o.patchRow(ctx, r, map[string]value.Value{rName: v}, "renamed "+d.name()+" "+text(r.Row, rName)+" → "+in.New+"; ids and refs unchanged")
+	if err != nil {
+		return out, err
+	}
+	id, label := r.Row.ID.String(), d.name()+labelSep+in.New
+	hits, blocked, err := o.refsTo(ctx, id, label)
+	if err != nil {
+		return out, err
+	}
+	if in.RewriteRows {
+		if out.Batch, err = o.rewriteRefLabels(ctx, hits, id, label); err != nil {
+			return out, err
+		}
+	}
+	out.Human += renameLabelLines(len(hits), blocked, in.RewriteRows, out.Batch)
+	return out, nil
 }
 
 // resMerge folds in.Name into in.Into (RES 3.6): the survivor keeps its own
@@ -217,7 +237,7 @@ func (o ops) resMerge(ctx context.Context, in ResMergeIn) (ResRepointOut, error)
 		return ResRepointOut{}, err
 	}
 	if len(filled) > 0 {
-		patch, perr := valuesPatch(d, kv.vals, kv)
+		patch, perr := o.valuesPatch(ctx, d, kv.vals, kv)
 		if perr != nil {
 			return ResRepointOut{}, perr
 		}
@@ -335,7 +355,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 			}
 		}
 		if fixed {
-			patch, perr := valuesPatch(d, stored.vals, stored)
+			patch, perr := o.valuesPatch(ctx, d, stored.vals, stored)
 			if perr != nil {
 				return ResLintOut{}, perr
 			}
@@ -448,7 +468,7 @@ func (o ops) fieldRetype(ctx context.Context, in FieldRetypeIn) (RowOut, error) 
 		return RowOut{}, err
 	}
 	for _, c := range convs {
-		patch, perr := valuesPatch(d, c.stored.vals, c.stored)
+		patch, perr := o.valuesPatch(ctx, d, c.stored.vals, c.stored)
 		if perr != nil {
 			return RowOut{}, perr
 		}

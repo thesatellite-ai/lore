@@ -218,6 +218,10 @@ type Kind struct {
 	Unreviewed    bool    `json:"unreviewed,omitempty"`
 	Count         int     `json:"count"`
 	Fields        []Field `json:"fields"`
+	// Note warns that the kind or one of its fields holds conflict
+	// markers: the view is the last good definition, read-only, or the
+	// raw rows when this machine never saw one (RES 3.13, P3-RES-2).
+	Note string `json:"note,omitempty"`
 }
 
 // KindOut is the output of resource.kind.show.
@@ -229,6 +233,9 @@ type KindOut struct {
 func (o KindOut) Text() string {
 	k := o.Data
 	var b strings.Builder
+	if k.Note != "" {
+		b.WriteString(k.Note + "\n")
+	}
 	fmt.Fprintf(&b, "%s  %s  (%s)\n", k.ID, k.Name, k.Store)
 	if k.Unreviewed {
 		b.WriteString("  added by an agent, not reviewed yet (lore resource kind edit " + k.Name + " --reviewed)\n")
@@ -281,6 +288,11 @@ func (o KindsOut) Text() string {
 		return "(no kinds)\n"
 	}
 	var b strings.Builder
+	for _, k := range o.Data {
+		if k.Note != "" {
+			b.WriteString(k.Note + "\n")
+		}
+	}
 	b.WriteString("ID\tKIND\tSTORE\tROWS\tFIELDS\n")
 	for _, k := range o.Data {
 		names := make([]string, 0, len(k.Fields))
@@ -500,13 +512,23 @@ func (o ops) kindView(ctx context.Context, k located) (Kind, error) {
 	if err != nil {
 		return Kind{}, err
 	}
+	// RES 3.13: a kind or field row with conflict markers shows the last
+	// good definition with its warning; never seen good here, the raw rows
+	// with the warning, so a person sees what to resolve (P3-RES-2).
+	var note string
+	if marked := markedRows(k, fs); len(marked) > 0 {
+		note = "warning: " + errs.EnvelopeOf(conflicted(k, marked)).Error.Message + "; no last good definition on this machine (showing the rows as stored)"
+		if d, derr := o.kindDefRead(ctx, k.Row.ID.String()); derr == nil && d.note != "" {
+			k, fs, note = d.kind, d.fieldList(), d.note
+		}
+	}
 	res, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
 	if err != nil {
 		return Kind{}, err
 	}
 	out := Kind{ID: k.Row.ID.String(), Name: text(k.Row, kName), Store: string(k.Src), Description: text(k.Row, kDescription),
 		NameFormat: text(k.Row, kNameFormat), Render: text(k.Row, kRender), SecretManager: text(k.Row, kSecretMgr), Fields: []Field{},
-		AddedBy: text(k.Row, kAddedBy), Unreviewed: isUnreviewed(k.Row),
+		AddedBy: text(k.Row, kAddedBy), Unreviewed: isUnreviewed(k.Row), Note: note,
 		Count: len(where(res, map[string]string{rKind: k.Row.ID.String()}))}
 	for _, f := range fs {
 		fv := Field{ID: f.Row.ID.String(), Name: text(f.Row, kName), Type: text(f.Row, fType), Required: flag(f.Row, fRequired),
@@ -865,7 +887,7 @@ func (o ops) relabelFieldRows(ctx context.Context, k, f located) (int, string, e
 			if derr != nil {
 				return derr
 			}
-			patch, perr := valuesPatch(d, stored.vals, stored)
+			patch, perr := o.valuesPatch(ctx, d, stored.vals, stored)
 			if perr != nil {
 				return perr
 			}
@@ -906,7 +928,7 @@ func (o ops) fieldRemove(ctx context.Context, in FieldRemoveIn) (RowOut, error) 
 		}
 		delete(stored.vals, f.Row.ID.String())
 		delete(stored.conflicts, f.Row.ID.String())
-		patch, perr := valuesPatch(d, stored.vals, stored)
+		patch, perr := o.valuesPatch(ctx, d, stored.vals, stored)
 		if perr != nil {
 			return RowOut{}, perr
 		}

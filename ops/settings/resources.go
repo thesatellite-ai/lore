@@ -340,6 +340,11 @@ type fieldEntry struct {
 	// VName is the value name beside a closed value's val_ id in V (OQ-AV,
 	// FA-RES-OQAV): a label, refreshed from the field row by id on read.
 	VName json.RawMessage `json:"v_name,omitempty"`
+	// Label is a ref value's readable target label "<kind>/<name>" beside
+	// the target's res_ id in V (OQ17, P3-RES-1): written fresh on every
+	// write of the row, or for all referrers by resource rename
+	// --rewrite-rows; readers take the name from the target by id.
+	Label string `json:"v_label,omitempty"`
 }
 
 // resValues is a decoded `fields` object: the values by fld_ id (what every
@@ -357,6 +362,10 @@ type resValues struct {
 	// valIDs are the stored val_ id(s) of closed-value entries (OQ-AV), by
 	// fld_ id; vals holds their names.
 	valIDs map[string]json.RawMessage
+	// labels are the stored ref labels (v_label) by fld_ id: kept on a
+	// re-write while the target is not visible (a dangling ref keeps its
+	// label, RES 3.4).
+	labels map[string]string
 }
 
 // Conflict is one unsettled field of a resource as shown: the three sides
@@ -424,6 +433,15 @@ func decodeValues(r located) (resValues, error) {
 			out.valIDs[id] = v
 			v = vn
 		}
+		if lb, ok := probe[entryLabelKey]; ok {
+			var label string
+			if json.Unmarshal(lb, &label) == nil && label != "" {
+				if out.labels == nil {
+					out.labels = map[string]string{}
+				}
+				out.labels[id] = label
+			}
+		}
 		out.vals[id], out.names[id] = v, name
 	}
 	return out, nil
@@ -434,16 +452,20 @@ const (
 	entryNameKey  = "name"
 	entryValueKey = "v"
 	entryVNameKey = "v_name"
+	entryLabelKey = "v_label"
 )
 
-// valuesPatch builds the `fields` patch from vals in the spec shape: each
+// valuesPatchLabeled builds the `fields` patch from vals in the spec shape: each
 // entry named after d's field with that fld_ id, or, for an id d no longer
 // lists, the name the row stored (prev); an id with neither is a bug of the
 // caller and refused.
 //
 // Conflict entries of prev whose field vals does not set are kept as they
 // are (a merge clash stays for a person until that field is set).
-func valuesPatch(d kindDef, vals map[string]json.RawMessage, prev resValues) (map[string]value.Value, error) {
+//
+// labels are the ref labels to store by fld_ id (refLabels); an entry
+// without one is written without a label.
+func valuesPatchLabeled(d kindDef, vals map[string]json.RawMessage, prev resValues, labels map[string]string) (map[string]value.Value, error) {
 	entries := make(map[string]json.RawMessage, len(vals)+len(prev.conflicts))
 	for id, c := range prev.conflicts {
 		if _, set := vals[id]; !set {
@@ -464,6 +486,7 @@ func valuesPatch(d kindDef, vals map[string]json.RawMessage, prev resValues) (ma
 			return nil, errs.New(errs.Internal, "resource: no field name for "+id)
 		}
 		entry.Name = name
+		entry.Label = labels[id]
 		e, err := json.Marshal(entry)
 		if err != nil {
 			return nil, errs.Wrap(errs.Internal, "resource: encode field "+id, err)
@@ -720,7 +743,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if err = requireFields(d, in.Name, vals); err != nil {
 		return RowOut{}, err
 	}
-	fields, err := valuesPatch(d, vals, resValues{})
+	fields, err := o.valuesPatch(ctx, d, vals, resValues{})
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -835,7 +858,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if err = requireFields(d, name, vals); err != nil {
 		return RowOut{}, err
 	}
-	patch, err := valuesPatch(d, vals, stored)
+	patch, err := o.valuesPatch(ctx, d, vals, stored)
 	if err != nil {
 		return RowOut{}, err
 	}

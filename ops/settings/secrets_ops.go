@@ -631,7 +631,7 @@ func (o ops) rewriteResource(ctx context.Context, r secretRow, fix rewriter) (in
 	if err != nil {
 		return 0, err
 	}
-	patch, err := valuesPatch(d, vals, stored)
+	patch, err := o.valuesPatch(ctx, d, vals, stored)
 	if err != nil {
 		return 0, err
 	}

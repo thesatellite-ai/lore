@@ -89,7 +89,7 @@ func (o ops) rewriteValueRows(ctx context.Context, k, f located, pairs []valueRe
 			return n, errs.Wrap(errs.Internal, "resource: encode "+fid, merr)
 		}
 		stored.vals[fid] = b
-		patch, perr := valuesPatch(d, stored.vals, stored)
+		patch, perr := o.valuesPatch(ctx, d, stored.vals, stored)
 		if perr != nil {
 			return n, perr
 		}

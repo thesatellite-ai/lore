@@ -870,7 +870,7 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 	}
 	out.Batch = bid.String()
 	for _, c := range changes {
-		patch, perr := valuesPatch(c.d, c.store.vals, c.store)
+		patch, perr := o.valuesPatch(ctx, c.d, c.store.vals, c.store)
 		if perr != nil {
 			return ResRepointOut{}, perr
 		}

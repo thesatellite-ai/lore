@@ -98,6 +98,15 @@ func (o ops) kindDefRead(ctx context.Context, key string) (kindDef, error) {
 	return good, nil
 }
 
+// fieldList is d's fields as rows, sorted by name.
+func (d kindDef) fieldList() []located {
+	out := make([]located, 0, len(d.byName))
+	for _, n := range d.fieldNames() {
+		out = append(out, d.byName[n])
+	}
+	return out
+}
+
 // noteLines is d's warning as list notes (none when the kind is clean).
 func (d kindDef) noteLines() []string {
 	if d.note == "" {
