@@ -550,9 +550,17 @@ const homeTilde = "~"
 
 // cleanFileURL writes a file:// url in its one canonical form (absolute,
 // clean path) so the folder backend accepts it and two spellings of one
-// folder name the same store; other urls pass unchanged.
+// folder name the same store. Every url a person adds passes here (store
+// init, add, set-url), so it is also the add-time credential check: a url
+// holding a password or a token-shaped user is refused (E_URL_USERINFO,
+// attach.NormalizeURL; the url never appears in the error), because the
+// value would be written into the committed stores.yaml. Other urls pass
+// unchanged.
 func cleanFileURL(raw string) (string, error) {
 	if !strings.HasPrefix(raw, folder.Scheme+"://") {
+		if _, err := attach.NormalizeURL(raw); errs.Has(err, errs.URLUserinfo) {
+			return "", err
+		}
 		return raw, nil
 	}
 	u, err := url.Parse(raw)
