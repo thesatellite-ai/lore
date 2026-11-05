@@ -84,6 +84,14 @@ func storeSignature(org *lorecfg.Org) gitref.Signature {
 		}
 		return gitref.Signature{Name: name, Email: emailOfKey(org.Identity.Key), When: when}
 	}
+	// r3-sign: the same FLAG4 fallback the core's store commits use
+	// (wire.App.LoreSignature = lore whoami's commit signature); the old
+	// identity chain only when the core is not mounted.
+	if coreApp != nil {
+		if name, email, ok := coreApp.LoreSignature(context.Background()); ok {
+			return gitref.Signature{Name: name, Email: email, When: when}
+		}
+	}
 	r := identity.Resolve(identity.Inputs{})
 	name := r.DisplayName
 	if name == "" {
