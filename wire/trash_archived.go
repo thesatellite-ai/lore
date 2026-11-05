@@ -21,6 +21,8 @@ func (a *App) PurgeArchived(ctx context.Context, cutoff time.Time, dryRun bool) 
 		return eng.PurgeArchived(ctx, cutoff, true)
 	}
 	return a.trashWrite(ctx, func(eng *engine.Engine) (engine.TrashResult, error) {
+		return eng.PurgeArchived(ctx, cutoff, true) // the rows the purge will touch (actor rows first)
+	}, func(eng *engine.Engine) (engine.TrashResult, error) {
 		return eng.PurgeArchived(ctx, cutoff, false)
 	})
 }

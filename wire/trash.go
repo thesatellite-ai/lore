@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Trashed implements opstrash.Env.
@@ -66,12 +67,14 @@ func (a *App) TableSchema(ctx context.Context, table row.Table) (schema.TableDef
 
 // Restore implements opstrash.Env.
 func (a *App) Restore(ctx context.Context, target string) (engine.TrashResult, error) {
-	return a.trashWrite(ctx, func(eng *engine.Engine) (engine.TrashResult, error) { return eng.Restore(ctx, target) })
+	return a.trashWrite(ctx, func(eng *engine.Engine) (engine.TrashResult, error) { return eng.TrashTarget(ctx, target) },
+		func(eng *engine.Engine) (engine.TrashResult, error) { return eng.Restore(ctx, target) })
 }
 
 // PurgeTrash implements opstrash.Env.
 func (a *App) PurgeTrash(ctx context.Context, target string) (engine.TrashResult, error) {
-	return a.trashWrite(ctx, func(eng *engine.Engine) (engine.TrashResult, error) { return eng.PurgeTrash(ctx, target) })
+	return a.trashWrite(ctx, func(eng *engine.Engine) (engine.TrashResult, error) { return eng.TrashTarget(ctx, target) },
+		func(eng *engine.Engine) (engine.TrashResult, error) { return eng.PurgeTrash(ctx, target) })
 }
 
 // PurgeOlder implements opstrash.Env.
@@ -84,16 +87,33 @@ func (a *App) PurgeOlder(ctx context.Context, cutoff time.Time, expired, dryRun 
 		return eng.PurgeOlder(ctx, cutoff, expired, true)
 	}
 	return a.trashWrite(ctx, func(eng *engine.Engine) (engine.TrashResult, error) {
+		return eng.PurgeOlder(ctx, cutoff, expired, true)
+	}, func(eng *engine.Engine) (engine.TrashResult, error) {
 		return eng.PurgeOlder(ctx, cutoff, expired, false)
 	})
 }
 
 // trashWrite runs one trash write after the write checks, then records the
-// stores it landed in.
-func (a *App) trashWrite(ctx context.Context, do func(*engine.Engine) (engine.TrashResult, error)) (engine.TrashResult, error) {
+// stores it landed in. plan names the rows the write will touch without
+// writing (the restore or purge target, a purge dry run): the actor row is
+// written into each of their stores first, as every other write does, so
+// the updated_by of a restore or a tombstone always resolves there (OV9).
+func (a *App) trashWrite(ctx context.Context, plan, do func(*engine.Engine) (engine.TrashResult, error)) (engine.TrashResult, error) {
 	st, err := a.writeState(ctx)
 	if err != nil {
 		return engine.TrashResult{}, err
+	}
+	if planned, perr := plan(st.eng); perr == nil { // a bad target is reported by the write itself
+		done := map[store.Source]bool{}
+		for _, t := range planned.Rows {
+			if done[t.Store] {
+				continue
+			}
+			done[t.Store] = true
+			if aerr := a.ensureActor(ctx, st, t.Store); aerr != nil {
+				return engine.TrashResult{}, aerr
+			}
+		}
 	}
 	res, err := do(st.eng)
 	if len(res.Rows) == 0 {
