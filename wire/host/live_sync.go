@@ -15,8 +15,11 @@ package host
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 )
@@ -115,14 +118,92 @@ func (l liveSync) Land(ctx context.Context, in opssync.LandIn) (opssync.DoneOut,
 	return opssync.DoneOut{Done: string(out.Status)}, nil
 }
 
-// SyncStatus implements opssync.Env.
-func (liveSync) SyncStatus(context.Context, opssync.StatusIn) (opssync.StatusOut, error) {
-	return opssync.StatusOut{}, unsupported("status")
+// SyncStatus implements opssync.Env: the live rows of the cwd project and
+// why each waits (v0.1.17 printLiveStatus, side effect 13). This binary
+// keeps no lore.db sync state, so the file counters stay zero; open
+// conflicts counts live rows with conflict markers.
+func (l liveSync) SyncStatus(ctx context.Context, _ opssync.StatusIn) (opssync.StatusOut, error) {
+	out := opssync.StatusOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindStatus}
+	s, folder, err := l.here(ctx)
+	if err != nil {
+		return out, err
+	}
+	if s == nil {
+		return out, errs.New(errs.Unsupported, liveUnsupported)
+	}
+	plan, err := s.plan(ctx, folder, nil)
+	if err != nil {
+		return out, errs.Wrap(errs.Internal, "live status", err)
+	}
+	// Display only: an unreadable snapshot or pending list shows as none.
+	snap, _ := s.ref.Snapshot(ctx)
+	pending, _ := s.ref.Pending()
+	out.Lines = append(out.Lines, fmt.Sprintf("live rows:        %d (%s)", len(plan), folder))
+	if snap.Ahead() {
+		out.Lines = append(out.Lines, fmt.Sprintf("live not pushed:  %d write(s) waiting", max(len(pending), 1)))
+	}
+	protected := s.noteText(liveNoteProtected)
+	branch := s.defaultBranch(ctx)
+	now := s.clk.Now()
+	for _, p := range plan {
+		if isConflict(p) {
+			out.Data.OpenConflicts++
+		}
+		why := p.Decision.Reason
+		switch {
+		case p.Leave:
+			why = "on " + branch + "; leaves live on the next sync"
+		case p.Decision.Action != live.LandStay && protected != "":
+			why = "waiting to land: " + branch + " is protected, rides on your next push"
+		case p.Decision.Action != live.LandStay:
+			why = "waiting to land (" + why + ")"
+		}
+		age := now.Sub(p.File.Block.LiveSince).Round(time.Minute)
+		out.Lines = append(out.Lines, fmt.Sprintf("  %-10s %-40s live %-8s %s", p.Key.Table, p.Key.ID, age, why))
+	}
+	return out, nil
 }
 
-// SyncConflicts implements opssync.Env.
-func (liveSync) SyncConflicts(context.Context, opssync.ConflictsIn) (opssync.ConflictsOut, error) {
-	return opssync.ConflictsOut{}, unsupported("conflicts")
+// SyncConflicts implements opssync.Env: the live rows of the cwd project
+// whose text fields hold conflict markers (F4: both edits kept, the row
+// cannot land until a person settles it with an edit). This binary keeps
+// no saved conflict copies, so --all adds nothing.
+func (l liveSync) SyncConflicts(ctx context.Context, _ opssync.ConflictsIn) (opssync.ConflictsOut, error) {
+	out := opssync.ConflictsOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindConflicts, Data: []opssync.Conflict{}}
+	s, folder, err := l.here(ctx)
+	if err != nil {
+		return out, err
+	}
+	if s == nil {
+		return out, errs.New(errs.Unsupported, liveUnsupported)
+	}
+	plan, err := s.plan(ctx, folder, nil)
+	if err != nil {
+		return out, errs.Wrap(errs.Internal, "live conflicts", err)
+	}
+	for _, p := range plan {
+		if !isConflict(p) {
+			continue
+		}
+		at := p.File.Block.LiveSince.UTC().Format(time.RFC3339)
+		out.Data = append(out.Data, opssync.Conflict{ID: int64(len(out.Data) + 1), Table: p.Key.Table, RowID: p.Key.ID, Kept: conflictKeptBoth, At: at})
+		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, conflict markers in a text field; edit the row to settle it)", len(out.Data), p.Key.Table, p.Key.ID, conflictKeptBoth))
+	}
+	out.Count = len(out.Data)
+	if out.Count == 0 {
+		out.Lines = []string{"· no conflicts"}
+	}
+	return out, nil
+}
+
+// conflictKeptBoth is the kept side of a live text clash: both edits stay
+// in the field between markers.
+const conflictKeptBoth = "both"
+
+// isConflict: the plan keeps the row live because a text field holds
+// conflict markers (live.ShouldLand's "conflict…" reason).
+func isConflict(p landPlanRow) bool {
+	return p.Decision.Action == live.LandStay && strings.HasPrefix(p.Decision.Reason, "conflict")
 }
 
 // SyncResolve implements opssync.Env.

@@ -223,7 +223,7 @@ func (s *liveSession) rideBranch(ctx context.Context) (string, bool) {
 // as protected and that it does not hold yet, across every project folder
 // of the repo (one ride commit carries them all).
 func (s *liveSession) waitingRows(ctx context.Context) ([]live.LandItem, error) {
-	if b, err := os.ReadFile(filepath.Join(s.stateDir, liveNoteProtected)); err != nil || strings.TrimSpace(string(b)) == "" {
+	if s.noteText(liveNoteProtected) == "" {
 		return nil, nil // never refused as protected on this machine
 	}
 	_, tree, err := s.ref.LocalTree(ctx)
@@ -243,6 +243,15 @@ func (s *liveSession) waitingRows(ctx context.Context) ([]live.LandItem, error) 
 		}
 	}
 	return withoutLoneSupporting(items), nil
+}
+
+// noteText is a machine note of .git/lore ("" when absent or unreadable).
+func (s *liveSession) noteText(name string) string {
+	b, err := os.ReadFile(filepath.Join(s.stateDir, name))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // rideCommit adds the ride commit on branch (tip head) and brings the index
