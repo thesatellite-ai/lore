@@ -189,6 +189,32 @@ func (o ops) fenceClaimed(ctx context.Context, f forest, claimed []string) error
 	return nil
 }
 
+// FenceClaimed raises claim_epoch on every actively claimed task among
+// rows (FA-TASK-3, FA-TASK-7): the group deletes of other nouns (a
+// mission, a tasklist, a plan taking its tasks) call it under their delete
+// batch after the confirm and before the tombstones. It returns how many
+// were fenced (0 without a team board).
+func FenceClaimed(ctx context.Context, env work.Env, rows []work.Sourced) (int, error) {
+	t, ok := work.TeamFrom(ctx)
+	if !ok || len(rows) == 0 {
+		return 0, nil
+	}
+	board, err := t.Claims(ctx)
+	if err != nil {
+		return 0, err
+	}
+	f := forest{rows: map[string]work.Sourced{}}
+	var claimed []string
+	for _, s := range rows {
+		id := s.Row.ID.String()
+		if _, isClaimed, active := board.Claim(id); isClaimed && active {
+			f.rows[id] = s
+			claimed = append(claimed, id)
+		}
+	}
+	return len(claimed), ops{env: env}.fenceClaimed(ctx, f, claimed)
+}
+
 // autoStartParent applies tasks.auto_start_parent once child started
 // (TASK 6.7, FA-TASK-2): when the policy of the parent's store is on and
 // the parent is still todo, the parent becomes in_progress in a second

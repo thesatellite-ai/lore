@@ -21,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
@@ -473,7 +474,44 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, Noun, table, id, trashline.Moved(id.String(), id.String()))
+	if !engine.Confirmed(ctx) {
+		// the engine asks for a group holding tasks; nothing is fenced yet
+		return work.Delete(ctx, o.env, Noun, table, id, trashline.Moved(id.String(), id.String()))
+	}
+	// TASK 6.12 / FA-TASK-7: the mission's claimed tasks are fenced in the
+	// delete batch before the tombstones, as a task subtree delete does.
+	rows, err := o.missionSourced(ctx, id.String())
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	bctx, _, err := bulk.Begin(ctx, bulk.KindDelete)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	n, err := opstask.FenceClaimed(bctx, o.env, rows)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	human := trashline.Moved(id.String(), id.String())
+	if n > 0 {
+		human += "  fenced " + strconv.Itoa(n) + " claimed task(s): their holders' next write fails\n"
+	}
+	return work.Delete(bctx, o.env, Noun, table, id, human)
+}
+
+// missionSourced are the live task rows of mission id with their stores.
+func (o ops) missionSourced(ctx context.Context, id string) ([]work.Sourced, error) {
+	all, err := work.ListAll(ctx, o.env, schema.TableTasks, "")
+	if err != nil {
+		return nil, err
+	}
+	var out []work.Sourced
+	for _, s := range all {
+		if !s.Row.Deleted && work.Field(s.Row, work.FieldMission) == id {
+			out = append(out, s)
+		}
+	}
+	return out, nil
 }
 
 // search matches missions by title, body and status.
