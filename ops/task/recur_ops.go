@@ -29,7 +29,7 @@ type RecurEditIn struct {
 	ID string `json:"id" arg:"0" desc:"an instance of the series (tsk_…)"`
 	// Rule is checked by the handler after the instance lookup (omitempty),
 	// so a bad id answers E_NOT_FOUND first (ops/internal/lookup).
-	Rule string `json:"rule,omitempty" arg:"1" rest:"true" desc:"the new rule, e.g. \"every! 30 days\" (this and later instances)"`
+	Rule string `json:"rule,omitempty" arg:"1" rest:"true" required:"after-lookup" desc:"the new rule, e.g. \"every! 30 days\" (this and later instances)"`
 }
 
 // RecurOut is the output of the recur operations.

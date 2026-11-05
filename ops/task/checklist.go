@@ -66,7 +66,7 @@ type ChecklistItemIn struct {
 	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	// Item is checked by the handler after the task lookup (omitempty), so
 	// a bad task id answers E_NOT_FOUND first (ops/internal/lookup).
-	Item string `json:"item,omitempty" arg:"1" desc:"the item: its position (1, 2, …) or its chk_ id"`
+	Item string `json:"item,omitempty" arg:"1" required:"after-lookup" desc:"the item: its position (1, 2, …) or its chk_ id"`
 }
 
 // ChecklistEditIn is the input of task.checklist.edit.
@@ -74,8 +74,8 @@ type ChecklistEditIn struct {
 	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	// Item and Text are checked by the handler after the task lookup
 	// (omitempty), so a bad task id answers E_NOT_FOUND first.
-	Item string `json:"item,omitempty" arg:"1" desc:"the item: its position (1, 2, …) or its chk_ id"`
-	Text string `json:"text,omitempty" arg:"2" rest:"true" desc:"the new text"`
+	Item string `json:"item,omitempty" arg:"1" required:"after-lookup" desc:"the item: its position (1, 2, …) or its chk_ id"`
+	Text string `json:"text,omitempty" arg:"2" rest:"true" required:"after-lookup" desc:"the new text"`
 }
 
 // ChecklistImportIn is the input of task.checklist.import.
