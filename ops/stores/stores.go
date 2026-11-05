@@ -147,6 +147,12 @@ type VisibilityOut struct {
 	Previous string `json:"previous"`
 	// Changed is false when the store already declared it.
 	Changed bool `json:"changed"`
+	// Repos are set when a shareable store goes back to internal: repos on
+	// this machine that attach it, whose committed files (LORE.md, pointer
+	// files) may already hold its rows (RepoUser). Re-render them.
+	Repos []string `json:"repos_holding_rows,omitempty"`
+	// Note says why Repos could not be read (the change itself is done).
+	Note string `json:"note,omitempty"`
 }
 
 // FolderAddIn is the input of store.folder.add.
@@ -324,7 +330,16 @@ func Ops(m Manager) []op.Entry {
 					WithQuestion("make store " + in.Name + " shareable? " + shareableQuestion).
 					WithHint("ask the person, then rerun with --yes")
 			}
-			return m.SetVisibility(ctx, in)
+			out, err := m.SetVisibility(ctx, in)
+			if err != nil || in.Visibility != VisibilityInternal || cur.Visibility != VisibilityShareable {
+				return out, err
+			}
+			if ru, ok := upgrade.As[RepoUser](m); ok {
+				if out.Repos, err = ru.ReposUsingStore(ctx, in.Name); err != nil {
+					out.Repos, out.Note = nil, "the repos that attach this store could not be listed: "+err.Error()
+				}
+			}
+			return out, nil
 		}),
 		// Flow (STORE TARGETS): validate names → Manager finds the store
 		// (stores.yaml, me, team), refuses read-only, writes the folder's

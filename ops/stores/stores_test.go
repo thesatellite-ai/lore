@@ -113,3 +113,46 @@ func TestVisibilityConfirm(t *testing.T) {
 		}
 	}
 }
+
+// fakeRepos adds RepoUser to fakeVis.
+type fakeRepos struct {
+	*fakeVis
+	repos []string
+}
+
+func (f fakeRepos) ReposUsingStore(context.Context, string) ([]string, error) { return f.repos, nil }
+
+// TestVisibilityInternalListsRepos (CLI_REFERENCE 3.21): shareable →
+// internal lists the repos that attach the store; an unchanged
+// visibility lists none (to shareable asks first: TestVisibilityConfirm).
+func TestVisibilityInternalListsRepos(t *testing.T) {
+	run := func(m Manager, body string) string {
+		for _, e := range Ops(m) {
+			if e.Spec().Name != OpVisibility {
+				continue
+			}
+			in, err := e.Decode(op.JSONDecoder{Body: []byte(body)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			res, err := e.Invoke(context.Background(), in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := res.JSON()
+			if err != nil {
+				t.Fatal(err)
+			}
+			return string(b)
+		}
+		t.Fatal("no store.visibility op")
+		return ""
+	}
+	repos := []string{"/w/client_a", "/w/own"}
+	if got := run(fakeRepos{&fakeVis{cur: VisibilityShareable}, repos}, `{"name":"kit","visibility":"internal"}`); !strings.Contains(got, `"repos_holding_rows":["/w/client_a","/w/own"]`) {
+		t.Errorf("back to internal: %s", got)
+	}
+	if got := run(fakeRepos{&fakeVis{cur: VisibilityInternal}, repos}, `{"name":"kit","visibility":"internal"}`); strings.Contains(got, "repos_holding_rows") {
+		t.Errorf("unchanged lists repos: %s", got)
+	}
+}

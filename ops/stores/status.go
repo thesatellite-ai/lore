@@ -39,3 +39,14 @@ type Status struct {
 type StatusReader interface {
 	StoreStatus(ctx context.Context, e Entry) Status
 }
+
+// RepoUser is the optional Manager upgrade behind going back to internal
+// (CLI_REFERENCE 3.21: "lists the client repos whose committed files
+// already hold its rows"): the repos on this machine whose last core open
+// attached the store (the FLAG3 cache use records). Whether each one is a
+// client repo is only known inside that repo, so every one is listed
+// (fail closed, DECISION STORE-INTERNAL-REPOS); repos on other machines
+// are not recorded here.
+type RepoUser interface {
+	ReposUsingStore(ctx context.Context, name string) ([]string, error)
+}
