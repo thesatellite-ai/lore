@@ -79,8 +79,8 @@ These matter when you work for an org in client repos. A **store** is a separate
 
 | Flag | What it does |
 |---|---|
-| `--yes` | answer yes to the question lore would ask (`rule add`, `memory add`, `decision add`, `comment add`, `org import`, `org link`, `org unlink`, `move`, `share`). For `move` and `share` it is never accepted from an agent |
-| `--confirm` | required by commands that remove for good: `delete --purge`, `trash purge`; a plain `delete` moves the row to the trash and takes `--yes` without a terminal |
+| `--yes` | answer yes to the question lore would ask (`rule add`, `memory add`, `decision add`, `comment add`, `org import`, `org link`, `move`). For `move` it is never accepted from an agent |
+| `--confirm` | required by commands that remove for good: `delete --purge`, `trash purge`, and a `delete` under policy `trash.purge_on_delete`. A plain `delete --confirm` still works: it moves the row to the trash, the same as `--yes` (v0.1.17's spelling, FA-DEL-1), and prints a hint at `lore trash purge` |
 | `--dry-run` | show what would happen and change nothing (`land`, `render`, `org link`, `live compact`, `sync promote`, `trash purge`, `sync fix-projects`, `sync install-action`, `sync ci-merge`, `skill compile`) |
 | `--auto` | opt in to automatic runs that spend GitHub Actions minutes (`sync install-action`: adds the pull request and push triggers; without it the workflow runs only when started by hand, and a re-run keeps the triggers the file already has) |
 
