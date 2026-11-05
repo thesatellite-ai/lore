@@ -1127,6 +1127,8 @@ resolve: only among loaded sources (F20); anything else prints "→ client/websi
 
 **Edge cases handled.** A client row pointing at an internal id: refused by F16 at commit, live write and landing. Agent work notes for a client task (D8) are internal rows pointing at the client task, which is the allowed direction.
 
+**As built in 0.1.18.** The direction rule is checked by the engine at write time on every reference field of every table definition (`engine/relations.go` `checkDirection`, through `logic/direction`), not only on comments and knowledge refs, and on `lore reminder add --on-id` (`ops/reminder`, `TestReminderOnIDDirection`); a refusal is `E_LEAK_BLOCKED` naming the field and the target. Kinds, metadata keys and tags are rows too, so a repo row cannot name a kind, meta key or tag defined only in an internal or personal store when the repo is client-class. The repo store's class follows the org-store link (`Attached.Client`, set by wire): a repo the org-store link marks as the org's own (internal) repo is internal-class and may point at the org store's rows, kinds, meta keys and tags; a client repo is client-class and may not; when the link cannot be read, the repo counts as a client repo (fail closed). Actor and team rows are exempt: a client row may name a person through the F18 client projection.
+
 **Test.** `StoreIndex` fake; matrix: target in repo / live / store / personal / unloaded × each direction. E2E: the two `task show` runs above.
 
 **Debug.** `lore explain tsk_01 --refs` lists every pointer and where it lives.
@@ -1245,6 +1247,8 @@ whoami: shows the identity and the step that decided it
 ```
 
 **Edge cases handled.** Email change: a new actor; `lore actor alias` links old and new on the roster (deferred). An agent that inherited `LORE_ACTOR=human:…`: ignored for approvals and writes as the org identity of the machine, with a warning. Two agents with the same label in two sessions: the second gets `E_LOST_CLAIM`-style refusal on claims (F7) and a hint to use a different label.
+
+**As built in 0.1.18.** The client copy above applies to a repo of client class only, and the repo's class follows the org-store link (F15 as built): an org's own internal repo keeps full actor rows like the org store, a client repo gets the projection, and a repo whose link cannot be read is treated as a client repo (fail closed).
 
 **Test.** `IdentitySource` and `Env` seams. Matrix: org resolved / none × LORE_ACTOR human / agent registered / agent unknown × same person on two machines × handle clash. E2E: two clones register the same person, one file results.
 
@@ -2648,7 +2652,7 @@ One place for every known side effect. Rows closed by a decision stay listed so 
 | 37 | signals ref contention with many agents | one write per renewal; limits in §7.8; hub in P5 | accepted | 2026-11-02 |
 | 38 | a host without `push --atomic` | GitHub and GitLab expected to support it, verified per host by the test suite; other hosts: signals first, then live, window documented, doctor reports it (TEAM-036) | handled | 2026-11-02 |
 | 39 | squash templates that drop the `Lore-Task:` trailer | the adapter or `lore task merged` | handled | 2026-11-02 |
-| 40 | `~/.lore/cache` and `~/.lore/render` gain a file per project | `lore cache prune` removes files for projects not used for 90 days; doctor shows the size | handled | 2026-11-02 |
+| 40 | `~/.lore/cache` gains a cache file per attached store (`stores/<store id>/<branch>/<folder>.db`) | `lore cache prune` removes the cache files of stores no repo on this machine attaches any more (FLAG3): lists each file with its size and asks first (`--yes` skips; no terminal = `E_NEEDS_CONFIRM`), `--dry-run` only lists; never touches row files or anything outside `~/.lore/cache`; doctor shows the size | handled | 2026-11-04 |
 | 41 | `claim_epoch` is visible on a linked client task row | a bare number needed to fence a status write that lives in the client repo; `attempts`, `claim_log`, `work_branch`, claim tokens and agent ids never go on the client row — they live on the store-side linked internal row (D8) | accepted | 2026-11-02 |
 
 ### 12.2 Open questions
