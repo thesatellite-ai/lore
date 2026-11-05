@@ -261,15 +261,28 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		lives[lr.Key()] = lr
 	}
 	out := make([]store.Row, 0, len(rows)+len(lives))
+	branchOnly := map[live.RowKey]int{} // index in out of rows with no live copy
 	for _, r := range rows {
 		if lr, ok := lives[r.Key()]; ok {
 			out = append(out, newer(lr, r))
 			delete(lives, r.Key())
 			continue
 		}
+		branchOnly[keyOf(r)] = len(out)
 		out = append(out, r)
 	}
 	if innerCur == "" {
+		// The default-branch read-through for lists (live_landed.go): branch
+		// rows origin holds newer copies of are swapped in place, and rows
+		// that landed and are not pulled yet are added after the live ones.
+		have := make(map[store.Key]bool, len(out)+len(lives))
+		for _, r := range out {
+			have[r.Key()] = true
+		}
+		for k := range lives {
+			have[k] = true
+		}
+		b.landedOverRows(ctx, s, out, branchOnly)
 		keys := make([]store.Key, 0, len(lives))
 		for k := range lives {
 			keys = append(keys, k)
@@ -283,6 +296,7 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		for _, k := range keys {
 			out = append(out, lives[k])
 		}
+		out = append(out, b.landedRows(ctx, s, have)...)
 	}
 	return out, store.Cursor(liveCursorPrefix + oid + liveCursorSep + string(next)), nil
 }

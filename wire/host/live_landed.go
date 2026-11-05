@@ -13,11 +13,14 @@ package host
 //	   work tree equals HEAD (nothing local pending) and origin's is newer
 //
 // Other branches keep "not found". Best effort: a file that cannot be
-// read or decoded leaves the row unseen, as before the read-through. Not
-// ported: the full Read (lists) read-through, landedRows.
+// read or decoded leaves the row unseen, as before the read-through. A full
+// Read (lists) gets the same through landedRows / landedOverRows: two
+// ls-trees, then one read per landed row.
 
 import (
 	"context"
+	"path"
+	"sort"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
@@ -91,4 +94,85 @@ func decodeLanded(raw []byte) (store.Row, bool) {
 	}
 	sr, err := store.FromRow(r)
 	return sr, err == nil
+}
+
+// dataPaths maps every row file under the folder's .lore/data at rev to its
+// blob id (none when rev does not exist, e.g. no fetched default branch).
+func (b *liveBackend) dataPaths(ctx context.Context, s *liveSession, rev string) map[string]string {
+	raw, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-tree", "-r", rev, "--", mainDataPath(b.folder, "")}})
+	if err != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		meta, p, ok := strings.Cut(line, "\t") // "<mode> <type> <oid>\t<path>"
+		if f := strings.Fields(meta); ok && len(f) == 3 {
+			out[p] = f[2]
+		}
+	}
+	return out
+}
+
+// landedRows is every row of a live-readable table that landed on the
+// fetched origin/<default>, is not in HEAD (not pulled, and not deleted here
+// on purpose) and is not in have (neither on the branch nor live), so a done
+// task that left live stays in lists until the checkout pulls.
+func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[store.Key]bool) []store.Row {
+	branch, ok := s.onDefaultBranch(ctx)
+	if !ok {
+		return nil
+	}
+	remote := "refs/remotes/" + s.ref.RemoteName + "/" + branch
+	inHead := b.dataPaths(ctx, s, "HEAD")
+	landed := b.dataPaths(ctx, s, remote)
+	paths := make([]string, 0, len(landed))
+	for p := range landed {
+		if _, held := inHead[p]; !held {
+			paths = append(paths, p)
+		}
+	}
+	sort.Strings(paths) // stable output
+	var out []store.Row
+	for _, p := range paths {
+		table := path.Base(path.Dir(p))
+		id, isRow := strings.CutSuffix(path.Base(p), rowFileExt)
+		if !isRow || !liveReadable(s, row.Table(table)) {
+			continue
+		}
+		raw, found, err := s.repo.ReadFile(ctx, remote, p)
+		if err != nil || !found {
+			continue
+		}
+		r, decoded := decodeLanded(raw)
+		if !decoded || r.ID.String() != id || have[r.Key()] {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// landedOverRows swaps, in place, each branch row of out (index by key in
+// branchOnly) whose copy on origin/<default> is newer while the work tree
+// equals HEAD (landedCopy's rule); only paths whose blobs differ are read.
+func (b *liveBackend) landedOverRows(ctx context.Context, s *liveSession, out []store.Row, branchOnly map[live.RowKey]int) {
+	if len(branchOnly) == 0 {
+		return
+	}
+	branch, ok := s.onDefaultBranch(ctx)
+	if !ok {
+		return
+	}
+	inHead := b.dataPaths(ctx, s, "HEAD")
+	landed := b.dataPaths(ctx, s, "refs/remotes/"+s.ref.RemoteName+"/"+branch)
+	for k, i := range branchOnly {
+		p := mainDataPath(b.folder, k.Table+"/"+k.ID+rowFileExt)
+		lo, onRemote := landed[p]
+		if ho, inH := inHead[p]; !onRemote || !inH || ho == lo || !liveReadable(s, row.Table(k.Table)) {
+			continue
+		}
+		if r, newer := b.landedCopy(ctx, s, k, out[i], true); newer {
+			out[i] = r
+		}
+	}
 }
