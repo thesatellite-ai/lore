@@ -111,6 +111,9 @@
 // live, untrashed tasks in `_rows` through logic/tasktree whenever a tasks
 // row is applied, on Rebuild and on first open of an older file; a lens
 // reads it as task_tree_all.
+// rollup.go: the lens view task_rollup (6.6 numbers per task: children,
+// leaves, estimates, subtree time, checklist) over tasks_all, task_tree_all
+// and task_time_spans, computed at read time.
 //
 // Layer L3: imports model, schema, logic and store, never the engine.
 package sqlite

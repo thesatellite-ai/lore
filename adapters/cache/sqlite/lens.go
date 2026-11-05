@@ -279,6 +279,11 @@ func (l *Lens) setup(ctx context.Context) error {
 	if err := l.createTimeSpent(ctx, tables, time.Now()); err != nil {
 		return err
 	}
+	// TASK 6.6 (rollup.go): task_rollup over tasks_all, task_tree_all and
+	// the spans above.
+	if err := l.createTaskRollup(ctx, tables); err != nil {
+		return err
+	}
 	if _, err := l.conn.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
 		return dbErr("lock lens", err)
 	}

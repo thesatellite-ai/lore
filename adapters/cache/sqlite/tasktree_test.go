@@ -96,3 +96,40 @@ func TestTaskTreeClosure(t *testing.T) {
 		t.Fatalf("lens task_tree_all = %v", res.Rows)
 	}
 }
+
+// TestTaskRollupView: task_rollup counts direct children and leaves
+// (cancelled in neither), sums leaf estimates (never the parent's own) and
+// counts the own live checklist items (6.6).
+func TestTaskRollupView(t *testing.T) {
+	f := newFixture(t)
+	c := f.open("c.db")
+	p, a, b, x, g := newTsk(), newTsk(), newTsk(), newTsk(), newTsk()
+	row := func(id ids.AnyID, parent, status, est string) store.Row {
+		r := f.task(id, parent, false)
+		dr := must(r.Decode())
+		dr.Fields["status"] = text(t, status)
+		if est != "" {
+			dr.Fields[schema.FieldTaskEstimate] = text(t, est)
+		}
+		if id == p {
+			dr.Fields[schema.FieldTaskChecklist] = must(value.JSONOf([]byte(`[{"id":"chk_1","text":"a","done":true},{"id":"chk_2","text":"b","done":false},{"id":"chk_3","text":"c","done":true,"deleted_at":"2026-11-04T10:00:00Z"}]`)))
+		}
+		return must(store.FromRow(dr))
+	}
+	f.apply(c, "repo", "1", row(p, "", "in_progress", "100"), row(a, p.String(), "done", "3"), row(b, p.String(), "todo", ""),
+		row(x, p.String(), "cancelled", "8"), row(g, b.String(), "todo", "5"))
+	l := openLens(t, []LensSource{{Name: "repo", Path: f.dir + "/c.db"}})
+	res := must(l.Query(f.ctx, `SELECT children_total, children_done, leaves_total, leaves_done, estimate_own, estimate_subtree, estimate_done,
+		time_subtree, checklist_total, checklist_done FROM task_rollup WHERE task_id = '`+p.String()+`'`))
+	if len(res.Rows) != 1 {
+		t.Fatalf("rows = %v", res.Rows)
+	}
+	var got []string
+	for _, v := range res.Rows[0] {
+		got = append(got, v.String())
+	}
+	// children a, b (x cancelled); leaves a, g; estimates 3 + 5 (100 is own)
+	if want := "2 1 2 1 100 8 3 0 2 1"; strings.Join(got, " ") != want {
+		t.Fatalf("rollup = %v, want %s", got, want)
+	}
+}
