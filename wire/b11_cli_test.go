@@ -62,7 +62,7 @@ func TestCoordErrExitCodes(t *testing.T) {
 		t.Fatal("nil stays nil")
 	}
 	coded := errs.New(errs.NotFound, "x")
-	if coordErr(coded) != error(coded) {
+	if got := coordErr(coded); !errors.Is(got, coded) || got.Error() != coded.Error() {
 		t.Fatal("an error that already has a code passes through unchanged")
 	}
 }
