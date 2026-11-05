@@ -2,6 +2,9 @@ package settings_test
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -116,8 +119,8 @@ func TestSecretsOffboarding(t *testing.T) {
 	}
 }
 
-// TestExposeOneCaller: Secret.Expose is called from exactly one function
-// in lore's whole source, the --reveal printer in ops/internal/reveal
+// TestExposeOneCaller: Secret.Expose is referenced (called or taken as a
+// method value) from exactly one function in lore's whole source, the --reveal printer in ops/internal/reveal
 // (SECRETS_AND_REFERENCES 10.2).
 func TestExposeOneCaller(t *testing.T) {
 	n, where := 0, []string{}
@@ -136,10 +139,19 @@ func TestExposeOneCaller(t *testing.T) {
 		if rerr != nil {
 			return rerr
 		}
-		if c := strings.Count(string(b), ".Expose()"); c > 0 {
-			n += c
-			where = append(where, p)
+		// every selector named Expose (a call, a method value, split over
+		// lines), not a text match a reformat could slip past
+		f, perr := parser.ParseFile(token.NewFileSet(), p, b, parser.SkipObjectResolution)
+		if perr != nil {
+			return perr
 		}
+		ast.Inspect(f, func(nd ast.Node) bool {
+			if sel, ok := nd.(*ast.SelectorExpr); ok && sel.Sel.Name == "Expose" {
+				n++
+				where = append(where, p)
+			}
+			return true
+		})
 		return nil
 	})
 	if err != nil {
