@@ -42,7 +42,8 @@ func TestVersionBelow(t *testing.T) {
 	}{
 		{"0.1.9", "0.1.19", true}, {"0.1.19", "0.1.9", false}, {"v0.1.19", "0.1.19", false},
 		{"0.1.19-dev", "0.1.19", false}, {"garbage", "0.1.0", true}, {"0.1.0", "garbage", false},
-		{"0.1.18", "", false},
+		{"0.1.18", "", false}, {"0.1.0-dev", "0.1.18", false}, {"0.1.0-SNAPSHOT-abc", "0.1.18", true},
+		{"0.1.0-snapshot-abc", "0.1.18", false},
 	} {
 		if got := VersionBelow(c.b, c.f); got != c.want {
 			t.Errorf("VersionBelow(%q,%q)=%v", c.b, c.f, got)

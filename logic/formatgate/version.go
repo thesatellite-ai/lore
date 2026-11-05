@@ -28,8 +28,22 @@ func effective(binary string) string {
 // numeric major.minor.patch core only ("0.1.19-dev" and "v0.1.19" count as
 // 0.1.19). An unparseable floor is "not below" (a hand-edited floor alone
 // must not lock everyone out; unknown features still block in Check); an
-// unparseable binary is below any parseable floor (fail closed).
+// unparseable binary is below any parseable floor (fail closed). A
+// development build ("0.1.0-dev", a goreleaser snapshot) is never below:
+// its numeric core is a placeholder, not a release, so it must not trip
+// team-version warnings, pin checks or upgrade notices. DECISION FMT-DEV
+// (ov44). The format gate itself (Check) compares through effective and
+// versionBelow, so a dev build is still locked out of a floor above every
+// feature it knows.
 func VersionBelow(binary, floor string) bool {
+	if DevBuild(binary) {
+		return false
+	}
+	return versionBelow(binary, floor)
+}
+
+// versionBelow is the plain numeric compare behind VersionBelow.
+func versionBelow(binary, floor string) bool {
 	f, ok := versionCore(floor)
 	if !ok {
 		return false
@@ -46,6 +60,12 @@ func VersionBelow(binary, floor string) bool {
 	return false
 }
 
+// DevBuild reports whether v is an unreleased development build: the
+// "-dev" suffix the unstamped binary carries, or a goreleaser snapshot.
+func DevBuild(v string) bool {
+	return strings.HasSuffix(v, "-dev") || strings.Contains(v, "snapshot")
+}
+
 // MaxVersion is the higher of two versions; an unparseable one loses to a
 // parseable one, and two unparseable ones keep a.
 func MaxVersion(a, b string) string {
@@ -56,7 +76,7 @@ func MaxVersion(a, b string) string {
 		return a
 	case !aok:
 		return b
-	case VersionBelow(a, b):
+	case versionBelow(a, b):
 		return b
 	}
 	return a

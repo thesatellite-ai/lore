@@ -114,7 +114,7 @@ func Check(binary string, d Declared) Verdict {
 			v.Unknown = append(v.Unknown, f)
 		}
 	}
-	if VersionBelow(effective(binary), d.MinLoreVersion) {
+	if versionBelow(effective(binary), d.MinLoreVersion) { // effective already lifts a dev build to the features it knows (FMT-EFF)
 		v.Floor = d.MinLoreVersion
 	}
 	v.Writable = len(v.Unknown) == 0 && v.Floor == ""
