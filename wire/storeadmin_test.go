@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -136,8 +135,8 @@ func TestAddFolder(t *testing.T) {
 func copyStore(t *testing.T, url string) string {
 	t.Helper()
 	dst := filepath.Join(t.TempDir(), "moved")
-	if out, err := exec.Command("cp", "-a", storeDir(url), dst).CombinedOutput(); err != nil {
-		t.Fatalf("cp: %v %s", err, out)
+	if err := os.CopyFS(dst, os.DirFS(storeDir(url))); err != nil {
+		t.Fatalf("copy store: %v", err)
 	}
 	return "file://" + filepath.ToSlash(dst)
 }
