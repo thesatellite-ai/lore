@@ -155,8 +155,11 @@ func TestF12_StoreAllowedFiles(t *testing.T) {
 // storeCloneFolderFiles are the files lore keeps in a store's <repo>/ folder
 // beside the bare clone: the worktree and the lock (spec 6.1), and the
 // fetch stamp of the push-at-once wrapper (store_push_core.go: its state
-// folder is the clone's base folder, live.fetch_ttl).
-var storeCloneFolderFiles = map[string]bool{"work": true, "lock": true, "fetch-stamp": true}
+// folder is the clone's base folder, live.fetch_ttl), and the state folder
+// beside the lock that holds the pending audit journal (P2-AUDIT-1, CLEANUP
+// Qs: rowfs.JournalDir, machine-local, never committed or synced; the
+// folder stays after the journal is acknowledged and removed).
+var storeCloneFolderFiles = map[string]bool{"work": true, "lock": true, "fetch-stamp": true, "state": true}
 
 func TestF12_EntriesOnOneURLShareOneBareClone(t *testing.T) {
 	a := newAgency(t)
