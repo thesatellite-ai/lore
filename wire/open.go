@@ -91,6 +91,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err != nil {
 		return nil, err
 	}
+	if opts.LockTimeout == 0 { // FA-AGENT-8: store.lock_timeout, a local setting
+		if opts.LockTimeout, err = readLockTimeout(opts.Home); err != nil {
+			return nil, err
+		}
+	}
 	fail := func(err error) (*state, error) { return nil, errors.Join(err, st.close()) }
 
 	repo, err := git.OpenRepo(ctx, opts.RepoDir, rowfs.FolderRoot, opts.openOptions())
