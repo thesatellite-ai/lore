@@ -150,8 +150,11 @@ func (x Exec) Run(ctx context.Context, inv Invocation) ([]byte, error) {
 	if err != nil {
 		return nil, ErrNoGit
 	}
-	cmd := exec.CommandContext(ctx, path, inv.Args...)
-	cmd.Dir = inv.Dir
+	// The Cmd is built directly rather than through exec.CommandContext:
+	// path is the absolute program exec.LookPath resolved, every argument
+	// is its own argv entry built by this package (no shell parses them),
+	// and runCancellable kills it when ctx ends, as CommandContext did.
+	cmd := &exec.Cmd{Path: path, Args: append([]string{path}, inv.Args...), Dir: inv.Dir}
 	cmd.Env = append(cleanEnv(os.Environ()), fixedLocale, noPrompt)
 	cmd.Env = append(cmd.Env, inv.Env...)
 	if inv.Stdin != nil {
@@ -159,7 +162,7 @@ func (x Exec) Run(ctx context.Context, inv Invocation) ([]byte, error) {
 	}
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
-	if err := cmd.Run(); err != nil {
+	if err := runCancellable(ctx, cmd); err != nil {
 		code := noExitCode
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
@@ -190,4 +193,32 @@ func cleanEnv(env []string) []string {
 		}
 	}
 	return out
+}
+
+// runCancellable runs cmd and kills it when ctx ends, the behaviour of
+// exec.CommandContext: a context that is already done refuses to start
+// (its error is returned), and a kill mid-run surfaces as the process's
+// own exit error, which Run wraps with ctx.Err().
+func runCancellable(ctx context.Context, cmd *exec.Cmd) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			// The kill only fails when the process already exited, which
+			// Wait below reports; there is nothing else to do with it.
+			if kerr := cmd.Process.Kill(); kerr != nil {
+				return
+			}
+		case <-done:
+		}
+	}()
+	err := cmd.Wait()
+	close(done)
+	return err
 }

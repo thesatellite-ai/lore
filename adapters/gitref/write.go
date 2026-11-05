@@ -469,8 +469,8 @@ func (r *Repo) WriteRef(ctx context.Context, req WriteRequest) (WriteResult, err
 	if err != nil {
 		return WriteResult{}, err
 	}
-	if err := r.refuseCheckedOut(ctx, req.Ref); err != nil {
-		return WriteResult{}, err
+	if rerr := r.refuseCheckedOut(ctx, req.Ref); rerr != nil {
+		return WriteResult{}, rerr
 	}
 	c, err := r.MakeCommit(ctx, CommitRequest{Base: old, History: req.History, Changes: req.Changes, Message: req.Message, Signature: req.Signature})
 	if err != nil {

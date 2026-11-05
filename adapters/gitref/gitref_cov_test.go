@@ -3,7 +3,6 @@ package gitref
 import (
 	"context"
 	"errors"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,7 +15,7 @@ func TestZeroOIDPerObjectFormat(t *testing.T) {
 	for format, n := range map[string]int{"sha1": 40, "sha256": 64} {
 		t.Run(format, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "r")
-			if out, err := exec.Command("git", "init", "-q", "--bare", "--object-format="+format, dir).CombinedOutput(); err != nil {
+			if out, err := gitCmd(t, "", "init", "-q", "--bare", "--object-format="+format, dir).CombinedOutput(); err != nil {
 				t.Skipf("git cannot init %s: %s", format, out)
 			}
 			r, err := Open(ctx, dir, nil)
@@ -36,7 +35,7 @@ func TestZeroOIDPerObjectFormat(t *testing.T) {
 func TestRunUsesRepoDirAndKeepsOutput(t *testing.T) {
 	ctx := context.Background()
 	dir := filepath.Join(t.TempDir(), "r")
-	if out, err := exec.Command("git", "init", "-q", "--bare", dir).CombinedOutput(); err != nil {
+	if out, err := gitCmd(t, "", "init", "-q", "--bare", dir).CombinedOutput(); err != nil {
 		t.Fatalf("%s", out)
 	}
 	r, err := Open(ctx, dir, nil)

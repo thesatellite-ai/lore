@@ -17,11 +17,21 @@ import (
 // testSig is the fixed identity every test commit uses.
 var testSig = Signature{Name: "Lore Test", Email: "lore@example.test", When: time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)}
 
+// gitCmd builds a git command for test setup from the resolved git binary;
+// each argument is its own argv entry, no shell parses them.
+func gitCmd(t *testing.T, dir string, args ...string) *exec.Cmd {
+	t.Helper()
+	bin, err := exec.LookPath(gitBinary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &exec.Cmd{Path: bin, Args: append([]string{bin}, args...), Dir: dir}
+}
+
 // git runs a git command for test setup and fails the test on error.
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
+	cmd := gitCmd(t, dir, args...)
 	cmd.Env = append(cleanEnv(os.Environ()), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t", "LC_ALL=C")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -48,14 +58,14 @@ func newRepo(t *testing.T, kind repoKind) *Repo {
 	t.Helper()
 	root := t.TempDir()
 	src := filepath.Join(root, "src")
-	if err := os.MkdirAll(filepath.Join(src, "sub"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(src, "sub"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	git(t, src, "init", "-q", "-b", "main")
-	if err := os.WriteFile(filepath.Join(src, "seed.txt"), []byte("seed\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(src, "seed.txt"), []byte("seed\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(src, "sub", "keep.txt"), []byte("k\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(src, "sub", "keep.txt"), []byte("k\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	git(t, src, "add", ".")
@@ -70,6 +80,8 @@ func newRepo(t *testing.T, kind repoKind) *Repo {
 		git(t, src, "worktree", "add", "-q", "-b", "wtbranch", dir)
 	case kindSubdir:
 		dir = filepath.Join(src, "sub")
+	case kindNormal:
+		// the clone itself
 	}
 	r, err := Open(context.Background(), dir, nil)
 	if err != nil {
@@ -114,8 +126,8 @@ func TestReadTreeEveryRepoKind(t *testing.T) {
 			if err != nil || len(none) != 0 {
 				t.Fatalf("missing prefix = %v, %v", keys(none), err)
 			}
-			if _, err := r.ReadTree(ctx, "refs/lore/nothing", ""); !errors.Is(err, ErrNotFound) {
-				t.Fatalf("missing rev err = %v", err)
+			if _, nerr := r.ReadTree(ctx, "refs/lore/nothing", ""); !errors.Is(nerr, ErrNotFound) {
+				t.Fatalf("missing rev err = %v", nerr)
 			}
 			b, ok, err := r.ReadFile(ctx, "main", "seed.txt")
 			if err != nil || !ok || string(b) != "seed\n" {
@@ -235,7 +247,7 @@ func TestWriteRefMatrix(t *testing.T) {
 func TestWriteRefLeavesWorkTreeAndIndexAlone(t *testing.T) {
 	ctx := context.Background()
 	r := newRepo(t, kindNormal)
-	if err := os.WriteFile(filepath.Join(r.Dir(), "seed.txt"), []byte("dirty\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(r.Dir(), "seed.txt"), []byte("dirty\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	git(t, r.Dir(), "add", "seed.txt")
@@ -499,8 +511,9 @@ func TestInheritedRepoEnvIsIgnored(t *testing.T) {
 		Changes: Changes{Put: map[string][]byte{"x": []byte("x")}}}); err != nil {
 		t.Fatal(err)
 	}
-	os.Unsetenv("GIT_DIR")
-	os.Unsetenv("GIT_INDEX_FILE")
+	// t.Setenv restores at cleanup; the check below needs them gone now.
+	t.Setenv("GIT_DIR", "")
+	t.Setenv("GIT_INDEX_FILE", "")
 	if out := git(t, decoy.Dir(), "for-each-ref", "refs/lore/"); out != "" {
 		t.Fatalf("write landed in the decoy: %s", out)
 	}

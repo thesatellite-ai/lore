@@ -121,8 +121,8 @@ const headsPrefix = "refs/heads/"
 // ResolveRef returns the object id ref points at. ok is false when the ref
 // does not exist. ref must be a full name (ValidateRef).
 func (r *Repo) ResolveRef(ctx context.Context, ref string) (oid string, ok bool, err error) {
-	if err := r.ValidateRef(ctx, ref); err != nil {
-		return "", false, err
+	if verr := r.ValidateRef(ctx, ref); verr != nil {
+		return "", false, verr
 	}
 	// for-each-ref matches patterns as prefixes of whole components, so
 	// "refs/lore/live" also lists refs/lore/live/x; the exact ref, when
