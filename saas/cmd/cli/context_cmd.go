@@ -73,6 +73,9 @@ const (
 	contextHookCapFall = 9000
 	contextNotesMax    = 5
 	contextMoreReserve = 200
+	// scopeNoteBoost lifts a note scoped to the path's folder chain above
+	// any word match (CQ12: a scoped memory beats an unscoped one).
+	scopeNoteBoost = 1000
 )
 
 // errContextNeedsMode: one of the modes is required.
@@ -339,8 +342,13 @@ func sortPicks(ps []contextPick) {
 	sort.SliceStable(ps, func(i, j int) bool { return rank[ps[i].group] < rank[ps[j].group] })
 }
 
-// contextForFile is the 6.8 --for-file pick.
+// contextForFile is the 6.8 --for-file pick for the detected tool.
 func contextForFile(ctx context.Context, p string) (contextResult, error) {
+	return contextForFileTool(ctx, p, "")
+}
+
+// contextForFileTool is --for-file for tool ("" = detect; 6.2.8).
+func contextForFileTool(ctx context.Context, p, tool string) (contextResult, error) {
 	rows, err := loadKnowledge(ctx)
 	if err != nil {
 		return contextResult{}, err
@@ -368,6 +376,14 @@ func contextForFile(ctx context.Context, p string) (contextResult, error) {
 			}
 		}
 	}
+	// 2. the folder scope chain, innermost first (6.2.2, 6.2.8).
+	fs := newFileScope(ctx, rel, tool)
+	scopeChainPicks(fs, rows, add, func(cp contextPick) {
+		if !seen[cp.ID] {
+			seen[cp.ID] = true
+			picks = append(picks, cp)
+		}
+	})
 	// 3. the body names the path or its folder.
 	for _, k := range rows {
 		if k.kind != "rule" && k.kind != "hotfix" {
@@ -381,7 +397,10 @@ func contextForFile(ctx context.Context, p string) (contextResult, error) {
 			add(k, "mentions "+dir+"/")
 		}
 	}
-	// 6. notes on the path's words, best first, up to 5.
+	// 4. rows tagged with a topic whose glob set covers the path (6.10).
+	topicGlobPicks(ctx, rel, rows, add)
+	// 6. notes on the path's words, best first, up to 5; notes scoped to
+	// the path's folder chain rank first (CQ12), innermost first.
 	type scored struct {
 		k knowledgeRow
 		n int
@@ -391,7 +410,11 @@ func contextForFile(ctx context.Context, p string) (contextResult, error) {
 		if k.kind != "memory" && k.kind != "decision" {
 			continue
 		}
-		if n := contextfit.Score(renderField(k.r.Row, renderFieldTitle)+" "+renderField(k.r.Row, renderFieldBody), words); n > 0 {
+		n := contextfit.Score(renderField(k.r.Row, renderFieldTitle)+" "+renderField(k.r.Row, renderFieldBody), words)
+		if at := fs.inChain(fs.folderOf(k)); at >= 0 {
+			n += scopeNoteBoost * (len(fs.chain) - at)
+		}
+		if n > 0 {
 			cand = append(cand, scored{k, n})
 		}
 	}
@@ -400,9 +423,13 @@ func contextForFile(ctx context.Context, p string) (contextResult, error) {
 		if i >= contextNotesMax {
 			break
 		}
-		notes = append(notes, pickOf(c.k, "words "+strings.Join(words, " ")))
+		why := "words " + strings.Join(words, " ")
+		if d := fs.folderOf(c.k); fs.inChain(d) >= 0 {
+			why = "scope dir:" + d
+		}
+		notes = append(notes, pickOf(c.k, why))
 	}
-	picks = append(picks, notes...)
+	picks = applyOverrides(append(picks, notes...), rows)
 	sortPicks(picks)
 	more := ""
 	if len(cand) > contextNotesMax || len(words) > 0 {
@@ -538,7 +565,7 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 				p = r
 			}
 		}
-		res, err = contextForFile(ctx, p)
+		res, err = contextForFileTool(ctx, p, f.hook)
 	case in.Prompt != "":
 		res, err = contextForPrompt(ctx, in.Prompt)
 	default:
