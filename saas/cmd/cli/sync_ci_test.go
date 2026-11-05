@@ -47,10 +47,10 @@ func ciRepo(t *testing.T, onFeature, onMain func(dir string)) string {
 func writeRepoFile(t *testing.T, dir, rel, content string) {
 	t.Helper()
 	p := filepath.Join(dir, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -69,7 +69,7 @@ func headOf(t *testing.T, dir string) string {
 func editMemory(body string) func(string) {
 	return func(dir string) {
 		path := filepath.Join(dir, ".lore", "data", "memories", "mem_1.json")
-		if err := os.WriteFile(path, []byte("{\n  \"body\": \""+body+"\"\n}\n"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("{\n  \"body\": \""+body+"\"\n}\n"), 0o600); err != nil {
 			panic(err)
 		}
 	}
@@ -77,7 +77,7 @@ func editMemory(body string) func(string) {
 
 func editReadme(text string) func(string) {
 	return func(dir string) {
-		if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(text), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(text), 0o600); err != nil {
 			panic(err)
 		}
 	}
@@ -145,7 +145,7 @@ func TestRunCIMergeAbortsWhenDriverFails(t *testing.T) {
 		t.Skip("no git")
 	}
 	gitDir := filepath.Dir(git)
-	if _, err := os.Stat(filepath.Join(gitDir, BinaryName)); err == nil {
+	if _, err = os.Stat(filepath.Join(gitDir, BinaryName)); err == nil {
 		t.Skip("lore is installed next to git; cannot hide it from PATH")
 	}
 	dir := ciRepo(t, editMemory("feature"), editMemory("main"))
@@ -173,7 +173,7 @@ func TestCIMergeHelpers(t *testing.T) {
 		t.Fatalf("root prefix = %q", got)
 	}
 	sub := filepath.Join(dir, "svc", "api")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
+	if err := os.MkdirAll(sub, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if got := lorePathPrefix(dir, sub); got != "svc/api/" {
@@ -195,7 +195,7 @@ func captureStdout(t *testing.T, fn func()) string {
 	os.Stdout = w
 	fn()
 	os.Stdout = old
-	if err := w.Close(); err != nil {
+	if err = w.Close(); err != nil {
 		t.Fatal(err)
 	}
 	out, err := io.ReadAll(r)

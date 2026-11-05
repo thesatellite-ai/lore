@@ -37,7 +37,7 @@ orgs:
 func writeHomeConfig(t *testing.T, home, body string) {
 	t.Helper()
 	dir := filepath.Join(home, ".lore")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(body), 0o600); err != nil {
@@ -153,7 +153,7 @@ func TestResolveWriteTarget(t *testing.T) {
 	t.Setenv("LORE_ACTOR", "")
 	writeHomeConfig(t, home, twoOrgConfig)
 	repo := filepath.Join(t.TempDir(), "acme")
-	if err := os.MkdirAll(repo, 0o755); err != nil {
+	if err := os.MkdirAll(repo, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "git@github.com:acme/app.git"}} {

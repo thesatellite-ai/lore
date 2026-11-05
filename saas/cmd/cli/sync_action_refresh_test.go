@@ -29,7 +29,7 @@ func installAt(t *testing.T, dir string, o syncActionOptions) string {
 
 func readFile(t *testing.T, p string) string {
 	t.Helper()
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(filepath.Clean(p))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestRefreshSkipsHandEditedFile(t *testing.T) {
 	dir := gitInitRepo(t)
 	file := installAt(t, dir, syncActionOptions{})
 	edited := strings.Replace(readFile(t, file), "timeout-minutes: 10", "timeout-minutes: 20", 1)
-	if err := os.WriteFile(file, []byte(edited), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte(edited), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r := refresh(t, dir, "0.1.12")
@@ -138,7 +138,7 @@ func TestRefreshToleratesCRLF(t *testing.T) {
 	dir := gitInitRepo(t)
 	file := installAt(t, dir, syncActionOptions{})
 	crlf := strings.ReplaceAll(readFile(t, file), "\n", "\r\n")
-	if err := os.WriteFile(file, []byte(crlf), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte(crlf), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if r := refresh(t, dir, "0.1.12"); r.To != "v0.1.12" {
@@ -156,10 +156,10 @@ func TestRefreshNeverCreatesOrTouchesForeignFiles(t *testing.T) {
 	if _, err := os.Stat(file); !os.IsNotExist(err) {
 		t.Fatal("refresh created the workflow")
 	}
-	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(file), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(file, []byte("name: theirs\n"), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte("name: theirs\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if r := refresh(t, dir, "0.1.12"); r != (syncActionRefresh{}) || readFile(t, file) != "name: theirs\n" {
@@ -187,7 +187,7 @@ func TestSyncActionPerProjectFiles(t *testing.T) {
 	dir := gitInitRepo(t)
 	api, web := filepath.Join(dir, "services", "api"), filepath.Join(dir, "web")
 	for _, d := range []string{api, web} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
+		if err := os.MkdirAll(d, 0o750); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -238,7 +238,7 @@ func TestRefreshLegacyFile(t *testing.T) {
 	t.Parallel()
 	dir := gitInitRepo(t)
 	file := installAt(t, dir, syncActionOptions{})
-	if err := os.WriteFile(file, []byte(legacyFile(readFile(t, file))), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte(legacyFile(readFile(t, file))), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if r := refresh(t, dir, "0.1.12"); r.To != "v0.1.12" {
@@ -252,7 +252,7 @@ func TestRefreshLegacyFile(t *testing.T) {
 	edited := gitInitRepo(t)
 	f2 := installAt(t, edited, syncActionOptions{})
 	legacy := strings.Replace(legacyFile(readFile(t, f2)), "timeout-minutes: 10", "timeout-minutes: 30", 1)
-	if err := os.WriteFile(f2, []byte(legacy), 0o644); err != nil {
+	if err := os.WriteFile(f2, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if r := refresh(t, edited, "0.1.12"); r.Note == "" || r.To != "" {
@@ -266,7 +266,7 @@ func TestRefreshMovesLegacySubfolderFile(t *testing.T) {
 	t.Parallel()
 	dir := gitInitRepo(t)
 	api := filepath.Join(dir, "api")
-	if err := os.MkdirAll(api, 0o755); err != nil {
+	if err := os.MkdirAll(api, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	own := installAt(t, api, syncActionOptions{})
@@ -274,7 +274,7 @@ func TestRefreshMovesLegacySubfolderFile(t *testing.T) {
 	if err := os.Rename(own, root); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(root, []byte(legacyFile(readFile(t, root))), 0o644); err != nil {
+	if err := os.WriteFile(root, []byte(legacyFile(readFile(t, root))), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r := refresh(t, api, "0.1.12")
@@ -288,7 +288,7 @@ func TestRefreshMovesLegacySubfolderFile(t *testing.T) {
 	other := gitInitRepo(t)
 	rootFile := installAt(t, other, syncActionOptions{})
 	sub := filepath.Join(other, "api")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
+	if err := os.MkdirAll(sub, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if r := refresh(t, sub, "0.1.12"); r != (syncActionRefresh{}) {

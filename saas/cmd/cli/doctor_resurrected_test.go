@@ -19,7 +19,7 @@ func TestDoctorNamesResurrectedRows(t *testing.T) {
 	f := newCoreFixture(t)
 	id := f.addID("memory", "add", "--body", "an old note to purge")
 	rel := filepath.Join(".lore", "data", "memories", id+".json")
-	live, err := os.ReadFile(filepath.Join(f.dir, rel))
+	live, err := os.ReadFile(filepath.Clean(filepath.Join(f.dir, rel)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestDoctorNamesResurrectedRows(t *testing.T) {
 	if r := f.run(e2eBin, "doctor"); strings.Contains(r.stdout+r.stderr, resurrectedMark) {
 		t.Fatalf("control: nothing resurrected yet: %s%s", r.stdout, r.stderr)
 	}
-	if err := os.WriteFile(filepath.Join(f.dir, rel), live, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Clean(filepath.Join(f.dir, rel)), live, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r := f.run(e2eBin, "doctor")

@@ -143,7 +143,7 @@ func (f *coreFixture) projectID() string {
 // ref (refs/lore/live/*), from there.
 func (f *coreFixture) taskRow(id string) []byte {
 	f.t.Helper()
-	b, err := os.ReadFile(filepath.Join(f.dir, ".lore", "data", tableTasks, id+".json"))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(f.dir, ".lore", "data", tableTasks, id+".json")))
 	if err == nil {
 		return b
 	}

@@ -280,7 +280,7 @@ type docInvocation struct {
 // docInvocations extracts every lore invocation from code in a markdown file.
 func docInvocations(t *testing.T, path string) []docInvocation {
 	t.Helper()
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		t.Fatal(err)
 	}

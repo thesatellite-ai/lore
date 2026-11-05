@@ -39,7 +39,7 @@ func TestEnsureGitignoreHidesBrokenDBCopies(t *testing.T) {
 	if err := exec.Command("git", "-C", root, "check-ignore", "-q", ".lore/data/tasks/x.json").Run(); err == nil {
 		t.Error(".lore/data must stay tracked")
 	}
-	b, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(root, ".gitignore")))
 	if err != nil {
 		t.Fatal(err)
 	}

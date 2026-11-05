@@ -203,19 +203,19 @@ func TestUC_BenchAutoRunCode(t *testing.T) {
 
 func TestUC_BenchParseArms(t *testing.T) {
 	t.Parallel()
-	for in, want := range map[string]string{
-		"baseline,with_skill":    "baseline,with_skill",
-		" with_skill , bogus, ,": "with_skill",
-		"":                       "",
-		"baseline,baseline":      "baseline,baseline",
-		"BASELINE":               "",
+	for _, tc := range []struct{ in, want string }{
+		{"baseline,with_skill", "baseline,with_skill"},
+		{" with_skill , bogus, ,", "with_skill"}, // spaces, an unknown arm, empty items
+		{"", ""},
+		{"baseline,baseline", "baseline,baseline"},
+		{"BASELINE", ""},
 	} {
 		var got []string
-		for _, a := range parseArms(in) {
+		for _, a := range parseArms(tc.in) {
 			got = append(got, string(a))
 		}
-		if strings.Join(got, ",") != want {
-			t.Fatalf("parseArms(%q) = %v, want %q", in, got, want)
+		if strings.Join(got, ",") != tc.want {
+			t.Fatalf("parseArms(%q) = %v, want %q", tc.in, got, tc.want)
 		}
 	}
 }
@@ -237,20 +237,20 @@ func TestUC_BenchLoadClaudeMd(t *testing.T) {
 	if _, _, _, err := loadClaudeMd(""); err == nil || !strings.Contains(err.Error(), "bench-CLAUDE.md") {
 		t.Fatalf("nothing to load must name what was tried: %v", err)
 	}
-	if err := os.WriteFile("CLAUDE.md", []byte("plain"), 0o644); err != nil {
+	if err := os.WriteFile("CLAUDE.md", []byte("plain"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if p, text, s, err := loadClaudeMd(""); err != nil || p != "CLAUDE.md" || text != "plain" || s != sha("plain") {
 		t.Fatalf("fallback CLAUDE.md: %q %q %q %v", p, text, s, err)
 	}
-	if err := os.WriteFile("bench-CLAUDE.md", []byte("bench"), 0o644); err != nil {
+	if err := os.WriteFile("bench-CLAUDE.md", []byte("bench"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if p, text, _, err := loadClaudeMd(""); err != nil || p != "bench-CLAUDE.md" || text != "bench" {
 		t.Fatalf("bench-CLAUDE.md wins over CLAUDE.md: %q %q %v", p, text, err)
 	}
 	explicit := filepath.Join(dir, "x.md")
-	if err := os.WriteFile(explicit, []byte("mine"), 0o644); err != nil {
+	if err := os.WriteFile(explicit, []byte("mine"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if p, text, s, err := loadClaudeMd(explicit); err != nil || p != explicit || text != "mine" || s != sha("mine") {
@@ -574,10 +574,10 @@ func TestUC_BenchSkillCompilerHelpers(t *testing.T) {
 	write := func(rel, content string) {
 		t.Helper()
 		p := filepath.Join(dir, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -586,7 +586,7 @@ func TestUC_BenchSkillCompilerHelpers(t *testing.T) {
 	write("ALPHA.md", "alpha")
 	write("examples/one.md", "ex")
 	write("notes.txt", "not markdown")
-	if err := os.MkdirAll(filepath.Join(dir, "dir.md"), 0o755); err != nil { // a directory matching *.md
+	if err := os.MkdirAll(filepath.Join(dir, "dir.md"), 0o750); err != nil { // a directory matching *.md
 		t.Fatal(err)
 	}
 	files, total, err := collectSkillSources(dir, []string{"*.md", "examples/*.md", "*.md"})
@@ -666,7 +666,7 @@ func fakeClaude(t *testing.T, script string) []string {
 	t.Helper()
 	dir := t.TempDir()
 	body := "#!/bin/sh\n" + script + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return []string{
@@ -684,7 +684,7 @@ func TestUC_BenchRunStartEndToEnd(t *testing.T) {
 		"--grader-kind=programmatic", `--grader-cmd=grep -q SAFE "$OUTPUT_FILE"`, "--link=hotfix:"+hfx)
 	a.lore("bench", "eval", "add", "--code=E1-001", "--category=rule-trigger", "--prompt=hello",
 		"--grader-kind=programmatic", `--grader-cmd=grep -q NEVER "$OUTPUT_FILE"`)
-	if err := os.WriteFile(filepath.Join(a.dir, "bench.md"), []byte("SKILLMARKER rules"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(a.dir, "bench.md"), []byte("SKILLMARKER rules"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// The stand-in model answers SAFE only when the skill text is in the prompt.
@@ -764,7 +764,7 @@ func TestUC_BenchRunStartPrintsRealCounts(t *testing.T) {
 	a.lore("init", "--non-interactive", "--name=app")
 	a.lore("bench", "eval", "add", "--code=E1-001", "--category=rule-trigger", "--prompt=hi",
 		"--grader-kind=programmatic", `--grader-cmd=grep -q YES "$OUTPUT_FILE"`)
-	if err := os.WriteFile(filepath.Join(a.dir, "bench.md"), []byte("ctx"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(a.dir, "bench.md"), []byte("ctx"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	env := fakeClaude(t, `cat >/dev/null; echo YES`)
@@ -781,10 +781,10 @@ func TestUC_BenchSkillCompileEndToEnd(t *testing.T) {
 	w := newWorld(t)
 	a := w.newClone("alice")
 	src := filepath.Join(a.dir, "skill")
-	if err := os.MkdirAll(src, 0o755); err != nil {
+	if err := os.MkdirAll(src, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte(strings.Repeat("long skill text ", 100)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte(strings.Repeat("long skill text ", 100)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	argsFile := filepath.Join(t.TempDir(), "args")

@@ -108,7 +108,7 @@ func TestTxClockHelperProcess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, txClockReadyFile), nil, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, txClockReadyFile), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		waitForFile(t, filepath.Join(dir, txClockGoFile))
@@ -119,7 +119,7 @@ func TestTxClockHelperProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 	case txClockRoleWriter:
-		if err := os.WriteFile(filepath.Join(dir, txClockWriterReadyFile), nil, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, txClockWriterReadyFile), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		waitForFile(t, filepath.Join(dir, txClockWriterGoFile))
@@ -138,7 +138,7 @@ func waitForFile(t *testing.T, path string) {
 	t.Helper()
 	deadline := time.Now().Add(time.Minute)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(path); err == nil {
+		if _, err := os.Stat(filepath.Clean(path)); err == nil {
 			return
 		}
 		time.Sleep(txClockPoll)
@@ -171,7 +171,7 @@ func TestTxAtWaitsForTheWriteLock(t *testing.T) {
 		cmd.Env = append(os.Environ(), envTxClockRole+"="+role, envTxClockDB+"="+path, envTxClockDir+"="+dir)
 		out := &strings.Builder{}
 		cmd.Stdout, cmd.Stderr = out, out
-		if err := cmd.Start(); err != nil {
+		if err = cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
 		return cmd, out
@@ -180,22 +180,22 @@ func TestTxAtWaitsForTheWriteLock(t *testing.T) {
 	waitForFile(t, filepath.Join(dir, txClockWriterReadyFile))
 	holder, holderOut := helper(txClockRoleHolder)
 	waitForFile(t, filepath.Join(dir, txClockReadyFile))
-	if err := os.WriteFile(filepath.Join(dir, txClockWriterGoFile), nil, 0o644); err != nil {
+	if err = os.WriteFile(filepath.Join(dir, txClockWriterGoFile), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(txClockWriterHead)
-	if err := os.WriteFile(filepath.Join(dir, txClockGoFile), nil, 0o644); err != nil {
+	if err = os.WriteFile(filepath.Join(dir, txClockGoFile), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := holder.Wait(); err != nil {
+	if err = holder.Wait(); err != nil {
 		t.Fatalf("holder: %v\n%s", err, holderOut)
 	}
-	if err := writer.Wait(); err != nil {
+	if err = writer.Wait(); err != nil {
 		t.Fatalf("the clock must wait for the write lock, not race it: %v\n%s", err, writerOut)
 	}
 	var got time.Time
 	for _, line := range strings.Split(writerOut.String(), "\n") {
-		if at, err := time.Parse(time.RFC3339Nano, line); err == nil {
+		if at, perr := time.Parse(time.RFC3339Nano, line); perr == nil {
 			got = at
 		}
 	}

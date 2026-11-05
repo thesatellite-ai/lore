@@ -25,7 +25,7 @@ func useTempCoreDirs() bool {
 		testCoreRoot = root
 		dir, home := filepath.Join(root, "repo"), filepath.Join(root, "home")
 		for _, d := range []string{dir, home} {
-			if err := os.MkdirAll(d, 0o755); err != nil {
+			if err := os.MkdirAll(d, 0o750); err != nil {
 				panic(err)
 			}
 		}

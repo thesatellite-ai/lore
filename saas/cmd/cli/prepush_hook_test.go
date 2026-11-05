@@ -7,6 +7,7 @@ package main
 // for real against scratch repositories.
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,7 +61,7 @@ func (r *hookRepo) git(args ...string) string {
 
 func (r *hookRepo) write(rel, content string) {
 	r.t.Helper()
-	if err := os.WriteFile(filepath.Join(r.dir, rel), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(r.dir, rel), []byte(content), 0o600); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -101,7 +102,7 @@ func (r *hookRepo) standInTask(mode standInMode) {
 	default:
 		body += run + "check:begin\n" + run + "check:stamp\n"
 	}
-	if err := os.WriteFile(filepath.Join(r.bin, "task"), []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(r.bin, "task"), []byte(body), 0o700); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -120,7 +121,8 @@ func (r *hookRepo) push(sha string, path string) (int, string, int) {
 	cmd.Stdin = strings.NewReader("refs/heads/main " + sha + " refs/heads/main " + zeroSHA + "\n")
 	out, err := cmd.CombinedOutput()
 	code := 0
-	if ee, ok := err.(*exec.ExitError); ok {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
 		code = ee.ExitCode()
 	} else if err != nil {
 		r.t.Fatal(err)

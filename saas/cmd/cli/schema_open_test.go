@@ -29,7 +29,11 @@ func oldDB(t *testing.T) string {
 		t.Fatal(err)
 	}
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	for _, q := range []string{
 		`ALTER TABLE actors DROP COLUMN owner_actor_id`,
 		`UPDATE schema_migrations SET migration_sha256 = 'older'`,
@@ -49,7 +53,11 @@ func TestOpenDBFromPreviousRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if missing, err := migrationlog.Drift(ctx, db); err != nil || len(missing) != 0 {
 		t.Fatalf("drift after update: %v %v", missing, err)
 	}
@@ -82,7 +90,11 @@ func TestOpenDBUpdateOffMapsToSchemaOld(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := dbent.InitDB(dbPath)
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	_, qerr := db.ExecContext(ctx, `SELECT owner_actor_id FROM actors`)
 	if qerr == nil {
 		t.Fatal("old DB has the column")

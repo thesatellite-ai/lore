@@ -228,16 +228,16 @@ func TestUpgradeAgainstLocalReleaseServer(t *testing.T) {
 				t.Fatalf("latest %q %v", latest, err)
 			}
 			files, err := func() (releaseFiles, error) {
-				a, err := rc.fetch(ctx, c.tag, name)
-				if err != nil {
-					return releaseFiles{}, err
+				a, ferr := rc.fetch(ctx, c.tag, name)
+				if ferr != nil {
+					return releaseFiles{}, ferr
 				}
-				s, err := rc.fetch(ctx, c.tag, checksumsFile)
-				if err != nil {
-					return releaseFiles{}, err
+				s, ferr := rc.fetch(ctx, c.tag, checksumsFile)
+				if ferr != nil {
+					return releaseFiles{}, ferr
 				}
-				if err := verifySHA(a, s, name); err != nil {
-					return releaseFiles{}, err
+				if ferr = verifySHA(a, s, name); ferr != nil {
+					return releaseFiles{}, ferr
 				}
 				return extract(a, goos)
 			}()
@@ -282,7 +282,7 @@ func TestUpgradeScriptSwapEndToEnd(t *testing.T) {
 	defer func() { releaseBaseURL = old }()
 	oldRun := runVersion
 	runVersion = func(_ context.Context, bin string) (string, error) {
-		b, err := os.ReadFile(bin)
+		b, err := os.ReadFile(filepath.Clean(bin))
 		if err != nil {
 			return "", err
 		}
@@ -295,14 +295,14 @@ func TestUpgradeScriptSwapEndToEnd(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "lore")
-	if err := os.WriteFile(exe, []byte("old"), 0o755); err != nil {
+	if err := os.WriteFile(exe, []byte("old"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
 	if err := upgradeByScript(context.Background(), &out, newReleaseClient(5*time.Second), exe, "0.1.19", "v0.1.20"); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	if b, _ := os.ReadFile(exe); !strings.Contains(string(b), "echo new") {
+	if b, _ := os.ReadFile(filepath.Clean(exe)); !strings.Contains(string(b), "echo new") {
 		t.Fatalf("binary not swapped: %q", b)
 	}
 	ents, _ := os.ReadDir(dir)

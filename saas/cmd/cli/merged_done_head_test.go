@@ -39,7 +39,7 @@ func TestWorkBranchHead_NeverRecordsMergedHEAD(t *testing.T) {
 	clone := filepath.Join(root, "clone")
 	gitIn(t, root, "clone", "-q", origin, clone)
 	commit := func(name string) string {
-		if err := os.WriteFile(filepath.Join(clone, name), []byte(name+"\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(clone, name), []byte(name+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		gitIn(t, clone, "add", name)

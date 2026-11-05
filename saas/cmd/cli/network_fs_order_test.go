@@ -27,10 +27,10 @@ func TestMaybeMaterialize_NetworkFSRefusesBeforeWriting(t *testing.T) {
 
 	root := filepath.Join(t.TempDir(), "Dropbox", "site")
 	data := filepath.Join(root, projresolve.MarkerDir, lsync.DataDirName)
-	if err := os.MkdirAll(data, 0o755); err != nil {
+	if err := os.MkdirAll(data, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(data, lsync.MetaFileName), []byte(`{"_v":1}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(data, lsync.MetaFileName), []byte(`{"_v":1}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(root)

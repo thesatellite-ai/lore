@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -56,7 +57,11 @@ func runTests(m *testing.M) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	defer os.RemoveAll(tmp) // temp fixtures; nothing to report on failure
+	defer func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			fmt.Fprintln(os.Stderr, "remove test fixtures:", err)
+		}
+	}()
 	defer func() {
 		if testCoreRoot != "" {
 			_ = os.RemoveAll(testCoreRoot) // the package-level core's temp repo (core_mount_dirs_test.go)
@@ -100,7 +105,7 @@ func newWorld(t *testing.T) *world {
 	t.Parallel()
 	root := t.TempDir()
 	w := &world{t: t, home: filepath.Join(root, "home"), origin: filepath.Join(root, "origin.git")}
-	if err := os.MkdirAll(w.home, 0o755); err != nil {
+	if err := os.MkdirAll(w.home, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	w.base = []string{
@@ -135,7 +140,7 @@ func (w *world) newClone(name string) *clone {
 	c.git("config", "user.name", name)
 	c.git("config", "pull.rebase", "false")
 	if out, _ := c.tryGit("rev-parse", "--verify", "HEAD"); out == "" {
-		if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# app\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# app\n"), 0o600); err != nil {
 			w.t.Fatal(err)
 		}
 		c.git("checkout", "-q", "-b", "main")
@@ -161,8 +166,8 @@ func (w *world) run(dir string, extraEnv []string, name string, args ...string) 
 	err := cmd.Run()
 	code := 0
 	if err != nil {
-		ee, ok := err.(*exec.ExitError)
-		if !ok {
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) {
 			w.t.Fatalf("%s %v: %v", name, args, err)
 		}
 		code = ee.ExitCode()
@@ -342,7 +347,7 @@ func (c *clone) writeDocField(table, id, key string, value any) {
 	if err != nil {
 		c.w.t.Fatal(err)
 	}
-	if err := os.WriteFile(c.dataFile(table, id), append(b, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(c.dataFile(table, id), append(b, '\n'), 0o600); err != nil {
 		c.w.t.Fatal(err)
 	}
 }
@@ -603,11 +608,11 @@ func TestE2E_HooksChainIntoExistingHooksPath(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
 	hooks := filepath.Join(c.dir, ".husky")
-	if err := os.MkdirAll(hooks, 0o755); err != nil {
+	if err := os.MkdirAll(hooks, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	existing := "#!/bin/sh\necho user-hook-ran\nexit 0\n"
-	if err := os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte(existing), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte(existing), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	c.git("config", "core.hooksPath", ".husky")
@@ -615,7 +620,7 @@ func TestE2E_HooksChainIntoExistingHooksPath(t *testing.T) {
 	if v := c.git("config", "--get", "core.hooksPath"); v != ".husky" {
 		t.Fatalf("core.hooksPath repointed to %q", v)
 	}
-	b, err := os.ReadFile(filepath.Join(hooks, "pre-commit"))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(hooks, "pre-commit")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -871,7 +876,7 @@ func TestE2E_DoctorAndStatus(t *testing.T) {
 	}
 	// A broken file degrades.
 	mem := idPattern.FindString(c.lore("rule", "list").stdout)
-	if err := os.WriteFile(c.dataFile("rules", mem), []byte("{broken"), 0o644); err != nil {
+	if err := os.WriteFile(c.dataFile("rules", mem), []byte("{broken"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r2 := c.loreAny("doctor", "--json")
@@ -1152,7 +1157,7 @@ func TestE2E_PreCommitGuardsUnstagedFileInSubdirProject(t *testing.T) {
 	w := newWorld(t)
 	repo := w.newClone("mono")
 	svc := filepath.Join(repo.dir, "svc")
-	if err := os.MkdirAll(svc, 0o755); err != nil {
+	if err := os.MkdirAll(svc, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	c := &clone{w: w, dir: svc}
@@ -1161,7 +1166,7 @@ func TestE2E_PreCommitGuardsUnstagedFileInSubdirProject(t *testing.T) {
 	repo.commitAll("base")
 	// The lore file gets a secret but stays UNSTAGED; only README is staged.
 	c.writeDocField("rules", mem, "body", "key AKIAIOSFODNN7EXAMPLE")
-	if err := os.WriteFile(filepath.Join(repo.dir, "README.md"), []byte("# changed\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repo.dir, "README.md"), []byte("# changed\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	repo.git("add", "README.md")
@@ -1199,7 +1204,7 @@ func TestE2E_TwoProjectsShareHooks(t *testing.T) {
 	repo := w.newClone("mono")
 	for _, name := range []string{"a", "b"} {
 		dir := filepath.Join(repo.dir, name)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatal(err)
 		}
 		(&clone{w: w, dir: dir}).lore("init", "--non-interactive", "--name="+name)
@@ -1260,7 +1265,7 @@ func TestE2E_AuditVerifyAndLog(t *testing.T) {
 func TestE2E_InitRefusesOnlyRealProject(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
-	if err := os.MkdirAll(filepath.Join(c.dir, ".lore", "state"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(c.dir, ".lore", "state"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	c.lore("init", "--non-interactive", "--name=app")
@@ -1273,7 +1278,7 @@ func TestE2E_InitRefusesOnlyRealProject(t *testing.T) {
 func TestE2E_InitRespectsBroaderIgnore(t *testing.T) {
 	w := newWorld(t)
 	c := w.newClone("solo")
-	if err := os.WriteFile(filepath.Join(c.dir, ".gitignore"), []byte(".lore/\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(c.dir, ".gitignore"), []byte(".lore/\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	c.lore("init", "--non-interactive", "--name=app")
@@ -1289,7 +1294,7 @@ func TestE2E_InitRespectsBroaderIgnore(t *testing.T) {
 func TestE2E_RepoIgnoreRuleCannotHideData(t *testing.T) {
 	w := newWorld(t)
 	alice := w.newClone("alice")
-	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte("_*\n*.json\nsnapshots/\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte("_*\n*.json\nsnapshots/\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	alice.commitAll("repo ignore rules")
@@ -1319,7 +1324,7 @@ func TestE2E_RepoIgnoreRuleCannotHideData(t *testing.T) {
 func TestE2E_IgnoredLoreFolderIsReported(t *testing.T) {
 	w := newWorld(t)
 	alice := w.newClone("alice")
-	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	alice.commitAll("ignore everything under .lore")
@@ -1330,21 +1335,21 @@ func TestE2E_IgnoredLoreFolderIsReported(t *testing.T) {
 	if got, err := os.ReadFile(filepath.Join(alice.dir, ".gitignore")); err != nil || string(got) != ".lore/\n" {
 		t.Fatalf("a re-include that cannot help must not be written: %q %v", got, err)
 	}
-	if r := alice.lore("rule", "list"); strings.Contains(r.stderr, "git ignores lore data") {
-		t.Fatalf("warning must not repeat while nothing changed: %s", r.stderr)
+	if again := alice.lore("rule", "list"); strings.Contains(again.stderr, "git ignores lore data") {
+		t.Fatalf("warning must not repeat while nothing changed: %s", again.stderr)
 	}
 	r = alice.loreAny("sync", "install-git")
 	if r.code == 0 || !strings.Contains(r.stderr+r.stdout, "E_SYNC_DATA_IGNORED") {
 		t.Fatalf("install-git must fail: %d %s %s", r.code, r.stdout, r.stderr)
 	}
 	// Editing the rule re-runs the check; fixing it clears the warning.
-	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/\n# still private\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/\n# still private\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if r := alice.lore("rule", "list"); !strings.Contains(r.stderr, "git ignores lore data") {
 		t.Fatalf("an edited .gitignore must be re-checked: %s", r.stderr)
 	}
-	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/lore.db\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(alice.dir, ".gitignore"), []byte(".lore/lore.db\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if r := alice.lore("rule", "list"); strings.Contains(r.stderr, "git ignores lore data") {
@@ -1474,11 +1479,11 @@ func TestE2E_CIMergeLeavesHumanConflictsAlone(t *testing.T) {
 	})
 	t.Run("code conflict", func(t *testing.T) {
 		_, alice, bob, _ := ciMergeWorld(t)
-		if err := os.WriteFile(filepath.Join(bob.dir, "README.md"), []byte("# bob\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(bob.dir, "README.md"), []byte("# bob\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		bob.commitAll("bob readme")
-		if err := os.WriteFile(filepath.Join(alice.dir, "README.md"), []byte("# alice\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(alice.dir, "README.md"), []byte("# alice\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		alice.commitAll("alice readme")
@@ -1505,7 +1510,7 @@ func TestE2E_CIMergeCleanAndGuards(t *testing.T) {
 	if res := bob.ciMerge(); res.Outcome != ciMergeClean {
 		t.Fatalf("new rows on both sides must be a clean merge: %+v", res)
 	}
-	if err := os.WriteFile(filepath.Join(bob.dir, "scratch.txt"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(bob.dir, "scratch.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if r := bob.loreAny("sync", "ci-merge", "--base", "origin/main"); r.code == 0 {
@@ -1549,7 +1554,7 @@ func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 	ci := w.newClone("ci")
 	stub := t.TempDir()
 	gh := "#!/bin/sh\ncase \"$*\" in\n  *headRefName*) echo feature ;;\n  *baseRefName*) echo main ;;\n  *'pr list'*) echo 7 ;;\n  *) echo \"unexpected gh $*\" >&2; exit 1 ;;\nesac\n"
-	if err := os.WriteFile(filepath.Join(stub, "gh"), []byte(gh), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(stub, "gh"), []byte(gh), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	summary := filepath.Join(t.TempDir(), "summary.md")
@@ -1564,7 +1569,7 @@ func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 	if !strings.Contains(r.stdout, "#7 (feature <- main): "+string(ciMergeMerged)) {
 		t.Fatalf("unexpected run: %s", r.stdout)
 	}
-	if got, _ := os.ReadFile(summary); !strings.Contains(string(got), "#7: merged") {
+	if got, _ := os.ReadFile(filepath.Clean(summary)); !strings.Contains(string(got), "#7: merged") {
 		t.Fatalf("summary = %q", got)
 	}
 	// The pushed branch now merges cleanly into main.
@@ -1693,7 +1698,7 @@ func TestE2E_WorkflowPinFollowsLoreUpgrade(t *testing.T) {
 
 func readFileE2E(t *testing.T, p string) string {
 	t.Helper()
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(filepath.Clean(p))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1712,7 +1717,7 @@ func e2ePath() string {
 		if d == "" || filepath.Clean(d) == filepath.Clean(own) {
 			continue
 		}
-		if fi, err := os.Stat(filepath.Join(d, BinaryName)); err == nil && !fi.IsDir() {
+		if fi, err := os.Stat(filepath.Clean(filepath.Join(d, BinaryName))); err == nil && !fi.IsDir() {
 			continue // another lore: keep the test hermetic
 		}
 		parts = append(parts, d)

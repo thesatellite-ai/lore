@@ -41,12 +41,12 @@ func TestExplainStorageError(t *testing.T) {
 		t.Fatalf("SQLITE_FULL must map to E_DISK_FULL: %s", got)
 	}
 	other := errors.New("some other failure")
-	if explainStorageError(other) != other {
+	if got := explainStorageError(other); !errors.Is(got, other) || got.Error() != other.Error() {
 		t.Fatal("unrelated errors must pass through unchanged")
 	}
 	// "unable to open" only means disk-full when the disk really is full.
 	cantOpen := errors.New("unable to open database file (14)")
-	if explainStorageError(cantOpen) != cantOpen {
+	if got := explainStorageError(cantOpen); !errors.Is(got, cantOpen) || got.Error() != cantOpen.Error() {
 		t.Fatal("CANTOPEN with free space must pass through")
 	}
 }

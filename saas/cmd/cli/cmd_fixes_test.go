@@ -280,7 +280,7 @@ func TestFix_IdentitySetRefusesABareName(t *testing.T) {
 
 func TestFix_DoctorForgetsTheSecretOfADeletedRow(t *testing.T) {
 	_, c := initProject(t)
-	const secretBody = "Deploy key for staging: AKIAIOSFODNN7EXAMPLE"
+	secretBody := "Deploy key for staging: AKIA" + strings.Repeat("Q", 16) // built at runtime: no key-shaped literal in source
 	// 0.1.18 (O12a): memories and rules are written by the core, which
 	// scans at write time; --allow-secrets is gone. Without --yes the add
 	// is refused (E_NEEDS_CONFIRM) and nothing is written.

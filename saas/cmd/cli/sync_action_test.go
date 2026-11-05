@@ -108,7 +108,7 @@ func TestRenderSyncAction(t *testing.T) {
 	}
 	var push triggerFilter
 	pushNode := doc.On["push"]
-	if err := pushNode.Decode(&push); err != nil {
+	if err = pushNode.Decode(&push); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(push.Branches, ",") != "main,staging" || strings.Join(push.Paths, ",") != ".lore/data/**" {
@@ -149,7 +149,7 @@ func TestRenderSyncActionSubdirProject(t *testing.T) {
 	ctx := context.Background()
 	dir := gitInitRepo(t)
 	sub := filepath.Join(dir, "services", "api")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
+	if err := os.MkdirAll(sub, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	p, err := syncActionParamsFor(ctx, dir, sub, syncActionOptions{branches: []string{"main"}})
@@ -213,13 +213,13 @@ func TestInstallUninstallSyncAction(t *testing.T) {
 	if res, err := installSyncAction(ctx, dir, upgraded); err != nil || res.Status != syncActionUpdated {
 		t.Fatalf("re-install after upgrade: %+v %v", res, err)
 	}
-	if got, _ := os.ReadFile(file); !strings.Contains(string(got), "v0.1.11") {
+	if got, _ := os.ReadFile(filepath.Clean(file)); !strings.Contains(string(got), "v0.1.11") {
 		t.Fatal("update did not rewrite the version")
 	}
 
 	// A workflow someone else wrote at that path is never overwritten or
 	// deleted without --force.
-	if err := os.WriteFile(file, []byte("name: theirs\n"), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte("name: theirs\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := installSyncAction(ctx, dir, o); err == nil {
@@ -228,7 +228,7 @@ func TestInstallUninstallSyncAction(t *testing.T) {
 	if _, err := uninstallSyncAction(ctx, dir, false); err == nil {
 		t.Fatal("deleted a foreign file")
 	}
-	if got, _ := os.ReadFile(file); string(got) != "name: theirs\n" {
+	if got, _ := os.ReadFile(filepath.Clean(file)); string(got) != "name: theirs\n" {
 		t.Fatal("foreign file changed")
 	}
 	forced := o

@@ -15,7 +15,7 @@ func TestStoreFolderProjectIDIsOnePerFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ids.Validate(first, ids.PrefixProject); err != nil {
+	if err = ids.Validate(first, ids.PrefixProject); err != nil {
 		t.Fatalf("not a project id: %v", err)
 	}
 	again, err := storeFolderProjectID(base)
@@ -64,8 +64,8 @@ func TestEnsureProjectRowResolvesThroughMeta(t *testing.T) {
 	}
 	// Idempotent: a second pass over the same files changes nothing.
 	n := len(fresh)
-	if again, err := ensureProjectRow(fresh, key); err != nil || again != want || len(fresh) != n {
-		t.Fatalf("second pass: %s, %v, %d files", again, err, len(fresh))
+	if again, perr := ensureProjectRow(fresh, key); perr != nil || again != want || len(fresh) != n {
+		t.Fatalf("second pass: %s, %v, %d files", again, perr, len(fresh))
 	}
 
 	const oldID, strayID = "prj_0190aaaa0000700080000000000000aa", "prj_0190aaaa0000700080000000000000ab"

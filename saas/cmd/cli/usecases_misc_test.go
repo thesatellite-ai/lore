@@ -353,7 +353,7 @@ func TestUC_MiscDirectiveInstallRemove(t *testing.T) {
 	}
 	read := func(name string) string {
 		t.Helper()
-		b, err := os.ReadFile(filepath.Join(dir, name))
+		b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, name)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -378,7 +378,7 @@ func TestUC_MiscDirectiveInstallRemove(t *testing.T) {
 	// AGENTS.md with hand content: block prepended, content kept; a stale
 	// block is replaced in place, not duplicated.
 	hand := "# Team notes\n\nKeep this.\n"
-	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(hand), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(hand), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	run("directive", "install", "--target=AGENTS.md,docs/RULES.md")
@@ -433,7 +433,7 @@ func TestUC_MiscDirectiveReinstallIsIdempotent(t *testing.T) {
 	if r := run("directive", "install"); !strings.Contains(r.stdout, "(no change)") {
 		t.Errorf("re-install changed the file: %s", r.stdout)
 	}
-	got, err := os.ReadFile(path)
+	got, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,11 +444,11 @@ func TestUC_MiscDirectiveReinstallIsIdempotent(t *testing.T) {
 	// An older block: same markers, different body (a line was added).
 	first, rest, _ := strings.Cut(block, "\n")
 	stale := first + "\nan outdated line\n" + rest + hand
-	if err := os.WriteFile(path, []byte(stale), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(stale), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	run("directive", "install")
-	if got, _ := os.ReadFile(path); string(got) != block+hand {
+	if got, _ := os.ReadFile(filepath.Clean(path)); string(got) != block+hand {
 		t.Errorf("stale block must be replaced in place, keeping hand notes")
 	}
 }
@@ -529,7 +529,7 @@ func TestUC_MiscSetupStampsFingerprint(t *testing.T) {
 func TestUC_MiscLearnListStatusFilter(t *testing.T) {
 	_, c := initProject(t)
 	notes := "# Notes\n\n## Always lint\n\nRun the linter before commit.\n\n## Release\n\nTag from main only.\n"
-	if err := os.WriteFile(filepath.Join(c.dir, "notes.md"), []byte(notes), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(c.dir, "notes.md"), []byte(notes), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	c.lore("learn-from", "docs", "--paths=notes.md")

@@ -166,7 +166,7 @@ func TestMainPurgedRefusesAnUnreadableList(t *testing.T) {
 			p := mainDataPath(live.RootFolder, lsync.PurgedFileName)
 			if c.body != "" {
 				full := filepath.Join(dir, filepath.FromSlash(p))
-				if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 					t.Fatal(err)
 				}
 				if err := os.WriteFile(full, []byte(c.body), 0o600); err != nil {

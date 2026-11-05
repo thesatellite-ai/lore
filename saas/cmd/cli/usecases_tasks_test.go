@@ -67,7 +67,7 @@ func ucTasklist(t *testing.T, c *clone) string {
 // created_by_actor_id (tasks) gives the same id either way.
 func ucRowField(t *testing.T, c *clone, table, id, field string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(c.dir, ".lore", "data", table, id+".json"))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(c.dir, ".lore", "data", table, id+".json")))
 	if os.IsNotExist(err) {
 		b, err = ucLiveRowFile(t, c, id)
 	}

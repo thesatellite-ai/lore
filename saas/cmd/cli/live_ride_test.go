@@ -47,7 +47,7 @@ func TestRideBranchSkipList(t *testing.T) {
 	gitDir := filepath.Join(dir, ".git")
 	for _, m := range rideInProgressMarkers {
 		p := filepath.Join(gitDir, m)
-		if err := os.WriteFile(p, nil, 0o644); err != nil {
+		if err := os.WriteFile(p, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := sess().rideBranch(ctx); ok {

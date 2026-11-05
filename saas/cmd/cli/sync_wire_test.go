@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -54,16 +55,16 @@ func TestNeedsMaterialize(t *testing.T) {
 		t.Fatal("no .lore/data")
 	}
 	data := filepath.Join(root, ".lore", "data")
-	if err := os.MkdirAll(data, 0o755); err != nil {
+	if err := os.MkdirAll(data, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(data, lsync.MetaFileName), []byte(`{"_v":1}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(data, lsync.MetaFileName), []byte(`{"_v":1}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if !needsMaterialize(root) {
 		t.Fatal("data without DB must materialize")
 	}
-	if err := os.WriteFile(filepath.Join(root, ".lore", "lore.toml"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".lore", "lore.toml"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if needsMaterialize(root) {
@@ -247,7 +248,8 @@ func TestPreCommitLineAgainstOldAndNewLore(t *testing.T) {
 		cmd.Stderr = &stderr
 		err := cmd.Run()
 		code := 0
-		if ee, ok := err.(*exec.ExitError); ok {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
 			code = ee.ExitCode()
 		} else if err != nil {
 			t.Fatal(err)
@@ -267,7 +269,7 @@ func TestPreCommitLineAgainstOldAndNewLore(t *testing.T) {
 func writeExecutable(t *testing.T, path, script string) {
 	t.Helper()
 	syscall.ForkLock.RLock()
-	err := os.WriteFile(path, []byte(script), 0o755)
+	err := os.WriteFile(path, []byte(script), 0o700)
 	syscall.ForkLock.RUnlock()
 	if err != nil {
 		t.Fatal(err)
@@ -279,7 +281,7 @@ func writeExecutable(t *testing.T, path, script string) {
 func TestDataUnignoreKeepsOSJunkIgnored(t *testing.T) {
 	t.Parallel()
 	dir := gitInitRepo(t)
-	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("_*\n.DS_Store\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("_*\n.DS_Store\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()

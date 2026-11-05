@@ -131,7 +131,7 @@ func TestNaturalIDHook_RenamedRowDoesNotBlockRecreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Prompt.UpdateOneID(first.ID).SetName("release").Save(ctx); err != nil {
+	if _, err = c.Prompt.UpdateOneID(first.ID).SetName("release").Save(ctx); err != nil {
 		t.Fatal(err)
 	}
 	again, err := c.Prompt.Create().SetProjectID(project).SetName("deploy").SetDescription("d").SetBody("b2").Save(ctx)

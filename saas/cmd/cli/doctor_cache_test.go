@@ -51,24 +51,24 @@ func TestCacheFinding(t *testing.T) {
 	}
 	for _, q := range []string{"CREATE TABLE t(a TEXT)", "CREATE INDEX ta ON t(a)",
 		"WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i < 3000) INSERT INTO t SELECT hex(randomblob(40)) FROM n"} {
-		if _, err := db.Exec(q); err != nil {
+		if _, err = db.Exec(q); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := db.Close(); err != nil {
+	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if got := cacheFinding(ctx, path); got != "" {
 		t.Fatalf("sound: %q", got)
 	}
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := 8192; i < len(b)-4096; i++ { // keep page 1 (the header) and the tail
 		b[i] = 0x5a
 	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Clean(path), b, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got := cacheFinding(ctx, path); !strings.Contains(got, "is damaged; delete it") {

@@ -42,7 +42,7 @@ func TestSyncPurgeCoreOwnedArchived(t *testing.T) {
 	if r := f.run(e2eBin, "memory", "show", id); r.code != 27 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
 		t.Fatalf("a purged row is gone: %+v", r)
 	}
-	b, err := os.ReadFile(filepath.Join(f.dir, ".lore", "data", "memories", id+".json"))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(f.dir, ".lore", "data", "memories", id+".json")))
 	if err != nil || !strings.Contains(string(b), `"_deleted": true`) {
 		t.Fatalf("the purged row's file is a tombstone: %v %s", err, b)
 	}

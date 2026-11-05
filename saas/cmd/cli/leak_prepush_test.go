@@ -31,10 +31,10 @@ func runGit(t *testing.T, dir string, args ...string) string {
 
 func writeAndCommit(t *testing.T, dir, rel, body, msg string) string {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, rel)), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, rel)), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, rel), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, rel), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	runGit(t, dir, "add", "-A")
