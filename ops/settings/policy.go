@@ -201,6 +201,10 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 		return RowOut{}, errs.New(errs.PolicyDenied, fmt.Sprintf("%s: %s sets %s, so %s may only set a value at least as strict",
 			in.Key, place(where[eff.Source]), display(eff.Value), place(target))).WithHint("nothing written")
 	}
+	note, err := o.unitNote(ctx, d.Key, entries, v)
+	if err != nil {
+		return RowOut{}, err
+	}
 	jv, err := asJSON(v)
 	if err != nil {
 		return RowOut{}, err
@@ -223,7 +227,41 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("✓ %s = %s (%s, %s)\n", in.Key, display(v), place(target), short(w.Row.ID))}, nil
+		Human: fmt.Sprintf("✓ %s = %s (%s, %s)\n", in.Key, display(v), place(target), short(w.Row.ID)) + note}, nil
+}
+
+// unitNote is the line `policy set tasks.estimate_unit` prints when the
+// unit changes and tasks carry estimates (TSQ4, OV59): the change asks
+// first (policy set always confirms) and never converts values, so it
+// says how many estimates now read in the new unit. "" for any other key,
+// an unchanged unit or no estimates.
+func (o ops) unitNote(ctx context.Context, key policy.Key, entries []policy.Entry, next value.Value) (string, error) {
+	if key != policy.KeyTasksEstimateUnit {
+		return "", nil
+	}
+	set, err := policy.Resolve(entries)
+	if err != nil {
+		return "", err
+	}
+	cur, _ := set.Get(key)
+	from, to := display(cur.Value), display(next)
+	if from == to {
+		return "", nil
+	}
+	tasks, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableTasks)
+	if err != nil {
+		return "", err
+	}
+	n := 0
+	for _, t := range tasks {
+		if e, ok := t.Row.Fields[schema.FieldTaskEstimate]; ok && e != nil && e.String() != "" {
+			n++
+		}
+	}
+	if n == 0 {
+		return "", nil
+	}
+	return fmt.Sprintf("  %d task estimate(s) were not converted: they now read as %s, not %s\n", n, to, from), nil
 }
 
 // where2 is the live row of key among rows (nil when none).

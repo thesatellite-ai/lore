@@ -198,3 +198,25 @@ func showRules(t *testing.T, h *opstest.H, prefix string) map[string]settings.Po
 	}
 	return m
 }
+
+// TestEstimateUnitNote (TSQ4, OV59): changing tasks.estimate_unit asks
+// first like every policy set, and once confirmed says how many estimates
+// were not converted; the same unit again, or a project without
+// estimates, prints no such line.
+func TestEstimateUnitNote(t *testing.T) {
+	h := opstest.New(t)
+	const line = "were not converted"
+	if got := opstest.Text(h.MustYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "hours", ""))); strings.Contains(got, line) {
+		t.Fatalf("no estimates yet, got a note: %q", got)
+	}
+	h.Seed("tasks", map[string]string{"title": `"a"`, "estimate": `"3"`})
+	h.Seed("tasks", map[string]string{"title": `"b"`})
+	h.Fails(settings.OpPolicySet, setIn("tasks.estimate_unit", "days", ""), errs.NeedsConfirm)
+	got := opstest.Text(h.MustYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "days", "")))
+	if !strings.Contains(got, "1 task estimate(s) "+line+": they now read as days, not hours") {
+		t.Fatalf("unit change: %q", got)
+	}
+	if got = opstest.Text(h.MustYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "days", ""))); strings.Contains(got, line) {
+		t.Fatalf("same unit again, got a note: %q", got)
+	}
+}
