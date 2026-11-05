@@ -374,29 +374,6 @@ func (o ops) metaDescribe(ctx context.Context, in MetaDescribeIn) (RowOut, error
 	return o.patchRow(ctx, k, patch, text(k.Row, mName)+": description set")
 }
 
-func (o ops) metaRename(ctx context.Context, in RenameIn) (RowOut, error) {
-	if err := checkKeyName(in.New); err != nil {
-		return RowOut{}, err
-	}
-	k, err := o.metaKey(ctx, in.Old)
-	if err != nil {
-		return RowOut{}, err
-	}
-	rows, err := liveRows(ctx, o.env, []store.Source{k.Src}, schema.TableMetaKeys)
-	if err != nil {
-		return RowOut{}, err
-	}
-	if len(where(rows, map[string]string{mName: in.New, mScope: text(k.Row, mScope)})) > 0 {
-		return RowOut{}, errs.New(errs.MetaTaken, "a metadata key named "+quote(in.New)+" already exists there")
-	}
-	v, err := txt(in.New)
-	if err != nil {
-		return RowOut{}, err
-	}
-	return o.patchRow(ctx, k, map[string]value.Value{mName: v},
-		"renamed "+text(k.Row, mName)+" → "+in.New+" in the registry; row labels refresh on each row's next write; no values changed")
-}
-
 func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
 	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableMetaKeys)
 	if err != nil {
