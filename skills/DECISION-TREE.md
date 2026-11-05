@@ -136,9 +136,9 @@ Searched on demand (run `lore search "<keywords>"` per turn):
 ## "I want to know what the agent saw"
 
 ```
-Most recent render?        → lore why-context --last-render
-Print the rendered text?   → lore why-context --last-render --rendered
-JSON for piping?           → lore why-context --last-render --json
+Most recent render?        → lore why-context
+Print the rendered text?   → lore why-context --rendered
+JSON for piping?           → lore why-context --json
 ```
 
 ## "I want to introspect at runtime"
@@ -185,7 +185,7 @@ invalidate (bitemporal)    memory invalidate <id>  (sets valid_until=now; preser
 pause/resume mission       mission pause <id> | mission resume <id>
 ack handoff                handoff ack <id>
 install agent directive    directive install [--target=CLAUDE.md,AGENTS.md]
-inspect render             why-context --last-render
+inspect render             why-context
 recompile context          render
 diagnose                   doctor
 fix DB                     repair --tier=1|2|3 --confirm

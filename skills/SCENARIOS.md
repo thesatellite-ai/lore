@@ -233,12 +233,12 @@ lore rule list --json | jq '.data[] | select(.activation == "glob" and (.globs /
 
 ### D.6 "Why is X showing in CLAUDE.md?"
 ```bash
-lore why-context --last-render --rendered | grep -B2 -A2 "X"
+lore why-context --rendered | grep -B2 -A2 "X"
 ```
 
 ### D.7 "What did the agent receive in its last render?"
 ```bash
-lore why-context --last-render --json | jq '.scope_summary'
+lore why-context --json | jq '.scope_summary'
 ```
 
 ---

@@ -104,7 +104,6 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Install the agent directive at the top of CLAUDE.md | `lore directive install` |
 | Same, but into AGENTS.md (or both) | `lore directive install --target=AGENTS.md` (or `--target=CLAUDE.md,AGENTS.md`) |
 | Print the directive block (no write) | `lore directive show` |
-| Strip the directive block | `lore directive remove [--target=...]` |
 
 ## Retrieve / search
 
@@ -147,9 +146,9 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Change the generated knowledge-file path | `lore render --out=docs/LORE.md` |
 | Write the generated file only (no pointer stitch) | `lore render --no-pointer` |
 | See what render would produce (the `.lore/LORE.md` body) | `lore render --dry-run` |
-| What did the agent actually see? | `lore why-context --last-render` |
-| Same as above in JSON | `lore why-context --last-render --json` |
-| Last rendered text | `lore why-context --last-render --rendered` |
+| What did the agent actually see? | `lore why-context` |
+| Same as above in JSON | `lore why-context --json` |
+| Last rendered text | `lore why-context --rendered` |
 
 ## Project + repo management
 

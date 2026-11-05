@@ -475,7 +475,6 @@ lore render
 | "tell the agent to use lore, not inline CLAUDE.md" / "stop the agent from writing memories into the file" | `lore directive install` (idempotent; default target CLAUDE.md at cwd) |
 | "drop the directive in AGENTS.md too" | `lore directive install --target=AGENTS.md` (or `--target=CLAUDE.md,AGENTS.md`) |
 | "what does the directive block say?" | `lore directive show` (prints to stdout, no write) |
-| "strip the directive block" | `lore directive remove [--target=...]` |
 
 ### Retrieval
 
@@ -505,7 +504,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "exact phrase 'connection pool'" | `lore memory search '"connection pool"' --json` (quoted = adjacent words in order) |
 | "what rules exist?" | `lore rule list --json` |
 | "what decisions about X?" | `lore decision list --json \| jq '.data[] \| select(.title \| test("X";"i"))'` |
-| "why did you do X?" | `lore why-context --last-render --rendered` |
+| "why did you do X?" | `lore why-context --rendered` |
 | "show me mem_<id>", "show me tsk_<id>", "show me dec_<id>" | `lore <kind> show <id>` |
 | "show all rules INCLUDING archived" | `lore rule list --archived --json` (plain `rule list` hides archived rules; `--archived` shows them marked `[archived]`) |
 | "rules under project X (cross-project peek)" | `lore rule list --project=X --json` (one-shot override, doesn't change cwd project) |
@@ -520,7 +519,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "put the generated file somewhere else" | `lore render --out=docs/LORE.md` |
 | "write the generated file only, leave CLAUDE.md alone" | `lore render --no-pointer` |
 | "render just one repo's slice" | `lore render --repo=<mount> --out=<mount>/.lore/LORE.md --target=<mount>/CLAUDE.md` |
-| "what did the agent actually see?" | `lore why-context --last-render` |
+| "what did the agent actually see?" | `lore why-context` |
 
 ### What's pinned in `.lore/LORE.md` vs searched on demand
 
@@ -994,7 +993,7 @@ INGEST      lore learn-from docs ; lore learn promote <id>
 CAPTURE     lore <memory|rule|decision|hotfix|task|...> add ...
 RENDER      lore render
 SEARCH      lore memory search "<q>" --json
-INTROSPECT  lore why-context --last-render
+INTROSPECT  lore why-context
 DIAGNOSE    lore doctor --json
 SHARE       git add .lore/data .gitattributes   (lore sync status to check)
 RECOVER     lore repair --tier=2 --confirm

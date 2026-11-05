@@ -369,7 +369,7 @@ T[file a bug | make a support bundle | generate a bundle for the issue]
 T[who modified X | audit trail for X | who changed X | when was X last edited]
                                           → sqlite3 .lore/lore.db "SELECT tx_at,actor_id,op,entity_id FROM audit_log WHERE entity_id='<X>' OR entity_table='<X>' ORDER BY tx_at DESC LIMIT 20"
                                           # (raw SQL — no dedicated CLI verb yet for audit log)
-T[why did you do X?]                     → why-context --last-render --rendered
+T[why did you do X?]                     → why-context --rendered
 T[show me mem_<id> | tsk_<id> | rul_<id> | dec_<id>]        → <kind> show <code>
 
 T[capture for <repo> repo: <text>]       → rule add --repo=<repo> "<text>"; render
@@ -414,9 +414,9 @@ lore render --dry-run              # preview the .lore/LORE.md body without writ
 lore render --target=AGENTS.md    # stitch the pointer into a different agent file
 lore render --out=docs/LORE.md    # change the generated knowledge-file path
 lore render --no-pointer          # write the generated file only; leave the agent file untouched
-lore why-context --last-render    # what was included and why
-lore why-context --last-render --rendered  # full rendered text
-lore why-context --last-render --json      # pipe-friendly
+lore why-context    # what was included and why
+lore why-context --rendered  # full rendered text
+lore why-context --json      # pipe-friendly
 lore doctor                        # DB integrity + FTS5 check; exit 0/1/2
 ```
 
@@ -514,7 +514,7 @@ P9  periodic review reminder
 
 P10 inspect what the agent is seeing
     lore render --dry-run
-    lore why-context --last-render --rendered
+    lore why-context --rendered
 
 P11 migrate from .cursorrules / AGENTS.md
     lore learn-from docs --paths=.cursorrules,AGENTS.md

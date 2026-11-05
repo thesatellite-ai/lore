@@ -636,7 +636,7 @@ After render, the result is queryable via `why-context`.
 ## Why-Context (introspect last render)
 
 ```bash
-lore why-context --last-render [--json] [--rendered]
+lore why-context [--json] [--rendered]
 ```
 
 Shows what was included/excluded and why (scope filters, dedup decisions, budget truncation). `--rendered` prints the full rendered text.
@@ -1014,7 +1014,7 @@ Intent                                       → Command
 "label arbitrary entity"                     → tag attach
 "discuss arbitrary entity"                   → comment add
 "refresh the agent context file"             → render
-"why does the agent see X?"                  → why-context --last-render
+"why does the agent see X?"                  → why-context
 "is my project healthy?"                     → doctor
 "my DB is broken"                            → repair --tier=2 --confirm
 "what error codes exist?"                    → errors list --json

@@ -202,10 +202,10 @@ lore reminder add "Re-evaluate SQLite choice" --due=2026-12-31 \
 
 ```bash
 lore render
-lore why-context --last-render --json | jq
+lore why-context --json | jq
 
 # Or see the rendered text itself
-lore why-context --last-render --rendered
+lore why-context --rendered
 ```
 
 Useful when the agent is "missing" context — verify the rule/memory is actually included.
