@@ -61,10 +61,16 @@ func versionBelow(binary, floor string) bool {
 }
 
 // DevBuild reports whether v is an unreleased development build: the
-// "-dev" suffix the unstamped binary carries, or a goreleaser snapshot.
+// plain "dev" a `go build` without ldflags stamps (cmd/lore's default
+// version, so its saves carry `_w {v: "dev"}`), the "-dev" suffix, or a
+// goreleaser snapshot. FMT-DEV: such a stamp is never below a floor, so a
+// teammate on a source build is not listed as turning read-only.
 func DevBuild(v string) bool {
-	return strings.HasSuffix(v, "-dev") || strings.Contains(v, "snapshot")
+	return v == devVersion || strings.HasSuffix(v, "-dev") || strings.Contains(v, "snapshot")
 }
+
+// devVersion is the version an unstamped build reports (cmd/lore main.go).
+const devVersion = "dev"
 
 // MaxVersion is the higher of two versions; an unparseable one loses to a
 // parseable one, and two unparseable ones keep a.
