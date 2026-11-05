@@ -21,7 +21,7 @@ func TestTimeFlow(t *testing.T) {
 	t.Setenv("LORE_HUMAN", "1")
 	base := time.Date(2026, 11, 18, 9, 0, 0, 0, time.UTC)
 	var off atomic.Int64
-	h := opstest.New(t, func(o *wire.Options) {
+	h := opstest.New(t, repoClient(false), func(o *wire.Options) { // time data lives in internal stores only (PC-LEAK-1)
 		o.Wall = func() time.Time { return base.Add(time.Duration(off.Load())) }
 	})
 	id := add(h, "Rate limit", "")

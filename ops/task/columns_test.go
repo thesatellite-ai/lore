@@ -48,7 +48,7 @@ func cellsFor(t listTable, id string) []string {
 // missing value prints "-"; dates print as a day, datetimes as a UTC minute;
 // the computed columns (tracked/time, elapsed, progress) are filled.
 func TestListColumnsTable(t *testing.T) {
-	h := opstest.New(t)
+	h := opstest.New(t, repoClient(false)) // time data lives in internal stores only (PC-LEAK-1)
 	a := add(h, "Café ünïcode", `"priority":"high","due":"2026-12-05","estimate":"3"`)
 	b := add(h, "b", `"priority":"low"`)
 	h.Must(opstask.OpTimeLog, `{"id":"`+a+`","duration":"1h30m","at":"2026-11-02"}`)

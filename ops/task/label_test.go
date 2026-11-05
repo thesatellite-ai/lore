@@ -144,7 +144,7 @@ func sourceRE(store, folder, label string) *regexp.Regexp {
 // their own form, then each row of another store as v0.1.17's external row
 // "<id>  <text>  <label>" (stores_reads.go printExternalRows: text folded
 // onto one line, never cut); the add lines of memory, rule and comment end
-// in the label, and in the repo in v0.1.17's trailing space.
+// in the label, and in the repo at the id (no trailing space, 07bbe43).
 func TestExternalRowLines(t *testing.T) {
 	h0 := opstest.WithStores(t, []string{"northwind"})
 	b, err := os.ReadFile(filepath.Join(h0.Repo, ".lore", "stores.yaml"))
@@ -163,7 +163,7 @@ func TestExternalRowLines(t *testing.T) {
 	ext := h.ID(h.MustYes("memory.add", `{"body":"multi\n  line\tbody `+long+`","to":"northwind"}`))
 	repoAdd := h.MustYes("memory.add", `{"body":"repo memory"}`)
 	repo := h.ID(repoAdd)
-	if got, want := opstest.Text(repoAdd), "✓ "+repo+" \n  scope: [master]\n"; got != want {
+	if got, want := opstest.Text(repoAdd), "✓ "+repo+"\n  scope: [master]\n"; got != want {
 		t.Errorf("repo memory add %q, want %q", got, want)
 	}
 	wantList := repo + " [retrieved] repo memory\n" +

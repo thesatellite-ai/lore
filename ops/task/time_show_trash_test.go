@@ -15,7 +15,7 @@ import (
 // by person sums each person's entries (manual time logged --by another
 // actor lands on that actor, not the writer).
 func TestTimeShowTrashGroupByPerson(t *testing.T) {
-	h := opstest.New(t)
+	h := opstest.New(t, repoClient(false)) // time data lives in internal stores only (PC-LEAK-1)
 	ann := newActor(h, "Ann")
 	bob := newActor(h, "Bob")
 	id := add(h, "worked then trashed", "")
