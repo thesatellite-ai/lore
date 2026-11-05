@@ -289,6 +289,9 @@ type compatRunner struct {
 	// F1 not-found explanation.
 	cmd  *cobra.Command
 	args []string
+	// purge is the running delete's --purge / --confirm (DELETION 2.5,
+	// 3.12); the engine fills Purged so the output can say "purged".
+	purge *engine.PurgeRequest
 }
 
 // Run implements op.Runner.
@@ -309,6 +312,9 @@ func (r *compatRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	}
 	if err := coreOrgWriteCheck(ctx, e, d); err != nil {
 		return op.Result{}, err
+	}
+	if r.purge != nil {
+		ctx = engine.WithPurge(ctx, r.purge)
 	}
 	res, err := r.app.Run(ctx, e, d, c)
 	if err != nil {
@@ -382,7 +388,8 @@ func coreOrgWriteCheck(ctx context.Context, e op.Entry, d op.Decoder) error {
 // commands that ask) and v0.1.17's indented --json output.
 func addCompatFlags(c *cobra.Command, r *compatRunner) {
 	var db, project string
-	var readOnly, confirm bool
+	var readOnly, confirm, purge bool
+	isDelete := c.Name() == op.VerbDelete
 	if c.Flags().Lookup(constants.FlagDB) == nil {
 		c.Flags().StringVar(&db, constants.FlagDB, "", "v0.1.17 lore.db path: not used by this command (refused)")
 	}
@@ -395,7 +402,14 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 		c.Flags().BoolVar(&readOnly, constants.FlagReadOnly, false, "refuse writes (also LORE_READ_ONLY=1)")
 	}
 	if c.Flags().Lookup(cli.FlagYes) != nil && c.Flags().Lookup(constants.FlagConfirm) == nil {
-		c.Flags().BoolVar(&confirm, constants.FlagConfirm, false, "v0.1.17 spelling: refused, use --yes")
+		desc := "v0.1.17 spelling: refused, use --yes"
+		if isDelete { // DQ8 / FA-DEL-1: accepted on a delete
+			desc = "confirms a --purge (or a delete under policy trash.purge_on_delete); without them, v0.1.17's spelling of --yes"
+		}
+		c.Flags().BoolVar(&confirm, constants.FlagConfirm, false, desc)
+	}
+	if isDelete && c.Flags().Lookup(flagPurge) == nil {
+		c.Flags().BoolVar(&purge, flagPurge, false, "skip the trash: remove for good, only a tombstone stays (needs --confirm)")
 	}
 	flagErr := c.FlagErrorFunc()
 	c.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
@@ -407,7 +421,19 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 		// Every error a generated command returns was printed by surface/cli.
 		defer func() { corePrinted = true }()
 		r.readOnly = readOnly
+		if isDelete {
+			r.purge = &engine.PurgeRequest{Asked: purge, Confirmed: confirm}
+		}
 		switch {
+		case isDelete && purge && !confirm: // DQ2/DEL-R4: a purge never prompts, it needs the literal --confirm
+			r.pending = errs.New(errs.NeedsConfirm, "--purge removes "+strings.Join(args, " ")+" for good, without the trash (only a tombstone stays)").
+				WithHint("ask the person, then rerun with --confirm (--yes does not purge)")
+		case isDelete && cmd.Flags().Changed(constants.FlagConfirm):
+			// DQ8 (FA-DEL-1): v0.1.17's delete --confirm is accepted; a
+			// delete is soft, so it answers the question like --yes.
+			if fl := cmd.Flags().Lookup(cli.FlagYes); fl != nil {
+				_ = fl.Value.Set("true") // a bool flag accepts "true"
+			}
 		case cmd.Flags().Changed(constants.FlagConfirm):
 			r.pending = errs.New(errs.InvalidInput, "--confirm was renamed: confirm with --yes").
 				WithHint("rerun with --yes instead of --confirm")
@@ -429,6 +455,9 @@ func addCompatFlags(c *cobra.Command, r *compatRunner) {
 			err := inner(cmd, args)
 			cmd.SetOut(out)
 			b := buf.Bytes()
+			if err == nil && r.purge != nil {
+				b = purgedLines(b, r.purge, confirm)
+			}
 			if err == nil && coreRouted != "" {
 				b = insertAfterFirstLine(b, "  filed: "+coreRouted+"\n")
 			}
@@ -464,6 +493,36 @@ func applyEnvDefaults(cmd *cobra.Command) {
 		}
 		_ = cmd.Flags().Set(fe[0], v) // a string flag accepts any value; the op validates it
 	}
+}
+
+// flagPurge is a delete's --purge (DELETION 2.5).
+const flagPurge = "purge"
+
+// trashLineMark is the phrase of every noun delete's success line
+// (ops/internal/trashline).
+const trashLineMark = "moved to the trash"
+
+// purgedLines rewrites a delete's "moved to the trash" line when the
+// engine purged instead (--purge, or policy trash.purge_on_delete), and
+// adds DQ8's hint to a plain delete given v0.1.17's --confirm.
+func purgedLines(b []byte, pr *engine.PurgeRequest, confirm bool) []byte {
+	if len(pr.Purged) == 0 {
+		if confirm && bytes.Contains(b, []byte(trashLineMark)) {
+			b = append(b, []byte("  note: a delete is soft now (restorable); to remove content for good: lore trash purge <id> --confirm\n")...)
+		}
+		return b
+	}
+	names := make([]string, 0, len(pr.Purged))
+	for _, id := range pr.Purged {
+		names = append(names, id.String())
+	}
+	lines := strings.SplitAfter(string(b), "\n")
+	for i, l := range lines {
+		if strings.Contains(l, trashLineMark) {
+			lines[i] = "✓ purged for good: " + strings.Join(names, ", ") + " (tombstones written; old content is still in git history)\n"
+		}
+	}
+	return []byte(strings.Join(lines, ""))
 }
 
 // insertAfterFirstLine returns b with line inserted after its first line
