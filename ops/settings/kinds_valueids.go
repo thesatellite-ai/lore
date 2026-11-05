@@ -19,6 +19,7 @@ package settings
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -127,6 +128,7 @@ func foldValueIDs(r row.Row, ext row.Row) (row.Row, error) {
 	if err != nil {
 		return row.Row{}, err
 	}
+	r.Fields = maps.Clone(r.Fields) // never write into the caller's row
 	r.Fields[fValueIDs] = v
 	return r, nil
 }
