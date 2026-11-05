@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/wire"
+	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
 
 // version is stamped at build time (-ldflags "-X main.version=…"), like
@@ -49,13 +50,16 @@ func main() {
 // process exit status (never 0 for a failure).
 func run(ctx context.Context, args []string) int {
 	wd, home := dirs()
-	app, err := wire.New(wire.StandaloneOptions(wd, home, wd, version))
+	hooks := hosthooks.Default() // the host hooks both binaries install (wire/host)
+	app, err := wire.New(hosthooks.Options(wire.StandaloneOptions(wd, home, wd, version), hooks))
 	if err != nil {
 		return printHostError(err)
 	}
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
-	root := cli.Build(app.Registry(), app, cli.WithInteractive(stdinIsTTY))
+	runner := hosthooks.NewRunner(app, hooks)
+	root := cli.Build(app.Registry(), runner, cli.WithInteractive(stdinIsTTY))
 	root.Version = version
+	hosthooks.Install(root, runner)
 	h := &host{app: app, home: home}
 	h.markPrinted(root)
 	mountShortcuts(root)
