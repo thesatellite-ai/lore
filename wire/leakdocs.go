@@ -106,10 +106,45 @@ func (a *App) LeakCheckDocs(ctx context.Context, res *OrgResolution, where strin
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
 	fs := leakcheck.Blocking(leakcheck.Check(items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client}))
+	fs, moved := withoutSelfMatches(fs, rows)
 	if len(fs) == 0 {
 		return nil
 	}
+	if moved {
+		return leakBlocked(leakWhereMove, fs)
+	}
 	return leakBlocked(where, fs)
+}
+
+// leakWhereMove names a write that carries an internal row to the client
+// under its own id (`lore move <id> --to repo`).
+const leakWhereMove = "move"
+
+// withoutSelfMatches drops findings where a row file matches the internal
+// row of its own id: that row is being moved on purpose (`lore move` keeps
+// the id, shows the text and asks), which is not a leak of another note.
+// moved reports whether any checked file is such a move; its remaining
+// findings (it also quotes another note) get the move's advice.
+func withoutSelfMatches(fs []leakcheck.Finding, rows []leakcheck.IndexRow) ([]leakcheck.Finding, bool) {
+	internal := make(map[string]bool, len(rows))
+	for _, r := range rows {
+		if !r.RepoKey {
+			internal[r.ID] = true
+		}
+	}
+	out := fs[:0:0]
+	moved := false
+	for _, f := range fs {
+		id, _, isRow := repoRowOf(f.Path)
+		if isRow && internal[id] {
+			moved = true
+			if f.RowID == id {
+				continue
+			}
+		}
+		out = append(out, f)
+	}
+	return out, moved
 }
 
 // leakBlocked is the F16 refusal: one line per finding, the fix as hint
@@ -144,7 +179,7 @@ const (
 )
 
 // leakWritesNothing are the actions refused before anything is written.
-var leakWritesNothing = map[string]bool{"live write": true, "repo write": true}
+var leakWritesNothing = map[string]bool{"live write": true, "repo write": true, leakWhereMove: true}
 
 // leakFix is the advice for one finding at path (v0.1.17 check_cmd.go
 // leakFix): a repo row is moved to the org or deleted; a pushed commit is
@@ -163,6 +198,9 @@ func leakFix(where, path string) string {
 			return fmt.Sprintf("%s is a %s in this repo. Keep it internal: lore move %s --to <org>   or remove it: lore %s delete %s --confirm", id, k, id, k, id)
 		}
 		return "Remove the internal text from " + path
+	}
+	if where == leakWhereMove && isRow {
+		return fmt.Sprintf("Not moved: %s carries text of an internal note named above, which stays internal. Remove that part from %s, then move it again; nothing written", id, id)
 	}
 	return "move the row to the org (`lore move <id> --to <org>`) or delete it; the rows stay on the live ref until then"
 }
