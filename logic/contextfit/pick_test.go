@@ -1,6 +1,9 @@
 package contextfit
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMatchGlob(t *testing.T) {
 	cases := []struct {
@@ -37,7 +40,7 @@ func TestWordsAndPick(t *testing.T) {
 	}
 	ps := []Piece{{ID: "a", Full: "aaaaaaaaaa", Line: "a"}, {ID: "b", Full: "bbbbbbbbbb", Line: "b"}, {ID: "c", Full: "cccccccccc", Line: "c"}}
 	got := Pick(ps, 11, 0)
-	if got.Text != "aaaaaaaaaab" || got.Lines != 1 || !got.More || got.Shown != 2 {
+	if got.Text != "aaaaaaaaaab" || got.Lines != 1 || !got.More || got.Shown != 2 || strings.Join(got.IDs, ",") != "a,b" {
 		t.Fatalf("Pick = %+v", got)
 	}
 	if all := Pick(ps, 0, 0); all.More || all.Shown != 3 {

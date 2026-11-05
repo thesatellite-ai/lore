@@ -12,7 +12,10 @@
 //	lore context --hook <tool> --hook-stdin
 //	                                 read the tool's hook JSON (file path / prompt),
 //	                                 answer in its format, capped at context.hook_cap;
-//	                                 never fails the tool: any error prints nothing
+//	                                 never fails the tool: any error prints nothing;
+//	                                 skips ids already sent this session (context_hookseen.go)
+//	  --session-start                SessionStart: in-flight tasks + rows changed since
+//	                                 the last session (context_sessionstart.go)
 //	  --max-bytes <n>                cap (default 16,000; hooks: context.hook_cap)
 //	lore context --internal          internal, global and personal rows (unchanged)
 //
@@ -59,6 +62,8 @@ const (
 	flagContextHook      = "hook"
 	flagContextHookStdin = "hook-stdin"
 	flagContextMaxBytes  = "max-bytes"
+	// flagContextSessionStart answers the SessionStart hook (6.9).
+	flagContextSessionStart = "session-start"
 )
 
 // Caps (6.8): the default output cap, the hook cap when the policy cannot
@@ -75,6 +80,7 @@ var errContextNeedsMode = errors.New("pass --for-file <path>, --for-task <id>, -
 
 type contextFlags struct {
 	internal, asJSON, topics, hookStdin bool
+	sessionStart                        bool
 	table, search                       string
 	forFile, topic, forPrompt, hook     string
 	forTask                             string
@@ -109,6 +115,7 @@ func newContextCommand() *cobra.Command {
 	fl.StringVar(&f.forPrompt, flagContextForPrompt, "", "rows matching this free text")
 	fl.StringVar(&f.hook, flagContextHook, "", "answer a tool hook (claude_code, codex)")
 	fl.BoolVar(&f.hookStdin, flagContextHookStdin, false, "with --hook: read the hook input JSON from stdin")
+	fl.BoolVar(&f.sessionStart, flagContextSessionStart, false, "with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)")
 	fl.IntVar(&f.maxBytes, flagContextMaxBytes, 0, "cap the output in bytes (default 16000; hooks: context.hook_cap)")
 	fl.BoolVar(&f.asJSON, constants.FlagJSON, false, "machine-readable output")
 	return cmd
@@ -207,6 +214,13 @@ type contextResult struct {
 
 // text fits the picks under maxBytes, grouped under section headers.
 func (r contextResult) text(maxBytes int) string {
+	s, _ := r.fit(maxBytes)
+	return s
+}
+
+// fit is text plus the ids it printed (full or line), which the hook
+// records in the session's seen set (6.9).
+func (r contextResult) fit(maxBytes int) (string, []string) {
 	head := fmt.Sprintf("# lore context for %s\n\n", r.title)
 	var pieces []contextfit.Piece
 	group := ""
@@ -219,14 +233,29 @@ func (r contextResult) text(maxBytes int) string {
 		pieces = append(pieces, contextfit.Piece{ID: p.ID, Full: p.full, Line: p.line})
 	}
 	if len(pieces) == 0 {
-		return head + "(nothing in the store applies here; try `lore search \"<keywords>\"`)\n"
+		return head + "(nothing in the store applies here; try `lore search \"<keywords>\"`)\n", nil
 	}
 	got := contextfit.Pick(pieces, maxBytes-len(head), contextMoreReserve)
 	s := head + got.Text
 	if got.More || r.more != "" {
 		s += "\nmore: " + r.more + "\n"
 	}
-	return s
+	return s, got.IDs
+}
+
+// without drops the picks whose id is in seen (the hook's session set).
+func (r contextResult) without(seen map[string]bool) contextResult {
+	if len(seen) == 0 {
+		return r
+	}
+	keep := r.picks[:0:0]
+	for _, p := range r.picks {
+		if !seen[p.ID] {
+			keep = append(keep, p)
+		}
+	}
+	r.picks = keep
+	return r
 }
 
 // Groups (section titles) of picks.
@@ -451,6 +480,7 @@ func contextForPrompt(ctx context.Context, text string) (contextResult, error) {
 // UserPromptSubmit (CONTEXT_BUDGET 6.9).
 type hookInput struct {
 	HookEventName string `json:"hook_event_name"`
+	SessionID     string `json:"session_id"`
 	Prompt        string `json:"prompt"`
 	Cwd           string `json:"cwd"`
 	ToolInput     struct {
@@ -493,7 +523,10 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 		return err
 	}
 	var res contextResult
+	startEvent := f.sessionStart || in.HookEventName == hookEventSessionStart
 	switch {
+	case startEvent:
+		res, err = contextSessionStart(ctx)
 	case in.ToolInput.FilePath != "":
 		p := in.ToolInput.FilePath
 		if filepath.IsAbs(p) {
@@ -514,11 +547,22 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 	if err != nil {
 		return err
 	}
+	// 6.9: skip ids this session was already sent (machine-local seen set,
+	// keyed by the tool's session id; no id, no memory).
+	seen := loadHookSeen(f.hook, in.SessionID)
+	if startEvent {
+		seen = hookSeen{} // the start lines never mute the per-file hook
+	}
+	res = res.without(seen.ids)
 	if len(res.picks) == 0 {
 		return nil // nothing new to say: print nothing
 	}
 	capB := f.maxBytes
-	if capB <= 0 {
+	switch {
+	case capB > 0:
+	case startEvent:
+		capB = contextSessionStartCap
+	default:
 		capB = contextHookCapFall
 		if set, ok := policySet(ctx); ok {
 			if n, found := set.Limit(policy.KeyContextHookCap); found {
@@ -527,10 +571,17 @@ func runContextHook(ctx context.Context, f *contextFlags, stdin io.Reader, out i
 		}
 	}
 	event := in.HookEventName
-	if event == "" {
+	switch {
+	case startEvent:
+		event = hookEventSessionStart
+	case event == "":
 		event = "PreToolUse"
 	}
-	return json.NewEncoder(out).Encode(hookOutput{HookSpecificOutput: hookSpecific{HookEventName: event, AdditionalContext: res.text(capB)}})
+	text, sent := res.fit(capB)
+	if err = json.NewEncoder(out).Encode(hookOutput{HookSpecificOutput: hookSpecific{HookEventName: event, AdditionalContext: text}}); err != nil {
+		return err
+	}
+	return seen.add(sent)
 }
 
 // logHookError appends err to ~/.lore/logs/hooks.log (6.9); best effort.

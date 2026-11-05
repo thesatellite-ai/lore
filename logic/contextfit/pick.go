@@ -119,6 +119,10 @@ type Picked struct {
 	Shown, Lines int
 	// More is true when pieces were left out for the cap.
 	More bool
+	// IDs are the ids of the pieces printed (full or line), in order;
+	// pieces without an id (section headers) are not listed. The context
+	// hook records them so a session never gets the same row twice (6.9).
+	IDs []string
 }
 
 // Pick writes pieces in order under maxBytes (0 = no cap), reserving
@@ -140,6 +144,9 @@ func Pick(pieces []Piece, maxBytes, reserve int) Picked {
 			return out
 		}
 		out.Shown++
+		if p.ID != "" {
+			out.IDs = append(out.IDs, p.ID)
+		}
 	}
 	out.Text = b.String()
 	return out
