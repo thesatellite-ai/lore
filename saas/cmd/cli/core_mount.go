@@ -203,6 +203,7 @@ func mountCore(root *cobra.Command) {
 	if t, _, ferr := root.Find([]string{opstask.Noun}); ferr == nil && t.Name() == opstask.Noun {
 		t.AddCommand(taskCoordCommands()...)
 		guardTaskCoreCommands(root)
+		withTaskShowSignals(root) // F7 Debug: task show --signals (task_show_signals.go)
 	}
 	if m, _, ferr := root.Find([]string{opsmission.Noun}); ferr == nil && m.Name() == opsmission.Noun {
 		m.AddCommand(newMissionStatusCommand())
