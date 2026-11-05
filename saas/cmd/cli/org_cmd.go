@@ -6,6 +6,7 @@
 //	link <org> --project <folder> [--own] [--default]
 //	                     validate and show the link; the store-side write
 //	                     arrives with stores (LinkWriter)
+//	rename <old> <new>   label change, org_rename_cmd.go (PROVENANCE 10.7)
 package main
 
 import (
@@ -45,7 +46,7 @@ func newOrgCommand() *cobra.Command {
 to at most one org; run ` + "`lore whoami --explain`" + ` to see why.`,
 	}
 	// No store-side link writer exists yet; the stores work passes one here.
-	cmd.AddCommand(newOrgUseCommand(), newOrgSetCommand(), newOrgLinkCommand(storeLinkWriter{}), newOrgCreateCommand())
+	cmd.AddCommand(newOrgUseCommand(), newOrgSetCommand(), newOrgLinkCommand(storeLinkWriter{}), newOrgCreateCommand(), newOrgRenameCommand())
 	return cmd
 }
 
