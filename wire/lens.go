@@ -2,6 +2,8 @@ package wire
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
@@ -32,13 +34,14 @@ import (
 // its own read-only connection (mode=ro, query_only); nothing it runs can
 // change a cache.
 func (a *App) Lens(ctx context.Context, o sqlite.LensOptions) (*sqlite.Lens, error) {
-	l, _, err := a.lensFor(ctx, o, false)
+	l, _, err := a.lensFor(ctx, o, false, "")
 	return l, err
 }
 
-// lensFor is Lens with the client repo's --internal choice; it also
-// returns the internal stores attached only because of internal.
-func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool) (*sqlite.Lens, []string, error) {
+// lensFor is Lens with the client repo's --internal choice and, when
+// deleted is not "", the deleted-rows file (FA-META-2) attached last; it
+// also returns the internal stores attached only because of internal.
+func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool, deleted string) (*sqlite.Lens, []string, error) {
 	st, err := a.state(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -48,6 +51,9 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool) 
 		return nil, nil, err
 	}
 	o.Trash = trashIn(o.Trash, srcs, st.eng.Stores())
+	if deleted != "" {
+		srcs = append(srcs, sqlite.LensSource{Name: deletedLensName, Path: deleted, Deleted: true})
+	}
 	if o.Expand == nil {
 		// lore_expand(text): var/res/row filled from the row files, never env,
 		// secrets or sensitive values (SQ4, SQ15); client repos see only their own (MQ6).
@@ -147,6 +153,80 @@ func trashIn(rows []sqlite.TrashRow, srcs []sqlite.LensSource, all []store.Sourc
 	return out
 }
 
+// deletedLensName labels the deleted-rows file in a lens; like the
+// combined file its rows carry their own store name in _source.
+const deletedLensName = "deleted"
+
+// deletedCache writes the rows in the trash of the stores the lens will
+// attach (the client rule of lensSources, CFG4) into a fresh cache file in
+// a temp folder, each under its store's name, for `lore sql
+// --include-deleted` (DELETION 2.9, FA-META-2: the store caches hold
+// trashed rows only as hidden tombstones). The caller runs cleanup after
+// the lens closes; it removes the folder.
+//
+//	engine.Trashed ─▶ keep attached stores ─▶ sqlite.Open(temp) ─▶ Apply per store ─▶ Close
+func (a *App) deletedCache(ctx context.Context, internal bool) (string, func(), error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	srcs, _, err := a.lensSources(ctx, st, internal)
+	if err != nil {
+		return "", nil, err
+	}
+	all, err := st.eng.Trashed(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	keep := map[store.Source]bool{}
+	for _, s := range srcs {
+		if s.Combined {
+			for _, n := range st.eng.Stores() {
+				keep[n] = true
+			}
+			continue
+		}
+		keep[store.Source(s.Name)] = true
+	}
+	byStore := map[store.Source][]store.Row{}
+	var order []store.Source
+	for _, t := range all {
+		if !keep[t.Store] {
+			continue
+		}
+		sr, rerr := store.FromRow(t.Row)
+		if rerr != nil {
+			return "", nil, rerr
+		}
+		if _, seen := byStore[t.Store]; !seen {
+			order = append(order, t.Store)
+		}
+		byStore[t.Store] = append(byStore[t.Store], sr)
+	}
+	dir, err := os.MkdirTemp("", "lore-deleted-")
+	if err != nil {
+		return "", nil, errs.Wrap(errs.Internal, "wire: create the deleted-rows folder", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
+	path := filepath.Join(dir, "deleted"+cacheExt)
+	c, err := cacheOpen(ctx, path, st.eng.Registry(), refs.Expander{Resolver: newResolver(st)})
+	if err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	for _, n := range order {
+		if aerr := c.Apply(ctx, n, byStore[n], ""); aerr != nil {
+			cleanup()
+			return "", nil, errors.Join(aerr, c.Close())
+		}
+	}
+	if cerr := c.Close(); cerr != nil {
+		cleanup()
+		return "", nil, cerr
+	}
+	return path, cleanup, nil
+}
+
 // combinedLensName labels the combined cache file in a lens; it never
 // reaches a result, since a combined source's rows carry their own store
 // name in _source.
@@ -160,7 +240,16 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 	if err != nil {
 		return opssql.Result{}, err
 	}
-	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows}, r.Internal)
+	var deleted string
+	if r.IncludeDeleted {
+		dir, cleanup, derr := a.deletedCache(ctx, r.Internal)
+		if derr != nil {
+			return opssql.Result{}, derr
+		}
+		defer cleanup()
+		deleted = dir
+	}
+	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows}, r.Internal, deleted)
 	if err != nil {
 		return opssql.Result{}, err
 	}

@@ -42,11 +42,22 @@ const MaxLensSources = 10
 // ResolveID reports each row's own source, so Name is only a label there.
 // A lens may mix plain files and combined ones (the repo's own cache plus
 // the combined file of its stores).
+//
+// Deleted marks the one file of trashed rows a lens built for `lore sql
+// --include-deleted` holds (DELETION 2.9, FA-META-2): each row applied
+// under its store's name, so like a combined file it takes `source` from
+// _source. Its rows join every "<table>_all" view, and the plain "<table>"
+// view of the nearest store gains that store's trashed rows.
 type LensSource struct {
 	Name     string
 	Path     string
 	Combined bool
+	Deleted  bool
 }
+
+// ownSource reports whether the file's rows carry their own source name
+// in _source (a combined or a deleted-rows file).
+func (s LensSource) ownSource() bool { return s.Combined || s.Deleted }
 
 // LensOptions changes what a lens exposes.
 type LensOptions struct {
@@ -328,7 +339,7 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 	var parts []string
 	for _, st := range srcs {
 		src := literal(l.sources[st.src].Name)
-		if l.sources[st.src].Combined {
+		if l.sources[st.src].ownSource() {
 			src = "NULL"
 			if slices.Contains(st.cols, colSource) {
 				src = `"` + colSource + `"`
@@ -348,15 +359,44 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 		return dbErr("create view "+n+lensViewSuffix, execErr)
 	}
 	l.views = append(l.views, n+lensViewSuffix)
-	if !l.masked {
+	first := srcs[0]
+	if l.sources[first.src].Deleted {
+		return nil // only trashed rows hold n: no nearest live copy to shadow
+	}
+	// FA-META-2: the deleted-rows file's copy of n, filtered to the nearest
+	// store's rows, joins the plain view.
+	var del *srcTable
+	for i := range srcs {
+		if l.sources[srcs[i].src].Deleted && slices.Contains(srcs[i].cols, colSource) {
+			del = &srcs[i]
+		}
+	}
+	if !l.masked && del == nil {
 		return nil
 	}
-	first := srcs[0]
-	sel, err := m.columns(n, first.cols, first.cols)
+	plainCols := first.cols
+	if del != nil {
+		plainCols = slices.Clone(first.cols)
+		for _, c := range del.cols {
+			if !slices.Contains(plainCols, c) {
+				plainCols = append(plainCols, c)
+			}
+		}
+	}
+	sel, err := m.columns(n, plainCols, first.cols)
 	if err != nil {
 		return err
 	}
-	if _, err := l.conn.ExecContext(ctx, "CREATE TEMP VIEW "+tq+" AS SELECT "+sel+` FROM "`+attachedName(first.src)+`".`+tq); err != nil {
+	body := "SELECT " + sel + ` FROM "` + attachedName(first.src) + `".` + tq
+	if del != nil {
+		dsel, dErr := m.columns(n, plainCols, del.cols)
+		if dErr != nil {
+			return dErr
+		}
+		body += " UNION ALL SELECT " + dsel + ` FROM "` + attachedName(del.src) + `".` + tq +
+			` WHERE "` + colSource + `" = ` + literal(l.sources[first.src].Name)
+	}
+	if _, err := l.conn.ExecContext(ctx, "CREATE TEMP VIEW "+tq+" AS "+body); err != nil {
 		return dbErr("create view "+n, err)
 	}
 	return nil
@@ -433,6 +473,9 @@ func (l *Lens) ResolveID(ctx context.Context, id ids.AnyID) (LensHit, error) {
 	}
 	var hits []LensHit
 	for i, s := range l.sources {
+		if s.Deleted {
+			continue // trashed rows are no live hit (FA-META-2)
+		}
 		found, err := resolveIn(l.conn.QueryContext(ctx, l.sql[i].resolve, id.String()))
 		if err != nil {
 			return LensHit{}, err

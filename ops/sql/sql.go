@@ -74,6 +74,9 @@ type Request struct {
 	// Internal also attaches the internal stores in a client repo (CFG4);
 	// in an own repo every store is attached already.
 	Internal bool
+	// IncludeDeleted adds the rows in the trash of the attached stores to
+	// every table view (DELETION 2.9, FA-META-2).
+	IncludeDeleted bool
 }
 
 // Env is what sql.run needs; *wire.App implements it.
@@ -108,6 +111,8 @@ type RunIn struct {
 	Format        string        `json:"format,omitempty" flag:"format" desc:"table (default), csv or json (an array of row objects)"`
 	Timeout       time.Duration `json:"timeout,omitempty" flag:"timeout" desc:"stop the statement after this long (default 10s); past it E_SQL_TIMEOUT"`
 	Internal      bool          `json:"internal,omitempty" flag:"internal" desc:"in a client repo, also read the internal stores (their rows are internal: never copy them into the repo)"`
+	// IncludeDeleted: DELETION 2.9 (FA-META-2).
+	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also read the rows in the trash (tables and their _all views; time_spent counts deleted tasks)"`
 }
 
 // RunOut is the output of sql.run (--json and REST): column names, rows
@@ -195,7 +200,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
-	res, err := env.SQL(ctx, Request{Query: q, ShowSensitive: in.ShowSensitive, Timeout: timeout, Internal: in.Internal})
+	res, err := env.SQL(ctx, Request{Query: q, ShowSensitive: in.ShowSensitive, Timeout: timeout, Internal: in.Internal, IncludeDeleted: in.IncludeDeleted})
 	if err != nil {
 		return RunOut{}, err
 	}
