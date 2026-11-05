@@ -22,7 +22,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/filter"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 )
@@ -217,9 +216,4 @@ func (o ListOut) columnsText() string {
 		line(t.Cells)
 	}
 	return b.String()
-}
-
-// rowCells is the decorate step of table mode (list's deco).
-func rowCells(cols []string, get func(row.Row) filter.Getter) func(b *Brief, r row.Row) {
-	return func(b *Brief, r row.Row) { cellsOf(cols, get(r), b) }
 }
