@@ -110,7 +110,7 @@ func addLinkedMemory(ctx context.Context, c *commonFlags, text, sourceKind, sour
 	if err != nil {
 		return "", errcodes.New(errcodes.EmptyBody, err.Error())
 	}
-	if err := refuseSecrets(body); err != nil {
+	if err := refuseSecretsCtx(ctx, body); err != nil {
 		return "", err
 	}
 	// The memory is written by the 0.1.18 core (memory.add) into the repo
@@ -240,17 +240,56 @@ func plainRowFallback(ctx context.Context, coordErr error) error {
 const toRepo = "repo"
 
 // refuseSecrets refuses text holding a credential pattern (as `memory add`
-// does without --allow-secrets).
+// does without --allow-secrets). Flow:
+//
+//	core mounted → coreApp.OutputScanner: the engine's write-time rule set
+//	               (defaults + every attached store's secret_rules rows,
+//	               a personal off included: this is the person's own
+//	               capture, BATCH 8) + the unmigrated pii-patterns.txt
+//	no core      → the v0.1.17 scanner (unit tests without a core)
+//
+// Refuses on any finding whatever secrets.on_detect says: this is the
+// pre-check of a text the old commands then write; the message carries
+// only the rule id and the masked preview, never the value.
 func refuseSecrets(body string) error {
-	scanner, err := secretScanner()
+	// no ctx on this signature (task_note.go callers): the scanner build
+	// reads row files only and is short
+	return refuseSecretsCtx(context.Background(), body)
+}
+
+// refuseSecretsCtx is refuseSecrets with the caller's context.
+func refuseSecretsCtx(ctx context.Context, body string) error {
+	if coreApp == nil {
+		scanner, err := secretScanner()
+		if err != nil {
+			return err
+		}
+		if m := scanner.Scan(body); len(m) > 0 {
+			return secretRefusal(m[0].PatternName, m[0].Preview)
+		}
+		return nil
+	}
+	user, err := userPatterns() // a bad line refuses (fail closed)
 	if err != nil {
 		return err
 	}
-	if m := scanner.Scan(body); len(m) > 0 {
-		return errcodes.New(errcodes.SecretDetected, fmt.Sprintf("text contains a credential pattern: %s (preview: %s)", m[0].PatternName, m[0].Preview)).
-			WithHint("remove the secret; lore never stores credentials in shared rows")
+	sc, err := coreApp.OutputScanner(ctx)
+	if err != nil {
+		return err
+	}
+	if user != nil {
+		sc = bothScanners{sc, user}
+	}
+	if f := sc.Scan("body", body); len(f) > 0 {
+		return secretRefusal(f[0].RuleID, f[0].Preview)
 	}
 	return nil
+}
+
+// secretRefusal is the E_SECRET_DETECTED of refuseSecrets.
+func secretRefusal(rule, preview string) error {
+	return errcodes.New(errcodes.SecretDetected, fmt.Sprintf("text contains a credential pattern: %s (preview: %s)", rule, preview)).
+		WithHint("remove the secret; lore never stores credentials in shared rows")
 }
 
 // guardTaskDone wraps the core's `lore task done` (ops/task) with v0.1.17's
