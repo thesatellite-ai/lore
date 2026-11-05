@@ -222,7 +222,7 @@ func (o ops) addEdge(ctx context.Context, waiter, up string) error {
 	if err != nil {
 		return err
 	}
-	_, w, err := work.Get(ctx, o.env, Noun, table, wid)
+	src, w, err := work.Get(ctx, o.env, Noun, table, wid)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (o ops) addEdge(ctx context.Context, waiter, up string) error {
 			return nil
 		}
 	}
-	add, err := o.parseAfter(ctx, []string{up}, work.Field(w, work.FieldRepo))
+	add, err := o.parseAfter(ctx, src, []string{up}, work.Field(w, work.FieldRepo))
 	if err != nil {
 		return err
 	}

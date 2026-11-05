@@ -33,6 +33,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
+	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -373,7 +374,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		}
 	}
 	if len(in.After) > 0 {
-		deps, derr := o.parseAfter(ctx, in.After, repoID)
+		deps, derr := o.parseAfter(ctx, store.Source(in.To), in.After, repoID)
 		if derr != nil {
 			return AddOut{}, derr
 		}
@@ -552,8 +553,12 @@ type dep struct {
 }
 
 // parseAfter resolves --after entries: each names an existing task; the
-// mode defaults to done in the same repo, merged across repos.
-func (o ops) parseAfter(ctx context.Context, entries []string, repoID string) ([]dep, error) {
+// mode defaults to done in the same repo, merged across repos. from is the
+// store of the waiting row: blocked_by is a JSON field, not a schema ref,
+// so the engine's F15 check does not see it and each edge is checked here
+// (TASK 6.11 leak guard, later 443): a client row cannot wait on a row
+// its readers cannot see (E_LEAK_BLOCKED, nothing written).
+func (o ops) parseAfter(ctx context.Context, from store.Source, entries []string, repoID string) ([]dep, error) {
 	var out []dep
 	seen := map[string]bool{}
 	for _, raw := range entries {
@@ -582,6 +587,9 @@ func (o ops) parseAfter(ctx context.Context, entries []string, repoID string) ([
 				// task is "no such task" (rewriting every error hid an
 				// ambiguous id).
 				return nil, err
+			}
+			if err = pointer.Check(ctx, o.env, from, engine.Ref{Table: table, ID: id}); err != nil {
+				return nil, err // names the target and carries the F15 hint
 			}
 			if until == "" {
 				until = untilDone
@@ -1206,7 +1214,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		}
 	}
 	if len(in.After) > 0 {
-		deps, derr := o.parseAfter(ctx, in.After, work.Field(cur, work.FieldRepo))
+		deps, derr := o.parseAfter(ctx, curSrc, in.After, work.Field(cur, work.FieldRepo))
 		if derr != nil {
 			return work.WriteOut{}, derr
 		}
