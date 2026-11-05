@@ -205,6 +205,11 @@ func (o ops) varByName(ctx context.Context, key, to string) (located, error) {
 			}
 		}
 	}
+	if terr := inTrashByKey(ctx, o.env, sources(o.env, to), schema.TableVars, func(l located) bool {
+		return l.Row.ID.String() == key || text(l.Row, vName) == key || slices.Contains(texts(l.Row, vAliases), key)
+	}); terr != nil {
+		return located{}, terr // DELETION 3.2: E_IN_TRASH for a trashed variable
+	}
 	return located{}, errs.New(errs.NotFound, "no variable "+quote(key)).WithHint("run `lore vars list` to see the variables")
 }
 
@@ -371,6 +376,11 @@ func (o ops) varsWhere(ctx context.Context, in VarsShowIn) (VarsOut, error) {
 		}
 	}
 	if len(out.Data) == 0 {
+		if terr := inTrashByKey(ctx, o.env, o.env.Stores(), schema.TableVars, func(l located) bool {
+			return text(l.Row, vName) == in.Name || l.Row.ID.String() == in.Name || slices.Contains(texts(l.Row, vAliases), in.Name)
+		}); terr != nil {
+			return VarsOut{}, terr // DELETION 3.2
+		}
 		return VarsOut{}, errs.New(errs.NotFound, "no variable "+quote(in.Name))
 	}
 	out.Count = len(out.Data)

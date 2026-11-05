@@ -231,7 +231,7 @@ func TestResourcesMatrix(t *testing.T) {
 	if v := resValues(t, h, "api"); v["db"] != dbID {
 		t.Errorf("dangling ref shows %q, want the old id %s", v["db"], dbID)
 	}
-	h.Fails(settings.OpResShow, `{"id":"main_db"}`, errs.NotFound)
+	h.Fails(settings.OpResShow, `{"id":"main_db"}`, errs.InTrash) // DELETION 3.2
 	again := h.ID(h.MustYes(settings.OpResAdd, `{"kind":"db","name":"main_db"}`))
 	if again == dbID {
 		t.Errorf("re-created resource reused the tombstoned id")
@@ -311,7 +311,7 @@ func TestVarsMatrix(t *testing.T) {
 		t.Errorf("api_url after rename resolves to %+v, want kb's real name", v)
 	}
 	h.MustYes(settings.OpVarsRm, `{"id":"base_url"}`)
-	h.Fails(settings.OpVarsShow, `{"id":"base_url"}`, errs.NotFound)
+	h.Fails(settings.OpVarsShow, `{"id":"base_url"}`, errs.InTrash) // DELETION 3.2
 	if got := opstest.Text(h.Must(settings.OpVarsList, ``)); got != "NAME\tVALUE\tTYPE\tWHERE\napi_url\thttps://y.example\ttext\tkb\nregion\teu\ttext\tkb/web\n" {
 		t.Errorf("list after rm %q", got)
 	}
@@ -406,7 +406,7 @@ func TestMetaMatrix(t *testing.T) {
 	}
 	h.Fails(settings.OpMetaDelete, `{"id":"maintainer"}`, errs.NeedsConfirm)
 	h.MustYes(settings.OpMetaDelete, `{"id":"maintainer"}`)
-	h.Fails(settings.OpMetaEdit, `{"id":"maintainer","strict":true}`, errs.NotFound)
+	h.Fails(settings.OpMetaEdit, `{"id":"maintainer","strict":true}`, errs.InTrash) // DELETION 3.2
 	// after a delete the key name is free again (fresh id).
 	h.MustYes(settings.OpMetaAdd, `{"name":"maintainer","type":"text"}`)
 }

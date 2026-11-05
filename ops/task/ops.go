@@ -1438,7 +1438,8 @@ func (o ops) cancel(ctx context.Context, in CancelIn) (DoneOut, error) {
 // its whole subtree, under one bat_ batch of kind delete. It always asks
 // (--yes); with at least one sub-task the question lists the count, the
 // first titles and every claimed child with its holder (TSQ3, DQ5).
-func (o ops) delete(ctx context.Context, in IDIn) (work.WriteOut, error) {
+func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
+	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	id, err := taskID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err

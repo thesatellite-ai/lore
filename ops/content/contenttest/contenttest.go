@@ -45,6 +45,11 @@ type Runner interface {
 // Mark is v0.1.17's success mark.
 const Mark = "✓"
 
+// DeletedText is a soft delete's line (content.DeletedText; DQ8).
+func DeletedText(id string) string {
+	return Mark + " " + id + " moved to the trash (restore: lore trash restore " + id + ")\n"
+}
+
 // Spec is one noun's v0.1.17 facts.
 type Spec struct {
 	// Noun is the op name prefix ("pattern" → pattern.add).
@@ -662,7 +667,7 @@ func checkDelete(t *testing.T, s Spec, r Runner) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := Text(res), Mark+" "+id+" deleted (hard)\n"; got != want {
+	if got, want := Text(res), DeletedText(id); got != want {
 		t.Errorf("delete text %q, want %q", got, want)
 	}
 	_, err = r.Run(s.Noun+".show", `{"id":"`+id+`"}`)

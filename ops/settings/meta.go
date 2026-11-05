@@ -712,9 +712,12 @@ func (o ops) metaGet(ctx context.Context, in MetaGetIn) (MetaGetOut, error) {
 	if err != nil {
 		return MetaGetOut{}, err
 	}
-	_, r, err := o.env.Get(ctx, engine.Ref{ID: id})
+	src, r, err := o.env.Get(ctx, engine.Ref{ID: id})
 	if err != nil {
 		return MetaGetOut{}, err
+	}
+	if r.Deleted { // DELETION 3.2: a trashed row answers E_IN_TRASH
+		return MetaGetOut{}, lookup.Gone(ctx, o.env, engine.Ref{Store: src, ID: id}, errs.New(errs.NotFound, "meta show: "+id.String()+" is deleted"))
 	}
 	out := MetaGetOut{ID: r.ID.String(), Data: []MetaValue{}, ids: in.IDs}
 	for kid, j := range r.Meta {

@@ -308,6 +308,12 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 }
 
+// DeleteIn is the input of task.delete (DELETION 2.1 --reason).
+type DeleteIn struct {
+	ID     string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+}
+
 // ShowIn is the input of task.show. From is v0.1.17's `task show --from`:
 // read the row from one source instead of whichever attached store holds
 // it (an id found in several, or a store task read from a client repo).

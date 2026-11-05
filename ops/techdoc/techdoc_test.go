@@ -104,7 +104,7 @@ func TestTechdoc(t *testing.T) {
 	h.Fails("techdoc.search", `{"query":"x","columns":["body"]}`, errs.InvalidInput)
 	// delete
 	h.Fails("techdoc.delete", `{"id":"`+ids[0]+`"}`, errs.NeedsConfirm)
-	if got, want := opstest.Text(h.MustYes("techdoc.delete", `{"id":"`+ids[0]+`"}`)), "✓ "+ids[0]+" deleted (hard)\n"; got != want {
+	if got, want := opstest.Text(h.MustYes("techdoc.delete", `{"id":"`+ids[0]+`"}`)), contenttest.DeletedText(ids[0]); got != want {
 		t.Errorf("delete line %q", got)
 	}
 	msg := h.Fails("techdoc.show", `{"id":"`+ids[0]+`"}`, errs.InTrash) // DELETION 3.2

@@ -331,9 +331,14 @@ func (o Ops) Unarchive(ctx context.Context, raw string) (WriteOut, error) {
 		func(id string) string { return Mark + " " + id + " unarchived\n" })
 }
 
-// Delete writes the row's tombstone ("✓ <id> deleted (hard)", v0.1.17's
-// line: the row is gone for every reader; the tombstone only keeps old
-// copies from coming back). reason is --reason (DELETION 2.1, stored as
+// DeletedText is the human line of a soft delete (DELETION 3.1, DQ8).
+func DeletedText(id string) string {
+	return Mark + " " + id + " moved to the trash (restore: lore trash restore " + id + ")\n"
+}
+
+// Delete moves the row to the trash ("✓ <id> moved to the trash; restore
+// with lore trash restore <id>": DQ8 every delete is soft, so v0.1.17's
+// "deleted (hard)" no longer tells the truth). reason is --reason (DELETION 2.1, stored as
 // deleted_reason; the engine refuses an empty one under
 // delete.require_reason with E_REASON_REQUIRED).
 func (o Ops) Delete(ctx context.Context, raw, reason string) (WriteOut, error) {
@@ -346,7 +351,7 @@ func (o Ops) Delete(ctx context.Context, raw, reason string) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return Written(src, w, Mark+" "+id.String()+" deleted (hard)\n"), nil
+	return Written(src, w, DeletedText(id.String())), nil
 }
 
 // Listed is one live row of a list, with the store holding it.

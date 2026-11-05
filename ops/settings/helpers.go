@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -167,12 +168,37 @@ func byNameOrID(ctx context.Context, env Env, srcs []store.Source, table row.Tab
 	}
 	switch {
 	case len(hits) == 0:
+		if terr := inTrashByKey(ctx, env, srcs, table, func(l located) bool {
+			return len(where([]located{l}, extra)) == 1 && (l.Row.ID.String() == key || text(l.Row, nameField) == key)
+		}); terr != nil {
+			return located{}, terr // DELETION 3.2: a trashed row answers E_IN_TRASH, not "no row"
+		}
 		return located{}, errs.New(errs.NotFound, "no "+string(table)+" row named "+quote(key))
 	case len(hits) > 1 && hits[1].Src == hits[0].Src:
 		return located{}, errs.New(errs.AmbiguousID, "several "+string(table)+" rows are named "+quote(key)+" in "+string(hits[0].Src)).
 			WithHint("name it by its id")
 	}
 	return hits[0], nil
+}
+
+// inTrashByKey is E_IN_TRASH for the first row of table in srcs that is
+// in the trash and matches (DELETION 3.2: show, edit and delete of a
+// trashed settings row say where it is), else nil. Only the lookup's own
+// table is read with the trash mode.
+func inTrashByKey(ctx context.Context, env Env, srcs []store.Source, table row.Table, match func(located) bool) error {
+	dctx := engine.WithDeleted(ctx, engine.DeletedOnly, table)
+	for _, src := range srcs {
+		rows, err := env.List(dctx, src, table)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if match(located{Src: src, Row: r}) {
+				return lookup.InTrash(ctx, env, engine.Ref{Store: src, Table: table, ID: r.ID})
+			}
+		}
+	}
+	return nil
 }
 
 // create writes a new settings row, refusing first when a LIVE row with the

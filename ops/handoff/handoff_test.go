@@ -148,7 +148,7 @@ func TestAddLinesAndText(t *testing.T) {
 	}
 	h.Fails("handoff.ack", `{"id":"hnd_01a1a5aca7f57659be7320c5f4b7ffff"}`, errs.NotFound)
 	h.Fails("handoff.delete", `{"id":"`+id+`"}`, errs.NeedsConfirm)
-	if got, want := opstest.Text(h.MustYes("handoff.delete", `{"id":"`+id+`"}`)), "✓ "+id+" deleted (hard)\n"; got != want {
+	if got, want := opstest.Text(h.MustYes("handoff.delete", `{"id":"`+id+`"}`)), contenttest.DeletedText(id); got != want {
 		t.Errorf("delete line %q", got)
 	}
 	h.Fails("handoff.show", `{"id":"`+id+`"}`, errs.InTrash)
