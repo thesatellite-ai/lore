@@ -71,6 +71,9 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	if o.Local.Clones == nil {
 		o.Local.Clones = &standaloneClones{home: home}
 	}
+	if o.Local.Config == nil {
+		o.Local.Config = standaloneConfig{home: home} // config check|set (P3-CFGCHECK)
+	}
 	if o.Local.Leaks == nil {
 		o.Local.Leaks = &standaloneLeaks{opts: o, res: res} // its own App: check is Local (P3-CMDLORE-8)
 	}
