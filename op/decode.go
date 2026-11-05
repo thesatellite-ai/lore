@@ -70,6 +70,9 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 			if f.Rest {
 				rest = true
 				vals = []string{strings.Join(d.Args[f.Arg:], " ")}
+				if f.Type == TypeStrings { // one value per argument (FB-TASK-2)
+					vals = d.Args[f.Arg:]
+				}
 			}
 		case f.Flag != "":
 			v, ok := d.Flags[f.Flag]

@@ -44,9 +44,11 @@ type FieldInfo struct {
 	Type FieldType
 	// Arg is the positional CLI argument index, or NoArg.
 	Arg int
-	// Rest marks the last positional string argument that takes every
-	// remaining argument joined by single spaces (`rest:"true"`), as
-	// v0.1.17 joined `lore reminder add --due X hello world`.
+	// Rest marks the last positional argument that takes every remaining
+	// argument (`rest:"true"`): a string field joins them by single spaces,
+	// as v0.1.17 joined `lore reminder add --due X hello world`; a []string
+	// field keeps one value per argument (`lore task split <id> "a" "b"`,
+	// FB-TASK-2).
 	Rest bool
 	// Flag is the CLI flag name ("" when the field is positional or has no
 	// flag).
@@ -215,8 +217,8 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		f.Arg = n
 	}
 	if r, ok := sf.Tag.Lookup(tagRest); ok {
-		if r != "true" || f.Arg == NoArg || f.Type != TypeString {
-			panic(tagError{where + `: rest:"true" goes on a positional string argument`})
+		if r != "true" || f.Arg == NoArg || (f.Type != TypeString && f.Type != TypeStrings) {
+			panic(tagError{where + `: rest:"true" goes on a positional string or []string argument`})
 		}
 		f.Rest = true
 	}
