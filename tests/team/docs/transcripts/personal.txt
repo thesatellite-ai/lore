@@ -31,7 +31,4 @@ alice (work/website)$ lore memory add --body 'the client invoice template lives 
   scope: [master]
 alice-devbox (work/website)$ lore memory list
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 mem_54fe984c9b495744c0217776765a28f2  the client invoice template lives in the shared drive  [me]

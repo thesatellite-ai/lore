@@ -112,7 +112,7 @@ $ lore memory add --body 'they approve estimates faster when we send them on Wha
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [master]
 $ lore rule add --body 'run the tests before you push' --to repo
-✓ rul_c0f3…b5b8 
+✓ rul_c0f3…b5b8
   scope: [master] severity: must
 $ git status --short
 ?? .lore/data/actors/act_2ad3…f891.json
@@ -214,7 +214,7 @@ $ lore agent start --label agent-backend --owner @alice
 ✓ act_28f8…03df agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 $ lore rule add --body 'require prepayment from this client'
-ERROR: [E_INVALID_INPUT] stores: this write needs an explicit --to: a rule written without a terminal in a client repo must pass --to (repo or agency); nothing written
+ERROR: [E_INVALID_INPUT] stores: this write needs an explicit --to: a rule written by an agent in a client repo must pass --to (repo or agency); nothing written
 (exit 20)
 ```
 <!-- /example -->

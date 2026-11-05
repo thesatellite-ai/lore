@@ -560,11 +560,12 @@ Flags:
       --for-file string     rules, hotfixes and notes for this path
       --for-prompt string   rows matching this free text
       --for-task string     the task, its plan and links, then what applies to the files it names
-      --hook string         answer a tool hook (claude_code, codex)
+      --hook string         answer a tool hook (claude_code, codex, gemini_cli)
       --hook-stdin          with --hook: read the hook input JSON from stdin
       --internal            internal, global and personal rows (outside this checkout)
       --json                machine-readable output
       --max-bytes int       cap the output in bytes (default 16000; hooks: context.hook_cap)
+      --meta                also print each returned row's metadata (sensitive values masked)
       --search string       with --internal: only rows whose title or body contains this text
       --session-start       with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)
       --table string        with --internal: only this table (rules, memories, decisions, tasks, …)

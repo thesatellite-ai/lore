@@ -19,7 +19,7 @@ In a repo without a remote, nothing is ever pushed. Tasks are still live by defa
 # alice, in scratch
 $ lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
 lore sync: imported 3
-✓ rul_7a67…9504 
+✓ rul_7a67…9504
   scope: [master] severity: must
 $ lore task add 'write the README'
 ✓ tsk_2ad3…f891 — write the README [medium]

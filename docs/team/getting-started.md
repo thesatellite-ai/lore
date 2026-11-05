@@ -147,6 +147,7 @@ cache
 identity.toml.migrated
 identity.yaml
 machine.json
+state
 display_name: Alice Doe
 stable_key: human:alice@example.com
 ```

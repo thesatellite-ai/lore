@@ -9,7 +9,7 @@ carol (work/app)$ mkdir -p web && cd web && lore init --non-interactive --name=w
 ✓ tsk_7a670ae8548ed05bf57ad29ad0759504 — fix header [medium]
 lore live: (live, pushed)
 lore sync: imported 3
-✓ rul_2ad3618e878ebbf527d34d446ef4f891 
+✓ rul_2ad3618e878ebbf527d34d446ef4f891
   scope: [master] severity: must
 carol (work/app)$ git ls-tree -r --name-only refs/lore/live
 _live/epoch
@@ -37,7 +37,7 @@ carol (work/app)$ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only re
     "cmd": "task add",
     "git": {
       "branch": "main",
-      "commit": "dab4a6a2a4b677e3473d783020dda5cd43323bb7",
+      "commit": "a7fb02cc0553a5d6b49fdf635ffaa1c8eaf303a5",
       "state": "branch"
     },
     "repo": "rep_54fe984c9b495744c0217776765a28f2",

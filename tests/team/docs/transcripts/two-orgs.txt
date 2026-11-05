@@ -73,7 +73,4 @@ alice (work/client3-api)$ lore memory list
 mem_d4314eba822f1bf5908b2b8ded5f313a  client3 deploys only on Tuesdays  [me/client3]
 alice (work/forked-tool)$ lore memory list
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/forked-tool/.git/hooks)
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/forked-tool/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 (no memories)
