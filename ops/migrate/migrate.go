@@ -153,14 +153,23 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		return RunOut{}, err
 	}
 	defer func() { _ = unlock() }() // a failed release leaves a lock file `lore migrate unlock` clears
-	releaseTeam, teamLine, err := takeTeamLock(ctx, !in.DryRun && !in.NoPush && !in.Offline)
+	pushes := !in.DryRun && !in.NoPush && !in.Offline
+	releaseTeam, teamLine, err := takeTeamLock(ctx, pushes)
 	if err != nil {
 		return RunOut{}, err
 	}
 	defer func() { _ = releaseTeam() }() // released before M (reverse order); an unreleased hold expires (7.2)
+	// teamLines are the run's team-lock lines: what taking T said (or that
+	// this surface has none), and the release when T was really taken.
+	// They survive a no-op run (OV38: the run says whether a team lock
+	// guarded it), and a surface without T never prints a release.
+	var teamLines []string
 	if teamLine != "" {
-		out.Journal = append(out.Journal, teamLine)
+		teamLines = append(teamLines, teamLine)
 	}
+	_, hasTeamLock := teamLockFrom(ctx)
+	tookTeamLock := pushes && hasTeamLock
+	out.Journal = append(out.Journal, teamLines...)
 	if err := At(ctx, PointTeamLocked); err != nil {
 		return RunOut{}, err
 	}
@@ -225,10 +234,11 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 			return RunOut{}, err
 		}
 		out.Journal = append(out.Journal, lines...)
-		if len(lines) == 0 { // nothing changed: the backup was dropped
-			out.BackupRef, out.Journal = "", nil
-		} else if teamLine != "" {
-			out.Journal = append(out.Journal, "team lock released")
+		if len(lines) == 0 { // nothing changed: the backup was dropped; the team-lock lines stay
+			out.BackupRef, out.Journal = "", teamLines
+		}
+		if tookTeamLock {
+			out.Journal = append(out.Journal, teamLockReleasedLine)
 		}
 	}
 	return out, nil

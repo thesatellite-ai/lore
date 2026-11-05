@@ -50,6 +50,9 @@ func teamLockFrom(ctx context.Context) (TeamLock, bool) {
 // noTeamLockLine is the journal line of a run on a surface with no team lock.
 const noTeamLockLine = "team lock: not available on this surface (no signals ref here); run `lore migrate run` from the CLI to guard against a teammate migrating at the same time"
 
+// teamLockReleasedLine ends the journal of a run that took T.
+const teamLockReleasedLine = "team lock released"
+
 // takeTeamLock takes T when the host gives one and the run will push.
 // It returns the release func (never nil) and a journal line ("" for none).
 func takeTeamLock(ctx context.Context, pushes bool) (func() error, string, error) {

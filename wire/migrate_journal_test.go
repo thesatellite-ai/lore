@@ -83,7 +83,9 @@ func TestMigrateRollbackLoses(t *testing.T) {
 }
 
 // TestMigrateNothingKeepsNoBackup: a run with nothing to migrate leaves no
-// backup ref and no journal (so a second run is a no-op).
+// backup ref and no journal (so a second run is a no-op); its output keeps
+// only the team-lock line (OV38: the run says no team lock guarded it on a
+// surface without one, a no-op run included).
 func TestMigrateNothingKeepsNoBackup(t *testing.T) {
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
@@ -92,7 +94,7 @@ func TestMigrateNothingKeepsNoBackup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out := migrateOut(t, raw); out.BackupRef != "" || len(out.Journal) != 0 {
+	if out := migrateOut(t, raw); out.BackupRef != "" || len(out.Journal) != 1 || !strings.HasPrefix(out.Journal[0], "team lock: not available") {
 		t.Fatalf("empty run kept a backup: %+v", out)
 	}
 	if ref := git.BackupRefPrefix + a.opts.Wall().Local().Format(backupDateLayout); snapshots(t).Resolve(background(), repo, ref) != "" {
