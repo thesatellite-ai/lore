@@ -105,7 +105,7 @@ func (o ops) metaForget(ctx context.Context, in MetaForgetIn) (RowOut, error) {
 	if len(names) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta forget: name a key").WithHint("lore meta keys --unused lists them")
 	}
-	rows, err := o.metaRows(ctx)
+	rows, err := o.usedRows(ctx) // OV58: trashed rows count as uses
 	if err != nil {
 		return RowOut{}, err
 	}

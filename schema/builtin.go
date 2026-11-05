@@ -236,6 +236,11 @@ func coreDefs() []TableDef {
 			Bool("deprecated"),
 			Text("replaced_by"),
 			Text("merged_into"),
+			// changed_by: one entry per loosening (internal, sensitive or
+			// strict turned off), written only by meta edit after its
+			// confirmation; the pre-commit check relies on it (RX7, OV58).
+			JSON("changed_by", MergeBy(MergeListByID),
+				Describe("loosenings [{id (the_…), field, to, by, at}] (METADATA 3.11, RX7)")),
 			UniqueOn(fieldName, "scope"),
 		),
 		Table(TableMetaValues, ids.PrefixMetaValue, Synced(), Description("an allowed value of a metadata key"),

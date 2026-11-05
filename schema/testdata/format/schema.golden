@@ -160,6 +160,7 @@ memories.valid_at datetime
 memories.valid_until datetime
 memories.validated_by_actor_id ref
 meta_keys.added_by text
+meta_keys.changed_by json
 meta_keys.default text
 meta_keys.default_on json
 meta_keys.deprecated bool

@@ -227,7 +227,7 @@ func (o ops) metaOps() []op.Entry {
 			Errors: readErrors}, o.metaGet),
 		op.Define(op.Spec{Name: OpMetaValueRename, Summary: "Rename an allowed value (a label change; the val_ id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.metaValueRename),
-	}, o.metaMaintOps()...), o.metaIOOps()...)
+	}, o.metaMaintOps()...), slices.Concat(o.metaIOOps(), o.metaMoveOps())...)
 }
 
 func (o ops) metaKey(ctx context.Context, key string) (located, error) {
@@ -408,12 +408,20 @@ func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
 		return MetaKeysOut{}, err
 	}
 	use := usage(data)
+	var used map[string]*keyUse // OV58: --unused also sees trashed rows
+	if in.Unused {
+		all, uerr := o.usedRows(ctx)
+		if uerr != nil {
+			return MetaKeysOut{}, uerr
+		}
+		used = usage(all)
+	}
 	for _, k := range rows {
 		n := 0
 		if u := use[k.Row.ID.String()]; u != nil {
 			n = u.rows
 		}
-		if in.Unused && n > 0 {
+		if in.Unused && used[k.Row.ID.String()] != nil {
 			continue
 		}
 		name := text(k.Row, mName)

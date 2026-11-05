@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -60,6 +61,44 @@ func (o ops) rowsOf(ctx context.Context, all bool) ([]metaRow, error) {
 			}
 			out = append(out, mr)
 		}
+	}
+	return out, nil
+}
+
+// trasher is the optional Env upgrade the used-key check needs: the rows
+// in the trash of every attached store (wire.App has it).
+type trasher interface {
+	Trashed(ctx context.Context) ([]engine.Trashed, error)
+}
+
+// usedRows is metaRows plus the trashed rows that carry metadata (OV58):
+// a key or value used only by a row in the trash is still used, because
+// restoring that row would bring back an id nothing defines. An Env
+// without a trash reads live rows only.
+func (o ops) usedRows(ctx context.Context) ([]metaRow, error) {
+	out, err := o.metaRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tr, ok := upgrade.As[trasher](o.env)
+	if !ok {
+		return out, nil
+	}
+	all, err := tr.Trashed(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range all {
+		if len(it.Row.Meta) == 0 || !engine.AcceptsMeta(it.Row.Table) {
+			continue
+		}
+		mr := metaRow{located: located{Src: it.Store, Row: it.Row}, entries: map[ids.ID[ids.MetaKey]]meta.Entry{}}
+		for kid, j := range it.Row.Meta {
+			if en, derr := meta.DecodeEntry(j); derr == nil {
+				mr.entries[kid] = en
+			}
+		}
+		out = append(out, mr)
 	}
 	return out, nil
 }

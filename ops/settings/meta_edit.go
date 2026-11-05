@@ -2,10 +2,12 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/meta"
@@ -15,7 +17,10 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // meta_keys fields of the 3.19 everyday features and the 3.12 fold.
@@ -41,6 +46,9 @@ const (
 //	resolve the key ─► --merge-into? fold (its own path, one batch)
 //	   ─► flags (strict/internal/sensitive) + 3.19 fields, checked against the type
 //	   ─► allowed values: --values, --value-label, --rename-value, --remove-value (E_META_IN_USE)
+//	   ─► a loosening (--no-internal/--no-sensitive/--no-strict on a set flag)?
+//	      --no-internal asks (3.11); each gets a changed_by entry and a
+//	      Lore-Meta trailer on the commit (RX7, OV58)
 //	   ─► one patch of the key row
 func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 	k, err := o.metaKey(ctx, in.Key)
@@ -76,6 +84,9 @@ func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 	}
 	human := strings.Join(notes, "")
 	if len(patch) > 0 {
+		if ctx, err = o.loosen(ctx, k, patch); err != nil {
+			return RowOut{}, err
+		}
 		out, perr := o.patchRow(ctx, k, patch, "edited "+name)
 		if perr != nil {
 			return RowOut{}, perr
@@ -84,6 +95,87 @@ func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 		return out, nil
 	}
 	return RowOut{ID: k.Row.ID.String(), Store: string(k.Src), Human: human}, nil
+}
+
+// Loosening record (RX7): changed_by entry fields and the trailer.
+const (
+	mChangedBy     = "changed_by"
+	loreMetaPrefix = "Lore-Meta: no-"
+)
+
+// changedByEntry is one changed_by item; id is the list-by-id merge key.
+type changedByEntry struct {
+	ID    string `json:"id"`
+	Field string `json:"field"`
+	To    bool   `json:"to"`
+	By    string `json:"by,omitempty"`
+	At    string `json:"at"`
+}
+
+// loosen records every protection patch turns off on key k (RX7): a flag
+// k has set (internal, sensitive, strict) patched to false gets a
+// changed_by entry, and ctx carries a "Lore-Meta: no-<field> <key id>"
+// trailer for the commit of that write, so the pre-commit and landing
+// checks can tell lore's own loosening from a hand edit. Turning internal
+// off asks first (3.11, E_NEEDS_CONFIRM without --yes); the ask counts
+// trashed rows too.
+func (o ops) loosen(ctx context.Context, k located, patch map[string]value.Value) (context.Context, error) {
+	var fields []string
+	for _, f := range []string{mInternal, mSensitive, mStrict} {
+		b, ok := patch[f].(value.Bool)
+		if ok && !b.Bool() && flag(k.Row, f) {
+			fields = append(fields, f)
+		}
+	}
+	if len(fields) == 0 {
+		return ctx, nil
+	}
+	name := text(k.Row, mName)
+	if slices.Contains(fields, mInternal) {
+		rows, err := o.usedRows(ctx)
+		if err != nil {
+			return ctx, err
+		}
+		n := 0
+		if u := usage(rows)[k.Row.ID.String()]; u != nil {
+			n = u.rows
+		}
+		if err = bulk.Ask(ctx, fmt.Sprintf("%s (%s) values will travel with every row moved into a client repo. It is used on %d rows. Make it shareable?", name, short(k.Row.ID), n)); err != nil {
+			return ctx, err
+		}
+	}
+	var list []changedByEntry
+	if raw, ok := k.Row.Fields[mChangedBy]; ok {
+		if b, merr := raw.MarshalJSON(); merr == nil && string(b) != "null" {
+			if uerr := json.Unmarshal(b, &list); uerr != nil {
+				return ctx, errs.Wrap(errs.ConfigInvalid, "meta key "+k.Row.ID.String()+": changed_by is not a list of entries", uerr)
+			}
+		}
+	}
+	by := ""
+	if a, isA := upgrade.As[actorer](o.env); isA {
+		if id, aerr := a.Actor(ctx); aerr == nil && !id.IsZero() {
+			by = id.String()
+		}
+	}
+	at := opclock.Now(o.env).UTC().Format(time.RFC3339)
+	trailers := make([]string, 0, len(fields))
+	for _, f := range fields {
+		id, err := ids.New[resHistTag]()
+		if err != nil {
+			return ctx, err
+		}
+		list = append(list, changedByEntry{ID: id.String(), Field: f, To: false, By: by, At: at})
+		trailers = append(trailers, loreMetaPrefix+f+" "+k.Row.ID.String())
+	}
+	raw, err := json.Marshal(list)
+	if err != nil {
+		return ctx, errs.Wrap(errs.Internal, "meta: encode changed_by", err)
+	}
+	if patch[mChangedBy], err = value.JSONOf(raw); err != nil {
+		return ctx, errs.Wrap(errs.Internal, "meta: changed_by", err)
+	}
+	return store.WithCommitTrailers(ctx, trailers...), nil
 }
 
 // keyType is the registered type of key row k.
@@ -300,7 +392,7 @@ func (o ops) labelValue(ctx context.Context, k located, vn, label string) (strin
 // valueNotUsed refuses removing allowed value v of key k while a row
 // stores it (E_META_IN_USE, 3.8).
 func (o ops) valueNotUsed(ctx context.Context, k located, v located) error {
-	rows, err := o.metaRows(ctx)
+	rows, err := o.usedRows(ctx) // OV58: trashed rows count as uses
 	if err != nil {
 		return err
 	}
