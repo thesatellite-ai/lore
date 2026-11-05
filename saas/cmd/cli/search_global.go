@@ -226,7 +226,7 @@ you want to scope to one type. This is the cross-entity hammer.`,
 			// key are exact conditions (row_meta); then field:value terms
 			// naming a resource field (RES 3.12); the rest is free text,
 			// phrase-quoted where FTS5 would read - . : as syntax.
-			mconds, rest, err := metaSearchTerms(ctx, query)
+			mconds, rest, msens, err := metaSearchTerms(ctx, query)
 			if err != nil {
 				return err
 			}
@@ -249,7 +249,7 @@ you want to scope to one type. This is the cross-entity hammer.`,
 				var err error
 				switch {
 				case len(mconds) > 0:
-					hits, err = searchMetaTable(ctx, eng, t, mconds, ftsText, sc, perTableLimit)
+					hits, err = searchMetaTable(ctx, eng, t, mconds, msens, ftsText, sc, perTableLimit)
 				case len(conds) > 0 && t.entity == searchEntityResource:
 					hits, err = searchResourceFields(ctx, eng, t, conds, text, sc, perTableLimit)
 				case len(conds) > 0 && text == "":
@@ -511,17 +511,35 @@ func plainSnippet(s string) string { return snippetMarks.Replace(s) }
 const searchEntityResource = "resource"
 
 // resourceCond is one field:value term of a search: a resource field name
-// and the value it must equal (case-insensitive, as text).
+// and the value it must equal (case-insensitive, as text). sensitive is
+// set when any kind in the lens marks the field sensitive (fail closed on
+// a name shared by kinds): the term still matches the real value, but the
+// value is never printed (OV34/OV39-SENSCOND).
 type resourceCond struct {
 	field, value string
+	sensitive    bool
+}
+
+// searchMask is what a search prints in place of a sensitive value a term
+// matched on (OV34/OV39-SENSCOND; the same mark as logic/meta.Show and the
+// masked lens).
+const searchMask = "•••"
+
+// saidValue is "name: value" for a hit's snippet, the value masked when
+// the term is on a sensitive field or key (OV34/OV39-SENSCOND).
+func saidValue(name, v string, sensitive bool) string {
+	if sensitive {
+		v = searchMask
+	}
+	return name + ": " + v
 }
 
 // resourceFieldTerms splits query (RES 3.12: "field:value in a search
 // matches resource fields") into conditions, for every term name:value or
 // name=value whose name is a field of some kind in this repo's view, and
 // the remaining free text. With no such term it returns no conditions and
-// the query unchanged. Sensitive values are masked in the lens, so a
-// condition on a sensitive field never matches (fail closed).
+// the query unchanged. A condition on a sensitive field matches the real
+// value and is printed masked (OV34/OV39-SENSCOND).
 func resourceFieldTerms(ctx context.Context, query string) ([]resourceCond, string, error) {
 	rest := strings.Fields(query)
 	if !slices.ContainsFunc(rest, func(w string) bool { i := strings.IndexAny(w, ":="); return i > 0 && i < len(w)-1 }) {
@@ -535,8 +553,8 @@ func resourceFieldTerms(ctx context.Context, query string) ([]resourceCond, stri
 	text := rest[:0:0]
 	for _, w := range rest {
 		i := strings.IndexAny(w, ":=")
-		if i > 0 && i < len(w)-1 && known[w[:i]] {
-			conds = append(conds, resourceCond{field: w[:i], value: strings.Trim(w[i+1:], `"'`)})
+		if sens, ok := known[w[:i]]; i > 0 && i < len(w)-1 && ok {
+			conds = append(conds, resourceCond{field: w[:i], value: strings.Trim(w[i+1:], `"'`), sensitive: sens})
 			continue
 		}
 		text = append(text, w)
@@ -544,9 +562,11 @@ func resourceFieldTerms(ctx context.Context, query string) ([]resourceCond, stri
 	return conds, strings.Join(text, " "), nil
 }
 
-// resourceFieldNames is every kind field name in this repo's lens.
+// resourceFieldNames is every kind field name in this repo's lens, mapped
+// to whether any kind marks it sensitive (OV34/OV39-SENSCOND: a name that
+// is sensitive anywhere is printed masked).
 func resourceFieldNames(ctx context.Context) (map[string]bool, error) {
-	res, err := coreApp.SQL(ctx, opssql.Request{Query: `SELECT DISTINCT name FROM kind_fields_all`, Timeout: opssql.DefaultTimeout})
+	res, err := coreApp.SQL(ctx, opssql.Request{Query: `SELECT name, MAX(COALESCE(sensitive, 0)) FROM kind_fields_all GROUP BY name`, Timeout: opssql.DefaultTimeout})
 	if err != nil {
 		if errs.Has(err, errs.InvalidInput) {
 			return map[string]bool{}, nil // no kinds table in this cache yet
@@ -555,8 +575,8 @@ func resourceFieldNames(ctx context.Context) (map[string]bool, error) {
 	}
 	out := map[string]bool{}
 	for _, r := range res.Rows {
-		if len(r) > 0 {
-			out[r[0].String()] = true
+		if len(r) > 1 {
+			out[r[0].String()] = r[1].String() != "0" // MAX(COALESCE(sensitive, 0)): 0 or 1
 		}
 	}
 	return out, nil
@@ -575,10 +595,12 @@ func searchResourceFields(ctx context.Context, eng *engine.Engine, t globalSearc
 	for _, c := range conds {
 		q += ` AND EXISTS (SELECT 1 FROM kind_fields_all f WHERE f.kind_id = r.kind AND f.name = ` + sqlText(c.field) +
 			` AND lower(CAST(json_extract(r.fields, '$."' || f.id || '".v') AS TEXT)) = lower(` + sqlText(c.value) + `))`
-		said = append(said, c.field+": "+c.value)
+		said = append(said, saidValue(c.field, c.value, c.sensitive))
 	}
 	q += ` ORDER BY r.name`
-	res, err := coreApp.SQL(ctx, opssql.Request{Query: q, Timeout: opssql.DefaultTimeout})
+	// OV34/OV39-SENSCOND: match on the real value (unmasked lens); only the
+	// id comes back and the snippet masks a sensitive term's value.
+	res, err := coreApp.SQL(ctx, opssql.Request{Query: q, ShowSensitive: true, Timeout: opssql.DefaultTimeout})
 	if err != nil {
 		return nil, err
 	}
@@ -626,25 +648,33 @@ func noMetaKeys(string) bool { return false }
 // repo's lens can see, from the registry or from the rows' own entries)
 // and the remaining words. A query without ':', '=' or '?' is not looked
 // at (no lens query).
-func metaSearchTerms(ctx context.Context, query string) ([]metaquery.Term, string, error) {
+//
+// The returned set names every key some entry or the registry marks
+// sensitive (OV34/OV39-SENSCOND: a condition on it matches the real value
+// and its value is printed masked; see metaKeySensitive).
+func metaSearchTerms(ctx context.Context, query string) ([]metaquery.Term, string, map[string]bool, error) {
 	if !strings.ContainsAny(query, ":=?") {
-		return nil, query, nil
+		return nil, query, nil, nil
 	}
 	known := map[string]bool{}
+	sensitive := map[string]bool{}
 	for _, q := range []string{
-		`SELECT DISTINCT key_name FROM row_meta_all WHERE item_idx = -1`,
-		`SELECT DISTINCT name FROM meta_keys_all`,
+		`SELECT key_name, MAX(COALESCE(sensitive, 0)) FROM row_meta_all WHERE item_idx = -1 GROUP BY key_name`,
+		`SELECT name, MAX(COALESCE(sensitive, 0)) FROM meta_keys_all GROUP BY name`,
 	} {
 		res, err := coreApp.SQL(ctx, opssql.Request{Query: q, Timeout: opssql.DefaultTimeout})
 		if err != nil {
 			if errs.Has(err, errs.InvalidInput) {
 				continue // no such view in this cache yet
 			}
-			return nil, "", err
+			return nil, "", nil, err
 		}
 		for _, r := range res.Rows {
-			if len(r) > 0 {
+			if len(r) > 1 {
 				known[r[0].String()] = true
+				if r[1].String() != "0" { // MAX(COALESCE(sensitive, 0)): 0 or 1
+					sensitive[r[0].String()] = true
+				}
 			}
 		}
 	}
@@ -657,16 +687,27 @@ func metaSearchTerms(ctx context.Context, query string) ([]metaquery.Term, strin
 		}
 		conds = append(conds, t)
 	}
-	return conds, strings.Join(words, " "), nil
+	return conds, strings.Join(words, " "), sensitive, nil
+}
+
+// metaKeySensitive tells whether a meta term's name (a key, or key.path
+// for an object field) is in sensitive, by itself or by its top-level key
+// (OV34/OV39-SENSCOND; fail closed: either marks it).
+func metaKeySensitive(name string, sensitive map[string]bool) bool {
+	if sensitive[name] {
+		return true
+	}
+	top, _, ok := strings.Cut(name, ".")
+	return ok && sensitive[top]
 }
 
 // searchMetaTable is one table's entry when the query has metadata
 // conditions: rows of this repo matching every condition exactly through
 // row_meta (case-insensitive text equality; an allowed value by its name),
-// narrowed to the full-text hits of ftsText when it is not empty. In the
-// masked lens a sensitive value reads as the mask, so a condition on it
-// never matches (fail closed, like OV34-SENSCOND); key? still answers.
-func searchMetaTable(ctx context.Context, eng *engine.Engine, t globalSearchTarget, conds []metaquery.Term, ftsText string, sc globalSearchScope, perTable int) ([]globalSearchHit, error) {
+// narrowed to the full-text hits of ftsText when it is not empty. A
+// condition on a sensitive key matches the real value (unmasked lens) and
+// its value is printed masked (OV34/OV39-SENSCOND); key? is unchanged.
+func searchMetaTable(ctx context.Context, eng *engine.Engine, t globalSearchTarget, conds []metaquery.Term, sensitive map[string]bool, ftsText string, sc globalSearchScope, perTable int) ([]globalSearchHit, error) {
 	q := `SELECT DISTINCT r.entity_id FROM row_meta_all r WHERE r.source = ` + sqlText(string(store.SourceRepo)) +
 		` AND r.entity_table = ` + sqlText(t.table.String()) + ` AND r.item_idx = -1`
 	var said []string
@@ -674,7 +715,7 @@ func searchMetaTable(ctx context.Context, eng *engine.Engine, t globalSearchTarg
 		match := `x.item_idx = -1`
 		if c.Kind == metaquery.Cond {
 			match = `x.item_idx >= 0 AND lower(x.value_text) = lower(` + sqlText(c.Value) + `)`
-			said = append(said, c.Name()+": "+c.Value)
+			said = append(said, saidValue(c.Name(), c.Value, metaKeySensitive(c.Name(), sensitive)))
 		} else {
 			said = append(said, c.Name()+"?")
 		}
@@ -682,7 +723,9 @@ func searchMetaTable(ctx context.Context, eng *engine.Engine, t globalSearchTarg
 			` AND x.entity_id = r.entity_id AND x.key_name = ` + sqlText(c.Name()) + ` AND ` + match + `)`
 	}
 	q += ` ORDER BY r.entity_id`
-	res, err := coreApp.SQL(ctx, opssql.Request{Query: q, Timeout: opssql.DefaultTimeout})
+	// OV34/OV39-SENSCOND: match on the real value; only ids come back and
+	// the snippet masks a sensitive key's value.
+	res, err := coreApp.SQL(ctx, opssql.Request{Query: q, ShowSensitive: true, Timeout: opssql.DefaultTimeout})
 	if err != nil {
 		if errs.Has(err, errs.InvalidInput) {
 			return nil, nil // no row_meta view in this cache yet
