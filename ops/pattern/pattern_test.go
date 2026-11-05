@@ -211,8 +211,9 @@ func TestV1RowReads(t *testing.T) {
 	if want := fmt.Sprintf(v1Show, h.Project); got != want {
 		t.Errorf("v1 row --json\n%s\nwant v0.1.17's\n%s", got, want)
 	}
-	if !strings.Contains(opstest.Text(h.Must("pattern.list", "")), "PA  "+id) {
-		t.Error("list misses the v1 row")
+	// The v1 row is archived: listed only with --archived (OV30-2).
+	if !strings.Contains(opstest.Text(h.Must("pattern.list", `{"archived":true}`)), "PA  "+id) {
+		t.Error("list --archived misses the v1 row")
 	}
 	h.Must("pattern.edit", `{"id":"`+id+`","title":"edited"}`)
 	if got := contenttest.Str(t, h.JSON(h.Must("pattern.show", `{"id":"`+id+`"}`)), "data", "title"); got != "edited" {

@@ -143,7 +143,8 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	return o.c.Create(ctx, in.To, fields)
 }
 
-// list returns the live playbooks (archived ones too, as v0.1.17).
+// list returns the live playbooks; archived ones only with --archived
+// (OV30-2, applied by Narrow).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	ctx = in.Deleted(ctx, o.c.Table) // DELETION 3.2: --include-deleted / --deleted-only
 	project, err := o.c.ProjectFilter(ctx, in.Project)

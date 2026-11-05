@@ -15,11 +15,9 @@ type MetaFlags = metalist.Flags
 
 // Narrow applies the metadata flags to listed rows: keeps the matching
 // ones in --sort order and returns the note lines the list prints after
-// its rows. No flag: rows unchanged, nothing read.
+// its rows. Archived rows are left out unless --archived (OV30-2); with
+// no other flag nothing is read.
 func (o Ops) Narrow(ctx context.Context, rows []Listed, f MetaFlags) ([]Listed, []string, error) {
-	if f.Empty() {
-		return rows, f.TrashNotes(rowsOf(rows)), nil
-	}
 	plain := make([]row.Row, len(rows))
 	for i, l := range rows {
 		plain[i] = l.Row

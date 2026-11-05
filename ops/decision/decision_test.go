@@ -29,8 +29,8 @@ func show(t *testing.T, h *opstest.H, id string) decision.Record {
 // TestTextMatchesV017 compares every human line with v0.1.17's output for
 // the same steps (captured with the 0.1.17 binary, ids replaced): the add
 // line keeps v0.1.17's trailing space, a superseded decision's status
-// becomes superseded, and list shows archived decisions (v0.1.17 had no
-// --archived on decision list).
+// becomes superseded, and list shows archived decisions only with
+// --archived (OV30-2 changed v0.1.17, which listed them always).
 func TestTextMatchesV017(t *testing.T) {
 	h := opstest.New(t)
 	r := h.Must(decision.OpAdd, `{"title":"Use SQLite","body":"local first"}`)
@@ -45,8 +45,11 @@ func TestTextMatchesV017(t *testing.T) {
 	add(t, h, `{"title":"Use Postgres","body":"server","supersedes":"`+d1+`"}`)
 	h.Must(decision.OpArchive, `{"id":"`+d1+`"}`)
 	want := "dec_ID [superseded] Use SQLite\ndec_ID [accepted] T\ndec_ID [accepted] Use Postgres\n"
-	if got := opstest.IDPattern(opstest.Text(h.Must(decision.OpList, ``))); got != want {
-		t.Fatalf("list\n%q\nwant\n%q", got, want)
+	if got := opstest.IDPattern(opstest.Text(h.Must(decision.OpList, `{"archived":true}`))); got != want {
+		t.Fatalf("list --archived\n%q\nwant\n%q", got, want)
+	}
+	if got, want := opstest.IDPattern(opstest.Text(h.Must(decision.OpList, ``))), "dec_ID [accepted] T\ndec_ID [accepted] Use Postgres\n"; got != want {
+		t.Fatalf("list (archived hidden, OV30-2)\n%q\nwant\n%q", got, want)
 	}
 	if got := opstest.IDPattern(opstest.Text(h.Must(decision.OpSearch, `{"query":"sqlite","include_archived":true}`))); got != "dec_ID [superseded] Use SQLite\n" {
 		t.Fatalf("search %q", got)

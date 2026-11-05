@@ -30,7 +30,6 @@ var spec = contenttest.Spec{
 		return contenttest.Str(t, rec, "id") + "\n  title:    " + contenttest.Str(t, rec, "title") + "\n  taken_at: " +
 			taken(t, rec).Format(time.RFC3339) + "\n\n" + contenttest.Str(t, rec, "body") + "\n"
 	},
-	ListHidesArchived: true,
 }
 
 func TestSnapshotConformance(t *testing.T) {

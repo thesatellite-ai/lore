@@ -8,16 +8,14 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 )
 
-// MetaFlags are the shared --meta / --place / --sort list flags (METADATA
-// 3.7); a list input embeds them.
+// MetaFlags are the shared --meta / --place / --sort / --archived list
+// flags (METADATA 3.7, 3.19); a list input embeds them.
 type MetaFlags = metalist.Flags
 
 // Narrow applies the metadata flags to listed rows: keeps the matching
 // ones in --sort order and returns the note lines the list prints.
+// --archived is a no-op on work tables without archived_at (OV30-2).
 func Narrow(ctx context.Context, env Env, items []Sourced, f MetaFlags) ([]Sourced, []string, error) {
-	if f.Empty() {
-		return items, f.TrashNotes(rowsOf(items)), nil
-	}
 	rows := make([]row.Row, len(items))
 	for i, it := range items {
 		rows[i] = it.Row

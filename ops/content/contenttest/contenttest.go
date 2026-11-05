@@ -76,9 +76,6 @@ type Spec struct {
 	// ShowText is the human show text from the row's --json record; nil
 	// means "<Badge>  <id>\n".
 	ShowText func(t testing.TB, rec string) string
-	// ListHidesArchived: list leaves archived rows out (v0.1.17 snapshot
-	// list did; the other nouns listed them).
-	ListHidesArchived bool
 	// SearchLine is one human search line; nil means "<id> <title>\n".
 	SearchLine func(id, title, body string) string
 	// Badge is v0.1.17's two-letter list badge.
@@ -633,10 +630,13 @@ func checkArchive(t *testing.T, s Spec, r Runner) {
 	if !strings.Contains(JSON(t, must(t, r, s.Noun+".show", `{"id":"`+id+`"}`)), `"archived_at"`) {
 		t.Error("show: no archived_at after archive")
 	}
-	// v0.1.17 list showed archived rows too (snapshot hid them); search
-	// hides them.
-	if listed := strings.Contains(Text(must(t, r, s.Noun+".list", "")), id); listed == s.ListHidesArchived {
-		t.Errorf("archived row listed=%v, want %v (v0.1.17)", listed, !s.ListHidesArchived)
+	// OV30-2: every list hides archived rows unless --archived (v0.1.17
+	// hid them only on snapshot); search hides them too.
+	if strings.Contains(Text(must(t, r, s.Noun+".list", "")), id) {
+		t.Error("list shows an archived row without --archived (OV30-2)")
+	}
+	if !strings.Contains(Text(must(t, r, s.Noun+".list", `{"archived":true}`)), id) {
+		t.Error("list --archived misses the archived row")
 	}
 	if strings.Contains(JSON(t, must(t, r, s.Noun+".search", `{"query":"retry"}`)), id) {
 		t.Error("search shows an archived row")

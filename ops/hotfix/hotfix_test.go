@@ -16,8 +16,8 @@ func add(t *testing.T, h *opstest.H, input string) string {
 
 // TestTextMatchesV017 compares each human line with v0.1.17's for the same
 // steps (0.1.17 binary, ids replaced): "⚠ <id> — <title> [<severity>]",
-// default severity high, list shows the body and keeps archived rows,
-// search shows the title.
+// default severity high, list shows the body, search shows the title;
+// archived rows are listed only with --archived (OV30-2 changed v0.1.17).
 func TestTextMatchesV017(t *testing.T) {
 	h := opstest.New(t)
 	r := h.Must(hotfix.OpAdd, `{"title":"Flaky CI","body":"Rerun once"}`)
@@ -34,7 +34,8 @@ func TestTextMatchesV017(t *testing.T) {
 		{hotfix.OpSearch, `{"query":"ci"}`, "hfx_ID [high] Flaky CI\n"},
 		{hotfix.OpEdit, `{"id":"` + h1 + `","severity":"low"}`, "✓ hfx_ID updated\n"},
 		{hotfix.OpArchive, `{"id":"` + h1 + `"}`, "✓ hfx_ID archived\n"},
-		{hotfix.OpList, ``, "hfx_ID [low] Rerun once\nhfx_ID [critical] boom\n"},
+		{hotfix.OpList, ``, "hfx_ID [critical] boom\n"},
+		{hotfix.OpList, `{"archived":true}`, "hfx_ID [low] Rerun once\nhfx_ID [critical] boom\n"},
 	}
 	for _, s := range steps {
 		if got := opstest.IDPattern(opstest.Text(h.Must(s.op, s.input))); got != s.want {

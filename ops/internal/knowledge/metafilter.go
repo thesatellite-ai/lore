@@ -8,17 +8,16 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 )
 
-// MetaFlags are the shared --meta / --place / --sort list flags (METADATA
-// 3.7); a list input embeds them.
+// MetaFlags are the shared --meta / --place / --sort / --archived list
+// flags (METADATA 3.7, 3.19); a list input embeds them.
 type MetaFlags = metalist.Flags
 
 // Narrow applies the metadata flags to listed items: keeps the matching
 // ones in --sort order and returns the note lines (unknown key, skipped,
-// not checked) the list prints after its rows.
+// not checked) the list prints after its rows. Archived rows are left
+// out unless --archived (OV30-2), so decision and hotfix lists, which
+// read archived rows, hide them like rule list.
 func Narrow(ctx context.Context, env Env, items []Item, f MetaFlags) ([]Item, []string, error) {
-	if f.Empty() {
-		return items, f.TrashNotes(rowsOf(items)), nil
-	}
 	rows := make([]row.Row, len(items))
 	for i, it := range items {
 		rows[i] = it.Row
