@@ -30,10 +30,10 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
-// releaseBaseURL is the repository page releases hang off. A variable only
-// so tests point it at an httptest server; never read from the environment
-// (a redirected download source would be a supply-chain hole).
-var releaseBaseURL = "https://github.com/thesatellite-ai/lore"
+// DefaultReleaseBase is the repository page releases hang off
+// (Updater.ReleaseBase "" means it). Never read from the environment: a
+// redirected download source would be a supply-chain hole.
+const DefaultReleaseBase = "https://github.com/thesatellite-ai/lore"
 
 // checksumsFile is goreleaser's checksum.name_template.
 const checksumsFile = "checksums.txt"
@@ -60,8 +60,11 @@ type releaseClient struct {
 // newReleaseClient never follows redirects on its own: latestTag needs the
 // Location header itself; fetch follows them by hand (GitHub serves assets
 // from a CDN host behind a 302).
-func newReleaseClient(timeout time.Duration, version string) releaseClient {
-	return releaseClient{base: strings.TrimRight(releaseBaseURL, "/"), version: version, http: &http.Client{
+func newReleaseClient(base string, timeout time.Duration, version string) releaseClient {
+	if base == "" {
+		base = DefaultReleaseBase
+	}
+	return releaseClient{base: strings.TrimRight(base, "/"), version: version, http: &http.Client{
 		Timeout:       timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}

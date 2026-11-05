@@ -75,6 +75,21 @@ type Updater struct {
 	// Confirmed is the caller's yes: it allows a downgrade into a project
 	// the older binary could not write (8.9).
 	Confirmed bool
+	// ReleaseBase is the repository page releases hang off; "" means
+	// DefaultReleaseBase. Tests point it at a local server.
+	ReleaseBase string
+	// VersionProbe returns the binary_version of the binary at a path (the
+	// new binary's smoke test, and the "already installed" check after
+	// waiting for the lock); nil means ProbeVersion. Tests fake it.
+	VersionProbe func(ctx context.Context, bin string) (string, error)
+}
+
+// probe is the version probe this upgrade uses.
+func (u Updater) probe(ctx context.Context, bin string) (string, error) {
+	if u.VersionProbe != nil {
+		return u.VersionProbe(ctx, bin)
+	}
+	return ProbeVersion(ctx, bin)
 }
 
 // sourceUpdateHint is how a source build is updated (8.8).
@@ -100,7 +115,7 @@ func (u Updater) Run(ctx context.Context, out io.Writer, f Flags) error {
 		return err
 	}
 	pin := effectivePin(meta)
-	rc := newReleaseClient(upgradeHTTPTimeout, u.Version)
+	rc := newReleaseClient(u.ReleaseBase, upgradeHTTPTimeout, u.Version)
 	newest := func() (string, error) { return rc.latestTag(ctx) }
 	target, err := chooseTarget(f.Version, pin, f.IgnorePin, os.Getenv(envCI) == "true", newest)
 	if err != nil {
@@ -223,7 +238,7 @@ func (u Updater) upgradeByScript(ctx context.Context, out io.Writer, rc releaseC
 	}
 	defer unlock()
 	// The first upgrade may have finished while this one waited (8.9).
-	if now, verr := runVersion(ctx, exe); verr == nil && normVersion(now) == normVersion(tag) {
+	if now, verr := u.probe(ctx, exe); verr == nil && normVersion(now) == normVersion(tag) {
 		if _, werr := fmt.Fprintf(out, "already %s\n", normVersion(tag)); werr != nil {
 			return werr
 		}
@@ -281,7 +296,7 @@ func (u Updater) upgradeByScript(ctx context.Context, out io.Writer, rc releaseC
 			_ = os.Remove(tmp) // never leave a half-installed binary behind
 		}
 	}()
-	got, err := runVersion(ctx, tmp)
+	got, err := u.probe(ctx, tmp)
 	if err != nil || normVersion(got) != normVersion(tag) {
 		return errs.Wrap(errs.UpgradeChecksum,
 			fmt.Sprintf("the new binary does not run as %s (got %q)", normVersion(tag), got), err).
@@ -342,9 +357,9 @@ func (u Updater) lockUpgrade() (func(), error) {
 // versionProbeTimeout bounds the new binary's smoke test.
 const versionProbeTimeout = 30 * time.Second
 
-// runVersion runs `<bin> version --json` and returns binary_version (the
-// stable JSON contract of version.go). A variable so tests can fake it.
-var runVersion = func(ctx context.Context, bin string) (string, error) {
+// ProbeVersion runs `<bin> version --json` and returns binary_version (the
+// stable JSON contract of the version command); Updater's default probe.
+func ProbeVersion(ctx context.Context, bin string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, versionProbeTimeout)
 	defer cancel()
 	b, err := exec.CommandContext(ctx, bin, "version", "--json").Output()

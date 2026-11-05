@@ -28,7 +28,10 @@ func (a *App) Upgrader(context.Context) (opsselfupgrade.Upgrader, error) {
 	if herr != nil {
 		userHome = ""
 	}
-	return selfUpgrader{u: selfupdate.Updater{Version: a.opts.Version, Home: a.opts.Home, Dir: dir, UserHome: userHome}}, nil
+	return selfUpgrader{u: selfupdate.Updater{
+		Version: a.opts.Version, Home: a.opts.Home, Dir: dir, UserHome: userHome,
+		ReleaseBase: selfupdate.DefaultReleaseBase, VersionProbe: selfupdate.ProbeVersion,
+	}}, nil
 }
 
 // selfUpgrader adapts selfupdate.Updater to the operation's port.

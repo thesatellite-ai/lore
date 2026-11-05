@@ -217,10 +217,7 @@ func TestUpgradeAgainstLocalReleaseServer(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			srv := httptest.NewServer(c.rel.handler())
 			defer srv.Close()
-			old := releaseBaseURL
-			releaseBaseURL = srv.URL
-			defer func() { releaseBaseURL = old }()
-			rc := newReleaseClient(5*time.Second, "0.1.19")
+			rc := newReleaseClient(srv.URL, 5*time.Second, "0.1.19")
 			latest, err := rc.latestTag(ctx)
 			if err != nil || latest != c.rel.tag {
 				t.Fatalf("latest %q %v", latest, err)
@@ -257,10 +254,7 @@ func TestUpgradeAgainstLocalReleaseServer(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 	}))
 	defer slow.Close()
-	old := releaseBaseURL
-	releaseBaseURL = slow.URL
-	defer func() { releaseBaseURL = old }()
-	if _, err := newReleaseClient(50*time.Millisecond, "0.1.19").latestTag(ctx); !errs.Has(err, errs.Offline) {
+	if _, err := newReleaseClient(slow.URL, 50*time.Millisecond, "0.1.19").latestTag(ctx); !errs.Has(err, errs.Offline) {
 		t.Fatalf("slow server: %v", err)
 	}
 }
@@ -275,11 +269,7 @@ func TestUpgradeScriptSwapEndToEnd(t *testing.T) {
 	rel := fakeRelease{tag: "v0.1.20", archive: archive, sums: hex.EncodeToString(sum[:]) + "  " + name + "\n"}
 	srv := httptest.NewServer(rel.handler())
 	defer srv.Close()
-	old := releaseBaseURL
-	releaseBaseURL = srv.URL
-	defer func() { releaseBaseURL = old }()
-	oldRun := runVersion
-	runVersion = func(_ context.Context, bin string) (string, error) {
+	probe := func(_ context.Context, bin string) (string, error) {
 		b, err := os.ReadFile(filepath.Clean(bin))
 		if err != nil {
 			return "", err
@@ -289,13 +279,12 @@ func TestUpgradeScriptSwapEndToEnd(t *testing.T) {
 		}
 		return "0.1.19", nil
 	}
-	defer func() { runVersion = oldRun }()
-	u := Updater{Version: "0.1.19", Home: t.TempDir()}
+	u := Updater{Version: "0.1.19", Home: t.TempDir(), ReleaseBase: srv.URL, VersionProbe: probe}
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "lore")
 	writeExecutable(t, exe, "old")
 	var out bytes.Buffer
-	if err := u.upgradeByScript(context.Background(), &out, newReleaseClient(5*time.Second, "0.1.19"), exe, "0.1.19", "v0.1.20"); err != nil {
+	if err := u.upgradeByScript(context.Background(), &out, newReleaseClient(srv.URL, 5*time.Second, "0.1.19"), exe, "0.1.19", "v0.1.20"); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 	if b, _ := os.ReadFile(filepath.Clean(exe)); !strings.Contains(string(b), "echo new") {
@@ -307,7 +296,7 @@ func TestUpgradeScriptSwapEndToEnd(t *testing.T) {
 	}
 	// Second run finds the target installed (the race case of 8.9).
 	out.Reset()
-	if err := u.upgradeByScript(context.Background(), &out, newReleaseClient(5*time.Second, "0.1.19"), exe, "0.1.19", "v0.1.20"); err != nil || !strings.Contains(out.String(), "already 0.1.20") {
+	if err := u.upgradeByScript(context.Background(), &out, newReleaseClient(srv.URL, 5*time.Second, "0.1.19"), exe, "0.1.19", "v0.1.20"); err != nil || !strings.Contains(out.String(), "already 0.1.20") {
 		t.Fatalf("%v %q", err, out.String())
 	}
 }
