@@ -69,6 +69,21 @@ func proseValue(match, rest string) bool {
 	return !twoLetterRe.MatchString(after)
 }
 
+// placeholderValue is password_pair's filter with the prose step off
+// (policy secrets.password_pair_prose_filter: off): only an unquoted
+// placeholder (3.4 step 3) is dropped; every other match is a hit.
+func placeholderValue(match, _ string) bool {
+	loc := pairValueRe.FindStringIndex(match)
+	if loc == nil {
+		return true
+	}
+	v := match[loc[1]:]
+	if strings.HasPrefix(v, `"`) || strings.HasPrefix(v, `'`) {
+		return true
+	}
+	return !passwordPairStopwords[strings.ToLower(strings.TrimRight(v, ".!?"))]
+}
+
 func isLetter(b byte) bool { return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') }
 
 // tokenUser is the url_token_user post-filter (14.6): the URL's user name
@@ -222,7 +237,11 @@ func (s *Scanner) keep(text string, fs []scan.Finding) []scan.Finding {
 	for _, f := range fs {
 		in := f.Offset >= 0 && f.Offset+f.Length <= len(text)
 		if in && s.builtin[f.RuleID] {
-			if pf, ok := postFilters[f.RuleID]; ok && (!s.noProse || f.RuleID != RulePasswordPair) && !pf(text[f.Offset:f.Offset+f.Length], lineRest(text, f.Offset+f.Length)) {
+			pf, ok := postFilters[f.RuleID]
+			if ok && s.noProse && f.RuleID == RulePasswordPair {
+				pf = placeholderValue // prose filter off: 3.4 step 2 goes, the stopwords (step 3) stay
+			}
+			if ok && !pf(text[f.Offset:f.Offset+f.Length], lineRest(text, f.Offset+f.Length)) {
 				continue
 			}
 		}
