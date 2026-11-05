@@ -530,9 +530,12 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 		return TrashResult{}, err
 	}
 	for _, t := range res.Rows {
-		if err := e.checkParents(ctx, t.Row, set); err != nil {
-			return TrashResult{}, err
+		if perr := e.checkParents(ctx, t.Row, set); perr != nil {
+			return TrashResult{}, perr
 		}
+	}
+	if err = e.rescreen(ctx, res.Rows); err != nil {
+		return TrashResult{}, err
 	}
 	if b, perr := ids.Parse[ids.Batch](res.Batch); perr == nil {
 		if _, ok := BatchOf(ctx); !ok {
@@ -601,6 +604,30 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 		}
 	}
 	return out, nil
+}
+
+// rescreen re-runs the secret check of a new write on every row a restore
+// brings back (DELETION 3.3 step 3, 4.6): a pattern added since the delete,
+// or a hand edit of the trashed file, refuses the whole restore with the
+// scanner's own code (E_SECRET_DETECTED, or E_NEEDS_CONFIRM under
+// secrets.on_detect ask) before anything is written; under redact the
+// match is replaced as on any write. Findings the row's secret_allows
+// already accept stay accepted.
+func (e *Engine) rescreen(ctx context.Context, rows []Trashed) error {
+	cl := e.callOf(ctx)
+	for i, t := range rows {
+		names := make([]string, 0, len(t.Row.Fields))
+		for k := range t.Row.Fields {
+			names = append(names, k)
+		}
+		slices.Sort(names)
+		sc, err := e.screen(ctx, cl, t.Store, t.Row.ID, t.Row.Fields, names)
+		if err != nil {
+			return err
+		}
+		rows[i].Row.Fields = sc.fields
+	}
+	return nil
 }
 
 // checkParents refuses to restore r while a cascade parent outside set is
