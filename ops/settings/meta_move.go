@@ -238,6 +238,11 @@ func (o ops) metaMoveKey(ctx context.Context, in MetaMoveIn) (MetaMoveOut, error
 	case store.SourceRepo:
 		return MetaMoveOut{}, errs.New(errs.InvalidInput, "meta move moves a key outward; "+name+" is in "+string(k.Src)+" and the repo would hide it from every other place").
 			WithHint("keep it where it is, or add a repo key under another name")
+	case store.SourceMachine:
+		// a key is a shared definition; the machine store holds only this
+		// machine's machine-local rows, so no key can live there (P3-META-9)
+		return MetaMoveOut{}, errs.New(errs.InvalidInput, "meta move cannot move "+name+" into the machine store: it holds only this machine's machine-local rows, never meta keys").
+			WithHint("pick a project folder, the org folder, the store root or personal")
 	}
 	have, err := liveRows(ctx, o.env, []store.Source{to}, schema.TableMetaKeys)
 	if err != nil {
