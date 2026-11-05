@@ -66,6 +66,7 @@ func Run(t *testing.T, newFixture NewFixture) {
 		{"ReadOnlyRefusesWrites", testReadOnly},
 		{"ConcurrentWritersLoseNothing", testConcurrent},
 		{"CloseIdempotent", testClose},
+		{"AuditJournal", testAuditJournal},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, newFixture(t)) })
