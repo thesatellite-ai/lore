@@ -98,6 +98,17 @@ func (h *host) initCommand(wd string) *cobra.Command {
 				return errs.New(errs.InvalidInput, "init: run lore init "+args[0]+" as the whole command")
 			}
 			ctx := cmd.Context()
+			// OWNERQ-1: the project is rooted here, never at a .lore above (initsub.go).
+			undo, err := rootInitAt(wd)
+			if err != nil {
+				return err
+			}
+			ok := false
+			defer func() {
+				if !ok {
+					undo()
+				}
+			}()
 			if pid, err := h.app.Project(ctx); err == nil {
 				if local {
 					return errs.New(errs.AlreadyInitialized, "a lore project already exists here ("+pid.String()+")")
@@ -107,6 +118,7 @@ func (h *host) initCommand(wd string) *cobra.Command {
 				if h.live != nil {
 					h.live.Prime(ctx)
 				}
+				ok = true
 				_, err = fmt.Fprintf(cmd.OutOrStdout(), "✓ adopted the shared lore project at %s\n    project_id: %s\n", wd, pid)
 				return err
 			} else if !errs.Has(err, errs.NotFound) {
@@ -131,10 +143,14 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			if serr := h.app.SeedRepoMeta(ctx, pid); serr != nil {
 				return serr
 			}
+			if ierr := h.inheritRepoID(ctx, wd); ierr != nil { // OWNERQ-1: one repo id per monorepo (initsub.go)
+				return ierr
+			}
 			repoID, _, err := h.app.EnsureRepoIdentity(ctx)
 			if err != nil {
 				return err
 			}
+			ok = true
 			ensureGitignore(ctx, cmd, wd)
 			if h.live != nil {
 				h.live.Prime(ctx) // the first fetch happens here, as v0.1.17's init did
