@@ -169,6 +169,9 @@ const (
 	// FORMAT_EVOLUTION rule 4, FQ5.
 	MigrateRollbackLoses Code = "E_MIGRATE_ROLLBACK_LOSES"
 	URLUserinfo          Code = "E_URL_CREDENTIALS"
+	// RepoURL is a repo address the normaliser refuses (`lore repo set-url`,
+	// PROVENANCE 10.4, CLI_REFERENCE 5).
+	RepoURL Code = "E_REPO_URL"
 	// Purged refuses any write that would bring a purged id back as a live
 	// row (update, create with the id, move, merge, restore): purged rows
 	// never come back (DELETION_DESIGN 3.5, DQ4; CLI_REFERENCE 5.5).
@@ -340,6 +343,7 @@ var table = map[Code]entry{
 	MigrateLocked:         {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
 	MigrateRollbackLoses:  {class: ClassMigrate, desc: "rolling back the migration would lose changes made after it; nothing was changed"},
 	URLUserinfo:           {class: ClassBadInput, desc: "a URL value holds credentials"},
+	RepoURL:               {class: ClassBadInput, desc: "a repo address the normaliser refuses"},
 	Purged:                {class: ClassRefused, desc: "the row was purged; only a tombstone is left"},
 	Refused:               {class: ClassRefused, desc: "a fixed lore rule refuses this; the message names the rule and what to do instead"},
 	InTrash:               {class: ClassRefused, desc: "an edit or delete of a row that is already in the trash"},
