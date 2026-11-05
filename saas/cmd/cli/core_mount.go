@@ -529,7 +529,7 @@ func ensureCoreGitignore(ctx context.Context) error {
 // driver, so the first pull of a row both sides wrote (an actor row on two
 // machines, F18) was a plain text conflict. "" = not in a lore project.
 func coreProjectRoot() string {
-	if pctx, err := projresolve.Resolve(projresolve.Inputs{}); err == nil {
+	if pctx, err := projresolve.Resolve(projresolve.Inputs{Dir: oldProjectDir()}); err == nil {
 		return pctx.ProjectRoot
 	}
 	cwd, err := os.Getwd()

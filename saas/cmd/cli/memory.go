@@ -77,6 +77,7 @@ func resolveContext(c *commonFlags) (*projresolve.Context, *ent.Client, error) {
 	}
 
 	ctx, err := projresolve.Resolve(projresolve.Inputs{
+		Dir:         oldProjectDir(),
 		FlagDB:      c.flagDB,
 		FlagProject: c.flagProject,
 		FlagRepo:    c.flagRepo,

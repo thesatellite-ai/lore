@@ -163,6 +163,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 	// 1. Resolve project context (errors don't fail the doctor — they go in
 	// the report so JSON consumers see structured status)
 	rctx, err := projresolve.Resolve(projresolve.Inputs{
+		Dir:         oldProjectDir(),
 		FlagDB:      f.flagDB,
 		FlagProject: f.flagProject,
 		FlagRepo:    f.flagRepo,

@@ -36,7 +36,7 @@ func coreSyncBefore(ctx context.Context, readOnly bool) {
 	if readOnly || os.Getenv(envReadOnly) == envValueOn {
 		return
 	}
-	rctx, err := projresolve.Resolve(projresolve.Inputs{})
+	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: oldProjectDir()})
 	if err != nil || !syncApplies(rctx) {
 		return
 	}
@@ -82,7 +82,7 @@ func coreFinishOptions(o lsync.Options) lsync.Options {
 // instead of failing E_AMBIGUOUS_PROJECT. Called only in that ambiguous
 // case; no lore.db, or not exactly one project in it, is no hint.
 func coreProjectHint(ctx context.Context) (string, bool) {
-	rctx, err := projresolve.Resolve(projresolve.Inputs{})
+	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: oldProjectDir()})
 	if err != nil {
 		return "", false
 	}

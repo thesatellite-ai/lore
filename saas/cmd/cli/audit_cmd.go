@@ -54,7 +54,7 @@ type auditVerifyResult struct {
 // openAuditDB opens the project DB with no sync pass and no session
 // registration (see file doc).
 func openAuditDB(c *commonFlags) (*sql.DB, *projresolve.Context, error) {
-	rctx, err := projresolve.Resolve(projresolve.Inputs{FlagDB: c.flagDB, FlagProject: c.flagProject})
+	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: oldProjectDir(), FlagDB: c.flagDB, FlagProject: c.flagProject})
 	if err != nil {
 		return nil, nil, mapResolveError(err)
 	}

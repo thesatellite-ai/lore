@@ -39,6 +39,7 @@ Strips macOS com.apple.quarantine xattr from the output so it can be opened
 on a fresh machine without right-click-Open friction.`,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, err := projresolve.Resolve(projresolve.Inputs{
+				Dir:    oldProjectDir(),
 				FlagDB: f.flagDB, FlagProject: f.flagProject,
 			})
 			if err != nil {
@@ -110,6 +111,7 @@ newest (later updated_at wins; the other version is kept under
 				return perr
 			}
 			rctx, err := projresolve.Resolve(projresolve.Inputs{
+				Dir:    oldProjectDir(),
 				FlagDB: f.flagDB, FlagProject: f.flagProject,
 			})
 			if err != nil {
@@ -248,6 +250,7 @@ Requires --confirm to make destructive changes.`,
 					"repair is destructive; pass --confirm to proceed")
 			}
 			rctx, err := projresolve.Resolve(projresolve.Inputs{
+				Dir:    oldProjectDir(),
 				FlagDB: f.flagDB, FlagProject: f.flagProject,
 			})
 			if err != nil {

@@ -392,11 +392,25 @@ func maybeMaterialize(ctx context.Context, c *commonFlags) error {
 	if c.flagDB != "" || os.Getenv(envDBPath) != "" {
 		return nil
 	}
+	return materializeAt(ctx, oldProjectDir())
+}
+
+// oldProjectDir is the folder old commands resolve the project from: the
+// nearest folder holding .lore/ at or above the working directory, without
+// leaving its git checkout (liveProjectRoot). Why: core writes from a repo
+// subfolder already found the project root while old reads (lore audit
+// verify, lore backup, ...) answered E_NOT_PROJECT_ROOT (OVERNIGHT Qs
+// subfolder). Outside a project it is the working directory itself, so
+// projresolve keeps its E_NOT_PROJECT_ROOT there.
+func oldProjectDir() string {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil
+		return ""
 	}
-	return materializeAt(ctx, cwd)
+	if root := liveProjectRoot(cwd); root != "" {
+		return root
+	}
+	return cwd
 }
 
 // materializeAt is maybeMaterialize for an explicit project root (the
