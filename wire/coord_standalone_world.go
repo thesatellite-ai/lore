@@ -891,7 +891,11 @@ func coordErr(err error) error {
 	case errors.As(err, &pe):
 		return errs.New(errs.InvalidInput, pe.Error())
 	case errors.Is(err, coord.ErrUnknownTask):
-		return errs.New(errs.NotFound, err.Error()).WithHint("`lore sync peek` shows rows not fetched yet")
+		// No hint here: the host's F1 answer (wire/host explainNotFound,
+		// v0.1.17 explainLiveNotFound) fills it for the id argument: a
+		// live tombstone or purge, else `lore sync peek <remote>/<branch>
+		// tasks`. It only adds a hint to an error that has none (later 218).
+		return errs.New(errs.NotFound, err.Error())
 	case errors.Is(err, coord.ErrNotOpen):
 		return errs.New(errs.InvalidInput, err.Error())
 	case errors.Is(err, signals.ErrNotHeld):

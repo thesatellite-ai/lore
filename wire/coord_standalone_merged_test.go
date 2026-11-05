@@ -10,6 +10,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/signals"
 	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/logic/merge"
+	"github.com/thesatellite-ai/lore/model/errs"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -251,5 +253,21 @@ func TestRecordMergedBranch_TwoClonesWriteTheSameRow(t *testing.T) {
 	}
 	if !strings.Contains(string(merged), `"merged_at"`) || !strings.Contains(string(merged), at.Format("2006-01-02T15:04:05")) {
 		t.Fatalf("merged copy lost merged_at: %s", merged)
+	}
+}
+
+// TestCoordUnknownTaskLeavesTheHintToTheHost (later.md 218): an unknown
+// task on a coordination command is E_NOT_FOUND with no hint of its own,
+// so the host's F1 answer (the `lore sync peek <remote>/<branch> tasks`
+// hint, or what live knows about the id) is the one the user sees; any
+// other coordination error keeps its own.
+func TestCoordUnknownTaskLeavesTheHintToTheHost(t *testing.T) {
+	t.Parallel()
+	var e *errs.Error
+	if err := coordErr(fmt.Errorf("%w: tsk_1", coord.ErrUnknownTask)); !errors.As(err, &e) || e.Code != errs.NotFound || e.Hint != "" {
+		t.Fatalf("unknown task: %v, want E_NOT_FOUND without a hint", err)
+	}
+	if err := coordErr(coord.ErrContended); !errors.As(err, &e) || e.Code != errs.Contended || e.Hint == "" {
+		t.Fatalf("a contended claim keeps its hint: %v", err)
 	}
 }
