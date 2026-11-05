@@ -275,3 +275,54 @@ func TestB11Sync_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 		t.Fatalf("both edits must be on the branch: %v", d)
 	}
 }
+
+// TestB11Sync_PeekAndPromote (TestE2E_PeekOtherBranch,
+// TestE2E_PromoteToMain): a rule written on a feature branch is not on
+// main; `sync peek feature/x rules` lists it without a checkout (and
+// --json is the sync.peek envelope); a bad ref is refused. `sync promote
+// <id> --to main` (after a --dry-run) commits it onto main without leaving
+// the branch; promoting onto the checked-out branch is refused.
+func TestB11Sync_PeekAndPromote(t *testing.T) {
+	s := newSyncSolo(t)
+	c := s.c
+	c.Git("checkout", "-q", "-b", "feature/x")
+	rule := addSyncRule(t, c, "urgent: never log tokens")
+	c.CommitAll("feature")
+	c.Git("checkout", "-q", "main")
+	c.MustLore("rule", "list").Never(t, "never log tokens")
+
+	r := c.Lore("sync", "peek", "feature/x", "rules")
+	bugRepoSyncHost.PendingOn(t, r, "E_UNSUPPORTED", "peek")
+	r.OK(t).Says(t, rule, "urgent: never log tokens")
+	type peekJSON struct {
+		Kind string `json:"kind"`
+		Data []struct {
+			Table string `json:"table"`
+			ID    string `json:"id"`
+		} `json:"data"`
+	}
+	pj := th.DecodeJSON[peekJSON](t, c.MustLore("sync", "peek", "feature/x", "--json"))
+	tables := map[string]bool{}
+	for _, d := range pj.Data {
+		tables[d.Table] = true
+	}
+	if pj.Kind != "sync.peek" || !tables["projects"] || !tables["rules"] {
+		t.Fatalf("peek --json: %+v", pj)
+	}
+	if bad := c.Lore("sync", "peek", "no-such-ref"); bad.Code == 0 {
+		t.Fatalf("a bad ref must be refused: %s", bad)
+	}
+	c.MustLore("rule", "list").Never(t, "never log tokens")
+
+	c.Git("checkout", "-q", "feature/x")
+	c.MustLore("sync", "promote", rule, "--to", "main", "--dry-run").Says(t, "would commit")
+	if bad := c.Lore("sync", "promote", rule, "--to", "feature/x"); bad.Code == 0 {
+		t.Fatalf("promote onto the checked-out branch must be refused: %s", bad)
+	}
+	c.MustLore("sync", "promote", rule, "--to", "main").Says(t, "not pushed")
+	if st := c.Status(); st != "" {
+		t.Fatalf("promote dirtied the checkout: %s", st)
+	}
+	c.Git("checkout", "-q", "main")
+	c.MustLore("rule", "list").Says(t, "never log tokens")
+}

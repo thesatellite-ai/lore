@@ -6,6 +6,8 @@ package wire
 // binary's opssync.Env (wire/host liveSync) delegates these verbs here.
 //
 //	install-action ─▶ reposync.Install (render, write or --dry-run)
+//	peek           ─▶ reposync.Peek (another ref's rows, nothing touched)
+//	promote        ─▶ reposync.Promote (row files onto another branch)
 //	ci-merge       ─▶ reposync.CIMerge (RX7 key loosening first, OV64;
 //	                  lore's drivers = this binary, per git invocation)
 
@@ -16,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/reposync"
+	"github.com/thesatellite-ai/lore/logic/clock"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 )
 
@@ -27,6 +30,41 @@ type RepoSync struct {
 	WorkDir string
 	Version string
 	Driver  string
+	// Clock stamps promote commits; nil is the wall clock.
+	Clock clock.Clock
+}
+
+// SyncPeek implements opssync.Env's peek verb (v0.1.17 sync.peek shape).
+func (r RepoSync) SyncPeek(ctx context.Context, in opssync.PeekIn) (opssync.PeekOut, error) {
+	out := opssync.PeekOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindPeek, Data: []opssync.PeekRow{}}
+	rows, err := reposync.Peek(ctx, r.dir(), in.Ref, in.Table)
+	if err != nil {
+		return out, err
+	}
+	for _, row := range rows {
+		out.Data = append(out.Data, opssync.PeekRow{Table: row.Table, ID: row.ID, Summary: row.Summary})
+	}
+	out.Count = len(out.Data)
+	out.Lines = reposync.PeekLines(in.Ref, rows)
+	return out, nil
+}
+
+// SyncPromote implements opssync.Env's promote verb.
+func (r RepoSync) SyncPromote(ctx context.Context, in opssync.PromoteIn) (opssync.DoneOut, error) {
+	c := r.Clock
+	if c == nil {
+		c = clock.Real{}
+	}
+	o := reposync.PromoteOptions{Dir: r.dir(), IDs: in.IDs, Branch: in.Branch, DryRun: in.DryRun, Now: c.Now()}
+	res, err := reposync.Promote(ctx, o)
+	if err != nil {
+		return opssync.DoneOut{}, err
+	}
+	out := opssync.DoneOut{Items: res.Paths, Lines: reposync.PromoteLines(o, res)}
+	if !in.DryRun && len(out.Lines) > 0 {
+		out.Done = strings.TrimPrefix(out.Lines[0], "✓ ")
+	}
+	return out, nil
 }
 
 // SyncInstallAction implements opssync.Env's install-action verb.
@@ -99,4 +137,3 @@ func (r RepoSync) driver() string {
 	}
 	return "'" + exe + "'"
 }
-
