@@ -197,11 +197,13 @@ func newSyncStatusCommand() *cobra.Command {
 				return errcodes.New(errcodes.Internal, "read sync status").WithCause(err)
 			}
 			uncommitted, gitErr := gitsetup.Uncommitted(cmd.Context(), t.root, filepath.Join(projresolve.MarkerDir, lsync.DataDirName))
+			quar := metaQuarantineLines(cmd.Context()) // METADATA 3.13 "counted"
 			out := struct {
 				lsync.Status
-				Uncommitted []string `json:"uncommitted,omitempty"`
-				GitError    string   `json:"git_error,omitempty"`
-			}{Status: st, Uncommitted: uncommitted}
+				Uncommitted     []string `json:"uncommitted,omitempty"`
+				GitError        string   `json:"git_error,omitempty"`
+				MetaQuarantined []string `json:"meta_quarantined,omitempty"`
+			}{Status: st, Uncommitted: uncommitted, MetaQuarantined: quar}
 			if gitErr != nil && !errors.Is(gitErr, gitsetup.ErrNotRepo) {
 				out.GitError = gitErr.Error()
 			}
@@ -216,6 +218,10 @@ func newSyncStatusCommand() *cobra.Command {
 			fmt.Printf("open conflicts:   %d\n", st.OpenConflicts)
 			fmt.Printf("trash rows:       %d\n", st.TrashRows)
 			fmt.Printf("uncommitted:      %d\n", len(uncommitted))
+			fmt.Printf("meta quarantined: %d\n", len(quar))
+			for _, q := range quar {
+				fmt.Println(style.Error("  " + q))
+			}
 			for _, e := range st.Errors {
 				fmt.Println(style.Error(fmt.Sprintf("  %s %s: %s", e.Kind, e.Path, e.Detail)))
 			}
