@@ -100,7 +100,7 @@ func refreshKindGood(ctx context.Context, tx *sql.Tx, source store.Source, kindI
 	case err != nil:
 		return dbErr("read kind row", err)
 	}
-	if merge.HasMarkers(string(kdoc)) {
+	if docHasMarkers(kdoc) {
 		return nil
 	}
 	snap := kindSnapshot{Kind: kdoc, Fields: []json.RawMessage{}}
@@ -113,7 +113,7 @@ func refreshKindGood(ctx context.Context, tx *sql.Tx, source store.Source, kindI
 		if serr := rs.Scan(&d); serr != nil {
 			return errors.Join(dbErr("read kind fields", serr), rs.Close())
 		}
-		if merge.HasMarkers(string(d)) {
+		if docHasMarkers(d) {
 			return rs.Close() // not good now: keep the old snapshot
 		}
 		snap.Fields = append(snap.Fields, d)
@@ -130,6 +130,24 @@ func refreshKindGood(ctx context.Context, tx *sql.Tx, source store.Source, kindI
 		return dbErr("record last good kind", err)
 	}
 	return nil
+}
+
+// docHasMarkers reports a stored doc whose field values hold a conflict
+// block. The doc is JSON, so a value's newlines are escaped there and
+// merge.HasMarkers on the raw bytes never fires: each field is decoded and
+// checked (the shape of ops/settings resources_lastgood). A doc this
+// binary cannot decode counts as not good.
+func docHasMarkers(doc []byte) bool {
+	r, err := row.Decode(doc)
+	if err != nil {
+		return true
+	}
+	for _, v := range r.Fields {
+		if v != nil && merge.HasMarkers(v.String()) {
+			return true
+		}
+	}
+	return false
 }
 
 // LastGoodKind returns the last good definition of kindID in source (RES
