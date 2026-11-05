@@ -42,6 +42,7 @@ import (
 	"maps"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -252,6 +253,9 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 		return lr, nil
 	}
 	if berr == nil {
+		if r, ok := b.landedOver(ctx, s, k, branchRow); ok {
+			return r, nil
+		}
 		return branchRow, nil
 	}
 	if r, ok := b.landedOnDefault(ctx, s, k); ok {
@@ -292,6 +296,45 @@ func onDefaultBranch(ctx context.Context, s *liveSession) (string, bool) {
 	return branch, err == nil && strings.TrimSpace(string(head)) == branch
 }
 
+// landedOver is the read-through for a row this checkout already holds an
+// OLDER committed copy of ([fix-team] T1 follow-up): on the default branch,
+// when the worktree copy is exactly HEAD's (branchRow's HLC equals the
+// committed file's, so nothing local is pending) and origin/<default>
+// holds the same row with a newer HLC, the landed copy is the one a reader
+// sees until the checkout pulls (a teammate's live row that landed on main
+// after lore init committed its handle-less actor row). A local edit (the
+// worktree differs from HEAD) always wins: it is never read through.
+func (b *liveBackend) landedOver(ctx context.Context, s *liveSession, k live.RowKey, branchRow store.Row) (store.Row, bool) {
+	branch, ok := onDefaultBranch(ctx, s)
+	if !ok {
+		return store.Row{}, false
+	}
+	file := mainDataPath(b.folder, k.Table+"/"+k.ID+storeRowFileExt)
+	headRaw, inHead, err := s.repo.ReadFile(ctx, "HEAD", file)
+	if err != nil || !inHead {
+		return store.Row{}, false
+	}
+	return landedNewer(ctx, s, "refs/remotes/"+s.ref.RemoteName+"/"+branch, file, headRaw, branchRow)
+}
+
+// landedNewer is landedOver's decision once HEAD's copy is read: the copy
+// at remote:file when the worktree row equals HEAD's and remote's is newer.
+func landedNewer(ctx context.Context, s *liveSession, remote, file string, headRaw []byte, branchRow store.Row) (store.Row, bool) {
+	head, ok := decodeLanded(headRaw)
+	if !ok || head.HLC.Compare(branchRow.HLC) != 0 {
+		return store.Row{}, false // the worktree copy differs from HEAD: local wins
+	}
+	raw, found, err := s.repo.ReadFile(ctx, remote, file)
+	if err != nil || !found {
+		return store.Row{}, false
+	}
+	r, ok := decodeLanded(raw)
+	if !ok || r.Key() != branchRow.Key() || r.HLC.Compare(branchRow.HLC) <= 0 {
+		return store.Row{}, false
+	}
+	return r, true
+}
+
 // decodeLanded decodes a row file read from origin/<default>; false when it
 // is not a row (a read-through is best effort: the row then stays unseen
 // until the checkout pulls, as it did before the read-through).
@@ -311,24 +354,39 @@ func decodeLanded(raw []byte) (store.Row, bool) {
 // every list (task list --status=done) between the fetch that showed it
 // landed and the pull that brings its file, while task show still found it
 // through Get. Two ls-trees, then one read per landed row.
-func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[store.Key]bool) []store.Row {
+//
+// T1 follow-up: a row whose HEAD blob differs from origin/<default>'s is
+// looked up in over (the branch rows by key, minus live ones); when the
+// worktree copy equals HEAD and the landed one is newer (landedNewer), the
+// landed copy replaces it in over.
+func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[store.Key]bool, over map[live.RowKey]*store.Row) []store.Row {
 	branch, ok := onDefaultBranch(ctx, s)
 	if !ok {
 		return nil
 	}
 	remote := "refs/remotes/" + s.ref.RemoteName + "/" + branch
-	inHead := map[string]bool{}
-	for _, p := range b.dataPaths(ctx, s, "HEAD") {
-		inHead[p] = true
+	inHead := b.dataPaths(ctx, s, "HEAD")
+	landed := b.dataPaths(ctx, s, remote)
+	paths := make([]string, 0, len(landed))
+	for p := range landed {
+		paths = append(paths, p)
 	}
+	sort.Strings(paths) // ls-tree order: the output stays stable
 	var out []store.Row
-	for _, p := range b.dataPaths(ctx, s, remote) {
-		if inHead[p] {
-			continue
-		}
+	for _, p := range paths {
+		oid := landed[p]
 		table := path.Base(path.Dir(p))
 		id, isRow := strings.CutSuffix(path.Base(p), storeRowFileExt)
 		if !isRow || !liveReadable(s, row.Table(table)) {
+			continue
+		}
+		if headOID, held := inHead[p]; held {
+			if headOID == oid {
+				continue // the same blob: nothing landed over it
+			}
+			if cur, isBranch := over[live.RowKey{Table: table, ID: id}]; isBranch {
+				replaceLandedOver(ctx, s, remote, p, cur)
+			}
 			continue
 		}
 		raw, found, err := s.repo.ReadFile(ctx, remote, p)
@@ -344,14 +402,35 @@ func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[s
 	return out
 }
 
-// dataPaths lists the row files under the store's .lore/data at rev (none
-// when rev does not exist, e.g. no fetched default branch yet).
-func (b *liveBackend) dataPaths(ctx context.Context, s *liveSession, rev string) []string {
-	raw, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-tree", "-r", "--name-only", rev, "--", mainDataPath(b.folder, "")}})
+// replaceLandedOver swaps the branch row cur (at p) for origin's newer
+// copy in place when landedNewer says so (T1 follow-up).
+func replaceLandedOver(ctx context.Context, s *liveSession, remote, p string, cur *store.Row) {
+	headRaw, inHead, err := s.repo.ReadFile(ctx, "HEAD", p)
+	if err != nil || !inHead {
+		return
+	}
+	if r, ok := landedNewer(ctx, s, remote, p, headRaw, *cur); ok {
+		*cur = r
+	}
+}
+
+// dataPaths maps every row file under the store's .lore/data at rev to its
+// blob id (none when rev does not exist, e.g. no fetched default branch
+// yet). The blob ids let landedRows skip rows HEAD and origin agree on.
+func (b *liveBackend) dataPaths(ctx context.Context, s *liveSession, rev string) map[string]string {
+	raw, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-tree", "-r", rev, "--", mainDataPath(b.folder, "")}})
 	if err != nil {
 		return nil
 	}
-	return strings.FieldsFunc(string(raw), func(r rune) bool { return r == '\n' })
+	out := map[string]string{}
+	for _, line := range strings.FieldsFunc(string(raw), func(r rune) bool { return r == '\n' }) {
+		// "<mode> <type> <oid>\t<path>"
+		meta, p, ok := strings.Cut(line, "\t")
+		if f := strings.Fields(meta); ok && len(f) == 3 {
+			out[p] = f[2]
+		}
+	}
+	return out
 }
 
 // Read implements store.Backend. While the live ref has not moved since
@@ -390,12 +469,14 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		lives[lr.Key()] = lr
 	}
 	out := make([]store.Row, 0, len(rows)+len(lives))
+	branchOnly := map[live.RowKey]int{} // index in out of rows with no live copy (T1 follow-up)
 	for _, r := range rows {
 		if lr, ok := lives[r.Key()]; ok {
 			out = append(out, newer(lr, r))
 			delete(lives, r.Key())
 			continue
 		}
+		branchOnly[live.RowKey{Table: string(r.Table), ID: r.ID.String()}] = len(out)
 		out = append(out, r)
 	}
 	// While the live ref did not move, only live rows whose branch copy
@@ -409,7 +490,11 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 			out = append(out, lr)
 			have[lr.Key()] = true
 		}
-		out = append(out, b.landedRows(ctx, s, have)...)
+		over := make(map[live.RowKey]*store.Row, len(branchOnly))
+		for k, i := range branchOnly {
+			over[k] = &out[i]
+		}
+		out = append(out, b.landedRows(ctx, s, have, over)...)
 	}
 	return out, store.Cursor(liveCursorPrefix + oid + liveCursorSep + string(next)), nil
 }
@@ -467,8 +552,11 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 			place = rowroute.PlaceLive
 		}
 		if place != rowroute.PlaceLive {
-			if !inBranch && !inLive {
+			switch {
+			case !inBranch && !inLive:
 				ch = b.materialiseLanded(ctx, s, ch)
+			case inBranch && !inLive:
+				ch = b.overLanded(ctx, s, ch, branchRow)
 			}
 			branch = append(branch, ch)
 			continue
@@ -486,6 +574,11 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 			}
 		case inBranch:
 			cur = branchRow
+			// T1 follow-up: Get served the newer landed copy; the caller
+			// expects that one.
+			if landed, ok := b.landedOver(ctx, s, k, branchRow); ok {
+				cur = landed
+			}
 		case !ch.Expect.IsZero():
 			// r2-regress: a row that landed on origin/<default> and left
 			// live is read through landedOnDefault (Get); a fenced
@@ -874,11 +967,8 @@ func (b *liveBackend) landedExpect(ctx context.Context, s *liveSession, ch store
 	if ch.Expect.IsZero() || !liveReadable(s, ch.Row.Table) {
 		return ch, nil // landedOnDefault serves only live-readable tables (Get)
 	}
-	_, berr := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID)
-	if berr == nil {
-		return ch, nil
-	}
-	if !errors.Is(berr, store.ErrNotFound) {
+	branchRow, berr := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID)
+	if berr != nil && !errors.Is(berr, store.ErrNotFound) {
 		return ch, berr
 	}
 	_, files, err := b.liveFiles(ctx, s)
@@ -888,7 +978,25 @@ func (b *liveBackend) landedExpect(ctx context.Context, s *liveSession, ch store
 	if _, inLive := files[live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}]; inLive {
 		return ch, nil
 	}
+	if berr == nil {
+		return b.overLanded(ctx, s, ch, branchRow), nil
+	}
 	return b.materialiseLanded(ctx, s, ch), nil
+}
+
+// overLanded is materialiseLanded for a row the branch holds an older
+// committed copy of (T1 follow-up): when the caller read the newer landed
+// copy (Get through landedOver; its HLC is the Expect), the edit replaces
+// the branch file, so the copy it expects there is the branch row's.
+func (b *liveBackend) overLanded(ctx context.Context, s *liveSession, ch store.Change, branchRow store.Row) store.Change {
+	if ch.Expect.IsZero() {
+		return ch
+	}
+	k := live.RowKey{Table: string(ch.Row.Table), ID: ch.Row.ID.String()}
+	if landed, ok := b.landedOver(ctx, s, k, branchRow); ok && landed.HLC.Compare(ch.Expect) == 0 {
+		ch.Expect = branchRow.HLC
+	}
+	return ch
 }
 
 // materialiseLanded resets the Expect of an edit of a row Get served from
