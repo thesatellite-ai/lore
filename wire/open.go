@@ -217,8 +217,19 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 
 	repoClient, note := repoIsClient(ctx, opts)
 	st.repoClassNote = note
+	// D8 / LORE_TEAM_SPEC 7.6: agent_details of the caller's org; read for
+	// every caller of a client repo, not only an agent, because a person
+	// editing a task an agent worked on must not write the agent's id into
+	// the client either (P2B-OLD-2: engine Attached.AgentsInternal).
+	details := AgentDetailsInternal
+	if repoClient {
+		if details, err = agentDetailsOf(opts.Home, st.who.Org); err != nil {
+			return fail(err)
+		}
+	}
 	engOpts := []engine.Option{
-		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient, ActorAs: st.clientActorAs(repoClient)}),
+		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient, ActorAs: st.clientActorAs(repoClient),
+			AgentsInternal: details == AgentDetailsInternal}),
 		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(newProvenance(opts, st.repoTop)), // _o place facts and the _w stamp (PROV4, PROV6, PROV8, OQ7)
@@ -244,10 +255,6 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		// agent in a client repo is recorded as its owning person; an org
 		// that sets agent_details: client shows the agent as itself, so no
 		// owner is looked up and clientActorAs stamps the agent's id.
-		details, derr := agentDetailsOf(opts.Home, st.who.Org)
-		if derr != nil {
-			return fail(derr)
-		}
 		if details == AgentDetailsInternal {
 			if st.agentOwner, st.agentOwnerName, err = agentOwnerOf(ctx, st); err != nil {
 				return fail(err)

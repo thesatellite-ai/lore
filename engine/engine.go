@@ -16,13 +16,13 @@
 package engine
 
 import (
-	"maps"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/thesatellite-ai/lore/logic/actorproject"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -70,6 +70,15 @@ type Attached struct {
 	// (a mapped id maps to itself) because a row's created_by is mapped
 	// again on every later write.
 	ActorAs func(ids.ID[ids.Actor]) ids.ID[ids.Actor]
+	// AgentsInternal marks a client store (Client) whose org keeps agent
+	// details internal (agents.agent_details: internal, the default; D8,
+	// AGENT_IDENTITY Q11/F18): no row written into it may hold any agent's
+	// actor id. New wraps ActorAs so every actor id of every write, the
+	// envelope, the HLC actor, the audit actor and every field at any
+	// depth, is projected to the agent's owner (owner_actor_id of its
+	// actors row), or to nobody when no owner is known (agentproject.go).
+	// Ignored on a store that is not Client. wire sets it.
+	AgentsInternal bool
 	// Location names where this attachment's rows physically live: the
 	// canonical store url with its branch and folder (attach.Open sets it).
 	// Two names over one store folder (an org store attached at its linked
@@ -100,49 +109,19 @@ func stampAs(st Attached, r row.Row) row.Row {
 	return r
 }
 
-// actorFieldsAs maps every top-level field that holds exactly one actor id
-// (a Ref to an actors row, or a Text field such as tasks.done_by or
-// approved_by that stores the id as text) through as, keeping the field's
-// kind. Why: the envelope is not the only place a writer's id lands —
-// task done records done_by, --assign @me records assigned_to_actor_id —
-// and in a client repo every one of them must name the agent's owner, not
-// the agent (D8, Q11), or the client's committed files carry the agent id.
-// The map is copied before the first change, so the caller's row is never
-// mutated; a field whose value as leaves unchanged is left as it was.
+// actorFieldsAs maps every actor id the fields hold through as, at any
+// depth (logic/actorproject): a ref or text field (tasks.done_by,
+// approved_by, assigned_to_actor_id), every list item (assignees,
+// watchers) and every string inside a JSON value (history[].by,
+// time_entries[].actor_id/created_by/updated_by, checklist[].done_by,
+// claim_log[].actor_id). Why: the envelope is not the only place a
+// writer's id lands, and in a client repo every one of them must name the
+// agent's owner, never the agent (D8, Q11, P2B-OLD-2). An id as maps to
+// the zero id names nobody: the field or item is removed (see
+// actorproject.Mapper). The map is copied before the first change, so the
+// caller's row is never mutated.
 func actorFieldsAs(as func(ids.ID[ids.Actor]) ids.ID[ids.Actor], fields map[string]value.Value) map[string]value.Value {
-	out, copied := fields, false
-	for k, v := range fields {
-		if v == nil || (v.Kind() != value.KindText && v.Kind() != value.KindRef) {
-			continue
-		}
-		id, err := ids.Parse[ids.Actor](v.String())
-		if err != nil || id.IsZero() {
-			continue
-		}
-		mapped := as(id)
-		if mapped == id || mapped.IsZero() {
-			continue
-		}
-		var nv value.Value
-		if v.Kind() == value.KindRef {
-			ref, rerr := value.RefOf(mapped.Any())
-			if rerr != nil {
-				continue
-			}
-			nv = ref
-		} else {
-			txt, terr := value.TextOf(mapped.String())
-			if terr != nil {
-				continue
-			}
-			nv = txt
-		}
-		if !copied {
-			out, copied = maps.Clone(fields), true
-		}
-		out[k] = nv
-	}
-	return out
+	return actorproject.Fields(as, fields)
 }
 
 // IDSource issues permanent row ids. The default makes UUIDv7 ids (the
@@ -327,6 +306,7 @@ func New(opts ...Option) (*Engine, error) {
 	if e.settings == nil {
 		e.settings = storeSettings{e: e}
 	}
+	e.projectClientAgents()                 // P2B-OLD-2: agent ids never reach a client store
 	e.audit = redactSink(e.audit, e.redact) // D21: the hook runs after the audit record
 	e.clock = hlc.NewClock(e.actor, e.wall)
 	return e, nil
