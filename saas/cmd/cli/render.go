@@ -280,7 +280,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	// Skip rename if content unchanged (R29 #53) — but still re-stitch the
 	// pointer: a tool file may have lost it even when the body is identical
 	unchanged := false
-	if existing, err := os.ReadFile(filepath.Clean(resolvedOut)); err == nil {
+	if existing, rerr := os.ReadFile(filepath.Clean(resolvedOut)); rerr == nil {
 		unchanged = sha256Hex(existing) == sha256Hex([]byte(body))
 	}
 
@@ -289,7 +289,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 			fmt.Printf("%s %s (unchanged)\n", style.Muted("·"), resolvedOut)
 		}
 	} else {
-		if err := atomicWriteFile(resolvedOut, []byte(body), 0o644); err != nil {
+		if err = atomicWriteFile(resolvedOut, []byte(body), 0o644); err != nil {
 			return errcodes.New(errcodes.Internal, "atomic write").WithCause(err)
 		}
 		if !f.quiet {
@@ -304,7 +304,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	}
 	// CQ2: the full fallback file, next to LORE.md, never imported.
 	if in.Settings.FullFile {
-		if err := writeFullFile(filepath.Join(filepath.Dir(resolvedOut), fullFileName), full, f.quiet); err != nil {
+		if err = writeFullFile(filepath.Join(filepath.Dir(resolvedOut), fullFileName), full, f.quiet); err != nil {
 			return err
 		}
 	}
@@ -314,7 +314,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 			printTargetPick(pick)
 		}
 		for _, t := range pick.targets {
-			if err := stitchPointer(root, t, resolvedOut); err != nil {
+			if err = stitchPointer(root, t, resolvedOut); err != nil {
 				return err
 			}
 		}

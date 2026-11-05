@@ -11,7 +11,7 @@
 //	    rows tagged with the task's tags ("topic <name>")
 //	    notes (memories, decisions) on the title/body words, up to 5
 //
-// Output fits like every other mode (contextResult.text: never splits an
+// Output fits like every other mode (contextResult.fit: never splits an
 // entry; "more: lore search …").
 package main
 

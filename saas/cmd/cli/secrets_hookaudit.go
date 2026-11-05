@@ -17,9 +17,9 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 )
 
-// credentialPrefix starts a secret finding's detail ("credential pattern
+// patternDetailLead starts a secret finding's detail ("credential pattern
 // <rule> …", leakcheck); the rule id is the next word.
-const credentialPrefix = "credential pattern "
+const patternDetailLead = "credential pattern "
 
 // auditHookRefused records secret.hook_refused for every secret finding a
 // commit or push check refused. Other checks (a write, a PR body, a move)
@@ -45,11 +45,11 @@ func auditHookRefused(ctx context.Context, fs []leakcheck.Finding, lc leakContex
 		}
 		rule := f.Secret.Rule
 		if rule == "" {
-			if rest, ok := strings.CutPrefix(f.Detail, credentialPrefix); ok {
+			if rest, ok := strings.CutPrefix(f.Detail, patternDetailLead); ok {
 				rule, _, _ = strings.Cut(rest, " ")
 			}
 		}
-		if err := coreApp.AuditSecret(ctx, engine.ActionSecretHookRefused, engine.SecretAudit{Command: hook,
+		if err := coreApp.AuditSecret(ctx, engine.ActionLeakHookRefused, engine.SecretAudit{Command: hook,
 			Result: "hook=" + hook + " path=" + f.Where + " rule=" + rule}); err != nil {
 			fmt.Fprintln(os.Stderr, "lore: warning: secret.hook_refused was not recorded: "+err.Error())
 		}

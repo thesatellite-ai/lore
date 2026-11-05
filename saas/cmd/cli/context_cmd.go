@@ -235,14 +235,9 @@ type contextResult struct {
 	more  string
 }
 
-// text fits the picks under maxBytes, grouped under section headers.
-func (r contextResult) text(maxBytes int) string {
-	s, _ := r.fit(maxBytes)
-	return s
-}
-
-// fit is text plus the ids it printed (full or line), which the hook
-// records in the session's seen set (6.9).
+// fit fits the picks under maxBytes, grouped under section headers, and
+// returns the ids it printed (full or line), which the hook records in the
+// session's seen set (6.9).
 func (r contextResult) fit(maxBytes int) (string, []string) {
 	head := fmt.Sprintf("# lore context for %s\n\n", r.title)
 	var pieces []contextfit.Piece

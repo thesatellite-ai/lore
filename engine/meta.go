@@ -660,7 +660,9 @@ func (p *metaPlan) metaLevel(src store.Source) string {
 		return meta.LevelProject
 	case policy.LevelOrg, policy.LevelStoreRoot:
 		return meta.LevelOrg
-	case policy.LevelPersonal:
+	case policy.LevelPersonal, policy.LevelMachine:
+		// The personal store has no grammar level; machine config is not
+		// an attached store, so it never names a place either.
 	}
 	return ""
 }
