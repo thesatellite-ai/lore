@@ -238,13 +238,12 @@ func TestMineAndClaimedBy(t *testing.T) {
 	if _, err := runCtx(h, ctx, opstask.OpList, `{"claimed_by":"@nobody"}`); !errs.Has(err, errs.NotFound) {
 		t.Errorf("unknown holder: %v", err)
 	}
-	// No host Team: the filters are refused naming the flag.
-	for in, flag := range map[string]string{`{"mine":true}`: "--mine", `{"claimed_by":"@bob"}`: "--claimed-by"} {
-		msg := h.Fails(opstask.OpList, in, errs.Unsupported)
-		if !strings.Contains(msg, flag) {
-			t.Errorf("%s refusal: %s", in, msg)
-		}
-	}
+	// Without the test's Team, App.Run supplies the standalone one
+	// (P3-COORD-3, P3-COORD-3a): --mine runs against the repo's own board
+	// (no signals ref here, so no claims), and --claimed-by resolves the
+	// handle on the repo roster, where Bob has none: refused, never guessed.
+	h.Must(opstask.OpList, `{"mine":true}`)
+	h.Fails(opstask.OpList, `{"claimed_by":"@bob"}`, errs.InvalidInput)
 	// An unreadable board: a filter fails closed, a plain list shows the
 	// rows without a STATE column.
 	broken := opstask.WithTeam(context.Background(), &fakeTeam{boardErr: errs.New(errs.StoreUnreachable, "signals ref unreadable")})
