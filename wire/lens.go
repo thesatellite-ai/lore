@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
@@ -249,7 +250,14 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 		defer cleanup()
 		deleted = dir
 	}
-	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows}, r.Internal, deleted)
+	// TQ8 / FB-TASK-4: the time_spent view's client column follows the
+	// repo's effective time.client_key.
+	pol, err := a.Policy(ctx, store.SourceRepo)
+	if err != nil {
+		return opssql.Result{}, err
+	}
+	clientKey, _ := pol.Text(policy.KeyTimeClientKey) // unset = the lens default
+	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows, TimeClientKey: clientKey}, r.Internal, deleted)
 	if err != nil {
 		return opssql.Result{}, err
 	}

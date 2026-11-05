@@ -20,7 +20,7 @@ import (
 //	   tasks_all (time_entries, time_open) + actors_all (owner_actor_id)
 //	   ─► spans, open ones ending at read time
 //	   ─► counted_seconds per worker, owner_counted_seconds per owner (TQ1)
-//	   ─► TEMP TABLE task_time_spans + task_time_clients (meta key `client`)
+//	   ─► TEMP TABLE task_time_spans + task_time_clients (meta key time.client_key)
 //	   ─► TEMP VIEW time_spent (joins tasks, projects, actors)
 //
 // Built on the lens, not in the cache file: the spans are derived from the
@@ -33,9 +33,9 @@ const (
 	tblTimeSpans   = "task_time_spans"
 	tblTimeClients = "task_time_clients"
 	viewTimeSpent  = "time_spent"
-	// TimeClientKey is the metadata key name the view's client column reads
-	// (TQ8 default; time.client_key waits for a text policy shape,
-	// OV16-CLIENTKEY).
+	// TimeClientKey is the default metadata key name the view's client
+	// column reads (TQ8); LensOptions.TimeClientKey carries the policy
+	// time.client_key (FB-TASK-4).
 	TimeClientKey = "client"
 	// openEntryPrefix marks an open span's entry_id (design 7.4).
 	openEntryPrefix = "open:"
@@ -241,16 +241,21 @@ func countSpans(spans []spanRow) {
 	assign(func(s spanRow) string { return s.taskID + "|" + s.ownerID }, func(s *spanRow, n int64) { s.ownerCounted = n })
 }
 
-// taskClients reads each task's value of the metadata key TimeClientKey,
-// found by its permanent mky_ id (a renamed key would be found by the new
-// name once time.client_key exists, TQ8).
+// taskClients reads each task's value of the metadata key the policy
+// time.client_key names (default TimeClientKey), by its permanent mky_ id:
+// the policy value is a key name, or the mky_ id itself so a renamed key
+// keeps working (TQ8, FB-TASK-4).
 func (l *Lens) taskClients(ctx context.Context, tables map[string][]srcTable) (map[string]string, error) {
 	out := map[string]string{}
 	if !hasCols(tables, schema.TableMetaKeys, "name") {
 		return out, nil
 	}
+	clientKey := l.clientKey
+	if clientKey == "" {
+		clientKey = TimeClientKey
+	}
 	var keyID string
-	err := l.conn.QueryRowContext(ctx, `SELECT id FROM "`+schema.TableMetaKeys+lensViewSuffix+`" WHERE name = ? ORDER BY id LIMIT 1`, TimeClientKey).Scan(&keyID)
+	err := l.conn.QueryRowContext(ctx, `SELECT id FROM "`+schema.TableMetaKeys+lensViewSuffix+`" WHERE name = ? OR id = ? ORDER BY id LIMIT 1`, clientKey, clientKey).Scan(&keyID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, nil
 	}

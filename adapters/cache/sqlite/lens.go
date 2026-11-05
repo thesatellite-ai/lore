@@ -75,6 +75,10 @@ type LensOptions struct {
 	// lens_trash.go): the cache keeps no trashed row, so the caller reads
 	// them from the stores and hands them in. nil gives an empty view.
 	Trash []TrashRow
+	// TimeClientKey is the metadata key (a name, or its mky_ id) the
+	// time_spent view reads as the client column: the policy
+	// time.client_key (TQ8, FB-TASK-4). "" means TimeClientKey ("client").
+	TimeClientKey string
 }
 
 // LensHit is where ResolveID found an id.
@@ -111,6 +115,8 @@ type Lens struct {
 	closed bool
 	expand Expander
 	trash  []TrashRow
+	// clientKey is LensOptions.TimeClientKey (timespans.go).
+	clientKey string
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -169,7 +175,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
