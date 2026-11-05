@@ -34,7 +34,12 @@ type Project struct{}
 // Prefix implements Tag.
 func (Project) Prefix() Prefix { return PrefixProject }
 
-// Machine tags ids of machine profiles.
+// Machine tags the ROW ids of machines-table rows (mch_ + 32 hex, like
+// every row id). It is not the machine's identity: that is MachineID
+// (mch_ + the full 64-hex keyed fingerprint, PROV4), stored in the row's
+// machine_id field and in every _w stamp. The row id is derived from the
+// MachineID (identity.Deterministic), so one machine has one row; the two
+// forms are never compared with each other (r3-origin, P2-ORG-1).
 type Machine struct{}
 
 // Prefix implements Tag.
