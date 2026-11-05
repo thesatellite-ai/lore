@@ -138,15 +138,26 @@ func newScanner(ctx context.Context, backends map[store.Source]store.Backend, op
 	for _, o := range opts {
 		o(s)
 	}
-	if err := s.Refresh(ctx); err != nil {
+	if err := s.refresh(ctx, false); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-// Refresh implements engine.RefreshingScanner.
+// Refresh implements engine.RefreshingScanner: every write calls it, and a
+// session id read error fails that write closed.
 func (s *liveScanner) Refresh(ctx context.Context) error {
-	if err := s.refreshSessions(ctx); err != nil {
+	return s.refresh(ctx, true)
+}
+
+// refresh rebuilds the rule set and, first, the known tool session ids.
+// strictSessions false (the first build, at App open) tolerates a session
+// id read error: FB-SESS-2: a damaged lore.db (machine-local, where the
+// ids live) failed every App open, so even a read of the shared rows in
+// .lore/data broke while lore.db was broken. Nothing is written at open,
+// and the write path's Refresh still fails closed.
+func (s *liveScanner) refresh(ctx context.Context, strictSessions bool) error {
+	if err := s.refreshSessions(ctx); err != nil && strictSessions {
 		return err
 	}
 	entries, key, err := ruleRows(ctx, s.backends, s.folders)

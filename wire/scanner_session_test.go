@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,8 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -24,6 +27,7 @@ import (
 type sessionSink struct {
 	mu  sync.Mutex
 	ids []string
+	err error // a failing read (a damaged lore.db)
 	evs []engine.Event
 }
 
@@ -37,7 +41,16 @@ func (s *sessionSink) Record(_ context.Context, ev engine.Event) error {
 func (s *sessionSink) ToolSessionIDs(context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.err != nil {
+		return nil, s.err
+	}
 	return append([]string(nil), s.ids...), nil
+}
+
+func (s *sessionSink) fail(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.err = err
 }
 
 func (s *sessionSink) set(ids ...string) {
@@ -221,5 +234,33 @@ func TestProseFilterPolicyOff(t *testing.T) {
 	}
 	if _, err := run(t, a, opsmemory.OpAdd, memBody(t, "the password: changeme"), false); err != nil {
 		t.Fatalf("a placeholder is no finding even with the filter off: %v", err)
+	}
+}
+
+// TestSessionIDReadErrorFailsWritesOnly (FB-SESS-2): when the tool session
+// ids cannot be read (a damaged lore.db), the App still opens and reads
+// the shared rows, while every write fails closed until the read works.
+func TestSessionIDReadErrorFailsWritesOnly(t *testing.T) {
+	sink := &sessionSink{}
+	sink.fail(errors.New("file is not a database"))
+	a := newSessionApp(t, gitRepo(t), sink)
+	eng, err := a.Engine(background())
+	if err != nil {
+		t.Fatalf("open with an unreadable session source: %v", err)
+	}
+	if _, lerr := run(t, a, opsmemory.OpList, `{}`, false); lerr != nil {
+		t.Fatalf("a read must not need the session ids: %v", lerr)
+	}
+	name, err := value.TextOf("demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := eng.Create(background(), store.SourceRepo, schema.TableProjects, map[string]value.Value{"name": name}); !errs.Has(err, errs.Internal) {
+		t.Fatalf("write with unreadable session ids: err = %v, want %s", err, errs.Internal)
+	}
+	sink.fail(nil)
+	withProject(t, a)
+	if _, err := run(t, a, opsmemory.OpAdd, memBody(t, "a plain note"), false); err != nil {
+		t.Fatalf("write after the session ids read again: %v", err)
 	}
 }
