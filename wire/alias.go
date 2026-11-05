@@ -2,11 +2,13 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/store"
@@ -62,6 +64,14 @@ func (a *App) resolveAlias(ctx context.Context, e op.Entry, d op.Decoder) (op.De
 	}
 	if to == "" || strings.Contains(to, targetSep) {
 		return d, nil // `<store>/<folder>` and `<store>/.` name their place explicitly
+	}
+	// TEAM-032 / side effect 4: `--to <org>` with several links to that
+	// org and none the default is refused naming them, never guessed
+	// (OrgEntryStore decides; P3-CMDLORE-10).
+	if a.opts.OrgEntryStore != nil {
+		if _, _, oerr := a.opts.OrgEntryStore(ctx, to, ""); errors.Is(oerr, orgresolve.ErrTwoLinksNoDefault) {
+			return nil, oerr
+		}
 	}
 	top, err := a.repoTop(ctx)
 	if err != nil {

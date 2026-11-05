@@ -21,6 +21,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -157,6 +158,14 @@ func (r *OrgResolution) OrgStores(ctx context.Context) ([]attach.Store, error) {
 	if s.Result.LinkUnknown {
 		return nil, errs.New(errs.LinkUnknown, "the store links of this repo cannot be read: "+s.Result.LinkDetail)
 	}
+	if s.Result.Disagreement != nil {
+		// F10: LORE_ORG / org use contradicting a link. Nothing of the
+		// chosen entry is attached, so opening never reaches a store of
+		// the wrong org; reads keep the repo and personal rows, and every
+		// org-scoped write is refused by decide (E_ORG_DISAGREES), as
+		// v0.1.17 refused before touching any store (P3-CMDLORE-10).
+		return nil, nil
+	}
 	var out []attach.Store
 	var linked *orgresolve.Link
 	for i := range s.Result.Links {
@@ -229,8 +238,14 @@ func (r *OrgResolution) OrgEntryStore(ctx context.Context, name, folder string) 
 	sc := &org.Stores[0]
 	if folder == "" {
 		var link, fallback *string
+		var entryFolders []string
+		entryDefault := false
 		for i := range s.Result.Links {
 			l := &s.Result.Links[i]
+			if l.Entry == name {
+				entryFolders = append(entryFolders, l.Folder)
+				entryDefault = entryDefault || l.Default
+			}
 			switch {
 			case l.Entry == name && (link == nil || l.Default):
 				link = &l.Folder
@@ -240,6 +255,12 @@ func (r *OrgResolution) OrgEntryStore(ctx context.Context, name, folder string) 
 			case l.Default && fallback == nil:
 				fallback = &l.Folder
 			}
+		}
+		if len(entryFolders) > 1 && !entryDefault {
+			// TEAM-032 / side effect 4: several links, none the default:
+			// refuse rather than pick one (P3-CMDLORE-10).
+			return attach.Store{}, false, errs.Wrap(errs.InvalidInput, fmt.Sprintf("%v: candidates %s; pass --to %s/<folder> or mark one with `lore org link %s --project <folder> --default`",
+				orgresolve.ErrTwoLinksNoDefault, strings.Join(entryFolders, ", "), name, name), orgresolve.ErrTwoLinksNoDefault)
 		}
 		switch {
 		case link != nil:
