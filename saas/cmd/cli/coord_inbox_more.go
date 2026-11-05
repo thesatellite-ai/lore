@@ -6,7 +6,7 @@ package main
 //
 //	triage     proposed tasks, for the actor tasks.triage_owner names (18.3)
 //	child      a sub-task of your task finished; your task has no open sub-tasks left
-//	parent     your open task's parent was closed, or is gone (6.13)
+//	parent     your open task's parent was closed, or is gone; or it sits in a parent cycle (6.13)
 //	deleted    a task you hold a claim on went to the trash (6.12, FB-TASK-1)
 //	mention    @you in a task body or a comment on a task (comments)
 //	recurring  a recurring instance assigned to you, created by someone else (10)
@@ -103,6 +103,7 @@ func (cv *coordView) moreInboxItems(ctx context.Context, docs []coord.Doc, me st
 			out = append(out, it)
 		}
 	}
+	out = append(out, parentCycleItems(docs, mine)...) // 6.13 parent cycle (P3-TASK-CYCLE-1)
 	out = append(out, cv.deletedClaimItems(byID, me)...)
 	out = append(out, cv.mentionItems(ctx, docs, byID, me)...)
 	return out
