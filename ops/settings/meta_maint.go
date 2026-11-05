@@ -110,8 +110,8 @@ func (o ops) metaMaintOps() []op.Entry {
 			Errors: append(slices.Clone(writeErrors), errs.MetaInUse), RESTNoun: metaREST}, o.metaForget),
 		op.Define(op.Spec{Name: OpMetaLint, Summary: "List metadata that does not fit its key, and registry problems", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{When: "fix"}, RESTNoun: metaREST}, o.metaLint),
-		op.Define(op.Spec{Name: OpMetaShow, Summary: "Show a row's metadata", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors}, o.metaGet),
+		op.Define(op.Spec{Name: OpMetaShow, Summary: "Show a row's metadata (sensitive values masked unless --show-sensitive)", Permission: op.PermRead, Access: op.AccessRead,
+			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}}, o.metaGet),
 	}
 }
 

@@ -223,8 +223,8 @@ func (o ops) metaOps() []op.Entry {
 			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "one value", CLI: "lore meta set tsk_… client=acme", Want: "set client"}}}, o.metaSet),
 		op.Define(op.Spec{Name: OpMetaUnset, Summary: "Remove a metadata key from a row (a parent removes its fields)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.metaUnset),
-		op.Define(op.Spec{Name: OpMetaGet, Summary: "Show a row's metadata", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors}, o.metaGet),
+		op.Define(op.Spec{Name: OpMetaGet, Summary: "Show a row's metadata (sensitive values masked unless --show-sensitive)", Permission: op.PermRead, Access: op.AccessRead,
+			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}}, o.metaGet),
 		op.Define(op.Spec{Name: OpMetaValueRename, Summary: "Rename an allowed value (a label change; the val_ id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.metaValueRename),
 	}, o.metaMaintOps()...), slices.Concat(o.metaIOOps(), o.metaMoveOps(), o.metaHistoryOps(), o.metaRebuildOps())...)
@@ -584,7 +584,13 @@ type MetaGetIn struct {
 	ID  string `json:"id" arg:"0" desc:"the row (any id)"`
 	Key string `json:"key,omitempty" arg:"1" desc:"only this key"`
 	IDs bool   `json:"ids,omitempty" flag:"ids" desc:"show key ids"`
+	// ShowSensitive: META 3.20 (asks first; --yes without a terminal, XQ3).
+	ShowSensitive bool `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
 }
+
+// metaShowSensitiveField is the json name of the show_sensitive inputs of
+// meta.get and meta.export (op.ConfirmRule.When: they ask first, XQ3).
+const metaShowSensitiveField = "show_sensitive"
 
 // MetaValue is one value as shown; a sensitive value is masked and has no
 // JSON (OQ2).
@@ -602,7 +608,9 @@ type MetaGetOut struct {
 	ID    string      `json:"id"`
 	Count int         `json:"count"`
 	Data  []MetaValue `json:"data"`
-	ids   bool
+	// Masked names the keys printed as ••• (META 3.14/3.20 meta_masked).
+	Masked []string `json:"meta_masked,omitempty"`
+	ids    bool
 }
 
 // Text implements op.Texter (the `meta show` sample of 3.2).
@@ -750,11 +758,19 @@ func (o ops) metaGet(ctx context.Context, in MetaGetIn) (MetaGetOut, error) {
 			continue
 		}
 		v := MetaValue{Key: en.Name, KeyID: kid.String(), Scope: en.Scope, Value: meta.Show(en), Sensitive: en.Sensitive}
-		if !en.Sensitive {
+		switch {
+		case !en.Sensitive:
 			v.JSON = string(en.V)
+		case in.ShowSensitive: // 3.20: the person asked (the op confirmed first)
+			shown := en
+			shown.Sensitive = false
+			v.Value, v.JSON = meta.Show(shown), string(en.V)
+		default:
+			out.Masked = append(out.Masked, en.Name)
 		}
 		out.Data = append(out.Data, v)
 	}
+	slices.Sort(out.Masked)
 	slices.SortFunc(out.Data, func(a, b MetaValue) int { return strings.Compare(a.Key+a.KeyID, b.Key+b.KeyID) })
 	out.Count = len(out.Data)
 	return out, nil

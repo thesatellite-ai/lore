@@ -47,6 +47,8 @@ type MetaExportIn struct {
 	Table  string `json:"table,omitempty" flag:"table" desc:"only rows of this table"`
 	Keys   string `json:"keys,omitempty" flag:"key" desc:"only these keys, comma separated"`
 	Format string `json:"format,omitempty" flag:"format" desc:"csv (default) or json (one object per line)"`
+	// ShowSensitive: META 3.20 (asks first; --yes without a terminal, XQ3).
+	ShowSensitive bool `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"export sensitive values as they are (asks first)"`
 }
 
 // MetaRecord is one exported or imported value.
@@ -79,7 +81,7 @@ type MetaImportIn struct {
 func (o ops) metaIOOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpMetaExport, Summary: "Export metadata values as CSV or JSON lines (id,key,value)", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors, RESTNoun: metaREST}, o.metaExport),
+			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}, RESTNoun: metaREST}, o.metaExport),
 		op.Define(op.Spec{Name: OpMetaImport, Summary: "Import metadata values from CSV or JSON lines, as one batch", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST}, o.metaImport),
 	}
@@ -100,9 +102,10 @@ func metaFormat(given, file string) (string, error) {
 	return "", errs.New(errs.InvalidInput, "meta: unknown format "+quote(f)).WithHint("csv or json (export: --format, import: --from)")
 }
 
-// exportValue is one entry's value as a record value.
-func exportValue(en meta.Entry) string {
-	if en.Sensitive {
+// exportValue is one entry's value as a record value; a sensitive one is
+// masked unless show (3.20 --show-sensitive).
+func exportValue(en meta.Entry, show bool) string {
+	if en.Sensitive && !show {
 		return maskedValue
 	}
 	raw := en.V
@@ -138,7 +141,7 @@ func (o ops) metaExport(ctx context.Context, in MetaExportIn) (MetaExportOut, er
 			if len(keys) > 0 && !slices.Contains(keys, en.Name) {
 				continue
 			}
-			out.Data = append(out.Data, MetaRecord{ID: r.Row.ID.String(), Key: en.Name, Value: exportValue(en)})
+			out.Data = append(out.Data, MetaRecord{ID: r.Row.ID.String(), Key: en.Name, Value: exportValue(en, in.ShowSensitive)})
 		}
 	}
 	slices.SortFunc(out.Data, func(a, b MetaRecord) int { return strings.Compare(a.ID+"\x00"+a.Key, b.ID+"\x00"+b.Key) })
