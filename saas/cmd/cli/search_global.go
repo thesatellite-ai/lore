@@ -25,7 +25,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -653,7 +655,7 @@ func noMetaKeys(string) bool { return false }
 // sensitive (OV34/OV39-SENSCOND: a condition on it matches the real value
 // and its value is printed masked; see metaKeySensitive).
 func metaSearchTerms(ctx context.Context, query string) ([]metaquery.Term, string, map[string]bool, error) {
-	if !strings.ContainsAny(query, ":=?") {
+	if !strings.ContainsAny(query, ":=?<>~!") { // OV39-CMP: comparisons too
 		return nil, query, nil, nil
 	}
 	known := map[string]bool{}
@@ -712,14 +714,33 @@ func searchMetaTable(ctx context.Context, eng *engine.Engine, t globalSearchTarg
 		` AND r.entity_table = ` + sqlText(t.table.String()) + ` AND r.item_idx = -1`
 	var said []string
 	for _, c := range conds {
-		match := `x.item_idx = -1`
-		if c.Kind == metaquery.Cond {
-			match = `x.item_idx >= 0 AND lower(x.value_text) = lower(` + sqlText(c.Value) + `)`
-			said = append(said, saidValue(c.Name(), c.Value, metaKeySensitive(c.Name(), sensitive)))
-		} else {
-			said = append(said, c.Name()+"?")
+		// METADATA 3.17 / OV39-CMP: the row_meta condition comes from the
+		// cache adapter (key:value, key?, > >= < <= ~= !=).
+		cc := c
+		exists := "EXISTS"
+		if c.Kind == metaquery.Cmp && c.Op == meta.OpNe {
+			// != : the row has the key and no leaf equals the value
+			cc.Kind, exists = metaquery.Cond, "NOT EXISTS"
+			q += ` AND EXISTS (SELECT 1 FROM row_meta_all h WHERE h.source = r.source AND h.entity_table = r.entity_table` +
+				` AND h.entity_id = r.entity_id AND h.key_name = ` + sqlText(c.Name()) + ` AND h.item_idx = -1)`
 		}
-		q += ` AND EXISTS (SELECT 1 FROM row_meta_all x WHERE x.source = r.source AND x.entity_table = r.entity_table` +
+		match, err := sqlite.RowMetaCond("x", cc)
+		if err != nil {
+			return nil, err
+		}
+		switch c.Kind {
+		case metaquery.Has:
+			said = append(said, c.Name()+"?")
+		case metaquery.Cmp:
+			v := c.Value
+			if metaKeySensitive(c.Name(), sensitive) {
+				v = searchMask
+			}
+			said = append(said, c.Name()+" "+string(c.Op)+" "+v)
+		default:
+			said = append(said, saidValue(c.Name(), c.Value, metaKeySensitive(c.Name(), sensitive)))
+		}
+		q += ` AND ` + exists + ` (SELECT 1 FROM row_meta_all x WHERE x.source = r.source AND x.entity_table = r.entity_table` +
 			` AND x.entity_id = r.entity_id AND x.key_name = ` + sqlText(c.Name()) + ` AND ` + match + `)`
 	}
 	q += ` ORDER BY r.entity_id`
