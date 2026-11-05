@@ -34,7 +34,8 @@ type toFlags struct {
 	Yes        bool
 	// Create allows `--to <org>/<folder>` to make a store project that
 	// exists in no listed store (coordinator Q-stores-2: refused without it,
-	// so a typo never creates a new lore). Bound by bindCreateFlag.
+	// so a typo never creates a new lore). No old command binds a flag to it
+	// any more; callers that build toFlags by hand may set it.
 	Create bool
 }
 
@@ -48,14 +49,6 @@ func bindToFlags(cmd *cobra.Command, f *toFlags, withYes bool) {
 	if withYes {
 		cmd.Flags().BoolVar(&f.Yes, flagYes, false, "confirm without a prompt")
 	}
-}
-
-// flagCreate is --create on entity add commands.
-const flagCreate = "create"
-
-// bindCreateFlag adds --create to an add command that takes --to.
-func bindCreateFlag(cmd *cobra.Command, f *toFlags) {
-	cmd.Flags().BoolVar(&f.Create, flagCreate, false, "with --to <org>/<folder>: create that store project if it exists nowhere yet")
 }
 
 // writeTarget is the decision for one write.

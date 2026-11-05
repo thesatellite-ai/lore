@@ -63,7 +63,7 @@ func runTUI(ctx context.Context, f *tuiFlags) error {
 	}
 	defer client.Close()
 
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		return err
 	}

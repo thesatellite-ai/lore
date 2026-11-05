@@ -58,7 +58,7 @@ func runWhyContext(ctx context.Context, f *whyContextFlags) error {
 	}
 	defer client.Close()
 
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		return err
 	}

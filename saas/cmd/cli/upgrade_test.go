@@ -187,6 +187,10 @@ func TestUpgradeAgainstLocalReleaseServer(t *testing.T) {
 	// A linux archive on every host: the server and extract take the
 	// platform as data, so this runs the same everywhere.
 	const goos, goarch = "linux", "amd64"
+	// Windows releases ship as .zip (goreleaser's format override).
+	if got := archiveName(goosWindows, "arm64"); got != BinaryName+"_windows_arm64.zip" {
+		t.Fatalf("windows archive name = %q", got)
+	}
 	archive := tarGz(t, map[string]string{"lore": "new-binary", "skills/SKILL.md": "skill", "README.md": "x"})
 	sum := sha256.Sum256(archive)
 	name := archiveName(goos, goarch)

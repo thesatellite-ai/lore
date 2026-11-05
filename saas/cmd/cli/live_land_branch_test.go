@@ -18,7 +18,9 @@ func TestPrintLandOutcome_NamesRealBranch(t *testing.T) {
 		for _, left := range []int{0, 2} {
 			out := landOutcome{Branch: branch, Status: st, Commit: "0123456789abcdef", Detail: "hook said no", Left: left}
 			var buf bytes.Buffer
-			printLandOutcome(&buf, out)
+			if err := printLandOutcome(&buf, out); err != nil {
+				t.Fatal(err)
+			}
 			got := buf.String()
 			if !strings.Contains(got, branch) {
 				t.Errorf("status %s left %d: %q does not name %q", st, left, got, branch)
@@ -31,7 +33,9 @@ func TestPrintLandOutcome_NamesRealBranch(t *testing.T) {
 
 	// A zero outcome (no branch recorded) never claims "main" either.
 	var buf bytes.Buffer
-	printLandOutcome(&buf, landOutcome{Status: live.LandDone, Commit: "0123456789abcdef", Left: 1})
+	if err := printLandOutcome(&buf, landOutcome{Status: live.LandDone, Commit: "0123456789abcdef", Left: 1}); err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(buf.String(), "main") {
 		t.Errorf("zero-branch outcome %q names main", buf.String())
 	}

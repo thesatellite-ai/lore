@@ -471,7 +471,7 @@ func newStoreForgetCommand() *cobra.Command {
 				return errcodes.New(errcodes.InvalidInput, fmt.Sprintf("the clone holds unpushed work (%s); forgetting it would lose it", strings.Join(pending, ", "))).
 					WithHint("run `lore sync` when the store is reachable, then forget it")
 			}
-			if err := removeStoreWorktrees(m, cfg, url); err != nil {
+			if err := removeStoreWorktrees(m, url); err != nil {
 				return err
 			}
 			if err := os.RemoveAll(st.Dir); err != nil {
@@ -488,7 +488,7 @@ func newStoreForgetCommand() *cobra.Command {
 }
 
 // removeStoreWorktrees deletes the browsing worktrees of one store.
-func removeStoreWorktrees(m *stores.Manager, cfg *lorecfg.Config, url string) error {
+func removeStoreWorktrees(m *stores.Manager, url string) error {
 	dir, err := m.Layout.WorktreeDir(url, "")
 	if err != nil {
 		return storeCLIError(err, "locate the store worktrees")

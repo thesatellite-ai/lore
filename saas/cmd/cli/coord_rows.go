@@ -162,7 +162,7 @@ func openRepoTarget(ctx context.Context, w *coordWorld) (coordTarget, error) {
 		return coordTarget{}, errcodes.New(errcodes.Internal, "open lore.db").WithCause(err)
 	}
 	folder := s.folderFor(root)
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		_ = client.Close() // the project error is the one to report
 		_ = db.Close()     // the project error is the one to report
@@ -171,7 +171,7 @@ func openRepoTarget(ctx context.Context, w *coordWorld) (coordTarget, error) {
 	// A mount not registered as a repo (E_REPO_NOT_FOUND) leaves the rows
 	// unscoped ("" = any repo) rather than failing a coordination command:
 	// the repo id only narrows which rows a checkout sees first.
-	repoID, _ := resolveRepoID(ctx, client, projectID, rctx.RepoMount)
+	repoID, _ := resolveRepoID(ctx, projectID, rctx.RepoMount)
 	rows := &liveRows{s: s, folder: folder, db: db, client: client, projectID: projectID, repoID: repoID, actor: w.ActorID}
 	return coordTarget{
 		Rows: rows, Signals: w.repoSignals(), Folder: folder, Repo: rctx.RepoMount,

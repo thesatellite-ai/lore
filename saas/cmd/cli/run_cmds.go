@@ -98,7 +98,7 @@ func newRunStartCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, "")
+			projectID, err := resolveProjectID(cmd.Context(), "")
 			if err != nil {
 				return err
 			}

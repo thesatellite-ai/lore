@@ -7,11 +7,9 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"dbent/gen/ent"
@@ -96,18 +94,6 @@ type externalTask struct {
 	row   cachedb.Row
 }
 
-// externalTasksHere returns the external task rows of this repo's sources
-// that p keeps. Like every external read it never fails the command:
-// problems go to stderr as one muted note each, and a row that does not
-// decode is skipped.
-func externalTasksHere(ctx context.Context, p taskListPredicate) []externalTask {
-	rows, notes := externalRowsHere(ctx, cachedb.Query{Table: tableTasks})
-	for _, n := range notes {
-		fmt.Fprintln(os.Stderr, style.Muted("lore: "+n))
-	}
-	return filterExternalTasks(rows, p)
-}
-
 // filterExternalTasks decodes rows and keeps the ones p keeps (pure; the
 // seam the tests use).
 func filterExternalTasks(rows []cachedb.Row, p taskListPredicate) []externalTask {
@@ -134,24 +120,6 @@ func printExternalTasks(w io.Writer, tasks []externalTask) int {
 		fmt.Fprintln(w, taskListLine(et.task, "")+"  "+style.Muted(et.label))
 	}
 	return len(tasks)
-}
-
-// externalTaskJSON is the --json form of external tasks: the row's own
-// fields plus _source, _label, _live_row (as externalJSONRows).
-func externalTaskJSON(tasks []externalTask) []map[string]any {
-	out := make([]map[string]any, 0, len(tasks))
-	for _, et := range tasks {
-		var doc map[string]any
-		if err := json.Unmarshal(et.row.Doc, &doc); err != nil {
-			continue
-		}
-		delete(doc, "_live")
-		// FLAG1: _source is the {store, store_id, folder, folder_id} object
-		// (names only on this old path), _label the human [store/folder].
-		doc[jsonKeySource], doc[jsonKeyLabel], doc[jsonKeyLive] = externalSource(et.row.Source), et.row.Label, et.row.Live
-		out = append(out, doc)
-	}
-	return out
 }
 
 // taskListLine is one line of the human task list, the same for repo and

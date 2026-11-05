@@ -105,7 +105,7 @@ func openRoster(ctx context.Context, c *commonFlags) (*roster, error) {
 	if err != nil {
 		return nil, err
 	}
-	pid, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	pid, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		_ = client.Close() // the project error is the one to report
 		return nil, err

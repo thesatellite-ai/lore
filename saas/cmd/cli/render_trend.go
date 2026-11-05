@@ -55,10 +55,7 @@ type trendOut struct {
 
 // renderTrend prints the trend for f.outPath of projectID.
 func renderTrend(ctx context.Context, client *ent.Client, projectID string, f *renderFlags) error {
-	target, err := resolveSymlinkTarget(f.outPath)
-	if err != nil {
-		return err
-	}
+	target := resolveSymlinkTarget(f.outPath)
 	now := cliClock().Now()
 	rows, err := client.RenderHistory.Query().
 		Where(entRenderHistory.ProjectID(projectID), entRenderHistory.TargetPath(target),

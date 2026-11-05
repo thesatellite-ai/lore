@@ -284,10 +284,10 @@ func taskListMergedCheck(ctx context.Context, readOnly bool) {
 	if err != nil {
 		return
 	}
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	repoID := ""
 	if err == nil {
-		repoID, err = resolveRepoID(ctx, client, projectID, rctx.RepoMount)
+		repoID, err = resolveRepoID(ctx, projectID, rctx.RepoMount)
 	}
 	_ = client.Close() // the check reads the core from here on; a close error is not actionable
 	if err == nil {

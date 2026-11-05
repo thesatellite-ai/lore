@@ -168,7 +168,7 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 			target.Close()
 		}
 	}
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		done()
 		return nil, nil, err
@@ -188,7 +188,7 @@ func openCoordView(ctx context.Context) (*coordView, func(), error) {
 		if v, err := target.Signals.Local(ctx); err == nil {
 			cv.board, cv.hasBoard = v, true
 		}
-	} else if repoID, err := resolveRepoID(ctx, client, projectID, rctx.RepoMount); err == nil {
+	} else if repoID, err := resolveRepoID(ctx, projectID, rctx.RepoMount); err == nil {
 		lazyMergedCheck(ctx, projectID, repoID)
 	}
 	return cv, func() { cv.labels.close(); done() }, nil

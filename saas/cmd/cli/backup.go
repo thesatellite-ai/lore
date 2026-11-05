@@ -37,7 +37,7 @@ Default output is .lore/backups/<ts>.sqlite
 
 Strips macOS com.apple.quarantine xattr from the output so it can be opened
 on a fresh machine without right-click-Open friction.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			rctx, err := projresolve.Resolve(projresolve.Inputs{
 				FlagDB: f.flagDB, FlagProject: f.flagProject,
 			})
@@ -45,7 +45,7 @@ on a fresh machine without right-click-Open friction.`,
 				return mapResolveError(err)
 			}
 			db := dbent.InitDB(rctx.DBPath)
-			defer db.Close()
+			defer joinClose(&err, db, "the project DB")
 
 			// ds:def id=backup-default-path-hccatu2u owner=@khanakia stability=stable desc="lore backup default output (.lore/backups/<ts>.sqlite)"
 			if out == "" {
@@ -98,7 +98,7 @@ newest (later updated_at wins; the other version is kept under
 		Example: `  lore restore .lore/backups/20261003-101500.sqlite --confirm
   lore restore snap.sqlite --confirm --prefer files`,
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if !confirm {
 				return errcodes.New(errcodes.InvalidInput,
 					"refusing to overwrite DB without --confirm")
@@ -165,7 +165,7 @@ newest (later updated_at wins; the other version is kept under
 			// baseline so the next command ADOPTs with the chosen side.
 			if _, ok := syncDataDir(dst); ok && os.Getenv(envSync) != envValueOff {
 				db := dbent.InitDB(dst)
-				defer db.Close()
+				defer joinClose(&err, db, "the restored DB")
 				if err := lsync.ResetForRestore(cmd.Context(), db, preferMode); err != nil {
 					return errcodes.New(errcodes.Internal, "reset sync state of restored DB").WithCause(err)
 				}
@@ -272,7 +272,7 @@ Requires --confirm to make destructive changes.`,
 	return cmd
 }
 
-func repairTier2(ctx context.Context, rctx *projresolve.Context) error {
+func repairTier2(ctx context.Context, rctx *projresolve.Context) (err error) {
 	// Find latest backup
 	dir := filepath.Join(rctx.ProjectRoot, projresolve.MarkerDir, projresolve.BackupDir)
 	entries, err := os.ReadDir(dir)
@@ -314,7 +314,7 @@ func repairTier2(ctx context.Context, rctx *projresolve.Context) error {
 
 	// Verify by opening + quick_check
 	db := dbent.InitDB(rctx.DBPath)
-	defer db.Close()
+	defer joinClose(&err, db, "the repaired DB")
 	if err := dbent.ApplyPragmas(db); err != nil {
 		return errcodes.New(errcodes.Internal, "post-repair pragmas").WithCause(err)
 	}
@@ -329,7 +329,7 @@ func repairTier2(ctx context.Context, rctx *projresolve.Context) error {
 	return nil
 }
 
-func repairTier3(rctx *projresolve.Context) error {
+func repairTier3(rctx *projresolve.Context) (err error) {
 	brokenName := rctx.DBPath + ".broken." + cliClock().Now().UTC().Format(brokenDBStamp)
 	if _, err := os.Stat(rctx.DBPath); err == nil {
 		_ = os.Rename(rctx.DBPath, brokenName)
@@ -340,7 +340,7 @@ func repairTier3(rctx *projresolve.Context) error {
 
 	// Re-init via the same path as `lore init` would
 	db := dbent.InitDB(rctx.DBPath)
-	defer db.Close()
+	defer joinClose(&err, db, "the repaired DB")
 	if err := dbent.ApplyPragmas(db); err != nil {
 		return errcodes.New(errcodes.Internal, "pragmas").WithCause(err)
 	}

@@ -53,7 +53,7 @@ func newBenchGraderTestCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -105,7 +105,7 @@ func newBenchGraderDebugCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -157,7 +157,7 @@ all stored BenchResult rows. Flags:
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}

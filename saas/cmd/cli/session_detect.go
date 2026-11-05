@@ -206,7 +206,7 @@ func currentSessionAt(ctx context.Context, db *sql.DB, d sessions.Details, root 
 		return "", mapResolveError(err)
 	}
 	client := dbent.New(db).Client()
-	project, perr := resolveProjectID(ctx, client, rctx.ProjectID)
+	project, perr := resolveProjectID(ctx, rctx.ProjectID)
 	if perr != nil || project == "" {
 		return "", nil // `lore init` before the project row exists has no session link yet
 	}

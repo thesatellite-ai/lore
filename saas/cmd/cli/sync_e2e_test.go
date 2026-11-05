@@ -1403,9 +1403,14 @@ func ciMergeWorld(t *testing.T) (*world, *clone, *clone, string) {
 	return w, alice, bob, mem
 }
 
-func (c *clone) ciMerge(base string) ciMergeResult {
+// ciMergeBase is the --base every ci-merge e2e merges from: the shared
+// main branch the clones push to.
+const ciMergeBase = "origin/main"
+
+// ciMerge runs `lore sync ci-merge --base origin/main --json` in the clone.
+func (c *clone) ciMerge() ciMergeResult {
 	c.w.t.Helper()
-	r := c.lore("sync", "ci-merge", "--base", base, "--json")
+	r := c.lore("sync", "ci-merge", "--base", ciMergeBase, "--json")
 	var env struct {
 		Data ciMergeResult `json:"data"`
 	}
@@ -1428,7 +1433,7 @@ func TestE2E_CIMergeSettlesLoreConflict(t *testing.T) {
 
 	bob.git("fetch", "-q")
 	head := bob.git("rev-parse", "HEAD")
-	res := bob.ciMerge("origin/main")
+	res := bob.ciMerge()
 	if res.Outcome != ciMergeMerged || res.Commit == "" || len(res.Merged) == 0 {
 		t.Fatalf("result = %+v", res)
 	}
@@ -1442,7 +1447,7 @@ func TestE2E_CIMergeSettlesLoreConflict(t *testing.T) {
 	if out := bob.git("status", "--porcelain"); out != "" {
 		t.Fatalf("left changes behind: %s", out)
 	}
-	if again := bob.ciMerge("origin/main"); again.Outcome != ciMergeUpToDate {
+	if again := bob.ciMerge(); again.Outcome != ciMergeUpToDate {
 		t.Fatalf("second run = %+v", again)
 	}
 }
@@ -1459,7 +1464,7 @@ func TestE2E_CIMergeLeavesHumanConflictsAlone(t *testing.T) {
 		alice.git("push", "-q")
 		bob.git("fetch", "-q")
 		head := bob.git("rev-parse", "HEAD")
-		res := bob.ciMerge("origin/main")
+		res := bob.ciMerge()
 		if res.Outcome != ciMergeNeedsHuman || len(res.Blocking) != 1 || !strings.Contains(res.Blocking[0], mem) {
 			t.Fatalf("result = %+v", res)
 		}
@@ -1479,7 +1484,7 @@ func TestE2E_CIMergeLeavesHumanConflictsAlone(t *testing.T) {
 		alice.commitAll("alice readme")
 		alice.git("push", "-q")
 		bob.git("fetch", "-q")
-		res := bob.ciMerge("origin/main")
+		res := bob.ciMerge()
 		if res.Outcome != ciMergeNeedsHuman || strings.Join(res.Blocking, ",") != "README.md" {
 			t.Fatalf("result = %+v", res)
 		}
@@ -1497,7 +1502,7 @@ func TestE2E_CIMergeCleanAndGuards(t *testing.T) {
 	alice.commitAll("alice")
 	alice.git("push", "-q")
 	bob.git("fetch", "-q")
-	if res := bob.ciMerge("origin/main"); res.Outcome != ciMergeClean {
+	if res := bob.ciMerge(); res.Outcome != ciMergeClean {
 		t.Fatalf("new rows on both sides must be a clean merge: %+v", res)
 	}
 	if err := os.WriteFile(filepath.Join(bob.dir, "scratch.txt"), []byte("x"), 0o644); err != nil {
@@ -1565,7 +1570,7 @@ func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 	// The pushed branch now merges cleanly into main.
 	bob.git("fetch", "-q")
 	bob.git("reset", "-q", "--hard", "origin/feature")
-	if res := bob.ciMerge("origin/main"); res.Outcome != ciMergeUpToDate {
+	if res := bob.ciMerge(); res.Outcome != ciMergeUpToDate {
 		t.Fatalf("pushed branch not up to date with main: %+v", res)
 	}
 	if doc := bob.readDoc("rules", mem); doc["body"] != "v2 from main" || doc["severity"] != "should" {

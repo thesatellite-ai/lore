@@ -87,7 +87,7 @@ func TestBadRowsError(t *testing.T) {
 // error, never "removed" (store forget would otherwise print ✓ forgot).
 func TestRemoveStoreWorktreesFailsOnBadURL(t *testing.T) {
 	m := &stores.Manager{Layout: stores.Layout{Home: t.TempDir()}}
-	if err := removeStoreWorktrees(m, nil, "https://example.com/../x"); err == nil {
+	if err := removeStoreWorktrees(m, "https://example.com/../x"); err == nil {
 		t.Fatal("a bad store URL must fail")
 	}
 }
@@ -105,7 +105,7 @@ func TestRemoveStoreWorktreesRemoves(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := removeStoreWorktrees(m, nil, url); err != nil {
+	if err := removeStoreWorktrees(m, url); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Dir(dir)); !os.IsNotExist(err) {

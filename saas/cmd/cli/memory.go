@@ -186,7 +186,7 @@ func mapResolveError(err error) error {
 
 // resolveProjectID converts a flag/env/toml project value (which may be a
 // name OR an opaque ID) to the actual prj_* row ID
-func resolveProjectID(ctx context.Context, client *ent.Client, projectIDOrName string) (string, error) {
+func resolveProjectID(ctx context.Context, projectIDOrName string) (string, error) {
 	// Already opaque?
 	if err := ids.Validate(projectIDOrName, ids.PrefixProject); err == nil {
 		return projectIDOrName, nil
@@ -260,7 +260,7 @@ func coreProjectIDs(ctx context.Context, name *string) ([]string, error) {
 
 // resolveRepoID converts a --repo flag (mount_name OR rep_id) to repo row ID
 // Returns ("", nil) for empty input (= master scope)
-func resolveRepoID(ctx context.Context, client *ent.Client, projectID, repoFlag string) (string, error) {
+func resolveRepoID(ctx context.Context, projectID, repoFlag string) (string, error) {
 	if repoFlag == "" {
 		return "", nil
 	}

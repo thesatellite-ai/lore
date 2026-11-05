@@ -54,7 +54,7 @@ func newBenchReportSummaryCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -122,7 +122,7 @@ func newBenchReportCompareCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -227,7 +227,7 @@ func newBenchReportTrendCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -305,7 +305,7 @@ func newBenchReportByCategoryCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -352,7 +352,7 @@ func newBenchReportRegressionsCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -412,7 +412,7 @@ func newBenchReportAnalyzeCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}

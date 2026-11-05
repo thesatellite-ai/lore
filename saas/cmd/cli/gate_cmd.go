@@ -22,9 +22,6 @@ import (
 	"github.com/thesatellite-ai/lore/schema"
 )
 
-// flagApprovers is `mission add --approvers`.
-const flagApprovers = "approvers"
-
 // Task / mission fields the gate reads.
 const (
 	fieldMissionID = "mission_id"
@@ -33,19 +30,6 @@ const (
 
 // gateHashShown is how much of approved_hash messages print.
 const gateHashShown = 8
-
-// resolveApprovers turns @handles into actor ids.
-func resolveApprovers(ctx context.Context, handles []string) ([]string, error) {
-	out := make([]string, 0, len(handles))
-	for _, h := range handles {
-		id, err := resolveHandleActor(ctx, h)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, nil
-}
 
 func newGateCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "gate", Short: "Human gates: stop agents until a person approves"}

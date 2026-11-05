@@ -140,11 +140,11 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	}
 	defer client.Close()
 
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		return err
 	}
-	repoID, err := resolveRepoID(ctx, client, projectID, rctx.RepoMount)
+	repoID, err := resolveRepoID(ctx, projectID, rctx.RepoMount)
 	if err != nil {
 		return err
 	}
@@ -264,10 +264,7 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	// (stitchPointer below)
 
 	// Resolve symlinks (R27 #19): if the out file is a symlink, write to target
-	resolvedOut, err := resolveSymlinkTarget(f.outPath)
-	if err != nil {
-		return errcodes.New(errcodes.Internal, "resolve out symlink").WithCause(err)
-	}
+	resolvedOut := resolveSymlinkTarget(f.outPath)
 
 	// Skip rename if content unchanged (R29 #53) — but still re-stitch the
 	// pointer: a tool file may have lost it even when the body is identical
@@ -684,29 +681,30 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
-// resolveSymlinkTarget returns the target if path is a symlink; path otherwise
+// resolveSymlinkTarget returns the target if path is a symlink; path otherwise.
+// Any lookup failure falls back to path itself, so it never fails.
 // (R27 #19 — atomic-write should preserve user's symlink layout.)
-func resolveSymlinkTarget(path string) (string, error) {
+func resolveSymlinkTarget(path string) string {
 	info, err := os.Lstat(path)
 	if err != nil {
 		// File doesn't exist yet — return path as-is
-		return path, nil
+		return path
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
-		return path, nil
+		return path
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return path, nil
+		return path
 	}
 	target, err := os.Readlink(abs)
 	if err != nil {
-		return path, nil
+		return path
 	}
 	if !filepath.IsAbs(target) {
 		target = filepath.Join(filepath.Dir(abs), target)
 	}
-	return target, nil
+	return target
 }
 
 // persistRenderHistory writes a render_history row for `lore why-context`

@@ -45,25 +45,6 @@ func briefIfPresentPlan(p *ent.Plan) any {
 	return map[string]any{"id": p.ID, "title": p.Title}
 }
 
-// printTaskRows renders the human task list. Shows the commitment chip only
-// when it isn't the common case (accepted) and the deferral wake date, so
-// triage/someday/deferred views are self-explaining
-func printTaskRows(rows []*ent.Task) { printTaskRowsWithState(rows, nil) }
-
-// printTaskRowsWithState is printTaskRows plus each task's coordination
-// state (§3.5: working / EXPIRED / gate / merged), when known.
-func printTaskRowsWithState(rows []*ent.Task, states map[string]string) {
-	if len(rows) == 0 {
-		fmt.Println(style.Muted("(no tasks)"))
-		return
-	}
-	for _, t := range rows {
-		// One line format for repo and store rows (taskListLine); the full
-		// opaque id is what every command takes.
-		fmt.Println(taskListLine(t, states[t.ID]))
-	}
-}
-
 // fullFromTask projects an ent.Task → taskFull JSON shape
 func fullFromTask(t *ent.Task) taskFull {
 	out := taskFull{
@@ -170,14 +151,6 @@ func taskStatus(s string) entTask.Status {
 	return es
 }
 
-func taskPriority(s string) entTask.Priority {
-	ep := entTask.Priority(s)
-	if err := entTask.PriorityValidator(ep); err != nil {
-		return entTask.PriorityMedium
-	}
-	return ep
-}
-
 // parseCommitment validates a --commitment value. Unlike taskStatus (which
 // silently falls back), commitment is loud: an invalid value is a hard error
 // so an agent can't typo its way into the wrong axis
@@ -195,26 +168,6 @@ func parseCommitment(s string) (entTask.Commitment, error) {
 // creation (no silent default — see TASK_COMMITMENT_SPEC.md ADR-TASK-1)
 func callerIsAgent() bool {
 	return identityBestEffort(context.Background()).Kind == identity.KindAgent
-}
-
-// activeTaskFilter applies the one shared ActiveTask predicate:
-//
-//	status NOT IN (done,cancelled)
-//	AND commitment = accepted
-//	AND (deferred_until IS NULL OR deferred_until <= now)
-//
-// Single definition consumed by `task list` default, the triage/someday/
-// deferred views, and the task FTS fetch (Rule 2 — do not inline elsewhere)
-func activeTaskFilter(q *ent.TaskQuery) *ent.TaskQuery {
-	now := time.Now()
-	return q.Where(
-		entTask.StatusNotIn(entTask.StatusDone, entTask.StatusCancelled),
-		entTask.CommitmentEQ(entTask.CommitmentAccepted),
-		entTask.Or(
-			entTask.DeferredUntilIsNil(),
-			entTask.DeferredUntilLTE(now),
-		),
-	)
 }
 
 // parseDeferUntil parses a --defer-until value (YYYY-MM-DD, consistent

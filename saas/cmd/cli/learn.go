@@ -101,7 +101,7 @@ func runLearnFromDocs(ctx context.Context, f *commonFlags, explicitPaths []strin
 	}
 	defer client.Close()
 
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func newLearnListCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -351,7 +351,7 @@ func newLearnPromoteCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -418,7 +418,7 @@ func newLearnRejectCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}

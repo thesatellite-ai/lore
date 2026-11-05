@@ -135,7 +135,7 @@ func runBenchRunStart(ctx context.Context, f *benchRunStartFlags) error {
 		return err
 	}
 	defer client.Close()
-	projectID, err := resolveProjectID(ctx, client, rctx.ProjectID)
+	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -440,7 +440,7 @@ func newBenchRunListCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -500,7 +500,7 @@ func newBenchRunShowCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -558,7 +558,7 @@ func newBenchRunCancelCommand() *cobra.Command {
 				return err
 			}
 			defer client.Close()
-			projectID, err := resolveProjectID(cmd.Context(), client, rctx.ProjectID)
+			projectID, err := resolveProjectID(cmd.Context(), rctx.ProjectID)
 			if err != nil {
 				return err
 			}

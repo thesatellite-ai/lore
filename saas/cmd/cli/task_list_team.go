@@ -13,15 +13,8 @@ import (
 	entTask "dbent/gen/ent/task"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/signals/coord"
-	"saas/pkg/constants"
 
-	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/schema"
-)
-
-const (
-	flagClaimedBy = "claimed-by"
-	flagMine      = "mine"
 )
 
 // fieldActive is the roster rows' active flag.
@@ -32,12 +25,6 @@ type taskListTeamFlags struct {
 	claimedBy string
 	mine      bool
 	allRepos  bool
-}
-
-func bindTaskListTeamFlags(cmd *cobra.Command, f *taskListTeamFlags) {
-	cmd.Flags().StringVar(&f.claimedBy, flagClaimedBy, "", "only tasks claimed right now by @handle")
-	cmd.Flags().BoolVar(&f.mine, flagMine, false, "assigned to me or my team, and unclaimed or claimed by me")
-	cmd.Flags().BoolVar(&f.allRepos, constants.FlagAllRepos, false, "every repo of the project (the default for team views)")
 }
 
 // boardReader is the one signals read the team filters need: the last
@@ -142,32 +129,4 @@ func agoString(d time.Duration) string {
 		return fmt.Sprintf("%d min", int(d.Minutes()))
 	}
 	return fmt.Sprintf("%d h", int(d.Hours()))
-}
-
-// flagSignals is `task show --signals`.
-const flagSignals = "signals"
-
-// printTaskSignals prints the task's claim as this reader sees it now
-// (F7 Debug: holder, token prefix, expires, renewed_seq).
-func printTaskSignals(ctx context.Context, id string) error {
-	w, err := openCoordWorld(ctx)
-	if err != nil {
-		return err
-	}
-	st, err := w.repoSignalsChecked()
-	if err != nil {
-		return err
-	}
-	return printClaimOn(ctx, st, w.Folder, id)
-}
-
-// printClaimOn prints the claim on task id in folder of the signals ref st
-// as this clone sees it now (claimText).
-func printClaimOn(ctx context.Context, st *signals.Store, folder, id string) error {
-	txt, err := claimText(ctx, st, folder, id)
-	if err != nil {
-		return err
-	}
-	fmt.Print(txt)
-	return nil
 }

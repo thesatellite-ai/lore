@@ -255,6 +255,8 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 			}
 		case live.LandProtected:
 			_ = writeLiveNote(s.stateDir, liveNoteProtected, res.Detail) // best effort: the note only feeds `lore live doctor`
+		case live.LandOffline, live.LandNoRemote, live.LandRetriesOut, live.LandRefused:
+			// nothing landed: the rows stay live and the next pass retries
 		}
 	}
 	if len(removeIf)+len(exact) > 0 {
@@ -304,7 +306,9 @@ func (s *liveSession) autoLand(ctx context.Context, folder string) {
 		fmt.Fprintln(os.Stderr, style.Error(liveLogPrefix+"land: "+err.Error()))
 		return
 	}
-	printLandOutcome(os.Stderr, out)
+	// autoLand is best effort and its only channel is stderr: a failed
+	// write there has nowhere else to be reported, so it is dropped.
+	_ = printLandOutcome(os.Stderr, out)
 }
 
 // landBranchFallback names the branch in landing messages when the pass
@@ -313,31 +317,43 @@ func (s *liveSession) autoLand(ctx context.Context, folder string) {
 const landBranchFallback = "the default branch"
 
 // printLandOutcome writes the result of a landing pass to w, naming the real
-// default branch (out.Branch) in every line.
-func printLandOutcome(w io.Writer, out landOutcome) {
+// default branch (out.Branch) in every line. LandNothing and LandNoRemote
+// print no status line (nothing happened worth a message); only the
+// rows-left line can follow. It returns the first write error.
+func printLandOutcome(w io.Writer, out landOutcome) error {
 	branch := out.Branch
 	if branch == "" {
 		branch = landBranchFallback
 	}
+	line := ""
 	switch out.Status {
 	case live.LandDone:
 		msg := fmt.Sprintf("landed on %s (%s)", branch, shortSHA(out.Commit))
 		if out.Copied > 0 {
 			msg += fmt.Sprintf("; %d open row(s) copied, they stay live", out.Copied)
 		}
-		fmt.Fprintln(w, style.Success(liveLogPrefix+msg+"; leaves live once "+branch+" is fetched"))
+		line = style.Success(liveLogPrefix + msg + "; leaves live once " + branch + " is fetched")
 	case live.LandProtected:
-		fmt.Fprintln(w, liveLogPrefix+branch+" is protected: the rows ride on your next push (lore: land N rows)")
+		line = liveLogPrefix + branch + " is protected: the rows ride on your next push (lore: land N rows)"
 	case live.LandOffline:
-		fmt.Fprintln(w, liveLogPrefix+"not landed yet (offline); the next command retries")
+		line = liveLogPrefix + "not landed yet (offline); the next command retries"
 	case live.LandRetriesOut:
-		fmt.Fprintln(w, liveLogPrefix+"not landed yet ("+branch+" kept moving); the next command retries")
+		line = liveLogPrefix + "not landed yet (" + branch + " kept moving); the next command retries"
 	case live.LandRefused:
-		fmt.Fprintln(w, style.Warn(liveLogPrefix+branch+" refused the landing: "+out.Detail))
+		line = style.Warn(liveLogPrefix + branch + " refused the landing: " + out.Detail)
+	case live.LandNothing, live.LandNoRemote:
+	}
+	if line != "" {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
 	}
 	if out.Left > 0 {
-		fmt.Fprintf(w, "%s%d row(s) left live (%s holds them)\n", liveLogPrefix, out.Left, branch)
+		if _, err := fmt.Fprintf(w, "%s%d row(s) left live (%s holds them)\n", liveLogPrefix, out.Left, branch); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // shortSHALen is how much of a commit id output shows.
@@ -373,7 +389,7 @@ are copied at live.max_age. land does it now for one row or a selection.
 			if err != nil {
 				return err
 			}
-			sel := landSelector(args, all, kind, mission)
+			sel := landSelector(args, kind, mission)
 			if dryRun {
 				return s.printLandPlan(cmd.Context(), folder, sel)
 			}
@@ -389,8 +405,7 @@ are copied at live.max_age. land does it now for one row or a selection.
 				fmt.Printf("nothing to land: %s already holds every named row\n", out.Branch)
 				return nil
 			}
-			printLandOutcome(os.Stderr, out)
-			return nil
+			return printLandOutcome(os.Stderr, out)
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "every live row of this project")
@@ -401,7 +416,7 @@ are copied at live.max_age. land does it now for one row or a selection.
 }
 
 // landSelector builds the row filter of `lore land`.
-func landSelector(args []string, all bool, kind, mission string) landSelect {
+func landSelector(args []string, kind, mission string) landSelect {
 	table := ""
 	if kind != "" {
 		table = kind

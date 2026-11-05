@@ -49,19 +49,6 @@ func printJSON(kind string, data any, count int) {
 	fmt.Println(string(out))
 }
 
-// missionWithTasks is the canonical JSON shape for mission show/list with
-// eager-loaded tasks. Fields use snake_case for stable consumer parsing
-type missionWithTasks struct {
-	ID          string      `json:"id"`
-	Title       string      `json:"title"`
-	Body        string      `json:"body,omitempty"`
-	Status      string      `json:"status"`
-	TargetDate  string      `json:"target_date,omitempty"`
-	CompletedAt string      `json:"completed_at,omitempty"`
-	CreatedAt   string      `json:"created_at"`
-	Tasks       []taskBrief `json:"tasks,omitempty"`
-}
-
 // taskBrief is the lightweight task projection used in eager-load contexts
 type taskBrief struct {
 	ID            string `json:"id"`
@@ -92,25 +79,6 @@ type taskFull struct {
 	ProjectID     string `json:"project_id"`
 	RepoID        string `json:"repo_id,omitempty"`
 	CreatedAt     string `json:"created_at"`
-}
-
-// projectWithRepos projects a Project with its repos
-type projectWithRepos struct {
-	ID           string      `json:"id"`
-	Name         string      `json:"name"`
-	OriginURL    string      `json:"origin_url,omitempty"`
-	ArchivedAt   string      `json:"archived_at,omitempty"`
-	CreatedAt    string      `json:"created_at"`
-	LastActiveAt string      `json:"last_active_at"`
-	Repos        []repoBrief `json:"repos,omitempty"`
-}
-
-type repoBrief struct {
-	ID          string `json:"id"`
-	MountName   string `json:"mount_name"`
-	DisplayName string `json:"display_name,omitempty"`
-	OriginURL   string `json:"origin_url,omitempty"`
-	ArchivedAt  string `json:"archived_at,omitempty"`
 }
 
 // briefTask projects an ent Task into the lightweight JSON form used in
