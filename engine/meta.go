@@ -26,8 +26,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 	"sync/atomic"
+	"time"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/policy"
