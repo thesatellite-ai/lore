@@ -142,6 +142,11 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
 				return errcodes.New(errcodes.Internal, "sync pass").WithCause(err)
 			}
 			core, coreErr := syncCoreStores(cmd.Context())
+			// TIME 11.9 (FA-LTASK-1): run spans queued while a store was
+			// unreachable are written now that the stores were reached.
+			if n := flushTimeOutbox(cmd.Context()); n > 0 && !asJSON {
+				fmt.Printf("lore sync: wrote %d queued run time span(s)\n", n)
+			}
 			if coreErr == nil {
 				// Store rows arrive through the core, not the lore.db
 				// import, so the private renders are refreshed here too.
