@@ -84,6 +84,9 @@ type coordWorld struct {
 	// client: the task is a client repo's own task coordinated on the
 	// linked store (forTask); its rows are clientRows.
 	client bool
+	// mergeCheck is merge_check.adapter (F9 check 3): the top level of
+	// config.yaml, then the org entry; "" = none.
+	mergeCheck orgconf.MergeCheckAdapter
 }
 
 // sigSpot is one signals ref: the git repo holding it, its remote, the
@@ -326,7 +329,7 @@ func (a *App) storeClone(ctx context.Context, name store.Source) (dir, branch, f
 	return g.Dir(), branch, folder, true
 }
 
-// settings applies lease, agents and live.autopush/remote: the defaults,
+// settings applies lease, agents, merge_check and live.autopush/remote: the defaults,
 // then the top level of config.yaml, then the org entry (v0.1.17
 // lorecfg LeaseFor/AgentsFor/LiveFor), then LORE_LIVE_REMOTE and
 // LORE_LIVE_AUTOPUSH.
@@ -335,6 +338,10 @@ func (w *coordWorld) settings(cfg *orgconf.Config, org *orgconf.Org) {
 	w.agents = coord.Agents{MaxClaims: defaultMaxClaims, MaxAttempts: defaultMaxAttempts}
 	w.autopush, w.remoteName = true, defaultRemote
 	if cfg != nil {
+		w.mergeCheck = cfg.MergeCheck.Adapter
+		if org != nil && org.MergeCheck != nil && org.MergeCheck.Adapter != "" {
+			w.mergeCheck = org.MergeCheck.Adapter
+		}
 		leases := []*orgconf.Lease{&cfg.Lease}
 		agents := []*orgconf.Agents{&cfg.Agents}
 		lives := []*orgconf.Live{&cfg.Live}
