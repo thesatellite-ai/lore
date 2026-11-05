@@ -32,7 +32,7 @@ func (t standaloneTeam) ShowDetail(ctx context.Context, taskID string) (opstask.
 	if err = w.useStore(ctx); err != nil {
 		return opstask.ShowDetail{}, false, err
 	}
-	d, ok, err := engineRows(h).Get(ctx, taskID)
+	d, ok, err := engineRows{a: h.a}.Get(ctx, taskID)
 	if err != nil || !ok {
 		return opstask.ShowDetail{}, false, err
 	}

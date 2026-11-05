@@ -81,7 +81,7 @@ func (h standaloneCoord) TaskReassignPlan(ctx context.Context, in opscoord.Reass
 	if err != nil {
 		return opscoord.ReassignPlan{}, err
 	}
-	docs, err := engineRows(h).List(ctx)
+	docs, err := engineRows{a: h.a}.List(ctx)
 	if err != nil {
 		return opscoord.ReassignPlan{}, err
 	}
@@ -388,7 +388,7 @@ func (h standaloneCoord) GateApprove(ctx context.Context, in opscoord.GateIn) (o
 
 // checkApprover enforces the mission's approvers list, when it has one.
 func (h standaloneCoord) checkApprover(ctx context.Context, id, actorID string) error {
-	rows := engineRows(h)
+	rows := engineRows{a: h.a}
 	task, ok, err := rows.Get(ctx, id)
 	if err != nil || !ok || task.Str(fieldMissionID) == "" {
 		return nil // no mission (or unreadable here): no list to check

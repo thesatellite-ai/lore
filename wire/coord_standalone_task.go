@@ -43,7 +43,7 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 	env := w.env(ctx)
 	opts := coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), Repo: h.hereRepo(ctx, w), InRepo: !w.spot.store, Coordinate: in.Coordinate}
 	// TASK 6.9: a parent with open sub-tasks is refused unless --coordinate.
-	docs, err := engineRows(h).List(ctx)
+	docs, err := engineRows{a: h.a}.List(ctx)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
@@ -114,7 +114,7 @@ func (h standaloneCoord) hereRepo(ctx context.Context, w *coordWorld) string {
 	if !ok {
 		return ""
 	}
-	return engineRows(h).RepoName(id)
+	return engineRows{a: h.a}.RepoName(id)
 }
 
 // TaskHeartbeat implements opscoord.Host: renew one claim, or every claim
@@ -218,7 +218,10 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 		return opscoord.NextOut{}, err
 	}
 	env := w.env(ctx)
-	rows := engineRows(h)
+	rows := engineRows{a: h.a}
+	if er, ok := env.Rows.(engineRows); ok {
+		rows = er // its List rolls a lost attempt back before the re-run picks (P3-SIGCOORD-6)
+	}
 	req := coord.NextRequest{
 		Filter: queue.Filter{Mission: in.Mission, Role: in.Role, Repo: in.Repo, Here: h.hereRepo(ctx, w)},
 		Opts:   coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), InRepo: !w.spot.store},

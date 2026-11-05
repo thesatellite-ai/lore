@@ -431,6 +431,9 @@ func (s *Store) attempt(ctx context.Context, decide Decide) (Result, bool, error
 		if err != nil {
 			return res, false, fmt.Errorf("signals: prepare companion: %w", err)
 		}
+		if u.Dst == "" {
+			continue // nothing of its own to push this time; Finalize still runs
+		}
 		updates = append(updates, u)
 	}
 	ch.Companions = slices.Concat(local, remote)

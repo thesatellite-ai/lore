@@ -77,8 +77,8 @@ func TestStandaloneNote(t *testing.T) {
 		{"from another place", `{"id":"` + id + `","text":["x"],"from":"acme"}`, errs.Unsupported},
 	}
 	for _, c := range refusals {
-		if _, err := noteLines(t, a, c.input); !errs.Has(err, c.code) {
-			t.Errorf("%s: %v, want %s", c.name, err, c.code)
+		if _, rerr := noteLines(t, a, c.input); !errs.Has(rerr, c.code) {
+			t.Errorf("%s: %v, want %s", c.name, rerr, c.code)
 		}
 	}
 	if n := countRows(t, a, schema.TableComments); n != 1 {

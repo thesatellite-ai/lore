@@ -139,7 +139,7 @@ func (h standaloneCoord) openView(ctx context.Context) (*coordView, error) {
 	if v, lerr := w.signalsStore().Local(ctx); lerr == nil {
 		cv.board, cv.hasBoard = v, true
 	}
-	if cv.docs, err = engineRows(h).List(ctx); err != nil {
+	if cv.docs, err = (engineRows{a: h.a}).List(ctx); err != nil {
 		return nil, err
 	}
 	return cv, nil
@@ -841,7 +841,7 @@ func (h standaloneCoord) MissionStatus(ctx context.Context, in opscoord.MissionS
 	if err != nil {
 		return opscoord.MissionStatusOut{}, err
 	}
-	rows := engineRows(h)
+	rows := engineRows{a: h.a}
 	m, ok, err := rows.Get(ctx, in.ID)
 	if err != nil {
 		return opscoord.MissionStatusOut{}, err

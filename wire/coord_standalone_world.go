@@ -466,7 +466,7 @@ func signatureEmail(stableKey string) string {
 
 // env is the coord.Env of this repo.
 func (w *coordWorld) env(ctx context.Context) coord.Env {
-	var rows coord.Rows = engineRows{a: w.a}
+	var rows coord.Rows = engineRows{a: w.a, at: w.atomicLive(ctx)}
 	if w.client {
 		rows = clientRowsFor(w)
 	}
@@ -538,8 +538,13 @@ func (w *coordWorld) requireHuman(what string) error {
 
 // engineRows is coord.Rows over the engine: reads see what the engine
 // sees (the live overlay included, after the command's fetch), writes go
-// through the engine after the signals push.
-type engineRows struct{ a *App }
+// through the engine after the signals push, or with it when at is set
+// (coord_standalone_atomic.go).
+type engineRows struct {
+	a *App
+	// at: the repo's live ref joins the signals push (nil: rows after it).
+	at LiveAtomic
+}
 
 var _ coord.Rows = engineRows{}
 
@@ -553,6 +558,9 @@ func tableFor(id string) row.Table {
 
 // Get implements coord.Rows.
 func (r engineRows) Get(ctx context.Context, id string) (coord.Doc, bool, error) {
+	if err := r.rollback(ctx); err != nil {
+		return nil, false, err
+	}
 	_, rw, ok, err := r.a.locateRow(ctx, tableFor(id), id)
 	if err != nil || !ok {
 		return nil, false, err
@@ -566,6 +574,9 @@ func (r engineRows) Get(ctx context.Context, id string) (coord.Doc, bool, error)
 
 // List returns every live task row of every attached store (task next).
 func (r engineRows) List(ctx context.Context) ([]coord.Doc, error) {
+	if err := r.rollback(ctx); err != nil {
+		return nil, err
+	}
 	var out []coord.Doc
 	for _, src := range r.a.Stores() {
 		rows, err := r.a.List(ctx, src, schema.TableTasks)
@@ -605,9 +616,28 @@ func (r engineRows) RepoName(repoID string) string {
 // fieldMountName is the repos table's mount name.
 const fieldMountName = "mount_name"
 
+// rollback undoes a lost attempt's rows before a decision reads (a no-op
+// without an atomic live ref or an open mark).
+func (r engineRows) rollback(ctx context.Context) error {
+	if r.at == nil {
+		return nil
+	}
+	return r.at.AtomicRollback(ctx)
+}
+
 // Stage implements coord.Rows: one companion writing every row through the
-// engine once the signals push was confirmed.
-func (r engineRows) Stage(_ context.Context, rows ...coord.RowWrite) ([]signals.Companion, error) {
+// engine, in the signals push when the repo's live ref can join it
+// (atomicCompanion), else once the signals push was confirmed.
+func (r engineRows) Stage(ctx context.Context, rows ...coord.RowWrite) ([]signals.Companion, error) {
+	if r.at != nil {
+		c, ok, err := r.stageAtomic(ctx, rows)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return []signals.Companion{c}, nil
+		}
+	}
 	return []signals.Companion{&engineCompanion{a: r.a, rows: rows}}, nil
 }
 
