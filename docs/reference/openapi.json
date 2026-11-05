@@ -1091,7 +1091,7 @@
     "/v1/architecturenotes/{id}": {
       "delete": {
         "operationId": "architecturenote.delete",
-        "summary": "Delete a architecture note (a tombstone keeps old copies from returning)",
+        "summary": "Delete a architecture note (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "architecturenote"
         ],
@@ -2080,6 +2080,160 @@
         }
       }
     },
+    "/v1/batches/{id}/undo": {
+      "post": {
+        "operationId": "batch.undo",
+        "summary": "Undo a bulk action: restore a delete batch, or move the rows a create batch added to the trash",
+        "tags": [
+          "batch"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the batch id (bat_…)",
+            "schema": {
+              "type": "string",
+              "description": "the batch id (bat_…)"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "into": {
+                      "type": "string"
+                    },
+                    "restored": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "reason"
+                        ]
+                      }
+                    },
+                    "trashed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "batch",
+                    "restored",
+                    "trashed",
+                    "skipped"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CANCELLED, E_PARENT_DELETED, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/behaviours": {
       "get": {
         "operationId": "behaviour.list",
@@ -2741,7 +2895,7 @@
     "/v1/behaviours/{id}": {
       "delete": {
         "operationId": "behaviour.delete",
-        "summary": "Delete a behaviour (a tombstone keeps old copies from returning)",
+        "summary": "Delete a behaviour (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "behaviour"
         ],
@@ -3951,7 +4105,7 @@
     "/v1/comments/{id}": {
       "delete": {
         "operationId": "comment.delete",
-        "summary": "Delete a comment (a tombstone is kept so old copies never return)",
+        "summary": "Delete a comment (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "comment"
         ],
@@ -4948,7 +5102,7 @@
     "/v1/cookbookrecipes/{id}": {
       "delete": {
         "operationId": "cookbookrecipe.delete",
-        "summary": "Delete a cookbookrecipe (a tombstone keeps old copies from returning)",
+        "summary": "Delete a cookbookrecipe (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "cookbookrecipe"
         ],
@@ -6369,7 +6523,7 @@
     "/v1/decisions/{id}": {
       "delete": {
         "operationId": "decision.delete",
-        "summary": "Delete a decision (a tombstone is kept so old copies never return)",
+        "summary": "Delete a decision (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "decision"
         ],
@@ -8875,7 +9029,7 @@
     "/v1/handoffs/{id}": {
       "delete": {
         "operationId": "handoff.delete",
-        "summary": "Delete a handoff (a tombstone keeps old copies from returning)",
+        "summary": "Delete a handoff (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "handoff"
         ],
@@ -10268,7 +10422,7 @@
     "/v1/hotfixes/{id}": {
       "delete": {
         "operationId": "hotfix.delete",
-        "summary": "Delete a hotfix (a tombstone is kept so old copies never return)",
+        "summary": "Delete a hotfix (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "hotfix"
         ],
@@ -11982,7 +12136,7 @@
     "/v1/incidents/{id}": {
       "delete": {
         "operationId": "incident.delete",
-        "summary": "Delete a incident (a tombstone keeps old copies from returning)",
+        "summary": "Delete a incident (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "incident"
         ],
@@ -13173,7 +13327,7 @@
                   },
                   "context": {
                     "type": "boolean",
-                    "description": "only the context checks: superseded but pinned, no summary, too long, code path without globs, untagged, near duplicates"
+                    "description": "only the context checks: superseded but pinned, no summary, too long, code path without globs, untagged, near duplicates, scope missing or conflicting, high hotfix older than 45 days, not validated in 90 days"
                   }
                 },
                 "additionalProperties": false
@@ -14284,6 +14438,10 @@
                     "type": "string",
                     "description": "actor id (act_…); default: the row's created_by is the current identity"
                   },
+                  "key": {
+                    "type": "string",
+                    "description": "idempotency key: a retry with the same key returns the memory already added and writes nothing"
+                  },
                   "kind": {
                     "type": "string",
                     "description": "core | retrieved | episodic | procedural | archival (default retrieved)"
@@ -14373,6 +14531,9 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
                     },
                     "id": {
                       "type": "string"
@@ -14712,7 +14873,7 @@
     "/v1/memories/{id}": {
       "delete": {
         "operationId": "memory.delete",
-        "summary": "Delete a memory (a tombstone is kept so old copies never return)",
+        "summary": "Delete a memory (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "memory"
         ],
@@ -14721,10 +14882,33 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the memory id (mem_…)",
+            "description": "the memory id (mem_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the memory id (mem_…)"
+              "description": "the memory id (mem_…); leave out with --where"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every memory matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every memory matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
             }
           },
           {
@@ -14758,6 +14942,9 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
                     },
                     "id": {
                       "type": "string"
@@ -15298,6 +15485,9 @@
                     "carried_meta": {
                       "type": "integer"
                     },
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -15459,6 +15649,9 @@
                     "carried_meta": {
                       "type": "integer"
                     },
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -15619,6 +15812,9 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
                     },
                     "id": {
                       "type": "string"
@@ -15794,6 +15990,9 @@
                     "carried_meta": {
                       "type": "integer"
                     },
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -15954,6 +16153,9 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
                     },
                     "id": {
                       "type": "string"
@@ -16434,9 +16636,17 @@
                     "type": "string",
                     "description": "only these keys, comma separated"
                   },
+                  "show_sensitive": {
+                    "type": "boolean",
+                    "description": "export sensitive values as they are (asks first)"
+                  },
                   "table": {
                     "type": "string",
                     "description": "only rows of this table"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "additionalProperties": false
@@ -16532,6 +16742,16 @@
           },
           "409": {
             "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -16807,7 +17027,7 @@
             }
           },
           "403": {
-            "description": "E_OLD_LORE",
+            "description": "E_META_FOREIGN_KEY, E_OLD_LORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -17354,6 +17574,24 @@
                         ]
                       }
                     },
+                    "refs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "absent": {
+                            "type": "integer"
+                          },
+                          "ref": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "ref",
+                          "absent"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -17457,7 +17695,7 @@
     "/v1/meta/rehome": {
       "post": {
         "operationId": "meta.rehome",
-        "summary": "List the metadata keys a place's rows use that it can no longer see",
+        "summary": "Re-file the metadata keys a place's rows use that it can no longer see (copy rule: reuse a visible key of that name and type, else a new key row)",
         "tags": [
           "meta"
         ],
@@ -17470,11 +17708,19 @@
                 "properties": {
                   "dry_run": {
                     "type": "boolean",
-                    "description": "preview (rehome only reports in this release; nothing is written either way)"
+                    "description": "list the keys to re-file and the rows to rewrite; write nothing"
                   },
                   "in": {
                     "type": "string",
                     "description": "the place whose rows are checked (default repo)"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "the place that takes a new key row when no visible key of that name and type exists (default: --in)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "additionalProperties": false
@@ -17490,11 +17736,17 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
                     "clashes": {
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "dry_run": {
+                      "type": "boolean"
                     },
                     "missing": {
                       "type": "array",
@@ -17515,6 +17767,9 @@
                           },
                           "scope": {
                             "type": "string"
+                          },
+                          "to": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -17525,6 +17780,15 @@
                         ]
                       }
                     },
+                    "plan": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rewritten": {
+                      "type": "integer"
+                    },
                     "store": {
                       "type": "string"
                     }
@@ -17532,14 +17796,15 @@
                   "required": [
                     "clashes",
                     "missing",
-                    "store"
+                    "store",
+                    "rewritten"
                   ]
                 }
               }
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_INVALID_ID, E_INVALID_INPUT",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
             "content": {
               "application/json": {
                 "schema": {
@@ -17579,7 +17844,17 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_IN_USE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -18101,6 +18376,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "context": {
+                    "type": "string",
+                    "description": "index: count this key's rows in the rendered available-knowledge index; none clears"
+                  },
                   "default": {
                     "type": "string",
                     "description": "value given on add (with --default-on); none clears"
@@ -18665,6 +18944,10 @@
                   "new_name": {
                     "type": "string",
                     "description": "the new name"
+                  },
+                  "rewrite_rows": {
+                    "type": "boolean",
+                    "description": "rewrite every row's label of the key now, in one batch (labels only; no updated_at or hlc change)"
                   }
                 },
                 "required": [
@@ -18796,7 +19079,7 @@
     "/v1/metas/{id}": {
       "get": {
         "operationId": "meta.show",
-        "summary": "Show a row's metadata",
+        "summary": "Show a row's metadata (sensitive values masked unless --show-sensitive)",
         "tags": [
           "meta"
         ],
@@ -18829,6 +19112,26 @@
             "schema": {
               "type": "boolean",
               "description": "show key ids"
+            }
+          },
+          {
+            "name": "show_sensitive",
+            "in": "query",
+            "required": false,
+            "description": "print sensitive values (asks first)",
+            "schema": {
+              "type": "boolean",
+              "description": "print sensitive values (asks first)"
+            }
+          },
+          {
+            "name": "yes",
+            "in": "query",
+            "required": false,
+            "description": "repeat after E_NEEDS_CONFIRM once the person said yes",
+            "schema": {
+              "type": "boolean",
+              "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
             }
           }
         ],
@@ -18877,6 +19180,12 @@
                     },
                     "id": {
                       "type": "string"
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -18938,6 +19247,16 @@
               }
             }
           },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "500": {
             "description": "E_INTERNAL",
             "content": {
@@ -18964,7 +19283,7 @@
     "/v1/metas/{id}/get": {
       "post": {
         "operationId": "meta.get",
-        "summary": "Show a row's metadata",
+        "summary": "Show a row's metadata (sensitive values masked unless --show-sensitive)",
         "tags": [
           "meta"
         ],
@@ -18994,6 +19313,14 @@
                   "key": {
                     "type": "string",
                     "description": "only this key"
+                  },
+                  "show_sensitive": {
+                    "type": "boolean",
+                    "description": "print sensitive values (asks first)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "additionalProperties": false
@@ -19046,6 +19373,12 @@
                     },
                     "id": {
                       "type": "string"
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -19099,6 +19432,16 @@
           },
           "409": {
             "description": "E_AMBIGUOUS_ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -19434,7 +19777,7 @@
             }
           },
           "403": {
-            "description": "E_OLD_LORE",
+            "description": "E_META_FOREIGN_KEY, E_OLD_LORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -19624,7 +19967,7 @@
             }
           },
           "403": {
-            "description": "E_OLD_LORE",
+            "description": "E_META_FOREIGN_KEY, E_OLD_LORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -20514,6 +20857,12 @@
                                     "store"
                                   ]
                                 },
+                                "cells": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "commitment": {
                                   "type": "string"
                                 },
@@ -20950,6 +21299,12 @@
                                 "required": [
                                   "store"
                                 ]
+                              },
+                              "cells": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "commitment": {
                                 "type": "string"
@@ -21643,7 +21998,7 @@
     "/v1/missions/{id}": {
       "delete": {
         "operationId": "mission.delete",
-        "summary": "Delete a mission (its tasks are detached; a tombstone is kept)",
+        "summary": "Delete a mission (its tasks go with it: one batch, to the trash)",
         "tags": [
           "mission"
         ],
@@ -21652,10 +22007,33 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the mission id (msn_…)",
+            "description": "the mission id (msn_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the mission id (msn_…)"
+              "description": "the mission id (msn_…); leave out with --where"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every mission matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every mission matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
             }
           },
           {
@@ -21854,6 +22232,69 @@
             }
           },
           {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "order the task table: time_spent or elapsed, :asc (default) or :desc",
+            "schema": {
+              "type": "array",
+              "description": "order the task table: time_spent or elapsed, :asc (default) or :desc",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "worked_by",
+            "in": "query",
+            "required": false,
+            "description": "only tasks with time by this actor (@me, act_ id, key or name); add +agents for their agents too",
+            "schema": {
+              "type": "string",
+              "description": "only tasks with time by this actor (@me, act_ id, key or name); add +agents for their agents too"
+            }
+          },
+          {
+            "name": "worked_since",
+            "in": "query",
+            "required": false,
+            "description": "only tasks with time on or after this day; TIME shows that range",
+            "schema": {
+              "type": "string",
+              "description": "only tasks with time on or after this day; TIME shows that range"
+            }
+          },
+          {
+            "name": "worked_until",
+            "in": "query",
+            "required": false,
+            "description": "only tasks with time on or before this day; TIME shows that range",
+            "schema": {
+              "type": "string",
+              "description": "only tasks with time on or before this day; TIME shows that range"
+            }
+          },
+          {
+            "name": "min_time",
+            "in": "query",
+            "required": false,
+            "description": "only tasks with at least this effort (e.g. 2h)",
+            "schema": {
+              "type": "string",
+              "description": "only tasks with at least this effort (e.g. 2h)"
+            }
+          },
+          {
+            "name": "max_time",
+            "in": "query",
+            "required": false,
+            "description": "only tasks with at most this effort (e.g. 30m)",
+            "schema": {
+              "type": "string",
+              "description": "only tasks with at most this effort (e.g. 30m)"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -22005,6 +22446,12 @@
                                 "required": [
                                   "store"
                                 ]
+                              },
+                              "cells": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "commitment": {
                                 "type": "string"
@@ -23699,7 +24146,7 @@
     "/v1/patterns/{id}": {
       "delete": {
         "operationId": "pattern.delete",
-        "summary": "Delete a pattern (archive is usually what you want; a tombstone keeps old copies from returning)",
+        "summary": "Delete a pattern (to the trash; archive is usually what you want)",
         "tags": [
           "pattern"
         ],
@@ -24674,6 +25121,275 @@
         }
       }
     },
+    "/v1/pins/{id}/set": {
+      "post": {
+        "operationId": "pin.set",
+        "summary": "Pin how a must rule or critical/high hotfix appears in LORE.md: --context full or line",
+        "tags": [
+          "pin"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the must rule (rul_…) or critical/high hotfix (hfx_…) to pin",
+            "schema": {
+              "type": "string",
+              "description": "the must rule (rul_…) or critical/high hotfix (hfx_…) to pin"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "context": {
+                    "type": "string",
+                    "description": "full (always in full, ahead of other must rules) or line (always one line)"
+                  }
+                },
+                "required": [
+                  "context"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "context": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store",
+                    "context"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_POLICY_DENIED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pins/{id}/unset": {
+      "post": {
+        "operationId": "pin.unset",
+        "summary": "Remove a pin; render ranks the entry again",
+        "tags": [
+          "pin"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the pinned rule or hotfix id",
+            "schema": {
+              "type": "string",
+              "description": "the pinned rule or hotfix id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "context": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store",
+                    "context"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_POLICY_DENIED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/plans": {
       "get": {
         "operationId": "plan.list",
@@ -25486,7 +26202,7 @@
     "/v1/plans/{id}": {
       "delete": {
         "operationId": "plan.delete",
-        "summary": "Delete a plan (its tasks and missions are detached; a tombstone is kept)",
+        "summary": "Move a plan to the trash, with its tasks (one batch; restore with lore trash restore)",
         "tags": [
           "plan"
         ],
@@ -25495,10 +26211,33 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the plan id (pln_…)",
+            "description": "the plan id (pln_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the plan id (pln_…)"
+              "description": "the plan id (pln_…); leave out with --where"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every plan matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every plan matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
             }
           },
           {
@@ -26801,7 +27540,7 @@
     "/v1/playbooks/{id}": {
       "delete": {
         "operationId": "playbook.delete",
-        "summary": "Delete a playbook (archive is usually what you want; a tombstone keeps old copies from returning)",
+        "summary": "Delete a playbook (to the trash; archive is usually what you want)",
         "tags": [
           "playbook"
         ],
@@ -28233,6 +28972,26 @@
               "type": "string",
               "description": "only projects of this store (default every attached store)"
             }
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "description": "also list rows in the trash (marked in the trash)",
+            "schema": {
+              "type": "boolean",
+              "description": "also list rows in the trash (marked in the trash)"
+            }
+          },
+          {
+            "name": "deleted_only",
+            "in": "query",
+            "required": false,
+            "description": "list only rows in the trash",
+            "schema": {
+              "type": "boolean",
+              "description": "list only rows in the trash"
+            }
           }
         ],
         "responses": {
@@ -28298,6 +29057,12 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "schema_version": {
                       "type": "integer"
@@ -28388,7 +29153,7 @@
     "/v1/projects/{id}": {
       "delete": {
         "operationId": "project.delete",
-        "summary": "Delete a project (a tombstone; archive is usually what you want)",
+        "summary": "Delete a project (to the trash; archive is usually what you want)",
         "tags": [
           "project"
         ],
@@ -29703,7 +30468,7 @@
     "/v1/prompts/{id}": {
       "delete": {
         "operationId": "prompt.delete",
-        "summary": "Delete a prompt (archive is usually what you want; a tombstone keeps old copies from returning)",
+        "summary": "Delete a prompt (to the trash; archive is usually what you want)",
         "tags": [
           "prompt"
         ],
@@ -31115,7 +31880,7 @@
     "/v1/reminders/{id}": {
       "delete": {
         "operationId": "reminder.delete",
-        "summary": "Delete a reminder (a tombstone is kept so old copies never return)",
+        "summary": "Delete a reminder (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "reminder"
         ],
@@ -31779,6 +32544,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "new_project": {
+                    "type": "boolean",
+                    "description": "also give the fork its own project: a new project id in _meta.json and a projects row; this fork's rows move to it (their _o.repo still names the upstream)"
+                  },
                   "split": {
                     "type": "boolean",
                     "description": "this repo was split from the recorded one (records split_from instead of forked_from)"
@@ -31803,10 +32572,16 @@
                     "mount_name": {
                       "type": "string"
                     },
+                    "project_id": {
+                      "type": "string"
+                    },
                     "repo_id": {
                       "type": "string"
                     },
                     "split_from": {
+                      "type": "string"
+                    },
+                    "upstream_project_id": {
                       "type": "string"
                     },
                     "url": {
@@ -31815,7 +32590,8 @@
                   },
                   "required": [
                     "repo_id",
-                    "mount_name"
+                    "mount_name",
+                    "project_id"
                   ]
                 }
               }
@@ -31945,6 +32721,9 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "batch": {
+                      "type": "string"
                     },
                     "dry_run": {
                       "type": "boolean"
@@ -32265,7 +33044,7 @@
     "/v1/repos/{id}": {
       "delete": {
         "operationId": "repo.delete",
-        "summary": "Delete a repo (a tombstone; archive is usually what you want)",
+        "summary": "Delete a repo (to the trash; archive is usually what you want)",
         "tags": [
           "repo"
         ],
@@ -32890,7 +33669,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_RESOURCE_NAME",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_KIND_LIMIT, E_RESOURCE_NAME",
             "content": {
               "application/json": {
                 "schema": {
@@ -33054,7 +33833,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_KIND_LIMIT",
             "content": {
               "application/json": {
                 "schema": {
@@ -33175,6 +33954,14 @@
                   "new_name": {
                     "type": "string",
                     "description": "the new field name"
+                  },
+                  "rewrite_rows": {
+                    "type": "boolean",
+                    "description": "also rewrite the field's stored name in every resource now (one batch)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "required": [
@@ -33223,7 +34010,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_RESOURCE_NAME",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_KIND_LIMIT, E_RESOURCE_NAME",
             "content": {
               "application/json": {
                 "schema": {
@@ -33503,6 +34290,13 @@
                       "type": "string"
                     }
                   },
+                  "clear": {
+                    "type": "array",
+                    "description": "remove a rule: default, pattern, min, max, replaced_by, remind_before (repeatable; clearing pattern/min/max asks)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "default": {
                     "type": "string",
                     "description": "the value written when an add does not set the field"
@@ -33601,6 +34395,13 @@
                     "type": "string",
                     "description": "tighten the field for a nearer place only (an extension row there; RES 3.6)"
                   },
+                  "value_labels": {
+                    "type": "array",
+                    "description": "label an allowed value, \u003cname\u003e=\u003ctext\u003e (repeatable; input then also takes the label; OQ-AV)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -33651,7 +34452,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_RESOURCE_TYPE",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_KIND_LIMIT, E_RESOURCE_TYPE",
             "content": {
               "application/json": {
                 "schema": {
@@ -33830,7 +34631,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_RESOURCE_NAME",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_KIND_LIMIT, E_RESOURCE_NAME",
             "content": {
               "application/json": {
                 "schema": {
@@ -33952,6 +34753,9 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "added_by": {
+                          "type": "string"
+                        },
                         "count": {
                           "type": "integer"
                         },
@@ -34014,6 +34818,27 @@
                               "type": {
                                 "type": "string"
                               },
+                              "value_ids": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name"
+                                  ]
+                                }
+                              },
                               "values": {
                                 "type": "array",
                                 "items": {
@@ -34045,6 +34870,9 @@
                         },
                         "store": {
                           "type": "string"
+                        },
+                        "unreviewed": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -34182,6 +35010,10 @@
                     "type": "string",
                     "description": "how a row renders"
                   },
+                  "reviewed": {
+                    "type": "boolean",
+                    "description": "mark an agent-added kind reviewed (a person only)"
+                  },
                   "secret_manager": {
                     "type": "string",
                     "description": "the secret manager a bare secret_ref path means"
@@ -34232,7 +35064,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_KIND_LIMIT",
             "content": {
               "application/json": {
                 "schema": {
@@ -34399,7 +35231,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_RESOURCE_NAME",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_KIND_LIMIT, E_RESOURCE_NAME",
             "content": {
               "application/json": {
                 "schema": {
@@ -34628,6 +35460,9 @@
                           "archived_at": {
                             "type": "string"
                           },
+                          "check_note": {
+                            "type": "string"
+                          },
                           "checked_by": {
                             "type": "string"
                           },
@@ -34775,7 +35610,7 @@
             }
           },
           "422": {
-            "description": "E_KIND_UNKNOWN",
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
             "content": {
               "application/json": {
                 "schema": {
@@ -34854,6 +35689,13 @@
                   "name": {
                     "type": "string",
                     "description": "the resource name (snake_case, or DNS / IP under the kind's name format)"
+                  },
+                  "prompt": {
+                    "type": "array",
+                    "description": "type this field's value at the terminal, hidden when sensitive (repeatable; @required = every missing required field)",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "set": {
                     "type": "array",
@@ -34967,7 +35809,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_IN_USE, E_RESOURCE_PLACE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_RESOURCE_ARCHIVED, E_RESOURCE_IN_USE, E_RESOURCE_PLACE, E_RESOURCE_TAKEN, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -34977,7 +35819,7 @@
             }
           },
           "422": {
-            "description": "E_KIND_UNKNOWN",
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
             "content": {
               "application/json": {
                 "schema": {
@@ -35085,7 +35927,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_KIND_LIMIT",
             "content": {
               "application/json": {
                 "schema": {
@@ -35300,7 +36142,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_IN_USE, E_RESOURCE_PLACE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_IN_USE, E_RESOURCE_PLACE, E_RESOURCE_TAKEN, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -35404,6 +36246,12 @@
                     },
                     "format": {
                       "type": "string"
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -35538,6 +36386,10 @@
                     "type": "string",
                     "description": "the kind of every row (required for csv; json/yaml rows name their kind)"
                   },
+                  "overwrite": {
+                    "type": "boolean",
+                    "description": "re-import: also replace rows edited in lore since the last import (default: keep them)"
+                  },
                   "skip_errors": {
                     "type": "boolean",
                     "description": "write the valid rows and list the rest (default: all or nothing)"
@@ -35581,6 +36433,9 @@
                       "type": "boolean"
                     },
                     "errors": {
+                      "type": "integer"
+                    },
+                    "kept": {
                       "type": "integer"
                     },
                     "rows": {
@@ -35670,7 +36525,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_IN_USE, E_RESOURCE_PLACE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_BATCH, E_RESOURCE_IN_USE, E_RESOURCE_PLACE, E_RESOURCE_TAKEN, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -35680,7 +36535,7 @@
             }
           },
           "422": {
-            "description": "E_KIND_UNKNOWN",
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
             "content": {
               "application/json": {
                 "schema": {
@@ -35735,6 +36590,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "unreviewed": {
+                    "type": "boolean",
+                    "description": "only kinds an agent added that no person reviewed yet"
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -35756,6 +36617,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "added_by": {
+                            "type": "string"
+                          },
                           "count": {
                             "type": "integer"
                           },
@@ -35818,6 +36682,27 @@
                                 "type": {
                                   "type": "string"
                                 },
+                                "value_ids": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "name"
+                                    ]
+                                  }
+                                },
                                 "values": {
                                   "type": "array",
                                   "items": {
@@ -35849,6 +36734,9 @@
                           },
                           "store": {
                             "type": "string"
+                          },
+                          "unreviewed": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -36021,6 +36909,12 @@
                           "name",
                           "detail"
                         ]
+                      }
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     }
                   },
@@ -36355,7 +37249,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_RESOURCE_INVALID",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_RESOURCE_INVALID, E_RESOURCE_KIND_MISMATCH",
             "content": {
               "application/json": {
                 "schema": {
@@ -36458,6 +37352,17 @@
                   "kind": {
                     "type": "string",
                     "description": "only this kind (name or knd_ id)"
+                  },
+                  "meta_where": {
+                    "type": "array",
+                    "description": "offboarding: only resources whose metadata matches: key=value, key!=value, key~=text, key? (repeatable, all must match)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "offboarding: only resources living in this place (\u003cfolder\u003e, \u003cstore\u003e/\u003cfolder\u003e or \u003cstore\u003e), across every attached store"
                   }
                 },
                 "additionalProperties": false
@@ -36509,6 +37414,12 @@
                         ]
                       }
                     },
+                    "inbound_refs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "kinds": {
                       "type": "array",
                       "items": {
@@ -36525,6 +37436,12 @@
                           "kind",
                           "count"
                         ]
+                      }
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "open_links": {
@@ -36714,6 +37631,9 @@
                           "archived_at": {
                             "type": "string"
                           },
+                          "check_note": {
+                            "type": "string"
+                          },
                           "checked_by": {
                             "type": "string"
                           },
@@ -36886,7 +37806,7 @@
     "/v1/resources/{id}": {
       "delete": {
         "operationId": "resource.delete",
-        "summary": "Delete a resource, or every resource of a kind matching --where (a tombstone is kept)",
+        "summary": "Delete a resource, or every resource of a kind matching --where (to the trash)",
         "tags": [
           "resource"
         ],
@@ -37050,7 +37970,7 @@
             }
           },
           "422": {
-            "description": "E_KIND_UNKNOWN",
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
             "content": {
               "application/json": {
                 "schema": {
@@ -37143,6 +38063,9 @@
                         "archived_at": {
                           "type": "string"
                         },
+                        "check_note": {
+                          "type": "string"
+                        },
                         "checked_by": {
                           "type": "string"
                         },
@@ -37222,6 +38145,12 @@
                         "store",
                         "values"
                       ]
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -37272,7 +38201,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_RESOURCE_AMBIGUOUS",
             "content": {
               "application/json": {
                 "schema": {
@@ -37367,6 +38296,13 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "prompt": {
+                    "type": "array",
+                    "description": "type this field's value at the terminal, hidden when sensitive (repeatable; @required = every missing required field)",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "set": {
                     "type": "array",
@@ -37486,7 +38422,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_IN_USE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_RESOURCE_ARCHIVED, E_RESOURCE_IN_USE, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -37496,7 +38432,7 @@
             }
           },
           "422": {
-            "description": "E_KIND_UNKNOWN",
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
             "content": {
               "application/json": {
                 "schema": {
@@ -37720,6 +38656,10 @@
                     "type": "string",
                     "description": "bulk: the kind of the rows --where matches"
                   },
+                  "note": {
+                    "type": "string",
+                    "description": "what was checked (kept until the next check)"
+                  },
                   "where": {
                     "type": "array",
                     "description": "bulk: filter on a field, as resource list --where (repeatable; all must match)",
@@ -37823,7 +38763,7 @@
             }
           },
           "422": {
-            "description": "E_KIND_UNKNOWN",
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
             "content": {
               "application/json": {
                 "schema": {
@@ -38170,6 +39110,9 @@
                           },
                           "id": {
                             "type": "string"
+                          },
+                          "import": {
+                            "type": "boolean"
                           },
                           "to": {
                             "type": "string"
@@ -38839,6 +39782,16 @@
             }
           },
           {
+            "name": "show_sensitive",
+            "in": "query",
+            "required": false,
+            "description": "print sensitive field and metadata values (asks first)",
+            "schema": {
+              "type": "boolean",
+              "description": "print sensitive field and metadata values (asks first)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -39005,6 +39958,12 @@
                     "meta": {
                       "type": "object",
                       "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
                         "type": "string"
                       }
                     },
@@ -39789,6 +40748,10 @@
                     "type": "string",
                     "description": "always | glob | semantic | manual (default always)"
                   },
+                  "applies_to_description": {
+                    "type": "string",
+                    "description": "when activation=semantic: words describing where the rule applies (lore context matches them, CONTEXT_BUDGET 6.8)"
+                  },
                   "body": {
                     "type": "string",
                     "description": "body (required; or give it as the first argument)"
@@ -40241,7 +41204,7 @@
     "/v1/rules/{id}": {
       "delete": {
         "operationId": "rule.delete",
-        "summary": "Delete a rule (a tombstone is kept so old copies never return)",
+        "summary": "Delete a rule (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "rule"
         ],
@@ -40250,10 +41213,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the rule id (rul_…)",
+            "description": "the rule id (rul_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the rule id (rul_…)"
+              "description": "the rule id (rul_…); leave out with --where"
             }
           },
           {
@@ -40264,6 +41227,29 @@
             "schema": {
               "type": "string",
               "description": "accepted for v0.1.17 scripts; the id already names its project"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every rule matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every rule matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
             }
           },
           {
@@ -40752,6 +41738,10 @@
                   "activation": {
                     "type": "string",
                     "description": "always | glob | semantic | manual"
+                  },
+                  "applies_to_description": {
+                    "type": "string",
+                    "description": "words describing where a semantic rule applies"
                   },
                   "body": {
                     "type": "string",
@@ -41304,6 +42294,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "replaced": {
+                    "type": "boolean",
+                    "description": "also list which gitleaks rule ids cover the same ground as each lore rule (3.3)"
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -41365,6 +42361,27 @@
                           "state",
                           "level",
                           "store"
+                        ]
+                      }
+                    },
+                    "replaced": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "gitleaks": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rule_id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "rule_id",
+                          "gitleaks"
                         ]
                       }
                     }
@@ -41964,6 +42981,9 @@
                           },
                           "at": {
                             "type": "integer"
+                          },
+                          "checked_at": {
+                            "type": "string"
                           },
                           "field": {
                             "type": "string"
@@ -42649,6 +43669,9 @@
                           },
                           "at": {
                             "type": "integer"
+                          },
+                          "checked_at": {
+                            "type": "string"
                           },
                           "field": {
                             "type": "string"
@@ -44021,6 +45044,9 @@
                           "at": {
                             "type": "integer"
                           },
+                          "checked_at": {
+                            "type": "string"
+                          },
                           "field": {
                             "type": "string"
                           },
@@ -45045,7 +46071,7 @@
     "/v1/snapshots/{id}": {
       "delete": {
         "operationId": "snapshot.delete",
-        "summary": "Delete a snapshot (archive is usually what you want; a tombstone keeps old copies from returning)",
+        "summary": "Delete a snapshot (to the trash; archive is usually what you want)",
         "tags": [
           "snapshot"
         ],
@@ -45828,6 +46854,14 @@
                     "type": "string",
                     "description": "table (default), csv or json (an array of row objects)"
                   },
+                  "include_deleted": {
+                    "type": "boolean",
+                    "description": "also read the rows in the trash (tables and their _all views; time_spent counts deleted tasks)"
+                  },
+                  "internal": {
+                    "type": "boolean",
+                    "description": "in a client repo, also read the internal stores (their rows are internal: never copy them into the repo)"
+                  },
                   "query": {
                     "type": "string",
                     "description": "one SELECT, WITH or VALUES statement (quote it; several words are joined)"
@@ -45870,6 +46904,12 @@
                     },
                     "count": {
                       "type": "integer"
+                    },
+                    "internal": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "rows": {
                       "type": "array",
@@ -47686,7 +48726,7 @@
     "/v1/suggestions/{id}": {
       "delete": {
         "operationId": "suggestion.delete",
-        "summary": "Delete a suggestion (a tombstone keeps old copies from returning)",
+        "summary": "Delete a suggestion (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "suggestion"
         ],
@@ -49465,7 +50505,7 @@
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -49480,6 +50520,10 @@
                     "description": "the new text"
                   }
                 },
+                "required": [
+                  "item",
+                  "text"
+                ],
                 "additionalProperties": false
               }
             }
@@ -50039,7 +51083,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH",
             "content": {
               "application/json": {
                 "schema": {
@@ -50101,7 +51145,7 @@
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -50112,6 +51156,9 @@
                     "description": "the item: its position (1, 2, …) or its chk_ id"
                   }
                 },
+                "required": [
+                  "item"
+                ],
                 "additionalProperties": false
               }
             }
@@ -50306,7 +51353,7 @@
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -50317,6 +51364,9 @@
                     "description": "the item: its position (1, 2, …) or its chk_ id"
                   }
                 },
+                "required": [
+                  "item"
+                ],
                 "additionalProperties": false
               }
             }
@@ -50511,7 +51561,7 @@
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -50522,6 +51572,9 @@
                     "description": "the item: its position (1, 2, …) or its chk_ id"
                   }
                 },
+                "required": [
+                  "item"
+                ],
                 "additionalProperties": false
               }
             }
@@ -50888,7 +51941,7 @@
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -50899,6 +51952,9 @@
                     "description": "the new rule, e.g. \"every! 30 days\" (this and later instances)"
                   }
                 },
+                "required": [
+                  "rule"
+                ],
                 "additionalProperties": false
               }
             }
@@ -52760,6 +53816,16 @@
               "type": "boolean",
               "description": "the task may be in the trash: show its time anyway (DQ10)"
             }
+          },
+          {
+            "name": "no_children",
+            "in": "query",
+            "required": false,
+            "description": "own time only: no subtree total of the sub-tasks",
+            "schema": {
+              "type": "boolean",
+              "description": "own time only: no subtree total of the sub-tasks"
+            }
           }
         ],
         "responses": {
@@ -52947,8 +54013,63 @@
                             ]
                           }
                         },
+                        "reopened": {
+                          "type": "string"
+                        },
                         "status": {
                           "type": "string"
+                        },
+                        "subtree": {
+                          "type": "object",
+                          "properties": {
+                            "children": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "depth": {
+                                    "type": "integer"
+                                  },
+                                  "effort_seconds": {
+                                    "type": "integer"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "workers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "title",
+                                  "depth",
+                                  "effort_seconds"
+                                ]
+                              }
+                            },
+                            "overlap_seconds": {
+                              "type": "integer"
+                            },
+                            "own_seconds": {
+                              "type": "integer"
+                            },
+                            "total_seconds": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "own_seconds",
+                            "total_seconds",
+                            "overlap_seconds",
+                            "children"
+                          ]
                         },
                         "task_id": {
                           "type": "string"
@@ -53010,7 +54131,8 @@
                         "elapsed_seconds",
                         "manual_seconds",
                         "group_by",
-                        "workers"
+                        "workers",
+                        "subtree"
                       ]
                     },
                     "kind": {
@@ -54147,6 +55269,12 @@
                           "filter": {
                             "type": "object",
                             "properties": {
+                              "columns": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "group_by": {
                                 "type": "string"
                               },
@@ -54272,6 +55400,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "columns": {
+                    "type": "array",
+                    "description": "task list columns: id,title,estimate,tracked,… (comma-separated or repeated; the task list --columns names)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "group_by": {
                     "type": "string",
                     "description": "board grouping: status | assignee | priority | mission | repo | parent"
@@ -54322,6 +55457,12 @@
                     "filter": {
                       "type": "object",
                       "properties": {
+                        "columns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "group_by": {
                           "type": "string"
                         },
@@ -54624,6 +55765,12 @@
                     "filter": {
                       "type": "object",
                       "properties": {
+                        "columns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "group_by": {
                           "type": "string"
                         },
@@ -54743,6 +55890,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "columns": {
+                    "type": "array",
+                    "description": "task list columns: id,title,estimate,tracked,… (comma-separated or repeated; the task list --columns names)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "group_by": {
                     "type": "string",
                     "description": "board grouping: status | assignee | priority | mission | repo | parent"
@@ -54793,6 +55947,12 @@
                     "filter": {
                       "type": "object",
                       "properties": {
+                        "columns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "group_by": {
                           "type": "string"
                         },
@@ -55712,7 +56872,7 @@
     "/v1/tasklists/{id}": {
       "delete": {
         "operationId": "tasklist.delete",
-        "summary": "Delete a tasklist and its tasks, with their sub-tasks (one batch; a tombstone is kept)",
+        "summary": "Delete a tasklist and its tasks, with their sub-tasks (one batch, to the trash)",
         "tags": [
           "tasklist"
         ],
@@ -55721,10 +56881,33 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the tasklist id (tlt_…)",
+            "description": "the tasklist id (tlt_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the tasklist id (tlt_…)"
+              "description": "the tasklist id (tlt_…); leave out with --where"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every tasklist matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every tasklist matching this filter (field=value, field:a,b, created_at\u003c2026-06-01; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list what would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list what would be deleted, write nothing"
             }
           },
           {
@@ -56656,10 +57839,10 @@
             "name": "columns",
             "in": "query",
             "required": false,
-            "description": "extra columns: +time, +elapsed (comma-separated or repeated)",
+            "description": "columns of a table: id,title,estimate,tracked,… (any --where key, time|tracked, elapsed, progress, store); +time / +elapsed alone extend the usual line",
             "schema": {
               "type": "array",
-              "description": "extra columns: +time, +elapsed (comma-separated or repeated)",
+              "description": "columns of a table: id,title,estimate,tracked,… (any --where key, time|tracked, elapsed, progress, store); +time / +elapsed alone extend the usual line",
               "items": {
                 "type": "string"
               }
@@ -56694,6 +57877,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "count": {
                       "type": "integer"
                     },
@@ -56724,6 +57913,12 @@
                             "required": [
                               "store"
                             ]
+                          },
+                          "cells": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "commitment": {
                             "type": "string"
@@ -57858,7 +59053,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -57932,7 +59127,7 @@
                   },
                   "columns": {
                     "type": "array",
-                    "description": "extra columns: +time, +elapsed (comma-separated or repeated)",
+                    "description": "columns of a table: id,title,estimate,tracked,… (any --where key, time|tracked, elapsed, progress, store); +time / +elapsed alone extend the usual line",
                     "items": {
                       "type": "string"
                     }
@@ -58117,6 +59312,12 @@
                                   "required": [
                                     "store"
                                   ]
+                                },
+                                "cells": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 },
                                 "commitment": {
                                   "type": "string"
@@ -58346,6 +59547,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "count": {
                       "type": "integer"
                     },
@@ -58376,6 +59583,12 @@
                             "required": [
                               "store"
                             ]
+                          },
+                          "cells": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "commitment": {
                             "type": "string"
@@ -58817,6 +60030,28 @@
                     },
                     "source": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -59235,6 +60470,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "count": {
                       "type": "integer"
                     },
@@ -59265,6 +60506,12 @@
                             "required": [
                               "store"
                             ]
+                          },
+                          "cells": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "commitment": {
                             "type": "string"
@@ -59548,6 +60795,12 @@
                               "store"
                             ]
                           },
+                          "cells": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "commitment": {
                             "type": "string"
                           },
@@ -59778,6 +61031,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "count": {
                       "type": "integer"
                     },
@@ -59808,6 +61067,12 @@
                             "required": [
                               "store"
                             ]
+                          },
+                          "cells": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "commitment": {
                             "type": "string"
@@ -60009,7 +61274,7 @@
     "/v1/tasks/{id}": {
       "delete": {
         "operationId": "task.delete",
-        "summary": "Delete a task and its sub-tasks (a tombstone is kept so old copies never return)",
+        "summary": "Delete a task and its sub-tasks (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "task"
         ],
@@ -60018,10 +61283,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the task id (tsk_…)",
+            "description": "the task id (tsk_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the task id (tsk_…)"
+              "description": "the task id (tsk_…); leave out with --where"
             }
           },
           {
@@ -60032,6 +61297,29 @@
             "schema": {
               "type": "string",
               "description": "why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "bulk delete: every task matching this filter, with its sub-tasks (the task list --where grammar; repeatable, all must match)",
+            "schema": {
+              "type": "array",
+              "description": "bulk delete: every task matching this filter, with its sub-tasks (the task list --where grammar; repeatable, all must match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "description": "with --where: list the tasks that would be deleted, write nothing",
+            "schema": {
+              "type": "boolean",
+              "description": "with --where: list the tasks that would be deleted, write nothing"
             }
           },
           {
@@ -61325,7 +62613,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -62665,6 +63953,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "commitment": {
+                    "type": "string",
+                    "description": "commitment of every sub-task (accepted | proposed | someday; default: inherited from the parent)"
+                  },
                   "dry_run": {
                     "type": "boolean",
                     "description": "show what would be added, write nothing"
@@ -62676,6 +63968,17 @@
                   "key": {
                     "type": "string",
                     "description": "idempotency key: child n gets \u003ckey\u003e/\u003cn\u003e, so a re-run adds nothing"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "priority of every sub-task (low | medium | high | urgent; default: inherited from the parent)"
+                  },
+                  "title_args": {
+                    "type": "array",
+                    "description": "sub-task titles, one per argument, in order (added before any --title)",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "titles": {
                     "type": "array",
@@ -62805,7 +64108,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH",
             "content": {
               "application/json": {
                 "schema": {
@@ -64148,7 +65451,7 @@
     "/v1/tasteprefs/{id}": {
       "delete": {
         "operationId": "tastepref.delete",
-        "summary": "Delete a tastepref (a tombstone keeps old copies from returning)",
+        "summary": "Delete a tastepref (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "tastepref"
         ],
@@ -65428,7 +66731,7 @@
     "/v1/techdocs/{id}": {
       "delete": {
         "operationId": "techdoc.delete",
-        "summary": "Delete a techdoc (a tombstone keeps old copies from returning)",
+        "summary": "Delete a techdoc (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "techdoc"
         ],
@@ -65946,6 +67249,46 @@
               "type": "boolean",
               "description": "list rows a merge kept alive over a delete (the other side edited them)"
             }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "only rows whose id, title or delete reason holds this text",
+            "schema": {
+              "type": "string",
+              "description": "only rows whose id, title or delete reason holds this text"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "rows per page (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "rows per page (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          },
+          {
+            "name": "from_history",
+            "in": "query",
+            "required": false,
+            "description": "list rows purged or hard-deleted, read from this place's git history",
+            "schema": {
+              "type": "boolean",
+              "description": "list rows purged or hard-deleted, read from this place's git history"
+            }
           }
         ],
         "responses": {
@@ -65979,6 +67322,9 @@
                           "id": {
                             "type": "string"
                           },
+                          "last_content_in": {
+                            "type": "string"
+                          },
                           "overruled": {
                             "type": "string"
                           },
@@ -66009,14 +67355,24 @@
                     "dependents": {
                       "type": "integer"
                     },
+                    "from": {
+                      "type": "integer"
+                    },
+                    "from_history": {
+                      "type": "boolean"
+                    },
                     "overruled": {
                       "type": "boolean"
+                    },
+                    "total": {
+                      "type": "integer"
                     }
                   },
                   "required": [
                     "data",
                     "count",
-                    "dependents"
+                    "dependents",
+                    "total"
                   ]
                 }
               }
@@ -66044,6 +67400,16 @@
           },
           "404": {
             "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -66147,6 +67513,9 @@
                             "type": "boolean"
                           },
                           "id": {
+                            "type": "string"
+                          },
+                          "last_content_in": {
                             "type": "string"
                           },
                           "overruled": {
@@ -66263,6 +67632,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "from_history": {
+                    "type": "boolean",
+                    "description": "refused: a purged row never comes back; read it with trash show --from-history"
+                  },
                   "mission": {
                     "type": "string",
                     "description": "new mission id for the restored row"
@@ -66290,6 +67663,10 @@
                   "tasklist": {
                     "type": "string",
                     "description": "new tasklist (tl_…) for a task whose tasklist was purged"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "required": [
@@ -66338,6 +67715,9 @@
                             "type": "boolean"
                           },
                           "id": {
+                            "type": "string"
+                          },
+                          "last_content_in": {
                             "type": "string"
                           },
                           "overruled": {
@@ -66408,7 +67788,17 @@
             }
           },
           "409": {
-            "description": "E_PARENT_DELETED, E_PARENT_PURGED, E_PURGED, E_STALE",
+            "description": "E_PARENT_DELETED, E_PARENT_PURGED, E_PURGED, E_SECRET_DETECTED, E_STALE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -66581,6 +67971,16 @@
               }
             }
           },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "500": {
             "description": "E_INTERNAL",
             "content": {
@@ -66623,6 +68023,16 @@
             }
           },
           {
+            "name": "from_history",
+            "in": "query",
+            "required": false,
+            "description": "show a purged row's last content from git history (3.6)",
+            "schema": {
+              "type": "boolean",
+              "description": "show a purged row's last content from git history (3.6)"
+            }
+          },
+          {
             "name": "yes",
             "in": "query",
             "required": false,
@@ -66659,6 +68069,9 @@
                         "id": {
                           "type": "string"
                         },
+                        "last_content_in": {
+                          "type": "string"
+                        },
                         "overruled": {
                           "type": "string"
                         },
@@ -66690,6 +68103,9 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "from_history": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -66731,7 +68147,7 @@
             }
           },
           "409": {
-            "description": "E_CANCELLED",
+            "description": "E_CANCELLED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -68414,7 +69830,7 @@
     "/v1/workflows/{id}": {
       "delete": {
         "operationId": "workflow.delete",
-        "summary": "Delete a workflow (a tombstone keeps old copies from returning)",
+        "summary": "Delete a workflow (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "workflow"
         ],
@@ -69678,7 +71094,7 @@
     "/v1/workspaces/{id}": {
       "delete": {
         "operationId": "workspace.delete",
-        "summary": "Delete a workspace (a tombstone keeps old copies from returning)",
+        "summary": "Delete a workspace (it goes to the trash; lore trash restore brings it back)",
         "tags": [
           "workspace"
         ],
