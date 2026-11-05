@@ -54,24 +54,9 @@ var _ opscoord.Host = standaloneCoord{}
 // coordUnsupported is ops/coord's refusal for the verb name.
 func coordUnsupported(name string) error { return opscoord.Unsupported(name) }
 
-// TaskClaim implements opscoord.Host.
-func (standaloneCoord) TaskClaim(context.Context, opscoord.ClaimIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpTaskClaim)
-}
-
-// TaskHeartbeat implements opscoord.Host.
-func (standaloneCoord) TaskHeartbeat(context.Context, opscoord.HeartbeatIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpTaskHeartbeat)
-}
-
 // TaskMerged implements opscoord.Host.
 func (standaloneCoord) TaskMerged(context.Context, opscoord.MergedIn) (opscoord.Report, error) {
 	return opscoord.Report{}, coordUnsupported(opscoord.OpTaskMerged)
-}
-
-// TaskNext implements opscoord.Host.
-func (standaloneCoord) TaskNext(context.Context, opscoord.NextIn) (opscoord.NextOut, error) {
-	return opscoord.NextOut{}, coordUnsupported(opscoord.OpTaskNext)
 }
 
 // TaskReassign implements opscoord.Host.
@@ -82,16 +67,6 @@ func (standaloneCoord) TaskReassign(context.Context, opscoord.ReassignIn) (opsco
 // TaskReassignPlan implements opscoord.Host.
 func (standaloneCoord) TaskReassignPlan(context.Context, opscoord.ReassignIn) (opscoord.ReassignPlan, error) {
 	return opscoord.ReassignPlan{}, coordUnsupported(opscoord.OpTaskReassign)
-}
-
-// TaskRelease implements opscoord.Host.
-func (standaloneCoord) TaskRelease(context.Context, opscoord.ReleaseIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpTaskRelease)
-}
-
-// TaskRevoke implements opscoord.Host.
-func (standaloneCoord) TaskRevoke(context.Context, opscoord.RevokeIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpTaskRevoke)
 }
 
 // HoldClaim implements opscoord.Host.
@@ -251,7 +226,7 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 		}
 	}
 	return opstask.Assignee{}, errs.New(errs.NotFound, "no person or team with handle @"+h).
-		WithHint("people join with `lore actor register`; teams with `lore team add`")
+		WithHint("people join with `lore actor register`")
 }
 
 // Claims implements opstask.Team: the last fetched copy of this repo's

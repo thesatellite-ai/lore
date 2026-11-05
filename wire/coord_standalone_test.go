@@ -83,10 +83,15 @@ func TestStandaloneNote(t *testing.T) {
 	if n := countRows(t, a, schema.TableComments); n != 1 {
 		t.Fatalf("a refused note wrote a row: %d comments", n)
 	}
-	for name, input := range map[string]string{opscoord.OpTaskClaim: `{"id":"` + id + `"}`, opscoord.OpTaskRelease: `{"id":"` + id + `"}`, opscoord.OpHoldRelease: `{"name":"suite"}`} {
-		if _, err := run(t, a, name, input, true); !errs.Has(err, errs.Unsupported) {
-			t.Errorf("%s: %v, want E_UNSUPPORTED", name, err)
+	// Claims are taken here now (P3-SIGCOORD-2); a repo without a remote
+	// cannot confirm one, so the write fails closed and nothing is queued.
+	for name, input := range map[string]string{opscoord.OpTaskClaim: `{"id":"` + id + `"}`, opscoord.OpTaskRelease: `{"id":"` + id + `"}`} {
+		if _, err := run(t, a, name, input, true); !errs.Has(err, errs.Offline) {
+			t.Errorf("%s: %v, want E_OFFLINE", name, err)
 		}
+	}
+	if _, err := run(t, a, opscoord.OpHoldRelease, `{"name":"suite"}`, true); !errs.Has(err, errs.Unsupported) {
+		t.Errorf("hold.release: %v, want E_UNSUPPORTED", err)
 	}
 }
 
