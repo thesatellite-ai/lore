@@ -13,9 +13,9 @@ The list below is written by `tests/docs/commands_index.py` from `lore --help` a
 Three hidden commands are left out on purpose: `lore merge-driver`, `lore sync hook` and `lore task hook commit-msg`. Git runs them from the hooks and the merge setting that lore installs; you never run them by hand.
 
 <!-- commands -->
-578 commands, 488 of them leaf commands (the ones you run; a command marked … only groups others).
+504 commands, 428 of them leaf commands (the ones you run; a command marked … only groups others).
 
-Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [architecturenote](#lore-architecturenote) · [audit](#lore-audit) · [backup](#lore-backup) · [batch](#lore-batch) · [behaviour](#lore-behaviour) · [bench](#lore-bench) · [cache](#lore-cache) · [check](#lore-check) · [comment](#lore-comment) · [commit](#lore-commit) · [completion](#lore-completion) · [config](#lore-config) · [context](#lore-context) · [cookbookrecipe](#lore-cookbookrecipe) · [decision](#lore-decision) · [directive](#lore-directive) · [doctor](#lore-doctor) · [errors](#lore-errors) · [explain](#lore-explain) · [external-source](#lore-external-source) · [finding](#lore-finding) · [gate](#lore-gate) · [handoff](#lore-handoff) · [hold](#lore-hold) · [hotfix](#lore-hotfix) · [identity](#lore-identity) · [inbox](#lore-inbox) · [incident](#lore-incident) · [init](#lore-init) · [land](#lore-land) · [learn](#lore-learn) · [learn-from](#lore-learn-from) · [link](#lore-link) · [lint](#lore-lint) · [live](#lore-live) · [machine](#lore-machine) · [memory](#lore-memory) · [meta](#lore-meta) · [migrate](#lore-migrate) · [mission](#lore-mission) · [mount-alias](#lore-mount-alias) · [move](#lore-move) · [org](#lore-org) · [pattern](#lore-pattern) · [pii-pattern](#lore-pii-pattern) · [pin](#lore-pin) · [plan](#lore-plan) · [playbook](#lore-playbook) · [plugin](#lore-plugin) · [policy](#lore-policy) · [project](#lore-project) · [prompt](#lore-prompt) · [querylog](#lore-querylog) · [reminder](#lore-reminder) · [render](#lore-render) · [renderhistory](#lore-renderhistory) · [repair](#lore-repair) · [repo](#lore-repo) · [resource](#lore-resource) · [restore](#lore-restore) · [row](#lore-row) · [rule](#lore-rule) · [run](#lore-run) · [scope](#lore-scope) · [search](#lore-search) · [secrets](#lore-secrets) · [session](#lore-session) · [setup](#lore-setup) · [show](#lore-show) · [skill](#lore-skill) · [snapshot](#lore-snapshot) · [spec](#lore-spec) · [sql](#lore-sql) · [store](#lore-store) · [suggestion](#lore-suggestion) · [support-bundle](#lore-support-bundle) · [sync](#lore-sync) · [tables](#lore-tables) · [tag](#lore-tag) · [task](#lore-task) · [tasklist](#lore-tasklist) · [tastepref](#lore-tastepref) · [team](#lore-team) · [techdoc](#lore-techdoc) · [trash](#lore-trash) · [tui](#lore-tui) · [upgrade](#lore-upgrade) · [vars](#lore-vars) · [version](#lore-version) · [whoami](#lore-whoami) · [why-context](#lore-why-context) · [workflow](#lore-workflow) · [workspace](#lore-workspace)
+Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [architecturenote](#lore-architecturenote) · [audit](#lore-audit) · [batch](#lore-batch) · [behaviour](#lore-behaviour) · [cache](#lore-cache) · [check](#lore-check) · [comment](#lore-comment) · [commit](#lore-commit) · [completion](#lore-completion) · [config](#lore-config) · [context](#lore-context) · [cookbookrecipe](#lore-cookbookrecipe) · [decision](#lore-decision) · [directive](#lore-directive) · [doctor](#lore-doctor) · [explain](#lore-explain) · [external-source](#lore-external-source) · [gate](#lore-gate) · [handoff](#lore-handoff) · [hold](#lore-hold) · [hotfix](#lore-hotfix) · [identity](#lore-identity) · [inbox](#lore-inbox) · [incident](#lore-incident) · [init](#lore-init) · [land](#lore-land) · [link](#lore-link) · [lint](#lore-lint) · [live](#lore-live) · [machine](#lore-machine) · [memory](#lore-memory) · [meta](#lore-meta) · [migrate](#lore-migrate) · [mission](#lore-mission) · [move](#lore-move) · [org](#lore-org) · [pattern](#lore-pattern) · [pii-pattern](#lore-pii-pattern) · [pin](#lore-pin) · [plan](#lore-plan) · [playbook](#lore-playbook) · [policy](#lore-policy) · [project](#lore-project) · [prompt](#lore-prompt) · [reminder](#lore-reminder) · [render](#lore-render) · [repo](#lore-repo) · [resource](#lore-resource) · [row](#lore-row) · [rule](#lore-rule) · [run](#lore-run) · [scope](#lore-scope) · [search](#lore-search) · [secrets](#lore-secrets) · [session](#lore-session) · [setup](#lore-setup) · [show](#lore-show) · [skill](#lore-skill) · [snapshot](#lore-snapshot) · [spec](#lore-spec) · [sql](#lore-sql) · [store](#lore-store) · [suggestion](#lore-suggestion) · [support-bundle](#lore-support-bundle) · [sync](#lore-sync) · [tag](#lore-tag) · [task](#lore-task) · [tasklist](#lore-tasklist) · [tastepref](#lore-tastepref) · [techdoc](#lore-techdoc) · [trash](#lore-trash) · [tui](#lore-tui) · [upgrade](#lore-upgrade) · [vars](#lore-vars) · [version](#lore-version) · [whoami](#lore-whoami) · [why-context](#lore-why-context) · [workflow](#lore-workflow) · [workspace](#lore-workspace)
 
 ### lore actor
 
@@ -63,12 +63,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore audit log` | Show recent audit entries, newest first | [operations/audit-log › Step 2 — Catch a change made outside lore](../../docs/operations/audit-log.md#step-2--catch-a-change-made-outside-lore) |
 | `lore audit verify` | Check the audit chain and look for rows changed outside lore | [operations/audit-log › Step 2 — Catch a change made outside lore](../../docs/operations/audit-log.md#step-2--catch-a-change-made-outside-lore) |
 
-### lore backup
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore backup` | Create an online backup of the project DB | [operations/backup-restore-repair › Step 1 — Make a backup](../../docs/operations/backup-restore-repair.md#step-1--make-a-backup) |
-
 ### lore batch
 
 | Command | What it does | Guide |
@@ -89,47 +83,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore behaviour list` | List behaviours | [knowledge/other-row-kinds › Step 2 — Add the other kinds](../../docs/knowledge/other-row-kinds.md#step-2--add-the-other-kinds) *(brief)* |
 | `lore behaviour search` | Full-text search across behaviour name + body | [knowledge/other-row-kinds › Step 2 — Add the other kinds](../../docs/knowledge/other-row-kinds.md#step-2--add-the-other-kinds) *(brief)* |
 | `lore behaviour show` | Show behaviour details | [knowledge/other-row-kinds › Step 2 — Add the other kinds](../../docs/knowledge/other-row-kinds.md#step-2--add-the-other-kinds) *(brief)* |
-
-### lore bench
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore bench` … | Benchmark engine — define + run + report on eval tasks | — |
-| `lore bench eval` … | Manage benchmark task definitions (templates) | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval add` | Add a new benchmark task | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval archive` | Soft-delete (sets archived_at; preserves history) | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval delete` | Durably delete (refuses if any results reference it) | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval duplicate` | Clone an existing task with --as=<new-code> | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval edit` | Update fields on an existing bench task | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval export` | Dump bench tasks → directory of YAML files (round-trip with import) | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval import` | Bulk-import bench tasks from a directory of YAML files | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval list` | List benchmark tasks | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval show` | Show one bench task with full grader spec + linked body | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench eval unarchive` | Restore an archived task | [operations/bench › Step 4 — Copy, retire and delete questions](../../docs/operations/bench.md#step-4--copy-retire-and-delete-questions) |
-| `lore bench grader` … | Meta-tools for graders (test / debug / audit) | [operations/bench › Step 2 — Check the marker before any model sees it](../../docs/operations/bench.md#step-2--check-the-marker-before-any-model-sees-it) |
-| `lore bench grader audit` | Flag suspect graders (too-strict / too-loose / flaky) | [operations/bench › Step 2 — Check the marker before any model sees it](../../docs/operations/bench.md#step-2--check-the-marker-before-any-model-sees-it) |
-| `lore bench grader debug` | Show stored grader_trace for one result (forensic debug) | [operations/bench › Step 2 — Check the marker before any model sees it](../../docs/operations/bench.md#step-2--check-the-marker-before-any-model-sees-it) |
-| `lore bench grader test` | Run a grader against a sample output file (no model call) | [operations/bench › Step 2 — Check the marker before any model sees it](../../docs/operations/bench.md#step-2--check-the-marker-before-any-model-sees-it) |
-| `lore bench report` … | Analysis on past bench runs | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench report analyze` | Statistical analysis: paired t-test, Cohen's d, 95% CI | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench report by-category` | Pass-rates per category × arm for one run | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench report compare` | Side-by-side: which tasks improved, which regressed | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench report regressions` | Tasks whose with-skill pass-rate dropped > 5pp recently | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench report summary` | Headline numbers for one run (omit arg or pass --latest for the most recent) | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench report trend` | Longitudinal: pass-rates / Δ per run, ordered by time | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench result` … | Inspect + regrade individual benchmark results | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench result compare` | Side-by-side: prompts, outputs, grades | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench result list` | List bench results (filter by --run, --eval, --arm, --grade) | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench result regrade` | Re-grade stored outputs without calling the model again | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench result replay` | Call the model again for a stored run (regrade reuses the stored output) | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench result show` | Show one bench result: prompt sent, output received, grader trace | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench result stats` | Tally pass/fail/error grouped by arm for one run (live-safe) | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench run` … | Execute benchmark runs against a model | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench run cancel` | Mark a running benchmark as aborted | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench run list` | List past bench runs | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench run retry` | Re-run failed (eval, arm) combos from a past run as a new run | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench run show` | Show one bench run with per-task verdict | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
-| `lore bench run start` | Start a benchmark run (synchronous) | [operations/bench › Step 6 — Read the results](../../docs/operations/bench.md#step-6--read-the-results) |
 
 ### lore cache
 
@@ -217,7 +170,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 |---|---|---|
 | `lore directive` … | Install/remove the lore agent-directive block in agent-loaded markdown | [knowledge/render-and-agent-files › Step 5 — Add only the directive](../../docs/knowledge/render-and-agent-files.md#step-5--add-only-the-directive) |
 | `lore directive install` | Install (or refresh) the directive block at the top of one or more files | [knowledge/render-and-agent-files › Step 5 — Add only the directive](../../docs/knowledge/render-and-agent-files.md#step-5--add-only-the-directive) |
-| `lore directive remove` | Strip the directive block from one or more files | [knowledge/render-and-agent-files › Step 5 — Add only the directive](../../docs/knowledge/render-and-agent-files.md#step-5--add-only-the-directive) |
 | `lore directive show` | Print the directive block (compact; --full for the long form) without writing any file | [knowledge/render-and-agent-files › Step 5 — Add only the directive](../../docs/knowledge/render-and-agent-files.md#step-5--add-only-the-directive) |
 
 ### lore doctor
@@ -225,13 +177,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore doctor` | Run health checks; exit 0 healthy, 1 degraded, 2 broken | [operations/doctor › Check lore's health with lore doctor](../../docs/operations/doctor.md#check-lores-health-with-lore-doctor) |
-
-### lore errors
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore errors` … | Manage error code registry | — |
-| `lore errors list` | List all registered error codes | [operations/doctor › Look up an error code](../../docs/operations/doctor.md#look-up-an-error-code) |
 
 ### lore explain
 
@@ -248,13 +193,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore external-source disable` | disable an external source | [knowledge/import-existing-notes › Register an outside source](../../docs/knowledge/import-existing-notes.md#register-an-outside-source) |
 | `lore external-source enable` | enable an external source | [knowledge/import-existing-notes › Register an outside source](../../docs/knowledge/import-existing-notes.md#register-an-outside-source) |
 | `lore external-source list` | List registered external sources | [knowledge/import-existing-notes › Register an outside source](../../docs/knowledge/import-existing-notes.md#register-an-outside-source) |
-
-### lore finding
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore finding` … | Findings: what one agent learns, every agent of the mission sees | — |
-| `lore finding add` | Save a finding pinned to a mission (a live memory every agent sees in its inbox) | [team/commands › lore finding add](../../docs/team/commands.md#lore-finding-add) |
 
 ### lore gate
 
@@ -303,7 +241,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore identity` … | Manage persisted identity (identity: in ~/.lore/config.yaml) | [team/identity-and-stores › Step 2 — Set or remove your own identity: lore identity set and unset](../../docs/team/identity-and-stores.md#step-2--set-or-remove-your-own-identity-lore-identity-set-and-unset) |
-| `lore identity anonymize` | Toggle anonymous-mode (anon:<random> per session) | [team/identity-and-stores › Step 2 — Set or remove your own identity: lore identity set and unset](../../docs/team/identity-and-stores.md#step-2--set-or-remove-your-own-identity-lore-identity-set-and-unset) |
 | `lore identity set` | Persist an identity: identity: in ~/.lore/config.yaml, or one org's (--org) | [team/identity-and-stores › Step 2 — Set or remove your own identity: lore identity set and unset](../../docs/team/identity-and-stores.md#step-2--set-or-remove-your-own-identity-lore-identity-set-and-unset) |
 | `lore identity show` | Show the resolved actor identity + which step matched | [team/identity-and-stores › Step 2 — Set or remove your own identity: lore identity set and unset](../../docs/team/identity-and-stores.md#step-2--set-or-remove-your-own-identity-lore-identity-set-and-unset) |
 | `lore identity unset` | Clear identity: in ~/.lore/config.yaml (or one org's with --org) | [team/identity-and-stores › Step 2 — Set or remove your own identity: lore identity set and unset](../../docs/team/identity-and-stores.md#step-2--set-or-remove-your-own-identity-lore-identity-set-and-unset) |
@@ -337,22 +274,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore land` | Write live rows to main now (finished rows land; open rows are copied and stay live) | [team/commands › lore land](../../docs/team/commands.md#lore-land) |
-
-### lore learn
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore learn` … | Manage learn_candidates (background-learning staging) | [knowledge/import-existing-notes › Step 4 — Keep or drop each candidate](../../docs/knowledge/import-existing-notes.md#step-4--keep-or-drop-each-candidate) |
-| `lore learn from` | Bootstrap knowledge from existing sources | [knowledge/import-existing-notes › Step 4 — Keep or drop each candidate](../../docs/knowledge/import-existing-notes.md#step-4--keep-or-drop-each-candidate) |
-| `lore learn list` | List learn_candidates | [knowledge/import-existing-notes › Step 4 — Keep or drop each candidate](../../docs/knowledge/import-existing-notes.md#step-4--keep-or-drop-each-candidate) |
-| `lore learn promote` | Promote a learn_candidate to its target table | [knowledge/import-existing-notes › Step 4 — Keep or drop each candidate](../../docs/knowledge/import-existing-notes.md#step-4--keep-or-drop-each-candidate) |
-| `lore learn reject` | Mark a learn_candidate as rejected (single, --ids=a,b,c, or --all) | [knowledge/import-existing-notes › Step 4 — Keep or drop each candidate](../../docs/knowledge/import-existing-notes.md#step-4--keep-or-drop-each-candidate) |
-
-### lore learn-from
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore learn-from` | Bootstrap knowledge from existing sources | [knowledge/import-existing-notes › Bring in notes you already have](../../docs/knowledge/import-existing-notes.md#bring-in-notes-you-already-have) *(brief)* |
 
 ### lore link
 
@@ -459,13 +380,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore mission show` | Show mission details + attached tasks | [tasks/missions-and-plans › Step 4 — Change, find, pause and finish a mission](../../docs/tasks/missions-and-plans.md#step-4--change-find-pause-and-finish-a-mission) |
 | `lore mission status` | The whole mission at a glance: ready / waiting / gated / claimed / expired / blocked / done | [tasks/missions-and-plans › Step 3 — See the whole mission at a glance](../../docs/tasks/missions-and-plans.md#step-3--see-the-whole-mission-at-a-glance) |
 
-### lore mount-alias
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore mount-alias` … | Inspect repo rename-redirect aliases | — |
-| `lore mount-alias list` | List mount aliases (rename redirects) | [sync/multi-repo-projects › Try it — renamed repos](../../docs/sync/multi-repo-projects.md#try-it--renamed-repos) |
-
 ### lore move
 
 | Command | What it does | Guide |
@@ -482,7 +396,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore org link` | Link this repo to an internal project in the org's store | [team/commands › lore org link](../../docs/team/commands.md#lore-org-link) |
 | `lore org rename` | Rename an org entry on this machine (a label change; the org's id and every row stay) | — |
 | `lore org set` | Write the committed .lore/org.yaml (only in the org's own repos) | [team/identity-and-stores › Step 5 — Let a repo name its org for everyone: lore org set](../../docs/team/identity-and-stores.md#step-5--let-a-repo-name-its-org-for-everyone-lore-org-set) |
-| `lore org unlink` | Remove this repo's link to an internal project in the org's store | [team/commands › lore org link](../../docs/team/commands.md#lore-org-link) |
 | `lore org use` | Choose the org entry for this project on this machine (not committed) | [team/commands › lore org use](../../docs/team/commands.md#lore-org-use) |
 
 ### lore pattern
@@ -543,15 +456,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore playbook show` | Show playbook details | [knowledge/other-row-kinds › What they are and when you want them](../../docs/knowledge/other-row-kinds.md#what-they-are-and-when-you-want-them) *(brief)* |
 | `lore playbook unarchive` | Unarchive a playbook (clear archived_at) | [knowledge/other-row-kinds › What they are and when you want them](../../docs/knowledge/other-row-kinds.md#what-they-are-and-when-you-want-them) *(brief)* |
 
-### lore plugin
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore plugin` … | Manage trusted-plugin allowlist | [operations/plugins-and-db-config › Step 1 — Trust a plugin by its fingerprint](../../docs/operations/plugins-and-db-config.md#step-1--trust-a-plugin-by-its-fingerprint) |
-| `lore plugin list` | List trusted plugins | [operations/plugins-and-db-config › Step 1 — Trust a plugin by its fingerprint](../../docs/operations/plugins-and-db-config.md#step-1--trust-a-plugin-by-its-fingerprint) |
-| `lore plugin trust` | Trust a plugin by name + sha256 | [operations/plugins-and-db-config › Step 1 — Trust a plugin by its fingerprint](../../docs/operations/plugins-and-db-config.md#step-1--trust-a-plugin-by-its-fingerprint) |
-| `lore plugin untrust` | Remove a trusted-plugin entry | [operations/plugins-and-db-config › Step 1 — Trust a plugin by its fingerprint](../../docs/operations/plugins-and-db-config.md#step-1--trust-a-plugin-by-its-fingerprint) |
-
 ### lore policy
 
 | Command | What it does | Guide |
@@ -588,13 +492,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore prompt show` | Show prompt details | [knowledge/other-row-kinds › What they are and when you want them](../../docs/knowledge/other-row-kinds.md#what-they-are-and-when-you-want-them) *(brief)* |
 | `lore prompt unarchive` | Unarchive a prompt (clear archived_at) | [knowledge/other-row-kinds › What they are and when you want them](../../docs/knowledge/other-row-kinds.md#what-they-are-and-when-you-want-them) *(brief)* |
 
-### lore querylog
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore querylog` … | Inspect querylogs | — |
-| `lore querylog list` | List querylogs | [knowledge/search › Pitfalls](../../docs/knowledge/search.md#pitfalls) |
-
 ### lore reminder
 
 | Command | What it does | Guide |
@@ -610,19 +507,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore render` | Render .lore/LORE.md from scoped knowledge and point your AI tools at it | [knowledge/render-and-agent-files › Step 5 — Point another tool](../../docs/knowledge/render-and-agent-files.md#step-5--point-another-tool) |
-
-### lore renderhistory
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore renderhistory` … | Inspect renderhistorys | — |
-| `lore renderhistory list` | List renderhistorys | [knowledge/render-and-agent-files › Try it: what did the tool read?](../../docs/knowledge/render-and-agent-files.md#try-it-what-did-the-tool-read) |
-
-### lore repair
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore repair` | Recover from a corrupted DB | [operations/backup-restore-repair › Step 4 — Repair a damaged database](../../docs/operations/backup-restore-repair.md#step-4--repair-a-damaged-database) |
 
 ### lore repo
 
@@ -677,12 +561,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore resource show` | Show one resource | — |
 | `lore resource stale` | Resources whose last_checked is older than --days, or never set | — |
 
-### lore restore
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore restore` | Restore the project DB from a backup file | [operations/backup-restore-repair › Step 2 — Restore a backup](../../docs/operations/backup-restore-repair.md#step-2--restore-a-backup) |
-
 ### lore row
 
 | Command | What it does | Guide |
@@ -712,11 +590,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore run` … | Log + inspect agent runs (start/step/end/cancel/replay/show/list) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
 | `lore run cancel` | Cancel a run (alias for `end --outcome=cancelled`) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
 | `lore run end` | Close a run with outcome (success \| partial \| failed \| cancelled) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
-| `lore run list` | List runs | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
-| `lore run replay` | Print the full step-by-step transcript of a run | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
-| `lore run show` | Show a run's metadata (status, outcome, tokens, cost) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
 | `lore run start` | Open a run (records what agent is attempting which task with which model) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
-| `lore run step` | Append a step to a run (prompt / tool / verify / reflect / decide / error / note) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
 
 ### lore scope
 
@@ -854,11 +728,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore sync` … | Sync lore.db with the git-tracked .lore/data files | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
 | `lore sync ci-merge` | Merge a base branch into this branch when only lore data conflicts (for CI) | [sync/github-workflow › Step 1 — Try ci-merge on your machine](../../docs/sync/github-workflow.md#step-1--try-ci-merge-on-your-machine) |
 | `lore sync conflicts` | List versions kept aside when both sides edited the same row | [sync/conflicts-and-duplicates › Step 3 — The file and your database both changed](../../docs/sync/conflicts-and-duplicates.md#step-3--the-file-and-your-database-both-changed) |
-| `lore sync dupes` | List rows recorded twice (same text, different ids) | [sync/conflicts-and-duplicates › Step 4 — The same fact written twice](../../docs/sync/conflicts-and-duplicates.md#step-4--the-same-fact-written-twice) |
-| `lore sync export` | Rewrite .lore/data files from lore.db | [sync/trash-and-purge › Step 2 — Rebuild .lore/data from the database](../../docs/sync/trash-and-purge.md#step-2--rebuild-loredata-from-the-database) |
 | `lore sync fix-projects` | Collapse several project rows into one (two parallel bootstraps met in a merge) | [sync/conflicts-and-duplicates › Step 5 — Two people set up lore on separate branches](../../docs/sync/conflicts-and-duplicates.md#step-5--two-people-set-up-lore-on-separate-branches) |
 | `lore sync install-action` | Add a GitHub workflow that merges lore data in pull requests (opt-in) | [sync/github-workflow › Step 4 — Or let it run by itself, or remove it](../../docs/sync/github-workflow.md#step-4--or-let-it-run-by-itself-or-remove-it) |
-| `lore sync install-git` | Install lore's merge driver, .gitattributes rules and hook blocks now | [sync/hooks-and-merge-driver › Step 1 — See what lore set up](../../docs/sync/hooks-and-merge-driver.md#step-1--see-what-lore-set-up) |
 | `lore sync merge-rows` | Fold a duplicate row into another (references move, the dropped row is trashed) | [sync/conflicts-and-duplicates › Step 4 — The same fact written twice](../../docs/sync/conflicts-and-duplicates.md#step-4--the-same-fact-written-twice) |
 | `lore sync peek` | List the lore rows another branch carries, without checking it out | [sync/branches-peek-promote › Step 2 — Peek at a teammate's branch](../../docs/sync/branches-peek-promote.md#step-2--peek-at-a-teammates-branch) |
 | `lore sync promote` | Commit rows onto another local branch (e.g. an urgent rule onto main) | [sync/branches-peek-promote › Step 3 — Promote one rule to main](../../docs/sync/branches-peek-promote.md#step-3--promote-one-rule-to-main) |
@@ -867,13 +738,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore sync status` | Show sync state: baseline, pending exports, conflicts, broken files | [sync/how-notes-travel-with-git › Step 4 — Run a pass by hand when you want to see it](../../docs/sync/how-notes-travel-with-git.md#step-4--run-a-pass-by-hand-when-you-want-to-see-it) |
 | `lore sync trash` … | Moved: lore trash --local (this spelling goes away in the next release) | [sync/trash-and-purge › Step 1 — Get back a note whose file disappeared](../../docs/sync/trash-and-purge.md#step-1--get-back-a-note-whose-file-disappeared) |
 | `lore sync trash restore` | Moved: lore trash restore --local <n> | [sync/trash-and-purge › Step 1 — Get back a note whose file disappeared](../../docs/sync/trash-and-purge.md#step-1--get-back-a-note-whose-file-disappeared) |
-| `lore sync uninstall-action` | Remove the workflow added by install-action | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
-
-### lore tables
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore tables` | List every data table and its total record count | [knowledge/first-project › Try it: check that everything is healthy](../../docs/knowledge/first-project.md#try-it-check-that-everything-is-healthy) |
 
 ### lore tag
 
@@ -983,14 +847,6 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore tastepref list` | List tasteprefs | [knowledge/other-row-kinds › Step 3 — Add a taste preference and a tech doc](../../docs/knowledge/other-row-kinds.md#step-3--add-a-taste-preference-and-a-tech-doc) *(brief)* |
 | `lore tastepref search` | Full-text search across tastepref body + scope | [knowledge/other-row-kinds › Step 3 — Add a taste preference and a tech doc](../../docs/knowledge/other-row-kinds.md#step-3--add-a-taste-preference-and-a-tech-doc) *(brief)* |
 | `lore tastepref show` | Show tastepref details | [knowledge/other-row-kinds › Step 3 — Add a taste preference and a tech doc](../../docs/knowledge/other-row-kinds.md#step-3--add-a-taste-preference-and-a-tech-doc) *(brief)* |
-
-### lore team
-
-| Command | What it does | Guide |
-|---|---|---|
-| `lore team` … | Teams on the org roster (@handle resolves to a person or a team) | [team/agents › Teams](../../docs/team/agents.md#teams) |
-| `lore team add` | Create or update a team; @handle then resolves to the team | [team/agents › Teams](../../docs/team/agents.md#teams) |
-| `lore team list` | List the roster's teams | [team/agents › Teams](../../docs/team/agents.md#teams) |
 
 ### lore techdoc
 

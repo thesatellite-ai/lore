@@ -39,10 +39,6 @@ BLOCK = re.compile(r"(<!-- commands -->\n)(.*?)(<!-- /commands -->)", re.S)
 SHORT_OVERRIDES = {
     "task triage": "Show proposed tasks (suggested, not yet committed)",
     "why-context": "Show the last rendered context (what the coding tool saw)",
-    "bench grader test": "Run a grader against a sample output file (no model call)",
-    "bench result regrade": "Re-grade stored outputs without calling the model again",
-    "bench result replay": "Call the model again for a stored run (regrade reuses the stored output)",
-    "bench run": "Execute benchmark runs against a model",
     "skill compile": "Compress the canonical bundle into a smaller .md with a model",
 }
 # Optional word list (one regular expression per line) that must never reach the page
@@ -56,6 +52,18 @@ def banned():
         return None
     words = [w.strip() for w in Path(WORDLIST).read_text().splitlines() if w.strip()]
     return re.compile("|".join(f"(?:{w})" for w in words), re.I) if words else None
+# Commands the old binary still registers while it is being emptied, but that the
+# 0.1.18 design does not list (CLI_REFERENCE.md has no row for them), so the release
+# binary (cmd/lore) does not have them either. They are left out with their whole
+# subtree, so the page is the same whichever binary writes it. Remove an entry once
+# the old binary stops registering that command.
+DROPPED = {
+    "backup", "bench", "errors", "finding", "learn", "learn-from", "mount-alias",
+    "plugin", "querylog", "renderhistory", "repair", "restore", "tables", "team",
+    "directive remove", "identity anonymize", "org unlink",
+    "run list", "run replay", "run show", "run step",
+    "sync dupes", "sync export", "sync install-git", "sync uninstall-action",
+}
 # Children cobra adds by itself; listed under their parent, not as rows of their own.
 SKIP_CHILDREN = {"help"}
 FOLD_CHILDREN = {"completion"}
@@ -88,7 +96,7 @@ def walk():
     rows = []
 
     def visit(path, short):
-        kids = [] if (path and path[-1] in FOLD_CHILDREN) else [k for k in subcommands(lore_help(path)) if k[0] not in SKIP_CHILDREN]
+        kids = [] if (path and path[-1] in FOLD_CHILDREN) else [k for k in subcommands(lore_help(path)) if k[0] not in SKIP_CHILDREN and " ".join(path + [k[0]]) not in DROPPED]
         if path:
             rows.append((path, short, bool(kids)))
         for name, s in kids:
