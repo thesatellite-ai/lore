@@ -17,6 +17,8 @@ func TestSearchParse(t *testing.T) {
 				parts = append(parts, fmt.Sprintf("cond(%s=%s)", x.Name(), x.Value))
 			case Has:
 				parts = append(parts, fmt.Sprintf("has(%s)", x.Name()))
+			case Cmp:
+				parts = append(parts, fmt.Sprintf("cmp(%s%s%s)", x.Name(), x.Op, x.Value))
 			case Text:
 				parts = append(parts, "text("+x.Word+")")
 			}

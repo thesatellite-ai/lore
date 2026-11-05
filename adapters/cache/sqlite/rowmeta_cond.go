@@ -51,7 +51,11 @@ func RowMetaCond(alias string, t metaquery.Term) (string, error) {
 				return "", err
 			}
 			return a + "item_idx >= 0 AND " + col + " IS NOT NULL AND " + col + " " + string(t.Op) + " " + lit, nil
+		case meta.OpEq, meta.OpIn, meta.OpHas, meta.OpMissing:
+			// not a Cmp operator: metaquery never makes these a Cmp term
 		}
+	case metaquery.Text:
+		// free text is FTS5's, not a row_meta condition
 	}
 	return "", errs.New(errs.MetaOp, "meta: "+strconv.Quote(t.Word)+" is not a search condition")
 }
@@ -71,6 +75,8 @@ func RowMetaComparable(alias string, t metaquery.Term) string {
 			return ""
 		}
 		return alias + ".item_idx >= 0 AND " + col + " IS NOT NULL"
+	case meta.OpEq, meta.OpNe, meta.OpLike, meta.OpIn, meta.OpHas, meta.OpMissing:
+		// equality-like: every leaf can be read, nothing is skipped
 	}
 	return ""
 }

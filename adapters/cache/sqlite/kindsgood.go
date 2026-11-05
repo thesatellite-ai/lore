@@ -110,16 +110,16 @@ func refreshKindGood(ctx context.Context, tx *sql.Tx, source store.Source, kindI
 	}
 	for rs.Next() {
 		var d []byte
-		if err := rs.Scan(&d); err != nil {
-			return errors.Join(dbErr("read kind fields", err), rs.Close())
+		if serr := rs.Scan(&d); serr != nil {
+			return errors.Join(dbErr("read kind fields", serr), rs.Close())
 		}
 		if merge.HasMarkers(string(d)) {
 			return rs.Close() // not good now: keep the old snapshot
 		}
 		snap.Fields = append(snap.Fields, d)
 	}
-	if err := errors.Join(rs.Err(), rs.Close()); err != nil {
-		return dbErr("read kind fields", err)
+	if jerr := errors.Join(rs.Err(), rs.Close()); jerr != nil {
+		return dbErr("read kind fields", jerr)
 	}
 	b, err := json.Marshal(snap)
 	if err != nil {
@@ -139,8 +139,8 @@ func refreshKindGood(ctx context.Context, tx *sql.Tx, source store.Source, kindI
 func (c *Cache) LastGoodKind(ctx context.Context, source store.Source, kindID string) (kind row.Row, fields []row.Row, ok bool, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.usable(); err != nil {
-		return row.Row{}, nil, false, err
+	if uerr := c.usable(); uerr != nil {
+		return row.Row{}, nil, false, uerr
 	}
 	var raw []byte
 	switch qerr := c.db.QueryRowContext(ctx, kindGoodRead, string(source), kindID).Scan(&raw); {
@@ -150,8 +150,8 @@ func (c *Cache) LastGoodKind(ctx context.Context, source store.Source, kindID st
 		return row.Row{}, nil, false, dbErr("read last good kind", qerr)
 	}
 	var snap kindSnapshot
-	if err := json.Unmarshal(raw, &snap); err != nil {
-		return row.Row{}, nil, false, dbErr("decode last good kind", err)
+	if jerr := json.Unmarshal(raw, &snap); jerr != nil {
+		return row.Row{}, nil, false, dbErr("decode last good kind", jerr)
 	}
 	if kind, err = row.Decode(snap.Kind); err != nil {
 		return row.Row{}, nil, false, err
