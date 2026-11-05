@@ -735,6 +735,137 @@
         }
       }
     },
+    "/v1/agents/start": {
+      "post": {
+        "operationId": "agent.start",
+        "summary": "Register an agent actor for this session and print its environment; --tool: record a tool session's details (session hook)",
+        "tags": [
+          "agent"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hook_stdin": {
+                    "type": "boolean",
+                    "description": "session hook: read the tool's hook JSON from stdin"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "the agent's label (one actor per label), e.g. agent-frontend"
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "session hook: the model the tool reports (never guessed)"
+                  },
+                  "owner": {
+                    "type": "string",
+                    "description": "the owning person (@handle); default: you"
+                  },
+                  "session": {
+                    "type": "string",
+                    "description": "session hook: the tool's own session id"
+                  },
+                  "tool": {
+                    "type": "string",
+                    "description": "session hook: the tool's slug (claude_code, codex, …); records details only"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hook": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "lore_actor": {
+                      "type": "string"
+                    },
+                    "lore_session": {
+                      "type": "string"
+                    },
+                    "owner": {
+                      "type": "string"
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/architecturenotes": {
       "get": {
         "operationId": "architecturenote.list",
@@ -51338,6 +51469,167 @@
           },
           "503": {
             "description": "E_SECRET_UNAVAILABLE, E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions": {
+      "get": {
+        "operationId": "session.list",
+        "summary": "List this machine's agent sessions: actor, tool, tool session, writes, new keys, flags (local only)",
+        "tags": [
+          "session"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "actor": {
+                            "type": "string"
+                          },
+                          "actor_id": {
+                            "type": "string"
+                          },
+                          "branch": {
+                            "type": "string"
+                          },
+                          "ci": {
+                            "type": "string"
+                          },
+                          "cwd": {
+                            "type": "string"
+                          },
+                          "declared_human": {
+                            "type": "boolean"
+                          },
+                          "flags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "last_write_at": {
+                            "type": "string"
+                          },
+                          "machine_id": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "new_keys": {
+                            "type": "integer"
+                          },
+                          "outer_tools": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "parent_session_id": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "run_id": {
+                            "type": "string"
+                          },
+                          "signal": {
+                            "type": "string"
+                          },
+                          "sources": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "started_at": {
+                            "type": "string"
+                          },
+                          "terminal": {
+                            "type": "string"
+                          },
+                          "tool": {
+                            "type": "string"
+                          },
+                          "tool_session_id": {
+                            "type": "string"
+                          },
+                          "tool_version": {
+                            "type": "string"
+                          },
+                          "writes": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "started_at",
+                          "writes",
+                          "new_keys"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "sessions"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
             "content": {
               "application/json": {
                 "schema": {

@@ -27,14 +27,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
 
-// Agent start --tool flags.
-const (
-	flagTool      = "tool"
-	flagSession   = "session"
-	flagModel     = "model"
-	flagHookStdin = "hook-stdin"
-)
-
 // hookStdinMax bounds the hook JSON lore reads (a hook input is a few
 // hundred bytes; the cap keeps a runaway pipe from holding the tool).
 const hookStdinMax = 1 << 20

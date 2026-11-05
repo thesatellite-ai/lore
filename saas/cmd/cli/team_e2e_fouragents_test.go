@@ -81,7 +81,7 @@ type doneNext struct {
 // session id" in the row: the row the claim writers build carries the
 // holder's session, which the client leak guard refuses, so the task stays
 // on the live ref. Found by a-task-e2e (PASS3 queue #10).
-var bugLandSession = th.Bug{ID: "BUG-LAND-SESSION", Owner: "main (claim writers / leak guard)", Open: true}
+var bugLandSession = th.Bug{ID: "BUG-LAND-SESSION", Owner: "main (claim writers / leak guard)", Open: false}
 
 // 6.9 + 21.3: w1 holds a task and splits it: the claim stays on the parent
 // as a coordinator lease; w2 and w3 race for the first child and exactly

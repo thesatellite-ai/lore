@@ -43,6 +43,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	opsagent "github.com/thesatellite-ai/lore/ops/agent"
 	opsarchitecturenote "github.com/thesatellite-ai/lore/ops/architecturenote"
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opsbatch "github.com/thesatellite-ai/lore/ops/batch"
@@ -84,6 +85,7 @@ import (
 	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	opsselfupgrade "github.com/thesatellite-ai/lore/ops/selfupgrade"
+	opssession "github.com/thesatellite-ai/lore/ops/session"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opssnapshot "github.com/thesatellite-ai/lore/ops/snapshot"
@@ -256,6 +258,9 @@ type Options struct {
 	// still lives in the binary (render history, …; wire/context_hosts.go,
 	// P3-MISC-3). A nil part answers E_UNSUPPORTED.
 	Context ContextHosts
+	// Sessions are the binary's hosts behind `lore session list` and
+	// `lore agent start` (wire/runs.go); zero = E_UNSUPPORTED.
+	Sessions SessionHosts
 }
 
 // openOptions is what every store open of this App passes to a backend:
@@ -466,6 +471,9 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opssync.Ops(a.opts.Sync)...)
 	entries = append(entries, opsrender.Ops(a)...)
 	entries = append(entries, opsdoctor.Ops(a)...)
+	// CLI 3.8 / 2.11: lore session list, lore agent start (P3-RUNS-4, P3-RUNS-6).
+	entries = append(entries, opssession.Ops(a)...)
+	entries = append(entries, opsagent.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 
@@ -551,6 +559,7 @@ func (a *App) repoTop(ctx context.Context) (string, error) {
 // The store operations run on the repo-only engine (configState); a
 // `--to <store>/<folder>` target is attached first (prepareTarget).
 func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+	ctx = a.TeamContext(ctx) // P3-COORD-3: --assign @h, --mine, STATE without a host Team (wire/coord_standalone.go)
 	// P3-CFG-1: a Local operation opens nothing, not even the
 	// agent detection's repo state (wire/localops.go).
 	if e.Spec().Local {

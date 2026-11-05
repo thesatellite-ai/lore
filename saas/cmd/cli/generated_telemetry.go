@@ -15,7 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newSessionGroup lives in session_list.go (AGENT_IDENTITY_DESIGN 6.2 columns).
+// `lore session list` is the operation session.list (ops/session over
+// sessionHost, P3-RUNS-4).
 
 func newQueryLogGroup() *cobra.Command {
 	cmd := &cobra.Command{Use: "querylog", Short: "Inspect querylogs"}

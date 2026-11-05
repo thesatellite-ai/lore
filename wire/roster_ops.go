@@ -7,6 +7,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	opsagent "github.com/thesatellite-ai/lore/ops/agent"
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	"github.com/thesatellite-ai/lore/schema"
@@ -43,7 +44,7 @@ const rosterHandleMark = "@"
 
 // hostRunOp reports whether wire runs the operation name directly.
 func hostRunOp(name string) bool {
-	return opsaudit.IsAuditOp(name) || opsinfra.IsRosterOp(name)
+	return opsaudit.IsAuditOp(name) || opsinfra.IsRosterOp(name) || opsagent.IsDirectOp(name)
 }
 
 // runDirect decodes and invokes e with no engine around it.

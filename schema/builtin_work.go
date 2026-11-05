@@ -196,7 +196,9 @@ func workDefs() []TableDef {
 			JSON("blocked_by", MergeBy(MergeSetUnion), Describe("--after edges: [{task_id, project_id?, until}]")),
 			Number("claim_epoch", Internal()),
 			Number("attempts", Internal()),
-			JSON("claim_log", Internal(), LoreRecord()), // its session ids are lore's own (BUG-T7)
+			// claim_log keeps sessions only as lore ses_ refs (coord.AppendClaimLog,
+			// P3-SEC-LAND-1), so the session-id rule applies to it like any field.
+			JSON("claim_log", Internal()),
 			// time_entries: closed spans of work (model/timeentry), union-merged
 			// by entry id; internal so client repos get no time data (TQ3).
 			JSON("time_entries", Internal(), MergeBy(MergeListByID),

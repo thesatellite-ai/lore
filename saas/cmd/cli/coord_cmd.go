@@ -7,16 +7,11 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"io"
-	"regexp"
 	"time"
 
 	"saas/pkg/aicoder/errcodes"
-	"saas/pkg/aicoder/identity"
-	"saas/pkg/aicoder/ids"
 	"saas/pkg/aicoder/signals"
 	"saas/pkg/aicoder/style"
 
@@ -28,124 +23,11 @@ import (
 // and `apply` under the existing `plan` group. It runs after the generated
 // entity groups are registered, so the group exists.
 func addCoordCommands(root *cobra.Command) {
-	root.AddCommand(newAgentCommand(), newFindingCommand())
+	root.AddCommand(newFindingCommand())
 }
 
-// ---------------------------------------------------------------- agent
-
-// sessionIDBytes of randomness make a session id ("s-" + hex) unique per
-// agent start on any machine.
-const (
-	sessionPrefix  = "s-"
-	sessionIDBytes = 4
-	flagLabel      = "label"
-	flagOwner      = "owner"
-)
-
-func newAgentCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "agent", Short: "Agent sessions (one actor per session label)"}
-	var label, owner, tool, toolSession, model string
-	var hookStdin bool
-	start := &cobra.Command{
-		Use:   "start",
-		Short: "Register an agent actor for this session and print its environment",
-		Long: `Start registers an agent actor (kind agent, the label, owned by a person) on the
-org roster and prints LORE_ACTOR and LORE_SESSION for the agent's shell. Every
-claim, heartbeat and done by the agent then carries that actor and session (F18).
-
-With --tool it is the optional session hook instead (6.4): it records this
-tool session's details (session id, model) on the machine-local session row
-of the detected agent, registers nothing, prints nothing on success and
-always exits 0. Install the snippets with ` + "`lore setup --agent-hooks`" + `.
-
-Example:
-  eval "$(lore agent start --label agent-frontend --owner @alice | tail -1)"
-  lore agent start --tool claude_code --hook-stdin          # from the tool's SessionStart hook
-  lore agent start --tool codex --session "$ID" --model "$MODEL"`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if cmd.Flags().Changed(flagTool) {
-				runAgentHook(cmd.Context(), tool, toolSession, model, hookStdin) // never fails (6.4)
-				return nil
-			}
-			if label == "" {
-				return errcodes.New(errcodes.InvalidInput, "--label is required (or --tool for the session hook)")
-			}
-			if err := validateAgentLabel(label); err != nil {
-				return errcodes.New(errcodes.InvalidInput, err.Error())
-			}
-			ctx := cmd.Context()
-			w, err := openCoordWorld(ctx)
-			if err != nil {
-				return err
-			}
-			if w.IsAgent() {
-				return errcodes.New(errcodes.InvalidInput, "an agent cannot start another agent; run `lore agent start` as its owner")
-			}
-			key := identity.KindAgent + ":" + label
-			actorID, err := ids.Deterministic(ids.PrefixActor, key)
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "derive the agent's actor id").WithCause(err)
-			}
-			session, err := newSessionID()
-			if err != nil {
-				return errcodes.New(errcodes.Internal, "make a session id").WithCause(err)
-			}
-			ownerShown := owner
-			if ownerShown == "" {
-				ownerShown = w.Caller().Label
-			}
-			pushed, err := registerAgent(cmd, w, agentSpec{ActorID: actorID, Key: key, Label: label, Owner: owner})
-			if err != nil {
-				return err
-			}
-			where := "registered"
-			if pushed != "" {
-				where = "registered in " + pushed
-			}
-			fmt.Printf("%s %s agent %s (owner %s) %s; LORE_ACTOR=%s LORE_SESSION=%s\n",
-				style.Success("✓"), actorID, label, ownerShown, where, key, session)
-			fmt.Printf("export %s=%s %s=%s\n", identity.EnvActor, key, identity.EnvSession, session)
-			return nil
-		},
-	}
-	start.Flags().StringVar(&label, flagLabel, "", "the agent's label (one actor per label), e.g. agent-frontend")
-	start.Flags().StringVar(&owner, flagOwner, "", "the owning person (@handle); default: you")
-	start.Flags().StringVar(&tool, flagTool, "", "session hook: the tool's slug (claude_code, codex, …); records details only")
-	start.Flags().StringVar(&toolSession, flagSession, "", "session hook: the tool's own session id")
-	start.Flags().StringVar(&model, flagModel, "", "session hook: the model the tool reports (never guessed)")
-	start.Flags().BoolVar(&hookStdin, flagHookStdin, false, "session hook: read the tool's hook JSON from stdin")
-	cmd.AddCommand(start)
-	return cmd
-}
-
-func newSessionID() (string, error) {
-	b := make([]byte, sessionIDBytes)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return sessionPrefix + hex.EncodeToString(b), nil
-}
-
-// agentSpec is an agent actor to put on the roster.
-type agentSpec struct {
-	ActorID, Key, Label, Owner string
-}
-
-// registerAgent writes the agent actor to the org roster (in the org
-// store; the repo's own actors table when no org applies) through the
-// stores work's roster writer, which also checks the owner is a person on
-// the roster. It returns where it registered.
-func registerAgent(cmd *cobra.Command, _ *coordWorld, a agentSpec) (string, error) {
-	id, where, err := rosterRegisterAgent(cmd.Context(), a.Label, a.Owner)
-	if err != nil {
-		return "", err
-	}
-	if id != a.ActorID {
-		return "", errcodes.New(errcodes.Internal, fmt.Sprintf("roster gave agent id %s, expected %s from its stable key", id, a.ActorID))
-	}
-	return where, nil
-}
+// `lore agent start` is the operation agent.start (ops/agent over
+// agentHost and the App's roster, P3-RUNS-6).
 
 // ---------------------------------------------------------------- hold
 
@@ -226,18 +108,5 @@ func runHoldRelease(ctx context.Context, out io.Writer, in opscoord.HoldReleaseI
 		return coordError(err)
 	}
 	_, _ = fmt.Fprintf(out, "%s released %s\n", style.Success("✓"), in.Name)
-	return nil
-}
-
-// agentLabelPattern is what a label may hold: it becomes part of the
-// stable key (agent:<label>), a session's display name and a path segment,
-// so it is kept to a safe, case-folded alphabet.
-var agentLabelPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
-
-// validateAgentLabel refuses labels outside agentLabelPattern.
-func validateAgentLabel(label string) error {
-	if !agentLabelPattern.MatchString(label) {
-		return fmt.Errorf("agent label %q: use lower-case letters, digits, '.', '_' or '-' (max 63, starting with a letter or digit)", label)
-	}
 	return nil
 }
