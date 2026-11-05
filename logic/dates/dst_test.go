@@ -12,8 +12,7 @@ import (
 // clock time is read in the local zone of that day (its own offset, not
 // today's) and stored as the UTC instant; one in the repeated autumn hour
 // takes the first (summer-time) instant. A time inside the spring gap
-// (02:30 on the change day) does not exist: TestPhraseInSpringGap pins
-// only that it lands on the change day next to the gap.
+// moves forward by the gap: TestLocalTimeAcrossTransitions (PC-TASK-3).
 func TestPhrasesAcrossDST(t *testing.T) {
 	ny, err := time.LoadLocation("America/New_York")
 	if err != nil {
@@ -71,23 +70,82 @@ func TestPhrasesAcrossDST(t *testing.T) {
 	}
 }
 
-// TestPhraseInSpringGap: "today 02:30" on the US spring-forward day names
-// a local time that does not exist. Go's time.Date picks one side of the
-// gap (today 06:30Z, i.e. 01:30 EST); the design does not say which, so
-// this pins only that the instant is within an hour of the gap and on the
-// change day, never a different day.
-func TestPhraseInSpringGap(t *testing.T) {
-	ny, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		t.Fatal(err)
+// TestLocalTimeAcrossTransitions (PC-TASK-3): "<day> HH:MM" across zones
+// on both clock-change days and an ordinary day. A wall time inside a
+// spring-forward gap moves forward by the gap length (1 h in New York and
+// Berlin, 30 min on Lord Howe); one a fall-back repeats takes the earlier
+// offset (the first instant); every other time reads plainly. The zone is
+// always injected, never the machine's.
+func TestLocalTimeAcrossTransitions(t *testing.T) {
+	zone := func(name string) *time.Location {
+		l, err := time.LoadLocation(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l
 	}
-	now := time.Date(2026, 3, 8, 5, 0, 0, 0, time.UTC)
-	r, err := Parse("today 02:30", Clock{Now: now, Loc: ny, WeekEnd: time.Friday})
-	if err != nil {
-		t.Fatal(err)
+	ny, berlin, lh := zone("America/New_York"), zone("Europe/Berlin"), zone("Australia/Lord_Howe")
+	cases := []struct {
+		name  string
+		loc   *time.Location
+		day   string // YYYY-MM-DD, local
+		clock string
+		want  string // the UTC instant
+		local string // what the instant reads as on loc's wall clock
+		note  bool   // a gap note is given
+	}{
+		// New York: spring 2026-03-08 02:00 EST → 03:00 EDT; fall 2026-11-01 02:00 EDT → 01:00 EST.
+		{"ny spring before gap", ny, "2026-03-08", "01:59", "2026-03-08T06:59:00Z", "01:59", false},
+		{"ny spring gap start", ny, "2026-03-08", "02:00", "2026-03-08T07:00:00Z", "03:00", true},
+		{"ny spring gap 02:30", ny, "2026-03-08", "02:30", "2026-03-08T07:30:00Z", "03:30", true},
+		{"ny spring gap end", ny, "2026-03-08", "02:59", "2026-03-08T07:59:00Z", "03:59", true},
+		{"ny spring after gap", ny, "2026-03-08", "03:00", "2026-03-08T07:00:00Z", "03:00", false},
+		{"ny fall before repeat", ny, "2026-11-01", "00:59", "2026-11-01T04:59:00Z", "00:59", false},
+		{"ny fall repeat start", ny, "2026-11-01", "01:00", "2026-11-01T05:00:00Z", "01:00", false},
+		{"ny fall repeat 01:30 earlier offset", ny, "2026-11-01", "01:30", "2026-11-01T05:30:00Z", "01:30", false},
+		{"ny fall after repeat", ny, "2026-11-01", "02:00", "2026-11-01T07:00:00Z", "02:00", false},
+		{"ny ordinary", ny, "2026-06-15", "02:30", "2026-06-15T06:30:00Z", "02:30", false},
+		// Berlin: spring 2026-03-29 02:00 CET → 03:00 CEST; fall 2026-10-25 03:00 CEST → 02:00 CET.
+		{"berlin spring gap 02:30", berlin, "2026-03-29", "02:30", "2026-03-29T01:30:00Z", "03:30", true},
+		{"berlin spring after gap", berlin, "2026-03-29", "03:30", "2026-03-29T01:30:00Z", "03:30", false},
+		{"berlin fall repeat 02:30 earlier offset", berlin, "2026-10-25", "02:30", "2026-10-25T00:30:00Z", "02:30", false},
+		{"berlin fall after repeat", berlin, "2026-10-25", "03:00", "2026-10-25T02:00:00Z", "03:00", false},
+		{"berlin ordinary", berlin, "2026-01-15", "02:30", "2026-01-15T01:30:00Z", "02:30", false},
+		// Lord Howe (30-minute change): spring 2026-10-04 02:00 +10:30 → 02:30 +11; fall 2026-04-05 02:00 +11 → 01:30 +10:30.
+		{"lh spring gap 02:15 moves 30 min", lh, "2026-10-04", "02:15", "2026-10-03T15:45:00Z", "02:45", true},
+		{"lh spring gap start", lh, "2026-10-04", "02:00", "2026-10-03T15:30:00Z", "02:30", true},
+		{"lh spring after gap", lh, "2026-10-04", "02:30", "2026-10-03T15:30:00Z", "02:30", false},
+		{"lh fall repeat 01:45 earlier offset", lh, "2026-04-05", "01:45", "2026-04-04T14:45:00Z", "01:45", false},
+		{"lh fall after repeat", lh, "2026-04-05", "02:00", "2026-04-04T15:30:00Z", "02:00", false},
+		{"lh ordinary", lh, "2026-07-01", "02:15", "2026-06-30T15:45:00Z", "02:15", false},
+		// UTC never shifts.
+		{"utc ny spring day", time.UTC, "2026-03-08", "02:30", "2026-03-08T02:30:00Z", "02:30", false},
+		{"utc ordinary", time.UTC, "2026-06-15", "23:59", "2026-06-15T23:59:00Z", "23:59", false},
 	}
-	gap := time.Date(2026, 3, 8, 7, 0, 0, 0, time.UTC)
-	if d := r.At.Sub(gap); d < -time.Hour || d > time.Hour || r.Day {
-		t.Errorf("gap time = %s, want within an hour of %s", r.At, gap)
+	for _, c := range cases {
+		day, err := time.ParseInLocation(DayLayout, c.day, c.loc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// "now" is noon of the day in loc; "today HH:MM" and the explicit
+		// "YYYY-MM-DD HH:MM" must agree.
+		now := time.Date(day.Year(), day.Month(), day.Day(), 12, 0, 0, 0, c.loc)
+		for _, phrase := range []string{"today " + c.clock, c.day + " " + c.clock} {
+			r, perr := Parse(phrase, Clock{Now: now.UTC(), Loc: c.loc, WeekEnd: time.Friday})
+			if perr != nil {
+				t.Errorf("%s: %q: %v", c.name, phrase, perr)
+				continue
+			}
+			if got := r.Text(); got != c.want {
+				t.Errorf("%s: %q = %s, want %s", c.name, phrase, got, c.want)
+			}
+			lt := r.At.In(c.loc)
+			if got := lt.Format("15:04"); got != c.local || lt.Format(DayLayout) != c.day {
+				t.Errorf("%s: %q reads %s on the wall clock, want %s %s", c.name, phrase, lt.Format("2006-01-02 15:04"), c.day, c.local)
+			}
+			if (r.Note != "") != c.note {
+				t.Errorf("%s: %q note %q, want a gap note: %v", c.name, phrase, r.Note, c.note)
+			}
+		}
 	}
 }

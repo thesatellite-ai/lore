@@ -4,6 +4,8 @@
 //
 //	Parse(raw, Clock{Now, Loc, WeekEnd})
 //	  ├─ split an optional trailing HH:MM          → datetime in Loc, UTC
+//	  │    (LocalTime: a spring-gap time moves forward by the gap,
+//	  │     a repeated fall-back time takes the earlier offset)
 //	  ├─ YYYY-MM-DD | RFC3339                      → as given
 //	  ├─ today|tomorrow|yesterday                  → Now's day in Loc
 //	  ├─ <wd> | this <wd> | next <wd>              → Monday-based weeks
@@ -16,7 +18,9 @@
 package dates
 
 import (
+	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -129,9 +133,58 @@ func Parse(raw string, c Clock) (Result, error) {
 		return bad("not in the table")
 	}
 	if hasClock {
-		return Result{At: time.Date(y, mo, d, hh, mm, 0, 0, loc).UTC(), Note: note}, nil
+		at, gap := LocalTime(y, mo, d, hh, mm, loc)
+		if gap > 0 && note == "" {
+			note = fmt.Sprintf("%02d:%02d does not exist on %04d-%02d-%02d in %s (clocks skip ahead): %s",
+				hh, mm, y, int(mo), d, loc, at.In(loc).Format("15:04"))
+		}
+		return Result{At: at, Note: note}, nil
 	}
 	return Result{At: time.Date(y, mo, d, 0, 0, 0, 0, time.UTC), Day: true, Note: note}, nil
+}
+
+// LocalTime is the UTC instant of the wall time y-mo-d hh:mm in loc, with
+// the RFC 5545 / java.time rule for the two hours a clock change makes
+// odd (PC-TASK-3); time.Date leaves both unspecified:
+//   - a wall time inside a spring-forward gap does not exist: it moves
+//     forward by the gap length (02:30 on a 1-hour change day = 03:30
+//     local; on Lord Howe's 30-minute change 02:15 = 02:45), i.e. it is
+//     read with the offset in effect before the gap; gap is that length;
+//   - a wall time a fall-back repeats takes the earlier offset (the first
+//     of the two instants).
+//
+// Every offset loc uses within a day of the wall time is tried; the ones
+// that give back the same wall time are the real readings.
+func LocalTime(y int, mo time.Month, d, hh, mm int, loc *time.Location) (time.Time, time.Duration) {
+	wall := time.Date(y, mo, d, hh, mm, 0, 0, time.UTC)
+	offsetAt := func(t time.Time) time.Duration {
+		_, off := t.In(loc).Zone()
+		return time.Duration(off) * time.Second
+	}
+	var offs []time.Duration
+	for _, step := range []time.Duration{-24 * time.Hour, 0, 24 * time.Hour} {
+		if off := offsetAt(wall.Add(step)); !slices.Contains(offs, off) {
+			offs = append(offs, off)
+		}
+	}
+	var best, earliest time.Time
+	for _, off := range offs {
+		t := wall.Add(-off)
+		if earliest.IsZero() || t.Before(earliest) {
+			earliest = t
+		}
+		if offsetAt(t) == off && (best.IsZero() || t.Before(best)) {
+			best = t
+		}
+	}
+	if !best.IsZero() {
+		return best, 0
+	}
+	// In the gap: no offset reads back. The offset before the change is
+	// the one in effect just before the earliest candidate instant.
+	before := offsetAt(earliest.Add(-time.Nanosecond))
+	at := wall.Add(-before)
+	return at, offsetAt(at) - before
 }
 
 // day resolves the date part; on refusal note may carry the reason.
