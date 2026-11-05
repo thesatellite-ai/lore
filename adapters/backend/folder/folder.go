@@ -144,7 +144,7 @@ func Open(dir, name string, o store.OpenOptions, opts ...Option) (*Backend, erro
 	for _, opt := range opts {
 		opt(&c)
 	}
-	r, err := rowfs.Open(dir, rowfs.WithLockTimeout(c.lockTimeout), rowfs.WithClock(c.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
+	r, err := rowfs.Open(dir, rowfs.WithLockTimeout(c.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(c.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
 	if err != nil {
 		return nil, err
 	}

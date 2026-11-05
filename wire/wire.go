@@ -175,6 +175,9 @@ type Options struct {
 	// with E_NETWORK_FS. The CLI sets it from LORE_ALLOW_NETWORK_FS=1, the
 	// v0.1.17 override; false, the default, keeps the refusal.
 	AllowNetworkFS bool
+	// LockTimeout is `store.lock_timeout` (0 = the backends' default); open
+	// fills it from ~/.lore/config.yaml when unset (F63, FA-AGENT-8).
+	LockTimeout time.Duration
 	// Notice receives one-line notices for the person, once per open (a
 	// CLI prints them on stderr; nil drops them). Today: LiveNote, when the
 	// v0.1.17 live ref holds rows the core cannot see yet.
@@ -204,13 +207,13 @@ type Options struct {
 // openOptions is what every store open of this App passes to a backend:
 // the lore home and the user's network-FS override.
 func (o Options) openOptions() store.OpenOptions {
-	return store.OpenOptions{Home: o.Home, AllowNetworkFS: o.AllowNetworkFS}
+	return store.OpenOptions{Home: o.Home, AllowNetworkFS: o.AllowNetworkFS, LockTimeout: o.LockTimeout}
 }
 
 // rowfsOptions are the rowfs options of a store this App makes on disk
 // (folder.Init), matching openOptions.
 func (o Options) rowfsOptions() []rowfs.Option {
-	return []rowfs.Option{rowfs.WithAllowNetworkFS(o.AllowNetworkFS)}
+	return []rowfs.Option{rowfs.WithAllowNetworkFS(o.AllowNetworkFS), rowfs.WithLockTimeout(o.LockTimeout)}
 }
 
 // WriteQuery is what the write hooks (Options.GuardRepoWrite,

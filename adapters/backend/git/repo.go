@@ -34,7 +34,7 @@ func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts
 		return nil, errs.Wrap(errs.Internal, "git: run git", err)
 	}
 	top := filepath.FromSlash(trimmed(out))
-	root, err := rowfs.Open(projectRoot(dir, top, o.Home), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
+	root, err := rowfs.Open(projectRoot(dir, top, o.Home), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
 	if err != nil {
 		return nil, err
 	}

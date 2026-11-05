@@ -122,7 +122,7 @@ func OpenClone(ctx context.Context, remote, base, folder string, o store.OpenOpt
 		return nil, errs.Wrap(errs.Internal, "git: create the clone folder", err)
 	}
 	lockPath := filepath.Join(base, lockName)
-	setupRoot, err := rowfs.Open(base, rowfs.WithLockPath(lockPath), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
+	setupRoot, err := rowfs.Open(base, rowfs.WithLockPath(lockPath), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func OpenClone(ctx context.Context, remote, base, folder string, o store.OpenOpt
 	if err = releaseKeep(err, lock); err != nil {
 		return nil, err
 	}
-	if b.root, err = rowfs.Open(b.work, rowfs.WithLockPath(lockPath), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS)); err != nil {
+	if b.root, err = rowfs.Open(b.work, rowfs.WithLockPath(lockPath), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS)); err != nil {
 		return nil, err
 	}
 	if b.folder, err = b.root.Folder(folder); err != nil {

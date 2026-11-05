@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -22,6 +23,10 @@ type OpenOptions struct {
 	// the user's explicit override (v0.1.17's LORE_ALLOW_NETWORK_FS=1);
 	// false, the zero value, keeps the refusal.
 	AllowNetworkFS bool
+	// LockTimeout is how long a write waits for the store lock before
+	// E_STORE_LOCKED (`store.lock_timeout` in ~/.lore/config.yaml, F63,
+	// FA-AGENT-8); 0 keeps the backend's default (10 s).
+	LockTimeout time.Duration
 }
 
 // Openers maps url schemes to Openers. It is a value built by the binary's
