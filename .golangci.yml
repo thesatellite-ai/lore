@@ -1,6 +1,5 @@
-# Strict lint for the root module (github.com/thesatellite-ai/lore).
-# The old nested modules (saas, dbent, lace) are separate modules and are not
-# linted by this file. Findings are fixed at the cause: no //nolint, no
+# Strict lint for the root module (github.com/thesatellite-ai/lore), the only
+# module in the repo. Findings are fixed at the cause: no //nolint, no
 # per-rule carve-outs for hand-written code.
 version: "2"
 

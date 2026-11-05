@@ -33,7 +33,7 @@ if [ -n "${KEEP:-}" ]; then echo "keeping worlds in $SCRATCH" >&2; else trap 'rm
 
 if [ -z "${LORE_BIN:-}" ]; then
   LORE_BIN="$SCRATCH/bin/lore"
-  (cd "$REPO" && CGO_ENABLED=0 go build -tags loretest -o "$LORE_BIN" ./saas/cmd/cli)
+  (cd "$REPO" && CGO_ENABLED=0 go build -tags loretest -o "$LORE_BIN" ./cmd/lore)
 fi
 export LORE_BIN
 

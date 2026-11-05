@@ -4,7 +4,7 @@
 #
 # Needs root: runs directly when already root, through passwordless sudo
 # when available, and skips otherwise (the refusal itself is also unit-tested
-# with an injected uid: saas/cmd/cli/guard_cli_test.go).
+# with an injected uid: cmd/lore/guard_test.go).
 source "$(dirname "$0")/../lib/common.sh"
 if [ "$(id -u)" -eq 0 ]; then
     AS_ROOT=(env)
