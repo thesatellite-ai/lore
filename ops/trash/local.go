@@ -19,7 +19,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 )
 
 // LocalCopy is one of this machine's safety copies (one `_lore_sync_trash`
@@ -104,4 +106,31 @@ func (o ListOut) localText() string {
 		b.WriteString("#" + strconv.FormatInt(c.N, 10) + " " + c.Table + "/" + c.RowID + "  " + c.At + "  (" + c.Reason + ")\n")
 	}
 	return b.String()
+}
+
+// LocalCopyDropper is the optional Env upgrade a purge uses (OWNERQ-25e):
+// it deletes this machine's v0.1.17 safety copies (`_lore_sync_trash` in
+// .lore/lore.db) of the given row ids and returns how many it deleted; no
+// lore.db or no table deletes none. A purge removes a value for good, so a
+// copy of the purged row must not survive in a local file either.
+type LocalCopyDropper interface {
+	DropLocalCopies(ctx context.Context, rowIDs []string) (int, error)
+}
+
+// dropLocalCopies runs after a real (never a dry-run) purge of res. Fail
+// closed: the rows are already purged, so an error says so and names the
+// listing that shows what is left, instead of reporting a clean purge.
+func (o ops) dropLocalCopies(ctx context.Context, res engine.TrashResult) error {
+	d, ok := upgrade.As[LocalCopyDropper](o.env)
+	if !ok || len(res.Rows) == 0 {
+		return nil
+	}
+	rowIDs := make([]string, 0, len(res.Rows))
+	for _, t := range res.Rows {
+		rowIDs = append(rowIDs, t.Row.ID.String())
+	}
+	if _, err := d.DropLocalCopies(ctx, rowIDs); err != nil {
+		return errs.Wrap(errs.Internal, "trash purge: the rows are purged, but this machine's safety copies of them could not be removed", err).WithHint(localTrashHint)
+	}
+	return nil
 }

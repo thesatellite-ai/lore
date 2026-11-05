@@ -422,6 +422,9 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		if err != nil {
 			return ResultOut{}, err
 		}
+		if err = o.dropLocalCopies(ctx, res); err != nil {
+			return ResultOut{}, err
+		}
 		return resultOf("purged", res, false), nil
 	}
 	cutoff := time.Time{}
@@ -443,6 +446,9 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 	}
 	if in.DryRun {
 		return resultOf("would purge", res, true), nil
+	}
+	if err = o.dropLocalCopies(ctx, res); err != nil {
+		return ResultOut{}, err
 	}
 	return resultOf("purged", res, false), nil
 }
@@ -480,6 +486,9 @@ func (o ops) purgeArchived(ctx context.Context, before string, dry, confirm bool
 	}
 	if dry {
 		return resultOf("would purge", res, true), nil
+	}
+	if err = o.dropLocalCopies(ctx, res); err != nil {
+		return ResultOut{}, err
 	}
 	return resultOf("purged", res, false), nil
 }

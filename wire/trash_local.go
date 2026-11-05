@@ -9,6 +9,10 @@ package wire
 //	no .lore/lore.db, or no _lore_sync_trash table ──▶ no copies
 //	else SELECT id, table_name, row_id, reason, at  newest first
 //	the "this machine only" line goes to the notice sink (stderr)
+//
+// A purge is the one writer (OWNERQ-25e, superseding "the core never
+// writes lore.db" for this case only): DropLocalCopies deletes the copies
+// of the purged row ids, so a purged value survives in no local file.
 
 import (
 	"context"
@@ -31,7 +35,14 @@ const v017SyncTrashTable = "_lore_sync_trash"
 // marked "this machine only"), as v0.1.17's `lore sync trash` did.
 const localTrashNote = "this machine only: local safety copies of rows sync removed (never shared)"
 
-var _ opstrash.LocalCopies = (*App)(nil)
+var (
+	_ opstrash.LocalCopies      = (*App)(nil)
+	_ opstrash.LocalCopyDropper = (*App)(nil)
+)
+
+// localTrashBusyMS is how long the purge's write handle waits for a
+// v0.1.17 lore that may still hold lore.db (SQLite busy_timeout, ms).
+const localTrashBusyMS = "5000"
 
 // LocalTrash implements opstrash.LocalCopies.
 func (a *App) LocalTrash(ctx context.Context) ([]opstrash.LocalCopy, error) {
@@ -83,4 +94,61 @@ func readLocalTrash(ctx context.Context, path string) ([]opstrash.LocalCopy, err
 		return nil, errs.Wrap(errs.Internal, "trash --local: list "+v017SyncTrashTable, rerr)
 	}
 	return out, nil
+}
+
+// DropLocalCopies implements opstrash.LocalCopyDropper (OWNERQ-25e): it
+// deletes the `_lore_sync_trash` copies of rowIDs from the checkout's
+// v0.1.17 lore.db and returns how many went. No lore.db or no table: 0.
+// The file is never created, and the handle waits for a v0.1.17 writer.
+func (a *App) DropLocalCopies(ctx context.Context, rowIDs []string) (int, error) {
+	if len(rowIDs) == 0 {
+		return 0, nil
+	}
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return 0, err
+	}
+	path := filepath.Join(top, filepath.FromSlash(v017LoreDB))
+	if _, serr := os.Stat(path); errors.Is(serr, fs.ErrNotExist) {
+		return 0, nil
+	} else if serr != nil {
+		return 0, errs.Wrap(errs.Internal, "trash purge: stat "+v017LoreDB, serr)
+	}
+	// mode=rw: never create the file; busy_timeout: wait for a v0.1.17 lore.
+	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=rw&_pragma=busy_timeout(" + localTrashBusyMS + ")"}).String()
+	db, err := sql.Open(sqliteDriver, dsn)
+	if err != nil {
+		return 0, errs.Wrap(errs.Internal, "trash purge: open "+v017LoreDB, err)
+	}
+	var n int
+	if qerr := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, v017SyncTrashTable).Scan(&n); qerr != nil {
+		return 0, errors.Join(errs.Wrap(errs.Internal, "trash purge: read "+v017LoreDB, qerr), db.Close())
+	}
+	if n == 0 {
+		return 0, db.Close()
+	}
+	// One transaction, one DELETE per id: all copies go or none do.
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errors.Join(errs.Wrap(errs.Internal, "trash purge: begin on "+v017LoreDB, err), db.Close())
+	}
+	var gone int64
+	for _, id := range rowIDs {
+		res, xerr := tx.ExecContext(ctx, `DELETE FROM `+v017SyncTrashTable+` WHERE row_id = ?`, id)
+		var k int64
+		if xerr == nil {
+			k, xerr = res.RowsAffected()
+		}
+		if xerr != nil {
+			return 0, errors.Join(errs.Wrap(errs.Internal, "trash purge: delete from "+v017SyncTrashTable, xerr), tx.Rollback(), db.Close())
+		}
+		gone += k
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, errors.Join(errs.Wrap(errs.Internal, "trash purge: commit on "+v017LoreDB, err), db.Close())
+	}
+	if cerr := db.Close(); cerr != nil {
+		return 0, errs.Wrap(errs.Internal, "trash purge: close "+v017LoreDB, cerr)
+	}
+	return int(gone), nil
 }
