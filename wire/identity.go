@@ -74,10 +74,21 @@ func (a *App) StoreIdentities(ctx context.Context) ([]StoreIdentity, error) {
 // tool version (OQ12). Plugin detectors (PQ1) are not wired yet.
 // In loretest builds LORE_NO_DETECT=1 makes it see nothing (cl-gate).
 func DetectAgent() (agentdetect.Result, error) {
+	return detectAgent(func() agentdetect.Inputs {
+		return agentdetect.Inputs{Getenv: os.Getenv, TTY: stdinTTY(), Procs: procwalk.New(), Files: machine.OSFiles{}}
+	})
+}
+
+// detectAgent is DetectAgent over the given inputs: the build's detection
+// switch first (identity.DetectionOff, honoured only in loretest builds),
+// then agentdetect.Detect. The inputs are built only when detection runs.
+// A seam so the switch can be tested with a fixed environment, terminal
+// and ancestor walk instead of whatever shell runs the test.
+func detectAgent(inputs func() agentdetect.Inputs) (agentdetect.Result, error) {
 	if identity.DetectionOff() {
 		return agentdetect.Result{}, nil
 	}
-	return agentdetect.Detect(agentdetect.Inputs{Getenv: os.Getenv, TTY: stdinTTY(), Procs: procwalk.New(), Files: machine.OSFiles{}})
+	return agentdetect.Detect(inputs())
 }
 
 // stdinTTY reports whether stdin is a character device (a terminal).
