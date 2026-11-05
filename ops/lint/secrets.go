@@ -2,17 +2,13 @@ package lint
 
 import (
 	"context"
-	"maps"
-	"math"
-	"slices"
 	"strconv"
 
+	"github.com/thesatellite-ai/lore/logic/rowscan"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
-	"github.com/thesatellite-ai/lore/schema"
 )
 
 // SecretFound is a stored row whose text the current secret rules match
@@ -27,7 +23,7 @@ type HookScanning interface {
 	HookScanner(ctx context.Context) (scan.Scanner, error)
 }
 
-// secret_allows field names (schema.Builtin).
+// secret_allows field names (schema.Builtin), for this package's tests.
 const (
 	fAllowRowID = "row_id"
 	fAllowField = "field"
@@ -35,73 +31,28 @@ const (
 	fAllowHash  = "match_hash"
 )
 
-// secretFindings re-scans every text field (text, json, each text item of
-// a list) of every live row with sc, drops what a secret_allows row
-// accepts, and reports row id, field, rule and the masked preview, never
-// the value. secret_rules rows are skipped: they hold patterns, not values.
-// Flow: allows from the secret_allows rows → per row × field: sc.Scan →
-// scan.Filter(row id) → one finding per match.
+// secretFindings re-scans every live row with sc through rowscan.Scan
+// (the one every-row scan, shared with `lore check leaks --rows`) and
+// reports row id, field, rule and the masked preview, never the value.
 func secretFindings(sc scan.Scanner, all map[row.Table][]sourced) []Finding {
-	allows := allowsOf(all[schema.TableSecretAllows])
+	in := make(map[row.Table][]rowscan.Row, len(all))
+	for t, rs := range all {
+		for _, s := range rs {
+			in[t] = append(in[t], rowscan.Row{Source: string(s.src), Row: s.r})
+		}
+	}
 	var out []Finding
-	for _, t := range slices.Sorted(maps.Keys(all)) {
-		if t == schema.TableSecretRules {
-			continue
-		}
-		for _, s := range all[t] {
-			for _, f := range slices.Sorted(maps.Keys(s.r.Fields)) {
-				for _, txt := range texts(s.r.Fields[f]) {
-					for _, hit := range scan.Filter(s.r.ID, sc.Scan(f, txt), allows) {
-						id := s.r.ID.String()
-						out = append(out, Finding{Code: SecretFound, ID: id, Store: string(s.src),
-							Message: f + " looks like a secret (" + hit.RuleID + ") at line " + strconv.Itoa(hit.Line) + ": " + hit.Preview,
-							Fix:     "move the value to your vault and write ${secret:…}: lore edit " + id + ", or if it is not a secret: lore secrets allow " + id + " --field " + f + " --rule " + hit.RuleID + " --match-hash " + strconv.FormatUint(uint64(hit.MatchHash), 10) + ` --reason "<why>"`})
-					}
-				}
-			}
-		}
+	for _, h := range rowscan.Scan(sc, in) {
+		id, f, hit := h.ID.String(), h.Finding.Field, h.Finding
+		out = append(out, Finding{Code: SecretFound, ID: id, Store: h.Source,
+			Message: f + " looks like a secret (" + hit.RuleID + ") at line " + strconv.Itoa(hit.Line) + ": " + hit.Preview,
+			Fix:     "move the value to your vault and write ${secret:…}: lore edit " + id + ", or if it is not a secret: lore secrets allow " + id + " --field " + f + " --rule " + hit.RuleID + " --match-hash " + strconv.FormatUint(uint64(hit.MatchHash), 10) + ` --reason "<why>"`})
 	}
 	return out
 }
 
-// texts is the scannable text of one field value.
-func texts(v value.Value) []string {
-	switch x := v.(type) {
-	case value.Text:
-		return []string{x.String()}
-	case value.JSON:
-		return []string{x.String()}
-	case value.List:
-		var out []string
-		for _, it := range x.Items() {
-			out = append(out, texts(it)...)
-		}
-		return out
-	}
-	return nil
-}
-
-// allowsOf reads the secret_allows rows; an incomplete or malformed one
-// allows nothing (fail closed: the finding stays).
-func allowsOf(rs []sourced) []scan.Allow {
-	var out []scan.Allow
-	for _, s := range rs {
-		target, err := ids.ParseAny(text(s.r, fAllowRowID))
-		if err != nil {
-			continue
-		}
-		n, ok := s.r.Fields[fAllowHash].(value.Number)
-		if !ok {
-			continue
-		}
-		h, err := n.Int64()
-		if err != nil || h < 0 || h > math.MaxUint32 {
-			continue
-		}
-		out = append(out, scan.Allow{RowID: target, Field: text(s.r, fAllowField), RuleID: text(s.r, fAllowRule), MatchHash: uint32(h)})
-	}
-	return out
-}
+// texts is the scannable text of one field value (rowscan.Texts).
+func texts(v value.Value) []string { return rowscan.Texts(v) }
 
 // secretScan is the SQ12 step of lint.run; an Env without HookScanning is
 // an internal error, never a silent "no findings" (skeleton honesty).
