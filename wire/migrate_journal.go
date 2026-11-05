@@ -97,6 +97,13 @@ type migrateJournal struct {
 	Phase        string         `json:"phase"`
 	Offline      bool           `json:"offline,omitempty"`
 	Places       []journalPlace `json:"places"`
+	// ConfigKeys are the ~/.lore/config.yaml keys the run set (step 12's
+	// personal half); rollback removes those still holding the value.
+	ConfigKeys []journalConfigKey `json:"config_keys,omitempty"`
+	// Previous is the finished journal this run replaced: a run that
+	// changes nothing puts it back (FA-FMT-3), so a no-op second run never
+	// takes away the rollback of the first.
+	Previous *migrateJournal `json:"previous,omitempty"`
 }
 
 // placeBackend is a backend whose data folder lives on disk (git and
@@ -227,7 +234,13 @@ func (a *App) Begin(ctx context.Context, offline bool) (opsmigrate.Begun, error)
 	if err != nil {
 		return opsmigrate.Begun{}, err
 	}
-	j = migrateJournal{Target: row.FormatVersion, Date: date, BackupRef: ref, BackupCommit: commit, Phase: phaseRunning, Offline: offline, Places: places}
+	var prev *migrateJournal
+	if ok && j.Phase == phaseDone {
+		done := j
+		done.Previous = nil // keep one level: only the latest finished run can be rolled back
+		prev = &done
+	}
+	j = migrateJournal{Target: row.FormatVersion, Date: date, BackupRef: ref, BackupCommit: commit, Phase: phaseRunning, Offline: offline, Places: places, Previous: prev}
 	if err := writeJournal(path, j); err != nil {
 		return opsmigrate.Begun{}, err
 	}
@@ -302,7 +315,10 @@ func (a *App) Finish(ctx context.Context, push bool, count int) ([]string, error
 		}
 		lines = append(lines, line)
 	}
-	if !changed && count == 0 {
+	if len(j.ConfigKeys) > 0 {
+		lines = append(lines, "~/.lore/"+ConfigFile+": "+strconv.Itoa(len(j.ConfigKeys))+" personal settings set")
+	}
+	if !changed && count == 0 && len(j.ConfigKeys) == 0 {
 		return nil, a.dropBackup(ctx, snaps, top, path, j)
 	}
 	j.Phase = phaseDone
@@ -320,7 +336,9 @@ func (a *App) dropBackup(ctx context.Context, snaps git.Snapshots, top, path str
 			all = append(all, snaps.DeleteRef(ctx, p.Dir, p.CloneBackup))
 		}
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if j.Previous != nil { // FA-FMT-3: the earlier run stays rollback-able
+		all = append(all, writeJournal(path, *j.Previous))
+	} else if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		all = append(all, errs.Wrap(errs.Internal, "migrate: remove the journal", err))
 	}
 	return errors.Join(all...)
@@ -390,9 +408,9 @@ func (a *App) Rollback(ctx context.Context) (opsmigrate.RollbackOut, error) {
 	}
 	reset := map[string]bool{}
 	for _, pl := range plans {
-		line, err := a.applyRollback(ctx, snaps, top, pl, reset)
-		if err != nil {
-			return opsmigrate.RollbackOut{}, err
+		line, aerr := a.applyRollback(ctx, snaps, top, pl, reset)
+		if aerr != nil {
+			return opsmigrate.RollbackOut{}, aerr
 		}
 		if pl.pushed {
 			out.Pushed = true
@@ -401,6 +419,14 @@ func (a *App) Rollback(ctx context.Context) (opsmigrate.RollbackOut, error) {
 			out.Lines = append(out.Lines, line)
 		}
 	}
+	cfgLine, cfgKept, err := a.rollbackConfigKeys(j.ConfigKeys)
+	if err != nil {
+		return opsmigrate.RollbackOut{}, err
+	}
+	if cfgLine != "" {
+		out.Lines = append(out.Lines, cfgLine)
+	}
+	out.Kept = append(out.Kept, cfgKept...)
 	if st, serr := a.state(ctx); serr == nil {
 		for _, name := range st.eng.Stores() {
 			if _, err := st.eng.Refresh(ctx, name); err != nil {

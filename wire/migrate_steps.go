@@ -8,7 +8,9 @@ package wire
 //	                    opstag.SnakeOf(name); keeper = smallest id byte-wise;
 //	                    rename it, move the others' tag_ids bindings to it, delete them
 //	db_settings_to_rows (step 12, CFG12): v0.1.17 project_configs rows of the repo
-//	                    → a team policies row when the key maps; else reported, kept
+//	                    → a team policies row when the key maps; personal keys (and
+//	                    the checkout's lore.db `config` rows) → ~/.lore/config.yaml
+//	                    (migrate_personal.go); else reported, kept
 //	audit_fields        (step 9, audit rule): per store, every _v 2 live row missing
 //	                    created_by/updated_by/deleted_by → auditfill.Defaults, written
 //	                    with its own HLC (format-only, like the v1 rewrite, which
@@ -233,6 +235,7 @@ func (a *App) migrateDBSettings(ctx context.Context, dryRun bool) ([]string, int
 		return nil, 0, err
 	}
 	var steps []string
+	var personal []personalSetting
 	n := 0
 	for _, sr := range rows {
 		if sr.Table.String() != projectConfigsTable || sr.Deleted {
@@ -245,12 +248,17 @@ func (a *App) migrateDBSettings(ctx context.Context, dryRun bool) ([]string, int
 		}
 		targets, ok := renderTargetsOf(c)
 		if !ok {
-			steps = append(steps, StepDBSettingsToRows+": "+projectConfigsTable+" key "+c.Key+" has no 0.1.18 home; left in place")
+			// not a team rule: offered to the personal half (CFG12)
+			if c.Value != nil {
+				personal = append(personal, personalSetting{Key: c.Key, Value: *c.Value, From: projectConfigsTable})
+			} else {
+				steps = append(steps, StepDBSettingsToRows+": "+projectConfigsTable+" key "+c.Key+" has no value; left in place")
+			}
 			continue
 		}
-		have, err := a.hasRepoPolicy(ctx, st, policy.KeyContextTargets)
-		if err != nil {
-			return nil, 0, err
+		have, herr := a.hasRepoPolicy(ctx, st, policy.KeyContextTargets)
+		if herr != nil {
+			return nil, 0, herr
 		}
 		line := StepDBSettingsToRows + ": " + projectConfigsTable + " " + c.Key + " → policy " + string(policy.KeyContextTargets) + " = " + strings.Join(targets, ",")
 		if have {
@@ -262,15 +270,29 @@ func (a *App) migrateDBSettings(ctx context.Context, dryRun bool) ([]string, int
 		if dryRun {
 			continue
 		}
-		fields, err := textListPolicy(policy.KeyContextTargets, targets, policyScopeRepo)
-		if err != nil {
-			return nil, 0, err
+		fields, ferr := textListPolicy(policy.KeyContextTargets, targets, policyScopeRepo)
+		if ferr != nil {
+			return nil, 0, ferr
 		}
-		if _, err := st.eng.Create(ctx, store.SourceRepo, schema.TablePolicies, fields); err != nil {
-			return nil, 0, errs.Wrap(errs.CodeOf(err), "migrate: write the "+string(policy.KeyContextTargets)+" policy", err)
+		if _, cerr := st.eng.Create(ctx, store.SourceRepo, schema.TablePolicies, fields); cerr != nil {
+			return nil, 0, errs.Wrap(errs.CodeOf(cerr), "migrate: write the "+string(policy.KeyContextTargets)+" policy", cerr)
 		}
 	}
-	return steps, n, nil
+	// Personal half: the checkout's v0.1.17 `config` rows (`lore config
+	// set` of v0.1.17) join the project_configs keys left over above.
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	local, err := readV017Config(ctx, top)
+	if err != nil {
+		return nil, 0, err
+	}
+	more, err := a.migratePersonalSettings(ctx, append(personal, local...), dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	return append(steps, more...), n, nil
 }
 
 // renderTargetsOf maps a render_targets setting to tool profile names:
