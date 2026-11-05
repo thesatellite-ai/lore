@@ -59,6 +59,10 @@ const (
 	KeyTasksSLAMedium Key = "tasks.sla.medium"
 	KeyTasksSLAHigh   Key = "tasks.sla.high"
 	KeyTasksSLAUrgent Key = "tasks.sla.urgent"
+	// KeyTasksUrgencyPrefix starts the urgency weight keys (TASK 13.2,
+	// OV15B-URG): tasks.urgency.<term> and tasks.urgency.priority.<level>,
+	// ShapeWeight values (UrgencyKeys lists them).
+	KeyTasksUrgencyPrefix Key = "tasks.urgency."
 	// Time tracking keys (TIME_TRACKING_DESIGN 14), in minutes: a limit,
 	// the smaller is stricter (flags more, merges less, allows less).
 	// OV7-1: integers in minutes, the policy layer has no duration shape.
@@ -192,7 +196,55 @@ const (
 	// ShapeAllow: a list of text from Choices; the levels INTERSECT, so a
 	// lower level may only narrow it (RQ2 resources.allowed_in).
 	ShapeAllow Shape = "allow"
+	// ShapeWeight: a signed number with at most two decimals, |v| <=
+	// Ceiling; the NEAREST level that sets it wins (a weight is a
+	// preference, not a safety limit, so there is no stricter value;
+	// OV15B-URG). Read as integer hundredths (Set.Weight), so every machine
+	// adds the same integers.
+	ShapeWeight Shape = "weight"
 )
+
+// Urgency weight terms (TASK 13.2; the names of logic/urgency.Term, kept
+// as text here because policy sits beside urgency, not above it).
+const (
+	urgencyPriority = "priority"
+	// ceilingUrgencyWeight bounds a weight in points (|v| <= 1000), far
+	// above every 13.2 default (the largest is next_tag 15.00).
+	ceilingUrgencyWeight = 1000
+)
+
+// urgencyTerms are the non-priority weight terms (13.2).
+var urgencyTerms = []string{"due", "mission_target", "blocking", "in_progress", "age", "sla_risk", "next_tag", "proposed"}
+
+// urgencyLevels are the priority levels with their own weight.
+var urgencyLevels = []string{"low", "medium", "high", "urgent"}
+
+// UrgencyKey is the policy key of an urgency term; level is the priority
+// level for the priority term, else "".
+func UrgencyKey(term, level string) Key {
+	if level != "" {
+		return KeyTasksUrgencyPrefix + Key(term+"."+level)
+	}
+	return KeyTasksUrgencyPrefix + Key(term)
+}
+
+// UrgencyKeys lists every urgency weight key with its term and level.
+func UrgencyKeys() []UrgencyWeightKey {
+	out := make([]UrgencyWeightKey, 0, len(urgencyTerms)+len(urgencyLevels))
+	for _, l := range urgencyLevels {
+		out = append(out, UrgencyWeightKey{Key: UrgencyKey(urgencyPriority, l), Term: urgencyPriority, Level: l})
+	}
+	for _, t := range urgencyTerms {
+		out = append(out, UrgencyWeightKey{Key: UrgencyKey(t, ""), Term: t})
+	}
+	return out
+}
+
+// UrgencyWeightKey names one urgency weight key.
+type UrgencyWeightKey struct {
+	Key         Key
+	Term, Level string
+}
 
 // Places of KeyResourcesAllowedIn (RQ2): a store, our own repo, a client repo.
 const (
@@ -305,6 +357,14 @@ func Keys() []KeyDef {
 		// here: user profiles live in ~/.lore/config.yaml, outside L1.
 		{Key: KeyContextTargets, Shape: ShapeSet, Default: mustList(),
 			Doc: "the tool profiles lore render wires (claude_code, codex, cursor, gemini_cli, copilot, generic, or your own); unset = detect from the repo's tool files"},
+	}
+	for _, u := range UrgencyKeys() {
+		what := "the " + u.Term + " term"
+		if u.Level != "" {
+			what = "priority " + u.Level
+		}
+		defs = append(defs, KeyDef{Key: u.Key, Shape: ShapeWeight, Ceiling: ceilingUrgencyWeight,
+			Doc: "urgency points of " + what + " (two decimals, may be negative; the nearest level wins; unset = the TASK 13.2 default)"})
 	}
 	slices.SortFunc(defs, func(a, b KeyDef) int { return cmp.Compare(a.Key, b.Key) })
 	return defs

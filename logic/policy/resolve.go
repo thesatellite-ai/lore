@@ -132,6 +132,9 @@ func stricter(d KeyDef, cur Effective, e Entry) (Effective, error) {
 		if n < c {
 			return take, nil
 		}
+	case ShapeWeight:
+		// OV15B-URG: nearest wins; levels arrive nearest first, so the
+		// first level that set it (taken above) stays.
 	case ShapeSet:
 		u, err := union(cur.Value, e.Value)
 		if err != nil {
@@ -170,6 +173,11 @@ func check(d KeyDef, v value.Value) error {
 		n, ok := intOf(v)
 		if !ok || n < 0 || (d.Ceiling > 0 && n > d.Ceiling) {
 			return errs.New(errs.ConfigInvalid, "value must be a whole number from 0"+ceiling(d.Ceiling))
+		}
+	case ShapeWeight:
+		h, ok := hundredthsOf(v)
+		if !ok || h > d.Ceiling*hundredth || h < -d.Ceiling*hundredth {
+			return errs.New(errs.ConfigInvalid, "value must be a number with at most two decimals"+weightRange(d.Ceiling))
 		}
 	case ShapeSet:
 		if l, ok := v.(value.List); !ok || (len(l.Items()) > 0 && l.Elem() != value.KindText) {
@@ -212,6 +220,58 @@ func (s Set) Limit(k Key) (int64, bool) {
 		return 0, false
 	}
 	return intOf(e.Value)
+}
+
+// Weight returns a ShapeWeight key's value in integer hundredths (12.5 →
+// 1250); ok is false when no level sets it (use the built-in default).
+func (s Set) Weight(k Key) (int64, bool) {
+	e, ok := s.m[k]
+	if !ok || e.Value == nil || e.IsDefault {
+		return 0, false
+	}
+	return hundredthsOf(e.Value)
+}
+
+// hundredth is how many hundredths make one point.
+const hundredth = 100
+
+// hundredthsOf reads a number with at most two decimals as hundredths,
+// by its decimal text (no float), so "0.1" is exactly 10.
+func hundredthsOf(v value.Value) (int64, bool) {
+	n, ok := v.(value.Number)
+	if !ok {
+		return 0, false
+	}
+	s := n.String()
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	whole, frac, _ := strings.Cut(s, ".")
+	if len(frac) > 2 || whole == "" || strings.ContainsAny(whole+frac, "eE+-") {
+		return 0, false
+	}
+	frac += strings.Repeat("0", 2-len(frac))
+	w, err := strconv.ParseInt(whole, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	f, err := strconv.ParseInt(frac, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	h := w*hundredth + f
+	if neg {
+		h = -h
+	}
+	return h, true
+}
+
+// weightRange is the " from -c to c" suffix of a weight error.
+func weightRange(c int64) string {
+	if c <= 0 {
+		return ""
+	}
+	n := strconv.FormatInt(c, 10)
+	return " from -" + n + " to " + n
 }
 
 // Strings returns a ShapeSet key's items, sorted.
