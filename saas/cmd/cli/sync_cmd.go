@@ -152,6 +152,7 @@ Environment: LORE_SYNC=0 disables sync; LORE_SYNC_GIT=0 leaves git config,
 			} else {
 				printSyncReport(rep)
 				printCoreSyncReport(core)
+				printScopeRenameHints(cmd.Context(), t.root) // 6.2: a folder renamed in git → lore scope move (never run)
 				if !rep.Changed() && len(rep.Errors) == 0 && len(rep.Conflicts) == 0 && len(core.Stores) == 0 {
 					fmt.Println(style.Muted("· already in sync"))
 				}
