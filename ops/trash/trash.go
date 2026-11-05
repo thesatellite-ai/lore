@@ -245,7 +245,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		it := itemOf(t)
 		switch {
 		case in.To != "" && it.Store != strings.TrimSpace(in.To):
-		case in.Type != "" && it.Table != in.Type && strings.TrimSuffix(it.Table, "s") != in.Type:
+		case in.Type != "" && !typeMatches(it.Table, in.Type):
 		case by != "" && it.DeletedBy != by:
 		case in.Batch != "" && it.Batch != strings.TrimSpace(in.Batch):
 		case in.Reason != "" && !strings.Contains(strings.ToLower(it.Reason), strings.ToLower(in.Reason)):
@@ -272,6 +272,16 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// typeMatches is --type: the table name or its singular ("task" for
+// tasks, "memory" for memories), any case.
+func typeMatches(table, typ string) bool {
+	typ = strings.ToLower(strings.TrimSpace(typ))
+	if stem, ok := strings.CutSuffix(table, "ies"); ok && typ == stem+"y" {
+		return true
+	}
+	return typ == table || typ == strings.TrimSuffix(table, "s")
 }
 
 // matches is --search: the text in the id, title or delete reason, any case.
@@ -446,7 +456,7 @@ func (o ops) overruled(ctx context.Context, in ListIn) (ListOut, error) {
 	out := ListOut{Data: []Item{}, Overruled: true}
 	for _, r := range rows {
 		it := Item{ID: r.Row.ID.String(), Table: r.Row.Table.String(), Store: string(r.Store), Title: titleOf(r.Row), Overruled: r.Note}
-		if (in.To != "" && it.Store != strings.TrimSpace(in.To)) || (in.Type != "" && it.Table != in.Type && strings.TrimSuffix(it.Table, "s") != in.Type) {
+		if (in.To != "" && it.Store != strings.TrimSpace(in.To)) || (in.Type != "" && !typeMatches(it.Table, in.Type)) {
 			continue
 		}
 		out.Data = append(out.Data, it)
