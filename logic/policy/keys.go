@@ -18,6 +18,9 @@ const (
 	KeyOnDetect        Key = "secrets.on_detect"
 	KeyAgentReveal     Key = "secrets.agent_reveal"
 	KeyUseRepoGitleaks Key = "secrets.use_repo_gitleaks"
+	// KeyPasswordPairProseFilter: the password_pair prose post-filter (D10,
+	// SECRETS 3.4); off flags an all-letters value followed by prose too.
+	KeyPasswordPairProseFilter Key = "secrets.password_pair_prose_filter"
 	// KeySecretsManagerTimeout: seconds each secret manager call may run
 	// (SECRETS_AND_REFERENCES 6: default 5, max 30); a limit, the smaller
 	// is stricter (a hung vault CLI is killed sooner).
@@ -285,6 +288,8 @@ func Keys() []KeyDef {
 			Default: mustText(string(AgentRevealAsk)), Doc: "whether an agent may reveal a secret without asking (SQ10)"},
 		{Key: KeyUseRepoGitleaks, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true),
 			Doc: "read a repo's .gitleaks.toml allowlists (D8); reading fewer allowlists is stricter"},
+		{Key: KeyPasswordPairProseFilter, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true),
+			Doc: "skip password_pair matches whose value is a plain word followed by prose (D10, SECRETS 3.4); off is stricter"},
 		{Key: KeySecretsManagerTimeout, Shape: ShapeLimit, Ceiling: ceilingManagerTimeoutSec, Default: value.Int(defaultManagerTimeoutSec),
 			Doc: "seconds a secret manager CLI may run per call (reveal, verify) before lore kills it (SECRETS 6, max 30)"},
 		{Key: KeyMetaMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest metadata value in bytes"},
