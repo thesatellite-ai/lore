@@ -229,7 +229,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	engOpts := []engine.Option{
 		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient, ActorAs: st.clientActorAs(repoClient),
-			AgentsInternal: details == AgentDetailsInternal}),
+			AgentsInternal: details == AgentDetailsInternal, Place: repoPlace(ctx, st.repoTop)}),
 		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(newProvenance(opts, st.repoTop)), // _o place facts and the _w stamp (PROV4, PROV6, PROV8, OQ7)
@@ -642,6 +642,20 @@ func keyNamespace(a engine.Attached) string {
 		ns += "/" + folder
 	}
 	return ns
+}
+
+// repoPlace is the repo store's place id (PROVENANCE 5.4, PROV-MOVED-ALL):
+// the checkout's rep_ id from .lore/repo.json, so a Lore-Moved-To trailer,
+// a `moves` entry and a kind's `copies` item name the repo by its
+// permanent id, never by the local name "repo". "" when the checkout has
+// no repo id yet: the engine then records the attached name "repo". It is
+// read once at open, so a `lore repo fork` in the same process is seen by
+// the next open.
+func repoPlace(ctx context.Context, top string) string {
+	if id, ok := repoIDAt(ctx, top); ok {
+		return id
+	}
+	return ""
 }
 
 // placeOf is an attached store's place id for `_o.moves` (PROVENANCE 5.4,
