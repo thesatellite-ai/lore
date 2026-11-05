@@ -11,11 +11,13 @@ package gitleaks
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/zricethezav/gitleaks/v8/config"
 	"github.com/zricethezav/gitleaks/v8/detect"
+	"github.com/zricethezav/gitleaks/v8/detect/codec"
 
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -149,6 +151,7 @@ func (s *Scanner) Scan(field, text string) []scan.Finding {
 // ScanReport scans text and reports whether the size gate fell back.
 func (s *Scanner) ScanReport(field, text string) Report {
 	rep := Report{Findings: s.keep(text, s.regex.Scan(field, text))}
+	rep.Findings = append(rep.Findings, s.decodedOwn(field, text)...)
 	if s.detector == nil {
 		return rep
 	}
@@ -206,4 +209,54 @@ func lineStart(text string, n int) int {
 		off += i + 1
 	}
 	return off
+}
+
+// decodedOwn runs lore's own rules (the regex scanner) on the decoded forms
+// of text (3.6: base64, hex, percent, unicode, up to maxDecodeDepth), the
+// way gitleaks re-scans its own rules (OV4: before, only gitleaks rules
+// saw decoded text). A hit counts only where it overlaps a decoded
+// segment (the plain text was scanned already) and is reported at the
+// encoded span of the original text, so allows and masking key on what is
+// stored.
+//
+//	text ─▶ codec.Decoder.Decode (depth 1..3) ─▶ regex.Scan(decoded)
+//	     ─▶ SegmentsWithDecodedOverlap ─▶ AdjustMatchIndex ─▶ finding on the original
+func (s *Scanner) decodedOwn(field, text string) []scan.Finding {
+	if len(text) > GitleaksMaxBytes {
+		return nil // the same size gate as the detector (a degraded scan is reported there)
+	}
+	dec := codec.NewDecoder()
+	cur := text
+	var segs []*codec.EncodedSegment
+	var out []scan.Finding
+	seen := map[string]bool{}
+	for range maxDecodeDepth {
+		cur, segs = dec.Decode(cur, segs)
+		if len(segs) == 0 {
+			break
+		}
+		for _, f := range s.regex.Scan(field, cur) {
+			if f.Offset < 0 {
+				continue
+			}
+			over := codec.SegmentsWithDecodedOverlap(segs, f.Offset, f.Offset+f.Length)
+			if len(over) == 0 {
+				continue
+			}
+			idx := codec.AdjustMatchIndex(over, []int{f.Offset, f.Offset + f.Length})
+			lo, hi := idx[0], idx[1]
+			if lo < 0 || hi > len(text) || lo >= hi {
+				continue
+			}
+			key := f.RuleID + "\x00" + strconv.Itoa(lo)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			secret := cur[f.Offset : f.Offset+f.Length] // the decoded value: masked and hashed like a plain hit
+			out = append(out, scan.Finding{RuleID: f.RuleID, Field: field, Line: strings.Count(text[:lo], "\n") + 1,
+				Offset: lo, Length: hi - lo, Preview: scan.Mask(secret), MatchHash: scan.HashMatch(secret)})
+		}
+	}
+	return out
 }
