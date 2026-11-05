@@ -5,22 +5,42 @@
 // Custom secret patterns are settings rows now (SETTINGS ARE DATA,
 // FORMAT_EVOLUTION step 17), written by `lore secrets rule add|on|off`. The
 // v0.1.17 pii_patterns table was machine-local in lore.db and no scanner
-// ever read it, so:
+// ever read it, so it is a machine-local core table (schema.MachineLocal)
+// filled only by the machine_local copy of `lore migrate run` (P3-PII-1):
 //
-//	pii-pattern list            ─► Env.LegacyPIIPatterns (what is left in
-//	                               the checkout's v0.1.17 lore.db, read-only)
+//	pii-pattern list            ─► Env.List(machine store, pii_patterns),
+//	                               by name (read-only leftovers)
 //	pii-pattern add|enable|disable ─► E_INVALID_INPUT naming the secrets
 //	                               rule command that replaced it
 //
-// The operations are machine-wide (op.Spec.Local): they open no store.
+// The moved verbs are Local (they refuse before opening anything); list
+// reads rows, so it runs on the opened engine like every row read.
 package piipattern
 
 import (
 	"context"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// Table is the machine-local table the list reads; it must equal
+// schema.TablePIIPatterns (the built-in definition, P3-PII-1), and its
+// field names are the v0.1.17 columns.
+const Table row.Table = "pii_patterns"
+
+// Fields of Table (schema.FieldPII*).
+const (
+	fieldName       = "name"
+	fieldRegex      = "regex"
+	fieldEnabled    = "enabled"
+	fieldSourceKind = "source_kind"
 )
 
 // Operation names (`lore pii-pattern …`).
@@ -68,12 +88,33 @@ type Pattern struct {
 	SourceKind string `json:"source_kind,omitempty"`
 }
 
-// Env is what the list reads; *wire.App implements it.
+// Env is what the list reads; *wire.App implements it (engine.Engine's
+// List: the engine routes a machine-local table to the machine store).
 type Env interface {
-	// LegacyPIIPatterns returns the rows of the v0.1.17 pii_patterns table
-	// of this checkout's lore.db, by name; none when there is no lore.db or
-	// no such table.
-	LegacyPIIPatterns(ctx context.Context) ([]Pattern, error)
+	List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error)
+}
+
+// patternOf maps one pii_patterns row to the v0.1.17 JSON shape. created_at
+// and updated_at are the envelope's: the migrate copy stamps them at copy
+// time (wire/machinecopy.go, lossy on purpose).
+func patternOf(r row.Row) Pattern {
+	text := func(k string) string {
+		if v, ok := r.Fields[k]; ok {
+			return v.String()
+		}
+		return ""
+	}
+	p := Pattern{ID: r.ID.String(), Name: text(fieldName), Regex: text(fieldRegex), SourceKind: text(fieldSourceKind)}
+	if b, ok := r.Fields[fieldEnabled].(value.Bool); ok {
+		p.Enabled = b.Bool()
+	}
+	if !r.CreatedAt.IsZero() {
+		p.CreatedAt = r.CreatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if !r.UpdatedAt.IsZero() {
+		p.UpdatedAt = r.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return p
 }
 
 // ListIn is the (empty) input of pii_pattern.list.
@@ -134,16 +175,24 @@ func Ops(env Env) []op.Entry {
 	refused := []errs.Code{errs.InvalidInput}
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpList, Summary: "List PII patterns", Local: true,
+			Name: OpList, Summary: "List PII patterns",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: []errs.Code{errs.Internal},
 		}, func(ctx context.Context, _ ListIn) (ListOut, error) {
-			got, err := env.LegacyPIIPatterns(ctx)
+			rows, err := env.List(ctx, store.SourceMachine, Table)
 			if err != nil {
 				return ListOut{}, err
 			}
-			if got == nil {
-				got = []Pattern{}
+			got := make([]Pattern, 0, len(rows))
+			for _, r := range rows {
+				got = append(got, patternOf(r))
 			}
+			// v0.1.17 ordered by name; id breaks ties so the order is stable
+			slices.SortFunc(got, func(a, b Pattern) int {
+				if c := strings.Compare(a.Name, b.Name); c != 0 {
+					return c
+				}
+				return strings.Compare(a.ID, b.ID)
+			})
 			return ListOut{SchemaVersion: schemaVersion, Kind: listKind, Count: len(got), Data: got}, nil
 		}),
 		op.Define(op.Spec{
