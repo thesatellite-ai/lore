@@ -8,7 +8,6 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -20,7 +19,9 @@ const targetSep = "/"
 // `--to <store>/<folder>` attaches that folder of an attached store (or of
 // `me`) as its own target, named "<store>/<folder>" (O1: one backend per
 // data folder; `--to agency/org` is the company folder). A folder the store
-// does not have yet is created only after a yes (E_NEEDS_CONFIRM).
+// does not have yet is created only with --create or a yes; otherwise the
+// write is refused naming the folders the store has (E_NEEDS_CONFIRM,
+// PL-CREATE-1, targets_create.go).
 // `team` and `company` were already rewritten to the org store names
 // (resolveAlias).
 //
@@ -108,10 +109,8 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 			return "", "", err
 		}
 	}
-	if !exists && !c.Yes {
-		return "", "", errs.New(errs.NeedsConfirm, "store "+base+" has no folder "+folderName+" yet").
-			WithQuestion("create the folder " + folderName + " in store " + base + "?").
-			WithHint("rerun with --yes to create it with this write")
+	if !exists && !c.Yes && !createAsked(in) {
+		return "", "", a.missingFolder(ctx, src, base, folderName)
 	}
 	target := attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly, Branch: src.Branch}
 	// `me/<folder>` and an org store's folder are not recorded: the
