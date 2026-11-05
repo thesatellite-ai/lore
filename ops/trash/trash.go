@@ -88,6 +88,8 @@ type ListIn struct {
 	Search string `json:"search,omitempty" flag:"search" desc:"only rows whose id, title or delete reason holds this text"`
 	Limit  int    `json:"limit,omitempty" flag:"limit" desc:"rows per page (default: all; 50 when --page is given)"`
 	Page   int    `json:"page,omitempty" flag:"page" desc:"page number, from 1 (with --limit)"`
+	// FromHistory lists purged and hard-deleted rows from git history (3.6).
+	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"list rows purged or hard-deleted, read from this place's git history"`
 }
 
 // defaultPageRows is --limit when only --page is given (DELETION 4.5:
@@ -98,6 +100,7 @@ const defaultPageRows = 50
 type ShowIn struct {
 	ID            string `json:"id" arg:"0" desc:"the row id"`
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive field values (asks first)"`
+	FromHistory   bool   `json:"from_history,omitempty" flag:"from-history" desc:"show a purged row's last content from git history (3.6)"`
 }
 
 // showSensitiveField is the json name of ShowIn.ShowSensitive: trash.show
@@ -114,6 +117,8 @@ type TargetIn struct {
 	NoTasklist bool   `json:"no_tasklist,omitempty" flag:"no-tasklist" desc:"restore a task whose tasklist was purged with no tasklist"`
 	Mission    string `json:"mission,omitempty" flag:"mission" desc:"new mission id for the restored row"`
 	Plan       string `json:"plan,omitempty" flag:"plan" desc:"new plan id for the restored row"`
+	// FromHistory is refused: purged rows never come back (DQ4, 3.6).
+	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"refused: a purged row never comes back; read it with trash show --from-history"`
 }
 
 // PurgeIn is the input of trash.purge.
@@ -142,7 +147,9 @@ type Item struct {
 	// Overruled is the delete_overruled note of a row listed by
 	// --overruled (JSON as stored).
 	Overruled string `json:"overruled,omitempty"`
-	at        time.Time
+	// LastIn is where --from-history read the last content ("<sha>^ (date)").
+	LastIn string `json:"last_content_in,omitempty"`
+	at     time.Time
 }
 
 // ListOut is the output of trash.list.
@@ -158,12 +165,16 @@ type ListOut struct {
 	// is the 1-based position of the first listed row (DELETION 4.5).
 	Total int `json:"total"`
 	From  int `json:"from,omitempty"`
+	// History marks a --from-history listing (purged rows, 3.6).
+	History bool `json:"from_history,omitempty"`
 }
 
 // ShowOut is the output of trash.show.
 type ShowOut struct {
 	Data   Item              `json:"data"`
 	Fields map[string]string `json:"fields"`
+	// History marks a --from-history show (the last content of a purged row).
+	History bool `json:"from_history,omitempty"`
 }
 
 // StatsIn is the input of trash.stats (none).
@@ -198,7 +209,7 @@ type ResultOut struct {
 // Ops returns the trash operations bound to env, for op.NewRegistry.
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
-	read := []errs.Code{errs.InvalidInput, errs.NotFound, errs.Internal}
+	read := []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.Internal} // Unsupported: --from-history without git
 	write := []errs.Code{errs.InvalidInput, errs.NotFound, errs.Purged, errs.ParentDeleted, errs.ParentPurged, errs.Stale, errs.Internal}
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpList, Summary: "List the rows in the trash",
@@ -233,6 +244,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	if in.Overruled {
 		return o.overruled(ctx, in)
+	}
+	if in.FromHistory {
+		return o.listHistory(ctx, in, since, by)
 	}
 	all, err := o.env.Trashed(ctx)
 	if err != nil {
@@ -311,6 +325,9 @@ func page(rows []Item, limit, pg int) ([]Item, int, error) {
 
 // show is trash.show: one trashed row with its fields.
 func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
+	if in.FromHistory {
+		return o.showHistory(ctx, in)
+	}
 	all, err := o.env.Trashed(ctx)
 	if err != nil {
 		return ShowOut{}, err
@@ -337,6 +354,9 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 // restore is trash.restore (DELETION 3.3): the engine clears the delete
 // fields of the row and its batch dependents, or of the whole batch.
 func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
+	if in.FromHistory {
+		return ResultOut{}, purgedForever(in.Target)
+	}
 	homes, err := homesOf(in)
 	if err != nil {
 		return ResultOut{}, err
@@ -718,6 +738,9 @@ func (o ListOut) Text() string {
 	if len(o.Data) == 0 && o.Total > 0 {
 		return "no rows on this page (" + strconv.Itoa(o.Total) + " match)\n"
 	}
+	if o.History {
+		return o.historyText()
+	}
 	if len(o.Data) == 0 {
 		return "the trash is empty\n"
 	}
@@ -752,6 +775,12 @@ func (it Item) line() string {
 // Text implements op.Texter.
 func (o ShowOut) Text() string {
 	var b strings.Builder
+	if o.History {
+		b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  purged " + o.Data.DeletedAt + " by " + o.Data.DeletedBy + "\n")
+		b.WriteString("  from commit " + o.Data.LastIn + " (the last commit that had it)\n")
+		b.WriteString(fieldLines(o.Fields))
+		return b.String()
+	}
 	b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  in the trash\n")
 	b.WriteString("  deleted   " + o.Data.DeletedAt + " by " + o.Data.DeletedBy + " (store " + o.Data.Store + ")\n")
 	if o.Data.Dependent {
@@ -761,14 +790,34 @@ func (o ShowOut) Text() string {
 		b.WriteString("  reason    " + o.Data.Reason + "\n")
 	}
 	b.WriteString("  batch     " + o.Data.Batch + "\n")
-	keys := make([]string, 0, len(o.Fields))
-	for k := range o.Fields {
+	b.WriteString(fieldLines(o.Fields))
+	return b.String()
+}
+
+// fieldLines renders fields as "  key: value" lines in key order.
+func fieldLines(fields map[string]string) string {
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
+	var b strings.Builder
 	for _, k := range keys {
-		b.WriteString("  " + k + ": " + o.Fields[k] + "\n")
+		b.WriteString("  " + k + ": " + fields[k] + "\n")
 	}
+	return b.String()
+}
+
+// historyText is ListOut.Text of a --from-history listing (DELETION 2.7).
+func (o ListOut) historyText() string {
+	if len(o.Data) == 0 {
+		return "no purged or hard-deleted rows in this place's git history\n"
+	}
+	var b strings.Builder
+	for _, it := range o.Data {
+		b.WriteString(it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  purged " + it.DeletedAt + "  by " + it.DeletedBy + "  last content in " + it.LastIn + "\n")
+	}
+	b.WriteString(strconv.Itoa(o.Count) + " rows in git history; they never come back (read one: lore trash show <id> --from-history)\n")
 	return b.String()
 }
 
