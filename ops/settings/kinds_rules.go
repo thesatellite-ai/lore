@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -240,6 +241,11 @@ func (o ops) applyDefaults(ctx context.Context, d kindDef, name string, vals map
 // pattern or bound that was set): E_NEEDS_CONFIRM without --yes.
 func loosening(ctx context.Context, f located, in FieldEditIn) error {
 	var what []string
+	for _, c := range in.Clear {
+		if col := clearable[c]; (col == fPattern || col == fMin || col == fMax) && text(f.Row, col) != "" {
+			what = append(what, "clear "+col+" "+text(f.Row, col))
+		}
+	}
 	for _, x := range []struct {
 		col string
 		off bool
@@ -277,6 +283,32 @@ func checkSecretManager(m string) error {
 	}
 	if _, err := value.SecretRefOf(m + "://probe"); err != nil {
 		return errs.New(errs.InvalidInput, "--secret-manager "+quote(m)+" is not a secret manager scheme").WithHint("e.g. gopass, op, vault")
+	}
+	return nil
+}
+
+// clearable maps a --clear name to its kind_fields column (OV32: field
+// edit could set but never remove these rules).
+var clearable = map[string]string{"default": fDefault, "pattern": fPattern, "min": fMin, "max": fMax,
+	"replaced_by": fReplacedBy, "remind_before": fRemindBefore}
+
+// clearRules writes null for every --clear rule into patch; a rule both
+// set and cleared in one edit, or an unknown name, is E_INVALID_INPUT.
+func clearRules(f located, in FieldEditIn, patch map[string]value.Value) error {
+	set := map[string]string{fDefault: in.Default, fPattern: in.Pattern, fMin: in.Min, fMax: in.Max,
+		fReplacedBy: in.ReplacedBy, fRemindBefore: in.RemindBefore}
+	for _, c := range in.Clear {
+		col, ok := clearable[c]
+		if !ok {
+			names := slices.Sorted(maps.Keys(clearable))
+			return errs.New(errs.InvalidInput, "--clear "+quote(c)+": want one of "+strings.Join(names, ", "))
+		}
+		if set[col] != "" {
+			return errs.New(errs.InvalidInput, "--clear "+c+" and --"+strings.ReplaceAll(c, "_", "-")+" in one edit")
+		}
+		if text(f.Row, col) != "" {
+			patch[col] = value.Null{}
+		}
 	}
 	return nil
 }

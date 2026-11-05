@@ -129,6 +129,7 @@ type FieldEditIn struct {
 	NoStrict     bool     `json:"no_strict,omitempty" flag:"no-strict" desc:"back to newer-wins on a both-sides change (asks)"`
 	NoDeprecated bool     `json:"no_deprecated,omitempty" flag:"no-deprecated" desc:"not deprecated any more"`
 	To           string   `json:"to,omitempty" flag:"to" desc:"tighten the field for a nearer place only (an extension row there; RES 3.6)"`
+	Clear        []string `json:"clear,omitempty" flag:"clear" desc:"remove a rule: default, pattern, min, max, replaced_by, remind_before (repeatable; clearing pattern/min/max asks)"`
 	FieldRuleFlags
 }
 
@@ -650,6 +651,11 @@ func (o ops) fieldEdit(ctx context.Context, in FieldEditIn) (RowOut, error) {
 		if err = triState(patch, t.f, t.on, t.off); err != nil {
 			return RowOut{}, err
 		}
+	}
+	// OV32: --clear removes a rule (null); clearing pattern/min/max is a
+	// loosening and asks below (RES 3.14).
+	if err = clearRules(f, in, patch); err != nil {
+		return RowOut{}, err
 	}
 	// RES 3.14: a loosening asks first.
 	if err = loosening(ctx, f, in); err != nil {
