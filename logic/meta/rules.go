@@ -23,6 +23,10 @@ type Rules struct {
 	Min, Max   string
 	Deprecated bool
 	ReplacedBy string
+	// Sensitive masks the value in Violation's message (3.20: a warning or
+	// an E_META_VALUE refusal never quotes a sensitive value). It checks
+	// nothing itself, so Empty ignores it.
+	Sensitive bool
 }
 
 // Empty reports rules that check nothing.
@@ -72,9 +76,18 @@ func Violation(name string, t Type, raw []byte, r Rules) (string, error) {
 		}
 	}
 	k := elemKind(t)
+	shown := func(s string, quoted bool) string {
+		switch {
+		case r.Sensitive:
+			return Show(Entry{Sensitive: true})
+		case quoted:
+			return fmt.Sprintf("%q", s)
+		}
+		return s
+	}
 	for _, s := range Strings(raw) {
 		if re != nil && (k == value.KindText || k == value.KindEmail || k == value.KindURL || k == value.KindDNS) && !re.MatchString(s) {
-			return fmt.Sprintf("%s: %q does not match the pattern %s", name, s, r.Pattern), nil
+			return fmt.Sprintf("%s: %s does not match the pattern %s", name, shown(s, true), r.Pattern), nil
 		}
 		if !ordered(k) || (r.Min == "" && r.Max == "") {
 			continue
@@ -85,12 +98,12 @@ func Violation(name string, t Type, raw []byte, r Rules) (string, error) {
 		}
 		if r.Min != "" {
 			if lo, berr := bound(k, r.Min); berr == nil && v.cmp(lo) < 0 {
-				return fmt.Sprintf("%s: %s is below the minimum %s", name, s, r.Min), nil
+				return fmt.Sprintf("%s: %s is below the minimum %s", name, shown(s, false), r.Min), nil
 			}
 		}
 		if r.Max != "" {
 			if hi, berr := bound(k, r.Max); berr == nil && v.cmp(hi) > 0 {
-				return fmt.Sprintf("%s: %s is above the maximum %s", name, s, r.Max), nil
+				return fmt.Sprintf("%s: %s is above the maximum %s", name, shown(s, false), r.Max), nil
 			}
 		}
 	}

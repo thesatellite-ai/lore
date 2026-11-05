@@ -247,7 +247,7 @@ func (e *Engine) metaRegistry(ctx context.Context) ([]keyDef, error) {
 			d := keyDef{id: mk, name: fieldText(k, mkName), scope: fieldText(k, mkScope), typ: t, src: src,
 				strict: fieldBool(k, mkStrict), sensitive: fieldBool(k, mkSensitive), internal: fieldBool(k, mkInternal),
 				rules: meta.Rules{Pattern: fieldText(k, mkPattern), Min: fieldText(k, mkMin), Max: fieldText(k, mkMax),
-					Deprecated: fieldBool(k, mkDeprecated), ReplacedBy: fieldText(k, mkReplacedBy)},
+					Deprecated: fieldBool(k, mkDeprecated), ReplacedBy: fieldText(k, mkReplacedBy), Sensitive: fieldBool(k, mkSensitive)},
 				requiredOn: fieldList(k, mkRequiredOn), defaultOn: fieldList(k, mkDefaultOn), dflt: fieldText(k, mkDefault),
 				retired: fieldText(k, mkMerge) != ""}
 			for _, v := range vals {

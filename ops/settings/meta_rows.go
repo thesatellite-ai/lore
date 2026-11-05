@@ -43,6 +43,10 @@ func (o ops) metaRows(ctx context.Context) ([]metaRow, error) { return o.rowsOf(
 // rowsOf is metaRows; all keeps rows without metadata too (a --where
 // filter such as `jira!?` must see them).
 func (o ops) rowsOf(ctx context.Context, all bool) ([]metaRow, error) {
+	sens, err := o.sensitiveKeyIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var out []metaRow
 	for _, t := range metaDataTables() {
 		rows, err := liveRows(ctx, o.env, o.env.Stores(), t)
@@ -53,16 +57,46 @@ func (o ops) rowsOf(ctx context.Context, all bool) ([]metaRow, error) {
 			if len(r.Row.Meta) == 0 && !all {
 				continue
 			}
-			mr := metaRow{located: r, entries: map[ids.ID[ids.MetaKey]]meta.Entry{}}
-			for kid, j := range r.Row.Meta {
-				if en, derr := meta.DecodeEntry(j); derr == nil {
-					mr.entries[kid] = en
-				}
-			}
+			mr := metaRow{located: r, entries: decodeEntries(r.Row, sens)}
 			out = append(out, mr)
 		}
 	}
 	return out, nil
+}
+
+// sensitiveKeyIDs is the id of every live key row, in any attached store,
+// marked sensitive. METADATA 3.20 "one masker": a value is masked when its
+// entry's label OR the registry's flag says so, whichever does; a row
+// written before its key turned sensitive (or one whose entry kept its
+// flags through a fold) carries no label, so every read path ORs this set
+// into the entry (decodeEntries) before anything prints a value.
+func (o ops) sensitiveKeyIDs(ctx context.Context) (map[string]bool, error) {
+	keys, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableMetaKeys)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, k := range keys {
+		if flag(k.Row, mSensitive) {
+			out[k.Row.ID.String()] = true
+		}
+	}
+	return out, nil
+}
+
+// decodeEntries decodes r's meta entries (an entry that does not decode is
+// skipped; lint reports it) with the registry's sensitive flag ORed in
+// (3.20). The flag is display-only here: no caller writes these entries
+// back as they are.
+func decodeEntries(r row.Row, sens map[string]bool) map[ids.ID[ids.MetaKey]]meta.Entry {
+	out := map[ids.ID[ids.MetaKey]]meta.Entry{}
+	for kid, j := range r.Meta {
+		if en, derr := meta.DecodeEntry(j); derr == nil {
+			en.Sensitive = en.Sensitive || sens[kid.String()]
+			out[kid] = en
+		}
+	}
+	return out
 }
 
 // trasher is the optional Env upgrade the used-key check needs: the rows
@@ -88,16 +122,15 @@ func (o ops) usedRows(ctx context.Context) ([]metaRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	sens, err := o.sensitiveKeyIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
 	for _, it := range all {
 		if len(it.Row.Meta) == 0 || !engine.AcceptsMeta(it.Row.Table) {
 			continue
 		}
-		mr := metaRow{located: located{Src: it.Store, Row: it.Row}, entries: map[ids.ID[ids.MetaKey]]meta.Entry{}}
-		for kid, j := range it.Row.Meta {
-			if en, derr := meta.DecodeEntry(j); derr == nil {
-				mr.entries[kid] = en
-			}
-		}
+		mr := metaRow{located: located{Src: it.Store, Row: it.Row}, entries: decodeEntries(it.Row, sens)}
 		out = append(out, mr)
 	}
 	return out, nil

@@ -652,12 +652,10 @@ func (o ops) metaRowWrite(ctx context.Context, id ids.AnyID, mw engine.MetaWrite
 // from the stored row so a sensitive key echoes "= •••" (METADATA 3.2,
 // 3.20; OV10) and a typed value shows as stored. A dotted (object field)
 // name, or one the row does not hold, shows alone.
-func setEcho(r row.Row, names []string) string {
+func setEcho(r row.Row, names []string, sens map[string]bool) string {
 	byName := map[string]meta.Entry{}
-	for _, j := range r.Meta {
-		if en, err := meta.DecodeEntry(j); err == nil {
-			byName[en.Name] = en
-		}
+	for _, en := range decodeEntries(r, sens) {
+		byName[en.Name] = en
 	}
 	parts := make([]string, 0, len(names))
 	for _, n := range names {
@@ -699,7 +697,11 @@ func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	for _, t := range append(slices.Clone(mw.Set), mw.JSON...) {
 		names = append(names, t.Name())
 	}
-	return o.metaRowWrite(ctx, id, mw, func(r row.Row) string { return "set " + setEcho(r, names) })
+	sens, err := o.sensitiveKeyIDs(ctx)
+	if err != nil {
+		return RowOut{}, err
+	}
+	return o.metaRowWrite(ctx, id, mw, func(r row.Row) string { return "set " + setEcho(r, names, sens) })
 }
 
 // metaUnset is `lore meta unset <id> <key>` (3.2): E_META_UNKNOWN when the
@@ -733,12 +735,17 @@ func (o ops) metaGet(ctx context.Context, in MetaGetIn) (MetaGetOut, error) {
 	if r.Deleted { // DELETION 3.2: a trashed row answers E_IN_TRASH
 		return MetaGetOut{}, lookup.Gone(ctx, o.env, engine.Ref{Store: src, ID: id}, errs.New(errs.NotFound, "meta show: "+id.String()+" is deleted"))
 	}
+	sens, err := o.sensitiveKeyIDs(ctx)
+	if err != nil {
+		return MetaGetOut{}, err
+	}
 	out := MetaGetOut{ID: r.ID.String(), Data: []MetaValue{}, ids: in.IDs}
 	for kid, j := range r.Meta {
 		en, derr := meta.DecodeEntry(j)
 		if derr != nil {
 			return MetaGetOut{}, derr
 		}
+		en.Sensitive = en.Sensitive || sens[kid.String()] // 3.20: entry OR registry
 		if in.Key != "" && en.Name != in.Key && kid.String() != in.Key {
 			continue
 		}

@@ -256,6 +256,17 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 // valueProblem is why entry en does not fit key row k now, or "": it was
 // written before the key became strict, got allowed values or rules.
 func (o ops) valueProblem(k located, en meta.Entry, vals []string) string {
+	why := o.valueProblemRaw(k, en, vals)
+	if why != "" && (en.Sensitive || flag(k.Row, mSensitive)) {
+		// 3.20: a lint line never shows a sensitive value (the raw
+		// message quotes it); name the rule class only
+		return meta.Show(meta.Entry{Sensitive: true}) + " does not fit the key (allowed values, type or rules); the value is sensitive"
+	}
+	return why
+}
+
+// valueProblemRaw is valueProblem before masking.
+func (o ops) valueProblemRaw(k located, en meta.Entry, vals []string) string {
 	typ, err := keyType(k)
 	if err != nil {
 		return err.Error()
@@ -273,7 +284,7 @@ func (o ops) valueProblem(k located, en meta.Entry, vals []string) string {
 			return fmt.Sprintf("%s does not fit the key type %s", meta.Show(en), typ)
 		}
 	}
-	why, err := meta.Violation(text(k.Row, mName), typ, en.V, meta.Rules{Pattern: text(k.Row, mPattern), Min: text(k.Row, mMin), Max: text(k.Row, mMax)})
+	why, err := meta.Violation(text(k.Row, mName), typ, en.V, meta.Rules{Pattern: text(k.Row, mPattern), Min: text(k.Row, mMin), Max: text(k.Row, mMax), Sensitive: en.Sensitive || flag(k.Row, mSensitive)})
 	if err != nil {
 		return err.Error()
 	}
