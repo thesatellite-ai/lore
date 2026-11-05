@@ -22,9 +22,11 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/merge"
+	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -63,29 +65,8 @@ const (
 // any failure everything opened so far is closed.
 func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool) (*state, error) {
 	st := &state{actorDone: map[store.Source]bool{}}
-	switch {
-	case !opts.Actor.IsZero():
-		st.actor = opts.Actor
-	case opts.ResolveActor != nil:
-		a, err := opts.ResolveActor(ctx)
-		if err != nil {
-			return nil, err
-		}
-		st.actor = a
-	default:
-		who, err := resolveIdentity(ctx, opts)
-		if err != nil {
-			return nil, err
-		}
-		if st.actor, err = identity.ActorID(who.StableKey); err != nil {
-			return nil, err
-		}
-		st.who = who
-		// 10.4: the stale-marker line is printed once per command (the
-		// full open, never the repo-only one too).
-		if who.Detection != nil && who.Detection.Note != "" && opts.Notice != nil && !repoOnly {
-			opts.Notice(who.Detection.Note)
-		}
+	if err := st.resolveActor(ctx, opts, !repoOnly); err != nil {
+		return nil, err
 	}
 	reg, err := builtinRegistry()
 	if err != nil {
@@ -289,6 +270,36 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	return st, nil
+}
+
+// resolveActor sets st.actor (and st.who for a resolved identity) from
+// opts: an explicit Actor, the ResolveActor hook, or the identity chain.
+// notice prints the 10.4 stale-marker line (once per command: the full
+// open, never the repo-only one too).
+func (st *state) resolveActor(ctx context.Context, opts Options, notice bool) error {
+	switch {
+	case !opts.Actor.IsZero():
+		st.actor = opts.Actor
+	case opts.ResolveActor != nil:
+		a, err := opts.ResolveActor(ctx)
+		if err != nil {
+			return err
+		}
+		st.actor = a
+	default:
+		who, err := resolveIdentity(ctx, opts)
+		if err != nil {
+			return err
+		}
+		if st.actor, err = identity.ActorID(who.StableKey); err != nil {
+			return err
+		}
+		st.who = who
+		if who.Detection != nil && who.Detection.Note != "" && opts.Notice != nil && notice {
+			opts.Notice(who.Detection.Note)
+		}
+	}
+	return nil
 }
 
 // repoIsClient asks opts.RepoIsClient whether the repo store is a client
@@ -800,3 +811,162 @@ func cleanStoresFileURLs(top string, cfg attach.Config) error {
 		engine.WarnURLUserinfo, strings.Join(names, ", "), attach.FileName)
 	return nil
 }
+
+// openStoreOnly builds the core with no repo store: only the org store
+// folder named target (one of Options.OrgStores) is opened (BUG-T3,
+// FA-AGENT-9). It serves the roster commands run outside any repo
+// (`lore actor register`, `lore org import`'s register step), and only
+// them (StoreOnlyRoster). Each place open uses the repo gets an explicit
+// answer here:
+//
+//   - repo store: none; the engine's only store is target, which is also
+//     the default target, so a write can land nowhere else.
+//   - stores.yaml, `--to` extras, the personal store `me`: not read or
+//     attached (they are the repo's or the person's, not the roster's).
+//   - repo cache (.lore/lore-cache.db): none; target keeps its usual cache
+//     under ~/.lore/cache/stores, and no cache use record is written
+//     (FLAG3 records a repo's caches; there is no repo).
+//   - scanner: no repo .gitleaks.toml allow (withRepoGitleaks("")), and no
+//     tool-session source (it lives in the repo's lore.db).
+//   - audit: target's machine-local store trail (routedAudit); the repo
+//     sink is storeOnlyAudit, which refuses any event naming the repo.
+//   - provenance: no repo id, dir or git facts (GitNone); _w (version,
+//     machine) as usual.
+//   - client-repo check, agent owner (D8): no repo, so not a client; an org
+//     store is internal.
+//   - format gate (O6): the repo's never asks; target's v0.1.17 question
+//     still applies (readStoreFormats).
+func openStoreOnly(ctx context.Context, opts Options, target store.Source) (*state, error) {
+	st := &state{actorDone: map[store.Source]bool{}}
+	if err := st.resolveActor(ctx, opts, true); err != nil {
+		return nil, err
+	}
+	reg, err := builtinRegistry()
+	if err != nil {
+		return nil, err
+	}
+	if opts.LockTimeout == 0 { // FA-AGENT-8
+		if opts.LockTimeout, err = readLockTimeout(opts.Home); err != nil {
+			return nil, err
+		}
+	}
+	org := rawOrgStores(ctx, opts)
+	idx := slices.IndexFunc(org, func(s attach.Store) bool { return s.Name == target })
+	if idx < 0 {
+		return nil, errs.New(errs.NotFound, "roster: no org store named "+string(target)+" is configured").
+			WithHint("the org entry in ~/.lore/config.yaml names the store and its org_folder")
+	}
+	one := org[idx]
+	raw := one.URL
+	if one.URL, err = canonical(one); err != nil {
+		return nil, errs.Wrap(errs.CodeOf(err), "wire: store "+string(one.Name), err)
+	}
+	openers, err := storeOpeners(reg, originsOf(raw), opts)
+	if err != nil {
+		return nil, err
+	}
+	attached, err := attach.Open(ctx, attach.Config{Stores: []attach.Store{one}}, openers, opts.openOptions())
+	if err != nil {
+		return nil, err
+	}
+	fail := func(err error) (*state, error) { return nil, errors.Join(err, st.close()) }
+	for i := range attached {
+		st.backends = append(st.backends, attached[i].Backend)
+		attached[i].Level = levelOf(attached[i])
+		attached[i].Location = location(one.URL, attached[i].Folder)
+		if opts.WrapBackend != nil {
+			if attached[i].Backend, err = wrapBackend(ctx, opts, attached[i].Name, attached[i].Folder, attached[i].Backend); err != nil {
+				return fail(err)
+			}
+		}
+	}
+	st.caches = newCaches()
+	rv := newResolver(st)
+	exp := refs.Expander{Resolver: rv}
+	st.byName = map[store.Source]store.Backend{}
+	st.folders = map[store.Source]string{}
+	for _, o := range attached {
+		path, pathErr := cachePath(opts.Home, o)
+		if pathErr != nil {
+			return fail(pathErr)
+		}
+		if err = st.caches.open(ctx, o.Name, path, reg, exp); err != nil {
+			return fail(err)
+		}
+		st.byName[o.Name] = o.Backend
+		st.folders[o.Name] = o.Folder
+	}
+	if err = st.settleAgentKey(ctx, st.byName); err != nil {
+		return fail(err)
+	}
+	scanner, err := newScanner(ctx, st.byName, withRepoGitleaks(""), withFolders(st.folders))
+	if err != nil {
+		return fail(err)
+	}
+	st.audit = newRoutedAudit(storeOnlyAudit{}, opts.Home, attached)
+	machinePol, polNotes, err := machinePolicy(opts.Home)
+	if err != nil {
+		return fail(err)
+	}
+	if opts.Notice != nil {
+		for _, n := range polNotes {
+			opts.Notice(n)
+		}
+	}
+	engOpts := []engine.Option{
+		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner),
+		engine.WithActor(st.actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
+		engine.WithProvenance(storeOnlyProvenance{inner: newProvenance(opts, "")}),
+		engine.WithMachinePolicy(machinePol),
+	}
+	for _, o := range attached {
+		a := o.Attached
+		a.KeyNamespace = keyNamespace(a)
+		a.Place = placeOf(ctx, a)
+		engOpts = append(engOpts, engine.WithStore(a))
+	}
+	st.defaultTarget = target
+	if st.eng, err = engine.New(engOpts...); err != nil {
+		return fail(err)
+	}
+	scanner.bindEngine(st.eng)
+	for _, name := range st.eng.Stores() {
+		if _, refErr := st.eng.Refresh(ctx, name); refErr != nil {
+			return fail(errs.Wrap(errs.CodeOf(refErr), "wire: refresh the cache of store "+string(name), refErr))
+		}
+	}
+	if st.storeFormat, err = readStoreFormats(ctx, opts, "", st.byName, st.actor); err != nil {
+		return fail(err)
+	}
+	return st, nil
+}
+
+// storeOnlyAudit is the repo audit sink of a store-only open: there is no
+// repo, so an event naming it is refused (fail closed: it would mean a
+// write reached a store that is not attached); every other event already
+// went to its store's machine-local trail (routedAudit).
+type storeOnlyAudit struct{}
+
+// Record implements engine.AuditSink.
+func (storeOnlyAudit) Record(_ context.Context, ev engine.Event) error {
+	if ev.Store == store.SourceRepo {
+		return errs.New(errs.NotAStore, "wire: no repo is open (a roster command run outside a repo); nothing is recorded for it")
+	}
+	return nil
+}
+
+// storeOnlyProvenance is the provenance of a store-only open: the command
+// runs in no checkout, so there is no repo id, dir or git state to
+// record (PROV6: never an absolute path); the writer facts (_w) stay.
+type storeOnlyProvenance struct{ inner *provenance }
+
+// Place implements engine.Provenance: no git facts.
+func (storeOnlyProvenance) Place(context.Context) origin.Facts {
+	return origin.Facts{Git: origin.Git{State: origin.GitNone}}
+}
+
+// Upstream implements engine.Provenance: no repo, no upstream.
+func (storeOnlyProvenance) Upstream(context.Context, string) bool { return false }
+
+// Writer implements engine.Provenance.
+func (p storeOnlyProvenance) Writer() (string, ids.MachineID) { return p.inner.Writer() }

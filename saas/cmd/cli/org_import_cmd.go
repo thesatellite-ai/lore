@@ -288,7 +288,7 @@ func importRegisterErr(entryName string, cause error) error {
 		code = ce.Code
 	}
 	return errcodes.New(code, "the org entry "+entryName+" is added to ~/.lore/config.yaml, but registering on its roster failed: "+redactIfQuiet(cause.Error())).
-		WithHint("run `lore actor register` in one of " + entryName + "'s repos")
+		WithHint("run `LORE_ORG=" + entryName + " lore actor register` in one of " + entryName + "'s repos or outside any repo (BUG-T3)")
 }
 
 // registerAfterImport registers the user on the new entry's roster

@@ -344,3 +344,41 @@ func teamOfRow(r row.Row) RosterTeam {
 	t.Members = value.ItemStrings(r.Fields[schema.FieldTeamMembers])
 	return t
 }
+
+// StoreOnlyRoster returns an App for a roster command run outside any repo
+// (BUG-T3, FA-AGENT-9): when opts.RepoDir is not inside a git work tree,
+// the App opens only the org store folder target (openStoreOnly) and has
+// no repo state, so every repo-only path (store operations, SeedRepoMeta,
+// anything on configState) fails with E_NOT_A_STORE. Inside a work tree it
+// returns nil, false: the caller keeps its normal App, whose full open
+// attaches the org store beside the repo. Only the roster commands call
+// this; every other command keeps requiring a repo (fail closed).
+func StoreOnlyRoster(ctx context.Context, opts Options, target store.Source) (*App, bool, error) {
+	if insideWorkTree(ctx, opts.RepoDir) {
+		return nil, false, nil
+	}
+	a, err := New(opts)
+	if err != nil {
+		return nil, false, err
+	}
+	st, err := openStoreOnly(ctx, opts, target)
+	if err != nil {
+		return nil, false, err
+	}
+	st.eng.SetRedactHook(a.redactTask) // D21, as App.state does
+	a.mu.Lock()
+	a.opened, a.st = true, st
+	a.cfgOpened = true
+	a.cfgErr = errs.New(errs.NotAStore, "wire: this command needs a repo; only the roster commands run outside one").
+		WithHint("run it inside a git repository")
+	a.mu.Unlock()
+	return a, true, nil
+}
+
+// insideWorkTree reports whether dir is inside a git work tree. A git that
+// cannot run answers false: the store-only open then fails on its own git
+// store, so nothing opens on a guess.
+func insideWorkTree(ctx context.Context, dir string) bool {
+	out, err := gitRun{dir: dir, args: []string{"rev-parse", "--is-inside-work-tree"}}.output(ctx)
+	return err == nil && strings.TrimSpace(string(out)) == "true"
+}

@@ -140,7 +140,7 @@ as made by ` + "`lore store init <name> <url>`" + `) or a store url.`,
 			fmt.Printf("✓ added org entry %s\n", orgName)
 			if err := registerAfterImport(ctx, orgName); err != nil {
 				fmt.Fprintln(os.Stderr, "lore: the org is created, but registering on the roster failed: "+redactIfQuiet(err.Error()))
-				fmt.Fprintln(os.Stderr, "      run `lore actor register` in one of "+orgName+"'s repos")
+				fmt.Fprintln(os.Stderr, "      run `LORE_ORG="+orgName+" lore actor register` in one of "+orgName+"'s repos or outside any repo")
 			}
 			fmt.Println("  teammates join with: lore org import " + url + " --key human:<their email> --name \"Their Name\"")
 			fmt.Println("  tie a client repo to it (written only into the store): lore org link " + orgName + " --project <folder>")

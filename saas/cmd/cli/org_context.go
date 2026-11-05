@@ -24,6 +24,9 @@ import (
 	"saas/pkg/aicoder/repourl"
 	"saas/pkg/aicoder/stores"
 
+	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
+
 	"golang.org/x/term"
 )
 
@@ -325,3 +328,29 @@ func dedupe(xs []string) []string {
 func stdinIsTTY() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
+
+// rosterCoreApp is the App a core roster command (actor register and
+// deactivate, team add and list, agent start, org import's register step)
+// runs on for the org store folder target: the process's coreApp inside a
+// repo; outside any repo a store-only App that opens only target and no
+// repo (BUG-T3, FA-AGENT-9), built once per process. Every other command
+// keeps coreApp, so it still needs a repo (fail closed).
+func rosterCoreApp(ctx context.Context, target store.Source) (*wire.App, error) {
+	if rosterStoreOnly != nil {
+		return rosterStoreOnly, nil
+	}
+	cwd, home := coreMountDirs()
+	app, ok, err := wire.StoreOnlyRoster(ctx, coreOptions(cwd, home), target)
+	if err != nil {
+		return nil, coreErr(err)
+	}
+	if !ok {
+		return coreApp, nil
+	}
+	rosterStoreOnly = app
+	return app, nil
+}
+
+// rosterStoreOnly caches rosterCoreApp's store-only App (one command per
+// process, like coreApp).
+var rosterStoreOnly *wire.App
