@@ -732,7 +732,8 @@ func (o ops) auditBatch(ctx context.Context, action engine.Action, n int, from, 
 }
 
 // secretsRelabel is `lore secrets relabel` (5.2): each machine holder's
-// label becomes "<handle>.<current machine label>" (the handle part kept).
+// label becomes "<handle>.<current machine label>" (the handle part kept),
+// and each actor holder's label becomes the actor's current handle (OV13b).
 func (o ops) secretsRelabel(ctx context.Context, in SecretsRelabelIn) (SecretsBatchOut, error) {
 	if in.Label != "" {
 		return o.secretsSetLabel(ctx, in)
@@ -750,8 +751,18 @@ func (o ops) secretsRelabel(ctx context.Context, in SecretsRelabelIn) (SecretsBa
 			}
 		}
 	}
+	handles, err := actorHandles(ctx, o.env)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
 	fix := func(t refs.SecretTarget) (refs.SecretTarget, bool) {
 		h := targetOption(t, refs.OptHolder)
+		if hd, isActor := handles[h]; isActor && t.Fixed == "" && (in.Holder == "" || h == in.Holder) {
+			if targetOption(t, refs.OptLabel) == hd {
+				return t, false
+			}
+			return setOption(t, refs.OptLabel, hd), true // an actor holder's label is its handle (5.2)
+		}
 		ml, known := labels[h]
 		if t.Fixed != "" || h == "" || !known || (in.Holder != "" && h != in.Holder) {
 			return t, false
@@ -769,6 +780,25 @@ func (o ops) secretsRelabel(ctx context.Context, in SecretsRelabelIn) (SecretsBa
 	}
 	return o.batchRewrite(ctx, engine.ActionSecretRelabeled, fix, "Relabelled", in.Holder, "")
 }
+
+// actorHandles maps each live actor id to its handle (actors without one
+// are left out, so their references keep the label they have).
+func actorHandles(ctx context.Context, env Env) (map[string]string, error) {
+	as, err := liveRows(ctx, env, env.Stores(), schema.TableActors)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, a := range as {
+		if hd := text(a.Row, fieldActorHandle); hd != "" {
+			out[a.Row.ID.String()] = hd
+		}
+	}
+	return out, nil
+}
+
+// fieldActorHandle is the actors table's handle field (schema.Builtin).
+const fieldActorHandle = "handle"
 
 // secretsSetLabel is `lore secrets relabel --holder <id> --label <text>`
 // (CLI_REFERENCE 3.13): count the references of that holder id ─► none is
