@@ -80,6 +80,7 @@ func run(ctx context.Context, args []string) int {
 	// ignores it).
 	clk := liveClock()
 	base.Wall = clk.Now
+	org.Now = clk.Now // a store clone's fetch_ttl on the same clock (storePush)
 	// The host hooks both binaries install (wire/host); the compat hook
 	// also prints v0.1.17's "  filed: <rule>" line under a routed create.
 	hooks := hosthooks.Replace(hosthooks.Default(wd), hosthooks.CompatFlagsHook(hosthooks.CompatOptions{Filed: org.Routed}))
